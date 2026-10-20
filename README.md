@@ -93,10 +93,10 @@ KinahLedger reset-id                     new random install ID
 
 ### What a shared run contains
 
-Region, activity, gear score bracket, minutes, kills, Kinah (tradeable and bound), item counts by ID,
-app version, and a random install ID used only to drop duplicates and spam. Never the character name,
-server, account, class, level, chat text or screenshots. Sharing is on by default and off with one
-setting; the live readout works either way.
+Server (region and world, as chosen in the window, so drops can be kept per server), activity, gear score
+bracket, minutes, kills, Kinah (tradeable and bound), item counts by ID, app version, and a random install ID
+used only to drop duplicates and spam. Never the character name, account, class, level, chat text or
+screenshots. Sharing is on by default and off with one setting; the live readout works either way.
 
 The totals post once, when the run stops, to the `/v1/runs` route of the site (`upload.endpoint` in
 `settings.json`). It is empty until the site is up, so nothing is sent yet. Runs under 5 minutes or with no
@@ -105,7 +105,7 @@ history and is not sent later.
 
 ### What a shared price contains
 
-A price batch is `{app, server_key, install, asks: [{item, unit_price, qty, seen_at}]}`: the server you typed
+A price batch is `{app, server_key, install, asks: [{item, unit_price, qty, seen_at}]}`: the server you chose
 (as `region-server`), each ask's item name, stack size, unit price and the time it was seen, the app version and
 the install ID. Never seller names, the character or screenshots. Batches post whenever the window and the game
 are open, run or no run, to the `/v1/prices` route next to the runs one (derived from `upload.endpoint`;
@@ -118,3 +118,8 @@ the window closes is dropped, and prices are never stored on this PC.
 `tools/crawl-tw.js` reads NCSoft Taiwan's public item dictionary (English names, grades, categories,
 icon URLs). NCSoft's EULA restricts automated access to its services, so running it is the owner's
 decision. See `docs/` for the pipeline and image-source notes.
+
+The tracker ships no icons. When a row's item has a known icon (the 46 gathering materials always; anything else
+once `data/tw-items.json` sits beside the exe), the file is fetched once from NCSOFT's image server by name, the
+way a browser does on their site, and kept under `%LocalAppData%\KinahLedger\icons`; a session touches a few dozen
+files at most. `"ui": { "icons": false }` in `settings.json` turns this off, and rows show a lettered tile instead.

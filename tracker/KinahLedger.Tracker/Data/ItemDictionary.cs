@@ -11,6 +11,16 @@ public sealed class ItemDictionary
     readonly Dictionary<string, long> _byName = new();
 
     public int Count => _byId.Count;
+
+    /// <summary>Where the game's item icons live; the crawler's records carry full URLs under it, the gathering list only file names.</summary>
+    public const string IconBase = "https://assets.playnccdn.com/static-aion2-gamedata/resources/";
+
+    /// <summary>The icon URL for an item, or "" when none is known (an unlisted item, or a synthetic ID for a misread name).</summary>
+    public string IconUrl(long id)
+    {
+        if (!_byId.TryGetValue(id, out var i) || i.Icon.Length == 0) return "";
+        return i.Icon.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? i.Icon : IconBase + i.Icon;
+    }
     public ItemInfo? Get(long id) => _byId.GetValueOrDefault(id);
     public string NameOf(long id) => _byId.TryGetValue(id, out var i) ? i.Name : $"item {id}";
 
@@ -92,7 +102,28 @@ public sealed class ItemDictionary
                 d._byId[id] = new ItemInfo(id, g.Name, g.Grade, true, "", "Gathering Material");
                 d._byName[Norm(g.Name)] = id;
             }
+        d.LoadGatheringIcons(p);
         return d;
+    }
+
+    /// <summary>Icon file names for the gathering materials: data/gathering-items.json beside the item list when present, else the copy built into the exe.</summary>
+    void LoadGatheringIcons(string itemsPath)
+    {
+        try
+        {
+            var beside = Path.Combine(Path.GetDirectoryName(itemsPath) ?? "", "gathering-items.json");
+            using var stream = File.Exists(beside) ? File.OpenRead(beside) : typeof(ItemDictionary).Assembly.GetManifestResourceStream("gathering-items.json");
+            if (stream == null) return;
+            using var doc = JsonDocument.Parse(stream);
+            if (!doc.RootElement.TryGetProperty("items", out var arr)) return;
+            foreach (var e in arr.EnumerateArray())
+            {
+                var name = Str(e, "name"); var icon = Str(e, "icon");
+                if (name.Length == 0 || icon.Length == 0 || !_byName.TryGetValue(Norm(name), out var id)) continue;
+                if (_byId.TryGetValue(id, out var info) && info.Icon.Length == 0) _byId[id] = info with { Icon = icon };
+            }
+        }
+        catch (Exception) { /* icons are decoration: a bad file costs nothing */ }
     }
 
     void LoadFile(string p)

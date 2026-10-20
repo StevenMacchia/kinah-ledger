@@ -13,7 +13,8 @@ using WF = System.Windows.Forms;
 
 namespace KinahLedger.Ui;
 
-public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "");
+/// <summary>One table row. Icon is the item's icon slot (filled as the file arrives) and Initial the letter shown until then; both empty on a header row.</summary>
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "");
 
 public partial class MainWindow : Window
 {
@@ -47,6 +48,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _settings = settings;
         _items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+        IconCache.Enabled = settings.Ui.Icons;
         if (!_prefs.ManualMarket) _marketRegion = null;
         _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.Server);
         _watcher.Market.Enabled = settings.Market.Enabled && _prefs.ShareMarket;
@@ -68,12 +70,17 @@ public partial class MainWindow : Window
         SiteLink.Click += (_, _) => Open(RepoUrl);
         SentLink.Click += (_, _) => WhatsSent();
         Version.Text = "v" + Upload.RunPayload.AppVersion;
-        // Market prices: its own switch and server, both remembered and live on the watcher; a chosen area replaces the title-and-headers search at once
+        // the server: everything shared is per server (prices now, drops once the site splits them), so it is chosen first and remembered
+        RegionBox.ItemsSource = Servers.Regions;
+        RegionBox.SelectedItem = Servers.Region(_prefs.Region) ?? Servers.Region(settings.Region) ?? Servers.Regions[0];
+        FillServers();
+        _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
+        RegionBox.SelectionChanged += (_, _) => { FillServers(); ServerChanged(); };
+        ServerPick.SelectionChanged += (_, _) => ServerChanged();
+        // Market prices: its own switch, remembered and live on the watcher; a chosen area replaces the title-and-headers search at once
         MarketChk.IsChecked = _prefs.ShareMarket;
-        ServerBox.Text = _prefs.Server;
         MarketChk.Checked += (_, _) => MarketSwitch(true);
         MarketChk.Unchecked += (_, _) => MarketSwitch(false);
-        ServerBox.TextChanged += (_, _) => _watcher.Market.Server = ServerBox.Text.Trim();
         MarketPickBtn.Click += (_, _) => PickMarket();
         MarketResetLink.Click += (_, _) => { _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); _watcher.Market.UseRegion(null); UpdateMarketUi(); Say("Back to automatic: the Market window is found by its title and column headers.", "Faint"); };
         MarketSentLink.Click += (_, _) => WhatsRead();
@@ -96,6 +103,8 @@ public partial class MainWindow : Window
         ShowTable(null);
         SettingsBtn.Click += (_, _) => SetCompact(!_compact);
         SetCompact(_prefs.Compact, remember: false);
+        ServerRowState();
+        if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
         if (watch) _watcher.Start();
     }
 
@@ -109,6 +118,7 @@ public partial class MainWindow : Window
         var v = on ? Visibility.Collapsed : Visibility.Visible;
         SetupCard.Visibility = v; Tagline.Visibility = v; Badge3.Visibility = v;
         Step3Title.Margin = on ? new Thickness(0) : new Thickness(12, 0, 0, 0);
+        ServerRow.Margin = on ? new Thickness(0, 12, 0, 0) : new Thickness(36, 12, 0, 0);
         KindGrid.Margin = on ? new Thickness(0, 12, 0, 0) : new Thickness(36, 12, 0, 0);
         OptsRow.Margin = on ? new Thickness(0, 14, 0, 0) : new Thickness(36, 14, 0, 0);
         LinkRow.Margin = on ? new Thickness(0, 8, 0, 0) : new Thickness(36, 8, 0, 0);
@@ -228,6 +238,7 @@ public partial class MainWindow : Window
     async Task StartTracking()
     {
         SavePrefs();
+        if (Server is not { } server) { Say("Choose your region and server first: prices and drops are kept per server.", "Warn"); ServerRowState(); return; }
         StartBtn.IsEnabled = false;
         Say(_region == null ? "Finding the chat and the zone…" : "Starting…", "Faint");
         try
@@ -235,7 +246,7 @@ public partial class MainWindow : Window
             _settings.Upload.Enabled = ShareChk.IsChecked == true;
             _mode = SelectedMode;
             ApplyModeLabels();
-            var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName());
+            var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName()) { RegionKey = server.Region.Key, Server = server.Label };
             await session.StartAsync();
             _session = session;
             _region = session.Region;
@@ -288,7 +299,7 @@ public partial class MainWindow : Window
     void SetTrackingUi(bool on)
     {
         StartBtn.Content = on ? "Stop" : "Start tracking";
-        StartBtn.IsEnabled = true;
+        StartBtn.IsEnabled = on || HasServer;
         StartBtn.Background = B(on ? "BtnStop" : "BtnPrimary");
         StartBtn.BorderBrush = on ? new SolidColorBrush(Color.FromRgb(0xD9, 0x5E, 0x5E)) : new SolidColorBrush(Color.FromRgb(0x4C, 0x9B, 0xEF));
         _trayToggle.Text = on ? "Stop tracking" : "Start tracking";
@@ -372,7 +383,7 @@ public partial class MainWindow : Window
             var g = GatheringCatalog.Find(r.Name);
             var grade = g?.Grade ?? _items.Get(r.Id)?.Grade ?? "";
             if (g != null) { gc += total; if (!bySkill.TryGetValue(g.Skill, out var list)) bySkill[g.Skill] = list = new(); list.Add((r.Name, total)); bySkillGrade[r.Name] = grade; }
-            else { dc += total; drops.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / hours), Grade: grade)); }
+            else { dc += total; drops.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name))); }
         }
         var gathered = new List<DropRow>();
         var stats = e.SkillSnapshot();
@@ -387,7 +398,7 @@ public partial class MainWindow : Window
                      + (st.Nodes > 0 ? $"  ·  {Rate(st.Nodes / hours)} nodes/hr" : "");
             gathered.Add(new DropRow(head, "", "", "", Header: true));
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
-                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, "")));
+                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name)));
         }
         // pets: one header per zone, best rate first, each crystal rated against the time spent in that zone
         var pets = new List<DropRow>();
@@ -398,7 +409,7 @@ public partial class MainWindow : Window
             var when = z.Seconds >= 30 ? Mins(z.Seconds) : "zone time not read";
             pets.Add(new DropRow($"{zone.ToUpperInvariant()}  ·  {when}  ·  {z.Kills} kill{(z.Kills == 1 ? "" : "s")}  ·  {Rate(z.Pets / zh)} crystals/hr", "", "", "", Header: true));
             foreach (var (name, n) in z.PetsByName.OrderByDescending(x => x.Value))
-                pets.Add(new DropRow(name, n.ToString("N0"), "", Rate(n / zh)));
+                pets.Add(new DropRow(name, n.ToString("N0"), "", Rate(n / zh), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name)));
         }
         var (best, bestRate) = BestZone(zones, hours);
         return new Tables(drops, gathered, pets, dc, gc, value, best, bestRate);
@@ -483,6 +494,10 @@ public partial class MainWindow : Window
         } ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>The icon slot for an item: cached or fetched by the cache, a lettered tile until then.</summary>
+    IconSlot Slot(long id) => IconCache.Get(_items.IconUrl(id));
+    static string InitialOf(string name) { foreach (var c in name) if (char.IsLetter(c)) return char.ToUpperInvariant(c).ToString(); return "·"; }
+
     static string Pct(double p) => p >= 1 ? p.ToString("0.0") + "×" : p >= .1 ? (p * 100).ToString("0") + "%" : p >= .01 ? (p * 100).ToString("0.0") + "%" : (p * 100).ToString("0.00") + "%";
     static string Rate(double v) => v >= 100 ? v.ToString("0") : v >= 10 ? v.ToString("0.0") : v.ToString("0.00");
     static string Fk(double v) => Math.Abs(v) >= 1e6 ? $"{v / 1e6:0.00}M" : Math.Abs(v) >= 1e4 ? $"{v / 1e3:0}K" : Math.Abs(v) >= 1e3 ? $"{v / 1e3:0.0}K" : v >= 100 ? $"{v:0}" : v >= 10 ? $"{v:0.0}" : $"{v:0.00}";
@@ -500,11 +515,46 @@ public partial class MainWindow : Window
 
     void WhatsSent() => MessageBox.Show(this,
         "When a run ends, these totals go to the public tables:\n\n" +
-        "•  what you're farming and where, gear score bracket, region\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
-        "Never your character name, server, account, class, level, chat text or screenshots.\n" +
+        "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
+        "Never your character name, account, class, level, chat text or screenshots.\n" +
         "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
-        "Sharing isn't live yet: until the site can receive runs (upload.endpoint in settings.json), everything stays on this PC. Once it is, the totals go once, when you press Stop; if the site can't be reached, the run stays here, saved to your history, and isn't sent later.",
+        "Sharing isn't live yet: until the site can receive runs (upload.endpoint in settings.json), everything stays on this PC. Once it is, the totals go once, when you press Stop; if the site can't be reached, the run stays here, saved to your history, and isn't sent later.\n\n" +
+        "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off and keeps the tracker fully offline.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
+
+    /* ---------------- server (everything shared is per server) ---------------- */
+
+    string RegionKey => (RegionBox.SelectedItem as GameRegion)?.Key ?? _settings.Region;
+    GameServer? Server => ServerPick.SelectedItem as GameServer;
+    bool HasServer => Server != null;
+
+    /// <summary>The region's servers in the picker, keeping the chosen label when the new region has it too.</summary>
+    void FillServers()
+    {
+        var keep = Server?.Label ?? _prefs.Server;
+        ServerPick.ItemsSource = Servers.In(RegionKey);
+        ServerPick.SelectedItem = Servers.Find(RegionKey, keep);
+    }
+
+    /// <summary>A chosen server goes to the Market reader at once and into the prefs; Start waits until there is one.</summary>
+    void ServerChanged()
+    {
+        var s = Server;
+        _watcher.Market.Region = RegionKey; _watcher.Market.Server = s?.Label ?? "";
+        _prefs.Region = RegionKey; _prefs.Server = s?.Label ?? "";
+        if (!_demo) _prefs.Save();
+        ServerRowState();
+        if (s != null && _session == null && !_demo) Say($"Server set to {s.Label} · {s.Region.Name}. " + (_compact ? "Press Start whenever you're ready." : "Do steps 1 and 2, or just press Start."), "Good");
+    }
+
+    /// <summary>Until a server is chosen the hint says so in orange and Start stays off: a run or a price with no server would skew the site's numbers.</summary>
+    void ServerRowState()
+    {
+        bool ok = HasServer;
+        ServerHint.Text = ok ? "Prices and drops are kept per server." : "Choose your region and server first: prices and drops are kept per server.";
+        ServerHint.Foreground = B(ok ? "Faint" : "Warn");
+        if (_session == null) StartBtn.IsEnabled = ok;
+    }
 
     /* ---------------- market prices (always on while the window is open; not part of a run) ---------------- */
 
@@ -554,7 +604,7 @@ public partial class MainWindow : Window
 
     void WhatsRead() => MessageBox.Show(this,
         "Whenever this window and the game are open (not only during a run), the tracker watches for the Market window. While the Market is open, the listings on your screen are read about once a second, the same way the chat is:\n\n" +
-        "•  item name, stack size and unit price of each ask\n•  your server, as typed here, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
+        "•  item name, stack size and unit price of each ask\n•  your server, as chosen above, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
         "Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
         "Nothing is clicked or typed in the game. Turn this off any time; the tracker still works.\n\n" +
         "Sharing isn't live yet: until the site can receive prices, what's read stays on this PC and is never stored. Once it is, asks go out in small batches as they are read; if the site can't be reached, the batch is tried again a few seconds later, and whatever is still unsent when this window closes is dropped.",
@@ -624,7 +674,7 @@ public partial class MainWindow : Window
         if (_demo) return;   // a layout render must not overwrite the player's saved choices
         _prefs.Activity = Kind.SelectedItem as string ?? "Open world";
         _prefs.Hud = HudChk.IsChecked == true; _prefs.Share = ShareChk.IsChecked == true;
-        _prefs.ShareMarket = MarketChk.IsChecked == true; _prefs.Server = ServerBox.Text.Trim();
+        _prefs.ShareMarket = MarketChk.IsChecked == true; _prefs.Region = RegionKey; _prefs.Server = Server?.Label ?? "";
         if (_prefs.ManualChat && _region is DRect mr) RegionStore.Save(mr);
         if (_prefs.ManualMarket && _marketRegion is DRect mm) RegionStore.Save(mm, RegionStore.MarketFile);
         if (WindowState == WindowState.Normal && !double.IsNaN(Left)) { _prefs.WinX = (int)Left; _prefs.WinY = (int)Top; }
@@ -645,6 +695,7 @@ public partial class MainWindow : Window
     {
         _demo = true;
         _region = region; _prefs.ManualChat = region != null; UpdateStep2();
+        if (!HasServer) { RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)"); }
         await StartTracking();
         if (_session == null) throw new InvalidOperationException("start failed: " + Status.Text);
         var found = _session.Region; var zone = _session.Zone;
@@ -661,6 +712,7 @@ public partial class MainWindow : Window
         bool market = kind == "Market";
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false; UpdateStep2();
         ZoneLbl.Text = "Zone: Western Cantas Valley";
+        RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)");
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new ItemAcquired(t, _items.IdOf(n), 1, b)); }
         void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new CurrencyGained(t, "Oculazen Soul Points", 1)); } }
@@ -720,7 +772,7 @@ public partial class MainWindow : Window
         Say(_mode switch { Mode.Gather => "Tracking Gathering · Western Cantas Valley · 3,620 reads · last: Sapphire Gemstone acquired.", Mode.Pets => "Tracking Pets · Rock Tomb Hill · 3,620 reads · last: Obtained 1 Fera Soul Crystals.", _ => "Tracking Open world · Western Cantas Valley · 3,620 reads · last: Spiritstone acquired." }, "Faint");
         if (market)
         {
-            ServerBox.Text = "Siel (Elyos)"; MarketChk.IsChecked = true;
+            MarketChk.IsChecked = true;
             MarketStatus.Text = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
         }
     }

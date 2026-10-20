@@ -14,22 +14,35 @@
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
           </Grid.ColumnDefinitions>
-          <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="12,0,8,0" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
+          <Grid Margin="10,0,8,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <!-- the item's icon once it is cached; its initial until then, or when none is known -->
+            <Border x:Name="IconTile" Width="24" Height="24" CornerRadius="5" Background="{StaticResource Card2}" BorderBrush="{StaticResource LineStrong}" BorderThickness="1" Margin="0,0,10,0" VerticalAlignment="Center">
+              <Grid>
+                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="1" RenderOptions.BitmapScalingMode="HighQuality"/>
+              </Grid>
+            </Border>
+            <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
+          </Grid>
           <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{StaticResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
           <TextBlock Grid.Column="2" Text="{Binding DropPct}" Foreground="{StaticResource Mint}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
           <TextBlock Grid.Column="3" Text="{Binding PerHour}" Foreground="{StaticResource Violet}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
         </Grid>
       </Border>
       <DataTemplate.Triggers>
-        <!-- item grades in the game's own colours -->
-        <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="#5FE08A"/></DataTrigger>
-        <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="NameText" Property="Foreground" Value="#5FA8FF"/></DataTrigger>
-        <DataTrigger Binding="{Binding Grade}" Value="Unique"><Setter TargetName="NameText" Property="Foreground" Value="#F5D05A"/></DataTrigger>
-        <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="#C88CFF"/></DataTrigger>
+        <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
+        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="#121C2E"/></Trigger>
+        <!-- item grades in the game's own colours, on the name and the icon's frame -->
+        <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="#5FE08A"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FE08A"/></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="NameText" Property="Foreground" Value="#5FA8FF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FA8FF"/></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Unique"><Setter TargetName="NameText" Property="Foreground" Value="#F5D05A"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99F5D05A"/></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="#C88CFF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99C88CFF"/></DataTrigger>
         <!-- a skill header row inside the gathered table: its own node count, failures and Plentiful rate -->
         <DataTrigger Binding="{Binding Header}" Value="True">
           <Setter TargetName="RowBorder" Property="Background" Value="#101826"/>
           <Setter TargetName="RowBorder" Property="Height" Value="30"/>
+          <Setter TargetName="IconTile" Property="Visibility" Value="Collapsed"/>
           <Setter TargetName="NameText" Property="Foreground" Value="{StaticResource Gold}"/>
           <Setter TargetName="NameText" Property="FontWeight" Value="SemiBold"/>
           <Setter TargetName="NameText" Property="FontSize" Value="12"/>
@@ -45,16 +58,29 @@
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/><ColumnDefinition Width="110"/><ColumnDefinition Width="130"/>
           </Grid.ColumnDefinitions>
-          <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="12,0,8,0" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
+          <Grid Margin="10,0,8,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <!-- the item's icon once it is cached; its initial until then, or when none is known -->
+            <Border x:Name="IconTile" Width="24" Height="24" CornerRadius="5" Background="{StaticResource Card2}" BorderBrush="{StaticResource LineStrong}" BorderThickness="1" Margin="0,0,10,0" VerticalAlignment="Center">
+              <Grid>
+                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="1" RenderOptions.BitmapScalingMode="HighQuality"/>
+              </Grid>
+            </Border>
+            <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
+          </Grid>
           <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{StaticResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
           <TextBlock Grid.Column="2" Text="{Binding PerHour}" Foreground="{StaticResource Violet}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
         </Grid>
       </Border>
       <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
+        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="#121C2E"/></Trigger>
         <!-- a zone header row: time spent there, kills and the crystal rate, so the best spot stands out -->
         <DataTrigger Binding="{Binding Header}" Value="True">
           <Setter TargetName="RowBorder" Property="Background" Value="#101826"/>
           <Setter TargetName="RowBorder" Property="Height" Value="30"/>
+          <Setter TargetName="IconTile" Property="Visibility" Value="Collapsed"/>
           <Setter TargetName="NameText" Property="Foreground" Value="{StaticResource Gold}"/>
           <Setter TargetName="NameText" Property="FontWeight" Value="SemiBold"/>
           <Setter TargetName="NameText" Property="FontSize" Value="12"/>
@@ -70,7 +96,14 @@
       <!-- header -->
       <Grid>
         <StackPanel>
-          <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="21" FontWeight="Bold"/>
+          <StackPanel Orientation="Horizontal">
+            <!-- the app mark: the same gold hex as the tray icon, drawn here so no image ships -->
+            <Grid Width="26" Height="26" Margin="0,0,10,0" VerticalAlignment="Center">
+              <Path Data="M13,1 L24,7.5 L24,19.5 L13,26 L2,19.5 L2,7.5 Z" Fill="#1A2740" Stroke="{StaticResource Gold}" StrokeThickness="1.4" StrokeLineJoin="Round"/>
+              <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B"/>
+            </Grid>
+            <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="21" FontWeight="Bold" VerticalAlignment="Center"/>
+          </StackPanel>
           <TextBlock x:Name="Tagline" Style="{StaticResource BodyStyle}" Margin="0,4,0,0" MaxWidth="540" HorizontalAlignment="Left"
                      Text="Unofficial Aion 2 farming tracker. Reads the loot lines from the chat on your screen. Nothing touches the game."/>
         </StackPanel>
@@ -130,16 +163,24 @@
 
       <!-- session -->
       <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="20,18,20,18">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <Border x:Name="Badge3" Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="3"/></Border>
+            <TextBlock x:Name="Step3Title" Style="{StaticResource StepTitle}" Text="What you're farming"/>
+          </StackPanel>
+          <!-- the server comes first: prices are filed per server, and drops will be once the site splits them. Full width, so region and server share a line in the narrow window too. -->
+          <WrapPanel x:Name="ServerRow" Margin="36,12,0,0">
+            <TextBlock x:Name="ServerLabel" Text="Your server" Foreground="{StaticResource Muted}" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,6"/>
+            <ComboBox x:Name="RegionBox" Width="138" FontSize="13" Margin="0,0,8,6" VerticalAlignment="Center" ToolTip="The region you play in. The same server names exist in every region, so both parts matter."/>
+            <ComboBox x:Name="ServerPick" Width="196" FontSize="13" Margin="0,0,12,6" VerticalAlignment="Center" ToolTip="Your home server and faction, as the game's server list shows them."/>
+            <TextBlock x:Name="ServerHint" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" VerticalAlignment="Center" Margin="0,0,0,6" MaxWidth="400"/>
+          </WrapPanel>
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
           <StackPanel>
-            <StackPanel Orientation="Horizontal">
-              <Border x:Name="Badge3" Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="3"/></Border>
-              <TextBlock x:Name="Step3Title" Style="{StaticResource StepTitle}" Text="What you're farming"/>
-            </StackPanel>
             <Grid x:Name="KindGrid" Margin="36,12,0,0">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -166,6 +207,7 @@
             <TextBlock Text="Ctrl+Shift+K works from inside the game" Foreground="{StaticResource Faint}" FontSize="11.5" HorizontalAlignment="Center" Margin="0,9,0,0"/>
           </StackPanel>
         </Grid>
+        </StackPanel>
       </Border>
 
       <!-- market prices: read off the Market window whenever the game and this window are open, run or no run, and shared as asks. Its own switch; off keeps everything else working. -->
@@ -180,9 +222,6 @@
             <TextBlock Margin="0,0,0,6" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="MarketSentLink" Style="{StaticResource LinkStyle}">what's read?</Hyperlink></TextBlock>
           </WrapPanel>
           <WrapPanel x:Name="MarketRow2" Margin="36,4,0,0">
-            <TextBlock Text="Server" Foreground="{StaticResource Muted}" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,6"/>
-            <TextBox x:Name="ServerBox" Width="190" Height="36" FontSize="13" Tag="e.g. Siel (Elyos)" Margin="0,0,10,6" VerticalAlignment="Center"
-                     ToolTip="Your server and faction, as the game shows them. Sent with the prices so they land on the right board; nothing is sent without it."/>
             <Button x:Name="MarketPickBtn" Content="Choose the Market" Width="150" FontSize="12.5" Margin="0,0,10,6" VerticalAlignment="Center"/>
             <TextBlock x:Name="MarketResetText" Margin="0,0,0,6" VerticalAlignment="Center" FontSize="12.5" Visibility="Collapsed"><Hyperlink x:Name="MarketResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
           </WrapPanel>
@@ -211,8 +250,10 @@
       <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="20,14,20,12">
         <StackPanel x:Name="TableStack">
           <Grid Margin="0,0,0,10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <TextBlock x:Name="TableTitle" Style="{StaticResource LabelStyle}" Text="THIS SESSION" VerticalAlignment="Center"/>
-            <TextBlock x:Name="Summary" Foreground="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" Text="no run yet"/>
+            <!-- the summary trims from the right when the window is narrow, instead of running under the title -->
+            <TextBlock x:Name="Summary" Grid.Column="1" Foreground="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" Text="no run yet"/>
           </Grid>
 
           <StackPanel x:Name="DropsSection">

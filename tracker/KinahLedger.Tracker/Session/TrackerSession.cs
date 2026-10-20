@@ -163,8 +163,12 @@ public sealed class TrackerSession
         Engine.Finish();
     }
 
+    /// <summary>The player's region key and server label ("na_e", "Siel (Elyos)"), sent with the run so the site can keep drops per server.</summary>
+    public string RegionKey { get; set; } = "";
+    public string Server { get; set; } = "";
+
     public Task<bool> UploadAsync(Settings s) =>
-        Eligible ? Uploader.SendAsync(RunPayload.Build(Engine, s, Kind, Activity), s.Upload) : Task.FromResult(false);
+        Eligible ? Uploader.SendAsync(RunPayload.Build(Engine, s, Kind, Activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server), s.Upload) : Task.FromResult(false);
 }
 
 /// <summary>What the window remembers between runs, kept per user.</summary>
@@ -182,8 +186,10 @@ public sealed class UserPrefs
     public bool ShareMarket { get; set; } = true;
     /// <summary>True once the player chose the Market area by hand; the title-and-headers search then stays off until they switch back.</summary>
     public bool ManualMarket { get; set; }
-    /// <summary>The server as typed ("Siel (Elyos)"), sent with prices so they land on the right board. Nothing is sent without it.</summary>
+    /// <summary>The chosen server's label ("Siel (Elyos)"), sent with prices and runs so they land on the right board. Nothing is shared without it.</summary>
     public string Server { get; set; } = "";
+    /// <summary>The chosen server's region key ("na_e"); empty means settings.json's region.</summary>
+    public string Region { get; set; } = "";
     public int? WinX { get; set; }
     public int? WinY { get; set; }
     /// <summary>Where the over-game panel was last dragged to.</summary>

@@ -343,6 +343,14 @@ options: --process aion[,other]");
             bool pass = got == expect; ok &= pass;
             Console.WriteLine($"  \"{server}\" -> {got,-28} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
         }
+        Console.WriteLine("\nServer roster:");
+        var roster = Servers.All.ToList();
+        var rosterKeys = roster.Select(x => x.Key).ToList();
+        bool rosterOk = roster.Count == 86 && rosterKeys.Distinct().Count() == rosterKeys.Count
+                     && rosterKeys.All(k => System.Text.RegularExpressions.Regex.IsMatch(k, @"^[a-z_]+-[a-z]+-(elyos|asmodian)$"))
+                     && Servers.Find("na_e", "Siel (Elyos)")?.Key == "na_e-siel-elyos";
+        ok &= rosterOk;
+        Console.WriteLine($"  {roster.Count} servers in {Servers.Regions.Length} regions, keys {rosterKeys[0]} .. {rosterKeys[^1]}  {(rosterOk ? "ok" : "MISMATCH: expected 86 distinct well-formed keys")}");
         Console.WriteLine(ok ? "\nAll market cases passed." : "\nMarket mismatch, see above.");
         return ok ? 0 : 1;
     }
@@ -398,6 +406,8 @@ options: --process aion[,other]");
         int? interval = int.TryParse(o.GetValueOrDefault("interval"), out var iv) ? iv : null;
         var manual = RegionStore.Parse(o.GetValueOrDefault("region")) ?? (o.ContainsKey("auto") ? null : RegionStore.Load());
         var session = new TrackerSession(manual, s, items, activity, interval);
+        var prefs = UserPrefs.Load();
+        session.RegionKey = prefs.Region; session.Server = o.GetValueOrDefault("server") ?? prefs.Server;
         var watcher = MarketWatcher(s, items, o);
         var engine = session.Engine;
         session.StartAsync().GetAwaiter().GetResult();
@@ -405,7 +415,7 @@ options: --process aion[,other]");
         Console.WriteLine($"Watching {session.Region} every {interval ?? s.Ocr.IntervalMs} ms. Activity: {activity}. Zone: {session.Zone ?? "not read"}. Items known: {items.Count}. (The on-screen panel is only in the window app.)");
         if (watcher.Market.Enabled) Console.WriteLine(MarketIntro(watcher));
         if (s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint))
-            Console.WriteLine($"When you stop, this run's totals go anonymously to {s.Upload.Endpoint}: region, activity, gear bracket, minutes, kills, kinah, item counts and a random install ID.");
+            Console.WriteLine($"When you stop, this run's totals go anonymously to {s.Upload.Endpoint}: server {ServerKeys.Build(session.RegionKey.Length > 0 ? session.RegionKey : s.Region, session.Server)}, activity, gear bracket, minutes, kills, kinah, item counts and a random install ID.");
         Console.WriteLine("Ctrl+C to stop.");
 
         var stop = false;
@@ -428,6 +438,7 @@ options: --process aion[,other]");
     {
         var prefs = UserPrefs.Load();
         var w = new GameWatcher(s, items, prefs.ManualMarket ? RegionStore.Load(RegionStore.MarketFile) : null, o.GetValueOrDefault("server") ?? prefs.Server);
+        if (prefs.Region.Length > 0) w.Market.Region = prefs.Region;
         w.Market.Enabled = s.Market.Enabled && prefs.ShareMarket && !o.ContainsKey("no-market");
         return w;
     }

@@ -90,6 +90,7 @@ public static class WpfApp
         w.Show();
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
+        IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
         var name = !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + ".png"), (compact ? 640 : 800) - 16);

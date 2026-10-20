@@ -14,6 +14,7 @@ public sealed class Settings
     public UploadSettings Upload { get; set; } = new();
     public OcrSettings Ocr { get; set; } = new();
     public MarketSettings Market { get; set; } = new();
+    public UiSettings Ui { get; set; } = new();
 
     public static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -44,6 +45,17 @@ public sealed class OcrSettings
     public bool Hud { get; set; } = true;
     /// <summary>How often the zone label above the minimap is read.</summary>
     public int ZoneEverySec { get; set; } = 10;
+}
+
+/// <summary>The window.</summary>
+public sealed class UiSettings
+{
+    /// <summary>
+    /// Item icons: each is fetched once from NCSOFT's image server by file name as its item shows up, the way a browser does
+    /// on their site, and kept under %LocalAppData%\KinahLedger\icons. Nothing is bundled. Off keeps the tracker fully offline;
+    /// rows show a lettered tile instead.
+    /// </summary>
+    public bool Icons { get; set; } = true;
 }
 
 /// <summary>Market price reading: while the Market window is on screen its listings are read and shared as asks.</summary>

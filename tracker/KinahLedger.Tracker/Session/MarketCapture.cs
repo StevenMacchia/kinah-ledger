@@ -35,7 +35,7 @@ public sealed class MarketCapture
     public bool Enabled { get => Volatile.Read(ref _enabled); set => Volatile.Write(ref _enabled, value); }
     /// <summary>The server as the player typed it ("Siel (Elyos)"); prices mean nothing without one, so none is sent until it's set.</summary>
     public string Server { get; set; }
-    public string Region { get; }
+    public string Region { get; set; }
     public string ServerKey => ServerKeys.Build(Region, Server);
     public MarketLayout? Layout { get; private set; }
     public bool Manual { get; private set; }
@@ -153,7 +153,7 @@ public sealed class MarketCapture
             string counts = AsksSeen == 0 ? "nothing read yet" : $"{AsksSeen:N0} ask{(AsksSeen == 1 ? "" : "s")} read · {Items:N0} item{(Items == 1 ? "" : "s")} · {Shared:N0} shared";
             string last = LastReadAt == DateTime.MinValue ? "" : " · last read " + Ago(LastReadAt);
             string why = AsksSeen > 0 && Shared == 0
-                ? string.IsNullOrWhiteSpace(Server) ? " · type your server to share" : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · sharing isn't live yet" : LastError.Length > 0 ? " · " + LastError : ""
+                ? string.IsNullOrWhiteSpace(Server) ? " · choose your server to share" : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · sharing isn't live yet" : LastError.Length > 0 ? " · " + LastError : ""
                 : "";
             return $"{state} · {counts}{last}{why}";
         }

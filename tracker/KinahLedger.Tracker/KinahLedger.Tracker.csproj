@@ -52,6 +52,8 @@
 
   <ItemGroup>
     <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- the 46 gathering materials' icon file names (8 KB), so their icons work before any item list is downloaded -->
+    <EmbeddedResource Include="..\..\data\gathering-items.json" LogicalName="gathering-items.json" />
   </ItemGroup>
 
 </Project>

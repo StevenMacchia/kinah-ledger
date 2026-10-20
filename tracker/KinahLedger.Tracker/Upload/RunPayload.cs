@@ -33,12 +33,14 @@ public static class InstallId
 }
 
 /// <summary>
-/// Exactly what leaves the PC when a run is shared. No character name, server, account, class, level,
-/// chat text or screenshots: only totals the public tables need.
+/// Exactly what leaves the PC when a run is shared: the server it was played on (as chosen in the window, so the site
+/// can keep drops per server) and the totals the public tables need. No character name, account, class, level,
+/// chat text or screenshots.
 /// </summary>
 public sealed record RunPayload(
     string app,
     string region,
+    string server_key,
     string activity,
     string kind,
     string? zone,
@@ -56,13 +58,16 @@ public sealed record RunPayload(
 {
     public static string AppVersion => typeof(RunPayload).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
 
-    public static RunPayload Build(SessionEngine s, Settings cfg, string kind, string activity)
+    /// <param name="region">The chosen server's region key ("na_e"); the settings' region when none was chosen.</param>
+    /// <param name="server">The chosen server's label ("Siel (Elyos)"); empty files the run under the region alone.</param>
+    public static RunPayload Build(SessionEngine s, Settings cfg, string kind, string activity, string region, string server)
     {
         var zones = s.ZoneSnapshot();
         var main = zones.Where(kv => kv.Key != SessionEngine.UnknownZone).OrderByDescending(kv => kv.Value.Seconds).Select(kv => kv.Key).FirstOrDefault();
         return new(
             AppVersion,
-            cfg.Region,
+            region,
+            ServerKeys.Build(region, server),
             activity,
             kind,
             main,
