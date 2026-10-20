@@ -77,7 +77,7 @@
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
           <StackPanel Margin="0,0,14,0">
             <TextBlock HorizontalAlignment="Right" FontSize="13"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-            <TextBlock x:Name="Version" Text="v0.5.3" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
+            <TextBlock x:Name="Version" Text="v0.6.0" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
           </StackPanel>
           <!-- once the chat and zone have been found, steps 1 and 2 live behind this button -->
           <Button x:Name="SettingsBtn" Content="Settings" Height="32" Padding="12,0" FontSize="12.5" VerticalAlignment="Top"/>
@@ -120,7 +120,9 @@
               <Border Width="10" Height="10" CornerRadius="2" Background="{StaticResource Accent}" VerticalAlignment="Center"/>
               <TextBlock Text="chat" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
               <Border Width="10" Height="10" CornerRadius="2" Background="{StaticResource Gold}" VerticalAlignment="Center"/>
-              <TextBlock Text="zone" Style="{StaticResource LabelStyle}" Margin="5,0,0,0"/>
+              <TextBlock Text="zone" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
+              <Border Width="10" Height="10" CornerRadius="2" Background="{StaticResource Mint}" VerticalAlignment="Center"/>
+              <TextBlock Text="market" Style="{StaticResource LabelStyle}" Margin="5,0,0,0"/>
             </StackPanel>
           </StackPanel>
         </Grid>
@@ -164,6 +166,29 @@
             <TextBlock Text="Ctrl+Shift+K works from inside the game" Foreground="{StaticResource Faint}" FontSize="11.5" HorizontalAlignment="Center" Margin="0,9,0,0"/>
           </StackPanel>
         </Grid>
+      </Border>
+
+      <!-- market prices: the listings are read off the Market window while it's open and shared as asks. Its own switch; off keeps everything else working. -->
+      <Border x:Name="MarketCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="20,16,20,16">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <Border x:Name="Badge4" Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="4"/></Border>
+            <TextBlock x:Name="Step4Title" Style="{StaticResource StepTitle}" Text="Market prices"/>
+          </StackPanel>
+          <WrapPanel x:Name="MarketRow" Margin="36,12,0,0">
+            <CheckBox x:Name="MarketChk" Content="Share market prices while the Market is open" Margin="0,0,8,6" VerticalAlignment="Center"/>
+            <TextBlock Margin="0,0,0,6" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="MarketSentLink" Style="{StaticResource LinkStyle}">what's read?</Hyperlink></TextBlock>
+          </WrapPanel>
+          <WrapPanel x:Name="MarketRow2" Margin="36,4,0,0">
+            <TextBlock Text="Server" Foreground="{StaticResource Muted}" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,6"/>
+            <TextBox x:Name="ServerBox" Width="190" Height="36" FontSize="13" Tag="e.g. Siel (Elyos)" Margin="0,0,10,6" VerticalAlignment="Center"
+                     ToolTip="Your server and faction, as the game shows them. Sent with the prices so they land on the right board; nothing is sent without it."/>
+            <Button x:Name="MarketPickBtn" Content="Choose the Market" Width="150" FontSize="12.5" Margin="0,0,10,6" VerticalAlignment="Center"/>
+            <TextBlock x:Name="MarketResetText" Margin="0,0,0,6" VerticalAlignment="Center" FontSize="12.5" Visibility="Collapsed"><Hyperlink x:Name="MarketResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
+          </WrapPanel>
+          <TextBlock x:Name="MarketStatus" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Margin="36,4,0,0"
+                     Text="Finds the Market window by its title and column headers while you track. Only the listings on your screen are read: item, quantity, unit price. Seller names are never captured."/>
+        </StackPanel>
       </Border>
 
       <!-- tiles -->

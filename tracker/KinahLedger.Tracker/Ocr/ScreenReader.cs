@@ -8,8 +8,11 @@ using Windows.Media.Ocr;
 
 namespace KinahLedger.Ocr;
 
-/// <summary>A recognized line and where it sits on screen, in screen pixels.</summary>
-public sealed record OcrLineBox(string Text, Rectangle Box);
+/// <summary>A recognized word and where it sits on screen, in screen pixels.</summary>
+public sealed record OcrWordBox(string Text, Rectangle Box);
+
+/// <summary>A recognized line and where it sits on screen, in screen pixels. Words carry their own boxes, so a table row can be split into columns.</summary>
+public sealed record OcrLineBox(string Text, Rectangle Box, IReadOnlyList<OcrWordBox>? Words = null);
 
 /// <summary>
 /// Reads text from one rectangle of the screen using the text recognition built into Windows 10/11.
@@ -109,6 +112,9 @@ public sealed class ScreenReader
         }
     }
 
+    // the chat loop and the Market loop share one recognizer; one recognition at a time keeps it predictable
+    static readonly SemaphoreSlim Gate = new(1, 1);
+
     static async Task<OcrResult> Recognize(Bitmap bmp)
     {
         using var ms = new MemoryStream();
@@ -117,7 +123,9 @@ public sealed class ScreenReader
         using var ras = ms.AsRandomAccessStream();
         var decoder = await BitmapDecoder.CreateAsync(ras);
         using var soft = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-        return await Engine.RecognizeAsync(soft);
+        await Gate.WaitAsync();
+        try { return await Engine.RecognizeAsync(soft); }
+        finally { Gate.Release(); }
     }
 
     /// <summary>Loads an image file (PNG, JPEG, WebP where Windows has the codec) into a 32-bit bitmap.</summary>
@@ -177,11 +185,18 @@ public sealed class ScreenReader
         return bmp;
     }
 
-    /// <summary>Reads any screen rectangle and returns each line with its position, for finding the chat and the zone label.</summary>
-    public static async Task<List<OcrLineBox>> ReadBoxesAsync(Rectangle region, int scale)
+    /// <summary>Reads any screen rectangle and returns each line with its position, for finding the chat, the zone label and the Market.</summary>
+    public static async Task<List<OcrLineBox>> ReadBoxesAsync(Rectangle region, int scale, bool boost = false)
     {
         using var raw = Capture(region);
-        var (bmp, f) = Prepare(raw, scale);
+        return await ReadBoxesAsync(raw, region.Location, scale, boost);
+    }
+
+    /// <summary>The same for a bitmap already in hand (a crop of a screenshot, in tests); origin is where its top-left sits on screen.</summary>
+    public static async Task<List<OcrLineBox>> ReadBoxesAsync(Bitmap raw, Point origin, int scale, bool boost = false)
+    {
+        using var src = boost ? Boost(raw) : (Bitmap)raw.Clone();
+        var (bmp, f) = Prepare(src, scale);
         using (bmp)
         {
             var result = await Recognize(bmp);
@@ -189,37 +204,46 @@ public sealed class ScreenReader
             foreach (var line in result.Lines)
             {
                 double l = double.MaxValue, t = double.MaxValue, r = 0, b = 0;
-                foreach (var w in line.Words) { l = Math.Min(l, w.BoundingRect.X); t = Math.Min(t, w.BoundingRect.Y); r = Math.Max(r, w.BoundingRect.X + w.BoundingRect.Width); b = Math.Max(b, w.BoundingRect.Y + w.BoundingRect.Height); }
+                var words = new List<OcrWordBox>();
+                foreach (var w in line.Words)
+                {
+                    var wb = w.BoundingRect;
+                    l = Math.Min(l, wb.X); t = Math.Min(t, wb.Y); r = Math.Max(r, wb.X + wb.Width); b = Math.Max(b, wb.Y + wb.Height);
+                    var wt = w.Text.Trim();
+                    if (wt.Length > 0) words.Add(new OcrWordBox(wt, Rectangle.FromLTRB(origin.X + (int)(wb.X / f), origin.Y + (int)(wb.Y / f), origin.X + (int)Math.Ceiling((wb.X + wb.Width) / f), origin.Y + (int)Math.Ceiling((wb.Y + wb.Height) / f))));
+                }
                 if (r <= 0) continue;
-                var box = Rectangle.FromLTRB(region.X + (int)(l / f), region.Y + (int)(t / f), region.X + (int)Math.Ceiling(r / f), region.Y + (int)Math.Ceiling(b / f));
+                var box = Rectangle.FromLTRB(origin.X + (int)(l / f), origin.Y + (int)(t / f), origin.X + (int)Math.Ceiling(r / f), origin.Y + (int)Math.Ceiling(b / f));
                 var text = line.Text.Trim();
-                if (text.Length > 0) list.Add(new OcrLineBox(text, box));
+                if (text.Length > 0) list.Add(new OcrLineBox(text, box, words));
             }
             return list;
         }
     }
 }
 
-/// <summary>The picked chat rectangle, kept per user so `pick` is a one-time step.</summary>
+/// <summary>A picked rectangle (the chat, or the Market), kept per user so choosing it is a one-time step.</summary>
 public static class RegionStore
 {
-    static string PathFor()
+    public const string ChatFile = "chat-region.json", MarketFile = "market-region.json";
+
+    static string PathFor(string file)
     {
         var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger");
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, "chat-region.json");
+        return Path.Combine(dir, file);
     }
 
-    public static Rectangle? Load()
+    public static Rectangle? Load(string file = ChatFile)
     {
-        var p = PathFor();
+        var p = PathFor(file);
         if (!File.Exists(p)) return null;
         var r = JsonSerializer.Deserialize<int[]>(File.ReadAllText(p));
         return r is { Length: 4 } ? new Rectangle(r[0], r[1], r[2], r[3]) : null;
     }
 
-    public static void Save(Rectangle r) => File.WriteAllText(PathFor(), JsonSerializer.Serialize(new[] { r.X, r.Y, r.Width, r.Height }));
-    public static void Clear() { var p = PathFor(); if (File.Exists(p)) File.Delete(p); }
+    public static void Save(Rectangle r, string file = ChatFile) => File.WriteAllText(PathFor(file), JsonSerializer.Serialize(new[] { r.X, r.Y, r.Width, r.Height }));
+    public static void Clear(string file = ChatFile) { var p = PathFor(file); if (File.Exists(p)) File.Delete(p); }
 
     public static Rectangle? Parse(string? s)
     {

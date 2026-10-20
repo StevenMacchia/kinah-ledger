@@ -17,7 +17,7 @@ public sealed class RegionPickerWindow : Window
 
     public DRect? Result { get; private set; }
 
-    public RegionPickerWindow()
+    public RegionPickerWindow(string? hint = null)
     {
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -30,13 +30,13 @@ public sealed class RegionPickerWindow : Window
         Width = SystemParameters.VirtualScreenWidth; Height = SystemParameters.VirtualScreenHeight;
         Cursor = Cursors.Cross;
 
-        var hint = new Border
+        var hintBox = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x0A, 0x0F, 0x18)), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 10, 16, 10),
-            Child = new TextBlock { Text = "Drag a box around the chat lines that show loot and Kinah.   Esc to cancel", Foreground = Brushes.White, FontSize = 15, FontFamily = new FontFamily("Segoe UI") }
+            Child = new TextBlock { Text = (hint ?? "Drag a box around the chat lines that show loot and Kinah.") + "   Esc to cancel", Foreground = Brushes.White, FontSize = 15, FontFamily = new FontFamily("Segoe UI") }
         };
-        Canvas.SetLeft(hint, 28); Canvas.SetTop(hint, 28);
-        _canvas.Children.Add(hint);
+        Canvas.SetLeft(hintBox, 28); Canvas.SetTop(hintBox, 28);
+        _canvas.Children.Add(hintBox);
         _canvas.Children.Add(_box);
         _canvas.Children.Add(_size);
         Content = _canvas;
@@ -69,9 +69,9 @@ public sealed class RegionPickerWindow : Window
         Canvas.SetLeft(_size, r.X); Canvas.SetTop(_size, r.Bottom + 6);
     }
 
-    public static DRect? Pick()
+    public static DRect? Pick(string? hint = null)
     {
-        var w = new RegionPickerWindow();
+        var w = new RegionPickerWindow(hint);
         w.ShowDialog();
         return w.Result;
     }

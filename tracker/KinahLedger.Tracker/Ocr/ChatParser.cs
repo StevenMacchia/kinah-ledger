@@ -112,8 +112,8 @@ public sealed partial class ChatParser
         }
     }
 
-    /// <summary>Digits only, with the recognizer's usual letter-for-digit slips corrected.</summary>
-    static long Digits(string s)
+    /// <summary>Digits only, with the recognizer's usual letter-for-digit slips corrected. Thousands separators and spaces drop out. Shared with the Market parser.</summary>
+    internal static long Digits(string s)
     {
         var sb = new StringBuilder();
         foreach (var c in s)

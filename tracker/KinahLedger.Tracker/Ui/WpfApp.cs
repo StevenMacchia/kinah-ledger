@@ -91,7 +91,7 @@ public static class WpfApp
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
         DoEvents();
-        var name = !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", _ => "ui-main-tracking" };
+        var name = !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + ".png"), (compact ? 640 : 800) - 16);
         w.Close();
 

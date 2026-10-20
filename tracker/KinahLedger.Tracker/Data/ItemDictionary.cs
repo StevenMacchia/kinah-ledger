@@ -33,6 +33,14 @@ public sealed class ItemDictionary
         return synthetic;
     }
 
+    /// <summary>True when the name is a real item, exactly or by a close misread: a dictionary entry or a gathering material. Adds nothing.</summary>
+    public bool Knows(string name)
+    {
+        var key = Norm(name);
+        if (_byName.TryGetValue(key, out var id)) return id > 0 || (_byId.TryGetValue(id, out var info) && info.Category.Length > 0);
+        return Closest(key) is { } close && (close > 0 || (_byId.TryGetValue(close, out var ci) && ci.Category.Length > 0));
+    }
+
     long? Closest(string key)
     {
         if (key.Length < 4) return null;

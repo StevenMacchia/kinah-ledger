@@ -42,6 +42,8 @@ internal static class Program
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
+                case "market-test": return MarketTest(settings, opts);
+                case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "watch": return Watch(settings, opts);
                 case "devices":
@@ -70,13 +72,22 @@ internal static class Program
     }
 
     static void Help() => Console.WriteLine(
-@"Kinah Ledger tracker 0.2
+$@"Kinah Ledger tracker {RunPayload.AppVersion}
 
-Screen reading (works today, no setup beyond picking the chat area):
+Screen reading (works today; the chat, the zone and the Market are found on their own):
+  locate                        find the game window, the chat, the zone and the Market; saves an annotated frame
   pick                          drag a box around the chat's loot lines; remembered for next time
   ocr-test [--save]             read the box once and show what was recognized (--save keeps a PNG)
-  watch [--activity name]       live tracker with an on-screen panel; Ctrl+C to stop
-        [--region x,y,w,h] [--interval 700] [--no-hud]
+  ocr-file <image> [--scale 2]  run recognition on a screenshot, plain and boosted
+  watch [--activity name]       live tracker, chat and Market; Ctrl+C to stop
+        [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""]
+  parse-test                    self-test of the chat-line parser
+  market-test                   self-test of the Market row parser
+  market-test --image shot.png  find the Market in a screenshot and read its rows
+        [--game x,y,w,h] [--region x,y,w,h]
+  ui-shot [dir] [--demo] [--pets|--gathering|--market] [--compact]
+                                render the window to PNG files for layout review
+  market-shot [dir]             the window with the Market card in its tracking state
 
 Packet capture (needs Npcap; decodes nothing until opcodes.json is mapped):
   devices                       list capture adapters (needs Npcap)
@@ -263,6 +274,9 @@ options: --process aion[,other]   --device <adapter name>");
         sw.Restart();
         var zone = Task.Run(() => ZoneLocator.DetectAsync(game.Value)).GetAwaiter().GetResult();
         Console.WriteLine($"Zone: {zone.zone ?? "not found"}  ({zone.note}, {sw.ElapsedMilliseconds} ms)");
+        sw.Restart();
+        var market = Task.Run(() => MarketLocator.DetectAsync(game.Value)).GetAwaiter().GetResult();
+        Console.WriteLine($"Market: {(market.layout != null ? market.layout.ToString() : "not open")}  ({market.note}, {sw.ElapsedMilliseconds} ms)");
         if (chat.region is { } rr)
         {
             var reader = new ScreenReader(rr, s.Ocr.Scale);
@@ -270,8 +284,18 @@ options: --process aion[,other]   --device <adapter name>");
             Console.WriteLine($"Chat area reads {lines.Count} line(s):");
             foreach (var l in lines.TakeLast(8)) Console.WriteLine("  " + l);
         }
-        var marks = chat.region is { } cr ? new[] { (cr, TrackerSession.ChatColor), (ZoneLocator.Strip(game.Value), TrackerSession.ZoneColor) } : new[] { (ZoneLocator.Strip(game.Value), TrackerSession.ZoneColor) };
-        using (var frame = ScreenReader.Frame(game.Value, 1280, marks)) frame.Save("locate-frame.png", System.Drawing.Imaging.ImageFormat.Png);
+        if (market.layout is { } ml)
+        {
+            var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
+            var parser = new MarketParser(items);
+            var rows = Task.Run(() => MarketReader.ReadRowsAsync(ml, s.Ocr.Scale)).GetAwaiter().GetResult();
+            Console.WriteLine($"Market table reads {rows.Count} row(s):");
+            foreach (var row in rows.Take(12)) Console.WriteLine($"  {row.Flat,-60} -> {parser.Parse(row)?.ToString() ?? "(ignored)"}");
+        }
+        var marks = new List<(System.Drawing.Rectangle, System.Drawing.Color)> { (ZoneLocator.Strip(game.Value), TrackerSession.ZoneColor) };
+        if (chat.region is { } cr) marks.Add((cr, TrackerSession.ChatColor));
+        if (market.layout is { } mk) marks.Add((mk.Outline, MarketCapture.MarkColor));
+        using (var frame = ScreenReader.Frame(game.Value, 1280, marks.ToArray())) frame.Save("locate-frame.png", System.Drawing.Imaging.ImageFormat.Png);
         Console.WriteLine("Annotated frame saved to locate-frame.png");
         return 0;
     }
@@ -302,7 +326,7 @@ options: --process aion[,other]   --device <adapter name>");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -379,6 +403,111 @@ options: --process aion[,other]   --device <adapter name>");
         return ok ? 0 : 1;
     }
 
+    /// <summary>
+    /// Feeds typical Market rows (as a chosen area reads them: one line per row, with recognition slips) and column cells
+    /// (as the found table gives them) through the Market parser. With --image, finds the Market in a screenshot and reads it instead.
+    /// </summary>
+    static int MarketTest(Settings s, Dictionary<string, string> o)
+    {
+        var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
+        var parser = new MarketParser(items);
+        if (o.TryGetValue("image", out var image)) return MarketImage(s, parser, image, o);
+
+        (string line, string expect)[] lines =
+        {
+            ("Spiritstone x1 7,499 7,499", "Spiritstone ×1 @ 7,499"),
+            ("Spiritstone x10 7,520 75,200", "Spiritstone ×10 @ 7,520"),
+            ("Spiritstone ×5 7,600 38,000", "Spiritstone ×5 @ 7,600"),
+            ("Raw Leather x20 14,949 298,980", "Raw Leather ×20 @ 14,949"),
+            ("Orichalcum Ore 1 1,950 1,950", "Orichalcum Ore ×1 @ 1,950"),
+            ("Fine Odyle x2 18,9OO 37,800", "Fine Odyle ×2 @ 18,900"),
+            ("Fresh Fruit x3 4,2OO 12,600", "Fresh Fruit ×3 @ 4,200"),
+            ("Orichalcurn Ore x3 1,950 5,850", "Orichalcum Ore ×3 @ 1,950"),
+            ("Ruby Gemstone x1 12,000 12,000 Kina", "Ruby Gemstone ×1 @ 12,000"),
+            ("Expert's Refining Stone x1 71,777 71,777 Zandr 23h", "Expert's Refining Stone ×1 @ 71,777"),
+            ("Thick hide x20 1,100 22,000 Sakukun", "Thick hide ×20 @ 1,100"),
+            ("Radiant Odyle Lv. 10 x1 45,000 45,000", "Radiant Odyle ×1 @ 45,000"),
+            ("Enchantment Stone 15 x1 9,900 9,900", "Enchantment Stone 15 ×1 @ 9,900"),
+            ("Spiritstone 7,499 7,499", "Spiritstone ×1 @ 7,499"),
+            ("Raw Leather 14,949 298,980", "Raw Leather ×20 @ 14,949"),
+            ("Spiritstone 1 500", "Spiritstone ×1 @ 500"),
+            ("Spiritstone x10 7,520 75,000", "(ignored)"),
+            ("Spiritstone 7,499", "(ignored)"),
+            ("Item Quantity Unit Price Total Price", "(ignored)"),
+            ("Acquired 1,240 Kina.", "(ignored)"),
+            ("[Vina] where did the filthy asmos go", "(ignored)"),
+            ("Search x1 7,499 7,499", "(ignored)"),
+            ("Market", "(ignored)")
+        };
+        bool ok = true;
+        Console.WriteLine("Market parser, one line per row (a chosen area):");
+        foreach (var (line, expect) in lines)
+        {
+            var got = parser.Parse(line)?.ToString() ?? "(ignored)";
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {line,-50} -> {got,-38} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+
+        Console.WriteLine("\nMarket parser, column cells (the found table):");
+        (Dictionary<string, string> cells, string expect)[] cells =
+        {
+            (new() { ["name"] = "Spiritstone", ["qty"] = "x10", ["unit"] = "7,520", ["total"] = "75,200" }, "Spiritstone ×10 @ 7,520"),
+            (new() { ["name"] = "Spiritstone", ["qty"] = "x10", ["unit"] = "7,520", ["total"] = "75,000" }, "(ignored)"),
+            (new() { ["name"] = "Raw Leather", ["unit"] = "14,949", ["total"] = "298,980" }, "Raw Leather ×20 @ 14,949"),
+            (new() { ["name"] = "Orichalcurn Ore", ["qty"] = "3", ["unit"] = "1,95O" }, "Orichalcum Ore ×3 @ 1,950"),
+            (new() { ["name"] = "Spiritstone", ["unit"] = "7,499" }, "(ignored)"),
+            (new() { ["name"] = "Unit Price", ["qty"] = "Quantity", ["unit"] = "Total" }, "(ignored)")
+        };
+        foreach (var (c, expect) in cells)
+        {
+            var got = parser.ParseCells(c)?.ToString() ?? "(ignored)";
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {string.Join(" | ", c.Select(kv => kv.Key + "=" + kv.Value)),-50} -> {got,-38} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+
+        Console.WriteLine("\nServer keys:");
+        foreach (var (server, expect) in new[] { ("Siel (Elyos)", "na_e-siel-elyos"), ("  Israphel / Asmodian ", "na_e-israphel-asmodian"), ("", "na_e") })
+        {
+            var got = ServerKeys.Build("na_e", server);
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  \"{server}\" -> {got,-28} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine(ok ? "\nAll market cases passed." : "\nMarket mismatch, see above.");
+        return ok ? 0 : 1;
+    }
+
+    /// <summary>Runs the Market locator and reader over a screenshot: what it finds, where, and what each row parses to.</summary>
+    static int MarketImage(Settings s, MarketParser parser, string image, Dictionary<string, string> o)
+    {
+        using var bmp = Task.Run(() => ScreenReader.LoadAsync(image)).GetAwaiter().GetResult();
+        var whole = new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height);
+        var game = RegionStore.Parse(o.GetValueOrDefault("game")) ?? whole;
+        MarketLocator.Reader read = async (region, scale, boost) =>
+        {
+            var r = System.Drawing.Rectangle.Intersect(region, whole);
+            if (r.Width < 2 || r.Height < 2) return new List<OcrLineBox>();
+            using var crop = bmp.Clone(r, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            return await ScreenReader.ReadBoxesAsync(crop, r.Location, scale, boost);
+        };
+        Console.WriteLine($"{image}: {bmp.Width} × {bmp.Height}; game frame {game.Width} × {game.Height} at {game.X}, {game.Y}");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var (layout, note) = Task.Run(() => MarketLocator.DetectAsync(game, read)).GetAwaiter().GetResult();
+        Console.WriteLine($"Locator: {note} ({sw.ElapsedMilliseconds} ms)");
+        if (layout == null && RegionStore.Parse(o.GetValueOrDefault("region")) is { } manual) { layout = MarketLayout.FromRegion(manual); Console.WriteLine($"Reading the given area as a chosen one: {layout}"); }
+        if (layout == null) { Console.WriteLine("No table to read. Pass --region x,y,w,h to read an area the way a chosen one is read."); return 1; }
+        var rows = Task.Run(() => MarketReader.ReadRowsAsync(layout, s.Ocr.Scale, read)).GetAwaiter().GetResult();
+        int asks = 0;
+        Console.WriteLine($"{rows.Count} row(s):");
+        foreach (var row in rows)
+        {
+            var ask = parser.Parse(row);
+            if (ask != null) asks++;
+            Console.WriteLine($"  {row.Flat,-60} -> {(ask == null ? "(ignored)" : ask + (ask.Known ? "" : "  (not a known item name)"))}");
+        }
+        Console.WriteLine($"{asks} ask(s) parsed.");
+        return asks > 0 ? 0 : 1;
+    }
+
     static string Describe(GameEvent ev, ItemDictionary items) => ev switch
     {
         KinahChanged k => $"Kinah {(k.Delta >= 0 ? "+" : "")}{k.Delta:N0}{(k.Bound ? " (bound)" : "")}",
@@ -398,20 +527,24 @@ options: --process aion[,other]   --device <adapter name>");
         var activity = o.GetValueOrDefault("activity") ?? s.Ocr.Activity;
         int? interval = int.TryParse(o.GetValueOrDefault("interval"), out var iv) ? iv : null;
         var manual = RegionStore.Parse(o.GetValueOrDefault("region")) ?? (o.ContainsKey("auto") ? null : RegionStore.Load());
-        var session = new TrackerSession(manual, s, items, activity, interval);
+        var prefs = UserPrefs.Load();
+        var session = new TrackerSession(manual, s, items, activity, interval, prefs.ManualMarket ? RegionStore.Load(RegionStore.MarketFile) : null, o.GetValueOrDefault("server") ?? prefs.Server);
+        session.Market.Enabled = s.Market.Enabled && prefs.ShareMarket && !o.ContainsKey("no-market");
         var engine = session.Engine;
         session.StartAsync().GetAwaiter().GetResult();
         Console.WriteLine($"Watching {session.Region} every {interval ?? s.Ocr.IntervalMs} ms. Activity: {activity}. Zone: {session.Zone ?? "not read"}. Items known: {items.Count}. (The on-screen panel is only in the window app.)");
+        if (session.Market.Enabled) Console.WriteLine($"Market prices: read while the Market is open, server \"{session.Market.Server}\" ({(session.Market.Server.Length == 0 ? "none: asks are read but not sent; pass --server" : session.Market.ServerKey)}). --no-market turns it off.");
         if (s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint))
             Console.WriteLine($"When you stop, this run's totals go anonymously to {s.Upload.Endpoint}: region, activity, gear bracket, minutes, kills, kinah, item counts and a random install ID.");
         Console.WriteLine("Ctrl+C to stop.");
 
         var stop = false;
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop = true; };
-        var view = new ConsoleView(engine, () => session.Activity, () => $"reads {session.Reads}  skipped {session.Unaligned}" + (session.LastError.Length > 0 ? "  " + session.LastError : ""));
+        var view = new ConsoleView(engine, () => session.Activity, () => $"reads {session.Reads}  skipped {session.Unaligned}" + (session.LastError.Length > 0 ? "  " + session.LastError : "") + (session.Market.Enabled ? $"  market: {session.Market.AsksSeen} asks, {session.Market.Shared} shared" : ""));
         while (!stop) { view.Render(); Thread.Sleep(1000); }
         session.StopAsync().GetAwaiter().GetResult();
         view.Render();
+        if (session.Market.Enabled) Console.WriteLine("Market: " + session.Market.Status);
 
         if (!session.Eligible) { Console.WriteLine("Run too short or empty; nothing uploaded."); return 0; }
         var sent = session.UploadAsync(s).GetAwaiter().GetResult();

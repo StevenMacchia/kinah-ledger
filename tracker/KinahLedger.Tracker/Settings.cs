@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace KinahLedger;
 
@@ -17,6 +18,7 @@ public sealed class Settings
     public FramingSettings Framing { get; set; } = new();
     public UploadSettings Upload { get; set; } = new();
     public OcrSettings Ocr { get; set; } = new();
+    public MarketSettings Market { get; set; } = new();
 
     public static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -60,10 +62,41 @@ public sealed class OcrSettings
     public int ZoneEverySec { get; set; } = 10;
 }
 
+/// <summary>Market price reading: while the Market window is on screen its listings are read and shared as asks.</summary>
+public sealed class MarketSettings
+{
+    /// <summary>Master switch; the window has its own per-player switch on top of it.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>How often the open Market is read. Never faster than once a second.</summary>
+    public int IntervalMs { get; set; } = 1000;
+    /// <summary>How often the screen is searched for the Market while it isn't open.</summary>
+    public int DetectEverySec { get; set; } = 3;
+    /// <summary>The same ask (item, stack, price) seen again inside this window isn't shared twice.</summary>
+    public int RepeatMinutes { get; set; } = 15;
+    /// <summary>Queued asks are sent this often, or sooner when a batch fills.</summary>
+    public int FlushSec { get; set; } = 10;
+    public int BatchSize { get; set; } = 100;
+    /// <summary>Reads in a row with no listing before the Market counts as closed and is looked for again.</summary>
+    public int LostAfterReads { get; set; } = 5;
+}
+
 public sealed class UploadSettings
 {
     /// <summary>On by default; the first-run notice in `run` says exactly what is sent.</summary>
     public bool Enabled { get; set; } = true;
-    /// <summary>Empty until the site's ingest endpoint exists, so nothing is sent yet.</summary>
+    /// <summary>Empty until the site's ingest endpoint exists, so nothing is sent yet. Runs go here (…/v1/runs).</summary>
     public string Endpoint { get; set; } = "";
+    /// <summary>Where Market asks go (…/v1/prices). Empty: derived from Endpoint when that ends in /v1/runs; otherwise nothing is sent.</summary>
+    public string PricesEndpoint { get; set; } = "";
+
+    [JsonIgnore]
+    public string PricesUrl
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(PricesEndpoint)) return PricesEndpoint.Trim();
+            var e = Endpoint.Trim().TrimEnd('/');
+            return e.EndsWith("/v1/runs", StringComparison.OrdinalIgnoreCase) ? e[..^4] + "prices" : "";
+        }
+    }
 }

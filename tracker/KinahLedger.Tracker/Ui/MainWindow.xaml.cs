@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     TrackerSession? _session;
     HudWindow? _hud;
     DRect? _region = RegionStore.Load();
+    DRect? _marketRegion = RegionStore.Load(RegionStore.MarketFile);
     bool _quitting, _balloonShown, _demo, _compact;
 
     readonly WF.NotifyIcon _tray = new();
@@ -60,6 +61,17 @@ public partial class MainWindow : Window
         StartBtn.Click += async (_, _) => await Toggle();
         SiteLink.Click += (_, _) => Open(RepoUrl);
         SentLink.Click += (_, _) => WhatsSent();
+        Version.Text = "v" + Upload.RunPayload.AppVersion;
+        // Market prices: its own switch and server, both remembered; the chosen area (if any) is used instead of the title-and-headers search
+        MarketChk.IsChecked = _prefs.ShareMarket;
+        ServerBox.Text = _prefs.Server;
+        if (!_prefs.ManualMarket) _marketRegion = null;
+        MarketChk.Checked += (_, _) => MarketSwitch(true);
+        MarketChk.Unchecked += (_, _) => MarketSwitch(false);
+        ServerBox.TextChanged += (_, _) => { if (_session != null) _session.Market.Server = ServerBox.Text.Trim(); };
+        MarketPickBtn.Click += (_, _) => PickMarket();
+        MarketResetLink.Click += (_, _) => { _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); UpdateMarketStatus(); Say("Back to automatic: the Market window is found by its title and column headers on the next Start.", "Faint"); };
+        MarketSentLink.Click += (_, _) => WhatsRead();
         try { LinkCodeRun.Text = Upload.InstallId.LinkCode(); } catch (Exception) { LinkCodeRun.Text = "unavailable"; }
         CopyCodeLink.Click += (_, _) => { try { Clipboard.SetText(LinkCodeRun.Text); Say("Link code copied. Paste it into your profile on the site to see your runs there.", "Good"); } catch (Exception) { Say("Couldn't reach the clipboard; the code is " + LinkCodeRun.Text, "Warn"); } };
         ResetLink.Click += (_, _) => { _region = null; _prefs.ManualChat = false; RegionStore.Clear(); UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Back to automatic: the chat is found when you start.", "Faint"); };
@@ -75,6 +87,7 @@ public partial class MainWindow : Window
         Closing += OnClosingWindow;
 
         UpdateStep2();
+        UpdateMarketStatus();
         ShowTable(null);
         SettingsBtn.Click += (_, _) => SetCompact(!_compact);
         SetCompact(_prefs.Compact, remember: false);
@@ -93,6 +106,10 @@ public partial class MainWindow : Window
         KindGrid.Margin = on ? new Thickness(0, 12, 0, 0) : new Thickness(36, 12, 0, 0);
         OptsRow.Margin = on ? new Thickness(0, 14, 0, 0) : new Thickness(36, 14, 0, 0);
         LinkRow.Margin = on ? new Thickness(0, 8, 0, 0) : new Thickness(36, 8, 0, 0);
+        // the Market card stays in the compact layout (its status matters while tracking), just without the step badge and indent
+        Badge4.Visibility = v;
+        Step4Title.Margin = on ? new Thickness(0) : new Thickness(12, 0, 0, 0);
+        foreach (var fe in new FrameworkElement[] { MarketRow, MarketRow2, MarketStatus }) fe.Margin = new Thickness(on ? 0 : 36, fe.Margin.Top, 0, 0);
         Kind.Width = on ? 168 : 200;
         KindHint.Visibility = v;                 // the zone name gets the room instead
         StartBtn.Width = on ? 160 : 196;
@@ -212,7 +229,8 @@ public partial class MainWindow : Window
             _settings.Upload.Enabled = ShareChk.IsChecked == true;
             _mode = SelectedMode;
             ApplyModeLabels();
-            var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName());
+            var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName(), marketRegion: _prefs.ManualMarket ? _marketRegion : null, server: ServerBox.Text.Trim());
+            session.Market.Enabled = MarketChk.IsChecked == true;
             await session.StartAsync();
             _session = session;
             _region = session.Region;
@@ -257,6 +275,7 @@ public partial class MainWindow : Window
         else { msg = "Stopped. Couldn't reach the site; run kept on this PC."; tone = "Warn"; }
         if (s.Engine.Events > 0) { SessionStore.Append(s.Engine, _items, s.Activity, _settings, shared); msg += $" Saved to your history ({SessionStore.Count()} runs)."; }
         _session = null;
+        UpdateMarketStatus(s.Market);
         TableTitle.Text = "LAST RUN · " + s.Activity.ToUpperInvariant();
         SetTrackingUi(false);
         Say(msg, tone);
@@ -270,6 +289,7 @@ public partial class MainWindow : Window
         StartBtn.BorderBrush = on ? new SolidColorBrush(Color.FromRgb(0xD9, 0x5E, 0x5E)) : new SolidColorBrush(Color.FromRgb(0x4C, 0x9B, 0xEF));
         _trayToggle.Text = on ? "Stop tracking" : "Start tracking";
         PickBtn.IsEnabled = !on; TestBtn.IsEnabled = !on; Kind.IsEnabled = !on; HudChk.IsEnabled = !on; ShareChk.IsEnabled = !on;
+        MarketPickBtn.IsEnabled = !on;   // the switch and the server stay live: both take effect on the running reader
         _tray.Text = on ? "Kinah Ledger · tracking" : "Kinah Ledger";
     }
 
@@ -278,6 +298,7 @@ public partial class MainWindow : Window
         var s = _session; if (s == null) return;
         FillNumbers(s.Engine, s.Engine.Elapsed);
         ZoneLbl.Text = "Zone: " + (s.Zone ?? "not read yet");
+        MarketStatus.Text = s.Market.Status;
         if (s.LastError.Length > 0) Say("Read problem: " + s.LastError, "Bad");
         else Say($"Tracking {s.Activity} · {s.Reads} reads" + (s.Unaligned > 0 ? $" · {s.Unaligned} skipped" : "") + (s.LastLine.Length > 0 ? " · last: " + s.LastLine : ""), "Faint");
         if (++_ticks % 4 == 0 && !_framing)
@@ -480,6 +501,48 @@ public partial class MainWindow : Window
         "Sharing isn't live yet; until the site can receive runs, everything stays on this PC.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
+    /* ---------------- market prices ---------------- */
+
+    void MarketSwitch(bool on)
+    {
+        _prefs.ShareMarket = on;
+        if (_session != null) _session.Market.Enabled = on; else UpdateMarketStatus();
+    }
+
+    void PickMarket()
+    {
+        Hide();
+        try
+        {
+            var r = RegionPickerWindow.Pick("Drag a box around the Market's listings: the rows with item, quantity and unit price.");
+            if (r != null) { _marketRegion = r; _prefs.ManualMarket = true; RegionStore.Save(r.Value, RegionStore.MarketFile); }
+        }
+        finally { Show(); Activate(); UpdateMarketStatus(); }
+        if (_prefs.ManualMarket && _marketRegion != null) Say("Market area chosen by hand. Each row is read as one line and split by its numbers. Used from the next Start.", "Good");
+    }
+
+    /// <summary>The card's line when no run is on: how the Market will be found, and what the last run read.</summary>
+    void UpdateMarketStatus(MarketCapture? last = null)
+    {
+        bool manual = _prefs.ManualMarket && _marketRegion != null;
+        MarketResetText.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
+        MarketPickBtn.Content = manual ? "Choose again" : "Choose the Market";
+        if (MarketChk.IsChecked != true) { MarketStatus.Text = "Off. The Market is never read; everything else keeps working."; return; }
+        string how = manual && _marketRegion is DRect m
+            ? $"Reads the area you chose ({m.Width} × {m.Height} px at {m.X}, {m.Y}) while you track."
+            : "Finds the Market window by its title and column headers while you track.";
+        string tail = last != null && last.AsksSeen > 0 ? $" Last run: {last.AsksSeen:N0} asks read, {last.Shared:N0} shared." : "";
+        MarketStatus.Text = how + " Only the listings on your screen are read: item, quantity, unit price. Seller names are never captured." + tail;
+    }
+
+    void WhatsRead() => MessageBox.Show(this,
+        "While the Market window is open in the game, the listings on your screen are read about once a second, the same way the chat is:\n\n" +
+        "•  item name, stack size and unit price of each ask\n•  your server, as typed here, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
+        "Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
+        "Nothing is clicked or typed in the game. Turn this off any time; the tracker still works.\n" +
+        "Sharing isn't live yet; until the site can receive prices, what's read stays on this PC.",
+        "What's read from the Market", MessageBoxButton.OK, MessageBoxImage.Information);
+
     /* ---------------- tray, hotkey, window state ---------------- */
 
     void BuildTray()
@@ -537,7 +600,9 @@ public partial class MainWindow : Window
         if (_demo) return;   // a layout render must not overwrite the player's saved choices
         _prefs.Activity = Kind.SelectedItem as string ?? "Open world";
         _prefs.Hud = HudChk.IsChecked == true; _prefs.Share = ShareChk.IsChecked == true;
+        _prefs.ShareMarket = MarketChk.IsChecked == true; _prefs.Server = ServerBox.Text.Trim();
         if (_prefs.ManualChat && _region is DRect mr) RegionStore.Save(mr);
+        if (_prefs.ManualMarket && _marketRegion is DRect mm) RegionStore.Save(mm, RegionStore.MarketFile);
         if (WindowState == WindowState.Normal && !double.IsNaN(Left)) { _prefs.WinX = (int)Left; _prefs.WinY = (int)Top; }
         _prefs.Save();
     }
@@ -565,10 +630,11 @@ public partial class MainWindow : Window
         return $"{reads} reads, chat {found}, zone {zone ?? "none"}, status: {Status.Text}";
     }
 
-    /// <summary>Fills the window with a sample session (open world, gathering or pets) so its layout can be reviewed without the game.</summary>
+    /// <summary>Fills the window with a sample session (open world, gathering, pets, or open world with the Market open) so its layout can be reviewed without the game.</summary>
     public void ShowDemo(string kind = "Open world")
     {
         _demo = true;
+        bool market = kind == "Market";
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false; UpdateStep2();
         ZoneLbl.Text = "Zone: Western Cantas Valley";
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
@@ -612,9 +678,26 @@ public partial class MainWindow : Window
             using var f = new System.Drawing.Font("Consolas", 5f);
             string[] lines = { "Orichalcum Ore acquired.", "Acquired 436 Kina.", "Kukuru acquired." };
             for (int i = 0; i < lines.Length; i++) g.DrawString(lines[i], f, System.Drawing.Brushes.Khaki, 12, 152 + i * 9);
+            if (market)
+            {
+                // the Market panel in the middle of the frame, its table outlined like the live preview does
+                using var panel = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(14, 20, 32));
+                using var marketPen = new System.Drawing.Pen(MarketCapture.MarkColor, 2);
+                g.FillRectangle(panel, 120, 30, 240, 120);
+                g.DrawString("Market", f, System.Drawing.Brushes.White, 126, 34);
+                g.DrawString("Item              Qty   Unit price    Total", f, System.Drawing.Brushes.Gray, 126, 46);
+                string[] rows = { "Spiritstone        x1       7,499     7,499", "Spiritstone       x10       7,520    75,200", "Spiritstone        x5       7,600    38,000", "Raw Leather       x20      14,949   298,980" };
+                for (int i = 0; i < rows.Length; i++) g.DrawString(rows[i], f, System.Drawing.Brushes.Gainsboro, 126, 58 + i * 9);
+                g.DrawRectangle(marketPen, 122, 32, 236, 116);
+            }
             SetPreview((System.Drawing.Bitmap)b.Clone());
         }
         SetTrackingUi(true);
         Say(_mode switch { Mode.Gather => "Tracking Gathering · Western Cantas Valley · 3,620 reads · last: Sapphire Gemstone acquired.", Mode.Pets => "Tracking Pets · Rock Tomb Hill · 3,620 reads · last: Obtained 1 Fera Soul Crystals.", _ => "Tracking Open world · Western Cantas Valley · 3,620 reads · last: Spiritstone acquired." }, "Faint");
+        if (market)
+        {
+            ServerBox.Text = "Siel (Elyos)"; MarketChk.IsChecked = true;
+            MarketStatus.Text = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
+        }
     }
 }

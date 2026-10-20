@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.RegularExpressions;
 using KinahLedger.Session;
 
 namespace KinahLedger.Upload;
@@ -83,16 +84,42 @@ public sealed record RunPayload(
 /// <summary>One zone's share of a run: how long, and what came out of it. This is what the "best spot per hour" tables are built from.</summary>
 public sealed record ZoneRun(int minutes, int kills, int nodes, long kinah, int drops, int pets, Dictionary<string, int> pets_by_name);
 
+/// <summary>One Market listing as seen on screen: what, how many, the price per unit, when. Never who listed it.</summary>
+public sealed record PriceAsk(string item, long unit_price, int qty, string seen_at);
+
+/// <summary>
+/// Exactly what leaves the PC while the Market is open: the server the player typed, the asks read since the last
+/// batch, the app version and the install ID. No character name, no account, no seller names, no screenshots.
+/// Posted to the /v1/prices route.
+/// </summary>
+public sealed record PriceBatch(string app, string server_key, string install, List<PriceAsk> asks);
+
+/// <summary>Region plus the server as typed, slugged: "na_e" and "Siel (Elyos)" give "na_e-siel-elyos". Same-named servers exist in every region, so both parts matter.</summary>
+public static class ServerKeys
+{
+    public static string Build(string region, string server)
+    {
+        var slug = Regex.Replace((server ?? "").ToLowerInvariant(), @"[^a-z0-9]+", "-").Trim('-');
+        return slug.Length == 0 ? region : $"{region}-{slug}";
+    }
+}
+
 public static class Uploader
 {
-    public static async Task<bool> SendAsync(RunPayload p, UploadSettings u)
+    public static Task<bool> SendAsync(RunPayload p, UploadSettings u) =>
+        !u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint) ? Task.FromResult(false) : PostAsync(u.Endpoint, p);
+
+    /// <summary>Market asks have their own switch in the window; here only the route matters.</summary>
+    public static Task<bool> SendPricesAsync(PriceBatch p, UploadSettings u) =>
+        string.IsNullOrWhiteSpace(u.PricesUrl) ? Task.FromResult(false) : PostAsync(u.PricesUrl, p);
+
+    static async Task<bool> PostAsync<T>(string url, T payload)
     {
-        if (!u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint)) return false;
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + RunPayload.AppVersion);
         try
         {
-            var r = await http.PostAsJsonAsync(u.Endpoint, p);
+            var r = await http.PostAsJsonAsync(url, payload);
             return r.IsSuccessStatusCode;
         }
         catch (HttpRequestException) { return false; }

@@ -16,10 +16,12 @@ public sealed class TrackerSession
     readonly CancellationTokenSource _cts = new();
     readonly int _interval;
     ScreenReader? _reader;
-    Task? _loop;
+    Task? _loop, _marketLoop;
     DateTime _zoneAt = DateTime.MinValue;
 
     public SessionEngine Engine { get; }
+    /// <summary>The Market reader that runs beside the chat loop; its switch and server can change while the run is on.</summary>
+    public MarketCapture Market { get; }
     public string Kind { get; }
     public Rectangle? Region { get; private set; }
     public bool ManualRegion { get; }
@@ -38,13 +40,15 @@ public sealed class TrackerSession
 
     public static readonly Color ChatColor = Color.FromArgb(76, 195, 245), ZoneColor = Color.FromArgb(241, 208, 140);
 
-    /// <summary>The whole game with the chat and map areas outlined; falls back to the chat crop when the game window isn't known.</summary>
+    /// <summary>The whole game with the chat, map and (when open) Market areas outlined; falls back to the chat crop when the game window isn't known.</summary>
     public Bitmap? Frame(int maxWidth)
     {
         var game = GameRect ?? GameWindow.Find(_settings.ProcessHints);
         if (game == null || Region == null) return Thumb;
         GameRect = game;
-        try { return ScreenReader.Frame(game.Value, maxWidth, (Region.Value, ChatColor), (ZoneLocator.Strip(game.Value), ZoneColor)); }
+        var marks = new List<(Rectangle, Color)> { (Region.Value, ChatColor), (ZoneLocator.Strip(game.Value), ZoneColor) };
+        if (Market.Enabled && Market.Layout is { } m && (Market.Detected || Market.Manual)) marks.Add((m.Outline, MarketCapture.MarkColor));
+        try { return ScreenReader.Frame(game.Value, maxWidth, marks.ToArray()); }
         catch (Exception) { return Thumb; }
     }
 
@@ -62,12 +66,13 @@ public sealed class TrackerSession
     public event Action<string>? LootLine;
     public event Action? Updated;
 
-    public TrackerSession(Rectangle? manualRegion, Settings s, ItemDictionary items, string kind, int? intervalMs = null)
+    public TrackerSession(Rectangle? manualRegion, Settings s, ItemDictionary items, string kind, int? intervalMs = null, Rectangle? marketRegion = null, string server = "")
     {
         _settings = s;
         _items = items;
         _parser = new ChatParser(items);
         Engine = new SessionEngine(items);
+        Market = new MarketCapture(s, items, marketRegion, server);
         Kind = kind;
         Region = manualRegion;
         ManualRegion = manualRegion != null;
@@ -90,6 +95,35 @@ public sealed class TrackerSession
         _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale);
         if (game != null) await ReadZone(game.Value);
         _loop ??= Task.Run(() => Loop(_cts.Token));
+        if (_settings.Market.Enabled) _marketLoop ??= Task.Run(() => MarketLoop(_cts.Token));
+    }
+
+    /// <summary>
+    /// The Market reader's own loop, about once a second, so a slow read of the big Market table never delays the chat.
+    /// It looks for the Market while it isn't open, reads it while it is, and sends queued asks every few seconds.
+    /// </summary>
+    async Task MarketLoop(CancellationToken ct)
+    {
+        int interval = Math.Clamp(_settings.Market.IntervalMs, 1000, 10000);
+        while (!ct.IsCancellationRequested)
+        {
+            var t0 = DateTime.UtcNow;
+            try
+            {
+                if (Market.Enabled)
+                {
+                    var game = GameRect ?? GameWindow.Find(_settings.ProcessHints);
+                    if (game != null) await Market.TickAsync(game.Value, _settings.Ocr.Scale);
+                }
+                if (Market.FlushDue) await Market.FlushAsync();
+            }
+            catch (Exception ex) { Market.LastError = ex.Message; CrashLog.Write("market", ex); }
+            int spent = (int)(DateTime.UtcNow - t0).TotalMilliseconds;
+            if (spent < interval) { try { await Task.Delay(interval - spent, ct); } catch (TaskCanceledException) { } }
+        }
+        // what was read in the last seconds still goes out when the run stops
+        try { while (Market.Pending > 0 && await Market.FlushAsync()) { } }
+        catch (Exception ex) { CrashLog.Write("market flush", ex); }
     }
 
     async Task ReadZone(Rectangle game)
@@ -154,6 +188,7 @@ public sealed class TrackerSession
     {
         _cts.Cancel();
         if (_loop != null) { try { await _loop; } catch (Exception) { /* loop ended */ } }
+        if (_marketLoop != null) { try { await _marketLoop; } catch (Exception) { /* loop ended */ } }
         Engine.Finish();
     }
 
@@ -172,6 +207,12 @@ public sealed class UserPrefs
     public bool ManualChat { get; set; }
     /// <summary>True once the chat and zone have been found: the window opens small, with the setup steps behind Settings.</summary>
     public bool Compact { get; set; }
+    /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
+    public bool ShareMarket { get; set; } = true;
+    /// <summary>True once the player chose the Market area by hand; the title-and-headers search then stays off until they switch back.</summary>
+    public bool ManualMarket { get; set; }
+    /// <summary>The server as typed ("Siel (Elyos)"), sent with prices so they land on the right board. Nothing is sent without it.</summary>
+    public string Server { get; set; } = "";
     public int? WinX { get; set; }
     public int? WinY { get; set; }
     /// <summary>Where the over-game panel was last dragged to.</summary>
