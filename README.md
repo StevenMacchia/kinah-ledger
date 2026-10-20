@@ -7,7 +7,7 @@ with NCSOFT. MIT licensed.
 This is a side project, separate from the author's professional work.
 
 ```
-site/      the website (single-file prototype in site/index.html)
+(website)  lives in a separate private repo; its download button points at this repo's releases
 tracker/   the Windows tracker, C# / .NET 8
 tools/     data tooling (item dictionary crawler, site data build)
 data/      data drops (tw-items.json goes here)
