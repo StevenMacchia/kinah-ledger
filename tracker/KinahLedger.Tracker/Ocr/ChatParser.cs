@@ -19,7 +19,7 @@ public sealed partial class ChatParser
     private static partial Regex Timestamp();
 
     /// <summary>"Acquired 520 Kina." The recognizer sometimes glues the verb to the number ("Acquiredn521 Kina?"), so the gap is loose.</summary>
-    [GeneratedRegex(@"\bacquired[\sn]{0,2}(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b(?<rest>.*)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\bacquired[\sn]{0,2}[.,\-'`]?\s?(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b(?<rest>.*)$", RegexOptions.IgnoreCase)]
     private static partial Regex Kina();
 
     [GeneratedRegex(@"\b(?:acquired|obtained|looted|picked up)\s+(?<name>.+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s*\.?\s*$", RegexOptions.IgnoreCase)]
@@ -202,24 +202,29 @@ public sealed partial class ChatParser
             var name = it.Groups["name"].Value.Trim().TrimEnd('.', ',', ';', ':', '\'', '"', '`', '-', ' ').Trim('[', ']', ' ');
             if (name.Length < 2) yield break;
             // "Acquired 3 Iron Ore" puts the count first; keep the name clean and the count right
-            var lead = System.Text.RegularExpressions.Regex.Match(name, @"^(\d{1,4})\s+(.+)$");
+            var lead = System.Text.RegularExpressions.Regex.Match(name, @"^(\d{1,4})[\s\-]+(.+)$");
             int lead_n = 0;
             if (lead.Success) { lead_n = int.Parse(lead.Groups[1].Value); name = lead.Groups[2].Value; }
             bool bound = name.Contains("(bound)", StringComparison.OrdinalIgnoreCase);
             // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
-            // "Obtained 1 Natura Soul Crystals.": a pet crystal, kept apart from drops and rated by zone, not by kill
-            var pet = System.Text.RegularExpressions.Regex.Match(name, @"^(?<pet>.+?)\s+sou[l1]\s+crysta[a-z]{0,3}[^a-z0-9]*$", RegexOptions.IgnoreCase);
+            // "Acquired .107 Kina" with a mark the Kina rule didn't expect: Kina is never an item, and a garbled amount isn't counted
+            if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\bk[i1l]nah?\s*$", RegexOptions.IgnoreCase)) yield break;
+            // "Obtained 1 Natura Soul Crystals.": a pet crystal, kept apart from drops and rated by zone, not by kill.
+            // The recognizer garbles these often ("Varian SouI Crystals", "Papis Soul poin!s"), so the match is loose:
+            // anything with "soul" followed by "cryst" or "poin" is one of the two, never a drop.
+            var pet = System.Text.RegularExpressions.Regex.Match(name, @"^(?<pet>.+?)[\s\-]*sou[l1iu]{1,2}[\s\-]*crys", RegexOptions.IgnoreCase);
             if (pet.Success)
             {
                 yield return new PetCrystal(time, pet.Groups["pet"].Value.Trim() + " Soul Crystal", Math.Clamp(n, 1, 9999));
                 yield break;
             }
-            // "Obtained 1 Oculazen Soul Points." is a per-kill payout, not loot
-            if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\b(?:points?|souls?)$", RegexOptions.IgnoreCase))
+            // "Obtained 1 Oculazen Soul Points." is a per-kill payout, not loot; "Papis Soul poin!s" and a cut-off "Papis Soul" are the same line
+            var pts = System.Text.RegularExpressions.Regex.Match(name, @"^(?<pet>.+?)[\s\-]*sou[l1iu]{1,2}(?:[\s\-]*po[i1l]n[^a-z]*t?[^a-z]*s?[^a-z]*)?$", RegexOptions.IgnoreCase);
+            if (pts.Success || System.Text.RegularExpressions.Regex.IsMatch(name, @"\b(?:points?|souls?)$", RegexOptions.IgnoreCase))
             {
-                yield return new CurrencyGained(time, name, Math.Clamp(n, 1, 999999));
+                yield return new CurrencyGained(time, pts.Success ? pts.Groups["pet"].Value.Trim() + " Soul Points" : name, Math.Clamp(n, 1, 999999));
                 yield break;
             }
             // common pickups are name-first ("Odyle acquired."), rarer ones verb-first ("Acquired Fine Odyle x2.");
