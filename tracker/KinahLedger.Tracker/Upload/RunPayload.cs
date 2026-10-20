@@ -62,7 +62,7 @@ public sealed record RunPayload(
     /// <param name="server">The chosen server's label ("Siel (Elyos)"); empty files the run under the region alone.</param>
     public static RunPayload Build(SessionEngine s, Settings cfg, string kind, string activity, string region, string server)
     {
-        var zones = s.ZoneSnapshot();
+        var zones = Shareable(s.ZoneSnapshot());
         var main = zones.Where(kv => kv.Key != SessionEngine.UnknownZone).OrderByDescending(kv => kv.Value.Seconds).Select(kv => kv.Key).FirstOrDefault();
         return new(
             AppVersion,
@@ -77,12 +77,41 @@ public sealed record RunPayload(
             s.Nodes,
             s.Kinah,
             s.KinahBound,
-            s.Items.ToDictionary(k => k.Key.ToString(), v => v.Value),
-            s.ItemsBound.ToDictionary(k => k.Key.ToString(), v => v.Value),
+            Keyed(s, s.Items),
+            Keyed(s, s.ItemsBound),
             s.PetSnapshot(),
             zones.Where(kv => kv.Value.Seconds >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0)
                  .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Seconds / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName)),
             InstallId.Get());
+    }
+
+    /// <summary>How an item is keyed in what is shared: its real id, or its name when the name wasn't in the item list (the site resolves either).</summary>
+    public static string ItemKey(SessionEngine s, long id) => id > 0 ? id.ToString() : s.ItemName(id);
+
+    static Dictionary<string, int> Keyed(SessionEngine s, Dictionary<long, int> counts)
+    {
+        var outp = new Dictionary<string, int>();
+        foreach (var (id, c) in counts) { var k = ItemKey(s, id); outp[k] = outp.GetValueOrDefault(k) + c; }
+        return outp;
+    }
+
+    /// <summary>
+    /// What leaves this PC names only zones the tracker is sure of: a known name or one with a place word. A label it
+    /// read off the minimap title but couldn't verify stays in the window here and is shared as "Unknown zone", so a
+    /// stray caption can't become a spot on the site.
+    /// </summary>
+    public static Dictionary<string, SessionEngine.ZoneStats> Shareable(Dictionary<string, SessionEngine.ZoneStats> zones)
+    {
+        var outp = new Dictionary<string, SessionEngine.ZoneStats>();
+        foreach (var (key, v) in zones)
+        {
+            var k = key == SessionEngine.UnknownZone || KinahLedger.Ocr.ZoneLocator.IsVerified(key) ? key : SessionEngine.UnknownZone;
+            if (!outp.TryGetValue(k, out var z)) { outp[k] = z = new SessionEngine.ZoneStats(); }
+            z.Seconds += v.Seconds; z.Kinah += v.Kinah; z.KinahDrops += v.KinahDrops; z.CurrencyLines += v.CurrencyLines;
+            z.Defeated += v.Defeated; z.Xp += v.Xp; z.Pets += v.Pets; z.Drops += v.Drops; z.Nodes += v.Nodes;
+            foreach (var (n, c) in v.PetsByName) z.PetsByName[n] = z.PetsByName.GetValueOrDefault(n) + c;
+        }
+        return outp;
     }
 }
 

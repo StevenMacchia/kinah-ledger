@@ -102,7 +102,7 @@
             <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="5"/>
           </Grid>
           <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
-          <TextBlock x:Name="Version" Text="v0.6.4" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+          <TextBlock x:Name="Version" Text="v0.6.5" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
           <TextBlock FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>

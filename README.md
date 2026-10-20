@@ -25,7 +25,8 @@ Since 0.6.2 it reads only the parts of the game that nothing covers. While anoth
 which program is in the way, and that time doesn't count toward any per-hour rate. `KinahLedger.exe in-view`
 shows what the tracker can see right now. Since 0.6.4 a zone name it has never seen (not in its list and without
 a place word such as Valley or Ruins) has to be read twice in a row before it counts, so a button or tooltip that
-drifts over the minimap can't become a zone.
+drifts over the minimap can't become a zone. Since 0.6.5 such a name is shown in the window only: what is shared files
+that time under "Unknown zone", so the site's spot tables hold only zones the tracker is sure of.
 
 **Screen reading.** The game prints every pickup in chat ("Acquired 2,790 Kina.",
 "Acquired Drakan hide ×2."). The tracker reads those lines off the screen with the text recognition
@@ -126,7 +127,13 @@ seconds later; whatever is still unsent when the window closes is dropped, and p
 icon URLs). NCSoft's EULA restricts automated access to its services, so running it is the owner's
 decision. See `docs/` for the pipeline and image-source notes.
 
+Since 0.6.5 the tracker fetches the site's item list (`kinahledger.com/data/items.json`: the id, name, grade and icon
+file name of every item in the game's dictionary, about 850 KB) once per start when it has changed, and keeps it under
+`%LocalAppData%\KinahLedger\items.json`. That is how drops leave this PC under their real item ids; nothing about the
+player goes up in that request. Offline, the saved copy is used, and a name the list doesn't hold is shared as the name.
+A `data/tw-items.json` beside the exe (the crawler's output) is used instead when present.
+
 The tracker ships no icons. When a row's item has a known icon (the 46 gathering materials always; anything else
-once `data/tw-items.json` sits beside the exe), the file is fetched once from NCSOFT's image server by name, the
+once the item list is on this PC), the file is fetched once from NCSOFT's image server by name, the
 way a browser does on their site, and kept under `%LocalAppData%\KinahLedger\icons`; a session touches a few dozen
 files at most. `"ui": { "icons": false }` in `settings.json` turns this off, and rows show a lettered tile instead.

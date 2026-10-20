@@ -293,6 +293,31 @@ options: --process aion[,other]");
             ok &= got == expect[i];
             Console.WriteLine($"  read {i + 1} [{string.Join(",", frames[i])}] -> new: [{got}]  expected [{expect[i]}] {(got == expect[i] ? "ok" : "MISMATCH")}");
         }
+        Console.WriteLine("\nZones in what is shared (unverified names fold into Unknown zone):");
+        var ze = new KinahLedger.Session.SessionEngine(items);
+        ze.CreditZone("Ask Gemini", 600); ze.CreditZone("Altamia Canyon", 300); ze.CreditZone("Sunlit Grove", 120); ze.CreditZone("Some Caption", 60);
+        var shared = RunPayload.Shareable(ze.ZoneSnapshot());
+        var sharedKeys = string.Join(", ", shared.Keys.OrderBy(k => k));
+        bool zok = !shared.ContainsKey("Ask Gemini") && !shared.ContainsKey("Some Caption") && shared.ContainsKey("Altamia Canyon") && shared.ContainsKey("Sunlit Grove")
+            && Math.Abs(shared[KinahLedger.Session.SessionEngine.UnknownZone].Seconds - 660) < 5;
+        var act = KinahLedger.Session.TrackerSession.ActivityOf(ze, "Open world");
+        zok &= act == "Open world · Altamia Canyon";
+        Console.WriteLine($"  shared zones: [{sharedKeys}]  activity: {act}  {(zok ? "ok" : "MISMATCH")}");
+        ok &= zok;
+        Console.WriteLine("\nItem list shapes (crawler and site) and the keys drops are shared under:");
+        var tmpList = Path.Combine(Path.GetTempPath(), "kl-items-test.json");
+        File.WriteAllText(tmpList, "{\"items\":[{\"id\":610531002,\"n\":\"Fresh Fruit\",\"g\":\"Common\",\"t\":1,\"c2\":\"CraftResource\",\"i\":\"Icon_A.png\"},{\"id\":110120001,\"name\":\"Noble Dragon Lord Greatsword\",\"grade\":\"Epic\",\"tradable\":true,\"categoryName\":\"Greatsword\",\"icon\":\"https://assets.playnccdn.com/x/Icon_B.png\"}]}");
+        var dict = new ItemDictionary();
+        long before = dict.IdOf("Fresh Fruit");                      // read before the list arrived: a synthetic id
+        int merged = dict.Merge(tmpList);
+        long after = dict.IdOf("Fresh Fruit"), sword = dict.IdOf("Noble Dragon Lord Greatsword"), odd = dict.IdOf("Zzyzx Shard");
+        var de = new KinahLedger.Session.SessionEngine(dict);
+        bool dok = merged == 2 && before < 0 && after == 610531002 && sword == 110120001 && odd < 0
+            && dict.IconUrl(after) == ItemDictionary.IconBase + "Icon_A.png" && dict.IconUrl(sword).EndsWith("Icon_B.png")
+            && RunPayload.ItemKey(de, after) == "610531002" && RunPayload.ItemKey(de, odd) == "Zzyzx Shard";
+        Console.WriteLine($"  merged {merged}, Fresh Fruit {before} -> {after}, sword {sword}, unknown {odd} -> key \"{RunPayload.ItemKey(de, odd)}\"  {(dok ? "ok" : "MISMATCH")}");
+        try { File.Delete(tmpList); } catch (Exception) { }
+        ok &= dok;
         Console.WriteLine(ok ? "\nAll tracker cases passed." : "\nTracker mismatch, see above.");
         return ok ? 0 : 1;
     }

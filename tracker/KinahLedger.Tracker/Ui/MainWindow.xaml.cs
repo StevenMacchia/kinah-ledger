@@ -57,6 +57,8 @@ public partial class MainWindow : Window
         IconCache.Enabled = settings.Ui.Icons;
         if (!_prefs.ManualMarket) _marketRegion = null;
         _settings.Upload.Enabled = _prefs.Share;
+        // the site's item list, so drops are shared under real ids and show their icons; one conditional request per start
+        if (watch && (settings.Ui.Icons || _settings.Upload.Enabled)) _ = DictionaryCache.RefreshAsync(_items);
         _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.ManualChat ? _region : null, _prefs.Server) { RegionKey = _prefs.Region, Server = _prefs.Server };
         _watcher.Market.Enabled = settings.Market.Enabled && _prefs.Share;   // prices ride on the one Share switch
         Icon = Native.AppIconSource();

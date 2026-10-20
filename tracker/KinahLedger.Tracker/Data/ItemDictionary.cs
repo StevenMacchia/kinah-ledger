@@ -4,13 +4,18 @@ namespace KinahLedger.Data;
 
 public sealed record ItemInfo(long Id, string Name, string Grade, bool Tradable, string Icon, string Category);
 
-/// <summary>Item names by ID, loaded from data/tw-items.json (the crawler's output). Empty when the file is absent.</summary>
+/// <summary>
+/// Item names by ID. Loaded from data/tw-items.json beside the exe (the crawler's output) when present, else from the
+/// site's item list kept by <see cref="DictionaryCache"/>; empty when neither exists. Safe to use from the reader thread
+/// while a fresh list is merged in.
+/// </summary>
 public sealed class ItemDictionary
 {
     readonly Dictionary<long, ItemInfo> _byId = new();
     readonly Dictionary<string, long> _byName = new();
+    readonly object _lock = new();
 
-    public int Count => _byId.Count;
+    public int Count { get { lock (_lock) return _byId.Count; } }
 
     /// <summary>Where the game's item icons live; the crawler's records carry full URLs under it, the gathering list only file names.</summary>
     public const string IconBase = "https://assets.playnccdn.com/static-aion2-gamedata/resources/";
@@ -18,11 +23,14 @@ public sealed class ItemDictionary
     /// <summary>The icon URL for an item, or "" when none is known (an unlisted item, or a synthetic ID for a misread name).</summary>
     public string IconUrl(long id)
     {
-        if (!_byId.TryGetValue(id, out var i) || i.Icon.Length == 0) return "";
-        return i.Icon.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? i.Icon : IconBase + i.Icon;
+        lock (_lock)
+        {
+            if (!_byId.TryGetValue(id, out var i) || i.Icon.Length == 0) return "";
+            return i.Icon.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? i.Icon : IconBase + i.Icon;
+        }
     }
-    public ItemInfo? Get(long id) => _byId.GetValueOrDefault(id);
-    public string NameOf(long id) => _byId.TryGetValue(id, out var i) ? i.Name : $"item {id}";
+    public ItemInfo? Get(long id) { lock (_lock) return _byId.GetValueOrDefault(id); }
+    public string NameOf(long id) { lock (_lock) return _byId.TryGetValue(id, out var i) ? i.Name : $"item {id}"; }
 
     /// <summary>
     /// ID for a name read off the screen. Known names map to their real item ID; unknown ones get a
@@ -30,25 +38,31 @@ public sealed class ItemDictionary
     /// </summary>
     public long IdOf(string name)
     {
-        var key = Norm(name);
-        if (_byName.TryGetValue(key, out var id)) return id;
+        lock (_lock)
+        {
+            var key = Norm(name);
+            if (_byName.TryGetValue(key, out var id)) return id;
 
-        // a misread of a known name ("Fresh Frult") snaps to the closest real item, so one drop doesn't become two rows
-        var close = Closest(key);
-        if (close != null) { _byName[key] = close.Value; return close.Value; }
+            // a misread of a known name ("Fresh Frult") snaps to the closest real item, so one drop doesn't become two rows
+            var close = Closest(key);
+            if (close != null) { _byName[key] = close.Value; return close.Value; }
 
-        long synthetic = -(long)(Fnv(key) & 0x7FFFFFFF) - 1;
-        _byId.TryAdd(synthetic, new ItemInfo(synthetic, name.Trim(), "", !key.EndsWith("(bound)"), "", ""));
-        _byName[key] = synthetic;
-        return synthetic;
+            long synthetic = -(long)(Fnv(key) & 0x7FFFFFFF) - 1;
+            _byId.TryAdd(synthetic, new ItemInfo(synthetic, name.Trim(), "", !key.EndsWith("(bound)"), "", ""));
+            _byName[key] = synthetic;
+            return synthetic;
+        }
     }
 
     /// <summary>True when the name is a real item, exactly or by a close misread: a dictionary entry or a gathering material. Adds nothing.</summary>
     public bool Knows(string name)
     {
-        var key = Norm(name);
-        if (_byName.TryGetValue(key, out var id)) return id > 0 || (_byId.TryGetValue(id, out var info) && info.Category.Length > 0);
-        return Closest(key) is { } close && (close > 0 || (_byId.TryGetValue(close, out var ci) && ci.Category.Length > 0));
+        lock (_lock)
+        {
+            var key = Norm(name);
+            if (_byName.TryGetValue(key, out var id)) return id > 0 || (_byId.TryGetValue(id, out var info) && info.Category.Length > 0);
+            return Closest(key) is { } close && (close > 0 || (_byId.TryGetValue(close, out var ci) && ci.Category.Length > 0));
+        }
     }
 
     long? Closest(string key)
@@ -94,6 +108,7 @@ public sealed class ItemDictionary
         var d = new ItemDictionary();
         var p = Settings.Resolve(path);
         if (File.Exists(p)) d.LoadFile(p);
+        else if (File.Exists(DictionaryCache.FilePath)) { try { d.LoadFile(DictionaryCache.FilePath); } catch (Exception) { /* a torn download: the next refresh replaces it */ } }
         // the gathering materials are always known, so misreads of them snap to the right name even without the full list
         foreach (var g in GatheringCatalog.All)
             if (!d._byName.ContainsKey(Norm(g.Name)))
@@ -126,25 +141,32 @@ public sealed class ItemDictionary
         catch (Exception) { /* icons are decoration: a bad file costs nothing */ }
     }
 
-    void LoadFile(string p)
+    /// <summary>Adds (or refreshes) the items in a list file while the tracker runs. Names read before the list arrived now resolve to their real item.</summary>
+    public int Merge(string path) { lock (_lock) return LoadFile(path); }
+
+    /// <summary>Reads either shape: the crawler's (name, grade, tradable, icon, categoryName) or the site's compact list (n, g, t, i, c2).</summary>
+    int LoadFile(string p)
     {
-        var d = this;
+        int n = 0;
         using var doc = JsonDocument.Parse(File.ReadAllText(p));
-        if (!doc.RootElement.TryGetProperty("items", out var arr)) return;
+        if (!doc.RootElement.TryGetProperty("items", out var arr) || arr.ValueKind != JsonValueKind.Array) return 0;
         foreach (var e in arr.EnumerateArray())
         {
-            if (!e.TryGetProperty("id", out var idEl) || !idEl.TryGetInt64(out var id)) continue;
-            var info = new ItemInfo(
-                id,
-                Str(e, "name"),
-                Str(e, "grade"),
-                e.TryGetProperty("tradable", out var t) && t.ValueKind == JsonValueKind.True,
-                Str(e, "icon"),
-                Str(e, "categoryName"));
-            d._byId[id] = info;
-            // first ID wins per name, so a later duplicate doesn't flip the mapping
-            d._byName.TryAdd(Norm(info.Name), id);
+            if (!e.TryGetProperty("id", out var idEl) || !idEl.TryGetInt64(out var id) || id <= 0) continue;
+            var name = Str(e, "name"); if (name.Length == 0) name = Str(e, "n");
+            if (name.Length == 0) continue;
+            var grade = Str(e, "grade"); if (grade.Length == 0) grade = Str(e, "g");
+            bool tradable = e.TryGetProperty("tradable", out var t) ? t.ValueKind == JsonValueKind.True
+                          : e.TryGetProperty("t", out var t2) && t2.ValueKind == JsonValueKind.Number && t2.GetInt32() != 0;
+            var icon = Str(e, "icon"); if (icon.Length == 0) icon = Str(e, "i");
+            var cat = Str(e, "categoryName"); if (cat.Length == 0) cat = Str(e, "c2");
+            _byId[id] = new ItemInfo(id, name.Trim(), grade, tradable, icon, cat);
+            n++;
+            // first real ID wins per name, so a later duplicate doesn't flip the mapping; a synthetic one gives way
+            var key = Norm(name);
+            if (!_byName.TryGetValue(key, out var cur) || cur < 0) _byName[key] = id;
         }
+        return n;
     }
 
     static string Str(JsonElement e, string name) =>

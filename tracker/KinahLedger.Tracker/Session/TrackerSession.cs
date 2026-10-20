@@ -63,8 +63,9 @@ public sealed class TrackerSession
 
     public static string ActivityOf(SessionEngine e, string kind)
     {
-        var zs = e.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).ToList();
-        var z = zs.Count > 0 ? zs.MaxBy(kv => kv.Value.Seconds).Key : e.Zone;
+        // the label is shared with the run, so only a zone the tracker is sure of goes into it
+        var zs = e.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone && ZoneLocator.IsVerified(kv.Key)).ToList();
+        var z = zs.Count > 0 ? zs.MaxBy(kv => kv.Value.Seconds).Key : (e.Zone is { } cur && ZoneLocator.IsVerified(cur) ? cur : null);
         return z != null ? $"{kind} · {z}" : kind;
     }
 
