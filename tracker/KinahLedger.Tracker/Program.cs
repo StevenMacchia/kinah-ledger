@@ -257,9 +257,12 @@ options: --process aion[,other]");
             new List<string> { "b", "c", "d" },
             new List<string> { "c", "d", "d" },
             new List<string> { "x", "y", "z" },
-            new List<string> { "y", "z", "w" }
+            new List<string> { "y", "z", "w" },
+            new List<string> { "a", "b", "c" },
+            new List<string>(),                      // the chat faded out: nothing new, and the baseline stays
+            new List<string> { "a", "b", "c", "d" }  // it came back with one more line, and only that one counts
         };
-        string[] expect = { "", "d", "", "d", "", "w" };
+        string[] expect = { "", "d", "", "d", "", "w", "", "", "d" };
         bool ok = true;
         for (int i = 0; i < frames.Length; i++)
         {
@@ -407,7 +410,7 @@ options: --process aion[,other]");
 
         var stop = false;
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop = true; };
-        var view = new ConsoleView(engine, () => session.Activity, () => $"reads {session.Reads}  skipped {session.Unaligned}" + (session.LastError.Length > 0 ? "  " + session.LastError : "") + (watcher.Market.Enabled ? $"  market: {watcher.Market.AsksSeen} asks, {watcher.Market.Shared} shared" : ""));
+        var view = new ConsoleView(engine, () => session.Activity, () => $"reads {session.Reads}  skipped {session.Unaligned}  empty {session.Empty}" + (session.LastError.Length > 0 ? "  " + session.LastError : "") + (watcher.Market.Enabled ? $"  market: {watcher.Market.AsksSeen} asks, {watcher.Market.Shared} shared" : ""));
         while (!stop) { view.Render(); Thread.Sleep(1000); }
         session.StopAsync().GetAwaiter().GetResult();
         watcher.StopAsync().GetAwaiter().GetResult();

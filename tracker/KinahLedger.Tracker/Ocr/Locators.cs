@@ -38,6 +38,8 @@ public static class GameWindow
 public static class ChatLocator
 {
     static readonly Regex Input = new(@"enter\s+your\s+messag|your\s+message", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // what a chat line looks like on its own: "[Name] text" from a player, or one of the game's own messages
+    static readonly Regex ChatLine = new(@"^\[[^\]]{2,20}\]\s|joined event|acquired|Kina|defeated|Obtained|failed|has logged in", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>The bottom-left quarter that holds the chat and its input box.</summary>
     public static Rectangle Corner(Rectangle game) => new(game.Left, game.Top + game.Height / 2, game.Width / 2, game.Height / 2);
@@ -47,7 +49,7 @@ public static class ChatLocator
         var corner = Corner(game);
         var lines = await ScreenReader.ReadBoxesAsync(corner, 1);
         var input = lines.FirstOrDefault(l => Input.IsMatch(l.Text));
-        if (input == null) return (null, $"couldn't see the chat input box in the bottom-left corner ({lines.Count} lines read)");
+        if (input == null) return await FromLines(game, lines);
 
         // the input row starts with the channel tab ("Common"); the chat's left edge is there, not where the placeholder text starts
         int rowMid = input.Box.Top + input.Box.Height / 2;
@@ -68,6 +70,45 @@ public static class ChatLocator
         int top = Math.Max(game.Top, bottom - lineH * 12);            // room for twelve lines: the chat grows upward
         var region = Rectangle.FromLTRB(left, top, right, bottom);
         return (region, $"chat found above the input box: {above.Count} line(s) visible, ~{lineH}px per line");
+    }
+
+    /// <summary>
+    /// The frameless chat: its lines float over the world at the bottom-left with no frame and no input box, and fade out
+    /// when idle, so there is no input row to anchor on. The lines are left-aligned, so two or more chat-shaped lines that
+    /// share a left edge give the position; the box is sized the way the input-row path sizes it.
+    /// </summary>
+    static async Task<(Rectangle? region, string note)> FromLines(Rectangle game, List<OcrLineBox> lines)
+    {
+        var chat = ChatLines(lines);
+        bool boosted = false;
+        if (chat.Count < 2)
+        {
+            // floating text over the world is faint: read the corner again with the contrast boost the live reader uses
+            lines = await ScreenReader.ReadBoxesAsync(Corner(game), 2, boost: true);
+            chat = ChatLines(lines);
+            boosted = true;
+        }
+        if (chat.Count < 2) return (null, $"couldn't see the chat input box or any chat lines in the bottom-left corner ({lines.Count} lines read)");
+
+        int lineH = Math.Max(14, (int)Math.Round(chat.Average(l => l.Box.Height) * 1.45));
+        int left = Math.Max(game.Left, chat.Min(l => l.Box.Left) - 12);
+        int right = Math.Min(game.Left + (int)(game.Width * 0.55), chat.Max(l => l.Box.Right) + 40);
+        int bottom = Math.Min(game.Bottom, chat.Max(l => l.Box.Bottom) + lineH);   // room for the next line, which arrives below
+        int top = Math.Max(game.Top, bottom - lineH * 12);
+        var region = Rectangle.FromLTRB(left, top, right, bottom);
+        return (region, $"chat found from its lines; the input box isn't shown ({chat.Count} lines{(boosted ? ", boosted read" : "")})");
+    }
+
+    /// <summary>Chat-shaped lines that share the most common left edge (within 40 px): the chat is left-aligned, stray UI text isn't.</summary>
+    static List<OcrLineBox> ChatLines(List<OcrLineBox> lines)
+    {
+        var shaped = lines.Where(l => ChatLine.IsMatch(l.Text.Trim())).ToList();
+        if (shaped.Count < 2) return shaped;
+        var anchor = shaped
+            .OrderByDescending(a => shaped.Count(b => Math.Abs(b.Box.Left - a.Box.Left) <= 40))
+            .ThenBy(a => a.Box.Left)
+            .First();
+        return shaped.Where(l => Math.Abs(l.Box.Left - anchor.Box.Left) <= 40).ToList();
     }
 }
 
