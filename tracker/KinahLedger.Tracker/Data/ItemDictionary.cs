@@ -75,9 +75,23 @@ public sealed class ItemDictionary
     {
         var d = new ItemDictionary();
         var p = Settings.Resolve(path);
-        if (!File.Exists(p)) return d;
+        if (File.Exists(p)) d.LoadFile(p);
+        // the gathering materials are always known, so misreads of them snap to the right name even without the full list
+        foreach (var g in GatheringCatalog.All)
+            if (!d._byName.ContainsKey(Norm(g.Name)))
+            {
+                long id = -(long)(Fnv("gather:" + Norm(g.Name)) & 0x7FFFFFFF) - 1;
+                d._byId[id] = new ItemInfo(id, g.Name, g.Grade, true, "", "Gathering Material");
+                d._byName[Norm(g.Name)] = id;
+            }
+        return d;
+    }
+
+    void LoadFile(string p)
+    {
+        var d = this;
         using var doc = JsonDocument.Parse(File.ReadAllText(p));
-        if (!doc.RootElement.TryGetProperty("items", out var arr)) return d;
+        if (!doc.RootElement.TryGetProperty("items", out var arr)) return;
         foreach (var e in arr.EnumerateArray())
         {
             if (!e.TryGetProperty("id", out var idEl) || !idEl.TryGetInt64(out var id)) continue;
@@ -92,7 +106,6 @@ public sealed class ItemDictionary
             // first ID wins per name, so a later duplicate doesn't flip the mapping
             d._byName.TryAdd(Norm(info.Name), id);
         }
-        return d;
     }
 
     static string Str(JsonElement e, string name) =>

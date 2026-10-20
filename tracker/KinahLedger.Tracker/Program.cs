@@ -258,7 +258,7 @@ options: --process aion[,other]   --device <adapter name>");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("gathering"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -280,9 +280,17 @@ options: --process aion[,other]   --device <adapter name>");
             "Acquired Radiant Odyle (Bound) ×4.",
             "Spiritstone acquired.",
             "Fresh Fruit acquirea.",
+            "Orichalcum Ore acquired.",
+            "Fine Orichalcum Ore x2 acquired.",
+            "Ruby Gemstone acquired.",
+            "Orichalcurn Ore acquired.",
             "Fresh Fruit x3 acquired.",
             "Obtained 1 Oculazen Soul Points.",
             "Acquired 520 Kina.",
+            "Acquired 13,000 Kina (Bound).",
+            "Acquired Artisan's Refining Stone (Bound) x3.",
+            "Title Acquired: Extracting in My Sleep",
+            "[Sakukun] the eastern altamia hig8hland",
             "You defeated Flame Sprite.",
             "Flame Sprite dealt 1,204 damage to you.",
             "[Vina] where did the filthy asmos go",
@@ -324,6 +332,8 @@ options: --process aion[,other]   --device <adapter name>");
         KinahChanged k => $"Kinah {(k.Delta >= 0 ? "+" : "")}{k.Delta:N0}{(k.Bound ? " (bound)" : "")}",
         ItemAcquired a => $"{items.NameOf(a.ItemId)} ×{a.Count}{(a.Bound ? " (bound)" : "")}",
         MobKilled => "kill",
+        CurrencyGained c => $"{c.Name} +{c.Amount:N0} (counts as a kill, not a drop)",
+        RewardReceived r => $"reward: {r.Name} ×{r.Count} (skipped)",
         ZoneChanged z => $"zone {z.ZoneId}",
         _ => ev.GetType().Name
     };

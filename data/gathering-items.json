@@ -1,0 +1,467 @@
+{
+ "source": "tw.ncsoft.com/aion2_tw/v2.0 dict, category Misc_001/GatherResource, locale en-US",
+ "fetched": "2026-10-20T03:39:37.194Z",
+ "count": 46,
+ "items": [
+  {
+   "name": "Aria",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Herb_L_c_001.png",
+   "ids": [
+    610670041,
+    630670001
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Asvata Log",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Wood_A_c_001.png",
+   "ids": [
+    610650012,
+    630650002
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Azpha",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Herb_D_c_001.png",
+   "ids": [
+    610670043,
+    630670003
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Calendula",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Herb_D_c_002.png",
+   "ids": [
+    610670044,
+    630670004
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Conide",
+   "grade": "Common",
+   "icon": "Icon_Gather_Food_L_lv1_01c.png",
+   "ids": [
+    610680053,
+    630680009
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Coriolus",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Food_L_c_001.png",
+   "ids": [
+    610680043,
+    630680001
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Cypri",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Food_L_c_006.png",
+   "ids": [
+    610680048,
+    630680005
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Diamond Gemstone",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Gemstone_A_c_003.png",
+   "ids": [
+    610660026,
+    630660002
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fine Asvata Log",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Wood_A_r_001.png",
+   "ids": [
+    610650014,
+    630650004
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fine Diamond Gemstone",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Gemstone_A_r_003.png",
+   "ids": [
+    610660029,
+    630660005
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fine Odyle",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Od_L_lv4_02a.png",
+   "ids": [
+    610610014,
+    630610002
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fine Orichalcum Ore",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Ore_A_r_002.png",
+   "ids": [
+    610620014,
+    630620002
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fine Ruby Gemstone",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Gemstone_A_r_004.png",
+   "ids": [
+    610660030,
+    630660006
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fine Sapphire Gemstone",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Gemstone_A_r_002.png",
+   "ids": [
+    610660028,
+    630660004
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fine Yggdrasil Log",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Wood_A_r_001.png",
+   "ids": [
+    610650013,
+    630650003
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fresh Aria",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Herb_L_r_001.png",
+   "ids": [
+    610670045,
+    630670005
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fresh Azpha",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Herb_D_r_001.png",
+   "ids": [
+    610670047,
+    630670007
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fresh Calendula",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Herb_D_r_002.png",
+   "ids": [
+    610670048,
+    630670008
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Fresh Targena",
+   "grade": "Rare",
+   "icon": "Icon_Item_Gather_Herb_D_r_002.png",
+   "ids": [
+    610670046,
+    630670006
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Inina",
+   "grade": "Common",
+   "icon": "Icon_Gather_Food_L_lv1_01c.png",
+   "ids": [
+    610680047,
+    630680004
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Kukuru",
+   "grade": "Common",
+   "icon": "Icon_Gather_Fruit_L_lv2_01a.png",
+   "ids": [
+    610680044,
+    630680002
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Mela",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Food_D_c_003.png",
+   "ids": [
+    610680045,
+    630680003
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Morfa",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Food_L_c_001.png",
+   "ids": [
+    610680049,
+    630680006
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Odyle",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Od_L_lv2_02a.png",
+   "ids": [
+    610610013,
+    630610001
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Ohkra",
+   "grade": "Common",
+   "icon": "Icon_Gather_Fruit_L_lv2_01a.png",
+   "ids": [
+    610680050,
+    630680007
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Orichalcum Ore",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Ore_A_c_002.png",
+   "ids": [
+    610620013,
+    630620001
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Pujery",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Food_L_c_006.png",
+   "ids": [
+    610680054,
+    630680010
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Pure Asvata Log",
+   "grade": "Legend",
+   "icon": "Icon_Item_Gather_Wood_A_l_001.png",
+   "ids": [
+    610650016,
+    630650006
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Pure Diamond Gemstone",
+   "grade": "Legend",
+   "icon": "Icon_Item_Gather_Gemstone_A_l_003.png",
+   "ids": [
+    610660032,
+    630660008
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Pure Odyle",
+   "grade": "Legend",
+   "icon": "Icon_Item_Gather_Od_L_lv4_04a.png",
+   "ids": [
+    610610015,
+    630610003
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Pure Orichalcum Ore",
+   "grade": "Legend",
+   "icon": "Icon_Item_Gather_Ore_A_l_002.png",
+   "ids": [
+    610620015,
+    630620003
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Pure Ruby Gemstone",
+   "grade": "Legend",
+   "icon": "Icon_Item_Gather_Gemstone_A_l_004.png",
+   "ids": [
+    610660033,
+    630660009
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Pure Sapphire Gemstone",
+   "grade": "Legend",
+   "icon": "Icon_Item_Gather_Gemstone_A_l_002.png",
+   "ids": [
+    610660031,
+    630660007
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Pure Yggdrasil Log",
+   "grade": "Legend",
+   "icon": "Icon_Item_Gather_Wood_A_l_001.png",
+   "ids": [
+    610650015,
+    630650005
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Radiant Asvata Log",
+   "grade": "Unique",
+   "icon": "Icon_Item_Gather_Wood_A_u_001.png",
+   "ids": [
+    610650018,
+    630650008
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Radiant Diamond Gemstone",
+   "grade": "Unique",
+   "icon": "Icon_Item_Gather_Gemstone_A_u_002.png",
+   "ids": [
+    610660035,
+    630660011
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Radiant Odyle",
+   "grade": "Unique",
+   "icon": "Icon_Item_Gather_Od_A_u_001.png",
+   "ids": [
+    610610016,
+    630610004
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Radiant Orichalcum Ore",
+   "grade": "Unique",
+   "icon": "Icon_Item_Gather_Ore_A_u_001.png",
+   "ids": [
+    610620016,
+    630620004
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Radiant Ruby Gemstone",
+   "grade": "Unique",
+   "icon": "Icon_Item_Gather_Gemstone_A_u_003.png",
+   "ids": [
+    610660036,
+    630660012
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Radiant Sapphire Gemstone",
+   "grade": "Unique",
+   "icon": "Icon_Item_Gather_Gemstone_A_u_001.png",
+   "ids": [
+    610660034,
+    630660010
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Radiant Yggdrasil Log",
+   "grade": "Unique",
+   "icon": "Icon_Item_Gather_Wood_A_u_001.png",
+   "ids": [
+    610650017,
+    630650007
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Raydam",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Food_L_c_003.png",
+   "ids": [
+    610680051,
+    630680008
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Ruby Gemstone",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Gemstone_A_c_004.png",
+   "ids": [
+    610660027,
+    630660003
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Sapphire Gemstone",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Gemstone_A_c_002.png",
+   "ids": [
+    610660025,
+    630660001
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Targena",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Herb_D_c_002.png",
+   "ids": [
+    610670042,
+    630670002
+   ],
+   "tradable": true
+  },
+  {
+   "name": "Yggdrasil Log",
+   "grade": "Common",
+   "icon": "Icon_Item_Gather_Wood_A_c_001.png",
+   "ids": [
+    610650011,
+    630650001
+   ],
+   "tradable": true
+  }
+ ]
+}

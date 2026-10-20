@@ -7,6 +7,22 @@
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
         WindowStartupLocation="CenterScreen">
 
+  <Window.Resources>
+    <DataTemplate x:Key="RowTemplate">
+      <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Height="34">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="12,0,8,0" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
+          <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{StaticResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
+          <TextBlock Grid.Column="2" Text="{Binding DropPct}" Foreground="{StaticResource Mint}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
+          <TextBlock Grid.Column="3" Text="{Binding PerHour}" Foreground="{StaticResource Violet}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </Window.Resources>
+
   <Border x:Name="Root" Background="{StaticResource Bg}" Padding="26,20,26,18">
     <StackPanel>
 
@@ -19,7 +35,7 @@
         </StackPanel>
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
           <TextBlock HorizontalAlignment="Right" FontSize="13"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-          <TextBlock x:Name="Version" Text="v0.4.2" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
+          <TextBlock x:Name="Version" Text="v0.4.3" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
         </StackPanel>
       </Grid>
 
@@ -72,8 +88,8 @@
               <TextBlock Style="{StaticResource StepTitle}" Text="What you're farming"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Margin="36,12,0,0">
-              <ComboBox x:Name="Kind" Width="160"/>
-              <TextBox x:Name="Place" Width="280" Margin="10,0,0,0" Tag="zone or mobs, e.g. Lakrum elites"/>
+              <ComboBox x:Name="Kind" Width="220"/>
+              <TextBlock x:Name="KindHint" Style="{StaticResource BodyStyle}" Margin="14,0,0,0" VerticalAlignment="Center" MaxWidth="240" FontSize="12"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Margin="36,14,0,0">
               <CheckBox x:Name="HudChk" Content="Show panel over the game"/>
@@ -91,62 +107,70 @@
       <!-- tiles -->
       <UniformGrid Columns="4" Margin="-6,12,-6,0">
         <Border Style="{StaticResource CardStyle}" Margin="6,0" Padding="16,12,16,14">
-          <StackPanel><TextBlock Style="{StaticResource LabelStyle}" Text="KINAH / HR"/><TextBlock x:Name="KinahHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Gold}" Text="0"/></StackPanel>
+          <StackPanel><TextBlock x:Name="Tile1Label" Style="{StaticResource LabelStyle}" Text="KINAH / HR"/><TextBlock x:Name="KinahHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Gold}" Text="0"/></StackPanel>
         </Border>
         <Border Style="{StaticResource CardStyle}" Margin="6,0" Padding="16,12,16,14">
-          <StackPanel><TextBlock Style="{StaticResource LabelStyle}" Text="KINAH / KILL"/><TextBlock x:Name="KinahKill" Style="{StaticResource TileValue}" Foreground="{StaticResource Gold}" Text="—"/></StackPanel>
+          <StackPanel><TextBlock x:Name="Tile2Label" Style="{StaticResource LabelStyle}" Text="KINAH / KILL"/><TextBlock x:Name="KinahKill" Style="{StaticResource TileValue}" Foreground="{StaticResource Gold}" Text="—"/></StackPanel>
         </Border>
         <Border Style="{StaticResource CardStyle}" Margin="6,0" Padding="16,12,16,14">
-          <StackPanel><TextBlock Style="{StaticResource LabelStyle}" Text="KILLS / HR"/><TextBlock x:Name="KillsHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Mint}" Text="0"/></StackPanel>
+          <StackPanel><TextBlock x:Name="Tile3Label" Style="{StaticResource LabelStyle}" Text="KILLS / HR"/><TextBlock x:Name="KillsHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Mint}" Text="0"/></StackPanel>
         </Border>
         <Border Style="{StaticResource CardStyle}" Margin="6,0" Padding="16,12,16,14">
-          <StackPanel><TextBlock Style="{StaticResource LabelStyle}" Text="DROPS / HR"/><TextBlock x:Name="DropsHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Violet}" Text="0"/></StackPanel>
+          <StackPanel><TextBlock x:Name="Tile4Label" Style="{StaticResource LabelStyle}" Text="DROPS / HR"/><TextBlock x:Name="DropsHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Violet}" Text="0"/></StackPanel>
         </Border>
       </UniformGrid>
 
-      <!-- drops -->
+      <!-- drops and gathered, two separate tables -->
       <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="20,14,20,12">
-        <StackPanel>
+        <StackPanel x:Name="TableStack">
           <Grid Margin="0,0,0,10">
-            <TextBlock x:Name="TableTitle" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center"/>
+            <TextBlock x:Name="TableTitle" Style="{StaticResource LabelStyle}" Text="THIS SESSION" VerticalAlignment="Center"/>
             <TextBlock x:Name="Summary" Foreground="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" Text="no run yet"/>
           </Grid>
-          <Border Background="{StaticResource Card2}" CornerRadius="6" Height="30">
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
-              </Grid.ColumnDefinitions>
-              <TextBlock Style="{StaticResource LabelStyle}" Text="ITEM" VerticalAlignment="Center" Margin="12,0,0,0"/>
-              <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
-              <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="DROP %" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" ToolTip="Drops divided by kills. Kills are counted from Kinah pickups (one per mob), or from kill lines when the chat shows them."/>
-              <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+
+          <StackPanel x:Name="DropsSection">
+            <Border Background="{StaticResource Card2}" CornerRadius="6" Height="30">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource LabelStyle}" Text="DROPS FROM KILLS" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource LabelStyle}" Text="DROP %" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" ToolTip="Drops divided by kills. Kills are counted from Kinah or Soul Point pickups (one per mob), or from kill lines when the chat shows them."/>
+                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+              </Grid>
+            </Border>
+            <Grid MinHeight="72">
+              <ScrollViewer MaxHeight="206" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="Rows" ItemTemplate="{StaticResource RowTemplate}"/>
+              </ScrollViewer>
+              <TextBlock x:Name="TableEmpty" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="460"
+                         Text="Drops show here as they're read, with the drop rate per kill and per hour."/>
             </Grid>
-          </Border>
-          <Grid MinHeight="168">
-            <ScrollViewer MaxHeight="232" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-              <ItemsControl x:Name="Rows">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Height="34">
-                      <Grid>
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="12,0,8,0" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{StaticResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
-                        <TextBlock Grid.Column="2" Text="{Binding DropPct}" Foreground="{StaticResource Mint}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
-                        <TextBlock Grid.Column="3" Text="{Binding PerHour}" Foreground="{StaticResource Violet}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
-                      </Grid>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
-            <TextBlock x:Name="TableEmpty" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="460"
-                       Text="Drops show here as they're read, with the drop rate per kill and per hour."/>
-          </Grid>
-          <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" FontSize="12" Margin="0,8,0,0" Visibility="Collapsed"
-                     Text="Drop % appears once kills are counted. Kills come from Kinah pickups, one per mob."/>
+          </StackPanel>
+
+          <StackPanel x:Name="GatherSection" Margin="0,12,0,0">
+            <Border Background="{StaticResource Card2}" CornerRadius="6" Height="30">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource LabelStyle}" Text="GATHERED" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="COUNT" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER NODE" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" ToolTip="Count divided by nodes. Any ore, log, Odyle, herb or food line counts as one node; gemstones and higher tiers are the finds."/>
+                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+              </Grid>
+            </Border>
+            <Grid MinHeight="72">
+              <ScrollViewer MaxHeight="206" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="GatherRows" ItemTemplate="{StaticResource RowTemplate}"/>
+              </ScrollViewer>
+              <TextBlock x:Name="GatherEmpty" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="460"
+                         Text="Gathered materials show here, with how often each comes per node and per hour."/>
+            </Grid>
+          </StackPanel>
+
+          <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" FontSize="12" Margin="0,8,0,0" Visibility="Collapsed"/>
         </StackPanel>
       </Border>
 

@@ -34,10 +34,14 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"\b(?:gained|earned|received|obtained)\s+(?<xp>[0-9OoIl][0-9OoIl,\. ]*?)\s*(?:xp\b|exp\b|experience)", RegexOptions.IgnoreCase)]
     private static partial Regex Xp();
 
+    [GeneratedRegex(@"^\s*title\s+acquired\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Title();
+
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");
         if (line.Length == 0) yield break;
+        if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
 
         var k = Kina().Match(line);
         if (k.Success)
@@ -62,6 +66,7 @@ public sealed partial class ChatParser
         }
 
         var it = ItemNameFirst().Match(line);
+        bool nameFirst = it.Success;
         if (!it.Success) it = Item().Match(line);
         if (it.Success)
         {
@@ -75,6 +80,18 @@ public sealed partial class ChatParser
             // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
+            // "Obtained 1 Oculazen Soul Points." is a per-kill payout, not loot
+            if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\b(?:points?|souls?)$", RegexOptions.IgnoreCase))
+            {
+                yield return new CurrencyGained(time, name, Math.Clamp(n, 1, 999999));
+                yield break;
+            }
+            // loot you pick up is written name-first ("Spiritstone acquired."); verb-first item lines are quest, title and box rewards
+            if (!nameFirst)
+            {
+                yield return new RewardReceived(time, name, Math.Clamp(n, 1, 9999));
+                yield break;
+            }
             yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 9999), bound);
         }
     }
