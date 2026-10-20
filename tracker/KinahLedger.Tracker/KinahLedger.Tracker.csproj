@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- a window app: double-click opens the tracker. Command-line modes still work (they attach to the terminal). -->
+    <OutputType>WinExe</OutputType>
+    <!-- Windows 10 1903+ target gives access to the built-in text recognition (Windows.Media.Ocr) -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>KinahLedger</AssemblyName>
+    <RootNamespace>KinahLedger</RootNamespace>
+    <Version>0.3.0</Version>
+    <AssemblyTitle>Kinah Ledger</AssemblyTitle>
+    <Product>Kinah Ledger</Product>
+    <Company>Kinah Ledger</Company>
+    <Description>Unofficial Aion 2 farming tracker: Kinah and loot per hour, read from the game's chat.</Description>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <!-- one downloadable exe with the runtime inside: nothing for players to install -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- packet path (record/run). Screen path (pick/watch) needs nothing extra. -->
+    <PackageReference Include="SharpPcap" Version="6.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="settings.json;opcodes.json;zones.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

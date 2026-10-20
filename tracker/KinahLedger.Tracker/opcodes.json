@@ -1,0 +1,5 @@
+{
+  "doc": "Message layouts, filled in from recordings made with `record`. Until this has entries the tracker decodes nothing. Offsets count from the first byte after the length and opcode header. Types: u8, bool, u16, i16, u32, i32, u64, i64. Example entry: {\"kind\":\"ItemAcquired\",\"opcode\":\"0x1234\",\"direction\":\"ServerToClient\",\"fields\":{\"itemId\":{\"offset\":0,\"type\":\"u32\"},\"count\":{\"offset\":4,\"type\":\"u32\"},\"bound\":{\"offset\":8,\"type\":\"u8\"}},\"note\":\"seen after every loot pickup\"}",
+  "gameVersion": "",
+  "opcodes": []
+}

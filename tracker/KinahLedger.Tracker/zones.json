@@ -1,0 +1,4 @@
+{
+  "doc": "Zone or instance IDs mapped to the activity slugs the site uses. Filled in from recordings; unknown IDs are reported as zone_<id>.",
+  "zones": {}
+}
