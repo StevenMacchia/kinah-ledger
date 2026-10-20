@@ -91,6 +91,27 @@ public sealed class ScreenReader
         }
     }
 
+    /// <summary>The whole game frame, scaled down, with the detected areas outlined: what the player sees as the live preview.</summary>
+    public static Bitmap Frame(Rectangle game, int maxWidth, params (Rectangle box, Color color)[] marks)
+    {
+        using var raw = Capture(game);
+        double k = Math.Min(1.0, maxWidth / (double)raw.Width);
+        var bmp = new Bitmap(Math.Max(1, (int)(raw.Width * k)), Math.Max(1, (int)(raw.Height * k)), PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(bmp);
+        g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+        g.DrawImage(raw, new Rectangle(0, 0, bmp.Width, bmp.Height));
+        foreach (var (box, color) in marks)
+        {
+            if (box.IsEmpty) continue;
+            using var pen = new Pen(color, 2f);
+            using var fill = new SolidBrush(Color.FromArgb(40, color));
+            var r = new Rectangle((int)((box.X - game.X) * k), (int)((box.Y - game.Y) * k), Math.Max(3, (int)(box.Width * k)), Math.Max(3, (int)(box.Height * k)));
+            g.FillRectangle(fill, r);
+            g.DrawRectangle(pen, r);
+        }
+        return bmp;
+    }
+
     /// <summary>Reads any screen rectangle and returns each line with its position, for finding the chat and the zone label.</summary>
     public static async Task<List<OcrLineBox>> ReadBoxesAsync(Rectangle region, int scale)
     {

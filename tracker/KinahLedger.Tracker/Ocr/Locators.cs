@@ -39,10 +39,12 @@ public static class ChatLocator
 {
     static readonly Regex Input = new(@"enter\s+your\s+messag|your\s+message", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>The bottom-left quarter that holds the chat and its input box.</summary>
+    public static Rectangle Corner(Rectangle game) => new(game.Left, game.Top + game.Height / 2, game.Width / 2, game.Height / 2);
+
     public static async Task<(Rectangle? region, string note)> DetectAsync(Rectangle game)
     {
-        // bottom-left quarter of the game window is plenty: the input box is always there
-        var corner = new Rectangle(game.Left, game.Top + game.Height / 2, game.Width / 2, game.Height / 2);
+        var corner = Corner(game);
         var lines = await ScreenReader.ReadBoxesAsync(corner, 1);
         var input = lines.FirstOrDefault(l => Input.IsMatch(l.Text));
         if (input == null) return (null, $"couldn't see the chat input box in the bottom-left corner ({lines.Count} lines read)");
@@ -84,9 +86,12 @@ public static class ZoneLocator
         "Garden of the Illusion God", "Altamia Highland Ruins", "Western Cantas Valley", "Eastern Cantas Valley", "Cantas Valley"
     };
 
+    /// <summary>The top-right corner that holds the minimap and its title.</summary>
+    public static Rectangle Strip(Rectangle game) => new(game.Right - (int)(game.Width * 0.24), game.Top, (int)(game.Width * 0.24), (int)(game.Height * 0.14));
+
     public static async Task<(string? zone, string note)> DetectAsync(Rectangle game)
     {
-        var strip = new Rectangle(game.Right - (int)(game.Width * 0.24), game.Top, (int)(game.Width * 0.24), (int)(game.Height * 0.14));
+        var strip = Strip(game);
         var lines = await ScreenReader.ReadBoxesAsync(strip, 2);
         var candidates = lines
             .Select(l => (l, text: Clean(l.Text)))

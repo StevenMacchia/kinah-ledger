@@ -36,6 +36,19 @@ public sealed class TrackerSession
     public bool Running => _loop != null && !_loop.IsCompleted;
     public bool Eligible => Engine.Elapsed.TotalMinutes >= 5 && Engine.Events > 0;
     public Bitmap? Thumb => _reader?.Thumb;
+    public Rectangle? GameRect { get; private set; }
+
+    public static readonly Color ChatColor = Color.FromArgb(76, 195, 245), ZoneColor = Color.FromArgb(241, 208, 140);
+
+    /// <summary>The whole game with the chat and map areas outlined; falls back to the chat crop when the game window isn't known.</summary>
+    public Bitmap? Frame(int maxWidth)
+    {
+        var game = GameRect ?? GameWindow.Find(_settings.ProcessHints);
+        if (game == null || Region == null) return Thumb;
+        GameRect = game;
+        try { return ScreenReader.Frame(game.Value, maxWidth, (Region.Value, ChatColor), (ZoneLocator.Strip(game.Value), ZoneColor)); }
+        catch (Exception) { return Thumb; }
+    }
 
     /// <summary>The kind plus the zone most of the run happened in, e.g. "Open world · Western Cantas Valley".</summary>
     public string Activity
@@ -66,12 +79,13 @@ public sealed class TrackerSession
     public async Task StartAsync()
     {
         var game = GameWindow.Find(_settings.ProcessHints);
+        GameRect = game;
         if (Region == null)
         {
             if (game == null) throw new InvalidOperationException("The game window wasn't found. Start the game (borderless or windowed), or choose the chat yourself.");
             var (region, note) = await ChatLocator.DetectAsync(game.Value);
             DetectNote = note;
-            if (region == null) throw new InvalidOperationException("Couldn't find the chat automatically. Choose the chat yourself; the zone may not be detected in that case.");
+            if (region == null) throw new InvalidOperationException("Couldn't see the chat. Make sure the game UI is showing with the chat open at the bottom-left (not hidden, no full-screen panel), then try again, or choose the chat yourself.");
             Region = region;
         }
         _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale);
@@ -93,6 +107,8 @@ public sealed class TrackerSession
         _zoneAt = DateTime.UtcNow;
     }
 
+    int _emptyReads;
+
     async Task Loop(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -102,6 +118,18 @@ public sealed class TrackerSession
             {
                 var lines = await _reader!.ReadAsync();
                 Reads++;
+                // the chat moved or the UI was toggled: after a stretch of empty reads, find it again (auto mode only)
+                _emptyReads = lines.Count == 0 ? _emptyReads + 1 : 0;
+                if (!ManualRegion && _emptyReads >= 20)
+                {
+                    _emptyReads = 0;
+                    var g = GameWindow.Find(_settings.ProcessHints);
+                    if (g != null)
+                    {
+                        var (again, note) = await ChatLocator.DetectAsync(g.Value);
+                        if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); DetectNote = "re-found: " + note; }
+                    }
+                }
                 foreach (var l in _tracker.NewLines(lines))
                 {
                     bool any = false;
@@ -113,6 +141,7 @@ public sealed class TrackerSession
                 if ((DateTime.UtcNow - _zoneAt).TotalSeconds >= _settings.Ocr.ZoneEverySec)
                 {
                     var game = GameWindow.Find(_settings.ProcessHints);
+                    GameRect = game ?? GameRect;
                     if (game != null) await ReadZone(game.Value); else _zoneAt = DateTime.UtcNow;
                 }
             }
@@ -148,6 +177,9 @@ public sealed class UserPrefs
     public bool ManualChat { get; set; }
     public int? WinX { get; set; }
     public int? WinY { get; set; }
+    /// <summary>Where the over-game panel was last dragged to.</summary>
+    public double? HudX { get; set; }
+    public double? HudY { get; set; }
 
     static string PathFor()
     {

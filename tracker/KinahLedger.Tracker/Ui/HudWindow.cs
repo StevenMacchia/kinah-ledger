@@ -22,7 +22,8 @@ public sealed class HudWindow : Window
         WindowStartupLocation = WindowStartupLocation.Manual;
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
-        Left = SystemParameters.WorkArea.Right - 360; Top = SystemParameters.WorkArea.Top + 24;
+        // top-centre by default: the top-right belongs to the minimap and its zone title, the bottom-left to the chat
+        Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 170; Top = SystemParameters.WorkArea.Top + 16;
 
         _big.FontSize = 21; _big.FontWeight = FontWeights.Bold; _big.Foreground = new SolidColorBrush(Color.FromRgb(0xF1, 0xD0, 0x8C));
         _big.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI");

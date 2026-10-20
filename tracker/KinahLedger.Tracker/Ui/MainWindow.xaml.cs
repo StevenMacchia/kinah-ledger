@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     readonly WF.NotifyIcon _tray = new();
     readonly WF.ToolStripMenuItem _trayToggle = new("Start tracking");
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    bool _framing; int _ticks;
 
     Brush B(string key) => (Brush)FindResource(key);
 
@@ -120,20 +121,21 @@ public partial class MainWindow : Window
         {
             var game = GameWindow.Find(_settings.ProcessHints);
             if (game == null) { Say("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself.", "Warn"); return; }
+            if (_hud != null) { _hud.Hide(); }   // never read our own panel
             var (region, note) = await Task.Run(() => ChatLocator.DetectAsync(game.Value));
             var (zone, _) = await Task.Run(() => ZoneLocator.DetectAsync(game.Value));
             ZoneLbl.Text = "Zone: " + (zone ?? "not read yet");
+            var g = game.Value;
+            var marks = region != null ? new[] { (region.Value, TrackerSession.ChatColor), (ZoneLocator.Strip(g), TrackerSession.ZoneColor) } : new[] { (ZoneLocator.Strip(g), TrackerSession.ZoneColor) };
+            SetPreview(await Task.Run(() => ScreenReader.Frame(g, 480, marks)));
             if (region == null)
             {
-                Say("Couldn't find the chat automatically (" + note + "). Choose the chat yourself; the zone may not be detected in that case.", "Warn");
+                Say("Couldn't see the chat (" + note + "). Make sure the game UI is showing with the chat open at the bottom-left, then Detect again, or choose the chat yourself.", "Warn");
                 return;
             }
             _region = region; _prefs.ManualChat = false; RegionStore.Clear();
             UpdateStep2();
-            var reader = new ScreenReader(region.Value, _settings.Ocr.Scale);
-            await Task.Run(() => reader.ReadAsync());
-            SetPreview(reader.Thumb);
-            Say($"Found the chat ({note}){(zone != null ? " and the zone" : "")}. Press Start whenever you're ready.", "Good");
+            Say($"Found the chat ({note}){(zone != null ? " and the zone" : "")}. The preview outlines both. Press Start whenever you're ready.", "Good");
         }
         catch (Exception ex) { Say(ex.Message, "Bad"); }
         finally { DetectBtn.IsEnabled = true; }
@@ -148,7 +150,8 @@ public partial class MainWindow : Window
             var reader = new ScreenReader(_region.Value, _settings.Ocr.Scale);
             var parser = new ChatParser(_items);
             var lines = await Task.Run(() => reader.ReadAsync());
-            SetPreview(reader.Thumb);
+            var game = GameWindow.Find(_settings.ProcessHints);
+            SetPreview(game is { } gw ? await Task.Run(() => ScreenReader.Frame(gw, 480, (_region.Value, TrackerSession.ChatColor), (ZoneLocator.Strip(gw), TrackerSession.ZoneColor))) : reader.Thumb);
             var engine = new SessionEngine(_items);
             int hits = 0;
             foreach (var l in lines) foreach (var ev in parser.Parse(l, DateTime.UtcNow)) { engine.Apply(ev); hits++; }
@@ -179,7 +182,13 @@ public partial class MainWindow : Window
             _region = session.Region;
             UpdateStep2();
             ZoneLbl.Text = "Zone: " + (session.Zone ?? "not read yet");
-            if (HudChk.IsChecked == true) { _hud = new HudWindow { Owner = this }; _hud.Show(); }
+            if (HudChk.IsChecked == true)
+            {
+                _hud = new HudWindow { Owner = this };
+                if (_prefs.HudX is double hx && _prefs.HudY is double hy && hx > SystemParameters.VirtualScreenLeft - 50 && hy > SystemParameters.VirtualScreenTop - 50) { _hud.Left = hx; _hud.Top = hy; }
+                _hud.LocationChanged += (_, _) => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
+                _hud.Show();
+            }
             TableTitle.Text = "THIS SESSION";
             ShowTable(session.Engine);
             SetTrackingUi(true);
@@ -234,7 +243,12 @@ public partial class MainWindow : Window
         ZoneLbl.Text = "Zone: " + (s.Zone ?? "not read yet");
         if (s.LastError.Length > 0) Say("Read problem: " + s.LastError, "Bad");
         else Say($"Tracking {s.Activity} · {s.Reads} reads" + (s.Unaligned > 0 ? $" · {s.Unaligned} skipped" : "") + (s.LastLine.Length > 0 ? " · last: " + s.LastLine : ""), "Faint");
-        if (s.Reads % 2 == 0) SetPreview(s.Thumb);
+        if (++_ticks % 4 == 0 && !_framing)
+        {
+            // the whole game with the chat and map outlined, refreshed every couple of seconds off the UI thread
+            _framing = true;
+            _ = Task.Run(() => s.Frame(480)).ContinueWith(t => Dispatcher.Invoke(() => { _framing = false; if (t.Status == TaskStatus.RanToCompletion) SetPreview(t.Result); }));
+        }
         if (_hud != null)
         {
             var e = s.Engine; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah;
@@ -448,13 +462,18 @@ public partial class MainWindow : Window
         ApplyModeLabels();
         TableTitle.Text = "THIS SESSION";
         FillNumbers(e, TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17));
-        using (var b = new System.Drawing.Bitmap(166, 76))
+        using (var b = new System.Drawing.Bitmap(480, 203))
         using (var g = System.Drawing.Graphics.FromImage(b))
         {
-            g.Clear(System.Drawing.Color.FromArgb(5, 9, 16));
-            using var f = new System.Drawing.Font("Consolas", 7f);
-            string[] lines = { "You defeated Lakrum Scout.", "Acquired 3,690 Kina.", "Acquired Thick hide x2.", "You defeated Lakrum Scout.", "Acquired 3,690 Kina." };
-            for (int i = 0; i < lines.Length; i++) g.DrawString(lines[i], f, i % 2 == 1 ? System.Drawing.Brushes.Khaki : System.Drawing.Brushes.Gray, 4, 4 + i * 13);
+            // a stand-in for the game frame: dark field, chat box bottom-left, map strip top-right
+            g.Clear(System.Drawing.Color.FromArgb(18, 30, 24));
+            using var ground = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(34, 52, 40));
+            g.FillRectangle(ground, 0, 120, 480, 83);
+            using var chatPen = new System.Drawing.Pen(TrackerSession.ChatColor, 2); using var zonePen = new System.Drawing.Pen(TrackerSession.ZoneColor, 2);
+            g.DrawRectangle(chatPen, 10, 148, 62, 44); g.DrawRectangle(zonePen, 364, 0, 116, 28);
+            using var f = new System.Drawing.Font("Consolas", 5f);
+            string[] lines = { "Orichalcum Ore acquired.", "Acquired 436 Kina.", "Kukuru acquired." };
+            for (int i = 0; i < lines.Length; i++) g.DrawString(lines[i], f, System.Drawing.Brushes.Khaki, 12, 152 + i * 9);
             SetPreview((System.Drawing.Bitmap)b.Clone());
         }
         SetTrackingUi(true);

@@ -252,6 +252,9 @@ options: --process aion[,other]   --device <adapter name>");
             Console.WriteLine($"Chat area reads {lines.Count} line(s):");
             foreach (var l in lines.TakeLast(8)) Console.WriteLine("  " + l);
         }
+        var marks = chat.region is { } cr ? new[] { (cr, TrackerSession.ChatColor), (ZoneLocator.Strip(game.Value), TrackerSession.ZoneColor) } : new[] { (ZoneLocator.Strip(game.Value), TrackerSession.ZoneColor) };
+        using (var frame = ScreenReader.Frame(game.Value, 1280, marks)) frame.Save("locate-frame.png", System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine("Annotated frame saved to locate-frame.png");
         return 0;
     }
 
