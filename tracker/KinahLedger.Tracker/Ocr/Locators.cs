@@ -198,7 +198,7 @@ public static class ZoneLocator
 {
     // what a zone label looks like: a few capitalized words, no digits, no brackets
     static readonly Regex Shape = new(@"^[A-Z][A-Za-z'’\-]+(?:\s+(?:of|the|and|[A-Z][A-Za-z'’\-]+)){1,5}$", RegexOptions.Compiled);
-    static readonly string[] Blocklist = { "Change", "Show", "Must", "Waiting", "Evasion", "Sprint", "Jump", "Mount", "Rest", "Auto", "Hide", "Ground", "Fly", "Level", "Quest", "View", "Menu", "Map", "Options", "Settings", "Inventory", "Chat", "Party", "Legion", "Friends", "Mail", "Shop" };
+    static readonly string[] Blocklist = { "Ask", "Gemini", "Google", "Search", "Chrome", "New", "Sign", "Open", "Close", "Change", "Show", "Must", "Waiting", "Evasion", "Sprint", "Jump", "Mount", "Rest", "Auto", "Hide", "Ground", "Fly", "Level", "Quest", "View", "Menu", "Map", "Options", "Settings", "Inventory", "Chat", "Party", "Legion", "Friends", "Mail", "Shop" };
     // words that appear in place names; a candidate needs one of these or a known-name match, so UI labels never pass
     static readonly string[] PlaceWords = { "Valley", "Highland", "Highlands", "Canyon", "Hill", "Hills", "Sanctum", "Ruins", "Garden", "Forest", "Plains", "Plain", "Cave", "Caves", "Cavern", "Fortress", "Village", "Lake", "Coast", "Shore", "Pass", "Road", "Gate", "Temple", "Swamp", "Marsh", "Desert", "Island", "Isle", "Abyss", "Outpost", "Camp", "Field", "Fields", "Ridge", "Peak", "Mountain", "Mountains", "Basin", "Plateau", "Woods", "Grove", "Gorge", "Hollow", "Ravine", "Cliff", "Cliffs", "Falls", "Spring", "Springs", "River", "Bridge", "Tower", "Citadel", "Stronghold", "Fort", "Shrine", "Sanctuary", "Crypt", "Tomb", "Mine", "Mines", "Quarry", "Den", "Nest", "Lair", "Harbor", "Port", "Bay", "Oasis", "Steppe", "Wasteland", "Tundra", "Crater", "Dunes", "Lowlands", "Vale", "Meadow", "Prairie", "Orchard", "Farm", "Mill", "Crossroads", "Square", "District", "Town", "City", "Palace", "Castle", "Keep", "Hall", "Prison", "Arena", "Academy", "Library", "Observatory", "Laboratory", "Workshop", "Foundry", "Forge", "Market", "Cemetery", "Graveyard", "Catacombs", "Altar", "Portal", "Rift", "Gateway", "Frontier", "Border", "Coastline", "Beach", "Glade", "Thicket", "Jungle", "Volcano", "Furnace", "Wall", "Walls", "Rampart", "Battlefield", "Front", "Encampment", "Garrison", "Barracks", "Landing", "Ascent", "Descent", "Depths", "Heights", "Summit", "Hideout", "Refuge", "Haven", "Hamlet", "Settlement", "Colony", "Waystation", "Station" };
 
@@ -210,6 +210,11 @@ public static class ZoneLocator
 
     /// <summary>The top-right corner that holds the minimap and its title.</summary>
     public static Rectangle Strip(Rectangle game) => new(game.Right - (int)(game.Width * 0.24), game.Top, (int)(game.Width * 0.24), (int)(game.Height * 0.14));
+
+    /// <summary>A name from the known list, or one carrying a place word: trusted on a single read. Anything else needs to be read twice in a row.</summary>
+    public static bool IsVerified(string zone) =>
+        Known.Any(k => string.Equals(k, zone, StringComparison.OrdinalIgnoreCase))
+        || zone.Split(' ').Any(w => PlaceWords.Contains(w.Trim('\'', '’'), StringComparer.OrdinalIgnoreCase));
 
     public static async Task<(string? zone, string note)> DetectAsync(Rectangle game)
     {

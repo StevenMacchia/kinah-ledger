@@ -114,11 +114,19 @@ public sealed class TrackerSession
         _loop ??= Task.Run(() => Loop(_cts.Token));
     }
 
+    string? _pendingZone;
+
     async Task ReadZone(Rectangle game)
     {
         try
         {
             var (zone, _) = await ZoneLocator.DetectAsync(game);
+            if (zone != null && !ZoneLocator.IsVerified(zone))
+            {
+                // an unfamiliar label becomes the zone only when two reads in a row agree; a stray read (a button, a tooltip) keeps the last zone
+                if (!string.Equals(_pendingZone, zone, StringComparison.Ordinal)) { _pendingZone = zone; zone = null; }
+            }
+            else _pendingZone = null;
             Engine.SetZone(zone);
             Secondary?.SetZone(zone);
         }
