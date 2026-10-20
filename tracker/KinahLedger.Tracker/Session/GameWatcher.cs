@@ -76,6 +76,22 @@ public sealed class GameWatcher
 
     public void Start() { _loop ??= Task.Run(() => Loop(_cts.Token)); }
 
+    DateTime _boardAt = DateTime.MinValue;
+    /// <summary>
+    /// Every 15 minutes, the community price board for the player's server from the site the runs go to (a public page,
+    /// read like a browser would; nothing is sent). Follows the Share switch, so sharing off keeps the tracker offline.
+    /// </summary>
+    async Task FetchBoardAsync()
+    {
+        if ((DateTime.UtcNow - _boardAt).TotalMinutes < 15 || !_settings.Upload.Enabled || string.IsNullOrWhiteSpace(Market.Server)) return;
+        _boardAt = DateTime.UtcNow;
+        if (!Uri.TryCreate(_settings.Upload.Endpoint, UriKind.Absolute, out var u)) return;
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
+        var r = await http.GetAsync($"{u.Scheme}://{u.Authority}/prices/{Market.ServerKey}.json");
+        if (r.IsSuccessStatusCode) PriceBook.SetBoard(PriceBook.ParseBoard(await r.Content.ReadAsStringAsync(), _items));
+    }
+
     // the watcher's retry and Start farming can both ask for the reader at once; without this, both started one and the
     // loser kept reading on its own (every line written to reads.log twice)
     readonly SemaphoreSlim _chatGate = new(1, 1);
@@ -164,6 +180,7 @@ public sealed class GameWatcher
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
                 await FlushPassiveAsync(false);
+                try { await FetchBoardAsync(); } catch (Exception ex) { CrashLog.Write("price board", ex); }
                 LastError = "";
             }
             catch (Exception ex) { LastError = ex.Message; Market.LastError = ex.Message; CrashLog.Write("watcher", ex); }

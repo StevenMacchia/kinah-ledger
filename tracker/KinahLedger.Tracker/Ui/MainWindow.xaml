@@ -8,6 +8,15 @@
         WindowStartupLocation="CenterScreen">
 
   <Window.Resources>
+    <!-- five tiles in a 560 px window: labels and numbers a touch smaller than the house tile style -->
+    <Style x:Key="TileLabel" TargetType="TextBlock" BasedOn="{StaticResource LabelStyle}">
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style x:Key="TileNumber" TargetType="TextBlock" BasedOn="{StaticResource TileValue}">
+      <Setter Property="FontSize" Value="23"/>
+    </Style>
+
     <!-- drops and gathered rows: icon, name, count, rate, per hour -->
     <DataTemplate x:Key="RowTemplate">
       <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="32">
@@ -184,18 +193,22 @@
       </Border>
 
       <!-- tiles -->
-      <UniformGrid x:Name="Tiles" Columns="4" Margin="-5,10,-5,0">
-        <Border Style="{StaticResource CardStyle}" Margin="5,0" Padding="12,9,12,10">
-          <StackPanel><TextBlock x:Name="Tile1Label" Style="{StaticResource LabelStyle}" Text="KINAH / HR"/><TextBlock x:Name="KinahHr" Style="{StaticResource TileValue}" Foreground="{DynamicResource Gold}" Text="0"/></StackPanel>
+      <UniformGrid x:Name="Tiles" Columns="5" Margin="-4,10,-4,0">
+        <Border Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10">
+          <StackPanel><TextBlock x:Name="Tile1Label" Style="{StaticResource TileLabel}" Text="KINAH / HR"/><TextBlock x:Name="KinahHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="0"/></StackPanel>
         </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="5,0" Padding="12,9,12,10">
-          <StackPanel><TextBlock x:Name="Tile2Label" Style="{StaticResource LabelStyle}" Text="KINAH / KILL"/><TextBlock x:Name="KinahKill" Style="{StaticResource TileValue}" Foreground="{DynamicResource Gold}" Text="—"/></StackPanel>
+        <Border Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10">
+          <StackPanel><TextBlock x:Name="Tile2Label" Style="{StaticResource TileLabel}" Text="KINAH / KILL"/><TextBlock x:Name="KinahKill" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="—"/></StackPanel>
         </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="5,0" Padding="12,9,12,10">
-          <StackPanel><TextBlock x:Name="Tile3Label" Style="{StaticResource LabelStyle}" Text="KILLS / HR"/><TextBlock x:Name="KillsHr" Style="{StaticResource TileValue}" Foreground="{DynamicResource Mint}" Text="0"/></StackPanel>
+        <Border Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10">
+          <StackPanel><TextBlock x:Name="Tile3Label" Style="{StaticResource TileLabel}" Text="KILLS / HR"/><TextBlock x:Name="KillsHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Mint}" Text="0"/></StackPanel>
         </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="5,0" Padding="12,9,12,10">
-          <StackPanel><TextBlock x:Name="Tile4Label" Style="{StaticResource LabelStyle}" Text="DROPS / HR"/><TextBlock x:Name="DropsHr" Style="{StaticResource TileValue}" Foreground="{DynamicResource Violet}" Text="0"/></StackPanel>
+        <Border Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10">
+          <StackPanel><TextBlock x:Name="Tile4Label" Style="{StaticResource TileLabel}" Text="DROPS / HR"/><TextBlock x:Name="DropsHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Violet}" Text="0"/></StackPanel>
+        </Border>
+        <!-- Kinah per hour plus what the tradeable drops sell for at Market prices (gathering: the materials' value) -->
+        <Border x:Name="ValueTile" Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10" ToolTipService.ShowDuration="20000">
+          <StackPanel><TextBlock x:Name="Tile5Label" Style="{StaticResource TileLabel}" Text="TOTAL / HR"/><TextBlock x:Name="ValueHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="—"/></StackPanel>
         </Border>
       </UniformGrid>
 

@@ -68,7 +68,17 @@ public sealed class ItemDictionary
             int d = Edit(key, kv.Key, bestD - 1);
             if (d < bestD) { bestD = d; best = kv.Value; if (d == 0) break; }
         }
-        return bestD <= budget ? best : null;
+        if (bestD <= budget) return best;
+        // the first letter of a line fading in is the one most often misread ("mria acquired." for "Aria acquired."):
+        // a name that differs from exactly one known name in its first letter only is that name
+        long? only = null;
+        foreach (var kv in _byName)
+        {
+            if (kv.Key.Length != key.Length || kv.Key[0] == key[0] || string.CompareOrdinal(kv.Key, 1, key, 1, key.Length - 1) != 0) continue;
+            if (only != null && only != kv.Value) return null;
+            only = kv.Value;
+        }
+        return only;
     }
 
     /// <summary>Levenshtein distance with a cutoff, so the scan over thousands of names stays cheap.</summary>

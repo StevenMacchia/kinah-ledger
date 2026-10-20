@@ -166,9 +166,11 @@ public partial class MainWindow : Window
         var m = _mode;
         (Tile1Label.Text, Tile2Label.Text, Tile3Label.Text, Tile4Label.Text, KindHint.Text) = m switch
         {
-            Mode.Gather => ("ATTEMPTS / HR", "ITEMS / HR", "ITEMS / ATTEMPT", "RARE FINDS / HR", "Ore, logs, Odyle, herbs and food. Every gather is an attempt, failed ones too; each skill has its own per-attempt rate."),
+            Mode.Gather => ("ATTEMPTS / HR", "ITEMS / HR", "PER ATTEMPT", "RARE / HR", "Ore, logs, Odyle, herbs and food. Every gather is an attempt, failed ones too; each skill has its own per-attempt rate."),
             _ => ("KINAH / HR", "KINAH / KILL", "KILLS / HR", "DROPS / HR", "Mobs that drop Kinah. Each Kinah pickup is a kill. Souls and Soul Crystals never count as drops."),
         };
+        // the fifth tile: what the hour is worth if the tradeable items are sold on the Market (plus the Kinah, in open world)
+        Tile5Label.Text = m == Mode.Gather ? "VALUE / HR" : "TOTAL / HR";
         PaintTabs();
         if (!Farming && _watcher.Chat == null && !_demo) ShowTable(null);
     }
@@ -182,7 +184,7 @@ public partial class MainWindow : Window
         if (e != null) FillNumbers(e, e.Elapsed); else ShowTable(null);
     }
 
-    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = SelectedMode == Mode.Open ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; }
+    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = SelectedMode == Mode.Open ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = "—"; }
 
     async Task Toggle() { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(); }
 
@@ -303,25 +305,33 @@ public partial class MainWindow : Window
     async Task StopTracking()
     {
         var e = _watcher.StopFarm(); if (e == null) return;
-        var chat = _watcher.Chat; var kind = _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
+        // shared and saved under what the run turned out to be, not the label picked before it started
+        var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
         CloseHud();
         // closing the panel hands focus to whatever is behind it, usually the game, which then covers this window
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Show(); Activate(); Topmost = true; Topmost = false;
-        _lastRun = e; _lastRunUntil = DateTime.UtcNow.AddMinutes(3);
-        TableTitle.Text = "LAST RUN · " + activity.ToUpperInvariant();
-        FillNumbers(e, e.Elapsed);
+        // the window goes straight back to the live count (the player's call: Stop must not look like counting stopped);
+        // the run's result stays on the status line for a few seconds and in the history
+        _lastRun = null; _lastRunUntil = DateTime.MinValue;
+        var t = e.Totals();
+        string ran = $"{e.Elapsed:hh\\:mm\\:ss}" + (t.Kinah > 0 ? $" · {Fk(t.Kinah)} Kinah" : "") + (t.Kills > 0 ? $" · {t.Kills} kills" : "") + (t.Nodes > 0 ? $" · {t.Nodes} attempts" : "") + (t.Drops > 0 ? $" · {t.Drops} items" : "");
         string msg, tone = "Faint"; bool shared = false; bool eligible = e.Elapsed.TotalMinutes >= 5 && e.Events > 0;
-        if (!eligible) msg = "Stopped. Under 5 minutes or no loot seen, so this run isn't shared.";
-        else if (ShareChk.IsChecked != true) msg = "Stopped. Sharing is off, so this run stays on this PC.";
-        else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = "Stopped. No sharing address in settings.json, so this run stays on this PC.";
-        else if (chat != null && await chat.UploadAsync(_settings, e, kind, activity)) { msg = "Stopped. Run shared anonymously."; tone = "Good"; shared = true; }
-        else { msg = "Stopped. Not shared: " + (Upload.Uploader.LastError.Length > 0 ? Upload.Uploader.LastError : "couldn't reach the site") + ". Run kept on this PC."; tone = "Warn"; }
-        if (e.Events > 0) { SessionStore.Append(e, _items, activity, _settings, shared); msg += $" Saved to your history ({SessionStore.Count()} runs)."; }
+        if (!eligible) msg = $"Run stopped ({ran}). Under 5 minutes or no loot seen, so it isn't shared.";
+        else if (ShareChk.IsChecked != true) msg = $"Run stopped ({ran}). Sharing is off, so it stays on this PC.";
+        else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = $"Run stopped ({ran}). No sharing address in settings.json, so it stays on this PC.";
+        else if (chat != null && await chat.UploadAsync(_settings, e, kind, activity)) { msg = $"Run stopped ({ran}) and shared anonymously."; tone = "Good"; shared = true; }
+        else { msg = $"Run stopped ({ran}). Not shared: " + (Upload.Uploader.LastError.Length > 0 ? Upload.Uploader.LastError : "couldn't reach the site") + ". Kept on this PC."; tone = "Warn"; }
+        if (e.Events > 0) { SessionStore.Append(e, _items, activity, _settings, shared); msg += $" Saved to your history ({SessionStore.Count()} runs). Still counting."; }
         SetTrackingUi(false);
         Say(msg, tone);
+        _statusHoldUntil = DateTime.UtcNow.AddSeconds(15);
+        Tick();
     }
+
+    /// <summary>A message the live status line mustn't overwrite yet (a stopped run's result).</summary>
+    DateTime _statusHoldUntil;
 
     void SetTrackingUi(bool on)
     {
@@ -345,16 +355,16 @@ public partial class MainWindow : Window
         else FarmTime.Text = "Ctrl+Shift+K starts and stops from inside the game";
         if (show != null && (farm != null || show != _lastRun))
         {
-            if (farm == null)
-            {
-                var dom = show.Events > 0 ? ModeOf(show) : SelectedMode;
-                if (dom != _mode) { _mode = dom; _tab = TabFor(_mode); ApplyModeLabels(); }
-                TableTitle.Text = "WHILE THE GAME IS OPEN";
-            }
+            // the tiles follow what the player is doing now (kills or gathers in the last few minutes), in a run or not:
+            // a run labelled Gathering that turned into mob farming shows Kinah per hour, not attempts
+            var dom = show.RecentKind is { } rk ? (rk == "Gathering" ? Mode.Gather : Mode.Open) : show.Events > 0 ? ModeOf(show) : SelectedMode;
+            if (dom != _mode) { _mode = dom; _tab = TabFor(_mode); ApplyModeLabels(); }
+            if (farm == null) TableTitle.Text = "WHILE THE GAME IS OPEN";
             FillNumbers(show, show.Elapsed);
         }
         ZoneLbl.Text = "Zone: " + (chat?.Zone ?? (_watcher.GameRect == null ? "waiting for the game" : "not read yet"));
-        if (chat == null) Say(_watcher.GameRect == null ? "Waiting for the game. Reading starts on its own once the game is open." : "Looking for the chat… " + _watcher.ChatNote, "Faint");
+        if (DateTime.UtcNow < _statusHoldUntil) { /* a stopped run's result is still showing */ }
+        else if (chat == null) Say(_watcher.GameRect == null ? "Waiting for the game. Reading starts on its own once the game is open." : "Looking for the chat… " + _watcher.ChatNote, "Faint");
         else if (chat.LastError.Length > 0) Say("Read problem: " + chat.LastError, "Bad");
         else if (chat.Paused.Length > 0) Say($"Paused: {chat.Paused}. Only the game is read, so reading picks up when the chat is in view again · " + MarketShort(), "Warn");
         else Say((farm != null ? "Farming" : "Reading") + $" · {chat.Reads} reads" + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : "") + " · " + MarketShort() + " · " + BalanceShort() + (_watcher.Flushed > 0 ? $" · {_watcher.Flushed} chunk{(_watcher.Flushed == 1 ? "" : "s")} shared" : ""), "Faint");
@@ -401,7 +411,9 @@ public partial class MainWindow : Window
         return m.AsksSeen > 0 ? $"Market: {m.AsksSeen:N0} asks · {m.Shared:N0} shared" : "Market: watching";
     }
 
-    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value);
+    /// <param name="Value">What the tradeable items would sell for on the Market, after its cut; bound items can't be sold.</param>
+    /// <param name="Priced">Tradeable items with a price; <paramref name="Unpriced"/> those without, left out of the value.</param>
+    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced);
 
     /// <summary>
     /// Splits the session into mob drops (rated per kill) and gathered materials grouped by skill (each skill rated
@@ -409,13 +421,17 @@ public partial class MainWindow : Window
     /// </summary>
     Tables Build(SessionEngine e, double hours, int kills)
     {
-        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0;
+        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0; int priced = 0, unpriced = 0;
         var bySkill = new Dictionary<GatherFamily, List<(string name, int total)>>();
         var bySkillGrade = new Dictionary<string, string>();
         foreach (var r in e.ItemRows())
         {
             int total = r.Count + r.Bound;
-            var price = PriceBook.Price(r.Name); if (price != null) value += price.Value * total;
+            if (r.Count > 0)
+            {
+                var price = PriceBook.Price(r.Name);
+                if (price != null) { value += (long)Math.Round(price.Value * r.Count * PriceBook.SellerKeeps); priced++; } else unpriced++;
+            }
             var g = GatheringCatalog.Find(r.Name);
             var grade = g?.Grade ?? _items.Get(r.Id)?.Grade ?? "";
             if (g != null) { gc += total; if (!bySkill.TryGetValue(g.Skill, out var list)) bySkill[g.Skill] = list = new(); list.Add((r.Name, total)); bySkillGrade[r.Name] = grade; }
@@ -436,7 +452,7 @@ public partial class MainWindow : Window
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
                 gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name)));
         }
-        return new Tables(drops, gathered, dc, gc, value);
+        return new Tables(drops, gathered, dc, gc, value, priced, unpriced);
     }
 
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
@@ -469,6 +485,14 @@ public partial class MainWindow : Window
                 Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {s.DropCount} drops · {t.Kills} kills{worth}" + crystals + (s.GatherCount > 0 ? $" · {s.GatherCount} gathered" : "") + skipped;
                 break;
         }
+        // the hour's worth if the tradeable items are sold at the lowest Market price, after the Market's cut; open world adds the Kinah
+        long worthHr = (long)((s.Value + (_mode == Mode.Gather ? 0 : kinah)) / h);
+        ValueHr.Text = s.Priced > 0 || (_mode != Mode.Gather && kinah > 0) ? Fk(worthHr) : "—";
+        ValueTile.ToolTip = (s.Priced + s.Unpriced == 0 ? "No tradeable items yet."
+                : s.Priced == 0 ? "No Market price yet for any of these items. Open the Market in the game once: the prices you see there value your drops, and the site's price board fills in the rest."
+                : $"{s.Priced} of {s.Priced + s.Unpriced} tradeable items priced, at the lowest Market price, keeping {PriceBook.SellerKeeps:P0} after the Market's fee and tax. Bound items can't be sold and aren't counted."
+                  + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
+            + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
         Summary.ToolTip = Summary.Text;
         var extra = Extras(e, h);
         ExtraLine.Text = extra; ExtraLine.ToolTip = extra;
@@ -755,6 +779,8 @@ public partial class MainWindow : Window
         RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)");
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
+        // a price board for the layout render, as the site would send it, so the value tile shows a figure
+        PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new ItemAcquired(t, _items.IdOf(n), 1, b)); }
         void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new CurrencyGained(t, "Oculazen Soul Points", 1)); } }
         void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new PetCrystal(t, n + " Soul Crystal", 1)); }

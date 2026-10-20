@@ -275,9 +275,11 @@ public sealed class LineTracker
     public List<string> NewLines(List<string> cur)
     {
         LastAfterFade = false;
-        if (cur.Count == 0)
+        // the frameless chat fades out when idle; when a loot line brings it back, the read before it is this empty one.
+        // A read of a line or two with nothing chat-like in it (a stray "99" from the world behind the chat) counts as
+        // empty too: as the new baseline it left the next real read nothing to line up with, and that read's lines were lost.
+        if (cur.Count == 0 || (cur.Count <= 2 && !cur.Any(ChatLike)))
         {
-            // the frameless chat fades out when idle; when a loot line brings it back, the read before it is this empty one
             Empty++;
             _faded = _prev.Count > 0;
             return new List<string>();
@@ -309,8 +311,11 @@ public sealed class LineTracker
                 {
                     if (!keys.GetRange(i, k).SequenceEqual(tail)) continue;
                     var fresh = cur.GetRange(i + k, keys.Count - i - k);
-                    // lines the last read had after the anchor were seen already: a misread copy of one in this read isn't new
-                    if (j < _prev.Count - 1) fresh = Without(fresh, _prev.GetRange(j + 1, _prev.Count - j - 1));
+                    // The last read's lines after the anchor are still on screen in this one, in the same order, even when
+                    // either read garbled them ("mria acquired."): skip one line here for each. Only world text (short,
+                    // nothing chat-like) can really be gone, so it holds nothing back. Comparing the text instead re-counted
+                    // every garbled line as new.
+                    if (j < _prev.Count - 1) fresh = fresh.Skip(_prev.Skip(j + 1).Count(Persists)).ToList();
                     _prev = keys;
                     return fresh;
                 }
@@ -321,33 +326,11 @@ public sealed class LineTracker
         return new List<string>();
     }
 
-    /// <summary>The lines minus one near-copy (the same text, or a one-letter misread of it) of each already-seen key.</summary>
-    static List<string> Without(List<string> lines, List<string> seenKeys)
-    {
-        var left = new List<string>(lines);
-        foreach (var s in seenKeys)
-        {
-            int at = left.FindIndex(l => Similar(Key(l), s));
-            if (at >= 0) left.RemoveAt(at);
-        }
-        return left;
-    }
+    /// <summary>A chat line, as opposed to text from the world behind the frameless chat ("Targena", "Cairn Tc"): long, or with a word the chat's own lines use.</summary>
+    static bool Persists(string key) => key.Length >= 10 || key.Contains("acqui") || key.Contains("obtain") || key.Contains("kina") || key.Contains("fail");
 
-    static bool Similar(string a, string b)
-    {
-        if (a == b) return true;
-        int budget = Math.Max(1, Math.Min(a.Length, b.Length) / 6);
-        if (Math.Abs(a.Length - b.Length) > budget) return false;
-        var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
-        for (int j = 0; j <= b.Length; j++) prev[j] = j;
-        for (int i = 1; i <= a.Length; i++)
-        {
-            cur[0] = i;
-            for (int j = 1; j <= b.Length; j++) cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
-            (prev, cur) = (cur, prev);
-        }
-        return prev[b.Length] <= budget;
-    }
+    /// <summary>The same test on a line as read: a player's line ("[Theo] next") is chat however short it is.</summary>
+    static bool ChatLike(string line) => line.TrimStart().StartsWith('[') || Persists(Key(line));
 
     static string Key(string s)
     {

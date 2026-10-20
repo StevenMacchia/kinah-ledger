@@ -71,6 +71,27 @@ public sealed class SessionEngine
         lock (_lock) { BalanceStart ??= b; BalanceEnd = b; }
     }
 
+    // when the last kills and gathers happened, so the window can show what the player is doing now
+    readonly Queue<DateTime> _recentKills = new(), _recentGathers = new();
+    static void Mark(Queue<DateTime> q, DateTime t) { q.Enqueue(t); while (q.Count > 0 && (t - q.Peek()).TotalMinutes > 3) q.Dequeue(); }
+
+    /// <summary>
+    /// "Gathering" or "Open world" from the last three minutes (more gathers or more kills), null when neither happened.
+    /// A count that started at the nodes and moved on to mobs shows Kinah per hour again, whatever came first.
+    /// </summary>
+    public string? RecentKind
+    {
+        get
+        {
+            lock (_lock)
+            {
+                var now = DateTime.UtcNow;
+                int kills = _recentKills.Count(t => (now - t).TotalMinutes <= 3), gathers = _recentGathers.Count(t => (now - t).TotalMinutes <= 3);
+                return kills == 0 && gathers == 0 ? null : gathers > kills ? "Gathering" : "Open world";
+            }
+        }
+    }
+
     /// <summary>What happened in one zone: time spent there plus the counters the "best spot" tables need.</summary>
     public sealed class ZoneStats
     {
@@ -151,7 +172,7 @@ public sealed class SessionEngine
                     if (g != null)
                     {
                         var sk = Skill(g.Skill); sk.Items += a.Count;
-                        if (g.IsNode) { Nodes++; sk.Nodes++; Z().Nodes++; if (a.Count >= 2) { Plentiful++; sk.Plentiful++; } }
+                        if (g.IsNode) { Nodes++; sk.Nodes++; Z().Nodes++; Mark(_recentGathers, a.Time); if (a.Count >= 2) { Plentiful++; sk.Plentiful++; } }
                         if (g.Bonus) { BonusFinds += a.Count; sk.Bonus += a.Count; }
                     }
                     else Z().Drops += a.Count;
@@ -162,26 +183,26 @@ public sealed class SessionEngine
                     var zp = Z(); zp.Pets += p.Count; zp.PetsByName[p.Name] = zp.PetsByName.GetValueOrDefault(p.Name) + p.Count;
                     break;
                 case GatherFailed f:
-                    Nodes++; NodesFailed++; Z().Nodes++;
+                    Nodes++; NodesFailed++; Z().Nodes++; Mark(_recentGathers, f.Time);
                     var ff = GatherSkills.FromSkillText(f.Skill);
                     if (ff != null) { var sk = Skill(ff.Value); sk.Nodes++; sk.Failed++; }
                     break;
                 case KinahChanged k:
                     // bound Kinah comes from quests, titles and rewards, not from mobs: tracked, but not farming income or a kill
                     if (k.Bound) { KinahBound += k.Delta; RewardsSkipped++; }
-                    else { Kinah += k.Delta; if (k.Delta > 0) { KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; } }
+                    else { Kinah += k.Delta; if (k.Delta > 0) { KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; Mark(_recentKills, k.Time); } }
                     break;
                 case RewardReceived:
                     RewardsSkipped++;
                     break;
-                case MobKilled:
-                    KillsDefeated++; Z().Defeated++;
+                case MobKilled mk:
+                    KillsDefeated++; Z().Defeated++; Mark(_recentKills, mk.Time);
                     break;
                 case XpGained:
                     KillsXp++; Z().Xp++;
                     break;
                 case CurrencyGained c:
-                    CurrencyLines++; Z().CurrencyLines++;
+                    CurrencyLines++; Z().CurrencyLines++; Mark(_recentKills, c.Time);
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
                     break;
                 case CraftResult cr:

@@ -97,6 +97,7 @@ public sealed class MarketCapture
             var ask = _parser.Parse(row);
             if (ask == null) continue;
             parsed++; AsksRead++;
+            PriceBook.Observe(ask.Item, ask.UnitPrice, now);   // the window values drops at the lowest ask seen
             bool fresh;
             lock (_lock)
             {
