@@ -17,8 +17,13 @@ public sealed class ScreenReader
     readonly OcrEngine _engine;
     readonly Rectangle _region;
     readonly int _scale;
+    readonly object _lock = new();
+    Bitmap? _thumb;
 
     public Rectangle Region => _region;
+
+    /// <summary>A small copy of the last capture, so the window can show exactly what's being read.</summary>
+    public Bitmap? Thumb { get { lock (_lock) return _thumb == null ? null : (Bitmap)_thumb.Clone(); } }
 
     public ScreenReader(Rectangle region, int scale)
     {
@@ -56,6 +61,9 @@ public sealed class ScreenReader
     {
         using var raw = Capture();
         if (savePng != null) raw.Save(savePng, ImageFormat.Png);
+        var k = Math.Min(1.0, Math.Min(166.0 / raw.Width, 76.0 / raw.Height));
+        var small = new Bitmap(raw, new Size(Math.Max(1, (int)(raw.Width * k)), Math.Max(1, (int)(raw.Height * k))));
+        lock (_lock) { _thumb?.Dispose(); _thumb = small; }
         using var bmp = Prepare(raw);
         using var ms = new MemoryStream();
         bmp.Save(ms, ImageFormat.Bmp);

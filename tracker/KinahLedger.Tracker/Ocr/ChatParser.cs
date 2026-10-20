@@ -27,6 +27,9 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"\bdefeated\s+(?<mob>.+?)\s*\.?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex Kill();
 
+    [GeneratedRegex(@"\b(?:gained|earned|received|obtained)\s+(?<xp>[0-9OoIl][0-9OoIl,\. ]*?)\s*(?:xp\b|exp\b|experience)", RegexOptions.IgnoreCase)]
+    private static partial Regex Xp();
+
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");
@@ -44,6 +47,13 @@ public sealed partial class ChatParser
         if (kill.Success)
         {
             yield return new MobKilled(time, Fnv(kill.Groups["mob"].Value));
+            yield break;
+        }
+
+        var xp = Xp().Match(line);
+        if (xp.Success)
+        {
+            yield return new XpGained(time, Digits(xp.Groups["xp"].Value));
             yield break;
         }
 

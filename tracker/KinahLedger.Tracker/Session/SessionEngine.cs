@@ -13,7 +13,10 @@ public sealed class SessionEngine
     public DateTime? Ended { get; private set; }
     public long Kinah { get; private set; }
     public long KinahBound { get; private set; }
-    public int Kills { get; private set; }
+    public int KillsDefeated { get; private set; }
+    public int KillsXp { get; private set; }
+    /// <summary>Kill lines when the tab shows them, otherwise experience lines as the next best count.</summary>
+    public int Kills => Math.Max(KillsDefeated, KillsXp);
     public int Events { get; private set; }
     public long? ZoneId { get; private set; }
     public long? InstanceId { get; private set; }
@@ -41,7 +44,10 @@ public sealed class SessionEngine
                     if (k.Bound) KinahBound += k.Delta; else Kinah += k.Delta;
                     break;
                 case MobKilled:
-                    Kills++;
+                    KillsDefeated++;
+                    break;
+                case XpGained:
+                    KillsXp++;
                     break;
                 case ZoneChanged z:
                     ZoneId = z.ZoneId;

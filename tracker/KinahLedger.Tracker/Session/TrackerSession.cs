@@ -23,6 +23,7 @@ public sealed class TrackerSession
     public string LastError { get; private set; } = "";
     public string LastLine { get; private set; } = "";
     public bool Running => _loop != null && !_loop.IsCompleted;
+    public Bitmap? Thumb => _reader.Thumb;
     public bool Eligible => Engine.Elapsed.TotalMinutes >= 5 && Engine.Events > 0;
 
     public event Action<string>? LootLine;
@@ -79,7 +80,8 @@ public sealed class TrackerSession
 /// <summary>What the window remembers between runs, kept per user.</summary>
 public sealed class UserPrefs
 {
-    public string Activity { get; set; } = "Fire Temple";
+    public string Activity { get; set; } = "Open world";
+    public string Place { get; set; } = "";
     public bool Hud { get; set; } = true;
     public bool Share { get; set; } = true;
     public int? WinX { get; set; }

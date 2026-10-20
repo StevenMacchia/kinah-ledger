@@ -22,9 +22,7 @@ internal static class Program
         if (args.Length == 0)
         {
             // double-clicked: open the window
-            WinUi.Init();
-            System.Windows.Forms.Application.Run(new MainForm(settings));
-            return 0;
+            return WpfApp.Run(settings);
         }
         // command line: write to the terminal that started us; if there's none and no pipe either, open one
         if (!AttachConsole(-1) && GetStdHandle(-11) == IntPtr.Zero) AllocConsole();
@@ -38,6 +36,7 @@ internal static class Program
             switch (cmd)
             {
                 case "pick": return Pick();
+                case "ui-shot": return UiShot(settings, opts, pos);
                 case "parse-test": return ParseTest(settings);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "watch": return Watch(settings, opts);
@@ -224,7 +223,7 @@ options: --process aion[,other]   --device <adapter name>");
     static int Pick()
     {
         Console.WriteLine("Drag a box around the chat lines that show loot and Kinah. Esc cancels.");
-        var r = WinUi.PickRegion();
+        var r = WpfApp.PickRegion();
         if (r == null) { Console.WriteLine("Cancelled."); return 1; }
         RegionStore.Save(r.Value);
         Console.WriteLine($"Saved chat region {r.Value.X},{r.Value.Y},{r.Value.Width},{r.Value.Height}. Next: `ocr-test` to check it reads, then `watch`.");
@@ -250,6 +249,15 @@ options: --process aion[,other]   --device <adapter name>");
             foreach (var ev in evs) Console.WriteLine($"      -> {Describe(ev, items)}");
         }
         if (lines.Count == 0) Console.WriteLine("Nothing recognized. Make sure the game is in borderless or windowed mode and the box covers the chat text.");
+        return 0;
+    }
+
+    /// <summary>Renders the window (and the panel) off-screen to PNG files, so the layout can be reviewed without a desktop session.</summary>
+    static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
+    {
+        var dir = pos.Count > 0 ? pos[0] : ".";
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"));
+        Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
 
@@ -318,9 +326,8 @@ options: --process aion[,other]   --device <adapter name>");
         int? interval = int.TryParse(o.GetValueOrDefault("interval"), out var iv) ? iv : null;
         var session = new TrackerSession(RegionFor(o), s, items, activity, interval);
         var engine = session.Engine;
-        var hud = s.Ocr.Hud && !o.ContainsKey("no-hud") ? HudForm.Launch() : null;
 
-        Console.WriteLine($"Watching {RegionFor(o)} every {interval ?? s.Ocr.IntervalMs} ms. Activity: {activity}. Items known: {items.Count}.");
+        Console.WriteLine($"Watching {RegionFor(o)} every {interval ?? s.Ocr.IntervalMs} ms. Activity: {activity}. Items known: {items.Count}. (The on-screen panel is only in the window app.)");
         if (s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint))
             Console.WriteLine($"When you stop, this run's totals go anonymously to {s.Upload.Endpoint}: region, activity, gear bracket, minutes, kills, kinah, item counts and a random install ID.");
         Console.WriteLine("Ctrl+C to stop.");
@@ -328,14 +335,6 @@ options: --process aion[,other]   --device <adapter name>");
         var stop = false;
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop = true; };
         var view = new ConsoleView(engine, () => activity, () => $"reads {session.Reads}  skipped {session.Unaligned}" + (session.LastError.Length > 0 ? "  " + session.LastError : ""));
-        session.Updated += () =>
-        {
-            double h = engine.Hours;
-            hud?.Update(
-                $"{Fk((engine.Kinah + engine.KinahBound) / h)} Kinah/hr",
-                $"{Fk(engine.Kinah)} tradeable · {Fk(engine.KinahBound)} bound\n{engine.Items.Values.Sum() + engine.ItemsBound.Values.Sum()} items · {engine.Kills} kills · {engine.Elapsed:hh\\:mm\\:ss}",
-                session.LastLine.Length > 44 ? session.LastLine[..43] + "…" : session.LastLine);
-        };
         session.Start();
         while (!stop) { view.Render(); Thread.Sleep(1000); }
         session.StopAsync().GetAwaiter().GetResult();

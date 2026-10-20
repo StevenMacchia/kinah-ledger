@@ -6,19 +6,22 @@
     <!-- Windows 10 1903+ target gives access to the built-in text recognition (Windows.Media.Ocr) -->
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <!-- WPF draws the window; Windows Forms is kept only for the tray icon and screen capture types -->
+    <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <StartupObject>KinahLedger.Program</StartupObject>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
     <Description>Unofficial Aion 2 farming tracker: Kinah and loot per hour, read from the game's chat.</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
     <!-- one downloadable exe with the runtime inside: nothing for players to install -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -29,7 +32,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- packet path (record/run). Screen path (pick/watch) needs nothing extra. -->
+    <!-- the two UI frameworks share many type names; each file imports what it needs instead -->
+    <Using Remove="System.Windows" />
+    <Using Remove="System.Windows.Controls" />
+    <Using Remove="System.Windows.Data" />
+    <Using Remove="System.Windows.Documents" />
+    <Using Remove="System.Windows.Input" />
+    <Using Remove="System.Windows.Media" />
+    <Using Remove="System.Windows.Media.Imaging" />
+    <Using Remove="System.Windows.Navigation" />
+    <Using Remove="System.Windows.Shapes" />
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- packet path (record/run). Screen path needs nothing extra. -->
     <PackageReference Include="SharpPcap" Version="6.3.0" />
   </ItemGroup>
 
