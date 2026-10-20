@@ -20,6 +20,11 @@ The tracker only ever reads the screen. It never captures network traffic, reads
 the client or sends input to the game; everything runs on the player's PC, and what leaves it is listed
 below. (An earlier packet-capture experiment was removed in 0.6.0 so that this stays true in full.)
 
+Since 0.6.2 it reads only the parts of the game that nothing covers. While another window sits over the chat
+(a browser, a chat app, the tracker's own window) or the game is minimized, reading pauses, the window says
+which program is in the way, and that time doesn't count toward any per-hour rate. `KinahLedger.exe in-view`
+shows what the tracker can see right now.
+
 **Screen reading.** The game prints every pickup in chat ("Acquired 2,790 Kina.",
 "Acquired Drakan hide ×2."). The tracker reads those lines off the screen with the text recognition
 built into Windows, counts what's new whenever the game is open, and times farming runs on top of that
