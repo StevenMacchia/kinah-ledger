@@ -48,13 +48,10 @@
     <Using Remove="System.Drawing" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- packet path (record/run). Screen path needs nothing extra. -->
-    <PackageReference Include="SharpPcap" Version="6.3.0" />
-  </ItemGroup>
+  <!-- no packages beyond the SDK: the tracker only reads the screen, so it needs no capture driver and no network library -->
 
   <ItemGroup>
-    <None Update="settings.json;opcodes.json;zones.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

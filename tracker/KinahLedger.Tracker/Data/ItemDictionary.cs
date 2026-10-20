@@ -119,24 +119,3 @@ public sealed class ItemDictionary
     static string Str(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : "";
 }
-
-/// <summary>zones.json: zone or instance IDs mapped to activity slugs the site understands.</summary>
-public sealed class ZoneMap
-{
-    readonly Dictionary<long, string> _z = new();
-
-    public static ZoneMap Load(string path)
-    {
-        var m = new ZoneMap();
-        var p = Settings.Resolve(path);
-        if (!File.Exists(p)) return m;
-        using var doc = JsonDocument.Parse(File.ReadAllText(p), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
-        if (!doc.RootElement.TryGetProperty("zones", out var z)) return m;
-        foreach (var kv in z.EnumerateObject())
-            if (long.TryParse(kv.Name, out var id) && kv.Value.ValueKind == JsonValueKind.String) m._z[id] = kv.Value.GetString()!;
-        return m;
-    }
-
-    public string Slug(long? id) => id == null ? "unknown" : _z.TryGetValue(id.Value, out var s) ? s : $"zone_{id}";
-    public string Name(long? id) => id == null ? "No zone yet" : _z.TryGetValue(id.Value, out var s) ? s.Replace('_', ' ') : $"zone {id}";
-}

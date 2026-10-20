@@ -6,9 +6,6 @@ captures/
 .vs/
 node_modules/
 
-# recordings contain raw server traffic (can include character names); share by choice only
-*.klrec
-
 # crawler progress and large data dumps
 tools/tw-progress.json
 tools/tw-items.json

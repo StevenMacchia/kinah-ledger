@@ -1,5 +1,4 @@
 using KinahLedger.Data;
-using KinahLedger.Protocol;
 
 namespace KinahLedger.Session;
 
@@ -35,8 +34,6 @@ public sealed class SessionEngine
     /// <summary>Best available kill count: kill lines, experience lines, or Kinah pickups (one per mob in open-world farming).</summary>
     public int Kills => Math.Max(Math.Max(KillsDefeated, KillsXp), Math.Max(KinahDrops, CurrencyLines));
     public int Events { get; private set; }
-    public long? ZoneId { get; private set; }
-    public long? InstanceId { get; private set; }
     public Dictionary<long, int> Items { get; } = new();
     public Dictionary<long, int> ItemsBound { get; } = new();
 
@@ -128,10 +125,6 @@ public sealed class SessionEngine
                 case CurrencyGained c:
                     CurrencyLines++; Z().CurrencyLines++;
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
-                    break;
-                case ZoneChanged z:
-                    ZoneId = z.ZoneId;
-                    InstanceId = z.InstanceId;
                     break;
             }
         }

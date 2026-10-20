@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using KinahLedger.Data;
-using KinahLedger.Protocol;
+using KinahLedger.Session;
 
 namespace KinahLedger.Ocr;
 

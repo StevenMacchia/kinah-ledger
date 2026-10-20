@@ -638,18 +638,18 @@ public partial class MainWindow : Window
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false; UpdateStep2();
         ZoneLbl.Text = "Zone: Western Cantas Valley";
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
-        void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new Protocol.ItemAcquired(t, _items.IdOf(n), 1, b)); }
-        void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new Protocol.KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new Protocol.CurrencyGained(t, "Oculazen Soul Points", 1)); } }
-        void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new Protocol.PetCrystal(t, n + " Soul Crystal", 1)); }
+        void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new ItemAcquired(t, _items.IdOf(n), 1, b)); }
+        void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new CurrencyGained(t, "Oculazen Soul Points", 1)); } }
+        void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new PetCrystal(t, n + " Soul Crystal", 1)); }
         Kind.SelectedItem = Kinds.Contains(kind) ? kind : "Open world"; _mode = SelectedMode;
         switch (_mode)
         {
             case Mode.Gather:
                 e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
-                Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new Protocol.ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));
+                Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));
                 Drop("Fine Orichalcum Ore", 14); Drop("Pure Orichalcum Ore", 2); Drop("Sapphire Gemstone", 9); Drop("Ruby Gemstone", 6); Drop("Diamond Gemstone", 4); Drop("Fine Sapphire Gemstone", 1);
                 Drop("Kukuru", 23); Drop("Conide", 11); Drop("Odyle", 31); Drop("Fine Odyle", 3);
-                for (int i = 0; i < 11; i++) e.Apply(new Protocol.GatherFailed(t, "Essence Extraction"));
+                for (int i = 0; i < 11; i++) e.Apply(new GatherFailed(t, "Essence Extraction"));
                 break;
             case Mode.Pets:
                 e.CreditZone("Western Cantas Valley", 25 * 60); Kills(96, 3690); Pet("Natura", 9); Pet("Fera", 4); Drop("Spiritstone", 12);

@@ -3,7 +3,7 @@ using KinahLedger.Session;
 
 namespace KinahLedger.Ui;
 
-/// <summary>Plain console readout, redrawn once a second. A small window replaces this once the protocol is mapped.</summary>
+/// <summary>Plain console readout for the `watch` command, redrawn once a second. The window app shows the same numbers with a panel over the game.</summary>
 public sealed class ConsoleView
 {
     readonly SessionEngine _s;
