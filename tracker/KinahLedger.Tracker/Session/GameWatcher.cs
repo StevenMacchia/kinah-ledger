@@ -42,10 +42,36 @@ public sealed class GameWatcher
     public int Flushed { get; private set; }
     public string FlushNote { get; private set; } = "";
 
+    /// <summary>The currency counter at the top-left, read every <see cref="BalanceEverySec"/> while the game is open.</summary>
+    public BalanceReader Balance { get; } = new();
+    public int BalanceEverySec { get; set; } = 10;
+    DateTime _balanceTickAt = DateTime.MinValue;
+    DateTime? _balanceApplied;
+
     public GameWatcher(Settings s, ItemDictionary items, Rectangle? marketRegion, Rectangle? manualChat, string server)
     {
         _settings = s; _items = items; ManualChat = manualChat;
         Market = new MarketCapture(s, items, marketRegion, server);
+    }
+
+    /// <summary>The balance just read, when it was trusted in the last 20 seconds; an older one may predate Kina spent or picked up since.</summary>
+    long? FreshBalance => Balance.Tracker.Balance is long b && Balance.Tracker.BalanceAt is DateTime at && (DateTime.UtcNow - at).TotalSeconds <= 20 ? b : null;
+
+    async Task TickBalanceAsync(Rectangle game)
+    {
+        var c = Chat; if (c == null) return;
+        if ((DateTime.UtcNow - _balanceTickAt).TotalSeconds < BalanceEverySec) return;
+        _balanceTickAt = DateTime.UtcNow;
+        // only the game's own counter is read: another window over the top-left corner is skipped, like the chat and the Market
+        if (GameWindow.Covered(BalanceReader.Strip(game), _settings.ProcessHints) != null) return;
+        await Balance.TickAsync(game, c.KinahPicked);
+        // a new trusted value goes to the always-on count and the farming run; each keeps its first and last
+        if (Balance.Tracker.BalanceAt is DateTime at && at != _balanceApplied)
+        {
+            _balanceApplied = at;
+            c.Engine.SetBalance(Balance.Tracker.Balance);
+            Farm?.SetBalance(Balance.Tracker.Balance);
+        }
     }
 
     public void Start() { _loop ??= Task.Run(() => Loop(_cts.Token)); }
@@ -56,6 +82,7 @@ public sealed class GameWatcher
         var c = Chat;
         if (c != null && c.Running) return c;
         var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server };
+        s.Parsed += ev => { if (ev is MarketSold or MarketListed or MarketExpired) Market.OnChatEvent(ev); };
         await s.StartAsync();
         Chat = s; ChatSince = DateTime.UtcNow; ChatNote = s.DetectNote; _flushAt = DateTime.UtcNow;
         return s;
@@ -72,6 +99,7 @@ public sealed class GameWatcher
     {
         var e = new SessionEngine(_items);
         e.SetZone(Chat?.Zone);
+        e.SetBalance(FreshBalance);
         Farm = e; FarmKind = kind;
         if (Chat != null) Chat.Secondary = e;
         return e;
@@ -85,13 +113,22 @@ public sealed class GameWatcher
         return e;
     }
 
-    /// <summary>Which mode a count looks like, from what it holds: gathers, Soul Crystals, or kills.</summary>
+    /// <summary>Which mode a count looks like, from what it holds: gathers, Soul Crystals, kills, or (with none of those) crafting and enchanting.</summary>
     public static string DominantKind(SessionEngine e)
     {
         var t = e.Totals();
         if (t.Nodes > t.Kills) return "Gathering";
         if (t.Pets > 0 && t.Pets * 5 >= Math.Max(1, t.Kills)) return "Pets";
+        var o = e.OddsTotals();
+        if (t.Kills == 0 && t.Kinah == 0 && o.Crafts + o.Enchants > 0) return "Crafting";
         return "Open world";
+    }
+
+    /// <summary>True when a count holds something the public tables can use: kills, Kinah, gathers, Soul Crystals, or craft and enchant results.</summary>
+    public static bool Worth(SessionEngine e)
+    {
+        var t = e.Totals(); var o = e.OddsTotals();
+        return t.Kills > 0 || t.Kinah > 0 || t.Nodes > 0 || t.Pets > 0 || o.Crafts + o.Enchants > 0;
     }
 
     async Task Loop(CancellationToken ct)
@@ -114,6 +151,7 @@ public sealed class GameWatcher
                         catch (Exception ex) { ChatNote = ex.Message; }
                     }
                     if (Market.Enabled && MarketInView()) await Market.TickAsync(game, _settings.Ocr.Scale);
+                    try { await TickBalanceAsync(game); } catch (Exception ex) { CrashLog.Write("balance", ex); }
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
                 await FlushPassiveAsync(false);
@@ -147,13 +185,23 @@ public sealed class GameWatcher
         if (!final && (DateTime.UtcNow - _flushAt).TotalMinutes < FlushMinutes) return;
         _flushAt = DateTime.UtcNow;
         var e = c.Engine;
-        if (e.Elapsed.TotalMinutes < 5 || e.Events == 0) { if (e.Elapsed.TotalMinutes >= FlushMinutes) c.Rotate(); return; }
-        var old = c.Rotate();
+        if (e.Elapsed.TotalMinutes < 5 || e.Events == 0) { if (e.Elapsed.TotalMinutes >= FlushMinutes) RotateChat(c); return; }
+        var old = RotateChat(c);
         if (!_settings.Upload.Enabled) { FlushNote = "sharing is off"; return; }
+        // time in town with a stray line or two isn't farming: sharing it would add a zero to some zone's Kinah per hour
+        if (!Worth(old)) { FlushNote = "nothing farmed in the last chunk, so nothing shared"; return; }
         var kind = DominantKind(old);
         bool ok = await c.UploadAsync(_settings, old, kind, TrackerSession.ActivityOf(old, kind));
         if (ok) { Flushed++; FlushNote = $"shared {old.Events} lines as {kind.ToLowerInvariant()}"; }
         else FlushNote = "couldn't reach the site";
+    }
+
+    /// <summary>Restarts the always-on count; the fresh one starts from the balance just read, when there is one.</summary>
+    SessionEngine RotateChat(TrackerSession c)
+    {
+        var old = c.Rotate();
+        c.Engine.SetBalance(FreshBalance);
+        return old;
     }
 
     /// <summary>Stops the loop, gives the last batches a few seconds to go out, then stops the chat reader.</summary>

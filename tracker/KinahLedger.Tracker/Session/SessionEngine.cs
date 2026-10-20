@@ -41,6 +41,36 @@ public sealed class SessionEngine
     public Dictionary<string, int> Pets { get; } = new();
     public int PetCrystals { get; private set; }
 
+    /// <summary>Successes and failures for one craft recipe or one enchant step.</summary>
+    public sealed class Odds { public int Ok, Fail; public int Attempts => Ok + Fail; }
+    /// <summary>Craft results by item key (dictionary ID, or the name read when the item isn't in the dictionary).</summary>
+    public Dictionary<string, Odds> Crafts { get; } = new();
+    /// <summary>Enchant results by "item|from|to"; a level the line didn't show is "?".</summary>
+    public Dictionary<string, Odds> Enchants { get; } = new();
+    /// <summary>A craft's own item line ("Orichalcum Ingot acquired.") follows the craft: it is the craft's output, not a drop.</summary>
+    public int CraftedSkipped { get; private set; }
+    long _craftedId; DateTime _craftedAt; string _lastCraft = ""; DateTime _lastCraftAt;
+
+    /// <summary>The player's own Market activity seen in chat during this count: what sold, for how much, and what expired.</summary>
+    public int Sold { get; private set; }
+    public long SoldKinah { get; private set; }
+    public int Listed { get; private set; }
+    public int Expired { get; private set; }
+
+    /// <summary>
+    /// The Kinah balance from the currency counter at the top-left of the game, first and last good read. The difference is
+    /// net income: pickups minus repairs, purchases and fees. Only the difference, rounded, is ever shared; never the balance.
+    /// </summary>
+    public long? BalanceStart { get; private set; }
+    public long? BalanceEnd { get; private set; }
+    public long? NetKinah { get { lock (_lock) return BalanceStart is long s && BalanceEnd is long e ? e - s : null; } }
+
+    public void SetBalance(long? balance)
+    {
+        if (balance is not long b) return;
+        lock (_lock) { BalanceStart ??= b; BalanceEnd = b; }
+    }
+
     /// <summary>What happened in one zone: time spent there plus the counters the "best spot" tables need.</summary>
     public sealed class ZoneStats
     {
@@ -111,6 +141,9 @@ public sealed class SessionEngine
             Events++;
             switch (ev)
             {
+                case ItemAcquired a when a.ItemId == _craftedId && (a.Time - _craftedAt).TotalSeconds <= 5:
+                    _craftedId = 0; CraftedSkipped++;
+                    break;
                 case ItemAcquired a:
                     var d = a.Bound ? ItemsBound : Items;
                     d[a.ItemId] = d.GetValueOrDefault(a.ItemId) + a.Count;
@@ -151,8 +184,47 @@ public sealed class SessionEngine
                     CurrencyLines++; Z().CurrencyLines++;
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
                     break;
+                case CraftResult cr:
+                {
+                    // "Crafting failed." may not name the item: it is the recipe crafted just before, when there is one
+                    var name = cr.Item.Length >= 2 ? cr.Item : (cr.Time - _lastCraftAt).TotalMinutes <= 2 ? _lastCraft : "";
+                    var key = name.Length >= 2 ? _items.KeyOf(_items.IdOf(name)) : "?";
+                    if (!Crafts.TryGetValue(key, out var o)) Crafts[key] = o = new Odds();
+                    if (cr.Ok) { o.Ok++; _craftedId = _items.IdOf(name); _craftedAt = cr.Time; } else o.Fail++;
+                    if (name.Length >= 2) { _lastCraft = name; _lastCraftAt = cr.Time; }
+                    break;
+                }
+                case EnchantResult en:
+                {
+                    var item = en.Item.Length >= 2 ? _items.KeyOf(_items.IdOf(en.Item)) : "?";
+                    var key = $"{item}|{(en.From >= 0 ? en.From.ToString() : "?")}|{(en.To >= 0 ? en.To.ToString() : "?")}";
+                    if (!Enchants.TryGetValue(key, out var o)) Enchants[key] = o = new Odds();
+                    if (en.Ok) o.Ok++; else o.Fail++;
+                    break;
+                }
+                case MarketSold s:
+                    Sold++; SoldKinah += s.Total;
+                    break;
+                case MarketListed:
+                    Listed++;
+                    break;
+                case MarketExpired:
+                    Expired++;
+                    break;
             }
         }
+    }
+
+    /// <summary>Copies of the craft and enchant counters, safe to read from the UI thread and to share.</summary>
+    public (Dictionary<string, Odds> Crafts, Dictionary<string, Odds> Enchants) OddsSnapshot()
+    {
+        lock (_lock) return (Crafts.ToDictionary(kv => kv.Key, kv => new Odds { Ok = kv.Value.Ok, Fail = kv.Value.Fail }), Enchants.ToDictionary(kv => kv.Key, kv => new Odds { Ok = kv.Value.Ok, Fail = kv.Value.Fail }));
+    }
+
+    /// <summary>Craft and enchant attempts in this count.</summary>
+    public (int Crafts, int CraftsOk, int Enchants, int EnchantsOk) OddsTotals()
+    {
+        lock (_lock) return (Crafts.Values.Sum(o => o.Attempts), Crafts.Values.Sum(o => o.Ok), Enchants.Values.Sum(o => o.Attempts), Enchants.Values.Sum(o => o.Ok));
     }
 
     public void Finish()

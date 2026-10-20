@@ -353,7 +353,7 @@ public partial class MainWindow : Window
         if (chat == null) Say(_watcher.GameRect == null ? "Waiting for the game. Reading starts on its own once the game is open." : "Looking for the chat… " + _watcher.ChatNote, "Faint");
         else if (chat.LastError.Length > 0) Say("Read problem: " + chat.LastError, "Bad");
         else if (chat.Paused.Length > 0) Say($"Paused: {chat.Paused}. Only the game is read, so reading picks up when the chat is in view again · " + MarketShort(), "Warn");
-        else Say((farm != null ? "Farming" : "Reading") + $" · {chat.Reads} reads" + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : "") + " · " + MarketShort() + (_watcher.Flushed > 0 ? $" · {_watcher.Flushed} chunk{(_watcher.Flushed == 1 ? "" : "s")} shared" : ""), "Faint");
+        else Say((farm != null ? "Farming" : "Reading") + $" · {chat.Reads} reads" + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : "") + " · " + MarketShort() + " · " + BalanceShort() + (_watcher.Flushed > 0 ? $" · {_watcher.Flushed} chunk{(_watcher.Flushed == 1 ? "" : "s")} shared" : ""), "Faint");
         if (chat != null && !_compact && ++_ticks % 4 == 0 && !_framing)
         {
             // the whole game with the chat, map and (when open) Market outlined, refreshed every couple of seconds off the UI thread
@@ -385,6 +385,13 @@ public partial class MainWindow : Window
                     break;
             }
         }
+    }
+
+    /// <summary>The Kinah balance counter in a few words for the status line: still looking for it, or the last good read.</summary>
+    string BalanceShort()
+    {
+        var b = _watcher.Balance.Tracker;
+        return b.Balance is long v ? $"Kinah {v:N0}" : b.KinahLeft != null ? "Kinah counter found" : "Kinah counter: pick up Kina to find it";
     }
 
     /// <summary>The Market in a few words for the status line.</summary>
@@ -501,7 +508,27 @@ public partial class MainWindow : Window
                 Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {s.DropCount} drops · {t.Kills} kills{worth}" + crystals + (s.GatherCount > 0 ? $" · {s.GatherCount} gathered" : "") + skipped;
                 break;
         }
+        Summary.ToolTip = Summary.Text;
+        var extra = Extras(e, h);
+        ExtraLine.Text = extra; ExtraLine.ToolTip = extra;
+        ExtraLine.Visibility = extra.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         ShowTable(e, elapsed, s);
+    }
+
+    /// <summary>
+    /// What 0.7 adds to the summary line, each part only once there is something to say: net Kinah from the balance
+    /// counter, craft and enchant results, and the player's own Market sales.
+    /// </summary>
+    static string Extras(SessionEngine e, double h)
+    {
+        var parts = new List<string>();
+        if (e.NetKinah is long net) parts.Add($"net {(net >= 0 ? "+" : "−")}{Fk(Math.Abs(net))} ({(net >= 0 ? "" : "−")}{Fk(Math.Abs(net) / h)}/hr)");
+        var o = e.OddsTotals();
+        if (o.Crafts > 0) parts.Add($"crafts {o.CraftsOk}/{o.Crafts} ok");
+        if (o.Enchants > 0) parts.Add($"enchants {o.EnchantsOk}/{o.Enchants} ok");
+        if (e.Sold > 0) parts.Add($"sold {e.Sold} for {Fk(e.SoldKinah)}");
+        if (e.Expired > 0) parts.Add($"{e.Expired} listing{(e.Expired == 1 ? "" : "s")} expired");
+        return string.Join(" · ", parts);
     }
 
     void ShowTable(SessionEngine? e, TimeSpan? elapsed = null, Tables? pre = null)
@@ -568,10 +595,12 @@ public partial class MainWindow : Window
 
     void WhatsSent() => MessageBox.Show(this,
         "When a run ends, these totals go to the public tables:\n\n" +
-        "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
-        "Never your character name, account, class, level, chat text or screenshots.\n" +
+        "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n" +
+        "•  how much your Kinah went up or down over the run, rounded to 100 (read from the counter at the top-left of the game; your balance itself is never sent)\n•  how many crafts and enchants worked and failed, by item\n" +
+        "•  app version and a random install ID used only to stop spam\n\n" +
+        "Never your character name, account, class, level, chat text, your Kinah balance or screenshots.\n" +
         "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
-        "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
+        "A farming run's totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop; what's counted while the game is open goes the same way in 15-minute chunks. If the site can't be reached, a run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
         "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off and keeps the tracker fully offline.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
@@ -660,7 +689,8 @@ public partial class MainWindow : Window
     void WhatsRead() => MessageBox.Show(this,
         "Whenever this window and the game are open (not only during a run), the tracker watches for the Market window. While the Market is open, the listings on your screen are read about once a second, the same way the chat is:\n\n" +
         "•  item name, stack size and unit price of each ask\n•  your server, as chosen above, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
-        "Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
+        "Your own sales, from the chat: when the game says one of your listings sold or expired, the item, quantity, price per unit, when, and how long it was listed (when this PC saw you list it) go with the asks. Your listings themselves stay on this PC.\n\n" +
+        "Never seller or buyer names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
         "Nothing is clicked or typed in the game. It follows the Share switch in Settings: with sharing off, the Market isn't read at all.\n\n" +
         "Asks go to kinahledger.com (https://kinahledger.com/v1/prices) in small batches as they are read. If the site can't be reached, the batch is tried again a few seconds later; whatever is still unsent when this window closes is dropped. Prices are never stored on this PC.",
         "What's read from the Market", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -793,6 +823,10 @@ public partial class MainWindow : Window
                 Drop("Thick hide", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Manastone", 8); Drop("Aether shard", 7); Drop("Enchantment stone", 3); Drop("Greater manastone", 1);
                 Drop("Orichalcum Ore", 6); Drop("Sapphire Gemstone", 1);
                 Pet("Natura", 3);
+                // 0.7: the balance counter, a few crafts and a sale, so the extra line shows in layout renders
+                e.SetBalance(1_204_300); e.SetBalance(1_784_900);
+                e.Apply(new CraftResult(t, "Orichalcum Ingot", true)); e.Apply(new CraftResult(t, "Orichalcum Ingot", true)); e.Apply(new CraftResult(t, "Orichalcum Ingot", false));
+                e.Apply(new MarketSold(t, "Spiritstone", 10, 75_200));
                 break;
         }
         ApplyModeLabels();

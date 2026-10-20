@@ -81,6 +81,12 @@ public sealed class TrackerSession
 
     public event Action<string>? LootLine;
     public event Action? Updated;
+    /// <summary>Every event read from the chat, as it is counted: the Market reader takes the player's own sales from here.</summary>
+    public event Action<GameEvent>? Parsed;
+
+    long _kinahPicked;
+    /// <summary>All tradeable Kina picked up since the reader started, across chunks: what the balance counter is checked against.</summary>
+    public long KinahPicked => Interlocked.Read(ref _kinahPicked);
 
     public TrackerSession(Rectangle? manualRegion, Settings s, ItemDictionary items, string kind, int? intervalMs = null)
     {
@@ -173,11 +179,21 @@ public sealed class TrackerSession
                 if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); DetectNote = "re-found: " + note; }
             }
         }
-        foreach (var l in _tracker.NewLines(lines))
+        int unaligned = _tracker.Unaligned;
+        var fresh = _tracker.NewLines(lines);
+        bool afterFade = _tracker.LastAfterFade;
+        // a read that couldn't be lined up with the last one counts nothing; the log says so, so a missed line can be traced
+        if (_tracker.Unaligned > unaligned) CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
+        foreach (var l in fresh)
         {
             bool any = false;
-            foreach (var ev in _parser.Parse(l, DateTime.UtcNow)) { Engine.Apply(ev); Secondary?.Apply(ev); any = true; }
-            CrashLog.Read(l, any);
+            foreach (var ev in _parser.Parse(l, DateTime.UtcNow))
+            {
+                Engine.Apply(ev); Secondary?.Apply(ev); any = true;
+                if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
+                try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+            }
+            CrashLog.Read(l, any, afterFade);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
         LastError = "";
@@ -206,7 +222,7 @@ public sealed class TrackerSession
 
     /// <summary>Shares one engine's totals (a farming run, or a chunk of the always-on count) under the given kind. Under five minutes or empty: nothing is sent.</summary>
     public Task<bool> UploadAsync(Settings s, SessionEngine e, string kind, string activity) =>
-        e.Elapsed.TotalMinutes >= 5 && e.Events > 0 ? Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server), s.Upload) : Task.FromResult(false);
+        e.Elapsed.TotalMinutes >= 5 && e.Events > 0 ? Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items), s.Upload) : Task.FromResult(false);
 }
 
 /// <summary>What the window remembers between runs, kept per user.</summary>

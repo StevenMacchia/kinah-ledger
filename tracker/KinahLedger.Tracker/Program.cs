@@ -40,6 +40,7 @@ internal static class Program
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
+                case "balance-test": return BalanceTest(settings, opts);
                 case "market-test": return MarketTest(settings, opts);
                 case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
                 case "market-watch": return MarketWatch(settings, opts);
@@ -75,7 +76,8 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   watch [--activity name]       a farming run in the console, with the Market reader beside it; Ctrl+C to stop
         [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]
   market-watch [--server ..]    only the Market reader, as the window runs it in the background; Ctrl+C to stop
-  parse-test                    self-test of the chat-line parser
+  parse-test                    self-test of the chat-line parser, the 0.7 reads and the balance counter logic
+  balance-test [--save]         read the currency counters at the top-left once and list the numbers (--save keeps the crop)
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
@@ -283,9 +285,13 @@ options: --process aion[,other]");
             new List<string> { "y", "z", "w" },
             new List<string> { "a", "b", "c" },
             new List<string>(),                      // the chat faded out: nothing new, and the baseline stays
-            new List<string> { "a", "b", "c", "d" }  // it came back with one more line, and only that one counts
+            new List<string> { "a", "b", "c", "d" }, // it came back with one more line, and only that one counts
+            new List<string> { "b", "c", "d", "Targena" },               // world text behind the frameless chat shows up at the bottom
+            new List<string> { "b", "c", "d", "Odyle acquired." },        // it's gone and a loot line arrived: the loot line counts
+            new List<string> { "c", "d", "Odyle acquired.", "Kukur" },
+            new List<string> { "c", "d", "Odyle acquirea.", "Ore" }       // a misread copy of a line already seen isn't new; Ore is
         };
-        string[] expect = { "", "d", "", "d", "", "w", "", "", "d" };
+        string[] expect = { "", "d", "", "d", "", "w", "", "", "d", "Targena", "Odyle acquired.", "Kukur", "Ore" };
         bool ok = true;
         for (int i = 0; i < frames.Length; i++)
         {
@@ -293,8 +299,128 @@ options: --process aion[,other]");
             ok &= got == expect[i];
             Console.WriteLine($"  read {i + 1} [{string.Join(",", frames[i])}] -> new: [{got}]  expected [{expect[i]}] {(got == expect[i] ? "ok" : "MISMATCH")}");
         }
-        Console.WriteLine(ok ? "\nAll tracker cases passed." : "\nTracker mismatch, see above.");
+        ok &= TradeTest(items);
+        Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
+    }
+
+    /// <summary>Reads the currency strip once, the way the window does every ten seconds, and lists the numbers with where each starts.</summary>
+    static int BalanceTest(Settings s, Dictionary<string, string> o)
+    {
+        var game = GameWindow.Find(s.ProcessHints);
+        if (game == null) { Console.WriteLine("Game window not found (is it running and not minimized?)."); return 1; }
+        var strip = BalanceReader.Strip(game.Value);
+        if (GameWindow.Covered(strip, s.ProcessHints) is { } cover) { Console.WriteLine($"The top-left corner isn't readable now: {cover}."); return 1; }
+        using var raw = ScreenReader.Capture(strip);
+        if (o.ContainsKey("save")) { raw.Save("balance-strip.png", System.Drawing.Imaging.ImageFormat.Png); Console.WriteLine("Strip saved to balance-strip.png"); }
+        var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true)).GetAwaiter().GetResult();
+        Console.WriteLine($"Strip {strip.Width} × {strip.Height} at {strip.X}, {strip.Y}: {lines.Count} line(s) read");
+        foreach (var l in lines) Console.WriteLine("  " + l.Text);
+        var counters = BalanceReader.Counters(lines);
+        Console.WriteLine(counters.Count == 0 ? "No numbers found." : "Numbers, left to right: " + string.Join("   ", counters.Select(c => $"{c.Value:N0} (x {c.Left})")));
+        Console.WriteLine("Which one is Kinah is worked out while you play: the counter that grows by exactly the Kina the chat shows.");
+        return counters.Count > 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The 0.7 reads: Market sale, listing and expiry lines, craft and enchant results, how the engine counts them,
+    /// what the run payload carries, and how the balance counter is found and trusted. Only "Successfully crafted …" is a
+    /// confirmed wording; the rest are the likely ones and get replaced by the client's own lines once they're collected.
+    /// </summary>
+    static bool TradeTest(ItemDictionary items)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        var parser = new ChatParser(items);
+        string One(string line) { var evs = parser.Parse(line, DateTime.UtcNow).Select(e => Describe(e, items)).ToList(); return evs.Count == 0 ? "(ignored)" : string.Join("; ", evs); }
+
+        Console.WriteLine("\nMarket, craft and enchant lines (0.7):");
+        (string line, string expect)[] lines =
+        {
+            ("Your Spiritstone x10 sold for 75,200 Kina.", "sold: Spiritstone ×10 for 75,200"),
+            ("Spiritstone x10 has been sold for 75,200 Kina.", "sold: Spiritstone ×10 for 75,200"),
+            ("Sold Raw Leather x20 for 298,980 Kina.", "sold: Raw Leather ×20 for 298,980"),
+            ("The Market sold your Fine Odyle x2 for 37,8OO Kina.", "sold: Fine Odyle ×2 for 37,800"),
+            ("Registered Spiritstone x10 on the Market for 75,200 Kina.", "listed: Spiritstone ×10 for 75,200"),
+            ("Spiritstone x5 has been registered on the Market.", "listed: Spiritstone ×5"),
+            ("Join request registered.", "(ignored)"),
+            ("Listing for Spiritstone x10 has expired.", "expired: Spiritstone ×10"),
+            ("Your Raw Leather listing has expired.", "expired: Raw Leather ×1"),
+            ("Blessing of Rock has expired.", "(ignored)"),
+            ("Successfully crafted Orichalcum Ingot.", "craft ok: Orichalcum Ingot"),
+            ("Successfully crafted Orichalcl", "craft ok: Orichalcl"),
+            ("Great success! Successfully crafted Orichalcum Ingot x2.", "craft ok: Orichalcum Ingot"),
+            ("Crafting failed.", "craft failed: ?"),
+            ("Failed to craft Orichalcum Ingot.", "craft failed: Orichalcum Ingot"),
+            ("Orichalcum Ingot crafting failed.", "craft failed: Orichalcum Ingot"),
+            ("Enchantment succeeded: Tahabata's Sword +11", "enchant ok: Tahabata's Sword +10 → +11"),
+            ("Successfully enchanted Tahabata's Sword to +11.", "enchant ok: Tahabata's Sword +10 → +11"),
+            ("Enchantment failed. Tahabata's Sword +10", "enchant failed: Tahabata's Sword +10 → +11"),
+            ("Failed to enchant Tahabata's Sword +10.", "enchant failed: Tahabata's Sword +10 → +11"),
+            ("Enchanting failed. The level dropped to +9.", "enchant failed: ? +? → +?"),
+            ("Enchantment Stone acquired.", "Enchantment Stone ×1"),
+            ("Acquired 67,676 Kina from the Market.", "reward: Market proceeds ×1 (skipped)"),
+            ("Acquired 520 Kina.", "Kinah +520"),
+            ("[ZenBytez] Crafted a Chalice cause my first", "(ignored)"),
+        };
+        foreach (var (line, expect) in lines) Check(line, One(line), expect);
+
+        Console.WriteLine("\nEngine (0.7):");
+        var e = new SessionEngine(items); var t0 = DateTime.UtcNow;
+        long ingot = items.IdOf("Orichalcum Ingot");
+        e.Apply(new CraftResult(t0, "Orichalcum Ingot", true));
+        e.Apply(new ItemAcquired(t0.AddSeconds(1), ingot, 1, false));                // the craft's own item line
+        e.Apply(new CraftResult(t0.AddSeconds(20), "", false));                       // "Crafting failed." right after: same recipe
+        e.Apply(new ItemAcquired(t0.AddSeconds(30), ingot, 1, false));               // later, unrelated to a craft: a drop
+        e.Apply(new EnchantResult(t0, "Tahabata's Sword", 10, 11, false));
+        e.Apply(new EnchantResult(t0, "Tahabata's Sword", 10, 11, true));
+        e.Apply(new EnchantResult(t0, "", -1, -1, false));
+        var (crafts, enchants) = e.OddsSnapshot();
+        var ingotKey = items.KeyOf(ingot);
+        Check("craft output not a drop, later pickup is", $"skipped {e.CraftedSkipped}, drops {e.Items.GetValueOrDefault(ingot)}", "skipped 1, drops 1");
+        Check("unnamed craft failure goes to the last recipe", crafts.TryGetValue(ingotKey, out var co) ? $"{co.Ok} ok, {co.Fail} failed" : "missing", "1 ok, 1 failed");
+        Check("enchant step key", string.Join(" ", enchants.OrderBy(k => k.Key).Select(k => $"{k.Key}={k.Value.Ok}/{k.Value.Attempts}")), "?|?|?=0/1 Tahabata's Sword|10|11=1/2");
+        var odds = OddsPayload.From(e);
+        Check("shared odds leave out unknown items", $"crafts {odds?.crafts?.Count ?? 0}, enchants {string.Join(",", odds?.enchants?.Keys ?? Enumerable.Empty<string>())}", "crafts 1, enchants Tahabata's Sword|10|11");
+        Check("synthetic item ids go out as names", items.KeyOf(items.IdOf("Some Unlisted Thing")), "Some Unlisted Thing");
+        Check("net Kinah rounded to 100", $"{RunPayload.RoundNet(123_449)} {RunPayload.RoundNet(-1_250)} {RunPayload.RoundNet(49)}", "123400 -1300 0");
+        var idle = new SessionEngine(items); idle.Apply(new CraftResult(t0, "Orichalcum Ingot", true));
+        Check("a craft-only count is shared as Crafting", GameWatcher.DominantKind(idle), "Crafting");
+        var town = new SessionEngine(items); town.Apply(new ItemAcquired(t0, ingot, 1, false));
+        Check("a stray pickup in town is not worth sharing", GameWatcher.Worth(town).ToString(), "False");
+
+        Console.WriteLine("\nBalance counter (0.7): which counter is Kinah, and when a read is trusted:");
+        var bt = new BalanceTracker();
+        List<CounterRead> Strip(long kinah, long other = 2751) => new() { new(7811, 40), new(kinah, 300), new(other, 560), new(15265, 820) };
+        (List<CounterRead> read, long picked, bool same, string expect, string why)[] steps =
+        {
+            (Strip(23501), 0, false, "none", "first read: nothing to compare yet"),
+            (Strip(24021), 520, false, "none", "grew by the 520 picked up: one match"),
+            (Strip(24457, 2752), 956, false, "24457", "grew by 436 again: found, and this read counts"),
+            (Strip(24857), 956, false, "24457", "a misread digit: not trusted"),
+            (Strip(24457), 956, false, "24457", "back to the right value, once: not yet"),
+            (Strip(24457), 956, false, "24457", "the same twice: trusted"),
+            (Strip(20000), 956, false, "24457", "spent on something: one read isn't enough"),
+            (Strip(20000), 956, true, "20000", "the same pixels again: trusted"),
+        };
+        foreach (var (read, picked, same, expect, why) in steps)
+        {
+            bt.Observe(read, picked, same);
+            Check(why, bt.Balance?.ToString() ?? "none", expect);
+        }
+        Check("the counter found", bt.KinahLeft?.ToString() ?? "none", "300");
+        var split = BalanceReader.Counters(new[] { new OcrLineBox("x 23, 501 @ 7,811", new System.Drawing.Rectangle(0, 0, 200, 20), new[]
+        {
+            new OcrWordBox("x", new System.Drawing.Rectangle(0, 0, 10, 20)), new OcrWordBox("23,", new System.Drawing.Rectangle(20, 0, 26, 20)),
+            new OcrWordBox("501", new System.Drawing.Rectangle(50, 0, 30, 20)), new OcrWordBox("@", new System.Drawing.Rectangle(110, 0, 12, 20)),
+            new OcrWordBox("7,811", new System.Drawing.Rectangle(130, 0, 50, 20))
+        }) });
+        Check("a number split by the recognizer is joined back", string.Join(" ", split.Select(c => $"{c.Value}@{c.Left}")), "23501@20 7811@130");
+        return ok;
     }
 
     /// <summary>
@@ -419,6 +545,11 @@ options: --process aion[,other]");
         PetCrystal p => $"pet: {p.Name} ×{p.Count} (Pets table, by zone; not a drop)",
         RewardReceived r => $"reward: {r.Name} ×{r.Count} (skipped)",
         GatherFailed f => $"{f.Skill} failed (node attempt, no yield)",
+        MarketSold s => $"sold: {s.Item} ×{s.Qty} for {s.Total:N0}",
+        MarketListed l => $"listed: {l.Item} ×{l.Qty}" + (l.Price > 0 ? $" for {l.Price:N0}" : ""),
+        MarketExpired x => $"expired: {x.Item} ×{x.Qty}",
+        CraftResult c => $"craft {(c.Ok ? "ok" : "failed")}: {(c.Item.Length > 0 ? c.Item : "?")}",
+        EnchantResult en => $"enchant {(en.Ok ? "ok" : "failed")}: {(en.Item.Length > 0 ? en.Item : "?")} +{(en.From >= 0 ? en.From.ToString() : "?")} → +{(en.To >= 0 ? en.To.ToString() : "?")}",
         _ => ev.GetType().Name
     };
 

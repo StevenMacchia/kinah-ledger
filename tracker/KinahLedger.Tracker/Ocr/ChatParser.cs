@@ -42,12 +42,129 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"^(?<skill>[^\[\]]*?(?:extraction|gathering|mining|logging|harvest(?:ing)?|collect(?:ion|ing)))\s+failed\.?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex GatherFail();
 
+    // Market, craft and enchant lines (0.7). Only "Successfully crafted <item>" has been seen in a real reads.log so far;
+    // the other shapes are the likely wordings, kept loose until the client's own lines are collected.
+    const string Stack = @"(?:\s*\(?\s*[×xX\*]\s*(?<n>\d{1,5})\s*\)?)?";
+    const string Price = @"(?<price>[0-9][0-9OoIl,\. ]*?)\s*kinah?\b";
+
+    /// <summary>"Your Spiritstone x10 sold for 75,200 Kina." / "Spiritstone x10 has been sold for 75,200 Kina."</summary>
+    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+been\s+|have\s+been\s+|was\s+|were\s+)?sold\b(?:\s+(?:on|at|in|through)\s+the\s+market)?(?:\s+for)?[^0-9]*?" + Price, RegexOptions.IgnoreCase)]
+    private static partial Regex SoldItemFirst();
+
+    /// <summary>"Sold Spiritstone x10 for 75,200 Kina." / "The Market sold your Spiritstone x10 for 75,200 Kina."</summary>
+    [GeneratedRegex(@"^(?:the\s+market\s+)?sold\s+(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+for\s+" + Price, RegexOptions.IgnoreCase)]
+    private static partial Regex SoldVerbFirst();
+
+    /// <summary>"Registered Spiritstone x10 on the Market for 75,200 Kina." / "You listed ..."</summary>
+    [GeneratedRegex(@"^(?:you\s+(?:have\s+)?)?(?:registered|listed)\s+(?<item>[^\[\]]+?)" + Stack + @"\s+(?:on|to|in)\s+the\s+market(?:\s+for\s+" + Price + ")?", RegexOptions.IgnoreCase)]
+    private static partial Regex ListedVerbFirst();
+
+    /// <summary>"Spiritstone x10 has been registered on the Market for 75,200 Kina."</summary>
+    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+been\s+|was\s+)?(?:registered|listed)\b(?<market>\s+(?:on|to|in)\s+the\s+market)?(?:\s+for\s+" + Price + ")?", RegexOptions.IgnoreCase)]
+    private static partial Regex ListedItemFirst();
+
+    /// <summary>"Listing for Spiritstone x10 has expired." / "Registration period for Spiritstone has expired."</summary>
+    [GeneratedRegex(@"^(?:the\s+)?(?:market\s+)?(?:listing|registration)(?:\s+period)?\s+(?:for|of)\s+(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:has\s+)?expired", RegexOptions.IgnoreCase)]
+    private static partial Regex ExpiredListingFirst();
+
+    /// <summary>"Your Spiritstone x10 listing has expired." / "Spiritstone x10 has expired on the Market."</summary>
+    [GeneratedRegex(@"^(?:your\s+)?(?<item>[^\[\]]+?)" + Stack + @"\s+(?:(?:market\s+)?(?:listing|registration)\s+(?:has\s+)?expired|(?:has\s+)?expired\b.*\bmarket)", RegexOptions.IgnoreCase)]
+    private static partial Regex ExpiredItemFirst();
+
+    /// <summary>"Successfully crafted Orichalcum Ingot." (seen in game), with a possible "Great success!" in front or a stack after.</summary>
+    [GeneratedRegex(@"^(?:(?:great|critical)\s+success[!.:]?\s*)?(?:you\s+(?:have\s+)?)?successfully\s+crafted\s+(?<item>[^\[\]]+?)" + Stack + @"\s*[.!]?$", RegexOptions.IgnoreCase)]
+    private static partial Regex Crafted();
+
+    /// <summary>"Crafting failed." / "Failed to craft Orichalcum Ingot." / "Orichalcum Ingot crafting failed."</summary>
+    [GeneratedRegex(@"^(?:craft(?:ing)?(?:\s+of\s+(?<item>[^\[\]]+?))?\s+(?:has\s+)?failed\b.*|(?:you\s+(?:have\s+)?)?failed\s+(?:to\s+craft|crafting)\s+(?<item>[^\[\]]+?)\s*[.!]?|(?<item>[^\[\]]+?)\s+craft(?:ing)?\s+(?:has\s+)?failed\b.*)$", RegexOptions.IgnoreCase)]
+    private static partial Regex CraftFailed();
+
+    [GeneratedRegex(@"\benchant(?:ed|ing|ment)?\b", RegexOptions.IgnoreCase)]
+    private static partial Regex EnchantWord();
+
+    [GeneratedRegex(@"\b(?:fail(?:ed|ure)?|unsuccessful)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex FailWord();
+
+    [GeneratedRegex(@"\b(?:succe(?:ss|ssful|ssfully|eded)|succeeded)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex SuccessWord();
+
+    [GeneratedRegex(@"\+\s?(?<lvl>\d{1,2})\b")]
+    private static partial Regex Level();
+
+    [GeneratedRegex(@"\b(?:dropp?ed|decreased|reduced|reset|fell|lowered)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex DropWord();
+
+    /// <summary>What's left of an enchant line once the verb phrases and levels are taken out: the item's name, or "" when the line has none.</summary>
+    [GeneratedRegex(@"(?:\byou\s+have\b|\bsuccessfully\b|\bhas\s+been\b|\bwas\b|\bfailed\s+to\s+enchant\b|\benchant(?:ed|ing|ment)?\b|\bsucce(?:ss|ssful|eded)\b|\bfail(?:ed|ure)?\b|\bunsuccessful\b|\bto\b\s*(?=\+)|\+\s?\d{1,2}\b|[:!])", RegexOptions.IgnoreCase)]
+    private static partial Regex EnchantNoise();
+
+    /// <summary>Market, craft and enchant lines. Checked before the loot rules, since a sale line mentions Kina and a craft is followed by its item.</summary>
+    IEnumerable<GameEvent> ParseTrade(string line, DateTime time)
+    {
+        Match m;
+        if ((m = SoldVerbFirst().Match(line)).Success || (m = SoldItemFirst().Match(line)).Success)
+        {
+            var item = CleanName(m.Groups["item"].Value); long total = Digits(m.Groups["price"].Value);
+            if (item.Length >= 2 && total > 0) yield return new MarketSold(time, item, Count(m), total);
+            yield break;
+        }
+        if ((m = ListedVerbFirst().Match(line)).Success || ((m = ListedItemFirst().Match(line)).Success && (m.Groups["market"].Success || m.Groups["price"].Success)))
+        {
+            var item = CleanName(m.Groups["item"].Value);
+            if (item.Length >= 2) yield return new MarketListed(time, item, Count(m), m.Groups["price"].Success ? Digits(m.Groups["price"].Value) : 0);
+            yield break;
+        }
+        if ((m = ExpiredListingFirst().Match(line)).Success || (m = ExpiredItemFirst().Match(line)).Success)
+        {
+            var item = CleanName(m.Groups["item"].Value);
+            if (item.Length >= 2) yield return new MarketExpired(time, item, Count(m));
+            yield break;
+        }
+        if ((m = Crafted().Match(line)).Success)
+        {
+            var item = CleanName(m.Groups["item"].Value);
+            if (item.Length >= 2) yield return new CraftResult(time, item, true);
+            yield break;
+        }
+        if ((m = CraftFailed().Match(line)).Success)
+        {
+            yield return new CraftResult(time, CleanName(m.Groups["item"].Value), false);
+            yield break;
+        }
+        if (EnchantWord().IsMatch(line) && !line.Contains("acqui", StringComparison.OrdinalIgnoreCase) && !line.Contains("obtain", StringComparison.OrdinalIgnoreCase))
+        {
+            bool fail = FailWord().IsMatch(line), ok = !fail && SuccessWord().IsMatch(line);
+            if (!fail && !ok) yield break;   // "Enchantment Stone" in some other line: neither outcome, not an attempt
+            var levels = Level().Matches(line).Select(x => int.Parse(x.Groups["lvl"].Value)).ToList();
+            int from = -1, to = -1;
+            if (ok) { if (levels.Count >= 2) (from, to) = (levels[0], levels[1]); else if (levels.Count == 1) (from, to) = (levels[0] - 1, levels[0]); }
+            else if (levels.Count >= 2) (from, to) = (levels[0], levels[0] + 1);
+            else if (levels.Count == 1 && !DropWord().IsMatch(line)) (from, to) = (levels[0], levels[0] + 1);
+            // "Enchanting failed. The level dropped to +9.": the sentence about the new level doesn't name the item
+            var named = string.Join(' ', line.Split('.').Where(s => !DropWord().IsMatch(s)));
+            var item = CleanName(EnchantNoise().Replace(named, " "));
+            yield return new EnchantResult(time, item, from, to, ok);
+        }
+    }
+
+    static int Count(Match m) => m.Groups["n"].Success && int.TryParse(m.Groups["n"].Value, out var n) ? Math.Clamp(n, 1, 99999) : 1;
+
+    static string CleanName(string s)
+    {
+        var name = Regex.Replace(s, @"\s+", " ").Trim().TrimEnd('.', ',', ';', ':', '\'', '"', '`', '-', ' ').Trim('[', ']', ' ');
+        name = Regex.Replace(name, @"^(?:your|the|an?)\s+", "", RegexOptions.IgnoreCase);
+        return name.Length > 64 ? name[..64] : name;
+    }
+
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");
         if (line.Length == 0) yield break;
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
         if (line.StartsWith("Increased ", StringComparison.OrdinalIgnoreCase)) yield break;   // "Increased Pet Insight Level ...": progress, not loot
+
+        var trade = ParseTrade(line, time).ToList();
+        if (trade.Count > 0) { foreach (var ev in trade) yield return ev; yield break; }
 
         var gf = GatherFail().Match(line);
         if (gf.Success) { yield return new GatherFailed(time, gf.Groups["skill"].Value.Trim()); yield break; }
@@ -56,6 +173,8 @@ public sealed partial class ChatParser
         if (k.Success)
         {
             long amt = Digits(k.Groups["amt"].Value);
+            // Kina from a sale or the mail isn't farming income: logged, never counted as a kill
+            if (Regex.IsMatch(line, @"\b(?:market|sale|sold|mail|proceeds)\b", RegexOptions.IgnoreCase)) { if (amt > 0) yield return new RewardReceived(time, "Market proceeds", 1); yield break; }
             if (amt > 0) yield return new KinahChanged(time, amt, k.Groups["rest"].Value.Contains("bound", StringComparison.OrdinalIgnoreCase));
             yield break;
         }
@@ -144,11 +263,18 @@ public sealed class LineTracker
 
     bool _faded;
 
+    /// <summary>
+    /// True when the last lines returned were counted by the after-a-fade rule rather than by lining up with the
+    /// previous read. Written to reads.log beside each line, so a line counted twice shows which rule counted it.
+    /// </summary>
+    public bool LastAfterFade { get; private set; }
+
     /// <summary>After a stretch the chat couldn't be seen, the next read is history again, like the first one: lines that arrived unseen aren't counted.</summary>
     public void Rebase() { _prev = new(); _faded = false; }
 
     public List<string> NewLines(List<string> cur)
     {
+        LastAfterFade = false;
         if (cur.Count == 0)
         {
             // the frameless chat fades out when idle; when a loot line brings it back, the read before it is this empty one
@@ -167,24 +293,60 @@ public sealed class LineTracker
             // after a fade, one or two lines are what arrived since: count them even when they repeat the last ones seen
             // ("Orichalcum Ore acquired." twice in a row). More at once means the history came back (a hover), so align as usual.
             _faded = false;
-            if (keys.Count <= 2) { _prev = keys; return new List<string>(cur); }
+            if (keys.Count <= 2) { _prev = keys; LastAfterFade = true; return new List<string>(cur); }
         }
         if (keys.SequenceEqual(_prev)) return new List<string>();
 
-        for (int k = Math.Min(3, _prev.Count); k >= 1; k--)
+        // Line up on the previous read's last line; when that line is gone, on the one before it, and so on. Behind the
+        // frameless chat the box also catches text from the world (a nameplate, a sign) that comes and goes as the camera
+        // moves; anchoring only on the last line lost every loot line that arrived while such text vanished.
+        for (int j = _prev.Count - 1; j >= Math.Max(0, _prev.Count - 4); j--)
         {
-            var tail = _prev.GetRange(_prev.Count - k, k);
-            for (int i = keys.Count - k; i >= 0; i--)        // last occurrence: fewest new lines, never a double count
+            for (int k = Math.Min(3, j + 1); k >= 1; k--)
             {
-                if (!keys.GetRange(i, k).SequenceEqual(tail)) continue;
-                var fresh = cur.GetRange(i + k, keys.Count - i - k);
-                _prev = keys;
-                return fresh;
+                var tail = _prev.GetRange(j - k + 1, k);
+                for (int i = keys.Count - k; i >= 0; i--)        // last occurrence: fewest new lines, never a double count
+                {
+                    if (!keys.GetRange(i, k).SequenceEqual(tail)) continue;
+                    var fresh = cur.GetRange(i + k, keys.Count - i - k);
+                    // lines the last read had after the anchor were seen already: a misread copy of one in this read isn't new
+                    if (j < _prev.Count - 1) fresh = Without(fresh, _prev.GetRange(j + 1, _prev.Count - j - 1));
+                    _prev = keys;
+                    return fresh;
+                }
             }
         }
         Unaligned++;
         _prev = keys;
         return new List<string>();
+    }
+
+    /// <summary>The lines minus one near-copy (the same text, or a one-letter misread of it) of each already-seen key.</summary>
+    static List<string> Without(List<string> lines, List<string> seenKeys)
+    {
+        var left = new List<string>(lines);
+        foreach (var s in seenKeys)
+        {
+            int at = left.FindIndex(l => Similar(Key(l), s));
+            if (at >= 0) left.RemoveAt(at);
+        }
+        return left;
+    }
+
+    static bool Similar(string a, string b)
+    {
+        if (a == b) return true;
+        int budget = Math.Max(1, Math.Min(a.Length, b.Length) / 6);
+        if (Math.Abs(a.Length - b.Length) > budget) return false;
+        var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i;
+            for (int j = 1; j <= b.Length; j++) cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length] <= budget;
     }
 
     static string Key(string s)

@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using KinahLedger.Data;
 using KinahLedger.Session;
 
 namespace KinahLedger.Upload;
@@ -35,7 +37,8 @@ public static class InstallId
 /// <summary>
 /// Exactly what leaves the PC when a run is shared: the server it was played on (as chosen in the window, so the site
 /// can keep drops per server) and the totals the public tables need. No character name, account, class, level,
-/// chat text or screenshots.
+/// chat text or screenshots. Since 0.7: the change in the Kinah balance over the run (rounded, never the balance
+/// itself) and craft and enchant outcome counts.
 /// </summary>
 public sealed record RunPayload(
     string app,
@@ -54,16 +57,23 @@ public sealed record RunPayload(
     Dictionary<string, int> items_bound,
     Dictionary<string, int> pets,
     Dictionary<string, ZoneRun> zones,
-    string install)
+    string install,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? kinah_net = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] OddsPayload? odds = null)
 {
     public static string AppVersion => typeof(RunPayload).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
 
+    /// <summary>Most keys per odds map, as the site accepts them; the most-tried recipes and steps are kept.</summary>
+    public const int MaxOddsKeys = 100;
+
     /// <param name="region">The chosen server's region key ("na_e"); the settings' region when none was chosen.</param>
     /// <param name="server">The chosen server's label ("Siel (Elyos)"); empty files the run under the region alone.</param>
-    public static RunPayload Build(SessionEngine s, Settings cfg, string kind, string activity, string region, string server)
+    public static RunPayload Build(SessionEngine s, Settings cfg, string kind, string activity, string region, string server, ItemDictionary? dict = null)
     {
         var zones = s.ZoneSnapshot();
         var main = zones.Where(kv => kv.Key != SessionEngine.UnknownZone).OrderByDescending(kv => kv.Value.Seconds).Select(kv => kv.Key).FirstOrDefault();
+        long? net = s.NetKinah is long n && s.Elapsed.TotalMinutes >= 5 ? RoundNet(n) : null;
+        string Key(long id) => dict?.KeyOf(id) ?? id.ToString();
         return new(
             AppVersion,
             region,
@@ -77,27 +87,76 @@ public sealed record RunPayload(
             s.Nodes,
             s.Kinah,
             s.KinahBound,
-            s.Items.ToDictionary(k => k.Key.ToString(), v => v.Value),
-            s.ItemsBound.ToDictionary(k => k.Key.ToString(), v => v.Value),
+            Merge(s.Items, Key),
+            Merge(s.ItemsBound, Key),
             s.PetSnapshot(),
             zones.Where(kv => kv.Value.Seconds >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0)
                  .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Seconds / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName)),
-            InstallId.Get());
+            InstallId.Get(),
+            net,
+            OddsPayload.From(s));
+    }
+
+    /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>
+    public static long RoundNet(long n) => (long)Math.Round(n / 100.0, MidpointRounding.AwayFromZero) * 100;
+
+    /// <summary>Counts keyed the way the site reads them; two synthetic IDs that carry the same name add up.</summary>
+    static Dictionary<string, int> Merge(Dictionary<long, int> counts, Func<long, string> key)
+    {
+        var d = new Dictionary<string, int>();
+        foreach (var (id, n) in counts) { var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
+        return d;
     }
 }
 
 /// <summary>One zone's share of a run: how long, and what came out of it. This is what the "best spot per hour" tables are built from.</summary>
 public sealed record ZoneRun(int minutes, int kills, int nodes, long kinah, int drops, int pets, Dictionary<string, int> pets_by_name);
 
+/// <summary>Successes and failures for one recipe or enchant step.</summary>
+public sealed record OddsCount(int ok, int fail);
+
+/// <summary>
+/// Craft and enchant outcomes seen in chat: crafts by item, enchants by "item|from|to". Results the line didn't tie
+/// to an item are counted in the window but not shared; they say nothing about any recipe.
+/// </summary>
+public sealed record OddsPayload(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, OddsCount>? crafts,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, OddsCount>? enchants)
+{
+    public static OddsPayload? From(SessionEngine s)
+    {
+        var (crafts, enchants) = s.OddsSnapshot();
+        Dictionary<string, OddsCount>? Pick(Dictionary<string, SessionEngine.Odds> m, Func<string, bool> keep)
+        {
+            var d = m.Where(kv => keep(kv.Key) && kv.Value.Attempts > 0)
+                     .OrderByDescending(kv => kv.Value.Attempts).Take(RunPayload.MaxOddsKeys)
+                     .ToDictionary(kv => kv.Key, kv => new OddsCount(Math.Min(kv.Value.Ok, 10_000), Math.Min(kv.Value.Fail, 10_000)));
+            return d.Count > 0 ? d : null;
+        }
+        var c = Pick(crafts, k => k != "?" && k.Length <= 64);
+        var e = Pick(enchants, k => !k.StartsWith("?|") && k.Length <= 64);
+        return c == null && e == null ? null : new OddsPayload(c, e);
+    }
+}
+
 /// <summary>One Market listing as seen on screen: what, how many, the price per unit, when. Never who listed it.</summary>
 public sealed record PriceAsk(string item, long unit_price, int qty, string seen_at);
+
+/// <summary>One of the player's own sales, from the chat: what, how many, the price per unit, when, and how long it was listed when this PC saw the listing too. Never who bought it.</summary>
+public sealed record PriceSale(string item, int qty, long unit_price, string sold_at, double? hours_listed);
+
+/// <summary>One of the player's own listings that expired unsold.</summary>
+public sealed record PriceExpired(string item, int qty, string expired_at);
 
 /// <summary>
 /// Exactly what leaves the PC while the Market is open: the server the player typed, the asks read since the last
 /// batch, the app version and the install ID. No character name, no account, no seller names, no screenshots.
-/// Posted to the /v1/prices route.
+/// Since 0.7 the player's own sales and expired listings ride along (item, quantity, price, time). Posted to the /v1/prices route.
 /// </summary>
-public sealed record PriceBatch(string app, string server_key, string install, List<PriceAsk> asks);
+public sealed record PriceBatch(
+    string app, string server_key, string install, List<PriceAsk> asks,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<PriceSale>? sales = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<PriceExpired>? expired = null);
 
 /// <summary>Region plus the server as typed, slugged: "na_e" and "Siel (Elyos)" give "na_e-siel-elyos". Same-named servers exist in every region, so both parts matter.</summary>
 public static class ServerKeys

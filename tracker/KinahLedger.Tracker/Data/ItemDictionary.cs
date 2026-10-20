@@ -25,6 +25,12 @@ public sealed class ItemDictionary
     public string NameOf(long id) => _byId.TryGetValue(id, out var i) ? i.Name : $"item {id}";
 
     /// <summary>
+    /// How an item is named in what's shared: its dictionary ID when it has one, else its name. A synthetic ID only means
+    /// something on this PC, so it never leaves it; the site matches names against the same dictionary.
+    /// </summary>
+    public string KeyOf(long id) => id > 0 ? id.ToString() : NameOf(id);
+
+    /// <summary>
     /// ID for a name read off the screen. Known names map to their real item ID; unknown ones get a
     /// stable negative ID so they still count, and the name is kept so it displays properly.
     /// </summary>

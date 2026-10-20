@@ -16,3 +16,14 @@ public sealed record GatherFailed(DateTime Time, string Skill) : GameEvent(Time)
 public sealed record RewardReceived(DateTime Time, string Name, int Count) : GameEvent(Time);
 /// <summary>An experience gain line. Counted as a kill when the chat tab doesn't show kill lines themselves.</summary>
 public sealed record XpGained(DateTime Time, long Amount) : GameEvent(Time);
+
+/// <summary>One of the player's own Market listings sold: what, how many, for how much in total. Never who bought it (the game doesn't say).</summary>
+public sealed record MarketSold(DateTime Time, string Item, int Qty, long Total) : GameEvent(Time);
+/// <summary>The player listed something on the Market: kept on this PC only, so a later sale can say how long it took.</summary>
+public sealed record MarketListed(DateTime Time, string Item, int Qty, long Price) : GameEvent(Time);
+/// <summary>One of the player's own listings expired unsold.</summary>
+public sealed record MarketExpired(DateTime Time, string Item, int Qty) : GameEvent(Time);
+/// <summary>A craft finished: the item and whether it worked. Materials and cost aren't shown in chat, so they aren't counted.</summary>
+public sealed record CraftResult(DateTime Time, string Item, bool Ok) : GameEvent(Time);
+/// <summary>An enchant attempt: the item, the step (+From to +To, -1 when the line didn't show it) and whether it worked.</summary>
+public sealed record EnchantResult(DateTime Time, string Item, int From, int To, bool Ok) : GameEvent(Time);

@@ -15,9 +15,12 @@ public sealed class MarketCapture
     readonly MarketSettings _cfg;
     readonly UploadSettings _upload;
     readonly MarketParser _parser;
+    readonly ItemDictionary _dict;
     readonly object _lock = new();
     readonly Dictionary<string, DateTime> _seen = new();
     readonly List<PriceAsk> _pending = new();
+    readonly List<PriceSale> _sales = new();
+    readonly List<PriceExpired> _expired = new();
     readonly HashSet<string> _items = new();
     DateTime _detectAt = DateTime.MinValue, _firstPendingAt = DateTime.MinValue;
     int _emptyReads;
@@ -25,7 +28,7 @@ public sealed class MarketCapture
 
     public MarketCapture(Settings s, ItemDictionary items, Rectangle? manualRegion, string server)
     {
-        _cfg = s.Market; _upload = s.Upload; _parser = new MarketParser(items);
+        _cfg = s.Market; _upload = s.Upload; _parser = new MarketParser(items); _dict = items;
         Region = s.Region; Server = server;
         _enabled = s.Market.Enabled;
         if (manualRegion is { } r) { Layout = MarketLayout.FromRegion(r); Manual = true; }
@@ -52,7 +55,11 @@ public sealed class MarketCapture
     /// <summary>Queued asks that couldn't be sent because there is no endpoint or no server yet.</summary>
     public int NotSent { get; private set; }
     public int Items { get { lock (_lock) return _items.Count; } }
-    public int Pending { get { lock (_lock) return _pending.Count; } }
+    public int Pending { get { lock (_lock) return _pending.Count + _sales.Count + _expired.Count; } }
+    /// <summary>The player's own sales and expiries read from the chat this session, and how many of those went out.</summary>
+    public int SalesSeen { get; private set; }
+    public int ExpiredSeen { get; private set; }
+    public int SalesShared { get; private set; }
     public DateTime LastReadAt { get; private set; } = DateTime.MinValue;
     public string LastAsk { get; private set; } = "";
     /// <summary>How the screen is read; tests swap in a screenshot.</summary>
@@ -114,25 +121,84 @@ public sealed class MarketCapture
             lock (_lock) foreach (var k in _seen.Where(kv => (now - kv.Value).TotalMinutes >= _cfg.RepeatMinutes).Select(kv => kv.Key).ToList()) _seen.Remove(k);
     }
 
-    public bool FlushDue
+    /* ---------------- the player's own sales, from the chat ---------------- */
+
+    /// <summary>Listings, sales and expiries from the chat reader. Sales and expiries are queued for sharing (they follow the same switch as asks); listings stay on this PC.</summary>
+    public void OnChatEvent(GameEvent ev)
     {
-        get { lock (_lock) return _pending.Count > 0 && (_pending.Count >= _cfg.BatchSize || (DateTime.UtcNow - _firstPendingAt).TotalSeconds >= _cfg.FlushSec); }
+        if (!Enabled) return;
+        var now = ev.Time;
+        switch (ev)
+        {
+            case MarketListed l:
+                ListingBook.Add(Canonical(l.Item), l.Qty, now);
+                break;
+            case MarketSold s:
+            {
+                var item = Canonical(s.Item);
+                var listed = ListingBook.Take(item, s.Qty);
+                double? hours = listed is DateTime at && now >= at ? Math.Round((now - at).TotalHours, 1) : null;
+                long unit = Math.Max(1, (long)Math.Round(s.Total / (double)Math.Max(1, s.Qty)));
+                lock (_lock)
+                {
+                    if (_pending.Count + _sales.Count + _expired.Count == 0) _firstPendingAt = DateTime.UtcNow;
+                    if (_sales.Count < 200) _sales.Add(new PriceSale(item, s.Qty, unit, now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"), hours));
+                }
+                SalesSeen++; LastAsk = $"sold {item} ×{s.Qty} @ {unit:N0}";
+                break;
+            }
+            case MarketExpired x:
+            {
+                var item = Canonical(x.Item);
+                ListingBook.Take(item, x.Qty);
+                lock (_lock)
+                {
+                    if (_pending.Count + _sales.Count + _expired.Count == 0) _firstPendingAt = DateTime.UtcNow;
+                    if (_expired.Count < 200) _expired.Add(new PriceExpired(item, x.Qty, now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+                }
+                ExpiredSeen++;
+                break;
+            }
+        }
     }
 
-    /// <summary>Sends one batch of queued asks. Without an endpoint or a server the batch is dropped and counted, never kept around.</summary>
+    /// <summary>The name asks for the same item go out under, so a sale and an ask land on the same row of the site's board.</summary>
+    string Canonical(string name) => _dict.NameOf(_dict.IdOf(name));
+
+    public bool FlushDue
+    {
+        get
+        {
+            lock (_lock)
+            {
+                int n = _pending.Count + _sales.Count + _expired.Count;
+                return n > 0 && (_pending.Count >= _cfg.BatchSize || (DateTime.UtcNow - _firstPendingAt).TotalSeconds >= _cfg.FlushSec);
+            }
+        }
+    }
+
+    /// <summary>Sends one batch of queued asks, sales and expiries. Without an endpoint or a server the batch is dropped and counted, never kept around.</summary>
     public async Task<bool> FlushAsync()
     {
-        List<PriceAsk> batch;
-        lock (_lock) { if (_pending.Count == 0) return false; batch = _pending.Take(_cfg.BatchSize).ToList(); }
-        if (string.IsNullOrWhiteSpace(_upload.PricesUrl) || string.IsNullOrWhiteSpace(Server))
-        {
-            lock (_lock) { _pending.RemoveRange(0, batch.Count); NotSent += batch.Count; _firstPendingAt = DateTime.UtcNow; }
-            return false;
-        }
-        var ok = await Uploader.SendPricesAsync(new PriceBatch(RunPayload.AppVersion, ServerKey, InstallId.Get(), batch), _upload);
+        List<PriceAsk> batch; List<PriceSale> sales; List<PriceExpired> expired;
         lock (_lock)
         {
-            if (ok) { _pending.RemoveRange(0, batch.Count); Shared += batch.Count; LastError = ""; }
+            if (_pending.Count + _sales.Count + _expired.Count == 0) return false;
+            batch = _pending.Take(_cfg.BatchSize).ToList(); sales = _sales.ToList(); expired = _expired.ToList();
+        }
+        if (string.IsNullOrWhiteSpace(_upload.PricesUrl) || string.IsNullOrWhiteSpace(Server))
+        {
+            lock (_lock) { _pending.RemoveRange(0, batch.Count); _sales.Clear(); _expired.Clear(); NotSent += batch.Count + sales.Count + expired.Count; _firstPendingAt = DateTime.UtcNow; }
+            return false;
+        }
+        var ok = await Uploader.SendPricesAsync(new PriceBatch(RunPayload.AppVersion, ServerKey, InstallId.Get(), batch, sales.Count > 0 ? sales : null, expired.Count > 0 ? expired : null), _upload);
+        lock (_lock)
+        {
+            if (ok)
+            {
+                _pending.RemoveRange(0, batch.Count); _sales.RemoveRange(0, sales.Count); _expired.RemoveRange(0, expired.Count);
+                Shared += batch.Count; SalesShared += sales.Count; LastError = "";
+            }
             else
             {
                 LastError = "couldn't reach the site";
@@ -151,6 +217,7 @@ public sealed class MarketCapture
             if (!Enabled) return "Off. The Market is never read; everything else keeps working.";
             string state = Detected ? "Market open" : Manual ? "Watching the chosen area" : "Watching for the Market window";
             string counts = AsksSeen == 0 ? "nothing read yet" : $"{AsksSeen:N0} ask{(AsksSeen == 1 ? "" : "s")} read · {Items:N0} item{(Items == 1 ? "" : "s")} · {Shared:N0} shared";
+            if (SalesSeen + ExpiredSeen > 0) counts += $" · your sales: {SalesSeen:N0} sold, {ExpiredSeen:N0} expired";
             string last = LastReadAt == DateTime.MinValue ? "" : " · last read " + Ago(LastReadAt);
             string why = AsksSeen > 0 && Shared == 0
                 ? string.IsNullOrWhiteSpace(Server) ? " · choose your server to share" : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · no sharing address in settings.json" : LastError.Length > 0 ? " · " + LastError : ""

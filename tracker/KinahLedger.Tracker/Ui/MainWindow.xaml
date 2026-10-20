@@ -102,7 +102,7 @@
             <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="5"/>
           </Grid>
           <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
-          <TextBlock x:Name="Version" Text="v0.6.3" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+          <TextBlock x:Name="Version" Text="v0.7.0" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
           <TextBlock FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
@@ -244,6 +244,8 @@
             <!-- the summary trims from the right when the window is narrow, instead of running under the title -->
             <TextBlock x:Name="Summary" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="11.5" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" Text="nothing read yet"/>
           </Grid>
+          <!-- net Kinah from the balance counter, craft and enchant results, your own Market sales: shown once there is one -->
+          <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Ink}" FontSize="11.5" HorizontalAlignment="Right" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
           <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
             <Button x:Name="DropsTab" Content="Drops" Padding="12,5" FontSize="12.5" Margin="0,0,6,0"/>
             <Button x:Name="GatherTab" Content="Gathered" Padding="12,5" FontSize="12.5" Margin="0,0,6,0"/>
