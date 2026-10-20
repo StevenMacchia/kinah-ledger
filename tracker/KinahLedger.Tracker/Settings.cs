@@ -56,6 +56,8 @@ public sealed class OcrSettings
     /// <summary>What you're farming, for the shared totals. Override per run with --activity.</summary>
     public string Activity { get; set; } = "unknown";
     public bool Hud { get; set; } = true;
+    /// <summary>How often the zone label above the minimap is read.</summary>
+    public int ZoneEverySec { get; set; } = 10;
 }
 
 public sealed class UploadSettings

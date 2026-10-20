@@ -35,7 +35,7 @@
         </StackPanel>
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
           <TextBlock HorizontalAlignment="Right" FontSize="13"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-          <TextBlock x:Name="Version" Text="v0.4.5" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
+          <TextBlock x:Name="Version" Text="v0.5.0" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
         </StackPanel>
       </Grid>
 
@@ -52,15 +52,16 @@
               <TextBlock Style="{StaticResource StepTitle}" Text="In the game"/>
             </StackPanel>
             <TextBlock Style="{StaticResource BodyStyle}" Margin="36,7,0,0"
-                       Text="Chat settings → add a tab that shows only System Notifications; that's where loot and Kinah lines appear. Play in borderless or windowed mode so the chat can be read."/>
+                       Text="Play in borderless or windowed mode with the chat open at the bottom-left. A chat tab showing only System Notifications reads best, but the normal tab works too."/>
             <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
               <Border Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="2"/></Border>
-              <TextBlock Style="{StaticResource StepTitle}" Text="Chat area"/>
+              <TextBlock Style="{StaticResource StepTitle}" Text="Chat area and zone"/>
             </StackPanel>
             <TextBlock x:Name="Step2Status" Style="{StaticResource BodyStyle}" Margin="36,7,0,0"/>
             <StackPanel Orientation="Horizontal" Margin="36,12,0,0">
-              <Button x:Name="PickBtn" Content="Pick area" Width="112"/>
-              <Button x:Name="TestBtn" Content="Test read" Width="112" Margin="10,0,0,0"/>
+              <Button x:Name="DetectBtn" Content="Detect now" Width="112"/>
+              <Button x:Name="PickBtn" Content="Choose the chat" Width="136" Margin="10,0,0,0"/>
+              <Button x:Name="TestBtn" Content="Test read" Width="104" Margin="10,0,0,0"/>
             </StackPanel>
           </StackPanel>
           <StackPanel Grid.Column="1" VerticalAlignment="Top">
@@ -88,8 +89,11 @@
               <TextBlock Style="{StaticResource StepTitle}" Text="What you're farming"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Margin="36,12,0,0">
-              <ComboBox x:Name="Kind" Width="220"/>
-              <TextBlock x:Name="KindHint" Style="{StaticResource BodyStyle}" Margin="14,0,0,0" VerticalAlignment="Center" MaxWidth="240" FontSize="12"/>
+              <ComboBox x:Name="Kind" Width="200"/>
+              <StackPanel Margin="14,0,0,0" VerticalAlignment="Center" MaxWidth="270">
+                <TextBlock x:Name="ZoneLbl" Foreground="{StaticResource Ink}" FontSize="13.5" FontWeight="SemiBold" Text="Zone: detected when you start" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="KindHint" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16"/>
+              </StackPanel>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Margin="36,14,0,0">
               <CheckBox x:Name="HudChk" Content="Show panel over the game"/>

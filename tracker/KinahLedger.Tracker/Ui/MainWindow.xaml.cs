@@ -52,11 +52,13 @@ public partial class MainWindow : Window
         { WindowStartupLocation = WindowStartupLocation.Manual; Left = x; Top = y; }
 
         PickBtn.Click += (_, _) => Pick();
+        DetectBtn.Click += async (_, _) => await DetectNow();
         TestBtn.Click += async (_, _) => await TestRead();
+        if (!_prefs.ManualChat) _region = null;   // auto mode: the chat is found at start, not remembered
         StartBtn.Click += async (_, _) => await Toggle();
         SiteLink.Click += (_, _) => Open(RepoUrl);
         SentLink.Click += (_, _) => WhatsSent();
-        ResetLink.Click += (_, _) => { _region = null; UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Chat area cleared. Press Pick area to choose it again.", "Faint"); };
+        ResetLink.Click += (_, _) => { _region = null; _prefs.ManualChat = false; RegionStore.Clear(); UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Back to automatic: the chat is found when you start.", "Faint"); };
         LogsLink.Click += (_, _) => Open(CrashLog.Dir);
 
         Kind.SelectionChanged += (_, _) => { if (_session == null) { ApplyModeLabels(); ResetTiles(); } };
@@ -105,14 +107,41 @@ public partial class MainWindow : Window
     void Pick()
     {
         Hide();
-        try { var r = RegionPickerWindow.Pick(); if (r != null) { _region = r; RegionStore.Save(r.Value); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; } }
+        try { var r = RegionPickerWindow.Pick(); if (r != null) { _region = r; _prefs.ManualChat = true; RegionStore.Save(r.Value); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; } }
         finally { Show(); Activate(); UpdateStep2(); }
-        if (_region != null) Say("Chat area set. Press Test read to check it, then Start.", "Good");
+        if (_region != null) Say("Chat area chosen by hand. The zone is still read from the minimap if the game window is found. Press Test read, then Start.", "Good");
+    }
+
+    /// <summary>Finds the game, the chat and the zone right now and shows what it found, without starting a run.</summary>
+    async Task DetectNow()
+    {
+        DetectBtn.IsEnabled = false; Say("Looking for the game window, the chat and the zone…", "Faint");
+        try
+        {
+            var game = GameWindow.Find(_settings.ProcessHints);
+            if (game == null) { Say("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself.", "Warn"); return; }
+            var (region, note) = await Task.Run(() => ChatLocator.DetectAsync(game.Value));
+            var (zone, _) = await Task.Run(() => ZoneLocator.DetectAsync(game.Value));
+            ZoneLbl.Text = "Zone: " + (zone ?? "not read yet");
+            if (region == null)
+            {
+                Say("Couldn't find the chat automatically (" + note + "). Choose the chat yourself; the zone may not be detected in that case.", "Warn");
+                return;
+            }
+            _region = region; _prefs.ManualChat = false; RegionStore.Clear();
+            UpdateStep2();
+            var reader = new ScreenReader(region.Value, _settings.Ocr.Scale);
+            await Task.Run(() => reader.ReadAsync());
+            SetPreview(reader.Thumb);
+            Say($"Found the chat ({note}){(zone != null ? " and the zone" : "")}. Press Start whenever you're ready.", "Good");
+        }
+        catch (Exception ex) { Say(ex.Message, "Bad"); }
+        finally { DetectBtn.IsEnabled = true; }
     }
 
     async Task TestRead()
     {
-        if (_region == null) { Pick(); if (_region == null) return; }
+        if (_region == null) { await DetectNow(); if (_region == null) return; }
         TestBtn.IsEnabled = false; Say("Reading…", "Faint");
         try
         {
@@ -136,23 +165,31 @@ public partial class MainWindow : Window
 
     async Task StartTracking()
     {
-        if (_region == null) { Pick(); if (_region == null) return; }
         SavePrefs();
+        StartBtn.IsEnabled = false;
+        Say(_region == null ? "Finding the chat and the zone…" : "Starting…", "Faint");
         try
         {
             _settings.Upload.Enabled = ShareChk.IsChecked == true;
             _gathering = GatheringSelected;
             ApplyModeLabels();
-            _session = new TrackerSession(_region.Value, _settings, _items, ActivityName());
-            _session.Start();
+            var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName());
+            await session.StartAsync();
+            _session = session;
+            _region = session.Region;
+            UpdateStep2();
+            ZoneLbl.Text = "Zone: " + (session.Zone ?? "not read yet");
             if (HudChk.IsChecked == true) { _hud = new HudWindow { Owner = this }; _hud.Show(); }
             TableTitle.Text = "THIS SESSION";
-            ShowTable(_session.Engine);
+            ShowTable(session.Engine);
             SetTrackingUi(true);
-            Say($"Tracking {ActivityName()}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
+            Say($"Tracking {session.Activity}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
         }
-        catch (Exception ex) { _session = null; Say(ex.Message, "Bad"); }
-        await Task.CompletedTask;
+        catch (Exception ex)
+        {
+            _session = null; StartBtn.IsEnabled = true;
+            Say(ex.Message, "Warn");
+        }
     }
 
     async Task StopTracking()
@@ -194,6 +231,7 @@ public partial class MainWindow : Window
     {
         var s = _session; if (s == null) return;
         FillNumbers(s.Engine, s.Engine.Elapsed);
+        ZoneLbl.Text = "Zone: " + (s.Zone ?? "not read yet");
         if (s.LastError.Length > 0) Say("Read problem: " + s.LastError, "Bad");
         else Say($"Tracking {s.Activity} · {s.Reads} reads" + (s.Unaligned > 0 ? $" · {s.Unaligned} skipped" : "") + (s.LastLine.Length > 0 ? " · last: " + s.LastLine : ""), "Faint");
         if (s.Reads % 2 == 0) SetPreview(s.Thumb);
@@ -203,11 +241,11 @@ public partial class MainWindow : Window
             if (_gathering)
                 _hud.Update($"{Fk(t.Drops / h)} items/hr",
                     $"{Fk(t.Nodes / h)} nodes/hr · {(t.Nodes > 0 ? (t.Drops / (double)t.Nodes).ToString("0.00") : "—")} items/node · {Fk(t.Bonus / h)} rare/hr\n{e.Elapsed:hh\\:mm\\:ss} · {t.Drops} items · {t.Nodes} nodes{(t.Failed > 0 ? $" ({t.Failed} failed)" : "")} · {t.Bonus} rare finds",
-                    s.LastLine);
+                    (s.Zone != null ? s.Zone + " · " : "") + s.LastLine);
             else
                 _hud.Update($"{Fk(kinah / h)} Kinah/hr",
                     $"{Fk(t.Kills / h)} kills/hr · {Fk(t.Drops / h)} drops/hr · {(t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—")} Kinah/kill\n{e.Elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {t.Drops} drops · {t.Kills} kills",
-                    s.LastLine);
+                    (s.Zone != null ? s.Zone + " · " : "") + s.LastLine);
         }
     }
 
@@ -357,36 +395,40 @@ public partial class MainWindow : Window
         if (_demo) return;   // a layout render must not overwrite the player's saved choices
         _prefs.Activity = Kind.SelectedItem as string ?? "Open world";
         _prefs.Hud = HudChk.IsChecked == true; _prefs.Share = ShareChk.IsChecked == true;
+        if (_prefs.ManualChat && _region is DRect mr) RegionStore.Save(mr);
         if (WindowState == WindowState.Normal && !double.IsNaN(Left)) { _prefs.WinX = (int)Left; _prefs.WinY = (int)Top; }
         _prefs.Save();
     }
 
     void UpdateStep2()
     {
-        if (_region is DRect r) { Step2Status.Text = $"Set: {r.Width} × {r.Height} px at {r.X}, {r.Y}. Press Test read if the chat moved."; Step2Status.Foreground = B("Ink"); }
-        else { Step2Status.Text = "Not set. Press Pick area and drag a box around the chat lines that show loot and Kinah."; Step2Status.Foreground = B("Gold"); }
+        if (_prefs.ManualChat && _region is DRect m) { Step2Status.Text = $"Chosen by hand: {m.Width} × {m.Height} px at {m.X}, {m.Y}. Reset chat area to go back to automatic."; Step2Status.Foreground = B("Ink"); }
+        else if (_region is DRect r) { Step2Status.Text = $"Found automatically: {r.Width} × {r.Height} px at {r.X}, {r.Y}. The zone is read from the minimap while you play."; Step2Status.Foreground = B("Ink"); }
+        else { Step2Status.Text = "Found automatically when you press Start: the chat above the input box, and the zone from the minimap. If it can't find the chat, choose it yourself."; Step2Status.Foreground = B("Muted"); }
     }
 
     public void ForceClose() { _quitting = true; Close(); }
 
     /// <summary>Runs start → wait → stop exactly as the buttons would, for catching crashes without a desktop session.</summary>
-    public async Task<string> DebugCycle(DRect region, int ms)
+    public async Task<string> DebugCycle(DRect? region, int ms)
     {
         _demo = true;
-        _region = region; UpdateStep2();
+        _region = region; _prefs.ManualChat = region != null; UpdateStep2();
         await StartTracking();
         if (_session == null) throw new InvalidOperationException("start failed: " + Status.Text);
+        var found = _session.Region; var zone = _session.Zone;
         await Task.Delay(ms);
         var reads = _session.Reads;
         await StopTracking();
-        return $"{reads} reads, status: {Status.Text}";
+        return $"{reads} reads, chat {found}, zone {zone ?? "none"}, status: {Status.Text}";
     }
 
     /// <summary>Fills the window with a sample session (open world, or gathering) so its layout can be reviewed without the game.</summary>
     public void ShowDemo(bool gathering = false)
     {
         _demo = true;
-        _region = new DRect(24, 980, 812, 140); UpdateStep2();
+        _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false; UpdateStep2();
+        ZoneLbl.Text = "Zone: Western Cantas Valley";
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new Protocol.ItemAcquired(t, _items.IdOf(n), 1, b)); }
         if (gathering)

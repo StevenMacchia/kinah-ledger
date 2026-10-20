@@ -8,13 +8,20 @@ using Windows.Media.Ocr;
 
 namespace KinahLedger.Ocr;
 
+/// <summary>A recognized line and where it sits on screen, in screen pixels.</summary>
+public sealed record OcrLineBox(string Text, Rectangle Box);
+
 /// <summary>
 /// Reads text from one rectangle of the screen using the text recognition built into Windows 10/11.
 /// Nothing but that rectangle is captured, and nothing touches the game.
 /// </summary>
 public sealed class ScreenReader
 {
-    readonly OcrEngine _engine;
+    static OcrEngine? _shared;
+    static OcrEngine Engine => _shared ??= OcrEngine.TryCreateFromLanguage(new Language("en-US"))
+        ?? OcrEngine.TryCreateFromUserProfileLanguages()
+        ?? throw new InvalidOperationException("Windows text recognition isn't available. In Settings > Time & language > Language, add English (United States) with the optional features.");
+
     readonly Rectangle _region;
     readonly int _scale;
     readonly object _lock = new();
@@ -27,34 +34,46 @@ public sealed class ScreenReader
 
     public ScreenReader(Rectangle region, int scale)
     {
-        if (region.Width < 20 || region.Height < 10) throw new ArgumentException("the chat region is too small; run `pick` again");
+        if (region.Width < 20 || region.Height < 10) throw new ArgumentException("the chat region is too small; detect or pick it again");
         _region = region;
         _scale = Math.Clamp(scale, 1, 4);
-        _engine = OcrEngine.TryCreateFromLanguage(new Language("en-US"))
-                  ?? OcrEngine.TryCreateFromUserProfileLanguages()
-                  ?? throw new InvalidOperationException("Windows text recognition isn't available. In Settings > Time & language > Language, add English (United States) with the optional features.");
+        _ = Engine;
     }
 
-    public Bitmap Capture()
+    public static Bitmap Capture(Rectangle region)
     {
-        var bmp = new Bitmap(_region.Width, _region.Height, PixelFormat.Format32bppArgb);
+        var bmp = new Bitmap(region.Width, region.Height, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bmp);
-        g.CopyFromScreen(_region.Location, Point.Empty, _region.Size, CopyPixelOperation.SourceCopy);
+        g.CopyFromScreen(region.Location, Point.Empty, region.Size, CopyPixelOperation.SourceCopy);
         return bmp;
     }
 
-    /// <summary>Upscale with smooth interpolation: chat text is small and the recognizer does much better at 2x.</summary>
-    Bitmap Prepare(Bitmap src)
+    public Bitmap Capture() => Capture(_region);
+
+    /// <summary>Upscale with smooth interpolation, keeping the aspect ratio and the recognizer's size limit. Returns the factor used.</summary>
+    static (Bitmap bmp, double factor) Prepare(Bitmap src, int scale)
     {
-        int max = (int)OcrEngine.MaxImageDimension;
-        int w = Math.Min(src.Width * _scale, max), h = Math.Min(src.Height * _scale, max);
+        double max = OcrEngine.MaxImageDimension;
+        double f = Math.Min(scale, Math.Min(max / src.Width, max / src.Height));
+        int w = Math.Max(1, (int)(src.Width * f)), h = Math.Max(1, (int)(src.Height * f));
         var dst = new Bitmap(w, h, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(dst);
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
         g.SmoothingMode = SmoothingMode.HighQuality;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
         g.DrawImage(src, new Rectangle(0, 0, w, h));
-        return dst;
+        return (dst, f);
+    }
+
+    static async Task<OcrResult> Recognize(Bitmap bmp)
+    {
+        using var ms = new MemoryStream();
+        bmp.Save(ms, ImageFormat.Bmp);
+        ms.Position = 0;
+        using var ras = ms.AsRandomAccessStream();
+        var decoder = await BitmapDecoder.CreateAsync(ras);
+        using var soft = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+        return await Engine.RecognizeAsync(soft);
     }
 
     public async Task<List<string>> ReadAsync(string? savePng = null)
@@ -64,15 +83,34 @@ public sealed class ScreenReader
         var k = Math.Min(1.0, Math.Min(166.0 / raw.Width, 76.0 / raw.Height));
         var small = new Bitmap(raw, new Size(Math.Max(1, (int)(raw.Width * k)), Math.Max(1, (int)(raw.Height * k))));
         lock (_lock) { _thumb?.Dispose(); _thumb = small; }
-        using var bmp = Prepare(raw);
-        using var ms = new MemoryStream();
-        bmp.Save(ms, ImageFormat.Bmp);
-        ms.Position = 0;
-        using var ras = ms.AsRandomAccessStream();
-        var decoder = await BitmapDecoder.CreateAsync(ras);
-        using var soft = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-        var result = await _engine.RecognizeAsync(soft);
-        return result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
+        var (bmp, _) = Prepare(raw, _scale);
+        using (bmp)
+        {
+            var result = await Recognize(bmp);
+            return result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
+        }
+    }
+
+    /// <summary>Reads any screen rectangle and returns each line with its position, for finding the chat and the zone label.</summary>
+    public static async Task<List<OcrLineBox>> ReadBoxesAsync(Rectangle region, int scale)
+    {
+        using var raw = Capture(region);
+        var (bmp, f) = Prepare(raw, scale);
+        using (bmp)
+        {
+            var result = await Recognize(bmp);
+            var list = new List<OcrLineBox>();
+            foreach (var line in result.Lines)
+            {
+                double l = double.MaxValue, t = double.MaxValue, r = 0, b = 0;
+                foreach (var w in line.Words) { l = Math.Min(l, w.BoundingRect.X); t = Math.Min(t, w.BoundingRect.Y); r = Math.Max(r, w.BoundingRect.X + w.BoundingRect.Width); b = Math.Max(b, w.BoundingRect.Y + w.BoundingRect.Height); }
+                if (r <= 0) continue;
+                var box = Rectangle.FromLTRB(region.X + (int)(l / f), region.Y + (int)(t / f), region.X + (int)Math.Ceiling(r / f), region.Y + (int)Math.Ceiling(b / f));
+                var text = line.Text.Trim();
+                if (text.Length > 0) list.Add(new OcrLineBox(text, box));
+            }
+            return list;
+        }
     }
 }
 
@@ -95,6 +133,7 @@ public static class RegionStore
     }
 
     public static void Save(Rectangle r) => File.WriteAllText(PathFor(), JsonSerializer.Serialize(new[] { r.X, r.Y, r.Width, r.Height }));
+    public static void Clear() { var p = PathFor(); if (File.Exists(p)) File.Delete(p); }
 
     public static Rectangle? Parse(string? s)
     {

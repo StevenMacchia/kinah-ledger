@@ -23,10 +23,10 @@ The tracker has two modes. Both run only on the player's PC and nothing touches 
 built into Windows, counts what's new, and shows Kinah and loot per hour in a small always-on-top
 panel. Setup is dragging a box around the chat once.
 
-1. In the game's chat settings, add a tab (call it Loot) that shows only System Notifications, and make it a few lines tall. Play in borderless or windowed mode.
-2. Double-click `KinahLedger.exe`. Press **Pick chat area** and drag a box around that tab's text.
-3. **Test read** shows what it sees; loot lines get a tick.
-4. Choose what you're farming (open world by default; type the zone or mobs) and press **Start tracking**. A small panel sits over the game. The window shows Kinah per hour and per kill, kills per hour, drops per hour, and every drop with its rate per kill and per hour. Ctrl+Shift+K starts and stops from inside the game; minimizing keeps it running in the tray.
+1. Play in borderless or windowed mode with the chat open at the bottom-left. A chat tab showing only System Notifications reads best; the normal tab works too.
+2. Double-click `KinahLedger.exe` and press **Start tracking**. The tracker finds the game window, locates the chat above the "Enter your message" box, and reads the zone name from the minimap every few seconds. If it can't find the chat, **Choose the chat** lets you drag a box yourself (the zone may not be detected in that case).
+3. **Test read** shows what it sees; loot lines count in the tables.
+4. Pick Open world or Gathering. The window shows Kinah per hour and per kill, kills per hour, drops per hour, and every drop with its drop rate and per-hour rate; in Gathering, nodes, items per node, Plentiful procs and rare finds. Ctrl+Shift+K starts and stops from inside the game; minimizing keeps it running in the tray. Runs are saved per user and tagged with the zone most of the run happened in.
 
 The same steps exist as commands for scripting (`pick`, `ocr-test`, `watch`), listed below.
 

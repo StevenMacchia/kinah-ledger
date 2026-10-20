@@ -36,9 +36,10 @@ internal static class Program
             switch (cmd)
             {
                 case "pick": return Pick();
+                case "locate": return Locate(settings);
                 case "ui-shot": return UiShot(settings, opts, pos);
-                case "ui-cycle": return WpfApp.Cycle(settings, RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
-                case "ui-live": return WpfApp.Live(settings, RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
+                case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
+                case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "watch": return Watch(settings, opts);
@@ -232,6 +233,28 @@ options: --process aion[,other]   --device <adapter name>");
         return 0;
     }
 
+    /// <summary>Finds the game window, the chat area and the zone label, and prints what it saw. The live test for auto-detection.</summary>
+    static int Locate(Settings s)
+    {
+        var game = GameWindow.Find(s.ProcessHints);
+        if (game == null) { Console.WriteLine("Game window not found (is it running and not minimized?)."); return 1; }
+        Console.WriteLine($"Game window: {game.Value.Width} × {game.Value.Height} at {game.Value.X}, {game.Value.Y}");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var chat = Task.Run(() => ChatLocator.DetectAsync(game.Value)).GetAwaiter().GetResult();
+        Console.WriteLine($"Chat: {(chat.region is { } r ? $"{r.Width} × {r.Height} at {r.X}, {r.Y}" : "not found")}  ({chat.note}, {sw.ElapsedMilliseconds} ms)");
+        sw.Restart();
+        var zone = Task.Run(() => ZoneLocator.DetectAsync(game.Value)).GetAwaiter().GetResult();
+        Console.WriteLine($"Zone: {zone.zone ?? "not found"}  ({zone.note}, {sw.ElapsedMilliseconds} ms)");
+        if (chat.region is { } rr)
+        {
+            var reader = new ScreenReader(rr, s.Ocr.Scale);
+            var lines = Task.Run(() => reader.ReadAsync()).GetAwaiter().GetResult();
+            Console.WriteLine($"Chat area reads {lines.Count} line(s):");
+            foreach (var l in lines.TakeLast(8)) Console.WriteLine("  " + l);
+        }
+        return 0;
+    }
+
     static System.Drawing.Rectangle RegionFor(Dictionary<string, string> o) =>
         RegionStore.Parse(o.GetValueOrDefault("region")) ?? RegionStore.Load()
         ?? throw new InvalidOperationException("no chat region yet: run `pick` first, or pass --region x,y,w,h");
@@ -349,25 +372,25 @@ options: --process aion[,other]   --device <adapter name>");
         var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
         var activity = o.GetValueOrDefault("activity") ?? s.Ocr.Activity;
         int? interval = int.TryParse(o.GetValueOrDefault("interval"), out var iv) ? iv : null;
-        var session = new TrackerSession(RegionFor(o), s, items, activity, interval);
+        var manual = RegionStore.Parse(o.GetValueOrDefault("region")) ?? (o.ContainsKey("auto") ? null : RegionStore.Load());
+        var session = new TrackerSession(manual, s, items, activity, interval);
         var engine = session.Engine;
-
-        Console.WriteLine($"Watching {RegionFor(o)} every {interval ?? s.Ocr.IntervalMs} ms. Activity: {activity}. Items known: {items.Count}. (The on-screen panel is only in the window app.)");
+        session.StartAsync().GetAwaiter().GetResult();
+        Console.WriteLine($"Watching {session.Region} every {interval ?? s.Ocr.IntervalMs} ms. Activity: {activity}. Zone: {session.Zone ?? "not read"}. Items known: {items.Count}. (The on-screen panel is only in the window app.)");
         if (s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint))
             Console.WriteLine($"When you stop, this run's totals go anonymously to {s.Upload.Endpoint}: region, activity, gear bracket, minutes, kills, kinah, item counts and a random install ID.");
         Console.WriteLine("Ctrl+C to stop.");
 
         var stop = false;
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop = true; };
-        var view = new ConsoleView(engine, () => activity, () => $"reads {session.Reads}  skipped {session.Unaligned}" + (session.LastError.Length > 0 ? "  " + session.LastError : ""));
-        session.Start();
+        var view = new ConsoleView(engine, () => session.Activity, () => $"reads {session.Reads}  skipped {session.Unaligned}" + (session.LastError.Length > 0 ? "  " + session.LastError : ""));
         while (!stop) { view.Render(); Thread.Sleep(1000); }
         session.StopAsync().GetAwaiter().GetResult();
         view.Render();
 
         if (!session.Eligible) { Console.WriteLine("Run too short or empty; nothing uploaded."); return 0; }
         var sent = session.UploadAsync(s).GetAwaiter().GetResult();
-        Console.WriteLine(sent ? "Run shared anonymously." : "Run kept on this PC.");
+        Console.WriteLine((sent ? "Run shared anonymously." : "Run kept on this PC.") + $" Activity: {session.Activity}.");
         return 0;
     }
 

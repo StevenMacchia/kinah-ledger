@@ -18,7 +18,7 @@ public static class WpfApp
     }
 
     /// <summary>The real app lifecycle (window shown, message loop running) with an automatic start → wait → stop, to catch anything that kills the process.</summary>
-    public static int Live(Settings settings, DRect region, int ms)
+    public static int Live(Settings settings, DRect? region, int ms)
     {
         var app = Ensure();
         app.DispatcherUnhandledException += (_, e) => { Console.WriteLine("UI exception: " + e.Exception); CrashLog.Write("ui", e.Exception); e.Handled = true; };
@@ -59,7 +59,7 @@ public static class WpfApp
     }
 
     /// <summary>Starts and stops a session in-process (no clicks needed) and reports any exception, for finding crashes.</summary>
-    public static int Cycle(Settings settings, DRect region, int ms)
+    public static int Cycle(Settings settings, DRect? region, int ms)
     {
         Ensure();
         var w = new MainWindow(settings) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
