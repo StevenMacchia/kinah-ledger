@@ -26,7 +26,7 @@ panel. Setup is dragging a box around the chat once.
 1. In the game's chat settings, add a tab (call it Loot) that shows only System Notifications, and make it a few lines tall. Play in borderless or windowed mode.
 2. Double-click `KinahLedger.exe`. Press **Pick chat area** and drag a box around that tab's text.
 3. **Test read** shows what it sees; loot lines get a tick.
-4. Choose what you're farming and press **Start tracking**. A small panel sits over the game; the window shows each loot line as it's read.
+4. Choose what you're farming (open world by default; type the zone or mobs) and press **Start tracking**. A small panel sits over the game. The window shows Kinah per hour and per kill, kills per hour, drops per hour, and every drop with its rate per kill and per hour. Ctrl+Shift+K starts and stops from inside the game; minimizing keeps it running in the tray.
 
 The same steps exist as commands for scripting (`pick`, `ocr-test`, `watch`), listed below.
 
