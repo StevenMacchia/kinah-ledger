@@ -110,7 +110,7 @@
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
           <StackPanel Margin="0,0,14,0">
             <TextBlock HorizontalAlignment="Right" FontSize="13"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-            <TextBlock x:Name="Version" Text="v0.6.0" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
+            <TextBlock x:Name="Version" Text="v0.6.1" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
           </StackPanel>
           <!-- once the chat and zone have been found, steps 1 and 2 live behind this button -->
           <Button x:Name="SettingsBtn" Content="Settings" Height="32" Padding="12,0" FontSize="12.5" VerticalAlignment="Top"/>
