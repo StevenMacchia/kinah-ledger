@@ -354,15 +354,12 @@ public sealed class LineTracker
         if (cur.Count == 0 || (cur.Count <= 2 && !cur.Any(ChatLike)))
         {
             Empty++;
-            _faded = _prev.Count > 0;
+            // the chat is faded (or hidden) now, whatever came before: right after a start or a pause too, so the loot
+            // line that brings it back is counted and not taken for history
+            _faded = true;
             return new List<string>();
         }
         var keys = cur.Select(Key).ToList();
-        if (_prev.Count == 0)
-        {
-            _prev = keys;                     // first read: what's already on screen is history, not loot
-            return new List<string>();
-        }
         if (_faded)
         {
             // after a fade, one or two lines are what arrived since: count them even when they repeat the last ones seen
@@ -370,7 +367,12 @@ public sealed class LineTracker
             _faded = false;
             if (keys.Count <= 2) { _prev = keys; LastAfterFade = true; return new List<string>(cur); }
         }
-        if (keys.SequenceEqual(_prev)) return new List<string>();
+        if (_prev.Count == 0)
+        {
+            _prev = keys;                     // first read: what's already on screen is history, not loot
+            return new List<string>();
+        }
+        if (keys.Count == _prev.Count && Enumerable.Range(0, keys.Count).All(i => Similar(keys[i], _prev[i]))) return new List<string>();
 
         // Line up on the previous read's last line; when that line is gone, on the one before it, and so on. Behind the
         // frameless chat the box also catches text from the world (a nameplate, a sign) that comes and goes as the camera
@@ -382,7 +384,7 @@ public sealed class LineTracker
                 var tail = _prev.GetRange(j - k + 1, k);
                 for (int i = keys.Count - k; i >= 0; i--)        // last occurrence: fewest new lines, never a double count
                 {
-                    if (!keys.GetRange(i, k).SequenceEqual(tail)) continue;
+                    if (!Enumerable.Range(0, k).All(x => Similar(keys[i + x], tail[x]))) continue;
                     var fresh = cur.GetRange(i + k, keys.Count - i - k);
                     // The last read's lines after the anchor are still on screen in this one, in the same order, even when
                     // either read garbled them ("mria acquired."): skip one line here for each. Only world text (short,
@@ -397,6 +399,38 @@ public sealed class LineTracker
         Unaligned++;
         _prev = keys;
         return new List<string>();
+    }
+
+    /// <summary>
+    /// The same line read twice, allowing for the recognizer: two reads of one line differ by a letter or two
+    /// ("obtainedipapissoulpoints" / "obtainedfpapissoulpoints"). Exact for short keys; a letter per eight for long ones.
+    /// Without this, a busy chat whose lines garble differently on every read never lined up, and all its loot was lost.
+    /// </summary>
+    static bool Similar(string a, string b)
+    {
+        if (a == b) return true;
+        if (a.Length < 8 || b.Length < 8) return false;
+        int max = Math.Max(1, Math.Min(a.Length, b.Length) / 8);
+        if (Math.Abs(a.Length - b.Length) > max) return false;
+        return Lev(a, b, max) <= max;
+    }
+
+    static int Lev(string a, string b, int max)
+    {
+        var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i; int rowMin = i;
+            for (int j = 1; j <= b.Length; j++)
+            {
+                cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+                rowMin = Math.Min(rowMin, cur[j]);
+            }
+            if (rowMin > max) return max + 1;
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length];
     }
 
     /// <summary>A chat line, as opposed to text from the world behind the frameless chat ("Targena", "Cairn Tc"): long, or with a word the chat's own lines use.</summary>

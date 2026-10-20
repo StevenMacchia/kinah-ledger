@@ -397,7 +397,7 @@ options: --process aion[,other]");
             ("Enchantment failed. Tahabata's Sword +10", "enchant failed: Tahabata's Sword +10 → +11"),
             ("Failed to enchant Tahabata's Sword +10.", "enchant failed: Tahabata's Sword +10 → +11"),
             ("Enchanting failed. The level dropped to +9.", "enchant failed: ? +? → +?"),
-            ("Enchantment Stone acquired.", "Enchantment Stone ×1"),
+            ("Enchantment Stone acquired.", "(ignored)"),
             ("Acquired 67,676 Kina from the Market.", "reward: Market proceeds ×1 (skipped)"),
             ("Acquired 520 Kina.", "Kinah +520"),
             ("[ZenBytez] Crafted a Chalice cause my first", "(ignored)"),

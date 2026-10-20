@@ -114,6 +114,7 @@ public sealed class TrackerSession
             DetectNote = note;
             if (region == null) throw new InvalidOperationException("Couldn't see the chat. Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.");
             Region = region;
+            _anchor = game;
         }
         _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale);
         if (game != null && GameWindow.Covered(ZoneLocator.Strip(game.Value), _settings.ProcessHints) == null) await ReadZone(game.Value);
@@ -142,6 +143,37 @@ public sealed class TrackerSession
 
     int _emptyReads;
 
+    // the game window as it was when the chat area was found (auto mode): the area is kept relative to it, so the game
+    // moving (a tab out and back, a drag) moves the area with it, and the game changing size (fullscreen to windowed,
+    // a resolution change) finds the chat again at once instead of after twenty empty reads
+    Rectangle? _anchor;
+    DateTime _refindAt = DateTime.MinValue;
+
+    /// <summary>Keeps the chat area on the game: shifted when the game moved, found again when the game changed size.</summary>
+    async Task FollowGameAsync()
+    {
+        if (ManualRegion || _anchor is not { } a) return;
+        var game = GameWindow.Find(_settings.ProcessHints);
+        if (game is not { } g) return;   // minimized or gone: the cover check pauses, and the area waits where it was
+        GameRect = g;
+        if (g == a) return;
+        if (g.Size == a.Size)
+        {
+            // same window, new place: the chat sits where it did inside it
+            var moved = Region!.Value; moved.Offset(g.X - a.X, g.Y - a.Y);
+            Region = moved; _reader = new ScreenReader(moved, _settings.Ocr.Scale); _anchor = g;
+            DetectNote = "the chat area moved with the game";
+            return;
+        }
+        if ((DateTime.UtcNow - _refindAt).TotalSeconds < 5 || GameWindow.Covered(ChatLocator.Corner(g), _settings.ProcessHints) != null) return;
+        _refindAt = DateTime.UtcNow;
+        var (again, note) = await ChatLocator.DetectAsync(g);
+        if (again == null) return;   // the chat may be faded: the empty-read rule keeps trying
+        Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); _anchor = g;
+        _tracker.Rebase();
+        DetectNote = "re-found after the game changed size: " + note;
+    }
+
     async Task Loop(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -149,6 +181,7 @@ public sealed class TrackerSession
             var t0 = DateTime.UtcNow;
             try
             {
+                await FollowGameAsync();
                 // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
                 if (GameWindow.Covered(Region!.Value, _settings.ProcessHints) is { } cover)
                 {
@@ -157,6 +190,13 @@ public sealed class TrackerSession
                     LastError = "";
                 }
                 else await ReadOnce();
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // the screen can't be copied: the session is locked, a secure prompt is up, or a display is switching. Wait, like a cover.
+                Engine.Pause(); Secondary?.Pause();
+                Paused = "the screen can't be read right now (locked, or a system prompt is up)";
+                LastError = "";
             }
             catch (Exception ex) { LastError = ex.Message; CrashLog.Write("read loop", ex); }
             Updated?.Invoke();
@@ -184,7 +224,7 @@ public sealed class TrackerSession
             if (g != null && GameWindow.Covered(ChatLocator.Corner(g.Value), _settings.ProcessHints) == null)
             {
                 var (again, note) = await ChatLocator.DetectAsync(g.Value);
-                if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); DetectNote = "re-found: " + note; }
+                if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); _anchor = g; DetectNote = "re-found: " + note; }
             }
         }
         int unaligned = _tracker.Unaligned;
