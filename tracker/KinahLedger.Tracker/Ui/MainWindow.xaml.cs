@@ -62,7 +62,7 @@ public partial class MainWindow : Window
         LogsLink.Click += (_, _) => Open(CrashLog.Dir);
 
         Kind.SelectionChanged += (_, _) => { if (_session == null) { ApplyModeLabels(); ResetTiles(); } };
-        ApplyModeLabels();
+        ApplyModeLabels(); ResetTiles();
         BuildTray();
         _timer.Tick += (_, _) => Tick();
         _timer.Start();
