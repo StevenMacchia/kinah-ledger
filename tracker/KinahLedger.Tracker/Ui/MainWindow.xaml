@@ -33,11 +33,11 @@
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
         <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="#121C2E"/></Trigger>
-        <!-- item grades in the game's own colours, on the name and the icon's frame -->
+        <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet); on the name and on the icon's frame -->
         <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="#5FE08A"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FE08A"/></DataTrigger>
-        <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="NameText" Property="Foreground" Value="#5FA8FF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FA8FF"/></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="#5FA8FF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FA8FF"/></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Unique"><Setter TargetName="NameText" Property="Foreground" Value="#F5D05A"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99F5D05A"/></DataTrigger>
-        <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="#C88CFF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99C88CFF"/></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="NameText" Property="Foreground" Value="#C88CFF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99C88CFF"/></DataTrigger>
         <!-- a skill header row inside the gathered table: its own node count, failures and Plentiful rate -->
         <DataTrigger Binding="{Binding Header}" Value="True">
           <Setter TargetName="RowBorder" Property="Background" Value="#101826"/>
