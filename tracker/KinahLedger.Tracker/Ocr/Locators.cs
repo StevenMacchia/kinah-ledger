@@ -225,18 +225,14 @@ public static class ZoneLocator
             .Where(x => x.text.Length >= 6 && x.text.Length <= 40 && Shape.IsMatch(x.text) && !Blocklist.Any(b => x.text.StartsWith(b + " ") || x.text == b))
             .OrderBy(x => x.l.Box.Top).ToList();
         if (candidates.Count == 0) return (null, $"no zone-shaped text in the top-right corner ({lines.Count} lines read)");
-        // a known name wins (even misread), then a name with a place word; anything else is some other label and is ignored
+        // the known list is the whitelist: a name on it wins even misread. Anything else is some other label, or a zone the
+        // list doesn't have yet; either way the count stays under "Unknown zone" rather than under a misread name.
         foreach (var c in candidates)
         {
             var hit = Known.FirstOrDefault(k => Edit(k.ToLowerInvariant(), c.text.ToLowerInvariant()) <= Math.Max(1, k.Length / 7));
             if (hit != null) return (hit, "zone matched a known name");
         }
-        var placed = candidates.FirstOrDefault(c => c.text.Split(' ').Any(w => PlaceWords.Contains(w.Trim('\'', '’'), StringComparer.OrdinalIgnoreCase)));
-        if (placed.text != null) return (placed.text, "zone read as shown; not in the known list yet");
-        // the minimap title is the top line of the corner; a label there with no place word is still most likely the zone (event areas, instances)
-        var top = candidates[0];
-        if (top.l.Box.Top - strip.Top < strip.Height * 0.5) return (top.text, "zone read from the minimap title; unverified name");
-        return (null, $"top-right text didn't look like a zone name: {string.Join(" | ", candidates.Take(3).Select(c => c.text))}");
+        return (null, $"top-right text isn't a zone on the list: {string.Join(" | ", candidates.Take(3).Select(c => c.text))}");
     }
 
     static string Clean(string s) => Regex.Replace(s.Trim(), @"\s+", " ").TrimEnd('.', ',', ':');

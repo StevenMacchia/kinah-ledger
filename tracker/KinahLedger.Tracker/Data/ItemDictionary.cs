@@ -110,6 +110,7 @@ public sealed class ItemDictionary
         var d = new ItemDictionary();
         var p = Settings.Resolve(path);
         if (File.Exists(p)) d.LoadFile(p);
+        else d.LoadEmbedded();
         // the gathering materials are always known, so misreads of them snap to the right name even without the full list
         foreach (var g in GatheringCatalog.All)
             if (!d._byName.ContainsKey(Norm(g.Name)))
@@ -142,10 +143,24 @@ public sealed class ItemDictionary
         catch (Exception) { /* icons are decoration: a bad file costs nothing */ }
     }
 
-    void LoadFile(string p)
+    void LoadFile(string p) { using var doc = JsonDocument.Parse(File.ReadAllText(p)); LoadJson(doc); }
+
+    /// <summary>The item list built into the exe (data/tw-items.json at build time): the whitelist when no list sits beside the exe.</summary>
+    void LoadEmbedded()
+    {
+        try
+        {
+            using var stream = typeof(ItemDictionary).Assembly.GetManifestResourceStream("tw-items.json");
+            if (stream == null) return;
+            using var doc = JsonDocument.Parse(stream);
+            LoadJson(doc);
+        }
+        catch (Exception) { /* without a list nothing counts as a drop; the window's status says how many items are known */ }
+    }
+
+    void LoadJson(JsonDocument doc)
     {
         var d = this;
-        using var doc = JsonDocument.Parse(File.ReadAllText(p));
         if (!doc.RootElement.TryGetProperty("items", out var arr)) return;
         foreach (var e in arr.EnumerateArray())
         {

@@ -54,6 +54,8 @@
     <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- the 46 gathering materials' icon file names (8 KB), so their icons work before any item list is downloaded -->
     <EmbeddedResource Include="..\..\data\gathering-items.json" LogicalName="gathering-items.json" />
+    <!-- the game's item list (the crawler's output, 6,324 items): the whitelist for drops, so a misread name can never become one -->
+    <EmbeddedResource Include="..\..\data\tw-items.json" LogicalName="tw-items.json" />
   </ItemGroup>
 
 </Project>

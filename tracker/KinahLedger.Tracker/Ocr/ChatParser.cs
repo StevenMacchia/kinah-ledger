@@ -193,6 +193,31 @@ public sealed partial class ChatParser
             yield break;
         }
 
+        // Every "Obtained ..." line the game prints is a Soul Crystal or Soul Points line (71 of 71 in the logs so far), and the
+        // recognizer garbles "Soul" freely ("Sput Crystals", "SouUPoints", "Soul-Points"). So the verb decides: the line is a pet
+        // crystal when its last word is close to "Crystals", a per-kill payout when it is close to "Points" (or the line is cut
+        // off at "Soul"), and otherwise nothing. An Obtained line is never a drop.
+        var ob = ObtainedLine().Match(line);
+        if (ob.Success)
+        {
+            var words = ob.Groups["name"].Value.Split(new[] { ' ', '-', '‑', '–' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(w => w.Trim('.', ',', ';', ':', '!', '?', '\'', '"', '`')).Where(w => w.Length > 0).ToList();
+            if (words.Count == 0) yield break;
+            string last = Letters(words[^1]);
+            bool crystal = last.Contains("cryst") || last.Contains("ystal") || Dist(last, "crystals") <= 2 || Dist(last, "crystal") <= 2;
+            bool points = !crystal && (last.Contains("poin") || last.EndsWith("ints") || Dist(last, "points") <= 2);
+            bool cut = !crystal && !points && Dist(last, "soul") <= 1;
+            if (!crystal && !points && !cut) yield break;
+            int n = ob.Groups["n"].Success ? int.Parse(ob.Groups["n"].Value) : 1;
+            // the pet's name is what comes before "Soul"; a one-word "SouUPoints" or a cut-off "Papis Soul" keeps the word before it
+            var head = words.Take(words.Count - 1).ToList();
+            if (head.Count > 0 && !cut && Dist(Letters(head[^1]), "soul") <= 2) head.RemoveAt(head.Count - 1);
+            var pet = PetName(string.Join(' ', head));
+            if (crystal) yield return new PetCrystal(time, (pet.Length > 0 ? pet + " " : "") + "Soul Crystal", Math.Clamp(n, 1, 9999));
+            else yield return new CurrencyGained(time, (pet.Length > 0 ? pet + " " : "") + "Soul Points", Math.Clamp(n, 1, 999999));
+            yield break;
+        }
+
         var it = ItemNameFirst().Match(line);
         bool nameFirst = it.Success;
         if (!it.Success) it = Item().Match(line);
@@ -234,6 +259,8 @@ public sealed partial class ChatParser
                 yield return new RewardReceived(time, name, Math.Clamp(n, 1, 9999));
                 yield break;
             }
+            // the item list is the whitelist: a name it doesn't hold, exactly or as a close misread, is never a drop
+            if (!_items.Knows(name)) { CrashLog.Note($"not in the item list, not counted: {name}"); yield break; }
             yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 9999), bound);
         }
     }
@@ -249,6 +276,47 @@ public sealed partial class ChatParser
             else if (c is 'I' or 'l' or '|') sb.Append('1');
         }
         return long.TryParse(sb.ToString(), out var v) ? v : 0;
+    }
+
+
+    /// <summary>"Obtained 2 Natura Soul Crystals." in any state of repair: the verb, an optional count, then the rest.</summary>
+    [GeneratedRegex(@"^\W*obtain[a-z]*[\W_]*(?:(?<n>\d{1,4})[\s\-]+)?(?<name>.+?)[\s.:;!?]*$", RegexOptions.IgnoreCase)]
+    private static partial Regex ObtainedLine();
+
+    static string Letters(string w) { var sb = new StringBuilder(); foreach (var c in w) if (char.IsLetter(c)) sb.Append(char.ToLowerInvariant(c)); return sb.ToString(); }
+
+    /// <summary>Levenshtein distance, for words a few letters long.</summary>
+    static int Dist(string a, string b)
+    {
+        var d = new int[a.Length + 1, b.Length + 1];
+        for (int i = 0; i <= a.Length; i++) d[i, 0] = i;
+        for (int j = 0; j <= b.Length; j++) d[0, j] = j;
+        for (int i = 1; i <= a.Length; i++)
+            for (int j = 1; j <= b.Length; j++)
+                d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+        return d[a.Length, b.Length];
+    }
+
+    /// <summary>
+    /// The pets whose Soul Crystals and Soul Points the game prints, as seen in real reads. This is the whitelist for pet
+    /// names: a read that isn't one of these, exactly, by containing one ("IfVarian"), or by one letter off, counts as a plain
+    /// Soul Crystal or Soul Points line with no pet name, and is logged, so a misread never becomes a new name on the site.
+    /// Add a pet here when the game shows a new one.
+    /// </summary>
+    public static readonly string[] KnownPets = { "Natura", "Varian", "Fera", "Ivera", "Papis", "Oculazen" };
+
+    static string PetName(string raw)
+    {
+        var name = Regex.Replace(raw, @"\s+", " ").Trim();
+        if (name.Length == 0) return "";
+        foreach (var k in KnownPets)
+        {
+            if (string.Equals(k, name, StringComparison.OrdinalIgnoreCase)) return k;
+            if (name.Contains(k, StringComparison.OrdinalIgnoreCase)) return k;
+            if (k.Length >= 5 && Dist(k.ToLowerInvariant(), Letters(name)) <= 1) return k;
+        }
+        CrashLog.Note($"not a pet on the list, counted without a name: {name}");
+        return "";
     }
 
     static long Fnv(string s) { uint h = 2166136261; foreach (var c in s.ToLowerInvariant()) { h ^= c; h *= 16777619; } return h; }

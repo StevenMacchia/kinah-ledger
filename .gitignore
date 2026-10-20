@@ -9,7 +9,6 @@ node_modules/
 # crawler progress and large data dumps
 tools/tw-progress.json
 tools/tw-items.json
-data/tw-items.json
 site/icons/
 
 # editor/session config
