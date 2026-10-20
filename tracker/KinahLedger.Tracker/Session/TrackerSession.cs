@@ -53,11 +53,12 @@ public sealed class TrackerSession
                 {
                     bool any = false;
                     foreach (var ev in _parser.Parse(l, DateTime.UtcNow)) { Engine.Apply(ev); any = true; }
+                    CrashLog.Read(l, any);
                     if (any) { LastLine = l; LootLine?.Invoke(l); }
                 }
                 LastError = "";
             }
-            catch (Exception ex) { LastError = ex.Message; }
+            catch (Exception ex) { LastError = ex.Message; CrashLog.Write("read loop", ex); }
             Updated?.Invoke();
 
             int spent = (int)(DateTime.UtcNow - t0).TotalMilliseconds;

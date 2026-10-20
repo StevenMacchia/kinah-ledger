@@ -59,6 +59,12 @@ public sealed class SessionEngine
 
     public void Finish() => Ended ??= DateTime.UtcNow;
 
+    /// <summary>A consistent snapshot of the totals, taken under the same lock the reader thread uses.</summary>
+    public (long Kinah, long KinahBound, long Drops, int Kills, int Events) Totals()
+    {
+        lock (_lock) return (Kinah, KinahBound, Items.Values.Sum() + ItemsBound.Values.Sum(), Kills, Events);
+    }
+
     public string ItemName(long id) => _items.NameOf(id);
 
     public List<(long Id, string Name, int Count, int Bound)> ItemRows()

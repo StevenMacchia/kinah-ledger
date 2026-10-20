@@ -37,6 +37,8 @@ internal static class Program
             {
                 case "pick": return Pick();
                 case "ui-shot": return UiShot(settings, opts, pos);
+                case "ui-cycle": return WpfApp.Cycle(settings, RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
+                case "ui-live": return WpfApp.Live(settings, RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "watch": return Watch(settings, opts);

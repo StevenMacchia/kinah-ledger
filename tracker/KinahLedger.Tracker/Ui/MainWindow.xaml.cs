@@ -57,6 +57,7 @@ public partial class MainWindow : Window
         SiteLink.Click += (_, _) => Open(RepoUrl);
         SentLink.Click += (_, _) => WhatsSent();
         ResetLink.Click += (_, _) => { _region = null; UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Chat area cleared. Press Pick area to choose it again.", "Faint"); };
+        LogsLink.Click += (_, _) => Open(CrashLog.Dir);
 
         BuildTray();
         _timer.Tick += (_, _) => Tick();
@@ -166,9 +167,9 @@ public partial class MainWindow : Window
         if (s.Reads % 2 == 0) SetPreview(s.Thumb);
         if (_hud != null)
         {
-            var e = s.Engine; double h = e.Hours; long drops = e.Items.Values.Sum() + e.ItemsBound.Values.Sum();
-            _hud.Update($"{Fk((e.Kinah + e.KinahBound) / h)} Kinah/hr",
-                $"{Fk(e.Kills / h)} kills/hr · {Fk(drops / h)} drops/hr · {(e.Kills > 0 ? Fk((e.Kinah + e.KinahBound) / (double)e.Kills) : "—")} Kinah/kill\n{e.Elapsed:hh\\:mm\\:ss} · {Fk(e.Kinah + e.KinahBound)} Kinah · {drops} drops · {e.Kills} kills",
+            var e = s.Engine; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah + t.KinahBound;
+            _hud.Update($"{Fk(kinah / h)} Kinah/hr",
+                $"{Fk(t.Kills / h)} kills/hr · {Fk(t.Drops / h)} drops/hr · {(t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—")} Kinah/kill\n{e.Elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {t.Drops} drops · {t.Kills} kills",
                 s.LastLine);
         }
     }
@@ -176,21 +177,22 @@ public partial class MainWindow : Window
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
     {
         double h = Math.Max(elapsed.TotalHours, 1.0 / 3600);
-        long drops = e.Items.Values.Sum() + e.ItemsBound.Values.Sum(), kinah = e.Kinah + e.KinahBound;
+        var t = e.Totals(); long kinah = t.Kinah + t.KinahBound;
         KinahHr.Text = Fk(kinah / h);
-        KinahKill.Text = e.Kills > 0 ? Fk(kinah / (double)e.Kills) : "—";
-        KillsHr.Text = Fk(e.Kills / h);
-        DropsHr.Text = Fk(drops / h);
-        Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(e.Kinah)} Kinah + {Fk(e.KinahBound)} bound · {drops} drops · {e.Kills} kills";
+        KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
+        KillsHr.Text = Fk(t.Kills / h);
+        DropsHr.Text = Fk(t.Drops / h);
+        Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(t.Kinah)} Kinah + {Fk(t.KinahBound)} bound · {t.Drops} drops · {t.Kills} kills";
         ShowTable(e, elapsed);
     }
 
     void ShowTable(SessionEngine? e, TimeSpan? elapsed = null)
     {
         var rows = new List<DropRow>();
-        if (e != null && (e.Items.Count > 0 || e.ItemsBound.Count > 0))
+        int kills = 0;
+        if (e != null)
         {
-            double h = Math.Max((elapsed ?? e.Elapsed).TotalHours, 1.0 / 3600); int kills = e.Kills;
+            double h = Math.Max((elapsed ?? e.Elapsed).TotalHours, 1.0 / 3600); kills = e.Totals().Kills;
             foreach (var r in e.ItemRows())
             {
                 int total = r.Count + r.Bound;
@@ -200,7 +202,7 @@ public partial class MainWindow : Window
         Rows.ItemsSource = rows;
         TableEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the drop rate per kill and per hour." : "No drops yet.";
-        TableNote.Visibility = rows.Count > 0 && e!.Kills == 0 ? Visibility.Visible : Visibility.Collapsed;
+        TableNote.Visibility = rows.Count > 0 && kills == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     static string Pct(double p) => p >= 1 ? p.ToString("0.0") + "×" : p >= .1 ? (p * 100).ToString("0") + "%" : p >= .01 ? (p * 100).ToString("0.0") + "%" : (p * 100).ToString("0.00") + "%";
@@ -288,6 +290,21 @@ public partial class MainWindow : Window
     {
         if (_region is DRect r) { Step2Status.Text = $"Set: {r.Width} × {r.Height} px at {r.X}, {r.Y}. Press Test read if the chat moved."; Step2Status.Foreground = B("Ink"); }
         else { Step2Status.Text = "Not set. Press Pick area and drag a box around the chat lines that show loot and Kinah."; Step2Status.Foreground = B("Gold"); }
+    }
+
+    public void ForceClose() { _quitting = true; Close(); }
+
+    /// <summary>Runs start → wait → stop exactly as the buttons would, for catching crashes without a desktop session.</summary>
+    public async Task<string> DebugCycle(DRect region, int ms)
+    {
+        _demo = true;
+        _region = region; UpdateStep2();
+        await StartTracking();
+        if (_session == null) throw new InvalidOperationException("start failed: " + Status.Text);
+        await Task.Delay(ms);
+        var reads = _session.Reads;
+        await StopTracking();
+        return $"{reads} reads, status: {Status.Text}";
     }
 
     /// <summary>Fills the window with a sample open-world session so its layout can be reviewed without the game.</summary>

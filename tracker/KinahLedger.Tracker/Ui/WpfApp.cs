@@ -17,11 +17,62 @@ public static class WpfApp
         return app;
     }
 
+    /// <summary>The real app lifecycle (window shown, message loop running) with an automatic start → wait → stop, to catch anything that kills the process.</summary>
+    public static int Live(Settings settings, DRect region, int ms)
+    {
+        var app = Ensure();
+        app.DispatcherUnhandledException += (_, e) => { Console.WriteLine("UI exception: " + e.Exception); CrashLog.Write("ui", e.Exception); e.Handled = true; };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Console.WriteLine("process exception: " + e.ExceptionObject);
+        var w = new MainWindow(settings);
+        string result = "window closed before the cycle finished";
+        w.Loaded += async (_, _) =>
+        {
+            try
+            {
+                result = await w.DebugCycle(region, ms);
+                await Task.Delay(1500);                // stay alive a moment after Stop: this is where the app vanished for the player
+                result += " · app still alive after stop";
+            }
+            catch (Exception ex) { result = "cycle FAILED: " + ex; }
+            w.ForceClose();
+        };
+        app.Exit += (_, e) => Console.WriteLine($"app exit code {e.ApplicationExitCode}");
+        app.Run(w);
+        Console.WriteLine(result);
+        return result.Contains("still alive") ? 0 : 1;
+    }
+
     public static int Run(Settings settings)
     {
         var app = Ensure();
+        // an error in a button handler must not take the whole app down: log it, tell the player, carry on
+        app.DispatcherUnhandledException += (_, e) =>
+        {
+            CrashLog.Write("ui", e.Exception);
+            e.Handled = true;
+            MessageBox.Show($"Something went wrong, but the tracker is still running.\n\n{e.Exception.Message}\n\nDetails were saved to:\n{CrashLog.CrashPath}", "Kinah Ledger", MessageBoxButton.OK, MessageBoxImage.Warning);
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write("process", e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString()));
+        TaskScheduler.UnobservedTaskException += (_, e) => { CrashLog.Write("task", e.Exception); e.SetObserved(); };
         var w = new MainWindow(settings);
         return app.Run(w);
+    }
+
+    /// <summary>Starts and stops a session in-process (no clicks needed) and reports any exception, for finding crashes.</summary>
+    public static int Cycle(Settings settings, DRect region, int ms)
+    {
+        Ensure();
+        var w = new MainWindow(settings) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        w.Show();
+        DoEvents();
+        var task = w.DebugCycle(region, ms);
+        var deadline = DateTime.UtcNow.AddMilliseconds(ms + 20000);
+        while (!task.IsCompleted && DateTime.UtcNow < deadline) { DoEvents(); Thread.Sleep(20); }
+        if (!task.IsCompleted) { Console.WriteLine("cycle did not finish in time"); return 2; }
+        if (task.IsFaulted) { Console.WriteLine("cycle FAILED:\n" + task.Exception?.GetBaseException()); return 1; }
+        Console.WriteLine("cycle ok: " + task.Result);
+        w.Close();
+        return 0;
     }
 
     public static DRect? PickRegion()

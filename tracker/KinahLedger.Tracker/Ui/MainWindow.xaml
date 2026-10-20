@@ -19,7 +19,7 @@
         </StackPanel>
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
           <TextBlock HorizontalAlignment="Right" FontSize="13"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-          <TextBlock x:Name="Version" Text="v0.4.0" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
+          <TextBlock x:Name="Version" Text="v0.4.1" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
         </StackPanel>
       </Grid>
 
@@ -155,7 +155,10 @@
       <!-- status -->
       <Grid Margin="0,14,0,0">
         <TextBlock x:Name="Status" Foreground="{StaticResource Faint}" FontSize="12.5" TextTrimming="CharacterEllipsis" Margin="0,0,150,0"/>
-        <TextBlock HorizontalAlignment="Right" FontSize="12.5"><Hyperlink x:Name="ResetLink" Style="{StaticResource LinkStyle}">Reset chat area</Hyperlink></TextBlock>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <TextBlock FontSize="12.5"><Hyperlink x:Name="LogsLink" Style="{StaticResource LinkStyle}">Open logs</Hyperlink></TextBlock>
+          <TextBlock FontSize="12.5" Margin="16,0,0,0"><Hyperlink x:Name="ResetLink" Style="{StaticResource LinkStyle}">Reset chat area</Hyperlink></TextBlock>
+        </StackPanel>
       </Grid>
 
     </StackPanel>

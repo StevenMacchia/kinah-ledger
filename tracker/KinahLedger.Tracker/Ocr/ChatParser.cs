@@ -21,7 +21,7 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"\bacquired\s+(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b(?<rest>.*)$", RegexOptions.IgnoreCase)]
     private static partial Regex Kina();
 
-    [GeneratedRegex(@"\bacquired\s+(?<name>.+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s*\.?\s*$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(?:acquired|obtained|looted|picked up)\s+(?<name>.+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s*\.?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex Item();
 
     [GeneratedRegex(@"\bdefeated\s+(?<mob>.+?)\s*\.?\s*$", RegexOptions.IgnoreCase)]
@@ -60,10 +60,14 @@ public sealed partial class ChatParser
         var it = Item().Match(line);
         if (it.Success)
         {
-            var name = it.Groups["name"].Value.Trim().TrimEnd('.');
+            var name = it.Groups["name"].Value.Trim().TrimEnd('.').Trim('[', ']', ' ');
             if (name.Length < 2) yield break;
+            // "Acquired 3 Iron Ore" puts the count first; keep the name clean and the count right
+            var lead = System.Text.RegularExpressions.Regex.Match(name, @"^(\d{1,4})\s+(.+)$");
+            int lead_n = 0;
+            if (lead.Success) { lead_n = int.Parse(lead.Groups[1].Value); name = lead.Groups[2].Value; }
             bool bound = name.Contains("(bound)", StringComparison.OrdinalIgnoreCase);
-            int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : 1;
+            int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
             yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 9999), bound);
         }
     }
