@@ -91,6 +91,14 @@ public partial class MainWindow : Window
         MarketResetLink.Click += (_, _) => { _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); _watcher.Market.UseRegion(null); UpdateMarketUi(); Say("Back to automatic: the Market window is found by its title and column headers.", "Faint"); };
         MarketSentLink.Click += (_, _) => WhatsRead();
         try { LinkCodeRun.Text = Upload.InstallId.LinkCode(); } catch (Exception) { LinkCodeRun.Text = "unavailable"; }
+        // one click: the site gets the code in the address, links it as soon as the player is signed in, and nothing has to be typed
+        LinkBtn.Click += (_, _) =>
+        {
+            var code = LinkCodeRun.Text;
+            if (!code.StartsWith("KL-")) { Say("No link code yet; try again in a moment.", "Warn"); return; }
+            Open("https://kinahledger.com/?link=" + Uri.EscapeDataString(code) + "#profile");
+            Say("Opened kinahledger.com in your browser. Sign in with Discord if it asks; this PC is then linked to your profile.", "Good");
+        };
         CopyCodeLink.Click += (_, _) => { try { Clipboard.SetText(LinkCodeRun.Text); Say("Link code copied. Paste it into your profile on the site to see your runs there.", "Good"); } catch (Exception) { Say("Couldn't reach the clipboard; the code is " + LinkCodeRun.Text, "Warn"); } };
         ResetLink.Click += (_, _) => { _region = null; _prefs.ManualChat = false; RegionStore.Clear(); _watcher.ManualChat = null; _ = _watcher.ResetChatAsync(); UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Back to automatic: the chat is found when you start.", "Faint"); };
         LogsLink.Click += (_, _) => Open(CrashLog.Dir);

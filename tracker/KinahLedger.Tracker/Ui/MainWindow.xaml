@@ -102,7 +102,7 @@
             <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="5"/>
           </Grid>
           <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
-          <TextBlock x:Name="Version" Text="v0.6.2" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+          <TextBlock x:Name="Version" Text="v0.6.3" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
           <TextBlock FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
@@ -152,8 +152,12 @@
             <CheckBox x:Name="HudChk" Content="Panel over the game while farming" Margin="0,0,0,4"/>
           </WrapPanel>
           <!-- optional: ties this PC's runs to a profile on the site; runs stay anonymous without it -->
-          <TextBlock x:Name="LinkRow" Margin="0,6,0,0" FontSize="12.5" Foreground="{DynamicResource Muted}"
-                     ToolTip="Paste this into your profile on the site to see your own runs there. It only ties runs from this PC to your profile; it says nothing about who you are."><Run Text="Profile link code "/><Run x:Name="LinkCodeRun" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource Gold}"/><Run Text="   "/><Hyperlink x:Name="CopyCodeLink" Style="{StaticResource LinkStyle}">copy</Hyperlink></TextBlock>
+          <WrapPanel x:Name="LinkRow" Margin="0,8,0,0">
+            <Button x:Name="LinkBtn" Content="Link to my profile on the site" Width="232" Margin="0,0,12,4"
+                    ToolTip="Opens kinahledger.com with this PC's link code. Sign in with Discord if asked, and the runs this PC shares show on your profile. Runs stay anonymous in the public tables either way."/>
+            <TextBlock VerticalAlignment="Center" Margin="0,0,0,4" FontSize="12.5" Foreground="{DynamicResource Muted}"
+                       ToolTip="The same code, for pasting by hand into Profile › Link your tracker."><Run Text="code "/><Run x:Name="LinkCodeRun" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource Gold}"/><Run Text="   "/><Hyperlink x:Name="CopyCodeLink" Style="{StaticResource LinkStyle}">copy</Hyperlink></TextBlock>
+          </WrapPanel>
 
           <TextBlock Style="{StaticResource LabelStyle}" Text="CHAT AND ZONE" Margin="0,14,0,0"/>
           <TextBlock x:Name="Step2Status" Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" Margin="0,6,0,0"/>
