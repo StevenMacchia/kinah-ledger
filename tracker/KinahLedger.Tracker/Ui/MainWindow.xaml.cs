@@ -29,7 +29,7 @@ public partial class MainWindow : Window
     TrackerSession? _session;
     HudWindow? _hud;
     DRect? _region = RegionStore.Load();
-    bool _quitting, _balloonShown, _demo;
+    bool _quitting, _balloonShown, _demo, _compact;
 
     readonly WF.NotifyIcon _tray = new();
     readonly WF.ToolStripMenuItem _trayToggle = new("Start tracking");
@@ -76,8 +76,35 @@ public partial class MainWindow : Window
 
         UpdateStep2();
         ShowTable(null);
-        Say("Not tracking. Do steps 1 and 2, then press Start.", "Faint");
+        SettingsBtn.Click += (_, _) => SetCompact(!_compact);
+        SetCompact(_prefs.Compact, remember: false);
     }
+
+    /// <summary>
+    /// Once the chat and the zone have been found, steps 1 and 2 go behind the Settings button and the window
+    /// shrinks to the mode picker, the tiles and the table. Settings brings the setup card back at any time.
+    /// </summary>
+    void SetCompact(bool on, bool remember = true)
+    {
+        _compact = on;
+        var v = on ? Visibility.Collapsed : Visibility.Visible;
+        SetupCard.Visibility = v; Tagline.Visibility = v; Badge3.Visibility = v;
+        Step3Title.Margin = on ? new Thickness(0) : new Thickness(12, 0, 0, 0);
+        KindGrid.Margin = on ? new Thickness(0, 12, 0, 0) : new Thickness(36, 12, 0, 0);
+        OptsRow.Margin = on ? new Thickness(0, 14, 0, 0) : new Thickness(36, 14, 0, 0);
+        LinkRow.Margin = on ? new Thickness(0, 8, 0, 0) : new Thickness(36, 8, 0, 0);
+        Kind.Width = on ? 168 : 200;
+        KindHint.Visibility = v;                 // the zone name gets the room instead
+        StartBtn.Width = on ? 160 : 196;
+        SettingsBtn.Content = on ? "Settings" : "Hide setup";
+        SettingsBtn.ToolTip = on ? "Show the setup steps: chat area, zone and the preview." : "Hide the setup steps. The chat and the zone are still found when you press Start.";
+        Width = on ? 640 : 800;
+        if (_session == null && !_demo) Say(on ? "Not tracking. Press Start; the chat and the zone are found on their own. Setup is under Settings." : "Not tracking. Do steps 1 and 2, then press Start.", "Faint");
+        if (remember) { _prefs.Compact = on; SavePrefs(); }
+    }
+
+    /// <summary>The compact layout for a layout render, without touching saved preferences.</summary>
+    public void ShowCompact() => SetCompact(true, remember: false);
 
     /* ---------------- actions ---------------- */
 
@@ -125,7 +152,7 @@ public partial class MainWindow : Window
         try
         {
             var game = GameWindow.Find(_settings.ProcessHints);
-            if (game == null) { Say("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself.", "Warn"); return; }
+            if (game == null) { if (_compact) SetCompact(false, remember: false); Say("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself.", "Warn"); return; }
             if (_hud != null) { _hud.Hide(); }   // never read our own panel
             var (region, note) = await Task.Run(() => ChatLocator.DetectAsync(game.Value));
             var (zone, _) = await Task.Run(() => ZoneLocator.DetectAsync(game.Value));
@@ -135,12 +162,15 @@ public partial class MainWindow : Window
             SetPreview(await Task.Run(() => ScreenReader.Frame(g, 480, marks)));
             if (region == null)
             {
+                if (_compact) SetCompact(false, remember: false);   // the buttons to fix it are in the setup card
                 Say("Couldn't see the chat (" + note + "). Make sure the game UI is showing with the chat open at the bottom-left, then Detect again, or choose the chat yourself.", "Warn");
                 return;
             }
             _region = region; _prefs.ManualChat = false; RegionStore.Clear();
             UpdateStep2();
-            Say($"Found the chat ({note}){(zone != null ? " and the zone" : "")}. The preview outlines both. Press Start whenever you're ready.", "Good");
+            // steps 1 and 2 are done: from now on the window opens small, with the setup behind Settings
+            bool first = !_compact; if (first) SetCompact(true);
+            Say($"Found the chat ({note}){(zone != null ? " and the zone" : "")}. " + (first ? "Setup is now under Settings. " : "") + "Press Start whenever you're ready.", "Good");
         }
         catch (Exception ex) { Say(ex.Message, "Bad"); }
         finally { DetectBtn.IsEnabled = true; }
@@ -198,11 +228,13 @@ public partial class MainWindow : Window
             TableTitle.Text = "THIS SESSION";
             ShowTable(session.Engine);
             SetTrackingUi(true);
+            if (!_compact) SetCompact(true);   // chat and zone found: the setup card has done its job
             Say($"Tracking {session.Activity}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
         }
         catch (Exception ex)
         {
             _session = null; StartBtn.IsEnabled = true;
+            if (_compact) SetCompact(false, remember: false);   // show the setup card so the fix is one click away
             Say(ex.Message, "Warn");
         }
     }

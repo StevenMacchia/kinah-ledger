@@ -170,6 +170,8 @@ public sealed class UserPrefs
     public bool Share { get; set; } = true;
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>
     public bool ManualChat { get; set; }
+    /// <summary>True once the chat and zone have been found: the window opens small, with the setup steps behind Settings.</summary>
+    public bool Compact { get; set; }
     public int? WinX { get; set; }
     public int? WinY { get; set; }
     /// <summary>Where the over-game panel was last dragged to.</summary>

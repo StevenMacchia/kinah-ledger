@@ -302,7 +302,7 @@ options: --process aion[,other]   --device <adapter name>");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world");
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
