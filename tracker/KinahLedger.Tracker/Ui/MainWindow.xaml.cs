@@ -13,12 +13,13 @@ using WF = System.Windows.Forms;
 
 namespace KinahLedger.Ui;
 
-public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour);
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "");
 
 public partial class MainWindow : Window
 {
     // dungeons and raids are out for now: a boss kill drops more lines at once than any chat window shows
-    static readonly string[] Kinds = { "Open world", "Gathering" };
+    static readonly string[] Kinds = { "Open world", "Gathering", "Pets" };
+    enum Mode { Open, Gather, Pets }
     const string RepoUrl = "https://github.com/StevenMacchia/kinah-ledger";
     const int HotkeyId = 1;
 
@@ -80,28 +81,30 @@ public partial class MainWindow : Window
 
     string ActivityName() => Kind.SelectedItem as string ?? "Open world";
 
-    /// <summary>Gathering has no Kinah and no kills: the unit is the node, and the finds worth tracking are gemstones and higher tiers.</summary>
-    bool _gathering;
-    bool GatheringSelected => (Kind.SelectedItem as string) == "Gathering";
+    /// <summary>
+    /// Open world rates drops per kill. Gathering has no Kinah and no kills: the unit is the node.
+    /// Pets counts Soul Crystals by zone, per hour only, so the best spot shows; they never enter the drop tables.
+    /// </summary>
+    Mode _mode;
+    Mode SelectedMode => (Kind.SelectedItem as string) switch { "Gathering" => Mode.Gather, "Pets" => Mode.Pets, _ => Mode.Open };
 
     void ApplyModeLabels()
     {
-        bool g = _session != null ? _gathering : GatheringSelected;
-        Tile1Label.Text = g ? "NODES / HR" : "KINAH / HR";
-        Tile2Label.Text = g ? "ITEMS / HR" : "KINAH / KILL";
-        Tile3Label.Text = g ? "ITEMS / NODE" : "KILLS / HR";
-        Tile4Label.Text = g ? "RARE FINDS / HR" : "DROPS / HR";
-        KindHint.Text = g ? "Ore, logs, Odyle, herbs and food. Each gather is a node." : "Mobs that drop Kinah. Each Kinah pickup is a kill.";
-        // the mode's own table comes first; the other appears only when it has rows
-        TableStack.Children.Remove(GatherSection); TableStack.Children.Remove(DropsSection);
-        TableStack.Children.Insert(1, g ? DropsSection : GatherSection);
-        TableStack.Children.Insert(1, g ? GatherSection : DropsSection);
-        GatherSection.Margin = g ? new Thickness(0) : new Thickness(0, 12, 0, 0);
-        DropsSection.Margin = g ? new Thickness(0, 12, 0, 0) : new Thickness(0);
+        var m = _session != null ? _mode : SelectedMode;
+        (Tile1Label.Text, Tile2Label.Text, Tile3Label.Text, Tile4Label.Text, KindHint.Text) = m switch
+        {
+            Mode.Gather => ("NODES / HR", "ITEMS / HR", "ITEMS / NODE", "RARE FINDS / HR", "Ore, logs, Odyle, herbs and food. Each gather is a node; each skill has its own per-node rate."),
+            Mode.Pets => ("SOUL CRYSTALS / HR", "SOUL CRYSTALS", "KILLS / HR", "KINAH / HR", "Pet Soul Crystals from mobs, counted by zone so the best spot per hour shows. Drops and per hour only, no drop %."),
+            _ => ("KINAH / HR", "KINAH / KILL", "KILLS / HR", "DROPS / HR", "Mobs that drop Kinah. Each Kinah pickup is a kill. Souls and Soul Crystals never count as drops."),
+        };
+        // the mode's own table comes first; the others appear only when they have rows
+        TableStack.Children.Remove(DropsSection); TableStack.Children.Remove(GatherSection); TableStack.Children.Remove(PetSection);
+        var order = m switch { Mode.Gather => new[] { GatherSection, DropsSection, PetSection }, Mode.Pets => new[] { PetSection, DropsSection, GatherSection }, _ => new[] { DropsSection, PetSection, GatherSection } };
+        for (int i = 0; i < order.Length; i++) { order[i].Margin = new Thickness(0, i == 0 ? 0 : 12, 0, 0); TableStack.Children.Insert(1 + i, order[i]); }
         if (_session == null) ShowTable(null);
     }
 
-    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = GatheringSelected ? "0" : "—"; KillsHr.Text = "0"; DropsHr.Text = "0"; }
+    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = SelectedMode == Mode.Open ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; }
 
     async Task Toggle() { if (_session == null) await StartTracking(); else await StopTracking(); }
 
@@ -145,6 +148,7 @@ public partial class MainWindow : Window
     {
         if (_region == null) { await DetectNow(); if (_region == null) return; }
         TestBtn.IsEnabled = false; Say("Reading…", "Faint");
+        _mode = SelectedMode;
         try
         {
             var reader = new ScreenReader(_region.Value, _settings.Ocr.Scale);
@@ -174,7 +178,7 @@ public partial class MainWindow : Window
         try
         {
             _settings.Upload.Enabled = ShareChk.IsChecked == true;
-            _gathering = GatheringSelected;
+            _mode = SelectedMode;
             ApplyModeLabels();
             var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName());
             await session.StartAsync();
@@ -220,7 +224,6 @@ public partial class MainWindow : Window
         if (s.Engine.Events > 0) { SessionStore.Append(s.Engine, _items, s.Activity, _settings, shared); msg += $" Saved to your history ({SessionStore.Count()} runs)."; }
         _session = null;
         TableTitle.Text = "LAST RUN · " + s.Activity.ToUpperInvariant();
-        _gathering = GatheringSelected;
         SetTrackingUi(false);
         Say(msg, tone);
     }
@@ -252,83 +255,172 @@ public partial class MainWindow : Window
         if (_hud != null)
         {
             var e = s.Engine; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah;
-            if (_gathering)
-                _hud.Update($"{Fk(t.Drops / h)} items/hr",
-                    $"{Fk(t.Nodes / h)} nodes/hr · {(t.Nodes > 0 ? (t.Drops / (double)t.Nodes).ToString("0.00") : "—")} items/node · {Fk(t.Bonus / h)} rare/hr\n{e.Elapsed:hh\\:mm\\:ss} · {t.Drops} items · {t.Nodes} nodes{(t.Failed > 0 ? $" ({t.Failed} failed)" : "")} · {t.Bonus} rare finds",
-                    (s.Zone != null ? s.Zone + " · " : "") + s.LastLine);
-            else
-                _hud.Update($"{Fk(kinah / h)} Kinah/hr",
-                    $"{Fk(t.Kills / h)} kills/hr · {Fk(t.Drops / h)} drops/hr · {(t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—")} Kinah/kill\n{e.Elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {t.Drops} drops · {t.Kills} kills",
-                    (s.Zone != null ? s.Zone + " · " : "") + s.LastLine);
+            var foot = (s.Zone != null ? s.Zone + " · " : "") + s.LastLine;
+            switch (_mode)
+            {
+                case Mode.Gather:
+                    _hud.Update($"{Fk(t.Drops / h)} items/hr",
+                        $"{Fk(t.Nodes / h)} nodes/hr · {(t.Nodes > 0 ? (t.Drops / (double)t.Nodes).ToString("0.00") : "—")} items/node · {Fk(t.Bonus / h)} rare/hr\n{e.Elapsed:hh\\:mm\\:ss} · {t.Drops} items · {t.Nodes} nodes{(t.Failed > 0 ? $" ({t.Failed} failed)" : "")} · {t.Bonus} rare finds",
+                        foot);
+                    break;
+                case Mode.Pets:
+                    var (best, rate) = BestZone(e.ZoneSnapshot(), h);
+                    _hud.Update($"{Fk(t.Pets / h)} crystals/hr",
+                        $"{Fk(t.Kills / h)} kills/hr · {Fk(kinah / h)} Kinah/hr · {t.Pets} crystals\n{e.Elapsed:hh\\:mm\\:ss} · {t.Kills} kills · {Fk(kinah)} Kinah" + (best != null ? $" · best: {best} {Rate(rate)}/hr" : ""),
+                        foot);
+                    break;
+                default:
+                    _hud.Update($"{Fk(kinah / h)} Kinah/hr",
+                        $"{Fk(t.Kills / h)} kills/hr · {Fk(t.Drops / h)} drops/hr · {(t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—")} Kinah/kill\n{e.Elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {t.Drops} drops · {t.Kills} kills" + (t.Pets > 0 ? $" · {t.Pets} crystals" : ""),
+                        foot);
+                    break;
+            }
         }
     }
 
-    /// <summary>Splits the session's items into mob drops and gathered materials, each with its own denominator.</summary>
-    (List<DropRow> drops, List<DropRow> gathered, long dropCount, long gatherCount, long value) Split(SessionEngine e, double hours, int kills, int nodes)
+    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, List<DropRow> Pets, long DropCount, long GatherCount, long Value, string? BestZone, double BestRate);
+
+    static string Mins(double seconds) { int m = (int)Math.Round(seconds / 60); return m >= 60 ? $"{m / 60} h {m % 60:00} min" : $"{m} min"; }
+    /// <summary>Hours credited to a zone; a zone seen for under half a minute is rated against the whole run instead.</summary>
+    static double ZoneHours(SessionEngine.ZoneStats z, double sessionHours) => z.Seconds >= 30 ? z.Seconds / 3600 : sessionHours;
+    /// <summary>The zone with the most Soul Crystals per hour, among zones with at least a minute of play.</summary>
+    static (string? zone, double rate) BestZone(Dictionary<string, SessionEngine.ZoneStats> zones, double hours)
     {
-        var drops = new List<DropRow>(); var gathered = new List<DropRow>(); long dc = 0, gc = 0, value = 0;
+        string? best = null; double bestRate = 0;
+        foreach (var (zone, z) in zones)
+        {
+            if (z.Pets == 0 || z.Seconds < 60 || zone == SessionEngine.UnknownZone) continue;
+            double r = z.Pets / ZoneHours(z, hours);
+            if (r > bestRate) { best = zone; bestRate = r; }
+        }
+        return (best, bestRate);
+    }
+
+    /// <summary>
+    /// Splits the session into mob drops (rated per kill), gathered materials grouped by skill (each skill rated
+    /// against its own nodes), and pet Soul Crystals grouped by zone (rated per hour in that zone, never per kill).
+    /// </summary>
+    Tables Build(SessionEngine e, double hours, int kills)
+    {
+        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0;
+        var bySkill = new Dictionary<GatherFamily, List<(string name, int total)>>();
+        var bySkillGrade = new Dictionary<string, string>();
         foreach (var r in e.ItemRows())
         {
             int total = r.Count + r.Bound;
             var price = PriceBook.Price(r.Name); if (price != null) value += price.Value * total;
-            if (GatheringCatalog.Find(r.Name) != null) { gc += total; gathered.Add(new DropRow(r.Name, total.ToString("N0"), nodes > 0 ? Pct(total / (double)nodes) : "—", Rate(total / hours))); }
-            else { dc += total; drops.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / hours))); }
+            var g = GatheringCatalog.Find(r.Name);
+            var grade = g?.Grade ?? _items.Get(r.Id)?.Grade ?? "";
+            if (g != null) { gc += total; if (!bySkill.TryGetValue(g.Skill, out var list)) bySkill[g.Skill] = list = new(); list.Add((r.Name, total)); bySkillGrade[r.Name] = grade; }
+            else { dc += total; drops.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / hours), Grade: grade)); }
         }
-        return (drops, gathered, dc, gc, value);
+        var gathered = new List<DropRow>();
+        var stats = e.SkillSnapshot();
+        foreach (var skill in GatherSkills.Order)
+        {
+            if (!bySkill.TryGetValue(skill, out var items) && !stats.ContainsKey(skill)) continue;
+            var st = stats.GetValueOrDefault(skill) ?? new SessionEngine.SkillStats();
+            int ok = st.Nodes - st.Failed;
+            var head = $"{GatherSkills.Label(skill).ToUpperInvariant()}  ·  {st.Nodes} node{(st.Nodes == 1 ? "" : "s")}"
+                     + (st.Failed > 0 ? $" ({st.Failed} failed)" : "")
+                     + (ok > 0 ? $"  ·  plentiful {Math.Round(100.0 * st.Plentiful / ok)}%" : "")
+                     + (st.Nodes > 0 ? $"  ·  {Rate(st.Nodes / hours)} nodes/hr" : "");
+            gathered.Add(new DropRow(head, "", "", "", Header: true));
+            foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
+                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, "")));
+        }
+        // pets: one header per zone, best rate first, each crystal rated against the time spent in that zone
+        var pets = new List<DropRow>();
+        var zones = e.ZoneSnapshot();
+        foreach (var (zone, z) in zones.Where(kv => kv.Value.Pets > 0).OrderByDescending(kv => kv.Value.Pets / ZoneHours(kv.Value, hours)))
+        {
+            double zh = ZoneHours(z, hours);
+            var when = z.Seconds >= 30 ? Mins(z.Seconds) : "zone time not read";
+            pets.Add(new DropRow($"{zone.ToUpperInvariant()}  ·  {when}  ·  {z.Kills} kill{(z.Kills == 1 ? "" : "s")}  ·  {Rate(z.Pets / zh)} crystals/hr", "", "", "", Header: true));
+            foreach (var (name, n) in z.PetsByName.OrderByDescending(x => x.Value))
+                pets.Add(new DropRow(name, n.ToString("N0"), "", Rate(n / zh)));
+        }
+        var (best, bestRate) = BestZone(zones, hours);
+        return new Tables(drops, gathered, pets, dc, gc, value, best, bestRate);
     }
 
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
     {
         double h = Math.Max(elapsed.TotalHours, 1.0 / 3600);
         var t = e.Totals(); long kinah = t.Kinah;   // farming Kinah only; bound Kinah is reward money
-        var s = Split(e, h, t.Kills, t.Nodes);
-        string worth = s.value > 0 ? $" · worth {Fk(s.value)} ({Fk(s.value / h)}/hr)" : "";
+        var s = Build(e, h, t.Kills);
+        string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
         string skipped = t.Rewards > 0 ? $" · {t.Rewards} reward line{(t.Rewards == 1 ? "" : "s")} skipped" : "";
-        if (_gathering)
+        string crystals = t.Pets > 0 ? $" · {t.Pets} soul crystal{(t.Pets == 1 ? "" : "s")}" : "";
+        switch (_mode)
         {
-            KinahHr.Text = Fk(t.Nodes / h);
-            KinahKill.Text = Fk(s.gatherCount / h);
-            KillsHr.Text = t.Nodes > 0 ? (s.gatherCount / (double)t.Nodes).ToString("0.00") : "—";
-            DropsHr.Text = Fk(t.Bonus / h);
-            int ok = t.Nodes - t.Failed;
-            string plent = ok > 0 ? $" · plentiful {Math.Round(100.0 * t.Plentiful / ok)}%" : "";
-            string fails = t.Failed > 0 ? $" ({t.Failed} failed)" : "";
-            Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {s.gatherCount} gathered · {t.Nodes} nodes{fails}{plent} · {t.Bonus} rare finds{worth}" + (kinah > 0 ? $" · {Fk(kinah)} Kinah" : "") + skipped;
-        }
-        else
-        {
-            KinahHr.Text = Fk(kinah / h);
-            KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
-            KillsHr.Text = Fk(t.Kills / h);
-            DropsHr.Text = Fk(s.dropCount / h);
-            Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {s.dropCount} drops · {t.Kills} kills{worth}" + (s.gatherCount > 0 ? $" · {s.gatherCount} gathered" : "") + skipped;
+            case Mode.Gather:
+            {
+                KinahHr.Text = Fk(t.Nodes / h);
+                KinahKill.Text = Fk(s.GatherCount / h);
+                KillsHr.Text = t.Nodes > 0 ? (s.GatherCount / (double)t.Nodes).ToString("0.00") : "—";
+                DropsHr.Text = Fk(t.Bonus / h);
+                int ok = t.Nodes - t.Failed;
+                string plent = ok > 0 ? $" · plentiful {Math.Round(100.0 * t.Plentiful / ok)}%" : "";
+                string fails = t.Failed > 0 ? $" ({t.Failed} failed)" : "";
+                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {s.GatherCount} gathered · {t.Nodes} nodes{fails}{plent} · {t.Bonus} rare finds{worth}" + (kinah > 0 ? $" · {Fk(kinah)} Kinah" : "") + crystals + skipped;
+                break;
+            }
+            case Mode.Pets:
+                KinahHr.Text = Fk(t.Pets / h);
+                KinahKill.Text = t.Pets.ToString("N0");
+                KillsHr.Text = Fk(t.Kills / h);
+                DropsHr.Text = Fk(kinah / h);
+                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {t.Pets} soul crystals · {t.Kills} kills · {Fk(kinah)} Kinah"
+                             + (s.BestZone != null ? $" · best zone: {s.BestZone} ({Rate(s.BestRate)}/hr)" : "")
+                             + (s.DropCount > 0 ? $" · {s.DropCount} drops" : "") + skipped;
+                break;
+            default:
+                KinahHr.Text = Fk(kinah / h);
+                KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
+                KillsHr.Text = Fk(t.Kills / h);
+                DropsHr.Text = Fk(s.DropCount / h);
+                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {s.DropCount} drops · {t.Kills} kills{worth}" + crystals + (s.GatherCount > 0 ? $" · {s.GatherCount} gathered" : "") + skipped;
+                break;
         }
         ShowTable(e, elapsed, s);
     }
 
-    void ShowTable(SessionEngine? e, TimeSpan? elapsed = null, (List<DropRow> drops, List<DropRow> gathered, long dropCount, long gatherCount, long value)? pre = null)
+    void ShowTable(SessionEngine? e, TimeSpan? elapsed = null, Tables? pre = null)
     {
-        var drops = new List<DropRow>(); var gathered = new List<DropRow>();
+        var drops = new List<DropRow>(); var gathered = new List<DropRow>(); var pets = new List<DropRow>();
         int kills = 0, nodes = 0;
+        var m = e == null ? SelectedMode : _mode;
         if (e != null)
         {
             double h = Math.Max((elapsed ?? e.Elapsed).TotalHours, 1.0 / 3600);
             var t = e.Totals(); kills = t.Kills; nodes = t.Nodes;
-            var s = pre ?? Split(e, h, kills, nodes);
-            drops = s.drops; gathered = s.gathered;
+            var s = pre ?? Build(e, h, kills);
+            drops = s.Drops; gathered = s.Gathered; pets = s.Pets;
         }
-        Rows.ItemsSource = drops; GatherRows.ItemsSource = gathered;
+        Rows.ItemsSource = drops; GatherRows.ItemsSource = gathered; PetRows.ItemsSource = pets;
         TableEmpty.Visibility = drops.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         GatherEmpty.Visibility = gathered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        PetEmpty.Visibility = pets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the drop rate per kill and per hour." : "No drops yet.";
         GatherEmpty.Text = e == null ? "Gathered materials show here, with how often each comes per node and per hour." : "Nothing gathered yet.";
-        // the mode's own table always shows; the other only when it has something
-        DropsSection.Visibility = !_gathering || drops.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        GatherSection.Visibility = _gathering || gathered.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        bool g = _session != null ? _gathering : GatheringSelected;
-        if (e == null) { DropsSection.Visibility = g ? Visibility.Collapsed : Visibility.Visible; GatherSection.Visibility = g ? Visibility.Visible : Visibility.Collapsed; }
-        TableNote.Text = g ? "Per-node rates appear once a node is counted: any ore, log, Odyle, herb or food line counts as one node." : "Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.";
-        TableNote.Visibility = (g ? gathered.Count > 0 && nodes == 0 : drops.Count > 0 && kills == 0) ? Visibility.Visible : Visibility.Collapsed;
+        PetEmpty.Text = e == null ? "Soul Crystals show here by zone, with drops and per hour, so the best pet-farming spot stands out." : "No Soul Crystals yet.";
+        // the mode's own table always shows; the others only when they have something
+        DropsSection.Visibility = m == Mode.Open || (e != null && drops.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
+        GatherSection.Visibility = m == Mode.Gather || (e != null && gathered.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
+        PetSection.Visibility = m == Mode.Pets || (e != null && pets.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
+        TableNote.Text = m switch
+        {
+            Mode.Gather => "Per-node rates appear once a node is counted: any ore, log, Odyle, herb or food line counts as one node.",
+            Mode.Pets => "Zone rates appear once the zone has been read from the minimap for a minute.",
+            _ => "Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.",
+        };
+        TableNote.Visibility = m switch
+        {
+            Mode.Gather => gathered.Count > 0 && nodes == 0,
+            Mode.Pets => pets.Count > 0 && pre?.BestZone == null,
+            _ => drops.Count > 0 && kills == 0,
+        } ? Visibility.Visible : Visibility.Collapsed;
     }
 
     static string Pct(double p) => p >= 1 ? p.ToString("0.0") + "×" : p >= .1 ? (p * 100).ToString("0") + "%" : p >= .01 ? (p * 100).ToString("0.0") + "%" : (p * 100).ToString("0.00") + "%";
@@ -348,7 +440,7 @@ public partial class MainWindow : Window
 
     void WhatsSent() => MessageBox.Show(this,
         "When a run ends, these totals go to the public tables:\n\n" +
-        "•  what you're farming and where, gear score bracket, region\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item\n•  app version and a random install ID used only to stop spam\n\n" +
+        "•  what you're farming and where, gear score bracket, region\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
         "Never your character name, server, account, class, level, chat text or screenshots.\nSharing isn't live yet; until the site can receive runs, everything stays on this PC.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
@@ -437,27 +529,37 @@ public partial class MainWindow : Window
         return $"{reads} reads, chat {found}, zone {zone ?? "none"}, status: {Status.Text}";
     }
 
-    /// <summary>Fills the window with a sample session (open world, or gathering) so its layout can be reviewed without the game.</summary>
-    public void ShowDemo(bool gathering = false)
+    /// <summary>Fills the window with a sample session (open world, gathering or pets) so its layout can be reviewed without the game.</summary>
+    public void ShowDemo(string kind = "Open world")
     {
         _demo = true;
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false; UpdateStep2();
         ZoneLbl.Text = "Zone: Western Cantas Valley";
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new Protocol.ItemAcquired(t, _items.IdOf(n), 1, b)); }
-        if (gathering)
+        void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new Protocol.KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new Protocol.CurrencyGained(t, "Oculazen Soul Points", 1)); } }
+        void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new Protocol.PetCrystal(t, n + " Soul Crystal", 1)); }
+        Kind.SelectedItem = Kinds.Contains(kind) ? kind : "Open world"; _mode = SelectedMode;
+        switch (_mode)
         {
-            Kind.SelectedItem = "Gathering"; _gathering = true;
-            Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new Protocol.ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));
-            Drop("Fine Orichalcum Ore", 14); Drop("Pure Orichalcum Ore", 2); Drop("Sapphire Gemstone", 9); Drop("Ruby Gemstone", 6); Drop("Diamond Gemstone", 4); Drop("Fine Sapphire Gemstone", 1);
-            for (int i = 0; i < 11; i++) e.Apply(new Protocol.GatherFailed(t, "Essence Extraction"));
-        }
-        else
-        {
-            Kind.SelectedItem = "Open world"; _gathering = false;
-            for (int i = 0; i < 161; i++) { e.Apply(new Protocol.KinahChanged(t, 3690 + (i % 7) * 40, false)); e.Apply(new Protocol.CurrencyGained(t, "Oculazen Soul Points", 1)); }
-            Drop("Thick hide", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Manastone", 8); Drop("Aether shard", 7); Drop("Enchantment stone", 3); Drop("Greater manastone", 1);
-            Drop("Orichalcum Ore", 6); Drop("Sapphire Gemstone", 1);
+            case Mode.Gather:
+                e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
+                Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new Protocol.ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));
+                Drop("Fine Orichalcum Ore", 14); Drop("Pure Orichalcum Ore", 2); Drop("Sapphire Gemstone", 9); Drop("Ruby Gemstone", 6); Drop("Diamond Gemstone", 4); Drop("Fine Sapphire Gemstone", 1);
+                Drop("Kukuru", 23); Drop("Conide", 11); Drop("Odyle", 31); Drop("Fine Odyle", 3);
+                for (int i = 0; i < 11; i++) e.Apply(new Protocol.GatherFailed(t, "Essence Extraction"));
+                break;
+            case Mode.Pets:
+                e.CreditZone("Western Cantas Valley", 25 * 60); Kills(96, 3690); Pet("Natura", 9); Pet("Fera", 4); Drop("Spiritstone", 12);
+                e.CreditZone("Rock Tomb Hill", 17 * 60 + 17); Kills(71, 2900); Pet("Natura", 3); Pet("Fera", 6); Pet("Oculazen", 1); Drop("Thick hide", 9);
+                break;
+            default:
+                e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
+                Kills(161, 3690);
+                Drop("Thick hide", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Manastone", 8); Drop("Aether shard", 7); Drop("Enchantment stone", 3); Drop("Greater manastone", 1);
+                Drop("Orichalcum Ore", 6); Drop("Sapphire Gemstone", 1);
+                Pet("Natura", 3);
+                break;
         }
         ApplyModeLabels();
         TableTitle.Text = "THIS SESSION";
@@ -477,6 +579,6 @@ public partial class MainWindow : Window
             SetPreview((System.Drawing.Bitmap)b.Clone());
         }
         SetTrackingUi(true);
-        Say(gathering ? "Tracking Gathering · 3,620 reads · last: Sapphire Gemstone acquired." : "Tracking Open world · 3,620 reads · last: Spiritstone acquired.", "Faint");
+        Say(_mode switch { Mode.Gather => "Tracking Gathering · Western Cantas Valley · 3,620 reads · last: Sapphire Gemstone acquired.", Mode.Pets => "Tracking Pets · Rock Tomb Hill · 3,620 reads · last: Obtained 1 Fera Soul Crystals.", _ => "Tracking Open world · Western Cantas Valley · 3,620 reads · last: Spiritstone acquired." }, "Faint");
     }
 }

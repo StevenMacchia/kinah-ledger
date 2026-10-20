@@ -37,6 +37,7 @@ internal static class Program
             {
                 case "pick": return Pick();
                 case "locate": return Locate(settings);
+                case "ocr-file": return OcrFile(pos, opts);
                 case "ui-shot": return UiShot(settings, opts, pos);
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
@@ -215,7 +216,7 @@ options: --process aion[,other]   --device <adapter name>");
             Console.WriteLine("Run too short or empty; nothing uploaded.");
             return 0;
         }
-        var payload = RunPayload.Build(engine, s, zones.Slug(engine.InstanceId ?? engine.ZoneId));
+        var payload = RunPayload.Build(engine, s, s.Ocr.Activity, zones.Slug(engine.InstanceId ?? engine.ZoneId));
         var sent = Uploader.SendAsync(payload, s.Upload).GetAwaiter().GetResult();
         Console.WriteLine(sent ? "Run shared anonymously." : "Run kept on this PC.");
         return 0;
@@ -230,6 +231,23 @@ options: --process aion[,other]   --device <adapter name>");
         if (r == null) { Console.WriteLine("Cancelled."); return 1; }
         RegionStore.Save(r.Value);
         Console.WriteLine($"Saved chat region {r.Value.X},{r.Value.Y},{r.Value.Width},{r.Value.Height}. Next: `ocr-test` to check it reads, then `watch`.");
+        return 0;
+    }
+
+    /// <summary>Runs recognition on an image file, plain and boosted, to compare what each sees. For tuning against real screenshots.</summary>
+    static int OcrFile(List<string> pos, Dictionary<string, string> o)
+    {
+        if (pos.Count == 0) throw new ArgumentException("usage: ocr-file <image> [--scale 2]");
+        int scale = int.TryParse(o.GetValueOrDefault("scale"), out var sc) ? sc : 2;
+        using var bmp = Task.Run(() => ScreenReader.LoadAsync(pos[0])).GetAwaiter().GetResult();
+        Console.WriteLine($"{pos[0]}: {bmp.Width} × {bmp.Height}");
+        foreach (var boost in new[] { false, true })
+        {
+            var lines = Task.Run(() => ScreenReader.ReadBitmapAsync(bmp, boost, scale)).GetAwaiter().GetResult();
+            Console.WriteLine($"== {(boost ? "boosted" : "plain")}: {lines.Count} line(s)");
+            foreach (var l in lines) Console.WriteLine("  " + l);
+        }
+        if (o.ContainsKey("save")) { using var b = ScreenReader.Boost(bmp); b.Save("boosted.png", System.Drawing.Imaging.ImageFormat.Png); Console.WriteLine("boosted image saved to boosted.png"); }
         return 0;
     }
 
@@ -284,7 +302,7 @@ options: --process aion[,other]   --device <adapter name>");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("gathering"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world");
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -317,6 +335,9 @@ options: --process aion[,other]   --device <adapter name>");
             "Orichalcurn Ore acquired.",
             "Fresh Fruit x3 acquired.",
             "Obtained 1 Oculazen Soul Points.",
+            "Obtained 1 Natura Soul Crystals.",
+            "Obtained 2 Fera Soul Crystals.",
+            "Increased Pet Insight Level Oculazen.",
             "Acquired 520 Kina.",
             "Acquired 13,000 Kina (Bound).",
             "Acquired Artisan's Refining Stone (Bound) x3.",
@@ -364,6 +385,7 @@ options: --process aion[,other]   --device <adapter name>");
         ItemAcquired a => $"{items.NameOf(a.ItemId)} ×{a.Count}{(a.Bound ? " (bound)" : "")}",
         MobKilled => "kill",
         CurrencyGained c => $"{c.Name} +{c.Amount:N0} (counts as a kill, not a drop)",
+        PetCrystal p => $"pet: {p.Name} ×{p.Count} (Pets table, by zone; not a drop)",
         RewardReceived r => $"reward: {r.Name} ×{r.Count} (skipped)",
         GatherFailed f => $"{f.Skill} failed (node attempt, no yield)",
         ZoneChanged z => $"zone {z.ZoneId}",

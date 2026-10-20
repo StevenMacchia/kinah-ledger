@@ -7,6 +7,35 @@ public sealed record GatherItem(string Name, string Grade, GatherFamily Family, 
 {
     /// <summary>A line for a primary resource means one node was gathered; gemstones ride along with ore and don't count as nodes.</summary>
     public bool IsNode => Family != GatherFamily.Gemstone;
+    /// <summary>The skill whose nodes this comes from. Gemstones come out of ore nodes.</summary>
+    public GatherFamily Skill => Family == GatherFamily.Gemstone ? GatherFamily.Ore : Family;
+}
+
+public static class GatherSkills
+{
+    public static readonly GatherFamily[] Order = { GatherFamily.Ore, GatherFamily.Log, GatherFamily.Odyle, GatherFamily.Herb, GatherFamily.Food };
+
+    public static string Label(GatherFamily f) => f switch
+    {
+        GatherFamily.Ore => "Mining · ore and gemstones",
+        GatherFamily.Log => "Logging · logs",
+        GatherFamily.Odyle => "Essence extraction · Odyle",
+        GatherFamily.Herb => "Herbs",
+        GatherFamily.Food => "Cooking ingredients",
+        _ => f.ToString()
+    };
+
+    /// <summary>Which skill a failure line belongs to, from the words the game uses ("Essence Extraction failed").</summary>
+    public static GatherFamily? FromSkillText(string skill)
+    {
+        var s = skill.ToLowerInvariant();
+        if (s.Contains("essence") || s.Contains("extract") || s.Contains("odyle")) return GatherFamily.Odyle;
+        if (s.Contains("min") || s.Contains("ore")) return GatherFamily.Ore;
+        if (s.Contains("log") || s.Contains("wood") || s.Contains("lumber")) return GatherFamily.Log;
+        if (s.Contains("herb") || s.Contains("alchem") || s.Contains("harvest")) return GatherFamily.Herb;
+        if (s.Contains("cook") || s.Contains("food") || s.Contains("collect") || s.Contains("forag")) return GatherFamily.Food;
+        return null;
+    }
 }
 
 /// <summary>
@@ -16,7 +45,7 @@ public sealed record GatherItem(string Name, string Grade, GatherFamily Family, 
 public static class GatheringCatalog
 {
     // declared before Spec: static fields initialize in textual order
-    static readonly (string, string)[] Metal = { ("", "Common"), ("Fine ", "Rare"), ("Pure ", "Legend"), ("Radiant ", "Unique") };
+    static readonly (string, string)[] Metal = { ("", "Common"), ("Fine ", "Rare"), ("Pure ", "Epic"), ("Radiant ", "Unique") };
 
     static readonly (string[] names, GatherFamily family, (string prefix, string grade)[] tiers)[] Spec =
     {

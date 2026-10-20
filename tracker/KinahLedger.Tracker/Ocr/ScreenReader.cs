@@ -65,6 +65,50 @@ public sealed class ScreenReader
         return (dst, f);
     }
 
+    /// <summary>
+    /// Makes coloured chat text readable: each pixel becomes its brightest channel (so green, blue and yellow
+    /// item names are as bright as white text), the contrast is stretched, and the result is inverted to
+    /// dark text on a light field, which the recognizer handles best.
+    /// </summary>
+    public static unsafe Bitmap Boost(Bitmap src)
+    {
+        var dst = new Bitmap(src.Width, src.Height, PixelFormat.Format24bppRgb);
+        var rect = new Rectangle(0, 0, src.Width, src.Height);
+        var rs = src.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        var ds = dst.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            const int lo = 70, hi = 235;
+            for (int y = 0; y < src.Height; y++)
+            {
+                byte* s = (byte*)rs.Scan0 + y * rs.Stride;
+                byte* d = (byte*)ds.Scan0 + y * ds.Stride;
+                for (int x = 0; x < src.Width; x++, s += 4, d += 3)
+                {
+                    int v = Math.Max(s[0], Math.Max(s[1], s[2]));
+                    v = (v - lo) * 255 / (hi - lo);
+                    v = v < 0 ? 0 : v > 255 ? 255 : v;
+                    byte o = (byte)(255 - v);
+                    d[0] = o; d[1] = o; d[2] = o;
+                }
+            }
+        }
+        finally { src.UnlockBits(rs); dst.UnlockBits(ds); }
+        return dst;
+    }
+
+    /// <summary>Recognizes a bitmap the way the live reader does: optional boost, then upscale.</summary>
+    public static async Task<List<string>> ReadBitmapAsync(Bitmap raw, bool boost, int scale)
+    {
+        using var src = boost ? Boost(raw) : (Bitmap)raw.Clone();
+        var (bmp, _) = Prepare(src, scale);
+        using (bmp)
+        {
+            var result = await Recognize(bmp);
+            return result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
+        }
+    }
+
     static async Task<OcrResult> Recognize(Bitmap bmp)
     {
         using var ms = new MemoryStream();
@@ -76,6 +120,26 @@ public sealed class ScreenReader
         return await Engine.RecognizeAsync(soft);
     }
 
+    /// <summary>Loads an image file (PNG, JPEG, WebP where Windows has the codec) into a 32-bit bitmap.</summary>
+    public static async Task<Bitmap> LoadAsync(string path)
+    {
+        using var fs = File.OpenRead(path);
+        using var ras = fs.AsRandomAccessStream();
+        var decoder = await BitmapDecoder.CreateAsync(ras);
+        using var soft = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+        var bmp = new Bitmap(soft.PixelWidth, soft.PixelHeight, PixelFormat.Format32bppArgb);
+        var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            var buffer = new Windows.Storage.Streams.Buffer((uint)(data.Stride * bmp.Height));
+            soft.CopyToBuffer(buffer);
+            var bytes = System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.ToArray(buffer);
+            System.Runtime.InteropServices.Marshal.Copy(bytes, 0, data.Scan0, Math.Min(bytes.Length, data.Stride * bmp.Height));
+        }
+        finally { bmp.UnlockBits(data); }
+        return bmp;
+    }
+
     public async Task<List<string>> ReadAsync(string? savePng = null)
     {
         using var raw = Capture();
@@ -83,7 +147,8 @@ public sealed class ScreenReader
         var k = Math.Min(1.0, Math.Min(166.0 / raw.Width, 76.0 / raw.Height));
         var small = new Bitmap(raw, new Size(Math.Max(1, (int)(raw.Width * k)), Math.Max(1, (int)(raw.Height * k))));
         lock (_lock) { _thumb?.Dispose(); _thumb = small; }
-        var (bmp, _) = Prepare(raw, _scale);
+        using var boosted = Boost(raw);
+        var (bmp, _) = Prepare(boosted, _scale);
         using (bmp)
         {
             var result = await Recognize(bmp);

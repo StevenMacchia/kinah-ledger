@@ -18,16 +18,14 @@ public sealed class TrackerSession
     ScreenReader? _reader;
     Task? _loop;
     DateTime _zoneAt = DateTime.MinValue;
-    string? _lastZone;
-    DateTime _zoneSince;
 
     public SessionEngine Engine { get; }
     public string Kind { get; }
     public Rectangle? Region { get; private set; }
     public bool ManualRegion { get; }
-    public string? Zone { get; private set; }
+    public string? Zone => Engine.Zone;
     /// <summary>Seconds spent per detected zone, so the run can be attributed to where most of it happened.</summary>
-    public Dictionary<string, double> ZoneSeconds { get; } = new();
+    public Dictionary<string, double> ZoneSeconds => Engine.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).ToDictionary(kv => kv.Key, kv => kv.Value.Seconds);
     public long Reads { get; private set; }
     public int Unaligned => _tracker.Unaligned;
     public string LastError { get; private set; } = "";
@@ -55,7 +53,8 @@ public sealed class TrackerSession
     {
         get
         {
-            var z = ZoneSeconds.Count > 0 ? ZoneSeconds.MaxBy(kv => kv.Value).Key : Zone;
+            var zs = ZoneSeconds;
+            var z = zs.Count > 0 ? zs.MaxBy(kv => kv.Value).Key : Zone;
             return z != null ? $"{Kind} · {z}" : Kind;
         }
     }
@@ -98,10 +97,7 @@ public sealed class TrackerSession
         try
         {
             var (zone, _) = await ZoneLocator.DetectAsync(game);
-            var now = DateTime.UtcNow;
-            if (_lastZone != null) ZoneSeconds[_lastZone] = ZoneSeconds.GetValueOrDefault(_lastZone) + (now - _zoneSince).TotalSeconds;
-            if (zone != null) Zone = zone;
-            _lastZone = zone ?? _lastZone; _zoneSince = now;
+            Engine.SetZone(zone);
         }
         catch (Exception ex) { CrashLog.Write("zone", ex); }
         _zoneAt = DateTime.UtcNow;
@@ -151,7 +147,6 @@ public sealed class TrackerSession
             int spent = (int)(DateTime.UtcNow - t0).TotalMilliseconds;
             if (spent < _interval) { try { await Task.Delay(_interval - spent, ct); } catch (TaskCanceledException) { } }
         }
-        if (_lastZone != null) ZoneSeconds[_lastZone] = ZoneSeconds.GetValueOrDefault(_lastZone) + (DateTime.UtcNow - _zoneSince).TotalSeconds;
         Engine.Finish();
     }
 
@@ -163,7 +158,7 @@ public sealed class TrackerSession
     }
 
     public Task<bool> UploadAsync(Settings s) =>
-        Eligible ? Uploader.SendAsync(RunPayload.Build(Engine, s, Activity), s.Upload) : Task.FromResult(false);
+        Eligible ? Uploader.SendAsync(RunPayload.Build(Engine, s, Kind, Activity), s.Upload) : Task.FromResult(false);
 }
 
 /// <summary>What the window remembers between runs, kept per user.</summary>

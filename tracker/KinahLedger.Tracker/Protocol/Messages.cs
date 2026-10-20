@@ -8,6 +8,8 @@ public sealed record KinahChanged(DateTime Time, long Delta, bool Bound) : GameE
 public sealed record MobKilled(DateTime Time, long MobId) : GameEvent(Time);
 /// <summary>Points-type pickups (Soul Points, Abyss Points). Guaranteed per kill, so they mark kills and never count as drops.</summary>
 public sealed record CurrencyGained(DateTime Time, string Name, long Amount) : GameEvent(Time);
+/// <summary>A pet Soul Crystal ("Obtained 1 Natura Soul Crystals."). Tracked by zone for pet farming; never a drop, never a kill.</summary>
+public sealed record PetCrystal(DateTime Time, string Name, int Count) : GameEvent(Time);
 /// <summary>A gather attempt that yielded nothing ("Essence Extraction failed"). Counts as a node attempt.</summary>
 public sealed record GatherFailed(DateTime Time, string Skill) : GameEvent(Time);
 /// <summary>A quest, title or box reward ("Acquired Artisan's Refining Stone (Bound) x3."). Logged, never counted as farming.</summary>

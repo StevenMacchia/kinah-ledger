@@ -82,15 +82,16 @@ public static class WpfApp
     }
 
     /// <summary>Renders the window (and the panel) off-screen to PNG files so the layout can be reviewed without a desktop session.</summary>
-    public static void Shot(Settings settings, string dir, bool demo, bool gathering = false)
+    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world")
     {
         Ensure();
         Directory.CreateDirectory(dir);
         var w = new MainWindow(settings) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
-        if (demo) w.ShowDemo(gathering);
+        if (demo) w.ShowDemo(kind);
         DoEvents();
-        Save((FrameworkElement)w.Content, Path.Combine(dir, demo ? (gathering ? "ui-main-gathering.png" : "ui-main-tracking.png") : "ui-main.png"), 800 - 16);
+        var name = !demo ? "ui-main.png" : kind switch { "Gathering" => "ui-main-gathering.png", "Pets" => "ui-main-pets.png", _ => "ui-main-tracking.png" };
+        Save((FrameworkElement)w.Content, Path.Combine(dir, name), 800 - 16);
         w.Close();
 
         var h = new HudWindow { Left = -12000, Top = -12000, ShowActivated = false };

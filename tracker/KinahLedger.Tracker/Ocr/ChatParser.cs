@@ -46,6 +46,7 @@ public sealed partial class ChatParser
         var line = Timestamp().Replace(rawLine.Trim(), "");
         if (line.Length == 0) yield break;
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
+        if (line.StartsWith("Increased ", StringComparison.OrdinalIgnoreCase)) yield break;   // "Increased Pet Insight Level ...": progress, not loot
 
         var gf = GatherFail().Match(line);
         if (gf.Success) { yield return new GatherFailed(time, gf.Groups["skill"].Value.Trim()); yield break; }
@@ -87,6 +88,13 @@ public sealed partial class ChatParser
             // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
+            // "Obtained 1 Natura Soul Crystals.": a pet crystal, kept apart from drops and rated by zone, not by kill
+            var pet = System.Text.RegularExpressions.Regex.Match(name, @"^(?<pet>.+?)\s+soul\s+crysta\w{0,3}$", RegexOptions.IgnoreCase);
+            if (pet.Success)
+            {
+                yield return new PetCrystal(time, pet.Groups["pet"].Value.Trim() + " Soul Crystal", Math.Clamp(n, 1, 9999));
+                yield break;
+            }
             // "Obtained 1 Oculazen Soul Points." is a per-kill payout, not loot
             if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\b(?:points?|souls?)$", RegexOptions.IgnoreCase))
             {
