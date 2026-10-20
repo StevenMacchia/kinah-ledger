@@ -15,8 +15,9 @@ public sealed class SessionEngine
     public long KinahBound { get; private set; }
     public int KillsDefeated { get; private set; }
     public int KillsXp { get; private set; }
-    /// <summary>Kill lines when the tab shows them, otherwise experience lines as the next best count.</summary>
-    public int Kills => Math.Max(KillsDefeated, KillsXp);
+    public int KinahDrops { get; private set; }
+    /// <summary>Best available kill count: kill lines, experience lines, or Kinah pickups (one per mob in open-world farming).</summary>
+    public int Kills => Math.Max(KillsDefeated, Math.Max(KillsXp, KinahDrops));
     public int Events { get; private set; }
     public long? ZoneId { get; private set; }
     public long? InstanceId { get; private set; }
@@ -42,6 +43,7 @@ public sealed class SessionEngine
                     break;
                 case KinahChanged k:
                     if (k.Bound) KinahBound += k.Delta; else Kinah += k.Delta;
+                    if (k.Delta > 0) KinahDrops++;
                     break;
                 case MobKilled:
                     KillsDefeated++;

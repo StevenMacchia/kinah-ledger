@@ -13,7 +13,7 @@ using WF = System.Windows.Forms;
 
 namespace KinahLedger.Ui;
 
-public sealed record DropRow(string Name, string Drops, string PerKill, string PerHour, string Bound);
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour);
 
 public partial class MainWindow : Window
 {
@@ -118,7 +118,7 @@ public partial class MainWindow : Window
             _settings.Upload.Enabled = ShareChk.IsChecked == true;
             _session = new TrackerSession(_region.Value, _settings, _items, ActivityName());
             _session.Start();
-            if (HudChk.IsChecked == true) { _hud = new HudWindow(); _hud.Show(); }
+            if (HudChk.IsChecked == true) { _hud = new HudWindow { Owner = this }; _hud.Show(); }
             TableTitle.Text = "DROPS THIS SESSION";
             ShowTable(_session.Engine);
             SetTrackingUi(true);
@@ -134,13 +134,17 @@ public partial class MainWindow : Window
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
         await s.StopAsync();
         CloseHud();
+        // closing the panel hands focus to whatever is behind it, usually the game, which then covers this window
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Show(); Activate(); Topmost = true; Topmost = false;
         FillNumbers(s.Engine, s.Engine.Elapsed);
-        string msg, tone = "Faint";
-        if (!s.Eligible) msg = "Stopped. Under 5 minutes or no loot seen, so this run isn't shared. Kept on this PC.";
-        else if (ShareChk.IsChecked != true) msg = "Stopped. Run kept on this PC (sharing is off).";
-        else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = "Stopped. Run kept on this PC (sharing isn't live yet).";
-        else if (await s.UploadAsync(_settings)) { msg = "Stopped. Run shared anonymously."; tone = "Good"; }
+        string msg, tone = "Faint"; bool shared = false;
+        if (!s.Eligible) msg = "Stopped. Under 5 minutes or no loot seen, so this run isn't shared.";
+        else if (ShareChk.IsChecked != true) msg = "Stopped. Sharing is off, so this run stays on this PC.";
+        else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = "Stopped. Sharing isn't live yet, so this run stays on this PC.";
+        else if (await s.UploadAsync(_settings)) { msg = "Stopped. Run shared anonymously."; tone = "Good"; shared = true; }
         else { msg = "Stopped. Couldn't reach the site; run kept on this PC."; tone = "Warn"; }
+        if (s.Engine.Events > 0) { SessionStore.Append(s.Engine, _items, s.Activity, _settings, shared); msg += $" Saved to your history ({SessionStore.Count()} runs)."; }
         _session = null;
         TableTitle.Text = "LAST RUN · " + s.Activity.ToUpperInvariant();
         SetTrackingUi(false);
@@ -182,7 +186,7 @@ public partial class MainWindow : Window
         KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
         KillsHr.Text = Fk(t.Kills / h);
         DropsHr.Text = Fk(t.Drops / h);
-        Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(t.Kinah)} Kinah + {Fk(t.KinahBound)} bound · {t.Drops} drops · {t.Kills} kills";
+        Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {t.Drops} drops · {t.Kills} kills";
         ShowTable(e, elapsed);
     }
 
@@ -196,7 +200,7 @@ public partial class MainWindow : Window
             foreach (var r in e.ItemRows())
             {
                 int total = r.Count + r.Bound;
-                rows.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / h), r.Bound > 0 ? r.Bound.ToString("N0") : ""));
+                rows.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / h)));
             }
         }
         Rows.ItemsSource = rows;
@@ -255,9 +259,10 @@ public partial class MainWindow : Window
 
     void OnStateChanged(object? sender, EventArgs e)
     {
-        if (WindowState != WindowState.Minimized) return;
+        // only a deliberate minimize while tracking goes to the tray; otherwise the window behaves like any other
+        if (WindowState != WindowState.Minimized || _session == null) return;
         Hide();
-        if (_session != null && !_balloonShown) { _balloonShown = true; _tray.ShowBalloonTip(3000, "Kinah Ledger", "Still tracking. Double-click the tray icon to open the window.", WF.ToolTipIcon.None); }
+        if (!_balloonShown) { _balloonShown = true; _tray.ShowBalloonTip(4000, "Kinah Ledger is still tracking", "It's in the tray by the clock. Double-click the icon to bring the window back.", WF.ToolTipIcon.Info); }
     }
 
     void OnClosingWindow(object? sender, CancelEventArgs e)
@@ -265,8 +270,8 @@ public partial class MainWindow : Window
         SavePrefs();
         if (_session != null && !_quitting)
         {
-            var r = MessageBox.Show(this, "Stop tracking and quit?\n\nChoose No to keep tracking from the tray.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (r == MessageBoxResult.No) { e.Cancel = true; WindowState = WindowState.Minimized; return; }
+            var r = MessageBox.Show(this, "You're still tracking. Stop and quit?\n\nYes stops the run and closes Kinah Ledger.\nNo keeps tracking and leaves this window open.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (r == MessageBoxResult.No) { e.Cancel = true; return; }
             e.Cancel = true; _quitting = true;
             _ = StopTracking().ContinueWith(_ => Dispatcher.Invoke(Close));
             return;
@@ -314,11 +319,9 @@ public partial class MainWindow : Window
         _region = new DRect(24, 980, 812, 140); UpdateStep2();
         Kind.SelectedItem = "Open world"; Place.Text = "Lakrum elites";
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
-        for (int i = 0; i < 161; i++) e.Apply(new Protocol.MobKilled(t, i));
-        for (int i = 0; i < 150; i++) e.Apply(new Protocol.KinahChanged(t, 3690, false));
-        for (int i = 0; i < 12; i++) e.Apply(new Protocol.KinahChanged(t, 9000, true));
+        for (int i = 0; i < 161; i++) e.Apply(new Protocol.KinahChanged(t, 3690 + (i % 7) * 40, false));
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new Protocol.ItemAcquired(t, _items.IdOf(n), 1, b)); }
-        Drop("Thick hide", 41); Drop("Essence", 26); Drop("Lesser essence", 19); Drop("Manastone", 8); Drop("Aether shard", 7); Drop("Enchantment stone", 3); Drop("Greater manastone", 1); Drop("Radiant Odyle (Bound)", 5, true);
+        Drop("Thick hide", 41); Drop("Essence", 26); Drop("Lesser essence", 19); Drop("Manastone", 8); Drop("Aether shard", 7); Drop("Radiant Odyle", 5, true); Drop("Enchantment stone", 3); Drop("Greater manastone", 1);
         TableTitle.Text = "DROPS THIS SESSION";
         FillNumbers(e, TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17));
         using (var b = new System.Drawing.Bitmap(166, 76))

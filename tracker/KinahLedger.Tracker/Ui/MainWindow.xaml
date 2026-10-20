@@ -19,7 +19,7 @@
         </StackPanel>
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
           <TextBlock HorizontalAlignment="Right" FontSize="13"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-          <TextBlock x:Name="Version" Text="v0.4.1" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
+          <TextBlock x:Name="Version" Text="v0.4.2" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
         </StackPanel>
       </Grid>
 
@@ -36,7 +36,7 @@
               <TextBlock Style="{StaticResource StepTitle}" Text="In the game"/>
             </StackPanel>
             <TextBlock Style="{StaticResource BodyStyle}" Margin="36,7,0,0"
-                       Text="Chat settings → add a tab that shows System Notifications (loot and Kinah). Tick Combat as well if you want drop rates per kill; that's where kill lines are. Play in borderless or windowed mode."/>
+                       Text="Chat settings → add a tab that shows only System Notifications; that's where loot and Kinah lines appear. Play in borderless or windowed mode so the chat can be read."/>
             <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
               <Border Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="2"/></Border>
               <TextBlock Style="{StaticResource StepTitle}" Text="Chat area"/>
@@ -114,13 +114,12 @@
           <Border Background="{StaticResource Card2}" CornerRadius="6" Height="30">
             <Grid>
               <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/><ColumnDefinition Width="84"/><ColumnDefinition Width="104"/><ColumnDefinition Width="104"/><ColumnDefinition Width="84"/>
+                <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
               </Grid.ColumnDefinitions>
               <TextBlock Style="{StaticResource LabelStyle}" Text="ITEM" VerticalAlignment="Center" Margin="12,0,0,0"/>
               <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
-              <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER KILL" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+              <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="DROP %" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" ToolTip="Drops divided by kills. Kills are counted from Kinah pickups (one per mob), or from kill lines when the chat shows them."/>
               <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
-              <TextBlock Grid.Column="4" Style="{StaticResource LabelStyle}" Text="BOUND" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
             </Grid>
           </Border>
           <Grid MinHeight="168">
@@ -131,13 +130,12 @@
                     <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Height="34">
                       <Grid>
                         <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="*"/><ColumnDefinition Width="84"/><ColumnDefinition Width="104"/><ColumnDefinition Width="104"/><ColumnDefinition Width="84"/>
+                          <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="12,0,8,0" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
                         <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{StaticResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
-                        <TextBlock Grid.Column="2" Text="{Binding PerKill}" Foreground="{StaticResource Mint}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
+                        <TextBlock Grid.Column="2" Text="{Binding DropPct}" Foreground="{StaticResource Mint}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
                         <TextBlock Grid.Column="3" Text="{Binding PerHour}" Foreground="{StaticResource Violet}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
-                        <TextBlock Grid.Column="4" Text="{Binding Bound}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
                       </Grid>
                     </Border>
                   </DataTemplate>
@@ -148,7 +146,7 @@
                        Text="Drops show here as they're read, with the drop rate per kill and per hour."/>
           </Grid>
           <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" FontSize="12" Margin="0,8,0,0" Visibility="Collapsed"
-                     Text="Per-kill rates need kill lines. Tick Combat in the chat tab's settings to include them."/>
+                     Text="Drop % appears once kills are counted. Kills come from Kinah pickups, one per mob."/>
         </StackPanel>
       </Border>
 

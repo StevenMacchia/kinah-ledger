@@ -22,10 +22,50 @@ public sealed class ItemDictionary
     {
         var key = Norm(name);
         if (_byName.TryGetValue(key, out var id)) return id;
+
+        // a misread of a known name ("Fresh Frult") snaps to the closest real item, so one drop doesn't become two rows
+        var close = Closest(key);
+        if (close != null) { _byName[key] = close.Value; return close.Value; }
+
         long synthetic = -(long)(Fnv(key) & 0x7FFFFFFF) - 1;
         _byId.TryAdd(synthetic, new ItemInfo(synthetic, name.Trim(), "", !key.EndsWith("(bound)"), "", ""));
         _byName[key] = synthetic;
         return synthetic;
+    }
+
+    long? Closest(string key)
+    {
+        if (key.Length < 4) return null;
+        int budget = Math.Max(1, key.Length / 6);
+        long? best = null; int bestD = budget + 1;
+        foreach (var kv in _byName)
+        {
+            if (Math.Abs(kv.Key.Length - key.Length) > budget || kv.Key[0] != key[0]) continue;
+            int d = Edit(key, kv.Key, bestD - 1);
+            if (d < bestD) { bestD = d; best = kv.Value; if (d == 0) break; }
+        }
+        return bestD <= budget ? best : null;
+    }
+
+    /// <summary>Levenshtein distance with a cutoff, so the scan over thousands of names stays cheap.</summary>
+    static int Edit(string a, string b, int max)
+    {
+        if (max < 0) return int.MaxValue;
+        var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i; int rowMin = cur[0];
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+                rowMin = Math.Min(rowMin, cur[j]);
+            }
+            if (rowMin > max) return int.MaxValue;
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length];
     }
 
     static string Norm(string s) => string.Join(' ', s.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));

@@ -278,8 +278,15 @@ options: --process aion[,other]   --device <adapter name>");
             "Acquired Aether shard *3.",
             "Acquired Greater manastone.",
             "Acquired Radiant Odyle (Bound) ×4.",
+            "Spiritstone acquired.",
+            "Fresh Fruit acquirea.",
+            "Fresh Fruit x3 acquired.",
+            "Obtained 1 Oculazen Soul Points.",
+            "Acquired 520 Kina.",
             "You defeated Flame Sprite.",
             "Flame Sprite dealt 1,204 damage to you.",
+            "[Vina] where did the filthy asmos go",
+            "[CharlieNyerk] [Force Recruitment] COME",
             "Guild chat: anyone selling Odyle?"
         };
         Console.WriteLine("Parser:");

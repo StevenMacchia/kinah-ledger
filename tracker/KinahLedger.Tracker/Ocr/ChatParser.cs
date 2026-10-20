@@ -24,6 +24,10 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"\b(?:acquired|obtained|looted|picked up)\s+(?<name>.+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s*\.?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex Item();
 
+    /// <summary>The game's own item line: "Fresh Fruit acquired." (name first). "acquire[da]" tolerates the common misread.</summary>
+    [GeneratedRegex(@"^(?<name>[^\[\]]+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s+acquire[da]\.?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex ItemNameFirst();
+
     [GeneratedRegex(@"\bdefeated\s+(?<mob>.+?)\s*\.?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex Kill();
 
@@ -57,7 +61,8 @@ public sealed partial class ChatParser
             yield break;
         }
 
-        var it = Item().Match(line);
+        var it = ItemNameFirst().Match(line);
+        if (!it.Success) it = Item().Match(line);
         if (it.Success)
         {
             var name = it.Groups["name"].Value.Trim().TrimEnd('.').Trim('[', ']', ' ');
@@ -67,6 +72,8 @@ public sealed partial class ChatParser
             int lead_n = 0;
             if (lead.Success) { lead_n = int.Parse(lead.Groups[1].Value); name = lead.Groups[2].Value; }
             bool bound = name.Contains("(bound)", StringComparison.OrdinalIgnoreCase);
+            // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
+            if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
             yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 9999), bound);
         }
