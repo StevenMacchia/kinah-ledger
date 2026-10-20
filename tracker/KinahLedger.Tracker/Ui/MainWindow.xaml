@@ -150,6 +150,9 @@
               <CheckBox x:Name="ShareChk" Content="Share runs anonymously" Margin="18,0,0,0"/>
               <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="SentLink" Style="{StaticResource LinkStyle}">what's sent?</Hyperlink></TextBlock>
             </StackPanel>
+            <!-- optional: ties this PC's runs to a profile on the site; runs stay anonymous without it -->
+            <TextBlock Margin="36,8,0,0" FontSize="12.5" Foreground="{StaticResource Muted}"
+                       ToolTip="Paste this into your profile on the site to see your own runs there. It only ties runs from this PC to your profile; it says nothing about who you are."><Run Text="Profile link code "/><Run x:Name="LinkCodeRun" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource Gold}"/><Run Text="   "/><Hyperlink x:Name="CopyCodeLink" Style="{StaticResource LinkStyle}">copy</Hyperlink></TextBlock>
           </StackPanel>
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
             <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start tracking" Width="196" Height="50"/>

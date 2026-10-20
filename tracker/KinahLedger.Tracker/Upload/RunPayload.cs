@@ -23,6 +23,12 @@ public static class InstallId
     }
 
     public static void Reset() { var p = PathFor(); if (File.Exists(p)) File.Delete(p); }
+
+    /// <summary>
+    /// A short form of the install ID a player can paste into their profile on the site, so this PC's runs show up there.
+    /// Optional: without it runs stay anonymous. It says nothing about who the player is.
+    /// </summary>
+    public static string LinkCode() { var id = Get(); return $"KL-{id.Substring(0, 4).ToUpperInvariant()}-{id.Substring(4, 2).ToUpperInvariant()}"; }
 }
 
 /// <summary>

@@ -60,6 +60,8 @@ public partial class MainWindow : Window
         StartBtn.Click += async (_, _) => await Toggle();
         SiteLink.Click += (_, _) => Open(RepoUrl);
         SentLink.Click += (_, _) => WhatsSent();
+        try { LinkCodeRun.Text = Upload.InstallId.LinkCode(); } catch (Exception) { LinkCodeRun.Text = "unavailable"; }
+        CopyCodeLink.Click += (_, _) => { try { Clipboard.SetText(LinkCodeRun.Text); Say("Link code copied. Paste it into your profile on the site to see your runs there.", "Good"); } catch (Exception) { Say("Couldn't reach the clipboard; the code is " + LinkCodeRun.Text, "Warn"); } };
         ResetLink.Click += (_, _) => { _region = null; _prefs.ManualChat = false; RegionStore.Clear(); UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Back to automatic: the chat is found when you start.", "Faint"); };
         LogsLink.Click += (_, _) => Open(CrashLog.Dir);
 
@@ -441,7 +443,9 @@ public partial class MainWindow : Window
     void WhatsSent() => MessageBox.Show(this,
         "When a run ends, these totals go to the public tables:\n\n" +
         "•  what you're farming and where, gear score bracket, region\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
-        "Never your character name, server, account, class, level, chat text or screenshots.\nSharing isn't live yet; until the site can receive runs, everything stays on this PC.",
+        "Never your character name, server, account, class, level, chat text or screenshots.\n" +
+        "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n" +
+        "Sharing isn't live yet; until the site can receive runs, everything stays on this PC.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- tray, hotkey, window state ---------------- */
