@@ -37,6 +37,8 @@ public sealed class TrackerSession
     public string LastError { get; private set; } = "";
     public string LastLine { get; private set; } = "";
     public string DetectNote { get; private set; } = "";
+    /// <summary>Why nothing is being read right now ("chrome covers the chat"); empty while reading.</summary>
+    public string Paused { get; private set; } = "";
     public bool Running => _loop != null && !_loop.IsCompleted;
     public bool Eligible => Engine.Elapsed.TotalMinutes >= 5 && Engine.Events > 0;
     public Bitmap? Thumb => _reader?.Thumb;
@@ -100,13 +102,15 @@ public sealed class TrackerSession
         if (Region == null)
         {
             if (game == null) throw new InvalidOperationException("The game window wasn't found. Start the game (borderless or windowed), or choose the chat yourself.");
+            if (GameWindow.Covered(ChatLocator.Corner(game.Value), _settings.ProcessHints) is { } cover)
+                throw new InvalidOperationException($"The chat corner of the game is out of view ({cover} is over it). Bring the game to the front, or move that window off the bottom-left of the game.");
             var (region, note) = await ChatLocator.DetectAsync(game.Value);
             DetectNote = note;
             if (region == null) throw new InvalidOperationException("Couldn't see the chat. Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.");
             Region = region;
         }
         _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale);
-        if (game != null) await ReadZone(game.Value);
+        if (game != null && GameWindow.Covered(ZoneLocator.Strip(game.Value), _settings.ProcessHints) == null) await ReadZone(game.Value);
         _loop ??= Task.Run(() => Loop(_cts.Token));
     }
 
@@ -131,34 +135,14 @@ public sealed class TrackerSession
             var t0 = DateTime.UtcNow;
             try
             {
-                var lines = await _reader!.ReadAsync();
-                Reads++;
-                // the chat moved or the UI was toggled: after a stretch of empty reads, find it again (auto mode only)
-                _emptyReads = lines.Count == 0 ? _emptyReads + 1 : 0;
-                if (!ManualRegion && _emptyReads >= 20)
+                // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
+                if (GameWindow.Covered(Region!.Value, _settings.ProcessHints) is { } cover)
                 {
-                    _emptyReads = 0;
-                    var g = GameWindow.Find(_settings.ProcessHints);
-                    if (g != null)
-                    {
-                        var (again, note) = await ChatLocator.DetectAsync(g.Value);
-                        if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); DetectNote = "re-found: " + note; }
-                    }
+                    Engine.Pause(); Secondary?.Pause();
+                    Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
+                    LastError = "";
                 }
-                foreach (var l in _tracker.NewLines(lines))
-                {
-                    bool any = false;
-                    foreach (var ev in _parser.Parse(l, DateTime.UtcNow)) { Engine.Apply(ev); Secondary?.Apply(ev); any = true; }
-                    CrashLog.Read(l, any);
-                    if (any) { LastLine = l; LootLine?.Invoke(l); }
-                }
-                LastError = "";
-                if ((DateTime.UtcNow - _zoneAt).TotalSeconds >= _settings.Ocr.ZoneEverySec)
-                {
-                    var game = GameWindow.Find(_settings.ProcessHints);
-                    GameRect = game ?? GameRect;
-                    if (game != null) await ReadZone(game.Value); else _zoneAt = DateTime.UtcNow;
-                }
+                else await ReadOnce();
             }
             catch (Exception ex) { LastError = ex.Message; CrashLog.Write("read loop", ex); }
             Updated?.Invoke();
@@ -167,6 +151,44 @@ public sealed class TrackerSession
             if (spent < _interval) { try { await Task.Delay(_interval - spent, ct); } catch (TaskCanceledException) { } }
         }
         Engine.Finish();
+    }
+
+    /// <summary>One read of the chat (the game is in view there): count the new lines, re-find a lost chat, re-read the zone when due.</summary>
+    async Task ReadOnce()
+    {
+        // back in view: lines that arrived while it was covered weren't seen, so the first read is history and the clocks restart
+        if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
+        Engine.Resume(); Secondary?.Resume();
+        var lines = await _reader!.ReadAsync();
+        Reads++;
+        // the chat moved or the UI was toggled: after a stretch of empty reads, find it again (auto mode only)
+        _emptyReads = lines.Count == 0 ? _emptyReads + 1 : 0;
+        if (!ManualRegion && _emptyReads >= 20)
+        {
+            _emptyReads = 0;
+            var g = GameWindow.Find(_settings.ProcessHints);
+            if (g != null && GameWindow.Covered(ChatLocator.Corner(g.Value), _settings.ProcessHints) == null)
+            {
+                var (again, note) = await ChatLocator.DetectAsync(g.Value);
+                if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); DetectNote = "re-found: " + note; }
+            }
+        }
+        foreach (var l in _tracker.NewLines(lines))
+        {
+            bool any = false;
+            foreach (var ev in _parser.Parse(l, DateTime.UtcNow)) { Engine.Apply(ev); Secondary?.Apply(ev); any = true; }
+            CrashLog.Read(l, any);
+            if (any) { LastLine = l; LootLine?.Invoke(l); }
+        }
+        LastError = "";
+        if ((DateTime.UtcNow - _zoneAt).TotalSeconds >= _settings.Ocr.ZoneEverySec)
+        {
+            var game = GameWindow.Find(_settings.ProcessHints);
+            GameRect = game ?? GameRect;
+            // the minimap has its own check: a window over it alone keeps the last zone and lets the chat be read
+            if (game != null && GameWindow.Covered(ZoneLocator.Strip(game.Value), _settings.ProcessHints) == null) await ReadZone(game.Value);
+            else _zoneAt = DateTime.UtcNow;
+        }
     }
 
     public async Task StopAsync()

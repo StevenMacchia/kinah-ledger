@@ -5,29 +5,110 @@ using System.Text.RegularExpressions;
 
 namespace KinahLedger.Ocr;
 
-/// <summary>Where the game window is, in screen pixels. Borderless and windowed modes both report a real rectangle.</summary>
+/// <summary>
+/// Where the game window is, in screen pixels, and whether a part of it can be seen. Borderless and windowed modes both
+/// report a real rectangle. The tracker reads the screen, not the game, so it only reads a part of the game nothing covers.
+/// </summary>
 public static class GameWindow
 {
     [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+    [DllImport("user32.dll")] static extern bool GetLayeredWindowAttributes(IntPtr hWnd, out uint key, out byte alpha, out uint flags);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out int value, int size);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out RECT value, int size);
+
+    const uint GW_HWNDPREV = 3, LWA_ALPHA = 2;
+    const int GWL_EXSTYLE = -20, WS_EX_TRANSPARENT = 0x20, WS_EX_LAYERED = 0x80000, DWMWA_EXTENDED_FRAME_BOUNDS = 9, DWMWA_CLOAKED = 14;
+
+    /// <summary>The game's window and every process id that belongs to the game, from the last successful <see cref="Find"/>.</summary>
+    sealed record Found(IntPtr Handle, HashSet<uint> Pids);
+    static volatile Found? _found;
 
     public static Rectangle? Find(IEnumerable<string> processHints)
     {
         var hints = processHints.Select(h => h.ToLowerInvariant()).ToArray();
+        var pids = new HashSet<uint>();
+        Rectangle? found = null; var handle = IntPtr.Zero;
         foreach (var p in Process.GetProcesses())
         {
             try
             {
                 if (!hints.Any(h => p.ProcessName.ToLowerInvariant().Contains(h))) continue;
+                pids.Add((uint)p.Id);
+                if (found != null) continue;
                 var h = p.MainWindowHandle;
                 if (h == IntPtr.Zero || IsIconic(h) || !GetWindowRect(h, out var r)) continue;
                 var rect = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
-                if (rect.Width >= 640 && rect.Height >= 360) return rect;
+                if (rect.Width >= 640 && rect.Height >= 360) { found = rect; handle = h; }
             }
             catch (Exception) { /* process went away */ }
         }
+        if (found != null) _found = new Found(handle, pids);
+        return found;
+    }
+
+    /// <summary>True while the game is the window the player is using.</summary>
+    public static bool InFront(IEnumerable<string> processHints)
+    {
+        var f = Current(processHints);
+        if (f == null) return false;
+        GetWindowThreadProcessId(GetForegroundWindow(), out var pid);
+        return f.Pids.Contains(pid);
+    }
+
+    /// <summary>
+    /// What keeps this part of the game from being read, in a few words ("chrome", "the game is closed or minimized"), or
+    /// null when it can be read. A window on top of the game would otherwise be read as if it were the game: its text
+    /// could be counted as loot. Windows that let clicks through (frame counters, recording badges), fully transparent
+    /// ones, windows on another desktop and the game's own windows don't count.
+    /// </summary>
+    public static string? Covered(Rectangle area, IEnumerable<string> processHints)
+    {
+        var f = Current(processHints);
+        if (f == null) return "the game is closed or minimized";
+        int n = 0;
+        for (var h = GetWindow(f.Handle, GW_HWNDPREV); h != IntPtr.Zero && n < 5000; h = GetWindow(h, GW_HWNDPREV), n++)
+        {
+            if (!IsWindowVisible(h) || IsIconic(h)) continue;
+            GetWindowThreadProcessId(h, out var pid);
+            if (f.Pids.Contains(pid)) continue;
+            long ex = GetWindowLongPtr(h, GWL_EXSTYLE).ToInt64();
+            if ((ex & WS_EX_TRANSPARENT) != 0) continue;
+            if ((ex & WS_EX_LAYERED) != 0 && GetLayeredWindowAttributes(h, out _, out var alpha, out var how) && (how & LWA_ALPHA) != 0 && alpha == 0) continue;
+            if (DwmGetWindowAttribute(h, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
+            var r = Bounds(h);
+            if (r.Width <= 0 || r.Height <= 0 || !r.IntersectsWith(area)) continue;
+            return NameOf(pid);
+        }
         return null;
+    }
+
+    static Found? Current(IEnumerable<string> processHints)
+    {
+        var f = _found;
+        if (f != null && IsWindow(f.Handle) && !IsIconic(f.Handle)) return f;
+        return Find(processHints) != null ? _found : null;
+    }
+
+    static Rectangle Bounds(IntPtr h)
+    {
+        // what is drawn: GetWindowRect also counts the invisible resize border around ordinary windows
+        if (DwmGetWindowAttribute(h, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT d, Marshal.SizeOf<RECT>()) == 0) return Rectangle.FromLTRB(d.Left, d.Top, d.Right, d.Bottom);
+        return GetWindowRect(h, out var r) ? Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom) : Rectangle.Empty;
+    }
+
+    static string NameOf(uint pid)
+    {
+        if (pid == (uint)Environment.ProcessId) return "Kinah Ledger's own window";
+        try { using var p = Process.GetProcessById((int)pid); return p.ProcessName; }
+        catch (Exception) { return "another window"; }
     }
 }
 

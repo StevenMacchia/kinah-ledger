@@ -63,10 +63,34 @@ public sealed class SessionEngine
         lock (_lock)
         {
             var now = DateTime.UtcNow;
-            Z().Seconds += (now - _zoneSince).TotalSeconds;   // time before the first successful read lands on "Unknown zone"
+            if (_pausedAt == null) Z().Seconds += (now - _zoneSince).TotalSeconds;   // time before the first successful read lands on "Unknown zone"
             if (zone != null) _zone = zone;
             _zoneSince = now;
         }
+    }
+
+    DateTime? _pausedAt; TimeSpan _paused;
+    public bool Paused { get { lock (_lock) return _pausedAt != null; } }
+
+    /// <summary>Stops the clock while the game can't be seen (covered, minimized): rates count only the time something could be read.</summary>
+    public void Pause()
+    {
+        lock (_lock)
+        {
+            if (Ended != null || _pausedAt != null) return;
+            var now = DateTime.UtcNow;
+            Z().Seconds += (now - _zoneSince).TotalSeconds;
+            _zoneSince = now; _pausedAt = now;
+        }
+    }
+
+    public void Resume() { lock (_lock) ResumeLocked(); }
+
+    void ResumeLocked()
+    {
+        if (_pausedAt is not { } at) return;
+        var now = DateTime.UtcNow;
+        _paused += now - at; _pausedAt = null; _zoneSince = now;
     }
 
     /// <summary>Adds time to a zone directly: used by the layout demo and by tests.</summary>
@@ -75,7 +99,8 @@ public sealed class SessionEngine
         lock (_lock) { _zone = zone; _zoneSince = DateTime.UtcNow; Z().Seconds += seconds; }
     }
 
-    public TimeSpan Elapsed => (Ended ?? DateTime.UtcNow) - Started;
+    /// <summary>Time the game could be read: paused stretches are left out.</summary>
+    public TimeSpan Elapsed { get { lock (_lock) return (Ended ?? _pausedAt ?? DateTime.UtcNow) - Started - _paused; } }
     /// <summary>Never below one second, so rates are defined from the first event.</summary>
     public double Hours => Math.Max(Elapsed.TotalHours, 1.0 / 3600);
 
@@ -135,6 +160,7 @@ public sealed class SessionEngine
         lock (_lock)
         {
             if (Ended != null) return;
+            ResumeLocked();
             Ended = DateTime.UtcNow;
             Z().Seconds += (Ended.Value - _zoneSince).TotalSeconds;
         }
@@ -154,7 +180,7 @@ public sealed class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null ? (now - _zoneSince).TotalSeconds : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, PetsByName = new Dictionary<string, int>(v.PetsByName) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, PetsByName = new Dictionary<string, int>(v.PetsByName) };
             return copy;
         }
     }

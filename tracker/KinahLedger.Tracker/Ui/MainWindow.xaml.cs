@@ -191,6 +191,12 @@ public partial class MainWindow : Window
             var game = GameWindow.Find(_settings.ProcessHints);
             if (game == null) { if (_compact) SetCompact(false, remember: false); Say("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself.", "Warn"); return; }
             if (_hud != null) { _hud.Hide(); }   // never read our own panel
+            if (GameWindow.Covered(ChatLocator.Corner(game.Value), _settings.ProcessHints) is { } cover)
+            {
+                if (_compact) SetCompact(false, remember: false);
+                Say($"The chat corner of the game is out of view: {cover} is over it. Move it off the bottom-left of the game, then Detect again.", "Warn");
+                return;
+            }
             var (region, note) = await Task.Run(() => ChatLocator.DetectAsync(game.Value));
             var (zone, _) = await Task.Run(() => ZoneLocator.DetectAsync(game.Value));
             ZoneLbl.Text = "Zone: " + (zone ?? "not read yet");
@@ -220,6 +226,11 @@ public partial class MainWindow : Window
         _mode = SelectedMode;
         try
         {
+            if (GameWindow.Covered(_region.Value, _settings.ProcessHints) is { } cover)
+            {
+                Say($"The chat is out of view: {cover}{(cover.StartsWith("the game") ? "" : " is over it")}. Only the game is read; bring it into view, then Test read again.", "Warn");
+                return;
+            }
             var reader = new ScreenReader(_region.Value, _settings.Ocr.Scale);
             var parser = new ChatParser(_items);
             var lines = await Task.Run(() => reader.ReadAsync());
@@ -317,7 +328,7 @@ public partial class MainWindow : Window
         if (!_compact) MarketStatus.Text = MarketLine();
         var chat = _watcher.Chat; var farm = _watcher.Farm;
         var show = farm ?? (DateTime.UtcNow < _lastRunUntil ? _lastRun : chat?.Engine);
-        if (farm != null) FarmTime.Text = "Farming for " + farm.Elapsed.ToString(@"hh\:mm\:ss");
+        if (farm != null) FarmTime.Text = "Farming for " + farm.Elapsed.ToString(@"hh\:mm\:ss") + (farm.Paused ? " · paused while the game is out of view" : "");
         else if (chat != null) FarmTime.Text = "Counting since " + _watcher.ChatSince.ToLocalTime().ToString("HH:mm") + " · Ctrl+Shift+K starts a run from inside the game";
         else FarmTime.Text = "Ctrl+Shift+K starts and stops from inside the game";
         if (show != null && (farm != null || show != _lastRun))
@@ -333,6 +344,7 @@ public partial class MainWindow : Window
         ZoneLbl.Text = "Zone: " + (chat?.Zone ?? (_watcher.GameRect == null ? "waiting for the game" : "not read yet"));
         if (chat == null) Say(_watcher.GameRect == null ? "Waiting for the game. Reading starts on its own once the game is open." : "Looking for the chat… " + _watcher.ChatNote, "Faint");
         else if (chat.LastError.Length > 0) Say("Read problem: " + chat.LastError, "Bad");
+        else if (chat.Paused.Length > 0) Say($"Paused: {chat.Paused}. Only the game is read, so reading picks up when the chat is in view again · " + MarketShort(), "Warn");
         else Say((farm != null ? "Farming" : "Reading") + $" · {chat.Reads} reads" + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : "") + " · " + MarketShort() + (_watcher.Flushed > 0 ? $" · {_watcher.Flushed} chunk{(_watcher.Flushed == 1 ? "" : "s")} shared" : ""), "Faint");
         if (chat != null && !_compact && ++_ticks % 4 == 0 && !_framing)
         {

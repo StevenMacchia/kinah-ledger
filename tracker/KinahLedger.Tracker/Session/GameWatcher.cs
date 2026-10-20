@@ -113,7 +113,7 @@ public sealed class GameWatcher
                         try { var c = await EnsureChatAsync(); if (Farm != null) { c.Secondary = Farm; } }
                         catch (Exception ex) { ChatNote = ex.Message; }
                     }
-                    if (Market.Enabled) await Market.TickAsync(game, _settings.Ocr.Scale);
+                    if (Market.Enabled && MarketInView()) await Market.TickAsync(game, _settings.Ocr.Scale);
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
                 await FlushPassiveAsync(false);
@@ -131,6 +131,11 @@ public sealed class GameWatcher
         }
         catch (Exception ex) { CrashLog.Write("watcher flush", ex); }
     }
+
+    /// <summary>The Market is read only where it can be seen: a found table nothing covers, or, while looking for it, the game in front.</summary>
+    bool MarketInView() => Market.Layout is { } l
+        ? GameWindow.Covered(l.Table, _settings.ProcessHints) == null
+        : GameWindow.InFront(_settings.ProcessHints);
 
     /// <summary>
     /// Every FlushMinutes (and once at close) the always-on count is shared as one anonymous chunk under the kind it

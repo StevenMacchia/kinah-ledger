@@ -144,6 +144,9 @@ public sealed class LineTracker
 
     bool _faded;
 
+    /// <summary>After a stretch the chat couldn't be seen, the next read is history again, like the first one: lines that arrived unseen aren't counted.</summary>
+    public void Rebase() { _prev = new(); _faded = false; }
+
     public List<string> NewLines(List<string> cur)
     {
         if (cur.Count == 0)

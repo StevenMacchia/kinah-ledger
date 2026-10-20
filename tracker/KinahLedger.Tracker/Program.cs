@@ -34,6 +34,7 @@ internal static class Program
             {
                 case "pick": return Pick();
                 case "locate": return Locate(settings);
+                case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);
                 case "ui-shot": return UiShot(settings, opts, pos);
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
@@ -67,7 +68,8 @@ $@"Kinah Ledger tracker {RunPayload.AppVersion}
 
 Screen reading (works today; the chat, the zone and the Market are found on their own):
   locate                        find the game window, the chat, the zone and the Market; saves an annotated frame
-  pick                          drag a box around the chat's loot lines; remembered for next time
+  in-view                       which parts of the game can be read now, and which window covers the others (reads nothing)
+  pick                         drag a box around the chat's loot lines; remembered for next time
   ocr-test [--save]             read the box once and show what was recognized (--save keeps a PNG)
   ocr-file <image> [--scale 2]  run recognition on a screenshot, plain and boosted
   watch [--activity name]       a farming run in the console, with the Market reader beside it; Ctrl+C to stop
@@ -165,6 +167,22 @@ options: --process aion[,other]");
         if (market.layout is { } mk) marks.Add((mk.Outline, MarketCapture.MarkColor));
         using (var frame = ScreenReader.Frame(game.Value, 1280, marks.ToArray())) frame.Save("locate-frame.png", System.Drawing.Imaging.ImageFormat.Png);
         Console.WriteLine("Annotated frame saved to locate-frame.png");
+        return 0;
+    }
+
+    /// <summary>Which parts of the game the tracker would read right now; for each one that's covered, the window over it. Captures nothing.</summary>
+    static int InView(Settings s)
+    {
+        var game = GameWindow.Find(s.ProcessHints);
+        if (game == null) { Console.WriteLine("Game window not found (is it running and not minimized?)."); return 1; }
+        var g = game.Value;
+        Console.WriteLine($"Game window: {g.Width} × {g.Height} at {g.X}, {g.Y} · {(GameWindow.InFront(s.ProcessHints) ? "in front" : "not the active window")}");
+        void Show(string name, System.Drawing.Rectangle r) =>
+            Console.WriteLine($"  {name,-14} {(GameWindow.Covered(r, s.ProcessHints) is { } c ? "covered by " + c : "in view")}");
+        Show("chat corner", ChatLocator.Corner(g));
+        if (RegionStore.Load() is { } chosen) Show("chosen chat", chosen);
+        Show("minimap", ZoneLocator.Strip(g));
+        Show("Market area", MarketLocator.Area(g));
         return 0;
     }
 
