@@ -60,7 +60,8 @@ public static class PriceBook
 
     /// <summary>
     /// Reads a /prices/&lt;server&gt;.json board: per item the lowest ask while it is fresh, else the 24-hour median, the
-    /// 7-day median, then the 7-day median of what actually sold. Items keyed by dictionary ID are named through the dictionary.
+    /// 7-day median, the 7-day median of what actually sold, then the reference price the site fetches from other price
+    /// sites (ref_price). Items keyed by dictionary ID are named through the dictionary.
     /// </summary>
     public static Dictionary<string, long> ParseBoard(string json, ItemDictionary? items)
     {
@@ -73,7 +74,7 @@ public static class PriceBook
             var name = it.GetString() ?? "";
             if (items != null && long.TryParse(name, out var id)) name = items.NameOf(id);
             bool stale = e.TryGetProperty("stale", out var st) && st.ValueKind == JsonValueKind.True;
-            long? p = (stale ? null : Num(e, "lowest_ask")) ?? Num(e, "median_24h") ?? Num(e, "median_7d") ?? Num(e, "sold_median_7d");
+            long? p = (stale ? null : Num(e, "lowest_ask")) ?? Num(e, "median_24h") ?? Num(e, "median_7d") ?? Num(e, "sold_median_7d") ?? Num(e, "ref_price");
             if (p is long v && v > 0 && name.Length > 0) d[name] = v;
         }
         return d;
