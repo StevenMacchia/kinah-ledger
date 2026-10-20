@@ -45,7 +45,8 @@ public static class GatherSkills
 public static class GatheringCatalog
 {
     // declared before Spec: static fields initialize in textual order
-    static readonly (string, string)[] Metal = { ("", "Common"), ("Fine ", "Rare"), ("Pure ", "Epic"), ("Radiant ", "Unique") };
+    // tier names as the item dictionary spells them: Common, Rare, Legend, Unique, Epic
+    static readonly (string, string)[] Metal = { ("", "Common"), ("Fine ", "Rare"), ("Pure ", "Legend"), ("Radiant ", "Unique") };
 
     static readonly (string[] names, GatherFamily family, (string prefix, string grade)[] tiers)[] Spec =
     {
