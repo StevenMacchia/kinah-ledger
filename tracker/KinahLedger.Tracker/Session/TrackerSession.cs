@@ -30,6 +30,7 @@ public sealed class TrackerSession
     public Dictionary<string, double> ZoneSeconds => Engine.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).ToDictionary(kv => kv.Key, kv => kv.Value.Seconds);
     public long Reads { get; private set; }
     public int Unaligned => _tracker.Unaligned;
+    public int Empty => _tracker.Empty;
     public string LastError { get; private set; } = "";
     public string LastLine { get; private set; } = "";
     public string DetectNote { get; private set; } = "";
@@ -89,7 +90,7 @@ public sealed class TrackerSession
             if (game == null) throw new InvalidOperationException("The game window wasn't found. Start the game (borderless or windowed), or choose the chat yourself.");
             var (region, note) = await ChatLocator.DetectAsync(game.Value);
             DetectNote = note;
-            if (region == null) throw new InvalidOperationException("Couldn't see the chat. Make sure the game UI is showing with the chat open at the bottom-left (not hidden, no full-screen panel), then try again, or choose the chat yourself.");
+            if (region == null) throw new InvalidOperationException("Couldn't see the chat. Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.");
             Region = region;
         }
         _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale);

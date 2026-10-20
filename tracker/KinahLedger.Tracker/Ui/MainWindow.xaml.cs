@@ -180,7 +180,7 @@ public partial class MainWindow : Window
             if (region == null)
             {
                 if (_compact) SetCompact(false, remember: false);   // the buttons to fix it are in the setup card
-                Say("Couldn't see the chat (" + note + "). Make sure the game UI is showing with the chat open at the bottom-left, then Detect again, or choose the chat yourself.", "Warn");
+                Say("Couldn't see the chat (" + note + "). Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.", "Warn");
                 return;
             }
             _region = region; _prefs.ManualChat = false; RegionStore.Clear();

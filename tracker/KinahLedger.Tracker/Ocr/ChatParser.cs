@@ -137,9 +137,17 @@ public sealed class LineTracker
 {
     List<string> _prev = new();
     public int Unaligned { get; private set; }
+    /// <summary>Reads that saw nothing: the chat faded out, or the UI was hidden. The last lines seen stay as the baseline.</summary>
+    public int Empty { get; private set; }
 
     public List<string> NewLines(List<string> cur)
     {
+        if (cur.Count == 0)
+        {
+            // the frameless chat fades out when idle; when a loot line brings it back, the read before it is this empty one
+            Empty++;
+            return new List<string>();
+        }
         var keys = cur.Select(Key).ToList();
         if (_prev.Count == 0)
         {
