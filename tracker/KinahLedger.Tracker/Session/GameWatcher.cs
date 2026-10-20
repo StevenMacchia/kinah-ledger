@@ -76,16 +76,25 @@ public sealed class GameWatcher
 
     public void Start() { _loop ??= Task.Run(() => Loop(_cts.Token)); }
 
-    /// <summary>Finds the chat now (or uses the chosen area) and starts reading. Throws with a plain message when it can't.</summary>
+    // the watcher's retry and Start farming can both ask for the reader at once; without this, both started one and the
+    // loser kept reading on its own (every line written to reads.log twice)
+    readonly SemaphoreSlim _chatGate = new(1, 1);
+
+    /// <summary>Finds the chat now (or uses the chosen area) and starts reading. Throws with a plain message when it can't. Only one reader ever runs.</summary>
     public async Task<TrackerSession> EnsureChatAsync()
     {
-        var c = Chat;
-        if (c != null && c.Running) return c;
-        var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server };
-        s.Parsed += ev => { if (ev is MarketSold or MarketListed or MarketExpired) Market.OnChatEvent(ev); };
-        await s.StartAsync();
-        Chat = s; ChatSince = DateTime.UtcNow; ChatNote = s.DetectNote; _flushAt = DateTime.UtcNow;
-        return s;
+        await _chatGate.WaitAsync();
+        try
+        {
+            var c = Chat;
+            if (c != null && c.Running) return c;
+            var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server };
+            s.Parsed += ev => { if (ev is MarketSold or MarketListed or MarketExpired) Market.OnChatEvent(ev); };
+            await s.StartAsync();
+            Chat = s; ChatSince = DateTime.UtcNow; ChatNote = s.DetectNote; _flushAt = DateTime.UtcNow;
+            return s;
+        }
+        finally { _chatGate.Release(); }
     }
 
     /// <summary>Drops the reader (the area was reset or re-chosen); the next tick finds the chat again. A farming run moves over to the new reader.</summary>

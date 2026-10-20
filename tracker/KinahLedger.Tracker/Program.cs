@@ -1,4 +1,4 @@
-using KinahLedger.Data;
+﻿using KinahLedger.Data;
 using KinahLedger.Ocr;
 using KinahLedger.Session;
 using KinahLedger.Ui;
@@ -81,7 +81,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
-  ui-shot [dir] [--demo] [--pets|--gathering|--market] [--compact] [--welcome] [--skin night|abyss|daylight]
+  ui-shot [dir] [--demo] [--gathering|--market] [--compact] [--welcome] [--skin night|abyss|daylight]
                                 render the window to PNG files for layout review
   market-shot [dir]             the window with the Market card in its tracking state
   reset-id                      replace the random install ID used for uploads
@@ -123,7 +123,7 @@ options: --process aion[,other]");
         if (pos.Count == 0) throw new ArgumentException("usage: ocr-file <image> [--scale 2]");
         int scale = int.TryParse(o.GetValueOrDefault("scale"), out var sc) ? sc : 2;
         using var bmp = Task.Run(() => ScreenReader.LoadAsync(pos[0])).GetAwaiter().GetResult();
-        Console.WriteLine($"{pos[0]}: {bmp.Width} × {bmp.Height}");
+        Console.WriteLine($"{pos[0]}: {bmp.Width} Ã— {bmp.Height}");
         foreach (var boost in new[] { false, true })
         {
             var lines = Task.Run(() => ScreenReader.ReadBitmapAsync(bmp, boost, scale)).GetAwaiter().GetResult();
@@ -139,10 +139,10 @@ options: --process aion[,other]");
     {
         var game = GameWindow.Find(s.ProcessHints);
         if (game == null) { Console.WriteLine("Game window not found (is it running and not minimized?)."); return 1; }
-        Console.WriteLine($"Game window: {game.Value.Width} × {game.Value.Height} at {game.Value.X}, {game.Value.Y}");
+        Console.WriteLine($"Game window: {game.Value.Width} Ã— {game.Value.Height} at {game.Value.X}, {game.Value.Y}");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var chat = Task.Run(() => ChatLocator.DetectAsync(game.Value)).GetAwaiter().GetResult();
-        Console.WriteLine($"Chat: {(chat.region is { } r ? $"{r.Width} × {r.Height} at {r.X}, {r.Y}" : "not found")}  ({chat.note}, {sw.ElapsedMilliseconds} ms)");
+        Console.WriteLine($"Chat: {(chat.region is { } r ? $"{r.Width} Ã— {r.Height} at {r.X}, {r.Y}" : "not found")}  ({chat.note}, {sw.ElapsedMilliseconds} ms)");
         sw.Restart();
         var zone = Task.Run(() => ZoneLocator.DetectAsync(game.Value)).GetAwaiter().GetResult();
         Console.WriteLine($"Zone: {zone.zone ?? "not found"}  ({zone.note}, {sw.ElapsedMilliseconds} ms)");
@@ -178,7 +178,7 @@ options: --process aion[,other]");
         var game = GameWindow.Find(s.ProcessHints);
         if (game == null) { Console.WriteLine("Game window not found (is it running and not minimized?)."); return 1; }
         var g = game.Value;
-        Console.WriteLine($"Game window: {g.Width} × {g.Height} at {g.X}, {g.Y} · {(GameWindow.InFront(s.ProcessHints) ? "in front" : "not the active window")}");
+        Console.WriteLine($"Game window: {g.Width} Ã— {g.Height} at {g.X}, {g.Y} Â· {(GameWindow.InFront(s.ProcessHints) ? "in front" : "not the active window")}");
         void Show(string name, System.Drawing.Rectangle r) =>
             Console.WriteLine($"  {name,-14} {(GameWindow.Covered(r, s.ProcessHints) is { } c ? "covered by " + c : "in view")}");
         Show("chat corner", ChatLocator.Corner(g));
@@ -229,11 +229,11 @@ options: --process aion[,other]");
             "[21:14] Acquired 9,000 Kina (Bound).",
             "Acquired 2,790 Kina.",
             "Acquired 1,24O Kina.",
-            "Acquired Drakan hide ×2.",
+            "Acquired Drakan hide Ã—2.",
             "Acquired Drakan hide x2",
             "Acquired Aether shard *3.",
             "Acquired Greater manastone.",
-            "Acquired Radiant Odyle (Bound) ×4.",
+            "Acquired Radiant Odyle (Bound) Ã—4.",
             "Spiritstone acquired.",
             "Fresh Fruit acquirea.",
             "Orichalcum Ore acquired.",
@@ -247,7 +247,7 @@ options: --process aion[,other]");
             "Orichalcurn Ore acquired.",
             "Fresh Fruit x3 acquired.",
             "Obtained 1 Oculazen Soul Points.",
-            "Orichalcum Ore acquiréd.i",
+            "Orichalcum Ore acquirÃ©d.i",
             "Fresh Fruit acquirea.",
             "Acquiredn521 Kina?",
             "Obtained 1 Natura Soul Crystals.",
@@ -314,7 +314,7 @@ options: --process aion[,other]");
         using var raw = ScreenReader.Capture(strip);
         if (o.ContainsKey("save")) { raw.Save("balance-strip.png", System.Drawing.Imaging.ImageFormat.Png); Console.WriteLine("Strip saved to balance-strip.png"); }
         var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true)).GetAwaiter().GetResult();
-        Console.WriteLine($"Strip {strip.Width} × {strip.Height} at {strip.X}, {strip.Y}: {lines.Count} line(s) read");
+        Console.WriteLine($"Strip {strip.Width} Ã— {strip.Height} at {strip.X}, {strip.Y}: {lines.Count} line(s) read");
         foreach (var l in lines) Console.WriteLine("  " + l.Text);
         var counters = BalanceReader.Counters(lines);
         Console.WriteLine(counters.Count == 0 ? "No numbers found." : "Numbers, left to right: " + string.Join("   ", counters.Select(c => $"{c.Value:N0} (x {c.Left})")));
@@ -324,7 +324,7 @@ options: --process aion[,other]");
 
     /// <summary>
     /// The 0.7 reads: Market sale, listing and expiry lines, craft and enchant results, how the engine counts them,
-    /// what the run payload carries, and how the balance counter is found and trusted. Only "Successfully crafted …" is a
+    /// what the run payload carries, and how the balance counter is found and trusted. Only "Successfully crafted â€¦" is a
     /// confirmed wording; the rest are the likely ones and get replaced by the client's own lines once they're collected.
     /// </summary>
     static bool TradeTest(ItemDictionary items)
@@ -341,15 +341,15 @@ options: --process aion[,other]");
         Console.WriteLine("\nMarket, craft and enchant lines (0.7):");
         (string line, string expect)[] lines =
         {
-            ("Your Spiritstone x10 sold for 75,200 Kina.", "sold: Spiritstone ×10 for 75,200"),
-            ("Spiritstone x10 has been sold for 75,200 Kina.", "sold: Spiritstone ×10 for 75,200"),
-            ("Sold Raw Leather x20 for 298,980 Kina.", "sold: Raw Leather ×20 for 298,980"),
-            ("The Market sold your Fine Odyle x2 for 37,8OO Kina.", "sold: Fine Odyle ×2 for 37,800"),
-            ("Registered Spiritstone x10 on the Market for 75,200 Kina.", "listed: Spiritstone ×10 for 75,200"),
-            ("Spiritstone x5 has been registered on the Market.", "listed: Spiritstone ×5"),
+            ("Your Spiritstone x10 sold for 75,200 Kina.", "sold: Spiritstone Ã—10 for 75,200"),
+            ("Spiritstone x10 has been sold for 75,200 Kina.", "sold: Spiritstone Ã—10 for 75,200"),
+            ("Sold Raw Leather x20 for 298,980 Kina.", "sold: Raw Leather Ã—20 for 298,980"),
+            ("The Market sold your Fine Odyle x2 for 37,8OO Kina.", "sold: Fine Odyle Ã—2 for 37,800"),
+            ("Registered Spiritstone x10 on the Market for 75,200 Kina.", "listed: Spiritstone Ã—10 for 75,200"),
+            ("Spiritstone x5 has been registered on the Market.", "listed: Spiritstone Ã—5"),
             ("Join request registered.", "(ignored)"),
-            ("Listing for Spiritstone x10 has expired.", "expired: Spiritstone ×10"),
-            ("Your Raw Leather listing has expired.", "expired: Raw Leather ×1"),
+            ("Listing for Spiritstone x10 has expired.", "expired: Spiritstone Ã—10"),
+            ("Your Raw Leather listing has expired.", "expired: Raw Leather Ã—1"),
             ("Blessing of Rock has expired.", "(ignored)"),
             ("Successfully crafted Orichalcum Ingot.", "craft ok: Orichalcum Ingot"),
             ("Successfully crafted Orichalcl", "craft ok: Orichalcl"),
@@ -357,13 +357,13 @@ options: --process aion[,other]");
             ("Crafting failed.", "craft failed: ?"),
             ("Failed to craft Orichalcum Ingot.", "craft failed: Orichalcum Ingot"),
             ("Orichalcum Ingot crafting failed.", "craft failed: Orichalcum Ingot"),
-            ("Enchantment succeeded: Tahabata's Sword +11", "enchant ok: Tahabata's Sword +10 → +11"),
-            ("Successfully enchanted Tahabata's Sword to +11.", "enchant ok: Tahabata's Sword +10 → +11"),
-            ("Enchantment failed. Tahabata's Sword +10", "enchant failed: Tahabata's Sword +10 → +11"),
-            ("Failed to enchant Tahabata's Sword +10.", "enchant failed: Tahabata's Sword +10 → +11"),
-            ("Enchanting failed. The level dropped to +9.", "enchant failed: ? +? → +?"),
-            ("Enchantment Stone acquired.", "Enchantment Stone ×1"),
-            ("Acquired 67,676 Kina from the Market.", "reward: Market proceeds ×1 (skipped)"),
+            ("Enchantment succeeded: Tahabata's Sword +11", "enchant ok: Tahabata's Sword +10 â†’ +11"),
+            ("Successfully enchanted Tahabata's Sword to +11.", "enchant ok: Tahabata's Sword +10 â†’ +11"),
+            ("Enchantment failed. Tahabata's Sword +10", "enchant failed: Tahabata's Sword +10 â†’ +11"),
+            ("Failed to enchant Tahabata's Sword +10.", "enchant failed: Tahabata's Sword +10 â†’ +11"),
+            ("Enchanting failed. The level dropped to +9.", "enchant failed: ? +? â†’ +?"),
+            ("Enchantment Stone acquired.", "Enchantment Stone Ã—1"),
+            ("Acquired 67,676 Kina from the Market.", "reward: Market proceeds Ã—1 (skipped)"),
             ("Acquired 520 Kina.", "Kinah +520"),
             ("[ZenBytez] Crafted a Chalice cause my first", "(ignored)"),
         };
@@ -435,22 +435,22 @@ options: --process aion[,other]");
 
         (string line, string expect)[] lines =
         {
-            ("Spiritstone x1 7,499 7,499", "Spiritstone ×1 @ 7,499"),
-            ("Spiritstone x10 7,520 75,200", "Spiritstone ×10 @ 7,520"),
-            ("Spiritstone ×5 7,600 38,000", "Spiritstone ×5 @ 7,600"),
-            ("Raw Leather x20 14,949 298,980", "Raw Leather ×20 @ 14,949"),
-            ("Orichalcum Ore 1 1,950 1,950", "Orichalcum Ore ×1 @ 1,950"),
-            ("Fine Odyle x2 18,9OO 37,800", "Fine Odyle ×2 @ 18,900"),
-            ("Fresh Fruit x3 4,2OO 12,600", "Fresh Fruit ×3 @ 4,200"),
-            ("Orichalcurn Ore x3 1,950 5,850", "Orichalcum Ore ×3 @ 1,950"),
-            ("Ruby Gemstone x1 12,000 12,000 Kina", "Ruby Gemstone ×1 @ 12,000"),
-            ("Expert's Refining Stone x1 71,777 71,777 Zandr 23h", "Expert's Refining Stone ×1 @ 71,777"),
-            ("Thick hide x20 1,100 22,000 Sakukun", "Thick hide ×20 @ 1,100"),
-            ("Radiant Odyle Lv. 10 x1 45,000 45,000", "Radiant Odyle ×1 @ 45,000"),
-            ("Enchantment Stone 15 x1 9,900 9,900", "Enchantment Stone 15 ×1 @ 9,900"),
-            ("Spiritstone 7,499 7,499", "Spiritstone ×1 @ 7,499"),
-            ("Raw Leather 14,949 298,980", "Raw Leather ×20 @ 14,949"),
-            ("Spiritstone 1 500", "Spiritstone ×1 @ 500"),
+            ("Spiritstone x1 7,499 7,499", "Spiritstone Ã—1 @ 7,499"),
+            ("Spiritstone x10 7,520 75,200", "Spiritstone Ã—10 @ 7,520"),
+            ("Spiritstone Ã—5 7,600 38,000", "Spiritstone Ã—5 @ 7,600"),
+            ("Raw Leather x20 14,949 298,980", "Raw Leather Ã—20 @ 14,949"),
+            ("Orichalcum Ore 1 1,950 1,950", "Orichalcum Ore Ã—1 @ 1,950"),
+            ("Fine Odyle x2 18,9OO 37,800", "Fine Odyle Ã—2 @ 18,900"),
+            ("Fresh Fruit x3 4,2OO 12,600", "Fresh Fruit Ã—3 @ 4,200"),
+            ("Orichalcurn Ore x3 1,950 5,850", "Orichalcum Ore Ã—3 @ 1,950"),
+            ("Ruby Gemstone x1 12,000 12,000 Kina", "Ruby Gemstone Ã—1 @ 12,000"),
+            ("Expert's Refining Stone x1 71,777 71,777 Zandr 23h", "Expert's Refining Stone Ã—1 @ 71,777"),
+            ("Thick hide x20 1,100 22,000 Sakukun", "Thick hide Ã—20 @ 1,100"),
+            ("Radiant Odyle Lv. 10 x1 45,000 45,000", "Radiant Odyle Ã—1 @ 45,000"),
+            ("Enchantment Stone 15 x1 9,900 9,900", "Enchantment Stone 15 Ã—1 @ 9,900"),
+            ("Spiritstone 7,499 7,499", "Spiritstone Ã—1 @ 7,499"),
+            ("Raw Leather 14,949 298,980", "Raw Leather Ã—20 @ 14,949"),
+            ("Spiritstone 1 500", "Spiritstone Ã—1 @ 500"),
             ("Spiritstone x10 7,520 75,000", "(ignored)"),
             ("Spiritstone 7,499", "(ignored)"),
             ("Item Quantity Unit Price Total Price", "(ignored)"),
@@ -471,10 +471,10 @@ options: --process aion[,other]");
         Console.WriteLine("\nMarket parser, column cells (the found table):");
         (Dictionary<string, string> cells, string expect)[] cells =
         {
-            (new() { ["name"] = "Spiritstone", ["qty"] = "x10", ["unit"] = "7,520", ["total"] = "75,200" }, "Spiritstone ×10 @ 7,520"),
+            (new() { ["name"] = "Spiritstone", ["qty"] = "x10", ["unit"] = "7,520", ["total"] = "75,200" }, "Spiritstone Ã—10 @ 7,520"),
             (new() { ["name"] = "Spiritstone", ["qty"] = "x10", ["unit"] = "7,520", ["total"] = "75,000" }, "(ignored)"),
-            (new() { ["name"] = "Raw Leather", ["unit"] = "14,949", ["total"] = "298,980" }, "Raw Leather ×20 @ 14,949"),
-            (new() { ["name"] = "Orichalcurn Ore", ["qty"] = "3", ["unit"] = "1,95O" }, "Orichalcum Ore ×3 @ 1,950"),
+            (new() { ["name"] = "Raw Leather", ["unit"] = "14,949", ["total"] = "298,980" }, "Raw Leather Ã—20 @ 14,949"),
+            (new() { ["name"] = "Orichalcurn Ore", ["qty"] = "3", ["unit"] = "1,95O" }, "Orichalcum Ore Ã—3 @ 1,950"),
             (new() { ["name"] = "Spiritstone", ["unit"] = "7,499" }, "(ignored)"),
             (new() { ["name"] = "Unit Price", ["qty"] = "Quantity", ["unit"] = "Total" }, "(ignored)")
         };
@@ -517,7 +517,7 @@ options: --process aion[,other]");
             using var crop = bmp.Clone(r, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             return await ScreenReader.ReadBoxesAsync(crop, r.Location, scale, boost);
         };
-        Console.WriteLine($"{image}: {bmp.Width} × {bmp.Height}; game frame {game.Width} × {game.Height} at {game.X}, {game.Y}");
+        Console.WriteLine($"{image}: {bmp.Width} Ã— {bmp.Height}; game frame {game.Width} Ã— {game.Height} at {game.X}, {game.Y}");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var (layout, note) = Task.Run(() => MarketLocator.DetectAsync(game, read)).GetAwaiter().GetResult();
         Console.WriteLine($"Locator: {note} ({sw.ElapsedMilliseconds} ms)");
@@ -539,17 +539,17 @@ options: --process aion[,other]");
     static string Describe(GameEvent ev, ItemDictionary items) => ev switch
     {
         KinahChanged k => $"Kinah {(k.Delta >= 0 ? "+" : "")}{k.Delta:N0}{(k.Bound ? " (bound)" : "")}",
-        ItemAcquired a => $"{items.NameOf(a.ItemId)} ×{a.Count}{(a.Bound ? " (bound)" : "")}",
+        ItemAcquired a => $"{items.NameOf(a.ItemId)} Ã—{a.Count}{(a.Bound ? " (bound)" : "")}",
         MobKilled => "kill",
         CurrencyGained c => $"{c.Name} +{c.Amount:N0} (counts as a kill, not a drop)",
-        PetCrystal p => $"pet: {p.Name} ×{p.Count} (Pets table, by zone; not a drop)",
-        RewardReceived r => $"reward: {r.Name} ×{r.Count} (skipped)",
+        PetCrystal p => $"pet: {p.Name} Ã—{p.Count} (Pets table, by zone; not a drop)",
+        RewardReceived r => $"reward: {r.Name} Ã—{r.Count} (skipped)",
         GatherFailed f => $"{f.Skill} failed (node attempt, no yield)",
-        MarketSold s => $"sold: {s.Item} ×{s.Qty} for {s.Total:N0}",
-        MarketListed l => $"listed: {l.Item} ×{l.Qty}" + (l.Price > 0 ? $" for {l.Price:N0}" : ""),
-        MarketExpired x => $"expired: {x.Item} ×{x.Qty}",
+        MarketSold s => $"sold: {s.Item} Ã—{s.Qty} for {s.Total:N0}",
+        MarketListed l => $"listed: {l.Item} Ã—{l.Qty}" + (l.Price > 0 ? $" for {l.Price:N0}" : ""),
+        MarketExpired x => $"expired: {x.Item} Ã—{x.Qty}",
         CraftResult c => $"craft {(c.Ok ? "ok" : "failed")}: {(c.Item.Length > 0 ? c.Item : "?")}",
-        EnchantResult en => $"enchant {(en.Ok ? "ok" : "failed")}: {(en.Item.Length > 0 ? en.Item : "?")} +{(en.From >= 0 ? en.From.ToString() : "?")} → +{(en.To >= 0 ? en.To.ToString() : "?")}",
+        EnchantResult en => $"enchant {(en.Ok ? "ok" : "failed")}: {(en.Item.Length > 0 ? en.Item : "?")} +{(en.From >= 0 ? en.From.ToString() : "?")} â†’ +{(en.To >= 0 ? en.To.ToString() : "?")}",
         _ => ev.GetType().Name
     };
 
@@ -614,7 +614,7 @@ options: --process aion[,other]");
         string last = "";
         while (!stop)
         {
-            var line = (watcher.GameRect == null ? "game not found · " : "") + watcher.Market.Status + (watcher.Market.LastAsk.Length > 0 ? " · last: " + watcher.Market.LastAsk : "") + (watcher.Market.Note.Length > 0 && !watcher.Market.Detected ? " · " + watcher.Market.Note : "");
+            var line = (watcher.GameRect == null ? "game not found Â· " : "") + watcher.Market.Status + (watcher.Market.LastAsk.Length > 0 ? " Â· last: " + watcher.Market.LastAsk : "") + (watcher.Market.Note.Length > 0 && !watcher.Market.Detected ? " Â· " + watcher.Market.Note : "");
             if (line != last) { Console.WriteLine($"{DateTime.Now:HH:mm:ss}  {line}"); last = line; }
             Thread.Sleep(1000);
         }

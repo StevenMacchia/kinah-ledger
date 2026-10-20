@@ -52,42 +52,6 @@
       </DataTemplate.Triggers>
     </DataTemplate>
 
-    <!-- pets: name, drops, per hour. No drop % column: Soul Crystals are rated by time in the zone, never by kill. -->
-    <DataTemplate x:Key="PetRowTemplate">
-      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="32">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/><ColumnDefinition Width="80"/><ColumnDefinition Width="100"/>
-          </Grid.ColumnDefinitions>
-          <Grid x:Name="NameCell" Margin="8,0,6,0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Border x:Name="IconTile" Width="22" Height="22" CornerRadius="5" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" Margin="0,0,8,0" VerticalAlignment="Center">
-              <Grid>
-                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="1" RenderOptions.BitmapScalingMode="HighQuality"/>
-              </Grid>
-            </Border>
-            <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="13"/>
-          </Grid>
-          <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
-          <TextBlock Grid.Column="2" Text="{Binding PerHour}" Foreground="{DynamicResource Violet}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
-        </Grid>
-      </Border>
-      <DataTemplate.Triggers>
-        <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
-        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
-        <!-- a zone header row: time spent there, kills and the crystal rate, so the best spot stands out -->
-        <DataTrigger Binding="{Binding Header}" Value="True">
-          <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHead}"/>
-          <Setter TargetName="RowBorder" Property="Height" Value="28"/>
-          <Setter TargetName="IconTile" Property="Visibility" Value="Collapsed"/>
-          <Setter TargetName="NameCell" Property="Grid.ColumnSpan" Value="3"/>
-          <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource Gold}"/>
-          <Setter TargetName="NameText" Property="FontWeight" Value="SemiBold"/>
-          <Setter TargetName="NameText" Property="FontSize" Value="11.5"/>
-        </DataTrigger>
-      </DataTemplate.Triggers>
-    </DataTemplate>
   </Window.Resources>
 
   <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="18,14,18,12">
@@ -235,7 +199,9 @@
         </Border>
       </UniformGrid>
 
-      <!-- one table at a time: Drops, Gathered or Pets, picked by the tabs -->
+      <!-- one table at a time: Drops or Gathered, picked by the tabs. The tables grow with what's farmed and the
+           window with them; a table only scrolls once it would run past the bottom of the screen -->
+
       <Border x:Name="TablesCard" Style="{StaticResource CardStyle}" Margin="0,10,0,0" Padding="14,10,14,10">
         <StackPanel x:Name="TableStack">
           <Grid>
@@ -248,8 +214,7 @@
           <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Ink}" FontSize="11.5" HorizontalAlignment="Right" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
           <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
             <Button x:Name="DropsTab" Content="Drops" Padding="12,5" FontSize="12.5" Margin="0,0,6,0"/>
-            <Button x:Name="GatherTab" Content="Gathered" Padding="12,5" FontSize="12.5" Margin="0,0,6,0"/>
-            <Button x:Name="PetsTab" Content="Pets" Padding="12,5" FontSize="12.5"/>
+            <Button x:Name="GatherTab" Content="Gathered" Padding="12,5" FontSize="12.5"/>
           </StackPanel>
 
           <StackPanel x:Name="DropsSection">
@@ -265,7 +230,7 @@
               </Grid>
             </Border>
             <Grid MinHeight="64">
-              <ScrollViewer MaxHeight="228" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <ScrollViewer x:Name="DropsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="Rows" ItemTemplate="{StaticResource RowTemplate}"/>
               </ScrollViewer>
               <TextBlock x:Name="TableEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
@@ -286,31 +251,11 @@
               </Grid>
             </Border>
             <Grid MinHeight="64">
-              <ScrollViewer MaxHeight="228" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <ScrollViewer x:Name="GatherScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="GatherRows" ItemTemplate="{StaticResource RowTemplate}"/>
               </ScrollViewer>
               <TextBlock x:Name="GatherEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
                          Text="Gathered materials show here, with how often each comes per attempt and per hour."/>
-            </Grid>
-          </StackPanel>
-
-          <StackPanel x:Name="PetSection">
-            <Border Background="{DynamicResource Card2}" CornerRadius="6" Height="28">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*"/><ColumnDefinition Width="80"/><ColumnDefinition Width="100"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Style="{StaticResource LabelStyle}" Text="SOUL CRYSTALS BY ZONE" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
-                <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="Crystals divided by the time spent in that zone. There is no drop %: Soul Crystals are rated by time in the zone, not by kill."/>
-              </Grid>
-            </Border>
-            <Grid MinHeight="64">
-              <ScrollViewer MaxHeight="228" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl x:Name="PetRows" ItemTemplate="{StaticResource PetRowTemplate}"/>
-              </ScrollViewer>
-              <TextBlock x:Name="PetEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
-                         Text="Soul Crystals show here by zone, with drops and per hour, so the best pet-farming spot stands out."/>
             </Grid>
           </StackPanel>
 
