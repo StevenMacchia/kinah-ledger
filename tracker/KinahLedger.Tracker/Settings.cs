@@ -68,9 +68,9 @@ public sealed class UploadSettings
 {
     /// <summary>On by default; the window's "what's sent?" link says exactly what leaves the PC.</summary>
     public bool Enabled { get; set; } = true;
-    /// <summary>Empty until the site's ingest endpoint exists, so nothing is sent yet. Runs go here (…/v1/runs).</summary>
-    public string Endpoint { get; set; } = "";
-    /// <summary>Where Market asks go (…/v1/prices). Empty: derived from Endpoint when that ends in /v1/runs; otherwise nothing is sent.</summary>
+    /// <summary>Where finished runs go (…/v1/runs): the site's ingest route. Blank it in settings.json and nothing is sent; an unreachable site keeps the run on this PC.</summary>
+    public string Endpoint { get; set; } = "https://kinahledger.com/v1/runs";
+    /// <summary>Override for where Market asks go (…/v1/prices). Empty: derived from Endpoint when that ends in /v1/runs, so the default is https://kinahledger.com/v1/prices; otherwise nothing is sent.</summary>
     public string PricesEndpoint { get; set; } = "";
 
     [JsonIgnore]

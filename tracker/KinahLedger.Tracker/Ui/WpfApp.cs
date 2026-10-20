@@ -86,7 +86,7 @@ public static class WpfApp
     {
         Ensure();
         Directory.CreateDirectory(dir);
-        var w = new MainWindow(settings) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();

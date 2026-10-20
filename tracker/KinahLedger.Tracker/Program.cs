@@ -41,6 +41,7 @@ internal static class Program
                 case "parse-test": return ParseTest(settings);
                 case "market-test": return MarketTest(settings, opts);
                 case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
+                case "market-watch": return MarketWatch(settings, opts);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "watch": return Watch(settings, opts);
                 case "reset-id":
@@ -69,8 +70,9 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   pick                          drag a box around the chat's loot lines; remembered for next time
   ocr-test [--save]             read the box once and show what was recognized (--save keeps a PNG)
   ocr-file <image> [--scale 2]  run recognition on a screenshot, plain and boosted
-  watch [--activity name]       live tracker, chat and Market; Ctrl+C to stop
-        [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""]
+  watch [--activity name]       a farming run in the console, with the Market reader beside it; Ctrl+C to stop
+        [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]
+  market-watch [--server ..]    only the Market reader, as the window runs it in the background; Ctrl+C to stop
   parse-test                    self-test of the chat-line parser
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
@@ -392,28 +394,64 @@ options: --process aion[,other]");
         var activity = o.GetValueOrDefault("activity") ?? s.Ocr.Activity;
         int? interval = int.TryParse(o.GetValueOrDefault("interval"), out var iv) ? iv : null;
         var manual = RegionStore.Parse(o.GetValueOrDefault("region")) ?? (o.ContainsKey("auto") ? null : RegionStore.Load());
-        var prefs = UserPrefs.Load();
-        var session = new TrackerSession(manual, s, items, activity, interval, prefs.ManualMarket ? RegionStore.Load(RegionStore.MarketFile) : null, o.GetValueOrDefault("server") ?? prefs.Server);
-        session.Market.Enabled = s.Market.Enabled && prefs.ShareMarket && !o.ContainsKey("no-market");
+        var session = new TrackerSession(manual, s, items, activity, interval);
+        var watcher = MarketWatcher(s, items, o);
         var engine = session.Engine;
         session.StartAsync().GetAwaiter().GetResult();
+        watcher.Start();
         Console.WriteLine($"Watching {session.Region} every {interval ?? s.Ocr.IntervalMs} ms. Activity: {activity}. Zone: {session.Zone ?? "not read"}. Items known: {items.Count}. (The on-screen panel is only in the window app.)");
-        if (session.Market.Enabled) Console.WriteLine($"Market prices: read while the Market is open, server \"{session.Market.Server}\" ({(session.Market.Server.Length == 0 ? "none: asks are read but not sent; pass --server" : session.Market.ServerKey)}). --no-market turns it off.");
+        if (watcher.Market.Enabled) Console.WriteLine(MarketIntro(watcher));
         if (s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint))
             Console.WriteLine($"When you stop, this run's totals go anonymously to {s.Upload.Endpoint}: region, activity, gear bracket, minutes, kills, kinah, item counts and a random install ID.");
         Console.WriteLine("Ctrl+C to stop.");
 
         var stop = false;
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop = true; };
-        var view = new ConsoleView(engine, () => session.Activity, () => $"reads {session.Reads}  skipped {session.Unaligned}" + (session.LastError.Length > 0 ? "  " + session.LastError : "") + (session.Market.Enabled ? $"  market: {session.Market.AsksSeen} asks, {session.Market.Shared} shared" : ""));
+        var view = new ConsoleView(engine, () => session.Activity, () => $"reads {session.Reads}  skipped {session.Unaligned}" + (session.LastError.Length > 0 ? "  " + session.LastError : "") + (watcher.Market.Enabled ? $"  market: {watcher.Market.AsksSeen} asks, {watcher.Market.Shared} shared" : ""));
         while (!stop) { view.Render(); Thread.Sleep(1000); }
         session.StopAsync().GetAwaiter().GetResult();
+        watcher.StopAsync().GetAwaiter().GetResult();
         view.Render();
-        if (session.Market.Enabled) Console.WriteLine("Market: " + session.Market.Status);
+        if (watcher.Market.Enabled) Console.WriteLine("Market: " + watcher.Market.Status);
 
         if (!session.Eligible) { Console.WriteLine("Run too short or empty; nothing uploaded."); return 0; }
         var sent = session.UploadAsync(s).GetAwaiter().GetResult();
         Console.WriteLine((sent ? "Run shared anonymously." : "Run kept on this PC.") + $" Activity: {session.Activity}.");
+        return 0;
+    }
+
+    /// <summary>The always-on Market reader as the window runs it: the saved switch and area, the server from --server or the saved one.</summary>
+    static GameWatcher MarketWatcher(Settings s, ItemDictionary items, Dictionary<string, string> o)
+    {
+        var prefs = UserPrefs.Load();
+        var w = new GameWatcher(s, items, prefs.ManualMarket ? RegionStore.Load(RegionStore.MarketFile) : null, o.GetValueOrDefault("server") ?? prefs.Server);
+        w.Market.Enabled = s.Market.Enabled && prefs.ShareMarket && !o.ContainsKey("no-market");
+        return w;
+    }
+
+    static string MarketIntro(GameWatcher w) =>
+        $"Market prices: read whenever the Market is open, server \"{w.Market.Server}\" ({(w.Market.Server.Length == 0 ? "none: asks are read but not sent; pass --server" : w.Market.ServerKey)}). --no-market turns it off.";
+
+    /// <summary>Only the Market reader, no farming run: what the window does in the background, for testing it on its own.</summary>
+    static int MarketWatch(Settings s, Dictionary<string, string> o)
+    {
+        var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
+        var watcher = MarketWatcher(s, items, o);
+        if (!watcher.Market.Enabled) { Console.WriteLine("Market reading is off (settings, the window's switch, or --no-market)."); return 1; }
+        watcher.Start();
+        Console.WriteLine(MarketIntro(watcher));
+        Console.WriteLine("Open the Market in the game. Ctrl+C to stop.");
+        var stop = false;
+        Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop = true; };
+        string last = "";
+        while (!stop)
+        {
+            var line = (watcher.GameRect == null ? "game not found · " : "") + watcher.Market.Status + (watcher.Market.LastAsk.Length > 0 ? " · last: " + watcher.Market.LastAsk : "") + (watcher.Market.Note.Length > 0 && !watcher.Market.Detected ? " · " + watcher.Market.Note : "");
+            if (line != last) { Console.WriteLine($"{DateTime.Now:HH:mm:ss}  {line}"); last = line; }
+            Thread.Sleep(1000);
+        }
+        watcher.StopAsync().GetAwaiter().GetResult();
+        Console.WriteLine("Market: " + watcher.Market.Status);
         return 0;
     }
 

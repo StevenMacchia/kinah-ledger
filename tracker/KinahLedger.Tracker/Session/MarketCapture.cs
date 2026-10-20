@@ -38,7 +38,7 @@ public sealed class MarketCapture
     public string Region { get; }
     public string ServerKey => ServerKeys.Build(Region, Server);
     public MarketLayout? Layout { get; private set; }
-    public bool Manual { get; }
+    public bool Manual { get; private set; }
     /// <summary>True while listings are being read: the table was found (auto) or the chosen area is showing listings (manual).</summary>
     public bool Detected { get; private set; }
     public string Note { get; private set; } = "";
@@ -60,20 +60,29 @@ public sealed class MarketCapture
 
     public static readonly Color MarkColor = Color.FromArgb(155, 232, 211);
 
+    /// <summary>Switches between the title-and-headers search (null) and a hand-chosen area, with immediate effect.</summary>
+    public void UseRegion(Rectangle? r)
+    {
+        Layout = r is { } rr ? MarketLayout.FromRegion(rr) : null;
+        Manual = r != null;
+        Detected = false; _emptyReads = 0; _detectAt = DateTime.MinValue;
+    }
+
     /// <summary>One read: find the table if it isn't known, then read its rows and queue what's new. Called about once a second.</summary>
     public async Task TickAsync(Rectangle game, int scale)
     {
         var now = DateTime.UtcNow;
-        if (Layout == null)
+        var layout = Layout;
+        if (layout == null)
         {
             if ((now - _detectAt).TotalSeconds < _cfg.DetectEverySec) return;
             _detectAt = now;
-            var (layout, note) = await MarketLocator.DetectAsync(game, Read);
+            var (found, note) = await MarketLocator.DetectAsync(game, Read);
             Note = note;
-            if (layout == null) { Detected = false; return; }
-            Layout = layout; Detected = true; _emptyReads = 0;
+            if (found == null) { Detected = false; return; }
+            Layout = layout = found; Detected = true; _emptyReads = 0;
         }
-        var rows = await MarketReader.ReadRowsAsync(Layout, scale, Read);
+        var rows = await MarketReader.ReadRowsAsync(layout, scale, Read);
         Reads++; LastReadAt = DateTime.UtcNow;
         int parsed = 0;
         foreach (var row in rows)
@@ -144,7 +153,7 @@ public sealed class MarketCapture
             string counts = AsksSeen == 0 ? "nothing read yet" : $"{AsksSeen:N0} ask{(AsksSeen == 1 ? "" : "s")} read · {Items:N0} item{(Items == 1 ? "" : "s")} · {Shared:N0} shared";
             string last = LastReadAt == DateTime.MinValue ? "" : " · last read " + Ago(LastReadAt);
             string why = AsksSeen > 0 && Shared == 0
-                ? string.IsNullOrWhiteSpace(Server) ? " · type your server to share" : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · sharing isn't live yet" : LastError.Length > 0 ? " · " + LastError : ""
+                ? string.IsNullOrWhiteSpace(Server) ? " · type your server to share" : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · no sharing address in settings.json" : LastError.Length > 0 ? " · " + LastError : ""
                 : "";
             return $"{state} · {counts}{last}{why}";
         }

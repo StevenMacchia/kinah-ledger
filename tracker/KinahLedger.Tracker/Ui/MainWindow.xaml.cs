@@ -26,11 +26,13 @@ public partial class MainWindow : Window
     readonly Settings _settings;
     readonly UserPrefs _prefs = UserPrefs.Load();
     readonly ItemDictionary _items;
+    /// <summary>Runs from the moment the window opens: finds the game and reads the Market whenever it is open. Start tracking is only for farming runs.</summary>
+    readonly GameWatcher _watcher;
     TrackerSession? _session;
     HudWindow? _hud;
     DRect? _region = RegionStore.Load();
     DRect? _marketRegion = RegionStore.Load(RegionStore.MarketFile);
-    bool _quitting, _balloonShown, _demo, _compact;
+    bool _quitting, _balloonShown, _demo, _compact, _watcherStopped;
 
     readonly WF.NotifyIcon _tray = new();
     readonly WF.ToolStripMenuItem _trayToggle = new("Start tracking");
@@ -39,11 +41,15 @@ public partial class MainWindow : Window
 
     Brush B(string key) => (Brush)FindResource(key);
 
-    public MainWindow(Settings settings)
+    /// <param name="watch">False for layout renders, so no screen is read while the window exists off-screen.</param>
+    public MainWindow(Settings settings, bool watch = true)
     {
         InitializeComponent();
         _settings = settings;
         _items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+        if (!_prefs.ManualMarket) _marketRegion = null;
+        _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.Server);
+        _watcher.Market.Enabled = settings.Market.Enabled && _prefs.ShareMarket;
         Icon = Native.AppIconSource();
 
         Kind.ItemsSource = Kinds;
@@ -62,15 +68,14 @@ public partial class MainWindow : Window
         SiteLink.Click += (_, _) => Open(RepoUrl);
         SentLink.Click += (_, _) => WhatsSent();
         Version.Text = "v" + Upload.RunPayload.AppVersion;
-        // Market prices: its own switch and server, both remembered; the chosen area (if any) is used instead of the title-and-headers search
+        // Market prices: its own switch and server, both remembered and live on the watcher; a chosen area replaces the title-and-headers search at once
         MarketChk.IsChecked = _prefs.ShareMarket;
         ServerBox.Text = _prefs.Server;
-        if (!_prefs.ManualMarket) _marketRegion = null;
         MarketChk.Checked += (_, _) => MarketSwitch(true);
         MarketChk.Unchecked += (_, _) => MarketSwitch(false);
-        ServerBox.TextChanged += (_, _) => { if (_session != null) _session.Market.Server = ServerBox.Text.Trim(); };
+        ServerBox.TextChanged += (_, _) => _watcher.Market.Server = ServerBox.Text.Trim();
         MarketPickBtn.Click += (_, _) => PickMarket();
-        MarketResetLink.Click += (_, _) => { _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); UpdateMarketStatus(); Say("Back to automatic: the Market window is found by its title and column headers on the next Start.", "Faint"); };
+        MarketResetLink.Click += (_, _) => { _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); _watcher.Market.UseRegion(null); UpdateMarketUi(); Say("Back to automatic: the Market window is found by its title and column headers.", "Faint"); };
         MarketSentLink.Click += (_, _) => WhatsRead();
         try { LinkCodeRun.Text = Upload.InstallId.LinkCode(); } catch (Exception) { LinkCodeRun.Text = "unavailable"; }
         CopyCodeLink.Click += (_, _) => { try { Clipboard.SetText(LinkCodeRun.Text); Say("Link code copied. Paste it into your profile on the site to see your runs there.", "Good"); } catch (Exception) { Say("Couldn't reach the clipboard; the code is " + LinkCodeRun.Text, "Warn"); } };
@@ -87,10 +92,11 @@ public partial class MainWindow : Window
         Closing += OnClosingWindow;
 
         UpdateStep2();
-        UpdateMarketStatus();
+        UpdateMarketUi();
         ShowTable(null);
         SettingsBtn.Click += (_, _) => SetCompact(!_compact);
         SetCompact(_prefs.Compact, remember: false);
+        if (watch) _watcher.Start();
     }
 
     /// <summary>
@@ -229,8 +235,7 @@ public partial class MainWindow : Window
             _settings.Upload.Enabled = ShareChk.IsChecked == true;
             _mode = SelectedMode;
             ApplyModeLabels();
-            var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName(), marketRegion: _prefs.ManualMarket ? _marketRegion : null, server: ServerBox.Text.Trim());
-            session.Market.Enabled = MarketChk.IsChecked == true;
+            var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName());
             await session.StartAsync();
             _session = session;
             _region = session.Region;
@@ -270,12 +275,11 @@ public partial class MainWindow : Window
         string msg, tone = "Faint"; bool shared = false;
         if (!s.Eligible) msg = "Stopped. Under 5 minutes or no loot seen, so this run isn't shared.";
         else if (ShareChk.IsChecked != true) msg = "Stopped. Sharing is off, so this run stays on this PC.";
-        else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = "Stopped. Sharing isn't live yet, so this run stays on this PC.";
+        else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = "Stopped. No sharing address in settings.json, so this run stays on this PC.";
         else if (await s.UploadAsync(_settings)) { msg = "Stopped. Run shared anonymously."; tone = "Good"; shared = true; }
         else { msg = "Stopped. Couldn't reach the site; run kept on this PC."; tone = "Warn"; }
         if (s.Engine.Events > 0) { SessionStore.Append(s.Engine, _items, s.Activity, _settings, shared); msg += $" Saved to your history ({SessionStore.Count()} runs)."; }
         _session = null;
-        UpdateMarketStatus(s.Market);
         TableTitle.Text = "LAST RUN · " + s.Activity.ToUpperInvariant();
         SetTrackingUi(false);
         Say(msg, tone);
@@ -289,23 +293,24 @@ public partial class MainWindow : Window
         StartBtn.BorderBrush = on ? new SolidColorBrush(Color.FromRgb(0xD9, 0x5E, 0x5E)) : new SolidColorBrush(Color.FromRgb(0x4C, 0x9B, 0xEF));
         _trayToggle.Text = on ? "Stop tracking" : "Start tracking";
         PickBtn.IsEnabled = !on; TestBtn.IsEnabled = !on; Kind.IsEnabled = !on; HudChk.IsEnabled = !on; ShareChk.IsEnabled = !on;
-        MarketPickBtn.IsEnabled = !on;   // the switch and the server stay live: both take effect on the running reader
+        // the Market card is not part of a run: its switch, server and area stay live either way
         _tray.Text = on ? "Kinah Ledger · tracking" : "Kinah Ledger";
     }
 
     void Tick()
     {
+        if (!_demo) MarketStatus.Text = MarketLine();   // the Market reader runs with or without a run
         var s = _session; if (s == null) return;
         FillNumbers(s.Engine, s.Engine.Elapsed);
         ZoneLbl.Text = "Zone: " + (s.Zone ?? "not read yet");
-        MarketStatus.Text = s.Market.Status;
         if (s.LastError.Length > 0) Say("Read problem: " + s.LastError, "Bad");
         else Say($"Tracking {s.Activity} · {s.Reads} reads" + (s.Unaligned > 0 ? $" · {s.Unaligned} skipped" : "") + (s.LastLine.Length > 0 ? " · last: " + s.LastLine : ""), "Faint");
         if (++_ticks % 4 == 0 && !_framing)
         {
-            // the whole game with the chat and map outlined, refreshed every couple of seconds off the UI thread
+            // the whole game with the chat, map and (when open) Market outlined, refreshed every couple of seconds off the UI thread
             _framing = true;
-            _ = Task.Run(() => s.Frame(480)).ContinueWith(t => Dispatcher.Invoke(() => { _framing = false; if (t.Status == TaskStatus.RanToCompletion) SetPreview(t.Result); }));
+            var marks = MarketMarks();
+            _ = Task.Run(() => s.Frame(480, marks)).ContinueWith(t => Dispatcher.Invoke(() => { _framing = false; if (t.Status == TaskStatus.RanToCompletion) SetPreview(t.Result); }));
         }
         if (_hud != null)
         {
@@ -497,16 +502,17 @@ public partial class MainWindow : Window
         "When a run ends, these totals go to the public tables:\n\n" +
         "•  what you're farming and where, gear score bracket, region\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
         "Never your character name, server, account, class, level, chat text or screenshots.\n" +
-        "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n" +
-        "Sharing isn't live yet; until the site can receive runs, everything stays on this PC.",
+        "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
+        "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
-    /* ---------------- market prices ---------------- */
+    /* ---------------- market prices (always on while the window is open; not part of a run) ---------------- */
 
     void MarketSwitch(bool on)
     {
         _prefs.ShareMarket = on;
-        if (_session != null) _session.Market.Enabled = on; else UpdateMarketStatus();
+        _watcher.Market.Enabled = on;
+        UpdateMarketUi();
     }
 
     void PickMarket()
@@ -515,32 +521,43 @@ public partial class MainWindow : Window
         try
         {
             var r = RegionPickerWindow.Pick("Drag a box around the Market's listings: the rows with item, quantity and unit price.");
-            if (r != null) { _marketRegion = r; _prefs.ManualMarket = true; RegionStore.Save(r.Value, RegionStore.MarketFile); }
+            if (r != null) { _marketRegion = r; _prefs.ManualMarket = true; RegionStore.Save(r.Value, RegionStore.MarketFile); _watcher.Market.UseRegion(r); }
         }
-        finally { Show(); Activate(); UpdateMarketStatus(); }
-        if (_prefs.ManualMarket && _marketRegion != null) Say("Market area chosen by hand. Each row is read as one line and split by its numbers. Used from the next Start.", "Good");
+        finally { Show(); Activate(); UpdateMarketUi(); }
+        if (_prefs.ManualMarket && _marketRegion != null) Say("Market area chosen by hand and in use now. Each row is read as one line and split by its numbers.", "Good");
     }
 
-    /// <summary>The card's line when no run is on: how the Market will be found, and what the last run read.</summary>
-    void UpdateMarketStatus(MarketCapture? last = null)
+    /// <summary>The card's buttons and its line, right away; the line is then refreshed every half second from the watcher.</summary>
+    void UpdateMarketUi()
     {
         bool manual = _prefs.ManualMarket && _marketRegion != null;
         MarketResetText.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
         MarketPickBtn.Content = manual ? "Choose again" : "Choose the Market";
-        if (MarketChk.IsChecked != true) { MarketStatus.Text = "Off. The Market is never read; everything else keeps working."; return; }
-        string how = manual && _marketRegion is DRect m
-            ? $"Reads the area you chose ({m.Width} × {m.Height} px at {m.X}, {m.Y}) while you track."
-            : "Finds the Market window by its title and column headers while you track.";
-        string tail = last != null && last.AsksSeen > 0 ? $" Last run: {last.AsksSeen:N0} asks read, {last.Shared:N0} shared." : "";
-        MarketStatus.Text = how + " Only the listings on your screen are read: item, quantity, unit price. Seller names are never captured." + tail;
+        MarketStatus.Text = MarketLine();
+    }
+
+    /// <summary>What the Market reader is doing right now, run or no run.</summary>
+    string MarketLine()
+    {
+        var m = _watcher.Market;
+        if (!m.Enabled) return "Off. The Market is never read; everything else keeps working.";
+        if (_watcher.GameRect == null) return "Waiting for the game. While the game and this window are open, the Market is read whenever you open it; Start tracking is only for farming runs.";
+        return m.Status + (m.Manual && _marketRegion is DRect r ? $" · chosen area {r.Width} x {r.Height} px" : "");
+    }
+
+    /// <summary>The Market table's outline for the preview, when it is being read.</summary>
+    (DRect, System.Drawing.Color)[] MarketMarks()
+    {
+        var m = _watcher.Market;
+        return m.Enabled && m.Layout is { } l && (m.Detected || m.Manual) ? new[] { (l.Outline, MarketCapture.MarkColor) } : Array.Empty<(DRect, System.Drawing.Color)>();
     }
 
     void WhatsRead() => MessageBox.Show(this,
-        "While the Market window is open in the game, the listings on your screen are read about once a second, the same way the chat is:\n\n" +
+        "Whenever this window and the game are open (not only during a run), the tracker watches for the Market window. While the Market is open, the listings on your screen are read about once a second, the same way the chat is:\n\n" +
         "•  item name, stack size and unit price of each ask\n•  your server, as typed here, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
         "Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
-        "Nothing is clicked or typed in the game. Turn this off any time; the tracker still works.\n" +
-        "Sharing isn't live yet; until the site can receive prices, what's read stays on this PC.",
+        "Nothing is clicked or typed in the game. Turn this off any time; the tracker still works.\n\n" +
+        "Asks go to kinahledger.com (https://kinahledger.com/v1/prices) in small batches as they are read. If the site can't be reached, the batch is tried again a few seconds later; whatever is still unsent when this window closes is dropped. Prices are never stored on this PC.",
         "What's read from the Market", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- tray, hotkey, window state ---------------- */
@@ -587,6 +604,13 @@ public partial class MainWindow : Window
             if (r == MessageBoxResult.No) { e.Cancel = true; return; }
             e.Cancel = true; _quitting = true;
             _ = StopTracking().ContinueWith(_ => Dispatcher.Invoke(Close));
+            return;
+        }
+        if (_watcher.Running && !_watcherStopped)
+        {
+            // let the Market reader send what it still holds (a few seconds at most), then close for real
+            e.Cancel = true; _watcherStopped = true;
+            _ = _watcher.StopAsync().ContinueWith(_ => Dispatcher.Invoke(Close));
             return;
         }
         var h = new WindowInteropHelper(this).Handle;

@@ -168,7 +168,7 @@
         </Grid>
       </Border>
 
-      <!-- market prices: the listings are read off the Market window while it's open and shared as asks. Its own switch; off keeps everything else working. -->
+      <!-- market prices: read off the Market window whenever the game and this window are open, run or no run, and shared as asks. Its own switch; off keeps everything else working. -->
       <Border x:Name="MarketCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="20,16,20,16">
         <StackPanel>
           <StackPanel Orientation="Horizontal">
@@ -187,7 +187,7 @@
             <TextBlock x:Name="MarketResetText" Margin="0,0,0,6" VerticalAlignment="Center" FontSize="12.5" Visibility="Collapsed"><Hyperlink x:Name="MarketResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
           </WrapPanel>
           <TextBlock x:Name="MarketStatus" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Margin="36,4,0,0"
-                     Text="Finds the Market window by its title and column headers while you track. Only the listings on your screen are read: item, quantity, unit price. Seller names are never captured."/>
+                     Text="Waiting for the game. While the game and this window are open, the Market is read whenever you open it; Start tracking is only for farming runs."/>
         </StackPanel>
       </Border>
 
