@@ -153,7 +153,7 @@ public sealed class MarketCapture
             string counts = AsksSeen == 0 ? "nothing read yet" : $"{AsksSeen:N0} ask{(AsksSeen == 1 ? "" : "s")} read · {Items:N0} item{(Items == 1 ? "" : "s")} · {Shared:N0} shared";
             string last = LastReadAt == DateTime.MinValue ? "" : " · last read " + Ago(LastReadAt);
             string why = AsksSeen > 0 && Shared == 0
-                ? string.IsNullOrWhiteSpace(Server) ? " · type your server to share" : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · no sharing address in settings.json" : LastError.Length > 0 ? " · " + LastError : ""
+                ? string.IsNullOrWhiteSpace(Server) ? " · type your server to share" : string.IsNullOrWhiteSpace(_upload.PricesUrl) ? " · sharing isn't live yet" : LastError.Length > 0 ? " · " + LastError : ""
                 : "";
             return $"{state} · {counts}{last}{why}";
         }

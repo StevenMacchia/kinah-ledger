@@ -98,9 +98,9 @@ app version, and a random install ID used only to drop duplicates and spam. Neve
 server, account, class, level, chat text or screenshots. Sharing is on by default and off with one
 setting; the live readout works either way.
 
-The totals post once, when the run stops, to `https://kinahledger.com/v1/runs` (`upload.endpoint` in
-`settings.json`, set by default; blank it and nothing is sent). Runs under 5 minutes or with no loot are
-never sent. If the site can't be reached, the run simply stays on this PC: it is still saved to your
+The totals post once, when the run stops, to the `/v1/runs` route of the site (`upload.endpoint` in
+`settings.json`). It is empty until the site is up, so nothing is sent yet. Runs under 5 minutes or with no
+loot are never sent. If the site can't be reached, the run simply stays on this PC: it is still saved to your
 history and is not sent later.
 
 ### What a shared price contains
@@ -108,9 +108,10 @@ history and is not sent later.
 A price batch is `{app, server_key, install, asks: [{item, unit_price, qty, seen_at}]}`: the server you typed
 (as `region-server`), each ask's item name, stack size, unit price and the time it was seen, the app version and
 the install ID. Never seller names, the character or screenshots. Batches post whenever the window and the game
-are open, run or no run, to `https://kinahledger.com/v1/prices`, derived from `upload.endpoint`;
-`upload.pricesEndpoint` in `settings.json` overrides it. If the site can't be reached, the batch is retried a few
-seconds later; whatever is still unsent when the window closes is dropped, and prices are never stored on this PC.
+are open, run or no run, to the `/v1/prices` route next to the runs one (derived from `upload.endpoint`;
+`upload.pricesEndpoint` in `settings.json` overrides it). Both are empty until the site is up, so nothing leaves
+the PC yet. If the site can't be reached, the batch is retried a few seconds later; whatever is still unsent when
+the window closes is dropped, and prices are never stored on this PC.
 
 ## Data
 
