@@ -18,14 +18,15 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"^\[?\d{1,2}:\d{2}(?::\d{2})?\]?\s*")]
     private static partial Regex Timestamp();
 
-    [GeneratedRegex(@"\bacquired\s+(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b(?<rest>.*)$", RegexOptions.IgnoreCase)]
+    /// <summary>"Acquired 520 Kina." The recognizer sometimes glues the verb to the number ("Acquiredn521 Kina?"), so the gap is loose.</summary>
+    [GeneratedRegex(@"\bacquired[\sn]{0,2}(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b(?<rest>.*)$", RegexOptions.IgnoreCase)]
     private static partial Regex Kina();
 
     [GeneratedRegex(@"\b(?:acquired|obtained|looted|picked up)\s+(?<name>.+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s*\.?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex Item();
 
     /// <summary>The game's own item line: "Fresh Fruit acquired." (name first). "acquire[da]" tolerates the common misread.</summary>
-    [GeneratedRegex(@"^(?<name>[^\[\]]+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s+acquire[da]\.?\s*$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?<name>[^\[\]]+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s+acqu[il1]r[eé]+[dao]?[.,]?\s*[a-z.]{0,2}$", RegexOptions.IgnoreCase)]
     private static partial Regex ItemNameFirst();
 
     [GeneratedRegex(@"\bdefeated\s+(?<mob>.+?)\s*\.?\s*$", RegexOptions.IgnoreCase)]
@@ -78,7 +79,8 @@ public sealed partial class ChatParser
         if (!it.Success) it = Item().Match(line);
         if (it.Success)
         {
-            var name = it.Groups["name"].Value.Trim().TrimEnd('.').Trim('[', ']', ' ');
+            // the recognizer leaves stray marks on line ends ("Fera Soul Crystals;"); none of them belong to a name
+            var name = it.Groups["name"].Value.Trim().TrimEnd('.', ',', ';', ':', '\'', '"', '`', '-', ' ').Trim('[', ']', ' ');
             if (name.Length < 2) yield break;
             // "Acquired 3 Iron Ore" puts the count first; keep the name clean and the count right
             var lead = System.Text.RegularExpressions.Regex.Match(name, @"^(\d{1,4})\s+(.+)$");
@@ -89,7 +91,7 @@ public sealed partial class ChatParser
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
             // "Obtained 1 Natura Soul Crystals.": a pet crystal, kept apart from drops and rated by zone, not by kill
-            var pet = System.Text.RegularExpressions.Regex.Match(name, @"^(?<pet>.+?)\s+soul\s+crysta\w{0,3}$", RegexOptions.IgnoreCase);
+            var pet = System.Text.RegularExpressions.Regex.Match(name, @"^(?<pet>.+?)\s+sou[l1]\s+crysta[a-z]{0,3}[^a-z0-9]*$", RegexOptions.IgnoreCase);
             if (pet.Success)
             {
                 yield return new PetCrystal(time, pet.Groups["pet"].Value.Trim() + " Soul Crystal", Math.Clamp(n, 1, 9999));
@@ -140,12 +142,15 @@ public sealed class LineTracker
     /// <summary>Reads that saw nothing: the chat faded out, or the UI was hidden. The last lines seen stay as the baseline.</summary>
     public int Empty { get; private set; }
 
+    bool _faded;
+
     public List<string> NewLines(List<string> cur)
     {
         if (cur.Count == 0)
         {
             // the frameless chat fades out when idle; when a loot line brings it back, the read before it is this empty one
             Empty++;
+            _faded = _prev.Count > 0;
             return new List<string>();
         }
         var keys = cur.Select(Key).ToList();
@@ -153,6 +158,13 @@ public sealed class LineTracker
         {
             _prev = keys;                     // first read: what's already on screen is history, not loot
             return new List<string>();
+        }
+        if (_faded)
+        {
+            // after a fade, one or two lines are what arrived since: count them even when they repeat the last ones seen
+            // ("Orichalcum Ore acquired." twice in a row). More at once means the history came back (a hover), so align as usual.
+            _faded = false;
+            if (keys.Count <= 2) { _prev = keys; return new List<string>(cur); }
         }
         if (keys.SequenceEqual(_prev)) return new List<string>();
 

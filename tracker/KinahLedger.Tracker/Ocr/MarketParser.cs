@@ -30,9 +30,9 @@ public sealed partial class MarketParser
     [GeneratedRegex(@"^(?:kinah?|k|ea|each|per|unit|units|pcs?)\.?$", RegexOptions.IgnoreCase)]
     private static partial Regex Filler();
     /// <summary>Level tags and bind marks that follow a name in the list.</summary>
-    [GeneratedRegex(@"\s*(?:\(bound\)|\[?\blv\.?\s*\d{1,3}\]?|\blevel\s+\d{1,3})\s*", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\s*(?:\(bound\)|\[?\blv\.?\s*\d{1,3}\]?|\bitem\s+[l1]eve[l1]\s*\d{1,3}|\b[l1]eve[l1]\s+\d{1,3})\s*", RegexOptions.IgnoreCase)]
     private static partial Regex NameTags();
-    [GeneratedRegex(@"^(?:buy|sell|search|my\s+listings?|listings?|page|register|registration|sort|filter|all|category|categories|cancel|collect|settle(?:ment)?)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:buy|sell|search|my\s+listings?|listings?|page|register|registration|sort|filter|all|category|categories|cancel|collect|settle(?:ment)?|settlement\s+details?|main|list|grade|item|exchange|market|enter\s+a\s+search.*|current\s+tax\s+rate.*|sales?\s*list|lowest\s*sale\s*price)$", RegexOptions.IgnoreCase)]
     private static partial Regex UiWords();
 
     public MarketAsk? Parse(MarketReader.Row row) => row.Cells != null ? ParseCells(row.Cells) : Parse(row.Flat);
@@ -40,7 +40,14 @@ public sealed partial class MarketParser
     /// <summary>A table row with its columns already apart.</summary>
     public MarketAsk? ParseCells(IReadOnlyDictionary<string, string> cells)
     {
-        if (!cells.TryGetValue("unit", out var unitText) || !cells.TryGetValue("name", out var nameText)) return null;
+        if (!cells.TryGetValue("name", out var nameText)) return null;
+        // the main board: one row per item with its lowest sale price; the price is per unit, so the stack is one
+        if (cells.TryGetValue("lowest", out var lowText))
+        {
+            long low = Number(lowText);
+            return low > 0 ? Make(nameText, 1, low) : null;
+        }
+        if (!cells.TryGetValue("unit", out var unitText)) return null;
         long unit = Number(unitText); if (unit <= 0) return null;
         long qty = cells.TryGetValue("qty", out var q) ? Number(q) : 0;
         long total = cells.TryGetValue("total", out var t) ? Number(t) : 0;

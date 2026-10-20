@@ -14,6 +14,7 @@ public static class WpfApp
         if (Application.Current != null) return Application.Current;
         var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
         app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/KinahLedger;component/Ui/Theme.xaml", UriKind.Relative) });
+        Skins.Apply(KinahLedger.Session.UserPrefs.Load().Skin);   // the chosen look, over the base theme
         return app;
     }
 
@@ -82,18 +83,20 @@ public static class WpfApp
     }
 
     /// <summary>Renders the window (and the panel) off-screen to PNG files so the layout can be reviewed without a desktop session.</summary>
-    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false)
+    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null)
     {
         Ensure();
         Directory.CreateDirectory(dir);
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
+        if (skin != null) Skins.Apply(skin);
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
+        if (welcome) w.ShowWelcomeDemo(skin ?? "night");
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
-        var name = !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", _ => "ui-main-tracking" };
-        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + ".png"), (compact ? 640 : 800) - 16);
+        var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", _ => "ui-main-tracking" };
+        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         w.Close();
 
         var h = new HudWindow { Left = -12000, Top = -12000, ShowActivated = false };

@@ -29,7 +29,13 @@ public partial class MainWindow : Window
     readonly ItemDictionary _items;
     /// <summary>Runs from the moment the window opens: finds the game and reads the Market whenever it is open. Start tracking is only for farming runs.</summary>
     readonly GameWatcher _watcher;
-    TrackerSession? _session;
+    /// <summary>The farming run just stopped, shown for a while before the live count takes the window back.</summary>
+    SessionEngine? _lastRun; DateTime _lastRunUntil;
+    bool Farming => _watcher.Farming;
+    enum Tab { Drops, Gathered, Pets }
+    Tab _tab;
+    static Tab TabFor(Mode m) => m == Mode.Gather ? Tab.Gathered : m == Mode.Pets ? Tab.Pets : Tab.Drops;
+    static Mode ModeOf(SessionEngine e) => GameWatcher.DominantKind(e) switch { "Gathering" => Mode.Gather, "Pets" => Mode.Pets, _ => Mode.Open };
     HudWindow? _hud;
     DRect? _region = RegionStore.Load();
     DRect? _marketRegion = RegionStore.Load(RegionStore.MarketFile);
@@ -50,8 +56,9 @@ public partial class MainWindow : Window
         _items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         IconCache.Enabled = settings.Ui.Icons;
         if (!_prefs.ManualMarket) _marketRegion = null;
-        _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.Server);
-        _watcher.Market.Enabled = settings.Market.Enabled && _prefs.ShareMarket;
+        _settings.Upload.Enabled = _prefs.Share;
+        _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.ManualChat ? _region : null, _prefs.Server) { RegionKey = _prefs.Region, Server = _prefs.Server };
+        _watcher.Market.Enabled = settings.Market.Enabled && _prefs.Share;   // prices ride on the one Share switch
         Icon = Native.AppIconSource();
 
         Kind.ItemsSource = Kinds;
@@ -78,18 +85,21 @@ public partial class MainWindow : Window
         RegionBox.SelectionChanged += (_, _) => { FillServers(); ServerChanged(); };
         ServerPick.SelectionChanged += (_, _) => ServerChanged();
         // Market prices: its own switch, remembered and live on the watcher; a chosen area replaces the title-and-headers search at once
-        MarketChk.IsChecked = _prefs.ShareMarket;
-        MarketChk.Checked += (_, _) => MarketSwitch(true);
-        MarketChk.Unchecked += (_, _) => MarketSwitch(false);
+        ShareChk.Checked += (_, _) => MarketSwitch(true);
+        ShareChk.Unchecked += (_, _) => MarketSwitch(false);
         MarketPickBtn.Click += (_, _) => PickMarket();
         MarketResetLink.Click += (_, _) => { _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); _watcher.Market.UseRegion(null); UpdateMarketUi(); Say("Back to automatic: the Market window is found by its title and column headers.", "Faint"); };
         MarketSentLink.Click += (_, _) => WhatsRead();
         try { LinkCodeRun.Text = Upload.InstallId.LinkCode(); } catch (Exception) { LinkCodeRun.Text = "unavailable"; }
         CopyCodeLink.Click += (_, _) => { try { Clipboard.SetText(LinkCodeRun.Text); Say("Link code copied. Paste it into your profile on the site to see your runs there.", "Good"); } catch (Exception) { Say("Couldn't reach the clipboard; the code is " + LinkCodeRun.Text, "Warn"); } };
-        ResetLink.Click += (_, _) => { _region = null; _prefs.ManualChat = false; RegionStore.Clear(); UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Back to automatic: the chat is found when you start.", "Faint"); };
+        ResetLink.Click += (_, _) => { _region = null; _prefs.ManualChat = false; RegionStore.Clear(); _watcher.ManualChat = null; _ = _watcher.ResetChatAsync(); UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Back to automatic: the chat is found when you start.", "Faint"); };
         LogsLink.Click += (_, _) => Open(CrashLog.Dir);
 
-        Kind.SelectionChanged += (_, _) => { if (_session == null) { ApplyModeLabels(); ResetTiles(); } };
+        Kind.SelectionChanged += (_, _) => { if (!Farming) { _mode = SelectedMode; _tab = TabFor(_mode); ApplyModeLabels(); if (_watcher.Chat == null) ResetTiles(); } };
+        DropsTab.Click += (_, _) => { _tab = Tab.Drops; Redraw(); };
+        GatherTab.Click += (_, _) => { _tab = Tab.Gathered; Redraw(); };
+        PetsTab.Click += (_, _) => { _tab = Tab.Pets; Redraw(); };
+        _mode = SelectedMode; _tab = TabFor(_mode);
         ApplyModeLabels(); ResetTiles();
         BuildTray();
         _timer.Tick += (_, _) => Tick();
@@ -104,6 +114,7 @@ public partial class MainWindow : Window
         SettingsBtn.Click += (_, _) => SetCompact(!_compact);
         SetCompact(_prefs.Compact, remember: false);
         ServerRowState();
+        InitWelcome();
         if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
         if (watch) _watcher.Start();
     }
@@ -115,24 +126,11 @@ public partial class MainWindow : Window
     void SetCompact(bool on, bool remember = true)
     {
         _compact = on;
-        var v = on ? Visibility.Collapsed : Visibility.Visible;
-        SetupCard.Visibility = v; Tagline.Visibility = v; Badge3.Visibility = v;
-        Step3Title.Margin = on ? new Thickness(0) : new Thickness(12, 0, 0, 0);
-        ServerRow.Margin = on ? new Thickness(0, 12, 0, 0) : new Thickness(36, 12, 0, 0);
-        KindGrid.Margin = on ? new Thickness(0, 12, 0, 0) : new Thickness(36, 12, 0, 0);
-        OptsRow.Margin = on ? new Thickness(0, 14, 0, 0) : new Thickness(36, 14, 0, 0);
-        LinkRow.Margin = on ? new Thickness(0, 8, 0, 0) : new Thickness(36, 8, 0, 0);
-        // the Market card stays in the compact layout (its status matters while tracking), just without the step badge and indent
-        Badge4.Visibility = v;
-        Step4Title.Margin = on ? new Thickness(0) : new Thickness(12, 0, 0, 0);
-        foreach (var fe in new FrameworkElement[] { MarketRow, MarketRow2, MarketStatus }) fe.Margin = new Thickness(on ? 0 : 36, fe.Margin.Top, 0, 0);
-        Kind.Width = on ? 168 : 200;
-        KindHint.Visibility = v;                 // the zone name gets the room instead
-        StartBtn.Width = on ? 160 : 196;
-        SettingsBtn.Content = on ? "Settings" : "Hide setup";
-        SettingsBtn.ToolTip = on ? "Show the setup steps: chat area, zone and the preview." : "Hide the setup steps. The chat and the zone are still found when you press Start.";
-        Width = on ? 640 : 800;
-        if (_session == null && !_demo) Say(on ? "Not tracking. Press Start; the chat and the zone are found on their own. Setup is under Settings." : "Not tracking. Do steps 1 and 2, then press Start.", "Faint");
+        SetupCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        Tagline.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        SettingsBtn.Content = on ? "Settings" : "Hide settings";
+        SettingsBtn.ToolTip = on ? "Server, sharing, chat area, Market and look." : "Hide the settings. Everything here is remembered.";
+        if (!Farming && !_demo) Say(on ? "Reading the chat whenever the game is open. Press Start farming to time a run." : "Settings. Everything here is remembered.", "Faint");
         if (remember) { _prefs.Compact = on; SavePrefs(); }
     }
 
@@ -152,28 +150,34 @@ public partial class MainWindow : Window
 
     void ApplyModeLabels()
     {
-        var m = _session != null ? _mode : SelectedMode;
+        var m = _mode;
         (Tile1Label.Text, Tile2Label.Text, Tile3Label.Text, Tile4Label.Text, KindHint.Text) = m switch
         {
-            Mode.Gather => ("NODES / HR", "ITEMS / HR", "ITEMS / NODE", "RARE FINDS / HR", "Ore, logs, Odyle, herbs and food. Each gather is a node; each skill has its own per-node rate."),
+            Mode.Gather => ("ATTEMPTS / HR", "ITEMS / HR", "ITEMS / ATTEMPT", "RARE FINDS / HR", "Ore, logs, Odyle, herbs and food. Every gather is an attempt, failed ones too; each skill has its own per-attempt rate."),
             Mode.Pets => ("SOUL CRYSTALS / HR", "SOUL CRYSTALS", "KILLS / HR", "KINAH / HR", "Pet Soul Crystals from mobs, counted by zone so the best spot per hour shows. Drops and per hour only, no drop %."),
             _ => ("KINAH / HR", "KINAH / KILL", "KILLS / HR", "DROPS / HR", "Mobs that drop Kinah. Each Kinah pickup is a kill. Souls and Soul Crystals never count as drops."),
         };
-        // the mode's own table comes first; the others appear only when they have rows
-        TableStack.Children.Remove(DropsSection); TableStack.Children.Remove(GatherSection); TableStack.Children.Remove(PetSection);
-        var order = m switch { Mode.Gather => new[] { GatherSection, DropsSection, PetSection }, Mode.Pets => new[] { PetSection, DropsSection, GatherSection }, _ => new[] { DropsSection, PetSection, GatherSection } };
-        for (int i = 0; i < order.Length; i++) { order[i].Margin = new Thickness(0, i == 0 ? 0 : 12, 0, 0); TableStack.Children.Insert(1 + i, order[i]); }
-        if (_session == null) ShowTable(null);
+        PaintTabs();
+        if (!Farming && _watcher.Chat == null && !_demo) ShowTable(null);
+    }
+
+    void PaintTabs() { PaintChip(DropsTab, _tab == Tab.Drops); PaintChip(GatherTab, _tab == Tab.Gathered); PaintChip(PetsTab, _tab == Tab.Pets); }
+
+    /// <summary>Redraws the table for the count on screen: the run, the run just stopped, or the live count.</summary>
+    void Redraw()
+    {
+        var e = _watcher.Farm ?? (DateTime.UtcNow < _lastRunUntil ? _lastRun : _watcher.Chat?.Engine);
+        if (e != null) FillNumbers(e, e.Elapsed); else ShowTable(null);
     }
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = SelectedMode == Mode.Open ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; }
 
-    async Task Toggle() { if (_session == null) await StartTracking(); else await StopTracking(); }
+    async Task Toggle() { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(); }
 
     void Pick()
     {
         Hide();
-        try { var r = RegionPickerWindow.Pick(); if (r != null) { _region = r; _prefs.ManualChat = true; RegionStore.Save(r.Value); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; } }
+        try { var r = RegionPickerWindow.Pick(); if (r != null) { _region = r; _prefs.ManualChat = true; RegionStore.Save(r.Value); _watcher.ManualChat = r; _ = _watcher.ResetChatAsync(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; } }
         finally { Show(); Activate(); UpdateStep2(); }
         if (_region != null) Say("Chat area chosen by hand. The zone is still read from the minimap if the game window is found. Press Test read, then Start.", "Good");
     }
@@ -240,18 +244,18 @@ public partial class MainWindow : Window
         SavePrefs();
         if (Server is not { } server) { Say("Choose your region and server first: prices and drops are kept per server.", "Warn"); ServerRowState(); return; }
         StartBtn.IsEnabled = false;
-        Say(_region == null ? "Finding the chat and the zone…" : "Starting…", "Faint");
+        Say(_watcher.Chat == null ? "Finding the chat and the zone…" : "Starting…", "Faint");
         try
         {
             _settings.Upload.Enabled = ShareChk.IsChecked == true;
-            _mode = SelectedMode;
+            _mode = SelectedMode; _tab = TabFor(_mode);
             ApplyModeLabels();
-            var session = new TrackerSession(_prefs.ManualChat ? _region : null, _settings, _items, ActivityName()) { RegionKey = server.Region.Key, Server = server.Label };
-            await session.StartAsync();
-            _session = session;
-            _region = session.Region;
+            var chat = await _watcher.EnsureChatAsync();
+            _region = chat.Region;
             UpdateStep2();
-            ZoneLbl.Text = "Zone: " + (session.Zone ?? "not read yet");
+            var farm = _watcher.StartFarm(ActivityName());
+            _lastRun = null;
+            ZoneLbl.Text = "Zone: " + (chat.Zone ?? "not read yet");
             if (HudChk.IsChecked == true)
             {
                 _hud = new HudWindow { Owner = this };
@@ -259,79 +263,93 @@ public partial class MainWindow : Window
                 _hud.LocationChanged += (_, _) => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
                 _hud.Show();
             }
-            TableTitle.Text = "THIS SESSION";
-            ShowTable(session.Engine);
+            TableTitle.Text = "THIS RUN";
+            ShowTable(farm);
             SetTrackingUi(true);
-            if (!_compact) SetCompact(true);   // chat and zone found: the setup card has done its job
-            Say($"Tracking {session.Activity}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
+            if (!_compact) SetCompact(true);   // chat and zone found: the settings have done their job
+            Say($"Farming · {chat.Zone ?? ActivityName()}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
         }
         catch (Exception ex)
         {
-            _session = null; StartBtn.IsEnabled = true;
-            if (_compact) SetCompact(false, remember: false);   // show the setup card so the fix is one click away
+            StartBtn.IsEnabled = true;
+            if (_compact) SetCompact(false, remember: false);   // show the settings so the fix is one click away
             Say(ex.Message, "Warn");
         }
     }
 
     async Task StopTracking()
     {
-        var s = _session; if (s == null) return;
+        var e = _watcher.StopFarm(); if (e == null) return;
+        var chat = _watcher.Chat; var kind = _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
-        await s.StopAsync();
         CloseHud();
         // closing the panel hands focus to whatever is behind it, usually the game, which then covers this window
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Show(); Activate(); Topmost = true; Topmost = false;
-        FillNumbers(s.Engine, s.Engine.Elapsed);
-        string msg, tone = "Faint"; bool shared = false;
-        if (!s.Eligible) msg = "Stopped. Under 5 minutes or no loot seen, so this run isn't shared.";
+        _lastRun = e; _lastRunUntil = DateTime.UtcNow.AddMinutes(3);
+        TableTitle.Text = "LAST RUN · " + activity.ToUpperInvariant();
+        FillNumbers(e, e.Elapsed);
+        string msg, tone = "Faint"; bool shared = false; bool eligible = e.Elapsed.TotalMinutes >= 5 && e.Events > 0;
+        if (!eligible) msg = "Stopped. Under 5 minutes or no loot seen, so this run isn't shared.";
         else if (ShareChk.IsChecked != true) msg = "Stopped. Sharing is off, so this run stays on this PC.";
         else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = "Stopped. No sharing address in settings.json, so this run stays on this PC.";
-        else if (await s.UploadAsync(_settings)) { msg = "Stopped. Run shared anonymously."; tone = "Good"; shared = true; }
-        else { msg = "Stopped. Couldn't reach the site; run kept on this PC."; tone = "Warn"; }
-        if (s.Engine.Events > 0) { SessionStore.Append(s.Engine, _items, s.Activity, _settings, shared); msg += $" Saved to your history ({SessionStore.Count()} runs)."; }
-        _session = null;
-        TableTitle.Text = "LAST RUN · " + s.Activity.ToUpperInvariant();
+        else if (chat != null && await chat.UploadAsync(_settings, e, kind, activity)) { msg = "Stopped. Run shared anonymously."; tone = "Good"; shared = true; }
+        else { msg = "Stopped. Not shared: " + (Upload.Uploader.LastError.Length > 0 ? Upload.Uploader.LastError : "couldn't reach the site") + ". Run kept on this PC."; tone = "Warn"; }
+        if (e.Events > 0) { SessionStore.Append(e, _items, activity, _settings, shared); msg += $" Saved to your history ({SessionStore.Count()} runs)."; }
         SetTrackingUi(false);
         Say(msg, tone);
     }
 
     void SetTrackingUi(bool on)
     {
-        StartBtn.Content = on ? "Stop" : "Start tracking";
+        StartBtn.Content = on ? "Stop" : "Start farming";
         StartBtn.IsEnabled = on || HasServer;
         StartBtn.Background = B(on ? "BtnStop" : "BtnPrimary");
         StartBtn.BorderBrush = on ? new SolidColorBrush(Color.FromRgb(0xD9, 0x5E, 0x5E)) : new SolidColorBrush(Color.FromRgb(0x4C, 0x9B, 0xEF));
-        _trayToggle.Text = on ? "Stop tracking" : "Start tracking";
-        PickBtn.IsEnabled = !on; TestBtn.IsEnabled = !on; Kind.IsEnabled = !on; HudChk.IsEnabled = !on; ShareChk.IsEnabled = !on;
-        // the Market card is not part of a run: its switch, server and area stay live either way
-        _tray.Text = on ? "Kinah Ledger · tracking" : "Kinah Ledger";
+        _trayToggle.Text = on ? "Stop farming" : "Start farming";
+        Kind.IsEnabled = !on;
+        _tray.Text = on ? "Kinah Ledger · farming" : "Kinah Ledger";
     }
 
     void Tick()
     {
-        if (!_demo) MarketStatus.Text = MarketLine();   // the Market reader runs with or without a run
-        var s = _session; if (s == null) return;
-        FillNumbers(s.Engine, s.Engine.Elapsed);
-        ZoneLbl.Text = "Zone: " + (s.Zone ?? "not read yet");
-        if (s.LastError.Length > 0) Say("Read problem: " + s.LastError, "Bad");
-        else Say($"Tracking {s.Activity} · {s.Reads} reads" + (s.Unaligned > 0 ? $" · {s.Unaligned} skipped" : "") + (s.LastLine.Length > 0 ? " · last: " + s.LastLine : ""), "Faint");
-        if (++_ticks % 4 == 0 && !_framing)
+        if (_demo) return;
+        if (!_compact) MarketStatus.Text = MarketLine();
+        var chat = _watcher.Chat; var farm = _watcher.Farm;
+        var show = farm ?? (DateTime.UtcNow < _lastRunUntil ? _lastRun : chat?.Engine);
+        if (farm != null) FarmTime.Text = "Farming for " + farm.Elapsed.ToString(@"hh\:mm\:ss");
+        else if (chat != null) FarmTime.Text = "Counting since " + _watcher.ChatSince.ToLocalTime().ToString("HH:mm") + " · Ctrl+Shift+K starts a run from inside the game";
+        else FarmTime.Text = "Ctrl+Shift+K starts and stops from inside the game";
+        if (show != null && (farm != null || show != _lastRun))
+        {
+            if (farm == null)
+            {
+                var dom = show.Events > 0 ? ModeOf(show) : SelectedMode;
+                if (dom != _mode) { _mode = dom; _tab = TabFor(_mode); ApplyModeLabels(); }
+                TableTitle.Text = "WHILE THE GAME IS OPEN";
+            }
+            FillNumbers(show, show.Elapsed);
+        }
+        ZoneLbl.Text = "Zone: " + (chat?.Zone ?? (_watcher.GameRect == null ? "waiting for the game" : "not read yet"));
+        if (chat == null) Say(_watcher.GameRect == null ? "Waiting for the game. Reading starts on its own once the game is open." : "Looking for the chat… " + _watcher.ChatNote, "Faint");
+        else if (chat.LastError.Length > 0) Say("Read problem: " + chat.LastError, "Bad");
+        else Say((farm != null ? "Farming" : "Reading") + $" · {chat.Reads} reads" + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : "") + " · " + MarketShort() + (_watcher.Flushed > 0 ? $" · {_watcher.Flushed} chunk{(_watcher.Flushed == 1 ? "" : "s")} shared" : ""), "Faint");
+        if (chat != null && !_compact && ++_ticks % 4 == 0 && !_framing)
         {
             // the whole game with the chat, map and (when open) Market outlined, refreshed every couple of seconds off the UI thread
             _framing = true;
             var marks = MarketMarks();
-            _ = Task.Run(() => s.Frame(480, marks)).ContinueWith(t => Dispatcher.Invoke(() => { _framing = false; if (t.Status == TaskStatus.RanToCompletion) SetPreview(t.Result); }));
+            _ = Task.Run(() => chat.Frame(480, marks)).ContinueWith(t => Dispatcher.Invoke(() => { _framing = false; if (t.Status == TaskStatus.RanToCompletion) SetPreview(t.Result); }));
         }
-        if (_hud != null)
+        if (_hud != null && farm != null)
         {
-            var e = s.Engine; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah;
-            var foot = (s.Zone != null ? s.Zone + " · " : "") + s.LastLine;
+            var e = farm; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah;
+            var foot = (chat?.Zone != null ? chat.Zone + " · " : "") + (chat?.LastLine ?? "");
             switch (_mode)
             {
                 case Mode.Gather:
                     _hud.Update($"{Fk(t.Drops / h)} items/hr",
-                        $"{Fk(t.Nodes / h)} nodes/hr · {(t.Nodes > 0 ? (t.Drops / (double)t.Nodes).ToString("0.00") : "—")} items/node · {Fk(t.Bonus / h)} rare/hr\n{e.Elapsed:hh\\:mm\\:ss} · {t.Drops} items · {t.Nodes} nodes{(t.Failed > 0 ? $" ({t.Failed} failed)" : "")} · {t.Bonus} rare finds",
+                        $"{Fk(t.Nodes / h)} attempts/hr · {(t.Nodes > 0 ? (t.Drops / (double)t.Nodes).ToString("0.00") : "—")} items/attempt · {Fk(t.Bonus / h)} rare/hr\n{e.Elapsed:hh\\:mm\\:ss} · {t.Drops} items · {t.Nodes} attempts{(t.Failed > 0 ? $" ({t.Failed} failed)" : "")} · {t.Bonus} rare finds",
                         foot);
                     break;
                 case Mode.Pets:
@@ -347,6 +365,15 @@ public partial class MainWindow : Window
                     break;
             }
         }
+    }
+
+    /// <summary>The Market in a few words for the status line.</summary>
+    string MarketShort()
+    {
+        var m = _watcher.Market;
+        if (!m.Enabled) return "Market: off with sharing";
+        if (m.Detected) return $"Market: open · {m.AsksSeen:N0} asks";
+        return m.AsksSeen > 0 ? $"Market: {m.AsksSeen:N0} asks · {m.Shared:N0} shared" : "Market: watching";
     }
 
     sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, List<DropRow> Pets, long DropCount, long GatherCount, long Value, string? BestZone, double BestRate);
@@ -392,10 +419,10 @@ public partial class MainWindow : Window
             if (!bySkill.TryGetValue(skill, out var items) && !stats.ContainsKey(skill)) continue;
             var st = stats.GetValueOrDefault(skill) ?? new SessionEngine.SkillStats();
             int ok = st.Nodes - st.Failed;
-            var head = $"{GatherSkills.Label(skill).ToUpperInvariant()}  ·  {st.Nodes} node{(st.Nodes == 1 ? "" : "s")}"
+            var head = $"{GatherSkills.Label(skill).ToUpperInvariant()}  ·  {st.Nodes} attempt{(st.Nodes == 1 ? "" : "s")}"
                      + (st.Failed > 0 ? $" ({st.Failed} failed)" : "")
                      + (ok > 0 ? $"  ·  plentiful {Math.Round(100.0 * st.Plentiful / ok)}%" : "")
-                     + (st.Nodes > 0 ? $"  ·  {Rate(st.Nodes / hours)} nodes/hr" : "");
+                     + (st.Nodes > 0 ? $"  ·  {Rate(st.Nodes / hours)} attempts/hr" : "");
             gathered.Add(new DropRow(head, "", "", "", Header: true));
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
                 gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name)));
@@ -434,7 +461,7 @@ public partial class MainWindow : Window
                 int ok = t.Nodes - t.Failed;
                 string plent = ok > 0 ? $" · plentiful {Math.Round(100.0 * t.Plentiful / ok)}%" : "";
                 string fails = t.Failed > 0 ? $" ({t.Failed} failed)" : "";
-                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {s.GatherCount} gathered · {t.Nodes} nodes{fails}{plent} · {t.Bonus} rare finds{worth}" + (kinah > 0 ? $" · {Fk(kinah)} Kinah" : "") + crystals + skipped;
+                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {s.GatherCount} gathered · {t.Nodes} attempts{fails}{plent} · {t.Bonus} rare finds{worth}" + (kinah > 0 ? $" · {Fk(kinah)} Kinah" : "") + crystals + skipped;
                 break;
             }
             case Mode.Pets:
@@ -474,24 +501,30 @@ public partial class MainWindow : Window
         GatherEmpty.Visibility = gathered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         PetEmpty.Visibility = pets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the drop rate per kill and per hour." : "No drops yet.";
-        GatherEmpty.Text = e == null ? "Gathered materials show here, with how often each comes per node and per hour." : "Nothing gathered yet.";
+        GatherEmpty.Text = e == null ? "Gathered materials show here, with how often each comes per attempt and per hour." : "Nothing gathered yet.";
         PetEmpty.Text = e == null ? "Soul Crystals show here by zone, with drops and per hour, so the best pet-farming spot stands out." : "No Soul Crystals yet.";
-        // the mode's own table always shows; the others only when they have something
-        DropsSection.Visibility = m == Mode.Open || (e != null && drops.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
-        GatherSection.Visibility = m == Mode.Gather || (e != null && gathered.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
-        PetSection.Visibility = m == Mode.Pets || (e != null && pets.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
-        TableNote.Text = m switch
+        // one table at a time, picked by the tabs; the tab labels carry the counts
+        int gc = gathered.Count(r => !r.Header), pc = pets.Count(r => !r.Header);
+        DropsTab.Content = drops.Count > 0 ? $"Drops · {drops.Count}" : "Drops";
+        GatherTab.Content = gc > 0 ? $"Gathered · {gc}" : "Gathered";
+        PetsTab.Content = pc > 0 ? $"Pets · {pc}" : "Pets";
+        PaintTabs();
+        DropsSection.Visibility = _tab == Tab.Drops ? Visibility.Visible : Visibility.Collapsed;
+        GatherSection.Visibility = _tab == Tab.Gathered ? Visibility.Visible : Visibility.Collapsed;
+        PetSection.Visibility = _tab == Tab.Pets ? Visibility.Visible : Visibility.Collapsed;
+        TableNote.Text = _tab switch
         {
-            Mode.Gather => "Per-node rates appear once a node is counted: any ore, log, Odyle, herb or food line counts as one node.",
-            Mode.Pets => "Zone rates appear once the zone has been read from the minimap for a minute.",
+            Tab.Gathered => "Per-attempt rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.",
+            Tab.Pets => "Zone rates appear once the zone has been read from the minimap for a minute.",
             _ => "Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.",
         };
-        TableNote.Visibility = m switch
+        TableNote.Visibility = _tab switch
         {
-            Mode.Gather => gathered.Count > 0 && nodes == 0,
-            Mode.Pets => pets.Count > 0 && pre?.BestZone == null,
+            Tab.Gathered => gathered.Count > 0 && nodes == 0,
+            Tab.Pets => pets.Count > 0 && pre?.BestZone == null,
             _ => drops.Count > 0 && kills == 0,
         } ? Visibility.Visible : Visibility.Collapsed;
+        _ = m;
     }
 
     /// <summary>The icon slot for an item: cached or fetched by the cache, a lettered tile until then.</summary>
@@ -541,10 +574,12 @@ public partial class MainWindow : Window
     {
         var s = Server;
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = s?.Label ?? "";
+        _watcher.RegionKey = RegionKey; _watcher.Server = s?.Label ?? "";
+        if (_watcher.Chat is { } ch) { ch.RegionKey = RegionKey; ch.Server = s?.Label ?? ""; }
         _prefs.Region = RegionKey; _prefs.Server = s?.Label ?? "";
         if (!_demo) _prefs.Save();
         ServerRowState();
-        if (s != null && _session == null && !_demo) Say($"Server set to {s.Label} · {s.Region.Name}. " + (_compact ? "Press Start whenever you're ready." : "Do steps 1 and 2, or just press Start."), "Good");
+        if (s != null && !Farming && !_demo) Say($"Server set to {s.Label} · {s.Region.Name}. " + (_compact ? "Press Start whenever you're ready." : "Do steps 1 and 2, or just press Start."), "Good");
     }
 
     /// <summary>Until a server is chosen the hint says so in orange and Start stays off: a run or a price with no server would skew the site's numbers.</summary>
@@ -553,15 +588,15 @@ public partial class MainWindow : Window
         bool ok = HasServer;
         ServerHint.Text = ok ? "Prices and drops are kept per server." : "Choose your region and server first: prices and drops are kept per server.";
         ServerHint.Foreground = B(ok ? "Faint" : "Warn");
-        if (_session == null) StartBtn.IsEnabled = ok;
+        if (!Farming) StartBtn.IsEnabled = ok;
     }
 
     /* ---------------- market prices (always on while the window is open; not part of a run) ---------------- */
 
     void MarketSwitch(bool on)
     {
-        _prefs.ShareMarket = on;
-        _watcher.Market.Enabled = on;
+        _settings.Upload.Enabled = on;
+        _watcher.Market.Enabled = on && _settings.Market.Enabled;
         UpdateMarketUi();
     }
 
@@ -590,7 +625,7 @@ public partial class MainWindow : Window
     string MarketLine()
     {
         var m = _watcher.Market;
-        if (!m.Enabled) return "Off. The Market is never read; everything else keeps working.";
+        if (!m.Enabled) return "Sharing is off, so the Market isn't read either. Turn Share runs anonymously back on and it resumes.";
         if (_watcher.GameRect == null) return "Waiting for the game. While the game and this window are open, the Market is read whenever you open it; Start tracking is only for farming runs.";
         return m.Status + (m.Manual && _marketRegion is DRect r ? $" · chosen area {r.Width} x {r.Height} px" : "");
     }
@@ -626,7 +661,7 @@ public partial class MainWindow : Window
     void OnSourceInitialized(object? sender, EventArgs e)
     {
         var h = new WindowInteropHelper(this).Handle;
-        Native.DarkTitleBar(h);
+        Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
         Native.RegisterHotKey(h, HotkeyId, Native.MOD_CONTROL | Native.MOD_SHIFT, (uint)KeyInterop.VirtualKeyFromKey(Key.K));
     }
@@ -639,18 +674,18 @@ public partial class MainWindow : Window
 
     void OnStateChanged(object? sender, EventArgs e)
     {
-        // only a deliberate minimize while tracking goes to the tray; otherwise the window behaves like any other
-        if (WindowState != WindowState.Minimized || _session == null) return;
+        // only a deliberate minimize while farming goes to the tray; otherwise the window behaves like any other
+        if (WindowState != WindowState.Minimized || !Farming) return;
         Hide();
-        if (!_balloonShown) { _balloonShown = true; _tray.ShowBalloonTip(4000, "Kinah Ledger is still tracking", "It's in the tray by the clock. Double-click the icon to bring the window back.", WF.ToolTipIcon.Info); }
+        if (!_balloonShown) { _balloonShown = true; _tray.ShowBalloonTip(4000, "Kinah Ledger is still counting", "It's in the tray by the clock. Double-click the icon to bring the window back.", WF.ToolTipIcon.Info); }
     }
 
     void OnClosingWindow(object? sender, CancelEventArgs e)
     {
         SavePrefs();
-        if (_session != null && !_quitting)
+        if (Farming && !_quitting)
         {
-            var r = MessageBox.Show(this, "You're still tracking. Stop and quit?\n\nYes stops the run and closes Kinah Ledger.\nNo keeps tracking and leaves this window open.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var r = MessageBox.Show(this, "You're still farming. Stop the run and quit?\n\nYes stops the run and closes Kinah Ledger.\nNo keeps it running and leaves this window open.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (r == MessageBoxResult.No) { e.Cancel = true; return; }
             e.Cancel = true; _quitting = true;
             _ = StopTracking().ContinueWith(_ => Dispatcher.Invoke(Close));
@@ -674,7 +709,7 @@ public partial class MainWindow : Window
         if (_demo) return;   // a layout render must not overwrite the player's saved choices
         _prefs.Activity = Kind.SelectedItem as string ?? "Open world";
         _prefs.Hud = HudChk.IsChecked == true; _prefs.Share = ShareChk.IsChecked == true;
-        _prefs.ShareMarket = MarketChk.IsChecked == true; _prefs.Region = RegionKey; _prefs.Server = Server?.Label ?? "";
+        _prefs.Region = RegionKey; _prefs.Server = Server?.Label ?? "";
         if (_prefs.ManualChat && _region is DRect mr) RegionStore.Save(mr);
         if (_prefs.ManualMarket && _marketRegion is DRect mm) RegionStore.Save(mm, RegionStore.MarketFile);
         if (WindowState == WindowState.Normal && !double.IsNaN(Left)) { _prefs.WinX = (int)Left; _prefs.WinY = (int)Top; }
@@ -694,13 +729,13 @@ public partial class MainWindow : Window
     public async Task<string> DebugCycle(DRect? region, int ms)
     {
         _demo = true;
-        _region = region; _prefs.ManualChat = region != null; UpdateStep2();
+        _region = region; _prefs.ManualChat = region != null; _watcher.ManualChat = region; UpdateStep2();
         if (!HasServer) { RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)"); }
         await StartTracking();
-        if (_session == null) throw new InvalidOperationException("start failed: " + Status.Text);
-        var found = _session.Region; var zone = _session.Zone;
+        if (!Farming) throw new InvalidOperationException("start failed: " + Status.Text);
+        var chat = _watcher.Chat!; var found = chat.Region; var zone = chat.Zone;
         await Task.Delay(ms);
-        var reads = _session.Reads;
+        var reads = chat.Reads;
         await StopTracking();
         return $"{reads} reads, chat {found}, zone {zone ?? "none"}, status: {Status.Text}";
     }
@@ -713,11 +748,12 @@ public partial class MainWindow : Window
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false; UpdateStep2();
         ZoneLbl.Text = "Zone: Western Cantas Valley";
         RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)");
+        SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new ItemAcquired(t, _items.IdOf(n), 1, b)); }
         void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new CurrencyGained(t, "Oculazen Soul Points", 1)); } }
         void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new PetCrystal(t, n + " Soul Crystal", 1)); }
-        Kind.SelectedItem = Kinds.Contains(kind) ? kind : "Open world"; _mode = SelectedMode;
+        Kind.SelectedItem = Kinds.Contains(kind) ? kind : "Open world"; _mode = SelectedMode; _tab = TabFor(_mode);
         switch (_mode)
         {
             case Mode.Gather:
@@ -740,7 +776,8 @@ public partial class MainWindow : Window
                 break;
         }
         ApplyModeLabels();
-        TableTitle.Text = "THIS SESSION";
+        TableTitle.Text = "THIS RUN";
+        FarmTime.Text = "Farming for 00:42:17";
         FillNumbers(e, TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17));
         using (var b = new System.Drawing.Bitmap(480, 203))
         using (var g = System.Drawing.Graphics.FromImage(b))
@@ -772,7 +809,6 @@ public partial class MainWindow : Window
         Say(_mode switch { Mode.Gather => "Tracking Gathering · Western Cantas Valley · 3,620 reads · last: Sapphire Gemstone acquired.", Mode.Pets => "Tracking Pets · Rock Tomb Hill · 3,620 reads · last: Obtained 1 Fera Soul Crystals.", _ => "Tracking Open world · Western Cantas Valley · 3,620 reads · last: Spiritstone acquired." }, "Faint");
         if (market)
         {
-            MarketChk.IsChecked = true;
             MarketStatus.Text = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
         }
     }

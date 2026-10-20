@@ -18,9 +18,12 @@ internal static class Native
     public const int WM_HOTKEY = 0x0312, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4;
 
     /// <summary>Asks Windows 10/11 to draw this window's title bar dark, to match the content.</summary>
-    public static void DarkTitleBar(IntPtr hwnd)
+    public static void DarkTitleBar(IntPtr hwnd) => DarkTitleBar(hwnd, true);
+
+    /// <summary>Dark or light title bar to match the skin.</summary>
+    public static void DarkTitleBar(IntPtr hwnd, bool dark)
     {
-        int on = 1;
+        int on = dark ? 1 : 0;
         if (DwmSetWindowAttribute(hwnd, 20, ref on, sizeof(int)) != 0) DwmSetWindowAttribute(hwnd, 19, ref on, sizeof(int));
     }
 

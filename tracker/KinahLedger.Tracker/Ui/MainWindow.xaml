@@ -1,334 +1,321 @@
 <Window x:Class="KinahLedger.Ui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kinah Ledger" Width="800" SizeToContent="Height" ResizeMode="CanMinimize"
-        Background="{StaticResource Bg}" Foreground="{StaticResource Ink}"
+        Title="Kinah Ledger" Width="560" SizeToContent="Height" ResizeMode="CanMinimize"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
         WindowStartupLocation="CenterScreen">
 
   <Window.Resources>
+    <!-- drops and gathered rows: icon, name, count, rate, per hour -->
     <DataTemplate x:Key="RowTemplate">
-      <Border x:Name="RowBorder" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Height="34">
+      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="32">
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
+            <ColumnDefinition Width="*"/><ColumnDefinition Width="72"/><ColumnDefinition Width="92"/><ColumnDefinition Width="92"/>
           </Grid.ColumnDefinitions>
-          <Grid Margin="10,0,8,0">
+          <Grid x:Name="NameCell" Margin="8,0,6,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <!-- the item's icon once it is cached; its initial until then, or when none is known -->
-            <Border x:Name="IconTile" Width="24" Height="24" CornerRadius="5" Background="{StaticResource Card2}" BorderBrush="{StaticResource LineStrong}" BorderThickness="1" Margin="0,0,10,0" VerticalAlignment="Center">
+            <Border x:Name="IconTile" Width="22" Height="22" CornerRadius="5" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" Margin="0,0,8,0" VerticalAlignment="Center">
               <Grid>
-                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                 <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="1" RenderOptions.BitmapScalingMode="HighQuality"/>
               </Grid>
             </Border>
-            <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
+            <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="13"/>
           </Grid>
-          <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{StaticResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
-          <TextBlock Grid.Column="2" Text="{Binding DropPct}" Foreground="{StaticResource Mint}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
-          <TextBlock Grid.Column="3" Text="{Binding PerHour}" Foreground="{StaticResource Violet}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
+          <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
+          <TextBlock Grid.Column="2" Text="{Binding DropPct}" Foreground="{DynamicResource Mint}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
+          <TextBlock Grid.Column="3" Text="{Binding PerHour}" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
         </Grid>
       </Border>
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
-        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="#121C2E"/></Trigger>
-        <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet); on the name and on the icon's frame -->
+        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
+        <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet) -->
         <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="#5FE08A"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FE08A"/></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="#5FA8FF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FA8FF"/></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Unique"><Setter TargetName="NameText" Property="Foreground" Value="#F5D05A"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99F5D05A"/></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="NameText" Property="Foreground" Value="#C88CFF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99C88CFF"/></DataTrigger>
-        <!-- a skill header row inside the gathered table: its own node count, failures and Plentiful rate -->
+        <!-- a skill header row inside the gathered table: its own attempts, failures and Plentiful rate, across the whole row -->
         <DataTrigger Binding="{Binding Header}" Value="True">
-          <Setter TargetName="RowBorder" Property="Background" Value="#101826"/>
-          <Setter TargetName="RowBorder" Property="Height" Value="30"/>
+          <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHead}"/>
+          <Setter TargetName="RowBorder" Property="Height" Value="28"/>
           <Setter TargetName="IconTile" Property="Visibility" Value="Collapsed"/>
-          <Setter TargetName="NameText" Property="Foreground" Value="{StaticResource Gold}"/>
+          <Setter TargetName="NameCell" Property="Grid.ColumnSpan" Value="4"/>
+          <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource Gold}"/>
           <Setter TargetName="NameText" Property="FontWeight" Value="SemiBold"/>
-          <Setter TargetName="NameText" Property="FontSize" Value="12"/>
-          <Setter TargetName="NameText" Property="Grid.ColumnSpan" Value="4"/>
+          <Setter TargetName="NameText" Property="FontSize" Value="11.5"/>
         </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
 
     <!-- pets: name, drops, per hour. No drop % column: Soul Crystals are rated by time in the zone, never by kill. -->
     <DataTemplate x:Key="PetRowTemplate">
-      <Border x:Name="RowBorder" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Height="34">
+      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="32">
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/><ColumnDefinition Width="110"/><ColumnDefinition Width="130"/>
+            <ColumnDefinition Width="*"/><ColumnDefinition Width="80"/><ColumnDefinition Width="100"/>
           </Grid.ColumnDefinitions>
-          <Grid Margin="10,0,8,0">
+          <Grid x:Name="NameCell" Margin="8,0,6,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <!-- the item's icon once it is cached; its initial until then, or when none is known -->
-            <Border x:Name="IconTile" Width="24" Height="24" CornerRadius="5" Background="{StaticResource Card2}" BorderBrush="{StaticResource LineStrong}" BorderThickness="1" Margin="0,0,10,0" VerticalAlignment="Center">
+            <Border x:Name="IconTile" Width="22" Height="22" CornerRadius="5" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" Margin="0,0,8,0" VerticalAlignment="Center">
               <Grid>
-                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                 <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="1" RenderOptions.BitmapScalingMode="HighQuality"/>
               </Grid>
             </Border>
-            <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="13.5"/>
+            <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="13"/>
           </Grid>
-          <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{StaticResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
-          <TextBlock Grid.Column="2" Text="{Binding PerHour}" Foreground="{StaticResource Violet}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" FontSize="13.5"/>
+          <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
+          <TextBlock Grid.Column="2" Text="{Binding PerHour}" Foreground="{DynamicResource Violet}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
         </Grid>
       </Border>
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
-        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="#121C2E"/></Trigger>
+        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
         <!-- a zone header row: time spent there, kills and the crystal rate, so the best spot stands out -->
         <DataTrigger Binding="{Binding Header}" Value="True">
-          <Setter TargetName="RowBorder" Property="Background" Value="#101826"/>
-          <Setter TargetName="RowBorder" Property="Height" Value="30"/>
+          <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHead}"/>
+          <Setter TargetName="RowBorder" Property="Height" Value="28"/>
           <Setter TargetName="IconTile" Property="Visibility" Value="Collapsed"/>
-          <Setter TargetName="NameText" Property="Foreground" Value="{StaticResource Gold}"/>
+          <Setter TargetName="NameCell" Property="Grid.ColumnSpan" Value="3"/>
+          <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource Gold}"/>
           <Setter TargetName="NameText" Property="FontWeight" Value="SemiBold"/>
-          <Setter TargetName="NameText" Property="FontSize" Value="12"/>
-          <Setter TargetName="NameText" Property="Grid.ColumnSpan" Value="3"/>
+          <Setter TargetName="NameText" Property="FontSize" Value="11.5"/>
         </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
   </Window.Resources>
 
-  <Border x:Name="Root" Background="{StaticResource Bg}" Padding="26,20,26,18">
+  <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="18,14,18,12">
     <StackPanel>
 
       <!-- header -->
       <Grid>
-        <StackPanel>
-          <StackPanel Orientation="Horizontal">
-            <!-- the app mark: the same gold hex as the tray icon, drawn here so no image ships -->
-            <Grid Width="26" Height="26" Margin="0,0,10,0" VerticalAlignment="Center">
-              <Path Data="M13,1 L24,7.5 L24,19.5 L13,26 L2,19.5 L2,7.5 Z" Fill="#1A2740" Stroke="{StaticResource Gold}" StrokeThickness="1.4" StrokeLineJoin="Round"/>
-              <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B"/>
-            </Grid>
-            <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="21" FontWeight="Bold" VerticalAlignment="Center"/>
-          </StackPanel>
-          <TextBlock x:Name="Tagline" Style="{StaticResource BodyStyle}" Margin="0,4,0,0" MaxWidth="540" HorizontalAlignment="Left"
-                     Text="Unofficial Aion 2 farming tracker. Reads the loot lines from the chat on your screen. Nothing touches the game."/>
+        <StackPanel Orientation="Horizontal">
+          <!-- the app mark: the same gold hex as the tray icon, drawn here so no image ships -->
+          <Grid Width="24" Height="24" Margin="0,0,9,0" VerticalAlignment="Center">
+            <Path Data="M13,1 L24,7.5 L24,19.5 L13,26 L2,19.5 L2,7.5 Z" Fill="{DynamicResource Mark}" Stroke="{DynamicResource Gold}" StrokeThickness="1.4" StrokeLineJoin="Round" Stretch="Uniform"/>
+            <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="5"/>
+          </Grid>
+          <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+          <TextBlock x:Name="Version" Text="v0.6.1" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
         </StackPanel>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-          <StackPanel Margin="0,0,14,0">
-            <TextBlock HorizontalAlignment="Right" FontSize="13"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-            <TextBlock x:Name="Version" Text="v0.6.1" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
-          </StackPanel>
-          <!-- once the chat and zone have been found, steps 1 and 2 live behind this button -->
-          <Button x:Name="SettingsBtn" Content="Settings" Height="32" Padding="12,0" FontSize="12.5" VerticalAlignment="Top"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+          <TextBlock FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
+          <!-- everything that needs setting lives behind this button; the main window is the live count -->
+          <Button x:Name="SettingsBtn" Content="Settings" Height="30" Padding="12,0" FontSize="12.5"/>
         </StackPanel>
       </Grid>
+      <TextBlock x:Name="Tagline" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,6,0,0"
+                 Text="Unofficial Aion 2 farming tracker. Reads the loot lines from the chat on your screen while the game is open. Nothing touches the game."/>
 
-      <!-- setup: steps 1 and 2. Hidden in the compact layout; Settings brings it back. -->
-      <Border x:Name="SetupCard" Style="{StaticResource CardStyle}" Margin="0,18,0,0" Padding="20,18,20,18">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="248"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel Margin="0,0,20,0">
-            <StackPanel Orientation="Horizontal">
-              <Border Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="1"/></Border>
-              <TextBlock Style="{StaticResource StepTitle}" Text="In the game"/>
-            </StackPanel>
-            <TextBlock Style="{StaticResource BodyStyle}" Margin="36,7,0,0"
-                       Text="Play in borderless or windowed mode with the chat open at the bottom-left. A chat tab showing only System Notifications reads best, but the normal tab works too."/>
-            <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
-              <Border Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="2"/></Border>
-              <TextBlock Style="{StaticResource StepTitle}" Text="Chat area and zone"/>
-            </StackPanel>
-            <TextBlock x:Name="Step2Status" Style="{StaticResource BodyStyle}" Margin="36,7,0,0"/>
-            <StackPanel Orientation="Horizontal" Margin="36,12,0,0">
-              <Button x:Name="DetectBtn" Content="Detect now" Width="112"/>
-              <Button x:Name="PickBtn" Content="Choose the chat" Width="136" Margin="10,0,0,0"/>
-              <Button x:Name="TestBtn" Content="Test read" Width="104" Margin="10,0,0,0"/>
-            </StackPanel>
-          </StackPanel>
-          <StackPanel Grid.Column="1" VerticalAlignment="Top">
-            <Border Background="{StaticResource Bg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Height="112" ClipToBounds="True">
-              <Grid>
-                <TextBlock x:Name="PreviewHint" Text="the game, with the chat and map outlined" Foreground="{StaticResource Faint}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="12,0"/>
-                <Image x:Name="Preview" Stretch="Uniform" Margin="3" RenderOptions.BitmapScalingMode="HighQuality"/>
-              </Grid>
-            </Border>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
-              <Border Width="10" Height="10" CornerRadius="2" Background="{StaticResource Accent}" VerticalAlignment="Center"/>
-              <TextBlock Text="chat" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
-              <Border Width="10" Height="10" CornerRadius="2" Background="{StaticResource Gold}" VerticalAlignment="Center"/>
-              <TextBlock Text="zone" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
-              <Border Width="10" Height="10" CornerRadius="2" Background="{StaticResource Mint}" VerticalAlignment="Center"/>
-              <TextBlock Text="market" Style="{StaticResource LabelStyle}" Margin="5,0,0,0"/>
-            </StackPanel>
-          </StackPanel>
-        </Grid>
+      <!-- first run: region, faction, server and a look, before anything else. Everything shared is filed per server. -->
+      <Border x:Name="WelcomeCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock Text="Welcome. Where do you play?" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="Bold"/>
+          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three taps and you are in; change any of it later under Settings."/>
+          <TextBlock Style="{StaticResource LabelStyle}" Text="REGION" Margin="0,16,0,8"/>
+          <WrapPanel x:Name="RegionChips"/>
+          <TextBlock Style="{StaticResource LabelStyle}" Text="FACTION" Margin="0,8,0,8"/>
+          <WrapPanel x:Name="FactionChips"/>
+          <TextBlock Style="{StaticResource LabelStyle}" Text="SERVER" Margin="0,8,0,8"/>
+          <WrapPanel x:Name="ServerChips"/>
+          <TextBlock x:Name="WelcomeHint" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,2,0,0"/>
+          <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,12,0,8"/>
+          <WrapPanel x:Name="SkinChips"/>
+          <Grid Margin="0,14,0,0">
+            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" VerticalAlignment="Center" MaxWidth="300" HorizontalAlignment="Left" Text="Nothing is read or shared until you continue. The chat and the zone are found on their own."/>
+            <Button x:Name="WelcomeGo" Style="{StaticResource PrimaryButton}" Content="Continue" Width="160" Height="44" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+          </Grid>
+        </StackPanel>
       </Border>
 
-      <!-- session -->
-      <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="20,18,20,18">
+      <!-- settings: server, sharing, chat and zone, Market, look. Hidden once set up; the Settings button brings it back. -->
+      <Border x:Name="SetupCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="18,14,18,16">
         <StackPanel>
-          <StackPanel Orientation="Horizontal">
-            <Border x:Name="Badge3" Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="3"/></Border>
-            <TextBlock x:Name="Step3Title" Style="{StaticResource StepTitle}" Text="What you're farming"/>
-          </StackPanel>
-          <!-- the server comes first: prices are filed per server, and drops will be once the site splits them. Full width, so region and server share a line in the narrow window too. -->
-          <WrapPanel x:Name="ServerRow" Margin="36,12,0,0">
-            <TextBlock x:Name="ServerLabel" Text="Your server" Foreground="{StaticResource Muted}" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,6"/>
+          <TextBlock Style="{StaticResource LabelStyle}" Text="SERVER"/>
+          <WrapPanel x:Name="ServerRow" Margin="0,8,0,0">
+            <TextBlock x:Name="ServerLabel" Text="Your server" Foreground="{DynamicResource Muted}" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,6" Visibility="Collapsed"/>
             <ComboBox x:Name="RegionBox" Width="138" FontSize="13" Margin="0,0,8,6" VerticalAlignment="Center" ToolTip="The region you play in. The same server names exist in every region, so both parts matter."/>
-            <ComboBox x:Name="ServerPick" Width="196" FontSize="13" Margin="0,0,12,6" VerticalAlignment="Center" ToolTip="Your home server and faction, as the game's server list shows them."/>
-            <TextBlock x:Name="ServerHint" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" VerticalAlignment="Center" Margin="0,0,0,6" MaxWidth="400"/>
+            <ComboBox x:Name="ServerPick" Width="190" FontSize="13" Margin="0,0,12,6" VerticalAlignment="Center" ToolTip="Your home server and faction, as the game's server list shows them."/>
+            <TextBlock x:Name="ServerHint" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" VerticalAlignment="Center" Margin="0,0,0,6" MaxWidth="500"/>
           </WrapPanel>
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel>
-            <Grid x:Name="KindGrid" Margin="36,12,0,0">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-              </Grid.ColumnDefinitions>
-              <ComboBox x:Name="Kind" Width="200" VerticalAlignment="Top"/>
-              <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
-                <TextBlock x:Name="ZoneLbl" Foreground="{StaticResource Ink}" FontSize="13.5" FontWeight="SemiBold" Text="Zone: detected when you start" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="40"/>
-                <TextBlock x:Name="KindHint" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16"/>
-              </StackPanel>
+
+          <TextBlock Style="{StaticResource LabelStyle}" Text="SHARING" Margin="0,12,0,0"/>
+          <WrapPanel x:Name="OptsRow" Margin="0,8,0,0">
+            <CheckBox x:Name="ShareChk" Content="Share runs and Market prices anonymously" Margin="0,0,6,4"/>
+            <TextBlock Margin="0,0,16,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="SentLink" Style="{StaticResource LinkStyle}">what's sent?</Hyperlink></TextBlock>
+            <CheckBox x:Name="HudChk" Content="Panel over the game while farming" Margin="0,0,0,4"/>
+          </WrapPanel>
+          <!-- optional: ties this PC's runs to a profile on the site; runs stay anonymous without it -->
+          <TextBlock x:Name="LinkRow" Margin="0,6,0,0" FontSize="12.5" Foreground="{DynamicResource Muted}"
+                     ToolTip="Paste this into your profile on the site to see your own runs there. It only ties runs from this PC to your profile; it says nothing about who you are."><Run Text="Profile link code "/><Run x:Name="LinkCodeRun" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource Gold}"/><Run Text="   "/><Hyperlink x:Name="CopyCodeLink" Style="{StaticResource LinkStyle}">copy</Hyperlink></TextBlock>
+
+          <TextBlock Style="{StaticResource LabelStyle}" Text="CHAT AND ZONE" Margin="0,14,0,0"/>
+          <TextBlock x:Name="Step2Status" Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" Margin="0,6,0,0"/>
+          <WrapPanel Margin="0,10,0,0">
+            <Button x:Name="DetectBtn" Content="Detect now" Width="104" Margin="0,0,8,6"/>
+            <Button x:Name="PickBtn" Content="Choose the chat" Width="124" Margin="0,0,8,6"/>
+            <Button x:Name="TestBtn" Content="Test read" Width="96" Margin="0,0,8,6"/>
+            <TextBlock FontSize="12.5" VerticalAlignment="Center" Margin="4,0,0,6"><Hyperlink x:Name="ResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
+          </WrapPanel>
+          <Border Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Height="118" ClipToBounds="True" Margin="0,6,0,0">
+            <Grid>
+              <TextBlock x:Name="PreviewHint" Text="the game, with the chat, the map and the Market outlined" Foreground="{DynamicResource Faint}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="12,0"/>
+              <Image x:Name="Preview" Stretch="Uniform" Margin="3" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Grid>
-            <!-- wraps instead of clipping when the column is narrow -->
-            <WrapPanel x:Name="OptsRow" Margin="36,14,0,0">
-              <CheckBox x:Name="HudChk" Content="Show panel over the game" Margin="0,0,18,4"/>
-              <CheckBox x:Name="ShareChk" Content="Share runs anonymously" Margin="0,0,6,4"/>
-              <TextBlock Margin="0,0,0,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="SentLink" Style="{StaticResource LinkStyle}">what's sent?</Hyperlink></TextBlock>
-            </WrapPanel>
-            <!-- optional: ties this PC's runs to a profile on the site; runs stay anonymous without it -->
-            <TextBlock x:Name="LinkRow" Margin="36,8,0,0" FontSize="12.5" Foreground="{StaticResource Muted}"
-                       ToolTip="Paste this into your profile on the site to see your own runs there. It only ties runs from this PC to your profile; it says nothing about who you are."><Run Text="Profile link code "/><Run x:Name="LinkCodeRun" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource Gold}"/><Run Text="   "/><Hyperlink x:Name="CopyCodeLink" Style="{StaticResource LinkStyle}">copy</Hyperlink></TextBlock>
+          </Border>
+          <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Accent}" VerticalAlignment="Center"/>
+            <TextBlock Text="chat" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
+            <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Gold}" VerticalAlignment="Center"/>
+            <TextBlock Text="zone" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
+            <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Mint}" VerticalAlignment="Center"/>
+            <TextBlock Text="market" Style="{StaticResource LabelStyle}" Margin="5,0,0,0"/>
           </StackPanel>
-          <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
-            <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start tracking" Width="196" Height="50"/>
-            <TextBlock Text="Ctrl+Shift+K works from inside the game" Foreground="{StaticResource Faint}" FontSize="11.5" HorizontalAlignment="Center" Margin="0,9,0,0"/>
-          </StackPanel>
-        </Grid>
+
+          <TextBlock Style="{StaticResource LabelStyle}" Text="MARKET PRICES" Margin="0,14,0,0"/>
+          <WrapPanel x:Name="MarketRow" Margin="0,6,0,0">
+            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" Margin="0,0,6,4" VerticalAlignment="Center" MaxWidth="500" Text="Whenever you open the Market, the listings on your screen are shared as anonymous asks, under the Share switch above. Nothing to set up."/>
+            <TextBlock Margin="0,0,0,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="MarketSentLink" Style="{StaticResource LinkStyle}">what's read?</Hyperlink></TextBlock>
+          </WrapPanel>
+          <WrapPanel x:Name="MarketRow2" Margin="0,4,0,0">
+            <Button x:Name="MarketPickBtn" Content="Choose the Market" Width="140" FontSize="12.5" Margin="0,0,10,4" VerticalAlignment="Center"/>
+            <TextBlock x:Name="MarketResetText" Margin="0,0,0,4" VerticalAlignment="Center" FontSize="12.5" Visibility="Collapsed"><Hyperlink x:Name="MarketResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
+          </WrapPanel>
+          <TextBlock x:Name="MarketStatus" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Margin="0,4,0,0"
+                     Text="Waiting for the game. While the game and this window are open, the Market is read whenever you open it."/>
+
+          <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,14,0,8"/>
+          <WrapPanel x:Name="SkinRow"/>
         </StackPanel>
       </Border>
 
-      <!-- market prices: read off the Market window whenever the game and this window are open, run or no run, and shared as asks. Its own switch; off keeps everything else working. -->
-      <Border x:Name="MarketCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="20,16,20,16">
-        <StackPanel>
-          <StackPanel Orientation="Horizontal">
-            <Border x:Name="Badge4" Style="{StaticResource Badge}"><TextBlock Style="{StaticResource BadgeText}" Text="4"/></Border>
-            <TextBlock x:Name="Step4Title" Style="{StaticResource StepTitle}" Text="Market prices"/>
+      <!-- the run bar: everything is counted all the time; Start farming times a run on top and shows it -->
+      <Border x:Name="SessionCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="14,12,14,12">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start farming" Width="150" Height="44" VerticalAlignment="Center"/>
+          <Grid x:Name="KindGrid" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+            <ComboBox x:Name="Kind" Width="130" VerticalAlignment="Center" ToolTip="What the run is labelled as when it is shared and saved. The count itself covers everything the chat shows."/>
+          </Grid>
+          <StackPanel Grid.Column="2" Margin="14,0,0,0" VerticalAlignment="Center">
+            <TextBlock x:Name="ZoneLbl" Foreground="{DynamicResource Ink}" FontSize="13" FontWeight="SemiBold" Text="Zone: waiting for the game" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="FarmTime" Foreground="{DynamicResource Faint}" FontSize="12" Margin="0,2,0,0" Text="Ctrl+Shift+K starts and stops from inside the game" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="KindHint" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Visibility="Collapsed"/>
           </StackPanel>
-          <WrapPanel x:Name="MarketRow" Margin="36,12,0,0">
-            <CheckBox x:Name="MarketChk" Content="Share market prices while the Market is open" Margin="0,0,8,6" VerticalAlignment="Center"/>
-            <TextBlock Margin="0,0,0,6" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="MarketSentLink" Style="{StaticResource LinkStyle}">what's read?</Hyperlink></TextBlock>
-          </WrapPanel>
-          <WrapPanel x:Name="MarketRow2" Margin="36,4,0,0">
-            <Button x:Name="MarketPickBtn" Content="Choose the Market" Width="150" FontSize="12.5" Margin="0,0,10,6" VerticalAlignment="Center"/>
-            <TextBlock x:Name="MarketResetText" Margin="0,0,0,6" VerticalAlignment="Center" FontSize="12.5" Visibility="Collapsed"><Hyperlink x:Name="MarketResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
-          </WrapPanel>
-          <TextBlock x:Name="MarketStatus" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Margin="36,4,0,0"
-                     Text="Waiting for the game. While the game and this window are open, the Market is read whenever you open it; Start tracking is only for farming runs."/>
-        </StackPanel>
+        </Grid>
       </Border>
 
       <!-- tiles -->
-      <UniformGrid Columns="4" Margin="-6,12,-6,0">
-        <Border Style="{StaticResource CardStyle}" Margin="6,0" Padding="16,12,16,14">
-          <StackPanel><TextBlock x:Name="Tile1Label" Style="{StaticResource LabelStyle}" Text="KINAH / HR"/><TextBlock x:Name="KinahHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Gold}" Text="0"/></StackPanel>
+      <UniformGrid x:Name="Tiles" Columns="4" Margin="-5,10,-5,0">
+        <Border Style="{StaticResource CardStyle}" Margin="5,0" Padding="12,9,12,10">
+          <StackPanel><TextBlock x:Name="Tile1Label" Style="{StaticResource LabelStyle}" Text="KINAH / HR"/><TextBlock x:Name="KinahHr" Style="{StaticResource TileValue}" Foreground="{DynamicResource Gold}" Text="0"/></StackPanel>
         </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="6,0" Padding="16,12,16,14">
-          <StackPanel><TextBlock x:Name="Tile2Label" Style="{StaticResource LabelStyle}" Text="KINAH / KILL"/><TextBlock x:Name="KinahKill" Style="{StaticResource TileValue}" Foreground="{StaticResource Gold}" Text="—"/></StackPanel>
+        <Border Style="{StaticResource CardStyle}" Margin="5,0" Padding="12,9,12,10">
+          <StackPanel><TextBlock x:Name="Tile2Label" Style="{StaticResource LabelStyle}" Text="KINAH / KILL"/><TextBlock x:Name="KinahKill" Style="{StaticResource TileValue}" Foreground="{DynamicResource Gold}" Text="—"/></StackPanel>
         </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="6,0" Padding="16,12,16,14">
-          <StackPanel><TextBlock x:Name="Tile3Label" Style="{StaticResource LabelStyle}" Text="KILLS / HR"/><TextBlock x:Name="KillsHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Mint}" Text="0"/></StackPanel>
+        <Border Style="{StaticResource CardStyle}" Margin="5,0" Padding="12,9,12,10">
+          <StackPanel><TextBlock x:Name="Tile3Label" Style="{StaticResource LabelStyle}" Text="KILLS / HR"/><TextBlock x:Name="KillsHr" Style="{StaticResource TileValue}" Foreground="{DynamicResource Mint}" Text="0"/></StackPanel>
         </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="6,0" Padding="16,12,16,14">
-          <StackPanel><TextBlock x:Name="Tile4Label" Style="{StaticResource LabelStyle}" Text="DROPS / HR"/><TextBlock x:Name="DropsHr" Style="{StaticResource TileValue}" Foreground="{StaticResource Violet}" Text="0"/></StackPanel>
+        <Border Style="{StaticResource CardStyle}" Margin="5,0" Padding="12,9,12,10">
+          <StackPanel><TextBlock x:Name="Tile4Label" Style="{StaticResource LabelStyle}" Text="DROPS / HR"/><TextBlock x:Name="DropsHr" Style="{StaticResource TileValue}" Foreground="{DynamicResource Violet}" Text="0"/></StackPanel>
         </Border>
       </UniformGrid>
 
-      <!-- drops and gathered, two separate tables -->
-      <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="20,14,20,12">
+      <!-- one table at a time: Drops, Gathered or Pets, picked by the tabs -->
+      <Border x:Name="TablesCard" Style="{StaticResource CardStyle}" Margin="0,10,0,0" Padding="14,10,14,10">
         <StackPanel x:Name="TableStack">
-          <Grid Margin="0,0,0,10">
+          <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <TextBlock x:Name="TableTitle" Style="{StaticResource LabelStyle}" Text="THIS SESSION" VerticalAlignment="Center"/>
+            <TextBlock x:Name="TableTitle" Style="{StaticResource LabelStyle}" Text="WHILE THE GAME IS OPEN" VerticalAlignment="Center"/>
             <!-- the summary trims from the right when the window is narrow, instead of running under the title -->
-            <TextBlock x:Name="Summary" Grid.Column="1" Foreground="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" Text="no run yet"/>
+            <TextBlock x:Name="Summary" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="11.5" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" Text="nothing read yet"/>
           </Grid>
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
+            <Button x:Name="DropsTab" Content="Drops" Padding="12,5" FontSize="12.5" Margin="0,0,6,0"/>
+            <Button x:Name="GatherTab" Content="Gathered" Padding="12,5" FontSize="12.5" Margin="0,0,6,0"/>
+            <Button x:Name="PetsTab" Content="Pets" Padding="12,5" FontSize="12.5"/>
+          </StackPanel>
 
           <StackPanel x:Name="DropsSection">
-            <Border Background="{StaticResource Card2}" CornerRadius="6" Height="30">
+            <Border Background="{DynamicResource Card2}" CornerRadius="6" Height="28">
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="72"/><ColumnDefinition Width="92"/><ColumnDefinition Width="92"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Style="{StaticResource LabelStyle}" Text="DROPS FROM KILLS" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
-                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource LabelStyle}" Text="DROP %" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" ToolTip="Drops divided by kills. Kills are counted from Kinah or Soul Point pickups (one per mob), or from kill lines when the chat shows them."/>
-                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+                <TextBlock Style="{StaticResource LabelStyle}" Text="DROPS FROM KILLS" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource LabelStyle}" Text="DROP %" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="Drops divided by kills. Kills are counted from Kinah or Soul Point pickups (one per mob), or from kill lines when the chat shows them."/>
+                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
               </Grid>
             </Border>
-            <Grid MinHeight="72">
-              <ScrollViewer MaxHeight="206" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid MinHeight="64">
+              <ScrollViewer MaxHeight="228" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="Rows" ItemTemplate="{StaticResource RowTemplate}"/>
               </ScrollViewer>
-              <TextBlock x:Name="TableEmpty" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="460"
+              <TextBlock x:Name="TableEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
                          Text="Drops show here as they're read, with the drop rate per kill and per hour."/>
             </Grid>
           </StackPanel>
 
-          <StackPanel x:Name="GatherSection" Margin="0,12,0,0">
-            <Border Background="{StaticResource Card2}" CornerRadius="6" Height="30">
+          <StackPanel x:Name="GatherSection">
+            <Border Background="{DynamicResource Card2}" CornerRadius="6" Height="28">
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="120"/><ColumnDefinition Width="120"/>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="72"/><ColumnDefinition Width="92"/><ColumnDefinition Width="92"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Style="{StaticResource LabelStyle}" Text="GATHERED" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="COUNT" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
-                <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER NODE" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" ToolTip="Count divided by nodes. Any ore, log, Odyle, herb or food line counts as one node; gemstones and higher tiers are the finds."/>
-                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+                <TextBlock Style="{StaticResource LabelStyle}" Text="GATHERED" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="COUNT" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER ATTEMPT" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="Count divided by attempts. Every ore, log, Odyle, herb or food line counts as one attempt, failed gathers too; gemstones and higher tiers are the finds."/>
+                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
               </Grid>
             </Border>
-            <Grid MinHeight="72">
-              <ScrollViewer MaxHeight="206" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid MinHeight="64">
+              <ScrollViewer MaxHeight="228" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="GatherRows" ItemTemplate="{StaticResource RowTemplate}"/>
               </ScrollViewer>
-              <TextBlock x:Name="GatherEmpty" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="460"
-                         Text="Gathered materials show here, with how often each comes per node and per hour."/>
+              <TextBlock x:Name="GatherEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
+                         Text="Gathered materials show here, with how often each comes per attempt and per hour."/>
             </Grid>
           </StackPanel>
 
-          <StackPanel x:Name="PetSection" Margin="0,12,0,0">
-            <Border Background="{StaticResource Card2}" CornerRadius="6" Height="30">
+          <StackPanel x:Name="PetSection">
+            <Border Background="{DynamicResource Card2}" CornerRadius="6" Height="28">
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*"/><ColumnDefinition Width="110"/><ColumnDefinition Width="130"/>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="80"/><ColumnDefinition Width="100"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Style="{StaticResource LabelStyle}" Text="PETS · SOUL CRYSTALS BY ZONE" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"/>
-                <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0" ToolTip="Crystals divided by the time spent in that zone. There is no drop %: Soul Crystals are rated by time in the zone, not by kill."/>
+                <TextBlock Style="{StaticResource LabelStyle}" Text="SOUL CRYSTALS BY ZONE" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="Crystals divided by the time spent in that zone. There is no drop %: Soul Crystals are rated by time in the zone, not by kill."/>
               </Grid>
             </Border>
-            <Grid MinHeight="72">
-              <ScrollViewer MaxHeight="206" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid MinHeight="64">
+              <ScrollViewer MaxHeight="228" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="PetRows" ItemTemplate="{StaticResource PetRowTemplate}"/>
               </ScrollViewer>
-              <TextBlock x:Name="PetEmpty" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="460"
+              <TextBlock x:Name="PetEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
                          Text="Soul Crystals show here by zone, with drops and per hour, so the best pet-farming spot stands out."/>
             </Grid>
           </StackPanel>
 
-          <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{StaticResource Faint}" FontSize="12" Margin="0,8,0,0" Visibility="Collapsed"/>
+          <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="0,6,0,0" Visibility="Collapsed"/>
         </StackPanel>
       </Border>
 
       <!-- status -->
-      <Grid Margin="0,14,0,0">
-        <TextBlock x:Name="Status" Foreground="{StaticResource Faint}" FontSize="12.5" TextTrimming="CharacterEllipsis" Margin="0,0,196,0"/>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-          <TextBlock FontSize="12.5"><Hyperlink x:Name="LogsLink" Style="{StaticResource LinkStyle}">Open logs</Hyperlink></TextBlock>
-          <TextBlock FontSize="12.5" Margin="16,0,0,0"><Hyperlink x:Name="ResetLink" Style="{StaticResource LinkStyle}">Reset chat area</Hyperlink></TextBlock>
-        </StackPanel>
+      <Grid x:Name="StatusRow" Margin="0,10,0,0">
+        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,0,80,0"/>
+        <TextBlock FontSize="12" HorizontalAlignment="Right"><Hyperlink x:Name="LogsLink" Style="{StaticResource LinkStyle}">Open logs</Hyperlink></TextBlock>
       </Grid>
 
     </StackPanel>

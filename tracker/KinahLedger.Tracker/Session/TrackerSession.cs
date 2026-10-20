@@ -22,8 +22,10 @@ public sealed class TrackerSession
     Task? _loop;
     DateTime _zoneAt = DateTime.MinValue;
 
-    public SessionEngine Engine { get; }
-    public string Kind { get; }
+    public SessionEngine Engine { get; private set; }
+    public string Kind { get; set; }
+    /// <summary>A second engine fed the same events: the farming run that sits on top of the always-on reader.</summary>
+    public SessionEngine? Secondary { get; set; }
     public Rectangle? Region { get; private set; }
     public bool ManualRegion { get; }
     public string? Zone => Engine.Zone;
@@ -55,14 +57,24 @@ public sealed class TrackerSession
     }
 
     /// <summary>The kind plus the zone most of the run happened in, e.g. "Open world · Western Cantas Valley".</summary>
-    public string Activity
+    public string Activity => ActivityOf(Engine, Kind);
+
+    public static string ActivityOf(SessionEngine e, string kind)
     {
-        get
-        {
-            var zs = ZoneSeconds;
-            var z = zs.Count > 0 ? zs.MaxBy(kv => kv.Value).Key : Zone;
-            return z != null ? $"{Kind} · {z}" : Kind;
-        }
+        var zs = e.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).ToList();
+        var z = zs.Count > 0 ? zs.MaxBy(kv => kv.Value.Seconds).Key : e.Zone;
+        return z != null ? $"{kind} · {z}" : kind;
+    }
+
+    /// <summary>Starts a fresh engine for the always-on reader and hands back the finished one, with the zone carried over.</summary>
+    public SessionEngine Rotate()
+    {
+        var old = Engine;
+        var fresh = new SessionEngine(_items);
+        fresh.SetZone(old.Zone);
+        Engine = fresh;
+        old.Finish();
+        return old;
     }
 
     public event Action<string>? LootLine;
@@ -104,6 +116,7 @@ public sealed class TrackerSession
         {
             var (zone, _) = await ZoneLocator.DetectAsync(game);
             Engine.SetZone(zone);
+            Secondary?.SetZone(zone);
         }
         catch (Exception ex) { CrashLog.Write("zone", ex); }
         _zoneAt = DateTime.UtcNow;
@@ -135,7 +148,7 @@ public sealed class TrackerSession
                 foreach (var l in _tracker.NewLines(lines))
                 {
                     bool any = false;
-                    foreach (var ev in _parser.Parse(l, DateTime.UtcNow)) { Engine.Apply(ev); any = true; }
+                    foreach (var ev in _parser.Parse(l, DateTime.UtcNow)) { Engine.Apply(ev); Secondary?.Apply(ev); any = true; }
                     CrashLog.Read(l, any);
                     if (any) { LastLine = l; LootLine?.Invoke(l); }
                 }
@@ -167,8 +180,11 @@ public sealed class TrackerSession
     public string RegionKey { get; set; } = "";
     public string Server { get; set; } = "";
 
-    public Task<bool> UploadAsync(Settings s) =>
-        Eligible ? Uploader.SendAsync(RunPayload.Build(Engine, s, Kind, Activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server), s.Upload) : Task.FromResult(false);
+    public Task<bool> UploadAsync(Settings s) => UploadAsync(s, Engine, Kind, Activity);
+
+    /// <summary>Shares one engine's totals (a farming run, or a chunk of the always-on count) under the given kind. Under five minutes or empty: nothing is sent.</summary>
+    public Task<bool> UploadAsync(Settings s, SessionEngine e, string kind, string activity) =>
+        e.Elapsed.TotalMinutes >= 5 && e.Events > 0 ? Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server), s.Upload) : Task.FromResult(false);
 }
 
 /// <summary>What the window remembers between runs, kept per user.</summary>
@@ -190,6 +206,10 @@ public sealed class UserPrefs
     public string Server { get; set; } = "";
     /// <summary>The chosen server's region key ("na_e"); empty means settings.json's region.</summary>
     public string Region { get; set; } = "";
+    /// <summary>True once the first-run screen (region, faction, server, look) has been completed.</summary>
+    public bool Welcomed { get; set; }
+    /// <summary>The look: night, abyss or daylight.</summary>
+    public string Skin { get; set; } = "night";
     public int? WinX { get; set; }
     public int? WinY { get; set; }
     /// <summary>Where the over-game panel was last dragged to.</summary>

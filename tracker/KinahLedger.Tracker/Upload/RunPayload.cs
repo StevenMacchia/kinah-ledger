@@ -118,6 +118,9 @@ public static class Uploader
     public static Task<bool> SendPricesAsync(PriceBatch p, UploadSettings u) =>
         string.IsNullOrWhiteSpace(u.PricesUrl) ? Task.FromResult(false) : PostAsync(u.PricesUrl, p);
 
+    /// <summary>Why the last send failed, in plain words, so the window can say more than "couldn't reach the site".</summary>
+    public static string LastError { get; private set; } = "";
+
     static async Task<bool> PostAsync<T>(string url, T payload)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
@@ -125,9 +128,13 @@ public static class Uploader
         try
         {
             var r = await http.PostAsJsonAsync(url, payload);
-            return r.IsSuccessStatusCode;
+            if (r.IsSuccessStatusCode) { LastError = ""; return true; }
+            string body = "";
+            try { body = (await r.Content.ReadAsStringAsync()).Trim(); } catch (Exception) { /* no body */ }
+            LastError = $"the site answered {(int)r.StatusCode}" + (body.Length > 0 ? ": " + (body.Length > 140 ? body[..140] + "…" : body) : "");
+            return false;
         }
-        catch (HttpRequestException) { return false; }
-        catch (TaskCanceledException) { return false; }
+        catch (HttpRequestException ex) { LastError = "no connection: " + ex.Message; return false; }
+        catch (TaskCanceledException) { LastError = "the site didn't answer within 15 s"; return false; }
     }
 }

@@ -77,7 +77,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
-  ui-shot [dir] [--demo] [--pets|--gathering|--market] [--compact]
+  ui-shot [dir] [--demo] [--pets|--gathering|--market] [--compact] [--welcome] [--skin night|abyss|daylight]
                                 render the window to PNG files for layout review
   market-shot [dir]             the window with the Market card in its tracking state
   reset-id                      replace the random install ID used for uploads
@@ -194,7 +194,7 @@ options: --process aion[,other]");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -227,8 +227,13 @@ options: --process aion[,other]");
             "Orichalcurn Ore acquired.",
             "Fresh Fruit x3 acquired.",
             "Obtained 1 Oculazen Soul Points.",
+            "Orichalcum Ore acquiréd.i",
+            "Fresh Fruit acquirea.",
+            "Acquiredn521 Kina?",
             "Obtained 1 Natura Soul Crystals.",
             "Obtained 2 Fera Soul Crystals.",
+            "Obtained 2 Fera Soul Crystals;",
+            "Obtained 1 Ivera Soul Crystal:",
             "Increased Pet Insight Level Oculazen.",
             "Acquired 520 Kina.",
             "Acquired 13,000 Kina (Bound).",
@@ -437,7 +442,7 @@ options: --process aion[,other]");
     static GameWatcher MarketWatcher(Settings s, ItemDictionary items, Dictionary<string, string> o)
     {
         var prefs = UserPrefs.Load();
-        var w = new GameWatcher(s, items, prefs.ManualMarket ? RegionStore.Load(RegionStore.MarketFile) : null, o.GetValueOrDefault("server") ?? prefs.Server);
+        var w = new GameWatcher(s, items, prefs.ManualMarket ? RegionStore.Load(RegionStore.MarketFile) : null, null, o.GetValueOrDefault("server") ?? prefs.Server);
         if (prefs.Region.Length > 0) w.Market.Region = prefs.Region;
         w.Market.Enabled = s.Market.Enabled && prefs.ShareMarket && !o.ContainsKey("no-market");
         return w;

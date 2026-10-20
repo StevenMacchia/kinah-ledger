@@ -47,14 +47,19 @@ public static class MarketLocator
     public delegate Task<List<OcrLineBox>> Reader(Rectangle region, int scale, bool boost);
     public static readonly Reader ScreenRead = (r, s, b) => ScreenReader.ReadBoxesAsync(r, s, b);
 
-    static readonly Regex TitleRx = new(@"^(?:server\s+|cross[\s-]*server\s+)?market(?:place)?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    // header words as the recognizer sees them, with its usual slips (1 for l, 7 for t) allowed
+    static readonly Regex TitleRx = new(@"^(?:server\s+|cross[\s-]*server\s+)?market(?:place)?(?:\s*[|·:\-]?\s*exchange)?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // header words as the recognizer sees them, with its usual slips (1 for l, 7 for t) allowed.
+    // Two table shapes: the listing table (Item, Quantity, Unit Price, Total Price) and the Market's main board
+    // (Grade, Item, Sales List, Lowest Sale Price), which is what the Exchange tab shows while browsing.
     static readonly (string kind, Regex rx)[] Headers =
     {
-        ("name",  new(@"^(?:item|items|item\s*name|name)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
-        ("qty",   new(@"^(?:quantity|quant[il1]ty|qty|q[t7]y|amount|count|stock)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
-        ("unit",  new(@"^(?:unit\s*pr[il1]ce|pr[il1]ce\s*(?:per|/|each)(?:\s*(?:unit|each|one))?|unit|pr[il1]ce|pr[il1]ce\s*each)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
-        ("total", new(@"^(?:tota[l1]\s*pr[il1]ce|tota[l1]|sum|tota[l1]\s*amount)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("name",     new(@"^(?:item|items|item\s*name|name)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("qty",      new(@"^(?:quantity|quant[il1]ty|qty|q[t7]y|amount|count|stock)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("lowest",   new(@"^(?:[l1]owest\s*sa[l1]e\s*pr[il1]ce|[l1]owest\s*pr[il1]ce|[l1]owest\s*sa[l1]e|[l1]owest)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("listings", new(@"^(?:sa[l1]es\s*[l1][il1]s[t7]|sa[l1]es|[l1]ist[il1]ngs?)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("grade",    new(@"^grade$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("unit",     new(@"^(?:unit\s*pr[il1]ce|pr[il1]ce\s*(?:per|/|each)(?:\s*(?:unit|each|one))?|unit|pr[il1]ce|pr[il1]ce\s*each)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("total",    new(@"^(?:tota[l1]\s*pr[il1]ce|tota[l1]|sum|tota[l1]\s*amount)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
     };
 
     /// <summary>The middle of the game frame, where panels open; the outer few percent hold the HUD.</summary>
@@ -89,7 +94,12 @@ public static class MarketLocator
             var mine = new List<(string kind, Rectangle box)>(); int used = 0;
             for (int i = 0; i < words.Count; i++)
             {
-                // two-word headers first ("Unit Price", "Total Price"), then single words
+                // three-word headers first ("Lowest Sale Price"), then two-word ("Unit Price", "Sales List"), then single words
+                if (i + 2 < words.Count && words[i + 1].Box.Left - words[i].Box.Right < words[i].Box.Height * 2 && words[i + 2].Box.Left - words[i + 1].Box.Right < words[i].Box.Height * 2)
+                {
+                    var three = KindOf(Clean(words[i].Text + " " + words[i + 1].Text + " " + words[i + 2].Text));
+                    if (three != null) { mine.Add((three, Rectangle.Union(Rectangle.Union(words[i].Box, words[i + 1].Box), words[i + 2].Box))); used += 3; i += 2; continue; }
+                }
                 if (i + 1 < words.Count && words[i + 1].Box.Left - words[i].Box.Right < words[i].Box.Height * 2)
                 {
                     var pair = KindOf(Clean(words[i].Text + " " + words[i + 1].Text));
@@ -111,14 +121,16 @@ public static class MarketLocator
             var same = hits.Where(o => o.box.Top <= mid && o.box.Bottom >= mid)
                            .GroupBy(o => o.kind).Select(g => g.OrderBy(o => o.box.Left).First())
                            .OrderBy(o => o.box.Left).ToList();
-            if (same.Any(o => o.kind == "unit") && same.Any(o => o.kind is "qty" or "total") && (row == null || same.Count > row.Count)) row = same;
+            bool listing = same.Any(o => o.kind == "unit") && same.Any(o => o.kind is "qty" or "total");
+            bool board = same.Any(o => o.kind == "lowest") && same.Any(o => o.kind == "name");
+            if ((listing || board) && (row == null || same.Count > row.Count)) row = same;
         }
         if (row == null) return (null, $"saw {string.Join(", ", hits.Select(h => h.kind).Distinct())} but not a whole header row");
 
         int hh = Math.Max(8, row.Max(o => o.box.Height));
-        int numericLeft = row.Where(o => o.kind != "name").Min(o => o.box.Left);
+        int numericLeft = row.Where(o => o.kind is not ("name" or "grade")).Min(o => o.box.Left);
         var kinds = new List<string>(); var bounds = new List<int>();
-        if (row[0].kind != "name") { kinds.Add("name"); bounds.Add(numericLeft - hh / 2); }
+        if (row[0].kind is not ("name" or "grade")) { kinds.Add("name"); bounds.Add(numericLeft - hh / 2); }
         for (int i = 0; i < row.Count; i++)
         {
             kinds.Add(row[i].kind);
@@ -128,7 +140,7 @@ public static class MarketLocator
             bounds.Add(row[i].kind == "name" ? b.Left - hh / 2 : (a.Left + a.Width / 2 + b.Left + b.Width / 2) / 2);
         }
         int rowTop = row.Min(o => o.box.Top), rowBottom = row.Max(o => o.box.Bottom);
-        int left = row[0].kind == "name" ? Math.Max(game.Left, row[0].box.Left - hh) : Math.Max(game.Left, numericLeft - game.Width * 22 / 100);
+        int left = row[0].kind is "name" or "grade" ? Math.Max(game.Left, row[0].box.Left - hh) : Math.Max(game.Left, numericLeft - game.Width * 22 / 100);
         int right = Math.Min(game.Right, row[^1].box.Right + Math.Max(2 * hh, game.Width * 2 / 100));
         int top = rowBottom + 2;
         int bottom = Math.Min(game.Bottom - game.Height * 4 / 100, top + game.Height * 60 / 100);
@@ -185,6 +197,28 @@ public static class MarketReader
             }
             rows.Add(new Row(string.Join(" ", g.Select(x => x.Text)), cells, box));
         }
+        // the main board shows each item on two lines, the name and "Item Level N"; the numbers sit between them and
+        // may land on either. Fold a level line (or a line with numbers but no name) into the row above it.
+        if (layout.Kinds != null && Array.IndexOf(layout.Kinds, "lowest") >= 0)
+        {
+            var merged = new List<Row>();
+            foreach (var r in rows)
+            {
+                var name = r.Cells != null && r.Cells.TryGetValue("name", out var n) ? n.Trim() : "";
+                bool level = LevelLine.IsMatch(name), nameless = name.Length == 0 || name.Count(char.IsLetter) < 3;
+                if (merged.Count > 0 && (level || nameless) && r.Box.Top - merged[^1].Box.Bottom < merged[^1].Box.Height * 1.5)
+                {
+                    var prev = merged[^1];
+                    var cells = new Dictionary<string, string>(prev.Cells!);
+                    foreach (var (k, v) in r.Cells!) if (k != "name" || !level) cells[k] = cells.TryGetValue(k, out var s) && s.Length > 0 ? s + " " + v : v;
+                    merged[^1] = new Row(prev.Flat + " " + r.Flat, cells, Rectangle.Union(prev.Box, r.Box));
+                }
+                else merged.Add(r);
+            }
+            rows = merged;
+        }
         return rows;
     }
+
+    static readonly Regex LevelLine = new(@"^(?:item\s*)?[l1]eve[l1]\s*\d{1,3}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 }
