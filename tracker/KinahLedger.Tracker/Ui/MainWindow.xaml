@@ -35,7 +35,7 @@
         </StackPanel>
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
           <TextBlock HorizontalAlignment="Right" FontSize="13"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-          <TextBlock x:Name="Version" Text="v0.4.3" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
+          <TextBlock x:Name="Version" Text="v0.4.4" Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,3,0,0" FontSize="12"/>
         </StackPanel>
       </Grid>
 
