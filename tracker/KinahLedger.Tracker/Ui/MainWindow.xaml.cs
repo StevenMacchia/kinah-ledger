@@ -503,7 +503,7 @@ public partial class MainWindow : Window
         "•  what you're farming and where, gear score bracket, region\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
         "Never your character name, server, account, class, level, chat text or screenshots.\n" +
         "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
-        "Sharing isn't live yet: until the site can receive runs (upload.endpoint in settings.json), everything stays on this PC. Once it is, the totals go once, when you press Stop; if the site can't be reached, the run stays here, saved to your history, and isn't sent later.",
+        "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- market prices (always on while the window is open; not part of a run) ---------------- */
@@ -557,7 +557,7 @@ public partial class MainWindow : Window
         "•  item name, stack size and unit price of each ask\n•  your server, as typed here, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
         "Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
         "Nothing is clicked or typed in the game. Turn this off any time; the tracker still works.\n\n" +
-        "Sharing isn't live yet: until the site can receive prices, what's read stays on this PC and is never stored. Once it is, asks go out in small batches as they are read; if the site can't be reached, the batch is tried again a few seconds later, and whatever is still unsent when this window closes is dropped.",
+        "Asks go to kinahledger.com (https://kinahledger.com/v1/prices) in small batches as they are read. If the site can't be reached, the batch is tried again a few seconds later; whatever is still unsent when this window closes is dropped. Prices are never stored on this PC.",
         "What's read from the Market", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- tray, hotkey, window state ---------------- */
