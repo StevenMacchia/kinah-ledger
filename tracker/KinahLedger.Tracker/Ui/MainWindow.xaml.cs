@@ -202,7 +202,7 @@ public partial class MainWindow : Window
             var e = s.Engine; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah;
             if (_gathering)
                 _hud.Update($"{Fk(t.Drops / h)} items/hr",
-                    $"{Fk(t.Nodes / h)} nodes/hr · {(t.Nodes > 0 ? (t.Drops / (double)t.Nodes).ToString("0.00") : "—")} items/node · {Fk(t.Bonus / h)} rare/hr\n{e.Elapsed:hh\\:mm\\:ss} · {t.Drops} items · {t.Nodes} nodes · {t.Bonus} rare finds",
+                    $"{Fk(t.Nodes / h)} nodes/hr · {(t.Nodes > 0 ? (t.Drops / (double)t.Nodes).ToString("0.00") : "—")} items/node · {Fk(t.Bonus / h)} rare/hr\n{e.Elapsed:hh\\:mm\\:ss} · {t.Drops} items · {t.Nodes} nodes{(t.Failed > 0 ? $" ({t.Failed} failed)" : "")} · {t.Bonus} rare finds",
                     s.LastLine);
             else
                 _hud.Update($"{Fk(kinah / h)} Kinah/hr",
@@ -238,7 +238,10 @@ public partial class MainWindow : Window
             KinahKill.Text = Fk(s.gatherCount / h);
             KillsHr.Text = t.Nodes > 0 ? (s.gatherCount / (double)t.Nodes).ToString("0.00") : "—";
             DropsHr.Text = Fk(t.Bonus / h);
-            Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {s.gatherCount} gathered · {t.Nodes} nodes · {t.Bonus} rare finds{worth}" + (kinah > 0 ? $" · {Fk(kinah)} Kinah" : "") + skipped;
+            int ok = t.Nodes - t.Failed;
+            string plent = ok > 0 ? $" · plentiful {Math.Round(100.0 * t.Plentiful / ok)}%" : "";
+            string fails = t.Failed > 0 ? $" ({t.Failed} failed)" : "";
+            Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {s.gatherCount} gathered · {t.Nodes} nodes{fails}{plent} · {t.Bonus} rare finds{worth}" + (kinah > 0 ? $" · {Fk(kinah)} Kinah" : "") + skipped;
         }
         else
         {
@@ -389,7 +392,9 @@ public partial class MainWindow : Window
         if (gathering)
         {
             Kind.SelectedItem = "Gathering"; _gathering = true;
-            Drop("Orichalcum Ore", 96); Drop("Fine Orichalcum Ore", 14); Drop("Pure Orichalcum Ore", 2); Drop("Sapphire Gemstone", 9); Drop("Ruby Gemstone", 6); Drop("Diamond Gemstone", 4); Drop("Fine Sapphire Gemstone", 1);
+            Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new Protocol.ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));
+            Drop("Fine Orichalcum Ore", 14); Drop("Pure Orichalcum Ore", 2); Drop("Sapphire Gemstone", 9); Drop("Ruby Gemstone", 6); Drop("Diamond Gemstone", 4); Drop("Fine Sapphire Gemstone", 1);
+            for (int i = 0; i < 11; i++) e.Apply(new Protocol.GatherFailed(t, "Essence Extraction"));
         }
         else
         {

@@ -281,6 +281,11 @@ options: --process aion[,other]   --device <adapter name>");
             "Spiritstone acquired.",
             "Fresh Fruit acquirea.",
             "Orichalcum Ore acquired.",
+            "Orichalcum Ore x2 acquired.",
+            "Acquired Fine Odyle x2.",
+            "Odyle acquired.",
+            "Kukuru acquired.",
+            "Essence Extraction failed",
             "Fine Orichalcum Ore x2 acquired.",
             "Ruby Gemstone acquired.",
             "Orichalcurn Ore acquired.",
@@ -334,6 +339,7 @@ options: --process aion[,other]   --device <adapter name>");
         MobKilled => "kill",
         CurrencyGained c => $"{c.Name} +{c.Amount:N0} (counts as a kill, not a drop)",
         RewardReceived r => $"reward: {r.Name} ×{r.Count} (skipped)",
+        GatherFailed f => $"{f.Skill} failed (node attempt, no yield)",
         ZoneChanged z => $"zone {z.ZoneId}",
         _ => ev.GetType().Name
     };

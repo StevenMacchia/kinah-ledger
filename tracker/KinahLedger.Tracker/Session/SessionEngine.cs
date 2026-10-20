@@ -21,8 +21,11 @@ public sealed class SessionEngine
     public Dictionary<string, long> Currencies { get; } = new();
     /// <summary>Quest, title and box rewards seen and deliberately left out of the farming numbers.</summary>
     public int RewardsSkipped { get; private set; }
-    /// <summary>Gathering: one per primary-resource line (ore, log, Odyle, herb, food).</summary>
+    /// <summary>Gathering: node attempts, one per primary-resource line (ore, log, Odyle, herb, food) plus failed attempts.</summary>
     public int Nodes { get; private set; }
+    public int NodesFailed { get; private set; }
+    /// <summary>Gathering: lines with x2 or more, the Plentiful proc.</summary>
+    public int Plentiful { get; private set; }
     /// <summary>Gathering: gemstones and higher-tier materials, the finds worth tracking per node.</summary>
     public int BonusFinds { get; private set; }
     /// <summary>Best available kill count: kill lines, experience lines, or Kinah pickups (one per mob in open-world farming).</summary>
@@ -50,7 +53,10 @@ public sealed class SessionEngine
                     var d = a.Bound ? ItemsBound : Items;
                     d[a.ItemId] = d.GetValueOrDefault(a.ItemId) + a.Count;
                     var g = GatheringCatalog.Find(_items.NameOf(a.ItemId));
-                    if (g != null) { if (g.IsNode) Nodes++; if (g.Bonus) BonusFinds += a.Count; }
+                    if (g != null) { if (g.IsNode) { Nodes++; if (a.Count >= 2) Plentiful++; } if (g.Bonus) BonusFinds += a.Count; }
+                    break;
+                case GatherFailed:
+                    Nodes++; NodesFailed++;
                     break;
                 case KinahChanged k:
                     // bound Kinah comes from quests, titles and rewards, not from mobs: tracked, but not farming income or a kill
@@ -81,9 +87,9 @@ public sealed class SessionEngine
     public void Finish() => Ended ??= DateTime.UtcNow;
 
     /// <summary>A consistent snapshot of the totals, taken under the same lock the reader thread uses.</summary>
-    public (long Kinah, long KinahBound, long Drops, int Kills, int Events, int Nodes, int Bonus, int Rewards) Totals()
+    public (long Kinah, long KinahBound, long Drops, int Kills, int Events, int Nodes, int Bonus, int Rewards, int Failed, int Plentiful) Totals()
     {
-        lock (_lock) return (Kinah, KinahBound, Items.Values.Sum() + ItemsBound.Values.Sum(), Kills, Events, Nodes, BonusFinds, RewardsSkipped);
+        lock (_lock) return (Kinah, KinahBound, Items.Values.Sum() + ItemsBound.Values.Sum(), Kills, Events, Nodes, BonusFinds, RewardsSkipped, NodesFailed, Plentiful);
     }
 
     public string ItemName(long id) => _items.NameOf(id);

@@ -37,11 +37,18 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"^\s*title\s+acquired\b", RegexOptions.IgnoreCase)]
     private static partial Regex Title();
 
+    /// <summary>"Essence Extraction failed": a gather attempt with no yield.</summary>
+    [GeneratedRegex(@"^(?<skill>[^\[\]]*?(?:extraction|gathering|mining|logging|harvest(?:ing)?|collect(?:ion|ing)))\s+failed\.?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex GatherFail();
+
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");
         if (line.Length == 0) yield break;
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
+
+        var gf = GatherFail().Match(line);
+        if (gf.Success) { yield return new GatherFailed(time, gf.Groups["skill"].Value.Trim()); yield break; }
 
         var k = Kina().Match(line);
         if (k.Success)
@@ -86,8 +93,9 @@ public sealed partial class ChatParser
                 yield return new CurrencyGained(time, name, Math.Clamp(n, 1, 999999));
                 yield break;
             }
-            // loot you pick up is written name-first ("Spiritstone acquired."); verb-first item lines are quest, title and box rewards
-            if (!nameFirst)
+            // common pickups are name-first ("Odyle acquired."), rarer ones verb-first ("Acquired Fine Odyle x2.");
+            // quest, title and box rewards are the verb-first lines marked (Bound), and only those are skipped
+            if (!nameFirst && bound)
             {
                 yield return new RewardReceived(time, name, Math.Clamp(n, 1, 9999));
                 yield break;
