@@ -444,7 +444,7 @@ options: --process aion[,other]");
         var prefs = UserPrefs.Load();
         var w = new GameWatcher(s, items, prefs.ManualMarket ? RegionStore.Load(RegionStore.MarketFile) : null, null, o.GetValueOrDefault("server") ?? prefs.Server);
         if (prefs.Region.Length > 0) w.Market.Region = prefs.Region;
-        w.Market.Enabled = s.Market.Enabled && prefs.ShareMarket && !o.ContainsKey("no-market");
+        w.Market.Enabled = s.Market.Enabled && prefs.Share && !o.ContainsKey("no-market");
         return w;
     }
 
@@ -456,7 +456,7 @@ options: --process aion[,other]");
     {
         var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
         var watcher = MarketWatcher(s, items, o);
-        if (!watcher.Market.Enabled) { Console.WriteLine("Market reading is off (settings, the window's switch, or --no-market)."); return 1; }
+        if (!watcher.Market.Enabled) { Console.WriteLine("Market reading is off (settings, the Share switch, or --no-market)."); return 1; }
         watcher.Start();
         Console.WriteLine(MarketIntro(watcher));
         Console.WriteLine("Open the Market in the game. Ctrl+C to stop.");

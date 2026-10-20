@@ -641,7 +641,7 @@ public partial class MainWindow : Window
         "Whenever this window and the game are open (not only during a run), the tracker watches for the Market window. While the Market is open, the listings on your screen are read about once a second, the same way the chat is:\n\n" +
         "•  item name, stack size and unit price of each ask\n•  your server, as chosen above, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
         "Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
-        "Nothing is clicked or typed in the game. Turn this off any time; the tracker still works.\n\n" +
+        "Nothing is clicked or typed in the game. It follows the Share switch in Settings: with sharing off, the Market isn't read at all.\n\n" +
         "Asks go to kinahledger.com (https://kinahledger.com/v1/prices) in small batches as they are read. If the site can't be reached, the batch is tried again a few seconds later; whatever is still unsent when this window closes is dropped. Prices are never stored on this PC.",
         "What's read from the Market", MessageBoxButton.OK, MessageBoxImage.Information);
 
