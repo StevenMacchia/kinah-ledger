@@ -23,7 +23,9 @@ below. (An earlier packet-capture experiment was removed in 0.6.0 so that this s
 Since 0.6.2 it reads only the parts of the game that nothing covers. While another window sits over the chat
 (a browser, a chat app, the tracker's own window) or the game is minimized, reading pauses, the window says
 which program is in the way, and that time doesn't count toward any per-hour rate. `KinahLedger.exe in-view`
-shows what the tracker can see right now.
+shows what the tracker can see right now. Since 0.6.4 a zone name it has never seen (not in its list and without
+a place word such as Valley or Ruins) has to be read twice in a row before it counts, so a button or tooltip that
+drifts over the minimap can't become a zone.
 
 **Screen reading.** The game prints every pickup in chat ("Acquired 2,790 Kina.",
 "Acquired Drakan hide ×2."). The tracker reads those lines off the screen with the text recognition
