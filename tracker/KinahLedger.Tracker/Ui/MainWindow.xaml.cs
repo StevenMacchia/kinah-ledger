@@ -14,7 +14,7 @@ using WF = System.Windows.Forms;
 namespace KinahLedger.Ui;
 
 /// <summary>One table row. Icon is the item's icon slot (filled as the file arrives) and Initial the letter shown until then; both empty on a header row.</summary>
-public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "");
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "");
 
 public partial class MainWindow : Window
 {
@@ -351,7 +351,7 @@ public partial class MainWindow : Window
         var chat = _watcher.Chat; var farm = _watcher.Farm;
         var show = farm ?? (DateTime.UtcNow < _lastRunUntil ? _lastRun : chat?.Engine);
         if (farm != null) FarmTime.Text = "Farming for " + farm.Elapsed.ToString(@"hh\:mm\:ss") + (farm.Paused ? " · paused while the game is out of view" : "");
-        else if (chat != null) FarmTime.Text = "Counting since " + _watcher.ChatSince.ToLocalTime().ToString("HH:mm") + " · Ctrl+Shift+K starts a run from inside the game";
+        else if (chat != null) FarmTime.Text = "Counting since " + _watcher.ChatSince.ToLocalTime().ToString("HH:mm");
         else FarmTime.Text = "Ctrl+Shift+K starts and stops from inside the game";
         if (show != null && (farm != null || show != _lastRun))
         {
@@ -435,7 +435,16 @@ public partial class MainWindow : Window
             var g = GatheringCatalog.Find(r.Name);
             var grade = g?.Grade ?? _items.Get(r.Id)?.Grade ?? "";
             if (g != null) { gc += total; if (!bySkill.TryGetValue(g.Skill, out var list)) bySkill[g.Skill] = list = new(); list.Add((r.Name, total)); bySkillGrade[r.Name] = grade; }
-            else { dc += total; drops.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name))); }
+            else { dc += total; drops.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceText(r.Name))); }
+        }
+        // Soul Crystals come from kills too, so they sit under Drops, in their own section: never mixed into the item rows or the drop count
+        var pets = e.PetSnapshot();
+        if (pets.Count > 0)
+        {
+            int all = pets.Values.Sum();
+            drops.Add(new DropRow($"SOUL CRYSTALS FROM KILLS  ·  {all}  ·  {Rate(all / hours)}/hr", "", "", "", Header: true));
+            foreach (var (name, n) in pets.OrderByDescending(x => x.Value))
+                drops.Add(new DropRow(name, n.ToString("N0"), kills > 0 ? Pct(n / (double)kills) : "—", Rate(n / hours), Initial: InitialOf(name)));
         }
         var gathered = new List<DropRow>();
         var stats = e.SkillSnapshot();
@@ -450,10 +459,13 @@ public partial class MainWindow : Window
                      + (st.Nodes > 0 ? $"  ·  {Rate(st.Nodes / hours)} attempts/hr" : "");
             gathered.Add(new DropRow(head, "", "", "", Header: true));
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
-                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name)));
+                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceText(name)));
         }
         return new Tables(drops, gathered, dc, gc, value, priced, unpriced);
     }
+
+    /// <summary>The lowest Market price for an item on this server, as the Price column shows it; a dash until one is known.</summary>
+    static string PriceText(string name) => PriceBook.Price(name) is long p ? Fk(p) : "—";
 
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
     {
@@ -482,7 +494,7 @@ public partial class MainWindow : Window
                 KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
                 KillsHr.Text = Fk(t.Kills / h);
                 DropsHr.Text = Fk(s.DropCount / h);
-                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {s.DropCount} drops · {t.Kills} kills{worth}" + crystals + (s.GatherCount > 0 ? $" · {s.GatherCount} gathered" : "") + skipped;
+                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {s.DropCount} drop{(s.DropCount == 1 ? "" : "s")} · {t.Kills} kill{(t.Kills == 1 ? "" : "s")}{worth}" + crystals + (s.GatherCount > 0 ? $" · {s.GatherCount} gathered" : "") + skipped;
                 break;
         }
         // the hour's worth if the tradeable items are sold at the lowest Market price, after the Market's cut; open world adds the Kinah
@@ -534,7 +546,8 @@ public partial class MainWindow : Window
         GatherEmpty.Text = e == null ? "Gathered materials show here, with how often each comes per attempt and per hour." : "Nothing gathered yet.";
         // one table at a time, picked by the tabs; the tab labels carry the counts
         int gc = gathered.Count(r => !r.Header);
-        DropsTab.Content = drops.Count > 0 ? $"Drops · {drops.Count}" : "Drops";
+        int ic = drops.TakeWhile(r => !r.Header).Count();   // item rows; the Soul Crystals section below them has its own count
+        DropsTab.Content = ic > 0 ? $"Drops · {ic}" : "Drops";
         GatherTab.Content = gc > 0 ? $"Gathered · {gc}" : "Gathered";
         PaintTabs();
         DropsSection.Visibility = _tab == Tab.Drops ? Visibility.Visible : Visibility.Collapsed;
@@ -542,7 +555,11 @@ public partial class MainWindow : Window
         TableNote.Text = _tab == Tab.Gathered
             ? "Per-attempt rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too."
             : "Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.";
-        TableNote.Visibility = (_tab == Tab.Gathered ? gathered.Count > 0 && nodes == 0 : drops.Count > 0 && kills == 0) ? Visibility.Visible : Visibility.Collapsed;
+        bool noPrice = (_tab == Tab.Gathered ? gathered : drops).Any(r => !r.Header && r.Price == "—");
+        bool ratesNote = _tab == Tab.Gathered ? gathered.Count > 0 && nodes == 0 : drops.Count > 0 && kills == 0;
+        if (noPrice && !PriceBook.Any)
+            TableNote.Text = (ratesNote ? TableNote.Text + " " : "") + "No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest.";
+        TableNote.Visibility = ratesNote || (noPrice && !PriceBook.Any) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>The icon slot for an item: cached or fetched by the cache, a lettered tile until then.</summary>

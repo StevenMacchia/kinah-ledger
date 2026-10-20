@@ -41,6 +41,10 @@ public sealed class SessionEngine
     public Dictionary<string, int> Pets { get; } = new();
     public int PetCrystals { get; private set; }
 
+    // the skill of the last gather, so "Essence Extraction failed" right after an ore counts against mining: the game
+    // prints that line for a failed gather of any kind, and the skill isn't in it
+    GatherFamily? _lastSkill; DateTime _lastSkillAt;
+
     /// <summary>Successes and failures for one craft recipe or one enchant step.</summary>
     public sealed class Odds { public int Ok, Fail; public int Attempts => Ok + Fail; }
     /// <summary>Craft results by item key (dictionary ID, or the name read when the item isn't in the dictionary).</summary>
@@ -172,7 +176,7 @@ public sealed class SessionEngine
                     if (g != null)
                     {
                         var sk = Skill(g.Skill); sk.Items += a.Count;
-                        if (g.IsNode) { Nodes++; sk.Nodes++; Z().Nodes++; Mark(_recentGathers, a.Time); if (a.Count >= 2) { Plentiful++; sk.Plentiful++; } }
+                        if (g.IsNode) { Nodes++; sk.Nodes++; Z().Nodes++; Mark(_recentGathers, a.Time); _lastSkill = g.Skill; _lastSkillAt = a.Time; if (a.Count >= 2) { Plentiful++; sk.Plentiful++; } }
                         if (g.Bonus) { BonusFinds += a.Count; sk.Bonus += a.Count; }
                     }
                     else Z().Drops += a.Count;
@@ -184,7 +188,7 @@ public sealed class SessionEngine
                     break;
                 case GatherFailed f:
                     Nodes++; NodesFailed++; Z().Nodes++; Mark(_recentGathers, f.Time);
-                    var ff = GatherSkills.FromSkillText(f.Skill);
+                    var ff = _lastSkill != null && (f.Time - _lastSkillAt).TotalSeconds <= 45 ? _lastSkill : GatherSkills.FromSkillText(f.Skill);
                     if (ff != null) { var sk = Skill(ff.Value); sk.Nodes++; sk.Failed++; }
                     break;
                 case KinahChanged k:
