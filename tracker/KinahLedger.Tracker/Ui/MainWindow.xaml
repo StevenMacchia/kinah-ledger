@@ -125,17 +125,12 @@
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <!-- the app mark, as the site draws it: a gold tile with the coin -->
-          <Border Width="30" Height="30" CornerRadius="9" Margin="0,0,10,0" VerticalAlignment="Center">
-            <Border.Background>
-              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#F8D598" Offset="0"/><GradientStop Color="#EBAE4C" Offset="0.45"/><GradientStop Color="#B9781F" Offset="1"/></LinearGradientBrush>
-            </Border.Background>
-            <Path Data="M12,3 L20,8 L20,16 L12,21 L4,16 L4,8 Z M12,8 L12,16 M8.5,10 L12,12 L15.5,10" Stroke="#2A1A04" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="17" Height="17" Stretch="Uniform"/>
-          </Border>
+          <!-- the app mark, the K tile (tools/brand/logo.svg) -->
+          <Image Source="{StaticResource AppMark}" Width="32" Height="32" Margin="0,0,10,0" VerticalAlignment="Center"/>
           <StackPanel VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
-              <TextBlock x:Name="Version" Text="v0.7.2" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+              <TextBlock x:Name="Version" Text="v0.7.4" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
             </StackPanel>
             <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="0,1,0,0" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
           </StackPanel>
@@ -188,8 +183,18 @@
           <TextBlock x:Name="WelcomeHint" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,2,0,0"/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,12,0,8"/>
           <WrapPanel x:Name="SkinChips"/>
+          <!-- sharing, chosen here before anything is read or sent (the same switch as Options › Sharing) -->
+          <Grid Margin="0,16,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,16,0">
+              <TextBlock Text="Share my runs and Market prices, anonymously" FontSize="13.5" FontWeight="SemiBold"/>
+              <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" Margin="0,2,0,0" Text="Totals only, for the site's public tables. Never your character, chat text or screenshots. Change it any time in Options."/>
+              <TextBlock FontSize="12.5" Margin="0,4,0,0"><Hyperlink x:Name="WelcomeSentLink" Style="{StaticResource LinkStyle}">What's shared</Hyperlink><Run Text="   "/><Hyperlink x:Name="WelcomePrivacyLink" Style="{StaticResource LinkStyle}">Privacy</Hyperlink></TextBlock>
+            </StackPanel>
+            <CheckBox x:Name="WelcomeShareChk" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True" VerticalAlignment="Center" AutomationProperties.Name="Share my runs and Market prices, anonymously"/>
+          </Grid>
           <Grid Margin="0,14,0,0">
-            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" VerticalAlignment="Center" MaxWidth="300" HorizontalAlignment="Left" Text="Nothing is read or shared until you continue. The chat and the zone are found on their own."/>
+            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" VerticalAlignment="Center" MaxWidth="300" HorizontalAlignment="Left" Text="Nothing is read or sent until you continue. The chat and the zone are found on their own."/>
             <Button x:Name="WelcomeGo" Style="{StaticResource PrimaryButton}" Content="Continue" Width="160" Height="44" HorizontalAlignment="Right" VerticalAlignment="Center"/>
           </Grid>
         </StackPanel>

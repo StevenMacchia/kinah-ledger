@@ -11,6 +11,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <StartupObject>KinahLedger.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- the K tile, built by tools/brand/make-icons.js: the exe's icon in Explorer, and embedded below for the window and tray -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -23,6 +25,9 @@
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
     <Description>Unofficial Aion 2 farming tracker: Kinah and loot per hour, read from the game's chat.</Description>
+    <!-- Properties shows the plain version, not "<version>+<commit hash>" -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Copyright>© 2026 Kinah Ledger authors · MIT License · kinahledger.com</Copyright>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
     <!-- one downloadable exe with the runtime inside: nothing for players to install -->
@@ -51,6 +56,8 @@
   <!-- no packages beyond the SDK: the tracker only reads the screen, so it needs no capture driver and no network library -->
 
   <ItemGroup>
+    <!-- the window and tray take their sizes from this copy of the exe's icon (Ui/Native.cs) -->
+    <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
     <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- the 46 gathering materials' icon file names (8 KB), so their icons work before any item list is downloaded -->
     <EmbeddedResource Include="..\..\data\gathering-items.json" LogicalName="gathering-items.json" />

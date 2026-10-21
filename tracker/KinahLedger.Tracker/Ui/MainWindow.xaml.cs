@@ -938,12 +938,16 @@ public partial class MainWindow : Window
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
     public static void Open(string url) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { } }
 
+    /// <summary>The privacy statement in the code signing policy, in this repository.</summary>
+    public const string PrivacyUrl = "https://github.com/StevenMacchia/kinah-ledger/blob/main/CODE_SIGNING_POLICY.md#privacy";
+
     public void WhatsSent(Window? owner = null) => MessageBox.Show(owner ?? this,
         "When a run ends, these totals go to the public tables:\n\n" +
         "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
         "Never your character name, account, class, level, chat text or screenshots.\n" +
         "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
         "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
+        "Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.\n\n" +
         "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
         "Updates: at start and every six hours the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);

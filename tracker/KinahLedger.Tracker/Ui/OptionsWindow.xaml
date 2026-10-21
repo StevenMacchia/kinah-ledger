@@ -21,10 +21,7 @@
     <Border Grid.RowSpan="2" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
       <DockPanel Margin="12,18,12,14">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,0,18">
-          <Grid Width="24" Height="24" Margin="0,0,10,0" VerticalAlignment="Center">
-            <Path Data="M13,1 L24,7.5 L24,19.5 L13,26 L2,19.5 L2,7.5 Z" Fill="{DynamicResource Mark}" Stroke="{DynamicResource Gold}" StrokeThickness="1.4" StrokeLineJoin="Round" Stretch="Uniform"/>
-            <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="5"/>
-          </Grid>
+          <Image Source="{StaticResource AppMark}" Width="28" Height="28" Margin="0,0,10,0" VerticalAlignment="Center"/>
           <StackPanel VerticalAlignment="Center">
             <TextBlock Text="Options" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="16" FontWeight="SemiBold"/>
             <TextBlock Text="Kinah Ledger" Foreground="{DynamicResource Faint}" FontSize="11.5"/>
@@ -353,10 +350,7 @@
         <!-- About -->
         <StackPanel x:Name="PageAbout" Visibility="Collapsed">
           <StackPanel Orientation="Horizontal">
-            <Grid Width="48" Height="48" Margin="0,0,16,0" VerticalAlignment="Center">
-              <Path Data="M13,1 L24,7.5 L24,19.5 L13,26 L2,19.5 L2,7.5 Z" Fill="{DynamicResource Mark}" Stroke="{DynamicResource Gold}" StrokeThickness="1.4" StrokeLineJoin="Round" Stretch="Uniform"/>
-              <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="10"/>
-            </Grid>
+            <Image Source="{StaticResource AppMark}" Width="52" Height="52" Margin="0,0,16,0" VerticalAlignment="Center"/>
             <StackPanel VerticalAlignment="Center">
               <TextBlock Style="{StaticResource PageTitle}" Text="Kinah Ledger"/>
               <TextBlock x:Name="AboutVersion" Foreground="{DynamicResource Muted}" FontSize="13" Margin="0,2,0,0"/>
