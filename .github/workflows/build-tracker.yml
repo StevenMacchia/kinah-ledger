@@ -1,0 +1,43 @@
+# Builds KinahLedger.exe on Windows whenever main changes (or on demand from the Actions tab), so the latest
+# build is always one download away: open the run, then Artifacts › kinah-ledger-tracker. The artifact holds the
+# self-contained exe and its latest.json (version, size, SHA-256). Publishing a release stays a manual step.
+name: Build tracker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tracker/**'
+      - 'data/**'
+      - 'tools/release-manifest.js'
+      - '.github/workflows/build-tracker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish the single-file exe
+        working-directory: tracker/KinahLedger.Tracker
+        run: dotnet publish -c Release -o ../../dist
+
+      - name: Write latest.json
+        run: node tools/release-manifest.js dist/KinahLedger.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kinah-ledger-tracker
+          path: |
+            dist/KinahLedger.exe
+            dist/latest.json
+          if-no-files-found: error
+          retention-days: 30
