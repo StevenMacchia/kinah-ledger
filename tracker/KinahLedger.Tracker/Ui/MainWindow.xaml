@@ -50,7 +50,7 @@
             <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
           </Grid.ColumnDefinitions>
           <Grid x:Name="NameCell" Margin="20,0,6,0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <!-- the item's icon once it is cached; its initial until then, or when none is known -->
             <Border x:Name="IconTile" Width="40" Height="40" CornerRadius="8" BorderBrush="#6BCDD3E2" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Center">
               <Border.Background>
@@ -65,6 +65,11 @@
               <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource CommonInk}" FontWeight="SemiBold" FontSize="14.5" TextTrimming="CharacterEllipsis"/>
               <TextBlock x:Name="SubText" Text="{Binding Sub}" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
+            <!-- Something looks wrong: shown on hover, kept on a flagged row. A flagged drop is never sent to the site -->
+            <TextBlock x:Name="ReportLink" Grid.Column="2" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Hidden"
+                       ToolTip="Something looks wrong with this drop? Keep it out of what this run sends to the site.">
+              <Hyperlink Style="{StaticResource LinkStyle}" Click="ReportClick"><Run Text="{Binding ReportText, Mode=OneWay}"/></Hyperlink>
+            </TextBlock>
           </Grid>
           <TextBlock Grid.Column="1" Style="{StaticResource Td}" Text="{Binding Drops}"/>
           <TextBlock Grid.Column="2" Style="{StaticResource Td}" Text="{Binding DropPct}" FontFamily="{DynamicResource BodyFont}"/>
@@ -83,7 +88,9 @@
         <DataTrigger Binding="{Binding Tone}" Value="Warn"><Setter TargetName="SubText" Property="Foreground" Value="{DynamicResource Warn}"/></DataTrigger>
         <!-- an enemy's loot table, opened under its row: indented and a little tighter -->
         <DataTrigger Binding="{Binding Child}" Value="True"><Setter TargetName="NameCell" Property="Margin" Value="58,0,6,0"/><Setter TargetName="RowBorder" Property="MinHeight" Value="44"/><Setter TargetName="RowBorder" Property="Padding" Value="0,4"/></DataTrigger>
-        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
+        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/><Setter TargetName="ReportLink" Property="Visibility" Value="Visible"/></Trigger>
+        <DataTrigger Binding="{Binding Reported}" Value="True"><Setter TargetName="ReportLink" Property="Visibility" Value="Visible"/><Setter TargetName="NameText" Property="Opacity" Value="0.55"/></DataTrigger>
+        <DataTrigger Binding="{Binding Report}" Value=""><Setter TargetName="ReportLink" Property="Visibility" Value="Collapsed"/></DataTrigger>
         <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet) -->
         <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeRare}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#8062D98B"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#4262D98B" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeLegend}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#805AA6FF"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#425AA6FF" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>

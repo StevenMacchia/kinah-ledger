@@ -207,8 +207,9 @@ public static class ChatLocator
 /// <summary>Reads the zone name shown above the minimap at the top-right, so sessions know where they happened.</summary>
 public static class ZoneLocator
 {
-    // what a zone label looks like: a few capitalized words, no digits, no brackets
-    static readonly Regex Shape = new(@"^[A-Z][A-Za-z'’\-]+(?:\s+(?:of|the|and|[A-Z][A-Za-z'’\-]+)){1,5}$", RegexOptions.Compiled);
+    // what a zone label looks like: a few capitalized words, no digits, no brackets. "!" and "?" are allowed for the
+    // Shugo Festival games ("Up! Up! Up!", "Not This Tile?")
+    static readonly Regex Shape = new(@"^[A-Z][A-Za-z'’\-!?]+(?:\s+(?:of|the|and|[A-Z][A-Za-z'’\-!?]+)){1,5}$", RegexOptions.Compiled);
     static readonly string[] Blocklist = { "Ask", "Gemini", "Copilot", "Google", "Search", "Chrome", "Edge", "Firefox", "Discord", "Steam", "Spotify", "Twitch", "YouTube", "Enter", "Type", "Message", "Reply", "File", "Edit", "Help", "Home", "Back", "Next", "Download", "Share", "Save", "Cancel", "Window", "Minimize", "Bookmarks", "History", "Extensions", "Profile", "Account", "Notifications", "Update", "New", "Sign", "Open", "Close", "Change", "Show", "Must", "Waiting", "Evasion", "Sprint", "Jump", "Mount", "Rest", "Auto", "Hide", "Ground", "Fly", "Level", "Quest", "View", "Menu", "Map", "Options", "Settings", "Inventory", "Chat", "Party", "Legion", "Friends", "Mail", "Shop" };
     // words that appear in place names; a candidate needs one of these or a known-name match, so UI labels never pass
     static readonly string[] PlaceWords = { "Valley", "Highland", "Highlands", "Canyon", "Hill", "Hills", "Sanctum", "Ruins", "Garden", "Forest", "Plains", "Plain", "Cave", "Caves", "Cavern", "Fortress", "Village", "Lake", "Coast", "Shore", "Pass", "Road", "Gate", "Temple", "Swamp", "Marsh", "Desert", "Island", "Isle", "Abyss", "Outpost", "Camp", "Field", "Fields", "Ridge", "Peak", "Mountain", "Mountains", "Basin", "Plateau", "Woods", "Grove", "Gorge", "Hollow", "Ravine", "Cliff", "Cliffs", "Falls", "Spring", "Springs", "River", "Bridge", "Tower", "Citadel", "Stronghold", "Fort", "Shrine", "Sanctuary", "Crypt", "Tomb", "Mine", "Mines", "Quarry", "Den", "Nest", "Lair", "Harbor", "Port", "Bay", "Oasis", "Steppe", "Wasteland", "Tundra", "Crater", "Dunes", "Lowlands", "Vale", "Meadow", "Prairie", "Orchard", "Farm", "Mill", "Crossroads", "Square", "District", "Town", "City", "Palace", "Castle", "Keep", "Hall", "Prison", "Arena", "Academy", "Library", "Observatory", "Laboratory", "Workshop", "Foundry", "Forge", "Market", "Cemetery", "Graveyard", "Catacombs", "Altar", "Portal", "Rift", "Gateway", "Frontier", "Border", "Coastline", "Beach", "Glade", "Thicket", "Jungle", "Volcano", "Furnace", "Wall", "Walls", "Rampart", "Battlefield", "Front", "Encampment", "Garrison", "Barracks", "Landing", "Ascent", "Descent", "Depths", "Heights", "Summit", "Hideout", "Refuge", "Haven", "Hamlet", "Settlement", "Colony", "Waystation", "Station" };
@@ -283,7 +284,8 @@ public static class ZoneLocator
         var lines = await ScreenReader.ReadBoxesAsync(strip, 2);
         var candidates = lines
             .Select(l => (l, text: Clean(l.Text)))
-            .Where(x => x.text.Length >= 6 && x.text.Length <= 40 && Shape.IsMatch(x.text) && !Blocklist.Any(b => x.text.StartsWith(b + " ") || x.text == b))
+            // an instance or event on the list is never a UI label, even when it starts like one ("Jump Jump")
+            .Where(x => Candidate(x.text))
             .OrderBy(x => x.l.Box.Top).ToList();
         LastUnlisted = null;
         if (candidates.Count == 0) return (null, $"no zone-shaped text in the top-right corner ({lines.Count} lines read)");
@@ -298,6 +300,10 @@ public static class ZoneLocator
         if (candidates[0].l.Box.Top - strip.Top < strip.Height * 0.5) LastUnlisted = candidates[0].text;
         return (null, $"top-right text isn't a zone on the list: {string.Join(" | ", candidates.Take(3).Select(c => c.text))}");
     }
+
+    /// <summary>Whether a line read in the corner looks like a place name and not a UI label. An instance or event on the list always does, even one that starts like a label ("Jump Jump").</summary>
+    public static bool Candidate(string text) =>
+        text.Length >= 6 && text.Length <= 40 && Shape.IsMatch(text) && (Instances.ContainsKey(text) || !Blocklist.Any(b => text.StartsWith(b + " ") || text == b));
 
     static string Clean(string s) => Regex.Replace(s.Trim(), @"\s+", " ").TrimEnd('.', ',', ':');
 

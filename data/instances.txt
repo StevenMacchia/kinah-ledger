@@ -231,3 +231,24 @@ Eltnen Legion Airship|Legion
 Morheim Legion Airship|Legion
 Verteron Legion Airship|Legion
 Incursion of the Spirits|Event
+# Timed events (metabot.gg/en/aion-2/events, its Shugo Festival and Dimensional Invasion pages, aion2.gg and aion2.tools, 2026-10-21):
+# the Shugo Festival games, the Dimensional Invasions, Spacetime Rift and Artifact Siege. Arena names are from metabot.gg and aion2.tools only.
+Jump Jump|Event
+Wraith Evasion|Event
+Mysterious Track|Event
+Hidden Lugi|Event
+Odyle Flight Frenzy|Event
+Goldrin's Treasure|Event
+Up! Up! Up!|Event
+Not This Tile?|Event
+Nyerk Shooter|Event
+Shugo's Dilemma|Event
+Dimensional Invasion|Event
+Beritra Air Raid|Event
+Accursed Sword|Event
+Spacetime Rift|Event
+Artifact Siege|Event
+Abyss Corridor|Event
+Arena of Tactics|Arena
+Arena of Solitude|Arena
+Arena of Cooperation|Arena

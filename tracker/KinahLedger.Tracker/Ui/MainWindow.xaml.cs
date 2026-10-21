@@ -15,7 +15,11 @@ using WF = System.Windows.Forms;
 namespace KinahLedger.Ui;
 
 /// <summary>One table row. Icon is the item's icon slot (filled as the file arrives) and Initial the letter shown until then; both empty on a header row.</summary>
-public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false);
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false, string Report = "", bool Reported = false)
+{
+    /// <summary>The row's report link: "Looks wrong?" flags the drop so the site never gets it; "Undo" takes the flag off.</summary>
+    public string ReportText => Reported ? "Undo" : "Looks wrong?";
+}
 
 public partial class MainWindow : Window
 {
@@ -176,6 +180,16 @@ public partial class MainWindow : Window
 
 
     /// <summary>Redraws the table for the count on screen: the run, the run just stopped, or the live count.</summary>
+    /// <summary>"Looks wrong?" on a drop or gathered row: flags the item so nothing about it is sent to the site; "Undo" takes the flag off.</summary>
+    void ReportClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkContentElement)?.DataContext is not DropRow r || r.Report.Length == 0) return;
+        bool on = ReportedDrops.Toggle(r.Report);
+        CrashLog.Note(on ? $"reported: {r.Report} (not sent to the site)" : $"report undone: {r.Report}");
+        Say(on ? $"{r.Report} won't be sent to the site. Thanks for flagging it." : $"{r.Report} counts again.", "Faint");
+        Redraw();
+    }
+
     void Redraw()
     {
         var e = Shown();
@@ -483,7 +497,9 @@ public partial class MainWindow : Window
                         sub = "not on any table you fought · check";
                     }
                 }
-                drops.Add(new DropRow(r.Name, total.ToString("N0"), odds, Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceText(r.Name), Value: rowValue, Sub: sub, Tone: tone));
+                bool flagged = ReportedDrops.Has(r.Name);
+                if (flagged) { sub = "Reported · not sent to the site"; tone = "Warn"; }
+                drops.Add(new DropRow(r.Name, total.ToString("N0"), odds, Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceText(r.Name), Value: rowValue, Sub: sub, Tone: tone, Report: r.Name, Reported: flagged));
             }
         }
         // Soul Crystals come from kills too: their own section at the bottom, never mixed into the item rows or the drop count
@@ -503,7 +519,8 @@ public partial class MainWindow : Window
                      + (st.Nodes > 0 ? $"  ·  {Rate(st.Nodes / hours)} attempts/hr" : "");
             gathered.Add(new DropRow(head, "", "", "", Header: true));
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
-                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceText(name), Value: worth.GetValueOrDefault(name, ""), Sub: "Gathering material"));
+                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceText(name), Value: worth.GetValueOrDefault(name, ""), Sub: ReportedDrops.Has(name) ? "Reported · not sent to the site" : "Gathering material",
+                    Tone: ReportedDrops.Has(name) ? "Warn" : "", Report: name, Reported: ReportedDrops.Has(name)));
         }
         // Kinah by enemy, a best guess: most Kinah first. The zone goes under the name when the view spans more than one.
         var mobs = new List<DropRow>();
@@ -513,11 +530,14 @@ public partial class MainWindow : Window
             var key = m.Zone + "|" + m.Name;
             bool open = _openMobs.Contains(key), known = book.Knows(m.Name);
             var where = zonesToo ? m.Zone ?? "" : "best guess";
+            // every enemy opens: its loot table when one is known, and always what it dropped for you
             mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: m.Kinah.ToString("N0"),
-                Sub: where + (known ? (open ? " · hide its loot table" : " · show its loot table") : ""), Key: key));
-            if (!open || !known) continue;
-            // its loot table: what you got against the listed chance, what hasn't dropped yet last
-            var rows = book.TableOf(m.Name).Select(en =>
+                Sub: where + (open ? " · ▾ hide drops" : " · ▸ show drops"), Key: key));
+            if (!open) continue;
+            // what you got against the listed chance, what hasn't dropped yet last; then drops the table doesn't list
+            var table = known ? book.TableOf(m.Name).ToList() : new();
+            bool OnTable(long id) => table.Any(en => (en.Id is long tid && tid == id) || string.Equals(_items.NameOf(id), en.Item, StringComparison.OrdinalIgnoreCase));
+            var rows = table.Select(en =>
             {
                 int got = m.Drops.Where(d => (en.Id is long id && id == d.Key) || string.Equals(_items.NameOf(d.Key), en.Item, StringComparison.OrdinalIgnoreCase)).Sum(d => d.Value);
                 return (en, got);
@@ -528,6 +548,16 @@ public partial class MainWindow : Window
                 mobs.Add(new DropRow(en.Item, got > 0 ? got.ToString("N0") : "", got > 0 ? Odds(got, m.Kills) : "not yet", "", Grade: _items.Get(iid)?.Grade ?? "", Icon: Slot(iid), Initial: InitialOf(en.Item),
                     Sub: en.Chance is double c && c > 0 ? $"listed {OneIn(c)}" : "listed", Child: true));
             }
+            foreach (var (id, got) in m.Drops.Where(d => !OnTable(d.Key)).OrderByDescending(d => d.Value))
+            {
+                var name = _items.NameOf(id);
+                mobs.Add(new DropRow(name, got.ToString("N0"), Odds(got, m.Kills), "", Grade: _items.Get(id)?.Grade ?? "", Icon: Slot(id), Initial: InitialOf(name),
+                    Sub: known ? "not on its listed table" : "dropped for you", Child: true));
+            }
+            if (m.Crystals > 0)
+                mobs.Add(new DropRow("Soul Crystals", m.Crystals.ToString("N0"), Odds(m.Crystals, m.Kills), "", Initial: "S", Sub: "from this enemy", Child: true));
+            if (!known && m.Drops.Count == 0 && m.Crystals == 0)
+                mobs.Add(new DropRow("No item drops yet", "", "", "", Sub: "only Kinah so far · its loot table isn't in the list yet", Child: true));
         }
         return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross, petRows);
     }

@@ -116,7 +116,16 @@ public sealed class ItemDictionary
         return prev[b.Length];
     }
 
-    static string Norm(string s) => string.Join(' ', s.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    /// <summary>
+    /// A name as it is looked up: lower case, accents off and stray marks gone, so "Raw Léather", "Raw Leather~" and
+    /// "Raw Leather" are the same item (Steven, 2026-10-21: a drop that looks like a normal drop is that drop).
+    /// </summary>
+    static string Norm(string s)
+    {
+        var t = KinahLedger.Ocr.ChatParser.StripAccents(s).ToLowerInvariant().Replace('’', '\'');
+        t = System.Text.RegularExpressions.Regex.Replace(t, @"[^a-z0-9'():+.,&\- ]", " ");
+        return string.Join(' ', t.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
     static uint Fnv(string s) { uint h = 2166136261; foreach (var c in s) { h ^= c; h *= 16777619; } return h; }
 
     public static ItemDictionary LoadOrEmpty(string path)

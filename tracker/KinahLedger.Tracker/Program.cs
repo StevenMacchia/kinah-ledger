@@ -624,6 +624,15 @@ options: --process aion[,other]");
         var zp = RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items);
         string ZoneItems(string z) => zp.zones.TryGetValue(z, out var zr) ? string.Join(",", zr.items.Select(kv => $"{(long.TryParse(kv.Key, out var iid) ? items.NameOf(iid) : kv.Key)}={kv.Value}")) + "/" + string.Join(",", zr.items_bound.Select(kv => $"{(long.TryParse(kv.Key, out var iid) ? items.NameOf(iid) : kv.Key)}={kv.Value}")) : "missing";
         Check("each zone sends its own items", $"{ZoneItems("Western Cantas Valley")} | {ZoneItems("Altamia Canyon")}", $"{items.NameOf(hide)}=2/ | {items.NameOf(stone)}=1/{items.NameOf(stone)}=1");
+        // "Looks wrong?" on a row keeps that item out of everything sent to the site (Steven, 2026-10-21)
+        ReportedDrops.Toggle(items.NameOf(stone));
+        var rp2 = RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items);
+        string Has(Dictionary<string, int> d) => d.Keys.Any(k => long.TryParse(k, out var iid) && iid == stone) ? "sent" : "not sent";
+        Check("a reported drop is not sent: run, zone, bound", $"{Has(rp2.items)} {Has(rp2.zones["Altamia Canyon"].items)} {Has(rp2.zones["Altamia Canyon"].items_bound)} · other drops {(rp2.zones["Western Cantas Valley"].items.Count > 0 ? "sent" : "missing")}", "not sent not sent not sent · other drops sent");
+        ReportedDrops.Toggle(items.NameOf(stone));
+        Check("undo: it is sent again", Has(RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items).items), "sent");
+        // a drop that looks like a normal drop is that drop: accents and stray marks don't make a new item
+        Check("accents and marks snap to the real item", $"{items.IdOf("Raw Léather") == items.IdOf("Raw Leather")} {items.IdOf("Raw Leather~") == items.IdOf("Raw Leather")} {items.Knows("Spiritstöne")}", "True True True");
 
         var me = new SessionEngine(items);
         me.SetZone("Western Cantas Valley");
@@ -675,6 +684,8 @@ options: --process aion[,other]");
             Check("instances: an event area too", ZoneLocator.KindOf("Defend Shugo Merchants") ?? "none", "Event");
             Check("instances: an open-world zone has none", ZoneLocator.KindOf("Eastern Cantas Valley") ?? "none", "none");
             Check("instances: they are on the zone list", ZoneLocator.Known.Contains("Urugugu Canyon") ? "yes" : "no", "yes");
+            Check("timed events: Shugo Festival games and invasions", string.Join(",", new[] { "Odyle Flight Frenzy", "Jump Jump", "Up! Up! Up!", "Not This Tile?", "Incursion of the Spirits", "Beritra Air Raid" }.Select(z => ZoneLocator.KindOf(z) ?? "none")), "Event,Event,Event,Event,Event,Event");
+            Check("event titles pass the label filter, UI labels don't", $"{ZoneLocator.Candidate("Jump Jump")} {ZoneLocator.Candidate("Up! Up! Up!")} {ZoneLocator.Candidate("Not This Tile?")} {ZoneLocator.Candidate("Jump Higher")}", "True True True False");
             {
                 var r = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = b0 };
                 r.LastLoot = b0.AddMinutes(7);

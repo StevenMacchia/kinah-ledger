@@ -293,7 +293,7 @@ public sealed partial class ChatParser
         return Regex.Replace(s, @"\s+", " ").Trim();
     }
 
-    static string StripAccents(string s)
+    internal static string StripAccents(string s)
     {
         if (s.All(c => c < 128)) return s;
         var d = s.Normalize(System.Text.NormalizationForm.FormD);
