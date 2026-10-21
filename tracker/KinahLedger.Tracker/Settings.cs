@@ -15,6 +15,7 @@ public sealed class Settings
     public OcrSettings Ocr { get; set; } = new();
     public MarketSettings Market { get; set; } = new();
     public UiSettings Ui { get; set; } = new();
+    public UpdateSettings Update { get; set; } = new();
 
     public static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -52,10 +53,19 @@ public sealed class UiSettings
 {
     /// <summary>
     /// Item icons: each is fetched once from NCSOFT's image server by file name as its item shows up, the way a browser does
-    /// on their site, and kept under %LocalAppData%\KinahLedger\icons. Nothing is bundled. Off keeps the tracker fully offline;
+    /// on their site, and kept under %LocalAppData%\KinahLedger\icons. Nothing is bundled. Off (with sharing and update.check off too) keeps the tracker fully offline;
     /// rows show a lettered tile instead.
     /// </summary>
     public bool Icons { get; set; } = true;
+}
+
+/// <summary>Updates: the tracker asks the site for the newest version at start and every few hours.</summary>
+public sealed class UpdateSettings
+{
+    /// <summary>Off: the tracker never asks. On, the window's switch chooses between installing a new version on its own and asking first.</summary>
+    public bool Check { get; set; } = true;
+    /// <summary>The version file the site publishes (version, download address, size, SHA-256).</summary>
+    public string Manifest { get; set; } = Update.Updater.DefaultManifest;
 }
 
 /// <summary>Market price reading: while the Market window is on screen its listings are read and shared as asks.</summary>

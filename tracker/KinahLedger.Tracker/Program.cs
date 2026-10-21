@@ -16,10 +16,10 @@ internal static class Program
     static int Main(string[] args)
     {
         var settings = Settings.Load();
-        if (args.Length == 0)
+        if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
         {
-            // double-clicked: open the window
-            return WpfApp.Run(settings);
+            // double-clicked, started with Windows (in the tray), or restarted by an update: open the window
+            return WpfApp.Run(settings, background: args.Contains(Platform.AutoStart.BackgroundArg), afterUpdate: args.Contains(Ui.MainWindow.AfterUpdateArg));
         }
         // command line: write to the terminal that started us; if there's none and no pipe either, open one
         if (!AttachConsole(-1) && GetStdHandle(-11) == IntPtr.Zero) AllocConsole();
@@ -41,19 +41,14 @@ internal static class Program
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
                 case "balance-test": return BalanceTest(settings, opts);
+                case "options-test": return WpfApp.OptionsSelfTest(settings);
                 case "market-test": return MarketTest(settings, opts);
                 case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
                 case "market-watch": return MarketWatch(settings, opts);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "target-test": return TargetTest(opts);
-                case "swap-script": Console.WriteLine(Updater.SwapScript(int.Parse(pos[0]), pos[1], pos[2])); return 0;
-                case "update-check":
-                {
-                    var rel = Task.Run(Updater.CheckAsync).GetAwaiter().GetResult();
-                    Console.WriteLine($"This is {RunPayload.AppVersion}. " + (rel == null ? "No newer release found (or GitHub couldn't be reached)." : $"{rel.Version.ToString(3)} is out: {rel.AssetUrl} ({rel.Size:N0} bytes, sha256 {(rel.Sha256 ?? "not in the notes")})"));
-                    return 0;
-                }
                 case "watch": return Watch(settings, opts);
+                case "update": return UpdateCmd(settings, opts);
                 case "reset-id":
                     InstallId.Reset();
                     Console.WriteLine("Install ID removed. A new one is created on the next upload.");
@@ -86,13 +81,16 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   market-watch [--server ..]    only the Market reader, as the window runs it in the background; Ctrl+C to stop
   parse-test                    self-test of the chat-line parser, the 0.7 reads and the balance counter logic
   balance-test [--save]         read the currency counters at the top-left once and list the numbers (--save keeps the crop)
+  options-test                  self-test of the Options window: changes, Save, Cancel (saves nothing)
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
-  ui-shot [dir] [--demo] [--gathering|--market] [--compact] [--settings] [--welcome] [--skin night|abyss|daylight]
-                                render the window to PNG files for layout review
+  ui-shot [dir] [--demo] [--gathering|--market|--crafting] [--compact] [--welcome] [--skin night|abyss|daylight]
+                                render the window to PNG files for layout review (--options: every Options page)
   market-shot [dir]             the window with the Market card in its tracking state
   reset-id                      replace the random install ID used for uploads
+  update [--check]              install the newest version from kinahledger.com now (--check only says whether there is one)
+        [--manifest url]        read another version file (a local test server)
 
 The tracker only ever reads the screen: it never captures network traffic, reads game memory or sends input to the game.
 
@@ -111,6 +109,29 @@ options: --process aion[,other]");
         }
         if (key != null) o[key] = "true";
         return (o, p);
+    }
+
+    /// <summary>The window's update, from the command line: check, download, verify, swap. The new version runs from the next start.</summary>
+    static int UpdateCmd(Settings s, Dictionary<string, string> o)
+    {
+        var manifest = o.GetValueOrDefault("manifest") is { Length: > 0 } m && m != "true" ? m : s.Update.Manifest;
+        var r = Task.Run(() => Update.Updater.CheckAsync(manifest)).GetAwaiter().GetResult();
+        Console.WriteLine(r.Ok ? r.Note : "Couldn't check: " + r.Note);
+        if (!r.Ok) return 1;
+        if (r.Newer == null || o.ContainsKey("check")) return 0;
+        var exe = Update.Updater.ExePath ?? throw new InvalidOperationException("not running as KinahLedger.exe, so there is nothing to replace");
+        Console.WriteLine($"Downloading {r.Newer.Url}");
+        int shown = -1;
+        var progress = new Progress<double>(f => { int p = (int)(f * 10); if (p > shown) { shown = p; Console.Write($" {p * 10}%"); } });
+        try
+        {
+            var staged = Task.Run(() => Update.Updater.DownloadAsync(r.Newer, exe, progress)).GetAwaiter().GetResult();
+            Console.WriteLine();
+            Update.Updater.Apply(staged, exe);
+        }
+        catch (Update.UpdateException ex) { Console.WriteLine(); Console.Error.WriteLine("Update failed: " + ex.Message); return 1; }
+        Console.WriteLine($"Updated to {Update.Updater.Show(r.Newer.Version)}, checksum verified. Start Kinah Ledger again to use it.");
+        return 0;
     }
 
     /* ---------------- screen reading ---------------- */
@@ -239,7 +260,8 @@ options: --process aion[,other]");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("settings"));
+        if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -382,6 +404,31 @@ options: --process aion[,other]");
             ok &= got == craftExpect[i];
             Console.WriteLine($"  crafting window read {i + 1} -> new: [{got}]  expected [{craftExpect[i]}] {(got == craftExpect[i] ? "ok" : "MISMATCH")}");
         }
+        Console.WriteLine("\nZones in what is shared (unverified names fold into Unknown zone):");
+        var ze = new KinahLedger.Session.SessionEngine(items);
+        ze.CreditZone("Ask Gemini", 600); ze.CreditZone("Altamia Canyon", 300); ze.CreditZone("Sunlit Grove", 120); ze.CreditZone("Some Caption", 60);
+        var shared = RunPayload.Shareable(ze.ZoneSnapshot());
+        var sharedKeys = string.Join(", ", shared.Keys.OrderBy(k => k));
+        bool zok = !shared.ContainsKey("Ask Gemini") && !shared.ContainsKey("Some Caption") && shared.ContainsKey("Altamia Canyon") && shared.ContainsKey("Sunlit Grove")
+            && Math.Abs(shared[KinahLedger.Session.SessionEngine.UnknownZone].Seconds - 660) < 5;
+        var act = KinahLedger.Session.TrackerSession.ActivityOf(ze, "Open world");
+        zok &= act == "Open world · Altamia Canyon";
+        Console.WriteLine($"  shared zones: [{sharedKeys}]  activity: {act}  {(zok ? "ok" : "MISMATCH")}");
+        ok &= zok;
+        Console.WriteLine("\nItem list shapes (crawler and site) and the keys drops are shared under:");
+        var tmpList = Path.Combine(Path.GetTempPath(), "kl-items-test.json");
+        File.WriteAllText(tmpList, "{\"items\":[{\"id\":610531002,\"n\":\"Fresh Fruit\",\"g\":\"Common\",\"t\":1,\"c2\":\"CraftResource\",\"i\":\"Icon_A.png\"},{\"id\":110120001,\"name\":\"Noble Dragon Lord Greatsword\",\"grade\":\"Epic\",\"tradable\":true,\"categoryName\":\"Greatsword\",\"icon\":\"https://assets.playnccdn.com/x/Icon_B.png\"}]}");
+        var dict = new ItemDictionary();
+        long before = dict.IdOf("Fresh Fruit");                      // read before the list arrived: a synthetic id
+        int merged = dict.Merge(tmpList);
+        long after = dict.IdOf("Fresh Fruit"), sword = dict.IdOf("Noble Dragon Lord Greatsword"), odd = dict.IdOf("Zzyzx Shard");
+        var de = new KinahLedger.Session.SessionEngine(dict);
+        bool dok = merged == 2 && before < 0 && after == 610531002 && sword == 110120001 && odd < 0
+            && dict.IconUrl(after) == ItemDictionary.IconBase + "Icon_A.png" && dict.IconUrl(sword).EndsWith("Icon_B.png")
+            && RunPayload.ItemKey(de, after) == "610531002" && RunPayload.ItemKey(de, odd) == "Zzyzx Shard";
+        Console.WriteLine($"  merged {merged}, Fresh Fruit {before} -> {after}, sword {sword}, unknown {odd} -> key \"{RunPayload.ItemKey(de, odd)}\"  {(dok ? "ok" : "MISMATCH")}");
+        try { File.Delete(tmpList); } catch (Exception) { }
+        ok &= dok;
         ok &= TradeTest(items);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
@@ -578,18 +625,18 @@ options: --process aion[,other]");
             Check("not an enemy: a quest step", TargetReader.Match("Pass through the narrow gap") ?? "none", "none");
         }
 
-        Console.WriteLine("\nUpdates from inside the app:");
+        Console.WriteLine("\nUpdates from the GitHub releases:");
         {
-            string Rel(string tag, string asset = "KinahLedger.exe", long size = 1234, string body = "", bool pre = false) =>
-                $$"""{"tag_name":"{{tag}}","draft":false,"prerelease":{{(pre ? "true" : "false")}},"html_url":"https://github.com/StevenMacchia/kinah-ledger/releases/tag/{{tag}}","body":{{System.Text.Json.JsonSerializer.Serialize(body)}},"assets":[{"name":"{{asset}}","size":{{size}},"browser_download_url":"https://github.com/StevenMacchia/kinah-ledger/releases/download/{{tag}}/{{asset}}"}]}""";
-            var cur = new Version(0, 7, 1);
-            string U(string json) => Updater.Parse(json, cur) is { } r ? $"{r.Version.ToString(3)} {r.Size} {(r.Sha256 ?? "no-sha")[..6]}" : "none";
-            Check("a newer release with the exe", U(Rel("v0.7.2")), "0.7.2 1234 no-sha");
-            Check("the same version is not an update", U(Rel("v0.7.1")), "none");
-            Check("an older one isn't either", U(Rel("v0.6.3")), "none");
-            Check("a prerelease is never offered", U(Rel("v0.8.0", pre: true)), "none");
-            Check("a release without KinahLedger.exe isn't", U(Rel("v0.7.2", asset: "KinahLedger.zip")), "none");
-            Check("the notes' sha256 line is read", U(Rel("v0.7.2", body: "Fixes.\n\nKinahLedger.exe sha256: 3F9A" + new string('0', 60))), "0.7.2 1234 3f9a00");
+            string Rel(string tag, string asset = "KinahLedger.exe", long size = 72_500_000, string body = "KinahLedger.exe sha256: 3F9A0000000000000000000000000000000000000000000000000000000000AB", bool pre = false) =>
+                "{\"tag_name\":\"" + tag + "\",\"draft\":false,\"prerelease\":" + (pre ? "true" : "false") + ",\"html_url\":\"https://github.com/StevenMacchia/kinah-ledger/releases/tag/" + tag + "\",\"body\":" + System.Text.Json.JsonSerializer.Serialize(body) +
+                ",\"assets\":[{\"name\":\"" + asset + "\",\"size\":" + size + ",\"browser_download_url\":\"https://github.com/StevenMacchia/kinah-ledger/releases/download/" + tag + "/" + asset + "\"}]}";
+            var api = new Uri(KinahLedger.Update.Updater.DefaultManifest);
+            string U(string json) => KinahLedger.Update.Updater.Parse(json, api, out var why) is { } r ? $"{KinahLedger.Update.Updater.Show(r.Version)} {r.Size} {r.Sha256[..6]}" : "none: " + why;
+            Check("a release with the exe and a sha256 line", U(Rel("v0.7.3")), "0.7.3 72500000 3f9a00");
+            Check("a prerelease is never offered", U(Rel("v0.8.0", pre: true)), "none: a prerelease");
+            Check("a release without KinahLedger.exe", U(Rel("v0.7.3", asset: "KinahLedger.zip")), "none: no KinahLedger.exe in the release");
+            Check("a release without a sha256 line", U(Rel("v0.7.3", body: "Fixes.")), "none: no sha256 line in the release notes");
+            Check("the site's manifest still reads", U("{\"version\":\"0.7.3\",\"url\":\"https://kinahledger.com/download/KinahLedger.exe\",\"sha256\":\"" + new string('a', 64) + "\",\"size\":72500000}"), "0.7.3 72500000 aaaaaa");
         }
 
         Console.WriteLine("\nBalance counter (0.7): which counter is Kinah, and when a read is trusted:");

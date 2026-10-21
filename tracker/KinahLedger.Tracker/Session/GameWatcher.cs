@@ -32,6 +32,8 @@ public sealed class GameWatcher
     public bool Farming => Farm != null;
     /// <summary>Where the game window was last seen; null while the game isn't running or is minimized.</summary>
     public Rectangle? GameRect { get; private set; }
+    /// <summary>True while a game process runs, window or not: what "open when the game starts" and "hide when it closes" follow.</summary>
+    public bool GameRunning { get; private set; }
     public string LastError { get; private set; } = "";
     public bool Running => _loop != null && !_loop.IsCompleted;
     /// <summary>The player's region key and server label, stamped on everything shared.</summary>
@@ -167,7 +169,7 @@ public sealed class GameWatcher
             try
             {
                 // the game window is looked up every few seconds; without it there is nothing to read and the loop just waits
-                if ((t0 - _gameAt).TotalSeconds >= 5) { GameRect = GameWindow.Find(_settings.ProcessHints); _gameAt = t0; }
+                if ((t0 - _gameAt).TotalSeconds >= 5) { GameRect = GameWindow.Find(_settings.ProcessHints); GameRunning = GameWindow.ProcessSeen; _gameAt = t0; }
                 if (GameRect is { } game)
                 {
                     // the chat reader starts as soon as the game is there and is retried every 20 s while the chat can't be seen

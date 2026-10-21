@@ -43,8 +43,20 @@ public static class WpfApp
         return result.Contains("still alive") ? 0 : 1;
     }
 
-    public static int Run(Settings settings)
+    /// <summary>
+    /// The window, as a double-click opens it. One tracker per Windows session: a second start shows the running one's
+    /// window and quits. <paramref name="background"/> (Windows sign-in) starts in the tray; <paramref name="afterUpdate"/>
+    /// waits for the version it replaces to finish closing.
+    /// </summary>
+    public static int Run(Settings settings, bool background = false, bool afterUpdate = false)
     {
+        using var instance = Platform.SingleInstance.TryAcquire(afterUpdate ? TimeSpan.FromSeconds(30) : TimeSpan.Zero);
+        if (instance == null)
+        {
+            if (!background) Platform.SingleInstance.ShowExisting();
+            return 0;
+        }
+        if (Update.Updater.ExePath is { } exe) Platform.AutoStart.Repair(exe);   // the exe moved or was renamed since startup was turned on
         var app = Ensure();
         // an error in a button handler must not take the whole app down: log it, tell the player, carry on
         app.DispatcherUnhandledException += (_, e) =>
@@ -56,7 +68,13 @@ public static class WpfApp
         AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write("process", e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString()));
         TaskScheduler.UnobservedTaskException += (_, e) => { CrashLog.Write("task", e.Exception); e.SetObserved(); };
         var w = new MainWindow(settings);
-        return app.Run(w);
+        w.StartUpdates();
+        instance.OnShowRequested(w.ShowFromOtherStart);
+        app.SessionEnding += (_, _) => w.PrepareForExit();   // sign-out or shutdown: never held up by "keep running in the tray"
+        if (!background) return app.Run(w);
+        w.StartInTray();
+        app.MainWindow = w;
+        return app.Run();
     }
 
     /// <summary>Starts and stops a session in-process (no clicks needed) and reports any exception, for finding crashes.</summary>
@@ -83,7 +101,100 @@ public static class WpfApp
     }
 
     /// <summary>Renders the window (and the panel) off-screen to PNG files so the layout can be reviewed without a desktop session.</summary>
-    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool openSettings = false)
+    /// <summary>
+    /// Drives the Options window the way a player would (switches, lists, theme chips, Save, Cancel) over a sample
+    /// session and checks what reaches the main window. Nothing is saved to disk: the sample session never writes prefs.
+    /// </summary>
+    public static int OptionsSelfTest(Settings settings)
+    {
+        Ensure();
+        int fails = 0;
+        void Check(bool ok, string what) { Console.WriteLine((ok ? "ok    " : "FAIL  ") + what); if (!ok) fails++; }
+        static void Click(System.Windows.Controls.Primitives.ButtonBase b) => b.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        static void Flip(System.Windows.Controls.CheckBox c) { c.IsChecked = c.IsChecked != true; Click(c); }
+
+        var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        w.Show();
+        w.ShowDemo();
+        var startSkin = Skins.Current;
+        OptionsWindow Open() { var o = new OptionsWindow(w, OptionsWindow.Page.General) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; o.Show(); DoEvents(); return o; }
+
+        var o = Open();
+        Check(!o.SaveBtn.IsEnabled, "Save is off until something changes");
+        Flip(o.HideOnCloseChk);
+        Check(o.SaveBtn.IsEnabled, "a change turns Save on");
+        Flip(o.HideOnCloseChk);
+        Check(!o.SaveBtn.IsEnabled, "changing it back turns Save off again");
+
+        Flip(o.CloseToTrayChk); Flip(o.MinToTrayChk); Flip(o.HideOnCloseChk);
+        o.GameStartBox.SelectedIndex = 1;
+        Flip(o.ShareChk);
+        var eu = Data.Servers.Regions.First(r => r.Key != w.RegionKey);
+        o.RegionPick.SelectedItem = eu;
+        var euServer = Data.Servers.In(eu.Key)[0];
+        o.ServerPick.SelectedItem = euServer;
+        Click(o.HotkeyOffBtn);
+        var other = Skins.All.First(s => s.Key != startSkin).Key;
+        Click((System.Windows.Controls.Button)o.SkinHost.Children[Array.FindIndex(Skins.All, s => s.Key == other)]);
+        Check(Skins.Current == other, "a theme chip previews the theme at once");
+        Check(!w.Prefs.CloseToTray && w.Prefs.Share, "nothing applies before Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(!o.IsVisible, "Save closes the window");
+        var p = w.Prefs;
+        Check(p.CloseToTray && p.MinimizeToTray && p.HideWhenGameCloses, "window and tray choices saved");
+        Check(p.OnGameStart == "tray", "when Aion 2 starts: stay in the tray");
+        Check(!p.Share && !w.AppSettings.Upload.Enabled, "sharing off reaches the uploader");
+        Check(w.RegionKey == eu.Key && w.Server?.Label == euServer.Label, "server saved: " + w.Server?.Label);
+        Check(p.Hotkey == "" && w.HotkeyText == "", "shortcut turned off");
+        Check(p.Skin == other && Skins.Current == other, "theme saved");
+
+        o = Open();
+        Check(o.CloseToTrayChk.IsChecked == true && o.GameStartBox.SelectedIndex == 1 && o.ServerPick.SelectedItem is Data.GameServer gs && gs.Label == euServer.Label, "Options opens with the saved choices");
+        Flip(o.HudChk);
+        var third = Skins.All.First(s => s.Key != other).Key;
+        Click((System.Windows.Controls.Button)o.SkinHost.Children[Array.FindIndex(Skins.All, s => s.Key == third)]);
+        Check(Skins.Current == third, "second theme previewed");
+        bool hudBefore = p.Hud;
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(!o.IsVisible, "Cancel closes the window");
+        Check(p.Hud == hudBefore, "Cancel keeps the panel setting as it was");
+        Check(Skins.Current == other, "Cancel puts the saved theme back");
+
+        o = Open();
+        Click(o.HotkeyResetBtn);
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(p.Hotkey == Platform.Hotkey.Default, "Default puts Ctrl+Shift+K back");
+
+        w.ForceClose();
+        Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
+        return fails == 0 ? 0 : 1;
+    }
+
+    /// <summary>Renders each page of the Options window over a sample session, for layout review.</summary>
+    public static void ShotOptions(Settings settings, string dir, string? skin = null)
+    {
+        Ensure();
+        Directory.CreateDirectory(dir);
+        if (skin != null) Skins.Apply(skin);
+        var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        w.Show();
+        w.ShowDemo("Market");
+        if (skin != null) w.Prefs.Skin = skin;   // what Options opens with (a render; nothing is saved)
+        foreach (var page in Enum.GetValues<OptionsWindow.Page>())
+        {
+            var o = new OptionsWindow(w, page) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            o.Show();
+            DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-{page.ToString().ToLowerInvariant()}{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Close();
+        }
+        w.Close();
+    }
+
+    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null)
     {
         Ensure();
         Directory.CreateDirectory(dir);
@@ -92,12 +203,11 @@ public static class WpfApp
         if (skin != null) Skins.Apply(skin);
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
-        if (openSettings) w.ShowSettingsDemo();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", _ => "ui-main-tracking" };
-        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + (openSettings ? "-settings" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         w.Close();
 
         var h = new HudWindow { Left = -12000, Top = -12000, ShowActivated = false };

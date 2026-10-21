@@ -7,7 +7,7 @@ with NCSOFT. MIT licensed.
 This is a side project, separate from the author's professional work.
 
 ```
-(website)  lives in a separate private repo; its download button points at this repo's releases
+(website)  lives in a separate private repo; kinahledger.com/download serves this repo's releases
 tracker/   the Windows tracker, C# / .NET 8
 tools/     data tooling (item dictionary crawler, site data build)
 data/      data drops (tw-items.json goes here)
@@ -25,7 +25,8 @@ Since 0.6.2 it reads only the parts of the game that nothing covers. While anoth
 which program is in the way, and that time doesn't count toward any per-hour rate. `KinahLedger.exe in-view`
 shows what the tracker can see right now. Since 0.6.4 a zone name it has never seen (not in its list and without
 a place word such as Valley or Ruins) has to be read twice in a row before it counts, so a button or tooltip that
-drifts over the minimap can't become a zone.
+drifts over the minimap can't become a zone. Since 0.6.5 such a name is shown in the window only: what is shared files
+that time under "Unknown zone", so the site's spot tables hold only zones the tracker is sure of.
 
 **Screen reading.** The game prints every pickup in chat ("Acquired 2,790 Kina.",
 "Acquired Drakan hide ×2."). The tracker reads those lines off the screen with the text recognition
@@ -36,10 +37,6 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
 2. Double-click `KinahLedger.exe`. On first run pick your region, faction and server, and a look (Night, Abyss or Daylight); everything shared is filed per server. From then on the tracker finds the game window, the chat (above the "Enter your message" box, or from its own lines) and the zone on the minimap by itself, and **counts everything the chat shows while the game is open**: drops, gathers, Soul Crystals, and Market prices whenever the Market is open. That count is shared anonymously in 15-minute chunks and never kept here.
 3. **Start farming** times a run on top of that count: the window shows the run (four tiles, then Drops / Gathered / Pets tabs), and Stop saves it to your history and shares it. Open world, Gathering or Pets is the run's label. Farming time is noticed from the chat itself: every loot, kill or gather line keeps the farming clock running, a minute with none stops it until the next, so every per-hour rate (here and on the site) divides by time actually spent farming, while counts and drop rates keep counting regardless. Open world shows Kinah per hour and per kill, kills per hour, drops per hour, and every drop with its drop rate and per-hour rate, with item names in the game's tier colours. Gathering splits each skill (mining, logging, essence extraction, herbs, cooking ingredients) into its own section with its own attempts, Plentiful rate and per-attempt rates. Pets counts Soul Crystals by zone with drops and per hour only, no drop %, so the best pet-farming spot stands out. Soul Points and Soul Crystals never count as drops. The game's item list is built into the tracker and is the whitelist for drops: a name that isn't on it (a misread, a nameplate behind the chat) is never counted and never sent. Zones work the same way against the tracker's zone list; anything else counts under "Unknown zone". Ctrl+Shift+K starts and stops a run from inside the game; minimizing keeps everything running in the tray.
 
-   **Updates.** Each time the tracker starts it asks GitHub for the latest release of this repository (switch it off under Settings › Updates). When a newer one is out, a line at the top says so: **Update now** downloads that release's `KinahLedger.exe` next to the one you run, checks it is complete (its size, and its SHA-256 when the release notes list one), then closes the tracker, puts the new file in place and starts it. Your settings, history and logs stay as they are. Nothing is downloaded until you press it; Settings › Check now looks again by hand.
-
-   **Settings** open beside the ledger, in two columns: the window gets wider, never taller, and the live count stays where it is.
-
    **Zones.** The tables start over when you change zone, so they show the zone you are in. Tick **All zones** under the activity picker to keep them counting across zones. Either way, what goes to the site is split by zone: each zone sends its own time, Kinah, kills and items, so one zone's drops are never filed under another.
 
    **Quest rewards** are left out of every farming number. Kinah marked (Bound), the Kinah after a "total payment … completed" line, a Kinah line that names a quest or reward, and any single Kinah line far above what the mobs pay (more than 25 times the median of your last pickups) are counted as skipped rewards, shown in the summary line, never as income or kills.
@@ -47,7 +44,21 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
    **Kinah by enemy (a best guess).** The tracker reads the target bar at the top-centre of the game every 2 seconds. Kinah, drops and Soul Crystals that land within 8 seconds of it naming an enemy are credited to that enemy, in the zone you fought it in. With several enemies on you the bar shows only one of them, so these figures are a guess, and the window and the site say so. Only enemy names on the tracker's enemy list (`data/mobs.txt`) count. If the panel over the game sits on the target bar, the window asks you to drag it aside.
 
    **Crafting** is its own part of the window: press **Crafting** at the top. Each recipe shows how many times you tried it, how often it worked, what came out (a great success included), what one try costs and what the result sells for, with the profit or loss. Costs come from the recipe's materials at the lowest Market prices on your server; a failed try uses them too. Bound vendor materials can't be priced and are left out, and the row says so. The recipes come from [MetaBot.GG](https://metabot.gg/en/aion-2/crafting). Crafted items are never drops, crafting is never farming time, and none of it goes into a zone's numbers. Market settlement payouts ("A total payment of … completed") are never farming Kinah either.
-4. **Settings** holds the server, the one **Share** switch (runs and Market prices together), the panel over the game, the profile link code (a short form of the random install ID: pasting it into a profile on the site attaches this PC's runs to that profile, otherwise runs stay anonymous), chat detection with **Detect now**, **Choose the chat** and **Test read**, the Market area, and the look.
+4. **Options** (its own window, with **Save** and **Cancel**) holds everything that can be set, page by page:
+   - **General**: start with Windows (it then waits in the tray until Aion 2 is running), what happens when Aion 2
+     starts (open the window, or stay in the tray; reading starts either way), hide when Aion 2 closes, the close
+     button keeping it in the tray, minimize to the tray, and the look.
+   - **Server**: region and server; everything shared is filed under it.
+   - **Sharing**: the one **Share** switch (runs and Market prices together), linking this PC to your profile on the
+     site (the link code is a short form of the random install ID; without it runs stay anonymous), replacing the
+     install ID, and the data folder.
+   - **Game reading**: **Detect now**, **Choose the chat**, **Test read**, the Market area, and a live preview of what
+     is read. These act right away.
+   - **In game**: the start/stop shortcut (Ctrl+Shift+K by default; any Ctrl/Alt/Shift combination, or off) and the
+     panel over the game.
+   - **Updates** and **About**.
+
+   Only one Kinah Ledger runs at a time: starting it again brings up the running one's window.
 
 The same steps exist as commands for scripting (`pick`, `ocr-test`, `watch`), listed below.
 
@@ -69,8 +80,8 @@ nothing is clicked or typed in the game, and no account ever reads the Market on
   thousands separators).
 - Your server, chosen on first run, travels with the prices as `region-server` (`na_e-siel-elyos`) so they land on
   the right board; without it, asks are read but not sent.
-- Market prices follow the one **Share** switch in Settings: with sharing off the Market is never read, and the rest
-  of the tracker works as before. Settings shows what the reader is doing: waiting for the game,
+- Market prices follow the one **Share** switch in Options › Sharing: with sharing off the Market is never read, and the rest
+  of the tracker works as before. Options › Game reading shows what the reader is doing: waiting for the game,
   watching for the Market, or reading it, with asks read, items, asks shared and when it last read. The same ask
   (item, stack, price) isn't sent twice within 15 minutes; batches go out every 10 seconds or 100 asks, and once
   more when the window closes.
@@ -94,6 +105,41 @@ dotnet publish -c Release
 `dotnet publish` writes one self-contained `KinahLedger.exe` to `dist/` with the .NET runtime inside, so players
 install nothing. It isn't code-signed yet, so Windows SmartScreen shows a warning the first time it runs; a
 signing certificate removes that. There are no drivers or other prerequisites.
+
+### Updates
+
+The tracker keeps itself current. Twenty seconds after it opens, and every six hours while it stays open, it asks
+GitHub for the latest release of this repository (`api.github.com/repos/StevenMacchia/kinah-ledger/releases/latest`;
+only the app version goes up, in the User-Agent). A release counts when it is not a draft or prerelease, carries a
+`KinahLedger.exe` file, and its notes have a `KinahLedger.exe sha256: <64 hex>` line. When it is newer:
+
+- **Install new versions automatically** (Options › Updates, on by default): it downloads beside the running exe, is checked
+  against the release's size and SHA-256, and replaces the exe when the window closes. A banner offers **Restart now** to
+  install it at once; during a farming run that asks first, and the run is stopped and saved before the restart.
+- Off: the banner says a new version is out and **Update** downloads it on request. Options › Updates › **Check now** looks again.
+- `"update": { "check": false }` in `settings.json` turns the check off entirely. `"update": { "manifest": "<url>" }` points it
+  at a `latest.json` manifest instead (as `tools/release-manifest.js` writes), for a test server or a mirror.
+
+Windows doesn't let a running exe be overwritten but does let it be renamed, so the swap is: running exe →
+`KinahLedger.exe.old`, verified download → `KinahLedger.exe` (whatever the file is called, such as
+`KinahLedger (1).exe`). The `.old` copy is deleted on the next start. A download that doesn't match the checksum is
+thrown away. Settings, history and logs under `%LOCALAPPDATA%\KinahLedger` are untouched. If the exe sits in a folder
+it can't write to (Program Files), the banner links to the releases page instead. `KinahLedger.exe update` does the same
+from a terminal (`--check` only reports).
+
+### Releasing
+
+```
+cd tracker/KinahLedger.Tracker
+dotnet publish -c Release
+cd ../..
+node tools/release-manifest.js            # latest.json beside the published exe: version, size, SHA-256
+gh release create vX.Y.Z dist/KinahLedger.exe dist/latest.json --title "Kinah Ledger tracker X.Y.Z" --notes-file notes.md
+```
+
+Bump `<Version>` in the csproj first. The notes must carry the exe's checksum on a line of its own,
+`KinahLedger.exe sha256: <the sha256 from latest.json>`: running trackers install a release only when the download
+matches it, and offer no update for a release without it. They pick it up within six hours, or at their next start.
 
 ### Commands
 
@@ -138,7 +184,13 @@ seconds later; whatever is still unsent when the window closes is dropped, and p
 icon URLs). NCSoft's EULA restricts automated access to its services, so running it is the owner's
 decision. See `docs/` for the pipeline and image-source notes.
 
+Since 0.6.5 the tracker fetches the site's item list (`kinahledger.com/data/items.json`: the id, name, grade and icon
+file name of every item in the game's dictionary, about 850 KB) once per start when it has changed, and keeps it under
+`%LocalAppData%\KinahLedger\items.json`. That is how drops leave this PC under their real item ids; nothing about the
+player goes up in that request. Offline, the saved copy is used, and a name the list doesn't hold is shared as the name.
+A `data/tw-items.json` beside the exe (the crawler's output) is used instead when present.
+
 The tracker ships no icons. When a row's item has a known icon (the 46 gathering materials always; anything else
-once `data/tw-items.json` sits beside the exe), the file is fetched once from NCSOFT's image server by name, the
+once the item list is on this PC), the file is fetched once from NCSOFT's image server by name, the
 way a browser does on their site, and kept under `%LocalAppData%\KinahLedger\icons`; a session touches a few dozen
 files at most. `"ui": { "icons": false }` in `settings.json` turns this off, and rows show a lettered tile instead.

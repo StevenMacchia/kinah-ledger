@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using KinahLedger.Data;
 using KinahLedger.Ocr;
+using KinahLedger.Platform;
 using KinahLedger.Session;
 using DRect = System.Drawing.Rectangle;
 using WF = System.Windows.Forms;
@@ -22,7 +23,8 @@ public partial class MainWindow : Window
     // Soul Crystals are still counted and shared (the site's Pets page needs them); the window shows them as a count only
     static readonly string[] Kinds = { "Open world", "Gathering" };
     enum Mode { Open, Gather }
-    const string RepoUrl = "https://github.com/StevenMacchia/kinah-ledger";
+    public const string RepoUrl = "https://github.com/StevenMacchia/kinah-ledger";
+    public const string SiteUrl = "https://kinahledger.com";
     const int HotkeyId = 1;
 
     readonly Settings _settings;
@@ -37,10 +39,14 @@ public partial class MainWindow : Window
     HudWindow? _hud;
     DRect? _region = RegionStore.Load();
     DRect? _marketRegion = RegionStore.Load(RegionStore.MarketFile);
-    bool _quitting, _balloonShown, _demo, _compact, _watcherStopped;
+    bool _quitting, _balloonShown, _trayHintShown, _demo, _watcherStopped;
+    /// <summary>The Options window while it is open.</summary>
+    OptionsWindow? _options;
+    /// <summary>The last frame of the game with the chat, zone and Market outlined, for the Options window's preview.</summary>
+    public System.Windows.Media.Imaging.BitmapSource? PreviewSource { get; private set; }
 
     readonly WF.NotifyIcon _tray = new();
-    readonly WF.ToolStripMenuItem _trayToggle = new("Start tracking");
+    readonly WF.ToolStripMenuItem _trayToggle = new("Start farming");
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     bool _framing; int _ticks;
 
@@ -55,72 +61,31 @@ public partial class MainWindow : Window
         IconCache.Enabled = settings.Ui.Icons;
         if (!_prefs.ManualMarket) _marketRegion = null;
         _settings.Upload.Enabled = _prefs.Share;
+        // the site's item list, so drops are shared under real ids and show their icons; one conditional request per start
+        if (watch && (settings.Ui.Icons || _settings.Upload.Enabled)) _ = DictionaryCache.RefreshAsync(_items);
         _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.ManualChat ? _region : null, _prefs.Server) { RegionKey = _prefs.Region, Server = _prefs.Server };
         _watcher.Market.Enabled = settings.Market.Enabled && _prefs.Share;   // prices ride on the one Share switch
         Icon = Native.AppIconSource();
 
         Kind.ItemsSource = Kinds;
         Kind.SelectedItem = Kinds.Contains(_prefs.Activity) ? _prefs.Activity : "Open world";
-        HudChk.IsChecked = _prefs.Hud;
-        // updates: looked up on launch when the switch is on; Update now is the only thing that downloads anything
-        UpdateChk.IsChecked = _prefs.CheckUpdates;
-        UpdateChk.Click += (_, _) => { _prefs.CheckUpdates = UpdateChk.IsChecked == true; if (!_demo) _prefs.Save(); };
-        UpdateStatusRun.Text = $"This is version {Upload.RunPayload.AppVersion}.";
-        UpdateCheckLink.Click += (_, _) => _ = CheckUpdatesAsync(manual: true);
-        UpdateNowLink.Click += (_, _) => _ = InstallUpdateAsync();
         // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
         AllZonesChk.IsChecked = _prefs.AllZones;
         AllZonesChk.Click += (_, _) => { _prefs.AllZones = AllZonesChk.IsChecked == true; if (!_demo) _prefs.Save(); Redraw(); Tick(); };
-        // the panel over the game follows the switch at once, run or no run
-        HudChk.Checked += (_, _) => Redraw();
-        HudChk.Unchecked += (_, _) => CloseHud();
-        HudOpacity.Value = Math.Clamp(_prefs.HudOpacity, 0.3, 1);
-        HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
-        HudOpacity.ValueChanged += (_, _) =>
-        {
-            _prefs.HudOpacity = HudOpacity.Value; HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
-            if (_hud != null) _hud.Opacity = HudOpacity.Value;
-            if (!_demo) _prefs.Save();
-        };
-        ShareChk.IsChecked = _prefs.Share;
         if (_prefs.WinX is int x && _prefs.WinY is int y && x > SystemParameters.VirtualScreenLeft - 50 && y > SystemParameters.VirtualScreenTop - 50
             && x < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 200 && y < SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 200)
         { WindowStartupLocation = WindowStartupLocation.Manual; Left = x; Top = y; }
 
-        PickBtn.Click += (_, _) => Pick();
-        DetectBtn.Click += async (_, _) => await DetectNow();
-        TestBtn.Click += async (_, _) => await TestRead();
         if (!_prefs.ManualChat) _region = null;   // auto mode: the chat is found at start, not remembered
         StartBtn.Click += async (_, _) => await Toggle();
-        SiteLink.Click += (_, _) => Open(RepoUrl);
-        SentLink.Click += (_, _) => WhatsSent();
+        // everything that can be set is in the Options window, so the ledger never moves or grows for it
+        OptionsBtn.Click += (_, _) => OpenOptions();
+        SiteBtn.Click += (_, _) => Open(SiteUrl);
+        ServerChip.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Server);
+        FixLink.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
         Version.Text = "v" + Upload.RunPayload.AppVersion;
-        // the server: everything shared is per server (prices now, drops once the site splits them), so it is chosen first and remembered
-        RegionBox.ItemsSource = Servers.Regions;
-        RegionBox.SelectedItem = Servers.Region(_prefs.Region) ?? Servers.Region(settings.Region) ?? Servers.Regions[0];
-        FillServers();
+        // the server: everything shared is per server, so it is chosen first (welcome screen or Options) and remembered
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
-        RegionBox.SelectionChanged += (_, _) => { FillServers(); ServerChanged(); };
-        ServerPick.SelectionChanged += (_, _) => ServerChanged();
-        // Market prices: its own switch, remembered and live on the watcher; a chosen area replaces the title-and-headers search at once
-        ShareChk.Checked += (_, _) => MarketSwitch(true);
-        ShareChk.Unchecked += (_, _) => MarketSwitch(false);
-        MarketPickBtn.Click += (_, _) => ShareMarketNow();
-        MarketPickLink.Click += (_, _) => PickMarket();
-        MarketResetLink.Click += (_, _) => { _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); _watcher.Market.UseRegion(null); UpdateMarketUi(); Say("Back to automatic: the Market window is found by its title and column headers.", "Faint"); };
-        MarketSentLink.Click += (_, _) => WhatsRead();
-        try { LinkCodeRun.Text = Upload.InstallId.LinkCode(); } catch (Exception) { LinkCodeRun.Text = "unavailable"; }
-        // one click: the site gets the code in the address, links it as soon as the player is signed in, and nothing has to be typed
-        LinkBtn.Click += (_, _) =>
-        {
-            var code = LinkCodeRun.Text;
-            if (!code.StartsWith("KL-")) { Say("No link code yet; try again in a moment.", "Warn"); return; }
-            Open("https://kinahledger.com/?link=" + Uri.EscapeDataString(code) + "#profile");
-            Say("Opened kinahledger.com in your browser. Sign in with Discord if it asks; this PC is then linked to your profile.", "Good");
-        };
-        CopyCodeLink.Click += (_, _) => { try { Clipboard.SetText(LinkCodeRun.Text); Say("Link code copied. Paste it into your profile on the site to see your runs there.", "Good"); } catch (Exception) { Say("Couldn't reach the clipboard; the code is " + LinkCodeRun.Text, "Warn"); } };
-        ResetLink.Click += (_, _) => { _region = null; _prefs.ManualChat = false; RegionStore.Clear(); _watcher.ManualChat = null; _ = _watcher.ResetChatAsync(); UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Back to automatic: the chat is found when you start.", "Faint"); };
-        LogsLink.Click += (_, _) => Open(CrashLog.Dir);
 
         Kind.SelectionChanged += (_, _) => { if (!Farming) { _mode = SelectedMode; ApplyModeLabels(); if (_watcher.Chat == null) ResetTiles(); } };
         DropsHead.MouseLeftButtonUp += (_, _) => { _prefs.DropsOpen = !_prefs.DropsOpen; if (!_demo) _prefs.Save(); Redraw(); };
@@ -141,8 +106,6 @@ public partial class MainWindow : Window
         StateChanged += OnStateChanged;
         Closing += OnClosingWindow;
 
-        UpdateStep2();
-        UpdateMarketUi();
         // the tables grow with what's farmed and the window with them (the player's rule: never scroll); only a table
         // that would run the window past the bottom of the screen gets a scroll bar, and the window moves up to stay on it
         // both tables share the screen below the tiles; each scrolls only once it would push the window off the bottom
@@ -151,13 +114,11 @@ public partial class MainWindow : Window
         ShowPart(_prefs.Part, remember: false);
         SizeChanged += (_, _) => KeepOnScreen();
         ShowTable(null);
-        SettingsBtn.Click += (_, _) => SetCompact(!_compact);
-        SetCompact(_prefs.Compact, remember: false);
         ServerRowState();
         InitWelcome();
         if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
+        else Say("Reading the chat whenever the game is open. Press Start farming to time a run.", "Faint");
         if (watch) _watcher.Start();
-        if (watch && _prefs.CheckUpdates) _ = CheckUpdatesAsync(manual: false);
     }
 
     /// <summary>
@@ -165,73 +126,14 @@ public partial class MainWindow : Window
     /// shrinks to the mode picker, the tiles and the table. Settings brings the setup card back at any time.
     /// </summary>
 
-    void SetCompact(bool on, bool remember = true)
-    {
-        _compact = on;
-        SetupCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-        // wider, never taller: the window sizes to its content, so the settings card beside the ledger widens it and the
-        // ledger keeps its place and its height. (Setting Width from code switched the height to fixed and squeezed the tables.)
-        Tagline.Visibility = Visibility.Collapsed;
-        SettingsBtn.Content = on ? "Settings" : "Hide settings";
-        SettingsBtn.ToolTip = on ? "Server, sharing, chat area, Market and look." : "Hide the settings. Everything here is remembered.";
-        if (!Farming && !_demo) Say(on ? "Reading the chat whenever the game is open. Press Start farming to time a run." : "Settings. Everything here is remembered.", "Faint");
-        if (remember) { _prefs.Compact = on; SavePrefs(); }
-    }
 
-    /// <summary>The compact layout for a layout render, without touching saved preferences.</summary>
-    public void ShowCompact() => SetCompact(true, remember: false);
+    /// <summary>The main window is the live count only; everything that needs setting is in Options. Kept for layout renders.</summary>
+    public void ShowCompact() { }
 
 
-    /// <summary>Settings open, with an update offered, for a layout render.</summary>
-    public void ShowSettingsDemo()
-    {
-        SetCompact(false, remember: false);
-        UpdateBarText.Text = "0.7.2 is out · "; UpdateBar.Visibility = Visibility.Visible;
-        UpdateStatusRun.Text = $"This is version {Upload.RunPayload.AppVersion}; 0.7.2 is out.";
-    }
 
-    /* ---------------- updates ---------------- */
 
-    Upload.Updater.Release? _update;
 
-    /// <summary>Looks up the latest release. Silent when GitHub can't be reached, unless the player pressed Check now.</summary>
-    async Task CheckUpdatesAsync(bool manual)
-    {
-        if (manual) UpdateStatusRun.Text = "Checking…";
-        var rel = await Upload.Updater.CheckAsync();
-        _update = rel;
-        var mine = Upload.RunPayload.AppVersion;
-        if (rel != null)
-        {
-            UpdateBarText.Text = $"{rel.Version.ToString(3)} is out · ";
-            UpdateBar.Visibility = Visibility.Visible;
-            UpdateStatusRun.Text = $"This is version {mine}; {rel.Version.ToString(3)} is out.";
-        }
-        else if (manual) UpdateStatusRun.Text = $"This is version {mine}. No newer version found.";
-    }
-
-    /// <summary>Downloads the newer release, checks it, and restarts into it. Settings and history stay as they are.</summary>
-    async Task InstallUpdateAsync()
-    {
-        if (_update is not { } rel) return;
-        if (Farming) { Say("Stop the run first, then update.", "Warn"); return; }
-        UpdateNowLink.IsEnabled = false;
-        var v = rel.Version.ToString(3);
-        try
-        {
-            var progress = new Progress<double>(f => UpdateBarText.Text = $"Downloading {v}… {f:P0} ");
-            var file = await Task.Run(() => Upload.Updater.DownloadAsync(rel, progress));
-            UpdateBarText.Text = $"Installing {v}: Kinah Ledger restarts in a moment. ";
-            Upload.Updater.SwapAndRestart(file);
-            ForceClose();
-        }
-        catch (Exception ex)
-        {
-            CrashLog.Write("update", ex);
-            UpdateBarText.Text = $"Couldn't update ({ex.Message}). Try again, or get it from the releases page · ";
-            UpdateNowLink.IsEnabled = true;
-        }
-    }
 
     /* ---------------- actions ---------------- */
 
@@ -283,61 +185,73 @@ public partial class MainWindow : Window
 
     async Task Toggle() { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(); }
 
-    void Pick()
+    /// <summary>Says something in the status line and on the Options window's reading page when it is open.</summary>
+    void Report(string text, string tone)
     {
+        Say(text, tone);
+        _options?.ShowNote(text, tone);
+    }
+
+    /// <summary>Drag a box around the chat by hand. The Options window hides itself around this.</summary>
+    public void PickChat()
+    {
+        bool was = IsVisible;
         Hide();
-        try { var r = RegionPickerWindow.Pick(); if (r != null) { _region = r; _prefs.ManualChat = true; RegionStore.Save(r.Value); _watcher.ManualChat = r; _ = _watcher.ResetChatAsync(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; } }
-        finally { Show(); Activate(); UpdateStep2(); }
-        if (_region != null) Say("Chat area chosen by hand. The zone is still read from the minimap if the game window is found. Press Test read, then Start.", "Good");
+        try { var r = RegionPickerWindow.Pick(); if (r != null) { _region = r; _prefs.ManualChat = true; RegionStore.Save(r.Value); _watcher.ManualChat = r; _ = _watcher.ResetChatAsync(); SetPreview(null); } }
+        finally { if (was) { Show(); Activate(); } }
+        if (_region != null && _prefs.ManualChat) Report("Chat area chosen by hand. The zone is still read from the minimap if the game window is found. Press Test read, then Start.", "Good");
+    }
+
+    /// <summary>Back to finding the chat on its own.</summary>
+    public void ResetChat()
+    {
+        _region = null; _prefs.ManualChat = false; RegionStore.Clear(); _watcher.ManualChat = null; _ = _watcher.ResetChatAsync();
+        SetPreview(null);
+        Report("Back to automatic: the chat is found when you start.", "Faint");
     }
 
     /// <summary>Finds the game, the chat and the zone right now and shows what it found, without starting a run.</summary>
-    async Task DetectNow()
+    public async Task DetectNow()
     {
-        DetectBtn.IsEnabled = false; Say("Looking for the game window, the chat and the zone…", "Faint");
+        Report("Looking for the game window, the chat and the zone…", "Faint");
         try
         {
             var game = GameWindow.Find(_settings.ProcessHints);
-            if (game == null) { if (_compact) SetCompact(false, remember: false); Say("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself.", "Warn"); return; }
+            if (game == null) { Report("The game window wasn't found. Start the game in borderless or windowed mode, or choose the chat yourself.", "Warn"); return; }
             if (_hud != null) { _hud.Hide(); }   // never read our own panel
             if (GameWindow.Covered(ChatLocator.Corner(game.Value), _settings.ProcessHints) is { } cover)
             {
-                if (_compact) SetCompact(false, remember: false);
-                Say($"The chat corner of the game is out of view: {cover} is over it. Move it off the bottom-left of the game, then Detect again.", "Warn");
+                Report($"The chat corner of the game is out of view: {cover} is over it. Move it off the bottom-left of the game, then Detect again.", "Warn");
                 return;
             }
             var (region, note) = await Task.Run(() => ChatLocator.DetectAsync(game.Value));
             var (zone, _) = await Task.Run(() => ZoneLocator.DetectAsync(game.Value));
-            ZoneLbl.Text = zone ?? "Zone not read yet";
+            ZoneLbl.Text = "Zone: " + (zone ?? "not read yet");
             var g = game.Value;
             var marks = region != null ? new[] { (region.Value, TrackerSession.ChatColor), (ZoneLocator.Strip(g), TrackerSession.ZoneColor) } : new[] { (ZoneLocator.Strip(g), TrackerSession.ZoneColor) };
             SetPreview(await Task.Run(() => ScreenReader.Frame(g, 480, marks)));
             if (region == null)
             {
-                if (_compact) SetCompact(false, remember: false);   // the buttons to fix it are in the setup card
-                Say("Couldn't see the chat (" + note + "). Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.", "Warn");
+                Report("Couldn't see the chat (" + note + "). Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.", "Warn");
                 return;
             }
             _region = region; _prefs.ManualChat = false; RegionStore.Clear();
-            UpdateStep2();
-            // steps 1 and 2 are done: from now on the window opens small, with the setup behind Settings
-            bool first = !_compact; if (first) SetCompact(true);
-            Say($"Found the chat ({note}){(zone != null ? " and the zone" : "")}. " + (first ? "Setup is now under Settings. " : "") + "Press Start whenever you're ready.", "Good");
+            ShowFix(false);
+            Report($"Found the chat ({note}){(zone != null ? " and the zone" : "")}. Press Start whenever you're ready.", "Good");
         }
-        catch (Exception ex) { Say(ex.Message, "Bad"); }
-        finally { DetectBtn.IsEnabled = true; }
+        catch (Exception ex) { Report(ex.Message, "Bad"); }
     }
 
-    async Task TestRead()
+    public async Task TestRead()
     {
         if (_region == null) { await DetectNow(); if (_region == null) return; }
-        TestBtn.IsEnabled = false; Say("Reading…", "Faint");
+        Report("Reading…", "Faint");
         _mode = SelectedMode;
         try
         {
             if (GameWindow.Covered(_region.Value, _settings.ProcessHints) is { } cover)
             {
-                Say($"The chat is out of view: {cover}{(cover.StartsWith("the game") ? "" : " is over it")}. Only the game is read; bring it into view, then Test read again.", "Warn");
+                Report($"The chat is out of view: {cover}{(cover.StartsWith("the game") ? "" : " is over it")}. Only the game is read; bring it into view, then Test read again.", "Warn");
                 return;
             }
             var reader = new ScreenReader(_region.Value, _settings.Ocr.Scale);
@@ -348,15 +262,14 @@ public partial class MainWindow : Window
             var engine = new SessionEngine(_items);
             int hits = 0;
             foreach (var l in lines) foreach (var ev in parser.Parse(l, DateTime.UtcNow)) { engine.Apply(ev); hits++; }
-            TableTitle.Text = "Test read"; TableWhat.Text = "what's on screen now"; Summary.Visibility = Visibility.Visible;
+            TableTitle.Text = "TEST READ · WHAT'S ON SCREEN NOW";
             ShowTable(engine, TimeSpan.FromHours(1));
             Summary.Text = $"{lines.Count} lines read · {hits} loot or kill lines";
-            if (lines.Count == 0) Say("Nothing recognized. Use borderless or windowed mode and make sure the box covers the chat text.", "Warn");
-            else if (hits == 0) Say($"{lines.Count} line(s) read but none look like loot. Loot something first, or try a bigger chat font or a tighter box.", "Warn");
-            else Say($"Reads fine: {hits} loot or kill line(s) out of {lines.Count}. Ready to start.", "Good");
+            if (lines.Count == 0) Report("Nothing recognized. Use borderless or windowed mode and make sure the box covers the chat text.", "Warn");
+            else if (hits == 0) Report($"{lines.Count} line(s) read but none look like loot. Loot something first, or try a bigger chat font or a tighter box.", "Warn");
+            else Report($"Reads fine: {hits} loot or kill line(s) out of {lines.Count}. Ready to start.", "Good");
         }
-        catch (Exception ex) { Say(ex.Message, "Bad"); }
-        finally { TestBtn.IsEnabled = true; }
+        catch (Exception ex) { Report(ex.Message, "Bad"); }
     }
 
     async Task StartTracking()
@@ -367,12 +280,11 @@ public partial class MainWindow : Window
         Say(_watcher.Chat == null ? "Finding the chat and the zone…" : "Starting…", "Faint");
         try
         {
-            _settings.Upload.Enabled = ShareChk.IsChecked == true;
+            _settings.Upload.Enabled = _prefs.Share;
             _mode = SelectedMode;
             ApplyModeLabels();
             var chat = await _watcher.EnsureChatAsync();
             _region = chat.Region;
-            UpdateStep2();
             var farm = _watcher.StartFarm(ActivityName());
             _lastRun = null;
             ZoneLbl.Text = chat.Zone ?? "Zone not read yet";
@@ -380,13 +292,13 @@ public partial class MainWindow : Window
             _tableWhat = ViewTitle();
             Redraw();
             SetTrackingUi(true);
-            if (!_compact) SetCompact(true);   // chat and zone found: the settings have done their job
+            ShowFix(false);
             Say($"Farming · {chat.Zone ?? ActivityName()}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
         }
         catch (Exception ex)
         {
             StartBtn.IsEnabled = true;
-            if (_compact) SetCompact(false, remember: false);   // show the settings so the fix is one click away
+            ShowFix(true);   // the fix is one click away, in Options › Game reading
             Say(ex.Message, "Warn");
         }
     }
@@ -407,7 +319,7 @@ public partial class MainWindow : Window
         string ran = $"{e.Elapsed:hh\\:mm\\:ss}" + (t.Kinah > 0 ? $" · {Fk(t.Kinah)} Kinah" : "") + (t.Kills > 0 ? $" · {t.Kills} kills" : "") + (t.Nodes > 0 ? $" · {t.Nodes} attempts" : "") + (t.Drops > 0 ? $" · {t.Drops} items" : "");
         string msg, tone = "Faint"; bool shared = false; bool eligible = e.Elapsed.TotalMinutes >= 5 && e.Events > 0;
         if (!eligible) msg = $"Run stopped ({ran}). Under 5 minutes or no loot seen, so it isn't shared.";
-        else if (ShareChk.IsChecked != true) msg = $"Run stopped ({ran}). Sharing is off, so it stays on this PC.";
+        else if (!_prefs.Share) msg = $"Run stopped ({ran}). Sharing is off, so it stays on this PC.";
         else if (string.IsNullOrWhiteSpace(_settings.Upload.Endpoint)) msg = $"Run stopped ({ran}). No sharing address in settings.json, so it stays on this PC.";
         else if (chat != null && await chat.UploadAsync(_settings, e, kind, activity)) { msg = $"Run stopped ({ran}) and shared anonymously."; tone = "Good"; shared = true; }
         else { msg = $"Run stopped ({ran}). Not shared: " + (Upload.Uploader.LastError.Length > 0 ? Upload.Uploader.LastError : "couldn't reach the site") + ". Kept on this PC."; tone = "Warn"; }
@@ -434,7 +346,7 @@ public partial class MainWindow : Window
     void Tick()
     {
         if (_demo) return;
-        if (!_compact) MarketStatus.Text = MarketLine();
+        WatchGame();
         var chat = _watcher.Chat; var farm = _watcher.Farm;
         var show = Shown();
         if (farm != null) FarmTime.Text = "Farming for " + farm.Elapsed.ToString(@"hh\:mm\:ss") + (farm.Paused ? " · paused while the game is out of view" : "");
@@ -458,7 +370,7 @@ public partial class MainWindow : Window
         else if (chat.LastError.Length > 0) Say("Read problem: " + chat.LastError, "Bad");
         else if (chat.Paused.Length > 0) Say($"Paused: {chat.Paused}. Only the game is read, so reading picks up when the chat is in view again · " + MarketShort(), "Warn");
         else Say((farm != null ? "Farming" : "Reading") + $" · {chat.Reads} reads" + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : "") + " · " + MarketShort() + " · " + BalanceShort() + (_watcher.Flushed > 0 ? $" · {_watcher.Flushed} chunk{(_watcher.Flushed == 1 ? "" : "s")} shared" : ""), "Faint");
-        if (chat != null && !_compact && ++_ticks % 4 == 0 && !_framing)
+        if (chat != null && _options is { WantsPreview: true } && ++_ticks % 4 == 0 && !_framing)
         {
             // the whole game with the chat, map and (when open) Market outlined, refreshed every couple of seconds off the UI thread
             _framing = true;
@@ -467,7 +379,7 @@ public partial class MainWindow : Window
         }
         // the panel over the game shows whenever its switch is on and the chat is being read: the run while one is on, the
         // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
-        if (HudChk.IsChecked == true && chat != null) EnsureHud();
+        if (_prefs.Hud && chat != null) EnsureHud();
         if (_part == "Crafting") FillCraft(chat?.CraftView);
         if (_hud != null && show != null)
         {
@@ -774,18 +686,22 @@ public partial class MainWindow : Window
     static string Rate(double v) => v >= 100 ? v.ToString("0") : v >= 10 ? v.ToString("0.0") : v.ToString("0.00");
     static string Fk(double v) => Math.Abs(v) >= 1e6 ? $"{v / 1e6:0.00}M" : Math.Abs(v) >= 1e4 ? $"{v / 1e3:0}K" : Math.Abs(v) >= 1e3 ? $"{v / 1e3:0.0}K" : v >= 100 ? $"{v:0}" : v >= 10 ? $"{v:0.0}" : $"{v:0.00}";
 
+    /// <summary>A new frame for the Options window's preview; null clears it (the chat area changed).</summary>
     void SetPreview(System.Drawing.Bitmap? bmp)
     {
-        if (bmp == null) return;
-        using (bmp) Preview.Source = Native.ToSource(bmp);
-        PreviewHint.Visibility = Visibility.Collapsed;
+        if (bmp == null) { PreviewSource = null; _options?.RefreshPreview(); return; }
+        using (bmp) PreviewSource = Native.ToSource(bmp);
+        _options?.RefreshPreview();
     }
+
+    /// <summary>The status row's link to Options › Game reading, shown while a reading problem stands.</summary>
+    void ShowFix(bool on) => FixText.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
     void CloseHud() { _hud?.Close(); _hud = null; }
 
     /// <summary>The draggable panel over the game, where it was last left; created once and kept until its switch goes off.</summary>
     void EnsureHud()
     {
-        if (_hud != null || HudChk.IsChecked != true) return;
+        if (_hud != null || !_prefs.Hud) return;
         _hud = new HudWindow { Owner = this, Opacity = Math.Clamp(_prefs.HudOpacity, 0.3, 1) };
         if (_prefs.HudX is double hx && _prefs.HudY is double hy && hx > SystemParameters.VirtualScreenLeft - 50 && hy > SystemParameters.VirtualScreenTop - 50) { _hud.Left = hx; _hud.Top = hy; }
         _hud.LocationChanged += (_, _) => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
@@ -801,52 +717,43 @@ public partial class MainWindow : Window
     }
     void Say(string text, string tone) { Status.Text = text; Status.Foreground = B(tone); }
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
-    static void Open(string url) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { } }
+    public static void Open(string url) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { } }
 
-    void WhatsSent() => MessageBox.Show(this,
+    public void WhatsSent(Window? owner = null) => MessageBox.Show(owner ?? this,
         "When a run ends, these totals go to the public tables:\n\n" +
-        "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n" +
-        "•  how much your Kinah went up or down over the run, rounded to 100 (read from the counter at the top-left of the game; your balance itself is never sent)\n•  how many crafts and enchants worked and failed, by item\n" +
-        "•  app version and a random install ID used only to stop spam\n\n" +
-        "Never your character name, account, class, level, chat text, your Kinah balance or screenshots.\n" +
+        "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
+        "Never your character name, account, class, level, chat text or screenshots.\n" +
         "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
-        "A farming run's totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop; what's counted while the game is open goes the same way in 15-minute chunks. If the site can't be reached, a run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
-        "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off and keeps the tracker fully offline.",
+        "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
+        "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
+        "Updates: at start and every six hours the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- server (everything shared is per server) ---------------- */
 
-    string RegionKey => (RegionBox.SelectedItem as GameRegion)?.Key ?? _settings.Region;
-    GameServer? Server => ServerPick.SelectedItem as GameServer;
+    public string RegionKey => Servers.Region(_prefs.Region)?.Key ?? Servers.Region(_settings.Region)?.Key ?? Servers.Regions[0].Key;
+    public GameServer? Server => Servers.Find(RegionKey, _prefs.Server);
     bool HasServer => Server != null;
 
-    /// <summary>The region's servers in the picker, keeping the chosen label when the new region has it too.</summary>
-    void FillServers()
-    {
-        var keep = Server?.Label ?? _prefs.Server;
-        ServerPick.ItemsSource = Servers.In(RegionKey);
-        ServerPick.SelectedItem = Servers.Find(RegionKey, keep);
-    }
 
-    /// <summary>A chosen server goes to the Market reader at once and into the prefs; Start waits until there is one.</summary>
-    void ServerChanged()
+    /// <summary>A chosen server goes to the readers at once and into the prefs; Start waits until there is one.</summary>
+    void ApplyServer(string regionKey, string label)
     {
+        _prefs.Region = regionKey; _prefs.Server = label;
         var s = Server;
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = s?.Label ?? "";
         _watcher.RegionKey = RegionKey; _watcher.Server = s?.Label ?? "";
         if (_watcher.Chat is { } ch) { ch.RegionKey = RegionKey; ch.Server = s?.Label ?? ""; }
-        _prefs.Region = RegionKey; _prefs.Server = s?.Label ?? "";
         if (!_demo) _prefs.Save();
         ServerRowState();
-        if (s != null && !Farming && !_demo) Say($"Server set to {s.Label} · {s.Region.Name}. " + (_compact ? "Press Start whenever you're ready." : "Do steps 1 and 2, or just press Start."), "Good");
     }
 
-    /// <summary>Until a server is chosen the hint says so in orange and Start stays off: a run or a price with no server would skew the site's numbers.</summary>
+    /// <summary>The server under the name in the header; until one is chosen it says so in orange and Start stays off (a run or a price with no server would skew the site).</summary>
     void ServerRowState()
     {
         bool ok = HasServer;
-        ServerHint.Text = ok ? "Prices and drops are kept per server." : "Choose your region and server first: prices and drops are kept per server.";
-        ServerHint.Foreground = B(ok ? "Faint" : "Warn");
+        ServerChip.Text = Server is { } s ? $"{s.Label} · {s.Region.Name}" : "No server chosen · pick one in Options";
+        ServerChip.Foreground = B(ok ? "Muted" : "Warn");
         if (!Farming) StartBtn.IsEnabled = ok;
     }
 
@@ -856,32 +763,32 @@ public partial class MainWindow : Window
     {
         _settings.Upload.Enabled = on;
         _watcher.Market.Enabled = on && _settings.Market.Enabled;
-        UpdateMarketUi();
     }
 
-    void PickMarket()
+    /// <summary>Drag a box around the Market's rows by hand. The Options window hides itself around this.</summary>
+    public void PickMarket()
     {
+        bool was = IsVisible;
         Hide();
         try
         {
             var r = RegionPickerWindow.Pick("Drag a box around the Market's listings: the rows with item, quantity and unit price.");
             if (r != null) { _marketRegion = r; _prefs.ManualMarket = true; RegionStore.Save(r.Value, RegionStore.MarketFile); _watcher.Market.UseRegion(r); }
         }
-        finally { Show(); Activate(); UpdateMarketUi(); }
-        if (_prefs.ManualMarket && _marketRegion != null) Say("Market area chosen by hand and in use now. Each row is read as one line and split by its numbers.", "Good");
+        finally { if (was) { Show(); Activate(); } }
+        if (_prefs.ManualMarket && _marketRegion != null) Report("Market area chosen by hand and in use now. Each row is read as one line and split by its numbers.", "Good");
     }
 
     /// <summary>
     /// Share Market prices: reads what the Market shows right now and sends it at once. The site lists a player's prices as
     /// the server's current ones, ahead of scraped data, for two hours or until someone shares newer ones.
     /// </summary>
-    async void ShareMarketNow()
+    public async void ShareMarketNow()
     {
-        if (ShareChk.IsChecked != true) { Say("Sharing is off. Turn on Share runs and Market prices first.", "Warn"); return; }
+        if (!_prefs.Share) { Say("Sharing is off. Turn on Share runs and Market prices first.", "Warn"); return; }
         if (!HasServer) { Say("Choose your server first, so the prices land on the right board.", "Warn"); return; }
         var game = GameWindow.Find(_settings.ProcessHints);
         if (game == null) { Say("The game isn't open. Open the Market in the game, then press Share.", "Warn"); return; }
-        MarketPickBtn.IsEnabled = false;
         Say("Reading the Market on your screen…", "Faint");
         bool hidden = false;
         try
@@ -895,23 +802,25 @@ public partial class MainWindow : Window
             else Say($"Shared {asks} prices for {items} item{(items == 1 ? "" : "s")}. They're {Server?.Label}'s current prices on the site now.", "Good");
         }
         catch (Exception ex) { CrashLog.Write("share market", ex); Say("Couldn't read the Market: " + ex.Message, "Bad"); }
-        finally { if (hidden) { Show(); Activate(); } MarketPickBtn.IsEnabled = true; UpdateMarketUi(); }
+        finally { if (hidden) { Show(); Activate(); } }
     }
 
-    /// <summary>The card's buttons and its line, right away; the line is then refreshed every half second from the watcher.</summary>
-    void UpdateMarketUi()
+    /// <summary>Back to finding the Market by its title and column headers.</summary>
+    public void ResetMarket()
     {
-        bool manual = _prefs.ManualMarket && _marketRegion != null;
-        MarketResetText.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
-        ((System.Windows.Documents.Run)MarketPickLink.Inlines.FirstInline).Text = manual ? "choose the area again" : "choose the area by hand";
-        MarketStatus.Text = MarketLine();
+        _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); _watcher.Market.UseRegion(null);
+        Report("Back to automatic: the Market window is found by its title and column headers.", "Faint");
     }
+
+    public bool MarketManual => _prefs.ManualMarket && _marketRegion != null;
+    public bool ChatManual => _prefs.ManualChat && _region != null;
 
     /// <summary>What the Market reader is doing right now, run or no run.</summary>
-    string MarketLine()
+    public string MarketLine()
     {
         var m = _watcher.Market;
-        if (!m.Enabled) return "Sharing is off, so the Market isn't read either. Turn Share runs anonymously back on and it resumes.";
+        if (_demoMarket.Length > 0) return _demoMarket;
+        if (!m.Enabled) return "Sharing is off, so the Market isn't read either. Turn sharing back on (Options › Sharing) and it resumes.";
         if (_watcher.GameRect == null) return "Waiting for the game. While the game and this window are open, the Market is read whenever you open it; Start tracking is only for farming runs.";
         return m.Status + (m.Manual && _marketRegion is DRect r ? $" · chosen area {r.Width} x {r.Height} px" : "");
     }
@@ -923,12 +832,11 @@ public partial class MainWindow : Window
         return m.Enabled && m.Layout is { } l && (m.Detected || m.Manual) ? new[] { (l.Outline, MarketCapture.MarkColor) } : Array.Empty<(DRect, System.Drawing.Color)>();
     }
 
-    void WhatsRead() => MessageBox.Show(this,
+    public void WhatsRead(Window? owner = null) => MessageBox.Show(owner ?? this,
         "Whenever this window and the game are open (not only during a run), the tracker watches for the Market window. While the Market is open, the listings on your screen are read about once a second, the same way the chat is:\n\n" +
         "•  item name, stack size and unit price of each ask\n•  your server, as chosen above, so prices land on the right board\n•  app version and the random install ID used only to stop spam\n\n" +
-        "Your own sales, from the chat: when the game says one of your listings sold or expired, the item, quantity, price per unit, when, and how long it was listed (when this PC saw you list it) go with the asks. Your listings themselves stay on this PC.\n\n" +
-        "Never seller or buyer names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
-        "Nothing is clicked or typed in the game. It follows the Share switch in Settings: with sharing off, the Market isn't read at all.\n\n" +
+        "Never seller names, your character, chat text or screenshots. The same ask isn't sent twice within 15 minutes.\n" +
+        "Nothing is clicked or typed in the game. It follows the Share switch in Options › Sharing: with sharing off, the Market isn't read at all.\n\n" +
         "Asks go to kinahledger.com (https://kinahledger.com/v1/prices) in small batches as they are read. If the site can't be reached, the batch is tried again a few seconds later; whatever is still unsent when this window closes is dropped. Prices are never stored on this PC.",
         "What's read from the Market", MessageBoxButton.OK, MessageBoxImage.Information);
 
@@ -937,12 +845,18 @@ public partial class MainWindow : Window
     void BuildTray()
     {
         var menu = new WF.ContextMenuStrip { BackColor = System.Drawing.Color.FromArgb(17, 26, 40), ForeColor = System.Drawing.Color.FromArgb(233, 239, 247), ShowImageMargin = false, Font = new System.Drawing.Font("Segoe UI", 9.75f) };
-        var open = new WF.ToolStripMenuItem("Open Kinah Ledger"); open.Click += (_, _) => Restore();
+        menu.Renderer = new TrayMenuRenderer();
+        var open = new WF.ToolStripMenuItem("Open Kinah Ledger") { Font = new System.Drawing.Font("Segoe UI", 9.75f, System.Drawing.FontStyle.Bold) };
+        open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
-        var quit = new WF.ToolStripMenuItem("Quit"); quit.Click += (_, _) => { _quitting = true; Close(); };
-        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, new WF.ToolStripSeparator(), quit });
+        var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
+        var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
+        var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
+        var quit = new WF.ToolStripMenuItem("Quit Kinah Ledger"); quit.Click += (_, _) => { _quitting = true; Close(); };
+        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, new WF.ToolStripSeparator(), options, updates, site, new WF.ToolStripSeparator(), quit });
         _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => Restore();
+        _tray.BalloonTipClicked += (_, _) => Restore();
     }
 
     void OnSourceInitialized(object? sender, EventArgs e)
@@ -950,7 +864,7 @@ public partial class MainWindow : Window
         var h = new WindowInteropHelper(this).Handle;
         Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
-        Native.RegisterHotKey(h, HotkeyId, Native.MOD_CONTROL | Native.MOD_SHIFT, (uint)KeyInterop.VirtualKeyFromKey(Key.K));
+        if (ApplyHotkey() is { } err) Say(err, "Warn");
     }
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -961,15 +875,17 @@ public partial class MainWindow : Window
 
     void OnStateChanged(object? sender, EventArgs e)
     {
-        // only a deliberate minimize while farming goes to the tray; otherwise the window behaves like any other
-        if (WindowState != WindowState.Minimized || !Farming) return;
+        // a minimize goes to the tray while farming, or always when Options › General says so
+        if (WindowState != WindowState.Minimized || !(Farming || _prefs.MinimizeToTray)) return;
         Hide();
-        if (!_balloonShown) { _balloonShown = true; _tray.ShowBalloonTip(4000, "Kinah Ledger is still counting", "It's in the tray by the clock. Double-click the icon to bring the window back.", WF.ToolTipIcon.Info); }
+        if (Farming && !_balloonShown) { _balloonShown = true; _tray.ShowBalloonTip(4000, "Kinah Ledger is still counting", "It's in the tray by the clock. Double-click the icon to bring the window back.", WF.ToolTipIcon.Info); }
     }
 
     void OnClosingWindow(object? sender, CancelEventArgs e)
     {
         SavePrefs();
+        // Options › General: the close button keeps the tracker in the tray, so it can open with the game; Quit is in the tray menu
+        if (_prefs.CloseToTray && !_quitting && !_demo) { e.Cancel = true; HideToTray(); return; }
         if (Farming && !_quitting)
         {
             var r = MessageBox.Show(this, "You're still farming. Stop the run and quit?\n\nYes stops the run and closes Kinah Ledger.\nNo keeps it running and leaves this window open.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -987,37 +903,39 @@ public partial class MainWindow : Window
         }
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.UnregisterHotKey(h, HotkeyId);
+        _options?.Discard();
         CloseHud();
         _tray.Visible = false; _tray.Dispose();
+        InstallUpdateOnClose();   // last: a downloaded update takes the exe's place now that nothing else needs it
     }
 
     void SavePrefs()
     {
         if (_demo) return;   // a layout render must not overwrite the player's saved choices
         _prefs.Activity = Kind.SelectedItem as string ?? "Open world";
-        _prefs.Hud = HudChk.IsChecked == true; _prefs.Share = ShareChk.IsChecked == true;
-        _prefs.Region = RegionKey; _prefs.Server = Server?.Label ?? "";
         if (_prefs.ManualChat && _region is DRect mr) RegionStore.Save(mr);
         if (_prefs.ManualMarket && _marketRegion is DRect mm) RegionStore.Save(mm, RegionStore.MarketFile);
         if (WindowState == WindowState.Normal && !double.IsNaN(Left)) { _prefs.WinX = (int)Left; _prefs.WinY = (int)Top; }
         _prefs.Save();
     }
 
-    void UpdateStep2()
-    {
-        if (_prefs.ManualChat && _region is DRect m) { Step2Status.Text = $"Chosen by hand: {m.Width} × {m.Height} px at {m.X}, {m.Y}. Reset chat area to go back to automatic."; Step2Status.Foreground = B("Ink"); }
-        else if (_region is DRect r) { Step2Status.Text = $"Found automatically: {r.Width} × {r.Height} px at {r.X}, {r.Y}. The zone is read from the minimap while you play."; Step2Status.Foreground = B("Ink"); }
-        else { Step2Status.Text = "Found automatically when you press Start: the chat above the input box, and the zone from the minimap. If it can't find the chat, choose it yourself."; Step2Status.Foreground = B("Muted"); }
-    }
+    /// <summary>Where the chat is read from, for Options › Game reading.</summary>
+    public string ChatAreaText() =>
+        _prefs.ManualChat && _region is DRect m ? $"Chosen by hand: {m.Width} × {m.Height} px at {m.X}, {m.Y}. Back to automatic undoes it."
+        : _region is DRect r ? $"Found automatically: {r.Width} × {r.Height} px at {r.X}, {r.Y}. The zone is read from the minimap while you play."
+        : "Found automatically when the game is open: the chat above the input box, and the zone from the minimap. If it can't find the chat, choose it yourself.";
 
     public void ForceClose() { _quitting = true; Close(); }
+
+    /// <summary>Windows is signing out or shutting down: close for real, whatever the close button is set to do.</summary>
+    public void PrepareForExit() => _quitting = true;
 
     /// <summary>Runs start → wait → stop exactly as the buttons would, for catching crashes without a desktop session.</summary>
     public async Task<string> DebugCycle(DRect? region, int ms)
     {
         _demo = true;
-        _region = region; _prefs.ManualChat = region != null; _watcher.ManualChat = region; UpdateStep2();
-        if (!HasServer) { RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)"); }
+        _region = region; _prefs.ManualChat = region != null; _watcher.ManualChat = region;
+        if (!HasServer) { ApplyServer("na_e", "Siel (Elyos)"); }
         await StartTracking();
         if (!Farming) throw new InvalidOperationException("start failed: " + Status.Text);
         var chat = _watcher.Chat!; var found = chat.Region; var zone = chat.Zone;
@@ -1032,9 +950,9 @@ public partial class MainWindow : Window
     {
         _demo = true;
         bool market = kind == "Market";
-        _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false; UpdateStep2();
+        _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false;
         ZoneLbl.Text = "Western Cantas Valley";
-        RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)");
+        ApplyServer("na_e", "Siel (Elyos)");
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         if (kind == "Crafting")
         {
@@ -1118,7 +1036,7 @@ public partial class MainWindow : Window
         Say(_mode == Mode.Gather ? "Tracking Gathering · Western Cantas Valley · 3,620 reads · last: Sapphire Gemstone acquired." : "Tracking Open world · Western Cantas Valley · 3,620 reads · last: Spiritstone acquired.", "Faint");
         if (market)
         {
-            MarketStatus.Text = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
+            _demoMarket = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
         }
     }
 }

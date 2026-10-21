@@ -31,6 +31,9 @@ public static class GameWindow
     sealed record Found(IntPtr Handle, HashSet<uint> Pids);
     static volatile Found? _found;
 
+    /// <summary>True when the last <see cref="Find"/> saw a game process, window or not (still loading, minimized).</summary>
+    public static bool ProcessSeen { get; private set; }
+
     public static Rectangle? Find(IEnumerable<string> processHints)
     {
         var hints = processHints.Select(h => h.ToLowerInvariant()).ToArray();
@@ -51,6 +54,7 @@ public static class GameWindow
             catch (Exception) { /* process went away */ }
         }
         if (found != null) _found = new Found(handle, pids);
+        ProcessSeen = pids.Count > 0;
         return found;
     }
 
@@ -198,7 +202,7 @@ public static class ZoneLocator
 {
     // what a zone label looks like: a few capitalized words, no digits, no brackets
     static readonly Regex Shape = new(@"^[A-Z][A-Za-z'’\-]+(?:\s+(?:of|the|and|[A-Z][A-Za-z'’\-]+)){1,5}$", RegexOptions.Compiled);
-    static readonly string[] Blocklist = { "Ask", "Gemini", "Google", "Search", "Chrome", "New", "Sign", "Open", "Close", "Change", "Show", "Must", "Waiting", "Evasion", "Sprint", "Jump", "Mount", "Rest", "Auto", "Hide", "Ground", "Fly", "Level", "Quest", "View", "Menu", "Map", "Options", "Settings", "Inventory", "Chat", "Party", "Legion", "Friends", "Mail", "Shop" };
+    static readonly string[] Blocklist = { "Ask", "Gemini", "Copilot", "Google", "Search", "Chrome", "Edge", "Firefox", "Discord", "Steam", "Spotify", "Twitch", "YouTube", "Enter", "Type", "Message", "Reply", "File", "Edit", "Help", "Home", "Back", "Next", "Download", "Share", "Save", "Cancel", "Window", "Minimize", "Bookmarks", "History", "Extensions", "Profile", "Account", "Notifications", "Update", "New", "Sign", "Open", "Close", "Change", "Show", "Must", "Waiting", "Evasion", "Sprint", "Jump", "Mount", "Rest", "Auto", "Hide", "Ground", "Fly", "Level", "Quest", "View", "Menu", "Map", "Options", "Settings", "Inventory", "Chat", "Party", "Legion", "Friends", "Mail", "Shop" };
     // words that appear in place names; a candidate needs one of these or a known-name match, so UI labels never pass
     static readonly string[] PlaceWords = { "Valley", "Highland", "Highlands", "Canyon", "Hill", "Hills", "Sanctum", "Ruins", "Garden", "Forest", "Plains", "Plain", "Cave", "Caves", "Cavern", "Fortress", "Village", "Lake", "Coast", "Shore", "Pass", "Road", "Gate", "Temple", "Swamp", "Marsh", "Desert", "Island", "Isle", "Abyss", "Outpost", "Camp", "Field", "Fields", "Ridge", "Peak", "Mountain", "Mountains", "Basin", "Plateau", "Woods", "Grove", "Gorge", "Hollow", "Ravine", "Cliff", "Cliffs", "Falls", "Spring", "Springs", "River", "Bridge", "Tower", "Citadel", "Stronghold", "Fort", "Shrine", "Sanctuary", "Crypt", "Tomb", "Mine", "Mines", "Quarry", "Den", "Nest", "Lair", "Harbor", "Port", "Bay", "Oasis", "Steppe", "Wasteland", "Tundra", "Crater", "Dunes", "Lowlands", "Vale", "Meadow", "Prairie", "Orchard", "Farm", "Mill", "Crossroads", "Square", "District", "Town", "City", "Palace", "Castle", "Keep", "Hall", "Prison", "Arena", "Academy", "Library", "Observatory", "Laboratory", "Workshop", "Foundry", "Forge", "Market", "Cemetery", "Graveyard", "Catacombs", "Altar", "Portal", "Rift", "Gateway", "Frontier", "Border", "Coastline", "Beach", "Glade", "Thicket", "Jungle", "Volcano", "Furnace", "Wall", "Walls", "Rampart", "Battlefield", "Front", "Encampment", "Garrison", "Barracks", "Landing", "Ascent", "Descent", "Depths", "Heights", "Summit", "Hideout", "Refuge", "Haven", "Hamlet", "Settlement", "Colony", "Waystation", "Station" };
 

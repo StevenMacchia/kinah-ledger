@@ -82,8 +82,9 @@ public sealed class TrackerSession
 
     public static string ActivityOf(SessionEngine e, string kind)
     {
-        var zs = e.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).ToList();
-        var z = zs.Count > 0 ? zs.MaxBy(kv => kv.Value.Seconds).Key : e.Zone;
+        // the label is shared with the run, so only a zone the tracker is sure of goes into it
+        var zs = e.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone && ZoneLocator.IsVerified(kv.Key)).ToList();
+        var z = zs.Count > 0 ? zs.MaxBy(kv => kv.Value.Seconds).Key : (e.Zone is { } cur && ZoneLocator.IsVerified(cur) ? cur : null);
         return z != null ? $"{kind} · {z}" : kind;
     }
 
@@ -359,7 +360,7 @@ public sealed class UserPrefs
     public bool Share { get; set; } = true;
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>
     public bool ManualChat { get; set; }
-    /// <summary>True once the chat and zone have been found: the window opens small, with the setup steps behind Settings.</summary>
+    /// <summary>No longer used: the window is always the live count, with setup in Options. Kept so older ui.json files load.</summary>
     public bool Compact { get; set; }
     /// <summary>The Drops and Gathered sections both show at once; each folds to its header on a click, and stays folded.</summary>
     public bool DropsOpen { get; set; } = true;
@@ -367,8 +368,6 @@ public sealed class UserPrefs
     public bool MobsOpen { get; set; } = true;
     /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
     public bool AllZones { get; set; }
-    /// <summary>Look for a newer release on GitHub when the app starts. On by default; the download still waits for a click.</summary>
-    public bool CheckUpdates { get; set; } = true;
     /// <summary>Which part of the window shows: "Farming" (the run, the stats, the tables) or "Crafting" (recipes, cost, success, profit).</summary>
     public string Part { get; set; } = "Farming";
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
@@ -383,6 +382,20 @@ public sealed class UserPrefs
     public bool Welcomed { get; set; }
     /// <summary>The look: night, abyss or daylight.</summary>
     public string Skin { get; set; } = "night";
+    /// <summary>Install a newer version on its own (downloaded in the background, swapped in when the window closes). Off: the window asks first.</summary>
+    public bool AutoUpdate { get; set; } = true;
+    /// <summary>The version that last opened the window, so the first start after an update can say so.</summary>
+    public string LastVersion { get; set; } = "";
+    /// <summary>When the game starts while the tracker waits in the tray: "open" shows the window, "tray" stays in the tray. Reading starts either way.</summary>
+    public string OnGameStart { get; set; } = "open";
+    /// <summary>Hide to the tray once the game has been closed for a few seconds (never during a run).</summary>
+    public bool HideWhenGameCloses { get; set; }
+    /// <summary>The window's close button hides it to the tray; Quit in the tray menu ends the tracker.</summary>
+    public bool CloseToTray { get; set; }
+    /// <summary>Minimizing always hides to the tray, not only during a run.</summary>
+    public bool MinimizeToTray { get; set; }
+    /// <summary>The start/stop shortcut, as "Ctrl+Shift+K"; empty is off.</summary>
+    public string Hotkey { get; set; } = Platform.Hotkey.Default;
     public int? WinX { get; set; }
     public int? WinY { get; set; }
     /// <summary>Where the over-game panel was last dragged to.</summary>
