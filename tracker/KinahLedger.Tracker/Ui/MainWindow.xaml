@@ -486,7 +486,10 @@
             <TextBlock Margin="0,0,0,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="MarketSentLink" Style="{StaticResource LinkStyle}">what's read?</Hyperlink></TextBlock>
           </WrapPanel>
           <WrapPanel x:Name="MarketRow2" Margin="0,4,0,0">
-            <Button x:Name="MarketPickBtn" Content="Choose the Market" Padding="14,0" FontSize="12.5" Margin="0,0,10,4" VerticalAlignment="Center"/>
+            <!-- one press: what the Market shows right now goes to the site as this server's current prices, ahead of scraped data -->
+            <Button x:Name="MarketPickBtn" Style="{StaticResource PrimaryButton}" Content="Share Market prices" Height="40" Padding="16,0" FontSize="14" Margin="0,0,12,4" VerticalAlignment="Center"
+                    ToolTip="Open the Market in the game, then press this. The prices on your screen go to the site at once and show as your server's current prices, ahead of scraped data."/>
+            <TextBlock Margin="0,0,12,4" VerticalAlignment="Center" FontSize="12.5"><Hyperlink x:Name="MarketPickLink" Style="{StaticResource LinkStyle}">choose the area by hand</Hyperlink></TextBlock>
             <TextBlock x:Name="MarketResetText" Margin="0,0,0,4" VerticalAlignment="Center" FontSize="12.5" Visibility="Collapsed"><Hyperlink x:Name="MarketResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
           </WrapPanel>
           <TextBlock x:Name="MarketStatus" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Margin="0,4,0,0" TextWrapping="Wrap"

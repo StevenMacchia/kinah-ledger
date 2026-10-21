@@ -291,7 +291,7 @@ public sealed class TrackerSession
     /// </summary>
     async Task TargetDueAsync()
     {
-        if ((DateTime.UtcNow - _targetAt).TotalSeconds < 2) return;
+        if ((DateTime.UtcNow - _targetAt).TotalSeconds < 1) return;   // every second: a fast kill is over in two or three
         _targetAt = DateTime.UtcNow;
         if (GameRect is not { } g) return;
         try

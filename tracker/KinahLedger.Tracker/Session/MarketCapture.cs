@@ -179,7 +179,59 @@ public sealed class MarketCapture
     }
 
     /// <summary>Sends one batch of queued asks, sales and expiries. Without an endpoint or a server the batch is dropped and counted, never kept around.</summary>
+    // the watcher's loop and the Share button can both flush; one at a time, so a batch never goes out twice
+    readonly SemaphoreSlim _flushGate = new(1, 1);
+
     public async Task<bool> FlushAsync()
+    {
+        await _flushGate.WaitAsync();
+        try { return await FlushCoreAsync(); }
+        finally { _flushGate.Release(); }
+    }
+
+    /// <summary>
+    /// The Share Market prices button: finds the Market on screen now, reads every row showing, queues them all (even ones
+    /// shared minutes ago: the player asked) and sends them straight away. The site lists them as the server's current
+    /// prices, ahead of scraped data. Returns what was read and whether it went out, with a plain note when it didn't.
+    /// </summary>
+    public async Task<(int Asks, int Items, bool Sent, string Note)> ShareNowAsync(Rectangle game, int scale)
+    {
+        var layout = Layout;
+        if (layout == null || (!Detected && !Manual))
+        {
+            var (found, note) = await MarketLocator.DetectAsync(game, Read);
+            Note = note;
+            if (found == null) return (0, 0, false, "The Market isn't open on screen. Open it in the game, then press Share again.");
+            Layout = layout = found; Detected = true; _emptyReads = 0;
+        }
+        var rows = await MarketReader.ReadRowsAsync(layout, scale, Read);
+        Reads++; LastReadAt = DateTime.UtcNow;
+        var now = DateTime.UtcNow; int n = 0; var names = new HashSet<string>();
+        foreach (var row in rows)
+        {
+            var ask = _parser.Parse(row);
+            if (ask == null) continue;
+            n++; AsksRead++; names.Add(ask.Item);
+            PriceBook.Observe(ask.Item, ask.UnitPrice, now);
+            lock (_lock)
+            {
+                _seen[ask.Key] = now; _items.Add(ask.Item);
+                if (_pending.Count == 0) _firstPendingAt = now;
+                if (_pending.Count < 2000) _pending.Add(new PriceAsk(ask.Item, ask.UnitPrice, ask.Qty, now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+            }
+            AsksSeen++; LastAsk = ask.ToString();
+        }
+        if (n == 0)
+        {
+            if (!Manual) { Layout = null; Detected = false; }
+            return (0, 0, false, "No prices could be read. Open a Market page with listings showing, then press Share again.");
+        }
+        bool sent = true;
+        for (int i = 0; i < 20 && Pending > 0; i++) if (!await FlushAsync()) { sent = false; break; }
+        return (n, names.Count, sent, sent ? "" : LastError.Length > 0 ? LastError : "nothing could be sent");
+    }
+
+    async Task<bool> FlushCoreAsync()
     {
         List<PriceAsk> batch; List<PriceSale> sales; List<PriceExpired> expired;
         lock (_lock)

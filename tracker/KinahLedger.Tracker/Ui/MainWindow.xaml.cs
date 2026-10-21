@@ -105,7 +105,8 @@ public partial class MainWindow : Window
         // Market prices: its own switch, remembered and live on the watcher; a chosen area replaces the title-and-headers search at once
         ShareChk.Checked += (_, _) => MarketSwitch(true);
         ShareChk.Unchecked += (_, _) => MarketSwitch(false);
-        MarketPickBtn.Click += (_, _) => PickMarket();
+        MarketPickBtn.Click += (_, _) => ShareMarketNow();
+        MarketPickLink.Click += (_, _) => PickMarket();
         MarketResetLink.Click += (_, _) => { _marketRegion = null; _prefs.ManualMarket = false; RegionStore.Clear(RegionStore.MarketFile); _watcher.Market.UseRegion(null); UpdateMarketUi(); Say("Back to automatic: the Market window is found by its title and column headers.", "Faint"); };
         MarketSentLink.Click += (_, _) => WhatsRead();
         try { LinkCodeRun.Text = Upload.InstallId.LinkCode(); } catch (Exception) { LinkCodeRun.Text = "unavailable"; }
@@ -870,12 +871,39 @@ public partial class MainWindow : Window
         if (_prefs.ManualMarket && _marketRegion != null) Say("Market area chosen by hand and in use now. Each row is read as one line and split by its numbers.", "Good");
     }
 
+    /// <summary>
+    /// Share Market prices: reads what the Market shows right now and sends it at once. The site lists a player's prices as
+    /// the server's current ones, ahead of scraped data, for two hours or until someone shares newer ones.
+    /// </summary>
+    async void ShareMarketNow()
+    {
+        if (ShareChk.IsChecked != true) { Say("Sharing is off. Turn on Share runs and Market prices first.", "Warn"); return; }
+        if (!HasServer) { Say("Choose your server first, so the prices land on the right board.", "Warn"); return; }
+        var game = GameWindow.Find(_settings.ProcessHints);
+        if (game == null) { Say("The game isn't open. Open the Market in the game, then press Share.", "Warn"); return; }
+        MarketPickBtn.IsEnabled = false;
+        Say("Reading the Market on your screen…", "Faint");
+        bool hidden = false;
+        try
+        {
+            // this window may sit over the Market: step aside for the read, like choosing an area does
+            if (GameWindow.Covered(game.Value, _settings.ProcessHints) == "Kinah Ledger's own window") { Hide(); hidden = true; await Task.Delay(250); }
+            var (asks, items, sent, note) = await _watcher.Market.ShareNowAsync(game.Value, _settings.Ocr.Scale);
+            if (hidden) { Show(); Activate(); hidden = false; }
+            if (asks == 0) Say(note, "Warn");
+            else if (!sent) Say($"Read {asks} prices for {items} item{(items == 1 ? "" : "s")}, but {note}. They go out with the next batch.", "Warn");
+            else Say($"Shared {asks} prices for {items} item{(items == 1 ? "" : "s")}. They're {Server?.Label}'s current prices on the site now.", "Good");
+        }
+        catch (Exception ex) { CrashLog.Write("share market", ex); Say("Couldn't read the Market: " + ex.Message, "Bad"); }
+        finally { if (hidden) { Show(); Activate(); } MarketPickBtn.IsEnabled = true; UpdateMarketUi(); }
+    }
+
     /// <summary>The card's buttons and its line, right away; the line is then refreshed every half second from the watcher.</summary>
     void UpdateMarketUi()
     {
         bool manual = _prefs.ManualMarket && _marketRegion != null;
         MarketResetText.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
-        MarketPickBtn.Content = manual ? "Choose again" : "Choose the Market";
+        ((System.Windows.Documents.Run)MarketPickLink.Inlines.FirstInline).Text = manual ? "choose the area again" : "choose the area by hand";
         MarketStatus.Text = MarketLine();
     }
 

@@ -528,6 +528,10 @@ options: --process aion[,other]");
         Check("target bar: rn for m, level and distance", Bar("45 Hard Kalgolern 2m"), "Hard Kalgolem");
         Check("target bar: a bare Kalgolem fits 26 names, so none", Bar("Kalgolern"), "none, unlisted: Kalgolern");
         Check("target bar: a name with a real rn still matches", Bar("45 Abyss Karnif"), "Abyss Karnif");
+        Check("target bar: a garbled read keeps the enemy on the bar", TargetReader.Close("Hgrcl Kalgolem", "Hard Kalgolem") ? "yes" : "no", "yes");
+        Check("target bar: a bare species keeps it too", TargetReader.Close("Kalgolern", "Hard Kalgolem") ? "yes" : "no", "yes");
+        Check("target bar: another enemy doesn't", TargetReader.Close("Abyss Drakan Scout", "Hard Kalgolem") ? "yes" : "no", "no");
+        Check("target bar: a UI word doesn't", TargetReader.Close("Trade Shop", "Hard Kalgolem") ? "yes" : "no", "no");
         Check("target bar: and its rn misread as m too", Bar("Abyss Kamif"), "Abyss Karnif");
 
         Console.WriteLine("\nCrafting and Market settlements (2026-10-21 log):");

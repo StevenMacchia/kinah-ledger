@@ -145,9 +145,30 @@ public sealed partial class TargetReader
             Unlisted = unlisted;
             if (_noted.Count < 200 && _noted.Add(unlisted)) CrashLog.Note($"target bar: not an enemy on the list, not credited: {unlisted}");
         }
-        if (found == null) { _pending = null; return; }   // nothing targeted: the last name keeps its time for the grace window
-        if (found == _pending) { Name = found; NameAt = DateTime.UtcNow; }   // read twice in a row: trusted
-        else _pending = found;
+        if (found == null)
+        {
+            // a garbled read of the enemy already on the bar ("Hgrcl Kalgolem", or a bare "Kalgolem", while fighting Hard
+            // Kalgolems) keeps it: farming one kind of mob, the bar names the same enemy, and one clean read says which
+            if (Name != null && unlisted.Length > 0 && Close(unlisted, Name)) { NameAt = DateTime.UtcNow; _pending = Name; return; }
+            _pending = null; return;   // nothing targeted: the last name keeps its time for the grace window
+        }
+        // a name on the enemy list is trusted on its first read: the list is the guard against garbage, and a mob that
+        // dies in two seconds was never read twice (Steven, 2026-10-21: 8 kills, 1 credited)
+        Name = found; NameAt = DateTime.UtcNow; _pending = found;
+    }
+
+    /// <summary>
+    /// True when a read that matched nothing is a garbled read of <paramref name="name"/>: within about a third of its
+    /// letters, or ending in its last word ("Kalgolem" for "Hard Kalgolem") when that word is five letters or more.
+    /// </summary>
+    internal static bool Close(string read, string name)
+    {
+        string r = Norm(read.Trim()), n = Norm(name);
+        if (r.Length < 4) return false;
+        int max = Math.Max(2, (int)(n.Length * 0.35));
+        if (Math.Abs(r.Length - n.Length) <= max && Edit(r, n) <= max) return true;
+        var last = n.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
+        return last.Length >= 5 && r.EndsWith(last, StringComparison.Ordinal);
     }
 
     /// <summary>
