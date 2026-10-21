@@ -398,6 +398,9 @@ public sealed partial class ChatParser
             // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
+            // the chat names a skin "Dawn Frost (Cloak) Skin"; the item list as "Dawn Frost (Skin: Cloak)"
+            var skin = System.Text.RegularExpressions.Regex.Match(name, @"^(?<set>.+?)\s*\((?<slot>[^()]+)\)\s*Skin$", RegexOptions.IgnoreCase);
+            if (skin.Success) name = $"{skin.Groups["set"].Value.Trim()} (Skin: {skin.Groups["slot"].Value.Trim()})";
             // "Acquired .107 Kina" with a mark the Kina rule didn't expect: Kina is never an item, and a garbled amount isn't counted
             if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\bk[i1l]nah?\s*$", RegexOptions.IgnoreCase)) yield break;
             // "Obtained 1 Natura Soul Crystals.": a pet crystal, kept apart from drops and rated by zone, not by kill.

@@ -68,6 +68,7 @@
     <EmbeddedResource Include="..\..\data\mob-images.json" LogicalName="mob-images.json" Condition="Exists('..\..\data\mob-images.json')" />
     <!-- each enemy's loot table (MetaBot.GG): odds per kill of an enemy that can drop the item -->
     <EmbeddedResource Include="..\..\data\loot-tables.json" LogicalName="loot-tables.json" Condition="Exists('..\..\data\loot-tables.json')" />
+    <EmbeddedResource Include="..\..\data\skins.json" LogicalName="skins.json" Condition="Exists('..\..\data\skins.json')" />
   </ItemGroup>
 
 </Project>

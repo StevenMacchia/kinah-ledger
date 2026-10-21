@@ -187,7 +187,37 @@ public sealed class ItemDictionary
                 d._byName[Norm(g.Name)] = id;
             }
         d.LoadGatheringIcons(p);
+        d.LoadSkins();
         return d;
+    }
+
+    /// <summary>
+    /// Cosmetic skins (data/skins.json, from MetaBot.GG, built into the exe): most are missing from the item list, so a
+    /// skin drop never counted. Each is known as "Set (Skin: Slot)", the list's own form; the chat's "Set (Slot) Skin" is
+    /// turned into it by the parser. A skin with no item id gets a stable one of its own and goes to the site by name.
+    /// </summary>
+    void LoadSkins()
+    {
+        try
+        {
+            using var stream = typeof(ItemDictionary).Assembly.GetManifestResourceStream("skins.json");
+            if (stream == null) return;
+            using var doc = JsonDocument.Parse(stream);
+            if (!doc.RootElement.TryGetProperty("items", out var arr) || arr.ValueKind != JsonValueKind.Array) return;
+            foreach (var e in arr.EnumerateArray())
+            {
+                string set = Str(e, "set"), slot = Str(e, "slot"), raw = Str(e, "name");
+                var name = set.Length > 0 && slot.Length > 0 ? $"{set} (Skin: {slot})" : raw;
+                if (name.Length == 0 || _byName.ContainsKey(Norm(name))) continue;
+                long id = e.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number && idEl.TryGetInt64(out var v) && v > 0 && !_byId.ContainsKey(v)
+                    ? v : -(long)(Fnv("skin:" + Norm(name)) & 0x7FFFFFFF) - 1;
+                bool tradable = !(e.TryGetProperty("tradable", out var t) && t.ValueKind == JsonValueKind.False);
+                _byId[id] = new ItemInfo(id, name, Str(e, "grade"), tradable, "", "Skin");
+                _byName[Norm(name)] = id;
+                if (raw.Length > 0 && !_byName.ContainsKey(Norm(raw))) _byName[Norm(raw)] = id;
+            }
+        }
+        catch (Exception) { /* without the skins file, skins count only when the item list has them */ }
     }
 
     /// <summary>Icon file names for the gathering materials: data/gathering-items.json beside the item list when present, else the copy built into the exe.</summary>
