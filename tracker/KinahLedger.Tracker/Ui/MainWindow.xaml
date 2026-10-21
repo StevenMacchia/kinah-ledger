@@ -350,6 +350,10 @@
               <TextBlock x:Name="MobEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="440"
                          Text="A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one."/>
             </Grid>
+            <!-- the enemy pictures are MetaBot.GG's copies of the game portraits; its terms ask for a link back -->
+            <TextBlock x:Name="MobCredit" FontSize="11" Foreground="{DynamicResource Faint}" Margin="16,4,16,6" Visibility="Collapsed">
+              <Run Text="Enemy pictures from "/><Hyperlink x:Name="MobCreditLink" Style="{StaticResource LinkStyle}">MetaBot.GG</Hyperlink>
+            </TextBlock>
           </StackPanel>
 
           <!-- the totals, like the site's session summary footer: loot before tax, the Market's cut, Kinah, the session total -->

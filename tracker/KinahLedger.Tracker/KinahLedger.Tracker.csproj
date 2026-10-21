@@ -62,6 +62,8 @@
     <EmbeddedResource Include="..\..\data\mobs.txt" LogicalName="mobs.txt" Condition="Exists('..\..\data\mobs.txt')" />
     <!-- crafting recipes from MetaBot.GG: materials per try, for the cost and profit of a craft -->
     <EmbeddedResource Include="..\..\data\recipes.json" LogicalName="recipes.json" Condition="Exists('..\..\data\recipes.json')" />
+    <!-- each enemy picture link (MetaBot.GG copies of the game portraits), for the rows of Kinah by enemy -->
+    <EmbeddedResource Include="..\..\data\mob-images.json" LogicalName="mob-images.json" Condition="Exists('..\..\data\mob-images.json')" />
   </ItemGroup>
 
 </Project>

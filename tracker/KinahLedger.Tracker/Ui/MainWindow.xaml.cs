@@ -123,6 +123,7 @@ public partial class MainWindow : Window
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
+        MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         CraftResetLink.Click += (_, _) => { _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView); };
         _mode = SelectedMode;
         ApplyModeLabels(); ResetTiles();
@@ -499,7 +500,7 @@ public partial class MainWindow : Window
         var ms = e.MobSnapshot();
         bool zonesToo = ms.Select(m => m.Zone).Distinct().Count() > 1;
         foreach (var m in ms)
-            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Value: m.Kinah.ToString("N0"), Sub: zonesToo ? m.Zone ?? "" : "best guess"));
+            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: m.Kinah.ToString("N0"), Sub: zonesToo ? m.Zone ?? "" : "best guess"));
         return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross);
     }
 
@@ -666,6 +667,7 @@ public partial class MainWindow : Window
         }
         Rows.ItemsSource = drops; GatherRows.ItemsSource = gathered; MobRows.ItemsSource = mobs;
         MobEmpty.Visibility = mobs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        MobCredit.Visibility = mobs.Count > 0 && _prefs.MobsOpen ? Visibility.Visible : Visibility.Collapsed;
         var target = _watcher.Chat?.TargetNote ?? "";
         MobEmpty.Text = target.Length > 0 ? "Target bar: " + target + "."
             : "A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one.";

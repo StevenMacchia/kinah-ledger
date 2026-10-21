@@ -152,7 +152,6 @@ Akilo Thieves Fossa
 Akilo Thieves Ranger
 Akilo Thieves Warrior
 Akula of Chaos
-Alluring Arrow
 Alluring Dionae
 Altar Daeva Patrol
 Altar Dark Mage
@@ -300,8 +299,6 @@ Aullaeu Warden Totem Shaman
 Aullaeu Warmage
 Aullaeu Watcher
 Aultross
-Aura of Darkness
-Aura of Protection
 Auxiliary Abyss Fusion Reactor
 Awakened Alturadon
 Awakened Dracuni
@@ -339,7 +336,6 @@ Bakarma Brigade Skirmisher
 Bakarma Brigade Strike Force Member
 Bakarma Brigade Strike Force Officer
 Bakarma's Watcheye
-Balanced
 Balaur Aerial Bomb
 Balaur Combat Flag
 Balaur Communication Tower
@@ -395,7 +391,6 @@ Beritra Strike Force Member
 Beritra Strike Force Officer
 Beritra Strike Force Scout
 Berserker Vargor
-Betrayal
 Bewitching Ulos
 Bierts Wraith
 Biruta Fighter
@@ -514,7 +509,6 @@ Cadaver Insectoid
 Caelid
 Cairn Octaside
 Cairn Tog
-Camera Shake
 Cantas Marauder Chief
 Cantas Raider
 Cantas Scout
@@ -582,7 +576,6 @@ Chaser Taulo
 Chief Officer Latrima
 Chief's Bodyguard
 Chief's Sentinel
-Chroma
 Citadel Odyle Spider
 Claudia
 Cliff Lupyllini
@@ -604,7 +597,6 @@ Commanding Captain Maktasha
 Conclave Guard
 Conclave Officer
 Conclave Orator
-Condensed Krao
 Condensed Specter
 Confused Spirit
 Confused Ursus
@@ -671,13 +663,11 @@ Contaminated Wind Spiritstone
 Contaminated Zelophi
 Contaminated Zone Skyray
 Contamination Clot
-Contamination Zone
 Corpse Spider
 Corpse-Eating Targoth
 Corridor Executor
 Corridor Watcher
 Corroded Soil Spirit
-Corrosion Wave
 Corrupted Archon Askolt
 Corrupted Archon Duebledd
 Corrupted Archon Ghatt
@@ -885,10 +875,7 @@ Destruction Archon Templar Apparition
 Deus Research Base Bomber
 Deus Research Base Dark Spirit
 Deus Research Base Guard
-Deus Research Base Laser
 Deus Research Base Mage
-Deus Research Base Rift
-Deus Research Base Storm
 Deus Research Base Warrior
 Devouring Klawfly
 Devouring Revenant
@@ -1193,7 +1180,6 @@ Duduka Treasure Worker
 Duduka Worker
 Dukysas Skyway Guardian
 Dull Kalgolem
-Durvati's Poison Fluid
 Dust Spider
 Dwelling Fire Spirit
 Earth Spirit
@@ -1206,9 +1192,6 @@ Eiron Thieves Ranger
 Eiron Thieves Thug
 Eiron Thieves Warrior
 Ekan the Long-Winded
-Electrifying Core
-Electrocuting Monster
-Electromagnetic Field
 Elite Drana Mutant
 Elite Inquisitor Verant
 Ellun River Crestlich Female
@@ -1269,7 +1252,6 @@ Eroded Apostle Kalusha
 Eroded Kalgolem
 Eroded Oga
 Eroded Warrior Stakard
-Escape through the window
 Escaped Fossa
 Escaped Mumu Worker
 Eternal Agrint
@@ -1297,7 +1279,6 @@ Eternal Starturtle
 Eternal Water Spirit
 Eternal Wind Spirit
 Eternal Zelophi
-Evgenir's Trial
 Evil Black Soul
 Evil Hill Zelophi
 Executed Archon Candidate
@@ -1333,9 +1314,7 @@ Expedition Leader Cohta
 Experiment Base Shulak Guard
 Experiment Base Shulak Porter
 Experiment Base Shulak Worker
-Explosion
 Explosive Mine
-Explosive Spirit
 Extermination Unit Captain Barahta
 Extermination Unit Ranger
 Extermination Unit Warrior
@@ -1353,7 +1332,6 @@ Faded Stone Spirit
 Faded Zaif
 Fafnir Drakan
 Fafnir's Poison Blood
-Fafnir's Poison Blood Pool
 Fafnite Luminous Sparkie
 Fafnite Scorpion
 Fafnite Sparkie
@@ -1448,10 +1426,8 @@ Fire Spider
 Fire Spirit
 Firebreath Barghest
 First Test Subject K'tima
-Flame
 Flame Rock Spider
 Flame Spirit
-Flame Zone
 Flat Potcrab
 Flauke's Connected Soul
 Floating Stone
@@ -1535,7 +1511,6 @@ Frost Spirit
 Frost Tayga
 Frost Trogas
 Frostarmor Harkhan
-Frozen Daeva
 Frozen Executor Erne
 Frozen Fate Archon
 Frozen Fate Archon Observer
@@ -1622,7 +1597,6 @@ Gargos Scout Fossa
 Gargos Wanted Criminal
 Garzykan Guardian
 Garzykan Swordsman
-Gas
 Gatekeeper Pinopi
 Gathering Manager Konutin Worker
 Gelcos
@@ -1892,12 +1866,10 @@ Icecap Young Kailin
 Idris
 Illegal Herbalist
 Illusion Cavaliers Priest
-Illusion Fragment
 Illusion Magic Gravi
 Illusion Ranger Soul
 Illusion Specter
 Illusion Templar Soul
-Illusion Veil
 Illusory Shadow
 Immortal Earth Spirit
 Immortal Earth Spirit Guardian
@@ -1940,7 +1912,6 @@ Jailor Iagosh
 Jealous Fairy
 Jewel Consumed Daeva
 Judge Urahum
-Jump Laser
 Kailin
 Kaisinel Sanctuary Guardian Ranger
 Kaisinel Sanctuary Guardian Warrior
@@ -2019,7 +1990,6 @@ Krall Warshaman
 Krall Watcher
 Krao Bioweapon
 Krao Magic Test Subject
-Krao Magnetic Field
 Krao Mutant
 Krao Seal Guardian
 Kromede's Desire
@@ -2079,7 +2049,6 @@ Lamnah Superior Ranger
 Lamphus of Agony
 Lamuatan
 Large Leaf Gravi
-Laser
 Latesran Northern Skyway Guardian
 Latesran Southern Skyway Guardian
 Latrima Armed Soldier
@@ -2180,7 +2149,6 @@ Library Kerubar Sentry
 Library Kerubian
 Library Kerubian Scout
 Library Kerubian Watcher
-Library Laser
 Library Watcher Guardite
 Library of Wisdom Kerubiel
 Lieutenant Hebran
@@ -2190,7 +2158,6 @@ Life Daeva Knight Revenant
 Life Daeva Patrol Revenant
 Life Daeva Ranger Revenant
 Life Stone
-Lingering Scent
 Loathing Abyss Swarm
 Loathing Balaur Ranger
 Loathing Balaur Warrior
@@ -2226,7 +2193,6 @@ Mad Lucant
 Mad Snowfield Daeva
 Mad Sura
 Mad Watcher Bulagan
-Magic Sphere
 Makarah Drakan Assault Trooper
 Makarah Drakan Scout
 Makarah Krall Karnif
@@ -2271,7 +2237,6 @@ Melee Training Scarecrow
 Melted Danar
 Melted Snowfield Spider
 Menoch
-Meteor
 Midsize Fafnium
 Midsize Monster
 Mighty Leumas
@@ -2424,14 +2389,11 @@ Nightmare Watcher
 Nikolai
 Nornir Specter
 Nornir Wraith
-Noxious Gas
 Oathbreaker Gartua
-Obliterated Spirit
 Obsessive Lithla
 Obsidian Driznak
 Oculazen
 Oditium
-Odyle Shard Storm
 Odyle Spider
 Odyle Stone Spirit
 Odyle-eating Abyss Insectoid
@@ -2440,7 +2402,6 @@ Odylium Cave Sura Warrior
 Odylium Marauder Mage
 Odylium Marauder Sentry
 Odylium Marauder Warrior
-Odylium Ore
 Officer Barha
 Officer Darc
 Old Agrint
@@ -2451,7 +2412,6 @@ Old Tree Spirit Warrior
 Oracle Drakan
 Oracle Vivel
 Oratory Aullaeu Elder
-Ordeal of Love
 Ore Insectoid
 Ore Insectoid Adult
 Ore Insectoid Colony
@@ -2544,7 +2504,6 @@ Poison Blood Gatherer
 Poison Blood Spider
 Poison Contaminated Agrint
 Poison Contaminated Slime
-Poison Field
 Poison Flower
 Poison Fluid Sabga
 Poison Grass
@@ -2554,7 +2513,6 @@ Poison Scale Ghula
 Poisonous Plant
 Pond Skyray
 Pond Starturtle
-Pool
 Power Tower Drakan Common Soldier
 Power Tower Drakan Watcher
 Power-Possessed Kianah
@@ -2681,7 +2639,6 @@ Ridge Spider
 Ridge Sylphen
 Ridge Ursus
 Ridge Violent Ursus
-Rift
 Rift Guardian Lord Mahabali
 Rift Guardian Lord Tamapala
 Rift Knight's Soul
@@ -2802,8 +2759,6 @@ Sanctum Watch Ranger
 Sanctum Watch Scout
 Sanctum Watch Superior Warrior
 Sanctum Watchtower
-Sand Vortex
-Sandstorm
 Satiated Kuru Errand Runner
 Satiated Kuru Tinkerer
 Satiated Kuru Worker
@@ -2844,7 +2799,6 @@ Sensitive Fossa
 Sensitive Karnif
 Sentinel K'nash
 Sentinel Nuraka
-Sentry Laser
 Servant of Fafnir
 Servant of the Jewel
 Severed Wings Zvein
@@ -3115,8 +3069,6 @@ Tenacious Daeva Patrol
 Terminator Antakhara
 Terminator Bargott
 Thamon
-Thamon's Petrification
-Thermal Vent
 Thicket Zirka
 Thief Zirka
 Thieves Captain
@@ -3136,8 +3088,6 @@ Third Unit Captain Karkoti
 Third Unit Captain Minasara
 Three-Horned Mino
 Tiere
-Time Rift
-Time Vortex
 Toblini
 Tog
 Tolbas Forest Lake Skyray
@@ -3162,7 +3112,6 @@ Tome Grave Spider
 Torrent Spirit
 Torturer Tregon
 Toughmane Highland Karnif
-Toxic Aura Pool
 Toxic Poison Flower
 Tracker Dazran
 Tracker Oculazen
@@ -3192,7 +3141,6 @@ Tunapre Airon
 Tunapre Slink
 Tunnel Swarm
 Turncoat Ducal
-Turret
 Twilight Dry Leaf Agrint
 Twilight Kalgolem
 Twilight Odyle Stone Spirit
@@ -3286,7 +3234,6 @@ Urugugu Skirmisher
 Urugugu Slayer
 Urugugu Soldier
 Vakron
-Vakron's Thorn Root
 Vakron's Thorn Vines
 Valley Armadon
 Valley Durgal
@@ -3336,15 +3283,12 @@ Void Test Subject
 Void Twisted Magic Test Subject
 Void Twisted Test Subject
 Void Water Spirit
-Void Wave
 Volcanic Ash Kalgolem
 Volcano Spider
 Voldrik
 Voldrik's Minion
-Vortex
 Vulcanarch Grymnir
 Vusgard
-Wadan's Bomb
 Wailing Knight's Soul
 Wanderer Adar
 Wanderer Hansamu
@@ -3391,7 +3335,6 @@ Wasteland Torba
 Wasteland Tuka
 Wasteland Young Slink
 Wasteland Zirka
-Wastewater
 Watch Armed Beast
 Watch Captain Amurahta
 Watch Captain Dharvata
@@ -3484,5 +3427,4 @@ Zikel Follower
 Zikel Worshipper
 Zikel's Apparition
 Zikel's Nightmare
-Zumion's Energy
 Zumion's Projection
