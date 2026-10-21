@@ -15,7 +15,7 @@ using WF = System.Windows.Forms;
 namespace KinahLedger.Ui;
 
 /// <summary>One table row. Icon is the item's icon slot (filled as the file arrives) and Initial the letter shown until then; both empty on a header row.</summary>
-public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "");
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false);
 
 public partial class MainWindow : Window
 {
@@ -91,6 +91,15 @@ public partial class MainWindow : Window
         DropsHead.MouseLeftButtonUp += (_, _) => { _prefs.DropsOpen = !_prefs.DropsOpen; if (!_demo) _prefs.Save(); Redraw(); };
         GatherHead.MouseLeftButtonUp += (_, _) => { _prefs.GatherOpen = !_prefs.GatherOpen; if (!_demo) _prefs.Save(); Redraw(); };
         MobHead.MouseLeftButtonUp += (_, _) => { _prefs.MobsOpen = !_prefs.MobsOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        // a click on an enemy opens or closes its loot table
+        MobRows.MouseLeftButtonUp += (_, ev) =>
+        {
+            if ((ev.OriginalSource as FrameworkElement)?.DataContext is DropRow { Key.Length: > 0 } r)
+            {
+                if (!_openMobs.Remove(r.Key)) _openMobs.Add(r.Key);
+                Redraw();
+            }
+        };
         // Farming and Crafting are two parts of the window; crafting never shows in the farming tables
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
@@ -420,6 +429,10 @@ public partial class MainWindow : Window
     Tables Build(SessionEngine e, double hours, int kills)
     {
         var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0, gross = 0; int priced = 0, unpriced = 0;
+        // the enemies fought in this view and their loot tables: odds count only kills of enemies that can drop the item
+        var ms = e.MobSnapshot();
+        var book = LootBook.Current;
+        var tabled = ms.Where(m => book.Knows(m.Name)).ToList();
         var bySkill = new Dictionary<GatherFamily, List<(string name, int total)>>();
         var bySkillGrade = new Dictionary<string, string>();
         var worth = new Dictionary<string, string>();
@@ -443,7 +456,27 @@ public partial class MainWindow : Window
                 // under the name, what kind of item it is, as the site shows it ("Drop" when the item list has no category)
                 var cat = _items.Get(r.Id)?.Category is { Length: > 0 } c ? c : "Drop";
                 var sub = r.Count == 0 ? cat + " · bound" : r.Bound > 0 ? $"{cat} · {r.Bound} bound" : cat;
-                drops.Add(new DropRow(r.Name, total.ToString("N0"), Odds(total, kills), Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceText(r.Name), Value: rowValue, Sub: sub));
+                var odds = Odds(total, kills); var tone = "";
+                if (tabled.Count > 0)
+                {
+                    // only kills of enemies whose table lists the item: leather doesn't come from a rock, so rocks don't count
+                    var from = tabled.Where(m => book.CanDrop(m.Name, r.Name, r.Id) == true).ToList();
+                    int eligible = from.Sum(m => m.Kills);
+                    if (from.Count > 0 && eligible > 0)
+                    {
+                        odds = Odds(total, eligible);
+                        var names = string.Join(", ", from.OrderByDescending(m => m.Kills).Select(m => m.Name).Distinct().Take(2)) + (from.Select(m => m.Name).Distinct().Count() > 2 ? " and others" : "");
+                        var listed = from.Select(m => book.Find(m.Name, r.Name, r.Id)?.Chance).Where(c => c > 0).DefaultIfEmpty(null).Max();
+                        sub = $"from {names} · {eligible:N0} kill{(eligible == 1 ? "" : "s")}" + (listed is double lc ? $" · listed {OneIn(lc)}" : "");
+                    }
+                    else if (tabled.Count == ms.Count)
+                    {
+                        // every enemy fought has a table and none lists it: a misread, or a drop from something else
+                        odds = "—"; tone = "Warn";
+                        sub = "not on any table you fought · check";
+                    }
+                }
+                drops.Add(new DropRow(r.Name, total.ToString("N0"), odds, Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceText(r.Name), Value: rowValue, Sub: sub, Tone: tone));
             }
         }
         // Soul Crystals come from kills too, so they sit under Drops, in their own section: never mixed into the item rows or the drop count
@@ -472,12 +505,36 @@ public partial class MainWindow : Window
         }
         // Kinah by enemy, a best guess: most Kinah first. The zone goes under the name when the view spans more than one.
         var mobs = new List<DropRow>();
-        var ms = e.MobSnapshot();
         bool zonesToo = ms.Select(m => m.Zone).Distinct().Count() > 1;
         foreach (var m in ms)
-            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: m.Kinah.ToString("N0"), Sub: zonesToo ? m.Zone ?? "" : "best guess"));
+        {
+            var key = m.Zone + "|" + m.Name;
+            bool open = _openMobs.Contains(key), known = book.Knows(m.Name);
+            var where = zonesToo ? m.Zone ?? "" : "best guess";
+            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: m.Kinah.ToString("N0"),
+                Sub: where + (known ? (open ? " · hide its loot table" : " · show its loot table") : ""), Key: key));
+            if (!open || !known) continue;
+            // its loot table: what you got against the listed chance, what hasn't dropped yet last
+            var rows = book.TableOf(m.Name).Select(en =>
+            {
+                int got = m.Drops.Where(d => (en.Id is long id && id == d.Key) || string.Equals(_items.NameOf(d.Key), en.Item, StringComparison.OrdinalIgnoreCase)).Sum(d => d.Value);
+                return (en, got);
+            }).OrderByDescending(x => x.got > 0).ThenByDescending(x => x.en.Chance ?? 0).ToList();
+            foreach (var (en, got) in rows)
+            {
+                long iid = en.Id ?? _items.IdOf(en.Item);
+                mobs.Add(new DropRow(en.Item, got > 0 ? got.ToString("N0") : "", got > 0 ? Odds(got, m.Kills) : "not yet", "", Grade: _items.Get(iid)?.Grade ?? "", Icon: Slot(iid), Initial: InitialOf(en.Item),
+                    Sub: en.Chance is double c && c > 0 ? $"listed {OneIn(c)}" : "listed", Child: true));
+            }
+        }
         return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross);
     }
+
+    /// <summary>Enemy rows whose loot table is open, by "zone|name"; a click on the row opens or closes it.</summary>
+    readonly HashSet<string> _openMobs = new();
+
+    /// <summary>A listed chance as the Odds column reads: 0.2 → "1 in 5".</summary>
+    static string OneIn(double chance) => chance >= 1 ? "every kill" : $"1 in {Math.Max(1, Math.Round(1 / chance)):N0}";
 
     // the drops' Market value and how many items carried a price, from the last FillNumbers, for the panel over the game
     long _lastValue; int _lastPriced;

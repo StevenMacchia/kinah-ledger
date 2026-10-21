@@ -681,6 +681,34 @@ options: --process aion[,other]");
             Check("not an enemy: a quest step", TargetReader.Match("Pass through the narrow gap") ?? "none", "none");
         }
 
+        Console.WriteLine("\nLoot tables (which enemy can drop what):");
+        {
+            var keep = LootBook.Current;
+            LootBook.Current = LootBook.FromJson("""
+                {"tables": {
+                  "Stonebeak": {"drops": [{"item": "Raw Leather", "chance": 0.2}, {"item": "Spiritstone", "chance": 0.0667}]},
+                  "Hard Kalgolem": {"drops": [{"item": "Lesser Abyssal Manastone", "chance": 0.1}]}
+                }}
+                """);
+            var lb = LootBook.Current;
+            Check("leather from a Stonebeak, never from a rock", $"{lb.CanDrop("Stonebeak", "Raw Leather")} {lb.CanDrop("Hard Kalgolem", "Raw Leather")} {lb.CanDrop("Highland Karnif", "Raw Leather")?.ToString() ?? "unknown"}", "True False unknown");
+            Check("who drops Raw Leather", string.Join(",", lb.SourcesOf("raw leather")), "Stonebeak");
+            var le = new SessionEngine(items); var l0 = DateTime.UtcNow;
+            le.SetZone("Eastern Altamia Highland");
+            le.SetTarget("Stonebeak", l0); le.SetTarget("Hard Kalgolem", l0.AddSeconds(1));   // two on the player; the bar shows the rock last
+            le.Apply(new KinahChanged(l0.AddSeconds(2), 400, false));
+            le.Apply(new ItemAcquired(l0.AddSeconds(2), items.IdOf("Raw Leather"), 1, false));
+            le.Apply(new ItemAcquired(l0.AddSeconds(2), items.IdOf("Lesser Abyssal Manastone"), 1, false));
+            le.Apply(new ItemAcquired(l0.AddSeconds(2), items.IdOf("Spiritstone"), 1, false));
+            string Got(string mob) => string.Join(",", le.MobSnapshot().Where(m => m.Name == mob).SelectMany(m => m.Drops.Select(d => items.NameOf(d.Key))).OrderBy(x => x));
+            Check("the leather goes to the Stonebeak, the manastone stays with the rock", $"Stonebeak [{Got("Stonebeak")}] · Kalgolem [{Got("Hard Kalgolem")}]", "Stonebeak [Raw Leather,Spiritstone] · Kalgolem [Lesser Abyssal Manastone]");
+            Check("moved and unplaced drops are counted", $"{le.ReassignedDrops} moved, {le.UnplacedDrops} unplaced, {le.Items.Values.Sum()} drops", "2 moved, 0 unplaced, 3 drops");
+            le.SetTarget("Hard Kalgolem", l0.AddSeconds(30));
+            le.Apply(new ItemAcquired(l0.AddSeconds(30), items.IdOf("Raw Leather"), 1, false));   // only the rock is near: nobody can have dropped it
+            Check("a drop no enemy near can drop is a drop, credited to nobody", $"{le.UnplacedDrops} unplaced, Kalgolem [{Got("Hard Kalgolem")}], {le.Items.Values.Sum()} drops", "1 unplaced, Kalgolem [Lesser Abyssal Manastone], 4 drops");
+            LootBook.Current = keep;
+        }
+
         Console.WriteLine("\nUpdates from the GitHub releases:");
         {
             string Rel(string tag, string asset = "KinahLedger.exe", long size = 72_500_000, string body = "KinahLedger.exe sha256: 3F9A0000000000000000000000000000000000000000000000000000000000AB", bool pre = false) =>

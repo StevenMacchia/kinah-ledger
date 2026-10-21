@@ -79,6 +79,10 @@
         <!-- a craft's profit: green when it made Kinah, red when it lost some -->
         <DataTrigger Binding="{Binding Tone}" Value="Good"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Good}"/></DataTrigger>
         <DataTrigger Binding="{Binding Tone}" Value="Bad"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Bad}"/></DataTrigger>
+        <!-- a drop no enemy you fought can drop, by their loot tables: the line under it says check -->
+        <DataTrigger Binding="{Binding Tone}" Value="Warn"><Setter TargetName="SubText" Property="Foreground" Value="{DynamicResource Warn}"/></DataTrigger>
+        <!-- an enemy's loot table, opened under its row: indented and a little tighter -->
+        <DataTrigger Binding="{Binding Child}" Value="True"><Setter TargetName="NameCell" Property="Margin" Value="58,0,6,0"/><Setter TargetName="RowBorder" Property="MinHeight" Value="44"/><Setter TargetName="RowBorder" Property="Padding" Value="0,4"/></DataTrigger>
         <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
         <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet) -->
         <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeRare}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#8062D98B"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#4262D98B" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>

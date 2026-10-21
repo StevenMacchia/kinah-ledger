@@ -159,17 +159,54 @@ public sealed class SessionEngine
     /// <summary>The enemy on the target bar and when it was last seen there. A null name keeps the last one, so its grace window runs out on its own.</summary>
     public void SetTarget(string? name, DateTime at)
     {
-        lock (_lock) { if (name != null) { _target = name; _targetAt = at; } }
+        lock (_lock)
+        {
+            if (name == null) return;
+            _target = name; _targetAt = at;
+            _recentTargets.RemoveAll(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+            _recentTargets.Add((name, at));
+            if (_recentTargets.Count > 4) _recentTargets.RemoveAt(0);
+        }
+    }
+
+    // the last few enemies on the bar, newest last: with several on the player, a drop the current target can't drop
+    // goes to another one just fought that can
+    readonly List<(string Name, DateTime At)> _recentTargets = new();
+
+    MobStats Mob(string name)
+    {
+        var zone = _zone ?? UnknownZone;
+        var key = zone + "|" + name;
+        if (!_mobs.TryGetValue(key, out var m)) _mobs[key] = m = new MobStats { Name = name, Zone = zone };
+        return m;
     }
 
     MobStats? MobFor(DateTime t)
     {
         if (_target == null || Math.Abs((t - _targetAt).TotalSeconds) > TargetGraceSeconds) return null;
-        var zone = _zone ?? UnknownZone;
-        var key = zone + "|" + _target;
-        if (!_mobs.TryGetValue(key, out var m)) _mobs[key] = m = new MobStats { Name = _target, Zone = zone };
-        return m;
+        return Mob(_target);
     }
+
+    /// <summary>
+    /// The enemy a drop goes to: the one on the bar, unless its loot table says it can't drop the item; then the most
+    /// recent other enemy within the grace window whose table has it; else nobody (the drop still counts as a drop).
+    /// An enemy without a known table keeps the drop, as before.
+    /// </summary>
+    MobStats? MobForDrop(DateTime t, long itemId)
+    {
+        var near = _recentTargets.Where(r => Math.Abs((t - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).ToList();
+        if (near.Count == 0) return null;
+        var book = LootBook.Current; var item = _items.NameOf(itemId);
+        if (book.CanDrop(near[0].Name, item, itemId) != false) return Mob(near[0].Name);
+        foreach (var r in near.Skip(1)) if (book.CanDrop(r.Name, item, itemId) == true) { ReassignedDrops++; return Mob(r.Name); }
+        UnplacedDrops++;
+        return null;
+    }
+
+    /// <summary>Drops moved from the enemy on the bar to another one just fought, because only the other's loot table has the item.</summary>
+    public int ReassignedDrops { get; private set; }
+    /// <summary>Drops no enemy just fought can drop, by their loot tables: counted as drops, credited to no enemy.</summary>
+    public int UnplacedDrops { get; private set; }
 
     /// <summary>Copies of the per-enemy counters, most Kinah first, safe to read from the UI thread.</summary>
     public List<MobStats> MobSnapshot()
@@ -294,7 +331,7 @@ public sealed class SessionEngine
                     else
                     {
                         Z().Drops += a.Count;
-                        if (MobFor(a.Time) is { } md) md.Drops[a.ItemId] = md.Drops.GetValueOrDefault(a.ItemId) + a.Count;
+                        if (MobForDrop(a.Time, a.ItemId) is { } md) md.Drops[a.ItemId] = md.Drops.GetValueOrDefault(a.ItemId) + a.Count;
                     }
                     break;
                 case PetCrystal p:
