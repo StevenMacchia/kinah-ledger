@@ -40,7 +40,8 @@ public sealed class HudWindow : Window
         var h = Current;
         bool hide = false;
         if (h != null) { try { hide = await h.Dispatcher.InvokeAsync(() => h.PixelBounds().IntersectsWith(area)); } catch (Exception) { hide = false; } }
-        if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Hide); } catch (Exception) { hide = false; } }
+        // a hidden window can still be on screen for a frame or two: give the compositor a moment before the capture
+        if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Hide); await Task.Delay(120); } catch (Exception) { hide = false; } }
         try { await read(); }
         finally { if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Show); } catch (Exception) { /* closing */ } } }
     }

@@ -362,7 +362,7 @@ public partial class MainWindow : Window
             if (farm == null) TableTitle.Text = "WHILE THE GAME IS OPEN";
             FillNumbers(show, show.Active);
         }
-        ZoneLbl.Text = "Zone: " + (chat?.Zone ?? (_watcher.GameRect == null ? "waiting for the game" : "not read yet, trying every 30 s"));
+        ZoneLbl.Text = "Zone: " + (chat?.Zone ?? (_watcher.GameRect == null ? "waiting for the game" : "not read yet, trying every 5 s"));
         // with no zone on the list, what the minimap corner said, so a zone the list doesn't have yet can be named and added
         ZoneLbl.ToolTip = chat?.Zone == null && chat?.ZoneNote is { Length: > 0 } zn ? zn + "\n\nA zone has to be on the tracker's zone list to count. Send the name shown here to have it added." : null;
         if (DateTime.UtcNow < _statusHoldUntil) { /* a stopped run's result is still showing */ }

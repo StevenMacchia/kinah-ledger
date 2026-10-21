@@ -123,7 +123,7 @@ public sealed class TrackerSession
         _loop ??= Task.Run(() => Loop(_cts.Token));
     }
 
-    string? _pendingZone;
+    string? _pendingZone; DateTime _zoneNoteAt = DateTime.MinValue;
 
     async Task ReadZone(Rectangle game)
     {
@@ -138,6 +138,7 @@ public sealed class TrackerSession
             }
             else _pendingZone = null;
             if (zone != null && zone != Engine.Zone) CrashLog.Note($"zone: {zone}");
+            else if (zone == null && Engine.Zone == null && (DateTime.UtcNow - _zoneNoteAt).TotalSeconds >= 60) { _zoneNoteAt = DateTime.UtcNow; CrashLog.Note($"zone read: {note}"); }
             Engine.SetZone(zone);
             Secondary?.SetZone(zone);
         }
@@ -258,7 +259,7 @@ public sealed class TrackerSession
     /// </summary>
     async Task ZoneDueAsync()
     {
-        int every = Engine.Zone == null ? Math.Max(_settings.Ocr.ZoneEverySec, 30) : _settings.Ocr.ZoneEverySec;
+        int every = Engine.Zone == null ? 5 : _settings.Ocr.ZoneEverySec;   // no zone yet (a menu, a loading screen): try again every 5 s, as long as it takes
         if ((DateTime.UtcNow - _zoneAt).TotalSeconds < every) return;
         var game = GameWindow.Find(_settings.ProcessHints);
         GameRect = game ?? GameRect;
