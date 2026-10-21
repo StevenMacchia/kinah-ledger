@@ -56,6 +56,7 @@ public static class WpfApp
         AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write("process", e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString()));
         TaskScheduler.UnobservedTaskException += (_, e) => { CrashLog.Write("task", e.Exception); e.SetObserved(); };
         var w = new MainWindow(settings);
+        w.StartUpdates();
         return app.Run(w);
     }
 

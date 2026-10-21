@@ -241,6 +241,10 @@ public sealed class UserPrefs
     public bool Welcomed { get; set; }
     /// <summary>The look: night, abyss or daylight.</summary>
     public string Skin { get; set; } = "night";
+    /// <summary>Install a newer version on its own (downloaded in the background, swapped in when the window closes). Off: the window asks first.</summary>
+    public bool AutoUpdate { get; set; } = true;
+    /// <summary>The version that last opened the window, so the first start after an update can say so.</summary>
+    public string LastVersion { get; set; } = "";
     public int? WinX { get; set; }
     public int? WinY { get; set; }
     /// <summary>Where the over-game panel was last dragged to.</summary>

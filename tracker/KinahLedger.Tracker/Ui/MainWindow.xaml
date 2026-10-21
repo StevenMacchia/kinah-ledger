@@ -102,7 +102,7 @@
             <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="5"/>
           </Grid>
           <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
-          <TextBlock x:Name="Version" Text="v0.6.5" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+          <TextBlock x:Name="Version" Text="v0.6.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
           <TextBlock FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
@@ -112,6 +112,18 @@
       </Grid>
       <TextBlock x:Name="Tagline" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,6,0,0"
                  Text="Unofficial Aion 2 farming tracker. Reads the loot lines from the chat on your screen while the game is open. Nothing touches the game."/>
+
+      <!-- a newer version: shown only while there is one (downloading, ready to install, or waiting for a click) -->
+      <Border x:Name="UpdateCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="14,10,14,10" Visibility="Collapsed">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBlock x:Name="UpdateText" Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"/>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock x:Name="UpdateNotesText" FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"><Hyperlink x:Name="UpdateNotesLink" Style="{StaticResource LinkStyle}">What's new</Hyperlink></TextBlock>
+            <Button x:Name="UpdateBtn" Style="{StaticResource PrimaryButton}" Content="Restart now" Height="34" Padding="16,0" FontSize="13"/>
+          </StackPanel>
+        </Grid>
+      </Border>
 
       <!-- first run: region, faction, server and a look, before anything else. Everything shared is filed per server. -->
       <Border x:Name="WelcomeCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
@@ -196,6 +208,15 @@
 
           <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,14,0,8"/>
           <WrapPanel x:Name="SkinRow"/>
+
+          <TextBlock Style="{StaticResource LabelStyle}" Text="UPDATES" Margin="0,14,0,0"/>
+          <WrapPanel Margin="0,8,0,0">
+            <CheckBox x:Name="AutoUpdateChk" Content="Install new versions automatically" Margin="0,0,12,4" IsChecked="True"
+                      ToolTip="On: a new version downloads in the background and is installed when you close Kinah Ledger. Off: you're asked first."/>
+            <TextBlock Margin="0,0,0,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="CheckUpdateLink" Style="{StaticResource LinkStyle}">check now</Hyperlink></TextBlock>
+          </WrapPanel>
+          <TextBlock x:Name="UpdateStatus" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Margin="0,4,0,0" TextWrapping="Wrap"
+                     Text="Checks kinahledger.com for a newer version at start and every few hours. Only the app version goes with the request."/>
         </StackPanel>
       </Border>
 

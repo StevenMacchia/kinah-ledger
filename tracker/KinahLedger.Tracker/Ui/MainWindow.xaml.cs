@@ -139,7 +139,7 @@ public partial class MainWindow : Window
         SetupCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         Tagline.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         SettingsBtn.Content = on ? "Settings" : "Hide settings";
-        SettingsBtn.ToolTip = on ? "Server, sharing, chat area, Market and look." : "Hide the settings. Everything here is remembered.";
+        SettingsBtn.ToolTip = on ? "Server, sharing, chat area, Market, look and updates." : "Hide the settings. Everything here is remembered.";
         if (!Farming && !_demo) Say(on ? "Reading the chat whenever the game is open. Press Start farming to time a run." : "Settings. Everything here is remembered.", "Faint");
         if (remember) { _prefs.Compact = on; SavePrefs(); }
     }
@@ -574,7 +574,8 @@ public partial class MainWindow : Window
         "Never your character name, account, class, level, chat text or screenshots.\n" +
         "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
         "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
-        "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off and keeps the tracker fully offline.",
+        "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
+        "Updates: at start and every six hours the tracker asks kinahledger.com which version is newest; only the app version goes with that request. A newer version is downloaded from kinahledger.com and checked against its published checksum before it's installed. update.check in settings.json turns the check off.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- server (everything shared is per server) ---------------- */
@@ -724,6 +725,7 @@ public partial class MainWindow : Window
         if (h != IntPtr.Zero) Native.UnregisterHotKey(h, HotkeyId);
         CloseHud();
         _tray.Visible = false; _tray.Dispose();
+        InstallUpdateOnClose();   // last: a downloaded update takes the exe's place now that nothing else needs it
     }
 
     void SavePrefs()

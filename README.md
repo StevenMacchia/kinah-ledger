@@ -7,7 +7,7 @@ with NCSOFT. MIT licensed.
 This is a side project, separate from the author's professional work.
 
 ```
-(website)  lives in a separate private repo; its download button points at this repo's releases
+(website)  lives in a separate private repo; kinahledger.com/download serves this repo's releases
 tracker/   the Windows tracker, C# / .NET 8
 tools/     data tooling (item dictionary crawler, site data build)
 data/      data drops (tw-items.json goes here)
@@ -83,6 +83,38 @@ dotnet publish -c Release
 `dotnet publish` writes one self-contained `KinahLedger.exe` to `dist/` with the .NET runtime inside, so players
 install nothing. It isn't code-signed yet, so Windows SmartScreen shows a warning the first time it runs; a
 signing certificate removes that. There are no drivers or other prerequisites.
+
+### Updates
+
+Since 0.6.6 the tracker keeps itself current. Twenty seconds after it opens, and every six hours while it stays open,
+it reads `https://kinahledger.com/download/latest.json` (version, download address, size and SHA-256 of the newest exe;
+only the app version goes up, in the User-Agent). When there is a newer version:
+
+- **Install new versions automatically** (Settings, on by default): it downloads beside the running exe, is checked
+  against the size and SHA-256, and replaces the exe when the window closes. A banner offers **Restart now** to install it
+  at once; during a farming run that asks first, and the run is stopped and saved before the restart.
+- Off: the banner says a new version is out and **Update** downloads it on request.
+- `"update": { "check": false }` in `settings.json` turns the check off entirely.
+
+Windows doesn't let a running exe be overwritten but does let it be renamed, so the swap is: running exe →
+`KinahLedger.exe.old`, verified download → `KinahLedger.exe` (whatever the file is called, such as
+`KinahLedger (1).exe`). The `.old` copy is deleted on the next start. A download that doesn't match the checksum is
+thrown away. If the exe sits in a folder it can't write to (Program Files), the banner links to the site instead.
+`KinahLedger.exe update` does the same from a terminal (`--check` only reports).
+
+### Releasing
+
+```
+cd tracker/KinahLedger.Tracker
+dotnet publish -c Release
+cd ../..
+node tools/release-manifest.js            # latest.json beside the published exe: version, size, SHA-256
+gh release create vX.Y.Z dist/KinahLedger.exe dist/latest.json --title "Kinah Ledger tracker X.Y.Z" --notes-file notes.md
+```
+
+Bump `<Version>` in the csproj first. Both files go on the release: kinahledger.com serves the exe and passes
+`latest.json` to running trackers, which then update within six hours (or at their next start). A release without
+`latest.json` offers no update.
 
 ### Commands
 

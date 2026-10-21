@@ -45,6 +45,7 @@ internal static class Program
                 case "market-watch": return MarketWatch(settings, opts);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "watch": return Watch(settings, opts);
+                case "update": return UpdateCmd(settings, opts);
                 case "reset-id":
                     InstallId.Reset();
                     Console.WriteLine("Install ID removed. A new one is created on the next upload.");
@@ -83,6 +84,8 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
                                 render the window to PNG files for layout review
   market-shot [dir]             the window with the Market card in its tracking state
   reset-id                      replace the random install ID used for uploads
+  update [--check]              install the newest version from kinahledger.com now (--check only says whether there is one)
+        [--manifest url]        read another version file (a local test server)
 
 The tracker only ever reads the screen: it never captures network traffic, reads game memory or sends input to the game.
 
@@ -101,6 +104,29 @@ options: --process aion[,other]");
         }
         if (key != null) o[key] = "true";
         return (o, p);
+    }
+
+    /// <summary>The window's update, from the command line: check, download, verify, swap. The new version runs from the next start.</summary>
+    static int UpdateCmd(Settings s, Dictionary<string, string> o)
+    {
+        var manifest = o.GetValueOrDefault("manifest") is { Length: > 0 } m && m != "true" ? m : s.Update.Manifest;
+        var r = Task.Run(() => Update.Updater.CheckAsync(manifest)).GetAwaiter().GetResult();
+        Console.WriteLine(r.Ok ? r.Note : "Couldn't check: " + r.Note);
+        if (!r.Ok) return 1;
+        if (r.Newer == null || o.ContainsKey("check")) return 0;
+        var exe = Update.Updater.ExePath ?? throw new InvalidOperationException("not running as KinahLedger.exe, so there is nothing to replace");
+        Console.WriteLine($"Downloading {r.Newer.Url}");
+        int shown = -1;
+        var progress = new Progress<double>(f => { int p = (int)(f * 10); if (p > shown) { shown = p; Console.Write($" {p * 10}%"); } });
+        try
+        {
+            var staged = Task.Run(() => Update.Updater.DownloadAsync(r.Newer, exe, progress)).GetAwaiter().GetResult();
+            Console.WriteLine();
+            Update.Updater.Apply(staged, exe);
+        }
+        catch (Update.UpdateException ex) { Console.WriteLine(); Console.Error.WriteLine("Update failed: " + ex.Message); return 1; }
+        Console.WriteLine($"Updated to {Update.Updater.Show(r.Newer.Version)}, checksum verified. Start Kinah Ledger again to use it.");
+        return 0;
     }
 
     /* ---------------- screen reading ---------------- */
