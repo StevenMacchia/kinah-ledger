@@ -58,6 +58,8 @@
     <EmbeddedResource Include="..\..\data\tw-items.json" LogicalName="tw-items.json" />
     <!-- zone and area names as the minimap prints them: the whitelist for zones -->
     <EmbeddedResource Include="..\..\data\zones.txt" LogicalName="zones.txt" />
+    <!-- enemy names as the target bar prints them: the whitelist for Kinah by enemy -->
+    <EmbeddedResource Include="..\..\data\mobs.txt" LogicalName="mobs.txt" Condition="Exists('..\..\data\mobs.txt')" />
   </ItemGroup>
 
 </Project>

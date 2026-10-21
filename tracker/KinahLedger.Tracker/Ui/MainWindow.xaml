@@ -187,9 +187,12 @@
             <ColumnDefinition Width="*"/>
           </Grid.ColumnDefinitions>
           <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start farming" Width="150" Height="44" VerticalAlignment="Center"/>
-          <Grid x:Name="KindGrid" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+          <StackPanel x:Name="KindGrid" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
             <ComboBox x:Name="Kind" Width="130" VerticalAlignment="Center" ToolTip="What the run is labelled as when it is shared and saved. The count itself covers everything the chat shows."/>
-          </Grid>
+            <!-- off (the default): the tables start over when the zone changes; on: they keep counting across zones. The site gets each zone's own numbers either way -->
+            <CheckBox x:Name="AllZonesChk" Content="All zones" FontSize="11.5" Margin="2,5,0,0"
+                      ToolTip="Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone. Either way, what goes to the site is kept apart by zone."/>
+          </StackPanel>
           <StackPanel Grid.Column="2" Margin="14,0,0,0" VerticalAlignment="Center">
             <TextBlock x:Name="ZoneLbl" Foreground="{DynamicResource Ink}" FontSize="13" FontWeight="SemiBold" Text="Zone: waiting for the game" TextTrimming="CharacterEllipsis"/>
             <TextBlock x:Name="FarmTime" Foreground="{DynamicResource Faint}" FontSize="12" Margin="0,2,0,0" Text="Ctrl+Shift+K starts and stops from inside the game" TextTrimming="CharacterEllipsis"/>
@@ -280,6 +283,32 @@
               </ScrollViewer>
               <TextBlock x:Name="GatherEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
                          Text="Gathered materials show here, with how often each comes per attempt and per hour."/>
+            </Grid>
+          </StackPanel>
+
+          <!-- Kinah by enemy: what landed within a few seconds of the target bar naming an enemy. A guess, and labelled one -->
+          <StackPanel x:Name="MobSection" Margin="0,8,0,0">
+            <Border x:Name="MobHead" Background="{DynamicResource Card2}" CornerRadius="6" Height="28" Cursor="Hand" ToolTip="Click to fold or unfold">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="64"/><ColumnDefinition Width="88"/><ColumnDefinition Width="84"/><ColumnDefinition Width="78"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                  <TextBlock x:Name="MobChev" Style="{StaticResource LabelStyle}" Text="▾" Width="14"/>
+                  <TextBlock x:Name="MobTitle" Style="{StaticResource LabelStyle}" Text="KINAH BY ENEMY · BEST GUESS"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="KILLS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="KINAH / KILL" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="KINAH / HR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                <TextBlock Grid.Column="4" Style="{StaticResource LabelStyle}" Text="KINAH" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+              </Grid>
+            </Border>
+            <Grid x:Name="MobBody" MinHeight="64">
+              <ScrollViewer x:Name="MobScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="MobRows" ItemTemplate="{StaticResource RowTemplate}"/>
+              </ScrollViewer>
+              <TextBlock x:Name="MobEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="440"
+                         Text="A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one."/>
             </Grid>
           </StackPanel>
 

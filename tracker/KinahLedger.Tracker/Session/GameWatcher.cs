@@ -71,6 +71,7 @@ public sealed class GameWatcher
             _balanceApplied = at;
             c.Engine.SetBalance(Balance.Tracker.Balance);
             Farm?.SetBalance(Balance.Tracker.Balance);
+            c.ZoneView.SetBalance(Balance.Tracker.Balance);
         }
     }
 
@@ -126,7 +127,8 @@ public sealed class GameWatcher
         e.SetZone(Chat?.Zone);
         e.SetBalance(FreshBalance);
         Farm = e; FarmKind = kind;
-        if (Chat != null) Chat.Secondary = e;
+        // the zone view starts over with the run, so its tables are this run in this zone
+        if (Chat != null) { Chat.Secondary = e; Chat.ResetZoneView(); Chat.ZoneView.SetBalance(FreshBalance); }
         return e;
     }
 

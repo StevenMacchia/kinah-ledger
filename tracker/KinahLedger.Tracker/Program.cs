@@ -430,6 +430,47 @@ options: --process aion[,other]");
         var town = new SessionEngine(items); town.Apply(new ItemAcquired(t0, ingot, 1, false));
         Check("a stray pickup in town is not worth sharing", GameWatcher.Worth(town).ToString(), "False");
 
+        Console.WriteLine("\nQuest rewards, zones and Kinah by enemy (0.7.1):");
+        Check("payment line, then its Kinah", One("A total payment of 34,916 Kina has been") + " | " + One("Acquired 34,916 Kina."), "(ignored) | Kinah +34,916 (bound)");
+        Check("a later pickup of another amount is a drop", One("Acquired 512 Kina."), "Kinah +512");
+        Check("a Kinah line naming a quest", One("Acquired 20,000 Kina (Quest reward)."), "Kinah +20,000 (bound)");
+        var qe = new SessionEngine(items);
+        foreach (var amt in new long[] { 430, 452, 466, 501, 519, 523 }) qe.Apply(new KinahChanged(t0, amt, false));
+        qe.Apply(new KinahChanged(t0, 34_916, false));   // an unmarked quest reward
+        qe.Apply(new KinahChanged(t0, 2_400, false));    // an elite: well above the median, still a mob
+        Check("one line far above the mobs' Kinah is a reward", $"farmed {qe.Kinah:N0}, skipped {qe.KinahSkipped:N0}, kills {qe.Kills}", "farmed 5,291, skipped 34,916, kills 7");
+        var qe2 = new SessionEngine(items);
+        qe2.Apply(new KinahChanged(t0, 30_000, false)); qe2.Apply(new KinahChanged(t0, 3_000, false));
+        Check("before five pickups, over 25,000 is a reward", $"farmed {qe2.Kinah:N0}, skipped {qe2.KinahSkipped:N0}", "farmed 3,000, skipped 30,000");
+
+        var ze = new SessionEngine(items);
+        long hide = items.IdOf("Thick hide"), stone = items.IdOf("Spiritstone");
+        ze.SetZone("Western Cantas Valley");
+        ze.Apply(new KinahChanged(t0, 450, false)); ze.Apply(new ItemAcquired(t0, hide, 2, false));
+        ze.SetZone("Altamia Canyon");
+        ze.Apply(new KinahChanged(t0, 470, false)); ze.Apply(new ItemAcquired(t0, stone, 1, false)); ze.Apply(new ItemAcquired(t0, stone, 1, true));
+        var zp = RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items);
+        string ZoneItems(string z) => zp.zones.TryGetValue(z, out var zr) ? string.Join(",", zr.items.Select(kv => $"{(long.TryParse(kv.Key, out var iid) ? items.NameOf(iid) : kv.Key)}={kv.Value}")) + "/" + string.Join(",", zr.items_bound.Select(kv => $"{(long.TryParse(kv.Key, out var iid) ? items.NameOf(iid) : kv.Key)}={kv.Value}")) : "missing";
+        Check("each zone sends its own items", $"{ZoneItems("Western Cantas Valley")} | {ZoneItems("Altamia Canyon")}", $"{items.NameOf(hide)}=2/ | {items.NameOf(stone)}=1/{items.NameOf(stone)}=1");
+
+        var me = new SessionEngine(items);
+        me.SetZone("Western Cantas Valley");
+        me.SetTarget("Test Lizard", t0);
+        me.Apply(new KinahChanged(t0.AddSeconds(2), 500, false));
+        me.Apply(new ItemAcquired(t0.AddSeconds(3), hide, 1, false));
+        me.Apply(new PetCrystal(t0.AddSeconds(4), "Natura Soul Crystal", 1));
+        me.Apply(new KinahChanged(t0.AddSeconds(12), 480, false));   // past the 8-second grace: nobody's
+        me.SetTarget("Test Lizard", t0.AddSeconds(20));
+        me.Apply(new KinahChanged(t0.AddSeconds(21), 520, false));
+        me.SetZone("Altamia Canyon");
+        me.Apply(new KinahChanged(t0.AddSeconds(22), 510, false));   // same name, new zone: its own row
+        var mobs = me.MobSnapshot().OrderBy(m => m.Zone).Select(m => $"{m.Name}@{m.Zone}: {m.Kills} kills {m.Kinah} Kinah {m.Drops.Values.Sum()} drops {m.Crystals} crystals");
+        Check("Kinah by enemy, 8-second grace, by zone", string.Join(" | ", mobs), "Test Lizard@Altamia Canyon: 1 kills 510 Kinah 0 drops 0 crystals | Test Lizard@Western Cantas Valley: 2 kills 1020 Kinah 1 drops 1 crystals");
+        var mp = RunPayload.Build(me, new Settings(), "Open world", "Open world", "na_e", "", items);
+        Check("mobs go out with their zone", string.Join(" | ", (mp.mobs ?? new()).OrderBy(m => m.zone).Select(m => $"{m.name}/{m.zone}/{m.kills}/{m.kinah}")), "Test Lizard/Altamia Canyon/1/510 | Test Lizard/Western Cantas Valley/2/1020");
+        Check("a run with no target bar sends no mobs", RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items).mobs == null ? "none" : "some", "none");
+        Check("enemy list built in", TargetReader.Known.Length > 0 ? "yes" : "no (data/mobs.txt missing)", "yes");
+
         Console.WriteLine("\nBalance counter (0.7): which counter is Kinah, and when a read is trusted:");
         var bt = new BalanceTracker();
         List<CounterRead> Strip(long kinah, long other = 2751) => new() { new(7811, 40), new(kinah, 300), new(other, 560), new(15265, 820) };

@@ -62,6 +62,9 @@ public partial class MainWindow : Window
         Kind.ItemsSource = Kinds;
         Kind.SelectedItem = Kinds.Contains(_prefs.Activity) ? _prefs.Activity : "Open world";
         HudChk.IsChecked = _prefs.Hud;
+        // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
+        AllZonesChk.IsChecked = _prefs.AllZones;
+        AllZonesChk.Click += (_, _) => { _prefs.AllZones = AllZonesChk.IsChecked == true; if (!_demo) _prefs.Save(); Redraw(); Tick(); };
         // the panel over the game follows the switch at once, run or no run
         HudChk.Checked += (_, _) => Redraw();
         HudChk.Unchecked += (_, _) => CloseHud();
@@ -115,6 +118,7 @@ public partial class MainWindow : Window
         Kind.SelectionChanged += (_, _) => { if (!Farming) { _mode = SelectedMode; ApplyModeLabels(); if (_watcher.Chat == null) ResetTiles(); } };
         DropsHead.MouseLeftButtonUp += (_, _) => { _prefs.DropsOpen = !_prefs.DropsOpen; if (!_demo) _prefs.Save(); Redraw(); };
         GatherHead.MouseLeftButtonUp += (_, _) => { _prefs.GatherOpen = !_prefs.GatherOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        MobHead.MouseLeftButtonUp += (_, _) => { _prefs.MobsOpen = !_prefs.MobsOpen; if (!_demo) _prefs.Save(); Redraw(); };
         _mode = SelectedMode;
         ApplyModeLabels(); ResetTiles();
         BuildTray();
@@ -130,7 +134,7 @@ public partial class MainWindow : Window
         // that would run the window past the bottom of the screen gets a scroll bar, and the window moves up to stay on it
         // both tables share the screen below the tiles; each scrolls only once it would push the window off the bottom
         double tableCap = Math.Max(200, (SystemParameters.WorkArea.Height - 520) / 2);
-        DropsScroll.MaxHeight = tableCap; GatherScroll.MaxHeight = tableCap;
+        DropsScroll.MaxHeight = tableCap; GatherScroll.MaxHeight = tableCap; MobScroll.MaxHeight = tableCap;
         SizeChanged += (_, _) => KeepOnScreen();
         ShowTable(null);
         SettingsBtn.Click += (_, _) => SetCompact(!_compact);
@@ -187,9 +191,23 @@ public partial class MainWindow : Window
     /// <summary>Redraws the table for the count on screen: the run, the run just stopped, or the live count.</summary>
     void Redraw()
     {
-        var e = _watcher.Farm ?? (DateTime.UtcNow < _lastRunUntil ? _lastRun : _watcher.Chat?.Engine);
+        var e = Shown();
         if (e != null) FillNumbers(e, e.Active); else ShowTable(null);
     }
+
+    /// <summary>
+    /// The count the window shows: this zone since you arrived (or since the run started), unless All zones is on; then the
+    /// run, or the live count. A run just stopped shows for a few seconds either way.
+    /// </summary>
+    SessionEngine? Shown()
+    {
+        var chat = _watcher.Chat; var farm = _watcher.Farm;
+        if (farm == null && _lastRun != null && DateTime.UtcNow < _lastRunUntil) return _lastRun;
+        if (!_prefs.AllZones && chat != null) return chat.ZoneView;
+        return farm ?? chat?.Engine;
+    }
+
+    string ViewTitle() => _watcher.Farm != null ? (_prefs.AllZones ? "THIS RUN" : "THIS RUN · THIS ZONE") : (_prefs.AllZones ? "WHILE THE GAME IS OPEN" : "THIS ZONE");
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = SelectedMode == Mode.Open ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = "—"; }
 
@@ -289,8 +307,8 @@ public partial class MainWindow : Window
             _lastRun = null;
             ZoneLbl.Text = "Zone: " + (chat.Zone ?? "not read yet");
             EnsureHud();
-            TableTitle.Text = "THIS RUN";
-            ShowTable(farm);
+            TableTitle.Text = ViewTitle();
+            Redraw();
             SetTrackingUi(true);
             if (!_compact) SetCompact(true);   // chat and zone found: the settings have done their job
             Say($"Farming · {chat.Zone ?? ActivityName()}. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
@@ -349,7 +367,7 @@ public partial class MainWindow : Window
         if (_demo) return;
         if (!_compact) MarketStatus.Text = MarketLine();
         var chat = _watcher.Chat; var farm = _watcher.Farm;
-        var show = farm ?? (DateTime.UtcNow < _lastRunUntil ? _lastRun : chat?.Engine);
+        var show = Shown();
         if (farm != null) FarmTime.Text = "Farming for " + farm.Elapsed.ToString(@"hh\:mm\:ss") + (farm.Paused ? " · paused while the game is out of view" : "");
         else if (chat != null) FarmTime.Text = "Counting since " + _watcher.ChatSince.ToLocalTime().ToString("HH:mm");
         else FarmTime.Text = "Ctrl+Shift+K starts and stops from inside the game";
@@ -359,7 +377,7 @@ public partial class MainWindow : Window
             // a run labelled Gathering that turned into mob farming shows Kinah per hour, not attempts
             var dom = show.RecentKind is { } rk ? (rk == "Gathering" ? Mode.Gather : Mode.Open) : show.Events > 0 ? ModeOf(show) : SelectedMode;
             if (dom != _mode) { _mode = dom; ApplyModeLabels(); }
-            if (farm == null) TableTitle.Text = "WHILE THE GAME IS OPEN";
+            if (show != _lastRun) TableTitle.Text = ViewTitle();
             FillNumbers(show, show.Active);
         }
         ZoneLbl.Text = "Zone: " + (chat?.Zone ?? (_watcher.GameRect == null ? "waiting for the game" : "not read yet, trying every 5 s"));
@@ -406,7 +424,7 @@ public partial class MainWindow : Window
 
     /// <param name="Value">What the tradeable items would sell for on the Market, after its cut; bound items can't be sold.</param>
     /// <param name="Priced">Tradeable items with a price; <paramref name="Unpriced"/> those without, left out of the value.</param>
-    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced);
+    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs);
 
     /// <summary>
     /// Splits the session into mob drops (rated per kill) and gathered materials grouped by skill (each skill rated
@@ -454,7 +472,13 @@ public partial class MainWindow : Window
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
                 gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceText(name)));
         }
-        return new Tables(drops, gathered, dc, gc, value, priced, unpriced);
+        // Kinah by enemy, a best guess: most Kinah first. The zone goes beside the name when the view spans more than one.
+        var mobs = new List<DropRow>();
+        var ms = e.MobSnapshot();
+        bool zonesToo = ms.Select(m => m.Zone).Distinct().Count() > 1;
+        foreach (var m in ms)
+            mobs.Add(new DropRow(zonesToo ? $"{m.Name} · {m.Zone}" : m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Price: Fk(m.Kinah)));
+        return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs);
     }
 
     // the drops' Market value and how many items carried a price, from the last FillNumbers, for the panel over the game
@@ -469,7 +493,8 @@ public partial class MainWindow : Window
         var t = e.Totals(); long kinah = t.Kinah;   // farming Kinah only; bound Kinah is reward money
         var s = Build(e, h, t.Kills);
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
-        string skipped = t.Rewards > 0 ? $" · {t.Rewards} reward line{(t.Rewards == 1 ? "" : "s")} skipped" : "";
+        // quest and payment rewards: bound Kinah, a payment line, or one line far above what the mobs pay. Never farming income.
+        string skipped = t.Rewards > 0 ? $" · {t.Rewards} reward line{(t.Rewards == 1 ? "" : "s")} skipped" + (e.KinahSkipped > 0 ? $" ({Fk(e.KinahSkipped)} Kinah)" : "") : "";
         string crystals = t.Pets > 0 ? $" · {t.Pets} soul crystal{(t.Pets == 1 ? "" : "s")}" : "";
         // the clock is farming time; a minute or more of readable time with no loot is shown as idle beside it
         string idle = e.Idle >= TimeSpan.FromMinutes(1) ? $" farming · {e.Idle:hh\\:mm\\:ss} idle" : "";
@@ -529,16 +554,23 @@ public partial class MainWindow : Window
 
     void ShowTable(SessionEngine? e, TimeSpan? elapsed = null, Tables? pre = null)
     {
-        var drops = new List<DropRow>(); var gathered = new List<DropRow>();
+        var drops = new List<DropRow>(); var gathered = new List<DropRow>(); var mobs = new List<DropRow>();
         int kills = 0, nodes = 0;
         if (e != null)
         {
             double h = Math.Max((elapsed ?? e.Active).TotalHours, 1.0 / 3600);
             var t = e.Totals(); kills = t.Kills; nodes = t.Nodes;
             var s = pre ?? Build(e, h, kills);
-            drops = s.Drops; gathered = s.Gathered;
+            drops = s.Drops; gathered = s.Gathered; mobs = s.Mobs;
         }
-        Rows.ItemsSource = drops; GatherRows.ItemsSource = gathered;
+        Rows.ItemsSource = drops; GatherRows.ItemsSource = gathered; MobRows.ItemsSource = mobs;
+        MobEmpty.Visibility = mobs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var target = _watcher.Chat?.TargetNote ?? "";
+        MobEmpty.Text = target.Length > 0 ? "Target bar: " + target + "."
+            : "A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one.";
+        MobTitle.Text = mobs.Count > 0 ? $"KINAH BY ENEMY · BEST GUESS  ·  {mobs.Count}" : "KINAH BY ENEMY · BEST GUESS";
+        MobChev.Text = _prefs.MobsOpen ? "▾" : "▸";
+        MobBody.Visibility = _prefs.MobsOpen ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Visibility = drops.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         GatherEmpty.Visibility = gathered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the drop rate per kill and per hour." : "No drops yet.";
@@ -555,6 +587,8 @@ public partial class MainWindow : Window
         if (_prefs.DropsOpen && drops.Count > 0 && kills == 0) notes.Add("Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.");
         if (_prefs.GatherOpen && gathered.Count > 0 && nodes == 0) notes.Add("Per-attempt rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.");
         bool noPrice = (_prefs.DropsOpen && drops.Any(r => !r.Header && r.Price == "—")) || (_prefs.GatherOpen && gathered.Any(r => !r.Header && r.Price == "—"));
+        if (_prefs.MobsOpen && mobs.Count > 0 && target.Length > 0) notes.Add("Target bar: " + target + ".");
+        if (_prefs.MobsOpen && _watcher.Chat?.Target.Unlisted is { Length: > 0 } un && mobs.Count == 0) notes.Add($"The target bar shows \"{un}\", which isn't on the enemy list yet, so it isn't counted.");
         if (noPrice && !PriceBook.Any) notes.Add("No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest.");
         TableNote.Text = string.Join(" ", notes);
         TableNote.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -821,7 +855,10 @@ public partial class MainWindow : Window
                 break;
             default:
                 e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
-                Kills(161, 3690);
+                // Kinah by enemy: the target bar named these while their Kinah landed
+                e.SetTarget("Abyss Drakan Scout", t); Kills(94, 3690);
+                e.SetTarget("Abyss Drakan Striker", t); Kills(52, 4120);
+                e.SetTarget("Abyss Drakan Striker", t.AddMinutes(-5)); Kills(15, 3500);   // the bar went quiet: nobody's
                 Drop("Thick hide", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Manastone", 8); Drop("Aether shard", 7); Drop("Enchantment stone", 3); Drop("Greater manastone", 1);
                 Drop("Orichalcum Ore", 6); Drop("Sapphire Gemstone", 1);
                 Pet("Natura", 3);

@@ -30,6 +30,56 @@ public sealed partial class TargetReader
         "Kinah", "Kinah Ledger", "Target", "Elite", "Boss", "Normal", "Hero", "Legendary", "Total Estimated Value", "Drops Value", "Kinah Hr",
     };
 
+    /// <summary>
+    /// Enemy names as the game prints them on the target bar: data/mobs.txt, built into the exe. The whitelist for Kinah
+    /// by enemy, the same file the site reads: a name not on it, exactly or as a close misread, is never credited or sent.
+    /// </summary>
+    public static readonly string[] Known = LoadMobs();
+
+    static string[] LoadMobs()
+    {
+        try
+        {
+            using var stream = typeof(TargetReader).Assembly.GetManifestResourceStream("mobs.txt");
+            if (stream == null) return Array.Empty<string>();
+            using var r = new StreamReader(stream);
+            var names = new List<string>();
+            while (r.ReadLine() is { } line) { var t = line.Trim(); if (t.Length > 0 && !t.StartsWith('#')) names.Add(t); }
+            return names.ToArray();
+        }
+        catch (Exception) { return Array.Empty<string>(); }
+    }
+
+    /// <summary>The list's spelling of a name read off the bar, allowing a letter of misread per seven; null when it isn't on the list.</summary>
+    public static string? Match(string read)
+    {
+        var low = read.ToLowerInvariant();
+        foreach (var k in Known) if (string.Equals(k, read, StringComparison.OrdinalIgnoreCase)) return k;
+        foreach (var k in Known)
+        {
+            int max = Math.Max(1, k.Length / 7);
+            if (Math.Abs(k.Length - read.Length) <= max && Edit(k.ToLowerInvariant(), low) <= max) return k;
+        }
+        return null;
+    }
+
+    static int Edit(string a, string b)
+    {
+        var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i;
+            for (int j = 1; j <= b.Length; j++) cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length];
+    }
+
+    /// <summary>The last name-shaped text on the bar that isn't on the list, so a missing enemy can be named and added.</summary>
+    public string Unlisted { get; private set; } = "";
+    readonly HashSet<string> _noted = new(StringComparer.OrdinalIgnoreCase);
+
     string? _pending;
     ulong _hash;
     public long Reads { get; private set; }
@@ -56,7 +106,14 @@ public sealed partial class TargetReader
         {
             var t = Regex.Replace(Noise().Replace(l.Text, " "), @"\s+", " ").Trim().TrimEnd('.', ',', ':', ';');
             if (t.Length < 3 || !Shape().IsMatch(t) || Not.Contains(t) || ZoneLocator.Known.Contains(t, StringComparer.OrdinalIgnoreCase)) continue;
-            found = t;
+            var hit = Match(t);
+            if (hit == null)
+            {
+                Unlisted = t;
+                if (_noted.Count < 200 && _noted.Add(t)) CrashLog.Note($"target bar: not an enemy on the list, not credited: {t}");
+                continue;
+            }
+            found = hit;
             break;
         }
         if (found == null) { _pending = null; return; }   // nothing targeted: the last name keeps its time for the grace window

@@ -103,6 +103,8 @@ public sealed class SessionEngine
         /// <summary>Seconds of farming in the zone: time within a minute of a loot, kill or gather line. What the zone's per-hour rates divide by.</summary>
         public double Active;
         public Dictionary<string, int> PetsByName = new();
+        /// <summary>Items picked up in this zone, by item id, tradeable and bound apart like the run-level maps. What the site files under this zone, so a run that moved zones never credits one zone with another's drops.</summary>
+        public Dictionary<long, int> Items = new(), ItemsBound = new();
         public int Kills => Math.Max(Math.Max(Defeated, Xp), Math.Max(KinahDrops, CurrencyLines));
         public double Hours => Math.Max(Seconds / 3600, 1.0 / 3600);
     }
@@ -113,6 +115,66 @@ public sealed class SessionEngine
     ZoneStats Z() { var key = _zone ?? UnknownZone; if (!Zones.TryGetValue(key, out var z)) Zones[key] = z = new ZoneStats(); return z; }
 
     public SessionEngine(ItemDictionary items) { _items = items; }
+
+    // ---- quest rewards ----
+    // Quest and title Kinah mostly comes marked (Bound) and is skipped as a reward. Some doesn't ("A total payment of
+    // 34,916 Kina has been completed." then "Acquired 34,916 Kina."), and one such line outweighed an hour of mobs. So a
+    // single unbound Kinah line far above what this count's mobs pay is taken for a reward too: more than 25 times the
+    // median of the last pickups (and over 5,000), or, before five pickups are known, over 25,000.
+    public const long OutlierFloor = 5_000, OutlierBeforeKnown = 25_000;
+    public const int OutlierTimes = 25;
+    /// <summary>Kinah from lines taken for rewards (bound, a payment, or far above the mobs' usual amount): shown, never farming income.</summary>
+    public long KinahSkipped { get; private set; }
+    readonly List<long> _recentPickups = new();
+
+    bool RewardSizedLocked(long delta)
+    {
+        if (_recentPickups.Count < 5) return delta > OutlierBeforeKnown;
+        var sorted = _recentPickups.OrderBy(x => x).ToList();
+        long median = sorted[sorted.Count / 2];
+        return delta > Math.Max(OutlierFloor, median * OutlierTimes);
+    }
+
+    // ---- Kinah by enemy, a best guess ----
+    // The target bar at the top of the game names the enemy being fought. Kinah, drops and Soul Crystals read within
+    // TargetGraceSeconds of the bar last showing a name are credited to that name. With several enemies on the player the
+    // bar shows one of them, so every figure here is a guess, and is labelled one wherever it is shown.
+    public const double TargetGraceSeconds = 8;
+    string? _target; DateTime _targetAt;
+
+    /// <summary>What one enemy paid, as far as the target bar can tell: kills, Kinah, drops by item and Soul Crystals, in the zone it was credited in.</summary>
+    public sealed class MobStats
+    {
+        public string Name = "", Zone = UnknownZone;
+        public int KinahDrops, CurrencyLines, Crystals;
+        public long Kinah;
+        public Dictionary<long, int> Drops = new();
+        public int Kills => Math.Max(KinahDrops, CurrencyLines);
+    }
+    /// <summary>By zone and name ("zone|name"): the same enemy in two zones is two rows, never mixed.</summary>
+    readonly Dictionary<string, MobStats> _mobs = new();
+
+    /// <summary>The enemy on the target bar and when it was last seen there. A null name keeps the last one, so its grace window runs out on its own.</summary>
+    public void SetTarget(string? name, DateTime at)
+    {
+        lock (_lock) { if (name != null) { _target = name; _targetAt = at; } }
+    }
+
+    MobStats? MobFor(DateTime t)
+    {
+        if (_target == null || Math.Abs((t - _targetAt).TotalSeconds) > TargetGraceSeconds) return null;
+        var zone = _zone ?? UnknownZone;
+        var key = zone + "|" + _target;
+        if (!_mobs.TryGetValue(key, out var m)) _mobs[key] = m = new MobStats { Name = _target, Zone = zone };
+        return m;
+    }
+
+    /// <summary>Copies of the per-enemy counters, most Kinah first, safe to read from the UI thread.</summary>
+    public List<MobStats> MobSnapshot()
+    {
+        lock (_lock) return _mobs.Values.OrderByDescending(m => m.Kinah).ThenByDescending(m => m.Kills)
+            .Select(m => new MobStats { Name = m.Name, Zone = m.Zone, KinahDrops = m.KinahDrops, CurrencyLines = m.CurrencyLines, Crystals = m.Crystals, Kinah = m.Kinah, Drops = new Dictionary<long, int>(m.Drops) }).ToList();
+    }
 
     /// <summary>Called whenever the zone is re-read. Credits the time since the last call to the zone the player was in; a null read keeps the last known zone.</summary>
     public void SetZone(string? zone)
@@ -198,6 +260,12 @@ public sealed class SessionEngine
         lock (_lock)
         {
             Events++;
+            // a Kinah line far above what the mobs pay is a quest or payment reward, not farming: counted like bound Kinah
+            if (ev is KinahChanged { Bound: false, Delta: > 0 } big && RewardSizedLocked(big.Delta))
+            {
+                CrashLog.Note($"Kinah line far above what the mobs pay, taken for a reward and not counted as farming: {big.Delta:N0}");
+                ev = new KinahChanged(big.Time, big.Delta, true);
+            }
             // what counts as farming: loot, Kinah, kills, gathers (failed ones too), Soul Crystals and Soul Points.
             // Crafts, enchants, Market lines and quest rewards don't: they happen in town.
             if (ev is ItemAcquired or KinahChanged { Bound: false } or MobKilled or XpGained or GatherFailed or PetCrystal or CurrencyGained) Farmed(DateTime.UtcNow);
@@ -209,6 +277,8 @@ public sealed class SessionEngine
                 case ItemAcquired a:
                     var d = a.Bound ? ItemsBound : Items;
                     d[a.ItemId] = d.GetValueOrDefault(a.ItemId) + a.Count;
+                    var zi = a.Bound ? Z().ItemsBound : Z().Items;
+                    zi[a.ItemId] = zi.GetValueOrDefault(a.ItemId) + a.Count;
                     var g = GatheringCatalog.Find(_items.NameOf(a.ItemId));
                     if (g != null)
                     {
@@ -216,12 +286,17 @@ public sealed class SessionEngine
                         if (g.IsNode) { Nodes++; sk.Nodes++; Z().Nodes++; Mark(_recentGathers, a.Time); _lastSkill = g.Skill; _lastSkillAt = a.Time; if (a.Count >= 2) { Plentiful++; sk.Plentiful++; } }
                         if (g.Bonus) { BonusFinds += a.Count; sk.Bonus += a.Count; }
                     }
-                    else Z().Drops += a.Count;
+                    else
+                    {
+                        Z().Drops += a.Count;
+                        if (MobFor(a.Time) is { } md) md.Drops[a.ItemId] = md.Drops.GetValueOrDefault(a.ItemId) + a.Count;
+                    }
                     break;
                 case PetCrystal p:
                     Pets[p.Name] = Pets.GetValueOrDefault(p.Name) + p.Count;
                     PetCrystals += p.Count;
                     var zp = Z(); zp.Pets += p.Count; zp.PetsByName[p.Name] = zp.PetsByName.GetValueOrDefault(p.Name) + p.Count;
+                    if (MobFor(p.Time) is { } mp) mp.Crystals += p.Count;
                     break;
                 case GatherFailed f:
                     Nodes++; NodesFailed++; Z().Nodes++; Mark(_recentGathers, f.Time);
@@ -230,8 +305,17 @@ public sealed class SessionEngine
                     break;
                 case KinahChanged k:
                     // bound Kinah comes from quests, titles and rewards, not from mobs: tracked, but not farming income or a kill
-                    if (k.Bound) { KinahBound += k.Delta; RewardsSkipped++; }
-                    else { Kinah += k.Delta; if (k.Delta > 0) { KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; Mark(_recentKills, k.Time); } }
+                    if (k.Bound) { KinahBound += k.Delta; KinahSkipped += k.Delta; RewardsSkipped++; }
+                    else
+                    {
+                        Kinah += k.Delta;
+                        if (k.Delta > 0)
+                        {
+                            KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; Mark(_recentKills, k.Time);
+                            _recentPickups.Add(k.Delta); if (_recentPickups.Count > 50) _recentPickups.RemoveAt(0);
+                            if (MobFor(k.Time) is { } mk) { mk.Kinah += k.Delta; mk.KinahDrops++; }
+                        }
+                    }
                     break;
                 case RewardReceived:
                     RewardsSkipped++;
@@ -244,6 +328,7 @@ public sealed class SessionEngine
                     break;
                 case CurrencyGained c:
                     CurrencyLines++; Z().CurrencyLines++; Mark(_recentKills, c.Time);
+                    if (MobFor(c.Time) is { } mc) mc.CurrencyLines++;
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
                     break;
                 case CraftResult cr:
@@ -314,7 +399,7 @@ public sealed class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, PetsByName = new Dictionary<string, int>(v.PetsByName) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
             return copy;
         }
     }

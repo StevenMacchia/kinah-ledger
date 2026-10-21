@@ -59,12 +59,15 @@ public sealed record RunPayload(
     Dictionary<string, ZoneRun> zones,
     string install,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? kinah_net = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] OddsPayload? odds = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] OddsPayload? odds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<MobRun>? mobs = null)
 {
     public static string AppVersion => typeof(RunPayload).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
 
     /// <summary>Most keys per odds map, as the site accepts them; the most-tried recipes and steps are kept.</summary>
     public const int MaxOddsKeys = 100;
+    /// <summary>Most enemies per run, as the site accepts them; the ones that paid the most Kinah are kept.</summary>
+    public const int MaxMobs = 60;
 
     /// <param name="region">The chosen server's region key ("na_e"); the settings' region when none was chosen.</param>
     /// <param name="server">The chosen server's label ("Siel (Elyos)"); empty files the run under the region alone.</param>
@@ -92,11 +95,13 @@ public sealed record RunPayload(
             Merge(s.Items, Key),
             Merge(s.ItemsBound, Key),
             s.PetSnapshot(),
-            zones.Where(kv => kv.Value.Active >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0)
-                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName)),
+            // each zone carries its own items, so the site files them under the zone they dropped in, never all under the main one
+            zones.Where(kv => kv.Value.Active >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0 || kv.Value.Items.Count > 0 || kv.Value.ItemsBound.Count > 0)
+                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName, Merge(kv.Value.Items, Key), Merge(kv.Value.ItemsBound, Key))),
             InstallId.Get(),
             net,
-            OddsPayload.From(s));
+            OddsPayload.From(s),
+            MobRun.From(s, Key));
     }
 
     /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>
@@ -112,7 +117,28 @@ public sealed record RunPayload(
 }
 
 /// <summary>One zone's share of a run: how long, and what came out of it. This is what the "best spot per hour" tables are built from.</summary>
-public sealed record ZoneRun(int minutes, int kills, int nodes, long kinah, int drops, int pets, Dictionary<string, int> pets_by_name);
+public sealed record ZoneRun(int minutes, int kills, int nodes, long kinah, int drops, int pets, Dictionary<string, int> pets_by_name, Dictionary<string, int> items, Dictionary<string, int> items_bound);
+
+/// <summary>
+/// Kinah by enemy, a best guess: what came within a few seconds of the target bar showing this enemy. Only names on the
+/// enemy list (data/mobs.txt) are ever credited, and only zones on the zone list are sent. The site labels it a guess.
+/// </summary>
+public sealed record MobRun(string name, string zone, int kills, long kinah, Dictionary<string, int> drops, int crystals)
+{
+    public static List<MobRun>? From(SessionEngine s, Func<long, string> key)
+    {
+        var list = s.MobSnapshot()
+            .Where(m => m.Zone != SessionEngine.UnknownZone && (m.Kills > 0 || m.Kinah > 0))
+            .Take(RunPayload.MaxMobs)
+            .Select(m =>
+            {
+                var d = new Dictionary<string, int>();
+                foreach (var (id, n) in m.Drops) { var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
+                return new MobRun(m.Name, m.Zone, m.Kills, m.Kinah, d, m.Crystals);
+            }).ToList();
+        return list.Count > 0 ? list : null;
+    }
+}
 
 /// <summary>Successes and failures for one recipe or enchant step.</summary>
 public sealed record OddsCount(int ok, int fail);

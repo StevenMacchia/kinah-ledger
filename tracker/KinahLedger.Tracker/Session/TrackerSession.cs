@@ -23,6 +23,17 @@ public sealed class TrackerSession
     DateTime _zoneAt = DateTime.MinValue;
 
     public SessionEngine Engine { get; private set; }
+    /// <summary>
+    /// What the window shows unless the player keeps the tables across zones: the same events, started over whenever the
+    /// zone changes (and when a run starts). Only shown, never shared; what is shared comes from the other counts, split by zone.
+    /// </summary>
+    public SessionEngine ZoneView { get; private set; }
+    /// <summary>Starts the zone view over in the zone the player is in now.</summary>
+    public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
+    /// <summary>The target bar at the top-centre: which enemy is being fought, for Kinah by enemy (a best guess).</summary>
+    public TargetReader Target { get; } = new();
+    /// <summary>Why the target bar can't be read right now ("the panel sits over it"); empty while it is read.</summary>
+    public string TargetNote { get; private set; } = "";
     public string Kind { get; set; }
     /// <summary>A second engine fed the same events: the farming run that sits on top of the always-on reader.</summary>
     public SessionEngine? Secondary { get; set; }
@@ -96,6 +107,7 @@ public sealed class TrackerSession
         _items = items;
         _parser = new ChatParser(items);
         Engine = new SessionEngine(items);
+        ZoneView = new SessionEngine(items);
         Kind = kind;
         Region = manualRegion;
         ManualRegion = manualRegion != null;
@@ -141,6 +153,9 @@ public sealed class TrackerSession
             else if (zone == null && Engine.Zone == null && (DateTime.UtcNow - _zoneNoteAt).TotalSeconds >= 60) { _zoneNoteAt = DateTime.UtcNow; CrashLog.Note($"zone read: {note}"); }
             Engine.SetZone(zone);
             Secondary?.SetZone(zone);
+            // a new zone starts the zone view over: its tables are this zone's alone
+            if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
+            else ZoneView.SetZone(zone);
         }
         catch (Exception ex) { CrashLog.Write("zone", ex); }
         _zoneAt = DateTime.UtcNow;
@@ -190,17 +205,17 @@ public sealed class TrackerSession
                 // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
                 if (GameWindow.Covered(Region!.Value, _settings.ProcessHints) is { } cover)
                 {
-                    Engine.Pause(); Secondary?.Pause();
+                    Engine.Pause(); Secondary?.Pause(); ZoneView.Pause();
                     Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
                     LastError = "";
                 }
-                else await ReadOnce();
+                else { await ReadOnce(); await TargetDueAsync(); }
                 await ZoneDueAsync();
             }
             catch (System.ComponentModel.Win32Exception)
             {
                 // the screen can't be copied: the session is locked, a secure prompt is up, or a display is switching. Wait, like a cover.
-                Engine.Pause(); Secondary?.Pause();
+                Engine.Pause(); Secondary?.Pause(); ZoneView.Pause();
                 Paused = "the screen can't be read right now (locked, or a system prompt is up)";
                 LastError = "";
             }
@@ -218,7 +233,7 @@ public sealed class TrackerSession
     {
         // back in view: lines that arrived while it was covered weren't seen, so the first read is history and the clocks restart
         if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
-        Engine.Resume(); Secondary?.Resume();
+        Engine.Resume(); Secondary?.Resume(); ZoneView.Resume();
         var lines = await _reader!.ReadAsync();
         Reads++;
         // the chat moved or the UI was toggled: after a stretch of empty reads, find it again (auto mode only)
@@ -238,12 +253,14 @@ public sealed class TrackerSession
         bool afterFade = _tracker.LastAfterFade;
         // a read that couldn't be lined up with the last one counts nothing; the log says so, so a missed line can be traced
         if (_tracker.Unaligned > unaligned) CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
+        // the enemy on the target bar, as last read, goes with this read's events (Kinah by enemy, a best guess)
+        if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
         foreach (var l in fresh)
         {
             bool any = false;
             foreach (var ev in _parser.Parse(l, DateTime.UtcNow))
             {
-                Engine.Apply(ev); Secondary?.Apply(ev); any = true;
+                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); any = true;
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
@@ -251,6 +268,33 @@ public sealed class TrackerSession
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
         LastError = "";
+    }
+
+    DateTime _targetAt = DateTime.MinValue;
+
+    /// <summary>
+    /// The target bar every 2 seconds while the chat is read. Unlike the minimap, the panel isn't hidden for it: a read every
+    /// 2 seconds would make it flicker. It is read through instead, and the window asks to move it only when nothing is read.
+    /// </summary>
+    async Task TargetDueAsync()
+    {
+        if ((DateTime.UtcNow - _targetAt).TotalSeconds < 2) return;
+        _targetAt = DateTime.UtcNow;
+        if (GameRect is not { } g) return;
+        try
+        {
+            var cover = GameWindow.Covered(TargetReader.Strip(g), _settings.ProcessHints);
+            bool own = cover != null && cover.StartsWith("Kinah Ledger");
+            // the panel (or this window) over part of the band is read through: its own labels are never on the enemy list.
+            // Only when no enemy has been read for a minute does the window ask to drag it aside.
+            if (cover == null || own)
+            {
+                await Target.TickAsync(g);
+                TargetNote = own && (Target.Name == null || (DateTime.UtcNow - Target.NameAt).TotalSeconds > 60) ? "the panel sits over the target bar; drag it aside if enemies don't show" : "";
+            }
+            else TargetNote = cover!.StartsWith("the game") ? "" : cover + " covers the target bar";
+        }
+        catch (Exception ex) { CrashLog.Write("target bar", ex); }
     }
 
     /// <summary>
@@ -307,6 +351,9 @@ public sealed class UserPrefs
     /// <summary>The Drops and Gathered sections both show at once; each folds to its header on a click, and stays folded.</summary>
     public bool DropsOpen { get; set; } = true;
     public bool GatherOpen { get; set; } = true;
+    public bool MobsOpen { get; set; } = true;
+    /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
+    public bool AllZones { get; set; }
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
     public bool ShareMarket { get; set; } = true;
     /// <summary>True once the player chose the Market area by hand; the title-and-headers search then stays off until they switch back.</summary>

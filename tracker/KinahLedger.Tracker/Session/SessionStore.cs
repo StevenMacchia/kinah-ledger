@@ -12,6 +12,13 @@ public static class SessionStore
         Dictionary<string, int> drops, Dictionary<string, int> pets, Dictionary<string, Upload.ZoneRun> zones, bool shared,
         long? kinah_net = null, Upload.OddsPayload? odds = null, int sold = 0, long sold_kinah = 0);
 
+    static Dictionary<string, int> ByName(Dictionary<long, int> m, ItemDictionary items)
+    {
+        var d = new Dictionary<string, int>();
+        foreach (var (id, n) in m) { var k = items.NameOf(id); d[k] = d.GetValueOrDefault(k) + n; }
+        return d;
+    }
+
     public static void Append(SessionEngine e, ItemDictionary items, string activity, Settings s, bool shared)
     {
         try
@@ -19,7 +26,7 @@ public static class SessionStore
             var t = e.Totals();
             var drops = new Dictionary<string, int>();
             foreach (var r in e.ItemRows()) drops[r.Name] = r.Count + r.Bound;
-            var zones = e.ZoneSnapshot().ToDictionary(kv => kv.Key, kv => new Upload.ZoneRun((int)Math.Round(kv.Value.Seconds / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName));
+            var zones = e.ZoneSnapshot().ToDictionary(kv => kv.Key, kv => new Upload.ZoneRun((int)Math.Round(kv.Value.Seconds / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName, ByName(kv.Value.Items, items), ByName(kv.Value.ItemsBound, items)));
             var rec = new Saved(e.Started.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), (int)Math.Round(e.Active.TotalMinutes), activity, s.GearBracket, s.Region,
                 t.Kinah, t.KinahBound, t.Kills, e.KinahDrops, t.Nodes, t.Bonus, drops, e.PetSnapshot(), zones, shared,
                 e.NetKinah, Upload.OddsPayload.From(e), e.Sold, e.SoldKinah);

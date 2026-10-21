@@ -22,6 +22,13 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"\bacquired[\sn]{0,2}[.,\-'`]?\s?(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b(?<rest>.*)$", RegexOptions.IgnoreCase)]
     private static partial Regex Kina();
 
+    /// <summary>"A total payment of 34,916 Kina has been completed." The game prints it before the "Acquired 34,916 Kina." of a quest or payment reward.</summary>
+    [GeneratedRegex(@"\bpayment\s+of\s+(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Payment();
+
+    // the amount of the last payment line and when it was read: the "Acquired" line with the same amount right after is the reward itself
+    long _paymentAmt; DateTime _paymentAt;
+
     [GeneratedRegex(@"\b(?:acquired|obtained|looted|picked up)\s+(?<name>.+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s*\.?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex Item();
 
@@ -169,10 +176,21 @@ public sealed partial class ChatParser
         var gf = GatherFail().Match(line);
         if (gf.Success) { yield return new GatherFailed(time, gf.Groups["skill"].Value.Trim()); yield break; }
 
+        var pay = Payment().Match(line);
+        if (pay.Success) { _paymentAmt = Digits(pay.Groups["amt"].Value); _paymentAt = time; yield break; }
+
         var k = Kina().Match(line);
         if (k.Success)
         {
             long amt = Digits(k.Groups["amt"].Value);
+            // a quest or payment reward: the payment line just before named this amount, or the line says what it is.
+            // Counted like bound Kinah: shown, never farming income, never a kill.
+            if ((amt > 0 && amt == _paymentAmt && (time - _paymentAt).TotalSeconds <= 15) || Regex.IsMatch(line, @"\b(?:quest|reward|payment|completed)\b", RegexOptions.IgnoreCase))
+            {
+                _paymentAmt = 0;
+                if (amt > 0) yield return new KinahChanged(time, amt, true);
+                yield break;
+            }
             // Kina from a sale or the mail isn't farming income: logged, never counted as a kill
             if (Regex.IsMatch(line, @"\b(?:market|sale|sold|mail|proceeds)\b", RegexOptions.IgnoreCase)) { if (amt > 0) yield return new RewardReceived(time, "Market proceeds", 1); yield break; }
             if (amt > 0) yield return new KinahChanged(time, amt, k.Groups["rest"].Value.Contains("bound", StringComparison.OrdinalIgnoreCase));
