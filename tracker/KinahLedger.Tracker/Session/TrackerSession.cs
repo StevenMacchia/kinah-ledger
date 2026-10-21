@@ -137,6 +137,7 @@ public sealed class TrackerSession
                 if (!string.Equals(_pendingZone, zone, StringComparison.Ordinal)) { _pendingZone = zone; zone = null; }
             }
             else _pendingZone = null;
+            if (zone != null && zone != Engine.Zone) CrashLog.Note($"zone: {zone}");
             Engine.SetZone(zone);
             Secondary?.SetZone(zone);
         }
@@ -261,9 +262,14 @@ public sealed class TrackerSession
         if ((DateTime.UtcNow - _zoneAt).TotalSeconds < every) return;
         var game = GameWindow.Find(_settings.ProcessHints);
         GameRect = game ?? GameRect;
-        // the minimap has its own check: a window over it alone keeps the last zone and lets the chat be read
-        if (game != null && GameWindow.Covered(ZoneLocator.Strip(game.Value), _settings.ProcessHints) == null) await ReadZone(game.Value);
-        else _zoneAt = DateTime.UtcNow;
+        if (game is not { } g) { _zoneAt = DateTime.UtcNow; return; }
+        // the panel over the game steps aside for the read when it sits on the minimap corner; the minimap then has its own
+        // cover check: another window over it alone keeps the last zone and lets the chat be read
+        await Ui.HudWindow.HiddenIfOver(ZoneLocator.Strip(g), async () =>
+        {
+            if (GameWindow.Covered(ZoneLocator.Strip(g), _settings.ProcessHints) == null) await ReadZone(g);
+            else _zoneAt = DateTime.UtcNow;
+        });
     }
 
     public async Task StopAsync()

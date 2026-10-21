@@ -1,6 +1,8 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 
 namespace KinahLedger.Ui;
@@ -14,8 +16,40 @@ public sealed class HudWindow : Window
 {
     readonly TextBlock _kinah = new(), _value = new(), _total = new();
 
+    /// <summary>The panel on screen right now, if any: the readers step around it.</summary>
+    public static HudWindow? Current { get; private set; }
+
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
+
+    /// <summary>Where the panel is on screen, in pixels (not DIPs), or empty when it isn't shown.</summary>
+    System.Drawing.Rectangle PixelBounds()
+    {
+        var h = new WindowInteropHelper(this).Handle;
+        if (h == IntPtr.Zero || !IsVisible || !GetWindowRect(h, out var r)) return System.Drawing.Rectangle.Empty;
+        return System.Drawing.Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+    }
+
+    /// <summary>
+    /// Runs a screen read with the panel out of the way: when the panel sits over the area about to be read (dragged onto
+    /// the minimap corner, say), it is hidden for the read and shown again after, so the game's own text is what gets read
+    /// and the panel never counts as a window covering the game.
+    /// </summary>
+    public static async Task HiddenIfOver(System.Drawing.Rectangle area, Func<Task> read)
+    {
+        var h = Current;
+        bool hide = false;
+        if (h != null) { try { hide = await h.Dispatcher.InvokeAsync(() => h.PixelBounds().IntersectsWith(area)); } catch (Exception) { hide = false; } }
+        if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Hide); } catch (Exception) { hide = false; } }
+        try { await read(); }
+        finally { if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Show); } catch (Exception) { /* closing */ } } }
+    }
+
     public HudWindow()
     {
+        Current = this;
+        Closed += (_, _) => { if (Current == this) Current = null; };
+        ShowActivated = false;   // never takes focus from the game, on start or when shown again after a read
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
