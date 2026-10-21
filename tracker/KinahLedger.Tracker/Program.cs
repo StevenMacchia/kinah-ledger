@@ -334,6 +334,27 @@ options: --process aion[,other]");
             ok &= got == gExpect[i];
             Console.WriteLine($"  garbled read {i + 1} -> new: [{got}]  expected [{gExpect[i]}] {(got == gExpect[i] ? "ok" : "MISMATCH")}");
         }
+        // the crafting window's "Show acquired designs" over the chat became the baseline after a fade, and the next read,
+        // holding the craft and its item line, was dropped as unaligned (live reads.log, 2026-10-21 09:38)
+        var h = new List<string> { "[Masu] only way is to swipe", "[Drogo] i only swipe for cosmetics", "Acquired 144 Kina.", "Obtained 1 Karnif Soul Points.", "[Drogo] we're wumbo" };
+        var cw = new LineTracker();
+        var craftFrames = new[]
+        {
+            h,
+            new List<string>(),
+            new List<string> { "Odyle acquired." },
+            new List<string>(),
+            new List<string> { "Show acquired designs" },
+            h.Concat(new[] { "Odyle acquired.", "Successfully crafted Orichalcum Ingot.", "Orichalcum Ingot acquired." }).ToList(),
+            h.Concat(new[] { "Odyle acquired.", "Successfully crafted Orichalcum Ingot.", "Orichalcum Ingot acquired.", "Acquired 150 Kina." }).ToList(),
+        };
+        string[] craftExpect = { "", "", "Odyle acquired.", "", "Show acquired designs", "Successfully crafted Orichalcum Ingot.,Orichalcum Ingot acquired.", "Acquired 150 Kina." };
+        for (int i = 0; i < craftFrames.Length; i++)
+        {
+            var got = string.Join(",", cw.NewLines(craftFrames[i]));
+            ok &= got == craftExpect[i];
+            Console.WriteLine($"  crafting window read {i + 1} -> new: [{got}]  expected [{craftExpect[i]}] {(got == craftExpect[i] ? "ok" : "MISMATCH")}");
+        }
         ok &= TradeTest(items);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;

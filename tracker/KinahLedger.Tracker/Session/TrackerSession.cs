@@ -259,6 +259,7 @@ public sealed class TrackerSession
         var fresh = _tracker.NewLines(lines);
         bool afterFade = _tracker.LastAfterFade;
         // a read that couldn't be lined up with the last one counts nothing; the log says so, so a missed line can be traced
+        if (_tracker.LastFromAnchor) CrashLog.Note($"the last read was a stray line, so this one was lined up with the last full read of the chat ({fresh.Count} new)");
         if (_tracker.Unaligned > unaligned) CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
         // the enemy on the target bar, as last read, goes with this read's events (Kinah by enemy, a best guess)
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }

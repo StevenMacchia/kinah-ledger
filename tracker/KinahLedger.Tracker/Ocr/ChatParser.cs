@@ -394,12 +394,32 @@ public sealed class LineTracker
     /// </summary>
     public bool LastAfterFade { get; private set; }
 
+    /// <summary>
+    /// True when the last lines returned were found by lining up with the last full read of the chat, because the read
+    /// just before was a stray line or two (a game window's label over the chat, "Show acquired designs").
+    /// </summary>
+    public bool LastFromAnchor { get; private set; }
+
+    // The last read of three or more lines that was lined up (or the first): the fallback when a read can't be lined up
+    // with the one just before it. Lines returned since that read (after a fade, from a short read) are kept in _since,
+    // so lining up on the older read never counts them twice.
+    List<string> _anchor = new();
+    readonly List<string> _since = new();
+
     /// <summary>After a stretch the chat couldn't be seen, the next read is history again, like the first one: lines that arrived unseen aren't counted.</summary>
-    public void Rebase() { _prev = new(); _faded = false; }
+    public void Rebase() { _prev = new(); _anchor = new(); _since.Clear(); _faded = false; }
+
+    void Anchor(List<string> keys) { if (keys.Count >= 3) { _anchor = keys; _since.Clear(); } }
+
+    List<string> Returned(List<string> keys, List<string> fresh)
+    {
+        if (keys.Count >= 3) Anchor(keys); else _since.AddRange(fresh.Select(Key));
+        return fresh;
+    }
 
     public List<string> NewLines(List<string> cur)
     {
-        LastAfterFade = false;
+        LastAfterFade = false; LastFromAnchor = false;
         // the frameless chat fades out when idle; when a loot line brings it back, the read before it is this empty one.
         // A read of a line or two with nothing chat-like in it (a stray "99" from the world behind the chat) counts as
         // empty too: as the new baseline it left the next real read nothing to line up with, and that read's lines were lost.
@@ -417,23 +437,53 @@ public sealed class LineTracker
             // after a fade, one or two lines are what arrived since: count them even when they repeat the last ones seen
             // ("Orichalcum Ore acquired." twice in a row). More at once means the history came back (a hover), so align as usual.
             _faded = false;
-            if (keys.Count <= 2) { _prev = keys; LastAfterFade = true; return new List<string>(cur); }
+            if (keys.Count <= 2) { _prev = keys; LastAfterFade = true; return Returned(keys, new List<string>(cur)); }
         }
         if (_prev.Count == 0)
         {
             _prev = keys;                     // first read: what's already on screen is history, not loot
+            Anchor(keys);
             return new List<string>();
         }
-        if (keys.Count == _prev.Count && Enumerable.Range(0, keys.Count).All(i => Similar(keys[i], _prev[i]))) return new List<string>();
+        if (keys.Count == _prev.Count && Enumerable.Range(0, keys.Count).All(i => Similar(keys[i], _prev[i]))) { Anchor(keys); return new List<string>(); }
 
-        // Line up on the previous read's last line; when that line is gone, on the one before it, and so on. Behind the
-        // frameless chat the box also catches text from the world (a nameplate, a sign) that comes and goes as the camera
-        // moves; anchoring only on the last line lost every loot line that arrived while such text vanished.
-        for (int j = _prev.Count - 1; j >= Math.Max(0, _prev.Count - 4); j--)
+        if (Align(_prev, keys, cur) is { } fresh) { _prev = keys; return Returned(keys, fresh); }
+
+        // Couldn't line up with the read just before. When that read was a stray line or two (a game window's label over
+        // the chat, like the crafting window's "Show acquired designs"), the last full read of the chat still lines up:
+        // what follows it is new, less the lines already counted since. Without this, the read holding
+        // "Successfully crafted Orichalcum Ingot." and its item line was dropped (2026-10-21 09:38).
+        if (_anchor.Count >= 3 && !ReferenceEquals(_anchor, _prev) && Align(_anchor, keys, cur) is { } again)
+        {
+            var seen = new List<string>(_since);
+            var kept = new List<string>();
+            foreach (var l in again)
+            {
+                int at = seen.FindIndex(s => Similar(s, Key(l)));
+                if (at >= 0) seen.RemoveAt(at); else kept.Add(l);
+            }
+            LastFromAnchor = true;
+            _prev = keys;
+            return Returned(keys, kept);
+        }
+        Unaligned++;
+        _prev = keys;
+        return new List<string>();
+    }
+
+    /// <summary>
+    /// The lines of <paramref name="cur"/> that come after <paramref name="prev"/>'s last lines, or null when the two
+    /// can't be lined up. Lines up on the previous read's last line; when that line is gone, on the one before it, and so
+    /// on. Behind the frameless chat the box also catches text from the world (a nameplate, a sign) that comes and goes as
+    /// the camera moves; anchoring only on the last line lost every loot line that arrived while such text vanished.
+    /// </summary>
+    static List<string>? Align(List<string> prev, List<string> keys, List<string> cur)
+    {
+        for (int j = prev.Count - 1; j >= Math.Max(0, prev.Count - 4); j--)
         {
             for (int k = Math.Min(3, j + 1); k >= 1; k--)
             {
-                var tail = _prev.GetRange(j - k + 1, k);
+                var tail = prev.GetRange(j - k + 1, k);
                 for (int i = keys.Count - k; i >= 0; i--)        // last occurrence: fewest new lines, never a double count
                 {
                     if (!Enumerable.Range(0, k).All(x => Similar(keys[i + x], tail[x]))) continue;
@@ -442,15 +492,12 @@ public sealed class LineTracker
                     // either read garbled them ("mria acquired."): skip one line here for each. Only world text (short,
                     // nothing chat-like) can really be gone, so it holds nothing back. Comparing the text instead re-counted
                     // every garbled line as new.
-                    if (j < _prev.Count - 1) fresh = fresh.Skip(_prev.Skip(j + 1).Count(Persists)).ToList();
-                    _prev = keys;
+                    if (j < prev.Count - 1) fresh = fresh.Skip(prev.Skip(j + 1).Count(Persists)).ToList();
                     return fresh;
                 }
             }
         }
-        Unaligned++;
-        _prev = keys;
-        return new List<string>();
+        return null;
     }
 
     /// <summary>
