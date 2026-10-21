@@ -227,7 +227,7 @@ public sealed class UserPrefs
     public bool Share { get; set; } = true;
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>
     public bool ManualChat { get; set; }
-    /// <summary>True once the chat and zone have been found: the window opens small, with the setup steps behind Settings.</summary>
+    /// <summary>No longer used: the window is always the live count, with setup in Options. Kept so older ui.json files load.</summary>
     public bool Compact { get; set; }
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
     public bool ShareMarket { get; set; } = true;
@@ -245,6 +245,16 @@ public sealed class UserPrefs
     public bool AutoUpdate { get; set; } = true;
     /// <summary>The version that last opened the window, so the first start after an update can say so.</summary>
     public string LastVersion { get; set; } = "";
+    /// <summary>When the game starts while the tracker waits in the tray: "open" shows the window, "tray" stays in the tray. Reading starts either way.</summary>
+    public string OnGameStart { get; set; } = "open";
+    /// <summary>Hide to the tray once the game has been closed for a few seconds (never during a run).</summary>
+    public bool HideWhenGameCloses { get; set; }
+    /// <summary>The window's close button hides it to the tray; Quit in the tray menu ends the tracker.</summary>
+    public bool CloseToTray { get; set; }
+    /// <summary>Minimizing always hides to the tray, not only during a run.</summary>
+    public bool MinimizeToTray { get; set; }
+    /// <summary>The start/stop shortcut, as "Ctrl+Shift+K"; empty is off.</summary>
+    public string Hotkey { get; set; } = Platform.Hotkey.Default;
     public int? WinX { get; set; }
     public int? WinY { get; set; }
     /// <summary>Where the over-game panel was last dragged to.</summary>

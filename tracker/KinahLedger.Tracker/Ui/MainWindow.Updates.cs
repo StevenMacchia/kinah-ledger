@@ -12,6 +12,8 @@ public partial class MainWindow
 {
     static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(20), CheckEvery = TimeSpan.FromHours(6);
     const string SiteDownloadPage = "https://kinahledger.com/#tracker";
+    /// <summary>Tells the restarted exe to wait for this one to let go instead of handing over to it.</summary>
+    public const string AfterUpdateArg = "--after-update";
 
     /// <summary>The newest version the site lists, when it is above this one.</summary>
     Release? _release;
@@ -20,25 +22,24 @@ public partial class MainWindow
     string? _updateError;
     bool _updateNeedsSite, _downloading, _restartForUpdate, _updatesStarted;
     double _updateProgress;
-    string? _exe;
+    readonly string? _exe = Updater.ExePath;
+    string _updateStatus = "Checks kinahledger.com for a newer version at start and every few hours. Only the app version goes with the request.";
+
+    /// <summary>The update line for Options › Updates.</summary>
+    public string UpdateStatusText => _updateStatus;
+    void SetUpdateStatus(string text) { _updateStatus = text; _options?.RefreshUpdates(); }
 
     /// <summary>Starts the update checks. Called by the real app start only, never by layout renders or self-tests.</summary>
     public void StartUpdates()
     {
         if (_updatesStarted) return;
         _updatesStarted = true;
-        _exe = Updater.ExePath;
-        AutoUpdateChk.IsChecked = _prefs.AutoUpdate;
-        AutoUpdateChk.Checked += (_, _) => { _prefs.AutoUpdate = true; _prefs.Save(); if (_release != null && _staged == null && !_downloading) _ = FetchUpdate(_release); };
-        AutoUpdateChk.Unchecked += (_, _) => { _prefs.AutoUpdate = false; _prefs.Save(); };
-        CheckUpdateLink.Click += async (_, _) => await CheckForUpdate(manual: true);
         UpdateBtn.Click += async (_, _) => await UpdateClicked();
         UpdateNotesLink.Click += (_, _) => { if (_release?.NotesUrl is { Length: > 0 } u) Open(u); };
         AnnounceUpdated();
         if (!_settings.Update.Check)
         {
-            AutoUpdateChk.IsEnabled = false; CheckUpdateLink.IsEnabled = false;
-            UpdateStatus.Text = "Update checks are off (update.check in settings.json). New versions are on kinahledger.com.";
+            SetUpdateStatus("Update checks are off (update.check in settings.json). New versions are on kinahledger.com.");
             return;
         }
         _ = UpdateLoop();
@@ -54,7 +55,7 @@ public partial class MainWindow
         if (Updater.ParseVersion(was) is { } w && w < Updater.Current)
         {
             Say($"Updated to {now}. Everything you set is kept.", "Good");
-            UpdateStatus.Text = $"Updated from {was} to {now}.";
+            SetUpdateStatus($"Updated from {was} to {now}.");
         }
     }
 
@@ -71,14 +72,22 @@ public partial class MainWindow
         }
     }
 
-    async Task CheckForUpdate(bool manual)
+    /// <summary>The automatic-install choice changed in Options: a found version starts downloading at once when it was turned on.</summary>
+    void AutoUpdateChanged(bool on)
+    {
+        _prefs.AutoUpdate = on;
+        if (on && _release != null && _staged == null && !_downloading) _ = FetchUpdate(_release);
+    }
+
+    public async Task CheckForUpdate(bool manual)
     {
         if (_downloading) return;
-        if (manual) UpdateStatus.Text = "Checking…";
+        if (!_settings.Update.Check) return;
+        if (manual) SetUpdateStatus("Checking…");
         var r = await Updater.CheckAsync(_settings.Update.Manifest);
         var at = DateTime.Now.ToString("t");
-        if (!r.Ok) { if (_release == null) UpdateStatus.Text = $"Couldn't check for updates at {at}: {r.Note}. It tries again in a few hours."; return; }
-        if (r.Newer == null) { if (_release == null) UpdateStatus.Text = $"{r.Note} Checked at {at}."; return; }
+        if (!r.Ok) { if (_release == null) SetUpdateStatus($"Couldn't check for updates at {at}: {r.Note}. It tries again in a few hours."); return; }
+        if (r.Newer == null) { if (_release == null) SetUpdateStatus($"{r.Note} Checked at {at}."); return; }
         if (_release != null && r.Newer.Version == _release.Version && _updateError == null) { ShowUpdate(); return; }
         _release = r.Newer; _staged = null; _updateError = null; _updateNeedsSite = false;
         if (_prefs.AutoUpdate && _exe != null) await FetchUpdate(_release);
@@ -102,7 +111,7 @@ public partial class MainWindow
         finally { _downloading = false; ShowUpdate(); }
     }
 
-    /// <summary>The banner and the line under Settings, for whatever state the update is in.</summary>
+    /// <summary>The banner and the line in Options › Updates, for whatever state the update is in.</summary>
     void ShowUpdate()
     {
         var r = _release;
@@ -131,7 +140,7 @@ public partial class MainWindow
             UpdateText.Text = $"Kinah Ledger {v} is out (you have {Updater.Show(Updater.Current)}).";
             UpdateBtn.Content = "Update";
         }
-        UpdateStatus.Text = UpdateText.Text;
+        SetUpdateStatus(UpdateText.Text);
     }
 
     async Task UpdateClicked()
@@ -153,6 +162,7 @@ public partial class MainWindow
             await StopTracking();
         }
         _restartForUpdate = true;
+        _quitting = true;   // a restart, even when the close button is set to keep the tracker in the tray
         Close();
     }
 
@@ -173,7 +183,7 @@ public partial class MainWindow
                     "Kinah Ledger", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         if (!_restartForUpdate) return;
-        try { Updater.Relaunch(_exe); }
+        try { Updater.Relaunch(_exe, AfterUpdateArg); }
         catch (Exception ex) { CrashLog.Write("update relaunch", ex); }
     }
 }

@@ -36,7 +36,21 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
 1. Play in borderless or windowed mode with the chat open at the bottom-left. A chat tab showing only System Notifications reads best; the normal tab works too, and so does the frameless chat with no input box.
 2. Double-click `KinahLedger.exe`. On first run pick your region, faction and server, and a look (Night, Abyss or Daylight); everything shared is filed per server. From then on the tracker finds the game window, the chat (above the "Enter your message" box, or from its own lines) and the zone on the minimap by itself, and **counts everything the chat shows while the game is open**: drops, gathers, Soul Crystals, and Market prices whenever the Market is open. That count is shared anonymously in 15-minute chunks and never kept here.
 3. **Start farming** times a run on top of that count: the window shows the run (four tiles, then Drops / Gathered / Pets tabs), and Stop saves it to your history and shares it. Open world, Gathering or Pets is the run's label. Open world shows Kinah per hour and per kill, kills per hour, drops per hour, and every drop with its drop rate and per-hour rate, with item names in the game's tier colours. Gathering splits each skill (mining, logging, essence extraction, herbs, cooking ingredients) into its own section with its own attempts, Plentiful rate and per-attempt rates. Pets counts Soul Crystals by zone with drops and per hour only, no drop %, so the best pet-farming spot stands out. Soul Points and Soul Crystals never count as drops. Ctrl+Shift+K starts and stops a run from inside the game; minimizing keeps everything running in the tray.
-4. **Settings** holds the server, the one **Share** switch (runs and Market prices together), the panel over the game, the profile link code (a short form of the random install ID: pasting it into a profile on the site attaches this PC's runs to that profile, otherwise runs stay anonymous), chat detection with **Detect now**, **Choose the chat** and **Test read**, the Market area, and the look.
+4. **Options** (its own window, with **Save** and **Cancel**) holds everything that can be set, page by page:
+   - **General**: start with Windows (it then waits in the tray until Aion 2 is running), what happens when Aion 2
+     starts (open the window, or stay in the tray; reading starts either way), hide when Aion 2 closes, the close
+     button keeping it in the tray, minimize to the tray, and the look.
+   - **Server**: region and server; everything shared is filed under it.
+   - **Sharing**: the one **Share** switch (runs and Market prices together), linking this PC to your profile on the
+     site (the link code is a short form of the random install ID; without it runs stay anonymous), replacing the
+     install ID, and the data folder.
+   - **Game reading**: **Detect now**, **Choose the chat**, **Test read**, the Market area, and a live preview of what
+     is read. These act right away.
+   - **In game**: the start/stop shortcut (Ctrl+Shift+K by default; any Ctrl/Alt/Shift combination, or off) and the
+     panel over the game.
+   - **Updates** and **About**.
+
+   Only one Kinah Ledger runs at a time: starting it again brings up the running one's window.
 
 The same steps exist as commands for scripting (`pick`, `ocr-test`, `watch`), listed below.
 
@@ -58,8 +72,8 @@ nothing is clicked or typed in the game, and no account ever reads the Market on
   thousands separators).
 - Your server, chosen on first run, travels with the prices as `region-server` (`na_e-siel-elyos`) so they land on
   the right board; without it, asks are read but not sent.
-- Market prices follow the one **Share** switch in Settings: with sharing off the Market is never read, and the rest
-  of the tracker works as before. Settings shows what the reader is doing: waiting for the game,
+- Market prices follow the one **Share** switch in Options › Sharing: with sharing off the Market is never read, and the rest
+  of the tracker works as before. Options › Game reading shows what the reader is doing: waiting for the game,
   watching for the Market, or reading it, with asks read, items, asks shared and when it last read. The same ask
   (item, stack, price) isn't sent twice within 15 minutes; batches go out every 10 seconds or 100 asks, and once
   more when the window closes.
@@ -90,7 +104,7 @@ Since 0.6.6 the tracker keeps itself current. Twenty seconds after it opens, and
 it reads `https://kinahledger.com/download/latest.json` (version, download address, size and SHA-256 of the newest exe;
 only the app version goes up, in the User-Agent). When there is a newer version:
 
-- **Install new versions automatically** (Settings, on by default): it downloads beside the running exe, is checked
+- **Install new versions automatically** (Options › Updates, on by default): it downloads beside the running exe, is checked
   against the size and SHA-256, and replaces the exe when the window closes. A banner offers **Restart now** to install it
   at once; during a farming run that asks first, and the run is stopped and saved before the restart.
 - Off: the banner says a new version is out and **Update** downloads it on request.

@@ -8,7 +8,7 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The first-run screen and the skin picker. Everything the tracker shares is filed per server, so the window
-/// shows nothing else until region, faction and server are chosen; the same choices sit under Settings afterwards.
+/// shows nothing else until region, faction and server are chosen; the same choices sit in Options afterwards.
 /// </summary>
 public partial class MainWindow
 {
@@ -22,29 +22,27 @@ public partial class MainWindow
     {
         _wRegion = RegionKey; _wServer = Server; _wFaction = Server?.Faction ?? "Elyos";
         BuildRegionChips(); BuildFactionChips(); BuildServerChips();
-        BuildSkinChips(SkinChips); BuildSkinChips(SkinRow);
+        BuildSkinChips(SkinChips);
         WelcomeGo.Click += (_, _) => FinishWelcome();
         SetWelcome(!_prefs.Welcomed || !HasServer);
     }
 
-    /// <summary>Welcome on: only the header and the welcome card. Off: the normal window, compact or not as before.</summary>
+    /// <summary>Welcome on: only the header and the welcome card. Off: the live count.</summary>
     void SetWelcome(bool on)
     {
         _welcome = on;
         WelcomeCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var fe in new FrameworkElement[] { SessionCard, Tiles, TablesCard, StatusRow, SettingsBtn })
+        foreach (var fe in new FrameworkElement[] { SessionCard, Tiles, TablesCard, StatusRow, OptionsBtn, ServerChip })
             fe.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-        if (on) { SetupCard.Visibility = Visibility.Collapsed; Tagline.Visibility = Visibility.Visible; Width = 640; }
-        else SetCompact(_compact, remember: false);
+        Tagline.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        Width = on ? 640 : 600;
         if (on) WelcomeHint.Text = HasServer ? "" : "Pick your server to continue.";
     }
 
     void FinishWelcome()
     {
         if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.Foreground = B("Warn"); return; }
-        RegionBox.SelectedItem = Servers.Region(_wRegion) ?? Servers.Regions[0];
-        FillServers();
-        ServerPick.SelectedItem = Servers.Find(_wRegion, _wServer.Label);
+        ApplyServer(_wRegion, _wServer.Label);
         _prefs.Welcomed = true;
         SavePrefs();
         SetWelcome(false);
@@ -53,7 +51,7 @@ public partial class MainWindow
 
     /* ---------------- chips ---------------- */
 
-    Button Chip(string text, bool on, Action click, string? toolTip = null)
+    public Button Chip(string text, bool on, Action click, string? toolTip = null)
     {
         var b = new Button { Content = text, Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(0, 0, 8, 8), FontSize = 13.5, MinWidth = 72, ToolTip = toolTip };
         PaintChip(b, on);
@@ -61,7 +59,7 @@ public partial class MainWindow
         return b;
     }
 
-    void PaintChip(Button b, bool on)
+    public void PaintChip(Button b, bool on)
     {
         b.Background = B(on ? "AccentDim" : "Card2");
         b.BorderBrush = B(on ? "Accent" : "Line");
@@ -116,14 +114,21 @@ public partial class MainWindow
 
     void SetSkin(string key)
     {
-        Skins.Apply(key);
+        ApplySkin(key);
         _prefs.Skin = key;
         if (!_demo) _prefs.Save();
+    }
+
+    /// <summary>Paints every open window in a look without saving it (Options previews a look until Save or Cancel).</summary>
+    public void ApplySkin(string key)
+    {
+        Skins.Apply(key);
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.DarkTitleBar(h, Skins.IsDark(key));
-        BuildSkinChips(SkinChips); BuildSkinChips(SkinRow);
+        _options?.SkinChanged();
+        BuildSkinChips(SkinChips);
         BuildRegionChips(); BuildFactionChips(); BuildServerChips();   // chips hold their own brushes, so repaint them
-        Preview.Source = Preview.Source;   // keep the preview; nothing else to redraw
+        PaintTabs();
     }
 
     /// <summary>The first-run screen for a layout render, with a sample choice half made.</summary>
@@ -132,7 +137,7 @@ public partial class MainWindow
         _demo = true;
         Skins.Apply(skin);
         _wRegion = "na_e"; _wFaction = "Elyos"; _wServer = Servers.Find("na_e", "Siel (Elyos)");
-        BuildRegionChips(); BuildFactionChips(); BuildServerChips(); BuildSkinChips(SkinChips); BuildSkinChips(SkinRow);
+        BuildRegionChips(); BuildFactionChips(); BuildServerChips(); BuildSkinChips(SkinChips);
         SetWelcome(true);
     }
 }

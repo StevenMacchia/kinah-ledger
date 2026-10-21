@@ -31,6 +31,9 @@ public static class GameWindow
     sealed record Found(IntPtr Handle, HashSet<uint> Pids);
     static volatile Found? _found;
 
+    /// <summary>True when the last <see cref="Find"/> saw a game process, window or not (still loading, minimized).</summary>
+    public static bool ProcessSeen { get; private set; }
+
     public static Rectangle? Find(IEnumerable<string> processHints)
     {
         var hints = processHints.Select(h => h.ToLowerInvariant()).ToArray();
@@ -51,6 +54,7 @@ public static class GameWindow
             catch (Exception) { /* process went away */ }
         }
         if (found != null) _found = new Found(handle, pids);
+        ProcessSeen = pids.Count > 0;
         return found;
     }
 

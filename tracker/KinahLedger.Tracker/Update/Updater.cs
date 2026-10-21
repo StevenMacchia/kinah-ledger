@@ -210,9 +210,9 @@ public static class Updater
         }
     }
 
-    /// <summary>Starts the (new) exe; the caller then closes. No arguments, so it opens the window as a double-click does.</summary>
-    public static void Relaunch(string exe) =>
-        Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) ?? "" });
+    /// <summary>Starts the (new) exe; the caller then closes. It opens the window as a double-click does.</summary>
+    public static void Relaunch(string exe, string args = "") =>
+        Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) ?? "" });
 
     /// <summary>
     /// Removes what an update leaves behind: the previous exe (.old), a half download (.part) and a download that was never

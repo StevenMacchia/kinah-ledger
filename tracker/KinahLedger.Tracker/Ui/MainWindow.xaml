@@ -1,7 +1,7 @@
 <Window x:Class="KinahLedger.Ui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kinah Ledger" Width="560" SizeToContent="Height" ResizeMode="CanMinimize"
+        Title="Kinah Ledger" Width="600" SizeToContent="Height" ResizeMode="CanMinimize"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
@@ -93,24 +93,37 @@
   <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="18,14,18,12">
     <StackPanel>
 
-      <!-- header -->
+      <!-- header: the mark, the name and version, the server everything is filed under, and Options -->
       <Grid>
-        <StackPanel Orientation="Horizontal">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <!-- the app mark: the same gold hex as the tray icon, drawn here so no image ships -->
-          <Grid Width="24" Height="24" Margin="0,0,9,0" VerticalAlignment="Center">
+          <Grid Width="26" Height="26" Margin="0,0,10,0" VerticalAlignment="Center">
             <Path Data="M13,1 L24,7.5 L24,19.5 L13,26 L2,19.5 L2,7.5 Z" Fill="{DynamicResource Mark}" Stroke="{DynamicResource Gold}" StrokeThickness="1.4" StrokeLineJoin="Round" Stretch="Uniform"/>
-            <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="5"/>
+            <Path Data="M13,7 L18.5,10.2 L18.5,16.8 L13,20 L7.5,16.8 L7.5,10.2 Z" Fill="#E3B55B" Stretch="Uniform" Margin="5.5"/>
           </Grid>
-          <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
-          <TextBlock x:Name="Version" Text="v0.6.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+          <StackPanel VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="KINAH LEDGER" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="17" FontWeight="Bold" VerticalAlignment="Center"/>
+              <TextBlock x:Name="Version" Text="v0.6.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="8,2,0,0" FontSize="11.5"/>
+            </StackPanel>
+            <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="0,1,0,0" Cursor="Hand" ToolTip="Your server. Change it in Options."
+                       Text="No server chosen"/>
+          </StackPanel>
         </StackPanel>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-          <TextBlock FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">Project page</Hyperlink></TextBlock>
-          <!-- everything that needs setting lives behind this button; the main window is the live count -->
-          <Button x:Name="SettingsBtn" Content="Settings" Height="30" Padding="12,0" FontSize="12.5"/>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="SiteBtn" Content="kinahledger.com" Height="32" Padding="12,0" FontSize="12.5" Margin="0,0,8,0" ToolTip="Open the website: community drop rates, prices and your profile."/>
+          <Button x:Name="OptionsBtn" Height="32" Padding="12,0" FontSize="12.5" ToolTip="Server, startup, sharing, game reading, hotkey, updates.">
+            <StackPanel Orientation="Horizontal">
+              <!-- a gear, drawn so no image ships -->
+              <Path Width="14" Height="14" Stretch="Uniform" Fill="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,7,0"
+                    Data="M10.3,1 L13.7,1 L14.2,3.6 C15,3.9 15.7,4.3 16.4,4.8 L18.9,3.9 L20.6,6.8 L18.6,8.6 C18.7,9.4 18.7,10.2 18.6,11 L20.6,12.8 L18.9,15.7 L16.4,14.8 C15.7,15.3 15,15.7 14.2,16 L13.7,18.6 L10.3,18.6 L9.8,16 C9,15.7 8.3,15.3 7.6,14.8 L5.1,15.7 L3.4,12.8 L5.4,11 C5.3,10.2 5.3,9.4 5.4,8.6 L3.4,6.8 L5.1,3.9 L7.6,4.8 C8.3,4.3 9,3.9 9.8,3.6 Z M12,6.6 A3.2,3.2 0 1 0 12,13 A3.2,3.2 0 1 0 12,6.6 Z"/>
+              <TextBlock Text="Options" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
         </StackPanel>
       </Grid>
-      <TextBlock x:Name="Tagline" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,6,0,0"
+      <TextBlock x:Name="Tagline" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,8,0,0" Visibility="Collapsed"
                  Text="Unofficial Aion 2 farming tracker. Reads the loot lines from the chat on your screen while the game is open. Nothing touches the game."/>
 
       <!-- a newer version: shown only while there is one (downloading, ready to install, or waiting for a click) -->
@@ -129,7 +142,7 @@
       <Border x:Name="WelcomeCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
         <StackPanel>
           <TextBlock Text="Welcome. Where do you play?" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="Bold"/>
-          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three taps and you are in; change any of it later under Settings."/>
+          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three taps and you are in; change any of it later in Options."/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="REGION" Margin="0,16,0,8"/>
           <WrapPanel x:Name="RegionChips"/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="FACTION" Margin="0,8,0,8"/>
@@ -143,80 +156,6 @@
             <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" VerticalAlignment="Center" MaxWidth="300" HorizontalAlignment="Left" Text="Nothing is read or shared until you continue. The chat and the zone are found on their own."/>
             <Button x:Name="WelcomeGo" Style="{StaticResource PrimaryButton}" Content="Continue" Width="160" Height="44" HorizontalAlignment="Right" VerticalAlignment="Center"/>
           </Grid>
-        </StackPanel>
-      </Border>
-
-      <!-- settings: server, sharing, chat and zone, Market, look. Hidden once set up; the Settings button brings it back. -->
-      <Border x:Name="SetupCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="18,14,18,16">
-        <StackPanel>
-          <TextBlock Style="{StaticResource LabelStyle}" Text="SERVER"/>
-          <WrapPanel x:Name="ServerRow" Margin="0,8,0,0">
-            <TextBlock x:Name="ServerLabel" Text="Your server" Foreground="{DynamicResource Muted}" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,6" Visibility="Collapsed"/>
-            <ComboBox x:Name="RegionBox" Width="138" FontSize="13" Margin="0,0,8,6" VerticalAlignment="Center" ToolTip="The region you play in. The same server names exist in every region, so both parts matter."/>
-            <ComboBox x:Name="ServerPick" Width="190" FontSize="13" Margin="0,0,12,6" VerticalAlignment="Center" ToolTip="Your home server and faction, as the game's server list shows them."/>
-            <TextBlock x:Name="ServerHint" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" VerticalAlignment="Center" Margin="0,0,0,6" MaxWidth="500"/>
-          </WrapPanel>
-
-          <TextBlock Style="{StaticResource LabelStyle}" Text="SHARING" Margin="0,12,0,0"/>
-          <WrapPanel x:Name="OptsRow" Margin="0,8,0,0">
-            <CheckBox x:Name="ShareChk" Content="Share runs and Market prices anonymously" Margin="0,0,6,4"/>
-            <TextBlock Margin="0,0,16,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="SentLink" Style="{StaticResource LinkStyle}">what's sent?</Hyperlink></TextBlock>
-            <CheckBox x:Name="HudChk" Content="Panel over the game while farming" Margin="0,0,0,4"/>
-          </WrapPanel>
-          <!-- optional: ties this PC's runs to a profile on the site; runs stay anonymous without it -->
-          <WrapPanel x:Name="LinkRow" Margin="0,8,0,0">
-            <Button x:Name="LinkBtn" Content="Link to my profile on the site" Width="232" Margin="0,0,12,4"
-                    ToolTip="Opens kinahledger.com with this PC's link code. Sign in with Discord if asked, and the runs this PC shares show on your profile. Runs stay anonymous in the public tables either way."/>
-            <TextBlock VerticalAlignment="Center" Margin="0,0,0,4" FontSize="12.5" Foreground="{DynamicResource Muted}"
-                       ToolTip="The same code, for pasting by hand into Profile › Link your tracker."><Run Text="code "/><Run x:Name="LinkCodeRun" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource Gold}"/><Run Text="   "/><Hyperlink x:Name="CopyCodeLink" Style="{StaticResource LinkStyle}">copy</Hyperlink></TextBlock>
-          </WrapPanel>
-
-          <TextBlock Style="{StaticResource LabelStyle}" Text="CHAT AND ZONE" Margin="0,14,0,0"/>
-          <TextBlock x:Name="Step2Status" Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" Margin="0,6,0,0"/>
-          <WrapPanel Margin="0,10,0,0">
-            <Button x:Name="DetectBtn" Content="Detect now" Width="104" Margin="0,0,8,6"/>
-            <Button x:Name="PickBtn" Content="Choose the chat" Width="124" Margin="0,0,8,6"/>
-            <Button x:Name="TestBtn" Content="Test read" Width="96" Margin="0,0,8,6"/>
-            <TextBlock FontSize="12.5" VerticalAlignment="Center" Margin="4,0,0,6"><Hyperlink x:Name="ResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
-          </WrapPanel>
-          <Border Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Height="118" ClipToBounds="True" Margin="0,6,0,0">
-            <Grid>
-              <TextBlock x:Name="PreviewHint" Text="the game, with the chat, the map and the Market outlined" Foreground="{DynamicResource Faint}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="12,0"/>
-              <Image x:Name="Preview" Stretch="Uniform" Margin="3" RenderOptions.BitmapScalingMode="HighQuality"/>
-            </Grid>
-          </Border>
-          <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-            <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Accent}" VerticalAlignment="Center"/>
-            <TextBlock Text="chat" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
-            <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Gold}" VerticalAlignment="Center"/>
-            <TextBlock Text="zone" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
-            <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Mint}" VerticalAlignment="Center"/>
-            <TextBlock Text="market" Style="{StaticResource LabelStyle}" Margin="5,0,0,0"/>
-          </StackPanel>
-
-          <TextBlock Style="{StaticResource LabelStyle}" Text="MARKET PRICES" Margin="0,14,0,0"/>
-          <WrapPanel x:Name="MarketRow" Margin="0,6,0,0">
-            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" Margin="0,0,6,4" VerticalAlignment="Center" MaxWidth="500" Text="Whenever you open the Market, the listings on your screen are shared as anonymous asks, under the Share switch above. Nothing to set up."/>
-            <TextBlock Margin="0,0,0,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="MarketSentLink" Style="{StaticResource LinkStyle}">what's read?</Hyperlink></TextBlock>
-          </WrapPanel>
-          <WrapPanel x:Name="MarketRow2" Margin="0,4,0,0">
-            <Button x:Name="MarketPickBtn" Content="Choose the Market" Width="140" FontSize="12.5" Margin="0,0,10,4" VerticalAlignment="Center"/>
-            <TextBlock x:Name="MarketResetText" Margin="0,0,0,4" VerticalAlignment="Center" FontSize="12.5" Visibility="Collapsed"><Hyperlink x:Name="MarketResetLink" Style="{StaticResource LinkStyle}">back to automatic</Hyperlink></TextBlock>
-          </WrapPanel>
-          <TextBlock x:Name="MarketStatus" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Margin="0,4,0,0"
-                     Text="Waiting for the game. While the game and this window are open, the Market is read whenever you open it."/>
-
-          <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,14,0,8"/>
-          <WrapPanel x:Name="SkinRow"/>
-
-          <TextBlock Style="{StaticResource LabelStyle}" Text="UPDATES" Margin="0,14,0,0"/>
-          <WrapPanel Margin="0,8,0,0">
-            <CheckBox x:Name="AutoUpdateChk" Content="Install new versions automatically" Margin="0,0,12,4" IsChecked="True"
-                      ToolTip="On: a new version downloads in the background and is installed when you close Kinah Ledger. Off: you're asked first."/>
-            <TextBlock Margin="0,0,0,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="CheckUpdateLink" Style="{StaticResource LinkStyle}">check now</Hyperlink></TextBlock>
-          </WrapPanel>
-          <TextBlock x:Name="UpdateStatus" Style="{StaticResource BodyStyle}" FontSize="12" LineHeight="16" Margin="0,4,0,0" TextWrapping="Wrap"
-                     Text="Checks kinahledger.com for a newer version at start and every few hours. Only the app version goes with the request."/>
         </StackPanel>
       </Border>
 
@@ -339,8 +278,10 @@
 
       <!-- status -->
       <Grid x:Name="StatusRow" Margin="0,10,0,0">
-        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,0,80,0"/>
-        <TextBlock FontSize="12" HorizontalAlignment="Right"><Hyperlink x:Name="LogsLink" Style="{StaticResource LinkStyle}">Open logs</Hyperlink></TextBlock>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+        <!-- shown with a reading problem: straight to the page that fixes it -->
+        <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
       </Grid>
 
     </StackPanel>

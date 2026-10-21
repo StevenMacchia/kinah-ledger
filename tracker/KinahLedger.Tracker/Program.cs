@@ -16,10 +16,10 @@ internal static class Program
     static int Main(string[] args)
     {
         var settings = Settings.Load();
-        if (args.Length == 0)
+        if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
         {
-            // double-clicked: open the window
-            return WpfApp.Run(settings);
+            // double-clicked, started with Windows (in the tray), or restarted by an update: open the window
+            return WpfApp.Run(settings, background: args.Contains(Platform.AutoStart.BackgroundArg), afterUpdate: args.Contains(Ui.MainWindow.AfterUpdateArg));
         }
         // command line: write to the terminal that started us; if there's none and no pipe either, open one
         if (!AttachConsole(-1) && GetStdHandle(-11) == IntPtr.Zero) AllocConsole();
@@ -40,6 +40,7 @@ internal static class Program
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
+                case "options-test": return WpfApp.OptionsSelfTest(settings);
                 case "market-test": return MarketTest(settings, opts);
                 case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
                 case "market-watch": return MarketWatch(settings, opts);
@@ -77,11 +78,12 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
         [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]
   market-watch [--server ..]    only the Market reader, as the window runs it in the background; Ctrl+C to stop
   parse-test                    self-test of the chat-line parser
+  options-test                  self-test of the Options window: changes, Save, Cancel (saves nothing)
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
   ui-shot [dir] [--demo] [--pets|--gathering|--market] [--compact] [--welcome] [--skin night|abyss|daylight]
-                                render the window to PNG files for layout review
+                                render the window to PNG files for layout review (--options: every Options page)
   market-shot [dir]             the window with the Market card in its tracking state
   reset-id                      replace the random install ID used for uploads
   update [--check]              install the newest version from kinahledger.com now (--check only says whether there is one)
@@ -238,6 +240,7 @@ options: --process aion[,other]");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
+        if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
