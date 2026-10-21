@@ -6,8 +6,16 @@ A fan project for Aion 2 (global): Kinah per hour, material yields, drop rates a
 built from runs players share through a free tracker. Made by players for players; not affiliated
 with NCSOFT. MIT licensed.
 
-This is a side project, separate from the author's professional work. Code signing and privacy:
-[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+This is a side project, separate from the author's professional work.
+
+## Download
+
+[**KinahLedger.exe, the latest release**](https://github.com/StevenMacchia/kinah-ledger/releases/latest): one file,
+no installer, Windows 10 or 11. Every release lists the file's SHA-256 checksum.
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/) (application pending; until it is approved, releases are unsigned).
+What is signed, who approves it, and what the tracker sends: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ```
 (website)  lives in a separate private repo; kinahledger.com/download serves this repo's releases
