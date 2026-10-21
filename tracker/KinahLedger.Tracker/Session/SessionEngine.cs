@@ -157,19 +157,62 @@ public sealed class SessionEngine
     readonly Dictionary<string, MobStats> _mobs = new();
 
     /// <summary>The enemy on the target bar and when it was last seen there. A null name keeps the last one, so its grace window runs out on its own.</summary>
+    DateTime _craftWindowAt = DateTime.MinValue;
+    /// <summary>When the crafting window was last seen open (its skill tabs in the band, or its own text over the chat).</summary>
+    public void SetCraftWindow(DateTime at) { lock (_lock) if (at > _craftWindowAt) _craftWindowAt = at; }
+    bool CraftWindowOpen(DateTime t) => Math.Abs((t - _craftWindowAt).TotalSeconds) <= KinahLedger.Ocr.TargetReader.CraftGraceSeconds;
+
     public void SetTarget(string? name, DateTime at)
     {
-        lock (_lock) { if (name != null) { _target = name; _targetAt = at; } }
+        lock (_lock)
+        {
+            if (name == null) return;
+            _target = name; _targetAt = at;
+            _recentTargets.RemoveAll(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+            _recentTargets.Add((name, at));
+            if (_recentTargets.Count > 4) _recentTargets.RemoveAt(0);
+        }
+    }
+
+    // the last few enemies on the bar, newest last: with several on the player, a drop the current target can't drop
+    // goes to another one just fought that can
+    readonly List<(string Name, DateTime At)> _recentTargets = new();
+
+    MobStats Mob(string name)
+    {
+        var zone = _zone ?? UnknownZone;
+        var key = zone + "|" + name;
+        if (!_mobs.TryGetValue(key, out var m)) _mobs[key] = m = new MobStats { Name = name, Zone = zone };
+        return m;
     }
 
     MobStats? MobFor(DateTime t)
     {
         if (_target == null || Math.Abs((t - _targetAt).TotalSeconds) > TargetGraceSeconds) return null;
-        var zone = _zone ?? UnknownZone;
-        var key = zone + "|" + _target;
-        if (!_mobs.TryGetValue(key, out var m)) _mobs[key] = m = new MobStats { Name = _target, Zone = zone };
-        return m;
+        return Mob(_target);
     }
+
+    /// <summary>
+    /// The enemy a drop goes to: the one on the bar, unless its loot table says it can't drop the item; then the most
+    /// recent other enemy within the grace window whose table has it; else nobody (the drop still counts as a drop).
+    /// An enemy without a known table keeps the drop, as before.
+    /// </summary>
+    MobStats? MobForDrop(DateTime t, long itemId)
+    {
+        var near = _recentTargets.Where(r => Math.Abs((t - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).ToList();
+        if (near.Count == 0) return null;
+        var book = LootBook.Current; var item = _items.NameOf(itemId);
+        // an item on no enemy's table is one the tables don't cover: it stays with the enemy on the bar
+        if (book.SourcesOf(item).Count == 0 || book.CanDrop(near[0].Name, item, itemId) != false) return Mob(near[0].Name);
+        foreach (var r in near.Skip(1)) if (book.CanDrop(r.Name, item, itemId) == true) { ReassignedDrops++; return Mob(r.Name); }
+        UnplacedDrops++;
+        return null;
+    }
+
+    /// <summary>Drops moved from the enemy on the bar to another one just fought, because only the other's loot table has the item.</summary>
+    public int ReassignedDrops { get; private set; }
+    /// <summary>Drops no enemy just fought can drop, by their loot tables: counted as drops, credited to no enemy.</summary>
+    public int UnplacedDrops { get; private set; }
 
     /// <summary>Copies of the per-enemy counters, most Kinah first, safe to read from the UI thread.</summary>
     public List<MobStats> MobSnapshot()
@@ -268,8 +311,10 @@ public sealed class SessionEngine
                 CrashLog.Note($"Kinah line far above what the mobs pay, taken for a reward and not counted as farming: {big.Delta:N0}");
                 ev = new KinahChanged(big.Time, big.Delta, true);
             }
-            // a craft's own item line belongs to crafting alone: not a drop, not a zone's item, not farming time
-            if (ev is ItemAcquired made && _craft.TakeOutput(_items.NameOf(made.ItemId), made.Count, made.Time))
+            // a craft's own item line belongs to crafting alone: not a drop, not a zone's item, not farming time. With the
+            // crafting window open, an item a recipe makes is a craft even when "Successfully crafted" wasn't read
+            if (ev is ItemAcquired made && (_craft.TakeOutput(_items.NameOf(made.ItemId), made.Count, made.Time)
+                || (CraftWindowOpen(made.Time) && _craft.TakeUnannounced(_items.NameOf(made.ItemId), made.Count))))
             {
                 CraftedSkipped++;
                 return;
@@ -284,6 +329,7 @@ public sealed class SessionEngine
                     d[a.ItemId] = d.GetValueOrDefault(a.ItemId) + a.Count;
                     var zi = a.Bound ? Z().ItemsBound : Z().Items;
                     zi[a.ItemId] = zi.GetValueOrDefault(a.ItemId) + a.Count;
+                    if (a.Unconfirmed) _unconfirmed[a.ItemId] = _unconfirmed.GetValueOrDefault(a.ItemId) + a.Count;
                     var g = GatheringCatalog.Find(_items.NameOf(a.ItemId));
                     if (g != null)
                     {
@@ -294,7 +340,7 @@ public sealed class SessionEngine
                     else
                     {
                         Z().Drops += a.Count;
-                        if (MobFor(a.Time) is { } md) md.Drops[a.ItemId] = md.Drops.GetValueOrDefault(a.ItemId) + a.Count;
+                        if (MobForDrop(a.Time, a.ItemId) is { } md) md.Drops[a.ItemId] = md.Drops.GetValueOrDefault(a.ItemId) + a.Count;
                     }
                     break;
                 case PetCrystal p:
@@ -422,6 +468,10 @@ public sealed class SessionEngine
     }
 
     public string ItemName(long id) => _items.NameOf(id);
+
+    readonly Dictionary<long, int> _unconfirmed = new();
+    /// <summary>Copies of an item the chat never confirmed: from the loot list, or a guessed name. Shown as a tag on its row.</summary>
+    public int Unconfirmed(long id) { lock (_lock) return _unconfirmed.GetValueOrDefault(id); }
 
     public List<(long Id, string Name, int Count, int Bound)> ItemRows()
     {

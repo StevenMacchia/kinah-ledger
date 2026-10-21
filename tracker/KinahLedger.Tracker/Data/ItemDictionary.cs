@@ -71,6 +71,48 @@ public sealed class ItemDictionary
         }
     }
 
+    /// <summary>
+    /// The item a partly hidden or badly garbled name most likely is, when the plain match failed (Steven, 2026-10-21:
+    /// "guessing based on closest match" for when something covers the chat). A name whose end or start is hidden
+    /// ("Spiritst", "itstone") or whose middle is garbled is matched against the items that could be it; the ones in
+    /// <paramref name="likely"/> (this run's items, the current enemy's loot table) are tried first. Only a single
+    /// answer counts: two items that fit equally well give none. Needs five letters at least.
+    /// </summary>
+    public long? Guess(string read, IEnumerable<string>? likely = null)
+    {
+        lock (_lock)
+        {
+            var key = Norm(read);
+            if (key.Count(char.IsLetter) < 5 || key.Contains("(bound)")) return null;
+            int budget = Math.Max(2, key.Length / 5);
+            var score = new Dictionary<long, int>();
+            foreach (var kv in _byName)
+            {
+                var id = kv.Value;
+                if (!(id > 0 || (_byId.TryGetValue(id, out var info) && info.Category.Length > 0))) continue;
+                var n = kv.Key;
+                int s = -1;
+                if (n.Length > key.Length && (n.StartsWith(key, StringComparison.Ordinal) || n.EndsWith(key, StringComparison.Ordinal))) s = 1;
+                else if (Math.Abs(n.Length - key.Length) <= budget) { int d = Edit(key, n, budget); if (d <= budget) s = 1 + d; }
+                if (s > 0 && (!score.TryGetValue(id, out var old) || s < old)) score[id] = s;
+            }
+            if (score.Count == 0) return null;
+            long? Pick(IEnumerable<KeyValuePair<long, int>> c)
+            {
+                var l = c.OrderBy(x => x.Value).ToList();
+                if (l.Count == 0) return null;
+                return l.Count == 1 || l[1].Value > l[0].Value ? l[0].Key : null;
+            }
+            if (likely != null)
+            {
+                var ids = likely.Select(x => _byName.TryGetValue(Norm(x), out var i) ? i : 0).Where(i => i != 0).ToHashSet();
+                if (Pick(score.Where(x => ids.Contains(x.Key))) is long hit) return hit;
+            }
+            // without a hint, only an answer no other item comes near
+            return score.Count == 1 ? score.Keys.First() : null;
+        }
+    }
+
     long? Closest(string key)
     {
         if (key.Length < 4) return null;
@@ -116,7 +158,16 @@ public sealed class ItemDictionary
         return prev[b.Length];
     }
 
-    static string Norm(string s) => string.Join(' ', s.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    /// <summary>
+    /// A name as it is looked up: lower case, accents off and stray marks gone, so "Raw Léather", "Raw Leather~" and
+    /// "Raw Leather" are the same item (Steven, 2026-10-21: a drop that looks like a normal drop is that drop).
+    /// </summary>
+    static string Norm(string s)
+    {
+        var t = KinahLedger.Ocr.ChatParser.StripAccents(s).ToLowerInvariant().Replace('’', '\'');
+        t = System.Text.RegularExpressions.Regex.Replace(t, @"[^a-z0-9'():+.,&\- ]", " ");
+        return string.Join(' ', t.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
     static uint Fnv(string s) { uint h = 2166136261; foreach (var c in s) { h ^= c; h *= 16777619; } return h; }
 
     public static ItemDictionary LoadOrEmpty(string path)

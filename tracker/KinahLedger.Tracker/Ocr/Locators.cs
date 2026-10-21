@@ -126,6 +126,13 @@ public static class ChatLocator
     // what a chat line looks like on its own: "[Name] text" from a player, or one of the game's own messages
     static readonly Regex ChatLine = new(@"^\[[^\]]{2,20}\]\s|joined event|acquired|Kina|defeated|Obtained|failed|has logged in", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>
+    /// The chat window's width at the least: about 40 characters, where the game wraps a chat line, in screen heights so
+    /// it holds on any screen. Sizing the area only from the lines on screen at the moment it was found cut every longer
+    /// line after that ("Sapphire Gemstone acq", a green armor's name, 2026-10-21 16:56) when those happened to be short.
+    /// </summary>
+    public static int MinChatWidth(Rectangle game) => (int)(game.Height * 0.40);
+
     /// <summary>The bottom-left quarter that holds the chat and its input box.</summary>
     public static Rectangle Corner(Rectangle game) => new(game.Left, game.Top + game.Height / 2, game.Width / 2, game.Height / 2);
 
@@ -150,7 +157,7 @@ public static class ChatLocator
         int lineH = above.Count > 0 ? (int)Math.Round(above.Take(8).Average(l => l.Box.Height) * 1.45) : (int)Math.Round(input.Box.Height * 1.2);
         lineH = Math.Max(lineH, 14);
         int left = Math.Max(game.Left, Math.Min(rowLeft, above.Count > 0 ? above.Min(l => l.Box.Left) : rowLeft) - 12);
-        int right = Math.Min(game.Left + (int)(game.Width * 0.55), Math.Max(above.Count > 0 ? above.Max(l => l.Box.Right) : 0, input.Box.Right) + 40);
+        int right = Math.Min(game.Left + (int)(game.Width * 0.55), Math.Max(Math.Max(above.Count > 0 ? above.Max(l => l.Box.Right) : 0, input.Box.Right) + 40, left + MinChatWidth(game)));
         int bottom = input.Box.Top - 4;
         int top = Math.Max(game.Top, bottom - lineH * 12);            // room for twelve lines: the chat grows upward
         var region = Rectangle.FromLTRB(left, top, right, bottom);
@@ -177,7 +184,7 @@ public static class ChatLocator
 
         int lineH = Math.Max(14, (int)Math.Round(chat.Average(l => l.Box.Height) * 1.45));
         int left = Math.Max(game.Left, chat.Min(l => l.Box.Left) - 12);
-        int right = Math.Min(game.Left + (int)(game.Width * 0.55), chat.Max(l => l.Box.Right) + 40);
+        int right = Math.Min(game.Left + (int)(game.Width * 0.55), Math.Max(chat.Max(l => l.Box.Right) + 40, left + MinChatWidth(game)));
         int bottom = Math.Min(game.Bottom, chat.Max(l => l.Box.Bottom) + lineH);   // room for the next line, which arrives below
         int top = Math.Max(game.Top, bottom - lineH * 12);
         var region = Rectangle.FromLTRB(left, top, right, bottom);
@@ -200,8 +207,9 @@ public static class ChatLocator
 /// <summary>Reads the zone name shown above the minimap at the top-right, so sessions know where they happened.</summary>
 public static class ZoneLocator
 {
-    // what a zone label looks like: a few capitalized words, no digits, no brackets
-    static readonly Regex Shape = new(@"^[A-Z][A-Za-z'’\-]+(?:\s+(?:of|the|and|[A-Z][A-Za-z'’\-]+)){1,5}$", RegexOptions.Compiled);
+    // what a zone label looks like: a few capitalized words, no digits, no brackets. "!" and "?" are allowed for the
+    // Shugo Festival games ("Up! Up! Up!", "Not This Tile?")
+    static readonly Regex Shape = new(@"^[A-Z][A-Za-z'’\-!?]+(?:\s+(?:of|the|and|[A-Z][A-Za-z'’\-!?]+)){1,5}$", RegexOptions.Compiled);
     static readonly string[] Blocklist = { "Ask", "Gemini", "Copilot", "Google", "Search", "Chrome", "Edge", "Firefox", "Discord", "Steam", "Spotify", "Twitch", "YouTube", "Enter", "Type", "Message", "Reply", "File", "Edit", "Help", "Home", "Back", "Next", "Download", "Share", "Save", "Cancel", "Window", "Minimize", "Bookmarks", "History", "Extensions", "Profile", "Account", "Notifications", "Update", "New", "Sign", "Open", "Close", "Change", "Show", "Must", "Waiting", "Evasion", "Sprint", "Jump", "Mount", "Rest", "Auto", "Hide", "Ground", "Fly", "Level", "Quest", "View", "Menu", "Map", "Options", "Settings", "Inventory", "Chat", "Party", "Legion", "Friends", "Mail", "Shop" };
     // words that appear in place names; a candidate needs one of these or a known-name match, so UI labels never pass
     static readonly string[] PlaceWords = { "Valley", "Highland", "Highlands", "Canyon", "Hill", "Hills", "Sanctum", "Ruins", "Garden", "Forest", "Plains", "Plain", "Cave", "Caves", "Cavern", "Fortress", "Village", "Lake", "Coast", "Shore", "Pass", "Road", "Gate", "Temple", "Swamp", "Marsh", "Desert", "Island", "Isle", "Abyss", "Outpost", "Camp", "Field", "Fields", "Ridge", "Peak", "Mountain", "Mountains", "Basin", "Plateau", "Woods", "Grove", "Gorge", "Hollow", "Ravine", "Cliff", "Cliffs", "Falls", "Spring", "Springs", "River", "Bridge", "Tower", "Citadel", "Stronghold", "Fort", "Shrine", "Sanctuary", "Crypt", "Tomb", "Mine", "Mines", "Quarry", "Den", "Nest", "Lair", "Harbor", "Port", "Bay", "Oasis", "Steppe", "Wasteland", "Tundra", "Crater", "Dunes", "Lowlands", "Vale", "Meadow", "Prairie", "Orchard", "Farm", "Mill", "Crossroads", "Square", "District", "Town", "City", "Palace", "Castle", "Keep", "Hall", "Prison", "Arena", "Academy", "Library", "Observatory", "Laboratory", "Workshop", "Foundry", "Forge", "Market", "Cemetery", "Graveyard", "Catacombs", "Altar", "Portal", "Rift", "Gateway", "Frontier", "Border", "Coastline", "Beach", "Glade", "Thicket", "Jungle", "Volcano", "Furnace", "Wall", "Walls", "Rampart", "Battlefield", "Front", "Encampment", "Garrison", "Barracks", "Landing", "Ascent", "Descent", "Depths", "Heights", "Summit", "Hideout", "Refuge", "Haven", "Hamlet", "Settlement", "Colony", "Waystation", "Station" };
@@ -210,7 +218,40 @@ public static class ZoneLocator
     /// Zone and area names as the game prints them on the minimap: data/zones.txt, built into the exe (about 330 names,
     /// both factions and the Abyss). The whitelist for zones; a name not here counts as Unknown zone. The site reads the same file.
     /// </summary>
-    public static readonly string[] Known = LoadZones();
+    public static readonly string[] Known = LoadZones().Concat(LoadInstances().Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    /// <summary>Instanced areas (dungeons, trials, arenas, event areas) and the kind a run in one is filed under: data/instances.txt.</summary>
+    public static readonly Dictionary<string, string> Instances = LoadInstances();
+
+    /// <summary>"Expedition", "Event", "Arena" or "Legion" for an instanced area; null for an open-world zone or none.</summary>
+    public static string? KindOf(string? zone) => zone != null && Instances.TryGetValue(zone, out var k) ? k : null;
+
+    static Dictionary<string, string> LoadInstances()
+    {
+        var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var stream = typeof(ZoneLocator).Assembly.GetManifestResourceStream("instances.txt");
+            if (stream == null) return d;
+            using var r = new StreamReader(stream);
+            while (r.ReadLine() is { } line)
+            {
+                var t = line.Trim();
+                if (t.Length == 0 || t.StartsWith('#')) continue;
+                var bar = t.LastIndexOf('|');
+                if (bar <= 0) continue;
+                d[t[..bar].Trim()] = t[(bar + 1)..].Trim();
+            }
+        }
+        catch (Exception) { /* without the list, instances read as unlisted titles and count under Unknown zone */ }
+        return d;
+    }
+
+    /// <summary>
+    /// The minimap title read last, when it was name-shaped but on no list (an expedition's inner area, an event area the
+    /// list doesn't have yet); null when the last read found a zone or no title at all.
+    /// </summary>
+    public static string? LastUnlisted { get; private set; }
 
     static string[] LoadZones()
     {
@@ -243,8 +284,10 @@ public static class ZoneLocator
         var lines = await ScreenReader.ReadBoxesAsync(strip, 2);
         var candidates = lines
             .Select(l => (l, text: Clean(l.Text)))
-            .Where(x => x.text.Length >= 6 && x.text.Length <= 40 && Shape.IsMatch(x.text) && !Blocklist.Any(b => x.text.StartsWith(b + " ") || x.text == b))
+            // an instance or event on the list is never a UI label, even when it starts like one ("Jump Jump")
+            .Where(x => Candidate(x.text))
             .OrderBy(x => x.l.Box.Top).ToList();
+        LastUnlisted = null;
         if (candidates.Count == 0) return (null, $"no zone-shaped text in the top-right corner ({lines.Count} lines read)");
         // the known list is the whitelist: a name on it wins even misread. Anything else is some other label, or a zone the
         // list doesn't have yet; either way the count stays under "Unknown zone" rather than under a misread name.
@@ -253,8 +296,14 @@ public static class ZoneLocator
             var hit = Known.FirstOrDefault(k => Edit(k.ToLowerInvariant(), c.text.ToLowerInvariant()) <= Math.Max(1, k.Length / 7));
             if (hit != null) return (hit, "zone matched a known name");
         }
+        // the top line of the corner is the minimap's title: name-shaped and on no list, it is a place the list lacks
+        if (candidates[0].l.Box.Top - strip.Top < strip.Height * 0.5) LastUnlisted = candidates[0].text;
         return (null, $"top-right text isn't a zone on the list: {string.Join(" | ", candidates.Take(3).Select(c => c.text))}");
     }
+
+    /// <summary>Whether a line read in the corner looks like a place name and not a UI label. An instance or event on the list always does, even one that starts like a label ("Jump Jump").</summary>
+    public static bool Candidate(string text) =>
+        text.Length >= 6 && text.Length <= 40 && Shape.IsMatch(text) && (Instances.ContainsKey(text) || !Blocklist.Any(b => text.StartsWith(b + " ") || text == b));
 
     static string Clean(string s) => Regex.Replace(s.Trim(), @"\s+", " ").TrimEnd('.', ',', ':');
 

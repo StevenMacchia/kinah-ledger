@@ -160,7 +160,7 @@ public sealed partial class ChatParser
     /// One read's new lines, parsed in order. A payment line then also claims the Kinah lines just before it in the same
     /// read when they make up what it still owes, exactly: they were the payment's first lines, not loot.
     /// </summary>
-    public List<(string Line, List<GameEvent> Events)> ParseBatch(IReadOnlyList<string> lines, DateTime time)
+    public List<(string Line, List<GameEvent> Events)> ParseBatch(IReadOnlyList<string> lines, DateTime time, bool wrap = true)
     {
         var outp = new List<(string Line, List<GameEvent> Events)>();
         int pay = -1;
@@ -168,13 +168,14 @@ public sealed partial class ChatParser
         // PurchaseSeconds: what was bought is never a drop
         bool claim = _purchaseCarry && (time - _purchaseAt).TotalSeconds <= PurchaseSeconds;
         _purchaseCarry = false;
+        var parsed = wrap ? Unwrap(lines, time) : lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
         for (int i = 0; i < lines.Count; i++)
         {
-            var evs = Parse(lines[i], time).ToList();
-            if (Purchase().IsMatch(lines[i])) { claim = true; _purchaseAt = time; _purchaseCarry = true; }
+            var (text, evs) = parsed[i];
+            if (Purchase().IsMatch(text)) { claim = true; _purchaseAt = time; _purchaseCarry = true; }
             else if (claim) evs = evs.Select(AsReward).ToList();
-            outp.Add((lines[i], evs));
-            if (Payment().IsMatch(lines[i])) pay = i;
+            outp.Add((text, evs));
+            if (Payment().IsMatch(text)) pay = i;
         }
         if (pay < 0 || _paymentLeft <= 0) return outp;
         var cands = new List<(int line, int ev, long amt)>();
@@ -193,6 +194,51 @@ public sealed partial class ChatParser
         }
         return outp;
     }
+
+    /// <summary>
+    /// The chat wraps a line at about 40 characters, so a long item name comes as two lines ("Artisan's Orichalcum" /
+    /// "Longsword acquired.", "Acquired" / "169 Kina."), and neither half counts on its own, or the second half reads as
+    /// a shorter item. A line that parsed to nothing is joined to the next when the two together make an item the list
+    /// holds, or Kinah. When the second half is itself a listed item, the join wins only if the joined name ends with that
+    /// item's name (so a stray word before "Raw Leather acquired." never changes it). The last line of a read that parsed
+    /// to nothing is held for WrapSeconds, since its second half can come in the next read. Every line keeps its place:
+    /// a consumed second half is returned as JoinedMark with no events.
+    /// </summary>
+    List<(string Text, List<GameEvent> Events)> Unwrap(IReadOnlyList<string> lines, DateTime time)
+    {
+        var res = lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
+        string? carry = _wrapCarry != null && (time - _wrapAt).TotalSeconds <= WrapSeconds ? _wrapCarry : null;
+        _wrapCarry = null;
+        for (int i = carry != null ? -1 : 0; i + 1 < res.Count; i++)
+        {
+            string a = i < 0 ? carry! : res[i].Text;
+            bool aEmpty = i < 0 || res[i].Events.Count == 0;
+            var b = res[i + 1];
+            if (!aEmpty || !Joinable(a) || !Joinable(b.Text)) continue;
+            var bItem = b.Events.Count == 1 && b.Events[0] is ItemAcquired bi ? bi : null;
+            if (b.Events.Count > 0 && bItem == null) continue;
+            var joined = a.Trim() + " " + b.Text.Trim();
+            var j = Parse(joined, time).ToList();
+            if (j.Count != 1 || j[0].Via.Length > 0) continue;   // a guessed name is no proof two lines belong together
+            bool take = bItem == null
+                ? j[0] is ItemAcquired || j[0] is KinahChanged
+                : j[0] is ItemAcquired ji && ji.ItemId != bItem.ItemId
+                  && _items.NameOf(ji.ItemId).EndsWith(_items.NameOf(bItem.ItemId), StringComparison.OrdinalIgnoreCase);
+            if (!take) continue;
+            res[i + 1] = (joined, j);
+            if (i >= 0) res[i] = (JoinedMark, new List<GameEvent>());
+            i++;
+        }
+        if (res.Count > 0 && res[^1].Events.Count == 0 && !ReferenceEquals(res[^1].Text, JoinedMark) && Joinable(res[^1].Text) && res[^1].Text.Trim().Length >= 3)
+        { _wrapCarry = res[^1].Text; _wrapAt = time; }
+        return res;
+    }
+
+    /// <summary>The text returned in place of the first half of a line joined to the one after it.</summary>
+    public const string JoinedMark = "(wrapped: joined to the next line)";
+    public const double WrapSeconds = 3;
+    string? _wrapCarry; DateTime _wrapAt;
+    static bool Joinable(string s) { var t = s.TrimStart(); return t.Length > 0 && !t.StartsWith('[') && !Payment().IsMatch(t) && !Purchase().IsMatch(t); }
 
     [GeneratedRegex(@"^\W*purchase\s+(?:complete|completed|successful)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Purchase();
@@ -220,9 +266,51 @@ public sealed partial class ChatParser
         return name.Length > 64 ? name[..64] : name;
     }
 
+    /// <summary>
+    /// A system line as the recognizer garbles it, put back in shape before it is parsed. Fast kills make the chat scroll
+    /// while lines fade in, and the reads that come back carry stray marks around the words that decide what a line is:
+    /// "Raw Leather *acquired.«", "Raw Leatheracquired.", "SpiritStone—acquired.", "Spiritstone acquired:-",
+    /// "cquired 347 Kina." (all from a live reads.log, 2026-10-21). Item names themselves are left alone; the item
+    /// list still decides what an item is, so a cleaned line can never turn something unlisted into a drop.
+    /// </summary>
+    public static string CleanSystemLine(string line)
+    {
+        // accents the recognizer adds to plain letters ("Acquiréd 169 Kina.", "AcquireÖ"): the game's English text has none
+        var s = StripAccents(line);
+        // marks that never belong to a chat line; a * only stays when it is a count ("*2" for ×2)
+        s = Regex.Replace(s, @"[«»•·¤~^`´¨""“”|¦]", " ");
+        s = Regex.Replace(s, @"\*(?!\s?\d)", " ");
+        // a dash, underscore or no space at all between the name and the verb: "SpiritStone—acquired", "Leatheracquired"
+        s = Regex.Replace(s, @"(?<=\w)[\-—–_]+(?=acqu)", " ", RegexOptions.IgnoreCase);
+        s = Regex.Replace(s, @"(?<=[a-z\)])(?=acqu[il1]r)", " ");
+        // the first letter or two of "Acquired" lost while the line faded in, before an amount of Kina
+        s = Regex.Replace(s, @"^\W*(?:a?c|c?q)?quired(?=\s*[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
+        s = Regex.Replace(s, @"^\W*cquired\b", "Acquired", RegexOptions.IgnoreCase);
+        // the verb's last letter misread before an amount: "AcquireO 169 Kina.", "Acquirea 212 Kina."
+        s = Regex.Replace(s, @"^\W*acqu[il1]re[dao0]?(?=\s+[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
+        // trailing marks after the line's own full stop: "acquired:-", "acquired.«", "acquiréd.i"
+        s = Regex.Replace(s, @"(acqu[il1]r[eé]+[dao]?)\s*[.,:;]?[\W_]*[a-z]?\W*$", "$1.", RegexOptions.IgnoreCase);
+        return Regex.Replace(s, @"\s+", " ").Trim();
+    }
+
+    internal static string StripAccents(string s)
+    {
+        if (s.All(c => c < 128)) return s;
+        var d = s.Normalize(System.Text.NormalizationForm.FormD);
+        var b = new System.Text.StringBuilder(d.Length);
+        foreach (var c in d)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark) b.Append(c);
+        return b.ToString().Normalize(System.Text.NormalizationForm.FormC);
+    }
+
+    /// <summary>Item names likely right now (this run's items, the current enemy's loot table), for guessing a partly hidden name.</summary>
+    public Func<IEnumerable<string>>? Likely { get; set; }
+
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");
+        if (line.Length == 0) yield break;
+        if (!line.StartsWith('[')) line = CleanSystemLine(line);
         if (line.Length == 0) yield break;
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
         if (line.StartsWith("Increased ", StringComparison.OrdinalIgnoreCase)) yield break;   // "Increased Pet Insight Level ...": progress, not loot
@@ -336,7 +424,18 @@ public sealed partial class ChatParser
                 yield break;
             }
             // the item list is the whitelist: a name it doesn't hold, exactly or as a close misread, is never a drop
-            if (!_items.Knows(name)) { CrashLog.Note($"not in the item list, not counted: {name}"); yield break; }
+            if (!_items.Knows(name))
+            {
+                // part of the name hidden or garbled: its closest item, when only one fits (the run's items and the
+                // current enemy's table first). Counted, and tagged as guessed so it shows in the window
+                if (_items.Guess(name, Likely?.Invoke()) is long gid)
+                {
+                    CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)} (closest match)");
+                    yield return new ItemAcquired(time, gid, Math.Clamp(n, 1, 9999), bound) { Via = "guessed" };
+                    yield break;
+                }
+                CrashLog.Note($"not in the item list, not counted: {name}"); yield break;
+            }
             yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 9999), bound);
         }
     }
@@ -470,6 +569,16 @@ public sealed class LineTracker
             return new List<string>();
         }
         if (keys.Count == _prev.Count && Enumerable.Range(0, keys.Count).All(i => Similar(keys[i], _prev[i]))) { Anchor(keys); return new List<string>(); }
+
+        // The chat grew and the last read is exactly its top: nothing scrolled off, so the lines below are new, even when
+        // they repeat the line above them ("Raw Leather acquired." twice in a row). Lining up on the last line alone took
+        // the second copy for the first and lost it (Steven, 2026-10-21 16:25).
+        if (keys.Count > _prev.Count && Enumerable.Range(0, _prev.Count).All(i => Similar(keys[i], _prev[i])))
+        {
+            var grown = cur.GetRange(_prev.Count, keys.Count - _prev.Count);
+            _prev = keys;
+            return Returned(keys, grown);
+        }
 
         if (Align(_prev, keys, cur) is { } fresh) { _prev = keys; return Returned(keys, fresh); }
 

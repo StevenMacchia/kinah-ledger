@@ -44,13 +44,13 @@
 
     <!-- drops and gathered rows: icon, name, count, rate, per hour -->
     <DataTemplate x:Key="RowTemplate">
-      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" MinHeight="54" Padding="0,7">
+      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" MinHeight="54" Padding="0,7" Background="Transparent" Cursor="Hand">
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
           </Grid.ColumnDefinitions>
           <Grid x:Name="NameCell" Margin="20,0,6,0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <!-- the item's icon once it is cached; its initial until then, or when none is known -->
             <Border x:Name="IconTile" Width="40" Height="40" CornerRadius="8" BorderBrush="#6BCDD3E2" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Center">
               <Border.Background>
@@ -65,6 +65,11 @@
               <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource CommonInk}" FontWeight="SemiBold" FontSize="14.5" TextTrimming="CharacterEllipsis"/>
               <TextBlock x:Name="SubText" Text="{Binding Sub}" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
+            <!-- Something looks wrong: shown on hover, kept on a flagged row. A flagged drop is never sent to the site -->
+            <TextBlock x:Name="ReportLink" Grid.Column="2" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Hidden"
+                       ToolTip="Something looks wrong with this drop? Keep it out of what this run sends to the site.">
+              <Hyperlink Style="{StaticResource LinkStyle}" Click="ReportClick"><Run Text="{Binding ReportText, Mode=OneWay}"/></Hyperlink>
+            </TextBlock>
           </Grid>
           <TextBlock Grid.Column="1" Style="{StaticResource Td}" Text="{Binding Drops}"/>
           <TextBlock Grid.Column="2" Style="{StaticResource Td}" Text="{Binding DropPct}" FontFamily="{DynamicResource BodyFont}"/>
@@ -79,7 +84,16 @@
         <!-- a craft's profit: green when it made Kinah, red when it lost some -->
         <DataTrigger Binding="{Binding Tone}" Value="Good"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Good}"/></DataTrigger>
         <DataTrigger Binding="{Binding Tone}" Value="Bad"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Bad}"/></DataTrigger>
-        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
+        <!-- a drop no enemy you fought can drop, by their loot tables: the line under it says check -->
+        <DataTrigger Binding="{Binding Tone}" Value="Warn"><Setter TargetName="SubText" Property="Foreground" Value="{DynamicResource Warn}"/></DataTrigger>
+        <!-- an enemy's loot table, opened under its row: indented and a little tighter -->
+        <DataTrigger Binding="{Binding Child}" Value="True"><Setter TargetName="NameCell" Property="Margin" Value="58,0,6,0"/><Setter TargetName="RowBorder" Property="MinHeight" Value="44"/><Setter TargetName="RowBorder" Property="Padding" Value="0,4"/></DataTrigger>
+        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/><Setter TargetName="ReportLink" Property="Visibility" Value="Visible"/></Trigger>
+        <DataTrigger Binding="{Binding Reported}" Value="True"><Setter TargetName="ReportLink" Property="Visibility" Value="Visible"/><Setter TargetName="NameText" Property="Opacity" Value="0.55"/></DataTrigger>
+        <DataTrigger Binding="{Binding Report}" Value=""><Setter TargetName="ReportLink" Property="Visibility" Value="Collapsed"/></DataTrigger>
+        <!-- only drop, gathered and enemy rows open something on a click -->
+        <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Report}" Value=""/><Condition Binding="{Binding Key}" Value=""/></MultiDataTrigger.Conditions><Setter TargetName="RowBorder" Property="Cursor" Value="Arrow"/></MultiDataTrigger>
+        <DataTrigger Binding="{Binding Child}" Value="True"><Setter TargetName="RowBorder" Property="Cursor" Value="Arrow"/></DataTrigger>
         <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet) -->
         <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeRare}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#8062D98B"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#4262D98B" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeLegend}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#805AA6FF"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#425AA6FF" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
@@ -238,6 +252,29 @@
         </StackPanel>
       </Border>
 
+      <!-- the last pickups as they are counted, with how each was read, so a miss shows on the spot (Steven, 2026-10-21) -->
+      <Border x:Name="PickupStrip" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,12,20,12" Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock Text="RECENT PICKUPS" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,6"
+                     ToolTip="The last pickups counted. chat: read in the chat. recovered: a chat line read again after it scrolled or garbled. loot list: only the list beside your character showed it. guessed: part of the name was hidden, taken as its closest item."/>
+          <ItemsControl x:Name="PickupRows">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,2">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Time}" FontFamily="{DynamicResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource Faint}" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="{Binding What}" FontSize="13.5" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="ViaText" Grid.Column="2" Text="{Binding Via}" FontSize="12" Foreground="{DynamicResource Muted}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </Grid>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding Unconfirmed}" Value="True"><Setter TargetName="ViaText" Property="Foreground" Value="{DynamicResource Warn}"/></DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
       <!-- one table at a time: Drops or Gathered, picked by the tabs. The tables grow with what's farmed and the
            window with them; a table only scrolls once it would run past the bottom of the screen -->
 
@@ -259,7 +296,7 @@
                   <TextBlock x:Name="DropsTitle" Style="{StaticResource Th}" Text="LOOT FROM KILLS" Margin="0" HorizontalAlignment="Left"/>
                 </StackPanel>
                 <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="QTY"/>
-                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource Th}" Text="ODDS" ToolTip="How many kills one drop takes, as the site shows it: drops divided by kills. Kills are counted from Kinah or Soul Point pickups (one per mob), or from kill lines when the chat shows them."/>
+                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource Th}" Text="ODDS" Background="Transparent" Cursor="Hand" ToolTip="How many kills one drop takes, counting only kills of enemies that can drop the item. Click to show it as a percentage."/>
                 <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR"/>
                 <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="PRICE" ToolTip="The lowest Market price on your server for one: what you and other players saw on the Market, with the site's price board filling in. A dash means no price is known yet."/>
                 <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="VALUE" Margin="0,0,20,0" ToolTip="Quantity times price, before the Market's fee and tax. Bound items can't be sold and have no value here."/>
@@ -272,6 +309,8 @@
               <TextBlock x:Name="TableEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
                          Text="Drops show here as they're read, with the drop rate per kill and per hour."/>
             </Grid>
+            <!-- the top rows only, until "show all" is pressed -->
+            <TextBlock x:Name="DropsMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="DropsMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="DropsMoreRun" Text="Show all"/></Hyperlink></TextBlock>
           </StackPanel>
 
           <StackPanel x:Name="GatherSection">
@@ -298,6 +337,8 @@
               <TextBlock x:Name="GatherEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
                          Text="Gathered materials show here, with how often each comes per attempt and per hour."/>
             </Grid>
+            <!-- the top rows only, until "show all" is pressed -->
+            <TextBlock x:Name="GatherMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="GatherMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="GatherMoreRun" Text="Show all"/></Hyperlink></TextBlock>
           </StackPanel>
 
           <!-- Kinah by enemy: what landed within a few seconds of the target bar naming an enemy. A guess, and labelled one -->
@@ -324,10 +365,55 @@
               <TextBlock x:Name="MobEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="440"
                          Text="A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one."/>
             </Grid>
+            <!-- the top rows only, until "show all" is pressed -->
+            <TextBlock x:Name="MobMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="MobMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="MobMoreRun" Text="Show all"/></Hyperlink></TextBlock>
             <!-- the enemy pictures are MetaBot.GG's copies of the game portraits; its terms ask for a link back -->
             <TextBlock x:Name="MobCredit" FontSize="11" Foreground="{DynamicResource Faint}" Margin="16,4,16,6" Visibility="Collapsed">
               <Run Text="Enemy pictures from "/><Hyperlink x:Name="MobCreditLink" Style="{StaticResource LinkStyle}">MetaBot.GG</Hyperlink>
             </TextBlock>
+          </StackPanel>
+
+          <!-- expeditions and events: each trip from entering to the last loot, averaged over every run kept on this PC -->
+          <StackPanel x:Name="InstSection" Visibility="Collapsed">
+            <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="InstTitle" Style="{StaticResource Th}" Text="EXPEDITIONS AND EVENTS" Margin="20,0,0,0" HorizontalAlignment="Left"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="RUNS"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="AVG TIME" ToolTip="From entering to the last loot picked up there, averaged over the runs."/>
+                <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per hour inside the runs."/>
+                <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PER RUN" Margin="0,0,20,0" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per run. Events come round about once an hour, so this is their number."/>
+              </Grid>
+            </Border>
+            <ItemsControl x:Name="InstRows" ItemTemplate="{StaticResource RowTemplate}"/>
+          </StackPanel>
+
+          <!-- Soul Crystals from kills: their own section at the bottom, folded until opened; never mixed into the drops -->
+          <StackPanel x:Name="PetSection">
+            <Border x:Name="PetHead" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44" Cursor="Hand" ToolTip="Click to fold or unfold">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                  <TextBlock x:Name="PetChev" Style="{StaticResource Th}" Text="▸" Width="14" Margin="0" HorizontalAlignment="Left"/>
+                  <TextBlock x:Name="PetTitle" Style="{StaticResource Th}" Text="SOUL CRYSTALS FROM KILLS" Margin="0" HorizontalAlignment="Left"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="QTY"/>
+                <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR"/>
+              </Grid>
+            </Border>
+            <Grid x:Name="PetBody" MinHeight="64" Visibility="Collapsed">
+              <ScrollViewer x:Name="PetScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="PetRows" ItemTemplate="{StaticResource RowTemplate}"/>
+              </ScrollViewer>
+              <TextBlock x:Name="PetEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="440"
+                         Text="Soul Crystals from kills show here, by pet, with how many come per hour."/>
+            </Grid>
+            <!-- the top rows only, until "show all" is pressed -->
+            <TextBlock x:Name="PetMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="PetMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="PetMoreRun" Text="Show all"/></Hyperlink></TextBlock>
           </StackPanel>
 
           <!-- the totals, like the site's session summary footer: loot before tax, the Market's cut, Kinah, the session total -->

@@ -64,6 +64,20 @@ public sealed class CraftLedger
         return true;
     }
 
+    /// <summary>
+    /// An item a recipe makes, picked up while the crafting window was open, with no "Successfully crafted" line read
+    /// (the window hides most of the chat): it is a craft that worked. Returns false when no recipe makes the item.
+    /// </summary>
+    public bool TakeUnannounced(string item, int count)
+    {
+        if (RecipeBook.ForOutput(item) == null) return false;
+        var r = Get(item);
+        r.Ok++;
+        r.Made[item] = r.Made.GetValueOrDefault(item) + count;
+        _last = item; _lastAt = DateTime.UtcNow;
+        return true;
+    }
+
     /// <summary>A craft whose item line never came in time still worked: it counts under the name read.</summary>
     void Settle(DateTime t)
     {

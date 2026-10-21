@@ -93,6 +93,8 @@ public sealed class GameWatcher
         http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
         var r = await http.GetAsync($"{u.Scheme}://{u.Authority}/prices/{Market.ServerKey}.json");
         if (r.IsSuccessStatusCode) PriceBook.SetBoard(PriceBook.ParseBoard(await r.Content.ReadAsStringAsync(), _items));
+        // the community's drop rates for this server's zones and the listed drop chances, for the card a click on a drop opens
+        await SiteData.RefreshAsync(http, $"{u.Scheme}://{u.Authority}", Market.ServerKey);
     }
 
     // the watcher's retry and Start farming can both ask for the reader at once; without this, both started one and the
@@ -145,6 +147,9 @@ public sealed class GameWatcher
     /// <summary>Which mode a count looks like, from what it holds: gathers, Soul Crystals, kills, or (with none of those) crafting and enchanting.</summary>
     public static string DominantKind(SessionEngine e)
     {
+        // most of the time in an expedition, an arena or an event area: that is what the run was, kills or gathers alike
+        var main = e.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).OrderByDescending(kv => kv.Value.Seconds).Select(kv => kv.Key).FirstOrDefault();
+        if (Ocr.ZoneLocator.KindOf(main) is { } instance) return instance;
         var t = e.Totals();
         if (t.Nodes > t.Kills) return "Gathering";
         if (t.Pets > 0 && t.Pets * 5 >= Math.Max(1, t.Kills)) return "Pets";

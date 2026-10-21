@@ -95,6 +95,17 @@ public sealed partial class TargetReader
     /// <summary>A pass, shop or reward window's title, and not an enemy's name.</summary>
     public static bool IsRewardTitle(string text) => RewardWord().IsMatch(text) && Match(text.Trim()) == null;
 
+    // ---- the crafting window ----
+    // Open, it lists the crafting skills along the top of the screen, in the same band. While it is open the chat
+    // underneath is mostly hidden, so "Successfully crafted" is often never read: the item line alone says what was made.
+    public const double CraftGraceSeconds = 10;
+    static readonly string[] CraftTabs = { "Weaponsmithing", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alchemy", "Cooking", "Cookinq" };
+    public static bool IsCraftTab(string text) => CraftTabs.Any(t => text.Trim().Equals(t, StringComparison.OrdinalIgnoreCase));
+    /// <summary>When the crafting window's skill tabs were last seen in the band.</summary>
+    public DateTime CraftAt { get; private set; } = DateTime.MinValue;
+    bool _craftSeen;
+    public void MarkCraft(DateTime t) => CraftAt = t;
+
     /// <summary>When a reward screen's title was last seen in the band.</summary>
     public DateTime RewardAt { get; private set; } = DateTime.MinValue;
     bool _rewardSeen;
@@ -123,6 +134,7 @@ public sealed partial class TargetReader
             // the same pixels: the bar hasn't changed, so the name it showed is still the target, and a reward screen is still open
             if (Name != null && _pending == Name) NameAt = DateTime.UtcNow;
             if (_rewardSeen) RewardAt = DateTime.UtcNow;
+            if (_craftSeen) CraftAt = DateTime.UtcNow;
             return;
         }
         _hash = h;
@@ -132,7 +144,9 @@ public sealed partial class TargetReader
         var lines = await ScreenReader.ReadBoxesAsync(gold, strip.Location, 3);
         lines.AddRange(await ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true));
         Reads++;
-        var title = lines.Select(l => l.Text.Trim()).FirstOrDefault(IsRewardTitle);
+        _craftSeen = lines.Any(l => IsCraftTab(l.Text));
+        if (_craftSeen) CraftAt = DateTime.UtcNow;
+        var title = _craftSeen ? null : lines.Select(l => l.Text.Trim()).FirstOrDefault(IsRewardTitle);
         _rewardSeen = title != null;
         if (title != null)
         {

@@ -33,6 +33,8 @@ public sealed class TrackerSession
     /// ledger runs for as long as the tracker does (or until the player starts it over). Only shown, never shared.
     /// </summary>
     public SessionEngine CraftView { get; private set; }
+    /// <summary>Runs in expeditions and events, entry to last loot, kept across restarts.</summary>
+    public InstanceLog Instances { get; } = new();
     public void ResetCraftView() => CraftView = new SessionEngine(_items);
     /// <summary>Starts the zone view over in the zone the player is in now.</summary>
     public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
@@ -113,8 +115,11 @@ public sealed class TrackerSession
         _settings = s;
         _items = items;
         _parser = new ChatParser(items);
+        // a partly hidden name is guessed among this run's items and the current enemy's loot table first
+        _parser.Likely = () => Engine.ItemRows().Select(r => r.Name).Concat(Target.Name is { } tn ? LootBook.Current.TableOf(tn).Select(e => e.Item) : Enumerable.Empty<string>()).ToList();
         Engine = new SessionEngine(items);
         ZoneView = new SessionEngine(items);
+        _cross = new LootCrossCheck(items);
         CraftView = new SessionEngine(items);
         Kind = kind;
         Region = manualRegion;
@@ -143,7 +148,25 @@ public sealed class TrackerSession
         _loop ??= Task.Run(() => Loop(_cts.Token));
     }
 
-    string? _pendingZone; DateTime _zoneNoteAt = DateTime.MinValue;
+    string? _pendingZone; string? _unlistedTitle;
+
+    /// <summary>Two reads of the same title, allowing the recognizer a letter or two.</summary>
+    static bool Close(string a, string b)
+    {
+        a = a.ToLowerInvariant(); b = b.ToLowerInvariant();
+        if (a == b) return true;
+        int max = Math.Max(1, Math.Min(a.Length, b.Length) / 6);
+        if (Math.Abs(a.Length - b.Length) > max) return false;
+        var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i;
+            for (int j = 1; j <= b.Length; j++) cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length] <= max;
+    } DateTime _zoneNoteAt = DateTime.MinValue;
 
     async Task ReadZone(Rectangle game)
     {
@@ -157,10 +180,24 @@ public sealed class TrackerSession
                 if (!string.Equals(_pendingZone, zone, StringComparison.Ordinal)) { _pendingZone = zone; zone = null; }
             }
             else _pendingZone = null;
-            if (zone != null && zone != Engine.Zone) CrashLog.Note($"zone: {zone}");
+            // the minimap names a place on no list, twice in a row (an expedition's inner area, an event area): from now on
+            // the count goes under Unknown zone, never under the last zone that was read (Steven, 2026-10-21: refining
+            // stones from an expedition landed on Eastern Cantas Valley)
+            if (zone == null && ZoneLocator.LastUnlisted is { } u)
+            {
+                if (_unlistedTitle != null && Close(_unlistedTitle, u) && Engine.Zone != SessionEngine.UnknownZone)
+                {
+                    zone = SessionEngine.UnknownZone;
+                    CrashLog.Note($"zone: \"{u}\" is on no list, so this counts under Unknown zone, not under {Engine.Zone ?? "the last zone"}");
+                }
+                _unlistedTitle = u;
+            }
+            else if (zone != null) _unlistedTitle = null;
+            if (zone != null && zone != Engine.Zone && zone != SessionEngine.UnknownZone) CrashLog.Note($"zone: {zone}" + (ZoneLocator.KindOf(zone) is { } kind ? $" ({kind})" : ""));
             else if (zone == null && Engine.Zone == null && (DateTime.UtcNow - _zoneNoteAt).TotalSeconds >= 60) { _zoneNoteAt = DateTime.UtcNow; CrashLog.Note($"zone read: {note}"); }
             Engine.SetZone(zone);
             Secondary?.SetZone(zone);
+            Instances.Zone(zone, DateTime.UtcNow);
             // a new zone starts the zone view over: its tables are this zone's alone
             if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
             else ZoneView.SetZone(zone);
@@ -217,7 +254,7 @@ public sealed class TrackerSession
                     Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
                     LastError = "";
                 }
-                else { await ReadOnce(); await TargetDueAsync(); }
+                else { await ReadOnce(); await TargetDueAsync(); await LootListAsync(); }
                 await ZoneDueAsync();
             }
             catch (System.ComponentModel.Win32Exception)
@@ -261,30 +298,144 @@ public sealed class TrackerSession
         bool afterFade = _tracker.LastAfterFade;
         // a read that couldn't be lined up with the last one counts nothing; the log says so, so a missed line can be traced
         if (_tracker.LastFromAnchor) CrashLog.Note($"the last read was a stray line, so this one was lined up with the last full read of the chat ({fresh.Count} new)");
-        if (_tracker.Unaligned > unaligned) CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
+        if (_tracker.Unaligned > unaligned)
+        {
+            CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
+            // both reads in full, so a lost burst of kills can be traced line by line
+            CrashLog.Note("   before: " + string.Join("  |  ", _prevRead));
+            CrashLog.Note("   now:    " + string.Join("  |  ", lines));
+        }
+        _prevRead = lines;
         // the enemy on the target bar, as last read, goes with this read's events (Kinah by enemy, a best guess)
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
         // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
         bool reward = Target.RewardOpen(DateTime.UtcNow);
-        foreach (var (l, events) in _parser.ParseBatch(fresh, DateTime.UtcNow))
+        var now = DateTime.UtcNow;
+        // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
+        if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase))) Target.MarkCraft(now);
+        foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
+        bool crafting = (now - Target.CraftAt).TotalSeconds <= TargetReader.CraftGraceSeconds;
+        // loot lines that were read garbled while they faded in, now read cleanly at the same place: one more parse each
+        var reread = _reread.Take(lines, fresh.Count, now);
+        // more loot than the chat can show at once (an expedition's rewards, a box opened): the read shares no line with
+        // the last one, so nothing lines up. Its loot lines unseen in the last ten minutes are new, and are counted
+        if (_tracker.Unaligned > unaligned)
+        {
+            var burst = Reread.Burst(_lastLines, lines, _recent, now);
+            if (burst.Count > 0) { CrashLog.Note($"a burst of {burst.Count} loot line(s) arrived faster than the chat could show; counted from the read anyway"); reread.AddRange(burst); }
+            else
+            {
+                // it shares lines with the last read but no run of them lined up: what follows the last shared line is new
+                var after = Reread.AfterOverlap(_lastLines, lines);
+                if (after.Count > 0) { CrashLog.Note($"counted {after.Count} loot line(s) below the last line this read shares with the last one: {string.Join(" | ", after)}"); reread.AddRange(after); }
+            }
+        }
+        Reread.Remember(_recent, lines, now);
+        _lastLines = lines;
+        bool Apply(IEnumerable<GameEvent> events, string via = "chat")
         {
             bool any = false;
-            foreach (var parsed in events)
+            foreach (var p0 in events)
             {
-                var ev = reward ? _parser.AsReward(parsed) : parsed;
-                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); any = true;
+                var parsed = p0 with { Via = p0.Via.Length > 0 ? via + " · " + p0.Via : via };
+                // the loot list beside the character already added this pickup (this chat line came late): it counts once
+                if (_cross.Chat(parsed, now)) { any = true; continue; }
+                // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
+                bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
+                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); any = true;
+                Feed(ev);
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
+            return any;
+        }
+        int at = 0;
+        foreach (var (l, events) in _parser.ParseBatch(fresh, now))
+        {
+            bool any = Apply(events);
             CrashLog.Read(l, any, afterFade);
+            if (any) { LastLine = l; LootLine?.Invoke(l); }
+            // a loot-shaped line that matched nothing was probably still fading in: look at its place again next read
+            else if (Reread.LooksLikeLoot(l)) _reread.Remember(l, fresh.Count - 1 - at, now);
+            at++;
+        }
+        foreach (var l in reread)
+        {
+            bool any = false;
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, "chat · recovered");
+            CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
         LastError = "";
     }
 
     DateTime _targetAt = DateTime.MinValue;
+
+    /// <summary>One pickup as counted, for the recent pickups strip: when, what, and how it was read.</summary>
+    public sealed record Pickup(DateTime At, string What, string Via, bool Unconfirmed);
+    readonly List<Pickup> _pickups = new();
+    /// <summary>The last pickups counted, newest first: items and Kinah only, rewards and bound Kinah left out.</summary>
+    public List<Pickup> RecentPickups(int n) { lock (_pickups) return _pickups.TakeLast(n).Reverse().ToList(); }
+    void Feed(GameEvent ev)
+    {
+        string? what = ev switch
+        {
+            ItemAcquired a => $"{_items.NameOf(a.ItemId)} ×{a.Count}" + (a.Bound ? " (bound)" : ""),
+            KinahChanged { Bound: false, Delta: > 0 } k => $"{k.Delta:N0} Kinah",
+            _ => null,
+        };
+        if (what == null) return;
+        lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
+    }
+
+    /// <summary>The chat and the loot list beside the character, checked against each other: see <see cref="LootCrossCheck"/>.</summary>
+    readonly LootCrossCheck _cross;
+    public LootCrossCheck CrossCheck => _cross;
+
+    /// <summary>
+    /// One read of the loot list beside the character, every pass while the game is in view. Its rows wait for the chat;
+    /// a row the chat never matched is counted from the list, through the same rules as a chat line (reward screens too).
+    /// </summary>
+    async Task LootListAsync()
+    {
+        if (GameRect is not { } g) return;
+        // every pass: a row is up about three seconds, and during fast kills a pass can take over a second
+        var region = LootPopup.Region(g);
+        try
+        {
+            var cover = GameWindow.Covered(region, _settings.ProcessHints);
+            if (cover != null) return;   // something over it (this window, a browser): nothing read, nothing added
+            var lines = await ScreenReader.ReadBoxesAsync(region, 3, boost: true);
+            var now = DateTime.UtcNow;
+            var add = _cross.Popup(LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text))), now);
+            if (add.Count == 0) return;
+            bool reward = Target.RewardOpen(now);
+            foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
+            Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt);
+            bool crafting = (now - Target.CraftAt).TotalSeconds <= TargetReader.CraftGraceSeconds;
+            foreach (var p0 in add)
+            {
+                var parsed = p0 with { Via = "loot list" };
+                bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
+                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
+                Feed(ev);
+                if (ev is ItemAcquired) CraftView.Apply(ev);
+                if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
+                try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+            }
+        }
+        catch (Exception ex) { CrashLog.Write("loot list", ex); }
+    }
+    /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
+    List<string> _prevRead = new();
+    readonly Reread _reread = new();
+    // every line of the last ten minutes of reads, for telling a burst's new lines from history
+    readonly Dictionary<string, DateTime> _recent = new();
+    List<string> _lastLines = new();
 
     /// <summary>
     /// The target bar every 2 seconds while the chat is read. Unlike the minimap, the panel isn't hidden for it: a read every
@@ -333,6 +484,7 @@ public sealed class TrackerSession
 
     public async Task StopAsync()
     {
+        Instances.Close();
         _cts.Cancel();
         if (_loop != null) { try { await _loop; } catch (Exception) { /* loop ended */ } }
         Engine.Finish();
@@ -344,9 +496,19 @@ public sealed class TrackerSession
 
     public Task<bool> UploadAsync(Settings s) => UploadAsync(s, Engine, Kind, Activity);
 
-    /// <summary>Shares one engine's totals (a farming run, or a chunk of the always-on count) under the given kind. Under five minutes or empty: nothing is sent.</summary>
-    public Task<bool> UploadAsync(Settings s, SessionEngine e, string kind, string activity) =>
-        e.Elapsed.TotalMinutes >= 5 && e.Events > 0 ? Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items), s.Upload) : Task.FromResult(false);
+    /// <summary>
+    /// Shares one engine's totals (a farming run, or a chunk of the always-on count) under the given kind, with the
+    /// expedition and event runs that finished meanwhile. Under five minutes or empty: nothing is sent. A send that
+    /// doesn't reach the site puts the runs back for the next one; with sharing off they are let go, never sent later.
+    /// </summary>
+    public async Task<bool> UploadAsync(Settings s, SessionEngine e, string kind, string activity)
+    {
+        if (e.Elapsed.TotalMinutes < 5 || e.Events == 0) return false;
+        var runs = Instances.TakeUnshared(e.Started);
+        bool ok = await Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, runs), s.Upload);
+        if (!ok && s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint)) Instances.Restore(runs);
+        return ok;
+    }
 }
 
 /// <summary>What the window remembers between runs, kept per user.</summary>
@@ -366,8 +528,12 @@ public sealed class UserPrefs
     public bool DropsOpen { get; set; } = true;
     public bool GatherOpen { get; set; } = true;
     public bool MobsOpen { get; set; } = true;
+    /// <summary>Soul Crystals sit folded at the bottom until opened.</summary>
+    public bool PetsOpen { get; set; }
     /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
     public bool AllZones { get; set; }
+    /// <summary>The Odds column as a percentage ("4.9%") instead of "1 in 21"; a click on its header switches.</summary>
+    public bool OddsAsPercent { get; set; }
     /// <summary>Which part of the window shows: "Farming" (the run, the stats, the tables) or "Crafting" (recipes, cost, success, profit).</summary>
     public string Part { get; set; } = "Farming";
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>

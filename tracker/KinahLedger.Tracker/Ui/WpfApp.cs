@@ -208,6 +208,13 @@ public static class WpfApp
         DoEvents();
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        // KL_CARD_ZONE=<zone>: also draw the card a click on the first drop opens, with the live site's data for that zone
+        if (demo && Environment.GetEnvironmentVariable("KL_CARD_ZONE") is { Length: > 0 } cardZone)
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            Task.Run(() => KinahLedger.Data.SiteData.RefreshAsync(http, "https://kinahledger.com", "na_e-siel-elyos")).Wait();
+            w.ShotItemCard(Path.Combine(dir, "ui-card.png"), cardZone);
+        }
         w.Close();
 
         var h = new HudWindow { Left = -12000, Top = -12000, ShowActivated = false };
