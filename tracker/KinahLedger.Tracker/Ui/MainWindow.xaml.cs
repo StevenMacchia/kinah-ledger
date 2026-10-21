@@ -70,6 +70,8 @@ public partial class MainWindow : Window
         Kind.ItemsSource = Kinds;
         Kind.SelectedItem = Kinds.Contains(_prefs.Activity) ? _prefs.Activity : "Open world";
         // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
+        // every start: Drops, Gathered and Kinah by enemy open, Soul Crystals folded (Steven: Gathered is never hidden at start)
+        _prefs.DropsOpen = _prefs.GatherOpen = _prefs.MobsOpen = true; _prefs.PetsOpen = false;
         AllZonesChk.IsChecked = _prefs.AllZones;
         AllZonesChk.Click += (_, _) => { _prefs.AllZones = AllZonesChk.IsChecked == true; if (!_demo) _prefs.Save(); Redraw(); Tick(); };
         if (_prefs.WinX is int x && _prefs.WinY is int y && x > SystemParameters.VirtualScreenLeft - 50 && y > SystemParameters.VirtualScreenTop - 50
