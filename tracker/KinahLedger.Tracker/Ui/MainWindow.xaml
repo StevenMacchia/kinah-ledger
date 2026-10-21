@@ -116,7 +116,7 @@
           <StackPanel VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
-              <TextBlock x:Name="Version" Text="v0.7.2" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+              <TextBlock x:Name="Version" Text="v0.7.3" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
             </StackPanel>
             <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="0,1,0,0" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
           </StackPanel>
@@ -169,8 +169,18 @@
           <TextBlock x:Name="WelcomeHint" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,2,0,0"/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,12,0,8"/>
           <WrapPanel x:Name="SkinChips"/>
+          <!-- sharing, chosen here before anything is read or sent (the same switch as Options › Sharing) -->
+          <Grid Margin="0,16,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,16,0">
+              <TextBlock Text="Share my runs and Market prices, anonymously" FontSize="13.5" FontWeight="SemiBold"/>
+              <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" Margin="0,2,0,0" Text="Totals only, for the site's public tables. Never your character, chat text or screenshots. Change it any time in Options."/>
+              <TextBlock FontSize="12.5" Margin="0,4,0,0"><Hyperlink x:Name="WelcomeSentLink" Style="{StaticResource LinkStyle}">What's shared</Hyperlink><Run Text="   "/><Hyperlink x:Name="WelcomePrivacyLink" Style="{StaticResource LinkStyle}">Privacy</Hyperlink></TextBlock>
+            </StackPanel>
+            <CheckBox x:Name="WelcomeShareChk" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True" VerticalAlignment="Center" AutomationProperties.Name="Share my runs and Market prices, anonymously"/>
+          </Grid>
           <Grid Margin="0,14,0,0">
-            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" VerticalAlignment="Center" MaxWidth="300" HorizontalAlignment="Left" Text="Nothing is read or shared until you continue. The chat and the zone are found on their own."/>
+            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" VerticalAlignment="Center" MaxWidth="300" HorizontalAlignment="Left" Text="Nothing is read or sent until you continue. The chat and the zone are found on their own."/>
             <Button x:Name="WelcomeGo" Style="{StaticResource PrimaryButton}" Content="Continue" Width="160" Height="44" HorizontalAlignment="Right" VerticalAlignment="Center"/>
           </Grid>
         </StackPanel>

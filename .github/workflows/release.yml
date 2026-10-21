@@ -1,0 +1,84 @@
+# Releases the tracker: push a tag vX.Y.Z and this builds KinahLedger.exe on a GitHub-hosted runner, signs it through
+# SignPath (once the SignPath variables and secret below are set), writes latest.json and publishes the GitHub release
+# that every running tracker updates from. Nothing else builds or signs a release (CODE_SIGNING_POLICY.md).
+#
+# Before tagging: bump <Version> in the csproj to X.Y.Z and add release-notes/vX.Y.Z.md. The run stops if either is
+# missing, so a stray tag never reaches players.
+#
+# Signing turns on when the repository has these (Settings › Secrets and variables › Actions):
+#   variable SIGNPATH_ORGANIZATION_ID, secret SIGNPATH_API_TOKEN
+#   optional variables SIGNPATH_PROJECT_SLUG (default kinah-ledger), SIGNPATH_POLICY_SLUG (default release-signing)
+# SignPath asks an approver to approve each request; the run waits up to an hour for that.
+name: Release tracker
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Check the tag, the version and the notes agree
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"; ver="${tag#v}"
+          csproj=$(grep -oP '(?<=<Version>)[^<]+' tracker/KinahLedger.Tracker/KinahLedger.Tracker.csproj)
+          [ "$csproj" = "$ver" ] || { echo "::error::tag $tag but the csproj says $csproj"; exit 1; }
+          [ -s "release-notes/$tag.md" ] || { echo "::error::release-notes/$tag.md is missing"; exit 1; }
+          echo "VERSION=$ver" >> "$GITHUB_ENV"
+
+      - name: Publish the single-file exe
+        working-directory: tracker/KinahLedger.Tracker
+        run: dotnet publish -c Release -o ../../dist
+
+      - name: Upload the unsigned exe for signing
+        id: unsigned
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned
+          path: dist/KinahLedger.exe
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'kinah-ledger' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+
+      - name: Use the signed exe
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        shell: bash
+        run: cp -f signed/KinahLedger.exe dist/KinahLedger.exe
+
+      # the checksum is taken after signing: signing changes the file, and trackers install only an exact match
+      - name: Write latest.json and the notes
+        shell: bash
+        run: |
+          node tools/release-manifest.js dist/KinahLedger.exe
+          sha=$(node -e "console.log(require('./dist/latest.json').sha256)")
+          { cat "release-notes/${GITHUB_REF_NAME}.md"; printf '\n\nKinahLedger.exe sha256: %s\n' "$sha"; } > dist/notes.md
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/KinahLedger.exe dist/latest.json --title "Kinah Ledger tracker $VERSION" --notes-file dist/notes.md

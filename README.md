@@ -6,7 +6,8 @@ A fan project for Aion 2 (global): Kinah per hour, material yields, drop rates a
 built from runs players share through a free tracker. Made by players for players; not affiliated
 with NCSOFT. MIT licensed.
 
-This is a side project, separate from the author's professional work.
+This is a side project, separate from the author's professional work. Code signing and privacy:
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ```
 (website)  lives in a separate private repo; kinahledger.com/download serves this repo's releases
@@ -131,17 +132,18 @@ from a terminal (`--check` only reports).
 
 ### Releasing
 
+Bump `<Version>` in the csproj to X.Y.Z, write `release-notes/vX.Y.Z.md`, commit, then tag and push:
+
 ```
-cd tracker/KinahLedger.Tracker
-dotnet publish -c Release
-cd ../..
-node tools/release-manifest.js            # latest.json beside the published exe: version, size, SHA-256
-gh release create vX.Y.Z dist/KinahLedger.exe dist/latest.json --title "Kinah Ledger tracker X.Y.Z" --notes-file notes.md
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
-Bump `<Version>` in the csproj first. The notes must carry the exe's checksum on a line of its own,
-`KinahLedger.exe sha256: <the sha256 from latest.json>`: running trackers install a release only when the download
-matches it, and offer no update for a release without it. They pick it up within six hours, or at their next start.
+`.github/workflows/release.yml` builds the exe on GitHub, signs it through SignPath once signing is set up (see
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)), writes `latest.json` and publishes the release with the exe's
+checksum on its own line, `KinahLedger.exe sha256: <hex>`. Running trackers install a release only when the download
+matches it, and pick it up within six hours or at their next start. The run stops if the tag and the csproj disagree or
+the notes file is missing.
 
 ### Commands
 

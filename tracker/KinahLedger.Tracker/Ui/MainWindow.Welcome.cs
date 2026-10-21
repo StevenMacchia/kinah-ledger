@@ -24,6 +24,8 @@ public partial class MainWindow
         BuildRegionChips(); BuildFactionChips(); BuildServerChips();
         BuildSkinChips(SkinChips);
         WelcomeGo.Click += (_, _) => FinishWelcome();
+        WelcomeSentLink.Click += (_, _) => WhatsSent();
+        WelcomePrivacyLink.Click += (_, _) => Open(PrivacyUrl);
         SetWelcome(!_prefs.Welcomed || !HasServer);
     }
 
@@ -32,6 +34,7 @@ public partial class MainWindow
     {
         _welcome = on;
         WelcomeCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (on) WelcomeShareChk.IsChecked = _prefs.Share;
         foreach (var fe in new FrameworkElement[] { SessionCard, Tiles, TablesCard, StatusRow, OptionsBtn, ServerChip })
             fe.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         Tagline.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
@@ -42,6 +45,8 @@ public partial class MainWindow
     {
         if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.Foreground = B("Warn"); return; }
         ApplyServer(_wRegion, _wServer.Label);
+        bool share = WelcomeShareChk.IsChecked == true;
+        if (share != _prefs.Share) { _prefs.Share = share; MarketSwitch(share); }
         _prefs.Welcomed = true;
         SavePrefs();
         SetWelcome(false);
