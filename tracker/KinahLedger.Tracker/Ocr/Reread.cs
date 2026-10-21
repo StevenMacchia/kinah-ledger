@@ -84,6 +84,35 @@ public sealed class Reread
         return prev[b.Length];
     }
 
+    /// <summary>Every line of a read, by key, with when it was last on screen; keys older than ten minutes go.</summary>
+    public static void Remember(Dictionary<string, DateTime> recent, IReadOnlyList<string> lines, DateTime now)
+    {
+        foreach (var l in lines) { var k = Key(l); if (k.Length > 0) recent[k] = now; }
+        if (recent.Count > 600) foreach (var k in recent.Where(kv => (now - kv.Value).TotalMinutes > 10).Select(kv => kv.Key).ToList()) recent.Remove(k);
+    }
+
+    /// <summary>
+    /// A burst: more loot than the chat shows at once arrived between two reads, so this read shares no line with the last
+    /// one. Only then (a read that merely failed to line up shares most of its lines with the last and gives nothing here),
+    /// its loot-shaped lines that are not close to any line seen in the last ten minutes are new.
+    /// </summary>
+    public static List<string> Burst(IReadOnlyList<string> last, IReadOnlyList<string> cur, Dictionary<string, DateTime> recent, DateTime now)
+    {
+        var take = new List<string>();
+        if (last.Count == 0 || cur.Count < 3) return take;
+        var lastKeys = last.Select(Key).Where(k => k.Length > 0).ToList();
+        if (cur.Any(l => { var k = Key(l); return k.Length > 0 && lastKeys.Any(p => Near(k, p) || k == p); })) return take;   // overlaps: not a burst
+        var seen = recent.Where(kv => (now - kv.Value).TotalMinutes <= 10).Select(kv => kv.Key).ToList();
+        foreach (var l in cur)
+        {
+            if (!LooksLikeLoot(l) || l.TrimStart().StartsWith('[')) continue;
+            var k = Key(l);
+            if (seen.Any(p => p == k || Near(k, p))) continue;
+            take.Add(l);
+        }
+        return take;
+    }
+
     static string Key(string s)
     {
         var sb = new StringBuilder();

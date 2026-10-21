@@ -210,7 +210,40 @@ public static class ZoneLocator
     /// Zone and area names as the game prints them on the minimap: data/zones.txt, built into the exe (about 330 names,
     /// both factions and the Abyss). The whitelist for zones; a name not here counts as Unknown zone. The site reads the same file.
     /// </summary>
-    public static readonly string[] Known = LoadZones();
+    public static readonly string[] Known = LoadZones().Concat(LoadInstances().Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    /// <summary>Instanced areas (dungeons, trials, arenas, event areas) and the kind a run in one is filed under: data/instances.txt.</summary>
+    public static readonly Dictionary<string, string> Instances = LoadInstances();
+
+    /// <summary>"Expedition", "Event", "Arena" or "Legion" for an instanced area; null for an open-world zone or none.</summary>
+    public static string? KindOf(string? zone) => zone != null && Instances.TryGetValue(zone, out var k) ? k : null;
+
+    static Dictionary<string, string> LoadInstances()
+    {
+        var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var stream = typeof(ZoneLocator).Assembly.GetManifestResourceStream("instances.txt");
+            if (stream == null) return d;
+            using var r = new StreamReader(stream);
+            while (r.ReadLine() is { } line)
+            {
+                var t = line.Trim();
+                if (t.Length == 0 || t.StartsWith('#')) continue;
+                var bar = t.LastIndexOf('|');
+                if (bar <= 0) continue;
+                d[t[..bar].Trim()] = t[(bar + 1)..].Trim();
+            }
+        }
+        catch (Exception) { /* without the list, instances read as unlisted titles and count under Unknown zone */ }
+        return d;
+    }
+
+    /// <summary>
+    /// The minimap title read last, when it was name-shaped but on no list (an expedition's inner area, an event area the
+    /// list doesn't have yet); null when the last read found a zone or no title at all.
+    /// </summary>
+    public static string? LastUnlisted { get; private set; }
 
     static string[] LoadZones()
     {
@@ -245,6 +278,7 @@ public static class ZoneLocator
             .Select(l => (l, text: Clean(l.Text)))
             .Where(x => x.text.Length >= 6 && x.text.Length <= 40 && Shape.IsMatch(x.text) && !Blocklist.Any(b => x.text.StartsWith(b + " ") || x.text == b))
             .OrderBy(x => x.l.Box.Top).ToList();
+        LastUnlisted = null;
         if (candidates.Count == 0) return (null, $"no zone-shaped text in the top-right corner ({lines.Count} lines read)");
         // the known list is the whitelist: a name on it wins even misread. Anything else is some other label, or a zone the
         // list doesn't have yet; either way the count stays under "Unknown zone" rather than under a misread name.
@@ -253,6 +287,8 @@ public static class ZoneLocator
             var hit = Known.FirstOrDefault(k => Edit(k.ToLowerInvariant(), c.text.ToLowerInvariant()) <= Math.Max(1, k.Length / 7));
             if (hit != null) return (hit, "zone matched a known name");
         }
+        // the top line of the corner is the minimap's title: name-shaped and on no list, it is a place the list lacks
+        if (candidates[0].l.Box.Top - strip.Top < strip.Height * 0.5) LastUnlisted = candidates[0].text;
         return (null, $"top-right text isn't a zone on the list: {string.Join(" | ", candidates.Take(3).Select(c => c.text))}");
     }
 

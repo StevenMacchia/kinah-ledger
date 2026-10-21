@@ -145,6 +145,9 @@ public sealed class GameWatcher
     /// <summary>Which mode a count looks like, from what it holds: gathers, Soul Crystals, kills, or (with none of those) crafting and enchanting.</summary>
     public static string DominantKind(SessionEngine e)
     {
+        // most of the time in an expedition, an arena or an event area: that is what the run was, kills or gathers alike
+        var main = e.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).OrderByDescending(kv => kv.Value.Seconds).Select(kv => kv.Key).FirstOrDefault();
+        if (Ocr.ZoneLocator.KindOf(main) is { } instance) return instance;
         var t = e.Totals();
         if (t.Nodes > t.Kills) return "Gathering";
         if (t.Pets > 0 && t.Pets * 5 >= Math.Max(1, t.Kills)) return "Pets";

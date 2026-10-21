@@ -143,7 +143,25 @@ public sealed class TrackerSession
         _loop ??= Task.Run(() => Loop(_cts.Token));
     }
 
-    string? _pendingZone; DateTime _zoneNoteAt = DateTime.MinValue;
+    string? _pendingZone; string? _unlistedTitle;
+
+    /// <summary>Two reads of the same title, allowing the recognizer a letter or two.</summary>
+    static bool Close(string a, string b)
+    {
+        a = a.ToLowerInvariant(); b = b.ToLowerInvariant();
+        if (a == b) return true;
+        int max = Math.Max(1, Math.Min(a.Length, b.Length) / 6);
+        if (Math.Abs(a.Length - b.Length) > max) return false;
+        var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i;
+            for (int j = 1; j <= b.Length; j++) cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length] <= max;
+    } DateTime _zoneNoteAt = DateTime.MinValue;
 
     async Task ReadZone(Rectangle game)
     {
@@ -157,7 +175,20 @@ public sealed class TrackerSession
                 if (!string.Equals(_pendingZone, zone, StringComparison.Ordinal)) { _pendingZone = zone; zone = null; }
             }
             else _pendingZone = null;
-            if (zone != null && zone != Engine.Zone) CrashLog.Note($"zone: {zone}");
+            // the minimap names a place on no list, twice in a row (an expedition's inner area, an event area): from now on
+            // the count goes under Unknown zone, never under the last zone that was read (Steven, 2026-10-21: refining
+            // stones from an expedition landed on Eastern Cantas Valley)
+            if (zone == null && ZoneLocator.LastUnlisted is { } u)
+            {
+                if (_unlistedTitle != null && Close(_unlistedTitle, u) && Engine.Zone != SessionEngine.UnknownZone)
+                {
+                    zone = SessionEngine.UnknownZone;
+                    CrashLog.Note($"zone: \"{u}\" is on no list, so this counts under Unknown zone, not under {Engine.Zone ?? "the last zone"}");
+                }
+                _unlistedTitle = u;
+            }
+            else if (zone != null) _unlistedTitle = null;
+            if (zone != null && zone != Engine.Zone && zone != SessionEngine.UnknownZone) CrashLog.Note($"zone: {zone}" + (ZoneLocator.KindOf(zone) is { } kind ? $" ({kind})" : ""));
             else if (zone == null && Engine.Zone == null && (DateTime.UtcNow - _zoneNoteAt).TotalSeconds >= 60) { _zoneNoteAt = DateTime.UtcNow; CrashLog.Note($"zone read: {note}"); }
             Engine.SetZone(zone);
             Secondary?.SetZone(zone);
@@ -270,6 +301,15 @@ public sealed class TrackerSession
         var now = DateTime.UtcNow;
         // loot lines that were read garbled while they faded in, now read cleanly at the same place: one more parse each
         var reread = _reread.Take(lines, fresh.Count, now);
+        // more loot than the chat can show at once (an expedition's rewards, a box opened): the read shares no line with
+        // the last one, so nothing lines up. Its loot lines unseen in the last ten minutes are new, and are counted
+        if (_tracker.Unaligned > unaligned)
+        {
+            var burst = Reread.Burst(_lastLines, lines, _recent, now);
+            if (burst.Count > 0) { CrashLog.Note($"a burst of {burst.Count} loot line(s) arrived faster than the chat could show; counted from the read anyway"); reread.AddRange(burst); }
+        }
+        Reread.Remember(_recent, lines, now);
+        _lastLines = lines;
         bool Apply(IEnumerable<GameEvent> events)
         {
             bool any = false;
@@ -305,6 +345,9 @@ public sealed class TrackerSession
 
     DateTime _targetAt = DateTime.MinValue;
     readonly Reread _reread = new();
+    // every line of the last ten minutes of reads, for telling a burst's new lines from history
+    readonly Dictionary<string, DateTime> _recent = new();
+    List<string> _lastLines = new();
 
     /// <summary>
     /// The target bar every 2 seconds while the chat is read. Unlike the minimap, the panel isn't hidden for it: a read every

@@ -586,6 +586,18 @@ options: --process aion[,other]");
             Check("a different line in that place is not taken", string.Join("|", rr.Take(new[] { "Acquired 436 Kina." }, 0, r0.AddSeconds(1))), "");
             rr.Remember("ria acquired", 0, r0);
             Check("still garbled: one more look", string.Join("|", rr.Take(new[] { "ria acquired" }, 0, r0.AddSeconds(1))) + "/" + string.Join("|", rr.Take(new[] { "Aria acquired." }, 0, r0.AddSeconds(2))), "/Aria acquired.");
+            var rec = new Dictionary<string, DateTime>(); var b0 = DateTime.UtcNow;
+            Reread.Remember(rec, new[] { "Orichalcum Ore acquired.", "Acquired 436 Kina.", "[Bob] hi" }, b0.AddMinutes(-1));
+            Check("burst: a read sharing nothing with the last counts its unseen loot", string.Join("|", Reread.Burst(new[] { "Acquired 436 Kina.", "[Bob] hi" },
+                new[] { "Lesser Refining Stone acquired.", "Acquired Fine Odyle x2.", "Spiritstone acquired.", "[Amy] gg" }, rec, b0)), "Lesser Refining Stone acquired.|Acquired Fine Odyle x2.|Spiritstone acquired.");
+            Check("burst: a read that overlaps the last is no burst", string.Join("|", Reread.Burst(new[] { "Acquired 436 Kina.", "[Bob] hi" },
+                new[] { "Acquired 436 Kina.", "Spiritstone acquired.", "Odyle acquired." }, rec, b0)), "");
+            Check("burst: loot seen in the last ten minutes is history, not new", string.Join("|", Reread.Burst(new[] { "Acquired 436 Kina.", "[Bob] hi" },
+                new[] { "Orichalcum Ore acquired.", "Orichalcum Ore acquirad.", "Spiritstone acquired." }, rec, b0)), "Spiritstone acquired.");
+            Check("instances: an expedition area has a kind", ZoneLocator.KindOf("Auldor's Sanctum") ?? "none", "Expedition");
+            Check("instances: an event area too", ZoneLocator.KindOf("Defend Shugo Merchants") ?? "none", "Event");
+            Check("instances: an open-world zone has none", ZoneLocator.KindOf("Eastern Cantas Valley") ?? "none", "none");
+            Check("instances: they are on the zone list", ZoneLocator.Known.Contains("Urugugu Canyon") ? "yes" : "no", "yes");
             Check("player chat is not loot-shaped", Reread.LooksLikeLoot("[Drogo] bro i live between 1984 and 2008") ? "yes" : "no", "no");
         }
         Check("target bar: a garbled read keeps the enemy on the bar", TargetReader.Close("Hgrcl Kalgolem", "Hard Kalgolem") ? "yes" : "no", "yes");

@@ -528,7 +528,7 @@ public partial class MainWindow : Window
                   + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
             + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
         // the card's head: what and how long, then the hour's total (Kinah plus the loot after the Market's cut)
-        TableTitle.Text = $"{(_mode == Mode.Gather ? "Gathering" : "Open world")} · {Clock(elapsed)}";
+        TableTitle.Text = $"{(ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : "Open world"))} · {Clock(elapsed)}";
         TableWhat.Text = _tableWhat;
         long totalNow = kinah + s.Value;
         HeadRate.Text = totalNow > 0 ? $"{Fk(totalNow / h)}/hr" : "";

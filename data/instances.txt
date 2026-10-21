@@ -1,0 +1,232 @@
+# Instanced areas the minimap names: dungeons, trials, arenas and event areas, one per line as "Name|Kind". They are zones
+# like the ones in zones.txt (the whitelist covers both), and a run spent mostly in one is filed under its kind instead
+# of Open world. Kinds: Expedition (every dungeon, trial and instance type), Arena, Legion, Event.
+# Sources: https://metabot.gg/en/aion-2/dungeons (2026-10-21; its sealed-dungeon list is partly collapsed, so some are
+# missing), plus names read in play. A new one goes here, then rebuild the tracker and run the site's gen-zones.mjs.
+# Seen in play, 2026-10-21 (inside an expedition, and the Shugo Festival event):
+Auldor's Sanctum|Expedition
+Urugugu Temple|Expedition
+Urugugu Village|Expedition
+Defend Shugo Merchants|Event
+Shugo Festival|Event
+# Party dungeons, raids, trials, growth, daily and boss content
+Abyssal Horn Den|Expedition
+Azure Breath Island|Expedition
+Citadel of the Fallen Daeva|Expedition
+Cradle of Nihility|Expedition
+Deus Research Base|Expedition
+Draupnir|Expedition
+Dying Dramata's Nest|Expedition
+Ferocious Horn Den|Expedition
+Fire Temple|Expedition
+Hall of Illusion|Expedition
+Krao Cave|Expedition
+Shattered Arkanis|Expedition
+Submerged Life Temple|Expedition
+Urugugu Canyon|Expedition
+Vakron Sky Island|Expedition
+Mirror of Scarlet Desire|Expedition
+Abyssal Forge: Ludra|Expedition
+Chalice of Muspel|Expedition
+Corroded Decontamination Facility|Expedition
+Chamber of the Dead|Expedition
+Chamber of the Dead (Doom)|Expedition
+Depository of Fates|Expedition
+Forgotten Repository|Expedition
+Forgotten Repository (Doom)|Expedition
+Nightmare Altar|Expedition
+Sanctum of Loathing|Expedition
+Tyrant's Hideout|Expedition
+Fafnite Amphitheater|Expedition
+Silent Graveyard|Expedition
+Crobakhi's Secret Depository|Expedition
+Daeva Bio-Research Base|Expedition
+Odylium Repository|Expedition
+Nightmare|Expedition
+# Ascension instances
+Chloris's Abyss|Expedition
+Dream of Shattered Fragments|Expedition
+Dream of Torment|Expedition
+Dream Remnants|Expedition
+Forgotten Battlefield|Expedition
+Kaisinel's Collapsed Sanctum|Expedition
+Kaisinel's Distorted Dream|Expedition
+Narun's Dream|Expedition
+Sigebert's Abyss|Expedition
+Subspace of Ascension|Expedition
+Zikel's Collapsed Barracks|Expedition
+Zikel's Distorted Dream|Expedition
+# Sealed dungeons
+Abandoned One's Grave|Expedition
+Cave of the Desperate|Expedition
+Chilly Hideout|Expedition
+Dratona Cave|Expedition
+Dusk Pit|Expedition
+Hidden Vein Cave|Expedition
+Lost Ruins|Expedition
+Lupyllini Habitat|Expedition
+Mysterious Mushroom Cave|Expedition
+Old Graveyard|Expedition
+Ossuary of the Noble|Expedition
+Poacher's Den|Expedition
+Poisonous Plant Habitat|Expedition
+Smuggler's Cave|Expedition
+Treasure Hunter's Residence|Expedition
+Trickster's Den|Expedition
+Valka's Nest|Expedition
+Watcher's Temporary Outpost|Expedition
+Abandoned Archon Jail|Expedition
+Akilo Thieves Den|Expedition
+Anguish Hideout|Expedition
+Bibliophile's Grave|Expedition
+Bloodsoaked Confessional|Expedition
+Blue Dragon's Trap|Expedition
+Corrupted Spiritmaster's Residence|Expedition
+Cursed Hideout|Expedition
+Deep Underground Cave|Expedition
+Fafnite Storage Room|Expedition
+Fanatics' Den|Expedition
+Filth Pit|Expedition
+Forest Library|Expedition
+Fortuneteller's Grave|Expedition
+Homish's Prison Compound|Expedition
+Howling Den|Expedition
+Library of Foresight|Expedition
+Looted Repository|Expedition
+Marsh Library|Expedition
+Prison of Oblivion|Expedition
+Spirit Flower Cave|Expedition
+Victims' Cave|Expedition
+Abandoned Memorial Room|Expedition
+Closed Hideout|Expedition
+Collapsed Fortress Basement|Expedition
+Destroyed Scriptorium|Expedition
+Distorted Cave|Expedition
+Fortress Grave|Expedition
+Fortress Jail|Expedition
+Hidden Ruins Altar|Expedition
+Karat's Nest|Expedition
+Lamnah Base|Expedition
+Predator's Lair|Expedition
+Unstable Cave|Expedition
+Worshiper's Underground Cave|Expedition
+Abandoned Odylium Cave|Expedition
+Aullaeu Oratory|Expedition
+Cave Storage|Expedition
+Dark Root Cave|Expedition
+Deadly Poison Den|Expedition
+Drana Depository|Expedition
+Herb Cave|Expedition
+Hidden Valley|Expedition
+High Priest's Ruins|Expedition
+Konutin's Cave|Expedition
+Prison of Exiles|Expedition
+Red Dragon Altar|Expedition
+Skurv Laborer Den|Expedition
+Solitary Rock Tomb|Expedition
+Twisted Pit|Expedition
+Wild Biruta Habitat|Expedition
+Wild Kuru Habitat|Expedition
+All-Curing Cave|Expedition
+Altar of Hope|Expedition
+Balaur Scouts Outpost|Expedition
+Broken Hall of Knowledge|Expedition
+Canyon Library|Expedition
+Deep and Dark Pit|Expedition
+Dratona Assembly Area|Expedition
+Experimental Prison Compound|Expedition
+Final Haven|Expedition
+Guardian's Armory|Expedition
+Insectoid Tunnel|Expedition
+Kidnapper's Hold|Expedition
+Kius' Residence|Expedition
+Klaw Den|Expedition
+Kraka's Altar|Expedition
+Library of Patience|Expedition
+Library of Wisdom|Expedition
+Looted Pilgrim's Rest|Expedition
+Renegade Base|Expedition
+Rift Cave|Expedition
+Rift Fissure|Expedition
+Scribe's Room|Expedition
+Targoth's Cave|Expedition
+Balaur Scouts Campsite|Expedition
+Cave of the Defeated|Expedition
+Destruction Archons Armory|Expedition
+Dratona Outpost|Expedition
+Empty Cave|Expedition
+Fungie Habitat|Expedition
+Laborers Training Ground|Expedition
+Lonely Rock Chasm|Expedition
+Odylium Marauder Den|Expedition
+Pirate's Treasure Storage|Expedition
+Place of Rest|Expedition
+Rock Cave|Expedition
+Scale Altar|Expedition
+Shulak Cave|Expedition
+Ascetic's Cave|Expedition
+Dehinon's Hideout|Expedition
+Den of Exiles|Expedition
+Grave of the Wrathful Dead|Expedition
+Illusionary Ruins|Expedition
+Krall Barracks|Expedition
+Kumbahum's Cave|Expedition
+Lagta Fafnite Storage|Expedition
+Plantation Storage|Expedition
+Spider Cave|Expedition
+Tayga Breeding Ground|Expedition
+Warriors' Rest|Expedition
+Abandoned Kromede Base|Expedition
+Abandoned Life Hideout|Expedition
+Barrier Tower Fortress Vault|Expedition
+Blades Base|Expedition
+Blades Secret Repository|Expedition
+Camouflaged Fate Archon Base|Expedition
+Cave of the Exiled Ones|Expedition
+Cave of the Stranded|Expedition
+Defunct Creion Laboratory|Expedition
+Drok the Outlaw's Den|Expedition
+Fallen Haven|Expedition
+Fate Temple|Expedition
+Filthy Cave|Expedition
+Fire Cave|Expedition
+Forgotten Fire Altar|Expedition
+Forgotten Spring|Expedition
+Frozen Land of Fate|Expedition
+Fugitive Hideout|Expedition
+Gravarax Research Center|Expedition
+Guardian Statues' Cave|Expedition
+Hidden Lepharist Research Center|Expedition
+Iagosh's Secret Storage|Expedition
+Indnath Secret Base|Expedition
+Iralcig Naga Cave|Expedition
+Ishtar Logistics Base|Expedition
+Kurpak Special Operations Unit Base|Expedition
+Land of Raging Flame|Expedition
+Lepharist Special Operations Research Center|Expedition
+Life Awakening Site|Expedition
+Life Daeva Library|Expedition
+Manduri Habitat|Expedition
+Mutated Drana Plantation|Expedition
+Patamor Marauder Base|Expedition
+Patamor Underwater Cave|Expedition
+Predator's Nest|Expedition
+Pure Spring|Expedition
+Ratcatchers Base|Expedition
+Ruins of the Ancient City of Roah|Expedition
+Sunken Ancient Legacy|Expedition
+Sunken Temple|Expedition
+Verdandi's Oratory|Expedition
+# Arenas and legion content
+Beritra Brigade Fortress|Arena
+Fafnite Forge|Arena
+Fire Temple Arena|Arena
+Impetusium Arena|Arena
+Odyle Shard Cradle|Arena
+Orcus's Grave|Arena
+Sandstorm Temple|Arena
+Stormslumber Snowfield|Arena
+Altgard Legion Airship|Legion
+Eltnen Legion Airship|Legion
+Morheim Legion Airship|Legion
+Verteron Legion Airship|Legion
