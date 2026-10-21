@@ -47,13 +47,15 @@ public sealed class SessionEngine
 
     /// <summary>Successes and failures for one craft recipe or one enchant step.</summary>
     public sealed class Odds { public int Ok, Fail; public int Attempts => Ok + Fail; }
-    /// <summary>Craft results by item key (dictionary ID, or the name read when the item isn't in the dictionary).</summary>
-    public Dictionary<string, Odds> Crafts { get; } = new();
+    /// <summary>Crafting, apart from farming: recipes, tries, successes and what came out. Never drops, kills, farming time or zone numbers.</summary>
+    readonly CraftLedger _craft = new();
     /// <summary>Enchant results by "item|from|to"; a level the line didn't show is "?".</summary>
     public Dictionary<string, Odds> Enchants { get; } = new();
-    /// <summary>A craft's own item line ("Orichalcum Ingot acquired.") follows the craft: it is the craft's output, not a drop.</summary>
+    /// <summary>Item lines that were a craft's own output ("Artisan's Orichalcum Longsword acquired." after the craft): recorded under crafting, not as drops.</summary>
     public int CraftedSkipped { get; private set; }
-    long _craftedId; DateTime _craftedAt; string _lastCraft = ""; DateTime _lastCraftAt;
+
+    /// <summary>Copies of the crafting ledger, safe to read from the UI thread.</summary>
+    public List<CraftLedger.Recipe> CraftSnapshot() { lock (_lock) return _craft.Snapshot(); }
 
     /// <summary>The player's own Market activity seen in chat during this count: what sold, for how much, and what expired.</summary>
     public int Sold { get; private set; }
@@ -266,14 +268,17 @@ public sealed class SessionEngine
                 CrashLog.Note($"Kinah line far above what the mobs pay, taken for a reward and not counted as farming: {big.Delta:N0}");
                 ev = new KinahChanged(big.Time, big.Delta, true);
             }
+            // a craft's own item line belongs to crafting alone: not a drop, not a zone's item, not farming time
+            if (ev is ItemAcquired made && _craft.TakeOutput(_items.NameOf(made.ItemId), made.Count, made.Time))
+            {
+                CraftedSkipped++;
+                return;
+            }
             // what counts as farming: loot, Kinah, kills, gathers (failed ones too), Soul Crystals and Soul Points.
             // Crafts, enchants, Market lines and quest rewards don't: they happen in town.
             if (ev is ItemAcquired or KinahChanged { Bound: false } or MobKilled or XpGained or GatherFailed or PetCrystal or CurrencyGained) Farmed(DateTime.UtcNow);
             switch (ev)
             {
-                case ItemAcquired a when a.ItemId == _craftedId && (a.Time - _craftedAt).TotalSeconds <= 5:
-                    _craftedId = 0; CraftedSkipped++;
-                    break;
                 case ItemAcquired a:
                     var d = a.Bound ? ItemsBound : Items;
                     d[a.ItemId] = d.GetValueOrDefault(a.ItemId) + a.Count;
@@ -332,15 +337,8 @@ public sealed class SessionEngine
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
                     break;
                 case CraftResult cr:
-                {
-                    // "Crafting failed." may not name the item: it is the recipe crafted just before, when there is one
-                    var name = cr.Item.Length >= 2 ? cr.Item : (cr.Time - _lastCraftAt).TotalMinutes <= 2 ? _lastCraft : "";
-                    var key = name.Length >= 2 ? _items.KeyOf(_items.IdOf(name)) : "?";
-                    if (!Crafts.TryGetValue(key, out var o)) Crafts[key] = o = new Odds();
-                    if (cr.Ok) { o.Ok++; _craftedId = _items.IdOf(name); _craftedAt = cr.Time; } else o.Fail++;
-                    if (name.Length >= 2) { _lastCraft = name; _lastCraftAt = cr.Time; }
+                    _craft.OnResult(cr);
                     break;
-                }
                 case EnchantResult en:
                 {
                     var item = en.Item.Length >= 2 ? _items.KeyOf(_items.IdOf(en.Item)) : "?";
@@ -365,13 +363,24 @@ public sealed class SessionEngine
     /// <summary>Copies of the craft and enchant counters, safe to read from the UI thread and to share.</summary>
     public (Dictionary<string, Odds> Crafts, Dictionary<string, Odds> Enchants) OddsSnapshot()
     {
-        lock (_lock) return (Crafts.ToDictionary(kv => kv.Key, kv => new Odds { Ok = kv.Value.Ok, Fail = kv.Value.Fail }), Enchants.ToDictionary(kv => kv.Key, kv => new Odds { Ok = kv.Value.Ok, Fail = kv.Value.Fail }));
+        lock (_lock)
+        {
+            // crafts by the recipe's item key, from the crafting ledger
+            var crafts = new Dictionary<string, Odds>();
+            foreach (var r in _craft.Snapshot())
+            {
+                var key = r.Name.Length >= 2 && r.Name != "?" ? _items.KeyOf(_items.IdOf(r.Name)) : "?";
+                if (!crafts.TryGetValue(key, out var o)) crafts[key] = o = new Odds();
+                o.Ok += r.Ok; o.Fail += r.Fail;
+            }
+            return (crafts, Enchants.ToDictionary(kv => kv.Key, kv => new Odds { Ok = kv.Value.Ok, Fail = kv.Value.Fail }));
+        }
     }
 
     /// <summary>Craft and enchant attempts in this count.</summary>
     public (int Crafts, int CraftsOk, int Enchants, int EnchantsOk) OddsTotals()
     {
-        lock (_lock) return (Crafts.Values.Sum(o => o.Attempts), Crafts.Values.Sum(o => o.Ok), Enchants.Values.Sum(o => o.Attempts), Enchants.Values.Sum(o => o.Ok));
+        lock (_lock) { var c = _craft.Snapshot(); return (c.Sum(o => o.Attempts), c.Sum(o => o.Ok), Enchants.Values.Sum(o => o.Attempts), Enchants.Values.Sum(o => o.Ok)); }
     }
 
     public void Finish()

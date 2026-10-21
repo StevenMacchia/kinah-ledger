@@ -26,8 +26,10 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"\bpayment\s+of\s+(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b", RegexOptions.IgnoreCase)]
     private static partial Regex Payment();
 
-    // the amount of the last payment line and when it was read: the "Acquired" line with the same amount right after is the reward itself
-    long _paymentAmt; DateTime _paymentAt;
+    // what the last payment line still owes and when it was read: the Kinah lines that make it up are payment, not
+    // farming. A Market settlement pays out in several lines ("Acquired 44,998 Kina." "A total payment of 61,765 Kina has
+    // been completed." "Acquired 16,767 Kina."), some before the total and some after it.
+    long _paymentLeft; DateTime _paymentAt;
 
     [GeneratedRegex(@"\b(?:acquired|obtained|looted|picked up)\s+(?<name>.+?)(?:\s*[×xX\*]\s*(?<n>\d{1,4}))?\s*\.?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex Item();
@@ -154,6 +156,37 @@ public sealed partial class ChatParser
         }
     }
 
+    /// <summary>
+    /// One read's new lines, parsed in order. A payment line then also claims the Kinah lines just before it in the same
+    /// read when they make up what it still owes, exactly: they were the payment's first lines, not loot.
+    /// </summary>
+    public List<(string Line, List<GameEvent> Events)> ParseBatch(IReadOnlyList<string> lines, DateTime time)
+    {
+        var outp = new List<(string Line, List<GameEvent> Events)>();
+        int pay = -1;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            outp.Add((lines[i], Parse(lines[i], time).ToList()));
+            if (Payment().IsMatch(lines[i])) pay = i;
+        }
+        if (pay < 0 || _paymentLeft <= 0) return outp;
+        var cands = new List<(int line, int ev, long amt)>();
+        for (int i = pay - 1; i >= 0 && cands.Count < 12; i--)
+            for (int j = 0; j < outp[i].Events.Count; j++)
+                if (outp[i].Events[j] is KinahChanged { Bound: false, Delta: > 0 } k) cands.Add((i, j, k.Delta));
+        for (int mask = 1; mask < (1 << cands.Count); mask++)
+        {
+            long sum = 0;
+            for (int b = 0; b < cands.Count; b++) if ((mask & (1 << b)) != 0) sum += cands[b].amt;
+            if (sum != _paymentLeft) continue;
+            for (int b = 0; b < cands.Count; b++)
+                if ((mask & (1 << b)) != 0) { var c = cands[b]; outp[c.line].Events[c.ev] = new KinahChanged(time, c.amt, true); }
+            _paymentLeft = 0;
+            break;
+        }
+        return outp;
+    }
+
     static int Count(Match m) => m.Groups["n"].Success && int.TryParse(m.Groups["n"].Value, out var n) ? Math.Clamp(n, 1, 99999) : 1;
 
     static string CleanName(string s)
@@ -177,7 +210,7 @@ public sealed partial class ChatParser
         if (gf.Success) { yield return new GatherFailed(time, gf.Groups["skill"].Value.Trim()); yield break; }
 
         var pay = Payment().Match(line);
-        if (pay.Success) { _paymentAmt = Digits(pay.Groups["amt"].Value); _paymentAt = time; yield break; }
+        if (pay.Success) { _paymentLeft = Digits(pay.Groups["amt"].Value); _paymentAt = time; yield break; }
 
         var k = Kina().Match(line);
         if (k.Success)
@@ -185,9 +218,10 @@ public sealed partial class ChatParser
             long amt = Digits(k.Groups["amt"].Value);
             // a quest or payment reward: the payment line just before named this amount, or the line says what it is.
             // Counted like bound Kinah: shown, never farming income, never a kill.
-            if ((amt > 0 && amt == _paymentAmt && (time - _paymentAt).TotalSeconds <= 15) || Regex.IsMatch(line, @"\b(?:quest|reward|payment|completed)\b", RegexOptions.IgnoreCase))
+            bool paid = amt > 0 && amt <= _paymentLeft && (time - _paymentAt).TotalSeconds <= 15;
+            if (paid || Regex.IsMatch(line, @"\b(?:quest|reward|payment|completed)\b", RegexOptions.IgnoreCase))
             {
-                _paymentAmt = 0;
+                if (paid) _paymentLeft -= amt;
                 if (amt > 0) yield return new KinahChanged(time, amt, true);
                 yield break;
             }

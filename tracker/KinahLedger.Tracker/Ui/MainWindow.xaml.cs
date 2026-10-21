@@ -14,7 +14,7 @@ using WF = System.Windows.Forms;
 namespace KinahLedger.Ui;
 
 /// <summary>One table row. Icon is the item's icon slot (filled as the file arrives) and Initial the letter shown until then; both empty on a header row.</summary>
-public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "");
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "");
 
 public partial class MainWindow : Window
 {
@@ -119,6 +119,11 @@ public partial class MainWindow : Window
         DropsHead.MouseLeftButtonUp += (_, _) => { _prefs.DropsOpen = !_prefs.DropsOpen; if (!_demo) _prefs.Save(); Redraw(); };
         GatherHead.MouseLeftButtonUp += (_, _) => { _prefs.GatherOpen = !_prefs.GatherOpen; if (!_demo) _prefs.Save(); Redraw(); };
         MobHead.MouseLeftButtonUp += (_, _) => { _prefs.MobsOpen = !_prefs.MobsOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        // Farming and Crafting are two parts of the window; crafting never shows in the farming tables
+        FarmTab.Click += (_, _) => ShowPart("Farming");
+        CraftTab.Click += (_, _) => ShowPart("Crafting");
+        CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
+        CraftResetLink.Click += (_, _) => { _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView); };
         _mode = SelectedMode;
         ApplyModeLabels(); ResetTiles();
         BuildTray();
@@ -134,7 +139,8 @@ public partial class MainWindow : Window
         // that would run the window past the bottom of the screen gets a scroll bar, and the window moves up to stay on it
         // both tables share the screen below the tiles; each scrolls only once it would push the window off the bottom
         double tableCap = Math.Max(200, (SystemParameters.WorkArea.Height - 520) / 2);
-        DropsScroll.MaxHeight = tableCap; GatherScroll.MaxHeight = tableCap; MobScroll.MaxHeight = tableCap;
+        DropsScroll.MaxHeight = tableCap; GatherScroll.MaxHeight = tableCap; MobScroll.MaxHeight = tableCap; CraftScroll.MaxHeight = tableCap * 2;
+        ShowPart(_prefs.Part, remember: false);
         SizeChanged += (_, _) => KeepOnScreen();
         ShowTable(null);
         SettingsBtn.Click += (_, _) => SetCompact(!_compact);
@@ -398,6 +404,7 @@ public partial class MainWindow : Window
         // the panel over the game shows whenever its switch is on and the chat is being read: the run while one is on, the
         // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
         if (HudChk.IsChecked == true && chat != null) EnsureHud();
+        if (_part == "Crafting") FillCraft(chat?.CraftView);
         if (_hud != null && show != null)
         {
             // two figures only: straight Kinah per hour, and what the hour's drops sell for at Market prices
@@ -576,13 +583,75 @@ public partial class MainWindow : Window
     {
         var parts = new List<string>();
         if (e.NetKinah is long net) parts.Add($"net {(net >= 0 ? "+" : "−")}{Fk(Math.Abs(net))} ({(net >= 0 ? "" : "−")}{Fk(Math.Abs(net) / h)}/hr)");
-        var o = e.OddsTotals();
-        if (o.Crafts > 0) parts.Add($"crafts {o.CraftsOk}/{o.Crafts} ok");
+        var o = e.OddsTotals();   // crafts have their own part of the window now, never this line
         if (o.Enchants > 0) parts.Add($"enchants {o.EnchantsOk}/{o.Enchants} ok");
         if (e.Sold > 0) parts.Add($"sold {e.Sold} for {Fk(e.SoldKinah)}");
         if (e.Expired > 0) parts.Add($"{e.Expired} listing{(e.Expired == 1 ? "" : "s")} expired");
         return string.Join(" · ", parts);
     }
+
+    /* ---------------- crafting ---------------- */
+
+    string _part = "Farming";
+
+    /// <summary>Shows one part of the window: Farming (the run bar, the stats, the loot tables) or Crafting (the crafting ledger).</summary>
+    void ShowPart(string part, bool remember = true)
+    {
+        _part = part == "Crafting" ? "Crafting" : "Farming";
+        bool craft = _part == "Crafting";
+        SessionCard.Visibility = Tiles.Visibility = TablesCard.Visibility = craft ? Visibility.Collapsed : Visibility.Visible;
+        CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
+        FarmTab.Style = (Style)FindResource(craft ? typeof(System.Windows.Controls.Button) : "PrimaryButton");
+        CraftTab.Style = (Style)FindResource(craft ? "PrimaryButton" : typeof(System.Windows.Controls.Button));
+        if (remember && !_demo) { _prefs.Part = _part; _prefs.Save(); }
+        if (craft && !_demo) FillCraft(_watcher.Chat?.CraftView);
+    }
+
+    /// <summary>
+    /// The crafting table: per recipe, the tries, how often it worked, what a try costs at Market prices (materials from
+    /// the recipe book; a failed try uses them too), what came out and what it sells for after the Market's cut, and the
+    /// profit or loss: the outcome's value minus every try's cost. A dash wherever a price or the recipe isn't known.
+    /// </summary>
+    void FillCraft(SessionEngine? e)
+    {
+        var rows = new List<DropRow>();
+        long spent = 0, worth = 0; int noCost = 0, noPrice = 0, tries = 0, ok = 0;
+        foreach (var r in e?.CraftSnapshot() ?? new())
+        {
+            tries += r.Attempts; ok += r.Ok;
+            long? cost = RecipeBook.CostPerTry(r.Name, out int unpricedMats, out int vendorMats);
+            bool costKnown = cost != null && unpricedMats == 0;
+            long made = 0; bool madeKnown = true;
+            foreach (var (item, n) in r.Made)
+            {
+                if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
+            }
+            if (costKnown) spent += cost!.Value * r.Attempts; else noCost++;
+            if (madeKnown) worth += made; else noPrice++;
+            var book = RecipeBook.ForOutput(r.Name);
+            var outcome = r.Made.Count == 0 ? "nothing came out yet" : "made " + string.Join(", ", r.Made.OrderByDescending(m => m.Value).Select(m => (m.Key.Equals(r.Name, StringComparison.OrdinalIgnoreCase) ? "" : m.Key + " ") + "×" + m.Value));
+            var listed = book?.SuccessRate is double sr ? $" · listed {sr:P0}" : "";
+            long? profit = costKnown && madeKnown ? made - cost!.Value * r.Attempts : null;
+            var sells = PriceBook.Price(r.Name) is long sp ? Fk(sp * PriceBook.SellerKeeps) : "—";
+            rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Attempts > 0 ? $"{100.0 * r.Ok / r.Attempts:0}%" : "—", costKnown ? Fk(cost!.Value) : "—",
+                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "",
+                Price: sells, Value: profit is long pf ? Signed(pf) : "—", Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : "",
+                Sub: outcome + listed + (book == null ? " · not in the recipe book" : unpricedMats > 0 ? $" · {unpricedMats} material{(unpricedMats == 1 ? "" : "s")} not priced" : "") + (vendorMats > 0 ? $" · plus {vendorMats} vendor item{(vendorMats == 1 ? "" : "s")}" : "")));
+        }
+        CraftRows.ItemsSource = rows;
+        CraftEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        CraftWhat.Text = tries > 0 ? $"{tries} tr{(tries == 1 ? "y" : "ies")} · {ok} worked ({100.0 * ok / tries:0}%)" : "since the tracker started";
+        CraftSpent.Text = spent > 0 ? "−" + Fk(spent) : "—";
+        CraftSpentNote.Text = noCost > 0 ? $"{noCost} recipe{(noCost == 1 ? "" : "s")} with no cost yet, left out" : "";
+        CraftMade.Text = worth > 0 ? Fk(worth) : "—";
+        CraftMadeNote.Text = noPrice > 0 ? $"{noPrice} recipe{(noPrice == 1 ? "" : "s")} with no Market price yet, left out" : "after the Market's fee and tax";
+        long net = worth - spent;
+        CraftProfit.Text = spent > 0 || worth > 0 ? Signed(net) : "—";
+        CraftProfit.Foreground = B(spent > 0 || worth > 0 ? (net >= 0 ? "Good" : "Bad") : "Ink");
+        CraftProfitNote.Text = noCost + noPrice > 0 ? "only recipes with every price known" : "";
+    }
+
+    static string Signed(double v) => (v >= 0 ? "+" : "−") + Fk(Math.Abs(v));
 
     void ShowTable(SessionEngine? e, TimeSpan? elapsed = null, Tables? pre = null)
     {
@@ -872,6 +941,23 @@ public partial class MainWindow : Window
         ZoneLbl.Text = "Zone: Western Cantas Valley";
         RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)");
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
+        if (kind == "Crafting")
+        {
+            // the Crafting part with a morning's crafts, priced, for a layout render
+            var ce = new SessionEngine(_items); var t0 = DateTime.UtcNow.AddMinutes(-30);
+            PriceBook.SetBoard(new() { ["Expert's Splendent Orichalcum Longsword"] = 420_000, ["Artisan's Refining Stone"] = 21_000, ["Pure Orichalcum Ore"] = 5_200, ["Pure Odyle"] = 6_300,
+                ["Artisan's Orichalcum Longsword"] = 690_000, ["Artisan's Splendent Orichalcum Longsword"] = 1_450_000, ["Fresh Fruit"] = 900, ["Artisan's Fruit Salad"] = 5_100 });
+            int s = 0;
+            void Craft(string recipe, bool ok, string? made = null) { ce.Apply(new CraftResult(t0.AddSeconds(s += 30), ok ? recipe : "", ok)); if (ok) ce.Apply(new ItemAcquired(t0.AddSeconds(s + 1), _items.IdOf(made ?? recipe), 1, false)); }
+            Craft("Artisan's Orichalcum Longsword", true); Craft("Artisan's Orichalcum Longsword", false); Craft("Artisan's Orichalcum Longsword", true, "Artisan's Splendent Orichalcum Longsword");
+            Craft("Artisan's Orichalcum Longsword", true); Craft("Artisan's Orichalcum Longsword", false);
+            for (int i = 0; i < 12; i++) Craft("Artisan's Fruit Salad", i % 4 != 3);
+            ShowPart("Crafting", remember: false);
+            FillCraft(ce);
+            SetTrackingUi(false);
+            Say("Reading · 3,620 reads · last: Artisan's Fruit Salad acquired.", "Faint");
+            return;
+        }
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
         PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });

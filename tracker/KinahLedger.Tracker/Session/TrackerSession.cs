@@ -28,6 +28,12 @@ public sealed class TrackerSession
     /// zone changes (and when a run starts). Only shown, never shared; what is shared comes from the other counts, split by zone.
     /// </summary>
     public SessionEngine ZoneView { get; private set; }
+    /// <summary>
+    /// The Crafting part of the window: the same events, never rotated and never reset by a zone change, so the crafting
+    /// ledger runs for as long as the tracker does (or until the player starts it over). Only shown, never shared.
+    /// </summary>
+    public SessionEngine CraftView { get; private set; }
+    public void ResetCraftView() => CraftView = new SessionEngine(_items);
     /// <summary>Starts the zone view over in the zone the player is in now.</summary>
     public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
     /// <summary>The target bar at the top-centre: which enemy is being fought, for Kinah by enemy (a best guess).</summary>
@@ -108,6 +114,7 @@ public sealed class TrackerSession
         _parser = new ChatParser(items);
         Engine = new SessionEngine(items);
         ZoneView = new SessionEngine(items);
+        CraftView = new SessionEngine(items);
         Kind = kind;
         Region = manualRegion;
         ManualRegion = manualRegion != null;
@@ -255,12 +262,14 @@ public sealed class TrackerSession
         if (_tracker.Unaligned > unaligned) CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
         // the enemy on the target bar, as last read, goes with this read's events (Kinah by enemy, a best guess)
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
-        foreach (var l in fresh)
+        // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
+        foreach (var (l, events) in _parser.ParseBatch(fresh, DateTime.UtcNow))
         {
             bool any = false;
-            foreach (var ev in _parser.Parse(l, DateTime.UtcNow))
+            foreach (var ev in events)
             {
                 Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); any = true;
+                if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
@@ -354,6 +363,8 @@ public sealed class UserPrefs
     public bool MobsOpen { get; set; } = true;
     /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
     public bool AllZones { get; set; }
+    /// <summary>Which part of the window shows: "Farming" (the run, the stats, the tables) or "Crafting" (recipes, cost, success, profit).</summary>
+    public string Part { get; set; } = "Farming";
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
     public bool ShareMarket { get; set; } = true;
     /// <summary>True once the player chose the Market area by hand; the title-and-headers search then stays off until they switch back.</summary>

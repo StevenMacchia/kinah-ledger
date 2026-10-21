@@ -214,7 +214,7 @@ options: --process aion[,other]");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -470,6 +470,27 @@ options: --process aion[,other]");
         Check("mobs go out with their zone", string.Join(" | ", (mp.mobs ?? new()).OrderBy(m => m.zone).Select(m => $"{m.name}/{m.zone}/{m.kills}/{m.kinah}")), "Test Lizard/Altamia Canyon/1/510 | Test Lizard/Western Cantas Valley/2/1020");
         Check("a run with no target bar sends no mobs", RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items).mobs == null ? "none" : "some", "none");
         Check("enemy list built in", TargetReader.Known.Length > 0 ? "yes" : "no (data/mobs.txt missing)", "yes");
+
+        Console.WriteLine("\nCrafting and Market settlements (2026-10-21 log):");
+        {
+            var cp = new ChatParser(items); var ce = new SessionEngine(items); ce.SetZone("Eastern Altamia Highland");
+            void Feed(params string[] ls) { foreach (var (_, evs) in cp.ParseBatch(ls, DateTime.UtcNow)) foreach (var ev in evs) ce.Apply(ev); }
+            Feed("Successfully crafted Artisan's Orichalcum", "Longsword.", "Artisan's Orichalcum Longsword acquired.");
+            var made = ce.CraftSnapshot();
+            Check("a wrapped craft line: its item is the craft's output", string.Join(" | ", made.Select(r => $"{r.Name}: {r.Ok} ok, made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")), "Artisan's Orichalcum Longsword: 1 ok, made Artisan's Orichalcum Longsword x1");
+            var zs = ce.ZoneSnapshot();
+            Check("and never a drop or a zone item", $"drops {ce.Items.Count + ce.ItemsBound.Count}, zone items {zs.Values.Sum(z => z.Items.Count + z.ItemsBound.Count)}, farming {ce.Active.TotalSeconds:0}s", "drops 0, zone items 0, farming 0s");
+            Feed("Crafting failed.");
+            Check("an unnamed failure goes to the last recipe", string.Join(" | ", ce.CraftSnapshot().Select(r => $"{r.Name} {r.Ok}/{r.Attempts}")), "Artisan's Orichalcum Longsword 1/2");
+            Feed("Acquired 44,998 Kina.", "A total payment of 61,765 Kina has been", "completed.", "Acquired 16,767 Kina.");
+            Check("a settlement paid out before and after its total line", $"farmed {ce.Kinah:N0}, skipped {ce.KinahSkipped:N0}", "farmed 0, skipped 61,765");
+            Feed("Acquired 512 Kina.");
+            Check("the next pickup is loot again", $"farmed {ce.Kinah:N0}", "farmed 512");
+            Check("recipe book: the Longsword's materials", RecipeBook.ForOutput("Artisan's Orichalcum Longsword") is { } rb ? string.Join(", ", rb.Materials.Select(m => $"{m.Qty} {m.Item}")) : "missing", "1 Expert's Splendent Orichalcum Longsword, 5 Artisan's Refining Stone, 8 Pure Orichalcum Ore, 4 Pure Odyle");
+            PriceBook.SetBoard(new() { ["Expert's Splendent Orichalcum Longsword"] = 400_000, ["Artisan's Refining Stone"] = 20_000, ["Pure Orichalcum Ore"] = 5_000, ["Pure Odyle"] = 6_000 });
+            Check("cost of one try at Market prices", $"{RecipeBook.CostPerTry("Artisan's Orichalcum Longsword", out var unp):N0} ({unp} unpriced)", "564,000 (0 unpriced)");
+            PriceBook.SetBoard(new());
+        }
 
         Console.WriteLine("\nBalance counter (0.7): which counter is Kinah, and when a read is trusted:");
         var bt = new BalanceTracker();

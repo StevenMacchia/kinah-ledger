@@ -60,6 +60,8 @@
     <EmbeddedResource Include="..\..\data\zones.txt" LogicalName="zones.txt" />
     <!-- enemy names as the target bar prints them: the whitelist for Kinah by enemy -->
     <EmbeddedResource Include="..\..\data\mobs.txt" LogicalName="mobs.txt" Condition="Exists('..\..\data\mobs.txt')" />
+    <!-- crafting recipes from MetaBot.GG: materials per try, for the cost and profit of a craft -->
+    <EmbeddedResource Include="..\..\data\recipes.json" LogicalName="recipes.json" Condition="Exists('..\..\data\recipes.json')" />
   </ItemGroup>
 
 </Project>
