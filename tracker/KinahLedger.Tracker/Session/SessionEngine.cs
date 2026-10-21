@@ -100,6 +100,8 @@ public sealed class SessionEngine
     public sealed class ZoneStats
     {
         public double Seconds; public long Kinah; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes;
+        /// <summary>Seconds of farming in the zone: time within a minute of a loot, kill or gather line. What the zone's per-hour rates divide by.</summary>
+        public double Active;
         public Dictionary<string, int> PetsByName = new();
         public int Kills => Math.Max(Math.Max(Defeated, Xp), Math.Max(KinahDrops, CurrencyLines));
         public double Hours => Math.Max(Seconds / 3600, 1.0 / 3600);
@@ -159,11 +161,46 @@ public sealed class SessionEngine
     /// <summary>Never below one second, so rates are defined from the first event.</summary>
     public double Hours => Math.Max(Elapsed.TotalHours, 1.0 / 3600);
 
+    // Farming time: the app notices farming from the chat itself. Every loot, kill or gather line keeps the farming
+    // clock running; a minute with none and the clock stops until the next one, so time spent in town, trading or
+    // away from the keyboard never dilutes a per-hour rate. Counts and drop rates (per kill, per attempt) don't depend
+    // on time and keep counting regardless.
+    const double GraceSeconds = 60;
+    double _active; DateTime? _lastFarmAt;
+
+    void Farmed(DateTime now)
+    {
+        if (_lastFarmAt is { } last)
+        {
+            double gap = Math.Clamp((now - last).TotalSeconds, 0, GraceSeconds);
+            _active += gap; Z().Active += gap;
+        }
+        _lastFarmAt = now;
+    }
+
+    /// <summary>Seconds of the grace minute still running after the last farming line, up to the clock's end.</summary>
+    double TrailingLocked()
+    {
+        if (_lastFarmAt is not { } last) return 0;
+        var end = Ended ?? _pausedAt ?? DateTime.UtcNow;
+        return Math.Clamp((end - last).TotalSeconds, 0, GraceSeconds);
+    }
+
+    /// <summary>Time spent farming: within a minute of a loot, kill or gather line. What every per-hour rate divides by.</summary>
+    public TimeSpan Active { get { lock (_lock) return TimeSpan.FromSeconds(_active + TrailingLocked()); } }
+    /// <summary>Never below one second, so rates are defined from the first event.</summary>
+    public double ActiveHours => Math.Max(Active.TotalHours, 1.0 / 3600);
+    /// <summary>Readable time that wasn't farming: in town, trading, away.</summary>
+    public TimeSpan Idle { get { var i = Elapsed - Active; return i < TimeSpan.Zero ? TimeSpan.Zero : i; } }
+
     public void Apply(GameEvent ev)
     {
         lock (_lock)
         {
             Events++;
+            // what counts as farming: loot, Kinah, kills, gathers (failed ones too), Soul Crystals and Soul Points.
+            // Crafts, enchants, Market lines and quest rewards don't: they happen in town.
+            if (ev is ItemAcquired or KinahChanged { Bound: false } or MobKilled or XpGained or GatherFailed or PetCrystal or CurrencyGained) Farmed(DateTime.UtcNow);
             switch (ev)
             {
                 case ItemAcquired a when a.ItemId == _craftedId && (a.Time - _craftedAt).TotalSeconds <= 5:
@@ -277,7 +314,7 @@ public sealed class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, PetsByName = new Dictionary<string, int>(v.PetsByName) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, PetsByName = new Dictionary<string, int>(v.PetsByName) };
             return copy;
         }
     }

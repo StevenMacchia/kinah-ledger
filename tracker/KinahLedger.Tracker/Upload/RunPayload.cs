@@ -82,7 +82,9 @@ public sealed record RunPayload(
             kind,
             main,
             cfg.GearBracket,
-            (int)Math.Round(s.Elapsed.TotalMinutes),
+            // farming minutes, not wall minutes: time within a minute of a loot, kill or gather line. The site's per-hour
+            // rates divide by this; drop rates per kill and per attempt don't depend on it. At least one minute once anything happened.
+            Math.Max(s.Events > 0 ? 1 : 0, (int)Math.Round(s.Active.TotalMinutes)),
             s.Kills,
             s.Nodes,
             s.Kinah,
@@ -90,8 +92,8 @@ public sealed record RunPayload(
             Merge(s.Items, Key),
             Merge(s.ItemsBound, Key),
             s.PetSnapshot(),
-            zones.Where(kv => kv.Value.Seconds >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0)
-                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Seconds / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName)),
+            zones.Where(kv => kv.Value.Active >= 30 || kv.Value.Kills > 0 || kv.Value.Pets > 0)
+                 .ToDictionary(kv => kv.Key, kv => new ZoneRun((int)Math.Round(kv.Value.Active / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName)),
             InstallId.Get(),
             net,
             OddsPayload.From(s));

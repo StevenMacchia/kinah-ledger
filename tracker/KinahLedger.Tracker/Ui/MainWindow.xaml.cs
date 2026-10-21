@@ -188,7 +188,7 @@ public partial class MainWindow : Window
     void Redraw()
     {
         var e = _watcher.Farm ?? (DateTime.UtcNow < _lastRunUntil ? _lastRun : _watcher.Chat?.Engine);
-        if (e != null) FillNumbers(e, e.Elapsed); else ShowTable(null);
+        if (e != null) FillNumbers(e, e.Active); else ShowTable(null);
     }
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = SelectedMode == Mode.Open ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = "—"; }
@@ -360,7 +360,7 @@ public partial class MainWindow : Window
             var dom = show.RecentKind is { } rk ? (rk == "Gathering" ? Mode.Gather : Mode.Open) : show.Events > 0 ? ModeOf(show) : SelectedMode;
             if (dom != _mode) { _mode = dom; ApplyModeLabels(); }
             if (farm == null) TableTitle.Text = "WHILE THE GAME IS OPEN";
-            FillNumbers(show, show.Elapsed);
+            FillNumbers(show, show.Active);
         }
         ZoneLbl.Text = "Zone: " + (chat?.Zone ?? (_watcher.GameRect == null ? "waiting for the game" : "not read yet"));
         if (DateTime.UtcNow < _statusHoldUntil) { /* a stopped run's result is still showing */ }
@@ -381,7 +381,7 @@ public partial class MainWindow : Window
         if (_hud != null && show != null)
         {
             // two figures only: straight Kinah per hour, and what the hour's drops sell for at Market prices
-            double h = Math.Max(show.Elapsed.TotalHours, 1.0 / 3600); var t = show.Totals();
+            double h = show.ActiveHours; var t = show.Totals();
             _hud.Update(Fk(t.Kinah / h), _lastPriced > 0 ? Fk(_lastValue / h) : "—", Fk(t.Kinah + _lastValue));
         }
     }
@@ -469,6 +469,8 @@ public partial class MainWindow : Window
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
         string skipped = t.Rewards > 0 ? $" · {t.Rewards} reward line{(t.Rewards == 1 ? "" : "s")} skipped" : "";
         string crystals = t.Pets > 0 ? $" · {t.Pets} soul crystal{(t.Pets == 1 ? "" : "s")}" : "";
+        // the clock is farming time; a minute or more of readable time with no loot is shown as idle beside it
+        string idle = e.Idle >= TimeSpan.FromMinutes(1) ? $" farming · {e.Idle:hh\\:mm\\:ss} idle" : "";
         switch (_mode)
         {
             case Mode.Gather:
@@ -480,7 +482,7 @@ public partial class MainWindow : Window
                 int ok = t.Nodes - t.Failed;
                 string plent = ok > 0 ? $" · plentiful {Math.Round(100.0 * t.Plentiful / ok)}%" : "";
                 string fails = t.Failed > 0 ? $" ({t.Failed} failed)" : "";
-                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {s.GatherCount} gathered · {t.Nodes} attempts{fails}{plent} · {t.Bonus} rare finds{worth}" + (kinah > 0 ? $" · {Fk(kinah)} Kinah" : "") + crystals + skipped;
+                Summary.Text = $"{elapsed:hh\\:mm\\:ss}{idle} · {s.GatherCount} gathered · {t.Nodes} attempts{fails}{plent} · {t.Bonus} rare finds{worth}" + (kinah > 0 ? $" · {Fk(kinah)} Kinah" : "") + crystals + skipped;
                 break;
             }
             default:
@@ -488,7 +490,7 @@ public partial class MainWindow : Window
                 KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
                 KillsHr.Text = Fk(t.Kills / h);
                 DropsHr.Text = Fk(s.DropCount / h);
-                Summary.Text = $"{elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {s.DropCount} drop{(s.DropCount == 1 ? "" : "s")} · {t.Kills} kill{(t.Kills == 1 ? "" : "s")}{worth}" + crystals + (s.GatherCount > 0 ? $" · {s.GatherCount} gathered" : "") + skipped;
+                Summary.Text = $"{elapsed:hh\\:mm\\:ss}{idle} · {Fk(kinah)} Kinah · {s.DropCount} drop{(s.DropCount == 1 ? "" : "s")} · {t.Kills} kill{(t.Kills == 1 ? "" : "s")}{worth}" + crystals + (s.GatherCount > 0 ? $" · {s.GatherCount} gathered" : "") + skipped;
                 break;
         }
         // the hour's worth if the tradeable items are sold at the lowest Market price, after the Market's cut; open world adds the Kinah
@@ -529,7 +531,7 @@ public partial class MainWindow : Window
         int kills = 0, nodes = 0;
         if (e != null)
         {
-            double h = Math.Max((elapsed ?? e.Elapsed).TotalHours, 1.0 / 3600);
+            double h = Math.Max((elapsed ?? e.Active).TotalHours, 1.0 / 3600);
             var t = e.Totals(); kills = t.Kills; nodes = t.Nodes;
             var s = pre ?? Build(e, h, kills);
             drops = s.Drops; gathered = s.Gathered;
