@@ -37,6 +37,8 @@ public sealed class TrackerSession
     public string LastError { get; private set; } = "";
     public string LastLine { get; private set; } = "";
     public string DetectNote { get; private set; } = "";
+    /// <summary>What the last zone read saw when it found no zone on the list ("top-right text isn't a zone on the list: …"); empty once one is read.</summary>
+    public string ZoneNote { get; private set; } = "";
     /// <summary>Why nothing is being read right now ("chrome covers the chat"); empty while reading.</summary>
     public string Paused { get; private set; } = "";
     public bool Running => _loop != null && !_loop.IsCompleted;
@@ -127,7 +129,8 @@ public sealed class TrackerSession
     {
         try
         {
-            var (zone, _) = await ZoneLocator.DetectAsync(game);
+            var (zone, note) = await ZoneLocator.DetectAsync(game);
+            ZoneNote = zone == null ? note : "";
             if (zone != null && !ZoneLocator.IsVerified(zone))
             {
                 // an unfamiliar label becomes the zone only when two reads in a row agree; a stray read (a button, a tooltip) keeps the last zone
@@ -190,6 +193,7 @@ public sealed class TrackerSession
                     LastError = "";
                 }
                 else await ReadOnce();
+                await ZoneDueAsync();
             }
             catch (System.ComponentModel.Win32Exception)
             {
@@ -245,14 +249,21 @@ public sealed class TrackerSession
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
         LastError = "";
-        if ((DateTime.UtcNow - _zoneAt).TotalSeconds >= _settings.Ocr.ZoneEverySec)
-        {
-            var game = GameWindow.Find(_settings.ProcessHints);
-            GameRect = game ?? GameRect;
-            // the minimap has its own check: a window over it alone keeps the last zone and lets the chat be read
-            if (game != null && GameWindow.Covered(ZoneLocator.Strip(game.Value), _settings.ProcessHints) == null) await ReadZone(game.Value);
-            else _zoneAt = DateTime.UtcNow;
-        }
+    }
+
+    /// <summary>
+    /// The zone on its own clock, whether or not the chat can be read: every ZoneEverySec while a zone is known, every
+    /// 30 seconds while none is ("not read yet"), as long as nothing covers the minimap corner.
+    /// </summary>
+    async Task ZoneDueAsync()
+    {
+        int every = Engine.Zone == null ? Math.Max(_settings.Ocr.ZoneEverySec, 30) : _settings.Ocr.ZoneEverySec;
+        if ((DateTime.UtcNow - _zoneAt).TotalSeconds < every) return;
+        var game = GameWindow.Find(_settings.ProcessHints);
+        GameRect = game ?? GameRect;
+        // the minimap has its own check: a window over it alone keeps the last zone and lets the chat be read
+        if (game != null && GameWindow.Covered(ZoneLocator.Strip(game.Value), _settings.ProcessHints) == null) await ReadZone(game.Value);
+        else _zoneAt = DateTime.UtcNow;
     }
 
     public async Task StopAsync()
