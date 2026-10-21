@@ -231,16 +231,16 @@ public partial class MainWindow : Window
         return string.Join(" ", parts);
     }
 
-    /// <summary>The recent pickups strip: the last four, newest first, on the Farming part while something has been counted.</summary>
+    /// <summary>The recent pickups strip: the last three, newest first, on the Farming part while something has been counted.</summary>
     void FillPickups()
     {
         var list = _demo
             ? new List<PickupRow>
               {
                   new("17:51:12", "Spiritstone ×1", ViaTip("chat · recovered")), new("17:51:11", "1,192 Kinah", ViaTip("chat · recovered")),
-                  new("17:51:09", "431 Kinah", ViaTip("chat")), new("17:51:08", "Spiritstone ×1", ViaTip("chat · guessed")),
+                  new("17:51:09", "431 Kinah", ViaTip("chat")),
               }
-            : (_watcher.Chat?.RecentPickups(4) ?? new()).Select(p => new PickupRow(p.At.ToLocalTime().ToString("HH:mm:ss"), p.What, ViaTip(p.Via))).ToList();
+            : (_watcher.Chat?.RecentPickups(3) ?? new()).Select(p => new PickupRow(p.At.ToLocalTime().ToString("HH:mm:ss"), p.What, ViaTip(p.Via))).ToList();
         PickupRows.ItemsSource = list;
         PickupStrip.Visibility = list.Count > 0 && _part != "Crafting" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -935,19 +935,28 @@ public partial class MainWindow : Window
         if (Opened("Gather", gathered.Count)) _prefs.GatherOpen = true;
         if (Opened("Mob", mobs.Count)) _prefs.MobsOpen = true;
         if (Opened("Pet", pets.Count)) _prefs.PetsOpen = true;
-        DropsSection.Visibility = drops.Count > 0 || allDrops > 0 ? Visibility.Visible : Visibility.Collapsed;
-        GatherSection.Visibility = gathered.Count > 0 || allGather > 0 ? Visibility.Visible : Visibility.Collapsed;
-        MobSection.Visibility = mobs.Count > 0 || allMobs > 0 ? Visibility.Visible : Visibility.Collapsed;
-        PetSection.Visibility = pets.Count > 0 || allPets > 0 ? Visibility.Visible : Visibility.Collapsed;
-        bool none = drops.Count + gathered.Count + mobs.Count + pets.Count == 0 && allDrops + allGather + allMobs + allPets == 0;
+        DropsSection.Visibility = drops.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        GatherSection.Visibility = gathered.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        MobSection.Visibility = mobs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        PetSection.Visibility = pets.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // what came in other zones, for the sections empty here: one line instead of a header each (Steven, 0.7.6)
+        var elsewhere = new List<string>();
+        if (drops.Count == 0 && allDrops > 0) elsewhere.Add($"{allDrops:N0} drop{(allDrops == 1 ? "" : "s")}");
+        if (gathered.Count == 0 && allGather > 0) elsewhere.Add($"{allGather:N0} gathered");
+        if (mobs.Count == 0 && allMobs > 0) elsewhere.Add($"{allMobs:N0} enem{(allMobs == 1 ? "y" : "ies")}");
+        if (pets.Count == 0 && allPets > 0) elsewhere.Add($"{allPets:N0} Soul Crystal{(allPets == 1 ? "" : "s")}");
+        bool nothingHere = drops.Count + gathered.Count + mobs.Count + pets.Count == 0;
+        OtherZones.Text = elsewhere.Count == 0 ? "" : (nothingHere ? "Nothing here yet" : "Other zones") + " · " + string.Join(", ", elsewhere) + (nothingHere ? " in other zones" : "");
+        OtherZones.Visibility = elsewhere.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        bool none = nothingHere && elsewhere.Count == 0;
         TablesEmpty.Visibility = none && !(_watcher.Chat?.Instances.Snapshot().Count > 0) ? Visibility.Visible : Visibility.Collapsed;
         bool dOpen = _prefs.DropsOpen && drops.Count > 0, gOpen = _prefs.GatherOpen && gathered.Count > 0,
              mOpen = _prefs.MobsOpen && mobs.Count > 0, pOpen = _prefs.PetsOpen && pets.Count > 0;
-        // the top rows of each section until "show all": four, five for Gathered; an enemy's open loot table always shows
-        Rows.ItemsSource = TopRows("Drops", drops, 4, DropsMore, DropsMoreRun);
-        GatherRows.ItemsSource = TopRows("Gather", gathered, 5, GatherMore, GatherMoreRun);
-        MobRows.ItemsSource = TopRows("Mob", mobs, 4, MobMore, MobMoreRun);
-        PetRows.ItemsSource = TopRows("Pet", pets, 4, PetMore, PetMoreRun);
+        // the top three rows of each section until "show all" (0.7.6, so a full session rarely scrolls); an enemy's open loot table always shows
+        Rows.ItemsSource = TopRows("Drops", drops, 3, DropsMore, DropsMoreRun);
+        GatherRows.ItemsSource = TopRows("Gather", gathered, 3, GatherMore, GatherMoreRun);
+        MobRows.ItemsSource = TopRows("Mob", mobs, 3, MobMore, MobMoreRun);
+        PetRows.ItemsSource = TopRows("Pet", pets, 3, PetMore, PetMoreRun);
         PetEmpty.Visibility = pets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         int pc = pets.Sum(r => int.TryParse(r.Drops, System.Globalization.NumberStyles.AllowThousands, null, out var n) ? n : 0);
         PetTitle.Text = pc > 0 ? $"SOUL CRYSTALS FROM KILLS  ·  {pc}" : "SOUL CRYSTALS FROM KILLS" + None(allPets, "");
