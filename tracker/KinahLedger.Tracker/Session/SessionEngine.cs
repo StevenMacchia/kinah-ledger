@@ -157,6 +157,11 @@ public sealed class SessionEngine
     readonly Dictionary<string, MobStats> _mobs = new();
 
     /// <summary>The enemy on the target bar and when it was last seen there. A null name keeps the last one, so its grace window runs out on its own.</summary>
+    DateTime _craftWindowAt = DateTime.MinValue;
+    /// <summary>When the crafting window was last seen open (its skill tabs in the band, or its own text over the chat).</summary>
+    public void SetCraftWindow(DateTime at) { lock (_lock) if (at > _craftWindowAt) _craftWindowAt = at; }
+    bool CraftWindowOpen(DateTime t) => Math.Abs((t - _craftWindowAt).TotalSeconds) <= KinahLedger.Ocr.TargetReader.CraftGraceSeconds;
+
     public void SetTarget(string? name, DateTime at)
     {
         lock (_lock)
@@ -306,8 +311,10 @@ public sealed class SessionEngine
                 CrashLog.Note($"Kinah line far above what the mobs pay, taken for a reward and not counted as farming: {big.Delta:N0}");
                 ev = new KinahChanged(big.Time, big.Delta, true);
             }
-            // a craft's own item line belongs to crafting alone: not a drop, not a zone's item, not farming time
-            if (ev is ItemAcquired made && _craft.TakeOutput(_items.NameOf(made.ItemId), made.Count, made.Time))
+            // a craft's own item line belongs to crafting alone: not a drop, not a zone's item, not farming time. With the
+            // crafting window open, an item a recipe makes is a craft even when "Successfully crafted" wasn't read
+            if (ev is ItemAcquired made && (_craft.TakeOutput(_items.NameOf(made.ItemId), made.Count, made.Time)
+                || (CraftWindowOpen(made.Time) && _craft.TakeUnannounced(_items.NameOf(made.ItemId), made.Count))))
             {
                 CraftedSkipped++;
                 return;

@@ -117,6 +117,7 @@ public sealed class TrackerSession
         _parser = new ChatParser(items);
         Engine = new SessionEngine(items);
         ZoneView = new SessionEngine(items);
+        _cross = new LootCrossCheck(items);
         CraftView = new SessionEngine(items);
         Kind = kind;
         Region = manualRegion;
@@ -251,7 +252,7 @@ public sealed class TrackerSession
                     Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
                     LastError = "";
                 }
-                else { await ReadOnce(); await TargetDueAsync(); }
+                else { await ReadOnce(); await TargetDueAsync(); await LootListAsync(); }
                 await ZoneDueAsync();
             }
             catch (System.ComponentModel.Win32Exception)
@@ -309,6 +310,10 @@ public sealed class TrackerSession
         // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
         bool reward = Target.RewardOpen(DateTime.UtcNow);
         var now = DateTime.UtcNow;
+        // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
+        if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase))) Target.MarkCraft(now);
+        foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
+        bool crafting = (now - Target.CraftAt).TotalSeconds <= TargetReader.CraftGraceSeconds;
         // loot lines that were read garbled while they faded in, now read cleanly at the same place: one more parse each
         var reread = _reread.Take(lines, fresh.Count, now);
         // more loot than the chat can show at once (an expedition's rewards, a box opened): the read shares no line with
@@ -325,7 +330,11 @@ public sealed class TrackerSession
             bool any = false;
             foreach (var parsed in events)
             {
-                var ev = reward ? _parser.AsReward(parsed) : parsed;
+                // the loot list beside the character already added this pickup (this chat line came late): it counts once
+                if (_cross.Chat(parsed, now)) { any = true; continue; }
+                // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
+                bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
                 Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); any = true;
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
@@ -354,6 +363,46 @@ public sealed class TrackerSession
     }
 
     DateTime _targetAt = DateTime.MinValue;
+
+    /// <summary>The chat and the loot list beside the character, checked against each other: see <see cref="LootCrossCheck"/>.</summary>
+    readonly LootCrossCheck _cross;
+    int _lootPass;
+    public LootCrossCheck CrossCheck => _cross;
+
+    /// <summary>
+    /// One read of the loot list beside the character, every pass while the game is in view. Its rows wait for the chat;
+    /// a row the chat never matched is counted from the list, through the same rules as a chat line (reward screens too).
+    /// </summary>
+    async Task LootListAsync()
+    {
+        if (GameRect is not { } g) return;
+        // every other pass: a read takes about 0.4 s, and a row stays up about three seconds, so it is still read twice
+        if (++_lootPass % 2 != 0) return;
+        var region = LootPopup.Region(g);
+        try
+        {
+            var cover = GameWindow.Covered(region, _settings.ProcessHints);
+            if (cover != null) return;   // something over it (this window, a browser): nothing read, nothing added
+            var lines = await ScreenReader.ReadBoxesAsync(region, 3, boost: true);
+            var now = DateTime.UtcNow;
+            var add = _cross.Popup(LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text))), now);
+            if (add.Count == 0) return;
+            bool reward = Target.RewardOpen(now);
+            foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
+            Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt);
+            bool crafting = (now - Target.CraftAt).TotalSeconds <= TargetReader.CraftGraceSeconds;
+            foreach (var parsed in add)
+            {
+                bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
+                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
+                if (ev is ItemAcquired) CraftView.Apply(ev);
+                if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
+                try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+            }
+        }
+        catch (Exception ex) { CrashLog.Write("loot list", ex); }
+    }
     /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
     List<string> _prevRead = new();
     readonly Reread _reread = new();

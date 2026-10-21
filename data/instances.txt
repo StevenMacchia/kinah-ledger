@@ -230,3 +230,4 @@ Altgard Legion Airship|Legion
 Eltnen Legion Airship|Legion
 Morheim Legion Airship|Legion
 Verteron Legion Airship|Legion
+Incursion of the Spirits|Event

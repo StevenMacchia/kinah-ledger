@@ -47,6 +47,21 @@ internal static class Program
                 case "market-watch": return MarketWatch(settings, opts);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "target-test": return TargetTest(opts);
+                case "popup-test":
+                {
+                    // a screenshot of the whole game (--image): the loot list's region and the rows read from it
+                    using var bmp = Task.Run(() => ScreenReader.LoadAsync(opts["image"])).GetAwaiter().GetResult();
+                    var game = new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height);
+                    // --crop: the image is the list's region already
+                    var reg = opts.ContainsKey("crop") ? game : LootPopup.Region(game);
+                    using var crop = bmp.Clone(reg, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    if (opts.ContainsKey("save")) crop.Save("popup-crop.png");
+                    int sc = int.TryParse(opts.GetValueOrDefault("scale"), out var scv) ? scv : 3; var sw = System.Diagnostics.Stopwatch.StartNew(); var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(crop, reg.Location, sc, boost: true)).GetAwaiter().GetResult(); Console.WriteLine($"read in {sw.ElapsedMilliseconds} ms at scale {sc}");
+                    Console.WriteLine($"region {reg}");
+                    foreach (var l in lines.OrderBy(l => l.Box.Top)) Console.WriteLine($"  read: {l.Text}");
+                    foreach (var r in LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text)))) Console.WriteLine($"  row: {(r.IsKinah ? "Kinah " + r.Amount : r.Name + " x" + r.Count)}");
+                    return 0;
+                }
                 case "parse-lines":
                 {
                     // each argument is one chat line: what the parser makes of it, for checking a line from reads.log
@@ -688,6 +703,16 @@ options: --process aion[,other]");
             Check("a wrapped craft line: its item is the craft's output", string.Join(" | ", made.Select(r => $"{r.Name}: {r.Ok} ok, made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")), "Artisan's Orichalcum Longsword: 1 ok, made Artisan's Orichalcum Longsword x1");
             var zs = ce.ZoneSnapshot();
             Check("and never a drop or a zone item", $"drops {ce.Items.Count + ce.ItemsBound.Count}, zone items {zs.Values.Sum(z => z.Items.Count + z.ItemsBound.Count)}, farming {ce.Active.TotalSeconds:0}s", "drops 0, zone items 0, farming 0s");
+            // the crafting window hides the chat: only the item line is read (2026-10-21 16:37). With the window seen
+            // open, an item a recipe makes is a craft; with it closed, the same line is a pickup as before
+            var cw2 = new SessionEngine(items); var cwt = DateTime.UtcNow;
+            cw2.SetCraftWindow(cwt);
+            cw2.Apply(new ItemAcquired(cwt.AddSeconds(2), items.IdOf("Artisan's Orichalcum Longsword"), 1, false));
+            Check("crafting window open, no crafted line: still a craft", $"{string.Join(",", cw2.CraftSnapshot().Select(r => r.Name + " " + r.Ok + " ok"))} · drops {cw2.Items.Count}", "Artisan's Orichalcum Longsword 1 ok · drops 0");
+            var cw3 = new SessionEngine(items);
+            cw3.Apply(new ItemAcquired(cwt, items.IdOf("Artisan's Orichalcum Longsword"), 1, false));
+            Check("crafting window not seen: a pickup as before", $"crafts {cw3.CraftSnapshot().Count} · drops {cw3.Items.Count}", "crafts 0 · drops 1");
+            Check("the crafting window's skill tabs", $"{TargetReader.IsCraftTab("Armorsmithing")} {TargetReader.IsCraftTab("Cookinq")} {TargetReader.IsCraftTab("Highland Karnif")}", "True True False");
             Feed("Crafting failed.");
             Check("an unnamed failure goes to the last recipe", string.Join(" | ", ce.CraftSnapshot().Select(r => $"{r.Name} {r.Ok}/{r.Attempts}")), "Artisan's Orichalcum Longsword 1/2");
             Feed("Acquired 44,998 Kina.", "A total payment of 61,765 Kina has been", "completed.", "Acquired 16,767 Kina.");
@@ -749,6 +774,55 @@ options: --process aion[,other]");
             le.Apply(new ItemAcquired(l0.AddSeconds(30), items.IdOf("Raw Leather"), 1, false));   // only the rock is near: nobody can have dropped it
             Check("a drop no enemy near can drop is a drop, credited to nobody", $"{le.UnplacedDrops} unplaced, Kalgolem [{Got("Hard Kalgolem")}], {le.Items.Values.Sum()} drops", "1 unplaced, Kalgolem [Lesser Abyssal Manastone], 4 drops");
             LootBook.Current = keep;
+        }
+
+        Console.WriteLine("\nThe loot list beside the character, checked against the chat:");
+        {
+            LootPopup.Row K(long a) => new($"Kina x{a}", "Kina", a, 1, true);
+            LootPopup.Row I(string n, int c = 1) => new($"{n} x{c}", n, 0, c, false);
+            var x0 = DateTime.UtcNow;
+            string Desc(List<GameEvent> evs) => evs.Count == 0 ? "nothing" : string.Join(", ", evs.Select(e => Describe(e, items)));
+
+            var c1 = new LootCrossCheck(items);
+            c1.Chat(new KinahChanged(x0, 404, false), x0);
+            var a1 = c1.Popup(new() { K(404) }, x0.AddSeconds(0.5)).Concat(c1.Popup(new() { K(404) }, x0.AddSeconds(1))).Concat(c1.Popup(new(), x0.AddSeconds(6))).ToList();
+            Check("a row the chat read is matched, nothing added", $"{Desc(a1)} · {c1.Matched} matched", "nothing · 1 matched");
+
+            var c2 = new LootCrossCheck(items);
+            var a2 = c2.Popup(new() { I("Raw Leather") }, x0).Concat(c2.Popup(new() { I("Raw Leather") }, x0.AddSeconds(0.7))).Concat(c2.Popup(new() { I("Raw Leather") }, x0.AddSeconds(5))).ToList();
+            Check("a row the chat missed is added once, after the wait", Desc(a2), "Raw Leather ×1");
+
+            var c3 = new LootCrossCheck(items);
+            c3.Chat(new ItemAcquired(x0, items.IdOf("Raw Leather"), 1, false), x0);
+            var a3 = new List<GameEvent>();
+            a3.AddRange(c3.Popup(new() { I("Raw Leather") }, x0.AddSeconds(0.3)));
+            a3.AddRange(c3.Popup(new() { I("Raw Leather") }, x0.AddSeconds(1.0)));
+            a3.AddRange(c3.Popup(new() { I("Raw Leather"), I("Raw Leather") }, x0.AddSeconds(1.7)));
+            a3.AddRange(c3.Popup(new() { I("Raw Leather"), I("Raw Leather") }, x0.AddSeconds(2.4)));
+            a3.AddRange(c3.Popup(new(), x0.AddSeconds(8)));
+            Check("two identical drops, the chat read one: the other is added", Desc(a3), "Raw Leather ×1");
+
+            var c4 = new LootCrossCheck(items);
+            c4.Popup(new() { K(483) }, x0); c4.Popup(new() { K(483) }, x0.AddSeconds(0.7));
+            var a4 = c4.Popup(new(), x0.AddSeconds(5));
+            bool skip = c4.Chat(new KinahChanged(x0.AddSeconds(6), 483, false), x0.AddSeconds(6));
+            Check("the chat line for an added row comes late: skipped, counted once", $"{Desc(a4)} · late line skipped {skip}", "Kinah +483 · late line skipped True");
+
+            var c5 = new LootCrossCheck(items);
+            var a5 = new List<GameEvent>();
+            a5.AddRange(c5.Popup(new() { I("Raw Leather"), K(1), I("Oracle") }, x0));                    // a misread seen once, a 1-Kina misread, a name plate
+            a5.AddRange(c5.Popup(new() { K(1), I("Oracle") }, x0.AddSeconds(0.7)));
+            a5.AddRange(c5.Popup(new() { K(1), I("Oracle") }, x0.AddSeconds(6)));
+            Check("one-off rows, Kina under 10 and names off the item list never count", Desc(a5), "nothing");
+
+            var c6 = new LootCrossCheck(items);
+            c6.Chat(new RewardReceived(x0, "Raw Leather", 1), x0);                                     // a purchase or a reward the chat set aside
+            c6.Popup(new() { I("Raw Leather") }, x0.AddSeconds(0.5));
+            var a6 = c6.Popup(new() { I("Raw Leather") }, x0.AddSeconds(1)).Concat(c6.Popup(new(), x0.AddSeconds(7))).ToList();
+            Check("a reward the chat set aside is not added back as a drop", Desc(a6), "nothing");
+
+            var rows = LootPopup.Rows(new[] { (0, "*Kina x212"), (1, "kina x483?"), (2, "Raw Leather x1"), (3, "Soul: Papis (Bound) x1"), (4, "Fresh Raw Meat") });
+            Check("rows read from the list", string.Join(" | ", rows.Select(r => r.IsKinah ? "Kinah " + r.Amount : r.Name + " x" + r.Count)), "Kinah 212 | Kinah 483 | Raw Leather x1 | Soul: Papis (Bound) x1 | Fresh Raw Meat x1");
         }
 
         Console.WriteLine("\nUpdates from the GitHub releases:");
