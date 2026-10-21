@@ -1,63 +1,95 @@
 <Window x:Class="KinahLedger.Ui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kinah Ledger" Width="600" SizeToContent="Height" ResizeMode="CanMinimize"
+        Title="Kinah Ledger" Width="660" SizeToContent="Height" ResizeMode="CanMinimize"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
         WindowStartupLocation="CenterScreen">
 
   <Window.Resources>
-    <!-- five tiles in a 560 px window: labels and numbers a touch smaller than the house tile style -->
-    <Style x:Key="TileLabel" TargetType="TextBlock" BasedOn="{StaticResource LabelStyle}">
-      <Setter Property="FontSize" Value="10"/>
-      <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    <!-- the stat strip: one line, number then label, like the site's compact mode -->
+    <Style x:Key="TileLabel" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="Margin" Value="5,0,0,1"/>
+      <Setter Property="VerticalAlignment" Value="Bottom"/>
     </Style>
-    <Style x:Key="TileNumber" TargetType="TextBlock" BasedOn="{StaticResource TileValue}">
-      <Setter Property="FontSize" Value="23"/>
+    <Style x:Key="TileNumber" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI"/>
+      <Setter Property="VerticalAlignment" Value="Bottom"/>
+    </Style>
+    <!-- table column headings, as the site's tables: small caps-style, faint, spaced -->
+    <Style x:Key="Th" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="10.5"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource Faint}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="HorizontalAlignment" Value="Right"/>
+      <Setter Property="Margin" Value="0,0,12,0"/>
+    </Style>
+    <Style x:Key="Td" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="HorizontalAlignment" Value="Right"/>
+      <Setter Property="Margin" Value="0,0,12,0"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+    </Style>
+    <Style x:Key="FootRow" TargetType="Border">
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+      <Setter Property="Padding" Value="16,9,16,9"/>
     </Style>
 
     <!-- drops and gathered rows: icon, name, count, rate, per hour -->
     <DataTemplate x:Key="RowTemplate">
-      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="32">
+      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" MinHeight="44" Padding="0,6">
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/><ColumnDefinition Width="64"/><ColumnDefinition Width="88"/><ColumnDefinition Width="84"/><ColumnDefinition Width="78"/>
+            <ColumnDefinition Width="*"/><ColumnDefinition Width="52"/><ColumnDefinition Width="66"/><ColumnDefinition Width="62"/><ColumnDefinition Width="70"/><ColumnDefinition Width="86"/>
           </Grid.ColumnDefinitions>
-          <Grid x:Name="NameCell" Margin="10,0,6,0">
+          <Grid x:Name="NameCell" Margin="16,0,6,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <!-- the item's icon once it is cached; its initial until then, or when none is known -->
-            <Border x:Name="IconTile" Width="22" Height="22" CornerRadius="5" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" Margin="0,0,8,0" VerticalAlignment="Center">
+            <Border x:Name="IconTile" Width="30" Height="30" CornerRadius="6" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" Margin="0,0,10,0" VerticalAlignment="Center">
               <Grid>
-                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="1" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="HighQuality"/>
               </Grid>
             </Border>
-            <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="13"/>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" FontSize="13.5" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="SubText" Text="{Binding Sub}" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
           </Grid>
-          <TextBlock Grid.Column="1" Text="{Binding Drops}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
-          <TextBlock Grid.Column="2" Text="{Binding DropPct}" Foreground="{DynamicResource Mint}" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
-          <TextBlock Grid.Column="3" Text="{Binding PerHour}" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
-          <TextBlock Grid.Column="4" Text="{Binding Price}" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" FontSize="13"/>
+          <TextBlock Grid.Column="1" Style="{StaticResource Td}" Text="{Binding Drops}"/>
+          <TextBlock Grid.Column="2" Style="{StaticResource Td}" Text="{Binding DropPct}" Foreground="{DynamicResource Mint}"/>
+          <TextBlock Grid.Column="3" Style="{StaticResource Td}" Text="{Binding PerHour}"/>
+          <TextBlock Grid.Column="4" Style="{StaticResource Td}" Text="{Binding Price}" Foreground="{DynamicResource Muted}"/>
+          <TextBlock Grid.Column="5" Style="{StaticResource Td}" Text="{Binding Value}" FontWeight="SemiBold" Margin="0,0,16,0"/>
         </Grid>
       </Border>
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
+        <DataTrigger Binding="{Binding Sub}" Value=""><Setter TargetName="SubText" Property="Visibility" Value="Collapsed"/></DataTrigger>
         <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
         <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet) -->
         <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="#5FE08A"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FE08A"/></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="#5FA8FF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995FA8FF"/></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Unique"><Setter TargetName="NameText" Property="Foreground" Value="#F5D05A"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99F5D05A"/></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="NameText" Property="Foreground" Value="#C88CFF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99C88CFF"/></DataTrigger>
-        <!-- a skill header row inside the gathered table: its own attempts, failures and Plentiful rate, across the whole row -->
+        <!-- a group row inside a table (a gathering skill, the Soul Crystals): its own line across the whole row -->
         <DataTrigger Binding="{Binding Header}" Value="True">
           <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHead}"/>
-          <Setter TargetName="RowBorder" Property="Height" Value="28"/>
+          <Setter TargetName="RowBorder" Property="MinHeight" Value="30"/>
+          <Setter TargetName="RowBorder" Property="Padding" Value="0,4"/>
           <Setter TargetName="IconTile" Property="Visibility" Value="Collapsed"/>
-          <Setter TargetName="NameCell" Property="Grid.ColumnSpan" Value="5"/>
+          <Setter TargetName="SubText" Property="Visibility" Value="Collapsed"/>
+          <Setter TargetName="NameCell" Property="Grid.ColumnSpan" Value="6"/>
           <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource Gold}"/>
-          <Setter TargetName="NameText" Property="FontWeight" Value="SemiBold"/>
-          <Setter TargetName="NameText" Property="FontSize" Value="11.5"/>
+          <Setter TargetName="NameText" Property="FontSize" Value="11"/>
         </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
@@ -198,55 +230,53 @@
         </Grid>
       </Border>
 
-      <!-- tiles -->
-      <UniformGrid x:Name="Tiles" Columns="5" Margin="-4,10,-4,0">
-        <Border Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10">
-          <StackPanel><TextBlock x:Name="Tile1Label" Style="{StaticResource TileLabel}" Text="KINAH / HR"/><TextBlock x:Name="KinahHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="0"/></StackPanel>
-        </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10">
-          <StackPanel><TextBlock x:Name="Tile2Label" Style="{StaticResource TileLabel}" Text="KINAH / KILL"/><TextBlock x:Name="KinahKill" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="—"/></StackPanel>
-        </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10">
-          <StackPanel><TextBlock x:Name="Tile3Label" Style="{StaticResource TileLabel}" Text="KILLS / HR"/><TextBlock x:Name="KillsHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Mint}" Text="0"/></StackPanel>
-        </Border>
-        <Border Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10">
-          <StackPanel><TextBlock x:Name="Tile4Label" Style="{StaticResource TileLabel}" Text="DROPS / HR"/><TextBlock x:Name="DropsHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Violet}" Text="0"/></StackPanel>
-        </Border>
-        <!-- Kinah per hour plus what the tradeable drops sell for at Market prices (gathering: the materials' value) -->
-        <Border x:Name="ValueTile" Style="{StaticResource CardStyle}" Margin="4,0" Padding="8,9,8,10" ToolTipService.ShowDuration="20000">
-          <StackPanel><TextBlock x:Name="Tile5Label" Style="{StaticResource TileLabel}" Text="TOTAL / HR"/><TextBlock x:Name="ValueHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="—"/></StackPanel>
-        </Border>
-      </UniformGrid>
+      <!-- the stat strip: one line, like the site's compact mode. Element names stay from the tiles it replaced. -->
+      <Border x:Name="Tiles" Style="{StaticResource CardStyle}" CornerRadius="8" Margin="0,10,0,0" Padding="16,10,16,10">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel Orientation="Horizontal"><TextBlock x:Name="KinahHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="0"/><TextBlock x:Name="Tile1Label" Style="{StaticResource TileLabel}" Text="Kinah/hr"/></StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center"><TextBlock x:Name="KinahKill" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="—"/><TextBlock x:Name="Tile2Label" Style="{StaticResource TileLabel}" Text="Kinah/kill"/></StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center"><TextBlock x:Name="KillsHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Mint}" Text="0"/><TextBlock x:Name="Tile3Label" Style="{StaticResource TileLabel}" Text="kills/hr"/></StackPanel>
+          <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Center"><TextBlock x:Name="DropsHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Violet}" Text="0"/><TextBlock x:Name="Tile4Label" Style="{StaticResource TileLabel}" Text="drops/hr"/></StackPanel>
+          <!-- Kinah per hour plus what the tradeable drops sell for at Market prices (gathering: the materials' value) -->
+          <StackPanel x:Name="ValueTile" Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right" Background="Transparent" ToolTipService.ShowDuration="20000"><TextBlock x:Name="ValueHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Good}" Text="—"/><TextBlock x:Name="Tile5Label" Style="{StaticResource TileLabel}" Text="total/hr"/></StackPanel>
+        </Grid>
+      </Border>
 
       <!-- one table at a time: Drops or Gathered, picked by the tabs. The tables grow with what's farmed and the
            window with them; a table only scrolls once it would run past the bottom of the screen -->
 
-      <Border x:Name="TablesCard" Style="{StaticResource CardStyle}" Margin="0,10,0,0" Padding="14,10,14,10">
+      <Border x:Name="TablesCard" Style="{StaticResource CardStyle}" Margin="0,10,0,0" Padding="0">
         <StackPanel x:Name="TableStack">
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <TextBlock x:Name="TableTitle" Style="{StaticResource LabelStyle}" Text="WHILE THE GAME IS OPEN" VerticalAlignment="Center"/>
-            <!-- the summary trims from the right when the window is narrow, instead of running under the title -->
-            <TextBlock x:Name="Summary" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="11.5" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" Text="nothing read yet"/>
+          <!-- the card's head, like the site's session summary: what and how long on the left, the hour's total on the right -->
+          <Grid Margin="16,12,16,12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="TableTitle" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Text="Open world"/>
+            <TextBlock x:Name="TableWhat" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="HeadRate" Grid.Column="2" Foreground="{DynamicResource Good}" FontSize="13" VerticalAlignment="Center" Margin="12,0,0,0"/>
           </Grid>
-          <!-- net Kinah from the balance counter, craft and enchant results, your own Market sales: shown once there is one -->
-          <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Ink}" FontSize="11.5" HorizontalAlignment="Right" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+          <!-- idle time and skipped reward lines; net Kinah, crafts and sales: each shown only once there is something to say -->
+          <TextBlock x:Name="Summary" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="16,-6,16,8" TextWrapping="Wrap" Visibility="Collapsed"/>
+          <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="16,-4,16,8" TextWrapping="Wrap" Visibility="Collapsed"/>
 
           <!-- both sections show at once (a run is often kills and nodes together); a click on a header folds that section -->
-          <StackPanel x:Name="DropsSection" Margin="0,8,0,0">
-            <Border x:Name="DropsHead" Background="{DynamicResource Card2}" CornerRadius="6" Height="28" Cursor="Hand" ToolTip="Click to fold or unfold">
+          <StackPanel x:Name="DropsSection">
+            <Border x:Name="DropsHead" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,1" Height="34" Cursor="Hand" ToolTip="Click to fold or unfold">
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*"/><ColumnDefinition Width="64"/><ColumnDefinition Width="88"/><ColumnDefinition Width="84"/><ColumnDefinition Width="78"/>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="52"/><ColumnDefinition Width="66"/><ColumnDefinition Width="62"/><ColumnDefinition Width="70"/><ColumnDefinition Width="86"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                  <TextBlock x:Name="DropsChev" Style="{StaticResource LabelStyle}" Text="▾" Width="14"/>
-                  <TextBlock x:Name="DropsTitle" Style="{StaticResource LabelStyle}" Text="DROPS FROM KILLS"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                  <TextBlock x:Name="DropsChev" Style="{StaticResource Th}" Text="▾" Width="14" Margin="0" HorizontalAlignment="Left"/>
+                  <TextBlock x:Name="DropsTitle" Style="{StaticResource Th}" Text="LOOT FROM KILLS" Margin="0" HorizontalAlignment="Left"/>
                 </StackPanel>
-                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
-                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource LabelStyle}" Text="DROP %" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="Drops divided by kills. Kills are counted from Kinah or Soul Point pickups (one per mob), or from kill lines when the chat shows them."/>
-                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
-                <TextBlock Grid.Column="4" Style="{StaticResource LabelStyle}" Text="PRICE" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="The lowest Market price on your server for one of the item: what you and other players saw on the Market, with the site's price board filling in. A dash means no price is known yet."/>
+                <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="QTY"/>
+                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource Th}" Text="DROP %" ToolTip="Drops divided by kills. Kills are counted from Kinah or Soul Point pickups (one per mob), or from kill lines when the chat shows them."/>
+                <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR"/>
+                <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="PRICE" ToolTip="The lowest Market price on your server for one: what you and other players saw on the Market, with the site's price board filling in. A dash means no price is known yet."/>
+                <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="VALUE" Margin="0,0,16,0" ToolTip="Quantity times price, before the Market's fee and tax. Bound items can't be sold and have no value here."/>
               </Grid>
             </Border>
             <Grid x:Name="DropsBody" MinHeight="64">
@@ -258,20 +288,21 @@
             </Grid>
           </StackPanel>
 
-          <StackPanel x:Name="GatherSection" Margin="0,8,0,0">
-            <Border x:Name="GatherHead" Background="{DynamicResource Card2}" CornerRadius="6" Height="28" Cursor="Hand" ToolTip="Click to fold or unfold">
+          <StackPanel x:Name="GatherSection">
+            <Border x:Name="GatherHead" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,1" Height="34" Cursor="Hand" ToolTip="Click to fold or unfold">
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*"/><ColumnDefinition Width="64"/><ColumnDefinition Width="88"/><ColumnDefinition Width="84"/><ColumnDefinition Width="78"/>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="52"/><ColumnDefinition Width="66"/><ColumnDefinition Width="62"/><ColumnDefinition Width="70"/><ColumnDefinition Width="86"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                  <TextBlock x:Name="GatherChev" Style="{StaticResource LabelStyle}" Text="▾" Width="14"/>
-                  <TextBlock x:Name="GatherTitle" Style="{StaticResource LabelStyle}" Text="GATHERED"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                  <TextBlock x:Name="GatherChev" Style="{StaticResource Th}" Text="▾" Width="14" Margin="0" HorizontalAlignment="Left"/>
+                  <TextBlock x:Name="GatherTitle" Style="{StaticResource Th}" Text="GATHERED" Margin="0" HorizontalAlignment="Left"/>
                 </StackPanel>
-                <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="COUNT" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
-                <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER ATTEMPT" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="Count divided by attempts. Every ore, log, Odyle, herb or food line counts as one attempt, failed gathers too; gemstones and higher tiers are the finds."/>
-                <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
-                <TextBlock Grid.Column="4" Style="{StaticResource LabelStyle}" Text="PRICE" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="The lowest Market price on your server for one of the material: what you and other players saw on the Market, with the site's price board filling in. A dash means no price is known yet."/>
+                <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="QTY"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="PER TRY" ToolTip="Count divided by attempts. Every ore, log, Odyle, herb or food line counts as one attempt, failed gathers too."/>
+                <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR"/>
+                <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="PRICE" ToolTip="The lowest Market price on your server for one: what you and other players saw on the Market, with the site's price board filling in. A dash means no price is known yet."/>
+                <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="VALUE" Margin="0,0,16,0" ToolTip="Quantity times price, before the Market's fee and tax."/>
               </Grid>
             </Border>
             <Grid x:Name="GatherBody" MinHeight="64">
@@ -283,7 +314,36 @@
             </Grid>
           </StackPanel>
 
-          <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="0,6,0,0" Visibility="Collapsed"/>
+          <!-- the totals, like the site's session summary footer: loot before tax, the Market's cut, Kinah, the session total -->
+          <Border x:Name="Foot" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="0,1,0,0" CornerRadius="0,0,9,9">
+            <StackPanel>
+              <Border Style="{StaticResource FootRow}">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Text="Loot before tax" FontWeight="SemiBold"/>
+                  <TextBlock x:Name="FootLootNote" Grid.Column="1" Foreground="{DynamicResource Muted}" Margin="14,0,12,0" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"/>
+                  <TextBlock x:Name="FootLoot" Grid.Column="2" FontWeight="SemiBold" Text="—"/></Grid>
+              </Border>
+              <Border Style="{StaticResource FootRow}">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock x:Name="FootTaxLbl" Foreground="{DynamicResource Muted}" Text="Market fee and tax"/>
+                  <TextBlock x:Name="FootTax" Grid.Column="2" Foreground="{DynamicResource Bad}" Text="—"/></Grid>
+              </Border>
+              <Border Style="{StaticResource FootRow}">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Text="Kinah" FontWeight="SemiBold"/>
+                  <TextBlock x:Name="FootKinahNote" Grid.Column="1" Foreground="{DynamicResource Muted}" Margin="14,0,12,0" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"/>
+                  <TextBlock x:Name="FootKinah" Grid.Column="2" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Text="0"/></Grid>
+              </Border>
+              <Border Style="{StaticResource FootRow}" BorderThickness="0">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Text="Session total" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="FootTotalNote" Grid.Column="1" Foreground="{DynamicResource Muted}" Margin="14,0,12,0" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="FootTotal" Grid.Column="2" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="15.5" FontWeight="Bold" Text="0" VerticalAlignment="Center"/></Grid>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="16,8,16,10" Visibility="Collapsed"/>
         </StackPanel>
       </Border>
 
