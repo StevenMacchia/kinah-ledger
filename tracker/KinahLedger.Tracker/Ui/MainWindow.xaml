@@ -271,6 +271,8 @@
               <TextBlock x:Name="TableEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
                          Text="Drops show here as they're read, with the drop rate per kill and per hour."/>
             </Grid>
+            <!-- the top rows only, until "show all" is pressed -->
+            <TextBlock x:Name="DropsMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="DropsMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="DropsMoreRun" Text="Show all"/></Hyperlink></TextBlock>
           </StackPanel>
 
           <StackPanel x:Name="GatherSection">
@@ -297,6 +299,8 @@
               <TextBlock x:Name="GatherEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="420"
                          Text="Gathered materials show here, with how often each comes per attempt and per hour."/>
             </Grid>
+            <!-- the top rows only, until "show all" is pressed -->
+            <TextBlock x:Name="GatherMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="GatherMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="GatherMoreRun" Text="Show all"/></Hyperlink></TextBlock>
           </StackPanel>
 
           <!-- Kinah by enemy: what landed within a few seconds of the target bar naming an enemy. A guess, and labelled one -->
@@ -323,6 +327,8 @@
               <TextBlock x:Name="MobEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="440"
                          Text="A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one."/>
             </Grid>
+            <!-- the top rows only, until "show all" is pressed -->
+            <TextBlock x:Name="MobMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="MobMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="MobMoreRun" Text="Show all"/></Hyperlink></TextBlock>
             <!-- the enemy pictures are MetaBot.GG's copies of the game portraits; its terms ask for a link back -->
             <TextBlock x:Name="MobCredit" FontSize="11" Foreground="{DynamicResource Faint}" Margin="16,4,16,6" Visibility="Collapsed">
               <Run Text="Enemy pictures from "/><Hyperlink x:Name="MobCreditLink" Style="{StaticResource LinkStyle}">MetaBot.GG</Hyperlink>
@@ -344,6 +350,32 @@
               </Grid>
             </Border>
             <ItemsControl x:Name="InstRows" ItemTemplate="{StaticResource RowTemplate}"/>
+          </StackPanel>
+
+          <!-- Soul Crystals from kills: their own section at the bottom, folded until opened; never mixed into the drops -->
+          <StackPanel x:Name="PetSection">
+            <Border x:Name="PetHead" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44" Cursor="Hand" ToolTip="Click to fold or unfold">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                  <TextBlock x:Name="PetChev" Style="{StaticResource Th}" Text="▸" Width="14" Margin="0" HorizontalAlignment="Left"/>
+                  <TextBlock x:Name="PetTitle" Style="{StaticResource Th}" Text="SOUL CRYSTALS FROM KILLS" Margin="0" HorizontalAlignment="Left"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="QTY"/>
+                <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR"/>
+              </Grid>
+            </Border>
+            <Grid x:Name="PetBody" MinHeight="64" Visibility="Collapsed">
+              <ScrollViewer x:Name="PetScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="PetRows" ItemTemplate="{StaticResource RowTemplate}"/>
+              </ScrollViewer>
+              <TextBlock x:Name="PetEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="440"
+                         Text="Soul Crystals from kills show here, by pet, with how many come per hour."/>
+            </Grid>
+            <!-- the top rows only, until "show all" is pressed -->
+            <TextBlock x:Name="PetMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="PetMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="PetMoreRun" Text="Show all"/></Hyperlink></TextBlock>
           </StackPanel>
 
           <!-- the totals, like the site's session summary footer: loot before tax, the Market's cut, Kinah, the session total -->

@@ -452,6 +452,8 @@ public sealed class UserPrefs
     public bool DropsOpen { get; set; } = true;
     public bool GatherOpen { get; set; } = true;
     public bool MobsOpen { get; set; } = true;
+    /// <summary>Soul Crystals sit folded at the bottom until opened.</summary>
+    public bool PetsOpen { get; set; }
     /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
     public bool AllZones { get; set; }
     /// <summary>Which part of the window shows: "Farming" (the run, the stats, the tables) or "Crafting" (recipes, cost, success, profit).</summary>

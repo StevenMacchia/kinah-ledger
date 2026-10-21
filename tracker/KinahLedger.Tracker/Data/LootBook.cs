@@ -57,7 +57,8 @@ public sealed class LootBook
                 if (!b._sourcesByItem.TryGetValue(key, out var src)) b._sourcesByItem[key] = src = new List<string>();
                 if (!src.Contains(t.Name, StringComparer.OrdinalIgnoreCase)) src.Add(t.Name);
             }
-            b._tables[t.Name] = list;
+            // an empty table says nothing (a page that lists no drops, or one not read yet): unknown, never "drops nothing"
+            if (list.Count > 0) b._tables[t.Name] = list;
         }
         return b;
     }

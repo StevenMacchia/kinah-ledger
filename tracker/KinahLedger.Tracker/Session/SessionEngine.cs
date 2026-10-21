@@ -197,7 +197,8 @@ public sealed class SessionEngine
         var near = _recentTargets.Where(r => Math.Abs((t - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).ToList();
         if (near.Count == 0) return null;
         var book = LootBook.Current; var item = _items.NameOf(itemId);
-        if (book.CanDrop(near[0].Name, item, itemId) != false) return Mob(near[0].Name);
+        // an item on no enemy's table is one the tables don't cover: it stays with the enemy on the bar
+        if (book.SourcesOf(item).Count == 0 || book.CanDrop(near[0].Name, item, itemId) != false) return Mob(near[0].Name);
         foreach (var r in near.Skip(1)) if (book.CanDrop(r.Name, item, itemId) == true) { ReassignedDrops++; return Mob(r.Name); }
         UnplacedDrops++;
         return null;
