@@ -202,11 +202,28 @@ public static class ZoneLocator
     // words that appear in place names; a candidate needs one of these or a known-name match, so UI labels never pass
     static readonly string[] PlaceWords = { "Valley", "Highland", "Highlands", "Canyon", "Hill", "Hills", "Sanctum", "Ruins", "Garden", "Forest", "Plains", "Plain", "Cave", "Caves", "Cavern", "Fortress", "Village", "Lake", "Coast", "Shore", "Pass", "Road", "Gate", "Temple", "Swamp", "Marsh", "Desert", "Island", "Isle", "Abyss", "Outpost", "Camp", "Field", "Fields", "Ridge", "Peak", "Mountain", "Mountains", "Basin", "Plateau", "Woods", "Grove", "Gorge", "Hollow", "Ravine", "Cliff", "Cliffs", "Falls", "Spring", "Springs", "River", "Bridge", "Tower", "Citadel", "Stronghold", "Fort", "Shrine", "Sanctuary", "Crypt", "Tomb", "Mine", "Mines", "Quarry", "Den", "Nest", "Lair", "Harbor", "Port", "Bay", "Oasis", "Steppe", "Wasteland", "Tundra", "Crater", "Dunes", "Lowlands", "Vale", "Meadow", "Prairie", "Orchard", "Farm", "Mill", "Crossroads", "Square", "District", "Town", "City", "Palace", "Castle", "Keep", "Hall", "Prison", "Arena", "Academy", "Library", "Observatory", "Laboratory", "Workshop", "Foundry", "Forge", "Market", "Cemetery", "Graveyard", "Catacombs", "Altar", "Portal", "Rift", "Gateway", "Frontier", "Border", "Coastline", "Beach", "Glade", "Thicket", "Jungle", "Volcano", "Furnace", "Wall", "Walls", "Rampart", "Battlefield", "Front", "Encampment", "Garrison", "Barracks", "Landing", "Ascent", "Descent", "Depths", "Heights", "Summit", "Hideout", "Refuge", "Haven", "Hamlet", "Settlement", "Colony", "Waystation", "Station" };
 
-    public static readonly string[] Known =
+    /// <summary>
+    /// Zone and area names as the game prints them on the minimap: data/zones.txt, built into the exe (about 330 names,
+    /// both factions and the Abyss). The whitelist for zones; a name not here counts as Unknown zone. The site reads the same file.
+    /// </summary>
+    public static readonly string[] Known = LoadZones();
+
+    static string[] LoadZones()
     {
-        "Western Altamia Highland", "Eastern Altamia Highland", "Southern Altamia Highland", "Altamia Canyon", "Contaminated Sanctum", "Rock Tomb Hill",
-        "Garden of the Illusion God", "Altamia Highland Ruins", "Western Cantas Valley", "Eastern Cantas Valley", "Cantas Valley", "Dawn Legion Base"
-    };
+        try
+        {
+            using var stream = typeof(ZoneLocator).Assembly.GetManifestResourceStream("zones.txt");
+            if (stream != null)
+            {
+                using var r = new StreamReader(stream);
+                var names = new List<string>();
+                while (r.ReadLine() is { } line) { var t = line.Trim(); if (t.Length > 0 && !t.StartsWith('#')) names.Add(t); }
+                if (names.Count > 0) return names.ToArray();
+            }
+        }
+        catch (Exception) { /* fall back to the few names below */ }
+        return new[] { "Western Altamia Highland", "Eastern Altamia Highland", "Southern Altamia Highland", "Altamia Canyon", "Contaminated Sanctum", "Rock Tomb Hill", "Garden of the Illusion God", "Altamia Highland Ruins", "Western Cantas Valley", "Eastern Cantas Valley", "Cantas Valley", "Dawn Legion Base" };
+    }
 
     /// <summary>The top-right corner that holds the minimap and its title.</summary>
     public static Rectangle Strip(Rectangle game) => new(game.Right - (int)(game.Width * 0.24), game.Top, (int)(game.Width * 0.24), (int)(game.Height * 0.14));

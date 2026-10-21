@@ -1,0 +1,336 @@
+# Zone and area names as the game prints them on the minimap, one per line. This is the whitelist for zones:
+# the tracker (ZoneLocator.Known, built into the exe) and the site (backend/src/zones.ts, generated) both read it.
+# Sources: metabot.gg/en/aion-2/zones and aion2db.gg/zones (2026-10-20), plus names seen in play.
+# A new zone goes here, then rebuild the tracker and run backend/scripts/gen-zones.mjs on the site.
+Abandoned Barracks Site
+Abandoned Campsite
+Abandoned Observatory
+Abandoned Site
+Abandoned Wind Breeze Office
+Aldelle Hill
+Aldelle Village
+Alert Observation Post
+Altamia Canyon
+Altamia Highland Ruins
+Altgard
+Amunta's Hideout
+Amurahta Surveillance Base
+Ancient Zumion Temple Site
+Andsha Forward Base
+Anguish Hill
+Anturn Cliff
+Archipelago of Siel's Wings
+Archipelago of Siel's Wings - Grave of Steel
+Archipelago of Siel's Wings - Siel's Heart
+Archipelago of Siel's Wings - Siel's Left Wing
+Archipelago of Siel's Wings - Siel's Right Wing
+Ardus Shrine Entrance
+Ashen Campsite
+Ashen Outpost
+Astin Mercenaries Base
+Astin's Secret Storage
+Aullaeu Funeral Island
+Aullaeu Village
+Aullaeu Village Border
+Azrakar Brigade Guard Camp
+Azrakar Brigade Stationing Base
+Barahta Extermination Unit Outpost
+Basfelt Ruins
+Basfelt Waterfall
+Battlescar Mound
+Beast Hunter Campsite
+Black Claw Village
+Black Fragments Area
+Black Fragments Area - Abandoned Island
+Black Fragments Area - Kibelium Fragment
+Black Fragments Area - Kration Conflict Zone
+Black Fragments Area - Lonely Island
+Blades Temporary Outpost
+Briskwind Shelter
+Caelid's Office
+Calderon Canyon
+Cantas Valley
+Cantas Valley Base
+Canyon Campsite
+Canyon Dispatch Area
+Canyon Thieves Den
+Chaotic Lower Reshanta
+Chaotic Middle Reshanta
+Chaotic Upper Reshanta
+Chloris's Secret Base
+Clione Lake
+Coastal Camp
+Cohta Outpost
+Collapsed Chasm
+Collapsed Cliff Face
+Collapsed Hall Of Fame
+Collapsed Pillar
+Collapsed Verteron Barrier Tower
+Contaminated Marsh
+Contaminated Sanctum
+Corroded Heart
+Corrupted Forester Ruins
+Creion Campsite
+Crematorium
+Crimson Isle
+Crimson Isle Outpost
+Crypt
+Cursed Snowfield Hideout
+Daminu Forest
+Dawn Legion Base
+Dawn Legion Command Post
+Dawn Legion Forward Base
+Dawn Legion Recovery Room
+Dawn Legion Temporary Outpost
+Deserter Encampment
+Destroyed Abyss Gate
+Destroyed Fafnium Site
+Destroyed Ruins
+Destroyed Temple Site
+Detlef Thieves Camp
+Devastated Remnants
+Devastated Remnants - Dusk Battlefield
+Devastated Remnants - Exile Island
+Devastated Remnants - Shade Island
+Devastated Remnants - Weathered Outcrop
+Dharvata Surveillance Base
+Digunaka Forward Base
+Dinakra Sky Outpost
+Distorted Old Growth Forest
+District 2 Central Administration Office
+District 2 Surana Research Center
+Drana Cultivation Area
+Drana Plantation
+Drana Processing Area
+Drana Transport Hub
+Dranactus
+Dredgion Crash Site
+Dukysas Fortress
+Dundu's Rest
+Duraro Vine Gorge
+Earth Altar
+Eastern Altamia Highland
+Eastern Cantas Campsite
+Eastern Cantas Valley
+Eastern Dartas Plains
+Eastern Gribade Highland
+Eastern Shugo Station
+Eastern Tolbas Forest
+Eiron Hill
+Eiron Refugee Camp
+Elim's Rest
+Ellun River Marsh
+Ellun River Meadow
+Ellun River Midstream
+Eltnen
+Eltnen Barrier Tower Ruins
+Eroded Fragment Area
+Eternal Isle
+Executioner's Tower
+Eye of Muspel
+Faded Stump
+Fafnir Fortress
+Fafnite Deposit
+Fallen Temple Ruins
+Fang Hideout
+Fire Altar
+Fire Plaza
+Fire Temple Entrance
+Fissure Cave
+Flauke Legion Outpost
+Floating Temple of Arkanis Entrance
+Floating Temple of Arkanis Plaza
+Forest Hideout
+Forest Marauder Campsite
+Forest of Exiles
+Forest Shade Execution Site
+Fractured Land
+Fractured Northern Crash Site
+Fractured Southern Crash Site
+Frostwind Forward Base
+Galorik's Inspection Area
+Garden of the Illusion God
+Gargos Thieves Campsite
+Golden Branch Stronghold Ruins
+Granach's Hideout
+Gravekeeper Camp
+Graverobber Campsite
+Graverobber Den
+Guide Rest Stop
+Guide's Dwelling
+Hakran Laboratory
+Halabana Canyon
+Healing Spring
+Hernon Thieves Den
+Hidden Cave
+Hidden Vein Outpost
+Hideout in Front of the Ruins
+Highland's End Campsite
+Hill of Purification
+Hunter's Hideout
+Icecap Ridge
+Ice Canyon Campsite
+Idun's Lake
+Illusion Cavaliers' Campsite
+Illusion Hideout
+Illusion Oratory
+Immortal Isle
+Impetusium Square
+In Front of Azrakar Brigade Prison Compound
+Iralcig Highland
+Iralcig Outpost
+Ishalgen
+Ishtar Castle
+Kizeri's Cave
+Kochi's Quarters
+Kraka Footpath
+Kraka Footpath Campsite
+Krall Command Post
+Kromede's Island
+Krotan Fortress
+Kumrica's Cellar
+Kuriullu Valley
+La Miren Fortress Northern Remnants
+La Miren Fortress Southern Remnants
+Laborer's Rest Stop
+Lacephin Village
+Lacrima Cliff
+Lagta Fortress
+Lankusis Highland
+Latesran Eastern Ridge
+Latesran Eastern Root
+Latesran Western Ridge
+Latesran Western Root
+Latrima Outpost
+Legion Base Ruins
+Lepharist Research Center Annex
+Logger's Rest Ruins
+Mahindel Cliff
+Mahindel River
+Maktashan Outpost
+Mantasch Patrol Base
+Marsh Legion Campsite
+Marsh Outpost
+Migzatu Brigade Base
+Migzatu Brigade Supply Depot
+Minushan Site
+Mire Campsite
+Miros Post
+Morheim
+Moslan Forest
+Munihelle Forest
+Munihelle Forest Outskirts
+Munin's Bridge
+Muqaka's Quarters
+Muspel Volcano Zone
+Mysterious Track
+Mystic Spring Observatory
+Mystic Spring of Anathe
+Nahid Brigade Fortress
+Nameless Cemetery
+Neglected Crematorium
+Nephra Snowfield
+Nephra Snowfield Outpost
+Night Dew Cave
+Nornir Assembly
+North Laborer's Tent
+Northern Shugo Station
+Northern Tolbas Forest
+Notos Legion Outpost
+Odar's Shade
+Outskirts Stall
+Pamos Farm
+Patamor Forest Outpost
+Patamor Plains
+Patamor Plains Outskirts
+Patamor Village
+Phoenix Sky Island
+Pilgrim's Rest
+Pilgrim's Ridge
+Place of Aulamus
+Plateau Hill Base
+Poacher's Base
+Poeta
+Prison Cell
+Purifying Altar
+Purifying Forest
+Quai Campsite
+Red Canyon
+Red Thorn Crown Isle
+Renegade Hideout
+Reshanta's Root
+Rock Hill Outpost
+Rock Tomb Hill
+Rogue Sky Fortress
+Romlon's Hideout
+Root of the Sacred Tree Entrance
+Rubek Thieves' Occupied Territory
+Ruberein Highland
+Ruberein Rest
+Ruin Exploration Campsite
+Ruined Laboratory
+Ruins Survey Campsite
+Sabga Balaur Campsite
+Sacrifice's Rest
+Safe Haven
+Sanctum Dumpsite
+Sanctum Outpost
+Sanctum Outskirts Watch
+Scarlet Forest
+Scarlet Forest Observation Site
+Searcher Campsite
+Searcher Rock
+Secret Rendezvous Point
+Sehna Outpost
+Shadow Hall
+Shulak Street Stall
+Silent Hill
+Silent Remnants
+Sleet Outpost
+Snowshade Hideout
+South Laborer's Tent
+Southern Altamia Highland
+Southern Gribade Highland
+Southern Shugo Station
+Southern Tolbas Forest
+Spirit Isle
+Spirit's Rest
+Steel Hammer Base
+Steel Hammer Merchants HQ
+Steel Hammer Temporary Trading Post
+Steel Hammer Workcamp
+Steel Titan's Grave
+Steep Guard Post
+Sulfur Tree Island
+Sulfur Tree Island - Branding Island
+Sulfur Tree Island - River of Rotten Sap
+Sulfur Tree Island - Sulfur Swamp
+Suspicious Ruins
+Temporary Investigation Base
+Temporary Retreat
+Tolbas Forest
+Tranein Highland
+Tranein Pond
+Tsenka Merchants Office
+Tsenka Merchants' Village
+Tunapre Lake
+Ugaros Thieves Campsite
+Uruthumheim
+Valley Outpost
+Verteron
+Verteron Fortress Ruins
+Victorious Daeva's Statue
+Watcher's Tent
+Watchtower Camp
+Water Altar
+Western Altamia Highland
+Western Cantas Valley
+Western Dartas Plains
+Western Gribade Highland
+Wind Altar
+Wind Breeze Merchants HQ
+Witch's Cabin
+Withered Trace Site
+Zemurru's Tomb
+Zikel's Sanctum
+Zumion Village
