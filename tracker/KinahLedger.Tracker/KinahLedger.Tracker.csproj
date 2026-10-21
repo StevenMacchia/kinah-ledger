@@ -20,12 +20,12 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.7.3</Version>
+    <Version>0.7.4</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
     <Description>Unofficial Aion 2 farming tracker: Kinah and loot per hour, read from the game's chat.</Description>
-    <!-- Properties shows "0.7.3", not "0.7.3+<commit hash>" -->
+    <!-- Properties shows the plain version, not "<version>+<commit hash>" -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Copyright>© 2026 Kinah Ledger authors · MIT License · kinahledger.com</Copyright>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

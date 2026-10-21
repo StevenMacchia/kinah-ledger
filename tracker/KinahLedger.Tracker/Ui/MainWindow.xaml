@@ -130,7 +130,7 @@
           <StackPanel VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
-              <TextBlock x:Name="Version" Text="v0.7.3" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+              <TextBlock x:Name="Version" Text="v0.7.4" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
             </StackPanel>
             <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="0,1,0,0" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
           </StackPanel>
