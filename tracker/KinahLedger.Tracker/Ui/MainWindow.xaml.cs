@@ -134,11 +134,16 @@ public partial class MainWindow : Window
         StateChanged += OnStateChanged;
         Closing += OnClosingWindow;
 
-        // the tables grow with what's farmed and the window with them (the player's rule: never scroll); only a table
-        // that would run the window past the bottom of the screen gets a scroll bar, and the window moves up to stay on it
-        // both tables share the screen below the tiles; each scrolls only once it would push the window off the bottom
-        double tableCap = Math.Max(200, (SystemParameters.WorkArea.Height - 520) / 2);
-        DropsScroll.MaxHeight = tableCap; GatherScroll.MaxHeight = tableCap; MobScroll.MaxHeight = tableCap; PetScroll.MaxHeight = tableCap; CraftScroll.MaxHeight = tableCap * 2;
+        // the tables grow with what's farmed and the window with them, never scrolling while it fits; 0.7.6 (Steven): the
+        // window is never taller than the screen, so past that, one scroll area below the summary holds the pickups and
+        // every table (they no longer scroll on their own). A wheel over a table scrolls the whole area.
+        MaxHeight = SystemParameters.WorkArea.Height;
+        foreach (var inner in new[] { DropsScroll, GatherScroll, MobScroll, PetScroll, CraftScroll })
+            inner.PreviewMouseWheel += (_, ev) =>
+            {
+                ev.Handled = true;
+                LowerScroll.RaiseEvent(new MouseWheelEventArgs(ev.MouseDevice, ev.Timestamp, ev.Delta) { RoutedEvent = MouseWheelEvent, Source = LowerScroll });
+            };
         ShowPart(_prefs.Part, remember: false);
         SizeChanged += (_, _) => KeepOnScreen();
         ShowTable(null);
@@ -979,7 +984,7 @@ public partial class MainWindow : Window
         if (gOpen && gathered.Count > 0 && nodes == 0) notes.Add("Per-attempt rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.");
         bool noPrice = (dOpen && drops.Any(r => !r.Header && r.Price == "—")) || (gOpen && gathered.Any(r => !r.Header && r.Price == "—"));
         if (mOpen && mobs.Count > 0 && target.Length > 0) notes.Add("Target bar: " + target + ".");
-        if (_prefs.MobsOpen && _watcher.Chat?.Target.Unlisted is { Length: > 0 } un && mobs.Count == 0) notes.Add($"The target bar shows \"{un}\", which isn't on the enemy list yet, so it isn't counted.");
+        if (_prefs.MobsOpen && _watcher.Chat?.Target is { Unlisted: { Length: > 0 } un } tg && (DateTime.UtcNow - tg.UnlistedAt).TotalSeconds < 30 && mobs.Count == 0) notes.Add($"The target bar shows \"{un}\", which isn't on the enemy list yet, so it isn't counted.");
         if (noPrice && !PriceBook.Any) notes.Add("No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest.");
         TableNote.Text = string.Join(" ", notes);
         TableNote.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;

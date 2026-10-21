@@ -214,6 +214,8 @@ public static class WpfApp
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
         if (skin != null) Skins.Apply(skin);
+        // KL_SCREEN_H=1040: render as a screen of that height would show it (the window never grows past the work area)
+        if (double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_H"), out var screenH) && screenH > 300) w.MaxHeight = screenH;
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");

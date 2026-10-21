@@ -121,7 +121,10 @@
   <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="22,16,22,14">
     <Grid>
     <!-- the ledger: always the same width, wherever the settings are -->
-    <StackPanel x:Name="LedgerCol" Width="662" VerticalAlignment="Top">
+    <!-- never taller than the screen (Steven, 0.7.6): the header, the run card and the summary stay put; the pickups and
+         the tables scroll below them once the window would run past the screen (Window.MaxHeight is the work area) -->
+    <DockPanel x:Name="LedgerCol" Width="662" VerticalAlignment="Top" LastChildFill="True">
+    <StackPanel DockPanel.Dock="Top">
 
       <!-- header: the gold mark and the name, the Farming / Crafting switch, the project page and Settings -->
       <Grid>
@@ -302,6 +305,19 @@
         </StackPanel>
       </Border>
 
+    </StackPanel>
+
+      <!-- status -->
+      <Grid x:Name="StatusRow" DockPanel.Dock="Bottom" Margin="0,14,0,0">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
+        <!-- shown with a reading problem: straight to the page that fixes it -->
+        <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
+      </Grid>
+
+    <!-- the scrolling part; its bar sits in the window's right padding, so the cards keep their width -->
+    <ScrollViewer x:Name="LowerScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,-20,0" Focusable="False">
+      <StackPanel Width="662" HorizontalAlignment="Left">
       <!-- the last pickups as they are counted, so a miss shows on the spot (Steven, 2026-10-21); how each was read is on hover (0.7.6) -->
       <Border x:Name="PickupStrip" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,12,20,12" Visibility="Collapsed">
         <StackPanel>
@@ -529,15 +545,10 @@
         </StackPanel>
       </Border>
 
-      <!-- status -->
-      <Grid x:Name="StatusRow" Margin="0,14,0,0">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
-        <!-- shown with a reading problem: straight to the page that fixes it -->
-        <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
-      </Grid>
+      </StackPanel>
+    </ScrollViewer>
 
-    </StackPanel>
+    </DockPanel>
 
     </Grid>
   </Border>

@@ -751,6 +751,9 @@ options: --process aion[,other]");
         Check("target bar: rn for m, level and distance", Bar("45 Hard Kalgolern 2m"), "Hard Kalgolem");
         Check("target bar: a bare Kalgolem fits 26 names, so none", Bar("Kalgolern"), "none, unlisted: Kalgolern");
         Check("target bar: a name with a real rn still matches", Bar("45 Abyss Karnif"), "Abyss Karnif");
+        Check("target bar: a game notice in the band is no name", Bar("Title acquired"), "none");
+        Check("target bar: a notice above the enemy doesn't hide it", Bar("Quest completed", "45 Highland Karnif 1m"), "Highland Karnif");
+        Check("target bar: an enemy named Failed is still an enemy", Bar("45 Failed Drana Mutant 3m"), "Failed Drana Mutant");
         {
             // a loot line read while it faded in is looked at again at its place in the next read
             var rr = new Reread(); var r0 = DateTime.UtcNow;
