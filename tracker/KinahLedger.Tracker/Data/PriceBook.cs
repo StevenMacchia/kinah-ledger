@@ -15,6 +15,8 @@ public static class PriceBook
     static readonly object Lock = new();
     static Dictionary<string, Seen>? _local;
     static Dictionary<string, long> _board = new();
+    /// <summary>The median price on the other servers of the player's region and faction, for items the server's own board lacks.</summary>
+    static Dictionary<string, long> _region = new();
 
     /// <summary>How long an ask read on this PC stays the price before the board's takes over again.</summary>
     public static TimeSpan LocalFor { get; set; } = TimeSpan.FromHours(24);
@@ -34,8 +36,37 @@ public static class PriceBook
         lock (Lock)
         {
             if (Local().TryGetValue(k, out var s) && DateTime.UtcNow - s.at <= LocalFor) return s.price;
-            return _board.TryGetValue(k, out var b) ? b : null;
+            if (_board.TryGetValue(k, out var b)) return b;
+            return _region.TryGetValue(k, out var r) ? r : null;
         }
+    }
+
+    /// <summary>Where an item's price comes from, for the Price column: Market (read on this PC), Server (the site's board), Region (other servers), or None.</summary>
+    public enum From { None, Market, Server, Region }
+
+    public static From SourceOf(string name)
+    {
+        var k = Norm(name);
+        lock (Lock)
+        {
+            if (Local().TryGetValue(k, out var s) && DateTime.UtcNow - s.at <= LocalFor) return From.Market;
+            if (_board.ContainsKey(k)) return From.Server;
+            return _region.ContainsKey(k) ? From.Region : From.None;
+        }
+    }
+
+    /// <summary>
+    /// The other servers' boards (same region and faction): per item, the median of their prices. Only used where the
+    /// player's own server has no price, and marked as such.
+    /// </summary>
+    public static void SetRegionBoards(IEnumerable<Dictionary<string, long>> boards)
+    {
+        var all = new Dictionary<string, List<long>>();
+        foreach (var b in boards)
+            foreach (var (name, p) in b)
+                if (p > 0) { var k = Norm(name); if (!all.TryGetValue(k, out var l)) all[k] = l = new(); l.Add(p); }
+        var med = all.ToDictionary(kv => kv.Key, kv => { var l = kv.Value; l.Sort(); return l.Count % 2 == 1 ? l[l.Count / 2] : (l[l.Count / 2 - 1] + l[l.Count / 2]) / 2; });
+        lock (Lock) _region = med;
     }
 
     /// <summary>An ask read on the Market: kept when it is the lowest of the last day for that item.</summary>

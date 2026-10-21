@@ -288,10 +288,17 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel over the game"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top strip with Kinah per hour, the drops' value per hour and the session total. Drag it anywhere; it remembers where."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top strip with the figures you pick below. Drag it anywhere; it remembers where."/>
                 </StackPanel>
                 <CheckBox x:Name="HudChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- which figures the panel shows: any mix, in a fixed order; the window works them all out the same way -->
+              <StackPanel Margin="18,13,18,15">
+                <TextBlock Style="{StaticResource RowTitle}" Text="What the panel shows"/>
+                <TextBlock Style="{StaticResource RowHint}" Text="Pick any. The figures match the window's."/>
+                <WrapPanel x:Name="HudFieldHost" Margin="0,10,0,0"/>
+              </StackPanel>
               <Border Style="{StaticResource Divider}"/>
               <!-- how solid the panel is: takes effect as the slider moves, like the buttons on the reading page -->
               <Grid Style="{StaticResource Row}">

@@ -8,14 +8,48 @@ using System.Windows.Shapes;
 
 namespace KinahLedger.Ui;
 
+/// <summary>The figures the panel over the game can show, in the order it shows them. The player picks which in Options › In game.</summary>
+public static class HudFields
+{
+    /// <param name="Key">Kept in ui.json (UserPrefs.HudFields).</param>
+    /// <param name="Name">The choice in Options.</param>
+    /// <param name="Label">Beside the figure on the panel; empty for the clock and the last pickup.</param>
+    public sealed record Field(string Key, string Name, string Label, string Hint);
+
+    public static readonly Field[] All =
+    {
+        new("time", "Timer", "", "How long you've farmed here"),
+        new("rate", "Total per hour", "/ hr", "Kinah plus loot after tax: the window's big number"),
+        new("kinah", "Kinah per hour", "Kinah / hr", "Kinah picked up, per hour"),
+        new("loot", "Loot per hour", "loot / hr", "What the hour's loot sells for, after tax"),
+        new("total", "Session total", "total", "Kinah plus loot after tax, so far"),
+        new("best", "Your best here", "best here", "Your best hour in this zone"),
+        new("last", "Last pickup", "", "The last thing picked up"),
+    };
+
+    /// <summary>The clock, the hour's total and the session total, the same figures the window shows.</summary>
+    public const string Default = "time,rate,total";
+
+    /// <summary>The saved list as keys in panel order; never empty (the clock at least).</summary>
+    public static List<string> Parse(string? saved)
+    {
+        var want = (saved ?? Default).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var keys = All.Where(f => want.Contains(f.Key)).Select(f => f.Key).ToList();
+        return keys.Count > 0 ? keys : new() { "time" };
+    }
+
+    public static string Join(IEnumerable<string> keys) => string.Join(",", Parse(string.Join(",", keys)));
+}
+
 /// <summary>
-/// One line over the game, like the site's compact mode: a recording dot and the farming clock, then Kinah per hour,
-/// what the hour's drops are worth at the lowest Market price, and the total estimated value so far (Kinah picked up
-/// plus the drops' value). Drag it anywhere; its opacity is a slider in Settings.
+/// One line over the game, like the site's compact mode: the figures the player picked (HudFields), worked out by the
+/// window itself so the panel and the window always agree. Drag it anywhere; its opacity is a slider in Options.
 /// </summary>
 public sealed class HudWindow : Window
 {
-    readonly TextBlock _time = new(), _kinah = new(), _value = new(), _total = new();
+    readonly Dictionary<string, TextBlock> _cells = new();
+    readonly StackPanel _row = new() { Orientation = Orientation.Horizontal };
+    List<string> _fields = HudFields.Parse(null);
 
     /// <summary>The panel on screen right now, if any: the readers step around it.</summary>
     public static HudWindow? Current { get; private set; }
@@ -49,8 +83,10 @@ public sealed class HudWindow : Window
 
     static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x7D, 0x84, 0xA8));
 
-    public HudWindow()
+    /// <param name="fields">The figures to show (HudFields keys); the default set when null.</param>
+    public HudWindow(IEnumerable<string>? fields = null)
     {
+        if (fields != null) _fields = HudFields.Parse(string.Join(",", fields));
         Current = this;
         Closed += (_, _) => { if (Current == this) Current = null; };
         ShowActivated = false;   // never takes focus from the game, on start or when shown again after a read
@@ -67,47 +103,68 @@ public sealed class HudWindow : Window
         // top-centre by default: the top-right belongs to the minimap and its zone title, the bottom-left to the chat
         Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 260; Top = SystemParameters.WorkArea.Top + 12;
 
-        var row = new Grid();
-        for (int i = 0; i < 4; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = i == 0 ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
-
-        // the recording dot and the farming clock
-        var clock = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 22, 0) };
-        clock.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x5E)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) });
-        _time.FontFamily = new FontFamily("Cascadia Mono, Consolas"); _time.FontSize = 14; _time.Foreground = new SolidColorBrush(Color.FromRgb(0xE9, 0xEF, 0xF7)); _time.VerticalAlignment = VerticalAlignment.Center;
-        clock.Children.Add(_time);
-        Grid.SetColumn(clock, 0); row.Children.Add(clock);
-
-        Cell(row, 1, _kinah, "Kinah / hr", Color.FromRgb(0xF8, 0xD5, 0x98), HorizontalAlignment.Left);
-        Cell(row, 2, _value, "loot / hr", Color.FromRgb(0xEE, 0xEC, 0xF6), HorizontalAlignment.Center);
-        Cell(row, 3, _total, "total value", Color.FromRgb(0x5E, 0xD8, 0xCB), HorizontalAlignment.Right);
+        Build();
 
         Content = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0A, 0x0C, 0x18)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x32, 0x3A, 0x66)),
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 10, 20, 10),
-            MinWidth = 520,
-            Child = row
+            Child = _row
         };
-        _time.Text = "0:00"; _kinah.Text = "—"; _value.Text = "—"; _total.Text = "—";
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
     }
 
-    /// <summary>A figure then its label on one line: "61K Kinah/hr".</summary>
-    static void Cell(Grid row, int col, TextBlock number, string label, Color color, HorizontalAlignment align)
+    /// <summary>Shows these figures, in panel order; the next Update fills them.</summary>
+    public void SetFields(IEnumerable<string> keys)
     {
-        var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = align, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, col < 3 ? 18 : 0, 0) };
-        number.FontSize = 16; number.FontWeight = FontWeights.SemiBold; number.Foreground = new SolidColorBrush(color);
-        number.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"); number.VerticalAlignment = VerticalAlignment.Bottom;
-        line.Children.Add(number);
-        line.Children.Add(new TextBlock { Text = label, FontSize = 12.5, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, 1) });
-        Grid.SetColumn(line, col);
-        row.Children.Add(line);
+        var next = HudFields.Parse(string.Join(",", keys));
+        if (next.SequenceEqual(_fields)) return;
+        _fields = next;
+        Build();
     }
 
-    /// <param name="time">The farming clock.</param>
-    /// <param name="kinahHr">Kinah picked up per hour.</param>
-    /// <param name="dropsValueHr">What the hour's tradeable drops sell for at the lowest Market price, or a dash with no price known.</param>
-    /// <param name="total">Kinah picked up plus the drops' Market value so far.</param>
-    public void Update(string time, string kinahHr, string dropsValueHr, string total) { _time.Text = time; _kinah.Text = kinahHr; _value.Text = dropsValueHr; _total.Text = total; }
+    void Build()
+    {
+        _row.Children.Clear(); _cells.Clear();
+        for (int i = 0; i < _fields.Count; i++)
+        {
+            var key = _fields[i]; var f = HudFields.All.First(x => x.Key == key);
+            var number = new TextBlock { Text = "—", VerticalAlignment = VerticalAlignment.Bottom };
+            var cell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(i == 0 ? 0 : 20, 0, 0, 0) };
+            switch (key)
+            {
+                case "time":
+                    // the recording dot and the clock
+                    cell.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x5E)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) });
+                    number.FontFamily = new FontFamily("Cascadia Mono, Consolas"); number.FontSize = 14; number.Foreground = new SolidColorBrush(Color.FromRgb(0xE9, 0xEF, 0xF7)); number.VerticalAlignment = VerticalAlignment.Center;
+                    number.Text = "0:00";
+                    break;
+                case "last":
+                    number.FontSize = 13.5; number.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCF, 0xE6)); number.MaxWidth = 240; number.TextTrimming = TextTrimming.CharacterEllipsis; number.VerticalAlignment = VerticalAlignment.Center;
+                    number.Text = "";
+                    break;
+                default:
+                    var color = key switch
+                    {
+                        "rate" => Color.FromRgb(0xF8, 0xD5, 0x98), "kinah" => Color.FromRgb(0xF8, 0xD5, 0x98), "total" => Color.FromRgb(0x5E, 0xD8, 0xCB),
+                        "best" => Color.FromRgb(0xB9, 0xBF, 0xDA), _ => Color.FromRgb(0xEE, 0xEC, 0xF6),
+                    };
+                    number.FontSize = key == "rate" ? 18 : 16; number.FontWeight = FontWeights.SemiBold; number.Foreground = new SolidColorBrush(color);
+                    number.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI");
+                    break;
+            }
+            cell.Children.Add(number);
+            if (f.Label.Length > 0) cell.Children.Add(new TextBlock { Text = f.Label, FontSize = 12.5, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, key == "rate" ? 2 : 1) });
+            _row.Children.Add(cell);
+            _cells[key] = number;
+        }
+    }
+
+    /// <summary>The figures by key (HudFields), as the window worked them out; a missing one shows a dash.</summary>
+    public void Update(IReadOnlyDictionary<string, string> values)
+    {
+        foreach (var (key, cell) in _cells)
+            cell.Text = values.TryGetValue(key, out var v) && v.Length > 0 ? v : key == "last" ? "" : "—";
+    }
 }

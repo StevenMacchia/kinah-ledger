@@ -534,6 +534,7 @@ options: --process aion[,other]");
         try { File.Delete(tmpList); } catch (Exception) { }
         ok &= dok;
         ok &= TradeTest(items);
+        ok &= BestTest(items);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }
@@ -554,6 +555,56 @@ options: --process aion[,other]");
         Console.WriteLine(counters.Count == 0 ? "No numbers found." : "Numbers, left to right: " + string.Join("   ", counters.Select(c => $"{c.Value:N0} (x {c.Left})")));
         Console.WriteLine("Which one is Kinah is worked out while you play: the counter that grows by exactly the Kina the chat shows.");
         return counters.Count > 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// 0.7.6: the region's middle price stands in where the server's board has none (and says so), the best hour per zone
+    /// is kept only past ten minutes and a better rate, and the panel's field list always has one figure in panel order.
+    /// Everything runs on temporary files, never the player's own.
+    /// </summary>
+    static bool BestTest(ItemDictionary items)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nRegion prices, best hour per zone, the panel's figures (0.7.6):");
+        var tmp = Path.Combine(Path.GetTempPath(), "kl-best-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmp);
+        var oldPrices = PriceBook.PathOverride; var oldDir = BestRuns.DirOverride;
+        try
+        {
+            PriceBook.PathOverride = Path.Combine(tmp, "prices.json"); BestRuns.DirOverride = tmp; BestRuns.Reset();
+            PriceBook.SetBoard(new() { ["Spiritstone"] = 7_000 });
+            PriceBook.SetRegionBoards(new[] { new Dictionary<string, long> { ["Thick hide"] = 1_000, ["Spiritstone"] = 9_000 }, new Dictionary<string, long> { ["Thick hide"] = 1_400 }, new Dictionary<string, long> { ["Thick hide"] = 1_100 } });
+            Check("server board first, the region's middle price second", $"{PriceBook.Price("Spiritstone")} {PriceBook.SourceOf("Spiritstone")} {PriceBook.Price("thick hide")} {PriceBook.SourceOf("Thick hide")} {PriceBook.SourceOf("Manastone")}", "7000 Server 1100 Region None");
+
+            var t0 = DateTime.UtcNow;
+            long hide = items.IdOf("Thick hide");
+            var stay = new SessionEngine(items);
+            stay.SetZone("Western Cantas Valley");
+            for (int i = 0; i < 10; i++) stay.Apply(new KinahChanged(t0, 5_000, false));   // ten mobs (one 50,000 line would be a quest reward)
+            stay.Apply(new ItemAcquired(t0, hide, 10, false));
+            Check("a stay's value: Kinah plus loot after the cut", BestRuns.Value(stay).ToString(), (50_000 + (long)Math.Round(11_000 * PriceBook.SellerKeeps)).ToString());
+            Check("under ten minutes doesn't count", BestRuns.Offer("Siel (Elyos)", "Western Cantas Valley", 100_000, 9 * 60).ToString(), "False");
+            Check("twenty minutes sets the best", $"{BestRuns.Offer("Siel (Elyos)", "Western Cantas Valley", 100_000, 20 * 60)} {BestRuns.For("Siel (Elyos)", "Western Cantas Valley")?.PerHr}", "True 300000");
+            Check("a slower stay leaves it", $"{BestRuns.Offer("Siel (Elyos)", "Western Cantas Valley", 100_000, 40 * 60)} {BestRuns.For("Siel (Elyos)", "Western Cantas Valley")?.PerHr}", "False 300000");
+            Check("kept per server", (BestRuns.For("Nezekan (Elyos)", "Western Cantas Valley") == null).ToString(), "True");
+            BestRuns.Reset();
+            Check("read back from best.json", BestRuns.For("Siel (Elyos)", "Western Cantas Valley")?.PerHr.ToString() ?? "none", "300000");
+
+            Check("panel fields in panel order", string.Join(",", Ui.HudFields.Parse("total, rate,time,nope")), "time,rate,total");
+            Check("an empty choice keeps the clock", string.Join(",", Ui.HudFields.Parse("")), "time");
+        }
+        finally
+        {
+            PriceBook.PathOverride = oldPrices; BestRuns.DirOverride = oldDir; BestRuns.Reset();
+            PriceBook.SetBoard(new()); PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>());
+            try { Directory.Delete(tmp, true); } catch (Exception) { }
+        }
+        return ok;
     }
 
     /// <summary>

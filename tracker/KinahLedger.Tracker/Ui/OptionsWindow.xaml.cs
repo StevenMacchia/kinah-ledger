@@ -105,6 +105,7 @@ public partial class OptionsWindow : Window
         AutoUpdateChk.IsChecked = c.AutoUpdate;
         AutoUpdateChk.IsEnabled = _host.AppSettings.Update.Check;
         BuildSkins(c.Skin);
+        BuildHudFields(c.HudFields);
         _loading = false;
         Refresh();
     }
@@ -125,6 +126,26 @@ public partial class OptionsWindow : Window
             SkinHost.Children.Add(chip);
         }
         SkinHint.Text = Skins.Get(current).Blurb is var b ? char.ToUpperInvariant(b[0]) + b[1..] + "." : "";
+    }
+
+    /// <summary>One chip per figure the panel can show; a click adds or takes it away (the last one stays).</summary>
+    void BuildHudFields(string saved)
+    {
+        HudFieldHost.Children.Clear();
+        var on = HudFields.Parse(saved);
+        foreach (var f in HudFields.All)
+        {
+            var key = f.Key;
+            var chip = _host.Chip(f.Name, on.Contains(key), () =>
+            {
+                var now = HudFields.Parse(_edit.HudFields);
+                if (!now.Remove(key)) now.Add(key);
+                if (now.Count == 0) return;   // the panel needs one figure at least
+                Edit(_edit with { HudFields = HudFields.Join(now) });
+                BuildHudFields(_edit.HudFields);
+            }, f.Hint);
+            HudFieldHost.Children.Add(chip);
+        }
     }
 
     void Wire()

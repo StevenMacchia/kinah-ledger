@@ -50,7 +50,7 @@ public partial class MainWindow
         _prefs.Welcomed = true;
         SavePrefs();
         SetWelcome(false);
-        Say($"Server set to {_wServer.Label} · {_wServer.Region.Name}. Press Start whenever you're ready; the chat and the zone are found on their own.", "Good");
+        Say($"Server set to {_wServer.Label} · {_wServer.Region.Name}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", "Good");
     }
 
     /* ---------------- chips ---------------- */
