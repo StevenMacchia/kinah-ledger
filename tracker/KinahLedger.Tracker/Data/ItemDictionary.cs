@@ -206,7 +206,8 @@ public sealed class ItemDictionary
             if (!doc.RootElement.TryGetProperty("items", out var arr) || arr.ValueKind != JsonValueKind.Array) return;
             foreach (var e in arr.EnumerateArray())
             {
-                string set = Str(e, "set"), slot = Str(e, "slot"), raw = Str(e, "name");
+                // MetaBot's own name carries "(Bound)" ("Dawnfrost (Skin: Cloak) (Bound)"); bound and tradable copies are one item
+                string set = Str(e, "set"), slot = Str(e, "slot"), raw = System.Text.RegularExpressions.Regex.Replace(Str(e, "name"), @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
                 var name = set.Length > 0 && slot.Length > 0 ? $"{set} (Skin: {slot})" : raw;
                 if (name.Length == 0 || _byName.ContainsKey(Norm(name))) continue;
                 long id = e.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number && idEl.TryGetInt64(out var v) && v > 0 && !_byId.ContainsKey(v)

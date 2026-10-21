@@ -432,7 +432,7 @@ options: --process aion[,other]");
         {
             var gp = new ChatParser(items);
             foreach (var (gline, gexpect) in new[] { ("Raw Leather *acquired.«", "Raw Leather ×1"), ("Raw Leatheracquired.", "Raw Leather ×1"), ("Spiritstone acquired:-", "Spiritstone ×1"),
-                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("Acquiréd 169 Kina.", "Kinah +169"), ("AcquireÖ 212 Kina.", "Kinah +212"), ("Raw Leather acquíred.", "Raw Leather ×1"), ("Restored Recon Team (Helm) Skin acquired.", "Restored Recon Team (Skin: Helm) ×1"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
+                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("Acquiréd 169 Kina.", "Kinah +169"), ("AcquireÖ 212 Kina.", "Kinah +212"), ("Raw Leather acquíred.", "Raw Leather ×1"), ("Restored Recon Team (Helm) Skin acquired.", "Restored Recon Team (Skin: Helm) ×1"), ("Dawn Frost (Cloak) Skin acquired.", "Dawn Frost (Skin: Cloak) ×1"), ("Forbidden Ritual (Orb) Skin acquired.", "Forbidden Ritual (Skin: Orb) ×1"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
             {
                 var gevs = gp.Parse(gline, DateTime.UtcNow).Select(e => Describe(e, items)).ToList();
                 var ggot = gevs.Count == 0 ? "(nothing)" : string.Join("; ", gevs);
