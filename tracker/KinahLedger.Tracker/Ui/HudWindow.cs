@@ -4,17 +4,18 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// A short, wide strip over the game with three figures side by side: Kinah per hour (what the mobs paid), what the
-/// hour's drops are worth at the lowest Market price, and the total estimated value so far (Kinah picked up plus the
-/// drops' value). Drag it anywhere; its opacity is a slider in Settings.
+/// One line over the game, like the site's compact mode: a recording dot and the farming clock, then Kinah per hour,
+/// what the hour's drops are worth at the lowest Market price, and the total estimated value so far (Kinah picked up
+/// plus the drops' value). Drag it anywhere; its opacity is a slider in Settings.
 /// </summary>
 public sealed class HudWindow : Window
 {
-    readonly TextBlock _kinah = new(), _value = new(), _total = new();
+    readonly TextBlock _time = new(), _kinah = new(), _value = new(), _total = new();
 
     /// <summary>The panel on screen right now, if any: the readers step around it.</summary>
     public static HudWindow? Current { get; private set; }
@@ -46,6 +47,8 @@ public sealed class HudWindow : Window
         finally { if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Show); } catch (Exception) { /* closing */ } } }
     }
 
+    static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x87, 0x97, 0xAE));
+
     public HudWindow()
     {
         Current = this;
@@ -62,49 +65,49 @@ public sealed class HudWindow : Window
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         // top-centre by default: the top-right belongs to the minimap and its zone title, the bottom-left to the chat
-        Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 230; Top = SystemParameters.WorkArea.Top + 12;
+        Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 260; Top = SystemParameters.WorkArea.Top + 12;
 
         var row = new Grid();
-        for (int i = 0; i < 5; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = i % 2 == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
-        Cell(row, 0, "KINAH / HR", _kinah, Color.FromRgb(0xF1, 0xD0, 0x8C));
-        Divider(row, 1);
-        Cell(row, 2, "DROPS VALUE / HR", _value, Color.FromRgb(0x9B, 0x8C, 0xFF));
-        Divider(row, 3);
-        Cell(row, 4, "TOTAL ESTIMATED VALUE", _total, Color.FromRgb(0x5F, 0xE0, 0x8A));
+        for (int i = 0; i < 4; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = i == 0 ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
+
+        // the recording dot and the farming clock
+        var clock = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 22, 0) };
+        clock.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x5A, 0x5A)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) });
+        _time.FontFamily = new FontFamily("Cascadia Mono, Consolas"); _time.FontSize = 14; _time.Foreground = new SolidColorBrush(Color.FromRgb(0xE9, 0xEF, 0xF7)); _time.VerticalAlignment = VerticalAlignment.Center;
+        clock.Children.Add(_time);
+        Grid.SetColumn(clock, 0); row.Children.Add(clock);
+
+        Cell(row, 1, _kinah, "Kinah/hr", Color.FromRgb(0xF1, 0xD0, 0x8C), HorizontalAlignment.Left);
+        Cell(row, 2, _value, "drops value/hr", Color.FromRgb(0xC5, 0xBB, 0xFF), HorizontalAlignment.Center);
+        Cell(row, 3, _total, "total value", Color.FromRgb(0x4E, 0xD0, 0x8C), HorizontalAlignment.Right);
 
         Content = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xEC, 0x0A, 0x0F, 0x18)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0x4C, 0xC3, 0xF5)),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 5, 6, 6),
-            MinWidth = 460,
+            Background = new SolidColorBrush(Color.FromArgb(0xEB, 0x07, 0x0D, 0x18)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x73, 0x4C, 0xC3, 0xF5)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 9, 18, 9),
+            MinWidth = 520,
             Child = row
         };
-        _kinah.Text = "—"; _value.Text = "—"; _total.Text = "—";
+        _time.Text = "0:00"; _kinah.Text = "—"; _value.Text = "—"; _total.Text = "—";
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
     }
 
-    static void Cell(Grid row, int col, string label, TextBlock number, Color color)
+    /// <summary>A figure then its label on one line: "61K Kinah/hr".</summary>
+    static void Cell(Grid row, int col, TextBlock number, string label, Color color, HorizontalAlignment align)
     {
-        var stack = new StackPanel { Margin = new Thickness(10, 0, 10, 0), HorizontalAlignment = HorizontalAlignment.Center };
-        var l = new TextBlock { Text = label, FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0x8A, 0xA3)), HorizontalAlignment = HorizontalAlignment.Center };
-        number.FontSize = 19; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
-        number.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI");
-        number.HorizontalAlignment = HorizontalAlignment.Center; number.Margin = new Thickness(0, -1, 0, 0);
-        stack.Children.Add(l); stack.Children.Add(number);
-        Grid.SetColumn(stack, col);
-        row.Children.Add(stack);
+        var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = align, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, col < 3 ? 18 : 0, 0) };
+        number.FontSize = 15; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
+        number.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"); number.VerticalAlignment = VerticalAlignment.Bottom;
+        line.Children.Add(number);
+        line.Children.Add(new TextBlock { Text = label, FontSize = 12.5, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, 1) });
+        Grid.SetColumn(line, col);
+        row.Children.Add(line);
     }
 
-    static void Divider(Grid row, int col)
-    {
-        var d = new Border { Width = 1, Background = new SolidColorBrush(Color.FromArgb(0x60, 0x4C, 0xC3, 0xF5)), Margin = new Thickness(0, 4, 0, 4) };
-        Grid.SetColumn(d, col);
-        row.Children.Add(d);
-    }
-
+    /// <param name="time">The farming clock.</param>
     /// <param name="kinahHr">Kinah picked up per hour.</param>
     /// <param name="dropsValueHr">What the hour's tradeable drops sell for at the lowest Market price, or a dash with no price known.</param>
     /// <param name="total">Kinah picked up plus the drops' Market value so far.</param>
-    public void Update(string kinahHr, string dropsValueHr, string total) { _kinah.Text = kinahHr; _value.Text = dropsValueHr; _total.Text = total; }
+    public void Update(string time, string kinahHr, string dropsValueHr, string total) { _time.Text = time; _kinah.Text = kinahHr; _value.Text = dropsValueHr; _total.Text = total; }
 }
