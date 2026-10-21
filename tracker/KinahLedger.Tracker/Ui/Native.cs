@@ -39,31 +39,31 @@ internal static class Native
         finally { DeleteObject(h); }
     }
 
+    static byte[]? _iconBytes;
+    static MemoryStream AppIconStream()
+    {
+        if (_iconBytes == null)
+        {
+            using var r = typeof(Native).Assembly.GetManifestResourceStream("app.ico")!;
+            using var m = new MemoryStream(); r.CopyTo(m); _iconBytes = m.ToArray();
+        }
+        return new MemoryStream(_iconBytes, false);
+    }
+
     static Icon? _icon;
-    /// <summary>A gold hex mark drawn in code, so the window, tray and taskbar have an icon without shipping an .ico yet.</summary>
+    /// <summary>The K tile from app.ico (tools/brand/make-icons.js), at the small-icon size this screen's DPI asks for, for the tray.</summary>
     public static Icon AppIcon()
     {
         if (_icon != null) return _icon;
-        using var bmp = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bmp))
-        {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
-            using var dark = new SolidBrush(Color.FromArgb(26, 39, 64));
-            using var gold = new SolidBrush(Color.FromArgb(227, 181, 91));
-            using var edge = new Pen(Color.FromArgb(241, 208, 140), 1.5f);
-            var hex = new[] { new PointF(16, 2), new PointF(29, 9), new PointF(29, 23), new PointF(16, 30), new PointF(3, 23), new PointF(3, 9) };
-            g.FillPolygon(dark, hex); g.DrawPolygon(edge, hex);
-            var inner = new[] { new PointF(16, 9), new PointF(22, 12.5f), new PointF(22, 19.5f), new PointF(16, 23), new PointF(10, 19.5f), new PointF(10, 12.5f) };
-            g.FillPolygon(gold, inner);
-        }
-        _icon = Icon.FromHandle(bmp.GetHicon());
+        using var s = AppIconStream();
+        _icon = new Icon(s, System.Windows.Forms.SystemInformation.SmallIconSize);
         return _icon;
     }
 
+    /// <summary>The whole app.ico for a window: WPF takes the title-bar and Alt+Tab sizes from its frames.</summary>
     public static BitmapSource AppIconSource()
     {
-        var s = Imaging.CreateBitmapSourceFromHIcon(AppIcon().Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+        var s = BitmapFrame.Create(AppIconStream(), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
         s.Freeze();
         return s;
     }

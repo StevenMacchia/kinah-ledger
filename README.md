@@ -1,3 +1,5 @@
+<img src="tools/brand/logo-256.png" width="88" height="88" alt="">
+
 # Kinah Ledger
 
 A fan project for Aion 2 (global): Kinah per hour, material yields, drop rates and market prices,
