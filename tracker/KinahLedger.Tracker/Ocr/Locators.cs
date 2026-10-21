@@ -205,7 +205,7 @@ public static class ZoneLocator
     public static readonly string[] Known =
     {
         "Western Altamia Highland", "Eastern Altamia Highland", "Southern Altamia Highland", "Altamia Canyon", "Contaminated Sanctum", "Rock Tomb Hill",
-        "Garden of the Illusion God", "Altamia Highland Ruins", "Western Cantas Valley", "Eastern Cantas Valley", "Cantas Valley"
+        "Garden of the Illusion God", "Altamia Highland Ruins", "Western Cantas Valley", "Eastern Cantas Valley", "Cantas Valley", "Dawn Legion Base"
     };
 
     /// <summary>The top-right corner that holds the minimap and its title.</summary>
