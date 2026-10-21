@@ -322,6 +322,12 @@ public sealed class TrackerSession
         {
             var burst = Reread.Burst(_lastLines, lines, _recent, now);
             if (burst.Count > 0) { CrashLog.Note($"a burst of {burst.Count} loot line(s) arrived faster than the chat could show; counted from the read anyway"); reread.AddRange(burst); }
+            else
+            {
+                // it shares lines with the last read but no run of them lined up: what follows the last shared line is new
+                var after = Reread.AfterOverlap(_lastLines, lines);
+                if (after.Count > 0) { CrashLog.Note($"counted {after.Count} loot line(s) below the last line this read shares with the last one: {string.Join(" | ", after)}"); reread.AddRange(after); }
+            }
         }
         Reread.Remember(_recent, lines, now);
         _lastLines = lines;
@@ -366,7 +372,6 @@ public sealed class TrackerSession
 
     /// <summary>The chat and the loot list beside the character, checked against each other: see <see cref="LootCrossCheck"/>.</summary>
     readonly LootCrossCheck _cross;
-    int _lootPass;
     public LootCrossCheck CrossCheck => _cross;
 
     /// <summary>
@@ -376,8 +381,7 @@ public sealed class TrackerSession
     async Task LootListAsync()
     {
         if (GameRect is not { } g) return;
-        // every other pass: a read takes about 0.4 s, and a row stays up about three seconds, so it is still read twice
-        if (++_lootPass % 2 != 0) return;
+        // every pass: a row is up about three seconds, and during fast kills a pass can take over a second
         var region = LootPopup.Region(g);
         try
         {

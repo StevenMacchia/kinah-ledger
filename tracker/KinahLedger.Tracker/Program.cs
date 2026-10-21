@@ -440,6 +440,17 @@ options: --process aion[,other]");
                 Console.WriteLine($"  garbled loot line {gline,-30} -> {ggot}  {(ggot == gexpect ? "ok" : "MISMATCH, expected " + gexpect)}");
             }
         }
+        // a read that shares lines with the last one but doesn't line up (the quest tracker garbled differently): the
+        // reads of 2026-10-21 17:51, where a Spiritstone, 1,192 Kina and 3 Soul Crystals were lost
+        {
+            var ovPrev = new[] { "asmos doing daily/feather runs. Got big bro", "holding the skies for ya", "Acquired 412 Kina.", "Defeat Kerubar and Kerubian", "Acquired 415 Kina.", "Acquired 223 Kina.", "Defeat Kerubar and Kerubian", "Defeat Kerubar and Kerubian", "Acquired 431 Kina.", "Defeat Kerubar and Kerubian", "(8/15)", "(9/15)", "(10/15)", "(11/15)" };
+            var now2 = new[] { "Acquired 415 Kina.", "Acquired 223 Kina.", "Defeat Kerubar and Kerubian (9/15)", "Defeat Kerubar and Kerubian (10/15)", "Acquired 431 Kina.", "Defeat Kerubar and Kerubian (11/15)", "Spiritstone acquired.", "Obtained 3 Cogni Soul Crystals.", "Obtained 1 Kerubian Soul Points.", "Acquired 1,192 Kina." };
+            var ovGot = Reread.AfterOverlap(ovPrev, now2);
+            void Ov(string what, string got2, string want) { ok &= got2 == want; Console.WriteLine($"  {what,-58} -> {got2}  {(got2 == want ? "ok" : "MISMATCH, expected " + want)}"); }
+            Ov("unaligned but overlapping: the lines after the last shared one", string.Join(" | ", ovGot), "Spiritstone acquired. | Obtained 3 Cogni Soul Crystals. | Obtained 1 Kerubian Soul Points. | Acquired 1,192 Kina.");
+            Ov("unaligned, nothing new below the shared line: nothing", Reread.AfterOverlap(now2, now2.Take(8).ToArray()).Count.ToString(), "0");
+            Ov("a new Kinah amount is never taken for an old one", string.Join(" | ", Reread.AfterOverlap(new[] { "Acquired 431 Kina.", "Raw Leather acquired." }, new[] { "Raw Leather acquired.", "Acquired 413 Kina." })), "Acquired 413 Kina.");
+        }
         // the chat wraps a line at about 40 characters: a long item name comes as two lines (2026-10-21, a green armor drop lost)
         {
             string Batches(params string[][] reads)
@@ -866,10 +877,33 @@ options: --process aion[,other]");
 
             var c5 = new LootCrossCheck(items);
             var a5 = new List<GameEvent>();
-            a5.AddRange(c5.Popup(new() { I("Raw Leather"), K(1), I("Oracle") }, x0));                    // a misread seen once, a 1-Kina misread, a name plate
+            a5.AddRange(c5.Popup(new() { K(250), K(1), I("Oracle") }, x0));                              // a Kinah amount seen once, a 1-Kina misread, a name plate
             a5.AddRange(c5.Popup(new() { K(1), I("Oracle") }, x0.AddSeconds(0.7)));
             a5.AddRange(c5.Popup(new() { K(1), I("Oracle") }, x0.AddSeconds(6)));
-            Check("one-off rows, Kina under 10 and names off the item list never count", Desc(a5), "nothing");
+            Check("Kinah seen once, Kina under 10 and names off the item list never count", Desc(a5), "nothing");
+
+            // fast kills: the list is read about once a second and a row is up about three, so a row can be read once only
+            var c7 = new LootCrossCheck(items);
+            var a7 = c7.Popup(new() { K(431), I("Spiritstone") }, x0).Concat(c7.Popup(new() { K(431) }, x0.AddSeconds(1.2))).Concat(c7.Popup(new(), x0.AddSeconds(6))).ToList();
+            Check("a listed item read once counts; Kinah read twice does", Desc(a7), "Spiritstone ×1, Kinah +431");
+
+            // the rows move as new ones come in: the same pickup at another place in the list is not new
+            var c8 = new LootCrossCheck(items);
+            var a8 = new List<GameEvent>();
+            a8.AddRange(c8.Popup(new() { I("Raw Leather"), I("Spiritstone") }, x0));
+            a8.AddRange(c8.Popup(new() { I("Spiritstone"), I("Raw Leather"), I("Fresh Fruit") }, x0.AddSeconds(1)));
+            a8.AddRange(c8.Popup(new() { I("Fresh Fruit") }, x0.AddSeconds(2)));
+            a8.AddRange(c8.Popup(new(), x0.AddSeconds(8)));
+            Check("rows that change places are counted once each", Desc(a8), "Raw Leather ×1, Spiritstone ×1, Fresh Fruit ×1");
+
+            // a row the reader missed for one read, then read again: still the same pickup
+            var c9 = new LootCrossCheck(items);
+            var a9 = new List<GameEvent>();
+            a9.AddRange(c9.Popup(new() { I("Raw Leather") }, x0));
+            a9.AddRange(c9.Popup(new(), x0.AddSeconds(1)));
+            a9.AddRange(c9.Popup(new() { I("Raw Leather") }, x0.AddSeconds(2)));
+            a9.AddRange(c9.Popup(new(), x0.AddSeconds(9)));
+            Check("a row missed by one read is not counted twice", Desc(a9), "Raw Leather ×1");
 
             var c6 = new LootCrossCheck(items);
             c6.Chat(new RewardReceived(x0, "Raw Leather", 1), x0);                                     // a purchase or a reward the chat set aside

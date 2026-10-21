@@ -113,6 +113,48 @@ public sealed class Reread
         return take;
     }
 
+    /// <summary>
+    /// A read that couldn't be lined up but does share lines with the last one (the quest tracker's lines garbled
+    /// differently in the two reads, so no run of lines matched): its lines after the last line both reads share are new,
+    /// less the last read's own lines after that point that are still on screen. Only loot-shaped lines are returned.
+    /// Lines are compared tightly, numbers exactly, so "Acquired 1,192 Kina." is never taken for "Acquired 431 Kina."
+    /// (2026-10-21 17:51: "Spiritstone acquired.", 1,192 Kina and 3 Soul Crystals were lost to such a read).
+    /// </summary>
+    public static List<string> AfterOverlap(IReadOnlyList<string> last, IReadOnlyList<string> cur)
+    {
+        var take = new List<string>();
+        if (last.Count == 0 || cur.Count == 0) return take;
+        var lastKeys = last.Select(Key).ToList();
+        int atCur = -1, atLast = -1;
+        for (int i = cur.Count - 1; i >= 0 && atCur < 0; i--)
+        {
+            var k = Key(cur[i]);
+            if (k.Length < 8) continue;                       // "(9/15)" and the like are no anchor
+            for (int j = lastKeys.Count - 1; j >= 0; j--) if (Same(k, lastKeys[j])) { atCur = i; atLast = j; break; }
+        }
+        if (atCur < 0) return take;                           // nothing shared: a burst, handled by Burst
+        var still = lastKeys.Skip(atLast + 1).ToList();       // the last read's lines below its match may still be on screen
+        foreach (var l in cur.Skip(atCur + 1))
+        {
+            var k = Key(l);
+            int m = still.FindIndex(p => Same(k, p));
+            if (m >= 0) { still.RemoveAt(m); continue; }
+            if (!LooksLikeLoot(l) || l.TrimStart().StartsWith('[')) continue;
+            take.Add(l);
+        }
+        return take;
+    }
+
+    /// <summary>One line read twice: the same digits, and the letters a misread or two apart at most.</summary>
+    static bool Same(string a, string b)
+    {
+        if (a == b) return true;
+        if (!new string(a.Where(char.IsDigit).ToArray()).Equals(new string(b.Where(char.IsDigit).ToArray()))) return false;
+        if (a.Length < 8 || b.Length < 8) return false;
+        int max = Math.Max(1, Math.Min(a.Length, b.Length) / 8);
+        return Math.Abs(a.Length - b.Length) <= max && Lev(a, b) <= max;
+    }
+
     static string Key(string s)
     {
         var sb = new StringBuilder();
