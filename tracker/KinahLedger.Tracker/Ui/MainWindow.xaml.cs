@@ -62,6 +62,12 @@ public partial class MainWindow : Window
         Kind.ItemsSource = Kinds;
         Kind.SelectedItem = Kinds.Contains(_prefs.Activity) ? _prefs.Activity : "Open world";
         HudChk.IsChecked = _prefs.Hud;
+        // updates: looked up on launch when the switch is on; Update now is the only thing that downloads anything
+        UpdateChk.IsChecked = _prefs.CheckUpdates;
+        UpdateChk.Click += (_, _) => { _prefs.CheckUpdates = UpdateChk.IsChecked == true; if (!_demo) _prefs.Save(); };
+        UpdateStatusRun.Text = $"This is version {Upload.RunPayload.AppVersion}.";
+        UpdateCheckLink.Click += (_, _) => _ = CheckUpdatesAsync(manual: true);
+        UpdateNowLink.Click += (_, _) => _ = InstallUpdateAsync();
         // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
         AllZonesChk.IsChecked = _prefs.AllZones;
         AllZonesChk.Click += (_, _) => { _prefs.AllZones = AllZonesChk.IsChecked == true; if (!_demo) _prefs.Save(); Redraw(); Tick(); };
@@ -150,17 +156,21 @@ public partial class MainWindow : Window
         InitWelcome();
         if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
         if (watch) _watcher.Start();
+        if (watch && _prefs.CheckUpdates) _ = CheckUpdatesAsync(manual: false);
     }
 
     /// <summary>
     /// Once the chat and the zone have been found, steps 1 and 2 go behind the Settings button and the window
     /// shrinks to the mode picker, the tiles and the table. Settings brings the setup card back at any time.
     /// </summary>
+
     void SetCompact(bool on, bool remember = true)
     {
         _compact = on;
         SetupCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-        Tagline.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        // wider, never taller: the window sizes to its content, so the settings card beside the ledger widens it and the
+        // ledger keeps its place and its height. (Setting Width from code switched the height to fixed and squeezed the tables.)
+        Tagline.Visibility = Visibility.Collapsed;
         SettingsBtn.Content = on ? "Settings" : "Hide settings";
         SettingsBtn.ToolTip = on ? "Server, sharing, chat area, Market and look." : "Hide the settings. Everything here is remembered.";
         if (!Farming && !_demo) Say(on ? "Reading the chat whenever the game is open. Press Start farming to time a run." : "Settings. Everything here is remembered.", "Faint");
@@ -169,6 +179,58 @@ public partial class MainWindow : Window
 
     /// <summary>The compact layout for a layout render, without touching saved preferences.</summary>
     public void ShowCompact() => SetCompact(true, remember: false);
+
+
+    /// <summary>Settings open, with an update offered, for a layout render.</summary>
+    public void ShowSettingsDemo()
+    {
+        SetCompact(false, remember: false);
+        UpdateBarText.Text = "0.7.2 is out · "; UpdateBar.Visibility = Visibility.Visible;
+        UpdateStatusRun.Text = $"This is version {Upload.RunPayload.AppVersion}; 0.7.2 is out.";
+    }
+
+    /* ---------------- updates ---------------- */
+
+    Upload.Updater.Release? _update;
+
+    /// <summary>Looks up the latest release. Silent when GitHub can't be reached, unless the player pressed Check now.</summary>
+    async Task CheckUpdatesAsync(bool manual)
+    {
+        if (manual) UpdateStatusRun.Text = "Checking…";
+        var rel = await Upload.Updater.CheckAsync();
+        _update = rel;
+        var mine = Upload.RunPayload.AppVersion;
+        if (rel != null)
+        {
+            UpdateBarText.Text = $"{rel.Version.ToString(3)} is out · ";
+            UpdateBar.Visibility = Visibility.Visible;
+            UpdateStatusRun.Text = $"This is version {mine}; {rel.Version.ToString(3)} is out.";
+        }
+        else if (manual) UpdateStatusRun.Text = $"This is version {mine}. No newer version found.";
+    }
+
+    /// <summary>Downloads the newer release, checks it, and restarts into it. Settings and history stay as they are.</summary>
+    async Task InstallUpdateAsync()
+    {
+        if (_update is not { } rel) return;
+        if (Farming) { Say("Stop the run first, then update.", "Warn"); return; }
+        UpdateNowLink.IsEnabled = false;
+        var v = rel.Version.ToString(3);
+        try
+        {
+            var progress = new Progress<double>(f => UpdateBarText.Text = $"Downloading {v}… {f:P0} ");
+            var file = await Task.Run(() => Upload.Updater.DownloadAsync(rel, progress));
+            UpdateBarText.Text = $"Installing {v}: Kinah Ledger restarts in a moment. ";
+            Upload.Updater.SwapAndRestart(file);
+            ForceClose();
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("update", ex);
+            UpdateBarText.Text = $"Couldn't update ({ex.Message}). Try again, or get it from the releases page · ";
+            UpdateNowLink.IsEnabled = true;
+        }
+    }
 
     /* ---------------- actions ---------------- */
 

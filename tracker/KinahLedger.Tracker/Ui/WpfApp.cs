@@ -83,7 +83,7 @@ public static class WpfApp
     }
 
     /// <summary>Renders the window (and the panel) off-screen to PNG files so the layout can be reviewed without a desktop session.</summary>
-    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null)
+    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool openSettings = false)
     {
         Ensure();
         Directory.CreateDirectory(dir);
@@ -92,11 +92,12 @@ public static class WpfApp
         if (skin != null) Skins.Apply(skin);
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
+        if (openSettings) w.ShowSettingsDemo();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", _ => "ui-main-tracking" };
-        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + (openSettings ? "-settings" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         w.Close();
 
         var h = new HudWindow { Left = -12000, Top = -12000, ShowActivated = false };

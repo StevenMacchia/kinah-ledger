@@ -34,7 +34,7 @@ public partial class MainWindow
         WelcomeCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         foreach (var fe in new FrameworkElement[] { SessionCard, Tiles, TablesCard, StatusRow, SettingsBtn })
             fe.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-        if (on) { SetupCard.Visibility = Visibility.Collapsed; Tagline.Visibility = Visibility.Visible; Width = 640; }
+        if (on) { SetupCard.Visibility = Visibility.Collapsed; Tagline.Visibility = Visibility.Visible; }
         else SetCompact(_compact, remember: false);
         if (on) WelcomeHint.Text = HasServer ? "" : "Pick your server to continue.";
     }

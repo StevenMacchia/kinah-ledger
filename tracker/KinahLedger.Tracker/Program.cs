@@ -46,6 +46,13 @@ internal static class Program
                 case "market-watch": return MarketWatch(settings, opts);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "target-test": return TargetTest(opts);
+                case "swap-script": Console.WriteLine(Updater.SwapScript(int.Parse(pos[0]), pos[1], pos[2])); return 0;
+                case "update-check":
+                {
+                    var rel = Task.Run(Updater.CheckAsync).GetAwaiter().GetResult();
+                    Console.WriteLine($"This is {RunPayload.AppVersion}. " + (rel == null ? "No newer release found (or GitHub couldn't be reached)." : $"{rel.Version.ToString(3)} is out: {rel.AssetUrl} ({rel.Size:N0} bytes, sha256 {(rel.Sha256 ?? "not in the notes")})"));
+                    return 0;
+                }
                 case "watch": return Watch(settings, opts);
                 case "reset-id":
                     InstallId.Reset();
@@ -82,7 +89,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
-  ui-shot [dir] [--demo] [--gathering|--market] [--compact] [--welcome] [--skin night|abyss|daylight]
+  ui-shot [dir] [--demo] [--gathering|--market] [--compact] [--settings] [--welcome] [--skin night|abyss|daylight]
                                 render the window to PNG files for layout review
   market-shot [dir]             the window with the Market card in its tracking state
   reset-id                      replace the random install ID used for uploads
@@ -232,7 +239,7 @@ options: --process aion[,other]");
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("settings"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -560,6 +567,20 @@ options: --process aion[,other]");
             Check("the read after that counts again", $"drops {pe.Items.Values.Sum()}", "drops 1");
             Check("parse-test writes to a scratch log", CrashLog.Dir.Contains("parse-test") ? "scratch" : CrashLog.Dir, "scratch");
             Check("not an enemy: a quest step", TargetReader.Match("Pass through the narrow gap") ?? "none", "none");
+        }
+
+        Console.WriteLine("\nUpdates from inside the app:");
+        {
+            string Rel(string tag, string asset = "KinahLedger.exe", long size = 1234, string body = "", bool pre = false) =>
+                $$"""{"tag_name":"{{tag}}","draft":false,"prerelease":{{(pre ? "true" : "false")}},"html_url":"https://github.com/StevenMacchia/kinah-ledger/releases/tag/{{tag}}","body":{{System.Text.Json.JsonSerializer.Serialize(body)}},"assets":[{"name":"{{asset}}","size":{{size}},"browser_download_url":"https://github.com/StevenMacchia/kinah-ledger/releases/download/{{tag}}/{{asset}}"}]}""";
+            var cur = new Version(0, 7, 1);
+            string U(string json) => Updater.Parse(json, cur) is { } r ? $"{r.Version.ToString(3)} {r.Size} {(r.Sha256 ?? "no-sha")[..6]}" : "none";
+            Check("a newer release with the exe", U(Rel("v0.7.2")), "0.7.2 1234 no-sha");
+            Check("the same version is not an update", U(Rel("v0.7.1")), "none");
+            Check("an older one isn't either", U(Rel("v0.6.3")), "none");
+            Check("a prerelease is never offered", U(Rel("v0.8.0", pre: true)), "none");
+            Check("a release without KinahLedger.exe isn't", U(Rel("v0.7.2", asset: "KinahLedger.zip")), "none");
+            Check("the notes' sha256 line is read", U(Rel("v0.7.2", body: "Fixes.\n\nKinahLedger.exe sha256: 3F9A" + new string('0', 60))), "0.7.2 1234 3f9a00");
         }
 
         Console.WriteLine("\nBalance counter (0.7): which counter is Kinah, and when a read is trusted:");

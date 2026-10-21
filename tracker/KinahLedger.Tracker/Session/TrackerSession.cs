@@ -367,6 +367,8 @@ public sealed class UserPrefs
     public bool MobsOpen { get; set; } = true;
     /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
     public bool AllZones { get; set; }
+    /// <summary>Look for a newer release on GitHub when the app starts. On by default; the download still waits for a click.</summary>
+    public bool CheckUpdates { get; set; } = true;
     /// <summary>Which part of the window shows: "Farming" (the run, the stats, the tables) or "Crafting" (recipes, cost, success, profit).</summary>
     public string Part { get; set; } = "Farming";
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
