@@ -631,6 +631,18 @@ options: --process aion[,other]");
         Check("a reported drop is not sent: run, zone, bound", $"{Has(rp2.items)} {Has(rp2.zones["Altamia Canyon"].items)} {Has(rp2.zones["Altamia Canyon"].items_bound)} · other drops {(rp2.zones["Western Cantas Valley"].items.Count > 0 ? "sent" : "missing")}", "not sent not sent not sent · other drops sent");
         ReportedDrops.Toggle(items.NameOf(stone));
         Check("undo: it is sent again", Has(RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items).items), "sent");
+        // the card a click on a drop opens reads two site files: the zones snapshot and the listed drops
+        {
+            var zj = "{\"publish_rule\":{\"min_runs\":5},\"windows\":{\"7d\":[{\"zone\":\"Altamia Canyon\",\"activity\":\"pets\",\"n_runs\":9,\"rates\":{}},{\"zone\":\"Altamia Canyon\",\"activity\":\"open-world\",\"n_runs\":7,\"rates\":{\"kina_hr\":1},\"drops\":{\"" + stone + "\":{\"per_kill\":0.04,\"per_hour\":12.5,\"n_runs\":6}}},{\"zone\":\"Kraka Footpath\",\"activity\":\"open-world\",\"n_runs\":2,\"rates\":null}]}}";
+            var lj = "{\"items\":{\"" + stone + "\":{\"name\":\"Spiritstone\",\"url\":\"https://metabot.gg/en/aion-2/items/spiritstone\",\"sources\":[{\"monster\":\"Stonebeak\",\"chance\":0.02,\"zone\":\"Altamia Canyon\",\"map\":\"Altamia\",\"level\":12},{\"monster\":\"Far Away\",\"chance\":0.5,\"zone\":\"Elsewhere\"}]}}}";
+            SiteData.Load(zj, lj);
+            var sz = SiteData.Zone("Altamia Canyon"); var kz = SiteData.Zone("Kraka Footpath");
+            Check("site card: the open-world bucket, its rate for the item", sz != null && sz.Drops.TryGetValue(stone.ToString(), out var sr) ? $"{sz.Activity} {sz.Runs} runs · {sr.PerKill} per kill · {sr.PerHour}/hr" : "missing", "open-world 7 runs · 0.04 per kill · 12.5/hr");
+            Check("site card: a zone under the publish rule says so", kz == null ? "missing" : $"published {kz.Published} · {kz.Runs} of {SiteData.MinRuns}", "published False · 2 of 5");
+            var sl = SiteData.ListedFor(stone, "Spiritstone");
+            Check("site card: listed chances with their zone", sl == null ? "missing" : string.Join(", ", sl.Sources.Select(x => $"{x.Monster}@{x.Zone}={x.Chance}")), "Stonebeak@Altamia Canyon=0.02, Far Away@Elsewhere=0.5");
+            SiteData.Load("{}", "{}");
+        }
         // a drop that looks like a normal drop is that drop: accents and stray marks don't make a new item
         Check("accents and marks snap to the real item", $"{items.IdOf("Raw Léather") == items.IdOf("Raw Leather")} {items.IdOf("Raw Leather~") == items.IdOf("Raw Leather")} {items.Knows("Spiritstöne")}", "True True True");
 

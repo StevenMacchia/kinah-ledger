@@ -93,6 +93,8 @@ public sealed class GameWatcher
         http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
         var r = await http.GetAsync($"{u.Scheme}://{u.Authority}/prices/{Market.ServerKey}.json");
         if (r.IsSuccessStatusCode) PriceBook.SetBoard(PriceBook.ParseBoard(await r.Content.ReadAsStringAsync(), _items));
+        // the community's drop rates for this server's zones and the listed drop chances, for the card a click on a drop opens
+        await SiteData.RefreshAsync(http, $"{u.Scheme}://{u.Authority}", Market.ServerKey);
     }
 
     // the watcher's retry and Start farming can both ask for the reader at once; without this, both started one and the

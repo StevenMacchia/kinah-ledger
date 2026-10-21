@@ -54,7 +54,8 @@ public partial class MainWindow : Window
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     bool _framing; int _ticks;
 
-    Brush B(string key) => (Brush)FindResource(key);
+    // a timer tick after the window closed (the off-screen renders) finds no theme: grey rather than a crash
+    Brush B(string key) => TryFindResource(key) as Brush ?? Brushes.Gray;
 
     /// <param name="watch">False for layout renders, so no screen is read while the window exists off-screen.</param>
     public MainWindow(Settings settings, bool watch = true)
@@ -97,13 +98,15 @@ public partial class MainWindow : Window
         // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
         OddsAsPct = _prefs.OddsAsPercent; ShowOddsHeader();
         PctHeader.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; OddsAsPct = _prefs.OddsAsPercent = !_prefs.OddsAsPercent; if (!_demo) _prefs.Save(); ShowOddsHeader(); Redraw(); };
-        DropsHead.MouseLeftButtonUp += (_, _) => { _prefs.DropsOpen = !_prefs.DropsOpen; if (!_demo) _prefs.Save(); Redraw(); };
-        GatherHead.MouseLeftButtonUp += (_, _) => { _prefs.GatherOpen = !_prefs.GatherOpen; if (!_demo) _prefs.Save(); Redraw(); };
-        MobHead.MouseLeftButtonUp += (_, _) => { _prefs.MobsOpen = !_prefs.MobsOpen; if (!_demo) _prefs.Save(); Redraw(); };
-        PetHead.MouseLeftButtonUp += (_, _) => { _prefs.PetsOpen = !_prefs.PetsOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        DropsHead.MouseLeftButtonUp += (_, _) => { if (Rows.Items.Count == 0) return; _prefs.DropsOpen = !_prefs.DropsOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        GatherHead.MouseLeftButtonUp += (_, _) => { if (GatherRows.Items.Count == 0) return; _prefs.GatherOpen = !_prefs.GatherOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        MobHead.MouseLeftButtonUp += (_, _) => { if (MobRows.Items.Count == 0) return; _prefs.MobsOpen = !_prefs.MobsOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        PetHead.MouseLeftButtonUp += (_, _) => { if (PetRows.Items.Count == 0) return; _prefs.PetsOpen = !_prefs.PetsOpen; if (!_demo) _prefs.Save(); Redraw(); };
         // "show all" / "show fewer" under each section
         foreach (var (name, link) in new[] { ("Drops", DropsMoreLink), ("Gather", GatherMoreLink), ("Mob", MobMoreLink), ("Pet", PetMoreLink) })
             link.Click += (_, _) => { if (!_allRows.Remove(name)) _allRows.Add(name); Redraw(); };
+        // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
+        Rows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on an enemy opens or closes its loot table
         MobRows.MouseLeftButtonUp += (_, ev) =>
         {
@@ -768,6 +771,9 @@ public partial class MainWindow : Window
             var s = pre ?? Build(e, h, kills);
             drops = s.Drops; gathered = s.Gathered; mobs = s.Mobs; pets = s.Pets ?? new();
         }
+        // a section with nothing in it stays folded until its first row comes, then opens as the player left it
+        bool dOpen = _prefs.DropsOpen && drops.Count > 0, gOpen = _prefs.GatherOpen && gathered.Count > 0,
+             mOpen = _prefs.MobsOpen && mobs.Count > 0, pOpen = _prefs.PetsOpen && pets.Count > 0;
         // the top rows of each section until "show all": four, five for Gathered; an enemy's open loot table always shows
         Rows.ItemsSource = TopRows("Drops", drops, 4, DropsMore, DropsMoreRun);
         GatherRows.ItemsSource = TopRows("Gather", gathered, 5, GatherMore, GatherMoreRun);
@@ -775,23 +781,23 @@ public partial class MainWindow : Window
         PetRows.ItemsSource = TopRows("Pet", pets, 4, PetMore, PetMoreRun);
         PetEmpty.Visibility = pets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         int pc = pets.Sum(r => int.TryParse(r.Drops, System.Globalization.NumberStyles.AllowThousands, null, out var n) ? n : 0);
-        PetTitle.Text = pc > 0 ? $"SOUL CRYSTALS FROM KILLS  ·  {pc}" : "SOUL CRYSTALS FROM KILLS";
-        PetChev.Text = _prefs.PetsOpen ? "▾" : "▸";
-        PetBody.Visibility = _prefs.PetsOpen ? Visibility.Visible : Visibility.Collapsed;
-        if (!_prefs.DropsOpen) DropsMore.Visibility = Visibility.Collapsed;
-        if (!_prefs.GatherOpen) GatherMore.Visibility = Visibility.Collapsed;
-        if (!_prefs.MobsOpen) MobMore.Visibility = Visibility.Collapsed;
-        if (!_prefs.PetsOpen) PetMore.Visibility = Visibility.Collapsed;
+        PetTitle.Text = pc > 0 ? $"SOUL CRYSTALS FROM KILLS  ·  {pc}" : "SOUL CRYSTALS FROM KILLS  ·  NONE YET";
+        PetChev.Text = pOpen ? "▾" : "▸";
+        PetBody.Visibility = pOpen ? Visibility.Visible : Visibility.Collapsed;
+        if (!dOpen) DropsMore.Visibility = Visibility.Collapsed;
+        if (!gOpen) GatherMore.Visibility = Visibility.Collapsed;
+        if (!mOpen) MobMore.Visibility = Visibility.Collapsed;
+        if (!pOpen) PetMore.Visibility = Visibility.Collapsed;
         MobEmpty.Visibility = mobs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ShowInstances();
-        MobCredit.Visibility = mobs.Count > 0 && _prefs.MobsOpen ? Visibility.Visible : Visibility.Collapsed;
+        MobCredit.Visibility = mobs.Count > 0 && mOpen ? Visibility.Visible : Visibility.Collapsed;
         var target = _watcher.Chat?.TargetNote ?? "";
         MobEmpty.Text = target.Length > 0 ? "Target bar: " + target + "."
             : "A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one.";
         int mc = mobs.Count(r => !r.Child);
-        MobTitle.Text = mc > 0 ? $"KINAH BY ENEMY · BEST GUESS  ·  {mc}" : "KINAH BY ENEMY · BEST GUESS";
-        MobChev.Text = _prefs.MobsOpen ? "▾" : "▸";
-        MobBody.Visibility = _prefs.MobsOpen ? Visibility.Visible : Visibility.Collapsed;
+        MobTitle.Text = mc > 0 ? $"KINAH BY ENEMY · BEST GUESS  ·  {mc}" : "KINAH BY ENEMY · BEST GUESS  ·  NONE YET";
+        MobChev.Text = mOpen ? "▾" : "▸";
+        MobBody.Visibility = mOpen ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Visibility = drops.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         GatherEmpty.Visibility = gathered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the drop rate per kill and per hour." : "No drops yet.";
@@ -799,16 +805,16 @@ public partial class MainWindow : Window
         // one table at a time, picked by the tabs; the tab labels carry the counts
         int gc = gathered.Count(r => !r.Header);
         int ic = drops.Count(r => !r.Header);   // item rows; the Soul Crystals have their own section
-        DropsTitle.Text = ic > 0 ? $"DROPS FROM KILLS  ·  {ic}" : "DROPS FROM KILLS";
-        GatherTitle.Text = gc > 0 ? $"GATHERED  ·  {gc}" : "GATHERED";
-        DropsChev.Text = _prefs.DropsOpen ? "▾" : "▸"; GatherChev.Text = _prefs.GatherOpen ? "▾" : "▸";
-        DropsBody.Visibility = _prefs.DropsOpen ? Visibility.Visible : Visibility.Collapsed;
-        GatherBody.Visibility = _prefs.GatherOpen ? Visibility.Visible : Visibility.Collapsed;
+        DropsTitle.Text = ic > 0 ? $"DROPS FROM KILLS  ·  {ic}" : "DROPS FROM KILLS  ·  NONE YET";
+        GatherTitle.Text = gc > 0 ? $"GATHERED  ·  {gc}" : gathered.Count > 0 ? "GATHERED" : "GATHERED  ·  NONE YET";
+        DropsChev.Text = dOpen ? "▾" : "▸"; GatherChev.Text = gOpen ? "▾" : "▸";
+        DropsBody.Visibility = dOpen ? Visibility.Visible : Visibility.Collapsed;
+        GatherBody.Visibility = gOpen ? Visibility.Visible : Visibility.Collapsed;
         var notes = new List<string>();
-        if (_prefs.DropsOpen && drops.Count > 0 && kills == 0) notes.Add("Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.");
-        if (_prefs.GatherOpen && gathered.Count > 0 && nodes == 0) notes.Add("Per-attempt rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.");
-        bool noPrice = (_prefs.DropsOpen && drops.Any(r => !r.Header && r.Price == "—")) || (_prefs.GatherOpen && gathered.Any(r => !r.Header && r.Price == "—"));
-        if (_prefs.MobsOpen && mobs.Count > 0 && target.Length > 0) notes.Add("Target bar: " + target + ".");
+        if (dOpen && drops.Count > 0 && kills == 0) notes.Add("Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.");
+        if (gOpen && gathered.Count > 0 && nodes == 0) notes.Add("Per-attempt rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.");
+        bool noPrice = (dOpen && drops.Any(r => !r.Header && r.Price == "—")) || (gOpen && gathered.Any(r => !r.Header && r.Price == "—"));
+        if (mOpen && mobs.Count > 0 && target.Length > 0) notes.Add("Target bar: " + target + ".");
         if (_prefs.MobsOpen && _watcher.Chat?.Target.Unlisted is { Length: > 0 } un && mobs.Count == 0) notes.Add($"The target bar shows \"{un}\", which isn't on the enemy list yet, so it isn't counted.");
         if (noPrice && !PriceBook.Any) notes.Add("No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest.");
         TableNote.Text = string.Join(" ", notes);

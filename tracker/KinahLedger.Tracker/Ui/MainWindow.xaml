@@ -44,7 +44,7 @@
 
     <!-- drops and gathered rows: icon, name, count, rate, per hour -->
     <DataTemplate x:Key="RowTemplate">
-      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" MinHeight="54" Padding="0,7">
+      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" MinHeight="54" Padding="0,7" Background="Transparent" Cursor="Hand">
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
@@ -91,6 +91,9 @@
         <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/><Setter TargetName="ReportLink" Property="Visibility" Value="Visible"/></Trigger>
         <DataTrigger Binding="{Binding Reported}" Value="True"><Setter TargetName="ReportLink" Property="Visibility" Value="Visible"/><Setter TargetName="NameText" Property="Opacity" Value="0.55"/></DataTrigger>
         <DataTrigger Binding="{Binding Report}" Value=""><Setter TargetName="ReportLink" Property="Visibility" Value="Collapsed"/></DataTrigger>
+        <!-- only drop, gathered and enemy rows open something on a click -->
+        <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Report}" Value=""/><Condition Binding="{Binding Key}" Value=""/></MultiDataTrigger.Conditions><Setter TargetName="RowBorder" Property="Cursor" Value="Arrow"/></MultiDataTrigger>
+        <DataTrigger Binding="{Binding Child}" Value="True"><Setter TargetName="RowBorder" Property="Cursor" Value="Arrow"/></DataTrigger>
         <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet) -->
         <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeRare}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#8062D98B"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#4262D98B" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeLegend}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#805AA6FF"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#425AA6FF" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
