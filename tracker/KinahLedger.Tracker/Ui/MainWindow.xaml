@@ -247,6 +247,29 @@
         </StackPanel>
       </Border>
 
+      <!-- the last pickups as they are counted, with how each was read, so a miss shows on the spot (Steven, 2026-10-21) -->
+      <Border x:Name="PickupStrip" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,12,20,12" Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock Text="RECENT PICKUPS" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,6"
+                     ToolTip="The last pickups counted. chat: read in the chat. recovered: a chat line read again after it scrolled or garbled. loot list: only the list beside your character showed it. guessed: part of the name was hidden, taken as its closest item."/>
+          <ItemsControl x:Name="PickupRows">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,2">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Time}" FontFamily="{DynamicResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource Faint}" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="{Binding What}" FontSize="13.5" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="ViaText" Grid.Column="2" Text="{Binding Via}" FontSize="12" Foreground="{DynamicResource Muted}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </Grid>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding Unconfirmed}" Value="True"><Setter TargetName="ViaText" Property="Foreground" Value="{DynamicResource Warn}"/></DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
       <!-- one table at a time: Drops or Gathered, picked by the tabs. The tables grow with what's farmed and the
            window with them; a table only scrolls once it would run past the bottom of the screen -->
 

@@ -219,7 +219,7 @@ public sealed partial class ChatParser
             if (b.Events.Count > 0 && bItem == null) continue;
             var joined = a.Trim() + " " + b.Text.Trim();
             var j = Parse(joined, time).ToList();
-            if (j.Count != 1) continue;
+            if (j.Count != 1 || j[0].Via.Length > 0) continue;   // a guessed name is no proof two lines belong together
             bool take = bItem == null
                 ? j[0] is ItemAcquired || j[0] is KinahChanged
                 : j[0] is ItemAcquired ji && ji.ItemId != bItem.ItemId
@@ -302,6 +302,9 @@ public sealed partial class ChatParser
             if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark) b.Append(c);
         return b.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
+
+    /// <summary>Item names likely right now (this run's items, the current enemy's loot table), for guessing a partly hidden name.</summary>
+    public Func<IEnumerable<string>>? Likely { get; set; }
 
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
@@ -421,7 +424,18 @@ public sealed partial class ChatParser
                 yield break;
             }
             // the item list is the whitelist: a name it doesn't hold, exactly or as a close misread, is never a drop
-            if (!_items.Knows(name)) { CrashLog.Note($"not in the item list, not counted: {name}"); yield break; }
+            if (!_items.Knows(name))
+            {
+                // part of the name hidden or garbled: its closest item, when only one fits (the run's items and the
+                // current enemy's table first). Counted, and tagged as guessed so it shows in the window
+                if (_items.Guess(name, Likely?.Invoke()) is long gid)
+                {
+                    CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)} (closest match)");
+                    yield return new ItemAcquired(time, gid, Math.Clamp(n, 1, 9999), bound) { Via = "guessed" };
+                    yield break;
+                }
+                CrashLog.Note($"not in the item list, not counted: {name}"); yield break;
+            }
             yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 9999), bound);
         }
     }

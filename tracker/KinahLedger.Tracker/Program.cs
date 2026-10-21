@@ -440,6 +440,22 @@ options: --process aion[,other]");
                 Console.WriteLine($"  garbled loot line {gline,-30} -> {ggot}  {(ggot == gexpect ? "ok" : "MISMATCH, expected " + gexpect)}");
             }
         }
+        // a name partly hidden (something over the chat, the line cut at the edge): its closest item, when only one fits
+        {
+            var gp2 = new ChatParser(items) { Likely = () => new[] { "Spiritstone", "Raw Leather" } };
+            string G(string line) { var evs = gp2.Parse(line, DateTime.UtcNow).ToList(); return evs.Count == 0 ? "(nothing)" : string.Join("; ", evs.Select(e2 => Describe(e2, items) + (e2.Via.Length > 0 ? " [" + e2.Via + "]" : ""))); }
+            foreach (var (gname, gline, gwant) in new[] {
+                ("end hidden, a likely item", "Spiritst acquired.", "Spiritstone ×1 [guessed]"),
+                ("start hidden, a likely item", "itstone acquired.", "Spiritstone ×1 [guessed]"),
+                ("middle garbled, a likely item", "Raw Lxathxr acquired.", "Raw Leather ×1 [guessed]"),
+                ("too little left to tell", "Spi acquired.", "(nothing)"),
+                ("a plain read is not a guess", "Spiritstone acquired.", "Spiritstone ×1") })
+            {
+                var ggot2 = G(gline).Replace("x1", "×1");
+                ok &= ggot2 == gwant;
+                Console.WriteLine($"  guess: {gname,-36} -> {ggot2}  {(ggot2 == gwant ? "ok" : "MISMATCH, expected " + gwant)}");
+            }
+        }
         // a read that shares lines with the last one but doesn't line up (the quest tracker garbled differently): the
         // reads of 2026-10-21 17:51, where a Spiritstone, 1,192 Kina and 3 Soul Crystals were lost
         {

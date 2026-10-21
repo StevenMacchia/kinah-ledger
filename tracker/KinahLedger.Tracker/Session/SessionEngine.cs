@@ -329,6 +329,7 @@ public sealed class SessionEngine
                     d[a.ItemId] = d.GetValueOrDefault(a.ItemId) + a.Count;
                     var zi = a.Bound ? Z().ItemsBound : Z().Items;
                     zi[a.ItemId] = zi.GetValueOrDefault(a.ItemId) + a.Count;
+                    if (a.Unconfirmed) _unconfirmed[a.ItemId] = _unconfirmed.GetValueOrDefault(a.ItemId) + a.Count;
                     var g = GatheringCatalog.Find(_items.NameOf(a.ItemId));
                     if (g != null)
                     {
@@ -467,6 +468,10 @@ public sealed class SessionEngine
     }
 
     public string ItemName(long id) => _items.NameOf(id);
+
+    readonly Dictionary<long, int> _unconfirmed = new();
+    /// <summary>Copies of an item the chat never confirmed: from the loot list, or a guessed name. Shown as a tag on its row.</summary>
+    public int Unconfirmed(long id) { lock (_lock) return _unconfirmed.GetValueOrDefault(id); }
 
     public List<(long Id, string Name, int Count, int Bound)> ItemRows()
     {

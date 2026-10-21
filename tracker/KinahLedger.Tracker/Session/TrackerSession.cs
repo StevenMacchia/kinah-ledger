@@ -115,6 +115,8 @@ public sealed class TrackerSession
         _settings = s;
         _items = items;
         _parser = new ChatParser(items);
+        // a partly hidden name is guessed among this run's items and the current enemy's loot table first
+        _parser.Likely = () => Engine.ItemRows().Select(r => r.Name).Concat(Target.Name is { } tn ? LootBook.Current.TableOf(tn).Select(e => e.Item) : Enumerable.Empty<string>()).ToList();
         Engine = new SessionEngine(items);
         ZoneView = new SessionEngine(items);
         _cross = new LootCrossCheck(items);
@@ -331,17 +333,19 @@ public sealed class TrackerSession
         }
         Reread.Remember(_recent, lines, now);
         _lastLines = lines;
-        bool Apply(IEnumerable<GameEvent> events)
+        bool Apply(IEnumerable<GameEvent> events, string via = "chat")
         {
             bool any = false;
-            foreach (var parsed in events)
+            foreach (var p0 in events)
             {
+                var parsed = p0 with { Via = p0.Via.Length > 0 ? via + " · " + p0.Via : via };
                 // the loot list beside the character already added this pickup (this chat line came late): it counts once
                 if (_cross.Chat(parsed, now)) { any = true; continue; }
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
                 Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); any = true;
+                Feed(ev);
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
@@ -361,7 +365,7 @@ public sealed class TrackerSession
         foreach (var l in reread)
         {
             bool any = false;
-            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events);
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, "chat · recovered");
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
@@ -369,6 +373,23 @@ public sealed class TrackerSession
     }
 
     DateTime _targetAt = DateTime.MinValue;
+
+    /// <summary>One pickup as counted, for the recent pickups strip: when, what, and how it was read.</summary>
+    public sealed record Pickup(DateTime At, string What, string Via, bool Unconfirmed);
+    readonly List<Pickup> _pickups = new();
+    /// <summary>The last pickups counted, newest first: items and Kinah only, rewards and bound Kinah left out.</summary>
+    public List<Pickup> RecentPickups(int n) { lock (_pickups) return _pickups.TakeLast(n).Reverse().ToList(); }
+    void Feed(GameEvent ev)
+    {
+        string? what = ev switch
+        {
+            ItemAcquired a => $"{_items.NameOf(a.ItemId)} ×{a.Count}" + (a.Bound ? " (bound)" : ""),
+            KinahChanged { Bound: false, Delta: > 0 } k => $"{k.Delta:N0} Kinah",
+            _ => null,
+        };
+        if (what == null) return;
+        lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
+    }
 
     /// <summary>The chat and the loot list beside the character, checked against each other: see <see cref="LootCrossCheck"/>.</summary>
     readonly LootCrossCheck _cross;
@@ -395,11 +416,13 @@ public sealed class TrackerSession
             foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
             Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt);
             bool crafting = (now - Target.CraftAt).TotalSeconds <= TargetReader.CraftGraceSeconds;
-            foreach (var parsed in add)
+            foreach (var p0 in add)
             {
+                var parsed = p0 with { Via = "loot list" };
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
                 Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
+                Feed(ev);
                 if (ev is ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }

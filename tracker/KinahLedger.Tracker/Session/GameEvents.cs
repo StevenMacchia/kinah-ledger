@@ -1,7 +1,17 @@
 namespace KinahLedger.Session;
 
 /// <summary>Game events the tracker counts, as read from the chat lines on screen.</summary>
-public abstract record GameEvent(DateTime Time);
+public abstract record GameEvent(DateTime Time)
+{
+    /// <summary>
+    /// How the pickup was read, for the recent pickups strip and the "from loot list" tag: "chat", "chat · recovered" (a
+    /// line read again or counted from a read that didn't line up), "loot list" (the list beside the character, which the
+    /// chat never confirmed), or with " · guessed" when the name was partly hidden and taken as its closest item.
+    /// </summary>
+    public string Via { get; init; } = "";
+    /// <summary>True when the chat never confirmed this pickup as read: from the loot list, or a guessed name.</summary>
+    public bool Unconfirmed => Via.Contains("loot list") || Via.Contains("guessed");
+}
 
 public sealed record ItemAcquired(DateTime Time, long ItemId, int Count, bool Bound) : GameEvent(Time);
 public sealed record KinahChanged(DateTime Time, long Delta, bool Bound) : GameEvent(Time);
