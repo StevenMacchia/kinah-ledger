@@ -5,10 +5,13 @@ using System.Windows.Media;
 
 namespace KinahLedger.Ui;
 
-/// <summary>Small always-on-top readout over the game. Drag it anywhere.</summary>
+/// <summary>
+/// Small always-on-top readout over the game: Kinah per hour (what the mobs paid), and what the hour's drops are worth
+/// at the lowest Market price on the server. Drag it anywhere; its opacity is a slider in Settings.
+/// </summary>
 public sealed class HudWindow : Window
 {
-    readonly TextBlock _big = new(), _small = new(), _foot = new();
+    readonly TextBlock _kinah = new(), _value = new();
 
     public HudWindow()
     {
@@ -23,17 +26,17 @@ public sealed class HudWindow : Window
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         // top-centre by default: the top-right belongs to the minimap and its zone title, the bottom-left to the chat
-        Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 170; Top = SystemParameters.WorkArea.Top + 16;
+        Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 120; Top = SystemParameters.WorkArea.Top + 16;
 
-        _big.FontSize = 21; _big.FontWeight = FontWeights.Bold; _big.Foreground = new SolidColorBrush(Color.FromRgb(0xF1, 0xD0, 0x8C));
-        _big.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI");
-        _small.FontSize = 12.5; _small.Foreground = new SolidColorBrush(Color.FromRgb(0xBA, 0xC6, 0xD6)); _small.Margin = new Thickness(0, 4, 0, 0); _small.LineHeight = 18;
-        _foot.FontSize = 11.5; _foot.Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0x8A, 0xA3)); _foot.Margin = new Thickness(0, 6, 0, 0); _foot.TextTrimming = TextTrimming.CharacterEllipsis; _foot.MaxWidth = 300;
+        var grid = new Grid { MinWidth = 230 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition()); grid.RowDefinitions.Add(new RowDefinition());
+        Row(grid, 0, "KINAH / HR", _kinah, Color.FromRgb(0xF1, 0xD0, 0x8C));
+        Row(grid, 1, "DROPS VALUE / HR", _value, Color.FromRgb(0x9B, 0x8C, 0xFF));
 
-        var stack = new StackPanel { MinWidth = 300 };
-        stack.Children.Add(_big); stack.Children.Add(_small); stack.Children.Add(_foot);
         var accent = new Border { Height = 2, Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xC3, 0xF5)), CornerRadius = new CornerRadius(1), Margin = new Thickness(0, 0, 0, 8) };
-        var inner = new StackPanel(); inner.Children.Add(accent); inner.Children.Add(stack);
+        var inner = new StackPanel(); inner.Children.Add(accent); inner.Children.Add(grid);
         Content = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0xEC, 0x0A, 0x0F, 0x18)),
@@ -41,9 +44,21 @@ public sealed class HudWindow : Window
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 10, 14, 11),
             Child = inner
         };
-        _big.Text = "Kinah Ledger"; _small.Text = "waiting for loot lines…";
+        _kinah.Text = "—"; _value.Text = "—";
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
     }
 
-    public void Update(string big, string small, string foot) { _big.Text = big; _small.Text = small; _foot.Text = foot; }
+    static void Row(Grid grid, int row, string label, TextBlock number, Color color)
+    {
+        var l = new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0x8A, 0xA3)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, row == 0 ? 0 : 6, 16, 0) };
+        number.FontSize = 22; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
+        number.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI");
+        number.HorizontalAlignment = HorizontalAlignment.Right; number.VerticalAlignment = VerticalAlignment.Center; number.Margin = new Thickness(0, row == 0 ? 0 : 6, 0, 0);
+        Grid.SetRow(l, row); Grid.SetColumn(l, 0); Grid.SetRow(number, row); Grid.SetColumn(number, 1);
+        grid.Children.Add(l); grid.Children.Add(number);
+    }
+
+    /// <param name="kinahHr">Kinah picked up per hour.</param>
+    /// <param name="dropsValueHr">What the hour's tradeable drops sell for at the lowest Market price, or a dash with no price known.</param>
+    public void Update(string kinahHr, string dropsValueHr) { _kinah.Text = kinahHr; _value.Text = dropsValueHr; }
 }

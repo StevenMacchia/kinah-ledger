@@ -65,6 +65,14 @@ public partial class MainWindow : Window
         // the panel over the game follows the switch at once, run or no run
         HudChk.Checked += (_, _) => Redraw();
         HudChk.Unchecked += (_, _) => CloseHud();
+        HudOpacity.Value = Math.Clamp(_prefs.HudOpacity, 0.3, 1);
+        HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
+        HudOpacity.ValueChanged += (_, _) =>
+        {
+            _prefs.HudOpacity = HudOpacity.Value; HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
+            if (_hud != null) _hud.Opacity = HudOpacity.Value;
+            if (!_demo) _prefs.Save();
+        };
         ShareChk.IsChecked = _prefs.Share;
         if (_prefs.WinX is int x && _prefs.WinY is int y && x > SystemParameters.VirtualScreenLeft - 50 && y > SystemParameters.VirtualScreenTop - 50
             && x < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 200 && y < SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 200)
@@ -372,21 +380,9 @@ public partial class MainWindow : Window
         if (HudChk.IsChecked == true && chat != null) EnsureHud();
         if (_hud != null && show != null)
         {
-            var e = show; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah;
-            var foot = (chat?.Zone != null ? chat.Zone + " · " : "") + (chat?.LastLine ?? "");
-            switch (_mode)
-            {
-                case Mode.Gather:
-                    _hud.Update($"{Fk(t.Drops / h)} items/hr",
-                        $"{Fk(t.Nodes / h)} attempts/hr · {(t.Nodes > 0 ? (t.Drops / (double)t.Nodes).ToString("0.00") : "—")} items/attempt · {Fk(t.Bonus / h)} rare/hr\n{e.Elapsed:hh\\:mm\\:ss} · {t.Drops} items · {t.Nodes} attempts{(t.Failed > 0 ? $" ({t.Failed} failed)" : "")} · {t.Bonus} rare finds",
-                        foot);
-                    break;
-                default:
-                    _hud.Update($"{Fk(kinah / h)} Kinah/hr",
-                        $"{Fk(t.Kills / h)} kills/hr · {Fk(t.Drops / h)} drops/hr · {(t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—")} Kinah/kill\n{e.Elapsed:hh\\:mm\\:ss} · {Fk(kinah)} Kinah · {t.Drops} drops · {t.Kills} kills" + (t.Pets > 0 ? $" · {t.Pets} crystals" : ""),
-                        foot);
-                    break;
-            }
+            // two figures only: straight Kinah per hour, and what the hour's drops sell for at Market prices
+            double h = Math.Max(show.Elapsed.TotalHours, 1.0 / 3600); var t = show.Totals();
+            _hud.Update(Fk(t.Kinah / h), _lastPriced > 0 ? Fk(_lastValue / h) : "—");
         }
     }
 
@@ -459,6 +455,9 @@ public partial class MainWindow : Window
         return new Tables(drops, gathered, dc, gc, value, priced, unpriced);
     }
 
+    // the drops' Market value and how many items carried a price, from the last FillNumbers, for the panel over the game
+    long _lastValue; int _lastPriced;
+
     /// <summary>The lowest Market price for an item on this server, as the Price column shows it; a dash until one is known.</summary>
     static string PriceText(string name) => PriceBook.Price(name) is long p ? Fk(p) : "—";
 
@@ -493,6 +492,7 @@ public partial class MainWindow : Window
                 break;
         }
         // the hour's worth if the tradeable items are sold at the lowest Market price, after the Market's cut; open world adds the Kinah
+        _lastValue = s.Value; _lastPriced = s.Priced;
         long worthHr = (long)((s.Value + (_mode == Mode.Gather ? 0 : kinah)) / h);
         ValueHr.Text = s.Priced > 0 || (_mode != Mode.Gather && kinah > 0) ? Fk(worthHr) : "—";
         ValueTile.ToolTip = (s.Priced + s.Unpriced == 0 ? "No tradeable items yet."
@@ -576,7 +576,7 @@ public partial class MainWindow : Window
     void EnsureHud()
     {
         if (_hud != null || HudChk.IsChecked != true) return;
-        _hud = new HudWindow { Owner = this };
+        _hud = new HudWindow { Owner = this, Opacity = Math.Clamp(_prefs.HudOpacity, 0.3, 1) };
         if (_prefs.HudX is double hx && _prefs.HudY is double hy && hx > SystemParameters.VirtualScreenLeft - 50 && hy > SystemParameters.VirtualScreenTop - 50) { _hud.Left = hx; _hud.Top = hy; }
         _hud.LocationChanged += (_, _) => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
         _hud.Show();

@@ -279,6 +279,8 @@ public sealed class UserPrefs
     public string Activity { get; set; } = "Open world";
     public string Place { get; set; } = "";
     public bool Hud { get; set; } = true;
+    /// <summary>How solid the panel over the game is, 0.3 to 1.</summary>
+    public double HudOpacity { get; set; } = 0.9;
     public bool Share { get; set; } = true;
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>
     public bool ManualChat { get; set; }

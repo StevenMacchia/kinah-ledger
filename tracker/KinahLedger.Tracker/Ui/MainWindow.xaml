@@ -123,7 +123,12 @@
           <WrapPanel x:Name="OptsRow" Margin="0,8,0,0">
             <CheckBox x:Name="ShareChk" Content="Share runs and Market prices anonymously" Margin="0,0,6,4"/>
             <TextBlock Margin="0,0,16,4" VerticalAlignment="Center" FontSize="13"><Hyperlink x:Name="SentLink" Style="{StaticResource LinkStyle}">what's sent?</Hyperlink></TextBlock>
-            <CheckBox x:Name="HudChk" Content="Panel over the game (drag it anywhere)" Margin="0,0,0,4"/>
+            <CheckBox x:Name="HudChk" Content="Panel over the game (drag it anywhere)" Margin="0,0,12,4"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center">
+              <TextBlock Text="Panel opacity" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <Slider x:Name="HudOpacity" Width="120" Minimum="0.3" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" ToolTip="How solid the panel over the game is"/>
+              <TextBlock x:Name="HudOpacityLbl" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="34"/>
+            </StackPanel>
           </WrapPanel>
           <!-- optional: ties this PC's runs to a profile on the site; runs stay anonymous without it -->
           <WrapPanel x:Name="LinkRow" Margin="0,8,0,0">

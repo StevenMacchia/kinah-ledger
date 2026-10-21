@@ -101,7 +101,7 @@ public static class WpfApp
 
         var h = new HudWindow { Left = -12000, Top = -12000, ShowActivated = false };
         h.Show();
-        h.Update("938K Kinah/hr", "229 kills/hr · 156 drops/hr · 4.1K Kinah/kill\n00:42:17 · 661K Kinah · 110 drops · 161 kills", "Acquired Thick hide ×2.");
+        h.Update("938K", "371K");
         DoEvents();
         Save((FrameworkElement)h.Content, Path.Combine(dir, "ui-hud.png"), 0);
         h.Close();
