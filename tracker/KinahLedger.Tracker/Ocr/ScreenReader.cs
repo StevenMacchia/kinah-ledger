@@ -100,6 +100,36 @@ public sealed class ScreenReader
         return dst;
     }
 
+    /// <summary>
+    /// The target bar's enemy name is gold or yellow, often over a bright, busy sky or rock where plain brightness has no
+    /// contrast. This keeps only warm, saturated, bright pixels (the name; white UI text and the scenery drop out) as
+    /// black on white for the recognizer.
+    /// </summary>
+    public static unsafe Bitmap NameMask(Bitmap src)
+    {
+        var dst = new Bitmap(src.Width, src.Height, PixelFormat.Format24bppRgb);
+        var rect = new Rectangle(0, 0, src.Width, src.Height);
+        var rs = src.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        var ds = dst.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            for (int y = 0; y < src.Height; y++)
+            {
+                byte* s = (byte*)rs.Scan0 + y * rs.Stride;
+                byte* d = (byte*)ds.Scan0 + y * ds.Stride;
+                for (int x = 0; x < src.Width; x++, s += 4, d += 3)
+                {
+                    int b = s[0], g = s[1], r = s[2];
+                    bool gold = r >= 190 && g >= 140 && b <= 110 && r - b >= 110 && g - b >= 70;
+                    byte o = gold ? (byte)0 : (byte)255;
+                    d[0] = o; d[1] = o; d[2] = o;
+                }
+            }
+        }
+        finally { src.UnlockBits(rs); dst.UnlockBits(ds); }
+        return dst;
+    }
+
     /// <summary>Recognizes a bitmap the way the live reader does: optional boost, then upscale.</summary>
     public static async Task<List<string>> ReadBitmapAsync(Bitmap raw, bool boost, int scale)
     {

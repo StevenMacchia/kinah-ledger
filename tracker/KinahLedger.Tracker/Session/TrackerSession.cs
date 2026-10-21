@@ -264,11 +264,14 @@ public sealed class TrackerSession
         // the enemy on the target bar, as last read, goes with this read's events (Kinah by enemy, a best guess)
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
+        // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
+        bool reward = Target.RewardOpen(DateTime.UtcNow);
         foreach (var (l, events) in _parser.ParseBatch(fresh, DateTime.UtcNow))
         {
             bool any = false;
-            foreach (var ev in events)
+            foreach (var parsed in events)
             {
+                var ev = reward ? _parser.AsReward(parsed) : parsed;
                 Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); any = true;
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);

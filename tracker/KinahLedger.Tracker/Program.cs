@@ -45,6 +45,7 @@ internal static class Program
                 case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
                 case "market-watch": return MarketWatch(settings, opts);
                 case "ocr-test": return OcrTest(settings, opts);
+                case "target-test": return TargetTest(opts);
                 case "watch": return Watch(settings, opts);
                 case "reset-id":
                     InstallId.Reset();
@@ -210,6 +211,23 @@ options: --process aion[,other]");
         return 0;
     }
 
+    /// <summary>Reads a saved image of the target bar (--image file.png) the way the tracker reads the band, and prints what it finds.</summary>
+    static int TargetTest(Dictionary<string, string> o)
+    {
+        if (!o.TryGetValue("image", out var image)) { Console.WriteLine("target-test --image <png of the target bar>"); return 1; }
+        using var bmp = Task.Run(() => ScreenReader.LoadAsync(image)).GetAwaiter().GetResult();
+        var lines = new List<OcrLineBox>();
+        foreach (var (label, img, scale) in new (string, System.Drawing.Bitmap, int)[] { ("plain", bmp, 3), ("boost", ScreenReader.Boost(bmp), 3), ("name colour", ScreenReader.NameMask(bmp), 3) })
+        {
+            var got = Task.Run(() => ScreenReader.ReadBoxesAsync(img, new System.Drawing.Point(0, 0), scale)).GetAwaiter().GetResult();
+            foreach (var l in got.OrderBy(l => l.Box.Top)) Console.WriteLine($"  {label}: {l.Text}");
+            lines.AddRange(got);
+        }
+        var name = TargetReader.FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
+        Console.WriteLine(name != null ? $"Enemy: {name}" : $"No enemy on the list" + (unlisted.Length > 0 ? $" (name-shaped text: {unlisted})" : ""));
+        return name != null ? 0 : 1;
+    }
+
     /// <summary>Renders the window (and the panel) off-screen to PNG files, so the layout can be reviewed without a desktop session.</summary>
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
@@ -222,6 +240,8 @@ options: --process aion[,other]");
     /// <summary>Feeds typical chat lines (including recognition slips) through the parser and the new-line tracker.</summary>
     static int ParseTest(Settings s)
     {
+        // the test's made-up lines and notes go to a scratch log, never the player's reads.log
+        CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-parse-test");
         var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
         var parser = new ChatParser(items);
         string[] lines =
@@ -491,6 +511,12 @@ options: --process aion[,other]");
         Check("mobs go out with their zone", string.Join(" | ", (mp.mobs ?? new()).OrderBy(m => m.zone).Select(m => $"{m.name}/{m.zone}/{m.kills}/{m.kinah}")), "Test Lizard/Altamia Canyon/1/510 | Test Lizard/Western Cantas Valley/2/1020");
         Check("a run with no target bar sends no mobs", RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items).mobs == null ? "none" : "some", "none");
         Check("enemy list built in", TargetReader.Known.Length > 0 ? "yes" : "no (data/mobs.txt missing)", "yes");
+        string Bar(params string[] ls) => TargetReader.FindName(ls.Select((l, i) => (i, l)), out var un) ?? (un.Length > 0 ? "none, unlisted: " + un : "none");
+        Check("target bar: level first, distance after", Bar("45 Highland Karnif 1m"), "Highland Karnif");
+        Check("target bar: the enemy's own target on the line", Bar("45 Highland Karnif 1m 45 Swoly"), "Highland Karnif");
+        Check("target bar: a misread letter", Bar("45 Highland Kamif"), "Highland Karnif");
+        Check("target bar: a gathering node is no enemy", Bar("Orichalcum", "Ore"), "none, unlisted: Orichalcum");
+        Check("target bar: the tag under the bar alone", Bar("Fera"), "none, unlisted: Fera");
 
         Console.WriteLine("\nCrafting and Market settlements (2026-10-21 log):");
         {
@@ -511,6 +537,29 @@ options: --process aion[,other]");
             PriceBook.SetBoard(new() { ["Expert's Splendent Orichalcum Longsword"] = 400_000, ["Artisan's Refining Stone"] = 20_000, ["Pure Orichalcum Ore"] = 5_000, ["Pure Odyle"] = 6_000 });
             Check("cost of one try at Market prices", $"{RecipeBook.CostPerTry("Artisan's Orichalcum Longsword", out var unp):N0} ({unp} unpriced)", "564,000 (0 unpriced)");
             PriceBook.SetBoard(new());
+        }
+
+        Console.WriteLine("\nDaeva Pass, shops and purchases (2026-10-21 log):");
+        {
+            Check("pass, shop and reward titles", string.Join(" ", new[] { "Daeva Pass", "Pass Shop", "Daeva Pass Level Reward", "Trade Shop", "Quna Shop", "Highland Karnif", "Orichalcum", "Status" }.Select(x => TargetReader.IsRewardTitle(x) ? "R" : "-")), "R R R R R - - -");
+            var tr = new TargetReader(); var rt = DateTime.UtcNow;
+            tr.MarkReward(rt);
+            Check("a reward screen stays open 3 s after its title", $"{tr.RewardOpen(rt.AddSeconds(2.9))} {tr.RewardOpen(rt.AddSeconds(5))}", "True False");
+            var rp = new ChatParser(items); var re = new SessionEngine(items);
+            void Batch(bool open, params string[] ls) { foreach (var (_, evs) in rp.ParseBatch(ls, DateTime.UtcNow)) foreach (var ev in evs) re.Apply(open ? rp.AsReward(ev) : ev); }
+            Batch(true, "Acquired 5,000 Kina.", "Fine Odyle acquired.", "Odyle (Bound) acquired.");
+            Check("in a reward screen: Kinah and items are rewards", $"farmed {re.Kinah:N0}, drops {re.Items.Count + re.ItemsBound.Count}, skipped {re.RewardsSkipped} lines ({re.KinahSkipped:N0} Kinah), farming {re.Active.TotalSeconds:0}s", "farmed 0, drops 0, skipped 3 lines (5,000 Kinah), farming 0s");
+            Batch(false, "Acquired 200 Kina.", "Obtained 1 Karnif Soul Points.");
+            Check("the kill 5 s later still counts", $"farmed {re.Kinah:N0}, kills {re.Kills}", "farmed 200, kills 1");
+            var pp = new ChatParser(items); var pe = new SessionEngine(items);
+            void Buy(params string[] ls) { foreach (var (_, evs) in pp.ParseBatch(ls, DateTime.UtcNow)) foreach (var ev in evs) pe.Apply(ev); }
+            Buy("Acquired 300 Kina.", "Purchase complete.", "Fine Odyle acquired.");
+            Buy("Odyle acquired.");
+            Check("bought items, this read and the next, are not drops", $"drops {pe.Items.Values.Sum()}, skipped {pe.RewardsSkipped}, farmed {pe.Kinah}", "drops 0, skipped 2, farmed 300");
+            Buy("Odyle acquired.");
+            Check("the read after that counts again", $"drops {pe.Items.Values.Sum()}", "drops 1");
+            Check("parse-test writes to a scratch log", CrashLog.Dir.Contains("parse-test") ? "scratch" : CrashLog.Dir, "scratch");
+            Check("not an enemy: a quest step", TargetReader.Match("Pass through the narrow gap") ?? "none", "none");
         }
 
         Console.WriteLine("\nBalance counter (0.7): which counter is Kinah, and when a read is trusted:");

@@ -3,11 +3,14 @@ namespace KinahLedger;
 /// <summary>Writes unexpected errors and read traces to %LOCALAPPDATA%\KinahLedger so problems can be diagnosed after the fact.</summary>
 public static class CrashLog
 {
+    /// <summary>Where the logs go instead of the player's own folder: parse-test points it at a scratch folder so its made-up lines never land in reads.log.</summary>
+    public static string? DirOverride { get; set; }
+
     public static string Dir
     {
         get
         {
-            var d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger");
+            var d = DirOverride ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger");
             Directory.CreateDirectory(d);
             return d;
         }

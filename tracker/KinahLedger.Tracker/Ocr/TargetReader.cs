@@ -76,6 +76,25 @@ public sealed partial class TargetReader
         return prev[b.Length];
     }
 
+    // ---- reward screens ----
+    // The same top-centre band shows the title of the Daeva Pass, a shop or a reward window while one is open ("Daeva
+    // Pass", "Pass Shop", "Daeva Pass Level Reward", "Trade Shop", "Quna Shop"). Kinah and items that land while one is
+    // open, and for RewardGraceSeconds after its title was last seen, are rewards: never farming Kinah, never drops.
+    public const double RewardGraceSeconds = 3;
+
+    [GeneratedRegex(@"\b(?:pass|shop|shops|reward|rewards)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex RewardWord();
+
+    /// <summary>A pass, shop or reward window's title, and not an enemy's name.</summary>
+    public static bool IsRewardTitle(string text) => RewardWord().IsMatch(text) && Match(text.Trim()) == null;
+
+    /// <summary>When a reward screen's title was last seen in the band.</summary>
+    public DateTime RewardAt { get; private set; } = DateTime.MinValue;
+    bool _rewardSeen;
+    public void MarkReward(DateTime t) => RewardAt = t;
+    /// <summary>True while a reward screen is open, or was seen within the last <see cref="RewardGraceSeconds"/>.</summary>
+    public bool RewardOpen(DateTime t) => (t - RewardAt).TotalSeconds is >= -1 and <= RewardGraceSeconds;
+
     /// <summary>The last name-shaped text on the bar that isn't on the list, so a missing enemy can be named and added.</summary>
     public string Unlisted { get; private set; } = "";
     readonly HashSet<string> _noted = new(StringComparer.OrdinalIgnoreCase);
@@ -94,31 +113,61 @@ public sealed partial class TargetReader
         var h = Hash(raw);
         if (h == _hash && Reads > 0)
         {
-            // the same pixels: the bar hasn't changed, so the name it showed is still the target
+            // the same pixels: the bar hasn't changed, so the name it showed is still the target, and a reward screen is still open
             if (Name != null && _pending == Name) NameAt = DateTime.UtcNow;
+            if (_rewardSeen) RewardAt = DateTime.UtcNow;
             return;
         }
         _hash = h;
-        var lines = await ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true);
+        // the enemy's name is gold over bright scenery: the name-colour read finds it where the brightness read can't;
+        // the brightness read covers names drawn in white
+        using var gold = ScreenReader.NameMask(raw);
+        var lines = await ScreenReader.ReadBoxesAsync(gold, strip.Location, 3);
+        lines.AddRange(await ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true));
         Reads++;
-        string? found = null;
-        foreach (var l in lines.OrderBy(l => l.Box.Top))
+        var title = lines.Select(l => l.Text.Trim()).FirstOrDefault(IsRewardTitle);
+        _rewardSeen = title != null;
+        if (title != null)
         {
-            var t = Regex.Replace(Noise().Replace(l.Text, " "), @"\s+", " ").Trim().TrimEnd('.', ',', ':', ';');
-            if (t.Length < 3 || !Shape().IsMatch(t) || Not.Contains(t) || ZoneLocator.Known.Contains(t, StringComparer.OrdinalIgnoreCase)) continue;
-            var hit = Match(t);
-            if (hit == null)
-            {
-                Unlisted = t;
-                if (_noted.Count < 200 && _noted.Add(t)) CrashLog.Note($"target bar: not an enemy on the list, not credited: {t}");
-                continue;
-            }
-            found = hit;
-            break;
+            if ((DateTime.UtcNow - RewardAt).TotalSeconds > RewardGraceSeconds) CrashLog.Note($"reward screen open ({title}): its Kinah and items are rewards, not farming");
+            RewardAt = DateTime.UtcNow;
+        }
+        var found = FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
+        if (found == null && unlisted.Length > 0)
+        {
+            Unlisted = unlisted;
+            if (_noted.Count < 200 && _noted.Add(unlisted)) CrashLog.Note($"target bar: not an enemy on the list, not credited: {unlisted}");
         }
         if (found == null) { _pending = null; return; }   // nothing targeted: the last name keeps its time for the grace window
         if (found == _pending) { Name = found; NameAt = DateTime.UtcNow; }   // read twice in a row: trusted
         else _pending = found;
+    }
+
+    /// <summary>
+    /// The enemy named on the bar, from the lines read in the band. The game prints the level first and the distance
+    /// after ("45 Highland Karnif 1m"), and the enemy's own target can share the line ("45 Swoly"), so words with digits
+    /// are dropped and the name is looked for in the whole line, then in any run of two or more of its words.
+    /// <paramref name="unlisted"/> is the first name-shaped text that isn't on the list, for the log.
+    /// </summary>
+    public static string? FindName(IEnumerable<(int Top, string Text)> lines, out string unlisted)
+    {
+        unlisted = "";
+        foreach (var (_, text) in lines.OrderBy(l => l.Top))
+        {
+            var words = Noise().Replace(text, " ").Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(w => w.Trim('.', ',', ':', ';', '|', '(', ')'))
+                .Where(w => w.Length >= 2 && !w.Any(char.IsDigit))
+                .ToList();
+            if (words.Count == 0) continue;
+            var t = string.Join(' ', words);
+            if (t.Length < 3 || Not.Contains(t) || ZoneLocator.Known.Contains(t, StringComparer.OrdinalIgnoreCase)) continue;
+            if (Match(t) is { } whole) return whole;
+            for (int len = words.Count - 1; len >= 2; len--)
+                for (int at = 0; at + len <= words.Count; at++)
+                    if (Match(string.Join(' ', words.Skip(at).Take(len))) is { } part) return part;
+            if (unlisted.Length == 0 && Shape().IsMatch(t)) unlisted = t;
+        }
+        return null;
     }
 
     /// <summary>A cheap fingerprint of the strip from a grid of sampled pixels, so an unchanged bar isn't recognized again.</summary>

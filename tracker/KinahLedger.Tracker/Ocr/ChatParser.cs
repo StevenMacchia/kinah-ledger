@@ -164,9 +164,16 @@ public sealed partial class ChatParser
     {
         var outp = new List<(string Line, List<GameEvent> Events)>();
         int pay = -1;
+        // "Purchase complete." claims the item lines after it in this read, and in the next read when it comes within
+        // PurchaseSeconds: what was bought is never a drop
+        bool claim = _purchaseCarry && (time - _purchaseAt).TotalSeconds <= PurchaseSeconds;
+        _purchaseCarry = false;
         for (int i = 0; i < lines.Count; i++)
         {
-            outp.Add((lines[i], Parse(lines[i], time).ToList()));
+            var evs = Parse(lines[i], time).ToList();
+            if (Purchase().IsMatch(lines[i])) { claim = true; _purchaseAt = time; _purchaseCarry = true; }
+            else if (claim) evs = evs.Select(AsReward).ToList();
+            outp.Add((lines[i], evs));
             if (Payment().IsMatch(lines[i])) pay = i;
         }
         if (pay < 0 || _paymentLeft <= 0) return outp;
@@ -186,6 +193,23 @@ public sealed partial class ChatParser
         }
         return outp;
     }
+
+    [GeneratedRegex(@"^\W*purchase\s+(?:complete|completed|successful)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Purchase();
+
+    public const double PurchaseSeconds = 5;
+    DateTime _purchaseAt; bool _purchaseCarry;
+
+    /// <summary>
+    /// The same event as a reward (a reward screen was open, or it was bought): Kinah becomes reward Kinah, an item a
+    /// skipped reward line. Neither is farming, a drop or a kill; both show in the summary's "reward lines skipped".
+    /// </summary>
+    public GameEvent AsReward(GameEvent ev) => ev switch
+    {
+        KinahChanged { Bound: false } k => new KinahChanged(k.Time, k.Delta, true),
+        ItemAcquired a => new RewardReceived(a.Time, _items.NameOf(a.ItemId), a.Count),
+        _ => ev,
+    };
 
     static int Count(Match m) => m.Groups["n"].Success && int.TryParse(m.Groups["n"].Value, out var n) ? Math.Clamp(n, 1, 99999) : 1;
 
