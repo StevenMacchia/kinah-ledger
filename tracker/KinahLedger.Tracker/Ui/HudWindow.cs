@@ -6,12 +6,13 @@ using System.Windows.Media;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Small always-on-top readout over the game: Kinah per hour (what the mobs paid), and what the hour's drops are worth
-/// at the lowest Market price on the server. Drag it anywhere; its opacity is a slider in Settings.
+/// A short, wide strip over the game with three figures side by side: Kinah per hour (what the mobs paid), what the
+/// hour's drops are worth at the lowest Market price, and the total estimated value so far (Kinah picked up plus the
+/// drops' value). Drag it anywhere; its opacity is a slider in Settings.
 /// </summary>
 public sealed class HudWindow : Window
 {
-    readonly TextBlock _kinah = new(), _value = new();
+    readonly TextBlock _kinah = new(), _value = new(), _total = new();
 
     public HudWindow()
     {
@@ -26,39 +27,49 @@ public sealed class HudWindow : Window
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         // top-centre by default: the top-right belongs to the minimap and its zone title, the bottom-left to the chat
-        Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 120; Top = SystemParameters.WorkArea.Top + 16;
+        Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 230; Top = SystemParameters.WorkArea.Top + 12;
 
-        var grid = new Grid { MinWidth = 230 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition()); grid.RowDefinitions.Add(new RowDefinition());
-        Row(grid, 0, "KINAH / HR", _kinah, Color.FromRgb(0xF1, 0xD0, 0x8C));
-        Row(grid, 1, "DROPS VALUE / HR", _value, Color.FromRgb(0x9B, 0x8C, 0xFF));
+        var row = new Grid();
+        for (int i = 0; i < 5; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = i % 2 == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
+        Cell(row, 0, "KINAH / HR", _kinah, Color.FromRgb(0xF1, 0xD0, 0x8C));
+        Divider(row, 1);
+        Cell(row, 2, "DROPS VALUE / HR", _value, Color.FromRgb(0x9B, 0x8C, 0xFF));
+        Divider(row, 3);
+        Cell(row, 4, "TOTAL ESTIMATED VALUE", _total, Color.FromRgb(0x5F, 0xE0, 0x8A));
 
-        var accent = new Border { Height = 2, Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xC3, 0xF5)), CornerRadius = new CornerRadius(1), Margin = new Thickness(0, 0, 0, 8) };
-        var inner = new StackPanel(); inner.Children.Add(accent); inner.Children.Add(grid);
         Content = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0xEC, 0x0A, 0x0F, 0x18)),
             BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0x4C, 0xC3, 0xF5)),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 10, 14, 11),
-            Child = inner
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 5, 6, 6),
+            MinWidth = 460,
+            Child = row
         };
-        _kinah.Text = "—"; _value.Text = "—";
+        _kinah.Text = "—"; _value.Text = "—"; _total.Text = "—";
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
     }
 
-    static void Row(Grid grid, int row, string label, TextBlock number, Color color)
+    static void Cell(Grid row, int col, string label, TextBlock number, Color color)
     {
-        var l = new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0x8A, 0xA3)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, row == 0 ? 0 : 6, 16, 0) };
-        number.FontSize = 22; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
+        var stack = new StackPanel { Margin = new Thickness(10, 0, 10, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        var l = new TextBlock { Text = label, FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0x7A, 0x8A, 0xA3)), HorizontalAlignment = HorizontalAlignment.Center };
+        number.FontSize = 19; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
         number.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI");
-        number.HorizontalAlignment = HorizontalAlignment.Right; number.VerticalAlignment = VerticalAlignment.Center; number.Margin = new Thickness(0, row == 0 ? 0 : 6, 0, 0);
-        Grid.SetRow(l, row); Grid.SetColumn(l, 0); Grid.SetRow(number, row); Grid.SetColumn(number, 1);
-        grid.Children.Add(l); grid.Children.Add(number);
+        number.HorizontalAlignment = HorizontalAlignment.Center; number.Margin = new Thickness(0, -1, 0, 0);
+        stack.Children.Add(l); stack.Children.Add(number);
+        Grid.SetColumn(stack, col);
+        row.Children.Add(stack);
+    }
+
+    static void Divider(Grid row, int col)
+    {
+        var d = new Border { Width = 1, Background = new SolidColorBrush(Color.FromArgb(0x60, 0x4C, 0xC3, 0xF5)), Margin = new Thickness(0, 4, 0, 4) };
+        Grid.SetColumn(d, col);
+        row.Children.Add(d);
     }
 
     /// <param name="kinahHr">Kinah picked up per hour.</param>
     /// <param name="dropsValueHr">What the hour's tradeable drops sell for at the lowest Market price, or a dash with no price known.</param>
-    public void Update(string kinahHr, string dropsValueHr) { _kinah.Text = kinahHr; _value.Text = dropsValueHr; }
+    /// <param name="total">Kinah picked up plus the drops' Market value so far.</param>
+    public void Update(string kinahHr, string dropsValueHr, string total) { _kinah.Text = kinahHr; _value.Text = dropsValueHr; _total.Text = total; }
 }

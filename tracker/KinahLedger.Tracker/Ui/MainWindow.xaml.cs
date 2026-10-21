@@ -382,7 +382,7 @@ public partial class MainWindow : Window
         {
             // two figures only: straight Kinah per hour, and what the hour's drops sell for at Market prices
             double h = Math.Max(show.Elapsed.TotalHours, 1.0 / 3600); var t = show.Totals();
-            _hud.Update(Fk(t.Kinah / h), _lastPriced > 0 ? Fk(_lastValue / h) : "—");
+            _hud.Update(Fk(t.Kinah / h), _lastPriced > 0 ? Fk(_lastValue / h) : "—", Fk(t.Kinah + _lastValue));
         }
     }
 

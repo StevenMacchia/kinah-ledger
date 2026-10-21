@@ -101,7 +101,7 @@ public static class WpfApp
 
         var h = new HudWindow { Left = -12000, Top = -12000, ShowActivated = false };
         h.Show();
-        h.Update("938K", "371K");
+        h.Update("938K", "371K", "875K");
         DoEvents();
         Save((FrameworkElement)h.Content, Path.Combine(dir, "ui-hud.png"), 0);
         h.Close();
