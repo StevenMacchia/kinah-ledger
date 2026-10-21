@@ -94,6 +94,9 @@ public partial class MainWindow : Window
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
 
         Kind.SelectionChanged += (_, _) => { if (!Farming) { _mode = SelectedMode; ApplyModeLabels(); if (_watcher.Chat == null) ResetTiles(); } };
+        // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
+        OddsAsPct = _prefs.OddsAsPercent; ShowOddsHeader();
+        PctHeader.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; OddsAsPct = _prefs.OddsAsPercent = !_prefs.OddsAsPercent; if (!_demo) _prefs.Save(); ShowOddsHeader(); Redraw(); };
         DropsHead.MouseLeftButtonUp += (_, _) => { _prefs.DropsOpen = !_prefs.DropsOpen; if (!_demo) _prefs.Save(); Redraw(); };
         GatherHead.MouseLeftButtonUp += (_, _) => { _prefs.GatherOpen = !_prefs.GatherOpen; if (!_demo) _prefs.Save(); Redraw(); };
         MobHead.MouseLeftButtonUp += (_, _) => { _prefs.MobsOpen = !_prefs.MobsOpen; if (!_demo) _prefs.Save(); Redraw(); };
@@ -479,14 +482,13 @@ public partial class MainWindow : Window
                 var odds = Odds(total, kills); var tone = "";
                 if (tabled.Count > 0)
                 {
-                    // only kills of enemies whose table lists the item: leather doesn't come from a rock, so rocks don't count
-                    var from = tabled.Where(m => book.CanDrop(m.Name, r.Name, r.Id) == true).ToList();
-                    int eligible = from.Sum(m => m.Kills);
+                    // the kills of every enemy fought that can drop the item, pooled (LootBook.Pool): leather doesn't come
+                    // from a rock, so rocks don't count; two enemies that both drop Fresh Raw Meat both do
+                    var (eligible, from, listed) = book.Pool(ms.Select(m => (m.Name, m.Kills, m.Drops.ContainsKey(r.Id))), r.Name, r.Id);
                     if (from.Count > 0 && eligible > 0)
                     {
                         odds = Odds(total, eligible);
-                        var names = string.Join(", ", from.OrderByDescending(m => m.Kills).Select(m => m.Name).Distinct().Take(2)) + (from.Select(m => m.Name).Distinct().Count() > 2 ? " and others" : "");
-                        var listed = from.Select(m => book.Find(m.Name, r.Name, r.Id)?.Chance).Where(c => c > 0).DefaultIfEmpty(null).Max();
+                        var names = string.Join(", ", from.Take(2)) + (from.Count > 2 ? " and others" : "");
                         sub = $"from {names} · {eligible:N0} kill{(eligible == 1 ? "" : "s")}" + (listed is double lc ? $" · listed {OneIn(lc)}" : "");
                     }
                     else if (tabled.Count == ms.Count && book.SourcesOf(r.Name).Count > 0)
@@ -592,8 +594,18 @@ public partial class MainWindow : Window
     /// <summary>Enemy rows whose loot table is open, by "zone|name"; a click on the row opens or closes it.</summary>
     readonly HashSet<string> _openMobs = new();
 
-    /// <summary>A listed chance as the Odds column reads: 0.2 → "1 in 5".</summary>
-    static string OneIn(double chance) => chance >= 1 ? "every kill" : $"1 in {Math.Max(1, Math.Round(1 / chance)):N0}";
+    /// <summary>A listed chance as the Odds column reads: 0.2 → "1 in 5", or "20%" with the column switched to percentages.</summary>
+    static string OneIn(double chance) => chance >= 1 ? "every kill" : OddsAsPct ? Pct(chance) : $"1 in {Math.Max(1, Math.Round(1 / chance)):N0}";
+
+    /// <summary>True when the Odds column reads as percentages; the header switches it (UserPrefs.OddsAsPercent).</summary>
+    static bool OddsAsPct;
+
+    void ShowOddsHeader()
+    {
+        PctHeader.Text = "ODDS ⇄";   // the column is narrow; the numbers themselves show which way it reads
+        PctHeader.ToolTip = (OddsAsPct ? "Drops per kill as a percentage" : "How many kills one drop takes")
+            + ", counting only kills of enemies that can drop the item. Click to show it as " + (OddsAsPct ? "\"1 in x\"." : "a percentage.");
+    }
 
     // the drops' Market value and how many items carried a price, from the last FillNumbers, for the panel over the game
     long _lastValue; int _lastPriced;
@@ -807,8 +819,8 @@ public partial class MainWindow : Window
     IconSlot Slot(long id) => IconCache.Get(_items.IconUrl(id));
     static string InitialOf(string name) { foreach (var c in name) if (char.IsLetter(c)) return char.ToUpperInvariant(c).ToString(); return "·"; }
 
-    /// <summary>A drop's odds as the site's item page says them: "1 in 6 kills" (here "1 in 6"), or "2.3 a kill" for more than one per kill.</summary>
-    static string Odds(long drops, int kills) => drops <= 0 || kills <= 0 ? "—" : drops >= kills ? $"{drops / (double)kills:0.0} a kill" : $"1 in {Math.Round(kills / (double)drops):0}";
+    /// <summary>A drop's odds as the site's item page says them: "1 in 6 kills" (here "1 in 6", or "17%" with the column switched), or "2.3 a kill" for more than one per kill.</summary>
+    static string Odds(long drops, int kills) => drops <= 0 || kills <= 0 ? "—" : drops >= kills ? $"{drops / (double)kills:0.0} a kill" : OddsAsPct ? Pct(drops / (double)kills) : $"1 in {Math.Round(kills / (double)drops):0}";
 
     /// <summary>
     /// Expeditions and events, one row per place: how many runs, the average time from entering to the last loot, the value
@@ -1165,6 +1177,8 @@ public partial class MainWindow : Window
                 e.SetTarget("Abyss Drakan Striker", t.AddMinutes(-5)); Kills(15, 3500);   // the bar went quiet: nobody's
                 Drop("Thick hide", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Manastone", 8); Drop("Aether shard", 7); Drop("Enchantment stone", 3); Drop("Greater manastone", 1);
                 Drop("Orichalcum Ore", 6); Drop("Sapphire Gemstone", 1);
+                // on both Drakans' tables: their odds pool the kills of the two
+                Drop("Soft Balaur Meat", 3); Drop("Refining Stone", 4);
                 Pet("Natura", 3);
                 // 0.7: the balance counter, a few crafts and a sale, so the extra line shows in layout renders
                 e.SetBalance(1_204_300); e.SetBalance(1_784_900);

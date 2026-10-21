@@ -505,6 +505,8 @@ public sealed class UserPrefs
     public bool PetsOpen { get; set; }
     /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
     public bool AllZones { get; set; }
+    /// <summary>The Odds column as a percentage ("4.9%") instead of "1 in 21"; a click on its header switches.</summary>
+    public bool OddsAsPercent { get; set; }
     /// <summary>Which part of the window shows: "Farming" (the run, the stats, the tables) or "Crafting" (recipes, cost, success, profit).</summary>
     public string Part { get; set; } = "Farming";
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>

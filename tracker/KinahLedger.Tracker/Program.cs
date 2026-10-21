@@ -791,6 +791,19 @@ options: --process aion[,other]");
             var lb = LootBook.Current;
             Check("leather from a Stonebeak, never from a rock", $"{lb.CanDrop("Stonebeak", "Raw Leather")} {lb.CanDrop("Hard Kalgolem", "Raw Leather")} {lb.CanDrop("Highland Karnif", "Raw Leather")?.ToString() ?? "unknown"}", "True False unknown");
             Check("who drops Raw Leather", string.Join(",", lb.SourcesOf("raw leather")), "Stonebeak");
+            {
+                // odds pool every enemy that can drop the item: two tables listing meat both count, a rock doesn't, an enemy with
+                // no table counts once it dropped it; the listed chance is weighted by kills (100 × 5% + 50 × 20%) / 150 = 10%
+                var mb = LootBook.FromJson("""
+                    {"tables": {
+                      "Coradon": {"drops": [{"item": "Fresh Raw Meat", "chance": 0.05}]},
+                      "Karnif": {"drops": [{"item": "Fresh Raw Meat", "chance": 0.2}]},
+                      "Hard Kalgolem": {"drops": [{"item": "Lesser Abyssal Manastone", "chance": 0.1}]}
+                    }}
+                    """);
+                var (pk, pf, pl) = mb.Pool(new[] { ("Coradon", 100, false), ("Karnif", 50, true), ("Hard Kalgolem", 80, false), ("Tog", 30, true), ("Ursus", 40, false) }, "Fresh Raw Meat");
+                Check("odds: every enemy that can drop it, pooled", $"{pk} kills from {string.Join(",", pf)}, listed {pl:0.###}", "180 kills from Coradon,Karnif,Tog, listed 0.1");
+            }
             var le = new SessionEngine(items); var l0 = DateTime.UtcNow;
             le.SetZone("Eastern Altamia Highland");
             le.SetTarget("Stonebeak", l0); le.SetTarget("Hard Kalgolem", l0.AddSeconds(1));   // two on the player; the bar shows the rock last

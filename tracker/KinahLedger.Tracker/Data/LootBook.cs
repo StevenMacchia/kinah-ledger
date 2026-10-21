@@ -81,6 +81,20 @@ public sealed class LootBook
     /// <summary>Whether an enemy can drop the item. Null when the book has no table for it (unknown, so not a no).</summary>
     public bool? CanDrop(string enemy, string itemName, long itemId = 0) => Knows(enemy) ? Find(enemy, itemName, itemId) != null : null;
 
+    /// <summary>
+    /// The kills an item's odds are counted against, pooled over every enemy fought that can drop it: each one whose table
+    /// lists it (two enemies that both drop Fresh Raw Meat both count), and each one with no table yet that dropped it for
+    /// you. Listed is what the tables expect for that mix: each listed chance weighted by how many of that enemy you killed.
+    /// </summary>
+    public (int Kills, List<string> From, double? Listed) Pool(IEnumerable<(string Name, int Kills, bool Dropped)> fought, string itemName, long itemId = 0)
+    {
+        var from = fought.Where(m => CanDrop(m.Name, itemName, itemId) == true || (!Knows(m.Name) && m.Dropped)).ToList();
+        var listed = from.Select(m => (m.Kills, Chance: Find(m.Name, itemName, itemId)?.Chance)).Where(x => x.Chance > 0 && x.Kills > 0).ToList();
+        int lk = listed.Sum(x => x.Kills);
+        return (from.Sum(m => m.Kills), from.OrderByDescending(m => m.Kills).Select(m => m.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                lk > 0 ? listed.Sum(x => x.Kills * x.Chance!.Value) / lk : null);
+    }
+
     /// <summary>Every enemy whose table lists the item.</summary>
     public IReadOnlyList<string> SourcesOf(string itemName) => _sourcesByItem.TryGetValue(Norm(itemName), out var s) ? s : Array.Empty<string>();
 }

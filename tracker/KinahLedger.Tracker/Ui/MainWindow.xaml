@@ -265,7 +265,7 @@
                   <TextBlock x:Name="DropsTitle" Style="{StaticResource Th}" Text="LOOT FROM KILLS" Margin="0" HorizontalAlignment="Left"/>
                 </StackPanel>
                 <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="QTY"/>
-                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource Th}" Text="ODDS" ToolTip="How many kills one drop takes, as the site shows it: drops divided by kills. Kills are counted from Kinah or Soul Point pickups (one per mob), or from kill lines when the chat shows them."/>
+                <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource Th}" Text="ODDS" Background="Transparent" Cursor="Hand" ToolTip="How many kills one drop takes, counting only kills of enemies that can drop the item. Click to show it as a percentage."/>
                 <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR"/>
                 <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="PRICE" ToolTip="The lowest Market price on your server for one: what you and other players saw on the Market, with the site's price board filling in. A dash means no price is known yet."/>
                 <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="VALUE" Margin="0,0,20,0" ToolTip="Quantity times price, before the Market's fee and tax. Bound items can't be sold and have no value here."/>
