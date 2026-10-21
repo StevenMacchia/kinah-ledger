@@ -47,7 +47,7 @@ public sealed class HudWindow : Window
         finally { if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Show); } catch (Exception) { /* closing */ } } }
     }
 
-    static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x87, 0x97, 0xAE));
+    static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x7D, 0x84, 0xA8));
 
     public HudWindow()
     {
@@ -72,20 +72,20 @@ public sealed class HudWindow : Window
 
         // the recording dot and the farming clock
         var clock = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 22, 0) };
-        clock.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x5A, 0x5A)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) });
+        clock.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x5E)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) });
         _time.FontFamily = new FontFamily("Cascadia Mono, Consolas"); _time.FontSize = 14; _time.Foreground = new SolidColorBrush(Color.FromRgb(0xE9, 0xEF, 0xF7)); _time.VerticalAlignment = VerticalAlignment.Center;
         clock.Children.Add(_time);
         Grid.SetColumn(clock, 0); row.Children.Add(clock);
 
-        Cell(row, 1, _kinah, "Kinah/hr", Color.FromRgb(0xF1, 0xD0, 0x8C), HorizontalAlignment.Left);
-        Cell(row, 2, _value, "drops value/hr", Color.FromRgb(0xC5, 0xBB, 0xFF), HorizontalAlignment.Center);
-        Cell(row, 3, _total, "total value", Color.FromRgb(0x4E, 0xD0, 0x8C), HorizontalAlignment.Right);
+        Cell(row, 1, _kinah, "Kinah / hr", Color.FromRgb(0xF8, 0xD5, 0x98), HorizontalAlignment.Left);
+        Cell(row, 2, _value, "loot / hr", Color.FromRgb(0xEE, 0xEC, 0xF6), HorizontalAlignment.Center);
+        Cell(row, 3, _total, "total value", Color.FromRgb(0x5E, 0xD8, 0xCB), HorizontalAlignment.Right);
 
         Content = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xEB, 0x07, 0x0D, 0x18)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x73, 0x4C, 0xC3, 0xF5)),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 9, 18, 9),
+            Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0A, 0x0C, 0x18)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x32, 0x3A, 0x66)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 10, 20, 10),
             MinWidth = 520,
             Child = row
         };
@@ -97,7 +97,7 @@ public sealed class HudWindow : Window
     static void Cell(Grid row, int col, TextBlock number, string label, Color color, HorizontalAlignment align)
     {
         var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = align, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, col < 3 ? 18 : 0, 0) };
-        number.FontSize = 15; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
+        number.FontSize = 16; number.FontWeight = FontWeights.SemiBold; number.Foreground = new SolidColorBrush(color);
         number.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"); number.VerticalAlignment = VerticalAlignment.Bottom;
         line.Children.Add(number);
         line.Children.Add(new TextBlock { Text = label, FontSize = 12.5, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, 1) });

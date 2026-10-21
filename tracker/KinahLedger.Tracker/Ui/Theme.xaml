@@ -1,42 +1,48 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- Atreia at night: the same palette as the website -->
-  <SolidColorBrush x:Key="Bg" Color="#0A0F18"/>
-  <SolidColorBrush x:Key="Card" Color="#111A28"/>
-  <SolidColorBrush x:Key="Card2" Color="#162236"/>
-  <SolidColorBrush x:Key="Line" Color="#232F45"/>
-  <SolidColorBrush x:Key="LineStrong" Color="#3A4E70"/>
-  <SolidColorBrush x:Key="Ink" Color="#E9EFF7"/>
-  <SolidColorBrush x:Key="Muted" Color="#93A3B8"/>
-  <SolidColorBrush x:Key="Faint" Color="#62718A"/>
-  <SolidColorBrush x:Key="Gold" Color="#F1D08C"/>
-  <SolidColorBrush x:Key="Violet" Color="#C5BBFF"/>
-  <SolidColorBrush x:Key="Mint" Color="#9BE8D3"/>
-  <SolidColorBrush x:Key="Accent" Color="#4CC3F5"/>
-  <SolidColorBrush x:Key="AccentDim" Color="#163650"/>
-  <SolidColorBrush x:Key="Good" Color="#4ED08C"/>
-  <SolidColorBrush x:Key="Warn" Color="#F4A65A"/>
-  <SolidColorBrush x:Key="Bad" Color="#FF7B6B"/>
+  <!-- the site redesign's palette, "an atlas at night": indigo night, Kinah gold, aether teal -->
+  <SolidColorBrush x:Key="Bg" Color="#090B15"/>
+  <SolidColorBrush x:Key="Card" Color="#12162D"/>
+  <SolidColorBrush x:Key="Card2" Color="#171C38"/>
+  <SolidColorBrush x:Key="Line" Color="#22284A"/>
+  <SolidColorBrush x:Key="LineStrong" Color="#323A66"/>
+  <SolidColorBrush x:Key="Ink" Color="#EEECF6"/>
+  <SolidColorBrush x:Key="Muted" Color="#B3B7D3"/>
+  <SolidColorBrush x:Key="Faint" Color="#7D84A8"/>
+  <SolidColorBrush x:Key="Gold" Color="#F8D598"/>
+  <SolidColorBrush x:Key="Violet" Color="#B48BFF"/>
+  <SolidColorBrush x:Key="Mint" Color="#5ED8CB"/>
+  <SolidColorBrush x:Key="Accent" Color="#5ED8CB"/>
+  <SolidColorBrush x:Key="AccentDim" Color="#11303A"/>
+  <SolidColorBrush x:Key="Good" Color="#62D98B"/>
+  <SolidColorBrush x:Key="Warn" Color="#F2A35E"/>
+  <SolidColorBrush x:Key="Bad" Color="#FF8A7A"/>
+  <SolidColorBrush x:Key="Slot" Color="#0B0E1E"/>
   <LinearGradientBrush x:Key="BtnPrimary" StartPoint="0,0" EndPoint="0,1">
-    <GradientStop Color="#3C90E8" Offset="0"/><GradientStop Color="#2766B8" Offset="1"/>
+    <GradientStop Color="#F8D598" Offset="0"/><GradientStop Color="#EBAE4C" Offset="0.55"/><GradientStop Color="#D9952F" Offset="1"/>
   </LinearGradientBrush>
   <LinearGradientBrush x:Key="BtnPrimaryHover" StartPoint="0,0" EndPoint="0,1">
-    <GradientStop Color="#4C9FF4" Offset="0"/><GradientStop Color="#2F74CC" Offset="1"/>
+    <GradientStop Color="#FBE0AE" Offset="0"/><GradientStop Color="#F0BA5E" Offset="0.55"/><GradientStop Color="#E0A03C" Offset="1"/>
   </LinearGradientBrush>
   <!-- rows and marks that used to be hard-coded; a skin overrides these too -->
-  <SolidColorBrush x:Key="RowHead" Color="#101826"/>
-  <SolidColorBrush x:Key="RowHover" Color="#121C2E"/>
-  <SolidColorBrush x:Key="Mark" Color="#1A2740"/>
+  <SolidColorBrush x:Key="RowHead" Color="#0E1124"/>
+  <SolidColorBrush x:Key="RowHover" Color="#171C38"/>
+  <SolidColorBrush x:Key="Mark" Color="#1A1F3D"/>
   <LinearGradientBrush x:Key="BtnStop" StartPoint="0,0" EndPoint="0,1">
-    <GradientStop Color="#C44E4E" Offset="0"/><GradientStop Color="#8E3434" Offset="1"/>
+    <GradientStop Color="#F8D598" Offset="0"/><GradientStop Color="#EBAE4C" Offset="0.55"/><GradientStop Color="#D9952F" Offset="1"/>
   </LinearGradientBrush>
+  <!-- the redesign's type: Unbounded for headings and big figures, Figtree for text. Until those two ship inside the
+       exe, the nearest Windows faces stand in -->
+  <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
+  <FontFamily x:Key="BodyFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+  <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 
   <Style x:Key="CardStyle" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource Card}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="CornerRadius" Value="18"/>
   </Style>
 
   <Style x:Key="LabelStyle" TargetType="TextBlock">
@@ -82,7 +88,7 @@
   </Style>
 
   <Style x:Key="LinkStyle" TargetType="Hyperlink">
-    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Gold}"/>
     <Setter Property="TextDecorations" Value="{x:Null}"/>
     <Style.Triggers>
       <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
@@ -102,13 +108,13 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="b" Property="Background" Value="#1E2D45"/>
-              <Setter TargetName="b" Property="BorderBrush" Value="#4C6690"/>
+              <Setter TargetName="b" Property="Background" Value="#1D2346"/>
+              <Setter TargetName="b" Property="BorderBrush" Value="#4A548F"/>
             </Trigger>
             <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.85"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
@@ -120,13 +126,14 @@
 
   <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Background" Value="{DynamicResource BtnPrimary}"/>
-    <Setter Property="BorderBrush" Value="#4C9BEF"/>
-    <Setter Property="Foreground" Value="White"/>
-    <Setter Property="FontSize" Value="14.5"/>
+    <Setter Property="BorderBrush" Value="#F6CB7C"/>
+    <Setter Property="Foreground" Value="#261702"/>
+    <Setter Property="FontSize" Value="15"/>
+    <Setter Property="FontWeight" Value="Bold"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="{TemplateBinding Padding}">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
@@ -137,6 +144,29 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+  </Style>
+
+  <!-- the Farming / Crafting switch: two pills in one group, the chosen one gold -->
+  <Style x:Key="SegOff" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+    <Setter Property="Height" Value="30"/>
+    <Setter Property="Padding" Value="14,0"/>
+    <Setter Property="FontSize" Value="13.5"/>
+  </Style>
+  <Style x:Key="SegOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
+    <Setter Property="Background" Value="#24EBAE4C"/>
+    <Setter Property="Foreground" Value="{DynamicResource Gold}"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+  </Style>
+  <!-- a small rounded label: "this run · this zone", "best guess" -->
+  <Style x:Key="Chip" TargetType="Border">
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Padding" Value="10,3"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Background" Value="#1A5ED8CB"/>
+    <Setter Property="BorderBrush" Value="#735ED8CB"/>
   </Style>
 
   <!-- check boxes -->

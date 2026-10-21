@@ -245,7 +245,7 @@ public partial class MainWindow : Window
             }
             var (region, note) = await Task.Run(() => ChatLocator.DetectAsync(game.Value));
             var (zone, _) = await Task.Run(() => ZoneLocator.DetectAsync(game.Value));
-            ZoneLbl.Text = "Zone: " + (zone ?? "not read yet");
+            ZoneLbl.Text = zone ?? "Zone not read yet";
             var g = game.Value;
             var marks = region != null ? new[] { (region.Value, TrackerSession.ChatColor), (ZoneLocator.Strip(g), TrackerSession.ZoneColor) } : new[] { (ZoneLocator.Strip(g), TrackerSession.ZoneColor) };
             SetPreview(await Task.Run(() => ScreenReader.Frame(g, 480, marks)));
@@ -312,7 +312,7 @@ public partial class MainWindow : Window
             UpdateStep2();
             var farm = _watcher.StartFarm(ActivityName());
             _lastRun = null;
-            ZoneLbl.Text = "Zone: " + (chat.Zone ?? "not read yet");
+            ZoneLbl.Text = chat.Zone ?? "Zone not read yet";
             EnsureHud();
             _tableWhat = ViewTitle();
             Redraw();
@@ -360,10 +360,9 @@ public partial class MainWindow : Window
 
     void SetTrackingUi(bool on)
     {
-        StartBtn.Content = on ? "Stop" : "Start farming";
+        StartBtn.Content = on ? "Stop run" : "Start farming";
+        RecDot.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         StartBtn.IsEnabled = on || HasServer;
-        StartBtn.Background = B(on ? "BtnStop" : "BtnPrimary");
-        StartBtn.BorderBrush = on ? new SolidColorBrush(Color.FromRgb(0xD9, 0x5E, 0x5E)) : new SolidColorBrush(Color.FromRgb(0x4C, 0x9B, 0xEF));
         _trayToggle.Text = on ? "Stop farming" : "Start farming";
         Kind.IsEnabled = !on;
         _tray.Text = on ? "Kinah Ledger · farming" : "Kinah Ledger";
@@ -387,7 +386,8 @@ public partial class MainWindow : Window
             if (show != _lastRun) _tableWhat = ViewTitle();
             FillNumbers(show, show.Active);
         }
-        ZoneLbl.Text = "Zone: " + (chat?.Zone ?? (_watcher.GameRect == null ? "waiting for the game" : "not read yet, trying every 5 s"));
+        // the zone is the run card's title, as the site's "best place" card names its zone
+        ZoneLbl.Text = chat?.Zone ?? (_watcher.GameRect == null ? "Waiting for the game" : "Zone not read yet");
         // with no zone on the list, what the minimap corner said, so a zone the list doesn't have yet can be named and added
         ZoneLbl.ToolTip = chat?.Zone == null && chat?.ZoneNote is { Length: > 0 } zn ? zn + "\n\nA zone has to be on the tracker's zone list to count. Send the name shown here to have it added." : null;
         if (DateTime.UtcNow < _statusHoldUntil) { /* a stopped run's result is still showing */ }
@@ -468,7 +468,7 @@ public partial class MainWindow : Window
                 // under the name, what kind of item it is, as the site shows it ("Drop" when the item list has no category)
                 var cat = _items.Get(r.Id)?.Category is { Length: > 0 } c ? c : "Drop";
                 var sub = r.Count == 0 ? cat + " · bound" : r.Bound > 0 ? $"{cat} · {r.Bound} bound" : cat;
-                drops.Add(new DropRow(r.Name, total.ToString("N0"), kills > 0 ? Pct(total / (double)kills) : "—", Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceText(r.Name), Value: rowValue, Sub: sub));
+                drops.Add(new DropRow(r.Name, total.ToString("N0"), Odds(total, kills), Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceText(r.Name), Value: rowValue, Sub: sub));
             }
         }
         // Soul Crystals come from kills too, so they sit under Drops, in their own section: never mixed into the item rows or the drop count
@@ -602,8 +602,8 @@ public partial class MainWindow : Window
         bool craft = _part == "Crafting";
         SessionCard.Visibility = Tiles.Visibility = TablesCard.Visibility = craft ? Visibility.Collapsed : Visibility.Visible;
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
-        FarmTab.Style = (Style)FindResource(craft ? typeof(System.Windows.Controls.Button) : "PrimaryButton");
-        CraftTab.Style = (Style)FindResource(craft ? "PrimaryButton" : typeof(System.Windows.Controls.Button));
+        FarmTab.Style = (Style)FindResource(craft ? "SegOff" : "SegOn");
+        CraftTab.Style = (Style)FindResource(craft ? "SegOn" : "SegOff");
         if (remember && !_demo) { _prefs.Part = _part; _prefs.Save(); }
         if (craft && !_demo) FillCraft(_watcher.Chat?.CraftView);
     }
@@ -700,6 +700,9 @@ public partial class MainWindow : Window
     /// <summary>The icon slot for an item: cached or fetched by the cache, a lettered tile until then.</summary>
     IconSlot Slot(long id) => IconCache.Get(_items.IconUrl(id));
     static string InitialOf(string name) { foreach (var c in name) if (char.IsLetter(c)) return char.ToUpperInvariant(c).ToString(); return "·"; }
+
+    /// <summary>A drop's odds as the site's item page says them: "1 in 6 kills" (here "1 in 6"), or "2.3 a kill" for more than one per kill.</summary>
+    static string Odds(long drops, int kills) => drops <= 0 || kills <= 0 ? "—" : drops >= kills ? $"{drops / (double)kills:0.0} a kill" : $"1 in {Math.Round(kills / (double)drops):0}";
 
     /// <summary>"42:17" under an hour, "1:42:17" past it, as the site's timer shows it.</summary>
     static string Clock(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
@@ -940,7 +943,7 @@ public partial class MainWindow : Window
         _demo = true;
         bool market = kind == "Market";
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false; UpdateStep2();
-        ZoneLbl.Text = "Zone: Western Cantas Valley";
+        ZoneLbl.Text = "Western Cantas Valley";
         RegionBox.SelectedItem = Servers.Region("na_e"); FillServers(); ServerPick.SelectedItem = Servers.Find("na_e", "Siel (Elyos)");
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         if (kind == "Crafting")

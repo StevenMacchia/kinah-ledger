@@ -14,7 +14,7 @@ public static class Skins
 
     public static readonly Skin[] All =
     {
-        new("night", "Night", true, "the site's palette: deep blue, gold and mint"),
+        new("night", "Night", true, "the site's palette: indigo night, Kinah gold and aether teal"),
         new("abyss", "Abyss", true, "violet and teal on near-black"),
         new("daylight", "Daylight", false, "light, for a bright room"),
     };
@@ -56,7 +56,7 @@ public static class Skins
                 S("Ink", "#EEEAFF"); S("Muted", "#A99FC9"); S("Faint", "#6F668F");
                 S("Gold", "#F2C97D"); S("Violet", "#D2B8FF"); S("Mint", "#8EE3D6"); S("Accent", "#9F7BFF"); S("AccentDim", "#2A1F4F");
                 S("Good", "#58D39A"); S("Warn", "#F3A65B"); S("Bad", "#FF7A86");
-                S("RowHead", "#19162D"); S("RowHover", "#1F1B38"); S("Mark", "#1C2740");
+                S("RowHead", "#19162D"); S("RowHover", "#1F1B38"); S("Mark", "#1C2740"); S("Slot", "#100E1E");
                 G("BtnPrimary", "#7E5BEF", "#5A3DC2"); G("BtnPrimaryHover", "#8F6EFF", "#6648D6"); G("BtnStop", "#C44E4E", "#8E3434");
                 break;
             case "daylight":
@@ -64,16 +64,16 @@ public static class Skins
                 S("Ink", "#14202F"); S("Muted", "#5B6B82"); S("Faint", "#8593A8");
                 S("Gold", "#9A6B10"); S("Violet", "#5C46C9"); S("Mint", "#1F8A6B"); S("Accent", "#1F8FCB"); S("AccentDim", "#D7ECF8");
                 S("Good", "#1E8E57"); S("Warn", "#B86A14"); S("Bad", "#C2463A");
-                S("RowHead", "#E8EDF4"); S("RowHover", "#F2F5F9"); S("Mark", "#E3EBF5");
+                S("RowHead", "#E8EDF4"); S("RowHover", "#F2F5F9"); S("Mark", "#E3EBF5"); S("Slot", "#E9EEF5");
                 G("BtnPrimary", "#3C90E8", "#2766B8"); G("BtnPrimaryHover", "#4C9FF4", "#2F74CC"); G("BtnStop", "#D45A5A", "#A33C3C");
                 break;
             default:   // night: the base theme's own values, listed so a switch back is complete
-                S("Bg", "#0A0F18"); S("Card", "#111A28"); S("Card2", "#162236"); S("Line", "#232F45"); S("LineStrong", "#3A4E70");
-                S("Ink", "#E9EFF7"); S("Muted", "#93A3B8"); S("Faint", "#62718A");
-                S("Gold", "#F1D08C"); S("Violet", "#C5BBFF"); S("Mint", "#9BE8D3"); S("Accent", "#4CC3F5"); S("AccentDim", "#163650");
-                S("Good", "#4ED08C"); S("Warn", "#F4A65A"); S("Bad", "#FF7B6B");
-                S("RowHead", "#101826"); S("RowHover", "#121C2E"); S("Mark", "#1A2740");
-                G("BtnPrimary", "#3C90E8", "#2766B8"); G("BtnPrimaryHover", "#4C9FF4", "#2F74CC"); G("BtnStop", "#C44E4E", "#8E3434");
+                S("Bg", "#090B15"); S("Card", "#12162D"); S("Card2", "#171C38"); S("Line", "#22284A"); S("LineStrong", "#323A66");
+                S("Ink", "#EEECF6"); S("Muted", "#B3B7D3"); S("Faint", "#7D84A8");
+                S("Gold", "#F8D598"); S("Violet", "#B48BFF"); S("Mint", "#5ED8CB"); S("Accent", "#5ED8CB"); S("AccentDim", "#11303A");
+                S("Good", "#62D98B"); S("Warn", "#F2A35E"); S("Bad", "#FF8A7A"); S("Slot", "#0B0E1E");
+                S("RowHead", "#0E1124"); S("RowHover", "#171C38"); S("Mark", "#1A1F3D");
+                G("BtnPrimary", "#F8D598", "#D9952F"); G("BtnPrimaryHover", "#FBE0AE", "#E0A03C"); G("BtnStop", "#F8D598", "#D9952F");
                 break;
         }
         return d;
