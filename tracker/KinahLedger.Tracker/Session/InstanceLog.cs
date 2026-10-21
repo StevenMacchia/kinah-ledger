@@ -32,6 +32,8 @@ public sealed class InstanceLog
 {
     readonly object _lock = new();
     readonly List<InstanceRun> _done = new();
+    /// <summary>Runs closed since this reader started that haven't gone to the site yet.</summary>
+    readonly List<InstanceRun> _unshared = new();
     InstanceRun? _cur;
     static string PathOf => System.IO.Path.Combine(System.IO.Path.GetDirectoryName(CrashLog.ReadsPath)!, "instances.jsonl");
 
@@ -85,6 +87,7 @@ public sealed class InstanceLog
         if (_cur?.LastLoot != null)
         {
             _done.Add(_cur);
+            _unshared.Add(_cur);
             try { File.AppendAllText(PathOf, JsonSerializer.Serialize(_cur) + "\n"); } catch (Exception) { /* a read-only profile keeps it for this session */ }
             CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run done: {_cur.Zone}, {TimeSpan.FromSeconds(_cur.Seconds):m\\:ss}, {_cur.Kinah:N0} Kinah, {_cur.Items.Values.Sum()} items");
         }
@@ -103,6 +106,28 @@ public sealed class InstanceLog
     }
 
     public string? Open { get { lock (_lock) return _cur?.Zone; } }
+
+    /// <summary>
+    /// The runs to share with a run or a chunk that started at <paramref name="since"/>: those closed since the last share
+    /// whose last loot came after it, or up to 20 minutes before it (a run that ends just before a chunk rolls over is
+    /// closed by the next zone read and goes with the next chunk). Each run is handed over once: a farming run and the
+    /// always-on chunk both share, and the site counts a run with whichever goes first. Older ones are let go.
+    /// </summary>
+    public List<InstanceRun> TakeUnshared(DateTime since)
+    {
+        lock (_lock)
+        {
+            var take = _unshared.Where(r => r.LastLoot is { } l && l >= since.AddMinutes(-20)).ToList();
+            _unshared.Clear();
+            return take;
+        }
+    }
+
+    /// <summary>Puts runs back after a send that didn't reach the site, so the next share takes them.</summary>
+    public void Restore(IEnumerable<InstanceRun> runs)
+    {
+        lock (_lock) _unshared.InsertRange(0, runs.Where(r => !_unshared.Contains(r)));
+    }
 
     void Load()
     {

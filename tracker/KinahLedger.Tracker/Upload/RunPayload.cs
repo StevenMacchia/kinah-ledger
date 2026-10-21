@@ -38,7 +38,8 @@ public static class InstallId
 /// Exactly what leaves the PC when a run is shared: the server it was played on (as chosen in the window, so the site
 /// can keep drops per server) and the totals the public tables need. No character name, account, class, level,
 /// chat text or screenshots. Since 0.7: the change in the Kinah balance over the run (rounded, never the balance
-/// itself) and craft and enchant outcome counts.
+/// itself) and craft and enchant outcome counts. Since 0.7.2: the expedition and event runs that finished meanwhile
+/// (area, length, Kinah, kills, tradeable items), each sent once.
 /// </summary>
 public sealed record RunPayload(
     string app,
@@ -60,7 +61,8 @@ public sealed record RunPayload(
     string install,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? kinah_net = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] OddsPayload? odds = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<MobRun>? mobs = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<MobRun>? mobs = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<InstanceRunPayload>? instance_runs = null)
 {
     public static string AppVersion => typeof(RunPayload).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
 
@@ -71,7 +73,8 @@ public sealed record RunPayload(
 
     /// <param name="region">The chosen server's region key ("na_e"); the settings' region when none was chosen.</param>
     /// <param name="server">The chosen server's label ("Siel (Elyos)"); empty files the run under the region alone.</param>
-    public static RunPayload Build(SessionEngine s, Settings cfg, string kind, string activity, string region, string server, ItemDictionary? dict = null)
+    /// <param name="instances">Expedition and event runs that finished while this run or chunk counted (InstanceLog.TakeUnshared).</param>
+    public static RunPayload Build(SessionEngine s, Settings cfg, string kind, string activity, string region, string server, ItemDictionary? dict = null, IEnumerable<InstanceRun>? instances = null)
     {
         var zones = Shareable(s.ZoneSnapshot());
         var main = zones.Where(kv => kv.Key != SessionEngine.UnknownZone).OrderByDescending(kv => kv.Value.Seconds).Select(kv => kv.Key).FirstOrDefault();
@@ -101,7 +104,8 @@ public sealed record RunPayload(
             InstallId.Get(),
             net,
             OddsPayload.From(s),
-            MobRun.From(s, Key));
+            MobRun.From(s, Key),
+            InstanceRunPayload.From(instances, Key));
     }
 
     /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>
@@ -166,6 +170,33 @@ public sealed record MobRun(string name, string zone, int kills, long kinah, Dic
                 var d = new Dictionary<string, int>();
                 foreach (var (id, n) in m.Drops) { var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
                 return new MobRun(m.Name, m.Zone, m.Kills, m.Kinah, d, m.Crystals);
+            }).ToList();
+        return list.Count > 0 ? list : null;
+    }
+}
+
+/// <summary>
+/// One trip into an expedition or event area, entry to the last loot: how long it took, the Kinah, the kills and the
+/// tradeable items. Only areas on the instance list (data/instances.txt) are sent; nothing else about the run or the player.
+/// The site shows these per run and per hour inside runs.
+/// </summary>
+public sealed record InstanceRunPayload(string zone, string kind, int seconds, long kinah, int kills, Dictionary<string, int> items)
+{
+    /// <summary>Most runs per payload, and the longest run, as the site accepts them.</summary>
+    public const int MaxRuns = 50;
+    public const int MaxSeconds = 4 * 3600;
+
+    public static List<InstanceRunPayload>? From(IEnumerable<InstanceRun>? runs, Func<long, string> key)
+    {
+        if (runs == null) return null;
+        var list = runs
+            .Where(r => r.LastLoot != null && KinahLedger.Ocr.ZoneLocator.KindOf(r.Zone) != null && r.Seconds >= 1 && r.Seconds <= MaxSeconds)
+            .OrderByDescending(r => r.Start).Take(MaxRuns)
+            .Select(r =>
+            {
+                var d = new Dictionary<string, int>();
+                foreach (var (id, n) in r.Items) { var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
+                return new InstanceRunPayload(r.Zone, KinahLedger.Ocr.ZoneLocator.KindOf(r.Zone)!, (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d);
             }).ToList();
         return list.Count > 0 ? list : null;
     }

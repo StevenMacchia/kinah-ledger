@@ -411,9 +411,19 @@ public sealed class TrackerSession
 
     public Task<bool> UploadAsync(Settings s) => UploadAsync(s, Engine, Kind, Activity);
 
-    /// <summary>Shares one engine's totals (a farming run, or a chunk of the always-on count) under the given kind. Under five minutes or empty: nothing is sent.</summary>
-    public Task<bool> UploadAsync(Settings s, SessionEngine e, string kind, string activity) =>
-        e.Elapsed.TotalMinutes >= 5 && e.Events > 0 ? Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items), s.Upload) : Task.FromResult(false);
+    /// <summary>
+    /// Shares one engine's totals (a farming run, or a chunk of the always-on count) under the given kind, with the
+    /// expedition and event runs that finished meanwhile. Under five minutes or empty: nothing is sent. A send that
+    /// doesn't reach the site puts the runs back for the next one; with sharing off they are let go, never sent later.
+    /// </summary>
+    public async Task<bool> UploadAsync(Settings s, SessionEngine e, string kind, string activity)
+    {
+        if (e.Elapsed.TotalMinutes < 5 || e.Events == 0) return false;
+        var runs = Instances.TakeUnshared(e.Started);
+        bool ok = await Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, runs), s.Upload);
+        if (!ok && s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint)) Instances.Restore(runs);
+        return ok;
+    }
 }
 
 /// <summary>What the window remembers between runs, kept per user.</summary>

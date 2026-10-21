@@ -605,6 +605,30 @@ options: --process aion[,other]");
                 var none = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Start = b0 };
                 Check("a run with no loot has no length", none.Seconds.ToString("0"), "0");
             }
+            {
+                // instance runs ride along with a run: listed areas only, items keyed like the rest of the payload
+                var a = new InstanceRun { Zone = "Auldor's Sanctum", Kind = "Expedition", Start = b0, LastLoot = b0.AddSeconds(545), Kinah = 120_000, Kills = 31 };
+                a.Items[hide] = 2;
+                var off = new InstanceRun { Zone = "Eastern Cantas Valley", Kind = "Expedition", Start = b0, LastLoot = b0.AddMinutes(5), Kinah = 9 };
+                var open = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Start = b0 };
+                var ip = RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items, new[] { a, off, open });
+                Check("instance runs: listed areas with loot only, keyed like the rest", string.Join(" | ", (ip.instance_runs ?? new()).Select(r => $"{r.zone}/{r.kind}/{r.seconds}/{r.kinah}/{r.kills}/{string.Join(",", r.items.Select(kv => $"{(long.TryParse(kv.Key, out var iid) ? items.NameOf(iid) : kv.Key)}={kv.Value}"))}")), $"Auldor's Sanctum/Expedition/545/120000/31/{items.NameOf(hide)}=2");
+                Check("instance runs: none, no field sent", System.Text.Json.JsonSerializer.Serialize(zp).Contains("instance_runs") ? "sent" : "absent", "absent");
+                var json = System.Text.Json.JsonSerializer.Serialize(ip);
+                Check("instance runs: only the run's own figures leave the PC", json.Contains("\"kind\":\"Expedition\",\"seconds\":545,\"kinah\":120000,\"kills\":31,\"items\":{") ? "yes" : json[json.IndexOf("instance_runs", StringComparison.Ordinal)..], "yes");
+                // each finished run is handed over once (the farming run and the chunk both share), back after a failed send, let go when old
+                var log = new InstanceLog();
+                log.Zone("Auldor's Sanctum", b0);
+                log.Loot(new KinahChanged(b0.AddMinutes(3), 50_000, false));
+                log.Zone("Eastern Cantas Valley", b0.AddMinutes(4));
+                var first = log.TakeUnshared(b0); var second = log.TakeUnshared(b0);
+                log.Restore(first); var third = log.TakeUnshared(b0);
+                log.Restore(third); var stale = log.TakeUnshared(b0.AddHours(1));
+                Check("instance runs: handed over once, back after a failed send, let go when old", $"{first.Count}/{second.Count}/{third.Count}/{stale.Count}", "1/0/1/0");
+                log.Zone("Shugo Festival", b0.AddMinutes(10));
+                log.Loot(new KinahChanged(b0.AddMinutes(12), 40_000, false));
+                Check("instance runs: a run still open isn't handed over", log.TakeUnshared(b0).Count.ToString(), "0");
+            }
             Check("player chat is not loot-shaped", Reread.LooksLikeLoot("[Drogo] bro i live between 1984 and 2008") ? "yes" : "no", "no");
         }
         Check("target bar: a garbled read keeps the enemy on the bar", TargetReader.Close("Hgrcl Kalgolem", "Hard Kalgolem") ? "yes" : "no", "yes");
