@@ -123,8 +123,13 @@
     <!-- the ledger: always the same width, wherever the settings are -->
     <!-- never taller than the screen (Steven, 0.7.6): the header, the run card and the summary stay put; the pickups and
          the tables scroll below them once the window would run past the screen (Window.MaxHeight is the work area) -->
-    <DockPanel x:Name="LedgerCol" Width="662" VerticalAlignment="Top" LastChildFill="True">
-    <StackPanel DockPanel.Dock="Top">
+    <!-- 0.7.6 (Steven): Compact (the default) is the run card and the summary; Full view doubles the width and puts every
+         table in a second column beside them. Never taller than the screen: the tables' column scrolls past it. -->
+    <Grid x:Name="LedgerCol" VerticalAlignment="Top">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition x:Name="LeftColDef" Width="662"/><ColumnDefinition x:Name="RightColDef" Width="0"/></Grid.ColumnDefinitions>
+    <!-- across both columns; its width is set with the view (ApplyView) so long text never widens the window -->
+    <StackPanel x:Name="HeadStack" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left">
 
       <!-- header: the gold mark and the name, the Farming / Crafting switch, the project page and Settings -->
       <Grid>
@@ -150,6 +155,14 @@
         <!-- the site and Options: everything that can be set is in the Options window, so the ledger never moves -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="SiteBtn" Content="kinahledger.com" Height="32" Padding="12,0" FontSize="12.5" Margin="0,0,8,0" ToolTip="Open the website: community drop rates, prices and your profile."/>
+          <!-- Compact / Full view: two panels drawn, the right one filled in Full view -->
+          <Button x:Name="ViewBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="Full view: every table beside the summary">
+            <Grid Width="16" Height="12">
+              <Rectangle Width="16" Height="12" RadiusX="2" RadiusY="2" Stroke="{DynamicResource Muted}" StrokeThickness="1.4"/>
+              <Rectangle Width="1.4" Height="12" Fill="{DynamicResource Muted}" HorizontalAlignment="Left" Margin="7,0,0,0"/>
+              <Rectangle x:Name="ViewFill" Width="6" Height="9" Fill="{DynamicResource Muted}" HorizontalAlignment="Right" Margin="0,0,1.5,0" Opacity="0.25"/>
+            </Grid>
+          </Button>
           <Button x:Name="OptionsBtn" Height="32" Padding="12,0" FontSize="12.5" ToolTip="Server, startup, sharing, game reading, hotkey, updates.">
             <StackPanel Orientation="Horizontal">
               <!-- a gear, drawn so no image ships -->
@@ -206,6 +219,10 @@
       </Border>
 
 
+    </StackPanel>
+
+    <!-- the left column: the run card, the summary and (in Full view) the recent pickups -->
+    <StackPanel x:Name="LeftCol" Grid.Row="1" Width="662" VerticalAlignment="Top">
       <!-- the run, as the site's "best place to farm it" card: where you are, how long, what the hour is worth, the stats,
            then the actions. Everything is counted all the time; Start farming times a run on top and shows it -->
       <Border x:Name="SessionCard" CornerRadius="22" Margin="0,16,0,0" Padding="24,22,24,22" BorderThickness="1" BorderBrush="{DynamicResource HeroLine}" Background="{DynamicResource HeroBg}">
@@ -302,22 +319,11 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
           </StackPanel>
+          <!-- compact only: the way to every table -->
+          <TextBlock x:Name="FullLinkText" FontSize="12.5" Margin="0,12,0,0" HorizontalAlignment="Right"><Hyperlink x:Name="FullLink" Style="{StaticResource LinkStyle}">Full view: every table ▸</Hyperlink></TextBlock>
         </StackPanel>
       </Border>
 
-    </StackPanel>
-
-      <!-- status -->
-      <Grid x:Name="StatusRow" DockPanel.Dock="Bottom" Margin="0,14,0,0">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
-        <!-- shown with a reading problem: straight to the page that fixes it -->
-        <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
-      </Grid>
-
-    <!-- the scrolling part; its bar sits in the window's right padding, so the cards keep their width -->
-    <ScrollViewer x:Name="LowerScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,-20,0" Focusable="False">
-      <StackPanel Width="662" HorizontalAlignment="Left">
       <!-- the last pickups as they are counted, so a miss shows on the spot (Steven, 2026-10-21); how each was read is on hover (0.7.6) -->
       <Border x:Name="PickupStrip" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,12,20,12" Visibility="Collapsed">
         <StackPanel>
@@ -337,6 +343,20 @@
         </StackPanel>
       </Border>
 
+    </StackPanel>
+
+      <!-- status -->
+      <Grid x:Name="StatusRow" Grid.Row="3" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left" Margin="0,14,0,0">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
+        <!-- shown with a reading problem: straight to the page that fixes it -->
+        <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
+      </Grid>
+
+    <!-- the right column (Full view, or Crafting): the tables, scrolling once they'd run past the screen; the bar sits in the
+         window's right padding, so the cards keep their width -->
+    <ScrollViewer x:Name="LowerScroll" Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="16,0,-20,0" Focusable="False" Visibility="Collapsed">
+      <StackPanel Width="662" HorizontalAlignment="Left">
       <!-- one table at a time: Drops or Gathered, picked by the tabs. The tables grow with what's farmed and the
            window with them; a table only scrolls once it would run past the bottom of the screen -->
 
@@ -552,7 +572,7 @@
       </StackPanel>
     </ScrollViewer>
 
-    </DockPanel>
+    </Grid>
 
     </Grid>
   </Border>

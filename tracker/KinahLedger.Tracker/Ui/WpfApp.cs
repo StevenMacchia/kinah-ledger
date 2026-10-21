@@ -181,6 +181,17 @@ public static class WpfApp
         DoEvents();
         Check(p.Hotkey == Platform.Hotkey.Default, "Default puts Ctrl+Shift+K back");
 
+        // Compact and Full view (0.7.6): the tables and pickups only in Full, which doubles the width; Crafting is one column either way
+        w.ShowCompact(); DoEvents();
+        double compactW = w.ActualWidth;
+        Check(w.TablesCard.Visibility == Visibility.Visible && w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility != Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
+            "Compact: run card, slim total, tables at three rows, no pickups");
+        w.ShowFull(); DoEvents();
+        Check(w.TablesCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.ActualWidth > compactW * 1.8,
+            $"Full view: pickups, top drops, more rows, {compactW:0} -> {w.ActualWidth:0} px wide");
+        w.ShowCompact(); DoEvents();
+        Check(Math.Abs(w.ActualWidth - compactW) < 2, "back to Compact: the width it had");
+
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;
@@ -207,7 +218,7 @@ public static class WpfApp
         w.Close();
     }
 
-    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null)
+    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false)
     {
         Ensure();
         Directory.CreateDirectory(dir);
@@ -218,11 +229,26 @@ public static class WpfApp
         if (double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_H"), out var screenH) && screenH > 300) w.MaxHeight = screenH;
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
+        if (full) w.ShowFull();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
+        if (Environment.GetEnvironmentVariable("KL_DEBUG_LAYOUT") == "1")
+        {
+            void Dump(DependencyObject d, int depth)
+            {
+                if (depth > 7) return;
+                for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+                {
+                    var c = VisualTreeHelper.GetChild(d, i);
+                    if (c is FrameworkElement fe && fe.ActualWidth > 600) Console.WriteLine($"{new string(' ', depth * 2)}{fe.GetType().Name} {fe.Name} {fe.ActualWidth:0} desired {fe.DesiredSize.Width:0} vis {fe.Visibility}");
+                    Dump(c, depth + 1);
+                }
+            }
+            Console.WriteLine($"window {w.ActualWidth:0}"); Dump(w, 0);
+        }
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", _ => "ui-main-tracking" };
-        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         // KL_CARD_ZONE=<zone>: also draw the card a click on the first drop opens, with the live site's data for that zone
         if (demo && Environment.GetEnvironmentVariable("KL_CARD_ZONE") is { Length: > 0 } cardZone)
         {

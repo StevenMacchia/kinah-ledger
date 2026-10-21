@@ -566,6 +566,8 @@ public sealed class UserPrefs
     public bool MinimizeToTray { get; set; } = true;
     /// <summary>What the panel over the game shows, in this order: time, rate, kinah, loot, total, best, last (HudFields.All). The player picks in Options › In game.</summary>
     public string HudFields { get; set; } = Ui.HudFields.Default;
+    /// <summary>Full view: the window doubles in width with every table beside the summary. Off (Compact, the default since 0.7.6): the run card and the summary only.</summary>
+    public bool FullView { get; set; }
     /// <summary>The start/stop shortcut, as "Ctrl+Shift+K"; empty is off.</summary>
     public string Hotkey { get; set; } = Platform.Hotkey.Default;
     public int? WinX { get; set; }

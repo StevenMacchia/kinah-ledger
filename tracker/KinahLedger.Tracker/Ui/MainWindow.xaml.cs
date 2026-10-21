@@ -98,6 +98,9 @@ public partial class MainWindow : Window
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
 
         ShareCardBtn.Click += (_, _) => CopyShareCard();
+        // Compact and Full view: the header button switches, and the summary's link opens Full view
+        ViewBtn.Click += (_, _) => SetView(!_prefs.FullView);
+        FullLink.Click += (_, _) => SetView(true);
         // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
         OddsAsPct = _prefs.OddsAsPercent; ShowOddsHeader();
         PctHeader.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; OddsAsPct = _prefs.OddsAsPercent = !_prefs.OddsAsPercent; if (!_demo) _prefs.Save(); ShowOddsHeader(); Redraw(); };
@@ -161,7 +164,9 @@ public partial class MainWindow : Window
 
 
     /// <summary>The main window is the live count only; everything that needs setting is in Options. Kept for layout renders.</summary>
-    public void ShowCompact() { }
+    public void ShowCompact() => SetView(false);
+    /// <summary>Full view, for layout renders.</summary>
+    public void ShowFull() => SetView(true);
 
 
 
@@ -208,6 +213,7 @@ public partial class MainWindow : Window
     void Redraw()
     {
         var e = Shown();
+        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillPickups(); return; }   // a layout render keeps its sample
         if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; SummaryCard.Visibility = Visibility.Collapsed; }
         FillPickups();
     }
@@ -242,7 +248,7 @@ public partial class MainWindow : Window
               }
             : (_watcher.Chat?.RecentPickups(3) ?? new()).Select(p => new PickupRow(p.At.ToLocalTime().ToString("HH:mm:ss"), p.What, ViaTip(p.Via))).ToList();
         PickupRows.ItemsSource = list;
-        PickupStrip.Visibility = list.Count > 0 && _part != "Crafting" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
+        PickupStrip.Visibility = list.Count > 0 && _part != "Crafting" && !_welcome && _prefs.FullView ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -757,7 +763,7 @@ public partial class MainWindow : Window
             s.GatherCount > 0 ? $"{s.GatherCount} gathered" : "", t.Pets > 0 ? $"{t.Pets} Soul Crystal{(t.Pets == 1 ? "" : "s")}" : "",
         }.Where(x => x.Length > 0));
         _hasSummary = e.Events > 0;
-        SummaryCard.Visibility = _hasSummary && _part != "Crafting" ? Visibility.Visible : Visibility.Collapsed;
+        SummaryCard.Visibility = _hasSummary && _part != "Crafting" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
         ShareCardBtn.IsEnabled = totalNow > 0;
         FootTotal.Text = totalNow.ToString("N0");
         SumBreakdown.Text = (kinah > 0 || _mode != Mode.Gather ? $"{Fk(kinah)} Kinah" : "") + (kinah > 0 || _mode != Mode.Gather ? "  +  " : "")
@@ -770,7 +776,7 @@ public partial class MainWindow : Window
         var top = s.Drops.Concat(s.Gathered).Where(r => !r.Header && r.Worth > 0).OrderByDescending(r => r.Worth).ToList();
         _topRows = top;
         TopDrops.ItemsSource = top.Take(3).Select(r => r with { Value = Fk(r.Worth) }).ToList();
-        TopDropsBox.Visibility = top.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        TopDropsBox.Visibility = top.Count > 0 && TopDropsShown ? Visibility.Visible : Visibility.Collapsed;
 
         // the player's best hour in this zone; this stay's own rate is the zone view's, whatever the window shows
         ShowBest(e);
@@ -854,15 +860,66 @@ public partial class MainWindow : Window
     {
         _part = part == "Crafting" ? "Crafting" : "Farming";
         bool craft = _part == "Crafting";
-        SessionCard.Visibility = Tiles.Visibility = TablesCard.Visibility = craft ? Visibility.Collapsed : Visibility.Visible;
-        SummaryCard.Visibility = craft || !_hasSummary ? Visibility.Collapsed : Visibility.Visible;
-        FillPickups();
-        CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
+        ApplyView();
         FarmTab.Style = (Style)FindResource(craft ? "SegOff" : "SegOn");
         CraftTab.Style = (Style)FindResource(craft ? "SegOn" : "SegOff");
         if (remember && !_demo) { _prefs.Part = _part; _prefs.Save(); }
         if (craft && !_demo) FillCraft(_watcher.Chat?.CraftView);
     }
+
+    /// <summary>Compact or Full view, remembered; the window grows to the right, or to the left near the screen's edge.</summary>
+    void SetView(bool full)
+    {
+        _prefs.FullView = full;
+        if (!_demo) _prefs.Save();
+        ApplyView();
+    }
+
+    /// <summary>
+    /// What shows where, for the part (Farming or Crafting), the view (Compact or Full) and the first-run screen.
+    /// Compact (Steven, 0.7.6): one 662px column, the run card, a slim session total, then the tables at three rows each;
+    /// no recent pickups. Full: double width, the run card, the summary with top drops and the pickups on the left, the
+    /// tables at six rows each on the right. Crafting is its own table in one column, whatever the view.
+    /// </summary>
+    void ApplyView()
+    {
+        bool craft = _part == "Crafting" && !_welcome, farm = !craft && !_welcome, full = farm && _prefs.FullView;
+        LeftCol.Visibility = craft ? Visibility.Collapsed : Visibility.Visible;
+        SessionCard.Visibility = Tiles.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
+        SummaryCard.Visibility = farm && _hasSummary ? Visibility.Visible : Visibility.Collapsed;
+        TablesCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
+        CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
+        LowerScroll.Visibility = farm || craft ? Visibility.Visible : Visibility.Collapsed;
+        // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
+        System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
+        System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
+        System.Windows.Controls.Grid.SetColumn(LowerScroll, full ? 1 : 0);
+        LowerScroll.Margin = full ? new Thickness(16, 0, -20, 0) : new Thickness(0, 0, -20, 0);
+        // fixed column widths: an Auto column would take half the header's width from the span and leave a gap
+        LeftColDef.Width = new GridLength(662);
+        RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
+        // the summary: slim in Compact (the total and how it adds up), with the top drops in Full
+        TopDropsShown = full;
+        TopDropsBox.Visibility = full && _topRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        FootTotal.FontSize = full ? 26 : 20;
+        SummaryCard.Padding = full ? new Thickness(20, 14, 20, 16) : new Thickness(20, 10, 20, 10);
+        FullLinkText.Visibility = Visibility.Collapsed;
+        HeadStack.Width = StatusRow.Width = full ? 662 * 2 + 16 : 662;
+        ViewFill.Opacity = full ? 1 : 0.25;
+        ViewBtn.ToolTip = full ? "Compact view: one column, three rows per table" : "Full view: twice as wide, with recent pickups and more rows per table";
+        ViewBtn.Visibility = craft || _welcome ? Visibility.Collapsed : Visibility.Visible;
+        FillPickups();
+        Redraw();
+    }
+
+    /// <summary>True in Full view: the summary shows the top drops (Compact keeps it to the total).</summary>
+    bool TopDropsShown;
+
+    /// <summary>Rows per table before "Show all": three in Compact, six in Full view.</summary>
+    int TableRows => _prefs.FullView ? 6 : 3;
+
+    /// <summary>A layout render's sample count and clock, so switching views in a render redraws the same sample.</summary>
+    SessionEngine? _demoEngine; TimeSpan _demoElapsed;
 
     /// <summary>
     /// The crafting table: per recipe, the tries, how often it worked, what a try costs at Market prices (materials from
@@ -953,10 +1010,10 @@ public partial class MainWindow : Window
         bool dOpen = _prefs.DropsOpen && drops.Count > 0, gOpen = _prefs.GatherOpen && gathered.Count > 0,
              mOpen = _prefs.MobsOpen && mobs.Count > 0, pOpen = _prefs.PetsOpen && pets.Count > 0;
         // the top three rows of each section until "show all" (0.7.6, so a full session rarely scrolls); an enemy's open loot table always shows
-        Rows.ItemsSource = TopRows("Drops", drops, 3, DropsMore, DropsMoreRun);
-        GatherRows.ItemsSource = TopRows("Gather", gathered, 3, GatherMore, GatherMoreRun);
-        MobRows.ItemsSource = TopRows("Mob", mobs, 3, MobMore, MobMoreRun);
-        PetRows.ItemsSource = TopRows("Pet", pets, 3, PetMore, PetMoreRun);
+        Rows.ItemsSource = TopRows("Drops", drops, TableRows, DropsMore, DropsMoreRun);
+        GatherRows.ItemsSource = TopRows("Gather", gathered, TableRows, GatherMore, GatherMoreRun);
+        MobRows.ItemsSource = TopRows("Mob", mobs, TableRows, MobMore, MobMoreRun);
+        PetRows.ItemsSource = TopRows("Pet", pets, TableRows, PetMore, PetMoreRun);
         PetEmpty.Visibility = pets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         int pc = pets.Sum(r => int.TryParse(r.Drops, System.Globalization.NumberStyles.AllowThousands, null, out var n) ? n : 0);
         PetTitle.Text = pc > 0 ? $"SOUL CRYSTALS FROM KILLS  ·  {pc}" : "SOUL CRYSTALS FROM KILLS" + None(allPets, "");
@@ -1091,6 +1148,8 @@ public partial class MainWindow : Window
         var wa = SystemParameters.WorkArea;
         if (WindowState != WindowState.Normal || double.IsNaN(Top) || Left < wa.Left || Left >= wa.Right) return;
         if (Top + ActualHeight > wa.Bottom) Top = Math.Max(wa.Top, wa.Bottom - ActualHeight);
+        // Full view doubles the width: near the right edge the window moves left to stay on the screen
+        if (Left + ActualWidth > wa.Right) Left = Math.Max(wa.Left, wa.Right - ActualWidth);
     }
     void Say(string text, string tone) { Status.Text = text; Status.Foreground = B(tone); Status.ToolTip = null; }
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
@@ -1388,7 +1447,8 @@ public partial class MainWindow : Window
         ApplyModeLabels();
         _tableWhat = "this run";
         FarmTime.Text = (_mode == Mode.Gather ? "Gathering" : "Farming") + " for 00:42:17";
-        FillNumbers(e, TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17));
+        _demoEngine = e; _demoElapsed = TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17);
+        FillNumbers(e, _demoElapsed);
         FillPickups();
         _hudValues["last"] = "Spiritstone ×1";
         using (var b = new System.Drawing.Bitmap(480, 203))

@@ -35,8 +35,9 @@ public partial class MainWindow
         _welcome = on;
         WelcomeCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (on) WelcomeShareChk.IsChecked = _prefs.Share;
-        foreach (var fe in new FrameworkElement[] { SessionCard, Tiles, TablesCard, StatusRow, OptionsBtn, ServerChip })
+        foreach (var fe in new FrameworkElement[] { StatusRow, OptionsBtn, ServerChip })
             fe.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        ApplyView();   // the run card, the summary and the tables follow the first-run screen
         Tagline.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (on) WelcomeHint.Text = HasServer ? "" : "Pick your server to continue.";
     }
