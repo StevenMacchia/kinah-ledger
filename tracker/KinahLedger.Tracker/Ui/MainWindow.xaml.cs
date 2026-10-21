@@ -62,6 +62,9 @@ public partial class MainWindow : Window
         Kind.ItemsSource = Kinds;
         Kind.SelectedItem = Kinds.Contains(_prefs.Activity) ? _prefs.Activity : "Open world";
         HudChk.IsChecked = _prefs.Hud;
+        // the panel over the game follows the switch at once, run or no run
+        HudChk.Checked += (_, _) => Redraw();
+        HudChk.Unchecked += (_, _) => CloseHud();
         ShareChk.IsChecked = _prefs.Share;
         if (_prefs.WinX is int x && _prefs.WinY is int y && x > SystemParameters.VirtualScreenLeft - 50 && y > SystemParameters.VirtualScreenTop - 50
             && x < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 200 && y < SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 200)
@@ -277,13 +280,7 @@ public partial class MainWindow : Window
             var farm = _watcher.StartFarm(ActivityName());
             _lastRun = null;
             ZoneLbl.Text = "Zone: " + (chat.Zone ?? "not read yet");
-            if (HudChk.IsChecked == true)
-            {
-                _hud = new HudWindow { Owner = this };
-                if (_prefs.HudX is double hx && _prefs.HudY is double hy && hx > SystemParameters.VirtualScreenLeft - 50 && hy > SystemParameters.VirtualScreenTop - 50) { _hud.Left = hx; _hud.Top = hy; }
-                _hud.LocationChanged += (_, _) => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
-                _hud.Show();
-            }
+            EnsureHud();
             TableTitle.Text = "THIS RUN";
             ShowTable(farm);
             SetTrackingUi(true);
@@ -304,7 +301,6 @@ public partial class MainWindow : Window
         // shared and saved under what the run turned out to be, not the label picked before it started
         var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
-        CloseHud();
         // closing the panel hands focus to whatever is behind it, usually the game, which then covers this window
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Show(); Activate(); Topmost = true; Topmost = false;
@@ -371,9 +367,12 @@ public partial class MainWindow : Window
             var marks = MarketMarks();
             _ = Task.Run(() => chat.Frame(480, marks)).ContinueWith(t => Dispatcher.Invoke(() => { _framing = false; if (t.Status == TaskStatus.RanToCompletion) SetPreview(t.Result); }));
         }
-        if (_hud != null && farm != null)
+        // the panel over the game shows whenever its switch is on and the chat is being read: the run while one is on, the
+        // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
+        if (HudChk.IsChecked == true && chat != null) EnsureHud();
+        if (_hud != null && show != null)
         {
-            var e = farm; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah;
+            var e = show; double h = e.Hours; var t = e.Totals(); long kinah = t.Kinah;
             var foot = (chat?.Zone != null ? chat.Zone + " · " : "") + (chat?.LastLine ?? "");
             switch (_mode)
             {
@@ -572,6 +571,16 @@ public partial class MainWindow : Window
         PreviewHint.Visibility = Visibility.Collapsed;
     }
     void CloseHud() { _hud?.Close(); _hud = null; }
+
+    /// <summary>The draggable panel over the game, where it was last left; created once and kept until its switch goes off.</summary>
+    void EnsureHud()
+    {
+        if (_hud != null || HudChk.IsChecked != true) return;
+        _hud = new HudWindow { Owner = this };
+        if (_prefs.HudX is double hx && _prefs.HudY is double hy && hx > SystemParameters.VirtualScreenLeft - 50 && hy > SystemParameters.VirtualScreenTop - 50) { _hud.Left = hx; _hud.Top = hy; }
+        _hud.LocationChanged += (_, _) => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
+        _hud.Show();
+    }
 
     /// <summary>When the window grows past the bottom of the screen it's on, it moves up instead (main screen only; elsewhere it's left where the player put it).</summary>
     void KeepOnScreen()
