@@ -220,9 +220,35 @@ public sealed partial class ChatParser
         return name.Length > 64 ? name[..64] : name;
     }
 
+    /// <summary>
+    /// A system line as the recognizer garbles it, put back in shape before it is parsed. Fast kills make the chat scroll
+    /// while lines fade in, and the reads that come back carry stray marks around the words that decide what a line is:
+    /// "Raw Leather *acquired.«", "Raw Leatheracquired.", "SpiritStone—acquired.", "Spiritstone acquired:-",
+    /// "cquired 347 Kina." (all from a live reads.log, 2026-10-21). Item names themselves are left alone; the item
+    /// list still decides what an item is, so a cleaned line can never turn something unlisted into a drop.
+    /// </summary>
+    public static string CleanSystemLine(string line)
+    {
+        var s = line;
+        // marks that never belong to a chat line; a * only stays when it is a count ("*2" for ×2)
+        s = Regex.Replace(s, @"[«»•·¤~^`´¨""“”|¦]", " ");
+        s = Regex.Replace(s, @"\*(?!\s?\d)", " ");
+        // a dash, underscore or no space at all between the name and the verb: "SpiritStone—acquired", "Leatheracquired"
+        s = Regex.Replace(s, @"(?<=\w)[\-—–_]+(?=acqu)", " ", RegexOptions.IgnoreCase);
+        s = Regex.Replace(s, @"(?<=[a-z\)])(?=acqu[il1]r)", " ");
+        // the first letter or two of "Acquired" lost while the line faded in, before an amount of Kina
+        s = Regex.Replace(s, @"^\W*(?:a?c|c?q)?quired(?=\s*[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
+        s = Regex.Replace(s, @"^\W*cquired\b", "Acquired", RegexOptions.IgnoreCase);
+        // trailing marks after the line's own full stop: "acquired:-", "acquired.«", "acquiréd.i"
+        s = Regex.Replace(s, @"(acqu[il1]r[eé]+[dao]?)\s*[.,:;]?[\W_]*[a-z]?\W*$", "$1.", RegexOptions.IgnoreCase);
+        return Regex.Replace(s, @"\s+", " ").Trim();
+    }
+
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");
+        if (line.Length == 0) yield break;
+        if (!line.StartsWith('[')) line = CleanSystemLine(line);
         if (line.Length == 0) yield break;
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
         if (line.StartsWith("Increased ", StringComparison.OrdinalIgnoreCase)) yield break;   // "Increased Pet Insight Level ...": progress, not loot
@@ -470,6 +496,16 @@ public sealed class LineTracker
             return new List<string>();
         }
         if (keys.Count == _prev.Count && Enumerable.Range(0, keys.Count).All(i => Similar(keys[i], _prev[i]))) { Anchor(keys); return new List<string>(); }
+
+        // The chat grew and the last read is exactly its top: nothing scrolled off, so the lines below are new, even when
+        // they repeat the line above them ("Raw Leather acquired." twice in a row). Lining up on the last line alone took
+        // the second copy for the first and lost it (Steven, 2026-10-21 16:25).
+        if (keys.Count > _prev.Count && Enumerable.Range(0, _prev.Count).All(i => Similar(keys[i], _prev[i])))
+        {
+            var grown = cur.GetRange(_prev.Count, keys.Count - _prev.Count);
+            _prev = keys;
+            return Returned(keys, grown);
+        }
 
         if (Align(_prev, keys, cur) is { } fresh) { _prev = keys; return Returned(keys, fresh); }
 

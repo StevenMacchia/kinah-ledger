@@ -295,7 +295,14 @@ public sealed class TrackerSession
         bool afterFade = _tracker.LastAfterFade;
         // a read that couldn't be lined up with the last one counts nothing; the log says so, so a missed line can be traced
         if (_tracker.LastFromAnchor) CrashLog.Note($"the last read was a stray line, so this one was lined up with the last full read of the chat ({fresh.Count} new)");
-        if (_tracker.Unaligned > unaligned) CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
+        if (_tracker.Unaligned > unaligned)
+        {
+            CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
+            // both reads in full, so a lost burst of kills can be traced line by line
+            CrashLog.Note("   before: " + string.Join("  |  ", _prevRead));
+            CrashLog.Note("   now:    " + string.Join("  |  ", lines));
+        }
+        _prevRead = lines;
         // the enemy on the target bar, as last read, goes with this read's events (Kinah by enemy, a best guess)
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
@@ -347,6 +354,8 @@ public sealed class TrackerSession
     }
 
     DateTime _targetAt = DateTime.MinValue;
+    /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
+    List<string> _prevRead = new();
     readonly Reread _reread = new();
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();

@@ -47,6 +47,18 @@ internal static class Program
                 case "market-watch": return MarketWatch(settings, opts);
                 case "ocr-test": return OcrTest(settings, opts);
                 case "target-test": return TargetTest(opts);
+                case "parse-lines":
+                {
+                    // each argument is one chat line: what the parser makes of it, for checking a line from reads.log
+                    var pitems = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+                    var pp = new ChatParser(pitems);
+                    foreach (var line in pos)
+                    {
+                        var evs = pp.Parse(line, DateTime.UtcNow).Select(e => Describe(e, pitems)).ToList();
+                        Console.WriteLine($"{line,-45} -> {(evs.Count == 0 ? "(nothing)" : string.Join("; ", evs))}");
+                    }
+                    return 0;
+                }
                 case "watch": return Watch(settings, opts);
                 case "update": return UpdateCmd(settings, opts);
                 case "reset-id":
@@ -382,6 +394,36 @@ options: --process aion[,other]");
             var got = string.Join(",", g.NewLines(garbled[i]));
             ok &= got == gExpect[i];
             Console.WriteLine($"  garbled read {i + 1} -> new: [{got}]  expected [{gExpect[i]}] {(got == gExpect[i] ? "ok" : "MISMATCH")}");
+        }
+        // two identical drops in a row while the chat isn't full: the second is new (live reads.log, 2026-10-21 16:25)
+        var dup = new LineTracker();
+        var dupFrames = new[]
+        {
+            new List<string> { "[Ririchiyo] wait you cant make new chars", "Acquired 128 Kina." },
+            new List<string>(),
+            new List<string> { "Raw Leather acquired." },
+            new List<string> { "Raw Leather acquired.", "Raw Leather acquired." },
+            new List<string> { "Raw Leather acquired.", "Raw Leather acquired.", "Acquired 444 Kina." },
+            new List<string> { "Raw Leather acquired.", "Raw Leather acquired.", "Acquired 444 Kina." },
+        };
+        string[] dupExpect = { "", "", "Raw Leather acquired.", "Raw Leather acquired.", "Acquired 444 Kina.", "" };
+        for (int i = 0; i < dupFrames.Length; i++)
+        {
+            var got = string.Join(",", dup.NewLines(dupFrames[i]));
+            ok &= got == dupExpect[i];
+            Console.WriteLine($"  same drop twice, read {i + 1} -> new: [{got}]  expected [{dupExpect[i]}] {(got == dupExpect[i] ? "ok" : "MISMATCH")}");
+        }
+        // lines the recognizer garbled around the words that matter (live reads.log, 2026-10-21)
+        {
+            var gp = new ChatParser(items);
+            foreach (var (gline, gexpect) in new[] { ("Raw Leather *acquired.«", "Raw Leather ×1"), ("Raw Leatheracquired.", "Raw Leather ×1"), ("Spiritstone acquired:-", "Spiritstone ×1"),
+                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
+            {
+                var gevs = gp.Parse(gline, DateTime.UtcNow).Select(e => Describe(e, items)).ToList();
+                var ggot = gevs.Count == 0 ? "(nothing)" : string.Join("; ", gevs);
+                ok &= ggot == gexpect;
+                Console.WriteLine($"  garbled loot line {gline,-30} -> {ggot}  {(ggot == gexpect ? "ok" : "MISMATCH, expected " + gexpect)}");
+            }
         }
         // the crafting window's "Show acquired designs" over the chat became the baseline after a fade, and the next read,
         // holding the craft and its item line, was dropped as unaligned (live reads.log, 2026-10-21 09:38)
