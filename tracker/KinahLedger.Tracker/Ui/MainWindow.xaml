@@ -54,7 +54,7 @@
             <!-- the item's icon once it is cached; its initial until then, or when none is known -->
             <Border x:Name="IconTile" Width="40" Height="40" CornerRadius="8" BorderBrush="#6BCDD3E2" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Center">
               <Border.Background>
-                <RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#38CDD3E2" Offset="0"/><GradientStop Color="#0B0E1E" Offset="1"/></RadialGradientBrush>
+                <RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#38CDD3E2" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush>
               </Border.Background>
               <Grid>
                 <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
@@ -62,7 +62,7 @@
               </Grid>
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-              <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="#CDD3E2" FontWeight="SemiBold" FontSize="14.5" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource CommonInk}" FontWeight="SemiBold" FontSize="14.5" TextTrimming="CharacterEllipsis"/>
               <TextBlock x:Name="SubText" Text="{Binding Sub}" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
           </Grid>
@@ -81,10 +81,10 @@
         <DataTrigger Binding="{Binding Tone}" Value="Bad"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Bad}"/></DataTrigger>
         <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
         <!-- item grades in the game's own colours, in the dictionary's order: Common, Rare (green), Legend (blue), Unique (yellow), Epic (violet) -->
-        <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="#62D98B"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#8062D98B"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#4262D98B" Offset="0"/><GradientStop Color="#0B0E1E" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
-        <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="#5AA6FF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#805AA6FF"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#425AA6FF" Offset="0"/><GradientStop Color="#0B0E1E" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
-        <DataTrigger Binding="{Binding Grade}" Value="Unique"><Setter TargetName="NameText" Property="Foreground" Value="#F3D35E"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#80F3D35E"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#42F3D35E" Offset="0"/><GradientStop Color="#0B0E1E" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
-        <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="NameText" Property="Foreground" Value="#B48BFF"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#80B48BFF"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#42B48BFF" Offset="0"/><GradientStop Color="#0B0E1E" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeRare}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#8062D98B"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#4262D98B" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeLegend}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#805AA6FF"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#425AA6FF" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Unique"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeUnique}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#80F3D35E"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#42F3D35E" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
+        <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeEpic}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#80B48BFF"/><Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.72" RadiusY="0.72"><GradientStop Color="#42B48BFF" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter></DataTrigger>
         <!-- a group row inside a table (a gathering skill, the Soul Crystals): its own line across the whole row -->
         <DataTrigger Binding="{Binding Header}" Value="True">
           <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHead}"/>
@@ -166,10 +166,7 @@
 
       <!-- the run, as the site's "best place to farm it" card: where you are, how long, what the hour is worth, the stats,
            then the actions. Everything is counted all the time; Start farming times a run on top and shows it -->
-      <Border x:Name="SessionCard" CornerRadius="22" Margin="0,16,0,0" Padding="24,22,24,22" BorderThickness="1" BorderBrush="#52EBAE4C">
-        <Border.Background>
-          <RadialGradientBrush Center="1,0" GradientOrigin="1,0" RadiusX="0.95" RadiusY="1.35"><GradientStop Color="#3A3323" Offset="0"/><GradientStop Color="#171C38" Offset="0.62"/><GradientStop Color="#12162D" Offset="1"/></RadialGradientBrush>
-        </Border.Background>
+      <Border x:Name="SessionCard" CornerRadius="22" Margin="0,16,0,0" Padding="24,22,24,22" BorderThickness="1" BorderBrush="{DynamicResource HeroLine}" Background="{DynamicResource HeroBg}">
         <StackPanel>
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -191,7 +188,7 @@
           </Grid>
 
           <!-- the stats, in the inset box the item page uses for "How many kills to expect". Element names stay from the tiles -->
-          <Border x:Name="Tiles" Margin="0,20,0,0" Padding="18,14,18,14" CornerRadius="14" Background="#38000000" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+          <Border x:Name="Tiles" Margin="0,20,0,0" Padding="18,14,18,14" CornerRadius="14" Background="{DynamicResource Inset}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock x:Name="KinahHr" Style="{StaticResource TileNumber}" Foreground="{DynamicResource Gold}" Text="0"/><TextBlock x:Name="Tile1Label" Style="{StaticResource TileLabel}" Text="Kinah/hr"/></StackPanel>

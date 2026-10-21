@@ -49,6 +49,15 @@ public static class Skins
             g.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(bottom)!, 1));
             d[k] = Frozen(g);
         }
+        void C(string k, string hex) => d[k] = (Color)ColorConverter.ConvertFromString(hex)!;
+        void R(string k, string a, string b, string c)
+        {
+            var g = new RadialGradientBrush { Center = new Point(1, 0), GradientOrigin = new Point(1, 0), RadiusX = 0.95, RadiusY = 1.35 };
+            g.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(a)!, 0));
+            g.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(b)!, 0.62));
+            g.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(c)!, 1));
+            d[k] = Frozen(g);
+        }
         switch (key)
         {
             case "abyss":
@@ -57,6 +66,8 @@ public static class Skins
                 S("Gold", "#F2C97D"); S("Violet", "#D2B8FF"); S("Mint", "#8EE3D6"); S("Accent", "#9F7BFF"); S("AccentDim", "#2A1F4F");
                 S("Good", "#58D39A"); S("Warn", "#F3A65B"); S("Bad", "#FF7A86");
                 S("RowHead", "#19162D"); S("RowHover", "#1F1B38"); S("Mark", "#1C2740"); S("Slot", "#100E1E");
+                R("HeroBg", "#2E2440", "#1D1A33", "#151326"); S("HeroLine", "#55F2C97D"); S("Inset", "#38000000"); C("SlotColor", "#100E1E");
+                S("CommonInk", "#D9D4EE"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#C8A8FF"); S("BtnPrimaryInk", "#FFFFFF");
                 G("BtnPrimary", "#7E5BEF", "#5A3DC2"); G("BtnPrimaryHover", "#8F6EFF", "#6648D6"); G("BtnStop", "#C44E4E", "#8E3434");
                 break;
             case "daylight":
@@ -65,7 +76,9 @@ public static class Skins
                 S("Gold", "#9A6B10"); S("Violet", "#5C46C9"); S("Mint", "#1F8A6B"); S("Accent", "#1F8FCB"); S("AccentDim", "#D7ECF8");
                 S("Good", "#1E8E57"); S("Warn", "#B86A14"); S("Bad", "#C2463A");
                 S("RowHead", "#E8EDF4"); S("RowHover", "#F2F5F9"); S("Mark", "#E3EBF5"); S("Slot", "#E9EEF5");
-                G("BtnPrimary", "#3C90E8", "#2766B8"); G("BtnPrimaryHover", "#4C9FF4", "#2F74CC"); G("BtnStop", "#D45A5A", "#A33C3C");
+                G("BtnPrimary", "#F6CB72", "#D9952F"); G("BtnPrimaryHover", "#F9D78E", "#E0A03C"); G("BtnStop", "#F6CB72", "#D9952F");
+                R("HeroBg", "#FFF0D2", "#FFFFFF", "#FFFFFF"); S("HeroLine", "#66D9952F"); S("Inset", "#F4F6FA"); C("SlotColor", "#F1F4F9");
+                S("CommonInk", "#2A3444"); S("GradeRare", "#1E8E57"); S("GradeLegend", "#1F6FCB"); S("GradeUnique", "#8F6F06"); S("GradeEpic", "#6E46C9"); S("BtnPrimaryInk", "#261702");
                 break;
             default:   // night: the base theme's own values, listed so a switch back is complete
                 S("Bg", "#090B15"); S("Card", "#12162D"); S("Card2", "#171C38"); S("Line", "#22284A"); S("LineStrong", "#323A66");
@@ -73,6 +86,8 @@ public static class Skins
                 S("Gold", "#F8D598"); S("Violet", "#B48BFF"); S("Mint", "#5ED8CB"); S("Accent", "#5ED8CB"); S("AccentDim", "#11303A");
                 S("Good", "#62D98B"); S("Warn", "#F2A35E"); S("Bad", "#FF8A7A"); S("Slot", "#0B0E1E");
                 S("RowHead", "#0E1124"); S("RowHover", "#171C38"); S("Mark", "#1A1F3D");
+                R("HeroBg", "#3A3323", "#171C38", "#12162D"); S("HeroLine", "#52EBAE4C"); S("Inset", "#38000000"); C("SlotColor", "#0B0E1E");
+                S("CommonInk", "#CDD3E2"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B48BFF"); S("BtnPrimaryInk", "#261702");
                 G("BtnPrimary", "#F8D598", "#D9952F"); G("BtnPrimaryHover", "#FBE0AE", "#E0A03C"); G("BtnStop", "#F8D598", "#D9952F");
                 break;
         }

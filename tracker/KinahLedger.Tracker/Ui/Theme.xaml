@@ -19,6 +19,20 @@
   <SolidColorBrush x:Key="Warn" Color="#F2A35E"/>
   <SolidColorBrush x:Key="Bad" Color="#FF8A7A"/>
   <SolidColorBrush x:Key="Slot" Color="#0B0E1E"/>
+  <!-- the run card, its stat box, the slot frames and the item names: these used to be written into the window, so
+       Daylight left them dark. Each look sets them now -->
+  <RadialGradientBrush x:Key="HeroBg" Center="1,0" GradientOrigin="1,0" RadiusX="0.95" RadiusY="1.35">
+    <GradientStop Color="#3A3323" Offset="0"/><GradientStop Color="#171C38" Offset="0.62"/><GradientStop Color="#12162D" Offset="1"/>
+  </RadialGradientBrush>
+  <SolidColorBrush x:Key="HeroLine" Color="#52EBAE4C"/>
+  <SolidColorBrush x:Key="Inset" Color="#38000000"/>
+  <Color x:Key="SlotColor">#0B0E1E</Color>
+  <SolidColorBrush x:Key="CommonInk" Color="#CDD3E2"/>
+  <SolidColorBrush x:Key="GradeRare" Color="#62D98B"/>
+  <SolidColorBrush x:Key="GradeLegend" Color="#5AA6FF"/>
+  <SolidColorBrush x:Key="GradeUnique" Color="#F3D35E"/>
+  <SolidColorBrush x:Key="GradeEpic" Color="#B48BFF"/>
+  <SolidColorBrush x:Key="BtnPrimaryInk" Color="#261702"/>
   <LinearGradientBrush x:Key="BtnPrimary" StartPoint="0,0" EndPoint="0,1">
     <GradientStop Color="#F8D598" Offset="0"/><GradientStop Color="#EBAE4C" Offset="0.55"/><GradientStop Color="#D9952F" Offset="1"/>
   </LinearGradientBrush>
@@ -127,7 +141,7 @@
   <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Background" Value="{DynamicResource BtnPrimary}"/>
     <Setter Property="BorderBrush" Value="#F6CB7C"/>
-    <Setter Property="Foreground" Value="#261702"/>
+    <Setter Property="Foreground" Value="{DynamicResource BtnPrimaryInk}"/>
     <Setter Property="FontSize" Value="15"/>
     <Setter Property="FontWeight" Value="Bold"/>
     <Setter Property="Template">
