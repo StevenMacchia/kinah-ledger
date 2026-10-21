@@ -229,7 +229,8 @@ public sealed partial class ChatParser
     /// </summary>
     public static string CleanSystemLine(string line)
     {
-        var s = line;
+        // accents the recognizer adds to plain letters ("Acquiréd 169 Kina.", "AcquireÖ"): the game's English text has none
+        var s = StripAccents(line);
         // marks that never belong to a chat line; a * only stays when it is a count ("*2" for ×2)
         s = Regex.Replace(s, @"[«»•·¤~^`´¨""“”|¦]", " ");
         s = Regex.Replace(s, @"\*(?!\s?\d)", " ");
@@ -239,9 +240,21 @@ public sealed partial class ChatParser
         // the first letter or two of "Acquired" lost while the line faded in, before an amount of Kina
         s = Regex.Replace(s, @"^\W*(?:a?c|c?q)?quired(?=\s*[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"^\W*cquired\b", "Acquired", RegexOptions.IgnoreCase);
+        // the verb's last letter misread before an amount: "AcquireO 169 Kina.", "Acquirea 212 Kina."
+        s = Regex.Replace(s, @"^\W*acqu[il1]re[dao0]?(?=\s+[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
         // trailing marks after the line's own full stop: "acquired:-", "acquired.«", "acquiréd.i"
         s = Regex.Replace(s, @"(acqu[il1]r[eé]+[dao]?)\s*[.,:;]?[\W_]*[a-z]?\W*$", "$1.", RegexOptions.IgnoreCase);
         return Regex.Replace(s, @"\s+", " ").Trim();
+    }
+
+    static string StripAccents(string s)
+    {
+        if (s.All(c => c < 128)) return s;
+        var d = s.Normalize(System.Text.NormalizationForm.FormD);
+        var b = new System.Text.StringBuilder(d.Length);
+        foreach (var c in d)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark) b.Append(c);
+        return b.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
 
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)

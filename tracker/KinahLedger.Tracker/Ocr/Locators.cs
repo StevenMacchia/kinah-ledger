@@ -126,6 +126,13 @@ public static class ChatLocator
     // what a chat line looks like on its own: "[Name] text" from a player, or one of the game's own messages
     static readonly Regex ChatLine = new(@"^\[[^\]]{2,20}\]\s|joined event|acquired|Kina|defeated|Obtained|failed|has logged in", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>
+    /// The chat window's width at the least: about 40 characters, where the game wraps a chat line, in screen heights so
+    /// it holds on any screen. Sizing the area only from the lines on screen at the moment it was found cut every longer
+    /// line after that ("Sapphire Gemstone acq", a green armor's name, 2026-10-21 16:56) when those happened to be short.
+    /// </summary>
+    public static int MinChatWidth(Rectangle game) => (int)(game.Height * 0.40);
+
     /// <summary>The bottom-left quarter that holds the chat and its input box.</summary>
     public static Rectangle Corner(Rectangle game) => new(game.Left, game.Top + game.Height / 2, game.Width / 2, game.Height / 2);
 
@@ -150,7 +157,7 @@ public static class ChatLocator
         int lineH = above.Count > 0 ? (int)Math.Round(above.Take(8).Average(l => l.Box.Height) * 1.45) : (int)Math.Round(input.Box.Height * 1.2);
         lineH = Math.Max(lineH, 14);
         int left = Math.Max(game.Left, Math.Min(rowLeft, above.Count > 0 ? above.Min(l => l.Box.Left) : rowLeft) - 12);
-        int right = Math.Min(game.Left + (int)(game.Width * 0.55), Math.Max(above.Count > 0 ? above.Max(l => l.Box.Right) : 0, input.Box.Right) + 40);
+        int right = Math.Min(game.Left + (int)(game.Width * 0.55), Math.Max(Math.Max(above.Count > 0 ? above.Max(l => l.Box.Right) : 0, input.Box.Right) + 40, left + MinChatWidth(game)));
         int bottom = input.Box.Top - 4;
         int top = Math.Max(game.Top, bottom - lineH * 12);            // room for twelve lines: the chat grows upward
         var region = Rectangle.FromLTRB(left, top, right, bottom);
@@ -177,7 +184,7 @@ public static class ChatLocator
 
         int lineH = Math.Max(14, (int)Math.Round(chat.Average(l => l.Box.Height) * 1.45));
         int left = Math.Max(game.Left, chat.Min(l => l.Box.Left) - 12);
-        int right = Math.Min(game.Left + (int)(game.Width * 0.55), chat.Max(l => l.Box.Right) + 40);
+        int right = Math.Min(game.Left + (int)(game.Width * 0.55), Math.Max(chat.Max(l => l.Box.Right) + 40, left + MinChatWidth(game)));
         int bottom = Math.Min(game.Bottom, chat.Max(l => l.Box.Bottom) + lineH);   // room for the next line, which arrives below
         int top = Math.Max(game.Top, bottom - lineH * 12);
         var region = Rectangle.FromLTRB(left, top, right, bottom);
