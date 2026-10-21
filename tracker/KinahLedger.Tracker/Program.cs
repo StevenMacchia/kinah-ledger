@@ -524,6 +524,11 @@ options: --process aion[,other]");
         Check("target bar: a misread letter", Bar("45 Highland Kamif"), "Highland Karnif");
         Check("target bar: a gathering node is no enemy", Bar("Orichalcum", "Ore"), "none, unlisted: Orichalcum");
         Check("target bar: the tag under the bar alone", Bar("Fera"), "none, unlisted: Fera");
+        Check("target bar: rn read for m", Bar("Hard Kalgolern"), "Hard Kalgolem");
+        Check("target bar: rn for m, level and distance", Bar("45 Hard Kalgolern 2m"), "Hard Kalgolem");
+        Check("target bar: a bare Kalgolem fits 26 names, so none", Bar("Kalgolern"), "none, unlisted: Kalgolern");
+        Check("target bar: a name with a real rn still matches", Bar("45 Abyss Karnif"), "Abyss Karnif");
+        Check("target bar: and its rn misread as m too", Bar("Abyss Kamif"), "Abyss Karnif");
 
         Console.WriteLine("\nCrafting and Market settlements (2026-10-21 log):");
         {

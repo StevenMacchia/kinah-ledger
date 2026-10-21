@@ -50,15 +50,22 @@ public sealed partial class TargetReader
         catch (Exception) { return Array.Empty<string>(); }
     }
 
+    /// <summary>
+    /// Lower case, with "rn" read as "m" on both sides: the recognizer often reads an m as rn ("Kalgolern" for Kalgolem),
+    /// which is two edits and more than the misread allowance for a short name. No two names on the list collide this way.
+    /// </summary>
+    static string Norm(string s) => s.ToLowerInvariant().Replace("rn", "m");
+    static readonly string[] KnownNorm = Known.Select(Norm).ToArray();
+
     /// <summary>The list's spelling of a name read off the bar, allowing a letter of misread per seven; null when it isn't on the list.</summary>
     public static string? Match(string read)
     {
-        var low = read.ToLowerInvariant();
-        foreach (var k in Known) if (string.Equals(k, read, StringComparison.OrdinalIgnoreCase)) return k;
-        foreach (var k in Known)
+        var low = Norm(read.Trim());
+        for (int i = 0; i < Known.Length; i++) if (KnownNorm[i] == low) return Known[i];
+        for (int i = 0; i < Known.Length; i++)
         {
-            int max = Math.Max(1, k.Length / 7);
-            if (Math.Abs(k.Length - read.Length) <= max && Edit(k.ToLowerInvariant(), low) <= max) return k;
+            int max = Math.Max(1, KnownNorm[i].Length / 7);
+            if (Math.Abs(KnownNorm[i].Length - low.Length) <= max && Edit(KnownNorm[i], low) <= max) return Known[i];
         }
         return null;
     }
