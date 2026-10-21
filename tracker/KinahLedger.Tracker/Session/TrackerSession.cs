@@ -355,7 +355,7 @@ public sealed class TrackerSession
         foreach (var l in reread)
         {
             bool any = false;
-            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now)) any |= Apply(events);
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events);
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }

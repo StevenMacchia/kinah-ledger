@@ -160,7 +160,7 @@ public sealed partial class ChatParser
     /// One read's new lines, parsed in order. A payment line then also claims the Kinah lines just before it in the same
     /// read when they make up what it still owes, exactly: they were the payment's first lines, not loot.
     /// </summary>
-    public List<(string Line, List<GameEvent> Events)> ParseBatch(IReadOnlyList<string> lines, DateTime time)
+    public List<(string Line, List<GameEvent> Events)> ParseBatch(IReadOnlyList<string> lines, DateTime time, bool wrap = true)
     {
         var outp = new List<(string Line, List<GameEvent> Events)>();
         int pay = -1;
@@ -168,13 +168,14 @@ public sealed partial class ChatParser
         // PurchaseSeconds: what was bought is never a drop
         bool claim = _purchaseCarry && (time - _purchaseAt).TotalSeconds <= PurchaseSeconds;
         _purchaseCarry = false;
+        var parsed = wrap ? Unwrap(lines, time) : lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
         for (int i = 0; i < lines.Count; i++)
         {
-            var evs = Parse(lines[i], time).ToList();
-            if (Purchase().IsMatch(lines[i])) { claim = true; _purchaseAt = time; _purchaseCarry = true; }
+            var (text, evs) = parsed[i];
+            if (Purchase().IsMatch(text)) { claim = true; _purchaseAt = time; _purchaseCarry = true; }
             else if (claim) evs = evs.Select(AsReward).ToList();
-            outp.Add((lines[i], evs));
-            if (Payment().IsMatch(lines[i])) pay = i;
+            outp.Add((text, evs));
+            if (Payment().IsMatch(text)) pay = i;
         }
         if (pay < 0 || _paymentLeft <= 0) return outp;
         var cands = new List<(int line, int ev, long amt)>();
@@ -193,6 +194,51 @@ public sealed partial class ChatParser
         }
         return outp;
     }
+
+    /// <summary>
+    /// The chat wraps a line at about 40 characters, so a long item name comes as two lines ("Artisan's Orichalcum" /
+    /// "Longsword acquired.", "Acquired" / "169 Kina."), and neither half counts on its own, or the second half reads as
+    /// a shorter item. A line that parsed to nothing is joined to the next when the two together make an item the list
+    /// holds, or Kinah. When the second half is itself a listed item, the join wins only if the joined name ends with that
+    /// item's name (so a stray word before "Raw Leather acquired." never changes it). The last line of a read that parsed
+    /// to nothing is held for WrapSeconds, since its second half can come in the next read. Every line keeps its place:
+    /// a consumed second half is returned as JoinedMark with no events.
+    /// </summary>
+    List<(string Text, List<GameEvent> Events)> Unwrap(IReadOnlyList<string> lines, DateTime time)
+    {
+        var res = lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
+        string? carry = _wrapCarry != null && (time - _wrapAt).TotalSeconds <= WrapSeconds ? _wrapCarry : null;
+        _wrapCarry = null;
+        for (int i = carry != null ? -1 : 0; i + 1 < res.Count; i++)
+        {
+            string a = i < 0 ? carry! : res[i].Text;
+            bool aEmpty = i < 0 || res[i].Events.Count == 0;
+            var b = res[i + 1];
+            if (!aEmpty || !Joinable(a) || !Joinable(b.Text)) continue;
+            var bItem = b.Events.Count == 1 && b.Events[0] is ItemAcquired bi ? bi : null;
+            if (b.Events.Count > 0 && bItem == null) continue;
+            var joined = a.Trim() + " " + b.Text.Trim();
+            var j = Parse(joined, time).ToList();
+            if (j.Count != 1) continue;
+            bool take = bItem == null
+                ? j[0] is ItemAcquired || j[0] is KinahChanged
+                : j[0] is ItemAcquired ji && ji.ItemId != bItem.ItemId
+                  && _items.NameOf(ji.ItemId).EndsWith(_items.NameOf(bItem.ItemId), StringComparison.OrdinalIgnoreCase);
+            if (!take) continue;
+            res[i + 1] = (joined, j);
+            if (i >= 0) res[i] = (JoinedMark, new List<GameEvent>());
+            i++;
+        }
+        if (res.Count > 0 && res[^1].Events.Count == 0 && !ReferenceEquals(res[^1].Text, JoinedMark) && Joinable(res[^1].Text) && res[^1].Text.Trim().Length >= 3)
+        { _wrapCarry = res[^1].Text; _wrapAt = time; }
+        return res;
+    }
+
+    /// <summary>The text returned in place of the first half of a line joined to the one after it.</summary>
+    public const string JoinedMark = "(wrapped: joined to the next line)";
+    public const double WrapSeconds = 3;
+    string? _wrapCarry; DateTime _wrapAt;
+    static bool Joinable(string s) { var t = s.TrimStart(); return t.Length > 0 && !t.StartsWith('[') && !Payment().IsMatch(t) && !Purchase().IsMatch(t); }
 
     [GeneratedRegex(@"^\W*purchase\s+(?:complete|completed|successful)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Purchase();

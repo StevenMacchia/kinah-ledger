@@ -440,6 +440,26 @@ options: --process aion[,other]");
                 Console.WriteLine($"  garbled loot line {gline,-30} -> {ggot}  {(ggot == gexpect ? "ok" : "MISMATCH, expected " + gexpect)}");
             }
         }
+        // the chat wraps a line at about 40 characters: a long item name comes as two lines (2026-10-21, a green armor drop lost)
+        {
+            string Batches(params string[][] reads)
+            {
+                var wp = new ChatParser(items); var t = DateTime.UtcNow; var got = new List<string>();
+                foreach (var r in reads) { foreach (var (_, evs) in wp.ParseBatch(r, t)) got.AddRange(evs.Select(e => Describe(e, items))); t = t.AddSeconds(1); }
+                return got.Count == 0 ? "(nothing)" : string.Join("; ", got);
+            }
+            foreach (var (wname, wgot, wexpect) in new[] {
+                ("a long item name split over two lines", Batches(new[] { "Artisan's Orichalcum", "Longsword acquired." }), "Artisan's Orichalcum Longsword ×1"),
+                ("the verb alone, the amount on the next line", Batches(new[] { "Acquired", "169 Kina." }), "Kinah +169"),
+                ("the split falls between two reads", Batches(new[] { "Raw Leather acquired.", "Artisan's Orichalcum" }, new[] { "Longsword acquired." }), "Raw Leather ×1; Artisan's Orichalcum Longsword ×1"),
+                ("a stray line above a drop never changes it", Batches(new[] { "lol nice", "Raw Leather acquired." }), "Raw Leather ×1"),
+                ("a wrapped quest line is nothing", Batches(new[] { "Defeat Gravi, specters, spirits, and Papis", "(4/20)", "Raw Leather acquired." }), "Raw Leather ×1"),
+                ("player chat is never joined", Batches(new[] { "[Theo] look at my Artisan's Orichalcum", "Longsword acquired." }), "(nothing)") })
+            {
+                ok &= wgot == wexpect;
+                Console.WriteLine($"  wrapped: {wname,-44} -> {wgot}  {(wgot == wexpect ? "ok" : "MISMATCH, expected " + wexpect)}");
+            }
+        }
         // the crafting window's "Show acquired designs" over the chat became the baseline after a fade, and the next read,
         // holding the craft and its item line, was dropped as unaligned (live reads.log, 2026-10-21 09:38)
         var h = new List<string> { "[Masu] only way is to swipe", "[Drogo] i only swipe for cosmetics", "Acquired 144 Kina.", "Obtained 1 Karnif Soul Points.", "[Drogo] we're wumbo" };
