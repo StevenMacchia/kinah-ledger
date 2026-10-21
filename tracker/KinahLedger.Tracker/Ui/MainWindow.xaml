@@ -226,25 +226,25 @@
           </Grid>
           <!-- net Kinah from the balance counter, craft and enchant results, your own Market sales: shown once there is one -->
           <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Ink}" FontSize="11.5" HorizontalAlignment="Right" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
-          <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
-            <Button x:Name="DropsTab" Content="Drops" Padding="12,5" FontSize="12.5" Margin="0,0,6,0"/>
-            <Button x:Name="GatherTab" Content="Gathered" Padding="12,5" FontSize="12.5"/>
-          </StackPanel>
 
-          <StackPanel x:Name="DropsSection">
-            <Border Background="{DynamicResource Card2}" CornerRadius="6" Height="28">
+          <!-- both sections show at once (a run is often kills and nodes together); a click on a header folds that section -->
+          <StackPanel x:Name="DropsSection" Margin="0,8,0,0">
+            <Border x:Name="DropsHead" Background="{DynamicResource Card2}" CornerRadius="6" Height="28" Cursor="Hand" ToolTip="Click to fold or unfold">
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*"/><ColumnDefinition Width="64"/><ColumnDefinition Width="88"/><ColumnDefinition Width="84"/><ColumnDefinition Width="78"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Style="{StaticResource LabelStyle}" Text="DROPS FROM KILLS" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                  <TextBlock x:Name="DropsChev" Style="{StaticResource LabelStyle}" Text="▾" Width="14"/>
+                  <TextBlock x:Name="DropsTitle" Style="{StaticResource LabelStyle}" Text="DROPS FROM KILLS"/>
+                </StackPanel>
                 <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="DROPS" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                 <TextBlock x:Name="PctHeader" Grid.Column="2" Style="{StaticResource LabelStyle}" Text="DROP %" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="Drops divided by kills. Kills are counted from Kinah or Soul Point pickups (one per mob), or from kill lines when the chat shows them."/>
                 <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                 <TextBlock Grid.Column="4" Style="{StaticResource LabelStyle}" Text="PRICE" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="The lowest Market price on your server for one of the item: what you and other players saw on the Market, with the site's price board filling in. A dash means no price is known yet."/>
               </Grid>
             </Border>
-            <Grid MinHeight="64">
+            <Grid x:Name="DropsBody" MinHeight="64">
               <ScrollViewer x:Name="DropsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="Rows" ItemTemplate="{StaticResource RowTemplate}"/>
               </ScrollViewer>
@@ -253,20 +253,23 @@
             </Grid>
           </StackPanel>
 
-          <StackPanel x:Name="GatherSection">
-            <Border Background="{DynamicResource Card2}" CornerRadius="6" Height="28">
+          <StackPanel x:Name="GatherSection" Margin="0,8,0,0">
+            <Border x:Name="GatherHead" Background="{DynamicResource Card2}" CornerRadius="6" Height="28" Cursor="Hand" ToolTip="Click to fold or unfold">
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*"/><ColumnDefinition Width="64"/><ColumnDefinition Width="88"/><ColumnDefinition Width="84"/><ColumnDefinition Width="78"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Style="{StaticResource LabelStyle}" Text="GATHERED" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                  <TextBlock x:Name="GatherChev" Style="{StaticResource LabelStyle}" Text="▾" Width="14"/>
+                  <TextBlock x:Name="GatherTitle" Style="{StaticResource LabelStyle}" Text="GATHERED"/>
+                </StackPanel>
                 <TextBlock Grid.Column="1" Style="{StaticResource LabelStyle}" Text="COUNT" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                 <TextBlock Grid.Column="2" Style="{StaticResource LabelStyle}" Text="PER ATTEMPT" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="Count divided by attempts. Every ore, log, Odyle, herb or food line counts as one attempt, failed gathers too; gemstones and higher tiers are the finds."/>
                 <TextBlock Grid.Column="3" Style="{StaticResource LabelStyle}" Text="PER HOUR" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0"/>
                 <TextBlock Grid.Column="4" Style="{StaticResource LabelStyle}" Text="PRICE" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0" ToolTip="The lowest Market price on your server for one of the material: what you and other players saw on the Market, with the site's price board filling in. A dash means no price is known yet."/>
               </Grid>
             </Border>
-            <Grid MinHeight="64">
+            <Grid x:Name="GatherBody" MinHeight="64">
               <ScrollViewer x:Name="GatherScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="GatherRows" ItemTemplate="{StaticResource RowTemplate}"/>
               </ScrollViewer>

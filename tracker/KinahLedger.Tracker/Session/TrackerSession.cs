@@ -284,6 +284,9 @@ public sealed class UserPrefs
     public bool ManualChat { get; set; }
     /// <summary>True once the chat and zone have been found: the window opens small, with the setup steps behind Settings.</summary>
     public bool Compact { get; set; }
+    /// <summary>The Drops and Gathered sections both show at once; each folds to its header on a click, and stays folded.</summary>
+    public bool DropsOpen { get; set; } = true;
+    public bool GatherOpen { get; set; } = true;
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
     public bool ShareMarket { get; set; } = true;
     /// <summary>True once the player chose the Market area by hand; the title-and-headers search then stays off until they switch back.</summary>

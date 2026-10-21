@@ -33,9 +33,6 @@ public partial class MainWindow : Window
     /// <summary>The farming run just stopped, shown for a while before the live count takes the window back.</summary>
     SessionEngine? _lastRun; DateTime _lastRunUntil;
     bool Farming => _watcher.Farming;
-    enum Tab { Drops, Gathered }
-    Tab _tab;
-    static Tab TabFor(Mode m) => m == Mode.Gather ? Tab.Gathered : Tab.Drops;
     static Mode ModeOf(SessionEngine e) => GameWatcher.DominantKind(e) == "Gathering" ? Mode.Gather : Mode.Open;
     HudWindow? _hud;
     DRect? _region = RegionStore.Load();
@@ -104,10 +101,10 @@ public partial class MainWindow : Window
         ResetLink.Click += (_, _) => { _region = null; _prefs.ManualChat = false; RegionStore.Clear(); _watcher.ManualChat = null; _ = _watcher.ResetChatAsync(); UpdateStep2(); Preview.Source = null; PreviewHint.Visibility = Visibility.Visible; Say("Back to automatic: the chat is found when you start.", "Faint"); };
         LogsLink.Click += (_, _) => Open(CrashLog.Dir);
 
-        Kind.SelectionChanged += (_, _) => { if (!Farming) { _mode = SelectedMode; _tab = TabFor(_mode); ApplyModeLabels(); if (_watcher.Chat == null) ResetTiles(); } };
-        DropsTab.Click += (_, _) => { _tab = Tab.Drops; Redraw(); };
-        GatherTab.Click += (_, _) => { _tab = Tab.Gathered; Redraw(); };
-        _mode = SelectedMode; _tab = TabFor(_mode);
+        Kind.SelectionChanged += (_, _) => { if (!Farming) { _mode = SelectedMode; ApplyModeLabels(); if (_watcher.Chat == null) ResetTiles(); } };
+        DropsHead.MouseLeftButtonUp += (_, _) => { _prefs.DropsOpen = !_prefs.DropsOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        GatherHead.MouseLeftButtonUp += (_, _) => { _prefs.GatherOpen = !_prefs.GatherOpen; if (!_demo) _prefs.Save(); Redraw(); };
+        _mode = SelectedMode;
         ApplyModeLabels(); ResetTiles();
         BuildTray();
         _timer.Tick += (_, _) => Tick();
@@ -120,7 +117,8 @@ public partial class MainWindow : Window
         UpdateMarketUi();
         // the tables grow with what's farmed and the window with them (the player's rule: never scroll); only a table
         // that would run the window past the bottom of the screen gets a scroll bar, and the window moves up to stay on it
-        double tableCap = Math.Max(228, SystemParameters.WorkArea.Height - 440);
+        // both tables share the screen below the tiles; each scrolls only once it would push the window off the bottom
+        double tableCap = Math.Max(200, (SystemParameters.WorkArea.Height - 520) / 2);
         DropsScroll.MaxHeight = tableCap; GatherScroll.MaxHeight = tableCap;
         SizeChanged += (_, _) => KeepOnScreen();
         ShowTable(null);
@@ -171,11 +169,9 @@ public partial class MainWindow : Window
         };
         // the fifth tile: what the hour is worth if the tradeable items are sold on the Market (plus the Kinah, in open world)
         Tile5Label.Text = m == Mode.Gather ? "VALUE / HR" : "TOTAL / HR";
-        PaintTabs();
         if (!Farming && _watcher.Chat == null && !_demo) ShowTable(null);
     }
 
-    void PaintTabs() { PaintChip(DropsTab, _tab == Tab.Drops); PaintChip(GatherTab, _tab == Tab.Gathered); }
 
     /// <summary>Redraws the table for the count on screen: the run, the run just stopped, or the live count.</summary>
     void Redraw()
@@ -273,7 +269,7 @@ public partial class MainWindow : Window
         try
         {
             _settings.Upload.Enabled = ShareChk.IsChecked == true;
-            _mode = SelectedMode; _tab = TabFor(_mode);
+            _mode = SelectedMode;
             ApplyModeLabels();
             var chat = await _watcher.EnsureChatAsync();
             _region = chat.Region;
@@ -358,7 +354,7 @@ public partial class MainWindow : Window
             // the tiles follow what the player is doing now (kills or gathers in the last few minutes), in a run or not:
             // a run labelled Gathering that turned into mob farming shows Kinah per hour, not attempts
             var dom = show.RecentKind is { } rk ? (rk == "Gathering" ? Mode.Gather : Mode.Open) : show.Events > 0 ? ModeOf(show) : SelectedMode;
-            if (dom != _mode) { _mode = dom; _tab = TabFor(_mode); ApplyModeLabels(); }
+            if (dom != _mode) { _mode = dom; ApplyModeLabels(); }
             if (farm == null) TableTitle.Text = "WHILE THE GAME IS OPEN";
             FillNumbers(show, show.Elapsed);
         }
@@ -444,7 +440,7 @@ public partial class MainWindow : Window
             int all = pets.Values.Sum();
             drops.Add(new DropRow($"SOUL CRYSTALS FROM KILLS  ·  {all}  ·  {Rate(all / hours)}/hr", "", "", "", Header: true));
             foreach (var (name, n) in pets.OrderByDescending(x => x.Value))
-                drops.Add(new DropRow(name, n.ToString("N0"), kills > 0 ? Pct(n / (double)kills) : "—", Rate(n / hours), Initial: InitialOf(name)));
+                drops.Add(new DropRow(name, n.ToString("N0"), "", Rate(n / hours), Initial: InitialOf(name)));
         }
         var gathered = new List<DropRow>();
         var stats = e.SkillSnapshot();
@@ -547,19 +543,18 @@ public partial class MainWindow : Window
         // one table at a time, picked by the tabs; the tab labels carry the counts
         int gc = gathered.Count(r => !r.Header);
         int ic = drops.TakeWhile(r => !r.Header).Count();   // item rows; the Soul Crystals section below them has its own count
-        DropsTab.Content = ic > 0 ? $"Drops · {ic}" : "Drops";
-        GatherTab.Content = gc > 0 ? $"Gathered · {gc}" : "Gathered";
-        PaintTabs();
-        DropsSection.Visibility = _tab == Tab.Drops ? Visibility.Visible : Visibility.Collapsed;
-        GatherSection.Visibility = _tab == Tab.Gathered ? Visibility.Visible : Visibility.Collapsed;
-        TableNote.Text = _tab == Tab.Gathered
-            ? "Per-attempt rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too."
-            : "Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.";
-        bool noPrice = (_tab == Tab.Gathered ? gathered : drops).Any(r => !r.Header && r.Price == "—");
-        bool ratesNote = _tab == Tab.Gathered ? gathered.Count > 0 && nodes == 0 : drops.Count > 0 && kills == 0;
-        if (noPrice && !PriceBook.Any)
-            TableNote.Text = (ratesNote ? TableNote.Text + " " : "") + "No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest.";
-        TableNote.Visibility = ratesNote || (noPrice && !PriceBook.Any) ? Visibility.Visible : Visibility.Collapsed;
+        DropsTitle.Text = ic > 0 ? $"DROPS FROM KILLS  ·  {ic}" : "DROPS FROM KILLS";
+        GatherTitle.Text = gc > 0 ? $"GATHERED  ·  {gc}" : "GATHERED";
+        DropsChev.Text = _prefs.DropsOpen ? "▾" : "▸"; GatherChev.Text = _prefs.GatherOpen ? "▾" : "▸";
+        DropsBody.Visibility = _prefs.DropsOpen ? Visibility.Visible : Visibility.Collapsed;
+        GatherBody.Visibility = _prefs.GatherOpen ? Visibility.Visible : Visibility.Collapsed;
+        var notes = new List<string>();
+        if (_prefs.DropsOpen && drops.Count > 0 && kills == 0) notes.Add("Drop % appears once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.");
+        if (_prefs.GatherOpen && gathered.Count > 0 && nodes == 0) notes.Add("Per-attempt rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.");
+        bool noPrice = (_prefs.DropsOpen && drops.Any(r => !r.Header && r.Price == "—")) || (_prefs.GatherOpen && gathered.Any(r => !r.Header && r.Price == "—"));
+        if (noPrice && !PriceBook.Any) notes.Add("No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest.");
+        TableNote.Text = string.Join(" ", notes);
+        TableNote.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>The icon slot for an item: cached or fetched by the cache, a lettered tile until then.</summary>
@@ -801,7 +796,7 @@ public partial class MainWindow : Window
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new ItemAcquired(t, _items.IdOf(n), 1, b)); }
         void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new CurrencyGained(t, "Oculazen Soul Points", 1)); } }
         void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new PetCrystal(t, n + " Soul Crystal", 1)); }
-        Kind.SelectedItem = Kinds.Contains(kind) ? kind : "Open world"; _mode = SelectedMode; _tab = TabFor(_mode);
+        Kind.SelectedItem = Kinds.Contains(kind) ? kind : "Open world"; _mode = SelectedMode;
         switch (_mode)
         {
             case Mode.Gather:
