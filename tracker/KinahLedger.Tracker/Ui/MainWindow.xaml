@@ -325,6 +325,23 @@
             </TextBlock>
           </StackPanel>
 
+          <!-- expeditions and events: each trip from entering to the last loot, averaged over every run kept on this PC -->
+          <StackPanel x:Name="InstSection" Visibility="Collapsed">
+            <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="InstTitle" Style="{StaticResource Th}" Text="EXPEDITIONS AND EVENTS" Margin="20,0,0,0" HorizontalAlignment="Left"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="RUNS"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="AVG TIME" ToolTip="From entering to the last loot picked up there, averaged over the runs."/>
+                <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per hour inside the runs."/>
+                <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PER RUN" Margin="0,0,20,0" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per run. Events come round about once an hour, so this is their number."/>
+              </Grid>
+            </Border>
+            <ItemsControl x:Name="InstRows" ItemTemplate="{StaticResource RowTemplate}"/>
+          </StackPanel>
+
           <!-- the totals, like the site's session summary footer: loot before tax, the Market's cut, Kinah, the session total -->
           <Border x:Name="Foot" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="0,1,0,0" CornerRadius="0,0,17,17">
             <StackPanel>

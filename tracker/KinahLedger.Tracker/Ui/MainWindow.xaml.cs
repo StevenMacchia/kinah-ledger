@@ -642,6 +642,7 @@ public partial class MainWindow : Window
         }
         Rows.ItemsSource = drops; GatherRows.ItemsSource = gathered; MobRows.ItemsSource = mobs;
         MobEmpty.Visibility = mobs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShowInstances();
         MobCredit.Visibility = mobs.Count > 0 && _prefs.MobsOpen ? Visibility.Visible : Visibility.Collapsed;
         var target = _watcher.Chat?.TargetNote ?? "";
         MobEmpty.Text = target.Length > 0 ? "Target bar: " + target + "."
@@ -678,6 +679,45 @@ public partial class MainWindow : Window
 
     /// <summary>A drop's odds as the site's item page says them: "1 in 6 kills" (here "1 in 6"), or "2.3 a kill" for more than one per kill.</summary>
     static string Odds(long drops, int kills) => drops <= 0 || kills <= 0 ? "—" : drops >= kills ? $"{drops / (double)kills:0.0} a kill" : $"1 in {Math.Round(kills / (double)drops):0}";
+
+    /// <summary>
+    /// Expeditions and events, one row per place: how many runs, the average time from entering to the last loot, the value
+    /// per hour inside the runs and per run (Kinah plus loot at the lowest Market price after the Market's cut).
+    /// </summary>
+    void ShowInstances()
+    {
+        var log = _watcher.Chat?.Instances;
+        var runs = log?.Snapshot() ?? new List<InstanceRun>();
+        var rows = new List<DropRow>();
+        foreach (var g in runs.GroupBy(r => r.Zone).OrderByDescending(g => g.Max(r => r.LastLoot)))
+        {
+            long value = 0; double secs = 0; int n = 0;
+            foreach (var r in g) { value += RunValue(r); secs += r.Seconds; n++; }
+            var kind = g.Last().Kind;
+            var last = g.Max(r => r.LastLoot) ?? DateTime.UtcNow;
+            var sub = log?.Open == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}";
+            rows.Add(new DropRow(g.Key, n.ToString("N0"), Clock(TimeSpan.FromSeconds(secs / n)), Fk(value / Math.Max(secs, 10) * 3600),
+                Initial: InitialOf(g.Key), Value: (value / n).ToString("N0"), Sub: sub));
+        }
+        InstRows.ItemsSource = rows;
+        InstTitle.Text = rows.Count > 0 ? $"EXPEDITIONS AND EVENTS  ·  {runs.Count} RUN{(runs.Count == 1 ? "" : "S")}" : "EXPEDITIONS AND EVENTS";
+        InstSection.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>A run's worth: its Kinah plus its tradeable loot at the lowest Market price, after the Market's cut.</summary>
+    long RunValue(InstanceRun r)
+    {
+        double v = r.Kinah;
+        foreach (var (id, count) in r.Items)
+            if (PriceBook.Price(_items.NameOf(id)) is long p) v += p * count * PriceBook.SellerKeeps;
+        return (long)Math.Round(v);
+    }
+
+    static string Ago(DateTime utc)
+    {
+        var d = DateTime.UtcNow - utc;
+        return d.TotalMinutes < 1 ? "just now" : d.TotalHours < 1 ? $"{(int)d.TotalMinutes} min ago" : d.TotalDays < 1 ? $"{(int)d.TotalHours} h ago" : $"{(int)d.TotalDays} d ago";
+    }
 
     /// <summary>"42:17" under an hour, "1:42:17" past it, as the site's timer shows it.</summary>
     static string Clock(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";

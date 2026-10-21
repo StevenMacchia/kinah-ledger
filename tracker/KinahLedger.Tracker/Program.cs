@@ -598,6 +598,13 @@ options: --process aion[,other]");
             Check("instances: an event area too", ZoneLocator.KindOf("Defend Shugo Merchants") ?? "none", "Event");
             Check("instances: an open-world zone has none", ZoneLocator.KindOf("Eastern Cantas Valley") ?? "none", "none");
             Check("instances: they are on the zone list", ZoneLocator.Known.Contains("Urugugu Canyon") ? "yes" : "no", "yes");
+            {
+                var r = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = b0 };
+                r.LastLoot = b0.AddMinutes(7);
+                Check("an expedition run lasts from entry to the last loot", TimeSpan.FromSeconds(r.Seconds).ToString(@"m\:ss"), "7:00");
+                var none = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Start = b0 };
+                Check("a run with no loot has no length", none.Seconds.ToString("0"), "0");
+            }
             Check("player chat is not loot-shaped", Reread.LooksLikeLoot("[Drogo] bro i live between 1984 and 2008") ? "yes" : "no", "no");
         }
         Check("target bar: a garbled read keeps the enemy on the bar", TargetReader.Close("Hgrcl Kalgolem", "Hard Kalgolem") ? "yes" : "no", "yes");

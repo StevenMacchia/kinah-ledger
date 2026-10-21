@@ -33,6 +33,8 @@ public sealed class TrackerSession
     /// ledger runs for as long as the tracker does (or until the player starts it over). Only shown, never shared.
     /// </summary>
     public SessionEngine CraftView { get; private set; }
+    /// <summary>Runs in expeditions and events, entry to last loot, kept across restarts.</summary>
+    public InstanceLog Instances { get; } = new();
     public void ResetCraftView() => CraftView = new SessionEngine(_items);
     /// <summary>Starts the zone view over in the zone the player is in now.</summary>
     public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
@@ -192,6 +194,7 @@ public sealed class TrackerSession
             else if (zone == null && Engine.Zone == null && (DateTime.UtcNow - _zoneNoteAt).TotalSeconds >= 60) { _zoneNoteAt = DateTime.UtcNow; CrashLog.Note($"zone read: {note}"); }
             Engine.SetZone(zone);
             Secondary?.SetZone(zone);
+            Instances.Zone(zone, DateTime.UtcNow);
             // a new zone starts the zone view over: its tables are this zone's alone
             if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
             else ZoneView.SetZone(zone);
@@ -316,7 +319,7 @@ public sealed class TrackerSession
             foreach (var parsed in events)
             {
                 var ev = reward ? _parser.AsReward(parsed) : parsed;
-                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); any = true;
+                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); any = true;
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
@@ -396,6 +399,7 @@ public sealed class TrackerSession
 
     public async Task StopAsync()
     {
+        Instances.Close();
         _cts.Cancel();
         if (_loop != null) { try { await _loop; } catch (Exception) { /* loop ended */ } }
         Engine.Finish();
