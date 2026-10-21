@@ -267,7 +267,10 @@ public sealed class TrackerSession
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
         // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
         bool reward = Target.RewardOpen(DateTime.UtcNow);
-        foreach (var (l, events) in _parser.ParseBatch(fresh, DateTime.UtcNow))
+        var now = DateTime.UtcNow;
+        // loot lines that were read garbled while they faded in, now read cleanly at the same place: one more parse each
+        var reread = _reread.Take(lines, fresh.Count, now);
+        bool Apply(IEnumerable<GameEvent> events)
         {
             bool any = false;
             foreach (var parsed in events)
@@ -278,13 +281,30 @@ public sealed class TrackerSession
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
+            return any;
+        }
+        int at = 0;
+        foreach (var (l, events) in _parser.ParseBatch(fresh, now))
+        {
+            bool any = Apply(events);
             CrashLog.Read(l, any, afterFade);
+            if (any) { LastLine = l; LootLine?.Invoke(l); }
+            // a loot-shaped line that matched nothing was probably still fading in: look at its place again next read
+            else if (Reread.LooksLikeLoot(l)) _reread.Remember(l, fresh.Count - 1 - at, now);
+            at++;
+        }
+        foreach (var l in reread)
+        {
+            bool any = false;
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now)) any |= Apply(events);
+            CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
         LastError = "";
     }
 
     DateTime _targetAt = DateTime.MinValue;
+    readonly Reread _reread = new();
 
     /// <summary>
     /// The target bar every 2 seconds while the chat is read. Unlike the minimap, the panel isn't hidden for it: a read every

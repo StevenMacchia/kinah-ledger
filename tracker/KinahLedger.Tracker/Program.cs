@@ -575,6 +575,19 @@ options: --process aion[,other]");
         Check("target bar: rn for m, level and distance", Bar("45 Hard Kalgolern 2m"), "Hard Kalgolem");
         Check("target bar: a bare Kalgolem fits 26 names, so none", Bar("Kalgolern"), "none, unlisted: Kalgolern");
         Check("target bar: a name with a real rn still matches", Bar("45 Abyss Karnif"), "Abyss Karnif");
+        {
+            // a loot line read while it faded in is looked at again at its place in the next read
+            var rr = new Reread(); var r0 = DateTime.UtcNow;
+            rr.Remember("ria acquired", 0, r0);
+            Check("fading line: read clean at the same place next time", string.Join("|", rr.Take(new[] { "Odyle acquired.", "Aria acquired." }, 0, r0.AddSeconds(1))), "Aria acquired.");
+            rr.Remember("»eqwacquired.", 0, r0);
+            Check("fast second gather: garbled, then clean, one line further up", string.Join("|", rr.Take(new[] { "Aria acquired.", "Aria acquired.", "Orichalcum Ore acquired." }, 1, r0.AddSeconds(1))), "Aria acquired.");
+            rr.Remember("ria acquired", 0, r0);
+            Check("a different line in that place is not taken", string.Join("|", rr.Take(new[] { "Acquired 436 Kina." }, 0, r0.AddSeconds(1))), "");
+            rr.Remember("ria acquired", 0, r0);
+            Check("still garbled: one more look", string.Join("|", rr.Take(new[] { "ria acquired" }, 0, r0.AddSeconds(1))) + "/" + string.Join("|", rr.Take(new[] { "Aria acquired." }, 0, r0.AddSeconds(2))), "/Aria acquired.");
+            Check("player chat is not loot-shaped", Reread.LooksLikeLoot("[Drogo] bro i live between 1984 and 2008") ? "yes" : "no", "no");
+        }
         Check("target bar: a garbled read keeps the enemy on the bar", TargetReader.Close("Hgrcl Kalgolem", "Hard Kalgolem") ? "yes" : "no", "yes");
         Check("target bar: a bare species keeps it too", TargetReader.Close("Kalgolern", "Hard Kalgolem") ? "yes" : "no", "yes");
         Check("target bar: another enemy doesn't", TargetReader.Close("Abyss Drakan Scout", "Hard Kalgolem") ? "yes" : "no", "no");
