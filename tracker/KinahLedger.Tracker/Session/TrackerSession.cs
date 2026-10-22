@@ -113,6 +113,10 @@ public sealed class TrackerSession
     /// <summary>All tradeable Kina picked up since the reader started, across chunks: what the balance counter is checked against.</summary>
     public long KinahPicked => Interlocked.Read(ref _kinahPicked);
     long _kinahBound;
+    /// <summary>The pace of reading while fighting, and how long after the last loot it lasts (measured 2026-10-22: a chat and loot list pass takes about 260 ms).</summary>
+    public const int FightIntervalMs = 300;
+    public const double FightSeconds = 10;
+    DateTime _lastActivity = DateTime.MinValue;
 
     // ---- the balance counter as a check on the count ----
     readonly BalanceCheck _balanceCheck = new();
@@ -312,7 +316,10 @@ public sealed class TrackerSession
             Updated?.Invoke();
 
             int spent = (int)(DateTime.UtcNow - t0).TotalMilliseconds;
-            if (spent < _interval) { try { await Task.Delay(_interval - spent, ct); } catch (TaskCanceledException) { } }
+            // during a fight (loot, a kill or a loot list row in the last FightSeconds) about three reads a second, so a line
+            // or a row up for a moment is read more than once; idle, the usual pace, since back-to-back reading costs a CPU core
+            int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, FightIntervalMs) : _interval;
+            if (spent < every) { try { await Task.Delay(every - spent, ct); } catch (TaskCanceledException) { } }
         }
         Engine.Finish();
     }
@@ -394,7 +401,7 @@ public sealed class TrackerSession
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
-                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); any = true;
+                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); any = true; _lastActivity = DateTime.UtcNow;
                 Feed(ev);
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
@@ -512,6 +519,7 @@ public sealed class TrackerSession
         try
         {
             var rows = LootPopup.Rows(lines);
+            if (rows.Count > 0) _lastActivity = DateTime.UtcNow;
             if (rows.Count > 0) ReadTrace.List(now, rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}"));
             var add = _cross.Popup(rows, now);
             if (add.Count == 0) return;
