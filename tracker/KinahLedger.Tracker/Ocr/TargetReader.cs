@@ -135,6 +135,14 @@ public sealed partial class TargetReader
     // Open, it lists the crafting skills along the top of the screen, in the same band. While it is open the chat
     // underneath is mostly hidden, so "Successfully crafted" is often never read: the item line alone says what was made.
     public const double CraftGraceSeconds = 10;
+    /// <summary>
+    /// How long after the crafting window's last sign (its skill tabs in the band, its "Show acquired designs only" over
+    /// the chat) it still counts as open. A queue of crafts runs for minutes with the chat hidden, and the loot list beside
+    /// the character shows each result well after the last sign (16:52, a longsword 16 s and 40 s after): 60 s, and only
+    /// after the sign, never before it (Steven, 2026-10-22: crafting is read from the window and the loot list, not chat).
+    /// </summary>
+    public const double CraftHoldSeconds = 60;
+    public static bool CraftOpen(DateTime at, DateTime t) => (t - at).TotalSeconds is >= -CraftGraceSeconds and <= CraftHoldSeconds;
     static readonly string[] CraftTabs = { "Weaponsmithing", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alchemy", "Cooking", "Cookinq" };
     public static bool IsCraftTab(string text) => CraftTabs.Any(t => text.Trim().Equals(t, StringComparison.OrdinalIgnoreCase));
     /// <summary>When the crafting window's skill tabs were last seen in the band.</summary>

@@ -482,6 +482,7 @@ options: --process aion[,other]");
         Console.WriteLine($"  kills counted        {tot.Kills}   (evidence: {e.KillsSeen} · Kinah pickups {e.KinahDrops} · Soul Points lines {e.CurrencyLines})");
         Console.WriteLine($"  quest counter steps  {s.QuestStepsTotal}   (kills of quest enemies, counted by the game)");
         Console.WriteLine($"  Kinah                {tot.Kinah:N0}");
+        Console.WriteLine($"  drops                {e.Items.Values.Sum()} items · crafts kept out of drops {e.CraftedSkipped}");
         Console.WriteLine($"  loot list            {s.CrossCheck.Matched} matched the chat · {s.CrossCheck.Added} added (chat missed) · {s.CrossCheck.Duplicates} chat repeats skipped");
         Console.WriteLine("  by enemy:");
         foreach (var m in e.MobSnapshot().Take(12)) Console.WriteLine($"    {m.Name,-36} {m.Kills,4} kills  {m.Kinah,9:N0} Kinah");
@@ -1367,6 +1368,15 @@ options: --process aion[,other]");
             int rsGone = TrackerSession.PruneRewardShots(rs, DateTime.Now);
             var rsLeft = string.Join(" ", Directory.GetFiles(rs).Select(Path.GetFileName).OrderBy(n => n));
             Directory.Delete(rs, true);
+            // a craft queue: the loot list shows each result long after the window's last sign (16:52, 16 s and 40 s);
+            // within the 60 s hold a recipe's item is a craft, after it a drop, and a drop before the window opened stays one
+            var ce = new SessionEngine(items); var cw = x0;
+            ce.SetCraftWindow(cw);
+            ce.Apply(new ItemAcquired(cw.AddSeconds(-30), items.IdOf("Orichalcum Longsword"), 1, false));
+            ce.Apply(new ItemAcquired(cw.AddSeconds(16), items.IdOf("Orichalcum Longsword"), 1, false));
+            ce.Apply(new ItemAcquired(cw.AddSeconds(40), items.IdOf("Orichalcum Longsword"), 1, false));
+            ce.Apply(new ItemAcquired(cw.AddSeconds(75), items.IdOf("Orichalcum Longsword"), 1, false));
+            Check("crafting window: held 60 s after its last sign", $"crafts {ce.CraftedSkipped} · drops {ce.Items.Values.Sum()}", "crafts 2 · drops 2");
             Check("reward-shots cleans itself", $"{rsGone} · {rsLeft}", "2 · 20261020-101010-Zone-Jump-Jump.jpg 20261022-101010-Zone-in-run.jpg mine.jpg");
 
             // a joke ask on the site's board (one listing, 5,000x its day before) is no price

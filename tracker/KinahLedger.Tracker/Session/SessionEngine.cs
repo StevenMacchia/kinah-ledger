@@ -260,7 +260,7 @@ public sealed class SessionEngine
     DateTime _craftWindowAt = DateTime.MinValue;
     /// <summary>When the crafting window was last seen open (its skill tabs in the band, or its own text over the chat).</summary>
     public void SetCraftWindow(DateTime at) { lock (_lock) if (at > _craftWindowAt) _craftWindowAt = at; }
-    bool CraftWindowOpen(DateTime t) => Math.Abs((t - _craftWindowAt).TotalSeconds) <= KinahLedger.Ocr.TargetReader.CraftGraceSeconds;
+    bool CraftWindowOpen(DateTime t) => KinahLedger.Ocr.TargetReader.CraftOpen(_craftWindowAt, t);
 
     public void SetTarget(string? name, DateTime at)
     {

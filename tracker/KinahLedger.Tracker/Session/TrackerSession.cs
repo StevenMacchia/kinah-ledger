@@ -392,7 +392,7 @@ public sealed class TrackerSession
         // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
         if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase))) Target.MarkCraft(now);
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
-        bool crafting = (now - Target.CraftAt).TotalSeconds <= TargetReader.CraftGraceSeconds;
+        bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
         // loot lines that were read garbled while they faded in, now read cleanly at the same place: one more parse each
         var reread = _reread.Take(lines, fresh.Count, now);
         // more loot than the chat can show at once (an expedition's rewards, a box opened): the read shares no line with
@@ -703,11 +703,18 @@ public sealed class TrackerSession
             bool reward = Target.RewardOpen(now);
             foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
             Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt);
-            bool crafting = (now - Target.CraftAt).TotalSeconds <= TargetReader.CraftGraceSeconds;
+            bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
             foreach (var p0 in add)
             {
                 var parsed = p0 with { Via = "loot list" };
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                // with the crafting window open, the loot list shows what the crafts gave: a recipe's item is a craft (the
+                // engines take it as one), anything else is set aside until the window itself can be read, never a drop
+                if (crafting && !made && parsed is ItemAcquired other)
+                {
+                    CrashLog.Note($"crafting window open: {_items.NameOf(other.ItemId)} x{other.Count} from the loot list set aside, not a drop");
+                    continue;
+                }
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
                 Count(ev);
                 Feed(ev);
@@ -739,8 +746,10 @@ public sealed class TrackerSession
     // reward-shots folder exists (made by hand on a PC that helps build the reader; never by the app).
     // The folder cleans itself (Steven, 2026-10-22: 212 pictures, 472 MB in a day): in-run pictures go after a day, reward
     // screens after a week, and past RewardShotsMaxMB the oldest go first, in-run ones before reward screens. Fight
-    // pictures stopped once the nameplate reader was built from them.
-    public const int RewardShotsPerDay = 200;
+    // pictures stopped once the nameplate reader was built from them. While the crafting window is open (or within its
+    // hold), a picture every 2 s, "-crafting.jpg", for a reader of the window's recipe, queue and result; kept a day.
+    public const int RewardShotsPerDay = 300;
+    bool _craftShotNoted;
     public const long RewardShotsMaxMB = 300;
     DateTime _rewardShotAt = DateTime.MinValue, _rewardPrunedAt = DateTime.MinValue; int _rewardShotsOpen;
 
@@ -750,7 +759,7 @@ public sealed class TrackerSession
         int gone = 0;
         var files = new DirectoryInfo(dir).GetFiles("2*-*.jpg")
             .Where(f => System.Text.RegularExpressions.Regex.IsMatch(f.Name, @"^\d{8}-\d{6}-"))
-            .Select(f => (F: f, Run: f.Name.EndsWith("-in-run.jpg") || f.Name.EndsWith("-fight.jpg")))
+            .Select(f => (F: f, Run: f.Name.EndsWith("-in-run.jpg") || f.Name.EndsWith("-fight.jpg") || f.Name.EndsWith("-crafting.jpg")))
             .ToList();
         void Drop((FileInfo F, bool Run) x) { try { x.F.Delete(); gone++; } catch { } }
         foreach (var x in files.Where(x => (now - x.F.LastWriteTime).TotalDays > (x.Run ? 1 : 7)).ToList()) { Drop(x); files.Remove(x); }
@@ -776,8 +785,11 @@ public sealed class TrackerSession
                 if (gone > 0) CrashLog.Note($"reward-shots: {gone} old pictures deleted");
             }
             bool reward = Target.RewardOpen(now), inside = ZoneLocator.KindOf(Zone) is "Event" or "Expedition" || Zone == SessionEngine.UnknownZone;
+            // the crafting window, to learn to read it: recipe, queue, result, item made (a picture every 2 s while open)
+            bool crafting = !reward && TargetReader.CraftOpen(Target.CraftAt, now) && now >= Target.CraftAt;
             if (!reward) _rewardShotsOpen = 0;
             bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2
+                     : crafting ? (now - _rewardShotAt).TotalSeconds >= 2
                      : inside && (now - _rewardShotAt).TotalSeconds >= 30;
             if (!due) return;
             var today = DateTime.Now.ToString("yyyyMMdd");
@@ -787,7 +799,7 @@ public sealed class TrackerSession
             // without counting as a window over it, and Alt+Tab shows thumbnails of everything open (2026-10-22 15:07)
             if (!GameWindow.InFront(_settings.ProcessHints)) return;
             _rewardShotAt = now; if (reward) _rewardShotsOpen++;
-            var title = !reward ? "in-run" : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            var title = crafting ? "crafting" : !reward ? "in-run" : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             using var bmp = ScreenReader.Capture(g);
             var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
@@ -795,7 +807,8 @@ public sealed class TrackerSession
             ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 85L);
             var file = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{zoneName}-{title}.jpg");
             bmp.Save(file, jpg, ps);
-            if (_rewardShotsOpen == 1) CrashLog.Note($"reward screen kept as a picture: {Path.GetFileName(file)}");
+            if (_rewardShotsOpen == 1 || (crafting && !_craftShotNoted)) CrashLog.Note($"{(crafting ? "crafting window" : "reward screen")} kept as a picture: {Path.GetFileName(file)}");
+            _craftShotNoted = crafting;
         }
         catch (Exception ex) { CrashLog.Write("reward picture", ex); }
     }
