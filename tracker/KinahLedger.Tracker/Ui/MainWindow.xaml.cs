@@ -475,6 +475,7 @@ public partial class MainWindow : Window
         if (_prefs.Hud && chat != null) EnsureHud();
         if (_part == "Crafting") FillCraft(chat?.CraftView);
         FillPickups();
+        AlertTick();
         UpdateHud();
     }
 

@@ -263,11 +263,12 @@ public static class WpfApp
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         w.Close();
 
-        foreach (var (file, fields) in new[] { ("ui-hud.png", HudFields.Parse(null)), ("ui-hud-all.png", HudFields.All.Select(f => f.Key).ToList()) })
+        foreach (var (file, fields) in new[] { ("ui-hud.png", HudFields.Parse(null)), ("ui-hud-all.png", HudFields.All.Select(f => f.Key).ToList()), ("ui-hud-alert.png", HudFields.Parse(null)) })
         {
             var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Show();
             h.Update(values);
+            if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();

@@ -105,14 +105,35 @@ public sealed class HudWindow : Window
 
         Build();
 
-        Content = new Border
+        _alert = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
+        _frame = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0A, 0x0C, 0x18)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x32, 0x3A, 0x66)),
+            BorderBrush = FrameBrush,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 10, 20, 10),
-            Child = _row
+            Child = new StackPanel { Children = { _row, _alert } }
         };
+        Content = _frame;
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
+    }
+
+    static readonly SolidColorBrush FrameBrush = new(Color.FromRgb(0x32, 0x3A, 0x66));
+    readonly Border _frame;
+    readonly TextBlock _alert;
+    System.Windows.Threading.DispatcherTimer? _alertTimer;
+
+    /// <summary>
+    /// A rare drop: the panel's border and a line under the figures in the item's grade colour, for a few seconds
+    /// (0.8, Steven 2026-10-22). A second alert while one shows replaces it and starts the time again.
+    /// </summary>
+    public void Alert(string text, Color color, double seconds = 5)
+    {
+        _alert.Text = text; _alert.Foreground = new SolidColorBrush(color); _alert.Visibility = Visibility.Visible;
+        _frame.BorderBrush = new SolidColorBrush(color); _frame.BorderThickness = new Thickness(2);
+        _alertTimer?.Stop();
+        _alertTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+        _alertTimer.Tick += (_, _) => { _alertTimer?.Stop(); _alert.Visibility = Visibility.Collapsed; _frame.BorderBrush = FrameBrush; _frame.BorderThickness = new Thickness(1); };
+        _alertTimer.Start();
     }
 
     /// <summary>Shows these figures, in panel order; the next Update fills them.</summary>

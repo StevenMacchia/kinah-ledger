@@ -101,6 +101,11 @@ public partial class MainWindow
             h.Click += (_, _) => { Open(url); if (_card != null) _card.IsOpen = false; };
             links.Inlines.Add(h);
         }
+        // Watch: this item alerts like a rare drop (Ui/MainWindow.Alerts.cs)
+        var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop watching" : "Watch: alert me when it drops"));
+        watch.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
+        watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop watching" : "Watch: alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
+        links.Inlines.Add(watch);
         Link("Drops on kinahledger.com", SiteUrl + "/#drops");
         if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) Link("MetaBot.GG page", mu);
         body.Children.Add(links);
