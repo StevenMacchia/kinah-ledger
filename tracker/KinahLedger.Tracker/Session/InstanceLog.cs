@@ -76,7 +76,9 @@ public sealed class InstanceLog
                     else _cur.Items[a.ItemId] = _cur.Items.GetValueOrDefault(a.ItemId) + a.Count;
                     _cur.LastLoot = a.Time;
                     break;
-                case KinahChanged { Bound: false } k when k.Delta > 0:
+                // bound Kina too: an expedition's or a Transcendence's end reward ("Acquired 20,000 Kina (Bound).") is money to
+                // spend all the same (Steven, 2026-10-22: "its straight cash")
+                case KinahChanged k when k.Delta > 0:
                     _cur.Kinah += k.Delta; _cur.LastLoot = k.Time;
                     break;
                 // a world boss run is one kill, the boss's: the enemies dying around it are not

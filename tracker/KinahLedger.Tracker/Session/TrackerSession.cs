@@ -519,6 +519,8 @@ public sealed class TrackerSession
     static string Unbound(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
     Dictionary<string, List<ItemInfo>>? _byIcon;
     readonly List<(DateTime At, string Name, int Count)> _runPickups = new();
+    // the reward table's Kina, for the chat line that may print the same amount after it
+    readonly List<(DateTime At, long Amount)> _gridKina = new();
 
     async Task RewardGridDue()
     {
@@ -564,7 +566,7 @@ public sealed class TrackerSession
                 // a clear match to the coin as the game draws it is sure on its own; a closer call needs the counter to agree
                 bool clearCoin = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25);
                 if (!clearCoin && !BalanceRose(amt, now)) { unnamed++; CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
-                Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" });
+                Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" }); _gridKina.Add((now, amt));
                 Feed(new KinahChanged(now, amt, false) { Via = "reward table" });
                 added++;
                 continue;
@@ -583,7 +585,7 @@ public sealed class TrackerSession
                 int kseen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Name == "Kina" && p.Count == amt);
                 if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; continue; }
                 bool bnd = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
-                Instances.Loot(new KinahChanged(now, amt, bnd) { Via = "reward table" });
+                Instances.Loot(new KinahChanged(now, amt, bnd) { Via = "reward table" }); _gridKina.Add((now, amt));
                 Feed(new KinahChanged(now, amt, bnd) { Via = "reward table" });
                 added++;
                 continue;
@@ -691,6 +693,13 @@ public sealed class TrackerSession
         if (ev is not CraftResult && BossTakes(ev)) return;
         if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored)
         {
+            // the reward table's coin slot, read first, then the same Kina in the chat: once
+            if (ev is KinahChanged { Delta: > 0 } dup && _gridKina.FindIndex(g => (ev.Time - g.At).TotalSeconds is >= 0 and <= 90 && g.Amount == dup.Delta) is int gi and >= 0)
+            {
+                _gridKina.RemoveAt(gi);
+                CrashLog.Note($"{dup.Delta:N0} Kina in the chat was the reward table's, already counted");
+                return;
+            }
             Instances.Loot(ev);
             // kept a while, so the reward table read after it doesn't count the same items again
             if (ev is ItemAcquired ra) _runPickups.Add((ev.Time, Unbound(_items.NameOf(ra.ItemId)), ra.Count));
@@ -928,7 +937,7 @@ public sealed class TrackerSession
     // bar for each craft; see CraftPanel. Its strip is read every pass (pixels only; a race lasts about five seconds), its
     // recipe line by OCR when the panel opens and every few seconds after, and each race's outcome is one craft.
     readonly CraftPanelTracker _panel = new();
-    string _panelRecipe = ""; DateTime _panelTextAt = DateTime.MinValue; bool _panelUp;
+    string _panelRecipe = ""; DateTime _panelTextAt = DateTime.MinValue; bool _panelUp, _panelIsCraft;
 
     async Task CraftPanelDue()
     {
@@ -942,19 +951,25 @@ public sealed class TrackerSession
             var s = CraftPanel.Measure(bmp, region, g);
             if (!s.Visible)
             {
-                if (_panelUp) CrashLog.Note("crafting panel gone");
-                _panelUp = false;
+                if (_panelUp && _panelIsCraft) CrashLog.Note("crafting panel gone");
+                _panelUp = false; _panelIsCraft = false;
                 return;
             }
             if (!_panelUp || (now - _panelTextAt).TotalSeconds >= 5)
             {
                 _panelTextAt = now;
                 var text = await CraftPanel.ReadTextAsync(bmp, region, g);
-                var recipe = text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
+                // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
+                // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
+                // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
+                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(l => l.Contains("Crafting", StringComparison.OrdinalIgnoreCase));
+                if (craft != _panelIsCraft || !_panelUp) CrashLog.Note(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
+                _panelIsCraft = craft;
+                var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
                 if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", CraftPanel.LastLines)})"); }
-                else if (!_panelUp) CrashLog.Note($"crafting panel up{(_panelRecipe.Length > 0 ? ", " + _panelRecipe : "")} (read: {string.Join(" | ", CraftPanel.LastLines)})");
             }
             _panelUp = true;
+            if (!_panelIsCraft) return;
             // the crafting window's hold and its pictures last as long as the queue runs, and the passes keep a fight's pace
             Target.MarkCraft(now); _lastActivity = now;
             foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.CraftPanelSeen(_panelRecipe, now);
