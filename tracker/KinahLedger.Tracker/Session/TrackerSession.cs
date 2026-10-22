@@ -300,6 +300,7 @@ public sealed class TrackerSession
                     _chatMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     await TargetDueAsync();
                     LootProcess(await list);
+                    RewardShot();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     Audit();
                 }
@@ -553,6 +554,43 @@ public sealed class TrackerSession
     /// The target bar every 2 seconds while the chat is read. Unlike the minimap, the panel isn't hidden for it: a read every
     /// 2 seconds would make it flicker. It is read through instead, and the window asks to move it only when nothing is read.
     /// </summary>
+    // ---- reward screens, kept as pictures ----
+    // Events and expeditions pay out on their own screens (cards picked at the end of an event, the big reward table at
+    // the end of an expedition), not in the chat (Steven, 2026-10-22). To learn to read them, a picture of the game window
+    // is kept each time one opens: a few seconds apart while it stays open, on this PC only, in reward-shots beside the
+    // logs, at most RewardShotsPerDay a day. Inside an event or expedition a picture every 15 s too, since a card pick may
+    // show no title to recognise. Nothing else on screen is captured, nothing is sent anywhere, and it only happens when the
+    // reward-shots folder exists (made by hand on a PC that helps build the reader; never by the app).
+    public const int RewardShotsPerDay = 200;
+    DateTime _rewardShotAt = DateTime.MinValue; int _rewardShotsOpen;
+    void RewardShot()
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            var dir = Path.Combine(CrashLog.Dir, "reward-shots");
+            if (GameRect is not { } g || !Directory.Exists(dir)) return;
+            bool reward = Target.RewardOpen(now), inside = ZoneLocator.KindOf(Zone) is "Event" or "Expedition";
+            if (!reward) _rewardShotsOpen = 0;
+            bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2 : inside && (now - _rewardShotAt).TotalSeconds >= 15;
+            if (!due) return;
+            var today = DateTime.Now.ToString("yyyyMMdd");
+            if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;
+            if (GameWindow.Covered(g, _settings.ProcessHints) is { } cover && !cover.StartsWith("Kinah Ledger")) return;   // only the game, never a window over it
+            _rewardShotAt = now; if (reward) _rewardShotsOpen++;
+            var title = !reward ? "in-run" : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            using var bmp = ScreenReader.Capture(g);
+            var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
+            using var ps = new System.Drawing.Imaging.EncoderParameters(1);
+            ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 85L);
+            var file = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{zoneName}-{title}.jpg");
+            bmp.Save(file, jpg, ps);
+            if (_rewardShotsOpen == 1) CrashLog.Note($"reward screen kept as a picture: {Path.GetFileName(file)}");
+        }
+        catch (Exception ex) { CrashLog.Write("reward picture", ex); }
+    }
+
     async Task TargetDueAsync()
     {
         if ((DateTime.UtcNow - _targetAt).TotalSeconds < 1) return;   // every second: a fast kill is over in two or three

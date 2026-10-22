@@ -143,6 +143,8 @@ public sealed partial class TargetReader
     public DateTime RewardAt { get; private set; } = DateTime.MinValue;
     bool _rewardSeen;
     public void MarkReward(DateTime t) => RewardAt = t;
+    /// <summary>The reward screen's title as last read ("Victory Reward", "Trade Shop").</summary>
+    public string RewardTitle { get; private set; } = "";
     /// <summary>True while a reward screen is open, or was seen within the last <see cref="RewardGraceSeconds"/>.</summary>
     public bool RewardOpen(DateTime t) => (t - RewardAt).TotalSeconds is >= -1 and <= RewardGraceSeconds;
 
@@ -187,6 +189,7 @@ public sealed partial class TargetReader
         {
             if ((DateTime.UtcNow - RewardAt).TotalSeconds > RewardGraceSeconds) CrashLog.Note($"reward screen open ({title}): its Kinah and items are rewards, not farming");
             RewardAt = DateTime.UtcNow;
+            RewardTitle = title;
         }
         var found = FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
         if (found == null && unlisted.Length > 0)
