@@ -563,7 +563,7 @@ public sealed class TrackerSession
     // logs, at most RewardShotsPerDay a day. Inside an event or expedition a picture every 15 s too, since a card pick may
     // show no title to recognise. Nothing else on screen is captured, nothing is sent anywhere, and it only happens when the
     // reward-shots folder exists (made by hand on a PC that helps build the reader; never by the app).
-    public const int RewardShotsPerDay = 200;
+    public const int RewardShotsPerDay = 500;
     DateTime _rewardShotAt = DateTime.MinValue; int _rewardShotsOpen;
     void RewardShot()
     {
@@ -572,12 +572,12 @@ public sealed class TrackerSession
             var now = DateTime.UtcNow;
             var dir = Path.Combine(CrashLog.Dir, "reward-shots");
             if (GameRect is not { } g || !Directory.Exists(dir)) return;
-            bool reward = Target.RewardOpen(now), inside = ZoneLocator.KindOf(Zone) is "Event" or "Expedition";
+            bool reward = Target.RewardOpen(now), inside = ZoneLocator.KindOf(Zone) is "Event" or "Expedition" || Zone == SessionEngine.UnknownZone;
             // fights too, every 30 s: the nameplates and health bars around the character, to learn which enemies are engaged
             bool fighting = (now - _lastActivity).TotalSeconds <= FightSeconds;
             if (!reward) _rewardShotsOpen = 0;
             bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2
-                     : inside ? (now - _rewardShotAt).TotalSeconds >= 15
+                     : inside ? (now - _rewardShotAt).TotalSeconds >= 5
                      : fighting && (now - _rewardShotAt).TotalSeconds >= 30;
             if (!due) return;
             var today = DateTime.Now.ToString("yyyyMMdd");
