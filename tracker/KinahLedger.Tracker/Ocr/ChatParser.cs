@@ -317,6 +317,8 @@ public sealed partial class ChatParser
         var line = Timestamp().Replace(raw.Trim(), "");
         if (line.Length == 0 || line.StartsWith('[')) return ("", false);
         line = CleanSystemLine(line);
+        if (SomeoneElses(line)) return ("", false);
+        line = WithoutDistribution(line);
         var k = Kina().Match(line);
         if (k.Success) { long a = Digits(k.Groups["amt"].Value); return a > 0 ? ("k:" + a, true) : ("", false); }
         var it = ItemNameFirst().Match(line);
@@ -332,6 +334,22 @@ public sealed partial class ChatParser
         return ("i:" + canon.ToLowerInvariant() + "x" + n, string.Equals(canon, name, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Another player's loot, as the Force (or a group) shares it: "Yarie acquired Soul: Ursus (Bound) through Force
+    /// distribution." Something stands before "acquired" and something follows it, where the player's own lines are
+    /// "Acquired 23 Kina." or "Spiritstone acquired." Never the player's drop or kill (Steven, 2026-10-22, a world boss
+    /// counted as killed once per Force member who got its soul).
+    /// </summary>
+    internal static bool SomeoneElses(string line) =>
+        Regex.IsMatch(line, @"^\W*(?!acqu)\S+.*?acqu\w*\s+\S{3}", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// The player's own share of a Force's loot ("Acquired Artwork: Furious Saursus through Force distribution."): the
+    /// item is what comes before "through", so the name is found in the item list.
+    /// </summary>
+    internal static string WithoutDistribution(string line) =>
+        Regex.Replace(line, @"\s+through(?:\s+\S*)?\s*(?:distri\S*)?\s*\.?\s*$", ".", RegexOptions.IgnoreCase);
+
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");
@@ -339,6 +357,8 @@ public sealed partial class ChatParser
         if (!line.StartsWith('[')) line = CleanSystemLine(line);
         if (line.Length == 0) yield break;
         if (line.StartsWith('[') || Title().IsMatch(line)) yield break;   // player chat, or a title being claimed
+        if (SomeoneElses(line)) yield break;
+        line = WithoutDistribution(line);
         if (line.StartsWith("Increased ", StringComparison.OrdinalIgnoreCase)) yield break;   // "Increased Pet Insight Level ...": progress, not loot
 
         var trade = ParseTrade(line, time).ToList();

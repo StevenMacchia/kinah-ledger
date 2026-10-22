@@ -1431,6 +1431,14 @@ options: --process aion[,other]");
                     "Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x1,Orichalcum Ore x2 · drops 0");
                 Check("crafting panel: gone a while, a pickup is a drop again", $"{pe.CraftPanelActive(pt.AddSeconds(31))}", "False");
             }
+            {
+                // a world boss with a Force (Steven, 2026-10-22): other players' shares are never the player's; the player's own share is
+                var fp = new ChatParser(items); var ft = DateTime.UtcNow;
+                string Got(string l) => string.Join(",", fp.Parse(l, ft).Select(e => e switch { ItemAcquired a => items.NameOf(a.ItemId), KinahChanged k => k.Delta + " Kina", _ => e.GetType().Name }));
+                Check("someone else's share of a Force's loot", $"[{Got("Yarie acquired Soul; Ursus (Bound) through")}] [{Got("zMochi acquired Artwork: Furious Saursus")}] [{Got("Kubie acquired Soul: Ursus (Bound) through)")}] [{Got("HePeDawneroacquired Soul: Ursus4(BoÃ¼nd)")}]", "[] [] [] []");
+                Check("the player's own lines still count", $"[{Got("Acquired 23 Kina.")}] [{Got("Spiritstone acquired.")}] [{Got("Acquired Spiritstone through Force distribution.")}]", "[23 Kina] [Spiritstone] [Spiritstone]");
+                Check("world bosses by name, titled or learned from the chat", $"{TrackerSession.WorldBossOf("Furious Saursus")} {TrackerSession.WorldBossOf("Young Ursus") ?? "-"} {TrackerSession.WorldBossOf("Raging Grimtusk", new[] { "Grimtusk" })}", "Saursus - Grimtusk");
+            }
             Check("crafting window: held 60 s after its last sign", $"crafts {ce.CraftedSkipped} · drops {ce.Items.Values.Sum()}", "crafts 2 · drops 2");
             Check("reward-shots cleans itself", $"{rsGone} · {rsLeft}", "2 · 20261020-101010-Zone-Jump-Jump.jpg 20261022-101010-Zone-in-run.jpg mine.jpg");
 

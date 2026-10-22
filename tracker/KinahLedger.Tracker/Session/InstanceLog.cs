@@ -79,8 +79,9 @@ public sealed class InstanceLog
                 case KinahChanged { Bound: false } k when k.Delta > 0:
                     _cur.Kinah += k.Delta; _cur.LastLoot = k.Time;
                     break;
-                case MobKilled:
-                case CurrencyGained c when c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase):
+                // a world boss run is one kill, the boss's: the enemies dying around it are not
+                case MobKilled when _cur.Kind != WorldBoss:
+                case CurrencyGained c when _cur.Kind != WorldBoss && c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase):
                     _cur.Kills++;
                     break;
             }
@@ -89,6 +90,27 @@ public sealed class InstanceLog
 
     /// <summary>Closes the open run (the reader is stopping).</summary>
     public void Close() { lock (_lock) CloseLocked(); }
+
+    public const string WorldBoss = "World Boss";
+
+    /// <summary>
+    /// A world boss just died: what lands next is its loot, a run of its own (kind <see cref="WorldBoss"/>, named for the
+    /// boss), never farming. False when an expedition or event run is open: there the run keeps everything as before.
+    /// </summary>
+    public bool StartBoss(string boss, DateTime now)
+    {
+        lock (_lock)
+        {
+            if (_cur != null && _cur.Kind != WorldBoss) return false;
+            CloseLocked();
+            _cur = new InstanceRun { Zone = boss, Kind = WorldBoss, Start = now, Kills = 1 };
+            CrashLog.Note($"world boss run started: {boss}");
+            return true;
+        }
+    }
+
+    /// <summary>The world boss's loot window is over: its run closes. Any other open run is left alone.</summary>
+    public void EndBoss() { lock (_lock) if (_cur?.Kind == WorldBoss) CloseLocked(); }
 
     void CloseLocked()
     {

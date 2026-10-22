@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using KinahLedger.Data;
 using KinahLedger.Ocr;
 using KinahLedger.Upload;
@@ -398,6 +399,18 @@ public sealed class TrackerSession
         }
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
         bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
+        // a Force's loot being handed out ("Yarie acquired Soul: Ursus (Bound) through Force distribution."): a world boss
+        // died, and for a while the panel beside the character shows the boss's loot table, not the player's pickups
+        if (lines.Any(l => Regex.IsMatch(l, @"distri\S*|through\s+Fo\S*ce", RegexOptions.IgnoreCase)))
+        {
+            if ((now - _distributionAt).TotalSeconds > DistributionSeconds) CrashLog.Note("a Force is handing out loot: rows beside the character count only when the chat says they are yours");
+            _distributionAt = now;
+            if (_boss != null) BossTick(now, died: true);
+        }
+        // "[Force Recruitment] WB Bloodfang": a world boss's name, learned for this session
+        foreach (var l in lines)
+            if (Regex.Match(l, @"\bWB\s+([A-Z][A-Za-z']{3,})") is { Success: true } wb && _learnedBosses.Add(wb.Groups[1].Value))
+                CrashLog.Note($"world boss named in the chat: {wb.Groups[1].Value}");
         // loot lines that were read garbled while they faded in, now read cleanly at the same place: one more parse each
         var reread = _reread.Take(lines, fresh.Count, now);
         // more loot than the chat can show at once (an expedition's rewards, a box opened): the read shares no line with
@@ -592,8 +605,89 @@ public sealed class TrackerSession
     /// expeditions never on the Farming page; the Urugugu Canyon reward cube's loot was counted as drops from kills). The
     /// run is shared on its own. Everywhere else it counts as farming, and the run log sees it too.
     /// </summary>
+    // ---- world bosses ----
+    // Steven, 2026-10-22, at a world boss: "when a world boss is seen for the top enemy health bar just stop parsing for
+    // anything but world boss until its killed" and "dont count world boss toward actual farming". So once the target bar
+    // names a world boss, nothing counts (the adds dying around it, their Kinah and drops: set aside, logged). When it dies
+    // (the Force's distribution lines, or its bar gone for BossGoneSeconds), what lands in the next BossLootSeconds is its
+    // loot: a run of its own on the Events tab and the site (kind "World Boss"), never Kinah/hr.
+    // the ones seen so far; the Force recruitment lines ("[Force Recruitment] WB Bloodfang") add more as they are read
+    static readonly string[] WorldBosses = { "Saursus", "Bloodfang" };
+    readonly HashSet<string> _learnedBosses = new(StringComparer.OrdinalIgnoreCase);
+    public const double BossGoneSeconds = 20, BossLootSeconds = 30, BossGiveUpSeconds = 120;
+    string? _boss; DateTime _bossSeenAt, _bossDeadAt = DateTime.MinValue; int _bossSetAside;
+    // a Force handing out loot: for this long after its last line, the panel beside the character may show a loot table
+    public const double DistributionSeconds = 60;
+    DateTime _distributionAt = DateTime.MinValue;
+
+    /// <summary>The world boss a target bar's name is, or null: a boss's name with or without its title ("Furious Saursus").</summary>
+    public static string? WorldBossOf(string? name, IEnumerable<string>? more = null) =>
+        name == null ? null : WorldBosses.Concat(more ?? Enumerable.Empty<string>()).FirstOrDefault(b => Regex.IsMatch(name, $@"\b{Regex.Escape(b)}\b", RegexOptions.IgnoreCase));
+
+    /// <summary>What the boss state is, for the window: "", "fighting X", "X's loot".</summary>
+    public string BossNote => _boss == null ? "" : _bossDeadAt == DateTime.MinValue ? $"world boss: {_boss} (nothing counts until it dies)" : $"world boss down: {_boss}'s loot";
+
+    void BossTick(DateTime now, bool died = false)
+    {
+        var seen = (now - Target.NameAt).TotalSeconds <= 3 ? WorldBossOf(Target.Name, _learnedBosses) : null;
+        if (_boss == null)
+        {
+            if (seen == null || Instances.Open != null) return;
+            _boss = seen; _bossSeenAt = now; _bossDeadAt = DateTime.MinValue; _bossSetAside = 0;
+            CrashLog.Note($"world boss on the target bar: {seen}. Nothing counts toward farming until it dies");
+            return;
+        }
+        if (_bossDeadAt == DateTime.MinValue)
+        {
+            if (seen != null) _bossSeenAt = now;
+            if (died || (now - _bossSeenAt).TotalSeconds >= BossGoneSeconds)
+            {
+                _bossDeadAt = now;
+                bool run = Instances.StartBoss(_boss, now);
+                CrashLog.Note($"world boss down ({(died ? "the Force's loot was handed out" : $"its bar gone {BossGoneSeconds:0} s")}): {_boss}; {_bossSetAside} pickup(s) set aside during the fight; the next {BossLootSeconds:0} s are its loot{(run ? "" : " (inside a run: kept by that run)")}");
+            }
+            else if ((now - _bossSeenAt).TotalSeconds >= BossGiveUpSeconds) EndBoss("left the fight");
+            return;
+        }
+        if ((now - _bossDeadAt).TotalSeconds >= BossLootSeconds) EndBoss("loot window over");
+    }
+
+    void EndBoss(string why)
+    {
+        CrashLog.Note($"world boss mode off ({why}): {_boss}");
+        Instances.EndBoss();
+        _boss = null; _bossDeadAt = DateTime.MinValue;
+    }
+
+    /// <summary>True when the world boss took this event: set aside during the fight, or kept as its loot after.</summary>
+    bool BossTakes(GameEvent ev)
+    {
+        if (_boss == null) return false;
+        if (_bossDeadAt == DateTime.MinValue)
+        {
+            if (ev is ItemAcquired or KinahChanged or MobKilled or CurrencyGained or EnemySoul or XpGained or PetCrystal)
+            {
+                _bossSetAside++;
+                CrashLog.Note($"world boss fight: {Describe(ev)} set aside, not farming");
+            }
+            return true;
+        }
+        Instances.Loot(ev);
+        return true;
+    }
+
+    string Describe(GameEvent ev) => ev switch
+    {
+        ItemAcquired a => $"{_items.NameOf(a.ItemId)} x{a.Count}",
+        KinahChanged k => $"{k.Delta:N0} Kina",
+        CurrencyGained c => c.Name,
+        EnemySoul s => "the soul of " + s.Kind,
+        _ => ev.GetType().Name,
+    };
+
     void Count(GameEvent ev)
     {
+        if (ev is not CraftResult && BossTakes(ev)) return;
         if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored)
         {
             Instances.Loot(ev);
@@ -714,6 +808,13 @@ public sealed class TrackerSession
             foreach (var p0 in add)
             {
                 var parsed = p0 with { Via = "loot list" };
+                // a Force handing out a boss's loot: the panel lists the loot table (Steven, 2026-10-22: "i didnt get the
+                // helm or the greaves... that was just showing us the loot table"). Only the chat can say an item is the player's
+                if ((now - _distributionAt).TotalSeconds <= DistributionSeconds && parsed is ItemAcquired dist)
+                {
+                    CrashLog.Note($"a Force is handing out loot: {_items.NameOf(dist.ItemId)} x{dist.Count} beside the character set aside, the chat never said it was yours");
+                    continue;
+                }
                 bool made = (panel && parsed is ItemAcquired) || (crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null);
                 // with the crafting window open, the loot list shows what the crafts gave: a recipe's item is a craft (the
                 // engines take it as one), anything else is set aside until the window itself can be read, never a drop
@@ -881,6 +982,7 @@ public sealed class TrackerSession
             if (cover == null || own)
             {
                 await Target.TickAsync(g);
+                BossTick(DateTime.UtcNow);
                 TargetNote = own && (Target.Name == null || (DateTime.UtcNow - Target.NameAt).TotalSeconds > 60) ? "the panel sits over the target bar; drag it aside if enemies don't show" : "";
             }
             else TargetNote = cover!.StartsWith("the game") ? "" : cover + " covers the target bar";
