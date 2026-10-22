@@ -889,6 +889,7 @@ options: --process aion[,other]");
             Check("instances: an open-world zone has none", ZoneLocator.KindOf("Eastern Cantas Valley") ?? "none", "none");
             Check("instances: they are on the zone list", ZoneLocator.Known.Contains("Urugugu Canyon") ? "yes" : "no", "yes");
             Check("timed events: Shugo Festival games and invasions", string.Join(",", new[] { "Odyle Flight Frenzy", "Jump Jump", "Up! Up! Up!", "Not This Tile?", "Incursion of the Spirits", "Beritra Air Raid" }.Select(z => ZoneLocator.KindOf(z) ?? "none")), "Event,Event,Event,Event,Event,Event");
+            Check("an expedition's areas file under it", $"{ZoneLocator.RunName("Auldor's Sanctum")} | {ZoneLocator.RunName("Urugugu Village")} | {ZoneLocator.RunName("Urugugu Canyon")} | {ZoneLocator.KindOf("Auldor's Sanctum")}", "Urugugu Canyon | Urugugu Canyon | Urugugu Canyon | Expedition");
             Check("the closest zone, not the first close enough", $"{ZoneLocator.Match("Southern Tolbas Forest")} | {ZoneLocator.Match("Nortnern Tolbas Forest")}", "Southern Tolbas Forest | Northern Tolbas Forest");
             Check("event titles pass the label filter, UI labels don't", $"{ZoneLocator.Candidate("Jump Jump")} {ZoneLocator.Candidate("Up! Up! Up!")} {ZoneLocator.Candidate("Not This Tile?")} {ZoneLocator.Candidate("Jump Higher")}", "True True True False");
             {
