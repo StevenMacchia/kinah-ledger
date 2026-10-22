@@ -133,7 +133,7 @@ public sealed class TrackerSession
         if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && _cross.TakeSingleKinah(gap, at))
         {
             var ev = new KinahChanged(at, gap, false) { Via = "loot list · balance" };
-            Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); Feed(ev);
+            Count(ev); Feed(ev);
             Interlocked.Add(ref _kinahPicked, gap);
             _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);   // the count matches the counter again
             CrashLog.Note($"the Kinah counter rose {gap:N0} more than counted, and the loot list showed {gap:N0} Kina once: counted from the two");
@@ -402,7 +402,7 @@ public sealed class TrackerSession
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
-                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); any = true; _lastActivity = DateTime.UtcNow;
+                Count(ev); any = true; _lastActivity = DateTime.UtcNow;
                 Feed(ev);
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
@@ -432,6 +432,18 @@ public sealed class TrackerSession
     }
 
     DateTime _targetAt = DateTime.MinValue;
+
+    /// <summary>
+    /// Where a pickup counts. Inside an expedition, event, arena or legion area it belongs to that run alone: never the
+    /// Farming page's drops, kills or Kinah by enemy, and never the site's farming numbers (Steven, 2026-10-22: events and
+    /// expeditions never on the Farming page; the Urugugu Canyon reward cube's loot was counted as drops from kills). The
+    /// run is shared on its own. Everywhere else it counts as farming, and the run log sees it too.
+    /// </summary>
+    void Count(GameEvent ev)
+    {
+        if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored) { Instances.Loot(ev); return; }
+        Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
+    }
 
     // ---- the audit: how the count holds up, once a minute in reads.log ----
     // The quest tracker's "Defeat … (n/20)" lines count kills of quest enemies exactly, so where every enemy fought is a
@@ -535,7 +547,7 @@ public sealed class TrackerSession
                 var parsed = p0 with { Via = "loot list" };
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
-                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
+                Count(ev);
                 Feed(ev);
                 if (ev is ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
