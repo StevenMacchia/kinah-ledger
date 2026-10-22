@@ -148,13 +148,14 @@
         <!-- two parts that never mix: Farming (the run, the stats, the loot) and Crafting (recipes, cost, success, profit) -->
         <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,10,0" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="#08FFFFFF" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal">
-            <Button x:Name="FarmTab" Style="{StaticResource SegOn}" Content="Farming"/>
-            <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Content="Crafting" Margin="2,0,0,0"/>
+            <Button x:Name="FarmTab" Style="{StaticResource SegOn}" Content="Farming" Padding="10,0"/>
+            <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Content="Crafting" Margin="2,0,0,0" Padding="10,0"/>
+            <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Content="Events" Margin="2,0,0,0" Padding="10,0" ToolTip="Expeditions and events: each trip, from entering to the last loot. Never on the Farming page."/>
           </StackPanel>
         </Border>
         <!-- the site and Options: everything that can be set is in the Options window, so the ledger never moves -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button x:Name="SiteBtn" Content="kinahledger.com" Height="32" Padding="12,0" FontSize="12.5" Margin="0,0,8,0" ToolTip="Open the website: community drop rates, prices and your profile."/>
+          <Button x:Name="SiteBtn" Content="kinahledger.com" Height="32" Padding="10,0" FontSize="12.5" Margin="0,0,8,0" ToolTip="Open the website: community drop rates, prices and your profile."/>
           <!-- Compact / Full view: two panels drawn, the right one filled in Full view -->
           <Button x:Name="ViewBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="Full view: every table beside the summary">
             <Grid Width="16" Height="12">
@@ -463,23 +464,6 @@
             </TextBlock>
           </StackPanel>
 
-          <!-- expeditions and events: each trip from entering to the last loot, averaged over every run kept on this PC -->
-          <StackPanel x:Name="InstSection" Visibility="Collapsed">
-            <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="InstTitle" Style="{StaticResource Th}" Text="EXPEDITIONS AND EVENTS" Margin="20,0,0,0" HorizontalAlignment="Left"/>
-                <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="RUNS"/>
-                <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="AVG TIME" ToolTip="From entering to the last loot picked up there, averaged over the runs."/>
-                <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per hour inside the runs."/>
-                <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PER RUN" Margin="0,0,20,0" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per run. Events come round about once an hour, so this is their number."/>
-              </Grid>
-            </Border>
-            <ItemsControl x:Name="InstRows" ItemTemplate="{StaticResource RowTemplate}"/>
-          </StackPanel>
-
           <!-- Soul Crystals from kills: their own section at the bottom, folded until opened; never mixed into the drops -->
           <StackPanel x:Name="PetSection">
             <Border x:Name="PetHead" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44" Cursor="Hand" ToolTip="Click to fold or unfold">
@@ -507,6 +491,35 @@
           </StackPanel>
 
           <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="16,8,16,10" Visibility="Collapsed"/>
+        </StackPanel>
+      </Border>
+
+      <!-- Expeditions and events: their own part of the window, never on the Farming page (Steven, 2026-10-22). Each trip
+           from entering to the last loot, averaged over every run kept on this PC; the runs stay until they're cleared. -->
+      <Border x:Name="EventsCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="0,8,0,0" Visibility="Collapsed">
+        <StackPanel>
+          <Grid Margin="16,12,16,12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Text="Expeditions and events"/>
+            <TextBlock x:Name="InstWhat" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" TextTrimming="CharacterEllipsis"/>
+          </Grid>
+          <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
+              </Grid.ColumnDefinitions>
+              <TextBlock x:Name="InstTitle" Style="{StaticResource Th}" Text="AREA · KIND" Margin="20,0,0,0" HorizontalAlignment="Left"/>
+              <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="RUNS"/>
+              <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="AVG TIME" ToolTip="From entering to the last loot picked up there, averaged over the runs."/>
+              <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per hour inside the runs."/>
+              <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PER RUN" Margin="0,0,20,0" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per run. Events come round about once an hour, so this is their number."/>
+            </Grid>
+          </Border>
+          <Grid MinHeight="64" Margin="0,0,0,8">
+            <ItemsControl x:Name="InstRows" ItemTemplate="{StaticResource RowTemplate}"/>
+            <TextBlock x:Name="InstEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" MaxWidth="440"
+                       Text="Run an expedition or join an event. Each one shows here with how long it took and what it paid."/>
+          </Grid>
         </StackPanel>
       </Border>
 

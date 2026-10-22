@@ -125,6 +125,7 @@ public partial class MainWindow : Window
         // Farming and Crafting are two parts of the window; crafting never shows in the farming tables
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
+        EventsTab.Click += (_, _) => ShowPart("Events");
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         CraftResetLink.Click += (_, _) => { _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView); };
@@ -248,7 +249,7 @@ public partial class MainWindow : Window
               }
             : (_watcher.Chat?.RecentPickups(3) ?? new()).Select(p => new PickupRow(p.At.ToLocalTime().ToString("HH:mm:ss"), p.What, ViaTip(p.Via))).ToList();
         PickupRows.ItemsSource = list;
-        PickupStrip.Visibility = list.Count > 0 && _part != "Crafting" && !_welcome && _prefs.FullView ? Visibility.Visible : Visibility.Collapsed;
+        PickupStrip.Visibility = list.Count > 0 && _part == "Farming" && !_welcome && _prefs.FullView ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -763,7 +764,7 @@ public partial class MainWindow : Window
             s.GatherCount > 0 ? $"{s.GatherCount} gathered" : "", t.Pets > 0 ? $"{t.Pets} Soul Crystal{(t.Pets == 1 ? "" : "s")}" : "",
         }.Where(x => x.Length > 0));
         _hasSummary = e.Events > 0;
-        SummaryCard.Visibility = _hasSummary && _part != "Crafting" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
+        SummaryCard.Visibility = _hasSummary && _part == "Farming" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
         ShareCardBtn.IsEnabled = totalNow > 0;
         FootTotal.Text = totalNow.ToString("N0");
         SumBreakdown.Text = (kinah > 0 || _mode != Mode.Gather ? $"{Fk(kinah)} Kinah" : "") + (kinah > 0 || _mode != Mode.Gather ? "  +  " : "")
@@ -855,14 +856,16 @@ public partial class MainWindow : Window
 
     string _part = "Farming";
 
-    /// <summary>Shows one part of the window: Farming (the run bar, the stats, the loot tables) or Crafting (the crafting ledger).</summary>
+    /// <summary>Shows one part of the window: Farming (the run bar, the stats, the loot tables), Crafting (the crafting ledger) or Expeditions and events (each trip, never on the Farming page).</summary>
     void ShowPart(string part, bool remember = true)
     {
-        _part = part == "Crafting" ? "Crafting" : "Farming";
+        _part = part is "Crafting" or "Events" ? part : "Farming";
         bool craft = _part == "Crafting";
         ApplyView();
-        FarmTab.Style = (Style)FindResource(craft ? "SegOff" : "SegOn");
+        FarmTab.Style = (Style)FindResource(_part == "Farming" ? "SegOn" : "SegOff");
         CraftTab.Style = (Style)FindResource(craft ? "SegOn" : "SegOff");
+        EventsTab.Style = (Style)FindResource(_part == "Events" ? "SegOn" : "SegOff");
+        if (_part == "Events") ShowInstances();
         if (remember && !_demo) { _prefs.Part = _part; _prefs.Save(); }
         if (craft && !_demo) FillCraft(_watcher.Chat?.CraftView);
     }
@@ -883,13 +886,14 @@ public partial class MainWindow : Window
     /// </summary>
     void ApplyView()
     {
-        bool craft = _part == "Crafting" && !_welcome, farm = !craft && !_welcome, full = farm && _prefs.FullView;
-        LeftCol.Visibility = craft ? Visibility.Collapsed : Visibility.Visible;
+        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, farm = !craft && !events && !_welcome, full = farm && _prefs.FullView;
+        LeftCol.Visibility = craft || events ? Visibility.Collapsed : Visibility.Visible;
         SessionCard.Visibility = Tiles.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         SummaryCard.Visibility = farm && _hasSummary ? Visibility.Visible : Visibility.Collapsed;
         TablesCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
-        LowerScroll.Visibility = farm || craft ? Visibility.Visible : Visibility.Collapsed;
+        EventsCard.Visibility = events ? Visibility.Visible : Visibility.Collapsed;
+        LowerScroll.Visibility = farm || craft || events ? Visibility.Visible : Visibility.Collapsed;
         // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
         System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
         System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
@@ -1094,8 +1098,8 @@ public partial class MainWindow : Window
                 Initial: InitialOf(g.Key), Value: (value / n).ToString("N0"), Sub: sub));
         }
         InstRows.ItemsSource = rows;
-        InstTitle.Text = rows.Count > 0 ? $"EXPEDITIONS AND EVENTS  ·  {runs.Count} RUN{(runs.Count == 1 ? "" : "S")}" : "EXPEDITIONS AND EVENTS";
-        InstSection.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        InstWhat.Text = rows.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} kept on this PC" + (log?.Open is { } open ? $" · in {open} now" : "") : "";
+        InstEmpty.Visibility = rows.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>A run's worth: its Kinah plus its tradeable loot at the lowest Market price, after the Market's cut.</summary>
@@ -1394,6 +1398,7 @@ public partial class MainWindow : Window
         ZoneLbl.Text = "Western Cantas Valley";
         ApplyServer("na_e", "Siel (Elyos)");
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
+        if (kind == "Events") { ShowPart("Events", remember: false); SetTrackingUi(false); return; }
         if (kind == "Crafting")
         {
             // the Crafting part with a morning's crafts, priced, for a layout render
