@@ -886,6 +886,12 @@ options: --process aion[,other]");
                 new[] { "Orichalcum Ore acquired.", "Orichalcum Ore acquirad.", "Spiritstone acquired." }, rec, b0)), "Spiritstone acquired.");
             Check("instances: an expedition area has a kind", ZoneLocator.KindOf("Auldor's Sanctum") ?? "none", "Expedition");
             Check("instances: an event area too", ZoneLocator.KindOf("Defend Shugo Merchants") ?? "none", "Event");
+            {
+                // Nightmare is known but left alone: its rewards never change, so nothing there is counted
+                var ne = new SessionEngine(items); ne.SetZone("Nightmare");
+                ne.Apply(new KinahChanged(DateTime.UtcNow, 5000, false)); ne.Apply(new ItemAcquired(DateTime.UtcNow, items.IdOf("Raw Leather"), 1, false));
+                Check("Nightmare: known, never counted", $"{ZoneLocator.KindOf("Nightmare")} · {ne.Kinah} Kinah · {ne.Items.Count} items · {ne.Events} events", "Ignored · 0 Kinah · 0 items · 0 events");
+            }
             Check("instances: an open-world zone has none", ZoneLocator.KindOf("Eastern Cantas Valley") ?? "none", "none");
             Check("instances: they are on the zone list", ZoneLocator.Known.Contains("Urugugu Canyon") ? "yes" : "no", "yes");
             Check("timed events: Shugo Festival games and invasions", string.Join(",", new[] { "Odyle Flight Frenzy", "Jump Jump", "Up! Up! Up!", "Not This Tile?", "Incursion of the Spirits", "Beritra Air Raid" }.Select(z => ZoneLocator.KindOf(z) ?? "none")), "Event,Event,Event,Event,Event,Event");
