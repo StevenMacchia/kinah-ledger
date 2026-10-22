@@ -63,27 +63,6 @@ internal static class Program
                     return 0;
                 }
                 case "replay": return Replay(settings, pos, opts);
-                case "icon-index":
-                {
-                    // icon-index <icons folder> <out.json>: thumbnails of every item picture, for naming reward items by their icon
-                    var idx = IconIndex.Build(pos[0], Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "..", "data", "tw-items.json") is var tw && File.Exists(tw) ? tw : opts.GetValueOrDefault("items", ""));
-                    idx.Save(pos[1]);
-                    Console.WriteLine($"{idx.Entries.Count} pictures, {idx.Entries.Sum(e => e.Items.Length)} items -> {pos[1]}");
-                    return 0;
-                }
-                case "icon-test":
-                {
-                    // icon-test <image> <index.json> x,y,w,h [x,y,w,h ...]: the closest pictures to each cell of a screenshot
-                    var idx = IconIndex.Load(File.ReadAllText(pos[1]));
-                    using var img = new System.Drawing.Bitmap(pos[0]);
-                    foreach (var cell in pos.Skip(2))
-                    {
-                        var v = cell.Split(',').Select(int.Parse).ToArray();
-                        var m = idx.Match(IconIndex.Thumb(img, new System.Drawing.Rectangle(v[0], v[1], v[2], v[3])), 3);
-                        Console.WriteLine($"{cell,-18} " + string.Join("  |  ", m.Select(x => $"{x.Distance:0} {string.Join("/", x.Entry.Items.Take(2))}{(x.Entry.Items.Length > 2 ? $" +{x.Entry.Items.Length - 2}" : "")}")));
-                    }
-                    return 0;
-                }
                 case "parse-lines":
                 {
                     // each argument is one chat line: what the parser makes of it, for checking a line from reads.log
