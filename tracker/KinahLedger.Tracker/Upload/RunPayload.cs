@@ -144,7 +144,7 @@ public sealed record RunPayload(
         {
             var k = key == SessionEngine.UnknownZone || KinahLedger.Ocr.ZoneLocator.IsVerified(key) ? key : SessionEngine.UnknownZone;
             if (!outp.TryGetValue(k, out var z)) { outp[k] = z = new SessionEngine.ZoneStats(); }
-            z.Seconds += v.Seconds; z.Active += v.Active; z.Kinah += v.Kinah; z.KinahDrops += v.KinahDrops; z.CurrencyLines += v.CurrencyLines;
+            z.Seconds += v.Seconds; z.Active += v.Active; z.Kinah += v.Kinah; z.KinahDrops += v.KinahDrops; z.CurrencyLines += v.CurrencyLines; z.KillsSeen += v.KillsSeen;
             z.Defeated += v.Defeated; z.Xp += v.Xp; z.Pets += v.Pets; z.Drops += v.Drops; z.Nodes += v.Nodes;
             foreach (var (n, c) in v.PetsByName) z.PetsByName[n] = z.PetsByName.GetValueOrDefault(n) + c;
             foreach (var (id, c) in v.Items) z.Items[id] = z.Items.GetValueOrDefault(id) + c;

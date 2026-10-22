@@ -35,6 +35,21 @@ public sealed class LootCrossCheck
     readonly List<(DateTime At, LootPopup.Row Row, string Key)> _waiting = new();
 
     public int Added { get; private set; }
+    /// <summary>Kinah lines the chat read twice that the list showed once, skipped.</summary>
+    public int Duplicates { get; private set; }
+    /// <summary>How close in time a second chat read of the same amount is taken for the same line.</summary>
+    public const double DupSeconds = 3;
+    // the most rows of each Kinah amount the list showed at once, lately
+    readonly Dictionary<string, (int Count, DateTime At)> _listShown = new();
+
+    /// <summary>The same pickup key, allowing one misread digit in a Kinah amount of three digits or more.</summary>
+    static bool Same(string a, string b)
+    {
+        if (a == b) return true;
+        if (!a.StartsWith("k:") || !b.StartsWith("k:") || a.Length != b.Length || a.Length < 5) return false;
+        int diff = 0; for (int i = 2; i < a.Length; i++) if (a[i] != b[i]) diff++;
+        return diff == 1;
+    }
     public int Matched { get; private set; }
 
     public LootCrossCheck(ItemDictionary items) { _items = items; }
@@ -59,7 +74,14 @@ public sealed class LootCrossCheck
             _ => null,
         };
         if (key == null) return false;
-        int late = _added.FindIndex(x => x.Key == key && Math.Abs((now - x.At).TotalSeconds) <= MatchSeconds);
+        // the same Kinah amount read again within a few seconds while the list showed it only once: the chat counted one
+        // line twice (2026-10-22 11:01: "Acquired 352 Kina." from two reads). When the list showed it as often, it stays.
+        if (ev is KinahChanged && _listShown.TryGetValue(key, out var ls) && (now - ls.At).TotalSeconds <= MatchSeconds)
+        {
+            int chatSame = _chat.Count(x => x.Key == key && (now - x.At).TotalSeconds <= DupSeconds);
+            if (chatSame >= ls.Count) { CrashLog.Note($"the chat read {key[2..]} Kina again within {DupSeconds:0} s and the loot list showed it {ls.Count}×: counted once"); Duplicates++; return true; }
+        }
+        int late = _added.FindIndex(x => Same(x.Key, key) && Math.Abs((now - x.At).TotalSeconds) <= MatchSeconds);
         if (late >= 0 && ev is not RewardReceived)
         {
             _added.RemoveAt(late);
@@ -85,6 +107,7 @@ public sealed class LootCrossCheck
         }
         foreach (var (key, (n, row)) in shown)
         {
+            if (row.IsKinah) _listShown[key] = (Math.Max(n, _listShown.TryGetValue(key, out var lsn) && (now - lsn.At).TotalSeconds <= MatchSeconds ? lsn.Count : 0), now);
             var had = _credited.TryGetValue(key, out var c) && (now - c.Seen).TotalSeconds <= HoldSeconds ? c : (0, now, 0);
             int more = n - had.Item1;
             if (more > 0 && row.IsKinah)
@@ -125,6 +148,8 @@ public sealed class LootCrossCheck
         {
             var (at, row, key) = _waiting[i];
             int c = _chat.FindIndex(x => !x.Used && x.Key == key && Math.Abs((x.At - at).TotalSeconds) <= MatchSeconds);
+            // a Kinah amount the chat misread by one digit (460 for the list's 463) is the same pickup
+            if (c < 0 && row.IsKinah) c = _chat.FindIndex(x => !x.Used && Same(x.Key, key) && Math.Abs((x.At - at).TotalSeconds) <= MatchSeconds);
             if (c >= 0)
             {
                 _chat[c] = (_chat[c].At, _chat[c].Key, true);

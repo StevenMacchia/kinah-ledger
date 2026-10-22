@@ -32,7 +32,9 @@ public sealed class SessionEngine
     /// <summary>Gathering: gemstones and higher-tier materials, the finds worth tracking per node.</summary>
     public int BonusFinds { get; private set; }
     /// <summary>Best available kill count: kill lines, experience lines, or Kinah pickups (one per mob in open-world farming).</summary>
-    public int Kills => Math.Max(Math.Max(KillsDefeated, KillsXp), Math.Max(KinahDrops, CurrencyLines));
+    public int Kills => Math.Max(KillsSeen, Math.Max(Math.Max(KillsDefeated, KillsXp), Math.Max(KinahDrops, CurrencyLines)));
+    /// <summary>Kills as separate pieces of evidence agree on them: see <see cref="KillEvidence"/>.</summary>
+    public int KillsSeen { get; private set; }
     public int Events { get; private set; }
     public Dictionary<long, int> Items { get; } = new();
     public Dictionary<long, int> ItemsBound { get; } = new();
@@ -101,19 +103,48 @@ public sealed class SessionEngine
     /// <summary>What happened in one zone: time spent there plus the counters the "best spot" tables need.</summary>
     public sealed class ZoneStats
     {
-        public double Seconds; public long Kinah; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes;
+        public double Seconds; public long Kinah; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
         /// <summary>Seconds of farming in the zone: time within a minute of a loot, kill or gather line. What the zone's per-hour rates divide by.</summary>
         public double Active;
         public Dictionary<string, int> PetsByName = new();
         /// <summary>Items picked up in this zone, by item id, tradeable and bound apart like the run-level maps. What the site files under this zone, so a run that moved zones never credits one zone with another's drops.</summary>
         public Dictionary<long, int> Items = new(), ItemsBound = new();
-        public int Kills => Math.Max(Math.Max(Defeated, Xp), Math.Max(KinahDrops, CurrencyLines));
+        public int Kills => Math.Max(KillsSeen, Math.Max(Math.Max(Defeated, Xp), Math.Max(KinahDrops, CurrencyLines)));
         public double Hours => Math.Max(Seconds / 3600, 1.0 / 3600);
     }
     public const string UnknownZone = "Unknown zone";
     public Dictionary<string, ZoneStats> Zones { get; } = new();
     string? _zone; DateTime _zoneSince = DateTime.UtcNow;
     public string? Zone { get { lock (_lock) return _zone; } }
+    // ---- kills, from the evidence that agrees on them ----
+    // One kill shows up as several things: its Kinah (a chat line, a row in the loot list beside the character, matched
+    // to one pickup), its Soul Points line, a "Defeated" line. Any one of them can be lost to a fast scroll or a misread;
+    // each counted alone undercounts, and adding them overcounts. So each piece joins the newest kill of the last few
+    // seconds that doesn't have that kind of evidence yet, and starts a kill of its own when none fits (2026-10-22).
+    readonly List<(DateTime At, bool Kinah, bool Soul, bool Defeat)> _kills = new();
+    public const double KillJoinSeconds = 3;
+    void KillEvidence(DateTime t, char kind)
+    {
+        for (int i = _kills.Count - 1; i >= 0; i--)
+        {
+            var k = _kills[i];
+            double d = (t - k.At).TotalSeconds;
+            if (d > KillJoinSeconds) break;
+            if (d < -1) continue;
+            bool has = kind == 'k' ? k.Kinah : kind == 's' ? k.Soul : k.Defeat;
+            if (has) continue;
+            // the oldest kill in reach that still lacks this kind: evidence pairs up in order
+            int j = i;
+            while (j - 1 >= 0 && (t - _kills[j - 1].At).TotalSeconds <= KillJoinSeconds && !(kind == 'k' ? _kills[j - 1].Kinah : kind == 's' ? _kills[j - 1].Soul : _kills[j - 1].Defeat)) j--;
+            var kj = _kills[j];
+            _kills[j] = (kj.At, kj.Kinah || kind == 'k', kj.Soul || kind == 's', kj.Defeat || kind == 'd');
+            return;
+        }
+        _kills.Add((t, kind == 'k', kind == 's', kind == 'd'));
+        if (_kills.Count > 64) _kills.RemoveAt(0);
+        KillsSeen++; Z().KillsSeen++;
+    }
+
     ZoneStats Z() { var key = _zone ?? UnknownZone; if (!Zones.TryGetValue(key, out var z)) Zones[key] = z = new ZoneStats(); return z; }
 
     public SessionEngine(ItemDictionary items) { _items = items; }
@@ -395,6 +426,7 @@ public sealed class SessionEngine
                         if (k.Delta > 0)
                         {
                             KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; Mark(_recentKills, k.Time);
+                            KillEvidence(k.Time, 'k');
                             _recentPickups.Add(k.Delta); if (_recentPickups.Count > 50) _recentPickups.RemoveAt(0);
                             var mk = MobFor(k.Time);
                             if (mk != null) { mk.Kinah += k.Delta; mk.KinahDrops++; }
@@ -407,12 +439,14 @@ public sealed class SessionEngine
                     break;
                 case MobKilled mk:
                     KillsDefeated++; Z().Defeated++; Mark(_recentKills, mk.Time);
+                    KillEvidence(mk.Time, 'd');
                     break;
                 case XpGained:
                     KillsXp++; Z().Xp++;
                     break;
                 case CurrencyGained c:
                     CurrencyLines++; Z().CurrencyLines++; Mark(_recentKills, c.Time);
+                    if (c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) KillEvidence(c.Time, 's');
                     // a Soul Points line names the kind of enemy that died: one kill of it, and the Kinah of that kill goes with it,
                     // whatever the target bar read (Steven, 2026-10-22: three different enemies killed, one shown)
                     if (c.Enemy.Length >= 3 && KinahLedger.Ocr.TargetReader.EnemyForSoul(c.Enemy, _recentTargets.Where(r => Math.Abs((c.Time - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).Select(r => r.Name)) is { Length: > 0 } enemy)
@@ -506,7 +540,7 @@ public sealed class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
             return copy;
         }
     }

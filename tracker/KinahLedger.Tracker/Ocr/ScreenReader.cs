@@ -21,6 +21,7 @@ public sealed record OcrLineBox(string Text, Rectangle Box, IReadOnlyList<OcrWor
 public sealed class ScreenReader
 {
     static OcrEngine? _shared;
+    static OcrEngine NewEngine() => OcrEngine.TryCreateFromLanguage(new Language("en-US")) ?? OcrEngine.TryCreateFromUserProfileLanguages() ?? Engine;
     static OcrEngine Engine => _shared ??= OcrEngine.TryCreateFromLanguage(new Language("en-US"))
         ?? OcrEngine.TryCreateFromUserProfileLanguages()
         ?? throw new InvalidOperationException("Windows text recognition isn't available. In Settings > Time & language > Language, add English (United States) with the optional features.");
@@ -142,8 +143,11 @@ public sealed class ScreenReader
         }
     }
 
-    // the chat loop and the Market loop share one recognizer; one recognition at a time keeps it predictable
-    static readonly SemaphoreSlim Gate = new(1, 1);
+    // up to three recognitions at once, each on its own recognizer: the chat and the loot list beside the character are
+    // read side by side, so a pass takes the time of the slower one instead of both (2026-10-22: rows up for three seconds
+    // were read once during fast kills). The Market loop takes a free one like the others.
+    static readonly SemaphoreSlim Gate = new(3, 3);
+    static readonly System.Collections.Concurrent.ConcurrentBag<OcrEngine> Pool = new();
 
     static async Task<OcrResult> Recognize(Bitmap bmp)
     {
@@ -154,8 +158,9 @@ public sealed class ScreenReader
         var decoder = await BitmapDecoder.CreateAsync(ras);
         using var soft = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
         await Gate.WaitAsync();
-        try { return await Engine.RecognizeAsync(soft); }
-        finally { Gate.Release(); }
+        var eng = Pool.TryTake(out var free) ? free : _shared == null ? Engine : NewEngine();
+        try { return await eng.RecognizeAsync(soft); }
+        finally { Pool.Add(eng); Gate.Release(); }
     }
 
     /// <summary>Loads an image file (PNG, JPEG, WebP where Windows has the codec) into a 32-bit bitmap.</summary>

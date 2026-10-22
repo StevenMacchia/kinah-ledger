@@ -70,7 +70,7 @@ internal static class Program
                     foreach (var line in pos)
                     {
                         var evs = pp.Parse(line, DateTime.UtcNow).Select(e => Describe(e, pitems)).ToList();
-                        Console.WriteLine($"{line,-45} -> {(evs.Count == 0 ? "(nothing)" : string.Join("; ", evs))}");
+                        Console.WriteLine($"{line,-45} -> {(evs.Count == 0 ? "(nothing)" : string.Join("; ", evs))}   [cleaned: {ChatParser.CleanSystemLine(line)}]");
                     }
                     return 0;
                 }
@@ -432,7 +432,7 @@ options: --process aion[,other]");
         {
             var gp = new ChatParser(items);
             foreach (var (gline, gexpect) in new[] { ("Raw Leather *acquired.«", "Raw Leather ×1"), ("Raw Leatheracquired.", "Raw Leather ×1"), ("Spiritstone acquired:-", "Spiritstone ×1"),
-                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("Acquiréd 169 Kina.", "Kinah +169"), ("AcquireÖ 212 Kina.", "Kinah +212"), ("Raw Leather acquíred.", "Raw Leather ×1"), ("Restored Recon Team (Helm) Skin acquired.", "Restored Recon Team (Skin: Helm) ×1"), ("Dawn Frost (Cloak) Skin acquired.", "Dawn Frost (Skin: Cloak) ×1"), ("Forbidden Ritual (Orb) Skin acquired.", "Forbidden Ritual (Skin: Orb) ×1"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
+                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("Acquiréd 169 Kina.", "Kinah +169"), ("Acquired 31>2. Kina.", "Kinah +312"), ("AcquireÖ 212 Kina.", "Kinah +212"), ("Raw Leather acquíred.", "Raw Leather ×1"), ("Restored Recon Team (Helm) Skin acquired.", "Restored Recon Team (Skin: Helm) ×1"), ("Dawn Frost (Cloak) Skin acquired.", "Dawn Frost (Skin: Cloak) ×1"), ("Forbidden Ritual (Orb) Skin acquired.", "Forbidden Ritual (Skin: Orb) ×1"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
             {
                 var gevs = gp.Parse(gline, DateTime.UtcNow).Select(e => Describe(e, items)).ToList();
                 var ggot = gevs.Count == 0 ? "(nothing)" : string.Join("; ", gevs);
@@ -742,6 +742,18 @@ options: --process aion[,other]");
         Check("a run with no target bar sends no mobs", RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items).mobs == null ? "none" : "some", "none");
         Check("enemy list built in", TargetReader.Known.Length > 0 ? "yes" : "no (data/mobs.txt missing)", "yes");
         {
+            // kills from the evidence that agrees on them: a kill's Kinah and its Soul Points line are one kill; a kill
+            // whose Kinah line was lost still counts from its Soul Points line; two kills at once are two
+            var ke = new SessionEngine(items); var k0 = DateTime.UtcNow;
+            void Pick(double s2, long amt) => ke.Apply(new KinahChanged(k0.AddSeconds(s2), amt, false));
+            void Soul(double s2, string kind) => ke.Apply(new CurrencyGained(k0.AddSeconds(s2), kind + " Soul Points", 1, kind));
+            Pick(0, 400); Soul(0.6, "Drakan Probe");                       // one kill
+            Pick(5, 300); Pick(5, 310); Soul(5.8, "Drakan Probe"); Soul(5.8, "Kerubian");   // two at once
+            Soul(12, "Drakan Probe");                                      // its Kinah line was lost
+            Pick(20, 250);                                                 // an enemy with no Soul Points
+            Check("kills from Kinah and Soul Points together", $"{ke.Totals().Kills} kills ({ke.KillsSeen} seen, {ke.KinahDrops} Kinah, {ke.CurrencyLines} Soul Points)", "5 kills (5 seen, 4 Kinah, 4 Soul Points)");
+        }
+        {
             // each kill prints "Obtained 1 <kind> Soul Points.": that names the enemy, whatever the target bar read
             // (2026-10-22 11:01: three kinds killed, the bar misread as "Drana Processing Mainte", "Dtana Proc", "Medil")
             var sp = new ChatParser(items); var se = new SessionEngine(items); var s0 = DateTime.UtcNow;
@@ -969,6 +981,23 @@ options: --process aion[,other]");
             a5.AddRange(c5.Popup(new() { K(1), I("Oracle") }, x0.AddSeconds(0.7)));
             a5.AddRange(c5.Popup(new() { K(1), I("Oracle") }, x0.AddSeconds(6)));
             Check("Kinah seen once, Kina under 10 and names off the item list never count", Desc(a5), "nothing");
+
+            // the chat misread the list's 463 as 460 (2026-10-22 11:02): the same pickup, not a second one
+            var c10 = new LootCrossCheck(items);
+            c10.Chat(new KinahChanged(x0, 460, false), x0);
+            var a10 = c10.Popup(new() { K(463) }, x0.AddSeconds(0.5)).Concat(c10.Popup(new() { K(463) }, x0.AddSeconds(1.2))).Concat(c10.Popup(new(), x0.AddSeconds(7))).ToList();
+            Check("a Kinah amount one digit off is the same pickup", Desc(a10), "nothing");
+
+            // the chat counted one Kinah line twice; the list showed it once (2026-10-22 11:01, 352 Kina)
+            var c11 = new LootCrossCheck(items);
+            bool first = c11.Chat(new KinahChanged(x0, 352, false), x0);
+            c11.Popup(new() { K(352) }, x0.AddSeconds(0.9));
+            bool second = c11.Chat(new KinahChanged(x0.AddSeconds(1.1), 352, false), x0.AddSeconds(1.1));
+            var c12 = new LootCrossCheck(items);
+            c12.Chat(new KinahChanged(x0, 352, false), x0);
+            c12.Popup(new() { K(352), K(352) }, x0.AddSeconds(0.9));
+            bool twoKills = c12.Chat(new KinahChanged(x0.AddSeconds(1.1), 352, false), x0.AddSeconds(1.1));
+            Check("the same amount read twice: skipped when the list showed it once, kept when twice", $"{first} {second} {twoKills}", "False True False");
 
             // fast kills: the list is read about once a second and a row is up about three, so a row can be read once only
             var c7 = new LootCrossCheck(items);

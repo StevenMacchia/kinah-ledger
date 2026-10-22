@@ -286,6 +286,8 @@ public sealed partial class ChatParser
         // the first letter or two of "Acquired" lost while the line faded in, before an amount of Kina
         s = Regex.Replace(s, @"^\W*(?:a?c|c?q)?quired(?=\s*[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"^\W*cquired\b", "Acquired", RegexOptions.IgnoreCase);
+        // a stray mark inside a Kinah amount ("Acquired 31>2. Kina." for 312, 2026-10-22 11:02): the digits are joined
+        if (Regex.IsMatch(s, @"acqu\w*\s.*\bkin", RegexOptions.IgnoreCase)) s = Regex.Replace(s, @"(?<=\d)[^\d\s.,]{1,2}(?=\d)", "");
         // the verb's last letter misread before an amount: "AcquireO 169 Kina.", "Acquirea 212 Kina."
         s = Regex.Replace(s, @"^\W*acqu[il1]re[dao0]?(?=\s+[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
         // trailing marks after the line's own full stop: "acquired:-", "acquired.«", "acquiréd.i"

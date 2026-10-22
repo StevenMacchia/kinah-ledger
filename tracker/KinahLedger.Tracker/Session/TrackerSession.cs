@@ -257,7 +257,18 @@ public sealed class TrackerSession
                     Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
                     LastError = "";
                 }
-                else { await ReadOnce(); await TargetDueAsync(); await LootListAsync(); }
+                else
+                {
+                    // the loot list is read beside the chat, not after it: a pass takes the slower of the two
+                    var p0 = DateTime.UtcNow;
+                    var list = LootReadAsync();
+                    await ReadOnce();
+                    _chatMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    await TargetDueAsync();
+                    LootProcess(await list);
+                    _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    Audit();
+                }
                 await ZoneDueAsync();
             }
             catch (System.ComponentModel.Win32Exception)
@@ -283,6 +294,7 @@ public sealed class TrackerSession
         if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
         Engine.Resume(); Secondary?.Resume(); ZoneView.Resume();
         var lines = await _reader!.ReadAsync();
+        if (lines.Count > 0) { ReadTrace.Chat(DateTime.UtcNow, lines); QuestCounter(lines); }
         Reads++;
         // the chat moved or the UI was toggled: after a stretch of empty reads, find it again (auto mode only)
         _emptyReads = lines.Count == 0 ? _emptyReads + 1 : 0;
@@ -377,6 +389,42 @@ public sealed class TrackerSession
 
     DateTime _targetAt = DateTime.MinValue;
 
+    // ---- the audit: how the count holds up, once a minute in reads.log ----
+    // The quest tracker's "Defeat … (n/20)" lines count kills of quest enemies exactly, so where every enemy fought is a
+    // quest enemy, the kills counted should rise as fast as the counter. Pass times say how often the screen is read.
+    int _passes; double _passMs, _chatMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
+    readonly Dictionary<int, int> _questMax = new();
+    void QuestCounter(IReadOnlyList<string> lines)
+    {
+        var best = new Dictionary<int, int>();
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(lines[i], @"\((\d{1,3})\s*/\s*(\d{1,3})\)\s*$");
+            if (!m.Success) continue;
+            // the counter line, or its wrapped half, follows a "Defeat …" line
+            bool quest = lines[i].Contains("Defeat", StringComparison.OrdinalIgnoreCase) || (i > 0 && lines[i - 1].Contains("Defeat", StringComparison.OrdinalIgnoreCase));
+            if (!quest) continue;
+            int n = int.Parse(m.Groups[1].Value), of = int.Parse(m.Groups[2].Value);
+            if (n > of || of < 2) continue;
+            best[of] = Math.Max(best.GetValueOrDefault(of), n);
+        }
+        foreach (var (of, n) in best)
+        {
+            if (_questMax.TryGetValue(of, out var was) && n > was && n - was <= 5) _questSteps += n - was;
+            if (!_questMax.ContainsKey(of) || n > was || n < was - 3) _questMax[of] = n;
+        }
+    }
+    void Audit()
+    {
+        var now = DateTime.UtcNow;
+        if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
+        if ((now - _auditAt).TotalSeconds < 60) return;
+        int kills = Engine.Totals().Kills;
+        if (_passes > 0 && (kills > _auditKills || _questSteps > 0))
+            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms)");
+        _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; _chatMs = 0; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
+    }
+
     /// <summary>One pickup as counted, for the recent pickups strip: when, what, and how it was read.</summary>
     public sealed record Pickup(DateTime At, string What, string Via, bool Unconfirmed);
     readonly List<Pickup> _pickups = new();
@@ -402,18 +450,28 @@ public sealed class TrackerSession
     /// One read of the loot list beside the character, every pass while the game is in view. Its rows wait for the chat;
     /// a row the chat never matched is counted from the list, through the same rules as a chat line (reward screens too).
     /// </summary>
-    async Task LootListAsync()
+    /// <summary>One read of the loot list beside the character, started before the chat read so the two run side by side. Null when it can't be read.</summary>
+    async Task<List<OcrLineBox>?> LootReadAsync()
     {
-        if (GameRect is not { } g) return;
-        // every pass: a row is up about three seconds, and during fast kills a pass can take over a second
+        if (GameRect is not { } g) return null;
         var region = LootPopup.Region(g);
         try
         {
-            var cover = GameWindow.Covered(region, _settings.ProcessHints);
-            if (cover != null) return;   // something over it (this window, a browser): nothing read, nothing added
-            var lines = await ScreenReader.ReadBoxesAsync(region, 3, boost: true);
+            if (GameWindow.Covered(region, _settings.ProcessHints) != null) return null;   // something over it: nothing read, nothing added
+            return await ScreenReader.ReadBoxesAsync(region, 3, boost: true);
+        }
+        catch (Exception ex) { CrashLog.Write("loot list", ex); return null; }
+    }
+
+    void LootProcess(List<OcrLineBox>? lines)
+    {
+        if (lines == null) return;
+        try
+        {
             var now = DateTime.UtcNow;
-            var add = _cross.Popup(LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text))), now);
+            var rows = LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text)));
+            if (rows.Count > 0) ReadTrace.List(now, rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}"));
+            var add = _cross.Popup(rows, now);
             if (add.Count == 0) return;
             bool reward = Target.RewardOpen(now);
             foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
