@@ -128,6 +128,13 @@ internal static class Program
                     using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(src));
                     var arr = doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array ? doc.RootElement : doc.RootElement.GetProperty("items");
                     var urls = arr.EnumerateArray().Select(e => e.TryGetProperty("icon", out var ic) ? ic.GetString() ?? "" : "").Where(u => u.Length > 0).ToList();
+                    // the currencies and reward items the list lacks (data/extra-items.json), when it is there
+                    var extra = opts.GetValueOrDefault("extra", Path.Combine(Path.GetDirectoryName(src) ?? ".", "extra-items.json"));
+                    if (File.Exists(extra))
+                    {
+                        using var xdoc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(extra));
+                        urls.AddRange(xdoc.RootElement.GetProperty("items").EnumerateArray().Select(e => e.TryGetProperty("icon", out var ic) ? ic.GetString() ?? "" : "").Where(u => u.Length > 0));
+                    }
                     int n = IconIndex.BuildAsync(urls, cache, outBin).GetAwaiter().GetResult();
                     Console.WriteLine($"wrote {n} icons to {Path.GetFullPath(outBin)}");
                     return 0;
@@ -170,7 +177,7 @@ internal static class Program
                         top = rc.Box.Bottom + (int)(frame.Height * 0.016);
                     }
                     var gitems = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
-                    var byIcon = gitems.AllItems().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(g => g.Key, g => g.ToList());
+                    var byIcon = gitems.AllWithIcons().GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(g => g.Key, g => g.ToList());
                     var slots = RewardGrid.ReadAsync(frame, top).GetAwaiter().GetResult();
                     Console.WriteLine($"{slots.Count} slots from y {top} ({IconIndex.All.Count} icons in the index)");
                     foreach (var sl in slots)

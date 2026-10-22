@@ -191,6 +191,7 @@ public sealed class ItemDictionary
             }
         d.LoadGatheringIcons(p);
         d.LoadSkins();
+        d.LoadExtras();
         return d;
     }
 
@@ -199,6 +200,39 @@ public sealed class ItemDictionary
     /// skin drop never counted. Each is known as "Set (Skin: Slot)", the list's own form; the chat's "Set (Slot) Skin" is
     /// turned into it by the parser. A skin with no item id gets a stable one of its own and goes to the site by name.
     /// </summary>
+    /// <summary>
+    /// Currencies and reward items the item list lacks (data/extra-items.json, from MetaBot.GG): Kina, Abyss Points, Soul
+    /// Codex, Silentium, Odyle Energy, shop coins and the like. They show in expedition and event reward grids, so the
+    /// grid's icons can name them. Each is known under its own name and, for a "(Bound)" one, without that suffix too,
+    /// since the chat parser takes "(Bound)" off before it looks a name up. No ids: they go to the site by name.
+    /// </summary>
+    void LoadExtras()
+    {
+        try
+        {
+            using var stream = typeof(ItemDictionary).Assembly.GetManifestResourceStream("extra-items.json");
+            if (stream == null) return;
+            using var doc = JsonDocument.Parse(stream);
+            if (!doc.RootElement.TryGetProperty("items", out var arr) || arr.ValueKind != JsonValueKind.Array) return;
+            foreach (var e in arr.EnumerateArray())
+            {
+                var name = Str(e, "name");
+                if (name.Length == 0 || _byName.ContainsKey(Norm(name))) continue;
+                long id = -(long)(Fnv("extra:" + Norm(name)) & 0x7FFFFFFF) - 1;
+                bool tradable = !(e.TryGetProperty("tradable", out var t) && t.ValueKind == JsonValueKind.False);
+                var cat = Str(e, "category"); if (cat.Length == 0) cat = "Currency";
+                _byId[id] = new ItemInfo(id, name, Str(e, "grade"), tradable, Str(e, "icon"), cat);
+                _byName[Norm(name)] = id;
+                var plain = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+                if (plain != name && !_byName.ContainsKey(Norm(plain))) _byName[Norm(plain)] = id;
+            }
+        }
+        catch (Exception) { /* without the extras, those slots stay unnamed */ }
+    }
+
+    /// <summary>Every item the list holds, the extras included (they have no real ids), for the reward grid's icon names.</summary>
+    public List<ItemInfo> AllWithIcons() { lock (_lock) return _byId.Values.Where(i => i.Icon.Length > 0).ToList(); }
+
     void LoadSkins()
     {
         try

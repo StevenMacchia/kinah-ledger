@@ -77,6 +77,7 @@
     <EmbeddedResource Include="..\..\data\loot-tables.json" LogicalName="loot-tables.json" Condition="Exists('..\..\data\loot-tables.json')" />
     <EmbeddedResource Include="..\..\data\skins.json" LogicalName="skins.json" Condition="Exists('..\..\data\skins.json')" />
     <EmbeddedResource Include="..\..\data\icon-index.bin" LogicalName="icon-index.bin" Condition="Exists('..\..\data\icon-index.bin')" />
+    <EmbeddedResource Include="..\..\data\extra-items.json" LogicalName="extra-items.json" Condition="Exists('..\..\data\extra-items.json')" />
   </ItemGroup>
 
   <ItemGroup>

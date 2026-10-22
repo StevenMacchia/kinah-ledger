@@ -58,6 +58,23 @@ public static class IconIndex
         return px;
     }
 
+    /// <summary>An icon file as a bitmap: PNG directly, WebP (some MetaBot icons) through Windows' own image decoder.</summary>
+    static async Task<Bitmap> OpenAsync(string file)
+    {
+        if (!file.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)) return new Bitmap(file);
+        var sf = await Windows.Storage.StorageFile.GetFileFromPathAsync(Path.GetFullPath(file));
+        using var stream = await sf.OpenReadAsync();
+        var dec = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+        using var soft = await dec.GetSoftwareBitmapAsync(Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8, Windows.Graphics.Imaging.BitmapAlphaMode.Straight);
+        var px = new byte[4 * soft.PixelWidth * soft.PixelHeight];
+        soft.CopyToBuffer(System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.AsBuffer(px));
+        var bmp = new Bitmap(soft.PixelWidth, soft.PixelHeight, PixelFormat.Format32bppArgb);
+        var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        Marshal.Copy(px, 0, data.Scan0, px.Length);
+        bmp.UnlockBits(data);
+        return bmp;
+    }
+
     /// <summary>Downloads every distinct icon of the item list (cached in <paramref name="cacheDir"/>) and writes the index.</summary>
     public static async Task<int> BuildAsync(IEnumerable<string> urls, string cacheDir, string outFile)
     {
@@ -74,9 +91,10 @@ public static class IconIndex
             try
             {
                 var key = KeyOf(url);
-                var file = Path.Combine(cacheDir, key + ".png");
+                var ext = Path.GetExtension(new Uri(url).AbsolutePath); if (ext.Length == 0) ext = ".png";
+                var file = Path.Combine(cacheDir, key + ext);
                 if (!File.Exists(file)) await File.WriteAllBytesAsync(file, await http.GetByteArrayAsync(url));
-                using var bmp = new Bitmap(file);
+                using var bmp = await OpenAsync(file);
                 entries.Add(new Entry(key, Fingerprint(bmp)));
             }
             catch (Exception ex) { Console.Error.WriteLine($"skipped {url}: {ex.Message}"); }
