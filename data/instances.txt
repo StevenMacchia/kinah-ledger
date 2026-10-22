@@ -253,3 +253,103 @@ Abyss Corridor|Event
 Arena of Tactics|Arena
 Arena of Solitude|Arena
 Arena of Cooperation|Arena
+
+# Expedition areas (2026-10-22, MetaBot.GG dungeon pages, 'Zones, Rooms and Portals'): an area files under its expedition
+Windy Valley|Expedition|Urugugu Canyon
+Survivors' Den|Expedition|Abyssal Horn Den
+Restricted Area|Expedition|Abyssal Horn Den
+Altar of Souls|Expedition|Abyssal Horn Den
+Path of the Sovereign|Expedition|Abyssal Horn Den
+Moonshadow Throne|Expedition|Abyssal Horn Den
+Azure Primeval Forest|Expedition|Azure Breath Island
+Moonlit Land|Expedition|Azure Breath Island
+Mushroom Colony|Expedition|Azure Breath Island
+Hall of Indomitability|Expedition|Citadel of the Fallen Daeva
+Execution's Crossing|Expedition|Citadel of the Fallen Daeva
+Tarnished Ramparts|Expedition|Citadel of the Fallen Daeva
+Arena of Defiled Honor Exterior|Expedition|Citadel of the Fallen Daeva
+Arena of Defiled Honor Interior|Expedition|Citadel of the Fallen Daeva
+Collapsed Cradle|Expedition|Cradle of Nihility
+Floating Dimension|Expedition|Cradle of Nihility
+Distorted Crystal Cave|Expedition|Cradle of Nihility
+Distorted Spiral|Expedition|Cradle of Nihility
+Ruptured Dimension|Expedition|Cradle of Nihility
+Dimensional Crystal Cave|Expedition|Cradle of Nihility
+Aerial Research Center Ruins|Expedition|Deus Research Base
+Research Material Depository|Expedition|Deus Research Base
+Storm-Battered Sky Island|Expedition|Deus Research Base
+Pseudo-Odyle Workshop|Expedition|Deus Research Base
+Collapsed Sky Island|Expedition|Deus Research Base
+Bakarma's Subspace|Expedition|Draupnir
+Meditation Room|Expedition|Draupnir
+Phantasmal Sky|Expedition|Draupnir
+Abyss Control Sector|Expedition|Draupnir
+Unknown Abyss|Expedition|Draupnir
+Faint Rift|Expedition|Draupnir
+Dramata's Cave Entrance|Expedition|Dying Dramata's Nest
+Dratona Hatchery|Expedition|Dying Dramata's Nest
+Dratona Breeding Ground|Expedition|Dying Dramata's Nest
+Dramata Valley|Expedition|Dying Dramata's Nest
+Dramata Valley Culvert|Expedition|Dying Dramata's Nest
+Durvati's Nest|Expedition|Dying Dramata's Nest
+Dramata Underwater Cave|Expedition|Dying Dramata's Nest
+Fera Surveillance Site|Expedition|Ferocious Horn Den
+Requiem Altar|Expedition|Ferocious Horn Den
+Mau's Resting Place|Expedition|Ferocious Horn Den
+Abyssal Surface|Expedition|Ferocious Horn Den
+Howling Throne|Expedition|Ferocious Horn Den
+Twinkling Abyss|Expedition|Ferocious Horn Den
+Path of Atonement|Expedition|Fire Temple
+Fire Corridor|Expedition|Fire Temple
+Mirror Altar|Expedition|Fire Temple
+Hall of Glory|Expedition|Hall of Illusion
+Mirror Corridor|Expedition|Hall of Illusion
+Reflected Hall|Expedition|Hall of Illusion
+Depths within the Mirror|Expedition|Hall of Illusion
+Divided Sanctum|Expedition|Hall of Illusion
+Red Cavity|Expedition|Krao Cave
+Weathered Testing Ground|Expedition|Krao Cave
+Sealed Cave|Expedition|Krao Cave
+Mirror Chamber|Expedition|Mirror of Scarlet Desire
+Hall of Sacred Union|Expedition|Mirror of Scarlet Desire
+Path of Eternal Vows|Expedition|Mirror of Scarlet Desire
+Chamber of the Scarlet Vow|Expedition|Mirror of Scarlet Desire
+Garden's Edge|Expedition|Mirror of Scarlet Desire
+Garden of Dreams|Expedition|Mirror of Scarlet Desire
+Tranquil Rose Garden|Expedition|Mirror of Scarlet Desire
+Garden of Pure Vows|Expedition|Mirror of Scarlet Desire
+Shattered Floating Temple|Expedition|Shattered Arkanis
+Collapsed Corridor|Expedition|Shattered Arkanis
+Void Altar|Expedition|Shattered Arkanis
+Slanted Plaza|Expedition|Shattered Arkanis
+Collapsed Hall|Expedition|Submerged Life Temple
+Path of Life|Expedition|Submerged Life Temple
+Submerged Altar|Expedition|Submerged Life Temple
+Sanctum of Life|Expedition|Submerged Life Temple
+Temple Access Path|Expedition|Submerged Life Temple
+Spirit Altar|Expedition|Vakron Sky Island
+Boulder Islands|Expedition|Vakron Sky Island
+Tiere's Nest|Expedition|Vakron Sky Island
+Thamon's Area|Expedition|Vakron Sky Island
+Islands Windstream|Expedition|Vakron Sky Island
+Abyssal Gateway|Expedition|Abyssal Forge: Ludra
+Avarice Plaza|Expedition|Abyssal Forge: Ludra
+Western Abyssal Forge Area|Expedition|Abyssal Forge: Ludra
+Eastern Abyssal Forge Area|Expedition|Abyssal Forge: Ludra
+Abyss Wing Training Grounds|Expedition|Abyssal Forge: Ludra
+Ludra's Subspace|Expedition|Abyssal Forge: Ludra
+Eternal Fortress Throne|Expedition|Abyssal Forge: Ludra
+Altar of Echoes|Expedition|Chalice of Muspel
+Winged Corridor|Expedition|Chalice of Muspel
+Consumed Guardian's Fault|Expedition|Chalice of Muspel
+Scourge's Hatchery|Expedition|Chalice of Muspel
+Volcano's Heart|Expedition|Chalice of Muspel
+Waste Disposal Area|Expedition|Corroded Decontamination Facility
+Underground Cavity|Expedition|Corroded Decontamination Facility
+Toxic Waste Tank|Expedition|Corroded Decontamination Facility
+Combined Purification Plant|Expedition|Corroded Decontamination Facility
+Courage Plaza|Arena|Beritra Brigade Fortress
+Fighting Spirit Plaza|Arena|Beritra Brigade Fortress
+Fury Plaza|Arena|Beritra Brigade Fortress
+Annihilation Plaza|Arena|Beritra Brigade Fortress
+Central Plaza|Arena|Beritra Brigade Fortress
