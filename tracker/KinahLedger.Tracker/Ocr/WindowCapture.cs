@@ -49,6 +49,14 @@ public static class WindowCapture
     static DateTime _lastAt;
     static bool _broken;
 
+    /// <summary>
+    /// The hook for reading several frames per line (multi-frame voting): counts every frame the game window delivers.
+    /// A reader that saw frame N can skip the read until this moves on; <see cref="NewFrame"/> says the same as it
+    /// happens, on a capture thread (keep the handler short: note it, read on your own loop).
+    /// </summary>
+    public static long FrameNumber { get; private set; }
+    public static event Action<long>? NewFrame;
+
     /// <summary>True when frames are arriving from the game window.</summary>
     public static bool Active { get { lock (Lock) return _session != null && _last != null && (DateTime.UtcNow - _lastAt).TotalSeconds < 3; } }
 
@@ -100,7 +108,7 @@ public static class WindowCapture
             var bmp = SoftwareBitmap.CreateCopyFromSurfaceAsync(frame.Surface, BitmapAlphaMode.Premultiplied).AsTask().GetAwaiter().GetResult();
             lock (Lock)
             {
-                _last?.Dispose(); _last = bmp; _lastAt = DateTime.UtcNow;
+                _last?.Dispose(); _last = bmp; _lastAt = DateTime.UtcNow; FrameNumber++;
                 if (frame.ContentSize.Width != _size.Width || frame.ContentSize.Height != _size.Height)
                 {
                     _size = frame.ContentSize;
@@ -108,7 +116,8 @@ public static class WindowCapture
                 }
             }
         }
-        catch (Exception) { /* the next frame tries again */ }
+        catch (Exception) { /* the next frame tries again */ return; }
+        try { NewFrame?.Invoke(FrameNumber); } catch (Exception) { /* a handler's error is not the capture's */ }
     }
 
     /// <summary>The screen rectangle cut from the newest frame of the game window; null when there is none to use.</summary>
