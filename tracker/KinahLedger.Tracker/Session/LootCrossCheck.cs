@@ -125,11 +125,15 @@ public sealed class LootCrossCheck
         var shown = new Dictionary<string, (int Count, LootPopup.Row Row)>();
         foreach (var row in raw)
         {
+            // "Soul: Drakan Probe (Bound) x1": the soul every enemy drops, so one kill of that kind (Steven, 2026-10-22)
+            var soul = row.IsKinah ? null : SoulOf(row.Name);
             string? key = row.IsKinah ? (row.Amount >= MinKinah ? KinahKey(row.Amount) : null)
+                        : soul != null ? "s:" + soul
                         : _items.Knows(row.Name) ? ItemKey(_items.IdOf(row.Name), row.Count) : null;
             if (key == null) continue;
             shown[key] = (shown.TryGetValue(key, out var x) ? x.Count + 1 : 1, row);
         }
+        var souls = new List<GameEvent>();
         foreach (var k in shown.Keys) if (!_visible.Contains(k)) _since[k] = now;
         foreach (var k in _since.Keys.Where(k => !shown.ContainsKey(k) && !_visible.Contains(k)).ToList()) _since.Remove(k);
         _visible.Clear(); foreach (var k in shown.Keys) _visible.Add(k);
@@ -144,7 +148,14 @@ public sealed class LootCrossCheck
                 if (!(_kinahOnce.TryGetValue(key, out var once) && (now - once.At).TotalSeconds <= HoldSeconds && once.Count >= n)) { _kinahOnce[key] = (n, now); more = 0; }
                 else _kinahOnce.Remove(key);
             }
-            if (more > 0)
+            if (more > 0 && key.StartsWith("s:"))
+            {
+                // a soul row needs no chat to match: the engine joins it to the kill's Kinah and Soul Points line, if any
+                for (int i = 0; i < more; i++) souls.Add(new EnemySoul(now, key[2..]) { Via = "loot list" });
+                CrashLog.Note($"loot list: the soul of {key[2..]}" + (more > 1 ? $" ({more} rows)" : "") + ": a kill");
+                _credited[key] = (n, now, 0);
+            }
+            else if (more > 0)
             {
                 for (int i = 0; i < more; i++) _waiting.Add((now, row, key));
                 CrashLog.Note($"loot list: {(row.IsKinah ? row.Amount.ToString("N0") + " Kina" : row.Name + " x" + row.Count)}" + (more > 1 ? $" ({more} rows)" : ""));
@@ -170,7 +181,16 @@ public sealed class LootCrossCheck
             if (long.TryParse(k[2..], out var amt)) { _singleKinah.Add((amt, _kinahOnce[k].At)); if (_singleKinah.Count > 20) _singleKinah.RemoveAt(0); }
             _kinahOnce.Remove(k);
         }
-        return Settle(now);
+        var settled = Settle(now);
+        settled.AddRange(souls);
+        return settled;
+    }
+
+    /// <summary>The enemy kind a "Soul: Drakan Probe (Bound)" row names, "" when the row shows only "Soul" (a kill, name unread); null for any other row. Soul Crystals are pets, not this.</summary>
+    public static string? SoulOf(string name)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(name, @"^\s*s[o0]u[l1i]\s*(?:[:;.]\s*(?<k>[A-Za-z' -]{3,}?))?\s*(?:\(bound\S*)?\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return m.Success ? System.Text.RegularExpressions.Regex.Replace(m.Groups["k"].Value, @"\s+", " ").Trim() : null;
     }
 
     /// <summary>Matches waiting rows to chat pickups; returns the rows that waited past WaitSeconds unmatched, as events.</summary>

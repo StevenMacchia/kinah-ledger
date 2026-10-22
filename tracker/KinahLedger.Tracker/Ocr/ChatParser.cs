@@ -377,6 +377,9 @@ public sealed partial class ChatParser
             int n = ob.Groups["n"].Success ? int.Parse(ob.Groups["n"].Value) : 1;
             // the pet's name is what comes before "Soul"; a one-word "SouUPoints" or a cut-off "Papis Soul" keeps the word before it
             var head = words.Take(words.Count - 1).ToList();
+            // "Obtained 2 Stigma Shard points." is another currency, not a soul: no "Soul" before "points", no kill
+            bool soulish = cut || crystal || (head.Count > 0 && Dist(Letters(head[^1]), "soul") <= 2) || last.Contains("soul") || last.StartsWith("sou");
+            if (points && !soulish) { yield return new CurrencyGained(time, string.Join(' ', words), Math.Clamp(n, 1, 999999)); yield break; }
             if (head.Count > 0 && !cut && Dist(Letters(head[^1]), "soul") <= 2) head.RemoveAt(head.Count - 1);
             var pet = PetName(string.Join(' ', head));
             if (crystal) yield return new PetCrystal(time, (pet.Length > 0 ? pet + " " : "") + "Soul Crystal", Math.Clamp(n, 1, 9999));

@@ -486,7 +486,7 @@ options: --process aion[,other]");
         {
             var gp = new ChatParser(items);
             foreach (var (gline, gexpect) in new[] { ("Raw Leather *acquired.«", "Raw Leather ×1"), ("Raw Leatheracquired.", "Raw Leather ×1"), ("Spiritstone acquired:-", "Spiritstone ×1"),
-                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("Acquiréd 169 Kina.", "Kinah +169"), ("Acquired 31>2. Kina.", "Kinah +312"), ("AcquireÖ 212 Kina.", "Kinah +212"), ("Raw Leather acquíred.", "Raw Leather ×1"), ("Restored Recon Team (Helm) Skin acquired.", "Restored Recon Team (Skin: Helm) ×1"), ("Dawn Frost (Cloak) Skin acquired.", "Dawn Frost (Skin: Cloak) ×1"), ("Forbidden Ritual (Orb) Skin acquired.", "Forbidden Ritual (Skin: Orb) ×1"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
+                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("Acquiréd 169 Kina.", "Kinah +169"), ("Acquired 31>2. Kina.", "Kinah +312"), ("Obtained 2 Stigma Shard points.", "Stigma Shard points +2"), ("AcquireÖ 212 Kina.", "Kinah +212"), ("Raw Leather acquíred.", "Raw Leather ×1"), ("Restored Recon Team (Helm) Skin acquired.", "Restored Recon Team (Skin: Helm) ×1"), ("Dawn Frost (Cloak) Skin acquired.", "Dawn Frost (Skin: Cloak) ×1"), ("Forbidden Ritual (Orb) Skin acquired.", "Forbidden Ritual (Skin: Orb) ×1"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
             {
                 var gevs = gp.Parse(gline, DateTime.UtcNow).Select(e => Describe(e, items)).ToList();
                 var ggot = gevs.Count == 0 ? "(nothing)" : string.Join("; ", gevs);
@@ -805,6 +805,12 @@ options: --process aion[,other]");
             Pick(5, 300); Pick(5, 310); Soul(5.8, "Drakan Probe"); Soul(5.8, "Kerubian");   // two at once
             Soul(12, "Drakan Probe");                                      // its Kinah line was lost
             Pick(20, 250);                                                 // an enemy with no Soul Points
+            // the loot list's "Soul: <enemy>" row: a kill of that enemy, joined to the same kill's Kinah and Soul Points line
+            Check("soul rows in the loot list", $"{LootCrossCheck.SoulOf("Soul: Papis (Bound)")} | {LootCrossCheck.SoulOf("Soul: Drakan Probe")} | {LootCrossCheck.SoulOf("Cogni Soul Crystals") ?? "none"} | {LootCrossCheck.SoulOf("Raw Leather") ?? "none"} | {LootCrossCheck.SoulOf("Soul: Papis (Boundj'")} | [{LootCrossCheck.SoulOf("Soul")}]", "Papis | Drakan Probe | none | none | Papis | []");
+            var se2 = new SessionEngine(items); var q0 = DateTime.UtcNow;
+            se2.Apply(new KinahChanged(q0, 400, false)); se2.Apply(new EnemySoul(q0.AddSeconds(0.5), "Drakan Probe")); se2.Apply(new CurrencyGained(q0.AddSeconds(0.8), "Drakan Probe Soul Points", 1, "Drakan Probe"));
+            se2.Apply(new EnemySoul(q0.AddSeconds(6), "Kerubian"));          // the chat lost this kill's lines; the list's soul row names it
+            Check("a kill seen three ways is one; a soul row alone is a kill", $"{se2.Totals().Kills} kills · " + string.Join(" | ", se2.MobSnapshot().OrderBy(m => m.Name).Select(m => $"{m.Name}: {m.Kills} kills {m.Kinah}")), "2 kills · Drakan Probe: 1 kills 400 | Kerubian: 1 kills 0");
             Check("kills from Kinah and Soul Points together", $"{ke.Totals().Kills} kills ({ke.KillsSeen} seen, {ke.KinahDrops} Kinah, {ke.CurrencyLines} Soul Points)", "5 kills (5 seen, 4 Kinah, 4 Soul Points)");
         }
         {
@@ -1273,7 +1279,7 @@ options: --process aion[,other]");
         KinahChanged k => $"Kinah {(k.Delta >= 0 ? "+" : "")}{k.Delta:N0}{(k.Bound ? " (bound)" : "")}",
         ItemAcquired a => $"{items.NameOf(a.ItemId)} ×{a.Count}{(a.Bound ? " (bound)" : "")}",
         MobKilled => "kill",
-        CurrencyGained c => $"{c.Name} +{c.Amount:N0} (counts as a kill, not a drop)",
+        CurrencyGained c => $"{c.Name} +{c.Amount:N0}" + (c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase) ? " (counts as a kill, not a drop)" : ""),
         PetCrystal p => $"pet: {p.Name} ×{p.Count} (Pets table, by zone; not a drop)",
         RewardReceived r => $"reward: {r.Name} ×{r.Count} (skipped)",
         GatherFailed f => $"{f.Skill} failed (node attempt, no yield)",

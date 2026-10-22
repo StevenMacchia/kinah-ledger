@@ -121,28 +121,56 @@ public sealed class SessionEngine
     // to one pickup), its Soul Points line, a "Defeated" line. Any one of them can be lost to a fast scroll or a misread;
     // each counted alone undercounts, and adding them overcounts. So each piece joins the newest kill of the last few
     // seconds that doesn't have that kind of evidence yet, and starts a kill of its own when none fits (2026-10-22).
-    readonly List<(DateTime At, bool Kinah, bool Soul, bool Defeat)> _kills = new();
+    /// <summary>One kill as its evidence came in: the kinds seen (k Kinah, s Soul Points line, l Soul row in the loot list, d Defeated line) and the enemy it was credited to by name.</summary>
+    sealed class KillRec { public DateTime At; public string Kinds = ""; public string? Mob; }
+    readonly List<KillRec> _kills = new();
     public const double KillJoinSeconds = 3;
-    void KillEvidence(DateTime t, char kind)
+    KillRec KillEvidence(DateTime t, char kind)
     {
+        // the oldest kill in reach that still lacks this kind of evidence: evidence pairs up in order
+        KillRec? join = null;
         for (int i = _kills.Count - 1; i >= 0; i--)
         {
             var k = _kills[i];
             double d = (t - k.At).TotalSeconds;
             if (d > KillJoinSeconds) break;
             if (d < -1) continue;
-            bool has = kind == 'k' ? k.Kinah : kind == 's' ? k.Soul : k.Defeat;
-            if (has) continue;
-            // the oldest kill in reach that still lacks this kind: evidence pairs up in order
-            int j = i;
-            while (j - 1 >= 0 && (t - _kills[j - 1].At).TotalSeconds <= KillJoinSeconds && !(kind == 'k' ? _kills[j - 1].Kinah : kind == 's' ? _kills[j - 1].Soul : _kills[j - 1].Defeat)) j--;
-            var kj = _kills[j];
-            _kills[j] = (kj.At, kj.Kinah || kind == 'k', kj.Soul || kind == 's', kj.Defeat || kind == 'd');
-            return;
+            if (k.Kinds.Contains(kind)) continue;
+            // a Soul Points line and a Soul row are the same thing seen twice: either one names the kill
+            if ((kind == 's' && k.Kinds.Contains('l')) || (kind == 'l' && k.Kinds.Contains('s'))) { if (join == null || k.At < join.At) join = k; continue; }
+            join = k;
         }
-        _kills.Add((t, kind == 'k', kind == 's', kind == 'd'));
+        if (join != null) { join.Kinds += kind; return join; }
+        var rec = new KillRec { At = t, Kinds = kind.ToString() };
+        _kills.Add(rec);
         if (_kills.Count > 64) _kills.RemoveAt(0);
         KillsSeen++; Z().KillsSeen++;
+        return rec;
+    }
+
+    /// <summary>
+    /// A kill named by its soul (a Soul Points line, or a "Soul: Drakan Probe" row in the loot list): one kill of that
+    /// enemy, and the Kinah that landed just before it goes with it, whatever the target bar read. Once per kill.
+    /// </summary>
+    void CreditSoul(string kind, DateTime t, KillRec rec)
+    {
+        if (rec.Mob != null || kind.Length < 3) return;
+        var enemy = KinahLedger.Ocr.TargetReader.EnemyForSoul(kind, _recentTargets.Where(r => Math.Abs((t - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).Select(r => r.Name));
+        if (enemy.Length == 0) return;
+        var ms = Mob(SameAs(enemy));
+        rec.Mob = ms.Name;
+        ms.CurrencyLines++;
+        int last = _kinahCredits.FindLastIndex(x => !x.Soul && (t - x.At).TotalSeconds is >= -1 and <= SoulKinahSeconds);
+        if (last >= 0)
+        {
+            var (at, amt, to, _) = _kinahCredits[last];
+            if (!ReferenceEquals(to, ms)) { if (to != null) { to.Kinah -= amt; to.KinahDrops--; } ms.Kinah += amt; ms.KinahDrops++; }
+            _kinahCredits[last] = (at, amt, ms, true);
+        }
+        // until the bar names someone else, what lands next belongs to this enemy too
+        _target = ms.Name; _targetAt = t;
+        _recentTargets.RemoveAll(r => string.Equals(r.Name, ms.Name, StringComparison.OrdinalIgnoreCase));
+        _recentTargets.Add((ms.Name, t)); if (_recentTargets.Count > 4) _recentTargets.RemoveAt(0);
     }
 
     ZoneStats Z() { var key = _zone ?? UnknownZone; if (!Zones.TryGetValue(key, out var z)) Zones[key] = z = new ZoneStats(); return z; }
@@ -445,28 +473,23 @@ public sealed class SessionEngine
                     KillsXp++; Z().Xp++;
                     break;
                 case CurrencyGained c:
-                    CurrencyLines++; Z().CurrencyLines++; Mark(_recentKills, c.Time);
-                    if (c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) KillEvidence(c.Time, 's');
+                    // only Soul Points come one per kill; another currency ("Stigma Shard points") is kept, never a kill
+                    if (c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) { CurrencyLines++; Z().CurrencyLines++; Mark(_recentKills, c.Time); }
                     // a Soul Points line names the kind of enemy that died: one kill of it, and the Kinah of that kill goes with it,
                     // whatever the target bar read (Steven, 2026-10-22: three different enemies killed, one shown)
-                    if (c.Enemy.Length >= 3 && KinahLedger.Ocr.TargetReader.EnemyForSoul(c.Enemy, _recentTargets.Where(r => Math.Abs((c.Time - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).Select(r => r.Name)) is { Length: > 0 } enemy)
+                    if (c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase))
                     {
-                        var ms = Mob(SameAs(enemy));
-                        ms.CurrencyLines++;
-                        int last = _kinahCredits.FindLastIndex(x => !x.Soul && (c.Time - x.At).TotalSeconds is >= -1 and <= SoulKinahSeconds);
-                        if (last >= 0)
-                        {
-                            var (at, amt, to, _) = _kinahCredits[last];
-                            if (!ReferenceEquals(to, ms)) { if (to != null) { to.Kinah -= amt; to.KinahDrops--; } ms.Kinah += amt; ms.KinahDrops++; }
-                            _kinahCredits[last] = (at, amt, ms, true);
-                        }
-                        // until the bar names someone else, what lands next belongs to this enemy too
-                        _target = ms.Name; _targetAt = c.Time;
-                        _recentTargets.RemoveAll(r => string.Equals(r.Name, ms.Name, StringComparison.OrdinalIgnoreCase));
-                        _recentTargets.Add((ms.Name, c.Time)); if (_recentTargets.Count > 4) _recentTargets.RemoveAt(0);
+                        var rec = KillEvidence(c.Time, 's');
+                        if (c.Enemy.Length >= 3) CreditSoul(c.Enemy, c.Time, rec);
+                        else if (rec.Mob == null && MobFor(c.Time) is { } mc) { mc.CurrencyLines++; rec.Mob = mc.Name; }
                     }
-                    else if (MobFor(c.Time) is { } mc) mc.CurrencyLines++;
+
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
+                    break;
+                case EnemySoul es:
+                    // a "Soul: <enemy>" row in the loot list beside the character: every enemy drops its soul, so a new row is a kill of it
+                    Mark(_recentKills, es.Time); Z();
+                    CreditSoul(es.Kind, es.Time, KillEvidence(es.Time, 'l'));
                     break;
                 case CraftResult cr:
                     _craft.OnResult(cr);
