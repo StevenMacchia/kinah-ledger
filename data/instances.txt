@@ -8,7 +8,8 @@
 Auldor's Sanctum|Expedition|Urugugu Canyon
 Urugugu Temple|Expedition|Urugugu Canyon
 Urugugu Village|Expedition|Urugugu Canyon
-Defend Shugo Merchants|Event
+# Events by family (Steven, 2026-10-22): every Shugo Festival game and every Dimensional Invasion share one drop table, so a run in any of them files under the family's name.
+Defend Shugo Merchants|Event|Shugo Festival
 Shugo Festival|Event
 # Party dungeons, raids, trials, growth, daily and boss content
 Abyssal Horn Den|Expedition
@@ -231,22 +232,22 @@ Altgard Legion Airship|Legion
 Eltnen Legion Airship|Legion
 Morheim Legion Airship|Legion
 Verteron Legion Airship|Legion
-Incursion of the Spirits|Event
+Incursion of the Spirits|Event|Dimensional Invasion
 # Timed events (metabot.gg/en/aion-2/events, its Shugo Festival and Dimensional Invasion pages, aion2.gg and aion2.tools, 2026-10-21):
 # the Shugo Festival games, the Dimensional Invasions, Spacetime Rift and Artifact Siege. Arena names are from metabot.gg and aion2.tools only.
-Jump Jump|Event
-Wraith Evasion|Event
-Mysterious Track|Event
-Hidden Lugi|Event
-Odyle Flight Frenzy|Event
-Goldrin's Treasure|Event
-Up! Up! Up!|Event
-Not This Tile?|Event
-Nyerk Shooter|Event
-Shugo's Dilemma|Event
+Jump Jump|Event|Shugo Festival
+Wraith Evasion|Event|Shugo Festival
+Mysterious Track|Event|Shugo Festival
+Hidden Lugi|Event|Shugo Festival
+Odyle Flight Frenzy|Event|Shugo Festival
+Goldrin's Treasure|Event|Shugo Festival
+Up! Up! Up!|Event|Shugo Festival
+Not This Tile?|Event|Shugo Festival
+Nyerk Shooter|Event|Shugo Festival
+Shugo's Dilemma|Event|Shugo Festival
 Dimensional Invasion|Event
-Beritra Air Raid|Event
-Accursed Sword|Event
+Beritra Air Raid|Event|Dimensional Invasion
+Accursed Sword|Event|Dimensional Invasion
 Spacetime Rift|Event
 Artifact Siege|Event
 Abyss Corridor|Event

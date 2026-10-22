@@ -63,6 +63,48 @@ internal static class Program
                     return 0;
                 }
                 case "replay": return Replay(settings, pos, opts);
+                case "icon-index":
+                {
+                    // every distinct item icon, fingerprinted for the reward grid: icon-index [tw-items.json] [out.bin] [cache dir]
+                    var src = pos.Count > 0 ? pos[0] : Path.Combine("..", "..", "data", "tw-items.json");
+                    var outBin = pos.Count > 1 ? pos[1] : Path.Combine("..", "..", "data", "icon-index.bin");
+                    var cache = pos.Count > 2 ? pos[2] : Path.Combine(Path.GetTempPath(), "kinah-icons");
+                    using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(src));
+                    var arr = doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array ? doc.RootElement : doc.RootElement.GetProperty("items");
+                    var urls = arr.EnumerateArray().Select(e => e.TryGetProperty("icon", out var ic) ? ic.GetString() ?? "" : "").Where(u => u.Length > 0).ToList();
+                    int n = IconIndex.BuildAsync(urls, cache, outBin).GetAwaiter().GetResult();
+                    Console.WriteLine($"wrote {n} icons to {Path.GetFullPath(outBin)}");
+                    return 0;
+                }
+                case "grid-test":
+                {
+                    // the expedition reward grid in a saved picture: grid-test --image <file> [--top <y>]
+                    if (!opts.TryGetValue("image", out var gimg)) { Console.Error.WriteLine("grid-test --image <file>"); return 1; }
+                    using var frame = new System.Drawing.Bitmap(gimg);
+                    int top;
+                    if (opts.TryGetValue("top", out var ts)) top = int.Parse(ts);
+                    else
+                    {
+                        var band = new System.Drawing.Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
+                        using var bandBmp = frame.Clone(band, frame.PixelFormat);
+                        var lines = ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1).GetAwaiter().GetResult();
+                        var rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+                        if (rc == null) { Console.WriteLine("no \"Reward collected\" in the top third: " + string.Join(" | ", lines.Select(l => l.Text))); return 1; }
+                        top = rc.Box.Bottom + (int)(frame.Height * 0.016);
+                    }
+                    var gitems = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+                    var byIcon = gitems.AllItems().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(g => g.Key, g => g.ToList());
+                    var slots = RewardGrid.ReadAsync(frame, top).GetAwaiter().GetResult();
+                    Console.WriteLine($"{slots.Count} slots from y {top} ({IconIndex.All.Count} icons in the index)");
+                    foreach (var sl in slots)
+                    {
+                        var best = sl.Icons.FirstOrDefault();
+                        var names = best.Key != null && byIcon.TryGetValue(best.Key, out var its) ? its.Where(i => i.Grade == sl.Grade).Select(i => i.Name).Distinct().Take(3).ToList() : new List<string>();
+                        if (names.Count == 0 && best.Key != null && byIcon.TryGetValue(best.Key, out var any)) names = any.Select(i => i.Name + " [" + i.Grade + "]").Distinct().Take(2).ToList();
+                        Console.WriteLine($"  {sl.Grade,-8} x{sl.Count,-8} [{sl.CountText,-7}] {best.Key} ({best.Distance:0.0}; next {(sl.Icons.Count > 1 ? sl.Icons[1].Distance : 0):0.0})  {string.Join(" / ", names)}");
+                    }
+                    return 0;
+                }
                 case "parse-lines":
                 {
                     // each argument is one chat line: what the parser makes of it, for checking a line from reads.log
@@ -520,6 +562,15 @@ options: --process aion[,other]");
             Ov("unaligned but overlapping: the lines after the last shared one", string.Join(" | ", ovGot), "Spiritstone acquired. | Obtained 3 Cogni Soul Crystals. | Obtained 1 Kerubian Soul Points. | Acquired 1,192 Kina.");
             Ov("unaligned, nothing new below the shared line: nothing", Reread.AfterOverlap(now2, now2.Take(8).ToArray()).Count.ToString(), "0");
             Ov("a new Kinah amount is never taken for an old one", string.Join(" | ", Reread.AfterOverlap(new[] { "Acquired 431 Kina.", "Raw Leather acquired." }, new[] { "Raw Leather acquired.", "Acquired 413 Kina." })), "Acquired 413 Kina.");
+            // the chat came back from a fade with a whole event reward at once (Accursed Sword, 2026-10-22 14:35): the loot lines
+            // not seen in the last ten minutes are new, from the bottom up; history shown by a hover ends with a seen line
+            {
+                var rec = new Dictionary<string, DateTime>(); var r0 = DateTime.UtcNow;
+                for (int i2 = 0; i2 < 25; i2++) Reread.Remember(rec, new[] { $"[P{i2}] chat line {i2}", "Acquired 431 Kina." }, r0.AddMinutes(-3));
+                var reward = new[] { "[P3] chat line 3", "Forgotten Bow acquired.", "Riverside Helm acquired.", "Acquired Odyle x6." };
+                var history = new[] { "Forgotten Bow acquired.", "Riverside Helm acquired.", "Acquired 431 Kina." };
+                Ov("a burst after a fade counts; history from a hover doesn't", $"{string.Join(" | ", Reread.Burst(Array.Empty<string>(), reward, rec, r0))} · [{string.Join(" | ", Reread.Burst(Array.Empty<string>(), history, rec, r0))}]", "Forgotten Bow acquired. | Riverside Helm acquired. | Acquired Odyle x6. · []");
+            }
         }
         // the chat wraps a line at about 40 characters: a long item name comes as two lines (2026-10-21, a green armor drop lost)
         {
@@ -865,6 +916,16 @@ options: --process aion[,other]");
                 new[] { "Orichalcum Ore acquired.", "Orichalcum Ore acquirad.", "Spiritstone acquired." }, rec, b0)), "Spiritstone acquired.");
             Check("instances: an expedition area has a kind", ZoneLocator.KindOf("Auldor's Sanctum") ?? "none", "Expedition");
             Check("instances: an event area too", ZoneLocator.KindOf("Defend Shugo Merchants") ?? "none", "Event");
+            {
+                // inside an expedition, loot is the run's alone: the Urugugu Canyon reward cube's items were counted as drops
+                // from kills (2026-10-22 15:22). Never on the Farming page, never the site's farming numbers.
+                var ts = new TrackerSession(null, new Settings(), items, "Test"); var u0 = DateTime.UtcNow;
+                ts.Engine.SetZone("Urugugu Canyon"); ts.ZoneView.SetZone("Urugugu Canyon"); ts.Instances.Zone("Urugugu Canyon", u0);
+                ts.ProcessChat(new List<string> { "[Theo] gg" }, u0);
+                ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(1));
+                var run = ts.Instances.Snapshot().LastOrDefault(r => r.Zone == "Urugugu Canyon");
+                Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {run?.Items.Values.Sum() ?? 0} items {run?.Kinah ?? 0} Kinah", "farming: 0 items 0 Kinah · run: 1 items 600 Kinah");
+            }
             {
                 // Nightmare is known but left alone: its rewards never change, so nothing there is counted
                 var ne = new SessionEngine(items); ne.SetZone("Nightmare");

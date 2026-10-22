@@ -61,6 +61,9 @@ public sealed class ItemDictionary
     }
 
     /// <summary>True when the name is a real item, exactly or by a close misread: a dictionary entry or a gathering material. Adds nothing.</summary>
+    /// <summary>Every item the list holds (real ids), for indexes built over the whole list.</summary>
+    public List<ItemInfo> AllItems() { lock (_lock) return _byId.Values.Where(i => i.Id > 0).ToList(); }
+
     public bool Knows(string name)
     {
         lock (_lock)
