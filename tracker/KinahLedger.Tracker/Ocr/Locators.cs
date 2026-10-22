@@ -84,7 +84,18 @@ public static class GameWindow
             GetWindowThreadProcessId(h, out var pid);
             if (f.Pids.Contains(pid)) continue;
             long ex = GetWindowLongPtr(h, GWL_EXSTYLE).ToInt64();
-            if ((ex & WS_EX_TRANSPARENT) != 0) continue;
+            // a click-through window: a screen-wide overlay (a GPU tool's) is let through, since it would stop reading
+            // for good; a small one is a pop-up over the game (a browser's tab preview put browser text in the chat read,
+            // 2026-10-22 14:41), so it covers like any window. Our own panel is let through: it is read through on purpose.
+            if ((ex & WS_EX_TRANSPARENT) != 0)
+            {
+                GetWindowThreadProcessId(h, out var tpid);
+                var tb = Bounds(h);
+                var gb = Bounds(f.Handle);
+                bool screenWide = tb.Width >= gb.Width * 0.8 && tb.Height >= gb.Height * 0.8;
+                if (screenWide || tpid == (uint)Environment.ProcessId || !tb.IntersectsWith(area)) continue;
+                return NameOf(tpid);
+            }
             if ((ex & WS_EX_LAYERED) != 0 && GetLayeredWindowAttributes(h, out _, out var alpha, out var how) && (how & LWA_ALPHA) != 0 && alpha == 0) continue;
             if (DwmGetWindowAttribute(h, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
             var r = Bounds(h);
