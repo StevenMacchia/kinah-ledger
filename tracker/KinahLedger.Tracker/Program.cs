@@ -18,6 +18,7 @@ internal static class Program
         // the installer's own runs (install, update, uninstall) end inside; a normal start returns at once
         Platform.Installer.RunHooks();
         var settings = Settings.Load();
+        Ocr.ScreenReader.UseWindowCapture = settings.Ocr.WindowCapture;
         // a kinahledger:// link from the site opens (or brings up) the window
         if (args.Length > 0 && Platform.Installer.IsLink(args[0])) args = Array.Empty<string>();
         if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
@@ -67,6 +68,24 @@ internal static class Program
                     return 0;
                 }
                 case "calib-shot": { var cdir = pos.FirstOrDefault() ?? "."; WpfApp.ShotCalibration(settings, cdir); Console.WriteLine($"wrote {Path.GetFullPath(cdir)}"); return 0; }
+                case "capture-test":
+                {
+                    // the chat area two ways: a screen copy (what is on top) and the game window's own pixels
+                    var cg = GameWindow.Find(settings.ProcessHints) ?? throw new InvalidOperationException("game window not found");
+                    var cr = Task.Run(() => ChatLocator.DetectAsync(cg)).GetAwaiter().GetResult().region ?? new System.Drawing.Rectangle(cg.Left + 100, cg.Bottom - 700, 860, 600);
+                    var cdir2 = pos.FirstOrDefault() ?? ".";
+                    using (var sc = ScreenReader.Capture(cr)) sc.Save(Path.Combine(cdir2, "capture-screen.png"));
+                    WindowCapture.Track(GameWindow.Handle);
+                    System.Drawing.Bitmap? wc = null;
+                    for (int i = 0; i < 40 && wc == null; i++) { Thread.Sleep(100); wc = WindowCapture.TryCapture(cr); }
+                    if (wc == null) { Console.WriteLine("window capture: no frame"); return 1; }
+                    var sw3 = System.Diagnostics.Stopwatch.StartNew(); int n3 = 0;
+                    while (sw3.ElapsedMilliseconds < 2000) { using var x = WindowCapture.TryCapture(cr); n3++; }
+                    wc.Save(Path.Combine(cdir2, "capture-window.png"));
+                    Console.WriteLine($"window capture works: {cr.Width}x{cr.Height} crops at {n3 / 2.0:0} a second; images in {Path.GetFullPath(cdir2)}");
+                    WindowCapture.Stop();
+                    return 0;
+                }
                 case "bench": return Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
                 case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);

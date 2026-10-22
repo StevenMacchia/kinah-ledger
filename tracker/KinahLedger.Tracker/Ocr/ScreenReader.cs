@@ -44,8 +44,17 @@ public sealed class ScreenReader
         _ = Engine;
     }
 
+    /// <summary>
+    /// The pixels of a screen rectangle: cut from the game window's own frames when window capture runs (so a window on
+    /// top of the game is never read), else copied from the screen. Settings: ocr.windowCapture (on by default).
+    /// </summary>
     public static Bitmap Capture(Rectangle region)
     {
+        if (UseWindowCapture)
+        {
+            WindowCapture.Track(GameWindow.Handle);
+            if (WindowCapture.TryCapture(region) is { } fromGame) return fromGame;
+        }
         var bmp = new Bitmap(region.Width, region.Height, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bmp);
         g.CopyFromScreen(region.Location, Point.Empty, region.Size, CopyPixelOperation.SourceCopy);
@@ -53,6 +62,9 @@ public sealed class ScreenReader
     }
 
     public Bitmap Capture() => Capture(_region);
+
+    /// <summary>Read the game window's own pixels when Windows allows it (Ocr/WindowCapture.cs). Off: copy the screen.</summary>
+    public static bool UseWindowCapture { get; set; } = true;
 
     /// <summary>Upscale with smooth interpolation, keeping the aspect ratio and the recognizer's size limit. Returns the factor used.</summary>
     static (Bitmap bmp, double factor) Prepare(Bitmap src, int scale)

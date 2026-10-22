@@ -30,6 +30,8 @@ public static class GameWindow
     /// <summary>The game's window and every process id that belongs to the game, from the last successful <see cref="Find"/>.</summary>
     sealed record Found(IntPtr Handle, HashSet<uint> Pids);
     static volatile Found? _found;
+    /// <summary>The game window's handle from the last successful <see cref="Find"/> (for window capture); zero when none.</summary>
+    public static IntPtr Handle => _found?.Handle ?? IntPtr.Zero;
 
     /// <summary>True when the last <see cref="Find"/> saw a game process, window or not (still loading, minimized).</summary>
     public static bool ProcessSeen { get; private set; }

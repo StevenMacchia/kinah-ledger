@@ -46,6 +46,8 @@ public sealed class OcrSettings
     public bool Hud { get; set; } = true;
     /// <summary>How often the zone label above the minimap is read.</summary>
     public int ZoneEverySec { get; set; } = 10;
+    /// <summary>Read the game window's own pixels (Windows Graphics Capture), so a window on top is never read. Off: copy the screen.</summary>
+    public bool WindowCapture { get; set; } = true;
 }
 
 /// <summary>The window.</summary>

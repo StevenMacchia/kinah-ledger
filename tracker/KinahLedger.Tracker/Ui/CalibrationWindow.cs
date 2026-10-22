@@ -95,7 +95,7 @@ public sealed class CalibrationWindow : Window
                     var r = _manualChat() ?? (await ChatLocator.DetectAsync(g)).region;
                     area = r ?? new DRect(g.Left + (int)(g.Width * 0.02), g.Top + (int)(g.Height * 0.6), (int)(g.Width * 0.17), (int)(g.Height * 0.3));
                     if (r == null) { st = State.Problem; sub = "no chat text found"; break; }
-                    if (GameWindow.Covered(r.Value, _settings.ProcessHints) is { } over) { st = State.Problem; sub = $"another window covers it ({over})"; break; }
+                    if (!WindowCapture.Active && GameWindow.Covered(r.Value, _settings.ProcessHints) is { } over) { st = State.Problem; sub = $"another window covers it ({over})"; break; }
                     // the lines as the tracker reads them, and the text's height from single words (a line box can span two lines)
                     var lines = await new ScreenReader(r.Value, _settings.Ocr.Scale).ReadAsync();
                     read = lines.TakeLast(4).ToList();
@@ -109,7 +109,7 @@ public sealed class CalibrationWindow : Window
                 case "loot":
                 {
                     area = LootPopup.Region(g);
-                    if (GameWindow.Covered(area, _settings.ProcessHints) is { } overL) { st = State.Problem; sub = $"another window covers it ({overL})"; break; }
+                    if (!WindowCapture.Active && GameWindow.Covered(area, _settings.ProcessHints) is { } overL) { st = State.Problem; sub = $"another window covers it ({overL})"; break; }
                     var lines = await ScreenReader.ReadBoxesAsync(area, 2, boost: true);
                     // as the tracker counts them: Kinah, and items on the item list; anything else in the area isn't loot
                     var rows = LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text))).Where(x => (x.IsKinah && x.Amount >= 10) || (!x.IsKinah && _knows(x.Name))).ToList();
@@ -122,7 +122,7 @@ public sealed class CalibrationWindow : Window
                 default:
                 {
                     area = TargetReader.Strip(g);
-                    if (GameWindow.Covered(area, _settings.ProcessHints) is { } overH) { st = State.Problem; sub = $"another window covers it ({overH})"; break; }
+                    if (!WindowCapture.Active && GameWindow.Covered(area, _settings.ProcessHints) is { } overH) { st = State.Problem; sub = $"another window covers it ({overH})"; break; }
                     await _target.TickAsync(g);
                     bool fresh = _target.Name != null && (DateTime.UtcNow - _target.NameAt).TotalSeconds < 5;
                     if (fresh) { read = new() { _target.Name! }; st = State.Good; sub = _target.Name!; }
