@@ -571,14 +571,18 @@ public sealed class TrackerSession
             var dir = Path.Combine(CrashLog.Dir, "reward-shots");
             if (GameRect is not { } g || !Directory.Exists(dir)) return;
             bool reward = Target.RewardOpen(now), inside = ZoneLocator.KindOf(Zone) is "Event" or "Expedition";
+            // fights too, every 30 s: the nameplates and health bars around the character, to learn which enemies are engaged
+            bool fighting = (now - _lastActivity).TotalSeconds <= FightSeconds;
             if (!reward) _rewardShotsOpen = 0;
-            bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2 : inside && (now - _rewardShotAt).TotalSeconds >= 15;
+            bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2
+                     : inside ? (now - _rewardShotAt).TotalSeconds >= 15
+                     : fighting && (now - _rewardShotAt).TotalSeconds >= 30;
             if (!due) return;
             var today = DateTime.Now.ToString("yyyyMMdd");
             if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;
             if (GameWindow.Covered(g, _settings.ProcessHints) is { } cover && !cover.StartsWith("Kinah Ledger")) return;   // only the game, never a window over it
             _rewardShotAt = now; if (reward) _rewardShotsOpen++;
-            var title = !reward ? "in-run" : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            var title = !reward ? (inside ? "in-run" : "fight") : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             using var bmp = ScreenReader.Capture(g);
             var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
