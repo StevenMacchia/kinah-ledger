@@ -401,9 +401,10 @@ public sealed class TrackerSession
         bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
         // a Force's loot being handed out ("Yarie acquired Soul: Ursus (Bound) through Force distribution."): a world boss
         // died, and for a while the panel beside the character shows the boss's loot table, not the player's pickups
-        if (lines.Any(l => Regex.IsMatch(l, @"distri\S*|through\s+Fo\S*ce", RegexOptions.IgnoreCase)))
+        // A boss's loot chest ("Pnyn Loot Chest (Bound) acquired.") shows its loot table in the same place (2026-10-22 18:39)
+        if (lines.Any(l => Regex.IsMatch(l, @"distri\S*|through\s+Fo\S*ce|loot\s*chest", RegexOptions.IgnoreCase)))
         {
-            if ((now - _distributionAt).TotalSeconds > DistributionSeconds) CrashLog.Note("a Force is handing out loot: rows beside the character count only when the chat says they are yours");
+            if ((now - _distributionAt).TotalSeconds > DistributionSeconds) CrashLog.Note("a Force is handing out loot or a loot chest came: rows beside the character count only when the chat says they are yours");
             _distributionAt = now;
             if (_boss != null) BossTick(now, died: true);
         }
@@ -612,7 +613,7 @@ public sealed class TrackerSession
     // (the Force's distribution lines, or its bar gone for BossGoneSeconds), what lands in the next BossLootSeconds is its
     // loot: a run of its own on the Events tab and the site (kind "World Boss"), never Kinah/hr.
     // the ones seen so far; the Force recruitment lines ("[Force Recruitment] WB Bloodfang") add more as they are read
-    static readonly string[] WorldBosses = { "Saursus", "Bloodfang" };
+    static readonly string[] WorldBosses = { "Saursus", "Bloodfang", "Pnyn", "Kutar" };
     readonly HashSet<string> _learnedBosses = new(StringComparer.OrdinalIgnoreCase);
     public const double BossGoneSeconds = 20, BossLootSeconds = 30, BossGiveUpSeconds = 120;
     string? _boss; DateTime _bossSeenAt, _bossDeadAt = DateTime.MinValue; int _bossSetAside;
