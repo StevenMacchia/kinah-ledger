@@ -114,6 +114,15 @@ public partial class MainWindow : Window
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on an enemy opens or closes its loot table
+        // a click on an expedition or event opens or closes what dropped there
+        InstRows.MouseLeftButtonUp += (_, ev) =>
+        {
+            if ((ev.OriginalSource as FrameworkElement)?.DataContext is DropRow { Key.Length: > 0, Child: false } r)
+            {
+                if (!_openInst.Remove(r.Key)) _openInst.Add(r.Key);
+                ShowInstances();
+            }
+        };
         MobRows.MouseLeftButtonUp += (_, ev) =>
         {
             if ((ev.OriginalSource as FrameworkElement)?.DataContext is DropRow { Key.Length: > 0 } r)
@@ -1134,7 +1143,7 @@ public partial class MainWindow : Window
     /// </summary>
     void ShowInstances()
     {
-        var log = _watcher.Chat?.Instances;
+        var log = _watcher.Chat?.Instances ?? _demoInst;
         var runs = log?.Snapshot() ?? new List<InstanceRun>();
         var rows = new List<DropRow>();
         foreach (var g in runs.GroupBy(r => r.Zone).OrderByDescending(g => g.Max(r => r.LastLoot)))
@@ -1143,22 +1152,68 @@ public partial class MainWindow : Window
             foreach (var r in g) { value += RunValue(r); secs += r.Seconds; n++; }
             var kind = g.Last().Kind;
             var last = g.Max(r => r.LastLoot) ?? DateTime.UtcNow;
-            var sub = log?.Open == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}";
+            bool shown = _openInst.Contains(g.Key);
+            var sub = (log?.Open == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}") + (shown ? " · ▾ Hide drops" : " · ▸ Show drops");
             rows.Add(new DropRow(g.Key, n.ToString("N0"), Clock(TimeSpan.FromSeconds(secs / n)), Fk(value / Math.Max(secs, 10) * 3600),
-                Initial: InitialOf(g.Key), Value: Short(value / n), Sub: sub));
+                Initial: InitialOf(g.Key), Value: Short(value / n), Sub: sub, Key: g.Key,
+                Tip: "Click to " + (shown ? "hide" : "show") + " what dropped here, rarest first."));
+            if (shown) rows.AddRange(InstDrops(g.ToList()));
         }
         InstRows.ItemsSource = rows;
         InstWhat.Text = rows.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} kept on this PC" + (log?.Open is { } open ? $" · in {open} now" : "") : "";
         InstEmpty.Visibility = rows.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    /// <summary>A run's worth: its Kinah plus its tradeable loot at the lowest Market price, after the Market's cut.</summary>
+    /// <summary>
+    /// A run's worth: its Kinah plus the loot that can be sold at the lowest Market price, after the Market's cut. Gear from
+    /// an event or expedition is bound to the character, so only the materials count (Steven, 2026-10-22).
+    /// </summary>
     long RunValue(InstanceRun r)
     {
         double v = r.Kinah;
         foreach (var (id, count) in r.Items)
-            if (PriceBook.Price(_items.NameOf(id)) is long p) v += p * count * PriceBook.SellerKeeps;
+            if (!_items.IsGear(id) && PriceBook.Price(_items.NameOf(id)) is long p) v += p * count * PriceBook.SellerKeeps;
         return (long)Math.Round(v);
+    }
+
+    readonly HashSet<string> _openInst = new();
+    InstanceLog? _demoInst;
+    static int GradeRank(string g) => g switch { "Epic" => 4, "Unique" => 3, "Legend" => 2, "Rare" => 1, _ => 0 };
+
+    /// <summary>
+    /// What dropped in one place over all its runs, rarest first: the highest grade, then the fewest runs it came in. The
+    /// one that came in the most runs is marked as the most common. Gear and bound items show, marked as not in the value.
+    /// </summary>
+    List<DropRow> InstDrops(List<InstanceRun> runs)
+    {
+        var total = new Dictionary<long, int>(); var inRuns = new Dictionary<long, int>(); var sellable = new HashSet<long>();
+        foreach (var r in runs)
+        {
+            foreach (var (id, c) in r.Items) { if (c <= 0) continue; total[id] = total.GetValueOrDefault(id) + c; sellable.Add(id); }
+            foreach (var (id, c) in r.BoundItems) { if (c <= 0) continue; total[id] = total.GetValueOrDefault(id) + c; }
+            foreach (var id in r.Items.Keys.Concat(r.BoundItems.Keys).Distinct()) inRuns[id] = inRuns.GetValueOrDefault(id) + 1;
+        }
+        var rows = new List<DropRow>();
+        if (total.Count == 0)
+        {
+            rows.Add(new DropRow("No item drops yet", "", "", "", Sub: runs.Sum(r => r.Bound) > 0 ? "only bound items, from runs before 0.8.5" : "only Kinah so far", Child: true));
+            return rows;
+        }
+        long common = inRuns.Where(x => total.ContainsKey(x.Key)).OrderByDescending(x => x.Value).ThenByDescending(x => total[x.Key]).First().Key;
+        var order = total.Keys.OrderByDescending(id => GradeRank(_items.Get(id)?.Grade ?? "")).ThenBy(id => inRuns[id]).ThenBy(id => total[id]).ToList();
+        long rarest = order[0];
+        foreach (var id in order)
+        {
+            var name = _items.NameOf(id); int got = total[id], seen = inRuns[id];
+            bool gear = _items.IsGear(id), noValue = gear || !sellable.Contains(id);
+            long each = !noValue && PriceBook.Price(name) is long p ? (long)Math.Round(p * PriceBook.SellerKeeps) : 0;
+            var tag = order.Count > 1 && id == rarest ? "rarest · " : order.Count > 1 && id == common ? "most common · " : "";
+            var why = gear ? "gear, bound: not in the value" : noValue ? "bound: not in the value" : each > 0 ? $"{Short(each)} each after the cut" : "no Market price yet";
+            rows.Add(new DropRow(name, got.ToString("N0"), seen == runs.Count ? "every run" : $"{seen} of {runs.Count} runs", "",
+                Grade: _items.Get(id)?.Grade ?? "", Icon: Slot(id), Initial: InitialOf(name), Value: each > 0 ? Short(each * got / runs.Count) : "",
+                Sub: tag + why, Child: true));
+        }
+        return rows;
     }
 
     static string Ago(DateTime utc)
@@ -1448,7 +1503,13 @@ public partial class MainWindow : Window
         ZoneLbl.Text = "Western Cantas Valley";
         ApplyServer("na_e", "Siel (Elyos)");
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
-        if (kind == "Events") { ShowPart("Events", remember: false); SetTrackingUi(false); return; }
+        if (kind == "Events")
+        {
+            // the runs kept on this PC, the newest one opened, for a layout render
+            _demoInst = new InstanceLog();
+            if (_demoInst.Snapshot().LastOrDefault() is { } newest) _openInst.Add(newest.Zone);
+            ShowPart("Events", remember: false); SetTrackingUi(false); return;
+        }
         if (kind == "Crafting")
         {
             // the Crafting part with a morning's crafts, priced, for a layout render

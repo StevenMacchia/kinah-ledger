@@ -18,6 +18,8 @@ public sealed class InstanceRun
     /// <summary>Items picked up in the run, tradeable ones, by item id (bound ones can't be sold, so they carry no value).</summary>
     public Dictionary<long, int> Items { get; set; } = new();
     public int Bound { get; set; }
+    /// <summary>The bound items by id, so a run's drop list shows them too (they still carry no value). Since 0.8.5.</summary>
+    public Dictionary<long, int> BoundItems { get; set; } = new();
     /// <summary>Entry to last loot, never under ten seconds.</summary>
     public double Seconds => LastLoot is { } l ? Math.Max(10, (l - Start).TotalSeconds) : 0;
 }
@@ -70,7 +72,8 @@ public sealed class InstanceLog
             switch (ev)
             {
                 case ItemAcquired a:
-                    if (a.Bound) _cur.Bound += a.Count; else _cur.Items[a.ItemId] = _cur.Items.GetValueOrDefault(a.ItemId) + a.Count;
+                    if (a.Bound) { _cur.Bound += a.Count; _cur.BoundItems[a.ItemId] = _cur.BoundItems.GetValueOrDefault(a.ItemId) + a.Count; }
+                    else _cur.Items[a.ItemId] = _cur.Items.GetValueOrDefault(a.ItemId) + a.Count;
                     _cur.LastLoot = a.Time;
                     break;
                 case KinahChanged { Bound: false } k when k.Delta > 0:

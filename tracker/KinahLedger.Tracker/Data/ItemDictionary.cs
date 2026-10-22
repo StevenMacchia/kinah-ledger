@@ -12,6 +12,8 @@ public sealed record ItemInfo(long Id, string Name, string Grade, bool Tradable,
 public sealed class ItemDictionary
 {
     readonly Dictionary<long, ItemInfo> _byId = new();
+    /// <summary>Weapons, armour and accessories (the list's "Equip_" groups).</summary>
+    readonly HashSet<long> _gear = new();
     readonly Dictionary<string, long> _byName = new();
     readonly object _lock = new();
 
@@ -30,6 +32,12 @@ public sealed class ItemDictionary
         }
     }
     public ItemInfo? Get(long id) { lock (_lock) return _byId.GetValueOrDefault(id); }
+    /// <summary>
+    /// A weapon, armour or accessory. Gear from an event or expedition is bound to the character and can't be sold, so it
+    /// carries no value in a run (Steven, 2026-10-22); only the materials can be sold. The list's own tradable flag can't
+    /// say this: one name has a tradable and a bound copy (Ethereal Longsword).
+    /// </summary>
+    public bool IsGear(long id) { lock (_lock) return _gear.Contains(id); }
     public string NameOf(long id) { lock (_lock) return _byId.TryGetValue(id, out var i) ? i.Name : $"item {id}"; }
 
     /// <summary>
@@ -312,6 +320,7 @@ public sealed class ItemDictionary
             var icon = Str(e, "icon"); if (icon.Length == 0) icon = Str(e, "i");
             var cat = Str(e, "categoryName"); if (cat.Length == 0) cat = System.Text.RegularExpressions.Regex.Replace(Str(e, "c2"), "(?<=[a-z])(?=[A-Z])", " ");   // the site's list keeps the code ("CraftResource"): spaced for the rows
             _byId[id] = new ItemInfo(id, name.Trim(), grade, tradable, icon, cat);
+            if (Str(e, "c1").StartsWith("Equip_", StringComparison.OrdinalIgnoreCase)) _gear.Add(id);
             n++;
             // first real ID wins per name, so a later duplicate doesn't flip the mapping; a synthetic one gives way
             var key = Norm(name);

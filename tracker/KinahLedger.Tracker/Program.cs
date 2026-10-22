@@ -1400,6 +1400,8 @@ options: --process aion[,other]");
             ce.Apply(new ItemAcquired(cw.AddSeconds(16), items.IdOf("Orichalcum Longsword"), 1, false));
             ce.Apply(new ItemAcquired(cw.AddSeconds(40), items.IdOf("Orichalcum Longsword"), 1, false));
             ce.Apply(new ItemAcquired(cw.AddSeconds(75), items.IdOf("Orichalcum Longsword"), 1, false));
+            // event and expedition gear is bound: only materials carry a run's value (Steven, 2026-10-22)
+            Check("gear from the item list's groups", $"{items.IsGear(items.IdOf("Orichalcum Longsword"))} {items.IsGear(items.IdOf("Holy Spirit Helm"))} {items.IsGear(items.IdOf("Refining Stone"))} {items.IsGear(items.IdOf("Fine Odyle"))}", "True True False False");
             Check("crafting window: its tabs, alone or joined on one line", $"{TargetReader.IsCraftTab("Blacksmithing")} {TargetReader.IsCraftTab("Blacksmithing Armorsmithing Handicrafting")} {TargetReader.IsCraftTab("Cooking Pot")}", "True True False");
             {
                 // the crafting panel's bar races, as read from Steven's two Life Serums on 2026-10-22: success, success, combo success
