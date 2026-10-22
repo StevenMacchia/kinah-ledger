@@ -827,6 +827,8 @@ options: --process aion[,other]");
             L(30, "Acquired 300 Kina."); L(30, "Obtained 1 Dracunt Herbalist Soul Points.");   // the same kind, misread
             var rows = se.MobSnapshot().OrderBy(m => m.Name).Select(m => $"{m.Name}: {m.Kills} kills {m.Kinah}");
             Check("Soul Points name the enemy killed", string.Join(" | ", rows), "Dracuni Herbalist: 2 kills 700 | Drakan Probe: 1 kills 486 | Eternal Kerubian: 1 kills 352");
+            // the soul names a kind, not always the enemy (2026-10-22 15:00: "Fossa Soul Points" fighting Astin Mercenaries)
+            Check("a soul kind and who has it", $"{TargetReader.EnemyForSoul("Fossa", new[] { "Astin Mercenaries Fossa" })} | {TargetReader.EnemyForSoul("Fossa", Array.Empty<string>())} | {TargetReader.EnemyForSoul("Fossa", Array.Empty<string>(), new[] { "Patrolling Fossa" })}", "Astin Mercenaries Fossa | Fossa | Patrolling Fossa");
             Check("a target bar cut short is its one enemy", TargetReader.Match("Drana Processing Mainte") ?? "none", "Drana Processing Maintenance Machine");
         }
         string Bar(params string[] ls) => TargetReader.FindName(ls.Select((l, i) => (i, l)), out var un) ?? (un.Length > 0 ? "none, unlisted: " + un : "none");
@@ -1083,6 +1085,23 @@ options: --process aion[,other]");
             var c13 = new LootCrossCheck(items);
             c13.Popup(new() { K(463) }, x0); c13.Popup(new(), x0.AddSeconds(1)); c13.Popup(new(), x0.AddSeconds(5));
             Check("a Kinah row read once waits for the counter", $"{c13.TakeSingleKinah(463, x0.AddSeconds(10))} {c13.TakeSingleKinah(463, x0.AddSeconds(10))} {c13.TakeSingleKinah(500, x0.AddSeconds(10))}", "True False False");
+
+            // the list misread a count (x14 for x1, 2026-10-22 14:26): with the chat's line, the same pickup; alone, read once, nothing
+            var c16 = new LootCrossCheck(items);
+            c16.Chat(new ItemAcquired(x0, items.IdOf("Orichalcum Ore"), 1, false), x0);
+            var a16 = c16.Popup(new() { I("Orichalcum Ore", 14) }, x0.AddSeconds(1)).Concat(c16.Popup(new(), x0.AddSeconds(2))).Concat(c16.Popup(new(), x0.AddSeconds(7))).ToList();
+            var c17 = new LootCrossCheck(items);
+            var a17 = c17.Popup(new() { I("Orichalcum Ore", 14) }, x0).Concat(c17.Popup(new(), x0.AddSeconds(1))).Concat(c17.Popup(new(), x0.AddSeconds(7))).ToList();
+            // a row that flickers out of a read or two and comes back is the same row (Ethereal Longsword, 2026-10-22 15:01)
+            var c18 = new LootCrossCheck(items);
+            c18.Popup(new() { I("Raw Leather") }, x0); c18.Popup(new(), x0.AddSeconds(0.7)); c18.Popup(new(), x0.AddSeconds(2.4));
+            c18.Chat(new ItemAcquired(x0.AddSeconds(2.6), items.IdOf("Raw Leather"), 1, false), x0.AddSeconds(2.6));
+            var a18 = c18.Popup(new() { I("Raw Leather") }, x0.AddSeconds(3)).Concat(c18.Popup(new(), x0.AddSeconds(4))).Concat(c18.Popup(new(), x0.AddSeconds(9))).ToList();
+            Check("a misread count, and a row that flickers back", $"{Desc(a16)} · {Desc(a17)} · {Desc(a18)}", "nothing · nothing · nothing");
+
+            // a joke ask on the site's board (one listing, 5,000x its day before) is no price
+            var pb = PriceBook.ParseBoard("{\"items\":[{\"item\":\"Ethereal Longsword\",\"lowest_ask\":10000011,\"n_obs\":1,\"change_24h\":4999.0},{\"item\":\"Raw Leather\",\"lowest_ask\":900,\"n_obs\":1,\"change_24h\":0.1}]}", null);
+            Check("a one-off price spike from the board is left out", string.Join(",", pb.Select(kv => kv.Key + "=" + kv.Value)), "Raw Leather=900");
 
             // fast kills: the list is read about once a second and a row is up about three, so a row can be read once only
             var c7 = new LootCrossCheck(items);

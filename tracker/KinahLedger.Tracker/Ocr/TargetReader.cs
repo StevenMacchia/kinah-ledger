@@ -90,16 +90,19 @@ public sealed partial class TargetReader
     /// longer name ("Snowfield Drakan Probe"). In order: an enemy just on the target bar whose name is or ends with the
     /// kind, the kind itself on the list, the one enemy on the list ending with it, else the kind as read, tidied.
     /// </summary>
-    public static string EnemyForSoul(string kind, IEnumerable<string> recentTargets)
+    public static string EnemyForSoul(string kind, IEnumerable<string> recentTargets, IEnumerable<string>? zoneEnemies = null)
     {
         var k = System.Text.RegularExpressions.Regex.Replace(kind, @"[^A-Za-z' ]+", " ");
         k = System.Text.RegularExpressions.Regex.Replace(k, @"\s+", " ").Trim();
         if (k.Length < 3) return "";
-        foreach (var t in recentTargets)
-            if (string.Equals(t, k, StringComparison.OrdinalIgnoreCase) || t.EndsWith(" " + k, StringComparison.OrdinalIgnoreCase)) return t;
-        if (Match(k) is { } exact) return exact;
-        var ends = Known.Where(n => n.EndsWith(" " + k, StringComparison.OrdinalIgnoreCase)).Distinct().ToList();
-        if (ends.Count == 1) return ends[0];
+        // who can have this soul: enemies whose loot table lists it, and enemies whose name is it or ends with it
+        var can = new HashSet<string>(KinahLedger.Data.LootBook.Current.EnemiesWithSoul(k), StringComparer.OrdinalIgnoreCase);
+        foreach (var n in Known) if (string.Equals(n, k, StringComparison.OrdinalIgnoreCase) || n.EndsWith(" " + k, StringComparison.OrdinalIgnoreCase)) can.Add(n);
+        bool Fits(string n) => can.Contains(n) || string.Equals(n, k, StringComparison.OrdinalIgnoreCase) || n.EndsWith(" " + k, StringComparison.OrdinalIgnoreCase);
+        // 1. the HP bar just showed one of them  2. one already killed here  3. the only one  4. the soul's own name, never a guess
+        foreach (var t in recentTargets) if (Fits(t)) return t;
+        if (zoneEnemies != null) foreach (var z in zoneEnemies) if (Fits(z)) return z;
+        if (can.Count == 1) return can.First();
         return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(k.ToLowerInvariant());
     }
 

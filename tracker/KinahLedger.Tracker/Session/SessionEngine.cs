@@ -155,7 +155,9 @@ public sealed class SessionEngine
     void CreditSoul(string kind, DateTime t, KillRec rec)
     {
         if (rec.Mob != null || kind.Length < 3) return;
-        var enemy = KinahLedger.Ocr.TargetReader.EnemyForSoul(kind, _recentTargets.Where(r => Math.Abs((t - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).Select(r => r.Name));
+        var zone = _zone ?? UnknownZone;
+        var enemy = KinahLedger.Ocr.TargetReader.EnemyForSoul(kind, _recentTargets.Where(r => Math.Abs((t - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).Select(r => r.Name),
+            _mobs.Values.Where(m => m.Zone == zone).OrderByDescending(m => m.Kills).Select(m => m.Name).ToList());
         if (enemy.Length == 0) return;
         var ms = Mob(SameAs(enemy));
         rec.Mob = ms.Name;

@@ -105,6 +105,9 @@ public static class PriceBook
             var name = it.GetString() ?? "";
             if (items != null && long.TryParse(name, out var id)) name = items.NameOf(id);
             bool stale = e.TryGetProperty("stale", out var st) && st.ValueKind == JsonValueKind.True;
+            // one listing that jumped over tenfold in a day is a joke ask, not a price (2026-10-22: an Ethereal Longsword at
+            // 10,000,011 from a single observation, 5,000× its day before; it sells for about 2,000): left out
+            if (Num(e, "n_obs") is long nObs && nObs <= 1 && e.TryGetProperty("change_24h", out var ch) && ch.ValueKind == JsonValueKind.Number && ch.GetDouble() >= 10) continue;
             long? p = (stale ? null : Num(e, "lowest_ask")) ?? Num(e, "median_24h") ?? Num(e, "median_7d") ?? Num(e, "sold_median_7d") ?? Num(e, "ref_price");
             if (p is long v && v > 0 && name.Length > 0) d[name] = v;
         }
