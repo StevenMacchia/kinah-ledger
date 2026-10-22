@@ -222,13 +222,17 @@ internal static class Program
                     var ctr = new CraftPanelTracker(); bool cread = false;
                     foreach (var cf in Directory.GetFiles(cdir, opts.TryGetValue("glob", out var cg) ? cg : "*.jpg").OrderBy(p => p))
                     {
-                        using var cbmp = new System.Drawing.Bitmap(cf);
-                        var cs = CraftPanel.Measure(cbmp);
+                        using var cfull = new System.Drawing.Bitmap(cf);
+                        // as the session reads it: only the panel's strip, cut from a game window placed off the screen's origin
+                        var cgame = new System.Drawing.Rectangle(100, 50, cfull.Width, cfull.Height);
+                        var carea = CraftPanel.Region(cgame);
+                        using var cbmp = cfull.Clone(new System.Drawing.Rectangle(carea.X - cgame.X, carea.Y - cgame.Y, carea.Width, carea.Height), cfull.PixelFormat);
+                        var cs = CraftPanel.Measure(cbmp, carea, cgame);
                         var co = ctr.Feed(File.GetLastWriteTime(cf), cs);
                         string cnote = co == null ? "" : $"  => {(co.Ok ? "SUCCESS" : "FAIL")}{(co.Combo ? " (combo)" : "")}";
                         if (cs.Visible && (!cread || co != null))
                         {
-                            var ct = CraftPanel.ReadTextAsync(cbmp).GetAwaiter().GetResult();
+                            var ct = CraftPanel.ReadTextAsync(cbmp, carea, cgame).GetAwaiter().GetResult();
                             Console.WriteLine("  read: " + string.Join(" | ", CraftPanel.LastLines));
                             if (ct != null) { cnote += $"  [{ct.Value.Done} / {ct.Value.Of}, {CraftPanel.ItemOf(ct.Value.Recipe)}]"; cread = true; }
                         }
@@ -1412,6 +1416,20 @@ options: --process aion[,other]");
                 var outs = races.Select((r, i) => cpt.Feed(cp0.AddSeconds(i), new CraftPanel.Sample(r.Up, r.S, r.F, r.C))).Where(o => o != null).Select(o => (o!.Ok ? "ok" : "fail") + (o.Combo ? "+combo" : ""));
                 Check("crafting panel: one outcome per race, the full bar decides", string.Join(" ", outs), "ok ok ok+combo fail");
                 Check("crafting panel: the recipe's item", CraftPanel.ItemOf("Life Serum (Bound) (Novice Lv. 1)"), "Life Serum (Bound)");
+                // the panel counts the tries; what the loot list shows meanwhile is their output, never a drop; chat craft lines are left out
+                var pe = new SessionEngine(items); var pt = DateTime.UtcNow;
+                var serum = items.IdOf("Life Serum (Bound)"); var other = items.IdOf("Orichalcum Ore");
+                pe.CraftPanelSeen("Life Serum (Bound)", pt);
+                pe.Apply(new CraftResult(pt, "Life Serum (Bound)", true) { Via = SessionEngine.CraftPanelVia });
+                pe.Apply(new ItemAcquired(pt.AddSeconds(1), serum, 1, true) { Via = "loot list" });
+                pe.Apply(new CraftResult(pt.AddSeconds(7), "Life Serum (Bound)", true) { Via = SessionEngine.CraftPanelVia });
+                pe.Apply(new CraftResult(pt.AddSeconds(14), "Life Serum (Bound)", true, Combo: true) { Via = SessionEngine.CraftPanelVia });
+                pe.Apply(new ItemAcquired(pt.AddSeconds(15), other, 2, false) { Via = "loot list" });
+                pe.Apply(new CraftResult(pt.AddSeconds(16), "Crafting failed.", false) { Via = "chat" });
+                var pr = pe.CraftSnapshot();
+                Check("crafting panel: tries, combo and output", string.Join(" | ", pr.Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")) + $" · drops {pe.Items.Count + pe.ItemsBound.Count}",
+                    "Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x1,Orichalcum Ore x2 · drops 0");
+                Check("crafting panel: gone a while, a pickup is a drop again", $"{pe.CraftPanelActive(pt.AddSeconds(31))}", "False");
             }
             Check("crafting window: held 60 s after its last sign", $"crafts {ce.CraftedSkipped} · drops {ce.Items.Values.Sum()}", "crafts 2 · drops 2");
             Check("reward-shots cleans itself", $"{rsGone} · {rsLeft}", "2 · 20261020-101010-Zone-Jump-Jump.jpg 20261022-101010-Zone-in-run.jpg mine.jpg");

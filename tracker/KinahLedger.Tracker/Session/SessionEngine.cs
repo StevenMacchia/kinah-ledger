@@ -260,6 +260,11 @@ public sealed class SessionEngine
     DateTime _craftWindowAt = DateTime.MinValue;
     /// <summary>When the crafting window was last seen open (its skill tabs in the band, or its own text over the chat).</summary>
     public void SetCraftWindow(DateTime at) { lock (_lock) if (at > _craftWindowAt) _craftWindowAt = at; }
+    /// <summary>The <see cref="GameEvent.Via"/> of a craft read from the crafting panel's bars.</summary>
+    public const string CraftPanelVia = "crafting panel";
+    /// <summary>The crafting panel is on screen, crafting this recipe ("" when its text wasn't read).</summary>
+    public void CraftPanelSeen(string recipe, DateTime at) { lock (_lock) _craft.PanelSeen(recipe, at); }
+    public bool CraftPanelActive(DateTime at) { lock (_lock) return _craft.PanelActive(at); }
     bool CraftWindowOpen(DateTime t) => KinahLedger.Ocr.TargetReader.CraftOpen(_craftWindowAt, t);
 
     public void SetTarget(string? name, DateTime at)
@@ -447,7 +452,9 @@ public sealed class SessionEngine
             }
             // a craft's own item line belongs to crafting alone: not a drop, not a zone's item, not farming time. With the
             // crafting window open, an item a recipe makes is a craft even when "Successfully crafted" wasn't read
-            if (ev is ItemAcquired made && (_craft.TakeOutput(_items.NameOf(made.ItemId), made.Count, made.Time)
+            // With the crafting panel up (or just gone), every pickup is what the crafts made: the panel counted the tries
+            if (ev is ItemAcquired made && (_craft.TakePanelOutput(_items.NameOf(made.ItemId), made.Count, made.Time)
+                || _craft.TakeOutput(_items.NameOf(made.ItemId), made.Count, made.Time)
                 || (CraftWindowOpen(made.Time) && _craft.TakeUnannounced(_items.NameOf(made.ItemId), made.Count))))
             {
                 CraftedSkipped++;
@@ -536,7 +543,10 @@ public sealed class SessionEngine
                     CreditSoul(es.Kind, es.Time, KillEvidence(es.Time, 'l'));
                     break;
                 case CraftResult cr:
-                    _craft.OnResult(cr);
+                    // the crafting panel's races are the count. The chat's craft lines never are (Steven, 2026-10-22: a queue
+                    // of crafts runs with the chat hidden), so live they are left out; only replays and tests feed them in
+                    if (cr.Via == CraftPanelVia) _craft.OnPanel(cr);
+                    else if (!cr.Via.StartsWith("chat")) _craft.OnResult(cr);
                     break;
                 case EnchantResult en:
                 {

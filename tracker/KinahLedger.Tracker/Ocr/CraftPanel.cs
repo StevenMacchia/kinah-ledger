@@ -56,18 +56,40 @@ public static class CraftPanel
             "000000000000000000000000000000000000000000000000"),
     };
 
-    /// <summary>How well a label's white pixels match its shape: intersection over union of the two grids, 0 to 1.</summary>
-    static double LabelScore(Bitmap f, (int X0, int X1, int Y0, int Y1, string Mask) l)
+    /// <summary>
+    /// A picture of part of the game: <paramref name="bmp"/> shows <paramref name="area"/>, both in screen pixels, of the
+    /// game window <paramref name="game"/>. Positions are worked out on the game and looked up in the picture.
+    /// </summary>
+    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game)
     {
-        int cx = f.Width / 2; double k = f.Height / 2160.0;
+        public int H => Game.Height;
+        public int Cx => Game.Width / 2;
+        /// <summary>The pixel at a point of the game window, or null outside the picture.</summary>
+        public Color? At(int gx, int gy)
+        {
+            int x = Game.X + gx - Area.X, y = Game.Y + gy - Area.Y;
+            return x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height ? null : Bmp.GetPixel(x, y);
+        }
+    }
+
+    /// <summary>The part of the game window the panel's text, labels and bars sit in, in screen pixels: all a read needs.</summary>
+    public static Rectangle Region(Rectangle game)
+    {
+        int h = game.Height, cx = game.X + game.Width / 2;
+        return Rectangle.FromLTRB(cx + (int)(PanelLeft * h), game.Y + (int)(TextTop * h), cx + (int)(PanelRight * h) + 2, game.Y + (int)(1975 / 2160.0 * h));
+    }
+
+    /// <summary>How well a label's white pixels match its shape: intersection over union of the two grids, 0 to 1.</summary>
+    static double LabelScore(View v, (int X0, int X1, int Y0, int Y1, string Mask) l)
+    {
+        double k = v.H / 2160.0;
         int both = 0, any = 0;
         for (int j = 0; j < GridH; j++)
             for (int i = 0; i < GridW; i++)
             {
-                int x = cx + (int)Math.Round((l.X0 - 2560 + (l.X1 - l.X0) * (i + 0.5) / GridW) * k);
+                int x = v.Cx + (int)Math.Round((l.X0 - 2560 + (l.X1 - l.X0) * (i + 0.5) / GridW) * k);
                 int y = (int)Math.Round((l.Y0 + (l.Y1 - l.Y0) * (j + 0.5) / GridH) * k);
-                if (x < 0 || y < 0 || x >= f.Width || y >= f.Height) return 0;
-                var c = f.GetPixel(x, y);
+                if (v.At(x, y) is not { } c) return 0;
                 bool white = Math.Min(c.R, Math.Min(c.G, c.B)) > 185, want = l.Mask[j * GridW + i] == '1';
                 if (white || want) any++;
                 if (white && want) both++;
@@ -75,25 +97,32 @@ public static class CraftPanel
         return any == 0 ? 0 : both / (double)any;
     }
 
-    /// <summary>Whether the crafting panel is on screen: both bar labels in place.</summary>
-    public static bool IsUp(Bitmap f) => Labels.All(l => LabelScore(f, l) >= LabelMatch);
+    /// <summary>Whether the crafting panel is on screen in a picture of the whole game window: both bar labels in place.</summary>
+    public static bool IsUp(Bitmap f) { var v = Whole(f); return Labels.All(l => LabelScore(v, l) >= LabelMatch); }
 
-    public static Sample Measure(Bitmap f)
+    static View Whole(Bitmap f) => new(f, new Rectangle(0, 0, f.Width, f.Height), new Rectangle(0, 0, f.Width, f.Height));
+
+    /// <summary>The panel in a picture of the whole game window.</summary>
+    public static Sample Measure(Bitmap f) => Measure(Whole(f));
+
+    /// <summary>The panel in a picture of <see cref="Region"/> (or any area holding it) of the game window <paramref name="game"/>.</summary>
+    public static Sample Measure(Bitmap bmp, Rectangle area, Rectangle game) => Measure(new View(bmp, area, game));
+
+    static Sample Measure(View v)
     {
-        int h = f.Height, cx = f.Width / 2;
+        int h = v.H, cx = v.Cx;
         int x0 = cx + (int)(BarLeft * h), x1 = cx + (int)(BarRight * h);
-        if (x0 < 0 || x1 >= f.Width) return new Sample(false, 0, 0, false);
         int ys = (int)(SuccessY * h), yf = (int)(FailY * h);
-        if (!IsUp(f)) return new Sample(false, 0, 0, false);
+        if (v.At(x0, ys) == null || v.At(x1, yf) == null) return new Sample(false, 0, 0, false);
+        if (!Labels.All(l => LabelScore(v, l) >= LabelMatch)) return new Sample(false, 0, 0, false);
         double Fill(int y, Func<Color, bool> isFill)
         {
             // the rightmost filled pixel: the bar's label sits over its left end, so only the fill's reach counts
-            for (int x = x1; x >= x0; x--) if (isFill(f.GetPixel(x, y))) return (x - x0 + 1) / (double)(x1 - x0 + 1);
+            for (int x = x1; x >= x0; x--) if (v.At(x, y) is { } c && isFill(c)) return (x - x0 + 1) / (double)(x1 - x0 + 1);
             return 0;
         }
         // a combo roll tints the whole panel blue
-        var bg = f.GetPixel(cx + (int)(PanelLeft * h) + 30, (int)(TextBottom * h) - 30);
-        bool combo = bg.B > bg.R + 35 && bg.B > 70;
+        bool combo = v.At(cx + (int)(PanelLeft * h) + 30, (int)(TextBottom * h) - 30) is { } bg && bg.B > bg.R + 35 && bg.B > 70;
         return new Sample(true, Fill(ys, Blue), Fill(yf, Orange), combo);
     }
 
@@ -101,13 +130,17 @@ public static class CraftPanel
     public static IReadOnlyList<string> LastLines { get; private set; } = Array.Empty<string>();
 
     /// <summary>The panel's text: how far the queue is ("1 / 2") and the recipe, with "(Bound)" and the level kept as read.</summary>
-    public static async Task<(int Done, int Of, string Recipe)?> ReadTextAsync(Bitmap f)
+    public static Task<(int Done, int Of, string Recipe)?> ReadTextAsync(Bitmap f) => ReadTextAsync(f, new Rectangle(0, 0, f.Width, f.Height), new Rectangle(0, 0, f.Width, f.Height));
+
+    /// <summary>The same, from a picture of <paramref name="area"/> of the game window <paramref name="game"/> (screen pixels).</summary>
+    public static async Task<(int Done, int Of, string Recipe)?> ReadTextAsync(Bitmap f, Rectangle area, Rectangle game)
     {
-        int h = f.Height, cx = f.Width / 2;
-        var area = Rectangle.FromLTRB(cx + (int)(PanelLeft * h), (int)(TextTop * h), cx + (int)(PanelRight * h), (int)(TextBottom * h));
-        area.Intersect(new Rectangle(0, 0, f.Width, f.Height));
-        using var bmp = f.Clone(area, f.PixelFormat);
-        var lines = await ScreenReader.ReadBoxesAsync(bmp, area.Location, 2);
+        int h = game.Height, cx = game.X + game.Width / 2;
+        var text = Rectangle.FromLTRB(cx + (int)(PanelLeft * h) - area.X, game.Y + (int)(TextTop * h) - area.Y, cx + (int)(PanelRight * h) - area.X, game.Y + (int)(TextBottom * h) - area.Y);
+        text.Intersect(new Rectangle(0, 0, f.Width, f.Height));
+        if (text.Width < 8 || text.Height < 8) return null;
+        using var bmp = f.Clone(text, f.PixelFormat);
+        var lines = await ScreenReader.ReadBoxesAsync(bmp, text.Location, 2);
         LastLines = lines.OrderBy(l => l.Box.Top).Select(l => l.Text).ToList();
         int done = 0, of = 0; string recipe = "";
         foreach (var l in lines.OrderBy(l => l.Box.Top))

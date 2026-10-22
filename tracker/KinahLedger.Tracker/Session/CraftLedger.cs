@@ -16,9 +16,52 @@ public sealed class CraftLedger
     {
         public string Name = "";
         public int Ok, Fail;
+        /// <summary>Combo rolls after a craft, as the crafting panel shows them: upgraded, and not.</summary>
+        public int Upgraded, NotUpgraded;
         public Dictionary<string, int> Made = new(StringComparer.OrdinalIgnoreCase);
         public int Attempts => Ok + Fail;
-        public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase) };
+        public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase) };
+    }
+
+    // ---- the crafting panel (Steven, 2026-10-22: crafts are read from what the game shows for them, never the chat) ----
+    // While crafts run, the panel at the bottom of the screen races a Success bar against a Fail bar; each race is one
+    // craft, and a race on the blue combo panel is the upgrade roll for the craft before it. The panel is the count: while
+    // it was seen in the last PanelSeconds, every item the loot list shows is what the crafts made, under the panel's recipe.
+
+    /// <summary>How long after the panel was last seen the loot list's rows are still the crafts' output (a queue's last item lands after the panel closes).</summary>
+    public const double PanelSeconds = 15;
+    string _panelRecipe = ""; DateTime _panelAt = DateTime.MinValue;
+
+    /// <summary>The panel is on screen, crafting this recipe (the item it makes, "" when its text wasn't read).</summary>
+    public void PanelSeen(string recipe, DateTime t)
+    {
+        if (recipe.Length >= 2) _panelRecipe = recipe;
+        if (t > _panelAt) _panelAt = t;
+    }
+
+    public bool PanelActive(DateTime t) => _panelAt != DateTime.MinValue && (t - _panelAt).TotalSeconds <= PanelSeconds;
+
+    /// <summary>One race on the panel: a craft that worked or failed, or the combo roll after one.</summary>
+    public void OnPanel(CraftResult cr)
+    {
+        PanelSeen(cr.Item, cr.Time);
+        var r = Get(_panelRecipe.Length >= 2 ? _panelRecipe : "?");
+        if (cr.Combo) { if (cr.Ok) r.Upgraded++; else r.NotUpgraded++; }
+        else if (cr.Ok) r.Ok++;
+        else r.Fail++;
+        _last = r.Name; _lastAt = cr.Time;
+    }
+
+    /// <summary>
+    /// An item picked up while the panel is up or just gone: what the crafts made, recorded under the panel's recipe
+    /// (the try itself was counted from the panel). Returns false when the panel hasn't been seen lately.
+    /// </summary>
+    public bool TakePanelOutput(string item, int count, DateTime t)
+    {
+        if (!PanelActive(t)) return false;
+        var r = Get(_panelRecipe.Length >= 2 ? _panelRecipe : "?");
+        r.Made[item] = r.Made.GetValueOrDefault(item) + count;
+        return true;
     }
 
     /// <summary>How long after "Successfully crafted" its item line can come.</summary>

@@ -37,6 +37,7 @@ public sealed record MarketListed(DateTime Time, string Item, int Qty, long Pric
 /// <summary>One of the player's own listings expired unsold.</summary>
 public sealed record MarketExpired(DateTime Time, string Item, int Qty) : GameEvent(Time);
 /// <summary>A craft finished: the item and whether it worked. Materials and cost aren't shown in chat, so they aren't counted.</summary>
-public sealed record CraftResult(DateTime Time, string Item, bool Ok) : GameEvent(Time);
+/// <param name="Combo">The combo roll after a craft (the crafting panel turns blue): whether that craft's item was upgraded, not another craft.</param>
+public sealed record CraftResult(DateTime Time, string Item, bool Ok, bool Combo = false) : GameEvent(Time);
 /// <summary>An enchant attempt: the item, the step (+From to +To, -1 when the line didn't show it) and whether it worked.</summary>
 public sealed record EnchantResult(DateTime Time, string Item, int From, int To, bool Ok) : GameEvent(Time);

@@ -314,6 +314,7 @@ public sealed class TrackerSession
                     await ReadOnce();
                     _chatMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     await TargetDueAsync();
+                    await CraftPanelDue();
                     LootProcess(await list);
                     RewardShot();
                     await RewardGridDue();
@@ -708,10 +709,12 @@ public sealed class TrackerSession
             foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
             Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt);
             bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
+            // with the crafting panel up or just gone, every item the list shows is what the crafts made
+            bool panel = CraftView.CraftPanelActive(now);
             foreach (var p0 in add)
             {
                 var parsed = p0 with { Via = "loot list" };
-                bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                bool made = (panel && parsed is ItemAcquired) || (crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null);
                 // with the crafting window open, the loot list shows what the crafts gave: a recipe's item is a craft (the
                 // engines take it as one), anything else is set aside until the window itself can be read, never a drop
                 if (crafting && !made && parsed is ItemAcquired other)
@@ -815,6 +818,53 @@ public sealed class TrackerSession
             _craftShotNoted = crafting;
         }
         catch (Exception ex) { CrashLog.Write("reward picture", ex); }
+    }
+
+    // ---- the crafting panel ----
+    // While crafts run, the crafting window is closed and the chat may never show a craft (Steven, 2026-10-22: "you can
+    // queue like 100 crafts and never see the chat"). The panel at the bottom centre races a Success bar against a Fail
+    // bar for each craft; see CraftPanel. Its strip is read every pass (pixels only; a race lasts about five seconds), its
+    // recipe line by OCR when the panel opens and every few seconds after, and each race's outcome is one craft.
+    readonly CraftPanelTracker _panel = new();
+    string _panelRecipe = ""; DateTime _panelTextAt = DateTime.MinValue; bool _panelUp;
+
+    async Task CraftPanelDue()
+    {
+        if (GameRect is not { } g) return;
+        try
+        {
+            var region = CraftPanel.Region(g);
+            if (Cover(region) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
+            using var bmp = ScreenReader.Capture(region);
+            var now = DateTime.UtcNow;
+            var s = CraftPanel.Measure(bmp, region, g);
+            if (!s.Visible)
+            {
+                if (_panelUp) CrashLog.Note("crafting panel gone");
+                _panelUp = false;
+                return;
+            }
+            if (!_panelUp || (now - _panelTextAt).TotalSeconds >= 5)
+            {
+                _panelTextAt = now;
+                var text = await CraftPanel.ReadTextAsync(bmp, region, g);
+                var recipe = text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
+                if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", CraftPanel.LastLines)})"); }
+                else if (!_panelUp) CrashLog.Note($"crafting panel up{(_panelRecipe.Length > 0 ? ", " + _panelRecipe : "")} (read: {string.Join(" | ", CraftPanel.LastLines)})");
+            }
+            _panelUp = true;
+            // the crafting window's hold and its pictures last as long as the queue runs, and the passes keep a fight's pace
+            Target.MarkCraft(now); _lastActivity = now;
+            foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.CraftPanelSeen(_panelRecipe, now);
+            if (_panel.Feed(now, s) is not { } o) return;
+            var ev = new CraftResult(now, _panelRecipe, o.Ok, o.Combo) { Via = SessionEngine.CraftPanelVia };
+            CrashLog.Note($"crafting panel: {(o.Combo ? "combo roll " : "")}{(o.Ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
+            Count(ev);
+            CraftView.Apply(ev);
+            try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+        }
+        catch (System.ComponentModel.Win32Exception) { throw; }
+        catch (Exception ex) { CrashLog.Write("crafting panel", ex); }
     }
 
     async Task TargetDueAsync()

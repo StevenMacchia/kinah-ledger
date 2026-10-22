@@ -1008,6 +1008,7 @@ public partial class MainWindow : Window
             var book = RecipeBook.ForOutput(r.Name);
             var outcome = r.Made.Count == 0 ? "nothing came out yet" : "made " + string.Join(", ", r.Made.OrderByDescending(m => m.Value).Select(m => (m.Key.Equals(r.Name, StringComparison.OrdinalIgnoreCase) ? "" : m.Key + " ") + "×" + m.Value));
             var listed = book?.SuccessRate is double sr ? $" · listed {sr:P0}" : "";
+            if (r.Upgraded + r.NotUpgraded > 0) listed += $" · combo upgraded {r.Upgraded} of {r.Upgraded + r.NotUpgraded}";
             long? profit = costKnown && madeKnown ? made - cost!.Value * r.Attempts : null;
             var sells = PriceBook.Price(r.Name) is long sp ? Fk(sp * PriceBook.SellerKeeps) : "—";
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Attempts > 0 ? $"{100.0 * r.Ok / r.Attempts:0}%" : "—", costKnown ? Fk(cost!.Value) : "—",
