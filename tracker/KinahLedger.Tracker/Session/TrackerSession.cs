@@ -494,6 +494,18 @@ public sealed class TrackerSession
             if (!sure) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
             // the bound and tradeable copies of an item are the same item
             var names = graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            // the gold coin is Kinah, not an item (600.0K on the Urugugu table): the run's Kinah, bound when the list says so
+            if (names.Count == 1 && string.Equals(names[0], "Kina", StringComparison.OrdinalIgnoreCase))
+            {
+                long amt = Math.Clamp(sl.Count, 1, 1_000_000_000);
+                int kseen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Name == "Kina" && p.Count == amt);
+                if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; continue; }
+                bool bnd = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
+                Instances.Loot(new KinahChanged(now, amt, bnd) { Via = "reward table" });
+                Feed(new KinahChanged(now, amt, bnd) { Via = "reward table" });
+                added++;
+                continue;
+            }
             int count = (int)Math.Clamp(sl.Count, 1, 99999);
             int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
             if (seen >= 0) { _runPickups.RemoveAt(seen); known++; continue; }
@@ -520,6 +532,7 @@ public sealed class TrackerSession
             // kept a while, so the reward table read after it doesn't count the same items again
             if (ev is ItemAcquired ra) _runPickups.Add((ev.Time, Unbound(_items.NameOf(ra.ItemId)), ra.Count));
             else if (ev is RewardReceived rr) _runPickups.Add((ev.Time, Unbound(rr.Name), rr.Count));
+            else if (ev is KinahChanged { Delta: > 0 } rk) _runPickups.Add((ev.Time, "Kina", (int)Math.Min(rk.Delta, int.MaxValue)));
             if (_runPickups.Count > 60) _runPickups.RemoveAt(0);
             return;
         }
