@@ -33,6 +33,9 @@ internal static class Program
         if (opts.TryGetValue("process", out var hints))
             settings.ProcessHints = hints.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+        // test and measuring commands log to a temp folder, never into the player's own reads.log
+        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench")
+            CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-test-logs");
         try
         {
             switch (cmd)
