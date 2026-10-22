@@ -1,26 +1,28 @@
 # Code signing policy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+Releases are signed with [Microsoft Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) (formerly
+Trusted Signing), under the identity of the project's maintainer, validated by Microsoft.
 
-**Status:** the application to SignPath Foundation is pending. Until it is approved, releases are unsigned and Windows
-shows an "unknown publisher" notice the first time the tracker runs. Once approved, Windows names the publisher as
-SignPath Foundation.
+**Status:** being set up (docs/signing-setup.md). Until it is, releases are unsigned and Windows SmartScreen shows a
+"Windows protected your PC" notice the first time the tracker or its installer runs (More info › Run anyway).
 
 ## What is signed
 
-Only `KinahLedger.exe`, the Windows tracker built from this repository. Every signed file is built from a version
-tag by [`.github/workflows/release.yml`](.github/workflows/release.yml), on GitHub-hosted runners, with no
-steps run anywhere else. Nothing built outside that workflow, and no third-party program, is ever signed.
+`KinahLedger.exe` (the single-file tracker), `KinahLedger-Setup.exe` (the installer) and the program files the
+installer puts on the PC, all built from this repository. Every signed file is built from a version tag by
+[`.github/workflows/release.yml`](.github/workflows/release.yml), on GitHub-hosted runners, with no steps run anywhere
+else. Nothing built outside that workflow, and no third-party program, is ever signed.
 
-## Team roles
+## Who can sign
 
 | Role | Who |
 |---|---|
 | Committers and reviewers: may change the source; review every change from anyone else before it is merged | [@StevenMacchia](https://github.com/StevenMacchia) |
-| Approvers: approve each signing request | [@StevenMacchia](https://github.com/StevenMacchia) |
+| Release: pushes the version tag that starts a signed build | [@StevenMacchia](https://github.com/StevenMacchia) |
 
-Every signing request is approved by hand before it is signed. Team members use multi-factor authentication for
-GitHub and SignPath.
+The workflow signs in to Azure through GitHub's OpenID Connect, with no password or key stored in the repository,
+and the Azure side accepts that sign-in only from this repository's version tags. Team members use multi-factor
+authentication for GitHub and Azure.
 
 ## Privacy
 
@@ -46,14 +48,22 @@ and never sends input to the game. It sends data to these places, and nowhere el
   Nothing about you goes with them. `ui.icons: false` in `settings.json` turns them off.
 - **GitHub, for updates.** At start and every six hours the tracker asks
   `api.github.com/repos/StevenMacchia/kinah-ledger/releases/latest` for the newest release and downloads it from
-  GitHub when there is one; only the app version goes with the request. `update.check: false` in `settings.json`
-  turns this off.
+  GitHub when there is one (the installed tracker downloads only what changed). At the same times it checks
+  `raw.githubusercontent.com/StevenMacchia/kinah-ledger/main/data/` for newer game data: zones, enemies, loot tables,
+  skins, recipes. Only the app version goes with these requests. `update.check: false` in `settings.json` turns both
+  off.
 
 Those sites have their own privacy policies:
 NCSOFT, [MetaBot.GG](https://metabot.gg/),
 [GitHub](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement),
 and [Cloudflare](https://www.cloudflare.com/privacypolicy/), which hosts kinahledger.com.
 
-Settings, run history and logs stay on the PC under `%LOCALAPPDATA%\KinahLedger`. Deleting that folder and the exe
-removes the tracker completely; it installs nothing else, apart from an optional Start with Windows entry
+Settings, run history, logs, the downloaded game data and your watched items stay on the PC under
+`%LOCALAPPDATA%\KinahLedger`.
+
+The installer puts the program in `%LOCALAPPDATA%\KinahLedgerTracker` for your Windows user only (no administrator
+rights), with Start menu and desktop shortcuts and a `kinahledger://` link the website can open. Uninstalling from
+Windows Settings › Apps removes the program, the shortcuts, the link and the Start with Windows entry; delete
+`%LOCALAPPDATA%\KinahLedger` too to remove your settings and history. The single-file `KinahLedger.exe` installs
+nothing: deleting it and that folder removes it completely, apart from an optional Start with Windows entry
 (Options › General) that it removes when switched off.

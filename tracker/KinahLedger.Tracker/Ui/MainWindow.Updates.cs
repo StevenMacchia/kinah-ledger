@@ -13,6 +13,8 @@ public partial class MainWindow
 {
     static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(20), CheckEvery = TimeSpan.FromHours(6);
     const string SiteDownloadPage = "https://kinahledger.com/#tracker";
+    /// <summary>Always the newest installer: GitHub serves the latest release's asset at this one address.</summary>
+    public const string LatestSetupUrl = "https://github.com/StevenMacchia/kinah-ledger/releases/latest/download/KinahLedger-Setup.exe";
     /// <summary>Tells the restarted exe to wait for this one to let go instead of handing over to it.</summary>
     public const string AfterUpdateArg = "--after-update";
 
@@ -103,7 +105,22 @@ public partial class MainWindow
         {
             var info = await um.CheckForUpdatesAsync();
             var when = DateTime.Now.ToString("t");
-            if (info == null) { if (_release == null) SetUpdateStatus($"You have the newest version ({Updater.Show(Updater.Current)}). Checked at {when}."); return; }
+            if (info == null)
+            {
+                // the newest GitHub release decides, not only the update packages: a newer release that carries no packages
+                // for installed copies (it shouldn't happen; the release workflow refuses one) still reaches the player,
+                // as its installer, which updates the installed copy in place
+                var gh = await Updater.CheckAsync(_settings.Update.Manifest);
+                if (gh.Ok && gh.Newer != null)
+                {
+                    _release = gh.Newer; _vInfo = null; _staged = null; _updateNeedsSite = true;
+                    _updateError = "this version comes as an installer";
+                    ShowUpdate();
+                    return;
+                }
+                if (_release == null) SetUpdateStatus($"You have the newest version ({Updater.Show(Updater.Current)}). Checked at {when}.");
+                return;
+            }
             var tv = info.TargetFullRelease.Version;
             var rel = new Release(new Version(tv.Major, tv.Minor, tv.Patch), "", info.TargetFullRelease.SHA1 ?? "", info.TargetFullRelease.Size, $"{Installer.RepoUrl}/releases/tag/v{tv.Major}.{tv.Minor}.{tv.Patch}");
             if (_release != null && rel.Version == _release.Version && _updateError == null) { ShowUpdate(); return; }
@@ -172,7 +189,7 @@ public partial class MainWindow
         else if (_updateError != null)
         {
             UpdateText.Text = $"Couldn't update to {v}: {_updateError.TrimEnd('.')}.";
-            UpdateBtn.Content = _updateNeedsSite ? "Download from the site" : "Try again";
+            UpdateBtn.Content = _updateNeedsSite ? (Installer.IsInstalled ? "Get the installer" : "Download from the site") : "Try again";
         }
         else
         {
@@ -187,7 +204,7 @@ public partial class MainWindow
         if (_offeringInstall) { await InstallClicked(); return; }
         if (_release == null || _downloading) return;
         if (_staged != null) { await RestartForUpdate(); return; }
-        if (_updateNeedsSite) { Open(SiteDownloadPage); return; }
+        if (_updateNeedsSite) { Open(Installer.IsInstalled ? LatestSetupUrl : SiteDownloadPage); return; }
         await FetchUpdate(_release);
     }
 

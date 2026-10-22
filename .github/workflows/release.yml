@@ -2,16 +2,19 @@
 #  - the installer (0.8+): Velopack packs the app as normal files into KinahLedger-Setup.exe plus the full and delta
 #    update packages and releases.win.json, which installed trackers update from (Platform/Installer.cs);
 #  - KinahLedger.exe, the single-file exe every 0.7 copy updates from, which offers to install itself;
-# signs the exe through SignPath (once the SignPath variables and secret below are set), writes latest.json and
-# publishes the GitHub release. Nothing else builds or signs a release (CODE_SIGNING_POLICY.md).
+# signs both with Microsoft's Artifact Signing (formerly Trusted Signing) once the repository has the variables below,
+# writes latest.json and publishes the GitHub release. Nothing else builds or signs a release (CODE_SIGNING_POLICY.md).
 #
 # Before tagging: bump <Version> in the csproj to X.Y.Z and add release-notes/vX.Y.Z.md. The run stops if either is
-# missing, so a stray tag never reaches players.
+# missing, so a stray tag never reaches players. It also stops when the installer or its update packages are missing:
+# installed trackers update only from releases that carry them (docs/signing-setup.md, Platform/Installer.cs).
 #
-# Signing turns on when the repository has these (Settings › Secrets and variables › Actions):
-#   variable SIGNPATH_ORGANIZATION_ID, secret SIGNPATH_API_TOKEN
-#   optional variables SIGNPATH_PROJECT_SLUG (default kinah-ledger), SIGNPATH_POLICY_SLUG (default release-signing)
-# SignPath asks an approver to approve each request; the run waits up to an hour for that.
+# Signing turns on when the "release" environment has these variables (Settings > Environments > release):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID   the app registration GitHub signs in as (OpenID Connect,
+#                                                            no secret stored here)
+#   AZURE_SIGNING_ENDPOINT       e.g. https://eus.codesigning.azure.net
+#   AZURE_SIGNING_ACCOUNT        the Artifact Signing account name
+#   AZURE_SIGNING_PROFILE        its certificate profile name
 name: Release tracker
 
 on:
@@ -21,10 +24,13 @@ on:
 permissions:
   contents: write
   actions: read
+  id-token: write   # Azure sign-in for Artifact Signing (OpenID Connect)
 
 jobs:
   release:
     runs-on: windows-latest
+    # the "release" environment holds the Azure variables, and is what Azure trusts for signing (docs/signing-setup.md)
+    environment: release
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +51,27 @@ jobs:
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
 
+      - name: Sign in to Azure for signing
+        if: ${{ vars.AZURE_SIGNING_ACCOUNT != '' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign the single-file exe
+        if: ${{ vars.AZURE_SIGNING_ACCOUNT != '' }}
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_SIGNING_PROFILE }}
+          files-folder: dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       # the installed app: normal files with ready-to-run code, so nothing unpacks at every start
       - name: Publish the app as files for the installer
         working-directory: tracker/KinahLedger.Tracker
@@ -62,38 +89,24 @@ jobs:
 
       - name: Pack the installer
         shell: bash
+        env:
+          SIGN_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          SIGN_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          SIGN_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
         run: |
+          sign=()
+          if [ -n "$SIGN_ACCOUNT" ]; then
+            printf '{"Endpoint":"%s","CodeSigningAccountName":"%s","CertificateProfileName":"%s"}' "$SIGN_ENDPOINT" "$SIGN_ACCOUNT" "$SIGN_PROFILE" > build-vpk/signing.json
+            sign=(--azureTrustedSignFile build-vpk/signing.json)
+          fi
           vpk pack -u KinahLedgerTracker -v "$VERSION" -p build-vpk/publish -e KinahLedger.exe \
             --packTitle "Kinah Ledger" --packAuthors "Kinah Ledger" -i tracker/KinahLedger.Tracker/app.ico \
-            --shortcuts "Desktop,StartMenuRoot" -o build-vpk/releases
+            --shortcuts "Desktop,StartMenuRoot" -o build-vpk/releases "${sign[@]}"
+          # installed trackers update only from a release that carries these: never publish one without them
+          for f in KinahLedgerTracker-win-Setup.exe releases.win.json "KinahLedgerTracker-$VERSION-full.nupkg"; do
+            [ -s "build-vpk/releases/$f" ] || { echo "::error::the installer build is missing $f"; exit 1; }
+          done
           cp -f build-vpk/releases/KinahLedgerTracker-win-Setup.exe dist/KinahLedger-Setup.exe
-
-      - name: Upload the unsigned exe for signing
-        id: unsigned
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: unsigned
-          path: dist/KinahLedger.exe
-          if-no-files-found: error
-
-      - name: Sign with SignPath
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        uses: signpath/github-action-submit-signing-request@v3
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'kinah-ledger' }}
-          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
-          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 3600
-          output-artifact-directory: signed
-
-      - name: Use the signed exe
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        shell: bash
-        run: cp -f signed/KinahLedger.exe dist/KinahLedger.exe
 
       # the checksum is taken after signing: signing changes the file, and trackers install only an exact match
       - name: Write latest.json and the notes

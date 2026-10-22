@@ -10,12 +10,15 @@ This is a side project, separate from the author's professional work.
 
 ## Download
 
-[**KinahLedger.exe, the latest release**](https://github.com/StevenMacchia/kinah-ledger/releases/latest): one file,
-no installer, Windows 10 or 11. Every release lists the file's SHA-256 checksum.
+[**KinahLedger-Setup.exe, the latest installer**](https://github.com/StevenMacchia/kinah-ledger/releases/latest/download/KinahLedger-Setup.exe):
+Windows 10 or 11, installs for your Windows user only (no administrator rights), with Start menu and desktop shortcuts
+and small automatic updates. The single-file `KinahLedger.exe` is on the
+[releases page](https://github.com/StevenMacchia/kinah-ledger/releases/latest) too, with no installer. Every release
+lists both files' SHA-256 checksums.
 
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/) (application pending; until it is approved, releases are unsigned).
-What is signed, who approves it, and what the tracker sends: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+Releases are signed with Microsoft Artifact Signing once it is set up; until then Windows SmartScreen asks once
+(More info › Run anyway). What is signed, who can sign, and what the tracker sends:
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ```
 (website)  lives in a separate private repo; kinahledger.com/download serves this repo's releases
@@ -147,9 +150,11 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-`.github/workflows/release.yml` builds the exe on GitHub, signs it through SignPath once signing is set up (see
-[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)), writes `latest.json` and publishes the release with the exe's
-checksum on its own line, `KinahLedger.exe sha256: <hex>`. Running trackers install a release only when the download
+`.github/workflows/release.yml` builds the single exe and the installer (Velopack: `KinahLedger-Setup.exe` plus the
+full and delta update packages) on GitHub, signs them with Artifact Signing once it is set up (see
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) and [docs/signing-setup.md](docs/signing-setup.md)), writes
+`latest.json` and publishes the release with each file's checksum on its own line, `KinahLedger.exe sha256: <hex>`
+first. It refuses to publish a release without the installer and its packages, which installed trackers update from. Running trackers install a release only when the download
 matches it, and pick it up within six hours or at their next start. The run stops if the tag and the csproj disagree or
 the notes file is missing.
 
