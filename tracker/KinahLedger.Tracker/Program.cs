@@ -38,6 +38,7 @@ internal static class Program
             {
                 case "pick": return Pick();
                 case "locate": return Locate(settings);
+                case "bench": return Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
                 case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);
                 case "ui-shot": return UiShot(settings, opts, pos);
