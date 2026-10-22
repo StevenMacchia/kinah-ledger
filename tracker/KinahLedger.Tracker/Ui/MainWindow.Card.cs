@@ -138,7 +138,7 @@ public partial class MainWindow
         right.Child = list;
         Grid.SetColumn(right, 1); mid.Children.Add(right);
 
-        var foot = T($"{DateTime.Now:d MMM yyyy} · drops at the lowest Market ask on the server · per hour and total after the Market's {1 - Data.PriceBook.SellerKeeps:P0}", 15, CardMuted);
+        var foot = T($"{DateTime.Now:d MMM yyyy} · drops at the lowest Market ask on the server · per hour and total after {1 - Data.PriceBook.SellerKeeps:P0} tax", 15, CardMuted);
         foot.Margin = new Thickness(0, 18, 0, 0);
         Grid.SetRow(foot, 2); page.Children.Add(foot);
 

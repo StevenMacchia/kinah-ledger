@@ -786,7 +786,7 @@ public partial class MainWindow : Window
         ShareCardBtn.IsEnabled = totalNow > 0;
         FootTotal.Text = totalNow.ToString("N0");
         SumBreakdown.Text = (kinah > 0 || _mode != Mode.Gather ? $"{Fk(kinah)} Kinah" : "") + (kinah > 0 || _mode != Mode.Gather ? "  +  " : "")
-            + (s.Priced > 0 ? $"{Fk(s.Value)} loot after the Market's {1 - PriceBook.SellerKeeps:P0}" : "loot not priced yet")
+            + (s.Priced > 0 ? $"{Fk(s.Value)} loot after {1 - PriceBook.SellerKeeps:P0} tax" : "loot not priced yet")
             + (s.Unpriced > 0 ? $"  ·  {s.Unpriced} item{(s.Unpriced == 1 ? "" : "s")} without a price" : "");
         SumBreakdown.ToolTip = $"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.\n"
             + (s.Priced > 0 ? $"Loot at the lowest Market price: {s.Gross:N0}.\nMarket fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}.\n" : "")
