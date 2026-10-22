@@ -128,6 +128,7 @@ public sealed class TrackerSession
     /// </summary>
     public void CheckBalance(long balance, DateTime at)
     {
+        lock (_balanceHist) { if (_balanceHist.Count == 0 || _balanceHist[^1].Balance != balance) _balanceHist.Add((at, balance)); _balanceHist.RemoveAll(b => (at - b.At).TotalMinutes > 3); }
         long gap = _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);
         if (gap == 0) return;
         if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && _cross.TakeSingleKinah(gap, at))
@@ -146,6 +147,20 @@ public sealed class TrackerSession
             : $"the Kinah counter rose {-gap:N0} less than counted (Kinah spent, or a pickup counted twice)");
     }
     public int BalanceAdded { get; private set; }
+    // the Kinah counter's readings of the last few minutes, for confirming a reward table's coin slot
+    readonly List<(DateTime At, long Balance)> _balanceHist = new();
+    /// <summary>True when the Kinah counter rose by exactly <paramref name="amount"/> between two readings within a minute of <paramref name="t"/>.</summary>
+    internal bool BalanceRose(long amount, DateTime t)
+    {
+        lock (_balanceHist)
+        {
+            var near = _balanceHist.Where(b => Math.Abs((b.At - t).TotalSeconds) <= 60).OrderBy(b => b.At).ToList();
+            for (int i = 0; i < near.Count; i++) for (int j = i + 1; j < near.Count; j++) if (near[j].Balance - near[i].Balance == amount) return true;
+            return false;
+        }
+    }
+    /// <summary>For tests: a Kinah counter reading.</summary>
+    internal void SeedBalance(DateTime at, long balance) { lock (_balanceHist) _balanceHist.Add((at, balance)); }
 
     public TrackerSession(Rectangle? manualRegion, Settings s, ItemDictionary items, string kind, int? intervalMs = null)
     {
@@ -481,12 +496,26 @@ public sealed class TrackerSession
     /// <summary>The reward table's slots into the run: each named item once, skipping what the chat already counted.</summary>
     internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
     {
-        _byIcon ??= _items.AllItems().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         int added = 0, known = 0, unnamed = 0;
         foreach (var sl in slots)
         {
             var best = sl.Icons.FirstOrDefault();
             if (best.Key == null || !_byIcon.TryGetValue(best.Key, out var its)) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} with no item to its icon; not counted"); continue; }
+            // the gold coin: Kinah when the Kinah counter rose by exactly the slot's amount around then (2026-10-22, Urugugu:
+            // 17,889 to 617,889 for the 600.0K slot). The coin's picture on the item list differs a little from the game's
+            // (closest 84), so the counter, not the picture alone, makes it sure; without it the slot isn't counted.
+            if (its.Any(i => string.Equals(Unbound(i.Name), "Kina", StringComparison.OrdinalIgnoreCase)) && best.Distance <= 100 && sl.Count >= 1000)
+            {
+                long amt = Math.Min(sl.Count, 1_000_000_000);
+                int kseen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Name == "Kina" && p.Count == amt);
+                if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; continue; }
+                if (!BalanceRose(amt, now)) { unnamed++; CrashLog.Note($"reward table: a coin slot x{sl.CountText} the Kinah counter didn't confirm; not counted"); continue; }
+                Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" });
+                Feed(new KinahChanged(now, amt, false) { Via = "reward table" });
+                added++;
+                continue;
+            }
             var graded = its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).ToList();
             // a sure match only: close (measured on the Urugugu table: right ones 23 to 60, wrong ones 82 to 114), clearly
             // closer than the next icon, and of the slot's own grade; anything else is the event's own item the list lacks

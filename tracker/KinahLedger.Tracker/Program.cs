@@ -157,7 +157,6 @@ internal static class Program
                     var gi = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
                     CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kinah-grid-run"); Directory.CreateDirectory(CrashLog.DirOverride);
                     File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), ""); File.Delete(Path.Combine(CrashLog.DirOverride, "instances.jsonl"));
-                    Console.WriteLine($"DEBUG extras with icons: {gi.AllWithIcons().Count(i => i.Id <= 0)}, Kina: {string.Join(",", gi.AllWithIcons().Where(i => i.Name.StartsWith("Kina")).Select(i => i.Name + "=" + IconIndex.KeyOf(i.Icon)))}");
                     var gs = new TrackerSession(null, settings, gi, "Test"); var zone = opts.GetValueOrDefault("zone", "Urugugu Canyon"); var g0 = DateTime.UtcNow;
                     gs.Engine.SetZone(zone); gs.ZoneView.SetZone(zone); gs.Instances.Zone(zone, g0);
                     if (opts.TryGetValue("balance", out var bal)) { var bv = bal.Split(',').Select(long.Parse).ToArray(); gs.SeedBalance(g0, bv[0]); gs.SeedBalance(g0.AddSeconds(2), bv[1]); }
@@ -170,7 +169,7 @@ internal static class Program
                     var grc = glines.First(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
                     gs.ApplyGrid(RewardGrid.ReadAsync(gf, grc.Box.Bottom + (int)(gf.Height * 0.016)).GetAwaiter().GetResult(), g0.AddSeconds(3));
                     var grun = gs.Instances.Snapshot().LastOrDefault();
-                    Console.WriteLine($"run {grun?.Zone}: " + string.Join(", ", (grun?.Items ?? new()).Select(kv => $"{gi.NameOf(kv.Key)} x{kv.Value}")));
+                    Console.WriteLine($"run {grun?.Zone}: {grun?.Kinah:N0} Kinah; " + string.Join(", ", (grun?.Items ?? new()).Select(kv => $"{gi.NameOf(kv.Key)} x{kv.Value}")));
                     foreach (var l in File.ReadAllLines(Path.Combine(CrashLog.DirOverride, "reads.log")).Where(l => l.Contains("reward table"))) Console.WriteLine("  " + l);
                     return 0;
                 }
@@ -1039,6 +1038,18 @@ options: --process aion[,other]");
                     new(box, rs.Grade, "3", 3, new() { (key, 41.0), ("Other", 99.0) }),
                     new(box, "Common", "6", 6, new() { ("Icon_GM_0030_T04_Shoulder", 82.2), ("Other", 85.1) }) }, gt0.AddSeconds(3));
                 var grun2 = gt.Instances.Snapshot().LastOrDefault();
+                // the gold coin counts as Kinah only when the Kinah counter rose by exactly its amount (Urugugu: 17,889 to 617,889)
+                var coin = IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina (Bound)").Icon);
+                Slot600(out var withCounter, true); Slot600(out var without, false);
+                void Slot600(out string got, bool counter)
+                {
+                    var cs = new TrackerSession(null, new Settings(), items, "Test"); var c0 = DateTime.UtcNow;
+                    cs.Engine.SetZone("Urugugu Canyon"); cs.Instances.Zone("Urugugu Canyon", c0);
+                    if (counter) { cs.SeedBalance(c0, 17_889); cs.SeedBalance(c0.AddSeconds(2), 617_889); }
+                    cs.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "600.0K", 600_000, new() { (coin, 84.4), ("Other", 103.7) }) }, c0.AddSeconds(3));
+                    got = $"{cs.Instances.Snapshot().LastOrDefault(r => r.Start >= c0.AddSeconds(-1))?.Kinah ?? 0:N0}";
+                }
+                Check("a coin slot is Kinah when the counter agrees", $"{withCounter} · {without}", "600,000 · 0");
                 Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
             }
             {
