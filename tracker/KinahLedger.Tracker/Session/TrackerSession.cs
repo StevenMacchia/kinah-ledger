@@ -390,7 +390,11 @@ public sealed class TrackerSession
         // run's, and a level-up popup mid-event must not set the event's loot aside (Accursed Sword, 2026-10-22 14:35)
         bool reward = Target.RewardOpen(now) && !(ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored);
         // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
-        if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase))) Target.MarkCraft(now);
+        if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase)))
+        {
+            if ((now - Target.CraftAt).TotalSeconds > 5) CrashLog.Note("crafting window seen (its \"Show acquired designs only\" over the chat)");
+            Target.MarkCraft(now);
+        }
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
         bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
         // loot lines that were read garbled while they faded in, now read cleanly at the same place: one more parse each

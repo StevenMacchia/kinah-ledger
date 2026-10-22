@@ -144,7 +144,14 @@ public sealed partial class TargetReader
     public const double CraftHoldSeconds = 60;
     public static bool CraftOpen(DateTime at, DateTime t) => (t - at).TotalSeconds is >= -CraftGraceSeconds and <= CraftHoldSeconds;
     static readonly string[] CraftTabs = { "Weaponsmithing", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alchemy", "Cooking", "Cookinq" };
-    public static bool IsCraftTab(string text) => CraftTabs.Any(t => text.Trim().Equals(t, StringComparison.OrdinalIgnoreCase));
+    /// <summary>A crafting skill tab: the line alone, or two tab names on one line (the read can join the row).</summary>
+    public static bool IsCraftTab(string text)
+    {
+        var t = text.Trim();
+        if (CraftTabs.Any(c => t.Equals(c, StringComparison.OrdinalIgnoreCase))) return true;
+        var words = t.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Count(w => CraftTabs.Any(c => w.Equals(c, StringComparison.OrdinalIgnoreCase))) >= 2;
+    }
     /// <summary>When the crafting window's skill tabs were last seen in the band.</summary>
     public DateTime CraftAt { get; private set; } = DateTime.MinValue;
     bool _craftSeen;
@@ -192,8 +199,11 @@ public sealed partial class TargetReader
         var lines = await ScreenReader.ReadBoxesAsync(gold, strip.Location, 3);
         lines.AddRange(await ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true));
         Reads++;
+        bool was = _craftSeen;
         _craftSeen = lines.Any(l => IsCraftTab(l.Text));
         if (_craftSeen) CraftAt = DateTime.UtcNow;
+        // logged, so a craft counted wrong can be checked against when the window was really seen
+        if (_craftSeen != was) CrashLog.Note(_craftSeen ? "crafting window seen (its skill tabs at the top)" : "crafting window's tabs gone");
         var title = _craftSeen ? null : lines.Select(l => l.Text.Trim()).FirstOrDefault(IsRewardTitle);
         _rewardSeen = title != null;
         if (title != null)

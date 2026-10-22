@@ -423,7 +423,9 @@ options: --process aion[,other]");
     static int TargetTest(Dictionary<string, string> o)
     {
         if (!o.TryGetValue("image", out var image)) { Console.WriteLine("target-test --image <png of the target bar>"); return 1; }
-        using var bmp = Task.Run(() => ScreenReader.LoadAsync(image)).GetAwaiter().GetResult();
+        using var whole = Task.Run(() => ScreenReader.LoadAsync(image)).GetAwaiter().GetResult();
+        // --strip: a whole game picture, cut to the band the tracker reads
+        using var bmp = o.ContainsKey("strip") ? whole.Clone(TargetReader.Strip(new System.Drawing.Rectangle(0, 0, whole.Width, whole.Height)), whole.PixelFormat) : (System.Drawing.Bitmap)whole.Clone();
         var lines = new List<OcrLineBox>();
         foreach (var (label, img, scale) in new (string, System.Drawing.Bitmap, int)[] { ("plain", bmp, 3), ("boost", ScreenReader.Boost(bmp), 3), ("name colour", ScreenReader.NameMask(bmp), 3) })
         {
@@ -431,6 +433,7 @@ options: --process aion[,other]");
             foreach (var l in got.OrderBy(l => l.Box.Top)) Console.WriteLine($"  {label}: {l.Text}");
             lines.AddRange(got);
         }
+        Console.WriteLine($"crafting window: {lines.Any(l => TargetReader.IsCraftTab(l.Text))}");
         var name = TargetReader.FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
         Console.WriteLine(name != null ? $"Enemy: {name}" : $"No enemy on the list" + (unlisted.Length > 0 ? $" (name-shaped text: {unlisted})" : ""));
         return name != null ? 0 : 1;
@@ -1376,6 +1379,7 @@ options: --process aion[,other]");
             ce.Apply(new ItemAcquired(cw.AddSeconds(16), items.IdOf("Orichalcum Longsword"), 1, false));
             ce.Apply(new ItemAcquired(cw.AddSeconds(40), items.IdOf("Orichalcum Longsword"), 1, false));
             ce.Apply(new ItemAcquired(cw.AddSeconds(75), items.IdOf("Orichalcum Longsword"), 1, false));
+            Check("crafting window: its tabs, alone or joined on one line", $"{TargetReader.IsCraftTab("Blacksmithing")} {TargetReader.IsCraftTab("Blacksmithing Armorsmithing Handicrafting")} {TargetReader.IsCraftTab("Cooking Pot")}", "True True False");
             Check("crafting window: held 60 s after its last sign", $"crafts {ce.CraftedSkipped} · drops {ce.Items.Values.Sum()}", "crafts 2 · drops 2");
             Check("reward-shots cleans itself", $"{rsGone} · {rsLeft}", "2 · 20261020-101010-Zone-Jump-Jump.jpg 20261022-101010-Zone-in-run.jpg mine.jpg");
 
