@@ -65,7 +65,7 @@ public sealed class GameWatcher
         if ((DateTime.UtcNow - _balanceTickAt).TotalSeconds < BalanceEverySec) return;
         _balanceTickAt = DateTime.UtcNow;
         // only the game's own counter is read: another window over the top-left corner is skipped, like the chat and the Market
-        if (GameWindow.Covered(BalanceReader.Strip(game), _settings.ProcessHints) != null) return;
+        if ((WindowCapture.Active ? null : GameWindow.Covered(BalanceReader.Strip(game), _settings.ProcessHints)) != null) return;
         await Balance.TickAsync(game, c.KinahPicked);
         // the counter against the count, on every tick: a gap has to hold a few seconds before it is judged
         if (Balance.Tracker.Balance is long bal && Balance.Tracker.BalanceAt is DateTime bat && (DateTime.UtcNow - bat).TotalSeconds <= 60) c.CheckBalance(bal, DateTime.UtcNow);
@@ -235,7 +235,7 @@ public sealed class GameWatcher
 
     /// <summary>The Market is read only where it can be seen: a found table nothing covers, or, while looking for it, the game in front.</summary>
     bool MarketInView() => Market.Layout is { } l
-        ? GameWindow.Covered(l.Table, _settings.ProcessHints) == null
+        ? (WindowCapture.Active ? null : GameWindow.Covered(l.Table, _settings.ProcessHints)) == null
         : GameWindow.InFront(_settings.ProcessHints);
 
     /// <summary>

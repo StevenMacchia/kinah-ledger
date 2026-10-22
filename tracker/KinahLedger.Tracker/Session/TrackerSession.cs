@@ -172,7 +172,7 @@ public sealed class TrackerSession
         if (Region == null)
         {
             if (game == null) throw new InvalidOperationException("The game window wasn't found. Start the game (borderless or windowed), or choose the chat yourself.");
-            if (GameWindow.Covered(ChatLocator.Corner(game.Value), _settings.ProcessHints) is { } cover)
+            if (Cover(ChatLocator.Corner(game.Value)) is { } cover)
                 throw new InvalidOperationException($"The chat corner of the game is out of view ({cover} is over it). Bring the game to the front, or move that window off the bottom-left of the game.");
             var (region, note) = await ChatLocator.DetectAsync(game.Value);
             DetectNote = note;
@@ -181,7 +181,7 @@ public sealed class TrackerSession
             _anchor = game;
         }
         _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale);
-        if (game != null && GameWindow.Covered(ZoneLocator.Strip(game.Value), _settings.ProcessHints) == null) await ReadZone(game.Value);
+        if (game != null && Cover(ZoneLocator.Strip(game.Value)) == null) await ReadZone(game.Value);
         _loop ??= Task.Run(() => Loop(_cts.Token));
     }
 
@@ -267,7 +267,7 @@ public sealed class TrackerSession
             DetectNote = "the chat area moved with the game";
             return;
         }
-        if ((DateTime.UtcNow - _refindAt).TotalSeconds < 5 || GameWindow.Covered(ChatLocator.Corner(g), _settings.ProcessHints) != null) return;
+        if ((DateTime.UtcNow - _refindAt).TotalSeconds < 5 || Cover(ChatLocator.Corner(g)) != null) return;
         _refindAt = DateTime.UtcNow;
         var (again, note) = await ChatLocator.DetectAsync(g);
         if (again == null) return;   // the chat may be faded: the empty-read rule keeps trying
@@ -285,7 +285,7 @@ public sealed class TrackerSession
             {
                 await FollowGameAsync();
                 // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
-                if (GameWindow.Covered(Region!.Value, _settings.ProcessHints) is { } cover)
+                if (Cover(Region!.Value) is { } cover)
                 {
                     Engine.Pause(); Secondary?.Pause(); ZoneView.Pause();
                     Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
@@ -341,7 +341,7 @@ public sealed class TrackerSession
         {
             _emptyReads = 0;
             var g = GameWindow.Find(_settings.ProcessHints);
-            if (g != null && GameWindow.Covered(ChatLocator.Corner(g.Value), _settings.ProcessHints) == null)
+            if (g != null && Cover(ChatLocator.Corner(g.Value)) == null)
             {
                 var (again, note) = await ChatLocator.DetectAsync(g.Value);
                 if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); _anchor = g; DetectNote = "re-found: " + note; }
@@ -436,6 +436,12 @@ public sealed class TrackerSession
 
     DateTime _targetAt = DateTime.MinValue;
 
+    /// <summary>
+    /// What covers part of the game, or null. While the game is read from its own frames (WindowCapture), a window over it
+    /// hides nothing, so reading goes on (0.8.1); otherwise the old check: another window over the area pauses its read.
+    /// </summary>
+    string? Cover(Rectangle r) => WindowCapture.Active ? null : GameWindow.Covered(r, _settings.ProcessHints);
+
     // ---- the reward table at the end of an expedition or event ----
     // "Obtained Items / Reward collected." lists every reward as an icon with a count; the chat shows only the last few
     // lines of it (2026-10-22, Urugugu Canyon). Inside an expedition or event, once a second, the top of the screen is
@@ -456,7 +462,7 @@ public sealed class TrackerSession
             if (GameRect is not { } g || ZoneLocator.KindOf(Zone) is not ("Expedition" or "Event")) { _gridDone = false; return; }
             if ((now - _gridAt).TotalSeconds < 1) return;
             _gridAt = now;
-            if (GameWindow.Covered(g, _settings.ProcessHints) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
+            if (Cover(g) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
             using var frame = ScreenReader.Capture(g);
             var band = new Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
             using var bandBmp = frame.Clone(band, frame.PixelFormat);
@@ -590,7 +596,7 @@ public sealed class TrackerSession
         var region = LootPopup.Region(g);
         try
         {
-            if (GameWindow.Covered(region, _settings.ProcessHints) != null) return null;   // something over it: nothing read, nothing added
+            if (Cover(region) != null) return null;   // something over it: nothing read, nothing added
             return await ScreenReader.ReadBoxesAsync(region, 3, boost: true);
         }
         catch (Exception ex) { CrashLog.Write("loot list", ex); return null; }
@@ -669,7 +675,7 @@ public sealed class TrackerSession
             if (!due) return;
             var today = DateTime.Now.ToString("yyyyMMdd");
             if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;
-            if (GameWindow.Covered(g, _settings.ProcessHints) is { } cover && !cover.StartsWith("Kinah Ledger")) return;   // only the game, never a window over it
+            if (Cover(g) is { } cover && !cover.StartsWith("Kinah Ledger")) return;   // only the game, never a window over it
             // and only while the game is the active window: Alt+Tab's switcher, the Start menu or a notification sit over it
             // without counting as a window over it, and Alt+Tab shows thumbnails of everything open (2026-10-22 15:07)
             if (!GameWindow.InFront(_settings.ProcessHints)) return;
@@ -694,7 +700,7 @@ public sealed class TrackerSession
         if (GameRect is not { } g) return;
         try
         {
-            var cover = GameWindow.Covered(TargetReader.Strip(g), _settings.ProcessHints);
+            var cover = Cover(TargetReader.Strip(g));
             bool own = cover != null && cover.StartsWith("Kinah Ledger");
             // the panel (or this window) over part of the band is read through: its own labels are never on the enemy list.
             // Only when no enemy has been read for a minute does the window ask to drag it aside.
@@ -728,11 +734,10 @@ public sealed class TrackerSession
         if (game is not { } g) { _zoneAt = DateTime.UtcNow; return; }
         // the panel over the game steps aside for the read when it sits on the minimap corner; the minimap then has its own
         // cover check: another window over it alone keeps the last zone and lets the chat be read
-        await Ui.HudWindow.HiddenIfOver(ZoneLocator.Strip(g), async () =>
-        {
-            if (GameWindow.Covered(ZoneLocator.Strip(g), _settings.ProcessHints) == null) await ReadZone(g);
-            else _zoneAt = DateTime.UtcNow;
-        });
+        // read from the game's own frames, the panel isn't in the picture: no stepping aside, no flicker
+        async Task Read() { if (Cover(ZoneLocator.Strip(g)) == null) await ReadZone(g); else _zoneAt = DateTime.UtcNow; }
+        if (WindowCapture.Active) await Read();
+        else await Ui.HudWindow.HiddenIfOver(ZoneLocator.Strip(g), Read);
     }
 
     public async Task StopAsync()
