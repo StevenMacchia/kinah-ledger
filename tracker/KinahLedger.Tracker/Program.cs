@@ -215,6 +215,27 @@ internal static class Program
                     }
                     return 0;
                 }
+                case "craft-test":
+                {
+                    // the crafting panel over saved pictures, in name order: craft-test --dir <folder> [--glob *crafting.jpg]
+                    if (!opts.TryGetValue("dir", out var cdir)) { Console.Error.WriteLine("craft-test --dir <folder> [--glob <pattern>]"); return 1; }
+                    var ctr = new CraftPanelTracker(); bool cread = false;
+                    foreach (var cf in Directory.GetFiles(cdir, opts.TryGetValue("glob", out var cg) ? cg : "*.jpg").OrderBy(p => p))
+                    {
+                        using var cbmp = new System.Drawing.Bitmap(cf);
+                        var cs = CraftPanel.Measure(cbmp);
+                        var co = ctr.Feed(File.GetLastWriteTime(cf), cs);
+                        string cnote = co == null ? "" : $"  => {(co.Ok ? "SUCCESS" : "FAIL")}{(co.Combo ? " (combo)" : "")}";
+                        if (cs.Visible && (!cread || co != null))
+                        {
+                            var ct = CraftPanel.ReadTextAsync(cbmp).GetAwaiter().GetResult();
+                            Console.WriteLine("  read: " + string.Join(" | ", CraftPanel.LastLines));
+                            if (ct != null) { cnote += $"  [{ct.Value.Done} / {ct.Value.Of}, {CraftPanel.ItemOf(ct.Value.Recipe)}]"; cread = true; }
+                        }
+                        Console.WriteLine($"{Path.GetFileName(cf)}  up={cs.Visible,-5} success={cs.Success:0.00} fail={cs.Fail:0.00} combo={cs.Combo}{cnote}");
+                    }
+                    return 0;
+                }
                 case "parse-lines":
                 {
                     // each argument is one chat line: what the parser makes of it, for checking a line from reads.log
@@ -1380,6 +1401,16 @@ options: --process aion[,other]");
             ce.Apply(new ItemAcquired(cw.AddSeconds(40), items.IdOf("Orichalcum Longsword"), 1, false));
             ce.Apply(new ItemAcquired(cw.AddSeconds(75), items.IdOf("Orichalcum Longsword"), 1, false));
             Check("crafting window: its tabs, alone or joined on one line", $"{TargetReader.IsCraftTab("Blacksmithing")} {TargetReader.IsCraftTab("Blacksmithing Armorsmithing Handicrafting")} {TargetReader.IsCraftTab("Cooking Pot")}", "True True False");
+            {
+                // the crafting panel's bar races, as read from Steven's two Life Serums on 2026-10-22: success, success, combo success
+                var cpt = new CraftPanelTracker(); var cp0 = new DateTime(2026, 10, 22, 17, 0, 13);
+                var races = new (double S, double F, bool C, bool Up)[] { (0, 0, false, true), (.32, .42, false, true), (.32, .70, false, true), (.99, .70, false, true), (1, .70, false, true),
+                    (0, 0, false, false), (0, 0, false, true), (.71, .28, false, true), (1, .28, false, true), (1, .28, false, true),
+                    (0, 0, true, true), (.32, .42, true, true), (1, .42, true, true), (1, .42, true, true), (0, 0, false, true), (.1, .98, false, true) };
+                var outs = races.Select((r, i) => cpt.Feed(cp0.AddSeconds(i), new CraftPanel.Sample(r.Up, r.S, r.F, r.C))).Where(o => o != null).Select(o => (o!.Ok ? "ok" : "fail") + (o.Combo ? "+combo" : ""));
+                Check("crafting panel: one outcome per race, the full bar decides", string.Join(" ", outs), "ok ok ok+combo fail");
+                Check("crafting panel: the recipe's item", CraftPanel.ItemOf("Life Serum (Bound) (Novice Lv. 1)"), "Life Serum (Bound)");
+            }
             Check("crafting window: held 60 s after its last sign", $"crafts {ce.CraftedSkipped} · drops {ce.Items.Values.Sum()}", "crafts 2 · drops 2");
             Check("reward-shots cleans itself", $"{rsGone} · {rsLeft}", "2 · 20261020-101010-Zone-Jump-Jump.jpg 20261022-101010-Zone-in-run.jpg mine.jpg");
 
