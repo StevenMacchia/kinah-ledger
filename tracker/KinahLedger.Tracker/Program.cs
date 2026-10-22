@@ -1053,6 +1053,19 @@ options: --process aion[,other]");
             bool twoKills = c12.Chat(new KinahChanged(x0.AddSeconds(1.1), 352, false), x0.AddSeconds(1.1));
             Check("the same amount read twice: skipped when the list showed it once, kept when twice", $"{first} {second} {twoKills}", "False True False");
 
+            // the Kinah counter against the count: a gap that holds is judged once; the chat catching up closes it
+            var bc = new BalanceCheck(); var b0 = x0;
+            long g1 = bc.Observe(10_000, 0, b0);                          // the start
+            long g2 = bc.Observe(10_400, 0, b0.AddSeconds(1));            // the counter moved first...
+            long g3 = bc.Observe(10_400, 400, b0.AddSeconds(2));          // ...and the chat caught up: agreed
+            long g4 = bc.Observe(10_863, 400, b0.AddSeconds(3));          // 463 the count lacks
+            long g5 = bc.Observe(10_863, 400, b0.AddSeconds(6));
+            long g6 = bc.Observe(10_863, 400, b0.AddSeconds(10));         // held over six seconds: judged
+            Check("the Kinah counter against the count", $"{g1} {g2} {g3} {g4} {g5} {g6} · agreed {bc.Agreed}", "0 0 0 0 0 463 · agreed 1");
+            var c13 = new LootCrossCheck(items);
+            c13.Popup(new() { K(463) }, x0); c13.Popup(new(), x0.AddSeconds(1)); c13.Popup(new(), x0.AddSeconds(5));
+            Check("a Kinah row read once waits for the counter", $"{c13.TakeSingleKinah(463, x0.AddSeconds(10))} {c13.TakeSingleKinah(463, x0.AddSeconds(10))} {c13.TakeSingleKinah(500, x0.AddSeconds(10))}", "True False False");
+
             // fast kills: the list is read about once a second and a row is up about three, so a row can be read once only
             var c7 = new LootCrossCheck(items);
             var a7 = c7.Popup(new() { K(431), I("Spiritstone") }, x0).Concat(c7.Popup(new() { K(431) }, x0.AddSeconds(1.2))).Concat(c7.Popup(new(), x0.AddSeconds(6))).ToList();

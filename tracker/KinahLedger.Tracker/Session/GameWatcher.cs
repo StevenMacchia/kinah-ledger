@@ -67,6 +67,8 @@ public sealed class GameWatcher
         // only the game's own counter is read: another window over the top-left corner is skipped, like the chat and the Market
         if (GameWindow.Covered(BalanceReader.Strip(game), _settings.ProcessHints) != null) return;
         await Balance.TickAsync(game, c.KinahPicked);
+        // the counter against the count, on every tick: a gap has to hold a few seconds before it is judged
+        if (Balance.Tracker.Balance is long bal && Balance.Tracker.BalanceAt is DateTime bat && (DateTime.UtcNow - bat).TotalSeconds <= 60) c.CheckBalance(bal, DateTime.UtcNow);
         // a new trusted value goes to the always-on count and the farming run; each keeps its first and last
         if (Balance.Tracker.BalanceAt is DateTime at && at != _balanceApplied)
         {

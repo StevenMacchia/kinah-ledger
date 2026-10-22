@@ -112,6 +112,36 @@ public sealed class TrackerSession
     long _kinahPicked;
     /// <summary>All tradeable Kina picked up since the reader started, across chunks: what the balance counter is checked against.</summary>
     public long KinahPicked => Interlocked.Read(ref _kinahPicked);
+    long _kinahBound;
+
+    // ---- the balance counter as a check on the count ----
+    readonly BalanceCheck _balanceCheck = new();
+    public BalanceCheck BalanceCheck => _balanceCheck;
+    /// <summary>
+    /// The game's Kinah counter, read every few seconds, against the Kinah counted. A rise the count lacks, of exactly an
+    /// amount the loot list showed in one read only, is that pickup: two sources agree, and it is counted. Any other gap
+    /// is written to reads.log and left alone, since a sale, mail or purchase moves the counter too.
+    /// </summary>
+    public void CheckBalance(long balance, DateTime at)
+    {
+        long gap = _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);
+        if (gap == 0) return;
+        if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && _cross.TakeSingleKinah(gap, at))
+        {
+            var ev = new KinahChanged(at, gap, false) { Via = "loot list · balance" };
+            Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); Feed(ev);
+            Interlocked.Add(ref _kinahPicked, gap);
+            _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);   // the count matches the counter again
+            CrashLog.Note($"the Kinah counter rose {gap:N0} more than counted, and the loot list showed {gap:N0} Kina once: counted from the two");
+            BalanceAdded++;
+            try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+            return;
+        }
+        CrashLog.Note(gap > 0
+            ? $"the Kinah counter rose {gap:N0} more than counted (a missed pickup, or a sale or mail the chat didn't show); not counted"
+            : $"the Kinah counter rose {-gap:N0} less than counted (Kinah spent, or a pickup counted twice)");
+    }
+    public int BalanceAdded { get; private set; }
 
     public TrackerSession(Rectangle? manualRegion, Settings s, ItemDictionary items, string kind, int? intervalMs = null)
     {
@@ -368,6 +398,7 @@ public sealed class TrackerSession
                 Feed(ev);
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
+                else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
             return any;
@@ -428,7 +459,7 @@ public sealed class TrackerSession
         if ((now - _auditAt).TotalSeconds < 60) return;
         int kills = Engine.Totals().Kills;
         if (_passes > 0 && (kills > _auditKills || _questSteps > 0))
-            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms)");
+            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms)");
         _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; _chatMs = 0; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
     }
 
@@ -497,6 +528,7 @@ public sealed class TrackerSession
                 Feed(ev);
                 if (ev is ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
+                else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
         }

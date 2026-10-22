@@ -35,6 +35,22 @@ public sealed class LootCrossCheck
     readonly List<(DateTime At, LootPopup.Row Row, string Key)> _waiting = new();
 
     public int Added { get; private set; }
+    // Kinah rows the list showed in one read only, never confirmed by a second read or the chat
+    readonly List<(long Amount, DateTime At)> _singleKinah = new();
+    /// <summary>How long a one-read Kinah row waits for the balance counter to confirm it.</summary>
+    public const double SingleSeconds = 30;
+
+    /// <summary>
+    /// True (and used up) when the list showed this Kinah amount once in the last <see cref="SingleSeconds"/> and nothing
+    /// else counted it: with the balance counter's gap of exactly that amount, two sources agree on a pickup.
+    /// </summary>
+    public bool TakeSingleKinah(long amount, DateTime now)
+    {
+        int i = _singleKinah.FindIndex(x => x.Amount == amount && (now - x.At).TotalSeconds <= SingleSeconds);
+        if (i < 0) return false;
+        _singleKinah.RemoveAt(i);
+        return true;
+    }
     /// <summary>Kinah lines the chat read twice that the list showed once, skipped.</summary>
     public int Duplicates { get; private set; }
     /// <summary>How close in time a second chat read of the same amount is taken for the same line.</summary>
@@ -136,7 +152,12 @@ public sealed class LootCrossCheck
             else _credited[k] = (c.Count, c.Seen, c.Fewer + 1);
         }
         foreach (var k in _credited.Where(kv => (now - kv.Value.Seen).TotalSeconds > HoldSeconds).Select(kv => kv.Key).ToList()) _credited.Remove(k);
-        foreach (var k in _kinahOnce.Where(kv => (now - kv.Value.At).TotalSeconds > HoldSeconds).Select(kv => kv.Key).ToList()) _kinahOnce.Remove(k);
+        foreach (var k in _kinahOnce.Where(kv => (now - kv.Value.At).TotalSeconds > HoldSeconds).Select(kv => kv.Key).ToList())
+        {
+            // read once and never again: not enough alone, but kept a while for the balance counter to confirm
+            if (long.TryParse(k[2..], out var amt)) { _singleKinah.Add((amt, _kinahOnce[k].At)); if (_singleKinah.Count > 20) _singleKinah.RemoveAt(0); }
+            _kinahOnce.Remove(k);
+        }
         return Settle(now);
     }
 
