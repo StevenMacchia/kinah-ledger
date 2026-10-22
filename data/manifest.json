@@ -1,0 +1,37 @@
+{
+  "min_tracker": "0.8.0",
+  "files": {
+    "zones.txt": {
+      "sha256": "9454ab28d9cb27b6ef18460389c55ec93543eb6f866dbad394ea1dc3d1778204",
+      "size": 7190
+    },
+    "instances.txt": {
+      "sha256": "ec9b3328bdeb6626828fbb982cfd915127724e223a3431a4570fb589fd767038",
+      "size": 8127
+    },
+    "mobs.txt": {
+      "sha256": "54d3c9b781451e7333c2a4d7e50625c0c273ab65e679d250c0857c77d377b514",
+      "size": 70037
+    },
+    "loot-tables.json": {
+      "sha256": "4263f5dd823aeb67a5d11838449cf8142c991b9d5c210cf4b380eb0053878c39",
+      "size": 8809578
+    },
+    "skins.json": {
+      "sha256": "e127284a4d203a1b79563adeedb843cab67de6e9253919f45f91a62b3713bd71",
+      "size": 503505
+    },
+    "recipes.json": {
+      "sha256": "324120c10132a84e7656ed7798e8be5087fc10e4a5b973c539c45b72d3d97077",
+      "size": 377933
+    },
+    "mob-images.json": {
+      "sha256": "b2d1fd959d8d669886f994131d7ed41e69edfef09c2f27f6c3d3bb0b5cefe6fa",
+      "size": 290684
+    },
+    "gathering-items.json": {
+      "sha256": "9da423765dc82c6944a92921fed886deb4f00bbea6130cf31e7343fc93b381e1",
+      "size": 8190
+    }
+  }
+}

@@ -200,7 +200,7 @@ public sealed class ItemDictionary
     {
         try
         {
-            using var stream = typeof(ItemDictionary).Assembly.GetManifestResourceStream("skins.json");
+            using var stream = KinahLedger.Data.DataFiles.Open("skins.json");
             if (stream == null) return;
             using var doc = JsonDocument.Parse(stream);
             if (!doc.RootElement.TryGetProperty("items", out var arr) || arr.ValueKind != JsonValueKind.Array) return;
@@ -227,7 +227,7 @@ public sealed class ItemDictionary
         try
         {
             var beside = Path.Combine(Path.GetDirectoryName(itemsPath) ?? "", "gathering-items.json");
-            using var stream = File.Exists(beside) ? File.OpenRead(beside) : typeof(ItemDictionary).Assembly.GetManifestResourceStream("gathering-items.json");
+            using var stream = File.Exists(beside) ? File.OpenRead(beside) : KinahLedger.Data.DataFiles.Open("gathering-items.json");
             if (stream == null) return;
             using var doc = JsonDocument.Parse(stream);
             if (!doc.RootElement.TryGetProperty("items", out var arr)) return;

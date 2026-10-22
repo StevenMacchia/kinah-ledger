@@ -26,7 +26,7 @@ public sealed class LootBook
     {
         try
         {
-            using var s = typeof(LootBook).Assembly.GetManifestResourceStream("loot-tables.json");
+            using var s = KinahLedger.Data.DataFiles.Open("loot-tables.json");
             if (s == null) return new LootBook();
             using var r = new StreamReader(s);
             return FromJson(r.ReadToEnd());

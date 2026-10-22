@@ -74,6 +74,15 @@ public partial class MainWindow
         {
             try { await CheckForUpdate(manual: false); }
             catch (Exception ex) { CrashLog.Write("update", ex); }
+            // the game data (zones, events, enemies, loot tables, skins…) between releases: see Data/DataFiles.cs
+            try
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
+                var got = await KinahLedger.Data.DataFiles.UpdateAsync(http);
+                if (got.Count > 0) SetUpdateStatus($"Game data updated ({string.Join(", ", got)}); in use from the next start.");
+            }
+            catch (Exception ex) { CrashLog.Note("data update: " + ex.Message); }
             await Task.Delay(CheckEvery);
         }
     }

@@ -67,6 +67,8 @@ public static class WpfApp
         };
         AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write("process", e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString()));
         TaskScheduler.UnobservedTaskException += (_, e) => { CrashLog.Write("task", e.Exception); e.SetObserved(); };
+        // nothing reads without Windows' English text recognition: offer to add it before anything else
+        if (!background && !Platform.OcrPack.HasEnglish()) Platform.OcrPack.OfferInstall(null);
         var w = new MainWindow(settings);
         w.StartUpdates();
         instance.OnShowRequested(w.ShowFromOtherStart);

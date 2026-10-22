@@ -47,7 +47,7 @@ public sealed partial class TargetReader
     {
         try
         {
-            using var stream = typeof(TargetReader).Assembly.GetManifestResourceStream("mobs.txt");
+            using var stream = KinahLedger.Data.DataFiles.Open("mobs.txt");
             if (stream == null) return Array.Empty<string>();
             using var r = new StreamReader(stream);
             var names = new List<string>();

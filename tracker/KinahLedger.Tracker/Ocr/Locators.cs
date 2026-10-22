@@ -231,7 +231,7 @@ public static class ZoneLocator
         var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            using var stream = typeof(ZoneLocator).Assembly.GetManifestResourceStream("instances.txt");
+            using var stream = KinahLedger.Data.DataFiles.Open("instances.txt");
             if (stream == null) return d;
             using var r = new StreamReader(stream);
             while (r.ReadLine() is { } line)
@@ -257,7 +257,7 @@ public static class ZoneLocator
     {
         try
         {
-            using var stream = typeof(ZoneLocator).Assembly.GetManifestResourceStream("zones.txt");
+            using var stream = KinahLedger.Data.DataFiles.Open("zones.txt");
             if (stream != null)
             {
                 using var r = new StreamReader(stream);

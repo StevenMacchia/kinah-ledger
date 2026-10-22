@@ -22,7 +22,7 @@ public static class RecipeBook
         var list = new List<Recipe>();
         try
         {
-            using var s = typeof(RecipeBook).Assembly.GetManifestResourceStream("recipes.json");
+            using var s = KinahLedger.Data.DataFiles.Open("recipes.json");
             if (s == null) return list;
             using var doc = JsonDocument.Parse(s);
             var root = doc.RootElement;

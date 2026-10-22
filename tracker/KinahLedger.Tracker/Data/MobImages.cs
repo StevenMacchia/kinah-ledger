@@ -17,7 +17,7 @@ public static class MobImages
         var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            using var s = typeof(MobImages).Assembly.GetManifestResourceStream("mob-images.json");
+            using var s = KinahLedger.Data.DataFiles.Open("mob-images.json");
             if (s == null) return d;
             using var doc = JsonDocument.Parse(s);
             if (!doc.RootElement.TryGetProperty("images", out var images) || images.ValueKind != JsonValueKind.Object) return d;

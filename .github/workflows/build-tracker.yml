@@ -10,6 +10,7 @@ on:
       - 'tracker/**'
       - 'data/**'
       - 'tools/release-manifest.js'
+      - 'tools/data/**'
       - '.github/workflows/build-tracker.yml'
   workflow_dispatch:
 
@@ -25,6 +26,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      # trackers download game data by this manifest's checksums: a data change committed without it would never reach them
+      - name: Check data/manifest.json is current
+        run: node tools/data/manifest.js --check
 
       - name: Publish the single-file exe
         working-directory: tracker/KinahLedger.Tracker

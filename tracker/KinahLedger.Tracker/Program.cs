@@ -38,6 +38,34 @@ internal static class Program
             {
                 case "pick": return Pick();
                 case "locate": return Locate(settings);
+                case "data-check":
+                {
+                    // each built-in data file's hash beside data/manifest.json's (path as the first argument): equal means a
+                    // tracker with this build downloads nothing until the data changes
+                    var man = KinahLedger.Data.DataFiles.Parse(File.ReadAllText(pos.FirstOrDefault() ?? "data/manifest.json"));
+                    int bad = 0;
+                    foreach (var n in KinahLedger.Data.DataFiles.Names)
+                    {
+                        var b = KinahLedger.Data.DataFiles.BuiltInHash(n); var m = man.Files.GetValueOrDefault(n);
+                        Console.WriteLine($"{n,-22} {(b == m ? "same" : "DIFFERENT")}  built-in {b?[..12]}  manifest {m?[..12]}");
+                        if (b != m) bad++;
+                    }
+                    return bad == 0 ? 0 : 1;
+                }
+                case "data-update":
+                {
+                    // one data update against another address and folder (a local test server): what came, and what is read after
+                    if (opts.TryGetValue("from", out var from)) KinahLedger.Data.DataFiles.FileUrl = from.TrimEnd('/') + "/";
+                    if (opts.TryGetValue("dir", out var ddir)) KinahLedger.Data.DataFiles.DirOverride = ddir;
+                    using var dhttp = new HttpClient();
+                    var got = Task.Run(() => KinahLedger.Data.DataFiles.UpdateAsync(dhttp)).GetAwaiter().GetResult();
+                    Console.WriteLine("updated: " + (got.Count == 0 ? "nothing" : string.Join(", ", got)));
+                    using var zs = KinahLedger.Data.DataFiles.Open("zones.txt");
+                    using var zr = new StreamReader(zs!);
+                    var zl = zr.ReadToEnd().Split((char)10).Select(x => x.Trim()).Where(x => x.Length > 0 && !x.StartsWith('#')).ToList();
+                    Console.WriteLine($"zones.txt now read: {zl.Count} names, last: {zl.LastOrDefault()}");
+                    return 0;
+                }
                 case "bench": return Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
                 case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);
