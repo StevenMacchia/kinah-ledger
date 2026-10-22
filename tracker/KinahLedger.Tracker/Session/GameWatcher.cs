@@ -259,6 +259,19 @@ public sealed class GameWatcher
         else FlushNote = "couldn't reach the site";
     }
 
+    /// <summary>
+    /// The player's "Clear" on the Farming part: what was counted is shared first, exactly as at the end of a chunk, then
+    /// the count and this zone's tables start over. A farming run under way is left alone (Stop ends it).
+    /// </summary>
+    public async Task ClearFarmingAsync()
+    {
+        var c = Chat; if (c == null) return;
+        await FlushPassiveAsync(final: true);
+        if (c.Engine.Events > 0) RotateChat(c);
+        c.ResetZoneView();
+        c.ZoneView.SetBalance(FreshBalance);
+    }
+
     /// <summary>Restarts the always-on count; the fresh one starts from the balance just read, when there is one.</summary>
     SessionEngine RotateChat(TrackerSession c)
     {

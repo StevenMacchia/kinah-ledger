@@ -372,8 +372,10 @@
 
       <Border x:Name="TablesCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="0,8,0,0">
         <StackPanel x:Name="TableStack">
+          <!-- start the farming tables over (Steven, 2026-10-22); hidden during a farming run, which Stop ends -->
+          <TextBlock x:Name="FarmClear" FontSize="12" Margin="20,8,20,-24" HorizontalAlignment="Right" Panel.ZIndex="1"><Hyperlink x:Name="FarmClearLink" Style="{StaticResource LinkStyle}">Clear</Hyperlink></TextBlock>
           <!-- idle time and skipped reward lines; net Kinah, crafts and sales: each shown only once there is something to say -->
-          <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,8,20,4" TextWrapping="Wrap" Visibility="Collapsed"/>
+          <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,8,64,4" TextWrapping="Wrap" Visibility="Collapsed"/>
           <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,4,20,4" TextWrapping="Wrap" Visibility="Collapsed"/>
 
           <!-- with nothing counted yet, one line instead of four empty headers; each section appears and opens with its first row -->
@@ -511,6 +513,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Text="Expeditions and events"/>
             <TextBlock x:Name="InstWhat" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Grid.Column="2" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"><Hyperlink x:Name="InstClearLink" Style="{StaticResource LinkStyle}">Clear</Hyperlink></TextBlock>
           </Grid>
           <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44">
             <Grid>

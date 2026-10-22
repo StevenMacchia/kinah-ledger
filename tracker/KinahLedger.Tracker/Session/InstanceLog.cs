@@ -108,6 +108,20 @@ public sealed class InstanceLog
     public string? Open { get { lock (_lock) return _cur?.Zone; } }
 
     /// <summary>
+    /// Clears the runs shown (the player's "Clear" on the Events part). The history file is kept aside as
+    /// instances.old.jsonl; runs not shared yet, and the one under way, still go to the site as usual.
+    /// </summary>
+    public void ClearShown()
+    {
+        lock (_lock)
+        {
+            _done.Clear();
+            try { var old = PathOf.Replace(".jsonl", ".old.jsonl"); if (File.Exists(old)) File.Delete(old); if (File.Exists(PathOf)) File.Move(PathOf, old); }
+            catch (Exception) { /* the list is cleared for this session either way */ }
+        }
+    }
+
+    /// <summary>
     /// The runs to share with a run or a chunk that started at <paramref name="since"/>: those closed since the last share
     /// whose last loot came after it, or up to 20 minutes before it (a run that ends just before a chunk rolls over is
     /// closed by the next zone read and goes with the next chunk). Each run is handed over once: a farming run and the
