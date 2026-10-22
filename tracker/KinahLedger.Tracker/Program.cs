@@ -1050,6 +1050,11 @@ options: --process aion[,other]");
                     got = $"{cs.Instances.Snapshot().LastOrDefault(r => r.Start >= c0.AddSeconds(-1))?.Kinah ?? 0:N0}";
                 }
                 Check("a coin slot is Kinah when the counter agrees", $"{withCounter} · {without}", "600,000 · 0");
+                // a clear match to the coin as the game draws it (Icon_gold, 4.4 against 84.4) needs no counter
+                var cs2 = new TrackerSession(null, new Settings(), items, "Test"); var cz = DateTime.UtcNow;
+                cs2.Engine.SetZone("Urugugu Canyon"); cs2.Instances.Zone("Urugugu Canyon", cz);
+                cs2.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "600.0K", 600_000, new() { (IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon), 4.4), (coin, 84.4) }) }, cz.AddSeconds(1));
+                Check("a clear coin match is Kinah without the counter", $"{cs2.Instances.Snapshot().LastOrDefault(r => r.Start >= cz.AddSeconds(-1))?.Kinah ?? 0:N0}", "600,000");
                 Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
             }
             {

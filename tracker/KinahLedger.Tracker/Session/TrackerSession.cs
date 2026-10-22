@@ -510,7 +510,9 @@ public sealed class TrackerSession
                 long amt = Math.Min(sl.Count, 1_000_000_000);
                 int kseen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Name == "Kina" && p.Count == amt);
                 if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; continue; }
-                if (!BalanceRose(amt, now)) { unnamed++; CrashLog.Note($"reward table: a coin slot x{sl.CountText} the Kinah counter didn't confirm; not counted"); continue; }
+                // a clear match to the coin as the game draws it is sure on its own; a closer call needs the counter to agree
+                bool clearCoin = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25);
+                if (!clearCoin && !BalanceRose(amt, now)) { unnamed++; CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
                 Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" });
                 Feed(new KinahChanged(now, amt, false) { Via = "reward table" });
                 added++;
