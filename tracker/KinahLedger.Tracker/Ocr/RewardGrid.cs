@@ -75,8 +75,20 @@ public static class IconIndex
         return bmp;
     }
 
+    /// <summary>
+    /// A fingerprint from a reward slot as the game draws it (a saved picture), under the icon key of the item it shows:
+    /// some art in a slot differs from the icon file (the Kina coin), so a real slot is the surer reference. The slot's
+    /// backing is part of it, so it is compared as is (fully opaque), the way Match lays an icon on the slot's colour.
+    /// </summary>
+    public static Entry FromSlot(string key, Bitmap picture, Rectangle slot)
+    {
+        int m = (int)Math.Round(slot.Width * 0.04);
+        using var crop = picture.Clone(Rectangle.Inflate(slot, -m, -m), PixelFormat.Format32bppArgb);
+        return new Entry(key, Fingerprint(crop));
+    }
+
     /// <summary>Downloads every distinct icon of the item list (cached in <paramref name="cacheDir"/>) and writes the index.</summary>
-    public static async Task<int> BuildAsync(IEnumerable<string> urls, string cacheDir, string outFile)
+    public static async Task<int> BuildAsync(IEnumerable<string> urls, string cacheDir, string outFile, IEnumerable<Entry>? slots = null)
     {
         Directory.CreateDirectory(cacheDir);
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
@@ -100,6 +112,7 @@ public static class IconIndex
             catch (Exception ex) { Console.Error.WriteLine($"skipped {url}: {ex.Message}"); }
             finally { gate.Release(); if (Interlocked.Increment(ref done) % 200 == 0) Console.WriteLine($"  {done} of {distinct.Count}"); }
         }));
+        foreach (var e in slots ?? Enumerable.Empty<Entry>()) entries.Add(e);
         using var w = new BinaryWriter(File.Create(outFile));
         var sorted = entries.OrderBy(e => e.Key, StringComparer.Ordinal).ToList();
         w.Write(sorted.Count);
@@ -267,7 +280,8 @@ public static class RewardGrid
                 }
             res.Add((e.Key, sum / Math.Max(wsum, 1)));
         }
-        return res.OrderBy(x => x.Item2).Take(5).ToList();
+        // the best per icon: an icon with two fingerprints (the game's file and its art as drawn in a slot) is one answer
+        return res.GroupBy(x => x.Item1).Select(g => g.OrderBy(x => x.Item2).First()).OrderBy(x => x.Item2).Take(5).ToList();
     }
 }
 

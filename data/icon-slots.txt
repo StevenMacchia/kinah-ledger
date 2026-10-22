@@ -1,0 +1,2 @@
+﻿# Reward slots as the game draws them, for art that differs from its icon file: key|picture beside this list|x,y,size
+Icon_gold|icon-slots/Icon_gold-urugugu.png|0,0,135

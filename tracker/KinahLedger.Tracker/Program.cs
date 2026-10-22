@@ -135,7 +135,19 @@ internal static class Program
                         using var xdoc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(extra));
                         urls.AddRange(xdoc.RootElement.GetProperty("items").EnumerateArray().Select(e => e.TryGetProperty("icon", out var ic) ? ic.GetString() ?? "" : "").Where(u => u.Length > 0));
                     }
-                    int n = IconIndex.BuildAsync(urls, cache, outBin).GetAwaiter().GetResult();
+                    // reward slots as the game draws them, from saved pictures: data/icon-slots.txt, "key|picture|x,y,size" per line
+                    var slotRefs = new List<IconIndex.Entry>();
+                    var slotsFile = Path.Combine(Path.GetDirectoryName(src) ?? ".", "icon-slots.txt");
+                    if (File.Exists(slotsFile))
+                        foreach (var line in File.ReadAllLines(slotsFile).Where(l => l.Trim().Length > 0 && !l.StartsWith('#')))
+                        {
+                            var parts = line.Split('|'); var xy = parts[2].Split(',').Select(int.Parse).ToArray();
+                            var pic = Path.Combine(Path.GetDirectoryName(slotsFile) ?? ".", parts[1].Trim());   // pictures kept beside the list, in data/icon-slots/
+                            if (!File.Exists(pic)) { Console.Error.WriteLine($"no picture for {parts[0]}: {pic}"); continue; }
+                            using var bmpPic = new System.Drawing.Bitmap(pic);
+                            slotRefs.Add(IconIndex.FromSlot(parts[0].Trim(), bmpPic, new System.Drawing.Rectangle(xy[0], xy[1], xy[2], xy[2])));
+                        }
+                    int n = IconIndex.BuildAsync(urls, cache, outBin, slotRefs).GetAwaiter().GetResult();
                     Console.WriteLine($"wrote {n} icons to {Path.GetFullPath(outBin)}");
                     return 0;
                 }
@@ -145,8 +157,10 @@ internal static class Program
                     var gi = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
                     CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kinah-grid-run"); Directory.CreateDirectory(CrashLog.DirOverride);
                     File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), ""); File.Delete(Path.Combine(CrashLog.DirOverride, "instances.jsonl"));
+                    Console.WriteLine($"DEBUG extras with icons: {gi.AllWithIcons().Count(i => i.Id <= 0)}, Kina: {string.Join(",", gi.AllWithIcons().Where(i => i.Name.StartsWith("Kina")).Select(i => i.Name + "=" + IconIndex.KeyOf(i.Icon)))}");
                     var gs = new TrackerSession(null, settings, gi, "Test"); var zone = opts.GetValueOrDefault("zone", "Urugugu Canyon"); var g0 = DateTime.UtcNow;
                     gs.Engine.SetZone(zone); gs.ZoneView.SetZone(zone); gs.Instances.Zone(zone, g0);
+                    if (opts.TryGetValue("balance", out var bal)) { var bv = bal.Split(',').Select(long.Parse).ToArray(); gs.SeedBalance(g0, bv[0]); gs.SeedBalance(g0.AddSeconds(2), bv[1]); }
                     gs.ProcessChat(new List<string> { "[x] start" }, g0);
                     if (pos.Count > 0) gs.ProcessChat(new List<string> { "[x] start" }.Concat(pos).ToList(), g0.AddSeconds(1));
                     using var gf = new System.Drawing.Bitmap(opts["image"]);
