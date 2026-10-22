@@ -308,6 +308,12 @@ public sealed class TrackerSession
                 if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); _anchor = g; DetectNote = "re-found: " + note; }
             }
         }
+        ProcessChat(lines, DateTime.UtcNow);
+    }
+
+    /// <summary>One read of the chat, counted: lined up with the last, parsed, checked against the loot list and applied. Also what replay feeds a recorded fight through.</summary>
+    internal void ProcessChat(List<string> lines, DateTime now)
+    {
         int unaligned = _tracker.Unaligned;
         var fresh = _tracker.NewLines(lines);
         bool afterFade = _tracker.LastAfterFade;
@@ -325,8 +331,7 @@ public sealed class TrackerSession
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
         // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
-        bool reward = Target.RewardOpen(DateTime.UtcNow);
-        var now = DateTime.UtcNow;
+        bool reward = Target.RewardOpen(now);
         // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
         if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase))) Target.MarkCraft(now);
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
@@ -394,7 +399,9 @@ public sealed class TrackerSession
     // quest enemy, the kills counted should rise as fast as the counter. Pass times say how often the screen is read.
     int _passes; double _passMs, _chatMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
     readonly Dictionary<int, int> _questMax = new();
-    void QuestCounter(IReadOnlyList<string> lines)
+    /// <summary>Steps of the quest tracker's kill counters seen since the start: kills of quest enemies, counted by the game.</summary>
+    public int QuestStepsTotal { get; private set; }
+    internal void QuestCounter(IReadOnlyList<string> lines)
     {
         var best = new Dictionary<int, int>();
         for (int i = 0; i < lines.Count; i++)
@@ -410,7 +417,7 @@ public sealed class TrackerSession
         }
         foreach (var (of, n) in best)
         {
-            if (_questMax.TryGetValue(of, out var was) && n > was && n - was <= 5) _questSteps += n - was;
+            if (_questMax.TryGetValue(of, out var was) && n > was && n - was <= 5) { _questSteps += n - was; QuestStepsTotal += n - was; }
             if (!_questMax.ContainsKey(of) || n > was || n < was - 3) _questMax[of] = n;
         }
     }
@@ -465,11 +472,15 @@ public sealed class TrackerSession
 
     void LootProcess(List<OcrLineBox>? lines)
     {
-        if (lines == null) return;
+        if (lines != null) ProcessList(lines.Select(l => (l.Box.Top, l.Text)).ToList(), DateTime.UtcNow);
+    }
+
+    /// <summary>One read of the loot list, checked against the chat. Also what replay feeds a recorded fight through.</summary>
+    internal void ProcessList(List<(int Top, string Text)> lines, DateTime now)
+    {
         try
         {
-            var now = DateTime.UtcNow;
-            var rows = LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text)));
+            var rows = LootPopup.Rows(lines);
             if (rows.Count > 0) ReadTrace.List(now, rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}"));
             var add = _cross.Popup(rows, now);
             if (add.Count == 0) return;

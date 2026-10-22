@@ -62,6 +62,7 @@ internal static class Program
                     foreach (var r in LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text)))) Console.WriteLine($"  row: {(r.IsKinah ? "Kinah " + r.Amount : r.Name + " x" + r.Count)}");
                     return 0;
                 }
+                case "replay": return Replay(settings, pos, opts);
                 case "parse-lines":
                 {
                     // each argument is one chat line: what the parser makes of it, for checking a line from reads.log
@@ -281,6 +282,59 @@ options: --process aion[,other]");
         var name = TargetReader.FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
         Console.WriteLine(name != null ? $"Enemy: {name}" : $"No enemy on the list" + (unlisted.Length > 0 ? $" (name-shaped text: {unlisted})" : ""));
         return name != null ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Feeds a recorded fight (trace.log: every chat and loot list read, as the tracker saw it) through the same counting
+    /// as a live run, and prints what it counted beside the game's own quest counter. A fix is measured here, on what the
+    /// screen really showed, before it ships. --from/--to take local times (HH:mm) to cut the trace to one fight.
+    /// </summary>
+    static int Replay(Settings settings, List<string> pos, Dictionary<string, string> opts)
+    {
+        var path = pos.Count > 0 ? pos[0] : Path.Combine(CrashLog.Dir, "trace.log");
+        if (!File.Exists(path)) { Console.Error.WriteLine($"no trace at {path}"); return 1; }
+        TimeSpan? from = opts.TryGetValue("from", out var f) && TimeSpan.TryParse(f, out var ft) ? ft : null;
+        TimeSpan? to = opts.TryGetValue("to", out var tt0) && TimeSpan.TryParse(tt0, out var tt) ? tt : null;
+        var real = CrashLog.Dir;
+        CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kinah-replay");   // the replay's own notes, never the player's logs
+        Directory.CreateDirectory(CrashLog.DirOverride);
+        File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), "");
+        var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+        var s = new TrackerSession(null, settings, items, "Replay");
+        int chats = 0, lists = 0; DateTime? first = null, last = null;
+        foreach (var raw in File.ReadLines(path))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(raw);
+                var r = doc.RootElement;
+                var t = DateTime.Parse(r.GetProperty("t").GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+                var local = t.ToLocalTime().TimeOfDay;
+                if ((from != null && local < from) || (to != null && local > to)) continue;
+                var lines = r.GetProperty("l").EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+                first ??= t; last = t;
+                if (r.GetProperty("k").GetString() == "chat") { s.QuestCounter(lines); s.ProcessChat(lines, t); chats++; }
+                else
+                {
+                    // the trace keeps list rows as "463 Kina" and "Name x2"; the list's own form is "Kina x463"
+                    var rows = lines.Select((x, i) => (i * 20, System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"))).ToList();
+                    s.ProcessList(rows, t); lists++;
+                }
+            }
+            catch (Exception ex) { Console.Error.WriteLine("skipped a trace line: " + ex.Message); }
+        }
+        var e = s.Engine; var tot = e.Totals();
+        Console.WriteLine($"Replayed {chats} chat reads and {lists} loot list reads, {first?.ToLocalTime():HH:mm:ss} to {last?.ToLocalTime():HH:mm:ss}.");
+        Console.WriteLine($"  kills counted        {tot.Kills}   (evidence: {e.KillsSeen} · Kinah pickups {e.KinahDrops} · Soul Points lines {e.CurrencyLines})");
+        Console.WriteLine($"  quest counter steps  {s.QuestStepsTotal}   (kills of quest enemies, counted by the game)");
+        Console.WriteLine($"  Kinah                {tot.Kinah:N0}");
+        Console.WriteLine($"  loot list            {s.CrossCheck.Matched} matched the chat · {s.CrossCheck.Added} added (chat missed) · {s.CrossCheck.Duplicates} chat repeats skipped");
+        Console.WriteLine("  by enemy:");
+        foreach (var m in e.MobSnapshot().Take(12)) Console.WriteLine($"    {m.Name,-36} {m.Kills,4} kills  {m.Kinah,9:N0} Kinah");
+        var notes = File.ReadAllLines(Path.Combine(CrashLog.DirOverride, "reads.log"));
+        Console.WriteLine($"  reads that didn't line up: {notes.Count(n => n.Contains("couldn't line"))}");
+        CrashLog.DirOverride = null; _ = real;
+        return 0;
     }
 
     /// <summary>Renders the window (and the panel) off-screen to PNG files, so the layout can be reviewed without a desktop session.</summary>
