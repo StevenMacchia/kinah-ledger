@@ -76,6 +76,27 @@ internal static class Program
                     Console.WriteLine($"wrote {n} icons to {Path.GetFullPath(outBin)}");
                     return 0;
                 }
+                case "grid-run":
+                {
+                    // grid-run --image <file> --zone <expedition> [chat lines...]: the reward table into a fresh run, after the chat lines given
+                    var gi = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+                    CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kinah-grid-run"); Directory.CreateDirectory(CrashLog.DirOverride);
+                    File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), ""); File.Delete(Path.Combine(CrashLog.DirOverride, "instances.jsonl"));
+                    var gs = new TrackerSession(null, settings, gi, "Test"); var zone = opts.GetValueOrDefault("zone", "Urugugu Canyon"); var g0 = DateTime.UtcNow;
+                    gs.Engine.SetZone(zone); gs.ZoneView.SetZone(zone); gs.Instances.Zone(zone, g0);
+                    gs.ProcessChat(new List<string> { "[x] start" }, g0);
+                    if (pos.Count > 0) gs.ProcessChat(new List<string> { "[x] start" }.Concat(pos).ToList(), g0.AddSeconds(1));
+                    using var gf = new System.Drawing.Bitmap(opts["image"]);
+                    var gband = new System.Drawing.Rectangle(gf.Width / 4, 0, gf.Width / 2, gf.Height / 3);
+                    using var gbb = gf.Clone(gband, gf.PixelFormat);
+                    var glines = ScreenReader.ReadBoxesAsync(gbb, gband.Location, 1).GetAwaiter().GetResult();
+                    var grc = glines.First(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+                    gs.ApplyGrid(RewardGrid.ReadAsync(gf, grc.Box.Bottom + (int)(gf.Height * 0.016)).GetAwaiter().GetResult(), g0.AddSeconds(3));
+                    var grun = gs.Instances.Snapshot().LastOrDefault();
+                    Console.WriteLine($"run {grun?.Zone}: " + string.Join(", ", (grun?.Items ?? new()).Select(kv => $"{gi.NameOf(kv.Key)} x{kv.Value}")));
+                    foreach (var l in File.ReadAllLines(Path.Combine(CrashLog.DirOverride, "reads.log")).Where(l => l.Contains("reward table"))) Console.WriteLine("  " + l);
+                    return 0;
+                }
                 case "grid-test":
                 {
                     // the expedition reward grid in a saved picture: grid-test --image <file> [--top <y>]
@@ -925,6 +946,23 @@ options: --process aion[,other]");
                 ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(1));
                 var run = ts.Instances.Snapshot().LastOrDefault(r => r.Zone == "Urugugu Canyon");
                 Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {run?.Items.Values.Sum() ?? 0} items {run?.Kinah ?? 0} Kinah", "farming: 0 items 0 Kinah · run: 1 items 600 Kinah");
+            }
+            {
+                // the reward table at the end of an expedition: a slot the chat already counted is skipped, a sure one is added
+                // to the run, an unsure one (an event item the list lacks, measured 82 and up) is never guessed
+                var rs = items.AllItems().First(i => i.Name == "Refining Stone");
+                var key = IconIndex.KeyOf(rs.Icon);
+                var gt = new TrackerSession(null, new Settings(), items, "Test"); var gt0 = DateTime.UtcNow;
+                gt.Engine.SetZone("Urugugu Canyon"); gt.ZoneView.SetZone("Urugugu Canyon"); gt.Instances.Zone("Urugugu Canyon", gt0);
+                gt.ProcessChat(new List<string> { "[x] a" }, gt0);
+                gt.ProcessChat(new List<string> { "[x] a", "Acquired Refining Stone x5." }, gt0.AddSeconds(1));
+                var box = new System.Drawing.Rectangle(0, 0, 10, 10);
+                gt.ApplyGrid(new List<RewardGrid.Slot> {
+                    new(box, rs.Grade, "5", 5, new() { (key, 39.6), ("Other", 98.7) }),
+                    new(box, rs.Grade, "3", 3, new() { (key, 41.0), ("Other", 99.0) }),
+                    new(box, "Common", "6", 6, new() { ("Icon_GM_0030_T04_Shoulder", 82.2), ("Other", 85.1) }) }, gt0.AddSeconds(3));
+                var grun2 = gt.Instances.Snapshot().LastOrDefault();
+                Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
             }
             {
                 // Nightmare is known but left alone: its rewards never change, so nothing there is counted

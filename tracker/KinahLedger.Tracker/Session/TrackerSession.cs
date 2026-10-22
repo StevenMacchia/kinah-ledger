@@ -301,6 +301,7 @@ public sealed class TrackerSession
                     await TargetDueAsync();
                     LootProcess(await list);
                     RewardShot();
+                    await RewardGridDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     Audit();
                 }
@@ -435,6 +436,70 @@ public sealed class TrackerSession
 
     DateTime _targetAt = DateTime.MinValue;
 
+    // ---- the reward table at the end of an expedition or event ----
+    // "Obtained Items / Reward collected." lists every reward as an icon with a count; the chat shows only the last few
+    // lines of it (2026-10-22, Urugugu Canyon). Inside an expedition or event, once a second, the top of the screen is
+    // checked for "Reward collected."; when it is there the grid is read once (RewardGrid, the other session's reader).
+    // A slot the chat already counted (same item, same count, last 20 s) is skipped; a slot named as exactly one item is
+    // added to the run alone; a slot that names only a family of items, or nothing, is written to reads.log, never guessed.
+    DateTime _gridAt = DateTime.MinValue, _gridSeenAt = DateTime.MinValue; bool _gridDone;
+    public const double GridSureDistance = 70;
+    static string Unbound(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+    Dictionary<string, List<ItemInfo>>? _byIcon;
+    readonly List<(DateTime At, string Name, int Count)> _runPickups = new();
+
+    async Task RewardGridDue()
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            if (GameRect is not { } g || ZoneLocator.KindOf(Zone) is not ("Expedition" or "Event")) { _gridDone = false; return; }
+            if ((now - _gridAt).TotalSeconds < 1) return;
+            _gridAt = now;
+            if (GameWindow.Covered(g, _settings.ProcessHints) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
+            using var frame = ScreenReader.Capture(g);
+            var band = new Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
+            using var bandBmp = frame.Clone(band, frame.PixelFormat);
+            var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
+            var rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+            if (rc == null) { if ((now - _gridSeenAt).TotalSeconds > 5) _gridDone = false; return; }
+            _gridSeenAt = now;
+            if (_gridDone) return;
+            _gridDone = true;
+            var slots = await RewardGrid.ReadAsync(frame, rc.Box.Bottom + (int)(frame.Height * 0.016));
+            ApplyGrid(slots, now);
+        }
+        catch (Exception ex) { CrashLog.Write("reward table", ex); }
+    }
+
+    /// <summary>The reward table's slots into the run: each named item once, skipping what the chat already counted.</summary>
+    internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
+    {
+        _byIcon ??= _items.AllItems().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        int added = 0, known = 0, unnamed = 0;
+        foreach (var sl in slots)
+        {
+            var best = sl.Icons.FirstOrDefault();
+            if (best.Key == null || !_byIcon.TryGetValue(best.Key, out var its)) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} with no item to its icon; not counted"); continue; }
+            var graded = its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).ToList();
+            // a sure match only: close (measured on the Urugugu table: right ones 23 to 60, wrong ones 82 to 114), clearly
+            // closer than the next icon, and of the slot's own grade; anything else is the event's own item the list lacks
+            bool sure = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25) && graded.Count > 0;
+            if (!sure) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
+            // the bound and tradeable copies of an item are the same item
+            var names = graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            int count = (int)Math.Clamp(sl.Count, 1, 99999);
+            int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
+            if (seen >= 0) { _runPickups.RemoveAt(seen); known++; continue; }
+            if (names.Count != 1) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}; not counted"); continue; }
+            var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
+            Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
+            Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
+            added++;
+        }
+        CrashLog.Note($"reward table read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
+    }
+
     /// <summary>
     /// Where a pickup counts. Inside an expedition, event, arena or legion area it belongs to that run alone: never the
     /// Farming page's drops, kills or Kinah by enemy, and never the site's farming numbers (Steven, 2026-10-22: events and
@@ -443,7 +508,15 @@ public sealed class TrackerSession
     /// </summary>
     void Count(GameEvent ev)
     {
-        if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored) { Instances.Loot(ev); return; }
+        if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored)
+        {
+            Instances.Loot(ev);
+            // kept a while, so the reward table read after it doesn't count the same items again
+            if (ev is ItemAcquired ra) _runPickups.Add((ev.Time, Unbound(_items.NameOf(ra.ItemId)), ra.Count));
+            else if (ev is RewardReceived rr) _runPickups.Add((ev.Time, Unbound(rr.Name), rr.Count));
+            if (_runPickups.Count > 60) _runPickups.RemoveAt(0);
+            return;
+        }
         Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
     }
 
