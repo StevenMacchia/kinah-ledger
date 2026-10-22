@@ -67,7 +67,33 @@ public sealed partial class TargetReader
             int max = Math.Max(1, KnownNorm[i].Length / 7);
             if (Math.Abs(KnownNorm[i].Length - low.Length) <= max && Edit(KnownNorm[i], low) <= max) return Known[i];
         }
+        // the bar cut the name short ("Drana Processing Mainte"): the one enemy whose name starts with what was read
+        if (low.Length >= 10)
+        {
+            string? only = null;
+            for (int i = 0; i < Known.Length; i++)
+                if (KnownNorm[i].StartsWith(low, StringComparison.Ordinal)) { if (only != null && only != Known[i]) return null; only = Known[i]; }
+            return only;
+        }
         return null;
+    }
+
+    /// <summary>
+    /// The enemy a Soul Points line names. The line gives the kind ("Drakan Probe"); the enemy list may hold it under a
+    /// longer name ("Snowfield Drakan Probe"). In order: an enemy just on the target bar whose name is or ends with the
+    /// kind, the kind itself on the list, the one enemy on the list ending with it, else the kind as read, tidied.
+    /// </summary>
+    public static string EnemyForSoul(string kind, IEnumerable<string> recentTargets)
+    {
+        var k = System.Text.RegularExpressions.Regex.Replace(kind, @"[^A-Za-z' ]+", " ");
+        k = System.Text.RegularExpressions.Regex.Replace(k, @"\s+", " ").Trim();
+        if (k.Length < 3) return "";
+        foreach (var t in recentTargets)
+            if (string.Equals(t, k, StringComparison.OrdinalIgnoreCase) || t.EndsWith(" " + k, StringComparison.OrdinalIgnoreCase)) return t;
+        if (Match(k) is { } exact) return exact;
+        var ends = Known.Where(n => n.EndsWith(" " + k, StringComparison.OrdinalIgnoreCase)).Distinct().ToList();
+        if (ends.Count == 1) return ends[0];
+        return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(k.ToLowerInvariant());
     }
 
     static int Edit(string a, string b)

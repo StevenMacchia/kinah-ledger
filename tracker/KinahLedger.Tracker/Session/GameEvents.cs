@@ -17,7 +17,8 @@ public sealed record ItemAcquired(DateTime Time, long ItemId, int Count, bool Bo
 public sealed record KinahChanged(DateTime Time, long Delta, bool Bound) : GameEvent(Time);
 public sealed record MobKilled(DateTime Time, long MobId) : GameEvent(Time);
 /// <summary>Points-type pickups (Soul Points, Abyss Points). Guaranteed per kill, so they mark kills and never count as drops.</summary>
-public sealed record CurrencyGained(DateTime Time, string Name, long Amount) : GameEvent(Time);
+/// <param name="Enemy">For Soul Points: the kind of enemy the line names, as read ("Obtained 1 Drakan Probe Soul Points."). One line per kill, so it says which enemy died.</param>
+public sealed record CurrencyGained(DateTime Time, string Name, long Amount, string Enemy = "") : GameEvent(Time);
 /// <summary>A pet Soul Crystal ("Obtained 1 Natura Soul Crystals."). Tracked by zone for pet farming; never a drop, never a kill.</summary>
 public sealed record PetCrystal(DateTime Time, string Name, int Count) : GameEvent(Time);
 /// <summary>A gather attempt that yielded nothing ("Essence Extraction failed"). Counts as a node attempt.</summary>

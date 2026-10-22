@@ -186,6 +186,37 @@ public sealed class SessionEngine
         return m;
     }
 
+    /// <summary>How long before its Soul Points line a kill's Kinah can land and still be that kill's.</summary>
+    public const double SoulKinahSeconds = 3;
+    // the last Kinah pickups and who they were credited to; Soul tells whether a Soul Points line already confirmed it
+    readonly List<(DateTime At, long Delta, MobStats? To, bool Soul)> _kinahCredits = new();
+
+    /// <summary>An enemy name read slightly differently from one already in this zone's rows ("Dracunt Herbalist") is that one.</summary>
+    string SameAs(string name)
+    {
+        var zone = _zone ?? UnknownZone;
+        foreach (var m in _mobs.Values)
+        {
+            if (m.Zone != zone || string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+            int max = Math.Max(1, Math.Min(m.Name.Length, name.Length) / 8);
+            if (Math.Abs(m.Name.Length - name.Length) <= max && Lev(m.Name.ToLowerInvariant(), name.ToLowerInvariant()) <= max) return m.Name;
+        }
+        return name;
+    }
+
+    static int Lev(string a, string b)
+    {
+        var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i;
+            for (int j = 1; j <= b.Length; j++) cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length];
+    }
+
     MobStats? MobFor(DateTime t)
     {
         if (_target == null || Math.Abs((t - _targetAt).TotalSeconds) > TargetGraceSeconds) return null;
@@ -217,7 +248,8 @@ public sealed class SessionEngine
     /// <summary>Copies of the per-enemy counters, most Kinah first, safe to read from the UI thread.</summary>
     public List<MobStats> MobSnapshot()
     {
-        lock (_lock) return _mobs.Values.OrderByDescending(m => m.Kinah).ThenByDescending(m => m.Kills)
+        // an enemy left with nothing (its Kinah moved to the one a Soul Points line named) is no row
+        lock (_lock) return _mobs.Values.Where(m => m.Kills > 0 || m.Kinah != 0 || m.Crystals > 0 || m.Drops.Count > 0).OrderByDescending(m => m.Kinah).ThenByDescending(m => m.Kills)
             .Select(m => new MobStats { Name = m.Name, Zone = m.Zone, KinahDrops = m.KinahDrops, CurrencyLines = m.CurrencyLines, Crystals = m.Crystals, Kinah = m.Kinah, Drops = new Dictionary<long, int>(m.Drops) }).ToList();
     }
 
@@ -364,7 +396,9 @@ public sealed class SessionEngine
                         {
                             KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; Mark(_recentKills, k.Time);
                             _recentPickups.Add(k.Delta); if (_recentPickups.Count > 50) _recentPickups.RemoveAt(0);
-                            if (MobFor(k.Time) is { } mk) { mk.Kinah += k.Delta; mk.KinahDrops++; }
+                            var mk = MobFor(k.Time);
+                            if (mk != null) { mk.Kinah += k.Delta; mk.KinahDrops++; }
+                            _kinahCredits.Add((k.Time, k.Delta, mk, false)); if (_kinahCredits.Count > 8) _kinahCredits.RemoveAt(0);
                         }
                     }
                     break;
@@ -379,7 +413,25 @@ public sealed class SessionEngine
                     break;
                 case CurrencyGained c:
                     CurrencyLines++; Z().CurrencyLines++; Mark(_recentKills, c.Time);
-                    if (MobFor(c.Time) is { } mc) mc.CurrencyLines++;
+                    // a Soul Points line names the kind of enemy that died: one kill of it, and the Kinah of that kill goes with it,
+                    // whatever the target bar read (Steven, 2026-10-22: three different enemies killed, one shown)
+                    if (c.Enemy.Length >= 3 && KinahLedger.Ocr.TargetReader.EnemyForSoul(c.Enemy, _recentTargets.Where(r => Math.Abs((c.Time - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).Select(r => r.Name)) is { Length: > 0 } enemy)
+                    {
+                        var ms = Mob(SameAs(enemy));
+                        ms.CurrencyLines++;
+                        int last = _kinahCredits.FindLastIndex(x => !x.Soul && (c.Time - x.At).TotalSeconds is >= -1 and <= SoulKinahSeconds);
+                        if (last >= 0)
+                        {
+                            var (at, amt, to, _) = _kinahCredits[last];
+                            if (!ReferenceEquals(to, ms)) { if (to != null) { to.Kinah -= amt; to.KinahDrops--; } ms.Kinah += amt; ms.KinahDrops++; }
+                            _kinahCredits[last] = (at, amt, ms, true);
+                        }
+                        // until the bar names someone else, what lands next belongs to this enemy too
+                        _target = ms.Name; _targetAt = c.Time;
+                        _recentTargets.RemoveAll(r => string.Equals(r.Name, ms.Name, StringComparison.OrdinalIgnoreCase));
+                        _recentTargets.Add((ms.Name, c.Time)); if (_recentTargets.Count > 4) _recentTargets.RemoveAt(0);
+                    }
+                    else if (MobFor(c.Time) is { } mc) mc.CurrencyLines++;
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
                     break;
                 case CraftResult cr:

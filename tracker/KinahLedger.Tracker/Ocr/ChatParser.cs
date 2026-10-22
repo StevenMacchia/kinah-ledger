@@ -378,7 +378,7 @@ public sealed partial class ChatParser
             if (head.Count > 0 && !cut && Dist(Letters(head[^1]), "soul") <= 2) head.RemoveAt(head.Count - 1);
             var pet = PetName(string.Join(' ', head));
             if (crystal) yield return new PetCrystal(time, (pet.Length > 0 ? pet + " " : "") + "Soul Crystal", Math.Clamp(n, 1, 9999));
-            else yield return new CurrencyGained(time, (pet.Length > 0 ? pet + " " : "") + "Soul Points", Math.Clamp(n, 1, 999999));
+            else yield return new CurrencyGained(time, (pet.Length > 0 ? pet + " " : "") + "Soul Points", Math.Clamp(n, 1, 999999), cut ? "" : string.Join(' ', head));
             yield break;
         }
 
@@ -416,7 +416,7 @@ public sealed partial class ChatParser
             var pts = System.Text.RegularExpressions.Regex.Match(name, @"^(?<pet>.+?)[\s\-]*sou[l1iu]{1,2}(?:[\s\-]*po[i1l]n[^a-z]*t?[^a-z]*s?[^a-z]*)?$", RegexOptions.IgnoreCase);
             if (pts.Success || System.Text.RegularExpressions.Regex.IsMatch(name, @"\b(?:points?|souls?)$", RegexOptions.IgnoreCase))
             {
-                yield return new CurrencyGained(time, pts.Success ? pts.Groups["pet"].Value.Trim() + " Soul Points" : name, Math.Clamp(n, 1, 999999));
+                yield return new CurrencyGained(time, pts.Success ? pts.Groups["pet"].Value.Trim() + " Soul Points" : name, Math.Clamp(n, 1, 999999), pts.Success ? pts.Groups["pet"].Value.Trim() : "");
                 yield break;
             }
             // common pickups are name-first ("Odyle acquired."), rarer ones verb-first ("Acquired Fine Odyle x2.");

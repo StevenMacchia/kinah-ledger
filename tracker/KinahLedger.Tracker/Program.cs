@@ -690,6 +690,22 @@ options: --process aion[,other]");
         Check("mobs go out with their zone", string.Join(" | ", (mp.mobs ?? new()).OrderBy(m => m.zone).Select(m => $"{m.name}/{m.zone}/{m.kills}/{m.kinah}")), "Test Lizard/Altamia Canyon/1/510 | Test Lizard/Western Cantas Valley/2/1020");
         Check("a run with no target bar sends no mobs", RunPayload.Build(ze, new Settings(), "Open world", "Open world", "na_e", "", items).mobs == null ? "none" : "some", "none");
         Check("enemy list built in", TargetReader.Known.Length > 0 ? "yes" : "no (data/mobs.txt missing)", "yes");
+        {
+            // each kill prints "Obtained 1 <kind> Soul Points.": that names the enemy, whatever the target bar read
+            // (2026-10-22 11:01: three kinds killed, the bar misread as "Drana Processing Mainte", "Dtana Proc", "Medil")
+            var sp = new ChatParser(items); var se = new SessionEngine(items); var s0 = DateTime.UtcNow;
+            se.SetZone("Western Cantas Valley");
+            void L(int sec, string line) { foreach (var ev in sp.Parse(line, s0.AddSeconds(sec))) se.Apply(ev); }
+            se.SetTarget("Medil", s0);                                                   // a misread that is no enemy: nothing should go to it
+            L(1, "Acquired 400 Kina."); L(1, "Obtained 1 Dracuni Herbalist Soul Points.");
+            L(8, "Acquired 486 Kina."); L(9, "Obtained 1 Drakan Probe Soul Points.");
+            se.SetTarget("Eternal Kerubian", s0.AddSeconds(14));
+            L(15, "Acquired 352 Kina."); L(16, "Obtained 1 Kerubian Soul Points.");
+            L(30, "Acquired 300 Kina."); L(30, "Obtained 1 Dracunt Herbalist Soul Points.");   // the same kind, misread
+            var rows = se.MobSnapshot().OrderBy(m => m.Name).Select(m => $"{m.Name}: {m.Kills} kills {m.Kinah}");
+            Check("Soul Points name the enemy killed", string.Join(" | ", rows), "Dracuni Herbalist: 2 kills 700 | Drakan Probe: 1 kills 486 | Eternal Kerubian: 1 kills 352");
+            Check("a target bar cut short is its one enemy", TargetReader.Match("Drana Processing Mainte") ?? "none", "Drana Processing Maintenance Machine");
+        }
         string Bar(params string[] ls) => TargetReader.FindName(ls.Select((l, i) => (i, l)), out var un) ?? (un.Length > 0 ? "none, unlisted: " + un : "none");
         Check("target bar: level first, distance after", Bar("45 Highland Karnif 1m"), "Highland Karnif");
         Check("target bar: the enemy's own target on the line", Bar("45 Highland Karnif 1m 45 Swoly"), "Highland Karnif");
