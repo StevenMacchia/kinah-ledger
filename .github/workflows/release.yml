@@ -1,6 +1,9 @@
-# Releases the tracker: push a tag vX.Y.Z and this builds KinahLedger.exe on a GitHub-hosted runner, signs it through
-# SignPath (once the SignPath variables and secret below are set), writes latest.json and publishes the GitHub release
-# that every running tracker updates from. Nothing else builds or signs a release (CODE_SIGNING_POLICY.md).
+# Releases the tracker: push a tag vX.Y.Z and this builds, on a GitHub-hosted runner,
+#  - the installer (0.8+): Velopack packs the app as normal files into KinahLedger-Setup.exe plus the full and delta
+#    update packages and releases.win.json, which installed trackers update from (Platform/Installer.cs);
+#  - KinahLedger.exe, the single-file exe every 0.7 copy updates from, which offers to install itself;
+# signs the exe through SignPath (once the SignPath variables and secret below are set), writes latest.json and
+# publishes the GitHub release. Nothing else builds or signs a release (CODE_SIGNING_POLICY.md).
 #
 # Before tagging: bump <Version> in the csproj to X.Y.Z and add release-notes/vX.Y.Z.md. The run stops if either is
 # missing, so a stray tag never reaches players.
@@ -42,6 +45,29 @@ jobs:
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
 
+      # the installed app: normal files with ready-to-run code, so nothing unpacks at every start
+      - name: Publish the app as files for the installer
+        working-directory: tracker/KinahLedger.Tracker
+        run: dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=false -p:PublishReadyToRun=true -o ../../build-vpk/publish
+
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version 1.2.161
+
+      # the previous release's full package, so this one also ships a small delta for installed trackers
+      - name: Fetch the previous release for deltas
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: vpk download github --repoUrl "https://github.com/${GITHUB_REPOSITORY}" --token "$GH_TOKEN" -o build-vpk/releases || echo "no earlier installer release, so this one ships the full package only"
+
+      - name: Pack the installer
+        shell: bash
+        run: |
+          vpk pack -u KinahLedgerTracker -v "$VERSION" -p build-vpk/publish -e KinahLedger.exe \
+            --packTitle "Kinah Ledger" --packAuthors "Kinah Ledger" -i tracker/KinahLedger.Tracker/app.ico \
+            --shortcuts "Desktop,StartMenuRoot" -o build-vpk/releases
+          cp -f build-vpk/releases/KinahLedgerTracker-win-Setup.exe dist/KinahLedger-Setup.exe
+
       - name: Upload the unsigned exe for signing
         id: unsigned
         if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
@@ -75,10 +101,15 @@ jobs:
         run: |
           node tools/release-manifest.js dist/KinahLedger.exe
           sha=$(node -e "console.log(require('./dist/latest.json').sha256)")
-          { cat "release-notes/${GITHUB_REF_NAME}.md"; printf '\n\nKinahLedger.exe sha256: %s\n' "$sha"; } > dist/notes.md
+          setup=$(sha256sum dist/KinahLedger-Setup.exe | cut -c1-64)
+          # KinahLedger.exe's line comes first: 0.7 trackers take the first sha256 in the notes
+          { cat "release-notes/${GITHUB_REF_NAME}.md"; printf '\n\nKinahLedger.exe sha256: %s\nKinahLedger-Setup.exe sha256: %s\n' "$sha" "$setup"; } > dist/notes.md
 
       - name: Publish the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/KinahLedger.exe dist/latest.json --title "Kinah Ledger tracker $VERSION" --notes-file dist/notes.md
+        run: |
+          shopt -s nullglob
+          pkgs=(build-vpk/releases/*-"$VERSION"-*.nupkg build-vpk/releases/releases.win.json build-vpk/releases/assets.win.json build-vpk/releases/RELEASES)
+          gh release create "$GITHUB_REF_NAME" dist/KinahLedger.exe dist/KinahLedger-Setup.exe dist/latest.json "${pkgs[@]}" --title "Kinah Ledger tracker $VERSION" --notes-file dist/notes.md

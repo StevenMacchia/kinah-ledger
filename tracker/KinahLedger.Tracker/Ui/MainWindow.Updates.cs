@@ -1,4 +1,5 @@
 using System.Windows;
+using KinahLedger.Platform;
 using KinahLedger.Update;
 
 namespace KinahLedger.Ui;
@@ -23,6 +24,9 @@ public partial class MainWindow
     bool _updateNeedsSite, _downloading, _restartForUpdate, _updatesStarted;
     double _updateProgress;
     readonly string? _exe = Updater.ExePath;
+    // installed (0.8+): Velopack finds, downloads (small deltas) and applies the update; a loose exe uses the swap above
+    Velopack.UpdateInfo? _vInfo;
+    bool _offeringInstall;
     string _updateStatus = "Checks GitHub for a newer release at start and every few hours. Only the app version goes with the request.";
 
     /// <summary>The update line for Options › Updates.</summary>
@@ -61,6 +65,8 @@ public partial class MainWindow
 
     async Task UpdateLoop()
     {
+        // a loose exe offers, once a week at most, to install itself: faster start, small updates, a desktop shortcut
+        if (Installer.OfferDue && _exe != null) { await Task.Delay(TimeSpan.FromSeconds(8)); OfferInstall(); }
         // what the last update left behind goes first, so it can't race a new download
         if (_exe != null) await Updater.CleanupAsync(_exe);
         await Task.Delay(FirstCheck);
@@ -84,6 +90,18 @@ public partial class MainWindow
         if (_downloading) return;
         if (!_settings.Update.Check) return;
         if (manual) SetUpdateStatus("Checking…");
+        if (Installer.Manager is { } um)
+        {
+            var info = await um.CheckForUpdatesAsync();
+            var when = DateTime.Now.ToString("t");
+            if (info == null) { if (_release == null) SetUpdateStatus($"You have the newest version ({Updater.Show(Updater.Current)}). Checked at {when}."); return; }
+            var tv = info.TargetFullRelease.Version;
+            var rel = new Release(new Version(tv.Major, tv.Minor, tv.Patch), "", info.TargetFullRelease.SHA1 ?? "", info.TargetFullRelease.Size, $"{Installer.RepoUrl}/releases/tag/v{tv.Major}.{tv.Minor}.{tv.Patch}");
+            if (_release != null && rel.Version == _release.Version && _updateError == null) { ShowUpdate(); return; }
+            _vInfo = info; _release = rel; _staged = null; _updateError = null; _updateNeedsSite = false;
+            if (_prefs.AutoUpdate) await FetchUpdate(_release); else ShowUpdate();
+            return;
+        }
         var r = await Updater.CheckAsync(_settings.Update.Manifest);
         var at = DateTime.Now.ToString("t");
         if (!r.Ok) { if (_release == null) SetUpdateStatus($"Couldn't check for updates at {at}: {r.Note}. It tries again in a few hours."); return; }
@@ -97,6 +115,18 @@ public partial class MainWindow
     async Task FetchUpdate(Release r)
     {
         if (_downloading) return;
+        if (Installer.Manager is { } vm && _vInfo != null)
+        {
+            _downloading = true; _updateProgress = 0; _updateError = null; ShowUpdate();
+            try
+            {
+                await vm.DownloadUpdatesAsync(_vInfo, p => Dispatcher.Invoke(() => { _updateProgress = p / 100.0; if (_downloading) ShowUpdate(); }));
+                if (ReferenceEquals(_release, r)) _staged = "installed";
+            }
+            catch (Exception ex) { _updateError = ex.Message; CrashLog.Write("update", ex); }
+            finally { _downloading = false; ShowUpdate(); }
+            return;
+        }
         if (_exe == null) { _updateError = "this copy isn't running as KinahLedger.exe"; _updateNeedsSite = true; ShowUpdate(); return; }
         _downloading = true; _updateProgress = 0; _updateError = null; _updateNeedsSite = false;
         ShowUpdate();
@@ -145,6 +175,7 @@ public partial class MainWindow
 
     async Task UpdateClicked()
     {
+        if (_offeringInstall) { await InstallClicked(); return; }
         if (_release == null || _downloading) return;
         if (_staged != null) { await RestartForUpdate(); return; }
         if (_updateNeedsSite) { Open(SiteDownloadPage); return; }
@@ -169,7 +200,15 @@ public partial class MainWindow
     /// <summary>The window's last step on close: a verified download replaces the exe, and Restart now starts it.</summary>
     void InstallUpdateOnClose()
     {
-        if (_staged == null || _exe == null) return;
+        if (_staged == null) return;
+        if (Installer.Manager is { } vm && _vInfo != null)
+        {
+            // Velopack applies it once this process has exited, and starts the new version when Restart now was pressed
+            try { vm.WaitExitThenApplyUpdates(_vInfo.TargetFullRelease, silent: true, restart: _restartForUpdate, restartArgs: _restartForUpdate ? new[] { AfterUpdateArg } : Array.Empty<string>()); }
+            catch (Exception ex) { CrashLog.Write("update", ex); }
+            return;
+        }
+        if (_exe == null) return;
         try
         {
             Updater.Apply(_staged, _exe);
@@ -185,5 +224,47 @@ public partial class MainWindow
         if (!_restartForUpdate) return;
         try { Updater.Relaunch(_exe, AfterUpdateArg); }
         catch (Exception ex) { CrashLog.Write("update relaunch", ex); }
+    }
+
+    // ---- a loose exe installing itself (0.8) ----
+
+    /// <summary>The banner offers the install: faster start, small background updates, a shortcut, a clean uninstall.</summary>
+    void OfferInstall()
+    {
+        if (_release != null || Installer.IsInstalled) return;   // an update banner is up: that comes first
+        _offeringInstall = true;
+        UpdateCard.Visibility = Visibility.Visible;
+        UpdateNotesText.Visibility = Visibility.Collapsed;
+        UpdateText.Text = "Install Kinah Ledger: it starts faster, updates in seconds, and gets a desktop shortcut. Your settings and history stay.";
+        UpdateBtn.Content = "Install"; UpdateBtn.IsEnabled = true;
+        SetUpdateStatus("This copy runs as a single file. Installing it makes it start faster and update in seconds.");
+    }
+
+    async Task InstallClicked()
+    {
+        if (Farming)
+        {
+            var answer = MessageBox.Show(this, "Install now?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual. The installed tracker opens by itself.",
+                "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes) return;
+            await StopTracking();
+        }
+        UpdateBtn.IsEnabled = false; UpdateBtn.Content = "Downloading";
+        try
+        {
+            var progress = new Progress<double>(f => UpdateText.Text = $"Downloading the installer… {(int)(f * 100)}%");
+            var setup = await Installer.DownloadSetupAsync(progress);
+            Installer.StartSetup(setup, _exe);
+            _quitting = true;
+            Close();
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("install", ex);
+            UpdateText.Text = $"Couldn't install: {ex.Message.TrimEnd('.')}. The tracker keeps working as it is.";
+            UpdateBtn.Content = "Not now"; UpdateBtn.IsEnabled = true;
+            _offeringInstall = false; Installer.NotNow();
+            UpdateBtn.Click += (_, _) => UpdateCard.Visibility = Visibility.Collapsed;
+        }
     }
 }

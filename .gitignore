@@ -13,3 +13,4 @@ site/icons/
 
 # editor/session config
 .claude/
+build-vpk/

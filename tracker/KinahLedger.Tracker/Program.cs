@@ -15,7 +15,11 @@ internal static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        // the installer's own runs (install, update, uninstall) end inside; a normal start returns at once
+        Platform.Installer.RunHooks();
         var settings = Settings.Load();
+        // a kinahledger:// link from the site opens (or brings up) the window
+        if (args.Length > 0 && Platform.Installer.IsLink(args[0])) args = Array.Empty<string>();
         if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
         {
             // double-clicked, started with Windows (in the tray), or restarted by an update: open the window
