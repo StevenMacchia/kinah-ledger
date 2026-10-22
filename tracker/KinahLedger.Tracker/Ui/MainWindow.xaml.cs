@@ -557,7 +557,7 @@ public partial class MainWindow : Window
             if (r.Count > 0)
             {
                 var price = PriceBook.Price(r.Name);
-                if (price != null) { long g0 = price.Value * r.Count; gross += g0; value += (long)Math.Round(g0 * PriceBook.SellerKeeps); priced++; rowValue = g0.ToString("N0"); worthN[r.Name] = g0; } else unpriced++;
+                if (price != null) { long g0 = price.Value * r.Count; gross += g0; value += (long)Math.Round(g0 * PriceBook.SellerKeeps); priced++; rowValue = Short(g0); worthN[r.Name] = g0; } else unpriced++;
             }
             worth[r.Name] = rowValue;
             var g = GatheringCatalog.Find(r.Name);
@@ -636,7 +636,7 @@ public partial class MainWindow : Window
             bool open = _openMobs.Contains(key), known = book.Knows(m.Name);
             var where = zonesToo && m.Zone is { Length: > 0 } mz ? mz + " · " : "";
             // every enemy opens: its loot table when one is known, and always what it dropped for you
-            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: m.Kinah.ToString("N0"),
+            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: Short(m.Kinah),
                 Sub: where + (open ? "▾ Hide drops" : "▸ Show drops"), Key: key,
                 Tip: "A best guess: the Kinah that landed just after the target bar named this enemy. Click to " + (open ? "hide" : "show") + " its drops."));
             if (!open) continue;
@@ -715,7 +715,12 @@ public partial class MainWindow : Window
     long _lastValue; int _lastPriced;
 
     /// <summary>The lowest Market price for an item on this server, as the Price column shows it; "≈" when it is the region's price, a dash until one is known.</summary>
-    static string PriceText(string name) => PriceBook.Price(name) is long p ? (PriceBook.SourceOf(name) == PriceBook.From.Region ? "≈" : "") + p.ToString("N0") : "—";
+    static string PriceText(string name) => PriceBook.Price(name) is long p ? (PriceBook.SourceOf(name) == PriceBook.From.Region ? "≈" : "") + Short(p) : "—";
+
+    /// <summary>A price or value that fits its column: in full under 100,000, then "680K", "1.68M" (Steven, 2026-10-22: "1,680,000" ran out of the column).</summary>
+    static string Short(long v) => Math.Abs(v) < 100_000 ? v.ToString("N0")
+        : Math.Abs(v) < 1_000_000 ? $"{v / 1e3:0.#}K"
+        : Math.Abs(v) < 1_000_000_000 ? $"{v / 1e6:0.##}M" : $"{v / 1e9:0.##}B";
 
     /// <summary>A line for the row's hover when the price is not the server's own: the region's middle price stands in.</summary>
     string PriceTip(string name) => PriceBook.SourceOf(name) == PriceBook.From.Region
@@ -1113,7 +1118,7 @@ public partial class MainWindow : Window
             var last = g.Max(r => r.LastLoot) ?? DateTime.UtcNow;
             var sub = log?.Open == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}";
             rows.Add(new DropRow(g.Key, n.ToString("N0"), Clock(TimeSpan.FromSeconds(secs / n)), Fk(value / Math.Max(secs, 10) * 3600),
-                Initial: InitialOf(g.Key), Value: (value / n).ToString("N0"), Sub: sub));
+                Initial: InitialOf(g.Key), Value: Short(value / n), Sub: sub));
         }
         InstRows.ItemsSource = rows;
         InstWhat.Text = rows.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} kept on this PC" + (log?.Open is { } open ? $" · in {open} now" : "") : "";
