@@ -377,6 +377,9 @@
           <!-- idle time and skipped reward lines; net Kinah, crafts and sales: each shown only once there is something to say -->
           <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,8,64,4" TextWrapping="Wrap" Visibility="Collapsed"/>
           <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,4,20,4" TextWrapping="Wrap" Visibility="Collapsed"/>
+          <!-- how the count holds up against what the game itself counts (Steven, 2026-10-22: an accuracy meter) -->
+          <TextBlock x:Name="AccuracyLine" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,0,20,4" TextWrapping="Wrap" Visibility="Collapsed"
+                     ToolTip="Checks against the game's own numbers. Kinah counter: how often the Kinah counter at the top-left rose by exactly what was counted. Quest kills: in the minutes a quest's kill counter moved, its count beside the tracker's. Loot list: pickups the chat read missed and the list beside your character caught."/>
 
           <!-- with nothing counted yet, one line instead of four empty headers; each section appears and opens with its first row -->
           <TextBlock x:Name="TablesEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="20,10,20,18" TextWrapping="Wrap"

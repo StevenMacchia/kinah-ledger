@@ -18,6 +18,13 @@ public sealed class BalanceCheck
     long _gap; DateTime _gapSince;
 
     public int Agreed { get; private set; }
+    /// <summary>Gaps that held and were judged (the counter disagreed with the count).</summary>
+    public int Judged { get; private set; }
+    /// <summary>
+    /// Judged gaps that look like a missed pickup: the counter rose by a pickup-sized amount the count lacks. Spending
+    /// (teleports, repairs, purchases) lowers the counter and large rises are sales or mail, so neither counts here.
+    /// </summary>
+    public int PickupMisses { get; private set; }
     public long Over { get; private set; }
     public long Under { get; private set; }
 
@@ -34,6 +41,8 @@ public sealed class BalanceCheck
         if ((at - _gapSince).TotalSeconds < SettleSeconds) return 0;
         // the gap held: judged once, then the count starts again from here
         if (gap > 0) Over += gap; else Under += -gap;
+        Judged++;
+        if (gap > 0 && gap <= MaxPickupGap) PickupMisses++;
         Rebase(balance, counted);
         return gap;
     }

@@ -608,6 +608,9 @@ public sealed class TrackerSession
     readonly Dictionary<int, int> _questMax = new();
     /// <summary>Steps of the quest tracker's kill counters seen since the start: kills of quest enemies, counted by the game.</summary>
     public int QuestStepsTotal { get; private set; }
+    /// <summary>For the accuracy meter: in the minutes the quest counter moved, the kills it counted and the kills the tracker counted.</summary>
+    public int QuestKillsGame { get; private set; }
+    public int QuestKillsCounted { get; private set; }
     internal void QuestCounter(IReadOnlyList<string> lines)
     {
         var best = new Dictionary<int, int>();
@@ -634,6 +637,8 @@ public sealed class TrackerSession
         if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
         int kills = Engine.Totals().Kills;
+        // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
+        if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
         if (_passes > 0 && (kills > _auditKills || _questSteps > 0))
             CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms)");
         _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; _chatMs = 0; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;

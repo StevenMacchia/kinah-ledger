@@ -229,6 +229,24 @@ public partial class MainWindow : Window
         Redraw();
     }
 
+    /// <summary>
+    /// The accuracy meter: the count against the game's own numbers, for the whole time the tracker has been reading.
+    /// Shown once there is something to compare; orange when a check is more than a tenth off.
+    /// </summary>
+    void ShowAccuracy()
+    {
+        var c = _watcher.Chat;
+        if (c == null || _demo) { AccuracyLine.Visibility = Visibility.Collapsed; return; }
+        var parts = new List<string>(); bool off = false;
+        var bc = c.BalanceCheck; int checks = bc.Agreed + bc.PickupMisses;
+        if (checks > 0) { parts.Add($"Kinah counter agrees {bc.Agreed} of {checks}"); off |= bc.Agreed < checks * 0.9; }
+        if (c.QuestKillsGame > 0) { parts.Add($"quest kills {c.QuestKillsGame}, counted {c.QuestKillsCounted}"); off |= Math.Abs(c.QuestKillsCounted - c.QuestKillsGame) > Math.Max(1, c.QuestKillsGame * 0.1); }
+        if (c.CrossCheck.Added > 0) parts.Add($"loot list caught {c.CrossCheck.Added} the chat missed");
+        AccuracyLine.Text = parts.Count > 0 ? "Accuracy · " + string.Join(" · ", parts) : "";
+        AccuracyLine.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, off ? "Warn" : "Faint");
+        AccuracyLine.Visibility = parts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     void Redraw()
     {
         var e = Shown();
@@ -816,6 +834,7 @@ public partial class MainWindow : Window
         var extra = Extras(e, h);
         ExtraLine.Text = extra; ExtraLine.ToolTip = extra.Length > 0 ? "From the Kinah counter at the top-left of the game and your Market mail: what your balance actually changed by, spending included." : null;
         ExtraLine.Visibility = extra.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShowAccuracy();
 
         // the panel over the game shows these same figures
         _hudValues["time"] = Clock(elapsed);
