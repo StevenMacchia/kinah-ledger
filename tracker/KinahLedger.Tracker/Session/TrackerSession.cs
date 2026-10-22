@@ -369,7 +369,9 @@ public sealed class TrackerSession
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
         // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
-        bool reward = Target.RewardOpen(now);
+        // a reward screen open turns what lands into rewards, except inside an event or expedition: there everything is the
+        // run's, and a level-up popup mid-event must not set the event's loot aside (Accursed Sword, 2026-10-22 14:35)
+        bool reward = Target.RewardOpen(now) && !(ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored);
         // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
         if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase))) Target.MarkCraft(now);
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
