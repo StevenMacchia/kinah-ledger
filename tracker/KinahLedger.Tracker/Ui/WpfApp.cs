@@ -200,6 +200,23 @@ public static class WpfApp
     }
 
     /// <summary>Renders each page of the Options window over a sample session, for layout review.</summary>
+    /// <summary>The setup check, drawn off-screen against the live game: one image per step, a few seconds apart.</summary>
+    public static void ShotCalibration(Settings settings, string dir)
+    {
+        Ensure();
+        Directory.CreateDirectory(dir);
+        var w = new CalibrationWindow(settings, Data.ItemDictionary.LoadOrEmpty(settings.ItemsFile).Knows, () => null, () => { }) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        w.Show();
+        for (int step = 0; step < 4; step++)
+        {
+            w.GoTo(step);
+            var until = DateTime.UtcNow.AddSeconds(step < 3 ? 4 : 1);
+            while (DateTime.UtcNow < until) { DoEvents(); Thread.Sleep(50); }
+            Save((FrameworkElement)w.Content, Path.Combine(dir, $"ui-calibration-{step + 1}.png"), 1300);
+        }
+        w.Close();
+    }
+
     public static void ShotOptions(Settings settings, string dir, string? skin = null)
     {
         Ensure();

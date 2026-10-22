@@ -287,6 +287,13 @@ public partial class MainWindow : Window
         if (_region != null && _prefs.ManualChat) Report("Chat area chosen by hand. The zone is still read from the minimap if the game window is found. Press Test read, then Start.", "Good");
     }
 
+    /// <summary>The step-by-step setup check (first run, and Options › Game reading › Check the setup).</summary>
+    public void OpenCalibration(Window owner)
+    {
+        var w = new CalibrationWindow(_settings, _items.Knows, () => _prefs.ManualChat ? _region : null, PickChat) { Owner = owner };
+        w.Show();
+    }
+
     /// <summary>Back to finding the chat on its own.</summary>
     public void ResetChat()
     {

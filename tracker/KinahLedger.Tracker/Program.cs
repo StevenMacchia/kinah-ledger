@@ -66,6 +66,7 @@ internal static class Program
                     Console.WriteLine($"zones.txt now read: {zl.Count} names, last: {zl.LastOrDefault()}");
                     return 0;
                 }
+                case "calib-shot": { var cdir = pos.FirstOrDefault() ?? "."; WpfApp.ShotCalibration(settings, cdir); Console.WriteLine($"wrote {Path.GetFullPath(cdir)}"); return 0; }
                 case "bench": return Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
                 case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);

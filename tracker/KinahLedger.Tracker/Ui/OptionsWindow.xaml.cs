@@ -188,6 +188,7 @@ public partial class OptionsWindow : Window
         DetectBtn.Click += async (_, _) => await Act(DetectBtn, _host.DetectNow);
         TestBtn.Click += async (_, _) => await Act(TestBtn, _host.TestRead);
         PickChatBtn.Click += (_, _) => AroundPicker(_host.PickChat);
+        CalibrateBtn.Click += (_, _) => _host.OpenCalibration(this);
         AutoChatBtn.Click += (_, _) => { _host.ResetChat(); RefreshLive(); };
         PickMarketBtn.Click += (_, _) => AroundPicker(_host.PickMarket);
         AutoMarketBtn.Click += (_, _) => { _host.ResetMarket(); RefreshLive(); };

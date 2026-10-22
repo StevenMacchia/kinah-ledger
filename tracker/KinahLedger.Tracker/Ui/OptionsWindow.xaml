@@ -221,6 +221,7 @@
             <StackPanel Margin="18,14,18,16">
               <TextBlock x:Name="ChatStatus" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Ink}" FontSize="12.5" LineHeight="18"/>
               <WrapPanel Margin="0,10,0,0">
+                <Button x:Name="CalibrateBtn" Content="Check the setup" Margin="0,0,8,6" ToolTip="A step-by-step check that the chat, the loot list and the HP bar read, with what to change when one doesn't."/>
                 <Button x:Name="DetectBtn" Content="Detect now" Margin="0,0,8,6"/>
                 <Button x:Name="PickChatBtn" Content="Choose the chat" Margin="0,0,8,6"/>
                 <Button x:Name="TestBtn" Content="Test read" Margin="0,0,8,6"/>
