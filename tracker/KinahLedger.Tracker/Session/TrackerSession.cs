@@ -112,6 +112,40 @@ public sealed class TrackerSession
     long _kinahPicked;
     /// <summary>All tradeable Kina picked up since the reader started, across chunks: what the balance counter is checked against.</summary>
     public long KinahPicked => Interlocked.Read(ref _kinahPicked);
+    long _kinahBound;
+    /// <summary>The pace of reading while fighting, and how long after the last loot it lasts (measured 2026-10-22: a chat and loot list pass takes about 260 ms).</summary>
+    public const int FightIntervalMs = 300;
+    public const double FightSeconds = 10;
+    DateTime _lastActivity = DateTime.MinValue;
+
+    // ---- the balance counter as a check on the count ----
+    readonly BalanceCheck _balanceCheck = new();
+    public BalanceCheck BalanceCheck => _balanceCheck;
+    /// <summary>
+    /// The game's Kinah counter, read every few seconds, against the Kinah counted. A rise the count lacks, of exactly an
+    /// amount the loot list showed in one read only, is that pickup: two sources agree, and it is counted. Any other gap
+    /// is written to reads.log and left alone, since a sale, mail or purchase moves the counter too.
+    /// </summary>
+    public void CheckBalance(long balance, DateTime at)
+    {
+        long gap = _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);
+        if (gap == 0) return;
+        if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && _cross.TakeSingleKinah(gap, at))
+        {
+            var ev = new KinahChanged(at, gap, false) { Via = "loot list · balance" };
+            Count(ev); Feed(ev);
+            Interlocked.Add(ref _kinahPicked, gap);
+            _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);   // the count matches the counter again
+            CrashLog.Note($"the Kinah counter rose {gap:N0} more than counted, and the loot list showed {gap:N0} Kina once: counted from the two");
+            BalanceAdded++;
+            try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+            return;
+        }
+        CrashLog.Note(gap > 0
+            ? $"the Kinah counter rose {gap:N0} more than counted (a missed pickup, or a sale or mail the chat didn't show); not counted"
+            : $"the Kinah counter rose {-gap:N0} less than counted (Kinah spent, or a pickup counted twice)");
+    }
+    public int BalanceAdded { get; private set; }
 
     public TrackerSession(Rectangle? manualRegion, Settings s, ItemDictionary items, string kind, int? intervalMs = null)
     {
@@ -266,6 +300,8 @@ public sealed class TrackerSession
                     _chatMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     await TargetDueAsync();
                     LootProcess(await list);
+                    RewardShot();
+                    await RewardGridDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     Audit();
                 }
@@ -282,7 +318,10 @@ public sealed class TrackerSession
             Updated?.Invoke();
 
             int spent = (int)(DateTime.UtcNow - t0).TotalMilliseconds;
-            if (spent < _interval) { try { await Task.Delay(_interval - spent, ct); } catch (TaskCanceledException) { } }
+            // during a fight (loot, a kill or a loot list row in the last FightSeconds) about three reads a second, so a line
+            // or a row up for a moment is read more than once; idle, the usual pace, since back-to-back reading costs a CPU core
+            int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, FightIntervalMs) : _interval;
+            if (spent < every) { try { await Task.Delay(every - spent, ct); } catch (TaskCanceledException) { } }
         }
         Engine.Finish();
     }
@@ -308,6 +347,12 @@ public sealed class TrackerSession
                 if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); _anchor = g; DetectNote = "re-found: " + note; }
             }
         }
+        ProcessChat(lines, DateTime.UtcNow);
+    }
+
+    /// <summary>One read of the chat, counted: lined up with the last, parsed, checked against the loot list and applied. Also what replay feeds a recorded fight through.</summary>
+    internal void ProcessChat(List<string> lines, DateTime now)
+    {
         int unaligned = _tracker.Unaligned;
         var fresh = _tracker.NewLines(lines);
         bool afterFade = _tracker.LastAfterFade;
@@ -325,8 +370,9 @@ public sealed class TrackerSession
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
         // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
-        bool reward = Target.RewardOpen(DateTime.UtcNow);
-        var now = DateTime.UtcNow;
+        // a reward screen open turns what lands into rewards, except inside an event or expedition: there everything is the
+        // run's, and a level-up popup mid-event must not set the event's loot aside (Accursed Sword, 2026-10-22 14:35)
+        bool reward = Target.RewardOpen(now) && !(ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored);
         // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
         if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase))) Target.MarkCraft(now);
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
@@ -359,10 +405,11 @@ public sealed class TrackerSession
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
-                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev); any = true;
+                Count(ev); any = true; _lastActivity = DateTime.UtcNow;
                 Feed(ev);
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
+                else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
             return any;
@@ -389,12 +436,98 @@ public sealed class TrackerSession
 
     DateTime _targetAt = DateTime.MinValue;
 
+    // ---- the reward table at the end of an expedition or event ----
+    // "Obtained Items / Reward collected." lists every reward as an icon with a count; the chat shows only the last few
+    // lines of it (2026-10-22, Urugugu Canyon). Inside an expedition or event, once a second, the top of the screen is
+    // checked for "Reward collected."; when it is there the grid is read once (RewardGrid, the other session's reader).
+    // A slot the chat already counted (same item, same count, last 20 s) is skipped; a slot named as exactly one item is
+    // added to the run alone; a slot that names only a family of items, or nothing, is written to reads.log, never guessed.
+    DateTime _gridAt = DateTime.MinValue, _gridSeenAt = DateTime.MinValue; bool _gridDone;
+    public const double GridSureDistance = 70;
+    static string Unbound(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+    Dictionary<string, List<ItemInfo>>? _byIcon;
+    readonly List<(DateTime At, string Name, int Count)> _runPickups = new();
+
+    async Task RewardGridDue()
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            if (GameRect is not { } g || ZoneLocator.KindOf(Zone) is not ("Expedition" or "Event")) { _gridDone = false; return; }
+            if ((now - _gridAt).TotalSeconds < 1) return;
+            _gridAt = now;
+            if (GameWindow.Covered(g, _settings.ProcessHints) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
+            using var frame = ScreenReader.Capture(g);
+            var band = new Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
+            using var bandBmp = frame.Clone(band, frame.PixelFormat);
+            var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
+            var rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+            if (rc == null) { if ((now - _gridSeenAt).TotalSeconds > 5) _gridDone = false; return; }
+            _gridSeenAt = now;
+            if (_gridDone) return;
+            _gridDone = true;
+            var slots = await RewardGrid.ReadAsync(frame, rc.Box.Bottom + (int)(frame.Height * 0.016));
+            ApplyGrid(slots, now);
+        }
+        catch (Exception ex) { CrashLog.Write("reward table", ex); }
+    }
+
+    /// <summary>The reward table's slots into the run: each named item once, skipping what the chat already counted.</summary>
+    internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
+    {
+        _byIcon ??= _items.AllItems().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        int added = 0, known = 0, unnamed = 0;
+        foreach (var sl in slots)
+        {
+            var best = sl.Icons.FirstOrDefault();
+            if (best.Key == null || !_byIcon.TryGetValue(best.Key, out var its)) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} with no item to its icon; not counted"); continue; }
+            var graded = its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).ToList();
+            // a sure match only: close (measured on the Urugugu table: right ones 23 to 60, wrong ones 82 to 114), clearly
+            // closer than the next icon, and of the slot's own grade; anything else is the event's own item the list lacks
+            bool sure = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25) && graded.Count > 0;
+            if (!sure) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
+            // the bound and tradeable copies of an item are the same item
+            var names = graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            int count = (int)Math.Clamp(sl.Count, 1, 99999);
+            int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
+            if (seen >= 0) { _runPickups.RemoveAt(seen); known++; continue; }
+            if (names.Count != 1) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}; not counted"); continue; }
+            var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
+            Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
+            Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
+            added++;
+        }
+        CrashLog.Note($"reward table read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
+    }
+
+    /// <summary>
+    /// Where a pickup counts. Inside an expedition, event, arena or legion area it belongs to that run alone: never the
+    /// Farming page's drops, kills or Kinah by enemy, and never the site's farming numbers (Steven, 2026-10-22: events and
+    /// expeditions never on the Farming page; the Urugugu Canyon reward cube's loot was counted as drops from kills). The
+    /// run is shared on its own. Everywhere else it counts as farming, and the run log sees it too.
+    /// </summary>
+    void Count(GameEvent ev)
+    {
+        if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored)
+        {
+            Instances.Loot(ev);
+            // kept a while, so the reward table read after it doesn't count the same items again
+            if (ev is ItemAcquired ra) _runPickups.Add((ev.Time, Unbound(_items.NameOf(ra.ItemId)), ra.Count));
+            else if (ev is RewardReceived rr) _runPickups.Add((ev.Time, Unbound(rr.Name), rr.Count));
+            if (_runPickups.Count > 60) _runPickups.RemoveAt(0);
+            return;
+        }
+        Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
+    }
+
     // ---- the audit: how the count holds up, once a minute in reads.log ----
     // The quest tracker's "Defeat … (n/20)" lines count kills of quest enemies exactly, so where every enemy fought is a
     // quest enemy, the kills counted should rise as fast as the counter. Pass times say how often the screen is read.
     int _passes; double _passMs, _chatMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
     readonly Dictionary<int, int> _questMax = new();
-    void QuestCounter(IReadOnlyList<string> lines)
+    /// <summary>Steps of the quest tracker's kill counters seen since the start: kills of quest enemies, counted by the game.</summary>
+    public int QuestStepsTotal { get; private set; }
+    internal void QuestCounter(IReadOnlyList<string> lines)
     {
         var best = new Dictionary<int, int>();
         for (int i = 0; i < lines.Count; i++)
@@ -410,7 +543,7 @@ public sealed class TrackerSession
         }
         foreach (var (of, n) in best)
         {
-            if (_questMax.TryGetValue(of, out var was) && n > was && n - was <= 5) _questSteps += n - was;
+            if (_questMax.TryGetValue(of, out var was) && n > was && n - was <= 5) { _questSteps += n - was; QuestStepsTotal += n - was; }
             if (!_questMax.ContainsKey(of) || n > was || n < was - 3) _questMax[of] = n;
         }
     }
@@ -421,7 +554,7 @@ public sealed class TrackerSession
         if ((now - _auditAt).TotalSeconds < 60) return;
         int kills = Engine.Totals().Kills;
         if (_passes > 0 && (kills > _auditKills || _questSteps > 0))
-            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms)");
+            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms)");
         _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; _chatMs = 0; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
     }
 
@@ -465,11 +598,18 @@ public sealed class TrackerSession
 
     void LootProcess(List<OcrLineBox>? lines)
     {
-        if (lines == null) return;
+        if (lines != null) ProcessList(lines.Select(l => (l.Box.Top, l.Text)).ToList(), DateTime.UtcNow);
+    }
+
+    /// <summary>One read of the loot list, checked against the chat. Also what replay feeds a recorded fight through.</summary>
+    internal void ProcessList(List<(int Top, string Text)> lines, DateTime now)
+    {
         try
         {
-            var now = DateTime.UtcNow;
-            var rows = LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text)));
+            // a shop or reward screen covers the place the loot list shows: nothing there is loot
+            if (Target.RewardOpen(now)) return;
+            var rows = LootPopup.Rows(lines);
+            if (rows.Count > 0) _lastActivity = DateTime.UtcNow;
             if (rows.Count > 0) ReadTrace.List(now, rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}"));
             var add = _cross.Popup(rows, now);
             if (add.Count == 0) return;
@@ -482,10 +622,11 @@ public sealed class TrackerSession
                 var parsed = p0 with { Via = "loot list" };
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
-                Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
+                Count(ev);
                 Feed(ev);
                 if (ev is ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
+                else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
         }
@@ -502,6 +643,50 @@ public sealed class TrackerSession
     /// The target bar every 2 seconds while the chat is read. Unlike the minimap, the panel isn't hidden for it: a read every
     /// 2 seconds would make it flicker. It is read through instead, and the window asks to move it only when nothing is read.
     /// </summary>
+    // ---- reward screens, kept as pictures ----
+    // Events and expeditions pay out on their own screens (cards picked at the end of an event, the big reward table at
+    // the end of an expedition), not in the chat (Steven, 2026-10-22). To learn to read them, a picture of the game window
+    // is kept each time one opens: a few seconds apart while it stays open, on this PC only, in reward-shots beside the
+    // logs, at most RewardShotsPerDay a day. Inside an event or expedition a picture every 15 s too, since a card pick may
+    // show no title to recognise. Nothing else on screen is captured, nothing is sent anywhere, and it only happens when the
+    // reward-shots folder exists (made by hand on a PC that helps build the reader; never by the app).
+    public const int RewardShotsPerDay = 500;
+    DateTime _rewardShotAt = DateTime.MinValue; int _rewardShotsOpen;
+    void RewardShot()
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            var dir = Path.Combine(CrashLog.Dir, "reward-shots");
+            if (GameRect is not { } g || !Directory.Exists(dir)) return;
+            bool reward = Target.RewardOpen(now), inside = ZoneLocator.KindOf(Zone) is "Event" or "Expedition" || Zone == SessionEngine.UnknownZone;
+            // fights too, every 30 s: the nameplates and health bars around the character, to learn which enemies are engaged
+            bool fighting = (now - _lastActivity).TotalSeconds <= FightSeconds;
+            if (!reward) _rewardShotsOpen = 0;
+            bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2
+                     : inside ? (now - _rewardShotAt).TotalSeconds >= 5
+                     : fighting && (now - _rewardShotAt).TotalSeconds >= 30;
+            if (!due) return;
+            var today = DateTime.Now.ToString("yyyyMMdd");
+            if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;
+            if (GameWindow.Covered(g, _settings.ProcessHints) is { } cover && !cover.StartsWith("Kinah Ledger")) return;   // only the game, never a window over it
+            // and only while the game is the active window: Alt+Tab's switcher, the Start menu or a notification sit over it
+            // without counting as a window over it, and Alt+Tab shows thumbnails of everything open (2026-10-22 15:07)
+            if (!GameWindow.InFront(_settings.ProcessHints)) return;
+            _rewardShotAt = now; if (reward) _rewardShotsOpen++;
+            var title = !reward ? (inside ? "in-run" : "fight") : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            using var bmp = ScreenReader.Capture(g);
+            var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
+            using var ps = new System.Drawing.Imaging.EncoderParameters(1);
+            ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 85L);
+            var file = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{zoneName}-{title}.jpg");
+            bmp.Save(file, jpg, ps);
+            if (_rewardShotsOpen == 1) CrashLog.Note($"reward screen kept as a picture: {Path.GetFileName(file)}");
+        }
+        catch (Exception ex) { CrashLog.Write("reward picture", ex); }
+    }
+
     async Task TargetDueAsync()
     {
         if ((DateTime.UtcNow - _targetAt).TotalSeconds < 1) return;   // every second: a fast kill is over in two or three
@@ -527,9 +712,16 @@ public sealed class TrackerSession
     /// The zone on its own clock, whether or not the chat can be read: every ZoneEverySec while a zone is known, every
     /// 30 seconds while none is ("not read yet"), as long as nothing covers the minimap corner.
     /// </summary>
+    bool _rewardWasOpen;
     async Task ZoneDueAsync()
     {
         int every = Engine.Zone == null ? 5 : _settings.Ocr.ZoneEverySec;   // no zone yet (a menu, a loading screen): try again every 5 s, as long as it takes
+        // inside an event or expedition, every 3 s: when it ends the game moves the player on, and what drops there must
+        // never land in the event (Steven, 2026-10-22). A reward screen closing is read at once (below).
+        if (ZoneLocator.KindOf(Engine.Zone) != null) every = Math.Min(every, 3);
+        bool rewardNow = Target.RewardOpen(DateTime.UtcNow);
+        if (_rewardWasOpen && !rewardNow) _zoneAt = DateTime.MinValue;
+        _rewardWasOpen = rewardNow;
         if ((DateTime.UtcNow - _zoneAt).TotalSeconds < every) return;
         var game = GameWindow.Find(_settings.ProcessHints);
         GameRect = game ?? GameRect;

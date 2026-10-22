@@ -155,7 +155,16 @@
         </Border>
         <!-- the site and Options: everything that can be set is in the Options window, so the ledger never moves -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button x:Name="SiteBtn" Content="kinahledger.com" Height="32" Padding="10,0" FontSize="12.5" Margin="0,0,8,0" ToolTip="Open the website: community drop rates, prices and your profile."/>
+          <!-- the site as a globe, so the three parts always fit beside the name (Steven, 2026-10-22: the tabs ran into the name) -->
+          <Button x:Name="SiteBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="kinahledger.com: community drop rates, prices and your profile">
+            <Grid Width="16" Height="16">
+              <Ellipse Width="16" Height="16" Stroke="{DynamicResource Muted}" StrokeThickness="1.4"/>
+              <Ellipse Width="7" Height="16" Stroke="{DynamicResource Muted}" StrokeThickness="1.2"/>
+              <Rectangle Height="1.2" Width="15" Fill="{DynamicResource Muted}" VerticalAlignment="Center"/>
+              <Rectangle Height="1.1" Width="12" Fill="{DynamicResource Muted}" VerticalAlignment="Top" Margin="0,4,0,0"/>
+              <Rectangle Height="1.1" Width="12" Fill="{DynamicResource Muted}" VerticalAlignment="Bottom" Margin="0,0,0,4"/>
+            </Grid>
+          </Button>
           <!-- Compact / Full view: two panels drawn, the right one filled in Full view -->
           <Button x:Name="ViewBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="Full view: every table beside the summary">
             <Grid Width="16" Height="12">
@@ -363,8 +372,10 @@
 
       <Border x:Name="TablesCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="0,8,0,0">
         <StackPanel x:Name="TableStack">
+          <!-- start the farming tables over (Steven, 2026-10-22); hidden during a farming run, which Stop ends -->
+          <TextBlock x:Name="FarmClear" FontSize="12" Margin="20,8,20,-24" HorizontalAlignment="Right" Panel.ZIndex="1"><Hyperlink x:Name="FarmClearLink" Style="{StaticResource LinkStyle}">Clear</Hyperlink></TextBlock>
           <!-- idle time and skipped reward lines; net Kinah, crafts and sales: each shown only once there is something to say -->
-          <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,8,20,4" TextWrapping="Wrap" Visibility="Collapsed"/>
+          <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,8,64,4" TextWrapping="Wrap" Visibility="Collapsed"/>
           <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,4,20,4" TextWrapping="Wrap" Visibility="Collapsed"/>
 
           <!-- with nothing counted yet, one line instead of four empty headers; each section appears and opens with its first row -->
@@ -502,6 +513,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Text="Expeditions and events"/>
             <TextBlock x:Name="InstWhat" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Grid.Column="2" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"><Hyperlink x:Name="InstClearLink" Style="{StaticResource LinkStyle}">Clear</Hyperlink></TextBlock>
           </Grid>
           <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44">
             <Grid>

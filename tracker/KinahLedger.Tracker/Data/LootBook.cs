@@ -37,6 +37,13 @@ public sealed class LootBook
     static string Norm(string s) => string.Join(' ', s.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
     /// <summary>Reads {"tables": {"enemy": {"drops": [{"item", "id", "chance"}]}}}.</summary>
+    /// <summary>
+    /// The enemies whose table lists "Soul: <kind>": the soul a Soul Points line or a loot list row names is a kind, not
+    /// always the enemy's name ("Drakan Probe" souls also come from the Drana Processing Maintenance Machine).
+    /// </summary>
+    public IReadOnlyList<string> EnemiesWithSoul(string kind) => _sourcesByItem.TryGetValue(Norm("Soul: " + kind + " (Bound)"), out var a) ? a
+        : _sourcesByItem.TryGetValue(Norm("Soul: " + kind), out var b) ? b : Array.Empty<string>();
+
     public static LootBook FromJson(string json)
     {
         var b = new LootBook();

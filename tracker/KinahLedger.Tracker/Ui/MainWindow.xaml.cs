@@ -128,7 +128,25 @@ public partial class MainWindow : Window
         EventsTab.Click += (_, _) => ShowPart("Events");
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
-        CraftResetLink.Click += (_, _) => { _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView); };
+        CraftResetLink.Click += (_, _) =>
+        {
+            if (MessageBox.Show(this, "Start crafting over? The recipes, tries and profit shown here are cleared.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView);
+        };
+        InstClearLink.Click += (_, _) =>
+        {
+            if (MessageBox.Show(this, "Clear the expedition and event runs shown here? Runs not sent to the site yet are still sent.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            _watcher.Chat?.Instances.ClearShown(); ShowInstances();
+        };
+        FarmClearLink.Click += async (_, _) =>
+        {
+            if (Farming) { Say("A farming run is on: Stop ends it and starts the tables over.", "Warn"); return; }
+            if (MessageBox.Show(this, "Clear the farming tables and start counting again? What was counted is shared with the site first, as usual.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            await _watcher.ClearFarmingAsync();
+            _lastRun = null;
+            Redraw();
+            Say("Farming tables cleared. Counting starts again from here.", "Faint");
+        };
         _mode = Mode.Open;
         ApplyModeLabels(); ResetTiles();
         BuildTray();
@@ -547,7 +565,7 @@ public partial class MainWindow : Window
             if (r.Count > 0)
             {
                 var price = PriceBook.Price(r.Name);
-                if (price != null) { long g0 = price.Value * r.Count; gross += g0; value += (long)Math.Round(g0 * PriceBook.SellerKeeps); priced++; rowValue = g0.ToString("N0"); worthN[r.Name] = g0; } else unpriced++;
+                if (price != null) { long g0 = price.Value * r.Count; gross += g0; value += (long)Math.Round(g0 * PriceBook.SellerKeeps); priced++; rowValue = Short(g0); worthN[r.Name] = g0; } else unpriced++;
             }
             worth[r.Name] = rowValue;
             var g = GatheringCatalog.Find(r.Name);
@@ -626,7 +644,7 @@ public partial class MainWindow : Window
             bool open = _openMobs.Contains(key), known = book.Knows(m.Name);
             var where = zonesToo && m.Zone is { Length: > 0 } mz ? mz + " · " : "";
             // every enemy opens: its loot table when one is known, and always what it dropped for you
-            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: m.Kinah.ToString("N0"),
+            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: Short(m.Kinah),
                 Sub: where + (open ? "▾ Hide drops" : "▸ Show drops"), Key: key,
                 Tip: "A best guess: the Kinah that landed just after the target bar named this enemy. Click to " + (open ? "hide" : "show") + " its drops."));
             if (!open) continue;
@@ -705,7 +723,12 @@ public partial class MainWindow : Window
     long _lastValue; int _lastPriced;
 
     /// <summary>The lowest Market price for an item on this server, as the Price column shows it; "≈" when it is the region's price, a dash until one is known.</summary>
-    static string PriceText(string name) => PriceBook.Price(name) is long p ? (PriceBook.SourceOf(name) == PriceBook.From.Region ? "≈" : "") + p.ToString("N0") : "—";
+    static string PriceText(string name) => PriceBook.Price(name) is long p ? (PriceBook.SourceOf(name) == PriceBook.From.Region ? "≈" : "") + Short(p) : "—";
+
+    /// <summary>A price or value that fits its column: in full under 100,000, then "680K", "1.68M" (Steven, 2026-10-22: "1,680,000" ran out of the column).</summary>
+    static string Short(long v) => Math.Abs(v) < 100_000 ? v.ToString("N0")
+        : Math.Abs(v) < 1_000_000 ? $"{v / 1e3:0.#}K"
+        : Math.Abs(v) < 1_000_000_000 ? $"{v / 1e6:0.##}M" : $"{v / 1e9:0.##}B";
 
     /// <summary>A line for the row's hover when the price is not the server's own: the region's middle price stands in.</summary>
     string PriceTip(string name) => PriceBook.SourceOf(name) == PriceBook.From.Region
@@ -776,7 +799,7 @@ public partial class MainWindow : Window
         ShareCardBtn.IsEnabled = totalNow > 0;
         FootTotal.Text = totalNow.ToString("N0");
         SumBreakdown.Text = (kinah > 0 || _mode != Mode.Gather ? $"{Fk(kinah)} Kinah" : "") + (kinah > 0 || _mode != Mode.Gather ? "  +  " : "")
-            + (s.Priced > 0 ? $"{Fk(s.Value)} loot after the Market's {1 - PriceBook.SellerKeeps:P0}" : "loot not priced yet")
+            + (s.Priced > 0 ? $"{Fk(s.Value)} loot after {1 - PriceBook.SellerKeeps:P0} tax" : "loot not priced yet")
             + (s.Unpriced > 0 ? $"  ·  {s.Unpriced} item{(s.Unpriced == 1 ? "" : "s")} without a price" : "");
         SumBreakdown.ToolTip = $"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.\n"
             + (s.Priced > 0 ? $"Loot at the lowest Market price: {s.Gross:N0}.\nMarket fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}.\n" : "")
@@ -1103,7 +1126,7 @@ public partial class MainWindow : Window
             var last = g.Max(r => r.LastLoot) ?? DateTime.UtcNow;
             var sub = log?.Open == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}";
             rows.Add(new DropRow(g.Key, n.ToString("N0"), Clock(TimeSpan.FromSeconds(secs / n)), Fk(value / Math.Max(secs, 10) * 3600),
-                Initial: InitialOf(g.Key), Value: (value / n).ToString("N0"), Sub: sub));
+                Initial: InitialOf(g.Key), Value: Short(value / n), Sub: sub));
         }
         InstRows.ItemsSource = rows;
         InstWhat.Text = rows.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} kept on this PC" + (log?.Open is { } open ? $" · in {open} now" : "") : "";

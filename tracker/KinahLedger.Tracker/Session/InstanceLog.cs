@@ -46,12 +46,16 @@ public sealed class InstanceLog
         lock (_lock)
         {
             var kind = ZoneLocator.KindOf(zone);
+            // an area left alone (Nightmare: the same rewards every time): no run, and the one before ends here
+            if (kind == ZoneLocator.Ignored) { CloseLocked(); return; }
             if (kind != null)
             {
-                if (_cur != null && string.Equals(_cur.Zone, zone, StringComparison.OrdinalIgnoreCase)) return;
+                // an area of an expedition is that expedition: walking from one area to the next is the same run
+                var name = ZoneLocator.RunName(zone);
+                if (_cur != null && string.Equals(_cur.Zone, name, StringComparison.OrdinalIgnoreCase)) return;
                 CloseLocked();
-                _cur = new InstanceRun { Zone = zone, Kind = kind, Start = now };
-                CrashLog.Note($"{kind.ToLowerInvariant()} run started: {zone}");
+                _cur = new InstanceRun { Zone = name, Kind = ZoneLocator.KindOf(name) ?? kind, Start = now };
+                CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run started: {name}" + (name != zone ? $" (in {zone})" : ""));
             }
             else if (zone != SessionEngine.UnknownZone) CloseLocked();
         }
@@ -72,7 +76,8 @@ public sealed class InstanceLog
                 case KinahChanged { Bound: false } k when k.Delta > 0:
                     _cur.Kinah += k.Delta; _cur.LastLoot = k.Time;
                     break;
-                case MobKilled or CurrencyGained:
+                case MobKilled:
+                case CurrencyGained c when c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase):
                     _cur.Kills++;
                     break;
             }
@@ -106,6 +111,20 @@ public sealed class InstanceLog
     }
 
     public string? Open { get { lock (_lock) return _cur?.Zone; } }
+
+    /// <summary>
+    /// Clears the runs shown (the player's "Clear" on the Events part). The history file is kept aside as
+    /// instances.old.jsonl; runs not shared yet, and the one under way, still go to the site as usual.
+    /// </summary>
+    public void ClearShown()
+    {
+        lock (_lock)
+        {
+            _done.Clear();
+            try { var old = PathOf.Replace(".jsonl", ".old.jsonl"); if (File.Exists(old)) File.Delete(old); if (File.Exists(PathOf)) File.Move(PathOf, old); }
+            catch (Exception) { /* the list is cleared for this session either way */ }
+        }
+    }
 
     /// <summary>
     /// The runs to share with a run or a chunk that started at <paramref name="since"/>: those closed since the last share

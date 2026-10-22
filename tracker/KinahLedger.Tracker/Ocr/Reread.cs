@@ -99,7 +99,24 @@ public sealed class Reread
     public static List<string> Burst(IReadOnlyList<string> last, IReadOnlyList<string> cur, Dictionary<string, DateTime> recent, DateTime now)
     {
         var take = new List<string>();
-        if (last.Count == 0 || cur.Count < 3) return take;
+        if (cur.Count < 3) return take;
+        if (last.Count == 0)
+        {
+            // the chat came back from a fade with a whole reward at once (the Accursed Sword event's eleven lines, 2026-10-22
+            // 14:35): nothing to line up with. From the bottom up, the loot lines not seen in the last ten minutes are new,
+            // up to the first line that was; history shown by a hover ends with a line already seen, so it adds nothing.
+            // Only once the tracker has been reading a while, so a fresh start never takes the history for new.
+            if (recent.Count < 20 || (now - recent.Values.Min()).TotalMinutes < 2) return take;
+            var since = recent.Where(kv => (now - kv.Value).TotalMinutes <= 10).Select(kv => kv.Key).ToList();
+            for (int i = cur.Count - 1; i >= 0; i--)
+            {
+                var k = Key(cur[i]);
+                if (k.Length == 0) continue;
+                if (since.Any(p => Same(k, p))) break;
+                if (LooksLikeLoot(cur[i]) && !cur[i].TrimStart().StartsWith('[')) take.Insert(0, cur[i]);
+            }
+            return take;
+        }
         var lastKeys = last.Select(Key).Where(k => k.Length > 0).ToList();
         if (cur.Any(l => { var k = Key(l); return k.Length > 0 && lastKeys.Any(p => Near(k, p) || k == p); })) return take;   // overlaps: not a burst
         var seen = recent.Where(kv => (now - kv.Value).TotalMinutes <= 10).Select(kv => kv.Key).ToList();
