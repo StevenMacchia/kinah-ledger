@@ -134,6 +134,8 @@ public sealed class LootCrossCheck
         foreach (var row in raw)
         {
             // "Soul: Drakan Probe (Bound) x1": the soul every enemy drops, so one kill of that kind (Steven, 2026-10-22)
+            // a Kinah row read without its amount ("Kina x1") is not an item called Kina (0.8.2 put Kina on the item list)
+            if (!row.IsKinah && System.Text.RegularExpressions.Regex.IsMatch(row.Name, @"^\W*kin[ae]h?\W*(\(bound\))?\W*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;
             var soul = row.IsKinah ? null : SoulOf(row.Name);
             string? key = row.IsKinah ? (row.Amount >= MinKinah ? KinahKey(row.Amount) : null)
                         : soul != null ? "s:" + soul

@@ -317,6 +317,7 @@ public sealed class TrackerSession
                     LootProcess(await list);
                     RewardShot();
                     await RewardGridDue();
+                    await PlatesDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     Audit();
                 }
@@ -456,6 +457,36 @@ public sealed class TrackerSession
     /// hides nothing, so reading goes on (0.8.1); otherwise the old check: another window over the area pauses its read.
     /// </summary>
     string? Cover(Rectangle r) => WindowCapture.Active ? null : GameWindow.Covered(r, _settings.ProcessHints);
+
+    // ---- the enemies fighting the player, from their nameplates ----
+    // In the open world, once a second while fighting (every 3 s otherwise), the game's picture is searched for the red
+    // health bars around the character and the names above them (Nameplates). The counts tell which enemy's bar just went
+    // when its loot lands; see SessionEngine.SetEngaged. Inside events and expeditions loot is the run's, so it's skipped.
+    DateTime _platesAt = DateTime.MinValue;
+    public IReadOnlyList<string> Engaged { get; private set; } = Array.Empty<string>();
+    async Task PlatesDue()
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            if (GameRect is not { } g || ZoneLocator.KindOf(Zone) != null) return;
+            double every = (now - _lastActivity).TotalSeconds <= 60 ? 1 : 3;
+            if ((now - _platesAt).TotalSeconds < every) return;
+            _platesAt = now;
+            if (Cover(g) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
+            using var frame = ScreenReader.Capture(g);
+            var plates = await Nameplates.ReadAsync(frame);
+            // one plate read as two bars a little apart is one enemy
+            var kept = new List<Nameplates.Plate>();
+            foreach (var p in plates)
+                if (!kept.Any(k => k.Enemy == p.Enemy && Math.Abs(k.Bar.Y - p.Bar.Y) < frame.Height * 0.02 && Math.Abs(k.Bar.X - p.Bar.X) < frame.Height * 0.06)) kept.Add(p);
+            var names = kept.Select(p => p.Enemy).ToList();
+            if (!names.SequenceEqual(Engaged)) CrashLog.Note("fighting: " + (names.Count == 0 ? "nobody" : string.Join(", ", names)));
+            Engaged = names;
+            foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SetEngaged(names, now);
+        }
+        catch (Exception ex) { CrashLog.Write("nameplates", ex); }
+    }
 
     // ---- the reward table at the end of an expedition or event ----
     // "Obtained Items / Reward collected." lists every reward as an icon with a count; the chat shows only the last few

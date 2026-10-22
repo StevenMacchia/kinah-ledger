@@ -148,6 +148,39 @@ public sealed class SessionEngine
         return rec;
     }
 
+    // ---- the enemies fighting the player, from their nameplates (Nameplates: a red health bar under a gold name) ----
+    // How many of each are up, and the ones whose bar just went: an enemy whose bar vanishes as its loot lands is the one
+    // that died (Steven, 2026-10-22: "look at the char on screen to see which healthbars around it are being fought").
+    readonly Dictionary<string, int> _engaged = new(StringComparer.OrdinalIgnoreCase);
+    sealed class Gone { public string Name = ""; public DateTime At; public bool Kinah, Soul; }
+    readonly List<Gone> _vanished = new();
+    public const double VanishSeconds = 4;
+
+    /// <summary>One read of the nameplates: every engaged enemy by name, as often as it shows.</summary>
+    public void SetEngaged(IEnumerable<string> names, DateTime at)
+    {
+        lock (_lock)
+        {
+            var now = names.GroupBy(n => n, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+            foreach (var (n, c) in _engaged) { int left = now.GetValueOrDefault(n); for (int i = left; i < c; i++) _vanished.Add(new Gone { Name = n, At = at }); }
+            _engaged.Clear(); foreach (var (n, c) in now) _engaged[n] = c;
+            _vanished.RemoveAll(v => (at - v.At).TotalSeconds > VanishSeconds * 3);
+        }
+    }
+
+    /// <summary>
+    /// The enemy whose bar went in the seconds before this loot; null when none did. Each one gives one Kinah pickup and
+    /// one soul (kind 'k' or 's'), so two enemies falling together are two kills, and a kill's soul line still sees the
+    /// enemy its Kinah went to.
+    /// </summary>
+    string? TakeVanished(DateTime t, char kind, Func<string, bool>? fits = null)
+    {
+        var v = _vanished.FirstOrDefault(v => (t - v.At).TotalSeconds is >= -1 and <= VanishSeconds && !(kind == 'k' ? v.Kinah : v.Soul) && (fits == null || fits(v.Name)));
+        if (v == null) return null;
+        if (kind == 'k') v.Kinah = true; else v.Soul = true;
+        return v.Name;
+    }
+
     /// <summary>
     /// A kill named by its soul (a Soul Points line, or a "Soul: Drakan Probe" row in the loot list): one kill of that
     /// enemy, and the Kinah that landed just before it goes with it, whatever the target bar read. Once per kill.
@@ -156,8 +189,14 @@ public sealed class SessionEngine
     {
         if (rec.Mob != null || kind.Length < 3) return;
         var zone = _zone ?? UnknownZone;
-        var enemy = KinahLedger.Ocr.TargetReader.EnemyForSoul(kind, _recentTargets.Where(r => Math.Abs((t - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).Select(r => r.Name),
-            _mobs.Values.Where(m => m.Zone == zone).OrderByDescending(m => m.Kills).Select(m => m.Name).ToList());
+        // first the enemies whose bars just went and those still fighting, then the target bar, then this zone's
+        var seen = _vanished.Where(v => (t - v.At).TotalSeconds is >= -1 and <= VanishSeconds && !v.Soul).OrderByDescending(v => v.At).Select(v => v.Name)
+            .Concat(_engaged.Keys)
+            .Concat(_recentTargets.Where(r => Math.Abs((t - r.At).TotalSeconds) <= TargetGraceSeconds).OrderByDescending(r => r.At).Select(r => r.Name)).ToList();
+        var enemy = KinahLedger.Ocr.TargetReader.EnemyForSoul(kind, seen, _mobs.Values.Where(m => m.Zone == zone).OrderByDescending(m => m.Kills).Select(m => m.Name).ToList());
+        // a soul that fits no enemy on screen (a soul named for a beast, from a humanoid): the enemy whose bar just went
+        if (!seen.Contains(enemy, StringComparer.OrdinalIgnoreCase) && TakeVanished(t, 's') is { } went) enemy = went;
+        else if (seen.Contains(enemy, StringComparer.OrdinalIgnoreCase)) TakeVanished(t, 's', n => string.Equals(n, enemy, StringComparison.OrdinalIgnoreCase));
         if (enemy.Length == 0) return;
         var ms = Mob(SameAs(enemy));
         rec.Mob = ms.Name;
@@ -460,7 +499,8 @@ public sealed class SessionEngine
                             KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; Mark(_recentKills, k.Time);
                             KillEvidence(k.Time, 'k');
                             _recentPickups.Add(k.Delta); if (_recentPickups.Count > 50) _recentPickups.RemoveAt(0);
-                            var mk = MobFor(k.Time);
+                            // the enemy whose bar just went, else the one on the target bar
+                            var mk = TakeVanished(k.Time, 'k') is { } went ? Mob(went) : MobFor(k.Time);
                             if (mk != null) { mk.Kinah += k.Delta; mk.KinahDrops++; }
                             _kinahCredits.Add((k.Time, k.Delta, mk, false)); if (_kinahCredits.Count > 8) _kinahCredits.RemoveAt(0);
                         }

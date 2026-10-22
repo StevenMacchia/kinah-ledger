@@ -151,6 +151,19 @@ internal static class Program
                     Console.WriteLine($"wrote {n} icons to {Path.GetFullPath(outBin)}");
                     return 0;
                 }
+                case "plate-test":
+                {
+                    // plate-test <frame> [frame ...]: the enemies with a health bar in each saved game frame
+                    foreach (var fp in pos)
+                    {
+                        using var pf = new System.Drawing.Bitmap(fp);
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        var bars = Nameplates.FindBars(pf); var found = sw.ElapsedMilliseconds;
+                        var plates = Nameplates.ReadAsync(pf).GetAwaiter().GetResult();
+                        Console.WriteLine($"{Path.GetFileName(fp)}: {bars.Count} bars ({found} ms), {plates.Count} enemies ({sw.ElapsedMilliseconds} ms): " + string.Join(" | ", plates.Select(x => $"{x.Enemy} @{x.Bar.X},{x.Bar.Y} [{x.Read}]")) + (bars.Count > plates.Count ? "   unnamed bars: " + string.Join(" ", bars.Where(b => !plates.Any(x => x.Bar == b)).Select(b => $"{b.X},{b.Y} {b.Width}x{b.Height}")) : ""));
+                    }
+                    return 0;
+                }
                 case "grid-run":
                 {
                     // grid-run --image <file> --zone <expedition> [chat lines...]: the reward table into a fresh run, after the chat lines given
@@ -977,6 +990,18 @@ options: --process aion[,other]");
             Check("Soul Points name the enemy killed", string.Join(" | ", rows), "Dracuni Herbalist: 2 kills 700 | Drakan Probe: 1 kills 486 | Eternal Kerubian: 1 kills 352");
             // the soul names a kind, not always the enemy (2026-10-22 15:00: "Fossa Soul Points" fighting Astin Mercenaries)
             Check("a soul kind and who has it", $"{TargetReader.EnemyForSoul("Fossa", new[] { "Astin Mercenaries Fossa" })} | {TargetReader.EnemyForSoul("Fossa", Array.Empty<string>())} | {TargetReader.EnemyForSoul("Fossa", Array.Empty<string>(), new[] { "Patrolling Fossa" })}", "Astin Mercenaries Fossa | Fossa | Patrolling Fossa");
+            {
+                // the nameplates: the enemy whose red bar goes as its loot lands is the one that died, whatever soul it gives
+                // (2026-10-22 16:39, Southern Tolbas Forest: Astin enemies counted as Tolbas Slink from their "Slink" souls)
+                var ne2 = new SessionEngine(items); var n0 = DateTime.UtcNow; ne2.SetZone("Southern Tolbas Forest");
+                ne2.SetEngaged(new[] { "Astin Mercenaries Watcher", "Astin Mercenaries Fighter" }, n0);
+                ne2.SetEngaged(new[] { "Astin Mercenaries Fighter" }, n0.AddSeconds(1));        // the Watcher's bar went
+                ne2.Apply(new KinahChanged(n0.AddSeconds(1.5), 300, false));
+                ne2.Apply(new CurrencyGained(n0.AddSeconds(2), "Slink Soul Points", 1, "Slink"));
+                ne2.SetEngaged(Array.Empty<string>(), n0.AddSeconds(6));                       // the Fighter's too
+                ne2.Apply(new KinahChanged(n0.AddSeconds(6.4), 410, false));
+                Check("the enemy whose bar went is the kill", string.Join(" | ", ne2.MobSnapshot().OrderBy(m => m.Name).Select(m => $"{m.Name}: {m.Kills} kills {m.Kinah}")), "Astin Mercenaries Fighter: 1 kills 410 | Astin Mercenaries Watcher: 1 kills 300");
+            }
             Check("a target bar cut short is its one enemy", TargetReader.Match("Drana Processing Mainte") ?? "none", "Drana Processing Maintenance Machine");
         }
         string Bar(params string[] ls) => TargetReader.FindName(ls.Select((l, i) => (i, l)), out var un) ?? (un.Length > 0 ? "none, unlisted: " + un : "none");
@@ -1298,6 +1323,11 @@ options: --process aion[,other]");
             c18.Chat(new ItemAcquired(x0.AddSeconds(2.6), items.IdOf("Raw Leather"), 1, false), x0.AddSeconds(2.6));
             var a18 = c18.Popup(new() { I("Raw Leather") }, x0.AddSeconds(3)).Concat(c18.Popup(new(), x0.AddSeconds(4))).Concat(c18.Popup(new(), x0.AddSeconds(9))).ToList();
             Check("a misread count, and a row that flickers back", $"{Desc(a16)} · {Desc(a17)} · {Desc(a18)}", "nothing · nothing · nothing");
+
+            // the loot list's Kinah row read without its amount is no item called "Kina" (0.8.2, 16:39)
+            var c19 = new LootCrossCheck(items);
+            var a19 = c19.Popup(new() { I("Kina") }, x0).Concat(c19.Popup(new(), x0.AddSeconds(1))).Concat(c19.Popup(new(), x0.AddSeconds(7))).ToList();
+            Check("a Kina row without its amount is nothing", Desc(a19), "nothing");
 
             // a joke ask on the site's board (one listing, 5,000x its day before) is no price
             var pb = PriceBook.ParseBoard("{\"items\":[{\"item\":\"Ethereal Longsword\",\"lowest_ask\":10000011,\"n_obs\":1,\"change_24h\":4999.0},{\"item\":\"Raw Leather\",\"lowest_ask\":900,\"n_obs\":1,\"change_24h\":0.1}]}", null);
