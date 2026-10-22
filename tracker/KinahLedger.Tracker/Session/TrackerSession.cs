@@ -583,6 +583,9 @@ public sealed class TrackerSession
             var today = DateTime.Now.ToString("yyyyMMdd");
             if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;
             if (GameWindow.Covered(g, _settings.ProcessHints) is { } cover && !cover.StartsWith("Kinah Ledger")) return;   // only the game, never a window over it
+            // and only while the game is the active window: Alt+Tab's switcher, the Start menu or a notification sit over it
+            // without counting as a window over it, and Alt+Tab shows thumbnails of everything open (2026-10-22 15:07)
+            if (!GameWindow.InFront(_settings.ProcessHints)) return;
             _rewardShotAt = now; if (reward) _rewardShotsOpen++;
             var title = !reward ? (inside ? "in-run" : "fight") : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');

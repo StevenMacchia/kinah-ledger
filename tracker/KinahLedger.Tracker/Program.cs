@@ -63,6 +63,27 @@ internal static class Program
                     return 0;
                 }
                 case "replay": return Replay(settings, pos, opts);
+                case "icon-index":
+                {
+                    // icon-index <icons folder> <out.json>: thumbnails of every item picture, for naming reward items by their icon
+                    var idx = IconIndex.Build(pos[0], Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "..", "data", "tw-items.json") is var tw && File.Exists(tw) ? tw : opts.GetValueOrDefault("items", ""));
+                    idx.Save(pos[1]);
+                    Console.WriteLine($"{idx.Entries.Count} pictures, {idx.Entries.Sum(e => e.Items.Length)} items -> {pos[1]}");
+                    return 0;
+                }
+                case "icon-test":
+                {
+                    // icon-test <image> <index.json> x,y,w,h [x,y,w,h ...]: the closest pictures to each cell of a screenshot
+                    var idx = IconIndex.Load(File.ReadAllText(pos[1]));
+                    using var img = new System.Drawing.Bitmap(pos[0]);
+                    foreach (var cell in pos.Skip(2))
+                    {
+                        var v = cell.Split(',').Select(int.Parse).ToArray();
+                        var m = idx.Match(IconIndex.Thumb(img, new System.Drawing.Rectangle(v[0], v[1], v[2], v[3])), 3);
+                        Console.WriteLine($"{cell,-18} " + string.Join("  |  ", m.Select(x => $"{x.Distance:0} {string.Join("/", x.Entry.Items.Take(2))}{(x.Entry.Items.Length > 2 ? $" +{x.Entry.Items.Length - 2}" : "")}")));
+                    }
+                    return 0;
+                }
                 case "parse-lines":
                 {
                     // each argument is one chat line: what the parser makes of it, for checking a line from reads.log
@@ -868,6 +889,7 @@ options: --process aion[,other]");
             Check("instances: an open-world zone has none", ZoneLocator.KindOf("Eastern Cantas Valley") ?? "none", "none");
             Check("instances: they are on the zone list", ZoneLocator.Known.Contains("Urugugu Canyon") ? "yes" : "no", "yes");
             Check("timed events: Shugo Festival games and invasions", string.Join(",", new[] { "Odyle Flight Frenzy", "Jump Jump", "Up! Up! Up!", "Not This Tile?", "Incursion of the Spirits", "Beritra Air Raid" }.Select(z => ZoneLocator.KindOf(z) ?? "none")), "Event,Event,Event,Event,Event,Event");
+            Check("the closest zone, not the first close enough", $"{ZoneLocator.Match("Southern Tolbas Forest")} | {ZoneLocator.Match("Nortnern Tolbas Forest")}", "Southern Tolbas Forest | Northern Tolbas Forest");
             Check("event titles pass the label filter, UI labels don't", $"{ZoneLocator.Candidate("Jump Jump")} {ZoneLocator.Candidate("Up! Up! Up!")} {ZoneLocator.Candidate("Not This Tile?")} {ZoneLocator.Candidate("Jump Higher")}", "True True True False");
             {
                 var r = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = b0 };

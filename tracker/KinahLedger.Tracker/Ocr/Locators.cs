@@ -304,7 +304,9 @@ public static class ZoneLocator
         // list doesn't have yet; either way the count stays under "Unknown zone" rather than under a misread name.
         foreach (var c in candidates)
         {
-            var hit = Known.FirstOrDefault(k => Edit(k.ToLowerInvariant(), c.text.ToLowerInvariant()) <= Math.Max(1, k.Length / 7));
+            // the closest name, not the first one close enough: "Southern Tolbas Forest" is two letters from "Northern
+            // Tolbas Forest", and the first on the list won (2026-10-22 15:10)
+            var hit = Match(c.text);
             if (hit != null) return (hit, "zone matched a known name");
         }
         // the top line of the corner is the minimap's title: name-shaped and on no list, it is a place the list lacks
@@ -315,6 +317,21 @@ public static class ZoneLocator
     /// <summary>Whether a line read in the corner looks like a place name and not a UI label. An instance or event on the list always does, even one that starts like a label ("Jump Jump").</summary>
     public static bool Candidate(string text) =>
         text.Length >= 6 && text.Length <= 40 && Shape.IsMatch(text) && (Instances.ContainsKey(text) || !Blocklist.Any(b => text.StartsWith(b + " ") || text == b));
+
+    /// <summary>The zone on the list a minimap title names: exactly, else the closest within a letter per seven, else none.</summary>
+    public static string? Match(string read)
+    {
+        var low = read.ToLowerInvariant();
+        string? best = null; int bestD = int.MaxValue;
+        foreach (var k in Known)
+        {
+            var kl = k.ToLowerInvariant();
+            if (kl == low) return k;
+            int d = Edit(kl, low);
+            if (d <= Math.Max(1, k.Length / 7) && d < bestD) { best = k; bestD = d; }
+        }
+        return best;
+    }
 
     static string Clean(string s) => Regex.Replace(s.Trim(), @"\s+", " ").TrimEnd('.', ',', ':');
 
