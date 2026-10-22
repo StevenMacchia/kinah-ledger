@@ -6,8 +6,16 @@ A fan project for Aion 2 (global): Kinah per hour, material yields, drop rates a
 built from runs players share through a free tracker. Made by players for players; not affiliated
 with NCSOFT. MIT licensed.
 
-This is a side project, separate from the author's professional work. Code signing and privacy:
-[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+This is a side project, separate from the author's professional work.
+
+## Download
+
+[**KinahLedger.exe, the latest release**](https://github.com/StevenMacchia/kinah-ledger/releases/latest): one file,
+no installer, Windows 10 or 11. Every release lists the file's SHA-256 checksum.
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/) (application pending; until it is approved, releases are unsigned).
+What is signed, who approves it, and what the tracker sends: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ```
 (website)  lives in a separate private repo; kinahledger.com/download serves this repo's releases
@@ -38,7 +46,7 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
 
 1. Play in borderless or windowed mode with the chat open at the bottom-left. A chat tab showing only System Notifications reads best; the normal tab works too, and so does the frameless chat with no input box.
 2. Double-click `KinahLedger.exe`. On first run pick your region, faction and server, and a look (Night, Abyss or Daylight); everything shared is filed per server. From then on the tracker finds the game window, the chat (above the "Enter your message" box, or from its own lines) and the zone on the minimap by itself, and **counts everything the chat shows while the game is open**: drops, gathers, Soul Crystals, and Market prices whenever the Market is open. That count is shared anonymously in 15-minute chunks and never kept here.
-3. **Start farming** times a run on top of that count: the window shows the run (four tiles, then Drops / Gathered / Pets tabs), and Stop saves it to your history and shares it. Open world, Gathering or Pets is the run's label. Farming time is noticed from the chat itself: every loot, kill or gather line keeps the farming clock running, a minute with none stops it until the next, so every per-hour rate (here and on the site) divides by time actually spent farming, while counts and drop rates keep counting regardless. Open world shows Kinah per hour and per kill, kills per hour, drops per hour, and every drop with its drop rate and per-hour rate, with item names in the game's tier colours. Gathering splits each skill (mining, logging, essence extraction, herbs, cooking ingredients) into its own section with its own attempts, Plentiful rate and per-attempt rates. Pets counts Soul Crystals by zone with drops and per hour only, no drop %, so the best pet-farming spot stands out. Soul Points and Soul Crystals never count as drops. The game's item list is built into the tracker and is the whitelist for drops: a name that isn't on it (a misread, a nameplate behind the chat) is never counted and never sent. Zones work the same way against the tracker's zone list; anything else counts under "Unknown zone". Ctrl+Shift+K starts and stops a run from inside the game; minimizing keeps everything running in the tray.
+3. **Start run** times a run on top of that count, and Stop saves it to your history and shares it. Open world or gathering is read from the chat, so there is nothing to pick: the run is saved and shared under what it turned out to be. The window opens on the session total and the three best drops; each table appears and opens once something lands in it. **Copy for Discord** puts a picture of the count (zone, per hour, top drops) on the clipboard, and the run card says your best hour in the zone once a stay of ten minutes or more has set one. Farming time is noticed from the chat itself: every loot, kill or gather line keeps the farming clock running, a minute with none stops it until the next, so every per-hour rate (here and on the site) divides by time actually spent farming, while counts and drop rates keep counting regardless. Open world shows Kinah per hour and per kill, kills per hour, drops per hour, and every drop with its drop rate and per-hour rate, with item names in the game's tier colours. Gathering splits each skill (mining, logging, essence extraction, herbs, cooking ingredients) into its own section with its own attempts, Plentiful rate and per-attempt rates. Pets counts Soul Crystals by zone with drops and per hour only, no drop %, so the best pet-farming spot stands out. Soul Points and Soul Crystals never count as drops. The game's item list is built into the tracker and is the whitelist for drops: a name that isn't on it (a misread, a nameplate behind the chat) is never counted and never sent. Zones work the same way against the tracker's zone list; anything else counts under "Unknown zone". Ctrl+Shift+K starts and stops a run from inside the game; minimizing keeps everything running in the tray.
 
    **Zones.** The tables start over when you change zone, so they show the zone you are in. Tick **All zones** under the activity picker to keep them counting across zones. Either way, what goes to the site is split by zone: each zone sends its own time, Kinah, kills and items, so one zone's drops are never filed under another.
 

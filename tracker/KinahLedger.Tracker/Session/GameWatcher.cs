@@ -89,12 +89,38 @@ public sealed class GameWatcher
         if ((DateTime.UtcNow - _boardAt).TotalMinutes < 15 || !_settings.Upload.Enabled || string.IsNullOrWhiteSpace(Market.Server)) return;
         _boardAt = DateTime.UtcNow;
         if (!Uri.TryCreate(_settings.Upload.Endpoint, UriKind.Absolute, out var u)) return;
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        using var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All }) { Timeout = TimeSpan.FromSeconds(10) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
         var r = await http.GetAsync($"{u.Scheme}://{u.Authority}/prices/{Market.ServerKey}.json");
         if (r.IsSuccessStatusCode) PriceBook.SetBoard(PriceBook.ParseBoard(await r.Content.ReadAsStringAsync(), _items));
+        await FetchRegionBoardsAsync(http, $"{u.Scheme}://{u.Authority}");
         // the community's drop rates for this server's zones and the listed drop chances, for the card a click on a drop opens
         await SiteData.RefreshAsync(http, $"{u.Scheme}://{u.Authority}", Market.ServerKey);
+    }
+
+    DateTime _regionAt = DateTime.MinValue; string _regionFor = "";
+    /// <summary>
+    /// Once an hour (or when the server changes), the boards of the other servers in the player's region and faction, so an
+    /// item the server's own board has no price for can still be valued; the window marks those prices as the region's.
+    /// About 20 KB each, compressed.
+    /// </summary>
+    async Task FetchRegionBoardsAsync(HttpClient http, string site)
+    {
+        var me = Data.Servers.Find(RegionKey, Server);
+        if (me == null) return;
+        if (_regionFor == me.Key && (DateTime.UtcNow - _regionAt).TotalMinutes < 60) return;
+        _regionAt = DateTime.UtcNow; _regionFor = me.Key;
+        var boards = new List<Dictionary<string, long>>();
+        foreach (var other in Data.Servers.In(RegionKey).Where(x => x.Faction == me.Faction && x.Key != me.Key))
+        {
+            try
+            {
+                var r = await http.GetAsync($"{site}/prices/{other.Key}.json");
+                if (r.IsSuccessStatusCode) boards.Add(PriceBook.ParseBoard(await r.Content.ReadAsStringAsync(), _items));
+            }
+            catch (Exception) { /* one server's board missing is fine */ }
+        }
+        if (boards.Count > 0) PriceBook.SetRegionBoards(boards);
     }
 
     // the watcher's retry and Start farming can both ask for the reader at once; without this, both started one and the

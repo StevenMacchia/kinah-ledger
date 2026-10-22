@@ -24,6 +24,13 @@ public sealed partial class TargetReader
     [GeneratedRegex(@"\b(?:lv|lvl|level)\.?\s*\d+\b|\d+\s*%|\[[^\]]*\]|\bhp\b", RegexOptions.IgnoreCase)]
     private static partial Regex Noise();
 
+    /// <summary>
+    /// The game's own notices, which pop up in the same top-centre band as the target bar ("Title acquired", "Quest
+    /// completed"): a line with one of these words is a notice, never an enemy, and isn't even noted as an unlisted name.
+    /// </summary>
+    [GeneratedRegex(@"\b(?:acquired|obtained|completed?|unlocked|learned|registered|received|gained|achieved|achievement|reached|succeeded|has been|you have)\b", RegexOptions.IgnoreCase)]
+    internal static partial Regex Notice();
+
     // the tracker's own panel labels and a few UI words that can land in the band
     static readonly HashSet<string> Not = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -141,6 +148,8 @@ public sealed partial class TargetReader
 
     /// <summary>The last name-shaped text on the bar that isn't on the list, so a missing enemy can be named and added.</summary>
     public string Unlisted { get; private set; } = "";
+    /// <summary>When <see cref="Unlisted"/> was last read: the window only mentions it while it is recent, not for the rest of the session.</summary>
+    public DateTime UnlistedAt { get; private set; } = DateTime.MinValue;
     readonly HashSet<string> _noted = new(StringComparer.OrdinalIgnoreCase);
 
     string? _pending;
@@ -182,7 +191,7 @@ public sealed partial class TargetReader
         var found = FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
         if (found == null && unlisted.Length > 0)
         {
-            Unlisted = unlisted;
+            Unlisted = unlisted; UnlistedAt = DateTime.UtcNow;
             if (_noted.Count < 200 && _noted.Add(unlisted)) CrashLog.Note($"target bar: not an enemy on the list, not credited: {unlisted}");
         }
         if (found == null)
@@ -222,6 +231,7 @@ public sealed partial class TargetReader
         unlisted = "";
         foreach (var (_, text) in lines.OrderBy(l => l.Top))
         {
+            if (Notice().IsMatch(text)) continue;   // "Title acquired": a game notice in the band, not a name
             var words = Noise().Replace(text, " ").Split(' ', StringSplitOptions.RemoveEmptyEntries)
                 .Select(w => w.Trim('.', ',', ':', ';', '|', '(', ')'))
                 .Where(w => w.Length >= 2 && !w.Any(char.IsDigit))

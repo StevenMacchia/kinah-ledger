@@ -10,7 +10,7 @@ namespace KinahLedger.Ui;
 /// <summary>Everything Options can change, as one value: what the window shows when it opens, and what Save hands back.</summary>
 public sealed record OptionsChoice(
     string Region, string Server, bool Share, bool Hud, string Hotkey, string Skin, bool AutoUpdate,
-    bool StartWithWindows, string OnGameStart, bool HideWhenGameCloses, bool CloseToTray, bool MinimizeToTray);
+    bool StartWithWindows, string OnGameStart, bool HideWhenGameCloses, bool CloseToTray, bool MinimizeToTray, string HudFields);
 
 /// <summary>
 /// The app around the live count: the tray, starting with Windows, reacting to the game starting and closing, the
@@ -136,7 +136,7 @@ public partial class MainWindow
     /// <summary>What Options opens with: the saved choices, and the startup entry as Windows has it now.</summary>
     public OptionsChoice CurrentOptions() => new(
         RegionKey, Server?.Label ?? "", _prefs.Share, _prefs.Hud, HotkeyText, Skins.Get(_prefs.Skin).Key, _prefs.AutoUpdate,
-        AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray);
+        AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)));
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -154,6 +154,12 @@ public partial class MainWindow
         {
             _prefs.Hud = c.Hud;
             if (!c.Hud) CloseHud();   // off: the panel goes now; on: the next tick shows it, run or no run
+        }
+        if (c.HudFields != was.HudFields)
+        {
+            _prefs.HudFields = c.HudFields;
+            _hud?.SetFields(Ui.HudFields.Parse(c.HudFields));
+            UpdateHud();
         }
         if (c.Skin != Skins.Get(_prefs.Skin).Key) { _prefs.Skin = c.Skin; }
         ApplySkin(_prefs.Skin);

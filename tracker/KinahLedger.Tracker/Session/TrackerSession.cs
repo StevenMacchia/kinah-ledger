@@ -38,6 +38,9 @@ public sealed class TrackerSession
     public void ResetCraftView() => CraftView = new SessionEngine(_items);
     /// <summary>Starts the zone view over in the zone the player is in now.</summary>
     public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
+
+    /// <summary>The zone view's stay, offered as the zone's best hour on this server (kept only past ten minutes and a better rate).</summary>
+    public void OfferBest() { try { BestRuns.Offer(Server, ZoneView); } catch (Exception ex) { CrashLog.Write("best runs", ex); } }
     /// <summary>The target bar at the top-centre: which enemy is being fought, for Kinah by enemy (a best guess).</summary>
     public TargetReader Target { get; } = new();
     /// <summary>Why the target bar can't be read right now ("the panel sits over it"); empty while it is read.</summary>
@@ -199,7 +202,7 @@ public sealed class TrackerSession
             Secondary?.SetZone(zone);
             Instances.Zone(zone, DateTime.UtcNow);
             // a new zone starts the zone view over: its tables are this zone's alone
-            if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
+            if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { OfferBest(); var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
             else ZoneView.SetZone(zone);
         }
         catch (Exception ex) { CrashLog.Write("zone", ex); }
@@ -484,6 +487,7 @@ public sealed class TrackerSession
 
     public async Task StopAsync()
     {
+        OfferBest();   // the window closing ends the stay in this zone too
         Instances.Close();
         _cts.Cancel();
         if (_loop != null) { try { await _loop; } catch (Exception) { /* loop ended */ } }
@@ -556,10 +560,14 @@ public sealed class UserPrefs
     public string OnGameStart { get; set; } = "open";
     /// <summary>Hide to the tray once the game has been closed for a few seconds (never during a run).</summary>
     public bool HideWhenGameCloses { get; set; }
-    /// <summary>The window's close button hides it to the tray; Quit in the tray menu ends the tracker.</summary>
-    public bool CloseToTray { get; set; }
-    /// <summary>Minimizing always hides to the tray, not only during a run.</summary>
-    public bool MinimizeToTray { get; set; }
+    /// <summary>The window's close button hides it to the tray; Quit in the tray menu ends the tracker. On for new installs since 0.7.6, so a habit close doesn't stop the count.</summary>
+    public bool CloseToTray { get; set; } = true;
+    /// <summary>Minimizing always hides to the tray, not only during a run. On for new installs since 0.7.6.</summary>
+    public bool MinimizeToTray { get; set; } = true;
+    /// <summary>What the panel over the game shows, in this order: time, rate, kinah, loot, total, best, last (HudFields.All). The player picks in Options › In game.</summary>
+    public string HudFields { get; set; } = Ui.HudFields.Default;
+    /// <summary>Full view: the window doubles in width with every table beside the summary. Off (Compact, the default since 0.7.6): the run card and the summary only.</summary>
+    public bool FullView { get; set; }
     /// <summary>The start/stop shortcut, as "Ctrl+Shift+K"; empty is off.</summary>
     public string Hotkey { get; set; } = Platform.Hotkey.Default;
     public int? WinX { get; set; }

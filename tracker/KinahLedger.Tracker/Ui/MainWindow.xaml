@@ -44,7 +44,7 @@
 
     <!-- drops and gathered rows: icon, name, count, rate, per hour -->
     <DataTemplate x:Key="RowTemplate">
-      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" MinHeight="54" Padding="0,7" Background="Transparent" Cursor="Hand">
+      <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" MinHeight="54" Padding="0,7" Background="Transparent" Cursor="Hand" ToolTip="{Binding Tip}" ToolTipService.InitialShowDelay="250">
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
@@ -63,7 +63,7 @@
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
               <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource CommonInk}" FontWeight="SemiBold" FontSize="14.5" TextTrimming="CharacterEllipsis"/>
-              <TextBlock x:Name="SubText" Text="{Binding Sub}" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="SubText" Text="{Binding SubShown}" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
             <!-- Something looks wrong: shown on hover, kept on a flagged row. A flagged drop is never sent to the site -->
             <TextBlock x:Name="ReportLink" Grid.Column="2" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Hidden"
@@ -80,7 +80,9 @@
       </Border>
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
-        <DataTrigger Binding="{Binding Sub}" Value=""><Setter TargetName="SubText" Property="Visibility" Value="Collapsed"/></DataTrigger>
+        <DataTrigger Binding="{Binding SubShown}" Value=""><Setter TargetName="SubText" Property="Visibility" Value="Collapsed"/></DataTrigger>
+        <!-- how a row was read or worked out: on hover only (Steven, 0.7.6: no reading jargon on the rows themselves) -->
+        <DataTrigger Binding="{Binding Tip}" Value=""><Setter TargetName="RowBorder" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <!-- a craft's profit: green when it made Kinah, red when it lost some -->
         <DataTrigger Binding="{Binding Tone}" Value="Good"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Good}"/></DataTrigger>
         <DataTrigger Binding="{Binding Tone}" Value="Bad"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Bad}"/></DataTrigger>
@@ -119,7 +121,15 @@
   <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="22,16,22,14">
     <Grid>
     <!-- the ledger: always the same width, wherever the settings are -->
-    <StackPanel x:Name="LedgerCol" Width="662" VerticalAlignment="Top">
+    <!-- never taller than the screen (Steven, 0.7.6): the header, the run card and the summary stay put; the pickups and
+         the tables scroll below them once the window would run past the screen (Window.MaxHeight is the work area) -->
+    <!-- 0.7.6 (Steven): Compact (the default) is the run card and the summary; Full view doubles the width and puts every
+         table in a second column beside them. Never taller than the screen: the tables' column scrolls past it. -->
+    <Grid x:Name="LedgerCol" VerticalAlignment="Top">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition x:Name="LeftColDef" Width="662"/><ColumnDefinition x:Name="RightColDef" Width="0"/></Grid.ColumnDefinitions>
+    <!-- across both columns; its width is set with the view (ApplyView) so long text never widens the window -->
+    <StackPanel x:Name="HeadStack" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left">
 
       <!-- header: the gold mark and the name, the Farming / Crafting switch, the project page and Settings -->
       <Grid>
@@ -130,7 +140,7 @@
           <StackPanel VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
-              <TextBlock x:Name="Version" Text="v0.7.4" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+              <TextBlock x:Name="Version" Text="v0.7.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
             </StackPanel>
             <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="0,1,0,0" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
           </StackPanel>
@@ -145,6 +155,14 @@
         <!-- the site and Options: everything that can be set is in the Options window, so the ledger never moves -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="SiteBtn" Content="kinahledger.com" Height="32" Padding="12,0" FontSize="12.5" Margin="0,0,8,0" ToolTip="Open the website: community drop rates, prices and your profile."/>
+          <!-- Compact / Full view: two panels drawn, the right one filled in Full view -->
+          <Button x:Name="ViewBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="Full view: every table beside the summary">
+            <Grid Width="16" Height="12">
+              <Rectangle Width="16" Height="12" RadiusX="2" RadiusY="2" Stroke="{DynamicResource Muted}" StrokeThickness="1.4"/>
+              <Rectangle Width="1.4" Height="12" Fill="{DynamicResource Muted}" HorizontalAlignment="Left" Margin="7,0,0,0"/>
+              <Rectangle x:Name="ViewFill" Width="6" Height="9" Fill="{DynamicResource Muted}" HorizontalAlignment="Right" Margin="0,0,1.5,0" Opacity="0.25"/>
+            </Grid>
+          </Button>
           <Button x:Name="OptionsBtn" Height="32" Padding="12,0" FontSize="12.5" ToolTip="Server, startup, sharing, game reading, hotkey, updates.">
             <StackPanel Orientation="Horizontal">
               <!-- a gear, drawn so no image ships -->
@@ -201,6 +219,10 @@
       </Border>
 
 
+    </StackPanel>
+
+    <!-- the left column: the run card, the summary and (in Full view) the recent pickups -->
+    <StackPanel x:Name="LeftCol" Grid.Row="1" Width="662" VerticalAlignment="Top">
       <!-- the run, as the site's "best place to farm it" card: where you are, how long, what the hour is worth, the stats,
            then the actions. Everything is counted all the time; Start farming times a run on top and shows it -->
       <Border x:Name="SessionCard" CornerRadius="22" Margin="0,16,0,0" Padding="24,22,24,22" BorderThickness="1" BorderBrush="{DynamicResource HeroLine}" Background="{DynamicResource HeroBg}">
@@ -210,17 +232,19 @@
             <StackPanel>
               <StackPanel Orientation="Horizontal">
                 <Ellipse x:Name="RecDot" Width="8" Height="8" Fill="#FF6B5E" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed"/>
-                <TextBlock x:Name="TableTitle" Foreground="{DynamicResource Gold}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Text="Open world"/>
+                <TextBlock x:Name="TableTitle" Foreground="{DynamicResource Gold}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Text="Not reading yet"/>
               </StackPanel>
               <TextBlock x:Name="ZoneLbl" FontFamily="{DynamicResource DisplayFont}" FontSize="27" FontWeight="SemiBold" Margin="0,8,0,0" Text="Waiting for the game" TextTrimming="CharacterEllipsis"/>
-              <TextBlock x:Name="FarmTime" Foreground="{DynamicResource Muted}" FontSize="14" Margin="0,4,0,0" Text="Ctrl+Shift+K starts and stops from inside the game" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="FarmTime" Foreground="{DynamicResource Muted}" FontSize="14" Margin="0,4,0,0" Text="Reading starts on its own once the game is open" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Margin="16,0,0,0" HorizontalAlignment="Right">
-              <Border Style="{StaticResource Chip}" HorizontalAlignment="Right">
+              <Border x:Name="TableWhatChip" Style="{StaticResource Chip}" HorizontalAlignment="Right" Visibility="Collapsed">
                 <TextBlock x:Name="TableWhat" Foreground="{DynamicResource Mint}" FontSize="11.5" FontWeight="SemiBold"/>
               </Border>
               <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="32" FontWeight="SemiBold" HorizontalAlignment="Right" Margin="0,8,0,0"/>
-              <TextBlock Text="Kinah plus loot, after tax" Foreground="{DynamicResource Faint}" FontSize="12.5" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+              <TextBlock x:Name="HeadRateLbl" Text="Kinah plus loot, after tax" Foreground="{DynamicResource Faint}" FontSize="12.5" HorizontalAlignment="Right" Margin="0,2,0,0" Visibility="Collapsed"/>
+              <!-- the player's best hour in this zone (BestRuns), or a note when this stay beats it -->
+              <TextBlock x:Name="BestLine" FontSize="12.5" FontWeight="SemiBold" HorizontalAlignment="Right" Margin="0,6,0,0" Visibility="Collapsed"/>
             </StackPanel>
           </Grid>
 
@@ -239,42 +263,100 @@
 
           <Grid Margin="0,18,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start farming" Width="156" Height="46" VerticalAlignment="Center"/>
+            <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start run" Width="156" Height="46" VerticalAlignment="Center"
+                    ToolTip="Everything is counted while the game is open. A run times one stretch on top; it is what gets saved and shared."/>
+            <!-- open world or gathering is read from the chat, so there is no activity to pick (0.7.6) -->
             <StackPanel x:Name="KindGrid" Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
-              <ComboBox x:Name="Kind" Width="140" VerticalAlignment="Center" ToolTip="What the run is labelled as when it is shared and saved. The count itself covers everything the chat shows."/>
+              <Button x:Name="ShareCardBtn" IsEnabled="False" Height="46" Padding="16,0" FontSize="13" Content="Copy for Discord"
+                      ToolTip="Copies a picture of this count (zone, per hour, top drops) to paste into Discord with Ctrl+V. A copy is saved too."/>
               <!-- off (the default): the tables start over when the zone changes; on: they keep counting across zones. The site gets each zone's own numbers either way -->
               <CheckBox x:Name="AllZonesChk" Content="All zones" Margin="14,0,0,0" VerticalAlignment="Center"
                         ToolTip="Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone. Either way, what goes to the site is kept apart by zone."/>
             </StackPanel>
-            <TextBlock Grid.Column="2" Text="Ctrl+Shift+K in game" Foreground="{DynamicResource Faint}" FontSize="12.5" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
+            <TextBlock x:Name="HotkeyLbl" Grid.Column="2" Text="Ctrl+Shift+K in game" Foreground="{DynamicResource Faint}" FontSize="12.5" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
           </Grid>
-          <TextBlock x:Name="KindHint" Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" Margin="0,10,0,0" Visibility="Collapsed"/>
         </StackPanel>
       </Border>
 
-      <!-- the last pickups as they are counted, with how each was read, so a miss shows on the spot (Steven, 2026-10-21) -->
+      <!-- summary first (Steven, 0.7.6): the session total, how it adds up and the three best drops, before any table -->
+      <Border x:Name="SummaryCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,14,20,16" Visibility="Collapsed">
+        <StackPanel>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="SESSION TOTAL" Foreground="{DynamicResource Gold}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+            <TextBlock x:Name="FootTotalNote" Grid.Column="1" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="14,0,12,0" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <TextBlock x:Name="FootTotal" Grid.Column="2" FontFamily="{DynamicResource DisplayFont}" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Text="0" VerticalAlignment="Center"/>
+          </Grid>
+          <!-- how the total adds up, in one line; the full breakdown on hover -->
+          <TextBlock x:Name="SumBreakdown" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="0,2,0,0" TextWrapping="Wrap" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
+          <StackPanel x:Name="TopDropsBox" Margin="0,14,0,0" Visibility="Collapsed">
+            <TextBlock Text="TOP DROPS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,0,0,8"/>
+            <ItemsControl x:Name="TopDrops">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3" Rows="1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="0,0,12,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border x:Name="TopTile" Width="36" Height="36" CornerRadius="8" BorderBrush="#6BCDD3E2" BorderThickness="1" Margin="0,0,10,0" Background="{DynamicResource Inset}">
+                      <Grid>
+                        <TextBlock x:Name="TopInitial" Text="{Binding Initial}" FontWeight="Bold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                        <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="HighQuality"/>
+                      </Grid>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock x:Name="TopName" Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource CommonInk}" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock FontSize="12" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"><Run Text="×"/><Run Text="{Binding Drops, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding Value, Mode=OneWay}" Foreground="{DynamicResource Gold}"/></TextBlock>
+                    </StackPanel>
+                  </Grid>
+                  <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="TopInitial" Property="Visibility" Value="Visible"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="TopName" Property="Foreground" Value="{DynamicResource GradeRare}"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Grade}" Value="Legend"><Setter TargetName="TopName" Property="Foreground" Value="{DynamicResource GradeLegend}"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Grade}" Value="Unique"><Setter TargetName="TopName" Property="Foreground" Value="{DynamicResource GradeUnique}"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Grade}" Value="Epic"><Setter TargetName="TopName" Property="Foreground" Value="{DynamicResource GradeEpic}"/></DataTrigger>
+                  </DataTemplate.Triggers>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+          <!-- compact only: the way to every table -->
+          <TextBlock x:Name="FullLinkText" FontSize="12.5" Margin="0,12,0,0" HorizontalAlignment="Right"><Hyperlink x:Name="FullLink" Style="{StaticResource LinkStyle}">Full view: every table ▸</Hyperlink></TextBlock>
+        </StackPanel>
+      </Border>
+
+      <!-- the last pickups as they are counted, so a miss shows on the spot (Steven, 2026-10-21); how each was read is on hover (0.7.6) -->
       <Border x:Name="PickupStrip" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,12,20,12" Visibility="Collapsed">
         <StackPanel>
           <TextBlock Text="RECENT PICKUPS" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,6"
-                     ToolTip="The last pickups counted. chat: read in the chat. recovered: a chat line read again after it scrolled or garbled. loot list: only the list beside your character showed it. guessed: part of the name was hidden, taken as its closest item."/>
+                     ToolTip="The last pickups counted. Hover one to see how it was read."/>
           <ItemsControl x:Name="PickupRows">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Grid Margin="0,2">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid Margin="0,2" Background="Transparent" ToolTip="{Binding Tip}" ToolTipService.InitialShowDelay="250">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                   <TextBlock Text="{Binding Time}" FontFamily="{DynamicResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource Faint}" VerticalAlignment="Center"/>
                   <TextBlock Grid.Column="1" Text="{Binding What}" FontSize="13.5" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                  <TextBlock x:Name="ViaText" Grid.Column="2" Text="{Binding Via}" FontSize="12" Foreground="{DynamicResource Muted}" Margin="12,0,0,0" VerticalAlignment="Center"/>
                 </Grid>
-                <DataTemplate.Triggers>
-                  <DataTrigger Binding="{Binding Unconfirmed}" Value="True"><Setter TargetName="ViaText" Property="Foreground" Value="{DynamicResource Warn}"/></DataTrigger>
-                </DataTemplate.Triggers>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </StackPanel>
       </Border>
 
+    </StackPanel>
+
+      <!-- status -->
+      <Grid x:Name="StatusRow" Grid.Row="3" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left" Margin="0,14,0,0">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
+        <!-- shown with a reading problem: straight to the page that fixes it -->
+        <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
+      </Grid>
+
+    <!-- the right column (Full view, or Crafting): the tables, scrolling once they'd run past the screen; the bar sits in the
+         window's right padding, so the cards keep their width -->
+    <ScrollViewer x:Name="LowerScroll" Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="16,0,-20,0" Focusable="False" Visibility="Collapsed">
+      <StackPanel Width="662" HorizontalAlignment="Left">
       <!-- one table at a time: Drops or Gathered, picked by the tabs. The tables grow with what's farmed and the
            window with them; a table only scrolls once it would run past the bottom of the screen -->
 
@@ -283,6 +365,14 @@
           <!-- idle time and skipped reward lines; net Kinah, crafts and sales: each shown only once there is something to say -->
           <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,8,20,4" TextWrapping="Wrap" Visibility="Collapsed"/>
           <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,4,20,4" TextWrapping="Wrap" Visibility="Collapsed"/>
+
+          <!-- with nothing counted yet, one line instead of four empty headers; each section appears and opens with its first row -->
+          <TextBlock x:Name="TablesEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="20,10,20,18" TextWrapping="Wrap"
+                     Text="Loot shows here as it comes in: drops from kills, gathering, Kinah by enemy and Soul Crystals. Each table opens on its own once something lands in it."/>
+
+          <!-- loot from other zones for the tables empty here, in one line; All zones counts them together -->
+          <TextBlock x:Name="OtherZones" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="20,10,20,10" TextWrapping="Wrap" Visibility="Collapsed" Background="Transparent"
+                     ToolTip="The tables show this zone only, and start over when you change zone. Turn on All zones to count every zone together."/>
 
           <!-- both sections show at once (a run is often kills and nodes together); a click on a header folds that section -->
           <StackPanel x:Name="DropsSection">
@@ -343,14 +433,14 @@
 
           <!-- Kinah by enemy: what landed within a few seconds of the target bar naming an enemy. A guess, and labelled one -->
           <StackPanel x:Name="MobSection">
-            <Border x:Name="MobHead" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44" Cursor="Hand" ToolTip="Click to fold or unfold">
+            <Border x:Name="MobHead" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44" Cursor="Hand" ToolTip="A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one. Click to fold or unfold.">
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*"/><ColumnDefinition Width="46"/><ColumnDefinition Width="84"/><ColumnDefinition Width="58"/><ColumnDefinition Width="72"/><ColumnDefinition Width="86"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
                   <TextBlock x:Name="MobChev" Style="{StaticResource Th}" Text="▾" Width="14" Margin="0" HorizontalAlignment="Left"/>
-                  <TextBlock x:Name="MobTitle" Style="{StaticResource Th}" Text="KINAH BY ENEMY · BEST GUESS" Margin="0" HorizontalAlignment="Left"/>
+                  <TextBlock x:Name="MobTitle" Style="{StaticResource Th}" Text="KINAH BY ENEMY" Margin="0" HorizontalAlignment="Left"/>
                 </StackPanel>
                 <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="KILLS"/>
                 <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="PER KILL"/>
@@ -416,35 +506,6 @@
             <TextBlock x:Name="PetMore" FontSize="12.5" Margin="20,6,20,8" Visibility="Collapsed"><Hyperlink x:Name="PetMoreLink" Style="{StaticResource LinkStyle}"><Run x:Name="PetMoreRun" Text="Show all"/></Hyperlink></TextBlock>
           </StackPanel>
 
-          <!-- the totals, like the site's session summary footer: loot before tax, the Market's cut, Kinah, the session total -->
-          <Border x:Name="Foot" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="0,1,0,0" CornerRadius="0,0,17,17">
-            <StackPanel>
-              <Border Style="{StaticResource FootRow}">
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="Loot before tax" FontWeight="SemiBold"/>
-                  <TextBlock x:Name="FootLootNote" Grid.Column="1" Foreground="{DynamicResource Muted}" Margin="14,0,12,0" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"/>
-                  <TextBlock x:Name="FootLoot" Grid.Column="2" FontWeight="SemiBold" Text="—"/></Grid>
-              </Border>
-              <Border Style="{StaticResource FootRow}">
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock x:Name="FootTaxLbl" Foreground="{DynamicResource Muted}" Text="Market fee and tax"/>
-                  <TextBlock x:Name="FootTax" Grid.Column="2" Foreground="{DynamicResource Bad}" Text="—"/></Grid>
-              </Border>
-              <Border Style="{StaticResource FootRow}">
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="Kinah" FontWeight="SemiBold"/>
-                  <TextBlock x:Name="FootKinahNote" Grid.Column="1" Foreground="{DynamicResource Muted}" Margin="14,0,12,0" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"/>
-                  <TextBlock x:Name="FootKinah" Grid.Column="2" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Text="0"/></Grid>
-              </Border>
-              <Border Style="{StaticResource FootRow}" BorderThickness="0">
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="SESSION TOTAL" Foreground="{DynamicResource Gold}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                  <TextBlock x:Name="FootTotalNote" Grid.Column="1" Foreground="{DynamicResource Muted}" Margin="14,0,12,0" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                  <TextBlock x:Name="FootTotal" Grid.Column="2" FontFamily="{DynamicResource DisplayFont}" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Text="0" VerticalAlignment="Center"/></Grid>
-              </Border>
-            </StackPanel>
-          </Border>
-
           <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="16,8,16,10" Visibility="Collapsed"/>
         </StackPanel>
       </Border>
@@ -467,7 +528,7 @@
               <TextBlock Style="{StaticResource Th}" Text="RECIPE · WHAT CAME OUT" Margin="20,0,0,0" HorizontalAlignment="Left"/>
               <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="TRIES"/>
               <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="SUCCESS" ToolTip="Tries that worked, out of all tries. The recipe's listed rate at the required mastery is shown under the recipe."/>
-              <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="COST/TRY" ToolTip="The recipe's materials at the lowest Market prices on your server. A failed try uses them too."/>
+              <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="COST" ToolTip="What one try costs: the recipe's materials at the lowest Market prices on your server. A failed try uses them too."/>
               <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="SELLS FOR" ToolTip="What one of the item sells for at the lowest Market price, after the Market's fee and tax."/>
               <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PROFIT" Margin="0,0,20,0" ToolTip="What came out, at Market prices after the Market's cut, minus the cost of every try."/>
             </Grid>
@@ -508,15 +569,10 @@
         </StackPanel>
       </Border>
 
-      <!-- status -->
-      <Grid x:Name="StatusRow" Margin="0,14,0,0">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-        <!-- shown with a reading problem: straight to the page that fixes it -->
-        <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
-      </Grid>
+      </StackPanel>
+    </ScrollViewer>
 
-    </StackPanel>
+    </Grid>
 
     </Grid>
   </Border>

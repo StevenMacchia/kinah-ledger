@@ -117,6 +117,8 @@ public static class WpfApp
         w.Show();
         w.ShowDemo();
         var startSkin = Skins.Current;
+        // a known start: the window and tray choices off (0.7.6 turns two of them on for new installs)
+        w.Prefs.CloseToTray = w.Prefs.MinimizeToTray = w.Prefs.HideWhenGameCloses = false;
         OptionsWindow Open() { var o = new OptionsWindow(w, OptionsWindow.Page.General) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false }; o.Show(); DoEvents(); return o; }
 
         var o = Open();
@@ -162,11 +164,33 @@ public static class WpfApp
         Check(p.Hud == hudBefore, "Cancel keeps the panel setting as it was");
         Check(Skins.Current == other, "Cancel puts the saved theme back");
 
+        // the panel's figures: a chip adds one, Save hands it to the panel, the order stays the panel's
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        var before = HudFields.Parse(p.HudFields);
+        var add = HudFields.All.First(f => !before.Contains(f.Key)).Key;
+        Click((System.Windows.Controls.Button)o.HudFieldHost.Children[Array.FindIndex(HudFields.All, f => f.Key == add)]);
+        Check(o.SaveBtn.IsEnabled && HudFields.Parse(p.HudFields).SequenceEqual(before), "a panel figure waits for Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(HudFields.Parse(p.HudFields).Contains(add) && HudFields.Parse(p.HudFields).Count == before.Count + 1, "panel figure saved: " + p.HudFields);
+
         o = Open();
         Click(o.HotkeyResetBtn);
         Click(o.SaveBtn);
         DoEvents();
         Check(p.Hotkey == Platform.Hotkey.Default, "Default puts Ctrl+Shift+K back");
+
+        // Compact and Full view (0.7.6): the tables and pickups only in Full, which doubles the width; Crafting is one column either way
+        w.ShowCompact(); DoEvents();
+        double compactW = w.ActualWidth;
+        Check(w.TablesCard.Visibility == Visibility.Visible && w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility != Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
+            "Compact: run card, slim total, tables at three rows, no pickups");
+        w.ShowFull(); DoEvents();
+        Check(w.TablesCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.ActualWidth > compactW * 1.8,
+            $"Full view: pickups, top drops, more rows, {compactW:0} -> {w.ActualWidth:0} px wide");
+        w.ShowCompact(); DoEvents();
+        Check(Math.Abs(w.ActualWidth - compactW) < 2, "back to Compact: the width it had");
 
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
@@ -194,20 +218,37 @@ public static class WpfApp
         w.Close();
     }
 
-    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null)
+    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false)
     {
         Ensure();
         Directory.CreateDirectory(dir);
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
         if (skin != null) Skins.Apply(skin);
+        // KL_SCREEN_H=1040: render as a screen of that height would show it (the window never grows past the work area)
+        if (double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_H"), out var screenH) && screenH > 300) w.MaxHeight = screenH;
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
+        if (full) w.ShowFull();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
+        if (Environment.GetEnvironmentVariable("KL_DEBUG_LAYOUT") == "1")
+        {
+            void Dump(DependencyObject d, int depth)
+            {
+                if (depth > 7) return;
+                for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+                {
+                    var c = VisualTreeHelper.GetChild(d, i);
+                    if (c is FrameworkElement fe && fe.ActualWidth > 600) Console.WriteLine($"{new string(' ', depth * 2)}{fe.GetType().Name} {fe.Name} {fe.ActualWidth:0} desired {fe.DesiredSize.Width:0} vis {fe.Visibility}");
+                    Dump(c, depth + 1);
+                }
+            }
+            Console.WriteLine($"window {w.ActualWidth:0}"); Dump(w, 0);
+        }
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", _ => "ui-main-tracking" };
-        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         // KL_CARD_ZONE=<zone>: also draw the card a click on the first drop opens, with the live site's data for that zone
         if (demo && Environment.GetEnvironmentVariable("KL_CARD_ZONE") is { Length: > 0 } cardZone)
         {
@@ -215,14 +256,20 @@ public static class WpfApp
             Task.Run(() => KinahLedger.Data.SiteData.RefreshAsync(http, "https://kinahledger.com", "na_e-siel-elyos")).Wait();
             w.ShotItemCard(Path.Combine(dir, "ui-card.png"), cardZone);
         }
+        // the Discord card for the same count, and the panel over the game with the window's own figures (every field, then the default set)
+        if (demo && kind != "Crafting") w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
+        var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         w.Close();
 
-        var h = new HudWindow { Left = -12000, Top = -12000, ShowActivated = false };
-        h.Show();
-        h.Update("42:17", "938K", "371K", "875K");
-        DoEvents();
-        Save((FrameworkElement)h.Content, Path.Combine(dir, "ui-hud.png"), 0);
-        h.Close();
+        foreach (var (file, fields) in new[] { ("ui-hud.png", HudFields.Parse(null)), ("ui-hud-all.png", HudFields.All.Select(f => f.Key).ToList()) })
+        {
+            var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            h.Update(values);
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            h.Close();
+        }
     }
 
     /// <summary>Lets pending layout and render work run, since no message loop is running in this mode.</summary>
