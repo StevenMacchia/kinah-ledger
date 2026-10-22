@@ -622,9 +622,16 @@ public sealed class TrackerSession
     /// The zone on its own clock, whether or not the chat can be read: every ZoneEverySec while a zone is known, every
     /// 30 seconds while none is ("not read yet"), as long as nothing covers the minimap corner.
     /// </summary>
+    bool _rewardWasOpen;
     async Task ZoneDueAsync()
     {
         int every = Engine.Zone == null ? 5 : _settings.Ocr.ZoneEverySec;   // no zone yet (a menu, a loading screen): try again every 5 s, as long as it takes
+        // inside an event or expedition, every 3 s: when it ends the game moves the player on, and what drops there must
+        // never land in the event (Steven, 2026-10-22). A reward screen closing is read at once (below).
+        if (ZoneLocator.KindOf(Engine.Zone) != null) every = Math.Min(every, 3);
+        bool rewardNow = Target.RewardOpen(DateTime.UtcNow);
+        if (_rewardWasOpen && !rewardNow) _zoneAt = DateTime.MinValue;
+        _rewardWasOpen = rewardNow;
         if ((DateTime.UtcNow - _zoneAt).TotalSeconds < every) return;
         var game = GameWindow.Find(_settings.ProcessHints);
         GameRect = game ?? GameRect;
