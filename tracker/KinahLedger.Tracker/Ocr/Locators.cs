@@ -234,6 +234,34 @@ public static class ZoneLocator
     /// <summary>Instanced areas (dungeons, trials, arenas, event areas) and the kind a run in one is filed under: data/instances.txt.</summary>
     public static readonly Dictionary<string, string> Instances = LoadInstances();
 
+    /// <summary>
+    /// The expedition an area belongs to (instances.txt "Area|Kind|Expedition"): one expedition has several areas, each
+    /// with its own minimap title, and a run through them is one run under the expedition's name (Steven, 2026-10-22).
+    /// </summary>
+    public static readonly Dictionary<string, string> Parents = LoadParents();
+    /// <summary>The name a run in this area is filed under: its expedition's, or its own.</summary>
+    public static string RunName(string zone) => Parents.TryGetValue(zone, out var p) ? p : zone;
+
+    static Dictionary<string, string> LoadParents()
+    {
+        var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var stream = typeof(ZoneLocator).Assembly.GetManifestResourceStream("instances.txt");
+            if (stream == null) return d;
+            using var r = new StreamReader(stream);
+            while (r.ReadLine() is { } line)
+            {
+                var t = line.Trim();
+                if (t.Length == 0 || t.StartsWith('#')) continue;
+                var parts = t.Split('|');
+                if (parts.Length >= 3 && parts[2].Trim().Length > 0) d[parts[0].Trim()] = parts[2].Trim();
+            }
+        }
+        catch (Exception) { /* without parents every area is its own run, as before */ }
+        return d;
+    }
+
     /// <summary>"Expedition", "Event", "Arena" or "Legion" for an instanced area; null for an open-world zone or none.</summary>
     public static string? KindOf(string? zone) => zone != null && Instances.TryGetValue(zone, out var k) ? k : null;
 
@@ -249,9 +277,9 @@ public static class ZoneLocator
             {
                 var t = line.Trim();
                 if (t.Length == 0 || t.StartsWith('#')) continue;
-                var bar = t.LastIndexOf('|');
-                if (bar <= 0) continue;
-                d[t[..bar].Trim()] = t[(bar + 1)..].Trim();
+                var parts = t.Split('|');
+                if (parts.Length < 2 || parts[0].Trim().Length == 0) continue;
+                d[parts[0].Trim()] = parts[1].Trim();
             }
         }
         catch (Exception) { /* without the list, instances read as unlisted titles and count under Unknown zone */ }

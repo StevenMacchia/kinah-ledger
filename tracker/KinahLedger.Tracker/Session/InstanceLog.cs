@@ -48,10 +48,12 @@ public sealed class InstanceLog
             var kind = ZoneLocator.KindOf(zone);
             if (kind != null)
             {
-                if (_cur != null && string.Equals(_cur.Zone, zone, StringComparison.OrdinalIgnoreCase)) return;
+                // an area of an expedition is that expedition: walking from one area to the next is the same run
+                var name = ZoneLocator.RunName(zone);
+                if (_cur != null && string.Equals(_cur.Zone, name, StringComparison.OrdinalIgnoreCase)) return;
                 CloseLocked();
-                _cur = new InstanceRun { Zone = zone, Kind = kind, Start = now };
-                CrashLog.Note($"{kind.ToLowerInvariant()} run started: {zone}");
+                _cur = new InstanceRun { Zone = name, Kind = ZoneLocator.KindOf(name) ?? kind, Start = now };
+                CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run started: {name}" + (name != zone ? $" (in {zone})" : ""));
             }
             else if (zone != SessionEngine.UnknownZone) CloseLocked();
         }
@@ -72,7 +74,8 @@ public sealed class InstanceLog
                 case KinahChanged { Bound: false } k when k.Delta > 0:
                     _cur.Kinah += k.Delta; _cur.LastLoot = k.Time;
                     break;
-                case MobKilled or CurrencyGained:
+                case MobKilled:
+                case CurrencyGained c when c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase):
                     _cur.Kills++;
                     break;
             }
