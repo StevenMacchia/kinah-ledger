@@ -193,16 +193,22 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     {
         if (runs == null) return null;
         var list = runs
-            .Where(r => r.LastLoot != null && KinahLedger.Ocr.ZoneLocator.KindOf(r.Zone) != null && r.Seconds >= 1 && r.Seconds <= MaxSeconds)
+            .Where(r => r.LastLoot != null && KindOf(r) != null && r.Seconds >= 1 && r.Seconds <= MaxSeconds)
             .OrderByDescending(r => r.Start).Take(MaxRuns)
             .Select(r =>
             {
                 var d = new Dictionary<string, int>();
                 foreach (var (id, n) in r.Items) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
-                return new InstanceRunPayload(r.Zone, KinahLedger.Ocr.ZoneLocator.KindOf(r.Zone)!, (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d);
+                return new InstanceRunPayload(r.Zone, KindOf(r)!, (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d);
             }).ToList();
         return list.Count > 0 ? list : null;
     }
+
+    /// <summary>
+    /// A run's kind as sent: the instance list's for an area, "World Boss" for a boss's loot (its zone is the boss's name,
+    /// on no area list; the site keeps it as its own loot table, never Kinah/hr or an event). Null: not sent.
+    /// </summary>
+    static string? KindOf(InstanceRun r) => r.Kind == InstanceLog.WorldBoss ? InstanceLog.WorldBoss : KinahLedger.Ocr.ZoneLocator.KindOf(r.Zone);
 }
 
 /// <summary>Successes and failures for one recipe or enchant step.</summary>

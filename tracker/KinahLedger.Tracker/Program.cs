@@ -1405,6 +1405,12 @@ options: --process aion[,other]");
             ce.Apply(new ItemAcquired(cw.AddSeconds(40), items.IdOf("Orichalcum Longsword"), 1, false));
             ce.Apply(new ItemAcquired(cw.AddSeconds(75), items.IdOf("Orichalcum Longsword"), 1, false));
             // event and expedition gear is bound: only materials carry a run's value (Steven, 2026-10-22)
+            // a world boss's loot goes to the site as its own kind; a run in no known area and of no boss kind doesn't
+            var wbRuns = new[] {
+                new InstanceRun { Zone = "Saursus", Kind = InstanceLog.WorldBoss, Start = x0, LastLoot = x0.AddSeconds(20), Kills = 1, Items = { [items.IdOf("Refining Stone")] = 2 } },
+                new InstanceRun { Zone = "Nowhere Known", Kind = "Event", Start = x0, LastLoot = x0.AddSeconds(20) } };
+            var wbSent = InstanceRunPayload.From(wbRuns, id => id.ToString()) ?? new();
+            Check("a world boss's loot is sent as its own kind", string.Join(" | ", wbSent.Select(r => $"{r.zone} {r.kind} {r.kills} kill {r.items.Values.Sum()} items")), "Saursus World Boss 1 kill 2 items");
             Check("gear from the item list's groups", $"{items.IsGear(items.IdOf("Orichalcum Longsword"))} {items.IsGear(items.IdOf("Holy Spirit Helm"))} {items.IsGear(items.IdOf("Refining Stone"))} {items.IsGear(items.IdOf("Fine Odyle"))}", "True True False False");
             Check("crafting window: its tabs, alone or joined on one line", $"{TargetReader.IsCraftTab("Blacksmithing")} {TargetReader.IsCraftTab("Blacksmithing Armorsmithing Handicrafting")} {TargetReader.IsCraftTab("Cooking Pot")}", "True True False");
             {
