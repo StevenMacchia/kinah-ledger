@@ -308,6 +308,30 @@ public sealed partial class ChatParser
     /// <summary>Item names likely right now (this run's items, the current enemy's loot table), for guessing a partly hidden name.</summary>
     public Func<IEnumerable<string>>? Likely { get; set; }
 
+    /// <summary>
+    /// What a line counts as, for the vote across reads (ChatVoter), without counting anything: "k:463" for Kinah,
+    /// "i:raw leather x1" for an item on the list, and whether the name was read exactly; ("", false) for anything else.
+    /// </summary>
+    public (string Key, bool Exact) Meaning(string raw)
+    {
+        var line = Timestamp().Replace(raw.Trim(), "");
+        if (line.Length == 0 || line.StartsWith('[')) return ("", false);
+        line = CleanSystemLine(line);
+        var k = Kina().Match(line);
+        if (k.Success) { long a = Digits(k.Groups["amt"].Value); return a > 0 ? ("k:" + a, true) : ("", false); }
+        var it = ItemNameFirst().Match(line);
+        if (!it.Success) it = Item().Match(line);
+        if (!it.Success) return ("", false);
+        var name = it.Groups["name"].Value.Trim().TrimEnd('.', ',', ';', ':', '\'', '"', '`', '-', ' ');
+        int n = it.Groups["n"].Success && int.TryParse(it.Groups["n"].Value, out var nn) ? nn : 1;
+        var lead = Regex.Match(name, @"^(\d{1,4})[\s\-]+(.+)$");
+        if (lead.Success) { n = int.Parse(lead.Groups[1].Value); name = lead.Groups[2].Value; }
+        name = Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
+        if (name.Length < 2 || !_items.Knows(name)) return ("", false);
+        var canon = _items.NameOf(_items.IdOf(name));
+        return ("i:" + canon.ToLowerInvariant() + "x" + n, string.Equals(canon, name, StringComparison.OrdinalIgnoreCase));
+    }
+
     public IEnumerable<GameEvent> Parse(string rawLine, DateTime time)
     {
         var line = Timestamp().Replace(rawLine.Trim(), "");

@@ -453,6 +453,7 @@ options: --process aion[,other]");
         File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), "");
         var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         var s = new TrackerSession(null, settings, items, "Replay");
+        s.Vote = !opts.ContainsKey("novote");
         int chats = 0, lists = 0; DateTime? first = null, last = null;
         foreach (var raw in File.ReadLines(path))
         {
@@ -475,6 +476,7 @@ options: --process aion[,other]");
             }
             catch (Exception ex) { Console.Error.WriteLine("skipped a trace line: " + ex.Message); }
         }
+        if (last != null) s.FlushVotes(last.Value);
         var e = s.Engine; var tot = e.Totals();
         Console.WriteLine($"Replayed {chats} chat reads and {lists} loot list reads, {first?.ToLocalTime():HH:mm:ss} to {last?.ToLocalTime():HH:mm:ss}.");
         Console.WriteLine($"  kills counted        {tot.Kills}   (evidence: {e.KillsSeen} · Kinah pickups {e.KinahDrops} · Soul Points lines {e.CurrencyLines})");
@@ -1045,7 +1047,8 @@ options: --process aion[,other]");
                 ts.Engine.SetZone("Urugugu Canyon"); ts.ZoneView.SetZone("Urugugu Canyon"); ts.Instances.Zone("Urugugu Canyon", u0);
                 ts.ProcessChat(new List<string> { "[Theo] gg" }, u0);
                 ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(1));
-                var run = ts.Instances.Snapshot().LastOrDefault(r => r.Zone == "Urugugu Canyon");
+                ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(2.2));   // the vote's next read
+                var run = ts.Instances.Snapshot().LastOrDefault(r => r.Zone == "Urugugu Canyon" && r.Start >= u0.AddSeconds(-1));
                 Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {run?.Items.Values.Sum() ?? 0} items {run?.Kinah ?? 0} Kinah", "farming: 0 items 0 Kinah · run: 1 items 600 Kinah");
             }
             {
@@ -1328,6 +1331,43 @@ options: --process aion[,other]");
             var c19 = new LootCrossCheck(items);
             var a19 = c19.Popup(new() { I("Kina") }, x0).Concat(c19.Popup(new(), x0.AddSeconds(1))).Concat(c19.Popup(new(), x0.AddSeconds(7))).ToList();
             Check("a Kina row without its amount is nothing", Desc(a19), "nothing");
+
+            // multi-frame voting: three reads of one new line, one garbled; the reading most agree on is the one counted
+            var vp = new ChatParser(items);
+            var v1 = new ChatVoter(); var vt = x0; var vo = new List<string>();
+            vo.AddRange(v1.Push(new[] { "Acquired 46&Kina." }, new[] { "Acquired 46&Kina." }, vt, vp.Meaning));
+            vo.AddRange(v1.Push(Array.Empty<string>(), new[] { "Acquired 468 Kina." }, vt.AddSeconds(0.33), vp.Meaning));
+            vo.AddRange(v1.Push(new[] { "You have acquired [Raw Leather]." }, new[] { "Acquired 468 Kina.", "You have acquired [Raw Leather]." }, vt.AddSeconds(0.66), vp.Meaning));
+            vo.AddRange(v1.Flush(vp.Meaning));
+            // a line that scrolled away after one read goes as read
+            var v2 = new ChatVoter(); var vo2 = new List<string>();
+            vo2.AddRange(v2.Push(new[] { "Acquired 352 Kina." }, new[] { "Acquired 352 Kina." }, vt, vp.Meaning));
+            vo2.AddRange(v2.Push(new[] { "Acquired 18 Kina." }, new[] { "Acquired 18 Kina." }, vt.AddSeconds(0.33), vp.Meaning));
+            // two Kinah lines that differ only in their digits are two pickups, never one line misread (16:53, 531 and 320)
+            var v3 = new ChatVoter(); var vo3 = new List<string>();
+            vo3.AddRange(v3.Push(new[] { "Acquired 320 Kina.", "Acquired 531 Kina." }, new[] { "Acquired 320 Kina.", "Acquired 531 Kina." }, vt, vp.Meaning));
+            vo3.AddRange(v3.Push(Array.Empty<string>(), new[] { "Acquired 320 Kina.", "x" }, vt.AddSeconds(0.33), vp.Meaning));
+            vo3.AddRange(v3.Flush(vp.Meaning));
+            Check("votes: different amounts are different lines", string.Join(" | ", vo3), "Acquired 320 Kina. | Acquired 531 Kina.");
+            // one digit apart is another pickup too (19:00: 486, 153, 386 all real; a read lost the last amount)
+            var v4 = new ChatVoter(); var vo4 = new List<string>();
+            vo4.AddRange(v4.Push(new[] { "Acquired 386 Kina." }, new[] { "Acquired 486 Kina.", "Acquired 153 Kina.", "Acquired 386 Kina." }, vt, vp.Meaning));
+            vo4.AddRange(v4.Push(Array.Empty<string>(), new[] { "Acquired 486 Kina.", "Acquired 153 Kina.", "Kina." }, vt.AddSeconds(0.33), vp.Meaning));
+            vo4.AddRange(v4.Push(Array.Empty<string>(), new[] { "Acquired 486 Kina." }, vt.AddSeconds(0.66), vp.Meaning));
+            vo4.AddRange(v4.Flush(vp.Meaning));
+            Check("votes: a digit apart is another pickup", string.Join(" | ", vo4), "Acquired 386 Kina.");
+            Check("votes across reads", $"{vp.Meaning("Acquired 463 Kina.").Key} · {string.Join(" | ", vo)} · {string.Join(" | ", vo2)} · changed {v1.Changed}",
+                "k:463 · Acquired 468 Kina. | You have acquired [Raw Leather]. · Acquired 352 Kina. · changed 1");
+
+            // reward-shots cleans itself: in-run pictures after a day, reward screens after a week, never other files
+            var rs = Path.Combine(Path.GetTempPath(), "kl-rs-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(rs);
+            void Pic(string n, double daysOld) { var f = Path.Combine(rs, n); File.WriteAllBytes(f, new byte[10]); File.SetLastWriteTime(f, DateTime.Now.AddDays(-daysOld)); }
+            Pic("20261020-101010-Zone-in-run.jpg", 2); Pic("20261022-101010-Zone-in-run.jpg", 0.1);
+            Pic("20261020-101010-Zone-Jump-Jump.jpg", 2); Pic("20261012-101010-Zone-Jump-Jump.jpg", 10); Pic("mine.jpg", 30);
+            int rsGone = TrackerSession.PruneRewardShots(rs, DateTime.Now);
+            var rsLeft = string.Join(" ", Directory.GetFiles(rs).Select(Path.GetFileName).OrderBy(n => n));
+            Directory.Delete(rs, true);
+            Check("reward-shots cleans itself", $"{rsGone} · {rsLeft}", "2 · 20261020-101010-Zone-Jump-Jump.jpg 20261022-101010-Zone-in-run.jpg mine.jpg");
 
             // a joke ask on the site's board (one listing, 5,000x its day before) is no price
             var pb = PriceBook.ParseBoard("{\"items\":[{\"item\":\"Ethereal Longsword\",\"lowest_ask\":10000011,\"n_obs\":1,\"change_24h\":4999.0},{\"item\":\"Raw Leather\",\"lowest_ask\":900,\"n_obs\":1,\"change_24h\":0.1}]}", null);

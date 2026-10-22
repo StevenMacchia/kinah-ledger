@@ -430,15 +430,13 @@ public sealed class TrackerSession
             }
             return any;
         }
-        int at = 0;
-        foreach (var (l, events) in _parser.ParseBatch(fresh, now))
+        // each new line is voted on across the next reads before it counts (ChatVoter); lines come out in order
+        var voted = Vote ? _voter.Push(fresh, lines, now, _parser.Meaning) : fresh;
+        foreach (var (l, events) in _parser.ParseBatch(voted, now))
         {
             bool any = Apply(events);
             CrashLog.Read(l, any, afterFade);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
-            // a loot-shaped line that matched nothing was probably still fading in: look at its place again next read
-            else if (Reread.LooksLikeLoot(l)) _reread.Remember(l, fresh.Count - 1 - at, now);
-            at++;
         }
         foreach (var l in reread)
         {
@@ -451,6 +449,9 @@ public sealed class TrackerSession
     }
 
     DateTime _targetAt = DateTime.MinValue;
+    readonly ChatVoter _voter = new();
+    internal bool Vote = true;   // off only for replay --novote, to measure what voting changes
+    public ChatVoter Voter => _voter;
 
     /// <summary>
     /// What covers part of the game, or null. While the game is read from its own frames (WindowCapture), a window over it
@@ -733,11 +734,34 @@ public sealed class TrackerSession
     // Events and expeditions pay out on their own screens (cards picked at the end of an event, the big reward table at
     // the end of an expedition), not in the chat (Steven, 2026-10-22). To learn to read them, a picture of the game window
     // is kept each time one opens: a few seconds apart while it stays open, on this PC only, in reward-shots beside the
-    // logs, at most RewardShotsPerDay a day. Inside an event or expedition a picture every 15 s too, since a card pick may
+    // logs, at most RewardShotsPerDay a day. Inside an event or expedition a picture every 30 s too, since a card pick may
     // show no title to recognise. Nothing else on screen is captured, nothing is sent anywhere, and it only happens when the
     // reward-shots folder exists (made by hand on a PC that helps build the reader; never by the app).
-    public const int RewardShotsPerDay = 500;
-    DateTime _rewardShotAt = DateTime.MinValue; int _rewardShotsOpen;
+    // The folder cleans itself (Steven, 2026-10-22: 212 pictures, 472 MB in a day): in-run pictures go after a day, reward
+    // screens after a week, and past RewardShotsMaxMB the oldest go first, in-run ones before reward screens. Fight
+    // pictures stopped once the nameplate reader was built from them.
+    public const int RewardShotsPerDay = 200;
+    public const long RewardShotsMaxMB = 300;
+    DateTime _rewardShotAt = DateTime.MinValue, _rewardPrunedAt = DateTime.MinValue; int _rewardShotsOpen;
+
+    /// <summary>Deletes old pictures from reward-shots (see above). Only ever .jpg files the tracker named itself.</summary>
+    internal static int PruneRewardShots(string dir, DateTime now)
+    {
+        int gone = 0;
+        var files = new DirectoryInfo(dir).GetFiles("2*-*.jpg")
+            .Where(f => System.Text.RegularExpressions.Regex.IsMatch(f.Name, @"^\d{8}-\d{6}-"))
+            .Select(f => (F: f, Run: f.Name.EndsWith("-in-run.jpg") || f.Name.EndsWith("-fight.jpg")))
+            .ToList();
+        void Drop((FileInfo F, bool Run) x) { try { x.F.Delete(); gone++; } catch { } }
+        foreach (var x in files.Where(x => (now - x.F.LastWriteTime).TotalDays > (x.Run ? 1 : 7)).ToList()) { Drop(x); files.Remove(x); }
+        long total = files.Sum(x => x.F.Length), max = RewardShotsMaxMB * 1024 * 1024;
+        foreach (var x in files.OrderByDescending(x => x.Run).ThenBy(x => x.F.LastWriteTime).ToList())
+        {
+            if (total <= max) break;
+            total -= x.F.Length; Drop(x);
+        }
+        return gone;
+    }
     void RewardShot()
     {
         try
@@ -745,13 +769,16 @@ public sealed class TrackerSession
             var now = DateTime.UtcNow;
             var dir = Path.Combine(CrashLog.Dir, "reward-shots");
             if (GameRect is not { } g || !Directory.Exists(dir)) return;
+            if ((now - _rewardPrunedAt).TotalMinutes >= 30)
+            {
+                _rewardPrunedAt = now;
+                int gone = PruneRewardShots(dir, DateTime.Now);
+                if (gone > 0) CrashLog.Note($"reward-shots: {gone} old pictures deleted");
+            }
             bool reward = Target.RewardOpen(now), inside = ZoneLocator.KindOf(Zone) is "Event" or "Expedition" || Zone == SessionEngine.UnknownZone;
-            // fights too, every 30 s: the nameplates and health bars around the character, to learn which enemies are engaged
-            bool fighting = (now - _lastActivity).TotalSeconds <= FightSeconds;
             if (!reward) _rewardShotsOpen = 0;
             bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2
-                     : inside ? (now - _rewardShotAt).TotalSeconds >= 5
-                     : fighting && (now - _rewardShotAt).TotalSeconds >= 30;
+                     : inside && (now - _rewardShotAt).TotalSeconds >= 30;
             if (!due) return;
             var today = DateTime.Now.ToString("yyyyMMdd");
             if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;
@@ -760,7 +787,7 @@ public sealed class TrackerSession
             // without counting as a window over it, and Alt+Tab shows thumbnails of everything open (2026-10-22 15:07)
             if (!GameWindow.InFront(_settings.ProcessHints)) return;
             _rewardShotAt = now; if (reward) _rewardShotsOpen++;
-            var title = !reward ? (inside ? "in-run" : "fight") : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            var title = !reward ? "in-run" : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             using var bmp = ScreenReader.Capture(g);
             var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
@@ -823,10 +850,21 @@ public sealed class TrackerSession
     public async Task StopAsync()
     {
         OfferBest();   // the window closing ends the stay in this zone too
-        Instances.Close();
         _cts.Cancel();
         if (_loop != null) { try { await _loop; } catch (Exception) { /* loop ended */ } }
+        FlushVotes();   // lines still waiting for their vote count as read, before the run closes
+        Instances.Close();
         Engine.Finish();
+    }
+
+    /// <summary>
+    /// Counts the lines still waiting for a vote (a stop, the end of a replay): the last read once more, just after the
+    /// vote's time is up, so they go through the same path as any other line, reward screen and crafting window included.
+    /// </summary>
+    internal void FlushVotes(DateTime? at = null)
+    {
+        if (_voter.Waiting == 0 || _prevRead.Count == 0) return;
+        ProcessChat(new List<string>(_prevRead), (at ?? DateTime.UtcNow).AddSeconds(ChatVoter.MaxSeconds + 0.1));
     }
 
     /// <summary>The player's region key and server label ("na_e", "Siel (Elyos)"), sent with the run so the site can keep drops per server.</summary>
