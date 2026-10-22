@@ -519,6 +519,8 @@ public sealed class TrackerSession
     {
         try
         {
+            // a shop or reward screen covers the place the loot list shows: nothing there is loot
+            if (Target.RewardOpen(now)) return;
             var rows = LootPopup.Rows(lines);
             if (rows.Count > 0) _lastActivity = DateTime.UtcNow;
             if (rows.Count > 0) ReadTrace.List(now, rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}"));

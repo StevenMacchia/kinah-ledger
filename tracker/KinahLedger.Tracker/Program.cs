@@ -1010,7 +1010,7 @@ options: --process aion[,other]");
             Check("a row the chat read is matched, nothing added", $"{Desc(a1)} · {c1.Matched} matched", "nothing · 1 matched");
 
             var c2 = new LootCrossCheck(items);
-            var a2 = c2.Popup(new() { I("Raw Leather") }, x0).Concat(c2.Popup(new() { I("Raw Leather") }, x0.AddSeconds(0.7))).Concat(c2.Popup(new() { I("Raw Leather") }, x0.AddSeconds(5))).ToList();
+            var a2 = c2.Popup(new() { I("Raw Leather") }, x0).Concat(c2.Popup(new() { I("Raw Leather") }, x0.AddSeconds(0.7))).Concat(c2.Popup(new(), x0.AddSeconds(3.5))).Concat(c2.Popup(new(), x0.AddSeconds(5))).ToList();
             Check("a row the chat missed is added once, after the wait", Desc(a2), "Raw Leather ×1");
 
             var c3 = new LootCrossCheck(items);
@@ -1035,6 +1035,18 @@ options: --process aion[,other]");
             a5.AddRange(c5.Popup(new() { K(1), I("Oracle") }, x0.AddSeconds(0.7)));
             a5.AddRange(c5.Popup(new() { K(1), I("Oracle") }, x0.AddSeconds(6)));
             Check("Kinah seen once, Kina under 10 and names off the item list never count", Desc(a5), "nothing");
+
+            // a shop window where the list shows (the Festival Shop's "Radiant Odyle (Bound) x1" beside "Sold Out x1",
+            // 2026-10-22 14:48), and any row that stays up longer than a loot row does: never loot
+            var c14 = new LootCrossCheck(items);
+            var a14 = new List<GameEvent>();
+            for (int i = 0; i < 6; i++) a14.AddRange(c14.Popup(new() { I("Raw Leather"), I("Sold Out") }, x0.AddSeconds(i)));
+            a14.AddRange(c14.Popup(new(), x0.AddSeconds(9)));
+            var c15 = new LootCrossCheck(items);
+            var a15 = new List<GameEvent>();
+            for (int i = 0; i <= 8; i++) a15.AddRange(c15.Popup(new() { I("Raw Leather") }, x0.AddSeconds(i)));
+            a15.AddRange(c15.Popup(new(), x0.AddSeconds(12)));
+            Check("a shop window, and a row that stays up, are never loot", $"{Desc(a14)} · {Desc(a15)}", "nothing · nothing");
 
             // the chat misread the list's 463 as 460 (2026-10-22 11:02): the same pickup, not a second one
             var c10 = new LootCrossCheck(items);

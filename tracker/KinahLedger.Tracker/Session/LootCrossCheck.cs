@@ -35,6 +35,12 @@ public sealed class LootCrossCheck
     readonly List<(DateTime At, LootPopup.Row Row, string Key)> _waiting = new();
 
     public int Added { get; private set; }
+    /// <summary>The longest a real loot row stays up; one showing longer belongs to a window.</summary>
+    public const double MaxRowSeconds = 6;
+    readonly HashSet<string> _visible = new();
+    readonly Dictionary<string, DateTime> _since = new();
+    static readonly System.Text.RegularExpressions.Regex _shopWord = new(@"\b(?:sold\s*out|purchase|price|buy|owned|limit|stock|exchange)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+    static System.Text.RegularExpressions.Regex ShopWord() => _shopWord;
     // Kinah rows the list showed in one read only, never confirmed by a second read or the chat
     readonly List<(long Amount, DateTime At)> _singleKinah = new();
     /// <summary>How long a one-read Kinah row waits for the balance counter to confirm it.</summary>
@@ -112,6 +118,9 @@ public sealed class LootCrossCheck
     /// <summary>One read of the loot list. Its new rows wait for a chat match; returns the rows that waited long enough unmatched, as pickups to add.</summary>
     public List<GameEvent> Popup(List<LootPopup.Row> raw, DateTime now)
     {
+        // a shop or reward window over the place the list shows ("Radiant Odyle (Bound) x1" beside "Sold Out x1" in the
+        // Festival Shop, 2026-10-22 14:48): the whole read is that window, not loot
+        if (raw.Any(r => !r.IsKinah && ShopWord().IsMatch(r.Name))) { _visible.Clear(); return Settle(now); }
         // what this read shows, by pickup: unknown names and Kinah under 10 never count
         var shown = new Dictionary<string, (int Count, LootPopup.Row Row)>();
         foreach (var row in raw)
@@ -121,6 +130,9 @@ public sealed class LootCrossCheck
             if (key == null) continue;
             shown[key] = (shown.TryGetValue(key, out var x) ? x.Count + 1 : 1, row);
         }
+        foreach (var k in shown.Keys) if (!_visible.Contains(k)) _since[k] = now;
+        foreach (var k in _since.Keys.Where(k => !shown.ContainsKey(k) && !_visible.Contains(k)).ToList()) _since.Remove(k);
+        _visible.Clear(); foreach (var k in shown.Keys) _visible.Add(k);
         foreach (var (key, (n, row)) in shown)
         {
             if (row.IsKinah) _listShown[key] = (Math.Max(n, _listShown.TryGetValue(key, out var lsn) && (now - lsn.At).TotalSeconds <= MatchSeconds ? lsn.Count : 0), now);
@@ -179,6 +191,14 @@ public sealed class LootCrossCheck
                 continue;
             }
             if ((now - at).TotalSeconds < WaitSeconds) continue;
+            // a loot row is up about three seconds; one that stays is part of a window (a shop, a reward list), never loot
+            if (_since.TryGetValue(key, out var since) && _visible.Contains(key))
+            {
+                if ((now - since).TotalSeconds <= MaxRowSeconds) continue;   // still up: wait for it to go
+                CrashLog.Note($"the loot list area showed {(row.IsKinah ? row.Amount.ToString("N0") + " Kina" : row.Name + " x" + row.Count)} for over {MaxRowSeconds:0} s: a window, not loot; not counted");
+                _waiting.RemoveAt(i--);
+                continue;
+            }
             add.Add(row.IsKinah ? new KinahChanged(at, row.Amount, false) : new ItemAcquired(at, _items.IdOf(row.Name), row.Count, false));
             CrashLog.Note($"the loot list showed {(row.IsKinah ? row.Amount.ToString("N0") + " Kina" : row.Name + " x" + row.Count)} and the chat read missed it: counted from the list");
             Added++;
