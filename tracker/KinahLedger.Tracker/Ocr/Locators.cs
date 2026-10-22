@@ -262,7 +262,10 @@ public static class ZoneLocator
         return d;
     }
 
-    /// <summary>"Expedition", "Event", "Arena" or "Legion" for an instanced area; null for an open-world zone or none.</summary>
+    /// <summary>The kind of an area the tracker knows but leaves alone: nothing in it is counted (Nightmare, whose rewards never change).</summary>
+    public const string Ignored = "Ignored";
+
+    /// <summary>"Expedition", "Event", "Arena", "Legion" or "Ignored" for an instanced area; null for an open-world zone or none.</summary>
     public static string? KindOf(string? zone) => zone != null && Instances.TryGetValue(zone, out var k) ? k : null;
 
     static Dictionary<string, string> LoadInstances()

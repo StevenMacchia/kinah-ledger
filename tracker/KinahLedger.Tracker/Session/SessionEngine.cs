@@ -397,6 +397,8 @@ public sealed class SessionEngine
     {
         lock (_lock)
         {
+            // an area left alone (Nightmare): nothing there is farming, a run or a drop rate (Steven, 2026-10-22)
+            if (KinahLedger.Ocr.ZoneLocator.KindOf(_zone) == KinahLedger.Ocr.ZoneLocator.Ignored) return;
             Events++;
             // a Kinah line far above what the mobs pay is a quest or payment reward, not farming: counted like bound Kinah
             if (ev is KinahChanged { Bound: false, Delta: > 0 } big && RewardSizedLocked(big.Delta))

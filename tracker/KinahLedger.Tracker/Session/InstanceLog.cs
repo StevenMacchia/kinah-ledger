@@ -46,6 +46,8 @@ public sealed class InstanceLog
         lock (_lock)
         {
             var kind = ZoneLocator.KindOf(zone);
+            // an area left alone (Nightmare: the same rewards every time): no run, and the one before ends here
+            if (kind == ZoneLocator.Ignored) { CloseLocked(); return; }
             if (kind != null)
             {
                 // an area of an expedition is that expedition: walking from one area to the next is the same run

@@ -3,7 +3,7 @@
 # like the ones in zones.txt (the whitelist covers both), and a run spent mostly in one is filed under its kind instead
 # of Open world. Kinds: Expedition (every dungeon, trial and instance type), Arena, Legion, Event.
 # Sources: https://metabot.gg/en/aion-2/dungeons (2026-10-21; its sealed-dungeon list is partly collapsed, so some are
-# missing), plus names read in play. A new one goes here, then rebuild the tracker and run the site's gen-zones.mjs.
+# missing), plus names read in play. Kind "Ignored": known, never counted (Nightmare: the same rewards every time). A new one goes here, then rebuild the tracker and run the site's gen-zones.mjs.
 # Seen in play, 2026-10-21 (inside an expedition, and the Shugo Festival event):
 Auldor's Sanctum|Expedition|Urugugu Canyon
 Urugugu Temple|Expedition|Urugugu Canyon
@@ -35,7 +35,7 @@ Chamber of the Dead (Doom)|Expedition
 Depository of Fates|Expedition
 Forgotten Repository|Expedition
 Forgotten Repository (Doom)|Expedition
-Nightmare Altar|Expedition
+Nightmare Altar|Ignored
 Sanctum of Loathing|Expedition
 Tyrant's Hideout|Expedition
 Fafnite Amphitheater|Expedition
@@ -43,7 +43,7 @@ Silent Graveyard|Expedition
 Crobakhi's Secret Depository|Expedition
 Daeva Bio-Research Base|Expedition
 Odylium Repository|Expedition
-Nightmare|Expedition
+Nightmare|Ignored
 # Ascension instances
 Chloris's Abyss|Expedition
 Dream of Shattered Fragments|Expedition
