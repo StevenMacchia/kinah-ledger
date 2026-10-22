@@ -349,7 +349,11 @@
                   <TextBlock x:Name="UpdateLine" Style="{StaticResource RowHint}"/>
                   <TextBlock FontSize="12.5" Margin="0,6,0,0"><Hyperlink x:Name="ReleasesLink" Style="{StaticResource LinkStyle}">All releases and their notes</Hyperlink></TextBlock>
                 </StackPanel>
-                <Button x:Name="CheckNowBtn" Grid.Column="1" Content="Check now" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <!-- shown once an update has downloaded: installs it now, as the banner's Restart now does -->
+                  <Button x:Name="RestartUpdateBtn" Style="{StaticResource PrimaryButton}" Content="Restart now" Margin="0,0,8,0" Visibility="Collapsed"/>
+                  <Button x:Name="CheckNowBtn" Content="Check now"/>
+                </StackPanel>
               </Grid>
             </StackPanel>
           </Border>

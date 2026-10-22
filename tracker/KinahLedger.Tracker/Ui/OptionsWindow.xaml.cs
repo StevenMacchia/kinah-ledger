@@ -203,6 +203,7 @@ public partial class OptionsWindow : Window
         HudResetBtn.Click += (_, _) => { _host.ResetHudPosition(); ShowNote("The panel goes back to the top centre of the screen.", "Good"); };
 
         CheckNowBtn.Click += async (_, _) => await Act(CheckNowBtn, () => _host.CheckForUpdate(manual: true));
+        RestartUpdateBtn.Click += async (_, _) => await _host.RestartToUpdate();
         ReleasesLink.Click += (_, _) => MainWindow.Open(MainWindow.RepoUrl + "/releases");
 
         AboutSiteBtn.Click += (_, _) => MainWindow.Open(MainWindow.SiteUrl);
@@ -295,6 +296,7 @@ public partial class OptionsWindow : Window
         VersionTitle.Text = "Version " + Upload.RunPayload.AppVersion;
         UpdateLine.Text = _host.UpdateStatusText;
         CheckNowBtn.IsEnabled = _host.AppSettings.Update.Check;
+        RestartUpdateBtn.Visibility = _host.UpdateReady || Environment.GetEnvironmentVariable("KL_SHOT_UPDATE_READY") == "1" ? Visibility.Visible : Visibility.Collapsed;   // the variable: layout renders only
     }
 
     public void RefreshPreview()

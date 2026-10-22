@@ -33,6 +33,10 @@ public partial class MainWindow
 
     /// <summary>The update line for Options › Updates.</summary>
     public string UpdateStatusText => _updateStatus;
+    /// <summary>A downloaded update is waiting: Options › Updates shows Restart now beside Check now.</summary>
+    public bool UpdateReady => _staged != null && !_downloading && _release != null;
+    /// <summary>Options › Updates' Restart now: the same as the banner's.</summary>
+    public Task RestartToUpdate() => _staged != null ? RestartForUpdate() : Task.CompletedTask;
     void SetUpdateStatus(string text) { _updateStatus = text; _options?.RefreshUpdates(); }
 
     /// <summary>Starts the update checks. Called by the real app start only, never by layout renders or self-tests.</summary>
