@@ -546,7 +546,7 @@ options: --process aion[,other]");
                     reader ??= new ScreenReader(new System.Drawing.Rectangle(origin, bmp.Size), settings.Ocr.Scale, auto);
                     var lines = Task.Run(() => reader.ReadCaptureAsync(bmp)).GetAwaiter().GetResult();
                     s.Parser.NoteAccents(reader.LastAccents);
-                    s.QuestCounter(lines); s.ProcessChat(lines, t); chats++;
+                    s.QuestCounter(lines, t); s.ProcessChat(lines, t); chats++;
                 }
                 else
                 {
@@ -607,7 +607,7 @@ options: --process aion[,other]");
                 if ((from != null && local < from) || (to != null && local > to)) continue;
                 var lines = r.GetProperty("l").EnumerateArray().Select(x => x.GetString() ?? "").ToList();
                 first ??= t; last = t;
-                if (r.GetProperty("k").GetString() == "chat") { s.QuestCounter(lines); s.ProcessChat(lines, t); chats++; }
+                if (r.GetProperty("k").GetString() == "chat") { s.QuestCounter(lines, t); s.ProcessChat(lines, t); chats++; }
                 else
                 {
                     // the trace keeps list rows as "463 Kina" and "Name x2"; the list's own form is "Kina x463"

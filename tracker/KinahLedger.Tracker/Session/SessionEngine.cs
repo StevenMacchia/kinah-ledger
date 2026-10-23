@@ -184,6 +184,9 @@ public sealed class SessionEngine
         return rec;
     }
 
+    /// <summary>The quest tracker counted one more kill ("Defeat ... (21/25)" to 22): evidence q for <see cref="KillEvidence"/>.</summary>
+    public void QuestStep(DateTime t) { lock (_lock) KillEvidence(t, 'q'); }
+
     // ---- the enemies fighting the player, from their nameplates (Nameplates: a red health bar under a gold name) ----
     // How many of each are up, and the ones whose bar just went: an enemy whose bar vanishes as its loot lands is the one
     // that died (Steven, 2026-10-22: "look at the char on screen to see which healthbars around it are being fought").

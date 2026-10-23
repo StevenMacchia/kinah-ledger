@@ -1252,13 +1252,16 @@ public sealed class TrackerSession
     // quest enemy, the kills counted should rise as fast as the counter. Pass times say how often the screen is read.
     int _passes; double _passMs, _chatMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
     readonly Dictionary<int, int> _questMax = new();
+    /// <summary>A new quest number seen once, waiting for the next read to agree (and when it was first seen).</summary>
+    readonly Dictionary<int, (int N, DateTime At)> _questPending = new();
     /// <summary>Steps of the quest tracker's kill counters seen since the start: kills of quest enemies, counted by the game.</summary>
     public int QuestStepsTotal { get; private set; }
     /// <summary>For the accuracy meter: in the minutes the quest counter moved, the kills it counted and the kills the tracker counted.</summary>
     public int QuestKillsGame { get; private set; }
     public int QuestKillsCounted { get; private set; }
-    internal void QuestCounter(IReadOnlyList<string> lines)
+    internal void QuestCounter(IReadOnlyList<string> lines, DateTime? at = null)
     {
+        var t = at ?? DateTime.UtcNow;
         var best = new Dictionary<int, int>();
         for (int i = 0; i < lines.Count; i++)
         {
@@ -1273,8 +1276,20 @@ public sealed class TrackerSession
         }
         foreach (var (of, n) in best)
         {
-            if (_questMax.TryGetValue(of, out var was) && n > was && n - was <= 5) { _questSteps += n - was; QuestStepsTotal += n - was; }
-            if (!_questMax.ContainsKey(of) || n > was || n < was - 3) _questMax[of] = n;
+            bool known = _questMax.TryGetValue(of, out var was);
+            if (known && n > was && n - was <= 5)
+            {
+                // two reads agree on the new number before it counts: one misread "(24/25)" is not three kills
+                if (!(_questPending.TryGetValue(of, out var p) && p.N == n)) { _questPending[of] = (n, t); continue; }
+                _questPending.Remove(of);
+                int steps = n - was;
+                _questSteps += steps; QuestStepsTotal += steps;
+                // each step is a kill the game counted: evidence for the kill count, joining the kill its Kinah or Soul
+                // line showed, or a kill of its own when those were lost (Steven, 2026-10-23: 25 kills counted as 20)
+                for (int s = 0; s < steps; s++) foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.QuestStep(p.At);
+            }
+            else _questPending.Remove(of);
+            if (!known || n > was || n < was - 3) _questMax[of] = n;
         }
     }
     void Audit()

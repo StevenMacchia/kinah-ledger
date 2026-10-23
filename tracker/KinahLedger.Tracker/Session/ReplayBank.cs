@@ -127,7 +127,7 @@ public static class ReplayBank
                 var ls = r.GetProperty("l").EnumerateArray().Select(x => x.GetString() ?? "").ToList();
                 switch (r.GetProperty("k").GetString())
                 {
-                    case "chat": session.QuestCounter(ls); session.ProcessChat(ls, t); break;
+                    case "chat": session.QuestCounter(ls, t); session.ProcessChat(ls, t); break;
                     case "list": session.ProcessList(ls.Select((x, i) => (100 + i * 30, System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"))).ToList(), t); break;
                     case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t); } break;
                 }

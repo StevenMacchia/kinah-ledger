@@ -255,16 +255,23 @@ public static class AccuracyTests
         // a small stack taken out of storage is not a drop either (the window, not the size, says so)
         var ss2 = new TrackerSession(null, settings, items, "Test");
         ss2.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
-        for (int i = 1; i <= 4; i++) ss2.ProcessChat(new List<string> { "Acquired 120 Kina.", "Stored item(s) in Storage.", "Acquired Refining Stone x6." }, q0.AddSeconds(i * 0.5));
+        for (int i = 1; i <= 4; i++) ss2.ProcessChat(new List<string> { "Acquired 120 Kina.", "Stored item(s) in Storage.", "Acquired Spiritstone x6." }, q0.AddSeconds(i * 0.5));
         ss2.FlushVotes(q0.AddSeconds(3));
-        Check("storage, then Refining Stone x6: not a drop", $"{N(ss2, "Refining Stone")}", "0");
+        Check("storage, then Spiritstone x6: not a drop", $"{N(ss2, "Spiritstone")}", "0");
+
+        // the quest tracker as a witness to kills: each step two reads agree on is a kill, even with its Kinah line lost;
+        // a number read once ("(7/20)" for "(2/20)") is not five kills
+        var sk = new TrackerSession(null, settings, items, "Test");
+        void Q(string l, double sec) => sk.QuestCounter(new List<string> { "Defeat Hard Kalgolem", l }, q0.AddSeconds(sec));
+        Q("(1/20)", 0); Q("(2/20)", 1); Q("(2/20)", 2); Q("(7/20)", 3); Q("(3/20)", 6); Q("(3/20)", 7);
+        Check("quest counter 1 to 3, one misread between: 2 kills", $"{sk.Engine.Totals().Kills}", "2");
 
         // a stack no enemy drops, out in the world, on its own
         var sp = new TrackerSession(null, settings, items, "Test");
         sp.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
-        for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300.", "Acquired Refining Stone x6." }, q0.AddSeconds(i * 0.5));
+        for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300.", "Acquired Spiritstone x6." }, q0.AddSeconds(i * 0.5));
         sp.FlushVotes(q0.AddSeconds(3));
-        Check("x300 out in the world: not a drop; x6 is", $"{N(sp, "Power Shard")} {N(sp, "Refining Stone")}", "0 6");
+        Check("x300 out in the world: not a drop; x6 is", $"{N(sp, "Power Shard")} {N(sp, "Spiritstone")}", "0 6");
 
         // a skin box's contents, the skin read before the box line is clean (16:00)
         var sx = new TrackerSession(null, settings, items, "Test");
