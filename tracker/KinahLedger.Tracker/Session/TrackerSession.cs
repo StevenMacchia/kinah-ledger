@@ -926,7 +926,12 @@ public sealed class TrackerSession
         // already seen, and was never counted (the synthetic fights; 497 Kina at 16:16 on 2026-10-23). Read exactly, in
         // two reads in a row, in a read that lined up, and at most two at once (more is history scrolled back into view).
         {
-            var handled = new HashSet<string>(fresh.Concat(reread).Concat(settled).Select(l => _parser.Meaning(l).Key).Where(k => k.Length > 0));
+            // what any path took in the last few seconds, by meaning and by text: a garbled copy still waiting for its vote
+            // is the same line as the clean one the ledger sees (the noisy synthetic fights counted those twice)
+            foreach (var l in fresh.Concat(reread).Concat(settled)) _recentHandled.Add((l.Trim(), _parser.Meaning(l).Key, now));
+            _recentHandled.RemoveAll(x => (now - x.At).TotalSeconds > HandledSeconds);
+            var handled = new HashSet<string>(_recentHandled.Select(x => x.Key).Where(k => k.Length > 0));
+            bool Handled(string line) => _recentHandled.Any(x => Reread.Same(x.Line, line.Trim()));
             var keyed = lines.Select(l => (Line: l, M: _parser.Meaning(l))).Where(x => x.M.Key.Length > 0).ToList();
             if (!_ledgerPrimed) { foreach (var x in keyed) _keySeen[x.M.Key] = now; _ledgerPrimed = true; }
             var unseen = keyed.Where(x => !handled.Contains(x.M.Key) && !(_keySeen.TryGetValue(x.M.Key, out var ks) && (now - ks).TotalMinutes <= LedgerMinutes)).ToList();
@@ -934,7 +939,7 @@ public sealed class TrackerSession
             if (aligned && unseen.Count is > 0 and <= 2)
                 foreach (var (l, m) in unseen.GroupBy(x => x.M.Key).Select(g => g.First()))
                 {
-                    if (!m.Exact) continue;
+                    if (!m.Exact || Handled(l)) continue;
                     int c = _keyCandidate.GetValueOrDefault(m.Key) + 1;
                     if (c < 2) { _keyCandidate[m.Key] = c; continue; }
                     _keyCandidate.Remove(m.Key);
@@ -954,6 +959,8 @@ public sealed class TrackerSession
 
     readonly Dictionary<string, DateTime> _keySeen = new();
     readonly Dictionary<string, int> _keyCandidate = new();
+    readonly List<(string Line, string Key, DateTime At)> _recentHandled = new();
+    const double HandledSeconds = 8;
     bool _ledgerPrimed;
     const double LedgerMinutes = 10;
 
