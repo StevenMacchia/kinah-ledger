@@ -38,6 +38,10 @@ public sealed class InstanceRun
     public bool FromPicture { get; set; }
     /// <summary>Slots on the reward table the reader couldn't name (since 0.8.18).</summary>
     public int SlotsUnread { get; set; }
+    /// <summary>Items the chat printed in the run, never counted: a run's items come from its reward picture (since 0.8.18).</summary>
+    public int ChatItemsSetAside { get; set; }
+    /// <summary>No reward picture was read for the run, so its rewards are not known (since 0.8.18). Kinah and kills still count.</summary>
+    public bool RewardsNotRead { get; set; }
     /// <summary>Entry to last loot, never under ten seconds.</summary>
     public double Seconds => LastLoot is { } l ? Math.Max(10, (l - Start).TotalSeconds) : 0;
 
@@ -150,6 +154,8 @@ public sealed class InstanceLog
                 }
                 CloseLocked(reentry && string.Equals(_cur?.Zone, name, StringComparison.OrdinalIgnoreCase) ? "left, then a new entry" : "another run began");
                 _cur = new InstanceRun { Zone = name, Kind = ZoneLocator.KindOf(name) ?? kind, Event = ev, Family = kind == "Event" ? ZoneLocator.FamilyOf(name) : "", Start = now };
+                if (_transcendAt is DateTime ta && (now - ta).TotalMinutes <= 5 && _cur.Kind == "Expedition") { _cur.Kind = Transcendence; CrashLog.Note($"{_cur.Label}: a Transcendence (its stage was set {ta.ToLocalTime():HH:mm:ss})"); }
+                _transcendAt = null;
                 _byMinimap = true;
                 // the chat or the header saw it first: the run starts there (an event's lobby fills before the minimap changes)
                 if (kind == "Event" && _pendingSince is { } since && (now - since).TotalSeconds <= PendingSeconds)
@@ -364,8 +370,14 @@ public sealed class InstanceLog
             if (_cur == null) return;
             // the run was left and its time for rewards is over: it closes, and this pickup is farming's
             if (_leftAt is { } left && (ev.Time - left).TotalSeconds > RewardGraceSeconds) { CloseLocked("time for rewards over"); return; }
-            // counted from the reward table already: the chat adds nothing more to it
-            if (_cur.FromPicture && ev is ItemAcquired && !ev.Via.Contains("reward table")) return;
+            // a run's items come from its reward picture, never the chat (Steven, 2026-10-23: expeditions, Transcendence and
+            // events). A chat item is set aside, counted for the log; it still dates the run and its rewards' arrival
+            if (_cur.Kind != WorldBoss && ev is ItemAcquired ci && !ev.Via.Contains("reward table"))
+            {
+                _cur.ChatItemsSetAside += ci.Count; _cur.LastLoot = ci.Time;
+                if (batch >= 3) Paid(ci.Time);
+                return;
+            }
             switch (ev)
             {
                 case ItemAcquired a:
@@ -401,6 +413,25 @@ public sealed class InstanceLog
 
     /// <summary>The reward table at the end was read: the run's rewards are in.</summary>
     public void RewardTable(DateTime t) { lock (_lock) Paid(t); }
+
+    /// <summary>
+    /// The open run is a Transcendence (Shattered Arkanis at a stage: "Shattered Arkanis [Stage 1] | Transcendence", "Set to
+    /// Stage 1"): its own kind from here on. The zone stays the dungeon's, so the reward table and the time for rewards after
+    /// leaving work as for any expedition (Steven, 2026-10-23: Transcendence rewards come from the reward picture too).
+    /// </summary>
+    public void MarkTranscendence(DateTime t)
+    {
+        lock (_lock)
+        {
+            // printed in town as the room is set up ("Set to Stage 1."), before the run opens: the next expedition run is one
+            if (_cur == null) { _transcendAt = t; return; }
+            if (_cur.Kind == WorldBoss || _cur.Kind == Transcendence || _cur.Kind == "Event") return;
+            _cur.Kind = Transcendence;
+            CrashLog.Note($"{_cur.Label}: a Transcendence ({t.ToLocalTime():HH:mm:ss})");
+        }
+    }
+    public const string Transcendence = "Transcendence";
+    DateTime? _transcendAt;
 
     /// <summary>
     /// The reward table was read: the open run's items are its slots, and only those. What the chat had put in the run gives
@@ -454,6 +485,11 @@ public sealed class InstanceLog
     {
         _leftAt = null;
         if (_cur != null) _cur.Ended = why;
+        if (_cur != null && _cur.Kind != WorldBoss && !_cur.FromPicture)
+        {
+            _cur.RewardsNotRead = true;
+            if (_cur.LastLoot != null) CrashLog.Note($"{_cur.Label}: no reward picture was read, so its rewards are marked not read ({_cur.ChatItemsSetAside} chat item(s) not counted)");
+        }
         if (_cur?.LastLoot != null)
         {
             _done.Add(_cur);

@@ -822,6 +822,9 @@ public sealed class TrackerSession
             _distributionAt = now;
             if (_boss != null) BossTick(now, died: true);
         }
+        // a Transcendence: the dungeon at a stage ("Shattered Arkanis [Stage 1] | Transcendence", "Set to Stage 1")
+        if (lines.Any(l => !PickupCheck.PlayerChat(l) && (Regex.IsMatch(l, @"transcend", RegexOptions.IgnoreCase) || Regex.IsMatch(l, @"\bset\s*to\s*stage\s*\d", RegexOptions.IgnoreCase))))
+            Instances.MarkTranscendence(now);
         // "[Force Recruitment] WB Bloodfang": a world boss's name, learned for this session
         foreach (var l in lines)
             if (Regex.Match(l, @"\bWB\s+([A-Z][A-Za-z']{3,})") is { Success: true } wb && _learnedBosses.Add(wb.Groups[1].Value))
