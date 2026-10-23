@@ -1340,32 +1340,88 @@ options: --process aion[,other]");
         }
         Console.WriteLine("\nAn event's rewards after leaving it, read while the chat fades in (2026-10-23):");
         var t0 = new DateTime(2026, 10, 23, 15, 1, 0, DateTimeKind.Utc);
-        var s = new TrackerSession(null, settings, items, "Test");
         int n(SessionEngine e, string name) => e.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
-        int r(string name) => (s.Instances.Snapshot().LastOrDefault()?.Items ?? new()).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
-        s.Engine.SetZone("Hidden Lugi"); s.Instances.Zone("Hidden Lugi", t0);
-        Check("Hidden Lugi opens a Shugo Festival run", s.Instances.Open ?? "none", "Shugo Festival");
-        var before = new List<string> { "Player1 (Shugo) found Player2 (Lugi).", "Player3 (Shugo) found Player1 (Lugi)." };
-        s.ProcessChat(before, t0.AddSeconds(300));
-        s.ProcessChat(before, t0.AddSeconds(301));
-        // the game moves the player out; the minimap names the campsite
-        var left = t0.AddSeconds(383);
-        s.Engine.SetZone("Ruin Exploration Campsite"); s.Instances.Zone("Ruin Exploration Campsite", left);
-        Check("left the event: its run stays open for its rewards", $"{s.Instances.Open} {s.Instances.Ending(left.AddSeconds(11))} {s.Instances.Ending(left.AddSeconds(InstanceLog.RewardGraceSeconds + 5))}", "Shugo Festival True False");
-        // the rewards fade in garbled three ways, then a clean read, then one that lines up with it
-        s.ProcessChat(new List<string> { "Forgotten Hatquired.", "Forgotten", "Illusion", "AcquirGdylO", "Codex (Bomd)", "One-of-a-Kind Gear III achieved." }, left.AddSeconds(11));
-        s.ProcessChat(new List<string> { "rorgotten Cloak", "Acquire d Fine OJy1e", "*quire d", "Odyle", "Acquire d Refining stone", "Acquire d soul codex (BoulJ) x]", "One-" }, left.AddSeconds(12.2));
-        s.ProcessChat(new List<string> { "• vrgotten Cloak", "Acquire d F•", "acquired", "Acquire d", "Ine Odyle", "Acquire d Refining stone", "Acquire d soul codex (Bounjl", "One-" }, left.AddSeconds(13.5));
-        s.ProcessChat(new List<string> { "SEA", "Forgotten Cloak acquired.", "Acquired Fine Odyle x2.", "Acquired Odyle x9.", "Acquired Refining Stone", "Acquired Soul Codex (Bound) x3", "One-of-a-Kind Gear ,III achieved.", "[Player4] a chat line" }, left.AddSeconds(18.5));
-        var settled = new List<string> { "Acquired Fine Odyle x2.", "Acquired Odyle x9.", "Acquired Refining Stone x6.", "Acquired Soul Codex (Bound) x3.", "One-of-a-Kind Gear III achieved.", "[Player4] a chat line" };
-        for (int i = 0; i < 4; i++) s.ProcessChat(settled, left.AddSeconds(29 + i));
-        s.FlushVotes(left.AddSeconds(33));
-        Check("the rewards count once the chat settles, in the run", $"{r("Forgotten Cloak")} {r("Fine Odyle")} {r("Odyle")} {r("Refining Stone")}", "1 2 9 6");
-        Check("...and not as farming in the campsite", $"{n(s.Engine, "Odyle")} {n(s.Engine, "Refining Stone")}", "0 0");
-        s.ProcessChat(settled, left.AddSeconds(40));
-        Check("read again later: counted once", $"{r("Odyle")}", "9");
-        s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(InstanceLog.RewardGraceSeconds + 5));
-        Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {s.Instances.Snapshot().LastOrDefault()?.Zone} {s.Instances.Snapshot().LastOrDefault()?.Items.Values.Sum()}", "none Shugo Festival 18");
+        // the same reads twice: as they came (an achievement line printed with the items), and without that line
+        foreach (bool achievement in new[] { false, true })
+        {
+            var tb = t0.AddHours(achievement ? 1 : 0);   // its own run, apart from the first pass's, kept on disk
+            string ach = achievement ? "One-of-a-Kind Gear III achieved." : "[Player5] gg";
+            var s = new TrackerSession(null, settings, items, "Test");
+            InstanceRun? run() => s.Instances.Snapshot().LastOrDefault(x => x.Zone == "Shugo Festival" && x.Start == tb);
+            int r(string name) => (run()?.Items ?? new()).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+            s.Engine.SetZone("Hidden Lugi"); s.Instances.Zone("Hidden Lugi", tb);
+            if (!achievement) Check("Hidden Lugi opens a Shugo Festival run", s.Instances.Open ?? "none", "Shugo Festival");
+            var before = new List<string> { "Player1 (Shugo) found Player2 (Lugi).", "Player3 (Shugo) found Player1 (Lugi)." };
+            s.ProcessChat(before, tb.AddSeconds(300));
+            s.ProcessChat(before, tb.AddSeconds(301));
+            // the game moves the player out; the minimap names the campsite
+            var left = tb.AddSeconds(383);
+            s.Engine.SetZone("Ruin Exploration Campsite"); s.Instances.Zone("Ruin Exploration Campsite", left);
+            if (!achievement) Check("left the event: its run stays open for its rewards", $"{s.Instances.Open} {s.Instances.Ending(left.AddSeconds(11))} {s.Instances.Ending(left.AddSeconds(InstanceLog.RewardGraceSeconds + 5))}", "Shugo Festival True False");
+            // the rewards fade in garbled three ways, then a clean read, then one that lines up with it
+            s.ProcessChat(new List<string> { "Forgotten Hatquired.", "Forgotten", "Illusion", "AcquirGdylO", "Codex (Bomd)", ach }, left.AddSeconds(11));
+            s.ProcessChat(new List<string> { "rorgotten Cloak", "Acquire d Fine OJy1e", "*quire d", "Odyle", "Acquire d Refining stone", "Acquire d soul codex (BoulJ) x]", "One-" }, left.AddSeconds(12.2));
+            s.ProcessChat(new List<string> { "• vrgotten Cloak", "Acquire d F•", "acquired", "Acquire d", "Ine Odyle", "Acquire d Refining stone", "Acquire d soul codex (Bounjl", "One-" }, left.AddSeconds(13.5));
+            s.ProcessChat(new List<string> { "SEA", "Forgotten Cloak acquired.", "Acquired Fine Odyle x2.", "Acquired Odyle x9.", "Acquired Refining Stone", "Acquired Soul Codex (Bound) x3", ach, "[Player4] a chat line" }, left.AddSeconds(18.5));
+            var settled = new List<string> { "Acquired Fine Odyle x2.", "Acquired Odyle x9.", "Acquired Refining Stone x6.", "Acquired Soul Codex (Bound) x3.", ach, "[Player4] a chat line" };
+            for (int i = 0; i < 4; i++) s.ProcessChat(settled, left.AddSeconds(29 + i));
+            s.FlushVotes(left.AddSeconds(33));
+            if (!achievement)
+            {
+                Check("the rewards count once the chat settles, in the run", $"{r("Forgotten Cloak")} {r("Fine Odyle")} {r("Odyle")} {r("Refining Stone")}", "1 2 9 6");
+                Check("...and not as farming in the campsite", $"{n(s.Engine, "Odyle")} {n(s.Engine, "Refining Stone")}", "0 0");
+                s.ProcessChat(settled, left.AddSeconds(40));
+                Check("read again later: counted once", $"{r("Odyle")}", "9");
+                s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(InstanceLog.RewardGraceSeconds + 5));
+                Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum()}", "none 18");
+            }
+            else
+            {
+                // Steven, 2026-10-23: achievement rewards never count; items printed with an achievement line are its reward
+                Check("printed with an achievement line: its reward, not drops", $"{r("Forgotten Cloak")} {r("Odyle")} {n(s.Engine, "Odyle")} {n(s.Engine, "Refining Stone")}", "0 0 0 0");
+                s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(InstanceLog.RewardGraceSeconds + 5));
+                Check("...so the run has no loot and isn't kept", $"{s.Instances.Open ?? "none"} {run() == null}", "none True");
+            }
+        }
+        // ---- achievement rewards and box contents: never drops (Steven, 2026-10-23) ----
+        int List(TrackerSession ss, DateTime at, params string[] rows)
+        {
+            // a row up for two seconds, read four times, then gone; the chat never shows it
+            for (int i = 0; i < 4; i++) ss.ProcessList(rows.Select((r0, k) => (k * 20, r0)).ToList(), at.AddSeconds(i * 0.5));
+            foreach (var dt in new[] { 5.0, 9.0 }) ss.ProcessList(new List<(int, string)>(), at.AddSeconds(dt));
+            return 0;
+        }
+        var b0 = new DateTime(2026, 10, 23, 16, 0, 0, DateTimeKind.Utc);
+        var sb = new TrackerSession(null, settings, items, "Test");
+        sb.Engine.SetZone("Ruin Exploration Campsite");
+        List(sb, b0, "Spiritstone x1");
+        Check("loot list, no kill or gather around it: a box's contents, set aside", $"{n(sb.Engine, "Spiritstone")}", "0");
+        List(sb, b0.AddSeconds(60), "Orichalcum Ore x1");
+        Check("...but a gathering material is a gather, counted", $"{n(sb.Engine, "Orichalcum Ore")}", "1");
+        sb.ProcessChat(new List<string> { "[Player1] hi" }, b0.AddSeconds(120));
+        for (int i = 1; i <= 4; i++) sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina." }, b0.AddSeconds(120 + i * 0.4));
+        sb.FlushVotes(b0.AddSeconds(122));
+        List(sb, b0.AddSeconds(123), "Spiritstone x1");
+        Check("a row right after a kill: a drop the chat missed, counted", $"{n(sb.Engine, "Spiritstone")}", "1");
+        sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Acquired Growth Pet Chest (Bound) x2." }, b0.AddSeconds(130));
+        for (int i = 1; i <= 3; i++) sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Acquired Growth Pet Chest (Bound) x2." }, b0.AddSeconds(130 + i * 0.4));
+        sb.FlushVotes(b0.AddSeconds(132));
+        sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Acquired Growth Pet Chest (Bound) x2.", "Acquired 520 Kina." }, b0.AddSeconds(133));
+        List(sb, b0.AddSeconds(133.5), "Spiritstone x1");
+        Check("a row just after a box or reward line, even near a kill: set aside", $"{n(sb.Engine, "Spiritstone")}", "1");
+        var sa = new TrackerSession(null, settings, items, "Test");
+        sa.Engine.SetZone("Ruin Exploration Campsite");
+        sa.ProcessChat(new List<string> { "[Player1] hi" }, b0);
+        var achLines = new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Spiritstone acquired.", "Fortress Guardian Notun III achieved.", "Lesser Manastone (Bound) acquired." };
+        for (int i = 1; i <= 5; i++) sa.ProcessChat(achLines, b0.AddSeconds(i * 0.4));
+        sa.FlushVotes(b0.AddSeconds(3));
+        Check("items printed with an achievement line: its reward, not drops", $"{n(sa.Engine, "Spiritstone")} {n(sa.Engine, "Lesser Manastone")} {sa.Engine.Totals().Kinah}", "0 0 300");
+        // the achievement line stays on screen, read a little differently now and then; a drop two minutes later is a drop
+        var later = new List<string> { "Acquired 300 Kina.", "Spiritstone acquired.", "Fortress Guardian Notun Ill achieved.", "Lesser Manastone (Bound) acquired.", "Acquired 410 Kina.", "Lesser Soulstone acquired." };
+        for (int i = 0; i < 5; i++) sa.ProcessChat(later, b0.AddSeconds(120 + i * 0.4));
+        sa.FlushVotes(b0.AddSeconds(123));
+        Check("an old achievement line still on screen: a new drop counts", $"{n(sa.Engine, "Lesser Soulstone")}", "1");
+
         // garbled reads over lines that were already on screen: nothing more
         var s2 = new TrackerSession(null, settings, items, "Test");
         var old = new List<string> { "Acquired Odyle x3.", "[Player1] hello" };

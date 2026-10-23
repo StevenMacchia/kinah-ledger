@@ -175,15 +175,21 @@ public sealed class Reread
     /// already counted while it was garbled (<paramref name="counted"/>) are left out, and a line this read shows whole
     /// ("Acquired Refining Stone x6." where the last read had cut it at "Refining Stone") is taken in its whole form.
     /// </summary>
-    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted)
+    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted) => Settled(prev, cur, before, counted, out _);
+
+    /// <summary>The same, saying whether the new lines hold an achievement ("One-of-a-Kind Gear III achieved."): then they are its reward.</summary>
+    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted, out bool achievement)
     {
         var take = new List<string>();
         var used = new HashSet<int>();
+        achievement = false;
         for (int i = prev.Count - 1; i >= 0; i--)
         {
             var line = prev[i]; var k = Key(line);
             if (k.Length == 0) continue;
             if (before.Any(p => Same(k, p))) break;
+            // an achievement line that stays on screen reads a little differently each time: new only if nothing like it was seen
+            if (IsAchievement(line) && !before.Any(p => Near(k, p))) achievement = true;
             if (!LooksLikeLoot(line) || line.TrimStart().StartsWith('[')) continue;
             // garbled reads line up with each other too ("Acquire d Refining stone" three reads running): only a line whose
             // verb was read whole is a clean read of it
@@ -201,6 +207,26 @@ public sealed class Reread
         }
         return take;
     }
+
+    /// <summary>When each line was first on screen, by key; kept ten minutes after it was last seen. Call once per read.</summary>
+    public static void NoteFirstSeen(Dictionary<string, (DateTime First, DateTime Last)> seen, IReadOnlyList<string> lines, DateTime now)
+    {
+        foreach (var l in lines) { var k = Key(l); if (k.Length == 0) continue; seen[k] = seen.TryGetValue(k, out var v) && (now - v.Last).TotalMinutes <= 10 ? (v.First, now) : (now, now); }
+        if (seen.Count > 800) foreach (var k in seen.Where(kv => (now - kv.Value.Last).TotalMinutes > 10).Select(kv => kv.Key).ToList()) seen.Remove(k);
+    }
+
+    /// <summary>The first time a line like this one (the same, or a misread or two apart) was on screen; null when never.</summary>
+    public static DateTime? FirstSeen(string line, Dictionary<string, (DateTime First, DateTime Last)> seen)
+    {
+        var k = Key(line);
+        if (k.Length == 0) return null;
+        DateTime? best = null;
+        foreach (var (key, v) in seen) if ((key == k || Near(k, key)) && (best == null || v.First < best)) best = v.First;
+        return best;
+    }
+
+    /// <summary>An achievement line ("Fortress Guardian Notun III achieved."), never a player's message.</summary>
+    public static bool IsAchievement(string line) => !line.TrimStart().StartsWith('[') && System.Text.RegularExpressions.Regex.IsMatch(line.Trim(), @"\bachieved\W{0,3}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>"acquired" or "obtained" read as a whole word: "Acquire d", "AcquirGdylO" and "Hatquired" are garbled.</summary>
     static bool CleanVerb(string line) => System.Text.RegularExpressions.Regex.IsMatch(line, @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
