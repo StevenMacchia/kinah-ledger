@@ -269,8 +269,9 @@ public static class AccuracyTests
         // a stack no enemy drops, out in the world, on its own
         var sp = new TrackerSession(null, settings, items, "Test");
         sp.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
-        for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300.", "Acquired Spiritstone x6." }, q0.AddSeconds(i * 0.5));
-        sp.FlushVotes(q0.AddSeconds(3));
+        for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300." }, q0.AddSeconds(i * 0.5));
+        for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300.", "Acquired Spiritstone x6." }, q0.AddSeconds(30 + i * 0.5));
+        sp.FlushVotes(q0.AddSeconds(33));
         Check("x300 out in the world: not a drop; x6 is", $"{N(sp, "Power Shard")} {N(sp, "Spiritstone")}", "0 6");
 
         // a skin box's contents, the skin read before the box line is clean (16:00)
