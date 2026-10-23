@@ -552,6 +552,9 @@ public sealed partial class ChatParser
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
             // the chat names a skin "Dawn Frost (Cloak) Skin"; the item list as "Dawn Frost (Skin: Cloak)"
             var skin = System.Text.RegularExpressions.Regex.Match(name, @"^(?<set>.+?)\s*\((?<slot>[^()]+)\)\s*Skin$", RegexOptions.IgnoreCase);
+            // ...but that line is the wardrobe unlocking an appearance (five and eight at a time, with Enhance Stones for the
+            // duplicates), not loot: not a pickup unless the site turns skins back on (Steven, 2026-10-23 16:09)
+            if (skin.Success && !Update.RemoteConfig.Current.SkinsCount) yield break;
             if (skin.Success) name = $"{skin.Groups["set"].Value.Trim()} (Skin: {skin.Groups["slot"].Value.Trim()})";
             // "Acquired .107 Kina" with a mark the Kina rule didn't expect: Kina is never an item, and a garbled amount isn't counted
             if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\bk[i1l]nah?\s*$", RegexOptions.IgnoreCase)) yield break;

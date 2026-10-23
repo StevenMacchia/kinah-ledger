@@ -214,6 +214,65 @@ public static class AccuracyTests
             Check("the site was asked each time", $"{site.Requests >= 4}", "True");
         }
 
+        // ---- the pickup check (PickupCheck; Steven, 2026-10-23: "you need some type of quality assurance check") ----
+        RemoteConfig.Current = RemoteConfig.BuiltIn;
+        Check("storage line: the inventory at work", $"{PickupCheck.IsInventoryLine("Stored item(s) in Storage.")} {PickupCheck.IsInventoryLine("Stored item(s) inStorage.")}", "True True");
+        Check("Quick Register, read garbled", $"{PickupCheck.IsInventoryLine("\"Added QuickCRegister items to the list.")} {PickupCheck.IsInventoryLine("Added. Quicb Registeritetns-tortlfe4iSt.")}", "True True");
+        Check("a failed gather is not the inventory", $"{PickupCheck.IsInventoryLine("Essence Extraction failed")}", "False");
+        Check("a player saying storage is not the inventory", $"{PickupCheck.IsInventoryLine("[Someone] put it in storage")} {PickupCheck.IsInventoryLine("gmeipuc'ito] storage run")}", "False False");
+        Check("wardrobe unlocks, read garbled", $"{PickupCheck.IsSkinUnlock("Dawn Frost (Gloves) Skin acquired.")} {PickupCheck.IsSkinUnlock("Nature Greenwood (Boots) Skimacquired.-")} {PickupCheck.IsSkinUnlock("Netherworld Explorer (Breastplate)'Skin")}", "True True True");
+        Check("gear is not a wardrobe unlock", $"{PickupCheck.IsSkinUnlock("Riverside Helm acquired.")} {PickupCheck.IsSkinUnlock("Acquired Silentium (Bound) x2.")}", "False False");
+        Check("a box line, read garbled", $"{PickupCheck.IsBoxLine("Obtained Mystic Light Weapon Skin Chest")} {PickupCheck.IsBoxLine("Obtained Mystic LighEWeapon Skin Chess")} {PickupCheck.IsBoxLine("Pnyn Loot Chest (Bound) acquired.")}", "True True False");
+        Check("Kina is never an item", $"{PickupCheck.IsKina("Kina")} {PickupCheck.IsKina("Kinah")} {PickupCheck.IsKina("Kina (Bound)")} {PickupCheck.IsKina("Kinah Pouch")}", "True True True False");
+        Check("Kina read as an item, garbled", $"{PickupCheck.IsKina("Kina (Bognd)")}", "True");
+        Check("a quest done is a reward's line; a craft isn't", $"{Reread.IsAchievement("Protect the Odyle Collector completed.")} {Reread.IsAchievement("Crafting completed.")} {Reread.IsAchievement("[Someone] quest completed")}", "True False False");
+        Check("200 Soul Crystals at once: a reward; 2 a kill's", $"{PickupCheck.TooManyCrystals(200) != null} {PickupCheck.TooManyCrystals(2) == null}", "True True");
+        Check("one pickup's size",$"{PickupCheck.TooMany(446) != null} {PickupCheck.TooMany(6) == null} {PickupCheck.TooMany(100) == null}", "True True True");
+
+        // the 16:09 storage burst, line for line (other players' lines left out): none of it is a drop
+        int N(TrackerSession ss, string name) => ss.Engine.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+        var burst = new List<string> { "Agquired 76 Kina.", "Obtained 1 Sylphen Soul Points.", "\"Added QuickCRegister items to the list.", "Stored item(s) in Storage.",
+            "Seed of Detection acquired.-", "Nature Greenwood (Boots) Skimacquired.-", "Dawn Frost (Gloves) Skin acquired.", "Dawn Frost (Cloak) Skin acquired.", "Acquired Enhance Stone x446." };
+        var sq = new TrackerSession(null, settings, items, "Test");
+        var q0 = DateTime.UtcNow.AddMinutes(-5);
+        sq.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
+        for (int i = 1; i <= 4; i++) sq.ProcessChat(new List<string> { "Acquired 120 Kina." }.Concat(burst).ToList(), q0.AddSeconds(i * 0.5));
+        sq.FlushVotes(q0.AddSeconds(3));
+        Check("storage burst: no Enhance Stone, no skins", $"{N(sq, "Enhance Stone")} {sq.Engine.Items.Keys.Count(k => items.NameOf(k).Contains("(Skin:"))}", "0 0");
+        // ...and a drop well after it counts again
+        var later = new List<string> { "Acquired 120 Kina." }.Concat(burst).Append("Riverside Helm acquired.").ToList();
+        for (int i = 1; i <= 4; i++) sq.ProcessChat(later, q0.AddSeconds(60 + i * 0.5));
+        sq.FlushVotes(q0.AddSeconds(63));
+        Check("...a drop a minute later: counted", $"{N(sq, "Riverside Helm")}", "1");
+
+        // the same burst arriving all at once, from a read that doesn't line up with the last one (the burst path)
+        var sb = new TrackerSession(null, settings, items, "Test");
+        sb.ProcessChat(new List<string> { "[Player] chat a1", "[Player] chat a2", "[Player] chat a3" }, q0);
+        for (int i = 1; i <= 4; i++) sb.ProcessChat(burst, q0.AddSeconds(i * 0.5));
+        sb.FlushVotes(q0.AddSeconds(3));
+        Check("...arriving in one unaligned read: still none", $"{N(sb, "Enhance Stone")} {sb.Engine.Items.Keys.Count(k => items.NameOf(k).Contains("(Skin:"))}", "0 0");
+
+        // a small stack taken out of storage is not a drop either (the window, not the size, says so)
+        var ss2 = new TrackerSession(null, settings, items, "Test");
+        ss2.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
+        for (int i = 1; i <= 4; i++) ss2.ProcessChat(new List<string> { "Acquired 120 Kina.", "Stored item(s) in Storage.", "Acquired Refining Stone x6." }, q0.AddSeconds(i * 0.5));
+        ss2.FlushVotes(q0.AddSeconds(3));
+        Check("storage, then Refining Stone x6: not a drop", $"{N(ss2, "Refining Stone")}", "0");
+
+        // a stack no enemy drops, out in the world, on its own
+        var sp = new TrackerSession(null, settings, items, "Test");
+        sp.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
+        for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300.", "Acquired Refining Stone x6." }, q0.AddSeconds(i * 0.5));
+        sp.FlushVotes(q0.AddSeconds(3));
+        Check("x300 out in the world: not a drop; x6 is", $"{N(sp, "Power Shard")} {N(sp, "Refining Stone")}", "0 6");
+
+        // a skin box's contents, the skin read before the box line is clean (16:00)
+        var sx = new TrackerSession(null, settings, items, "Test");
+        sx.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
+        for (int i = 1; i <= 4; i++) sx.ProcessChat(new List<string> { "Acquired 120 Kina.", "Obtained Mystic LighEWeapon Skin Chess", "Mystic Light (Longsword) Skin acquired." }, q0.AddSeconds(i * 0.5));
+        sx.FlushVotes(q0.AddSeconds(3));
+        Check("a skin box: its skin is not a drop", $"{sx.Engine.Items.Keys.Count(k => items.NameOf(k).Contains("(Skin:"))}", "0");
+
         CrashLog.DirOverride = null; RemoteConfig.PathOverride = null; RemoteConfig.Current = RemoteConfig.BuiltIn; Accuracy.Reset();
         Console.WriteLine(fails == 0 ? "\nAll accuracy cases passed." : $"\n{fails} accuracy case(s) failed.");
         return fails == 0 ? 0 : 1;

@@ -222,13 +222,17 @@ public sealed class Reread
     }
 
     /// <summary>An achievement line ("Fortress Guardian Notun III achieved."), never a player's message.</summary>
-    public static bool IsAchievement(string line) => !line.TrimStart().StartsWith('[') && System.Text.RegularExpressions.Regex.IsMatch(line.Trim(), @"\bachieved\W{0,3}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    // A quest done ("Protect the Odyle Collector completed.") is the same: what prints with it is the quest's reward
+    // (Steven, 2026-10-23 16:22: its 200 Natura Soul Crystals landed in Soul Crystals from kills). Not a craft or a gather.
+    public static bool IsAchievement(string line) => !line.TrimStart().StartsWith('[')
+        && System.Text.RegularExpressions.Regex.IsMatch(line.Trim(), @"\b(?:achieved|completed)\W{0,3}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        && !System.Text.RegularExpressions.Regex.IsMatch(line, @"craft|gather|extract|enchant|refin|design", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>"acquired" or "obtained" read as a whole word: "Acquire d", "AcquirGdylO" and "Hatquired" are garbled.</summary>
     static bool CleanVerb(string line) => System.Text.RegularExpressions.Regex.IsMatch(line, @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>One line read twice: the same digits, and the letters a misread or two apart at most.</summary>
-    static bool Same(string a, string b)
+    internal static bool Same(string a, string b)
     {
         if (a == b) return true;
         if (!new string(a.Where(char.IsDigit).ToArray()).Equals(new string(b.Where(char.IsDigit).ToArray()))) return false;

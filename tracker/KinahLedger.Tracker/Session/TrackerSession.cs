@@ -745,7 +745,7 @@ public sealed class TrackerSession
         if (_tracker.Unaligned > unaligned)
         {
             Accuracy.Add("unaligned");
-            CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
+            CrashLog.Note($"couldn't line this read up with the last one, so only a burst or the lines after the overlap can count from it ({lines.Count} lines; last: {lines[^1]})");
             // both reads in full, so a lost burst of kills can be traced line by line
             CrashLog.Note("   before: " + string.Join("  |  ", _prevRead));
             CrashLog.Note("   now:    " + string.Join("  |  ", lines));
@@ -766,6 +766,20 @@ public sealed class TrackerSession
         }
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
         bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
+        // ---- the pickup check (PickupCheck; Steven, 2026-10-23: "you need some type of quality assurance check") ----
+        // the player's own inventory at work (storage, Quick Register, an exchange) or the wardrobe unlocking skins: what
+        // prints with it, and in the next few seconds, moved or unlocked; it didn't drop (16:09: Enhance Stone x446)
+        if (lines.FirstOrDefault(l => (PickupCheck.IsInventoryLine(l) || PickupCheck.IsSkinUnlock(l)) && NewLine(l, now)) is { } invLine)
+        {
+            if (now > _inventoryUntil) CrashLog.Note($"the inventory at work (\"{invLine}\"): what prints with it is not a drop");
+            _inventoryUntil = now.AddSeconds(RewardWindowSeconds);
+        }
+        // a box obtained in this read, out in the world: what prints with it is its contents, even the lines read before its own
+        if (!InRun && _boss == null && lines.FirstOrDefault(l => PickupCheck.IsBoxLine(l) && NewLine(l, now)) is { } boxLine)
+        {
+            if (now > _boxUntil) CrashLog.Note($"a box (\"{boxLine}\"): what prints with it is its contents, not drops");
+            _boxUntil = now.AddSeconds(RewardWindowSeconds);
+        }
         // a Force's loot being handed out ("Yarie acquired Soul: Ursus (Bound) through Force distribution."): a world boss
         // died, and for a while the panel beside the character shows the boss's loot table, not the player's pickups
         // A boss's loot chest ("Pnyn Loot Chest (Bound) acquired.") shows its loot table in the same place (2026-10-22 18:39)
@@ -827,7 +841,12 @@ public sealed class TrackerSession
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
-                var why = parsed is ItemAcquired && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time)) : null;
+                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)))) : null;
+                // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
+                if (why == null && !made && parsed is ItemAcquired big && !InRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
+                if (why == null && parsed is PetCrystal bigc && !InRun) why = PickupCheck.TooManyCrystals(bigc.Count);
+                // Soul Crystals from a quest or a reward are not crystals from kills: left out, so the per hour stays the kills'
+                if (why != null && parsed is PetCrystal wp) { CrashLog.Note($"{wp.Name} x{wp.Count}: {why}, not counted with the kills"); any = true; continue; }
                 if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
                 var ev = (reward || why != null || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
@@ -845,6 +864,21 @@ public sealed class TrackerSession
         // only an achievement line that is new: one that stays on screen is read a little differently each time
         batchAchievement = voted.Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
+        // a line the settle just counted shows up again as new once the reads line up: the same pickup, counted once
+        // (Steven, 2026-10-23 16:22: 200 Natura Soul Crystals and 50,000 Kina counted twice)
+        lock (_settledCounted)
+        {
+            _settledCounted.RemoveAll(x => (now - x.At).TotalSeconds > SettledDupSeconds);
+            if (_settledCounted.Count > 0)
+                voted = voted.Where(l =>
+                {
+                    int i = _settledCounted.FindIndex(x => Reread.Same(x.Line, l.Trim()));
+                    if (i < 0) return true;
+                    _settledCounted.RemoveAt(i);
+                    CrashLog.Note($"{l}: counted already when the chat settled, not again");
+                    return false;
+                }).ToList();
+        }
         foreach (var (l, events) in _parser.ParseBatch(voted, now))
         {
             bool any = Apply(events, l);
@@ -869,7 +903,7 @@ public sealed class TrackerSession
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) any |= Apply(events, l, "chat · recovered");
             CrashLog.Read(l + "    (counted once the chat settled)", any);
-            if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; }
+            if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; lock (_settledCounted) _settledCounted.Add((l.Trim(), now)); }
         }
         if (settledAny)
         {
@@ -880,6 +914,9 @@ public sealed class TrackerSession
     }
 
     DateTime _targetAt = DateTime.MinValue;
+    /// <summary>Lines the settle counted, for the next reads not to count them again (each once).</summary>
+    readonly List<(string Line, DateTime At)> _settledCounted = new();
+    const double SettledDupSeconds = 15;
     readonly ChatVoter _voter = new();
     internal bool Vote = true;   // off only for replay --novote, to measure what voting changes
     public ChatVoter Voter => _voter;
@@ -1117,7 +1154,12 @@ public sealed class TrackerSession
     bool InRun => ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored;
 
     /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
-    string? RewardWhy(DateTime t) => t <= _achieveUntil ? "an achievement's reward" : !InRun && t <= _boxUntil ? "a box's or a reward's contents" : null;
+    string? RewardWhy(DateTime t, bool isBox = false) =>
+        t <= _achieveUntil ? "an achievement's reward"
+        : t <= _inventoryUntil ? "the inventory at work (storage, Quick Register, the wardrobe)"
+        : !InRun && !isBox && t <= _boxUntil ? "a box's or a reward's contents" : null;
+    /// <summary>Until when what lands is the player's own inventory at work (PickupCheck.IsInventoryLine, IsSkinUnlock).</summary>
+    DateTime _inventoryUntil = DateTime.MinValue;
 
     /// <summary>A reward line, or an item that is a box ("Growth Pet Chest"), out in the world opens the window for what comes out of it.</summary>
     void NoteReward(GameEvent ev, DateTime now)
@@ -1257,6 +1299,13 @@ public sealed class TrackerSession
     public List<Pickup> RecentPickups(int n) { lock (_pickups) return _pickups.TakeLast(n).Reverse().ToList(); }
     void Feed(GameEvent ev)
     {
+        // Kina is money, never an item: a loot list row the icon named Kina, its amount cut off ("Vana" read as "Kina x1"),
+        // landed in Drops from kills (Steven, 2026-10-23 16:17). The amount is unknown, so nothing counts from it
+        if (ev is ItemAcquired km && PickupCheck.IsKina(_items.NameOf(km.ItemId)))
+        {
+            CrashLog.Note($"Kina x{km.Count} as an item ({ev.Via}): Kina is money, not a drop, and its amount wasn't read; not counted");
+            return;
+        }
         string? what = ev switch
         {
             ItemAcquired a => $"{_items.NameOf(a.ItemId)} ×{a.Count}" + (a.Bound ? " (bound)" : ""),
@@ -1401,6 +1450,7 @@ public sealed class TrackerSession
                     _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                     bool gathered = _gatherNames.Contains(_items.NameOf(lr.ItemId));
                     if (why == null && !gathered && !InRun && (now - _lastKillAt).TotalSeconds > NoKillSeconds && (now - _lastGatherAt).TotalSeconds > NoKillSeconds) why = $"no kill or gather in the last {NoKillSeconds:0} s, so a box or a reward";
+                    if (why == null && !gathered && !InRun) why = PickupCheck.TooMany(lr.Count);
                     if (why != null) { CrashLog.Note($"loot list: {_items.NameOf(lr.ItemId)} x{lr.Count} set aside: {why}"); continue; }
                 }
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;

@@ -40,6 +40,16 @@ public sealed class RemoteConfig
     /// <summary>Added to the built-in pattern (distri…, through Force, loot chest), never in place of it.</summary>
     public string[] DistributionWords { get; init; } = { "distri", "loot chest" };
     public string[] CraftWindowWords { get; init; } = { "acquired design" };
+    /// <summary>Added to PickupCheck's built-in pattern (storage, Quick Register, an exchange...), never in place of it.</summary>
+    public string[] InventoryWords { get; init; } = { "stored item", "quick register" };
+
+    // ---- the pickup check (PickupCheck) ----
+    /// <summary>The wardrobe's "(Slot) Skin acquired" lines count as drops. Off: they are appearance unlocks.</summary>
+    public bool SkinsCount { get; init; }
+    /// <summary>More of one item than this in one line, out in the world, is a reward or a claim, not a pickup.</summary>
+    public int MaxOnePickup { get; init; } = 100;
+    /// <summary>More Soul Crystals than this in one line, out in the world, are a reward, not a kill's.</summary>
+    public int MaxOneCrystal { get; init; } = 10;
 
     // ---- kill switches: true turns that reader off ----
     public HashSet<string> Killed { get; init; } = new(StringComparer.OrdinalIgnoreCase);
@@ -101,6 +111,7 @@ public sealed class RemoteConfig
         var kill = Obj(r, "kill");
         var roll = Obj(r, "rollout");
         var rare = Obj(r, "rare");
+        var pick = Obj(r, "pickup");
         // the loot band moves at most a little from where it was measured, and never turns inside out
         double ll = Num(loot, "left", b.LootLeft, -0.60, -0.25), lr = Num(loot, "right", b.LootRight, -0.10, 0.10);
         double lt = Num(loot, "top", b.LootTop, -0.20, 0.05), lb = Num(loot, "bottom", b.LootBottom, 0.15, 0.45);
@@ -124,6 +135,10 @@ public sealed class RemoteConfig
             RewardCollectedWords = Words(words, "reward_collected", b.RewardCollectedWords),
             DistributionWords = Words(words, "distribution", b.DistributionWords),
             CraftWindowWords = Words(words, "craft_window", b.CraftWindowWords),
+            InventoryWords = Words(words, "inventory", b.InventoryWords),
+            SkinsCount = pick is { } pk && pk.TryGetProperty("skins_count", out var sc) && sc.ValueKind == JsonValueKind.True,
+            MaxOnePickup = (int)Num(pick, "max_one", b.MaxOnePickup, 20, 10000),
+            MaxOneCrystal = (int)Num(pick, "max_crystals", b.MaxOneCrystal, 3, 1000),
             Killed = killed,
             LegendMaterialsRare = !(rare is { } ra && ra.TryGetProperty("legend_materials", out var lm) && lm.ValueKind == JsonValueKind.False),
             RolloutVersion = Str(roll, "version", ""),
