@@ -921,8 +921,41 @@ public sealed class TrackerSession
             CrashLog.Note($"the chat settled after {(now - settledAt).TotalSeconds:0} s of reads that didn't line up; its loot lines counted from the clean read: {string.Join(" | ", settled)}");
             _garbledSince = null;
         }
+        // ---- the loot ledger: a loot line no read in ten minutes showed, that nothing counted, is new wherever it sits ----
+        // Lining reads up finds new lines at the bottom. A line one read lost and the next showed sits between lines
+        // already seen, and was never counted (the synthetic fights; 497 Kina at 16:16 on 2026-10-23). Read exactly, in
+        // two reads in a row, in a read that lined up, and at most two at once (more is history scrolled back into view).
+        {
+            var handled = new HashSet<string>(fresh.Concat(reread).Concat(settled).Select(l => _parser.Meaning(l).Key).Where(k => k.Length > 0));
+            var keyed = lines.Select(l => (Line: l, M: _parser.Meaning(l))).Where(x => x.M.Key.Length > 0).ToList();
+            if (!_ledgerPrimed) { foreach (var x in keyed) _keySeen[x.M.Key] = now; _ledgerPrimed = true; }
+            var unseen = keyed.Where(x => !handled.Contains(x.M.Key) && !(_keySeen.TryGetValue(x.M.Key, out var ks) && (now - ks).TotalMinutes <= LedgerMinutes)).ToList();
+            bool aligned = _tracker.Unaligned == unaligned;
+            if (aligned && unseen.Count is > 0 and <= 2)
+                foreach (var (l, m) in unseen.GroupBy(x => x.M.Key).Select(g => g.First()))
+                {
+                    if (!m.Exact) continue;
+                    int c = _keyCandidate.GetValueOrDefault(m.Key) + 1;
+                    if (c < 2) { _keyCandidate[m.Key] = c; continue; }
+                    _keyCandidate.Remove(m.Key);
+                    bool any = false;
+                    foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, l, "chat · ledger");
+                    CrashLog.Read(l + "    (between lines already seen: no read had shown it)", any);
+                    if (any) { LastLine = l; LootLine?.Invoke(l); }
+                    _keySeen[m.Key] = now;
+                }
+            var present = keyed.Select(x => x.M.Key).ToHashSet();
+            foreach (var k in _keyCandidate.Keys.Where(k => !present.Contains(k)).ToList()) _keyCandidate.Remove(k);
+            foreach (var k in present) if (!_keyCandidate.ContainsKey(k)) _keySeen[k] = now;
+            foreach (var k in _keySeen.Where(kv => (now - kv.Value).TotalMinutes > LedgerMinutes).Select(kv => kv.Key).ToList()) _keySeen.Remove(k);
+        }
         LastError = "";
     }
+
+    readonly Dictionary<string, DateTime> _keySeen = new();
+    readonly Dictionary<string, int> _keyCandidate = new();
+    bool _ledgerPrimed;
+    const double LedgerMinutes = 10;
 
     DateTime _targetAt = DateTime.MinValue;
     /// <summary>Lines the settle counted, for the next reads not to count them again (each once).</summary>

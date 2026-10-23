@@ -99,6 +99,8 @@ public static class SyntheticChat
         // what prints, and when
         var printed = new List<(double At, string Line)>();
         double now = 5;
+        // the chat already holds lines when the tracker starts: its first read is history
+        for (int h = 0; h < 10; h++) printed.Add((h * 0.2, $"[Player{r.Next(1, 9)}] {Words(r)}"));
         int quest = 0;
         for (int k = 0; k < 40; k++)
         {
