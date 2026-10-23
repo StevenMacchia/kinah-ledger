@@ -851,6 +851,9 @@ public sealed class TrackerSession
                 _garbledSince = now;
                 _beforeGarbled = new HashSet<string>(_recent.Where(kv => (now - kv.Value).TotalMinutes <= 10).Select(kv => kv.Key));
                 _countedGarbled.Clear();
+                // what any path counted just before the garbling began is counted too: read a little differently then, the
+                // settle took it for new (the noisy synthetic fights: "Acquired Spiritstone x4." counted twice)
+                lock (_countedLines) _countedGarbled.AddRange(_countedLines.Where(x => (now - x.At).TotalSeconds <= 30).Select(x => x.Line));
             }
         }
         else if (_garbledSince is { } gs && lines.Count > 0)
@@ -925,7 +928,7 @@ public sealed class TrackerSession
             bool any = Apply(events, l);
             CrashLog.Read(l, any, afterFade);
             // while the chat is garbled, what the vote counts is remembered too, so the settle doesn't count it again
-            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); }
         }
         batchAchievement = reread.Concat(fresh).Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         foreach (var l in reread)
@@ -933,7 +936,7 @@ public sealed class TrackerSession
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, l, "chat · recovered");
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
-            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); }
         }
         // dated when the garbling began, which is when they landed (an event's rewards: inside its time for rewards)
         // only an achievement line that first showed with the garbled reads: one that sat in the chat before is an old one
@@ -945,7 +948,7 @@ public sealed class TrackerSession
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) any |= Apply(events, l, "chat · recovered");
             CrashLog.Read(l + "    (counted once the chat settled)", any);
-            if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; lock (_settledCounted) _settledCounted.Add((l.Trim(), now)); }
+            if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; lock (_settledCounted) _settledCounted.Add((l.Trim(), now)); NoteCounted(l, now); }
         }
         if (settledAny)
         {
@@ -1737,6 +1740,9 @@ public sealed class TrackerSession
     bool NewLine(string line, DateTime now) => Reread.FirstSeen(line, _firstSeen) is not DateTime f || (now - f).TotalSeconds <= 20;
     // reads that couldn't be lined up, in a row: since when, the lines seen before them, what was counted meanwhile
     DateTime? _garbledSince; HashSet<string> _beforeGarbled = new(); readonly List<string> _countedGarbled = new();
+    /// <summary>Every chat line counted in the last minute, by any path, for the settle not to count it again.</summary>
+    readonly List<(string Line, DateTime At)> _countedLines = new();
+    void NoteCounted(string l, DateTime now) { lock (_countedLines) { _countedLines.Add((l, now)); _countedLines.RemoveAll(x => (now - x.At).TotalSeconds > 60); } }
     /// <summary>Garbled reads longer than this before the chat settles aren't one burst; nothing is taken from the settled read.</summary>
     public const double SettleSeconds = 45;
     // every line of the last ten minutes of reads, for telling a burst's new lines from history

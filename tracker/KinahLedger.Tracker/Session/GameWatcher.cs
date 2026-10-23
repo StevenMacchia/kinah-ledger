@@ -47,6 +47,7 @@ public sealed class GameWatcher
     /// <summary>The currency counter at the top-left, read every <see cref="BalanceEverySec"/> while the game is open.</summary>
     public BalanceReader Balance { get; } = new();
     readonly RelogDetector _relog = new();
+    DateTime _screenScanAt = DateTime.MinValue; bool _screenLogged;
     /// <summary>Another character is in the world (the reason, for the status line); the window closes the run and starts fresh.</summary>
     public event Action<string>? CharacterChanged;
     public int BalanceEverySec { get; set; } = 10;
@@ -77,6 +78,25 @@ public sealed class GameWatcher
             try { CharacterChanged?.Invoke(switched); } catch (Exception ex) { CrashLog.Write("character switch", ex); }
             return;   // the old character's balance mustn't reach the new count
         }
+        // the interface gone a while: a read of the whole window tells the character screen from a loading screen
+        var nowT = DateTime.UtcNow;
+        if (_relog.AbsentFor(nowT) is double away && away >= 8 && (nowT - _screenScanAt).TotalSeconds >= 5)
+        {
+            _screenScanAt = nowT;
+            try
+            {
+                var texts = (await ScreenReader.ReadBoxesAsync(game, 1)).Select(b => b.Text).ToList();
+                if (RelogDetector.IsCharacterScreen(texts) && _relog.CharacterScreen(nowT) is { } why)
+                {
+                    CrashLog.Note("character switch: " + why + " (" + string.Join(" | ", RelogDetector.MenuLines(texts)) + ")");
+                    try { CharacterChanged?.Invoke(why); } catch (Exception ex) { CrashLog.Write("character switch", ex); }
+                    return;
+                }
+                if (away >= 20 && !_screenLogged) { _screenLogged = true; CrashLog.Note("the game's interface is gone " + away.ToString("0") + " s; the window shows: " + string.Join(" | ", RelogDetector.MenuLines(texts))); }
+            }
+            catch (Exception ex) { CrashLog.Write("character screen", ex); }
+        }
+        else if (_relog.AbsentFor(nowT) == null) _screenLogged = false;
         // the counter against the count, on every tick: a gap has to hold a few seconds before it is judged
         if (Balance.Tracker.Balance is long bal && Balance.Tracker.BalanceAt is DateTime bat && (DateTime.UtcNow - bat).TotalSeconds <= 60) c.CheckBalance(bal, DateTime.UtcNow);
         // a new trusted value goes to the always-on count and the farming run; each keeps its first and last

@@ -14,6 +14,37 @@ public sealed class RelogDetector
 
     long? _before;
     DateTime? _absentSince;
+    bool _screenSeen;
+
+    /// <summary>How long the game's interface has been gone (the counter and the zone both), or null while it shows.</summary>
+    public double? AbsentFor(DateTime t) => _absentSince is DateTime g ? (t - g).TotalSeconds : null;
+
+    /// <summary>
+    /// The character screen itself was seen while the interface was gone (Steven, 2026-10-23: logging off and back on the
+    /// same character is "same as a switch: save and start fresh"). Once per visit; the balance check then has nothing to
+    /// compare, so coming back doesn't start fresh a second time.
+    /// </summary>
+    public string? CharacterScreen(DateTime t)
+    {
+        if (_screenSeen || _absentSince == null) return null;
+        _screenSeen = true; _before = null;
+        return "the character screen: logged off";
+    }
+
+    static readonly System.Text.RegularExpressions.Regex StrongWords = new(@"create\s*(?:a\s*)?character|delete\s*character|character\s*select|select\s*(?:a\s*)?character|change\s*server|server\s*select", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+    static readonly System.Text.RegularExpressions.Regex WeakWords = new(@"enter\s*(?:the\s*)?world|game\s*start|start\s*game|log\s*out|character\s*list", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>The character screen's own words in a read of the whole window: one strong phrase, or two weaker ones (and the site's list).</summary>
+    public static bool IsCharacterScreen(IReadOnlyList<string> lines)
+    {
+        var all = string.Join(" ", lines);
+        if (StrongWords.IsMatch(all) || KinahLedger.Update.RemoteConfig.HasAny(all, KinahLedger.Update.RemoteConfig.Current.CharacterScreenWords)) return true;
+        return WeakWords.Matches(all).Select(m => m.Value.ToLowerInvariant().Replace(" ", "")).Distinct().Count() >= 2;
+    }
+
+    /// <summary>The menu-like lines of a read, for learning what the character screen says (never names: only lines with a menu word).</summary>
+    public static List<string> MenuLines(IReadOnlyList<string> lines) =>
+        lines.Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"character|server|world|start|create|delete|select|enter|log\s*out|game", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).Take(12).ToList();
 
     /// <summary>The balance last trusted in the world, before any absence.</summary>
     public long? Before => _before;
@@ -41,6 +72,7 @@ public sealed class RelogDetector
             long now = balance!.Value;
             double away = (t - gone).TotalSeconds;
             _absentSince = null;
+            _screenSeen = false;
             var was = _before;
             _before = now;
             if (away >= AbsentSeconds && was is long w && w != now)

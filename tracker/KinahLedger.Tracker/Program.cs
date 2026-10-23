@@ -1627,6 +1627,17 @@ options: --process aion[,other]");
         var d5 = new RelogDetector();
         Tick(d5, 0, true, 1000, 0, 0); Tick(d5, 5, false, 1000, 0, -30);
         Check("both gone under 20 s: nothing", $"{Tick(d5, 15, true, 2000, 15, 15)}", "none");
+        // the character screen and back on the same character (Steven: "same as a switch: save and start fresh")
+        var d6 = new RelogDetector();
+        Tick(d6, 0, true, 900, 0, 0);
+        for (int s = 10; s <= 40; s += 10) Tick(d6, s, false, 900, 0, 0);
+        Check("the character screen while the interface is gone: reset", d6.CharacterScreen(t0.AddSeconds(40)) != null ? "reset" : "none", "reset");
+        Check("...seen again on the same visit: nothing", d6.CharacterScreen(t0.AddSeconds(45)) != null ? "reset" : "none", "none");
+        Check("...back on the same character: nothing more", $"{Tick(d6, 60, true, 900, 60, 60)}", "none");
+        Check("...and with the interface showing it can't be the screen", new RelogDetector().CharacterScreen(t0) != null ? "reset" : "none", "none");
+        Check("the character screen's words; a loading tip isn't them",
+            $"{RelogDetector.IsCharacterScreen(new[] { "Create Character", "Siel" })} {RelogDetector.IsCharacterScreen(new[] { "Loading...", "Tip: enter the world of Atreia" })} {RelogDetector.IsCharacterScreen(new[] { "Enter World", "Log Out" })}",
+            "True False True");
         return ok;
     }
 

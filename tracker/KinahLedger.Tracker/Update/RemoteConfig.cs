@@ -42,6 +42,8 @@ public sealed class RemoteConfig
     public string[] CraftWindowWords { get; init; } = { "acquired design" };
     /// <summary>Added to PickupCheck's built-in pattern (storage, Quick Register, an exchange...), never in place of it.</summary>
     public string[] InventoryWords { get; init; } = { "stored item", "quick register" };
+    /// <summary>Added to RelogDetector's built-in phrases for the character screen, never in place of them.</summary>
+    public string[] CharacterScreenWords { get; init; } = { "create character" };
 
     // ---- the pickup check (PickupCheck) ----
     /// <summary>The wardrobe's "(Slot) Skin acquired" lines count as drops. Off: they are appearance unlocks.</summary>
@@ -140,6 +142,7 @@ public sealed class RemoteConfig
             DistributionWords = Words(words, "distribution", b.DistributionWords),
             CraftWindowWords = Words(words, "craft_window", b.CraftWindowWords),
             InventoryWords = Words(words, "inventory", b.InventoryWords),
+            CharacterScreenWords = Words(words, "character_screen", b.CharacterScreenWords),
             SkinsCount = pick is { } pk && pk.TryGetProperty("skins_count", out var sc) && sc.ValueKind == JsonValueKind.True,
             MaxOnePickup = (int)Num(pick, "max_one", b.MaxOnePickup, 20, 10000),
             MaxOneCrystal = (int)Num(pick, "max_crystals", b.MaxOneCrystal, 3, 1000),
