@@ -1406,7 +1406,7 @@ options: --process aion[,other]");
                 s.ProcessChat(settled, left.AddSeconds(40));
                 Check("read again later: counted once", $"{r("Odyle")}", "9");
                 s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(InstanceLog.RewardGraceSeconds + 5));
-                Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum() + run()?.ChatItems.Values.Sum()}", "none 18");
+                Check("its time for rewards over: the run closes, kept (the bound Soul Codex x3 is the run's too since 0.8.18)", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum() + run()?.ChatItems.Values.Sum()}", "none 21");
             }
             else
             {
