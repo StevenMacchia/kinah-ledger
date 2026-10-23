@@ -1204,7 +1204,8 @@ options: --process aion[,other]");
         Console.WriteLine("\nWhat the player is doing, which event, the run's edges (2026-10-23):");
         try { File.Delete(Path.Combine(CrashLog.Dir, "instances.jsonl")); } catch (Exception) { }
         int n(SessionEngine e, string name) => e.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
-        int ri(InstanceRun? r, string name) => r == null ? 0 : r.Items.Concat(r.BoundItems).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+        // where a run's items went: the run (an event's chat items are set aside since 0.8.18, its reward picture counts them)
+        int ri(InstanceRun? r, string name) => r == null ? 0 : r.Items.Concat(r.BoundItems).Concat(r.ChatItems).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
         string notes() { try { return File.ReadAllText(CrashLog.ReadsPath); } catch (Exception) { return ""; } }
         string Local(DateTime t) => t.ToLocalTime().ToString("HH:mm:ss");
         // a chat window that scrolls: each read shows the last ten lines, so every read lines up with the one before
@@ -1313,7 +1314,7 @@ options: --process aion[,other]");
         sayW(w0.AddMinutes(4), Array.Empty<string>());
         sw.ProcessChat(new List<string> { "[Player1] hello", "[Player4] hi", "Temple Guardian Breastplate acquired.", "Rainy Forest Helm acquired.", "Acquired Odyle x8.", "Dawn Frost (Breastplate) Skin acquired.", "Dawn Frost (Helm) Skin acquired.", "Dawn Frost (Boots) Skin acquired." }, w0.AddMinutes(56));
         var runW = sw.Instances.Snapshot().LastOrDefault();
-        Check("an event open across a long pause closes where it was", $"{runW?.Items.Values.Sum()} {sw.Instances.Open ?? "closed"} {sw.Zone}", $"10 closed {SessionEngine.UnknownZone}");
+        Check("an event open across a long pause closes where it was", $"{runW?.Items.Values.Sum() + runW?.ChatItems.Values.Sum()} {sw.Instances.Open ?? "closed"} {sw.Zone}", $"10 closed {SessionEngine.UnknownZone}");
         Check("...saying why", runW?.Ended.StartsWith("the reader was away 52 min") == true ? "yes" : runW?.Ended ?? "", "yes");
 
         // a lobby filling up scrolls the chat past what lines up (Accursed Sword, 2026-10-23 11:33:16): those lines still count
@@ -1380,7 +1381,7 @@ options: --process aion[,other]");
             string ach = achievement ? "One-of-a-Kind Gear III achieved." : "[Player5] gg";
             var s = new TrackerSession(null, settings, items, "Test");
             InstanceRun? run() => s.Instances.Snapshot().LastOrDefault(x => x.Zone == "Shugo Festival" && x.Start == tb);
-            int r(string name) => (run()?.Items ?? new()).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+            int r(string name) => (run()?.Items ?? new()).Concat(run()?.ChatItems ?? new()).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
             s.Engine.SetZone("Hidden Lugi"); s.Instances.Zone("Hidden Lugi", tb);
             if (!achievement) Check("Hidden Lugi opens a Shugo Festival run", s.Instances.Open ?? "none", "Shugo Festival");
             var before = new List<string> { "Player1 (Shugo) found Player2 (Lugi).", "Player3 (Shugo) found Player1 (Lugi)." };
@@ -1405,7 +1406,7 @@ options: --process aion[,other]");
                 s.ProcessChat(settled, left.AddSeconds(40));
                 Check("read again later: counted once", $"{r("Odyle")}", "9");
                 s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(InstanceLog.RewardGraceSeconds + 5));
-                Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum()}", "none 18");
+                Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum() + run()?.ChatItems.Values.Sum()}", "none 18");
             }
             else
             {
@@ -1959,6 +1960,18 @@ options: --process aion[,other]");
                 cs2.Engine.SetZone("Urugugu Canyon"); cs2.Instances.Zone("Urugugu Canyon", cz);
                 cs2.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "600.0K", 600_000, new() { (IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon), 4.4), (coin, 84.4) }) }, cz.AddSeconds(1));
                 Check("a clear coin match is Kinah without the counter", $"{cs2.Instances.Snapshot().LastOrDefault(r => r.Start >= cz.AddSeconds(-1))?.Kinah ?? 0:N0}", "600,000");
+                // an event is counted from its reward screen's picture (Steven, 2026-10-23): until its cards can be read, its chat
+                // lines are set aside by name, the run is not read, and nothing from the chat uploads
+                var et = new TrackerSession(null, new Settings(), items, "Test"); var et0 = DateTime.UtcNow;
+                et.Engine.SetZone("Shugo Festival"); et.ZoneView.SetZone("Shugo Festival"); et.Instances.Zone("Shugo Festival", et0);
+                et.ProcessChat(new List<string> { "[x] a" }, et0);
+                for (int i = 1; i <= 3; i++) et.ProcessChat(new List<string> { "[x] a", "Spiritstone acquired.", "Acquired Refining Stone x6." }, et0.AddSeconds(i * 0.6));
+                et.FlushVotes(et0.AddSeconds(4)); et.Instances.Close();
+                var erun = et.Instances.Snapshot().LastOrDefault();
+                Check("an event run: the chat's items set aside, the run not read", $"{erun?.Items.Count} {erun?.ChatItemsSetAside} {erun?.RewardsNotRead}", "0 7 True");
+                Check("...and nothing from the chat uploads", $"{InstanceRunPayload.From(new[] { erun! }, id => items.KeyOf(id))?[0].items.Count ?? 0}", "0");
+                Check("an event's reward screen by its words", $"{TrackerSession.IsEventRewardTitle("Rewards have been sent to your cube.")} {TrackerSession.IsEventRewardTitle("Can select 0 time(s)")} {TrackerSession.IsEventRewardTitle("Reward collected.")}", "True True False");
+                Check("kept pictures by kind", string.Join(" ", new[] { "x-reward-table.jpg", "x-event-rewards.jpg", "x-Quna-Shop.jpg", "x-in-run.jpg", "x-Daeva-Pass.jpg" }.Select(n => TrackerSession.KindOfShot(n).ToString())), "RunEnd RunEnd Shop Frequent Screen");
                 Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
             }
             {
@@ -2245,6 +2258,17 @@ options: --process aion[,other]");
             int rsGone = TrackerSession.PruneRewardShots(rs, DateTime.Now);
             var rsLeft = string.Join(" ", Directory.GetFiles(rs).Select(Path.GetFileName).OrderBy(n => n));
             Directory.Delete(rs, true);
+            // too big: shop screens go first, then the frequent pictures; a run's end from today never goes (2026-10-23)
+            var rs2 = Path.Combine(Path.GetTempPath(), "kl-rs-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(rs2);
+            void Pic2(string n, double hoursOld) { var f = Path.Combine(rs2, n); File.WriteAllBytes(f, new byte[100]); File.SetLastWriteTime(f, DateTime.Now.AddHours(-hoursOld)); }
+            Pic2("20261023-175637-Auldors-Sanctum-reward-table.jpg", 5); Pic2("20261023-180812-Hidden-Lugi-event-rewards.jpg", 4);
+            Pic2("20261023-160003-Ellun-River-Midstream-Quna-Shop.jpg", 6); Pic2("20261023-171457-Deserter-Encampment-Trade-Shop.jpg", 5.5);
+            Pic2("20261023-175617-Auldors-Sanctum-in-run.jpg", 5.2); Pic2("20261023-100159-Ellun-River-Midstream-Attendance-Rewards.jpg", 12);
+            int rs2Gone = TrackerSession.PruneRewardShots(rs2, DateTime.Now, maxBytes: 300);
+            var rs2Left = string.Join(" ", Directory.GetFiles(rs2).Select(Path.GetFileName).OrderBy(n => n));
+            Directory.Delete(rs2, true);
+            Check("reward-shots too big: shops first, then in-run; today's run ends stay", $"{rs2Gone} · {rs2Left}",
+                "3 · 20261023-100159-Ellun-River-Midstream-Attendance-Rewards.jpg 20261023-175637-Auldors-Sanctum-reward-table.jpg 20261023-180812-Hidden-Lugi-event-rewards.jpg");
             // a craft queue: the loot list shows each result long after the window's last sign (16:52, 16 s and 40 s);
             // within the 60 s hold a recipe's item is a craft, after it a drop, and a drop before the window opened stays one
             var ce = new SessionEngine(items); var cw = x0;

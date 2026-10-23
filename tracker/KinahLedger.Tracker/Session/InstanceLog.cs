@@ -34,6 +34,12 @@ public sealed class InstanceRun
     public int Bound { get; set; }
     /// <summary>The bound items by id, so a run's drop list shows them too (they still carry no value). Since 0.8.5.</summary>
     public Dictionary<long, int> BoundItems { get; set; } = new();
+    /// <summary>Items the chat printed in the run, never counted: a run's items come from its reward picture (since 0.8.18).</summary>
+    public int ChatItemsSetAside { get; set; }
+    /// <summary>Those chat items by id, for the log and the tests: where they went, never what the run counts.</summary>
+    public Dictionary<long, int> ChatItems { get; set; } = new();
+    /// <summary>No reward picture was read for the run, so its rewards are not known (since 0.8.18). Kinah and kills still count.</summary>
+    public bool RewardsNotRead { get; set; }
     /// <summary>Entry to last loot, never under ten seconds.</summary>
     public double Seconds => LastLoot is { } l ? Math.Max(10, (l - Start).TotalSeconds) : 0;
 
@@ -360,6 +366,14 @@ public sealed class InstanceLog
             if (_cur == null) return;
             // the run was left and its time for rewards is over: it closes, and this pickup is farming's
             if (_leftAt is { } left && (ev.Time - left).TotalSeconds > RewardGraceSeconds) { CloseLocked("time for rewards over"); return; }
+            // an event's items come from its reward screen's picture, never the chat (Steven, 2026-10-23). A chat item is set
+            // aside, counted for the log; it still dates the run and its rewards' arrival. Expeditions keep their reading for now
+            if (_cur.Kind == "Event" && ev is ItemAcquired ci && !ev.Via.Contains("reward table"))
+            {
+                _cur.ChatItemsSetAside += ci.Count; _cur.ChatItems[ci.ItemId] = _cur.ChatItems.GetValueOrDefault(ci.ItemId) + ci.Count; _cur.LastLoot = ci.Time;
+                if (batch >= 3) Paid(ci.Time);
+                return;
+            }
             switch (ev)
             {
                 case ItemAcquired a:
@@ -396,6 +410,15 @@ public sealed class InstanceLog
     /// <summary>The reward table at the end was read: the run's rewards are in.</summary>
     public void RewardTable(DateTime t) { lock (_lock) Paid(t); }
 
+    /// <summary>An event's rewards came in the last <paramref name="seconds"/> s (for its reward pictures, every 2 s).</summary>
+    public bool EventPaidWithin(DateTime now, double seconds)
+    {
+        lock (_lock) return _cur is { Kind: "Event", PaidAt: DateTime p } && (now - p).TotalSeconds <= seconds;
+    }
+
+    /// <summary>An event's reward screen is up: its rewards are in (their picture is kept until its cards can be read).</summary>
+    public void EventRewardScreen(DateTime t) { lock (_lock) { if (_cur?.Kind == "Event") Paid(t); } }
+
     /// <summary>Closes the open run (the reader is stopping).</summary>
     public void Close() { lock (_lock) CloseLocked("the reader stopped"); }
 
@@ -424,6 +447,11 @@ public sealed class InstanceLog
     {
         _leftAt = null;
         if (_cur != null) _cur.Ended = why;
+        if (_cur != null && _cur.Kind == "Event")
+        {
+            _cur.RewardsNotRead = true;
+            if (_cur.LastLoot != null) CrashLog.Note($"{_cur.Label}: its reward screen isn't read yet, so its rewards are marked not read ({_cur.ChatItemsSetAside} chat item(s) not counted)");
+        }
         if (_cur?.LastLoot != null)
         {
             _done.Add(_cur);

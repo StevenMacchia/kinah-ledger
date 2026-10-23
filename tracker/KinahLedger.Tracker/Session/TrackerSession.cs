@@ -1160,6 +1160,18 @@ public sealed class TrackerSession
             using var bandBmp = frame.Clone(band, frame.PixelFormat);
             var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
             var rc = lines.FirstOrDefault(l => Update.RemoteConfig.HasAny(l.Text, Update.RemoteConfig.Current.RewardCollectedWords));
+            // an event's reward screen (Shugo Festival "Jump Jump": "Rewards have been sent to your cube.", "Can select 0 time(s)",
+            // five cards, the received ones bright with a card icon): its rewards are the run's and come from this picture,
+            // never the chat. Until its cards can be read, the picture is kept (a few, a second or two apart) and the run's
+            // rewards stay not read (Steven, 2026-10-23)
+            if (rc == null && lines.Any(l => IsEventRewardTitle(l.Text)))
+            {
+                if (!_eventScreenUp) { _eventScreenUp = true; _eventShots = 0; CrashLog.Note("event reward screen up: its cards are the run's rewards (kept as pictures until they can be read)"); }
+                Instances.EventRewardScreen(now);
+                if (_eventShots < 6 && (now - _eventShotAt).TotalSeconds >= 1.5) { _eventShotAt = now; _eventShots++; SaveShot(frame, "event-rewards"); }
+                return;
+            }
+            _eventScreenUp = false;
             if (rc == null) { if ((now - _gridSeenAt).TotalSeconds > 5) _gridDone = false; return; }
             _gridSeenAt = now;
             if (_gridDone) return;
@@ -1368,6 +1380,12 @@ public sealed class TrackerSession
     /// Progress", "Gråfting in Progresso" and "•raftingQsin Progresso" (Steven, 2026-10-23 17:12: both Superior Courage
     /// Scrolls were left to the chat because the title came back garbled, so a batch counted only after it ended).
     /// </summary>
+    bool _eventScreenUp; int _eventShots; DateTime _eventShotAt = DateTime.MinValue;
+
+    /// <summary>An event's reward screen by its words: "Rewards have been sent to your cube.", "Can select 0 time(s)".</summary>
+    public static bool IsEventRewardTitle(string line) =>
+        Regex.IsMatch(line, @"sent\s*to\s*your\s*cube|can\s*select\s*\d+\s*time", RegexOptions.IgnoreCase);
+
     public static bool IsCraftTitle(string line) =>
         Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.CraftPanelWords)
         || Regex.IsMatch(line, @"r[aåäà4]ft(?:ing|in|ng)|r[aåäà4]fting", RegexOptions.IgnoreCase);
@@ -1773,18 +1791,60 @@ public sealed class TrackerSession
     public const long RewardShotsMaxMB = 300;
     DateTime _rewardShotAt = DateTime.MinValue, _rewardPrunedAt = DateTime.MinValue; int _rewardShotsOpen;
 
+    /// <summary>A picture of the game kept in reward-shots (only where that folder exists, within the day's limit), named for the zone and what it shows.</summary>
+    string _gridShot = "";
+    void SaveShot(System.Drawing.Bitmap bmp, string title)
+    {
+        _gridShot = "";
+        try
+        {
+            var dir = Path.Combine(CrashLog.Dir, "reward-shots");
+            if (!Directory.Exists(dir)) return;
+            if (Directory.GetFiles(dir, DateTime.Now.ToString("yyyyMMdd") + "-*.jpg").Length >= RewardShotsPerDay) return;
+            var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
+            using var ps = new System.Drawing.Imaging.EncoderParameters(1);
+            ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L);
+            var file = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{zoneName}-{title}.jpg");
+            bmp.Save(file, jpg, ps);
+            _gridShot = Path.GetFileName(file);
+            CrashLog.Note($"{title.Replace('-', ' ')} kept as a picture: {Path.GetFileName(file)}");
+        }
+        catch (Exception ex) { CrashLog.Write("picture", ex); }
+    }
+
     /// <summary>Deletes old pictures from reward-shots (see above). Only ever .jpg files the tracker named itself.</summary>
-    internal static int PruneRewardShots(string dir, DateTime now)
+    /// <summary>
+    /// What a kept picture is, for how long it stays and what goes first when the folder is too big: a run's end (the
+    /// expedition table, an event's reward screen) the runs are counted from and replayed against; a shop or trade screen
+    /// (most of the folder, 2 to 3 MB each); a picture taken every few seconds (in a run, crafting, a fight, a world boss);
+    /// another reward screen (the Daeva Pass, attendance).
+    /// </summary>
+    internal enum ShotKind { RunEnd, Shop, Frequent, Screen }
+    internal static ShotKind KindOfShot(string name) =>
+        Regex.IsMatch(name, @"-(?:reward-table(?:-settled)?|event-rewards)\.jpg$", RegexOptions.IgnoreCase) ? ShotKind.RunEnd
+        : Regex.IsMatch(name, @"shop\.jpg$|-shop-", RegexOptions.IgnoreCase) ? ShotKind.Shop
+        : Regex.IsMatch(name, @"-(?:in-run|fight|crafting|worldboss)\.jpg$", RegexOptions.IgnoreCase) ? ShotKind.Frequent
+        : ShotKind.Screen;
+
+    /// <summary>
+    /// Keeps reward-shots small without losing what runs are counted from (Steven, 2026-10-23: the Urugugu and Shugo ends
+    /// were deleted within minutes, 452 pictures at a time, while a week of shop screens stayed). A run's end stays 7 days
+    /// and is never trimmed for size; shop screens 2 days, then the first to go; pictures taken every few seconds a day.
+    /// </summary>
+    internal static int PruneRewardShots(string dir, DateTime now, long? maxBytes = null)
     {
         int gone = 0;
         var files = new DirectoryInfo(dir).GetFiles("2*-*.jpg")
-            .Where(f => System.Text.RegularExpressions.Regex.IsMatch(f.Name, @"^\d{8}-\d{6}-"))
-            .Select(f => (F: f, Run: f.Name.EndsWith("-in-run.jpg") || f.Name.EndsWith("-fight.jpg") || f.Name.EndsWith("-crafting.jpg")))
+            .Where(f => Regex.IsMatch(f.Name, @"^\d{8}-\d{6}-"))
+            .Select(f => (F: f, K: KindOfShot(f.Name)))
             .ToList();
-        void Drop((FileInfo F, bool Run) x) { try { x.F.Delete(); gone++; } catch { } }
-        foreach (var x in files.Where(x => (now - x.F.LastWriteTime).TotalDays > (x.Run ? 1 : 7)).ToList()) { Drop(x); files.Remove(x); }
-        long total = files.Sum(x => x.F.Length), max = RewardShotsMaxMB * 1024 * 1024;
-        foreach (var x in files.OrderByDescending(x => x.Run).ThenBy(x => x.F.LastWriteTime).ToList())
+        void Drop((FileInfo F, ShotKind K) x) { try { x.F.Delete(); gone++; } catch { } }
+        double Days(ShotKind k) => k switch { ShotKind.RunEnd => 7, ShotKind.Shop => 2, ShotKind.Frequent => 1, _ => 7 };
+        foreach (var x in files.Where(x => (now - x.F.LastWriteTime).TotalDays > Days(x.K)).ToList()) { Drop(x); files.Remove(x); }
+        long total = files.Sum(x => x.F.Length), max = maxBytes ?? RewardShotsMaxMB * 1024 * 1024;
+        int Order(ShotKind k) => k switch { ShotKind.Shop => 0, ShotKind.Frequent => 1, _ => 2 };
+        foreach (var x in files.Where(x => x.K != ShotKind.RunEnd).OrderBy(x => Order(x.K)).ThenBy(x => x.F.LastWriteTime).ToList())
         {
             if (total <= max) break;
             total -= x.F.Length; Drop(x);
@@ -1819,7 +1879,7 @@ public sealed class TrackerSession
             // without counting as a window over it, and Alt+Tab shows thumbnails of everything open (2026-10-22 15:07)
             if (!GameWindow.InFront(_settings.ProcessHints)) return;
             _rewardShotAt = now; if (reward) _rewardShotsOpen++;
-            var title = crafting ? "crafting" : !reward ? "in-run" : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            var title = crafting ? "crafting" : !reward ? (Instances.EventPaidWithin(now, 20) ? "event-rewards" : "in-run") : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             using var bmp = ScreenReader.Capture(g);
             var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);

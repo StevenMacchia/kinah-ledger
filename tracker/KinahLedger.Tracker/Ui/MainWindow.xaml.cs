@@ -1283,8 +1283,16 @@ public partial class MainWindow : Window
             foreach (var id in r.Items.Keys.Concat(r.BoundItems.Keys).Distinct()) inRuns[id] = inRuns.GetValueOrDefault(id) + 1;
         }
         var rows = new List<DropRow>();
+        // runs whose reward screen wasn't read: shown, never filled in from the chat
+        int notRead = runs.Count(r => r.RewardsNotRead);
+        void Unread()
+        {
+            if (notRead > 0) rows.Add(new DropRow("Rewards not read", "", $"{notRead} of {runs.Count} runs", "",
+                Initial: "?", Sub: "the reward screen wasn't read, so these runs show no items", Child: true));
+        }
         if (total.Count == 0)
         {
+            if (notRead > 0) { Unread(); return rows; }
             rows.Add(new DropRow("No item drops yet", "", "", "", Sub: runs.Sum(r => r.Bound) > 0 ? "only bound items, from runs before 0.8.5" : "only Kinah so far", Child: true));
             return rows;
         }
@@ -1302,6 +1310,7 @@ public partial class MainWindow : Window
                 Grade: _items.Get(id)?.Grade ?? "", Icon: Slot(id), Initial: InitialOf(name), Value: each > 0 ? Short(each * got / runs.Count) : "",
                 Sub: tag + why, Child: true));
         }
+        Unread();
         return rows;
     }
 
