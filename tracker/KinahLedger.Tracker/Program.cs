@@ -1990,6 +1990,37 @@ options: --process aion[,other]");
                 var five = fv.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= fv0.AddMinutes(-1)).ToList();
                 Check("five Urugugu runs back to back: five runs, each its own table",
                     $"{five.Count} · {string.Join(" ", five.Select(r => r.Items.Values.Sum()))} · longest {(five.Count > 0 ? five.Max(r => r.Seconds) : 0):0} s", "5 · 5 5 5 5 5 · longest 400 s");
+                // today's exact times: tables at 18:33:57, 18:41:01, 18:48:56, 18:56:35, 19:04:02 (each with the 600.0K coin), an empty
+                // read at 18:57:25; a flicker of "Urugugu Canyon" for one read after the second table; a late bound payout 25 s
+                // after the first table, once he was back in the village, and the next run's first Kinah after it
+                var kinaKey = IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon);
+                RewardGrid.Slot Coin() => new(box, "Common", "600.0K", 600_000, new() { (kinaKey, 4.4), ("Other", 84.4) });
+                var ex = new TrackerSession(null, new Settings(), items, "Test");
+                var day = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-1), DateTimeKind.Utc);
+                DateTime At(string hms) => day + TimeSpan.Parse(hms);
+                void Area(string a, DateTime t) { ex.Engine.SetZone(a); ex.Instances.Zone(a, t); }
+                var tables = new[] { "18:33:57", "18:41:01", "18:48:56", "18:56:35", "19:04:02" }.Select(At).ToArray();
+                var entry = At("18:26:57");
+                for (int r = 0; r < 5; r++)
+                {
+                    var tb = tables[r];
+                    if (r == 0) { Area("Urugugu Village", entry); Area("Windy Valley", entry.AddSeconds(90)); }
+                    Area("Urugugu Temple", tb.AddSeconds(-180)); Area("Auldor's Sanctum", tb.AddSeconds(-90));
+                    if (r == 1) { Area("Urugugu Canyon", tb.AddSeconds(3)); Area("Auldor's Sanctum", tb.AddSeconds(5)); }   // a flicker
+                    ex.ApplyGrid(new List<RewardGrid.Slot> { Coin() }, tb);
+                    Area("Auldor's Sanctum", tb.AddSeconds(4));
+                    if (r == 3) ex.ApplyGrid(new List<RewardGrid.Slot>(), At("18:57:25"));   // the empty read
+                    Area("Urugugu Village", tb.AddSeconds(20)); Area("Urugugu Village", tb.AddSeconds(22));
+                    if (r == 0) ex.Instances.Loot(new KinahChanged(tb.AddSeconds(25), 20_000, true));   // a late payout: the first run's
+                    if (r == 0) ex.Instances.Loot(new KinahChanged(tb.AddSeconds(60), 300, false));    // a kill in the next run
+                    Area("Windy Valley", tb.AddSeconds(60));
+                }
+                Area("Pilgrim's Ridge", At("19:05:00")); Area("Pilgrim's Ridge", At("19:06:00"));
+                ex.Instances.Close();
+                var today = ex.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= entry.AddMinutes(-1)).OrderBy(r => r.Start).ToList();
+                Check("today's five runs, exact times: five runs, each its own 600K, the late payout the first run's, the flicker nothing",
+                    $"{today.Count} · {string.Join(" ", today.Select(r => r.Kinah.ToString()))} · first ends {(today.Count > 0 ? today[0].LastLoot?.ToString("HH:mm:ss") : "-")}",
+                    $"5 · 620000 600300 600000 600000 600000 · first ends {tables[0].AddSeconds(25):HH:mm:ss}");
                 // a second table with no change of area between: the next run's, never added onto the first
                 var sv2 = new TrackerSession(null, new Settings(), items, "Test"); var sv0 = DateTime.UtcNow.AddHours(-1);
                 sv2.Engine.SetZone("Auldor's Sanctum"); sv2.Instances.Zone("Auldor's Sanctum", sv0);

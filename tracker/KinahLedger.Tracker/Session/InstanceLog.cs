@@ -134,9 +134,21 @@ public sealed class InstanceLog
                 // an area of an expedition is that expedition: walking from one area to the next is the same run
                 var name = ZoneLocator.RunName(zone);
                 // ...until its reward table was read: moving on from there (back to the village, into the canyon) is the end of
-                // that run, and the way into the next one (Steven, 2026-10-23: five Urugugu runs from 18:26 to 19:04 were one)
-                if (_cur != null && _cur.Kind != WorldBoss && _paidArea != null && !string.Equals(zone, _paidArea, StringComparison.OrdinalIgnoreCase))
-                    CloseLocked($"its reward table was read, then {zone}");
+                // that run, and the way into the next one (Steven, 2026-10-23: five Urugugu runs from 18:26 to 19:04 were one).
+                // A move holds for two reads or 3 s (one read of another name is a flicker of the minimap), and the run takes
+                // its late reward lines for 30 s after its table before the next one begins
+                if (_cur != null && _cur.Kind != WorldBoss && _paidArea != null)
+                {
+                    if (!string.Equals(zone, _paidArea, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (_moveAt == null) { _moveAt = now; _moveReads = 0; }
+                        _moveReads++;
+                        if (_moveReads >= 2 || (now - _moveAt.Value).TotalSeconds >= MoveHoldSeconds) _moveConfirmed = true;
+                    }
+                    else if (!_moveConfirmed) { _moveAt = null; _moveReads = 0; }
+                    if (_moveConfirmed && _tableAt is DateTime ta && (now - ta).TotalSeconds >= RewardLateSeconds) SplitLocked($"its reward table was read, then {zone}");
+                    if (_cur != null && _moveConfirmed) return;   // still the paid run's time for late reward lines
+                }
                 var ev = kind == "Event" && !string.Equals(name, zone, StringComparison.OrdinalIgnoreCase) ? zone : kind == "Event" && ZoneLocator.FamilyOf(zone) == "" ? zone : "";
                 // the event just closed by the open world's Kina or a kill, still on the minimap for a read: not a new run
                 if (_cur == null && _outZone != null && string.Equals(_outZone, name, StringComparison.OrdinalIgnoreCase) && (now - _outAt).TotalSeconds <= 30) return;
@@ -370,6 +382,9 @@ public sealed class InstanceLog
         lock (_lock)
         {
             if (_cur == null) return;
+            // moved on after the run's reward table: a late reward line is still that run's, anything else begins the next
+            if (_moveConfirmed && _tableAt is DateTime tab && !(RewardLike(ev, batch) && (ev.Time - tab).TotalSeconds <= RewardLateSeconds))
+                SplitLocked("its reward table was read, and the next run's loot came");
             // the run was left and its time for rewards is over: it closes, and this pickup is farming's
             if (_leftAt is { } left && (ev.Time - left).TotalSeconds > RewardGraceSeconds) { CloseLocked("time for rewards over"); return; }
             // an event's items come from its reward screen's picture, never the chat (Steven, 2026-10-23). A chat item is set
@@ -442,7 +457,23 @@ public sealed class InstanceLog
             CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (a second reward table at {t.ToLocalTime():HH:mm:ss})");
         }
     }
-    string? _area, _paidArea; DateTime? _areaSince, _tableAt;
+    string? _area, _paidArea; DateTime? _areaSince, _tableAt, _moveAt; int _moveReads; bool _moveConfirmed;
+    public const double MoveHoldSeconds = 3, RewardLateSeconds = 30;
+
+    /// <summary>The paid run closes and the next opens, from when the move out of the paid area was first seen.</summary>
+    void SplitLocked(string why)
+    {
+        if (_cur == null) return;
+        var zone = _cur.Zone; var kind = _cur.Kind; var ev = _cur.Event; var fam = _cur.Family; var start = _moveAt ?? DateTime.UtcNow;
+        CloseLocked(why);
+        _cur = new InstanceRun { Zone = zone, Kind = kind, Event = ev, Family = fam, Start = start };
+        _byMinimap = true;
+        CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (moved on after the last one's reward table)");
+    }
+
+    /// <summary>A reward's kind of pickup: bound, Kinah by the thousand, a burst of three or more, or a reward table's slot.</summary>
+    static bool RewardLike(GameEvent ev, int batch) =>
+        batch >= 3 || ev.Via.Contains("reward table") || ev is ItemAcquired { Bound: true } || ev is KinahChanged { Bound: true } || ev is KinahChanged { Delta: >= 1000 };
 
     /// <summary>An event's rewards came in the last <paramref name="seconds"/> s (for its reward pictures, every 2 s).</summary>
     public bool EventPaidWithin(DateTime now, double seconds)
@@ -479,7 +510,7 @@ public sealed class InstanceLog
 
     void CloseLocked(string why)
     {
-        _leftAt = null; _paidArea = null; _tableAt = null;
+        _leftAt = null; _paidArea = null; _tableAt = null; _moveAt = null; _moveReads = 0; _moveConfirmed = false;
         if (_cur != null) _cur.Ended = why;
         if (_cur != null && _cur.Kind == "Event")
         {
