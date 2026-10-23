@@ -119,7 +119,8 @@ public partial class MainWindow : Window
         Rows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
         CraftRows.MouseLeftButtonUp += CraftRowClick;
-        InstEarlierLink.Click += (_, _) => { _eventsAll = !_eventsAll; ShowInstances(); };
+        InstSessionBtn.Click += (_, _) => { _eventsAll = false; ShowInstances(); };
+        InstEarlierBtn.Click += (_, _) => { _eventsAll = true; ShowInstances(); };
         // a click on an enemy opens or closes its loot table
         // a click on an expedition or event opens or closes what dropped there
         InstRows.MouseLeftButtonUp += (_, ev) =>
@@ -149,12 +150,12 @@ public partial class MainWindow : Window
             if (MessageBox.Show(this, "Start crafting over? The recipes, tries and profit shown here are cleared.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView);
         };
-        InstClearLink.Click += (_, _) =>
+        InstClearBtn.Click += (_, _) =>
         {
             if (MessageBox.Show(this, "Clear the expedition and event runs shown here? Runs not sent to the site yet are still sent.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             _watcher.Chat?.Instances.ClearShown(); ShowInstances();
         };
-        FarmClearLink.Click += async (_, _) =>
+        FarmClearBtn.Click += async (_, _) =>
         {
             if (Farming) { Say("A farming run is on: Stop ends it and starts the tables over.", "Warn"); return; }
             if (MessageBox.Show(this, "Clear the farming tables and start counting again? What was counted is shared with the site first, as usual.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
@@ -1195,8 +1196,12 @@ public partial class MainWindow : Window
         bool Now(InstanceRun r) => (r.LastLoot ?? r.Start) >= since || log?.Open == r.Zone;
         var runs = _eventsAll || _demoInst != null ? all : all.Where(Now).ToList();
         int earlier = all.Count(r => !Now(r));
-        InstEarlierText.Visibility = earlier > 0 && _demoInst == null ? Visibility.Visible : Visibility.Collapsed;
-        InstEarlierRun.Text = _eventsAll ? "This session only" : $"Earlier ({earlier})";
+        // the switch shows once there is something earlier to switch to (a render shows it with the demo's runs)
+        InstScope.Visibility = earlier > 0 || _demoInst != null ? Visibility.Visible : Visibility.Collapsed;
+        bool allShown = _eventsAll || _demoInst != null;
+        InstSessionBtn.Style = (Style)FindResource(allShown ? "SegOff" : "SegOn");
+        InstEarlierBtn.Style = (Style)FindResource(allShown ? "SegOn" : "SegOff");
+        InstEarlierBtn.Content = $"Earlier ({(_demoInst != null ? all.Count : earlier)})";
         var rows = new List<DropRow>();
         foreach (var g in runs.GroupBy(r => r.Zone).OrderByDescending(g => g.Max(r => r.LastLoot)))
         {
