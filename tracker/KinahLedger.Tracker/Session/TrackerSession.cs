@@ -908,6 +908,7 @@ public sealed class TrackerSession
         // only an achievement line that is new: one that stays on screen is read a little differently each time
         batchAchievement = voted.Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
+        var thisRead = new List<string>();   // lines the vote and the read-again count in this read, for the settle below
         // a line the settle just counted shows up again as new once the reads line up: the same pickup, counted once
         // (Steven, 2026-10-23 16:22: 200 Natura Soul Crystals and 50,000 Kina counted twice)
         lock (_settledCounted)
@@ -928,7 +929,7 @@ public sealed class TrackerSession
             bool any = Apply(events, l);
             CrashLog.Read(l, any, afterFade);
             // while the chat is garbled, what the vote counts is remembered too, so the settle doesn't count it again
-            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); }
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); thisRead.Add(l.Trim()); }
         }
         batchAchievement = reread.Concat(fresh).Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         foreach (var l in reread)
@@ -936,7 +937,7 @@ public sealed class TrackerSession
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, l, "chat · recovered");
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
-            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); }
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); thisRead.Add(l.Trim()); }
         }
         // dated when the garbling began, which is when they landed (an event's rewards: inside its time for rewards)
         // only an achievement line that first showed with the garbled reads: one that sat in the chat before is an old one
@@ -945,6 +946,9 @@ public sealed class TrackerSession
         if (settledAchievement) { _achieveUntil = settledAt.AddSeconds(RewardWindowSeconds); CrashLog.Note("the settled lines came with an achievement: they are its reward, not drops"); }
         foreach (var l in settled)
         {
+            // the vote or the read-again in this same read just counted it: the settle picked its lines before they ran
+            int dup = thisRead.FindIndex(x => Reread.Same(x, l.Trim()));
+            if (dup >= 0) { thisRead.RemoveAt(dup); CrashLog.Read(l + "    (counted already in this read, not again)", false); continue; }
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) any |= Apply(events, l, "chat · recovered");
             CrashLog.Read(l + "    (counted once the chat settled)", any);
