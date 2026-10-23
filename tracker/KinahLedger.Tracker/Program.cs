@@ -1092,6 +1092,13 @@ options: --process aion[,other]");
             return 0;
         }
         var b0 = new DateTime(2026, 10, 23, 16, 0, 0, DateTimeKind.Utc);
+        // with list-only adds off (the default since 2026-10-23), a row the chat never names counts nothing
+        var s0 = new TrackerSession(null, settings, items, "Test");
+        s0.Engine.SetZone("Ruin Exploration Campsite");
+        List(s0, b0, "Spiritstone x1");
+        Check("loot list row the chat never names: not counted (chat-confirmed only)", $"{n(s0.Engine, "Spiritstone")}", "0");
+        // the reward rules below hold for when list-only adds are switched back on (ocr.lootListAdds)
+        bool addsWere = settings.Ocr.LootListAdds; settings.Ocr.LootListAdds = true;
         var sb = new TrackerSession(null, settings, items, "Test");
         sb.Engine.SetZone("Ruin Exploration Campsite");
         List(sb, b0, "Spiritstone x1");
@@ -1109,6 +1116,7 @@ options: --process aion[,other]");
         sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Acquired Growth Pet Chest (Bound) x2.", "Acquired 520 Kina." }, b0.AddSeconds(133));
         List(sb, b0.AddSeconds(133.5), "Spiritstone x1");
         Check("a row just after a box or reward line, even near a kill: set aside", $"{n(sb.Engine, "Spiritstone")}", "1");
+        settings.Ocr.LootListAdds = addsWere;
         var sa = new TrackerSession(null, settings, items, "Test");
         sa.Engine.SetZone("Ruin Exploration Campsite");
         sa.ProcessChat(new List<string> { "[Player1] hi" }, b0);
@@ -1121,6 +1129,32 @@ options: --process aion[,other]");
         for (int i = 0; i < 5; i++) sa.ProcessChat(later, b0.AddSeconds(120 + i * 0.4));
         sa.FlushVotes(b0.AddSeconds(123));
         Check("an old achievement line still on screen: a new drop counts", $"{n(sa.Engine, "Lesser Soulstone")}", "1");
+
+        // ---- gathering (Steven, 2026-10-23 11:28-11:29, Orichalcum: "like a 25% accuracy") ----
+        // the loot list band read the gathering panel (node, proficiency, item, Success) as rows; the game upgraded the ore
+        // to Fine in place; one chat line came, late; then a gather he stopped showed the panel again and "failed"
+        var so = new TrackerSession(null, settings, items, "Test");
+        so.Engine.SetZone("Ruin Exploration Campsite");
+        var g0 = new DateTime(2026, 10, 23, 15, 28, 40, DateTimeKind.Utc);
+        List<(int, string)> L(params string[] r) => r.Select((x, k) => (100 + k * 30, x)).ToList();
+        var chatBase = new List<string> { "[Player1] a chat line", "Cannot end flight in current state." };
+        so.ProcessChat(chatBase, g0);
+        so.ProcessList(L("Orich x1", "Profes x1", "Orichalcum Ore x1", "Success x1"), g0.AddSeconds(11.7));
+        so.ProcessList(L("Orich x1", "AProfes x1", "Fine Orichalcum Ore x1", "Success x1"), g0.AddSeconds(12.4));
+        so.ProcessList(L("Orich x1", "APrdfes x1", "Fine Orichalcum Ore x1", "Success x1"), g0.AddSeconds(13.3));
+        so.ProcessList(L("Orich x1", "Fihe Orichalcum Ore x1", "Success x1"), g0.AddSeconds(15.0));
+        so.ProcessList(L("Orich x1", "EPFOfes x1", "Success x1"), g0.AddSeconds(16.1));
+        var chatOre = new List<string> { "[Player1] a chat line", "Cannot end flight in current state.", "Fine Orichalcum Ore acquired." };
+        for (int i = 0; i < 4; i++) so.ProcessChat(chatOre, g0.AddSeconds(16.8 + i));
+        so.ProcessList(L("Fine Orichalcum x1"), g0.AddSeconds(17.2));
+        so.ProcessList(L("Orichal x1", "Pero(eS x1", "Orichalcum Ore x1", "Success x1"), g0.AddSeconds(18.3));
+        for (int i = 0; i < 6; i++) so.ProcessList(L("Vangt x1", "Orichalcum x1", "Orichalcum Ore x1", "Success x1"), g0.AddSeconds(19.4 + i));
+        var chatFail = new List<string> { "Cannot end flight in current state.", "Fine Orichalcum Ore acquired.", "Essence Extraction failed" };
+        for (int i = 0; i < 4; i++) so.ProcessChat(chatFail, g0.AddSeconds(24.1 + i));
+        foreach (var dt in new[] { 30.0, 34.0, 40.0 }) so.ProcessList(new List<(int, string)>(), g0.AddSeconds(dt));
+        so.FlushVotes(g0.AddSeconds(41));
+        Check("one gather, upgraded in place, then a stopped one: one Fine ore", $"{n(so.Engine, "Fine Orichalcum Ore")} {n(so.Engine, "Orichalcum Ore")}", "1 0");
+        Check("...the failed gather is an attempt, not an item", $"{so.Engine.Totals().Nodes}", "2");
 
         // garbled reads over lines that were already on screen: nothing more
         var s2 = new TrackerSession(null, settings, items, "Test");
