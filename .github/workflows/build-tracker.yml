@@ -36,12 +36,23 @@ jobs:
         run: dotnet publish -c Release -o ../../dist
 
       # the self-tests that need no game, on GitHub's machine rather than a player's PC (Steven, 2026-10-23)
-      - name: Self-tests (parse, market, options)
+      - name: parse-test
         shell: bash
         run: |
-          dist/KinahLedger.exe parse-test | tail -25
-          dist/KinahLedger.exe market-test | tail -45
-          dist/KinahLedger.exe options-test | tail -15
+          set +e; dist/KinahLedger.exe parse-test > parse.txt; s=$?
+          grep -E "MISMATCH|FAIL" parse.txt; tail -2 parse.txt; exit $s
+      - name: market-test
+        if: always()
+        shell: bash
+        run: |
+          set +e; dist/KinahLedger.exe market-test > market.txt; s=$?
+          grep -E "MISMATCH|FAIL" market.txt; grep -A40 "^Player features" market.txt; tail -2 market.txt; exit $s
+      - name: options-test
+        if: always()
+        shell: bash
+        run: |
+          set +e; dist/KinahLedger.exe options-test > options.txt; s=$?
+          grep -E "FAIL" options.txt; tail -2 options.txt; exit $s
 
       # the window and its cards drawn with sample data, kept as an artifact for layout review
       - name: Layout renders
