@@ -564,6 +564,24 @@ public sealed class TrackerSession
                 if (after.Count > 0) { CrashLog.Note($"counted {after.Count} loot line(s) below the last line this read shares with the last one: {string.Join(" | ", after)}"); reread.AddRange(after); }
             }
         }
+        // garbled reads in a row (a reward burst fading in): once the chat settles, the clean read's loot lines count
+        var settled = new List<string>();
+        DateTime settledAt = now; bool settledAny = false;
+        if (_tracker.Unaligned > unaligned)
+        {
+            if (_garbledSince == null)
+            {
+                _garbledSince = now;
+                _beforeGarbled = new HashSet<string>(_recent.Where(kv => (now - kv.Value).TotalMinutes <= 10).Select(kv => kv.Key));
+                _countedGarbled.Clear();
+            }
+        }
+        else if (_garbledSince is { } gs && lines.Count > 0)
+        {
+            // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up
+            if ((now - gs).TotalSeconds > SettleSeconds) _garbledSince = null;
+            else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled); settledAt = gs; }
+        }
         Reread.Remember(_recent, lines, now);
         _lastLines = lines;
         bool Apply(IEnumerable<GameEvent> events, string via = "chat")
@@ -600,7 +618,20 @@ public sealed class TrackerSession
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, "chat · recovered");
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
-            if (any) { LastLine = l; LootLine?.Invoke(l); }
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
+        }
+        // dated when the garbled reads began, which is when they landed (an event's rewards: inside its time for rewards)
+        foreach (var l in settled)
+        {
+            bool any = false;
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) any |= Apply(events, "chat · recovered");
+            CrashLog.Read(l + "    (counted once the chat settled)", any);
+            if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; }
+        }
+        if (settledAny)
+        {
+            CrashLog.Note($"the chat settled after {(now - settledAt).TotalSeconds:0} s of reads that didn't line up; its loot lines counted from the clean read: {string.Join(" | ", settled)}");
+            _garbledSince = null;
         }
         LastError = "";
     }
@@ -829,7 +860,9 @@ public sealed class TrackerSession
     void Count(GameEvent ev)
     {
         if (ev is not CraftResult && BossTakes(ev)) return;
-        if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored)
+        // inside an event or expedition, or just out of one while its rewards still land (InstanceLog.RewardGraceSeconds)
+        bool ending = ZoneLocator.KindOf(Zone) == null && Instances.Ending(ev.Time);
+        if ((ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored) || ending)
         {
             // the reward table's coin slot, read first, then the same Kina in the chat: once
             if (ev is KinahChanged { Delta: > 0 } dup && _gridKina.FindIndex(g => (ev.Time - g.At).TotalSeconds is >= 0 and <= 90 && g.Amount == dup.Delta) is int gi and >= 0)
@@ -1019,6 +1052,10 @@ public sealed class TrackerSession
     /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
     List<string> _prevRead = new();
     readonly Reread _reread = new();
+    // reads that couldn't be lined up, in a row: since when, the lines seen before them, what was counted meanwhile
+    DateTime? _garbledSince; HashSet<string> _beforeGarbled = new(); readonly List<string> _countedGarbled = new();
+    /// <summary>Garbled reads longer than this before the chat settles aren't one burst; nothing is taken from the settled read.</summary>
+    public const double SettleSeconds = 45;
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
     List<string> _lastLines = new();

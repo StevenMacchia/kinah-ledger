@@ -888,6 +888,7 @@ options: --process aion[,other]");
         ok &= TradeTest(items);
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
+        ok &= EventRewardsTest(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }
@@ -1021,6 +1022,62 @@ options: --process aion[,other]");
             Check("no pictures unless the player said yes", $"{Directory.Exists(Path.Combine(rdir, "frames"))} {File.Exists(Path.Combine(rdir, "counted.jsonl"))} {File.Exists(Path.Combine(rdir, "README.txt"))}", "False True True");
         }
         finally { try { Directory.Delete(rtmp, true); } catch { } }
+        return ok;
+    }
+
+    /// <summary>
+    /// Steven, 2026-10-23, Hidden Lugi: the event's rewards printed 11 s after the game moved him out, while the chat faded
+    /// in garbled, and none of them counted, toward the event or anywhere. Modelled on that trace (other players' lines
+    /// replaced): the rewards count once the chat settles, dated when they landed, and go to the event run just left.
+    /// </summary>
+    static bool EventRewardsTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nAn event's rewards after leaving it, read while the chat fades in (2026-10-23):");
+        var t0 = new DateTime(2026, 10, 23, 15, 1, 0, DateTimeKind.Utc);
+        var s = new TrackerSession(null, settings, items, "Test");
+        int n(SessionEngine e, string name) => e.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+        int r(string name) => (s.Instances.Snapshot().LastOrDefault()?.Items ?? new()).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+        s.Engine.SetZone("Hidden Lugi"); s.Instances.Zone("Hidden Lugi", t0);
+        Check("Hidden Lugi opens a Shugo Festival run", s.Instances.Open ?? "none", "Shugo Festival");
+        var before = new List<string> { "Player1 (Shugo) found Player2 (Lugi).", "Player3 (Shugo) found Player1 (Lugi)." };
+        s.ProcessChat(before, t0.AddSeconds(300));
+        s.ProcessChat(before, t0.AddSeconds(301));
+        // the game moves the player out; the minimap names the campsite
+        var left = t0.AddSeconds(383);
+        s.Engine.SetZone("Ruin Exploration Campsite"); s.Instances.Zone("Ruin Exploration Campsite", left);
+        Check("left the event: its run stays open for its rewards", $"{s.Instances.Open} {s.Instances.Ending(left.AddSeconds(11))} {s.Instances.Ending(left.AddSeconds(40))}", "Shugo Festival True False");
+        // the rewards fade in garbled three ways, then a clean read, then one that lines up with it
+        s.ProcessChat(new List<string> { "Forgotten Hatquired.", "Forgotten", "Illusion", "AcquirGdylO", "Codex (Bomd)", "One-of-a-Kind Gear III achieved." }, left.AddSeconds(11));
+        s.ProcessChat(new List<string> { "rorgotten Cloak", "Acquire d Fine OJy1e", "*quire d", "Odyle", "Acquire d Refining stone", "Acquire d soul codex (BoulJ) x]", "One-" }, left.AddSeconds(12.2));
+        s.ProcessChat(new List<string> { "• vrgotten Cloak", "Acquire d F•", "acquired", "Acquire d", "Ine Odyle", "Acquire d Refining stone", "Acquire d soul codex (Bounjl", "One-" }, left.AddSeconds(13.5));
+        s.ProcessChat(new List<string> { "SEA", "Forgotten Cloak acquired.", "Acquired Fine Odyle x2.", "Acquired Odyle x9.", "Acquired Refining Stone", "Acquired Soul Codex (Bound) x3", "One-of-a-Kind Gear ,III achieved.", "[Player4] a chat line" }, left.AddSeconds(18.5));
+        var settled = new List<string> { "Acquired Fine Odyle x2.", "Acquired Odyle x9.", "Acquired Refining Stone x6.", "Acquired Soul Codex (Bound) x3.", "One-of-a-Kind Gear III achieved.", "[Player4] a chat line" };
+        for (int i = 0; i < 4; i++) s.ProcessChat(settled, left.AddSeconds(29 + i));
+        s.FlushVotes(left.AddSeconds(33));
+        Check("the rewards count once the chat settles, in the run", $"{r("Forgotten Cloak")} {r("Fine Odyle")} {r("Odyle")} {r("Refining Stone")}", "1 2 9 6");
+        Check("...and not as farming in the campsite", $"{n(s.Engine, "Odyle")} {n(s.Engine, "Refining Stone")}", "0 0");
+        s.ProcessChat(settled, left.AddSeconds(40));
+        Check("read again later: counted once", $"{r("Odyle")}", "9");
+        s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(45));
+        Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {s.Instances.Snapshot().LastOrDefault()?.Zone} {s.Instances.Snapshot().LastOrDefault()?.Items.Values.Sum()}", "none Shugo Festival 18");
+        // garbled reads over lines that were already on screen: nothing more
+        var s2 = new TrackerSession(null, settings, items, "Test");
+        var old = new List<string> { "Acquired Odyle x3.", "[Player1] hello" };
+        s2.ProcessChat(new List<string> { "[Player2] hi" }, t0);
+        s2.ProcessChat(new List<string> { "[Player2] hi", "Acquired Odyle x3.", "[Player1] hello" }, t0.AddSeconds(1));
+        for (int i = 2; i < 5; i++) s2.ProcessChat(new List<string> { "[Player2] hi", "Acquired Odyle x3.", "[Player1] hello" }, t0.AddSeconds(i));
+        int counted = n(s2.Engine, "Odyle");
+        s2.ProcessChat(new List<string> { "xqzv", "Acqu ired 0dyle x3", "pl ayerl hel" }, t0.AddSeconds(6));
+        s2.ProcessChat(new List<string> { "Acquired Odyle x3.", "[Player1] hello", "[Player5] new" }, t0.AddSeconds(7));
+        s2.ProcessChat(new List<string> { "Acquired Odyle x3.", "[Player1] hello", "[Player5] new" }, t0.AddSeconds(8));
+        s2.FlushVotes(t0.AddSeconds(9));
+        Check("a line already on screen before the garble: not again", $"{counted} {n(s2.Engine, "Odyle")}", "3 3");
         return ok;
     }
 
@@ -1379,6 +1436,8 @@ options: --process aion[,other]");
                 log.Zone("Auldor's Sanctum", b0);
                 log.Loot(new KinahChanged(b0.AddMinutes(3), 50_000, false));
                 log.Zone("Eastern Cantas Valley", b0.AddMinutes(4));
+                // out in the open world, the run takes its rewards for InstanceLog.RewardGraceSeconds, then closes
+                log.Zone("Eastern Cantas Valley", b0.AddMinutes(4).AddSeconds(InstanceLog.RewardGraceSeconds + 1));
                 var first = log.TakeUnshared(b0); var second = log.TakeUnshared(b0);
                 log.Restore(first); var third = log.TakeUnshared(b0);
                 log.Restore(third); var stale = log.TakeUnshared(b0.AddHours(1));

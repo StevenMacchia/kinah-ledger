@@ -41,6 +41,20 @@ public sealed class InstanceLog
 
     public InstanceLog() { Load(); }
 
+    /// <summary>
+    /// An event's rewards print a little after the game has moved the player out (Steven, 2026-10-23, Hidden Lugi: back in
+    /// Ruin Exploration Campsite at 11:07:23, the rewards in the chat at 11:07:34). For this long after the minimap names an
+    /// open-world zone, what is picked up is still the run's; then the run closes.
+    /// </summary>
+    public const double RewardGraceSeconds = 30;
+    DateTime? _leftAt;
+
+    /// <summary>True while the run just left is still taking its rewards (<see cref="RewardGraceSeconds"/> after leaving), for a pickup at <paramref name="t"/>.</summary>
+    public bool Ending(DateTime t)
+    {
+        lock (_lock) return _cur != null && _leftAt is { } l && (t - l).TotalSeconds is >= -5 and <= RewardGraceSeconds;
+    }
+
     /// <summary>The zone just read (null: nothing new to say).</summary>
     public void Zone(string? zone, DateTime now)
     {
@@ -54,12 +68,21 @@ public sealed class InstanceLog
             {
                 // an area of an expedition is that expedition: walking from one area to the next is the same run
                 var name = ZoneLocator.RunName(zone);
-                if (_cur != null && string.Equals(_cur.Zone, name, StringComparison.OrdinalIgnoreCase)) return;
+                if (_cur != null && string.Equals(_cur.Zone, name, StringComparison.OrdinalIgnoreCase)) { _leftAt = null; return; }
                 CloseLocked();
                 _cur = new InstanceRun { Zone = name, Kind = ZoneLocator.KindOf(name) ?? kind, Start = now };
                 CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run started: {name}" + (name != zone ? $" (in {zone})" : ""));
             }
-            else if (zone != SessionEngine.UnknownZone) CloseLocked();
+            else if (zone != SessionEngine.UnknownZone)
+            {
+                // out in the open world: an event or expedition run takes its rewards for a little longer before it closes
+                if (_cur != null && _cur.Kind != WorldBoss)
+                {
+                    if (_leftAt == null) { _leftAt = now; CrashLog.Note($"left {_cur.Zone}: what lands in the next {RewardGraceSeconds:0} s is still its rewards"); return; }
+                    if ((now - _leftAt.Value).TotalSeconds <= RewardGraceSeconds) return;
+                }
+                CloseLocked();
+            }
         }
     }
 
@@ -69,6 +92,8 @@ public sealed class InstanceLog
         lock (_lock)
         {
             if (_cur == null) return;
+            // the run was left and its time for rewards is over: it closes, and this pickup is farming's
+            if (_leftAt is { } left && (ev.Time - left).TotalSeconds > RewardGraceSeconds) { CloseLocked(); return; }
             switch (ev)
             {
                 case ItemAcquired a:
@@ -116,6 +141,7 @@ public sealed class InstanceLog
 
     void CloseLocked()
     {
+        _leftAt = null;
         if (_cur?.LastLoot != null)
         {
             _done.Add(_cur);

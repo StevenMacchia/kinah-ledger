@@ -162,6 +162,45 @@ public sealed class Reread
         return take;
     }
 
+    /// <summary>
+    /// The chat settled after reads that couldn't be lined up (Steven, 2026-10-23, Hidden Lugi: the event's rewards came in
+    /// all at once while the chat faded in, three reads garbled three ways, then a clean one; none of it was counted).
+    /// <paramref name="prev"/> is the read this one lined up with, so it is as clean as this one. From its bottom up, its
+    /// loot lines are new up to the first line that was on screen before the garbled reads began (<paramref name="before"/>,
+    /// keys of the lines seen in the ten minutes before): the chat is in order, so anything above that is older. Lines
+    /// already counted while it was garbled (<paramref name="counted"/>) are left out, and a line this read shows whole
+    /// ("Acquired Refining Stone x6." where the last read had cut it at "Refining Stone") is taken in its whole form.
+    /// </summary>
+    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted)
+    {
+        var take = new List<string>();
+        var used = new HashSet<int>();
+        for (int i = prev.Count - 1; i >= 0; i--)
+        {
+            var line = prev[i]; var k = Key(line);
+            if (k.Length == 0) continue;
+            if (before.Any(p => Same(k, p))) break;
+            if (!LooksLikeLoot(line) || line.TrimStart().StartsWith('[')) continue;
+            // garbled reads line up with each other too ("Acquire d Refining stone" three reads running): only a line whose
+            // verb was read whole is a clean read of it
+            if (!CleanVerb(line)) continue;
+            if (counted.Any(c => Near(Key(c), k))) continue;
+            // the same line, a little more of it (its count): most of it already read, and each fuller line used once
+            int f = -1;
+            for (int j = 0; j < cur.Count && f < 0; j++)
+            {
+                var ck = Key(cur[j]);
+                if (!used.Contains(j) && ck.Length > k.Length && k.Length >= 10 && k.Length * 10 >= ck.Length * 7 && ck.StartsWith(k, StringComparison.Ordinal) && CleanVerb(cur[j])) f = j;
+            }
+            if (f >= 0) used.Add(f);
+            take.Insert(0, f >= 0 ? cur[f] : line);
+        }
+        return take;
+    }
+
+    /// <summary>"acquired" or "obtained" read as a whole word: "Acquire d", "AcquirGdylO" and "Hatquired" are garbled.</summary>
+    static bool CleanVerb(string line) => System.Text.RegularExpressions.Regex.IsMatch(line, @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     /// <summary>One line read twice: the same digits, and the letters a misread or two apart at most.</summary>
     static bool Same(string a, string b)
     {
