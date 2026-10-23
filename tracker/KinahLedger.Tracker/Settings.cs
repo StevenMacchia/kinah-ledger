@@ -38,8 +38,16 @@ public sealed class Settings
 /// <summary>Screen reading: the chat's loot lines are read off the screen with Windows' built-in text recognition.</summary>
 public sealed class OcrSettings
 {
-    /// <summary>Chat text is small; reading it at 2x is far more accurate.</summary>
+    /// <summary>Chat text is small; reading it at 2x is far more accurate. With AutoScale, the least it is enlarged by.</summary>
     public int Scale { get; set; } = 2;
+    /// <summary>Enlarge the chat by how tall its text is on this screen (TextScale), aiming at TargetTextPx, never below Scale.</summary>
+    public bool AutoScale { get; set; } = true;
+    /// <summary>How tall the chat's words should be after enlarging, in pixels.</summary>
+    public int TargetTextPx { get; set; } = 36;
+    /// <summary>Judge a garbled item name by the colour it was printed in (its grade), learned from names read exactly.</summary>
+    public bool NameColours { get; set; } = true;
+    /// <summary>Name a loot list row whose text is cut off or garbled by its icon, among the items its letters could be.</summary>
+    public bool LootIcons { get; set; } = true;
     public int IntervalMs { get; set; } = 700;
     /// <summary>What you're farming, for the shared totals. Override per run with --activity.</summary>
     public string Activity { get; set; } = "unknown";

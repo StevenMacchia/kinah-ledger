@@ -16,6 +16,33 @@ public sealed class TrackerSession
     readonly Settings _settings;
     readonly ItemDictionary _items;
     readonly ChatParser _parser;
+    /// <summary>The chat's enlarging factor, sized to its text on this screen (ocr.autoScale); kept across re-found chats.</summary>
+    readonly TextScale? _textScale;
+    public TextScale? TextScale => _textScale;
+    public ChatParser Parser => _parser;
+    /// <summary>Each item grade's colour as printed on this PC (GradeColours), kept beside the logs.</summary>
+    static string ColoursPath => Path.Combine(CrashLog.Dir, "grade-colours.json");
+    int _coloursSaved;
+
+    /// <summary>
+    /// The open-world enemies being fought now: the target bar's (read in the last 15 s) and the nameplates around the
+    /// character. Nothing inside events and expeditions, where loot comes from chests and rewards no table lists.
+    /// </summary>
+    IReadOnlyCollection<string> Fighting()
+    {
+        if (ZoneLocator.KindOf(Zone) != null) return Array.Empty<string>();
+        var list = Engaged.ToList();
+        if (Target.Name is { } tn && (DateTime.UtcNow - Target.NameAt).TotalSeconds <= 15) list.Add(tn);
+        return list.Distinct().ToList();
+    }
+
+    /// <summary>Saves the grade colours when names taught it something since the last save.</summary>
+    void SaveColours()
+    {
+        if (_parser.Colours is not { } book || book.Observed == _coloursSaved) return;
+        _coloursSaved = book.Observed;
+        book.Save(ColoursPath);
+    }
     readonly LineTracker _tracker = new();
     readonly CancellationTokenSource _cts = new();
     readonly int _interval;
@@ -169,7 +196,13 @@ public sealed class TrackerSession
         _items = items;
         _parser = new ChatParser(items);
         // a partly hidden name is guessed among this run's items and the current enemy's loot table first
-        _parser.Likely = () => Engine.ItemRows().Select(r => r.Name).Concat(Target.Name is { } tn ? LootBook.Current.TableOf(tn).Select(e => e.Item) : Enumerable.Empty<string>()).ToList();
+        // a partly hidden or close name is settled among this run's items and the loot tables of the enemies being fought:
+        // the one on the target bar and those whose nameplates show around the character (2026-10-23)
+        _parser.Likely = () => Engine.ItemRows().Select(r => r.Name)
+            .Concat(new[] { Target.Name }.Concat(Engaged).Where(e => e != null).Distinct().SelectMany(e => LootBook.Current.TableOf(e!).Select(x => x.Item))).ToList();
+        _parser.Fighting = Fighting;
+        if (s.Ocr.NameColours) _parser.Colours = GradeColours.Load(ColoursPath);
+        _textScale = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) : null;
         Engine = new SessionEngine(items);
         ZoneView = new SessionEngine(items);
         _cross = new LootCrossCheck(items);
@@ -196,7 +229,7 @@ public sealed class TrackerSession
             Region = region;
             _anchor = game;
         }
-        _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale);
+        _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale, _textScale);
         if (game != null && Cover(ZoneLocator.Strip(game.Value)) == null) await ReadZone(game.Value);
         _loop ??= Task.Run(() => Loop(_cts.Token));
     }
@@ -279,7 +312,7 @@ public sealed class TrackerSession
         {
             // same window, new place: the chat sits where it did inside it
             var moved = Region!.Value; moved.Offset(g.X - a.X, g.Y - a.Y);
-            Region = moved; _reader = new ScreenReader(moved, _settings.Ocr.Scale); _anchor = g;
+            Region = moved; _reader = new ScreenReader(moved, _settings.Ocr.Scale, _textScale); _anchor = g;
             DetectNote = "the chat area moved with the game";
             return;
         }
@@ -287,7 +320,7 @@ public sealed class TrackerSession
         _refindAt = DateTime.UtcNow;
         var (again, note) = await ChatLocator.DetectAsync(g);
         if (again == null) return;   // the chat may be faded: the empty-read rule keeps trying
-        Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); _anchor = g;
+        Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale, _textScale); _anchor = g;
         _tracker.Rebase();
         DetectNote = "re-found after the game changed size: " + note;
     }
@@ -341,6 +374,7 @@ public sealed class TrackerSession
             int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, FightIntervalMs) : _interval;
             if (spent < every) { try { await Task.Delay(every - spent, ct); } catch (TaskCanceledException) { } }
         }
+        SaveColours();
         Engine.Finish();
     }
 
@@ -351,6 +385,7 @@ public sealed class TrackerSession
         if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
         Engine.Resume(); Secondary?.Resume(); ZoneView.Resume();
         var lines = await _reader!.ReadAsync();
+        _parser.NoteAccents(_reader.LastAccents);
         if (lines.Count > 0) { ReadTrace.Chat(DateTime.UtcNow, lines); QuestCounter(lines); }
         Reads++;
         // the chat moved or the UI was toggled: after a stretch of empty reads, find it again (auto mode only)
@@ -362,7 +397,7 @@ public sealed class TrackerSession
             if (g != null && Cover(ChatLocator.Corner(g.Value)) == null)
             {
                 var (again, note) = await ChatLocator.DetectAsync(g.Value);
-                if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale); _anchor = g; DetectNote = "re-found: " + note; }
+                if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale, _textScale); _anchor = g; DetectNote = "re-found: " + note; }
             }
         }
         ProcessChat(lines, DateTime.UtcNow);
@@ -746,11 +781,12 @@ public sealed class TrackerSession
         var now = DateTime.UtcNow;
         if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
+        SaveColours();
         int kills = Engine.Totals().Kills;
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
         if (_passes > 0 && (kills > _auditKills || _questSteps > 0))
-            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms)");
+            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms) · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x");
         _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; _chatMs = 0; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
     }
 
@@ -780,21 +816,48 @@ public sealed class TrackerSession
     /// a row the chat never matched is counted from the list, through the same rules as a chat line (reward screens too).
     /// </summary>
     /// <summary>One read of the loot list beside the character, started before the chat read so the two run side by side. Null when it can't be read.</summary>
-    async Task<List<OcrLineBox>?> LootReadAsync()
+    async Task<(List<OcrLineBox> Lines, System.Drawing.Bitmap Raw, System.Drawing.Point Origin)?> LootReadAsync()
     {
         if (GameRect is not { } g) return null;
         var region = LootPopup.Region(g);
+        System.Drawing.Bitmap? raw = null;
         try
         {
             if (Cover(region) != null) return null;   // something over it: nothing read, nothing added
-            return await ScreenReader.ReadBoxesAsync(region, 3, boost: true);
+            // the picture is kept for the read's rows' icons (PopupIcons); the caller disposes it
+            raw = ScreenReader.Capture(region);
+            return (await ScreenReader.ReadBoxesAsync(raw, region.Location, 3, boost: true), raw, region.Location);
         }
-        catch (Exception ex) { CrashLog.Write("loot list", ex); return null; }
+        catch (Exception ex) { raw?.Dispose(); CrashLog.Write("loot list", ex); return null; }
     }
 
-    void LootProcess(List<OcrLineBox>? lines)
+    /// <summary>Loot list rows named by their icon (PopupIcons), for the audit line.</summary>
+    public int IconNamed { get; private set; }
+
+    void LootProcess((List<OcrLineBox> Lines, System.Drawing.Bitmap Raw, System.Drawing.Point Origin)? read)
     {
-        if (lines != null) ProcessList(lines.Select(l => (l.Box.Top, l.Text)).ToList(), DateTime.UtcNow);
+        if (read is not { } r) return;
+        using (r.Raw)
+        {
+            var lines = r.Lines.Select(l => (l.Box.Top, l.Text)).ToList();
+            if (_settings.Ocr.LootIcons && r.Lines.Count > 0)
+            {
+                // a row whose text is cut off or garbled is named by the icon beside it, when one icon is clearly it
+                for (int i = 0; i < r.Lines.Count; i++)
+                {
+                    try
+                    {
+                        var look = PopupIcons.Name(_items, r.Raw, r.Origin, r.Lines[i]);
+                        if (look.Text == r.Lines[i].Text) continue;
+                        lines[i] = (lines[i].Top, look.Text);
+                        IconNamed++;
+                        CrashLog.Note($"loot list: \"{r.Lines[i].Text}\" read as \"{look.Text}\": {look.Note} (icon {look.Verdict?.Distance:0}, next {(look.Verdict?.Next < 1e6 ? look.Verdict.Next.ToString("0") : "none")})");
+                    }
+                    catch (Exception ex) { CrashLog.Write("loot list icon", ex); }
+                }
+            }
+            ProcessList(lines, DateTime.UtcNow);
+        }
     }
 
     /// <summary>One read of the loot list, checked against the chat. Also what replay feeds a recorded fight through.</summary>

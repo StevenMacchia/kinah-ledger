@@ -28,6 +28,7 @@ public sealed class ScreenReader
 
     readonly Rectangle _region;
     readonly int _scale;
+    readonly TextScale? _auto;
     readonly object _lock = new();
     Bitmap? _thumb;
 
@@ -36,13 +37,26 @@ public sealed class ScreenReader
     /// <summary>A small copy of the last capture, so the window can show exactly what's being read.</summary>
     public Bitmap? Thumb { get { lock (_lock) return _thumb == null ? null : (Bitmap)_thumb.Clone(); } }
 
-    public ScreenReader(Rectangle region, int scale)
+    /// <param name="auto">When given, the chat is enlarged by its factor (sized to the text on this screen) instead of
+    /// <paramref name="scale"/>, and each read's word heights go back to it. Shared across readers, since a re-found chat
+    /// keeps its text size.</param>
+    public ScreenReader(Rectangle region, int scale, TextScale? auto = null)
     {
         if (region.Width < 20 || region.Height < 10) throw new ArgumentException("the chat region is too small; detect or pick it again");
         _region = region;
         _scale = Math.Clamp(scale, 1, 4);
+        _auto = auto;
         _ = Engine;
     }
+
+    /// <summary>The factor the next read enlarges the chat by.</summary>
+    public double Factor => _auto?.Factor ?? _scale;
+
+    /// <summary>
+    /// The colour of each line's item name in the last read (its words other than the verb, counts and Kina), as the game
+    /// drew it, for lines where one could be measured. The parser takes a garbled name's grade from it (GradeColours).
+    /// </summary>
+    public IReadOnlyList<(string Text, Color Accent)> LastAccents { get; private set; } = Array.Empty<(string, Color)>();
 
     /// <summary>
     /// The pixels of a screen rectangle: cut from the game window's own frames when window capture runs (so a window on
@@ -67,7 +81,7 @@ public sealed class ScreenReader
     public static bool UseWindowCapture { get; set; } = true;
 
     /// <summary>Upscale with smooth interpolation, keeping the aspect ratio and the recognizer's size limit. Returns the factor used.</summary>
-    static (Bitmap bmp, double factor) Prepare(Bitmap src, int scale)
+    static (Bitmap bmp, double factor) Prepare(Bitmap src, double scale)
     {
         double max = OcrEngine.MaxImageDimension;
         double f = Math.Min(scale, Math.Min(max / src.Width, max / src.Height));
@@ -144,7 +158,7 @@ public sealed class ScreenReader
     }
 
     /// <summary>Recognizes a bitmap the way the live reader does: optional boost, then upscale.</summary>
-    public static async Task<List<string>> ReadBitmapAsync(Bitmap raw, bool boost, int scale)
+    public static async Task<List<string>> ReadBitmapAsync(Bitmap raw, bool boost, double scale)
     {
         using var src = boost ? Boost(raw) : (Bitmap)raw.Clone();
         var (bmp, _) = Prepare(src, scale);
@@ -203,12 +217,51 @@ public sealed class ScreenReader
         var small = new Bitmap(raw, new Size(Math.Max(1, (int)(raw.Width * k)), Math.Max(1, (int)(raw.Height * k))));
         lock (_lock) { _thumb?.Dispose(); _thumb = small; }
         using var boosted = Boost(raw);
-        var (bmp, _) = Prepare(boosted, _scale);
+        var (bmp, f) = Prepare(boosted, Factor);
         using (bmp)
         {
             var result = await Recognize(bmp);
+            try { LastAccents = Accents(raw, result, f); }
+            catch (Exception ex) { LastAccents = Array.Empty<(string, Color)>(); CrashLog.Write("name colours", ex); }
+            if (_auto != null)
+            {
+                double was = _auto.Factor;
+                var heights = result.Lines.SelectMany(l => l.Words).Where(w => w.Text.Count(char.IsLetter) >= 3).Select(w => w.BoundingRect.Height / f);
+                if (_auto.Observe(heights)) CrashLog.Note($"the chat's text is {_auto.TextPx:0} px tall on this screen: now read at {_auto.Factor:0.##}x (was {was:0.##}x)");
+            }
             return result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
         }
+    }
+
+    /// <summary>Each line's item name colour, from the capture before it was turned grey (TextColour, NameWord).</summary>
+    static unsafe List<(string Text, Color Accent)> Accents(Bitmap raw, OcrResult result, double f)
+    {
+        var list = new List<(string, Color)>();
+        if (result.Lines.Count == 0) return list;
+        var rect = new Rectangle(0, 0, raw.Width, raw.Height);
+        var data = raw.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            int stride = data.Stride;
+            // the capture's own pixels, read in place: no copy of the chat per read
+            var px = new ReadOnlySpan<byte>((void*)data.Scan0, stride * raw.Height);
+            foreach (var line in result.Lines)
+            {
+                long r = 0, g = 0, b = 0, n = 0;
+                foreach (var w in line.Words)
+                {
+                    if (!TextColour.NameWord(w.Text)) continue;
+                    var wb = w.BoundingRect;
+                    var box = Rectangle.FromLTRB((int)(wb.X / f), (int)(wb.Y / f), (int)Math.Ceiling((wb.X + wb.Width) / f), (int)Math.Ceiling((wb.Y + wb.Height) / f));
+                    if (TextColour.Of(px, stride, raw.Width, raw.Height, box) is not { } c) continue;
+                    r += (long)c.Colour.R * c.Pixels; g += (long)c.Colour.G * c.Pixels; b += (long)c.Colour.B * c.Pixels; n += c.Pixels;
+                }
+                var text = line.Text.Trim();
+                if (n > 0 && text.Length > 0) list.Add((text, Color.FromArgb((int)(r / n), (int)(g / n), (int)(b / n))));
+            }
+        }
+        finally { raw.UnlockBits(data); }
+        return list;
     }
 
     /// <summary>The whole game frame, scaled down, with the detected areas outlined: what the player sees as the live preview.</summary>

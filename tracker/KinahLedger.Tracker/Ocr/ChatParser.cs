@@ -305,8 +305,108 @@ public sealed partial class ChatParser
         return b.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
 
-    /// <summary>Item names likely right now (this run's items, the current enemy's loot table), for guessing a partly hidden name.</summary>
+    /// <summary>Item names likely right now (this run's items, the loot tables of the enemies being fought), for guessing a partly hidden name.</summary>
     public Func<IEnumerable<string>>? Likely { get; set; }
+
+    /// <summary>
+    /// The enemies being fought in the open world right now (the target bar, the nameplates), whose loot tables can say an
+    /// item can't drop here. Empty inside events and expeditions, where loot comes from chests and rewards.
+    /// </summary>
+    public Func<IReadOnlyCollection<string>>? Fighting { get; set; }
+
+    /// <summary>Each grade's colour as printed on this PC, learned from names read exactly (null: names aren't judged by colour).</summary>
+    public GradeColours? Colours { get; set; }
+
+    /// <summary>Close names settled by the name's colour, by the enemy's loot table or the run's items, and guesses held back as no table's.</summary>
+    public int ColourPicks { get; private set; }
+    public int TablePicks { get; private set; }
+    public int HeldUnlisted { get; private set; }
+
+    // the last reads' name colours by line text (ScreenReader.LastAccents): a voted or re-read line is one of those texts
+    readonly Dictionary<string, System.Drawing.Color> _accents = new();
+    readonly Queue<string> _accentOrder = new();
+
+    /// <summary>The name colours of a read, kept for the last few hundred lines.</summary>
+    public void NoteAccents(IEnumerable<(string Text, System.Drawing.Color Accent)> lines)
+    {
+        lock (_accents)
+            foreach (var (t, c) in lines)
+            {
+                if (!_accents.ContainsKey(t)) { _accentOrder.Enqueue(t); if (_accentOrder.Count > 400) _accents.Remove(_accentOrder.Dequeue()); }
+                _accents[t] = c;
+            }
+    }
+
+    System.Drawing.Color? AccentOf(string rawLine)
+    {
+        lock (_accents) return _accents.TryGetValue(rawLine.Trim(), out var c) ? c : null;
+    }
+
+    string GradeOf(long id) => _items.Get(id)?.Grade ?? "";
+
+    /// <summary>Items the name's colour doesn't rule out, or null when the colour says nothing (none measured, nothing learned).</summary>
+    Func<long, bool>? GradeFilter(System.Drawing.Color? accent) =>
+        accent is { } a && Colours is { } book && book.Learned().Count >= 2 ? id => book.Agrees(GradeOf(id), a) != false : null;
+
+    /// <summary>
+    /// The item a name on the item list is. Read exactly: that item, and its colour teaches the grade's colour. A misread:
+    /// the closest item, as before, unless the close ones say otherwise. The name's colour rules out items of another
+    /// grade (so "right letters, wrong grade" goes to the item of the right grade), and of two items as close as each
+    /// other the one on this run or the enemy's loot table wins, then the one whose grade the colour confirms; still a
+    /// tie, the list's own closest (2026-10-23).
+    /// </summary>
+    long Choose(string name, System.Drawing.Color? accent)
+    {
+        if (_items.IsExact(name))
+        {
+            long id = _items.IdOf(name);
+            if (accent is { } a && Colours != null && GradeOf(id) is { Length: > 0 } g) Colours.Observe(g, a);
+            return id;
+        }
+        long snap = _items.IdOf(name);
+        var near = _items.Near(name, Math.Max(1, name.Trim().Length / 6));
+        if (near.Count == 0) return snap;
+        var pool = near;
+        var filter = GradeFilter(accent);
+        if (filter != null) { var kept = near.Where(c => filter(c.Id)).ToList(); if (kept.Count > 0) pool = kept; }
+        int best = pool.Min(c => c.Distance);
+        var tied = pool.Where(c => c.Distance == best).ToList();
+        string why = filter != null && pool.Count < near.Count ? "its colour" : "";
+        if (tied.Count > 1)
+        {
+            var likely = Likely?.Invoke()?.Select(x => x.ToLowerInvariant()).ToHashSet() ?? new HashSet<string>();
+            var listed = tied.Where(c => likely.Contains(c.Name.ToLowerInvariant())).ToList();
+            var coloured = accent is { } a2 && Colours != null ? tied.Where(c => Colours.Agrees(c.Grade, a2) == true).ToList() : new();
+            if (listed.Count == 1) { tied = listed; why = "the run or the enemy's loot table"; }
+            else if (coloured.Count == 1) { tied = coloured; why = "its colour"; }
+            else return snap;
+        }
+        // nothing said otherwise: the list's own closest, exactly as before
+        if (why.Length == 0) return snap;
+        long pick = tied[0].Id;
+        if (pick != snap && why.Length > 0)
+        {
+            if (why == "its colour") ColourPicks++; else TablePicks++;
+            CrashLog.Note($"\"{name}\" is {_items.NameOf(pick)}, not {_items.NameOf(snap)}: {why} says so");
+        }
+        return pick;
+    }
+
+    /// <summary>
+    /// The open-world enemies being fought whose loot tables are known, when none of them lists the item; null when a table
+    /// lists it, when no table is known, or for a gathering material (those come from nodes, not loot tables).
+    /// </summary>
+    List<string>? Unlisted(long id)
+    {
+        var fought = Fighting?.Invoke();
+        if (fought == null || fought.Count == 0) return null;
+        if (_items.Get(id)?.Category == "Gathering Material") return null;
+        var book = LootBook.Current;
+        var known = fought.Where(book.Knows).Distinct().ToList();
+        if (known.Count == 0) return null;
+        var nm = _items.NameOf(id);
+        return known.Any(e => book.Find(e, nm, id) != null) ? null : known;
+    }
 
     /// <summary>
     /// What a line counts as, for the vote across reads (ChatVoter), without counting anything: "k:463" for Kinah,
@@ -475,20 +575,32 @@ public sealed partial class ChatParser
                 yield return new RewardReceived(time, name, Math.Clamp(n, 1, 9999));
                 yield break;
             }
+            // the colour the game printed the name in, when the reader could measure it: it says the item's grade
+            var accent = AccentOf(rawLine);
             // the item list is the whitelist: a name it doesn't hold, exactly or as a close misread, is never a drop
             if (!_items.Knows(name))
             {
                 // part of the name hidden or garbled: its closest item, when only one fits (the run's items and the
-                // current enemy's table first). Counted, and tagged as guessed so it shows in the window
-                if (_items.Guess(name, Likely?.Invoke()) is long gid)
+                // current enemy's table first; items of a grade the name's colour rules out never). Counted, and tagged
+                // as guessed so it shows in the window
+                var (guess, fromLikely) = _items.GuessWhy(name, Likely?.Invoke(), GradeFilter(accent));
+                if (guess is long gid)
                 {
-                    CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)} (closest match)");
+                    // a guess no loot table backs while fighting enemies whose tables are known: left for the loot list
+                    // beside the character to confirm (it adds the pickup itself if it showed it), never counted from a guess
+                    if (!fromLikely && Unlisted(gid) is { } fought)
+                    {
+                        HeldUnlisted++;
+                        CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)}, but {string.Join(", ", fought)} doesn't drop it: not counted from the chat, left for the loot list");
+                        yield break;
+                    }
+                    CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)} (closest match{(fromLikely ? ", on this run or the enemy's loot table" : "")})");
                     yield return new ItemAcquired(time, gid, Math.Clamp(n, 1, 9999), bound) { Via = "guessed" };
                     yield break;
                 }
                 CrashLog.Note($"not in the item list, not counted: {name}"); yield break;
             }
-            yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 9999), bound);
+            yield return new ItemAcquired(time, Choose(name, accent), Math.Clamp(n, 1, 9999), bound);
         }
     }
 

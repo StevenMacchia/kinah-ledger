@@ -116,6 +116,7 @@ internal static class Program
                     Console.WriteLine($"region {reg}");
                     foreach (var l in lines.OrderBy(l => l.Box.Top)) Console.WriteLine($"  read: {l.Text}");
                     foreach (var r in LootPopup.Rows(lines.Select(l => (l.Box.Top, l.Text)))) Console.WriteLine($"  row: {(r.IsKinah ? "Kinah " + r.Amount : r.Name + " x" + r.Count)}");
+                    PopupIconsReport(ItemDictionary.LoadOrEmpty(settings.ItemsFile), crop, reg.Location, lines);
                     return 0;
                 }
                 case "replay": return Replay(settings, pos, opts);
@@ -280,6 +281,8 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   in-view                       which parts of the game can be read now, and which window covers the others (reads nothing)
   pick                         drag a box around the chat's loot lines; remembered for next time
   ocr-test [--save]             read the box once and show what was recognized (--save keeps a PNG)
+  ocr-test --scales [--image p] read the chat (or a saved picture of it) at each enlarging factor, to see which reads best
+  popup-test --image shot.png   read the loot list beside the character in a game picture, with each row's icon match (--crop, --save, --scale n)
   ocr-file <image> [--scale 2]  run recognition on a screenshot, plain and boosted
   watch [--activity name]       a farming run in the console, with the Market reader beside it; Ctrl+C to stop
         [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]
@@ -429,7 +432,9 @@ options: --process aion[,other]");
     static int OcrTest(Settings s, Dictionary<string, string> o)
     {
         var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
-        var reader = new ScreenReader(RegionFor(o), s.Ocr.Scale);
+        if (o.ContainsKey("scales")) return ScalesTest(s, items, o);
+        var auto = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) : null;
+        var reader = new ScreenReader(RegionFor(o), s.Ocr.Scale, auto);
         var parser = new ChatParser(items);
         string? png = o.ContainsKey("save") ? $"ocr-test-{DateTime.Now:HHmmss}.png" : null;
         var lines = Task.Run(() => reader.ReadAsync(png)).GetAwaiter().GetResult();
@@ -441,7 +446,42 @@ options: --process aion[,other]");
             foreach (var ev in evs) Console.WriteLine($"      -> {Describe(ev, items)}");
         }
         if (lines.Count == 0) Console.WriteLine("Nothing recognized. Make sure the game is in borderless or windowed mode and the box covers the chat text.");
+        if (auto?.TextPx is { } tpx) Console.WriteLine($"Text is {tpx:0} px tall: read at {s.Ocr.Scale}x this time, {auto.Factor:0.##}x from the next read on (target {s.Ocr.TargetTextPx} px).");
+        foreach (var (t, c) in reader.LastAccents) Console.WriteLine($"  name colour {c.R,3},{c.G,3},{c.B,3}  {t}");
         return 0;
+    }
+
+    /// <summary>
+    /// The chat (or --image, a saved picture of it) read at each enlarging factor: how many lines came out and how many of
+    /// them are pickups the parser knows. The factor with the most known pickups is the one to aim ocr.targetTextPx at.
+    /// </summary>
+    static int ScalesTest(Settings s, ItemDictionary items, Dictionary<string, string> o)
+    {
+        var parser = new ChatParser(items);
+        using var raw = o.TryGetValue("image", out var img) ? Task.Run(() => ScreenReader.LoadAsync(img)).GetAwaiter().GetResult() : ScreenReader.Capture(RegionFor(o));
+        Console.WriteLine($"{raw.Width}x{raw.Height} px of chat:");
+        foreach (var f in new[] { 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0 })
+        {
+            var lines = Task.Run(() => ScreenReader.ReadBitmapAsync(raw, true, f)).GetAwaiter().GetResult();
+            int known = lines.Count(l => parser.Meaning(l).Key.Length > 0), exact = lines.Count(l => parser.Meaning(l).Exact);
+            Console.WriteLine($"  {f:0.0}x  {lines.Count,3} lines  {known,3} pickups  {exact,3} read exactly");
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// What each loot list row's icon says (PopupIcons), for popup-test: the text it would be counted by, why, and the
+    /// closest icons with their distances. For checking the icon's place beside the text and the sure distance on real pictures.
+    /// </summary>
+    static void PopupIconsReport(ItemDictionary items, System.Drawing.Bitmap crop, System.Drawing.Point origin, List<OcrLineBox> lines)
+    {
+        Console.WriteLine("icons:");
+        foreach (var l in lines.OrderBy(l => l.Box.Top))
+        {
+            var look = PopupIcons.Name(items, crop, origin, l);
+            Console.WriteLine($"  {l.Text,-36} -> {look.Text}" + (look.Note.Length > 0 ? $"   ({look.Note})" : ""));
+            foreach (var (n, d) in look.Scores.Take(4)) Console.WriteLine($"      {d,5:0}  {n}");
+        }
     }
 
     /// <summary>Reads a saved image of the target bar (--image file.png) the way the tracker reads the band, and prints what it finds.</summary>
@@ -781,6 +821,7 @@ options: --process aion[,other]");
         ok &= dok;
         ok &= TradeTest(items);
         ok &= BestTest(items);
+        ok &= AccuracyTest(items);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }
@@ -808,6 +849,95 @@ options: --process aion[,other]");
     /// is kept only past ten minutes and a better rate, and the panel's field list always has one figure in panel order.
     /// Everything runs on temporary files, never the player's own.
     /// </summary>
+    /// <summary>Text sizing, name colours, the name chooser, loot tables against guesses, the loot list's icon verdict (2026-10-23).</summary>
+    static bool AccuracyTest(ItemDictionary items)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nText size, name colours, loot tables and icons (2026-10-23):");
+
+        // ---- the chat's enlarging factor from its text height ----
+        var ts = new TextScale(2, 36);
+        Check("fewer than five words: the configured scale", $"{ts.Observe(new[] { 12.0, 12, 12 })} {ts.Factor}", "False 2");
+        Check("12 px text on a 1080p screen: read at 3x", $"{ts.Observe(new[] { 12.0, 12, 12, 13, 11 })} {ts.Factor}", "True 3");
+        Check("a small drift in the measure: no change", $"{ts.Observe(new[] { 12.5, 12.5, 12.5, 12.5 })} {ts.Factor}", "False 3");
+        var big = new TextScale(2, 36);
+        Check("25 px text: never below the configured 2x", $"{big.Observe(Enumerable.Repeat(25.0, 8))} {big.Factor}", "False 2");
+        var tiny = new TextScale(2, 36);
+        Check("7 px text: no more than 4x", $"{tiny.Observe(Enumerable.Repeat(7.0, 8))} {tiny.Factor}", "True 4");
+
+        // ---- a word's colour from its brightest pixels ----
+        int w = 20, h = 10, stride = w * 4;
+        var px = new byte[stride * h];
+        for (int i = 0; i < px.Length; i += 4) { px[i] = 30; px[i + 1] = 20; px[i + 2] = 20; px[i + 3] = 255; }   // the chat's dark backing (BGRA)
+        for (int y = 3; y < 7; y++) for (int x = 4; x < 16; x++) { int i = y * stride + x * 4; px[i] = 60; px[i + 1] = 180; px[i + 2] = 230; }   // gold letters
+        var tc = TextColour.Of(px, stride, w, h, new System.Drawing.Rectangle(0, 0, w, h));
+        Check("gold letters on the dark backing", tc is { } t1 ? $"{t1.Colour.R},{t1.Colour.G},{t1.Colour.B}" : "none", "230,180,60");
+        Check("a box with no letters in it", TextColour.Of(px, stride, w, h, new System.Drawing.Rectangle(0, 0, 3, 3)) is null ? "none" : "some", "none");
+        Check("name words: the verb, counts and Kina are not", string.Join(",", new[] { "Spiritstone", "acquired.", "x2", "1,240", "Kina.", "(Bound)", "Raw" }.Where(TextColour.NameWord)), "Spiritstone,Raw");
+
+        // ---- each grade's colour, learned from names read exactly ----
+        var gold = System.Drawing.Color.FromArgb(230, 180, 60); var blue = System.Drawing.Color.FromArgb(80, 140, 240); var white = System.Drawing.Color.FromArgb(225, 225, 225);
+        var book = new GradeColours();
+        Check("nothing learned: the colour says nothing", $"{book.Agrees("Unique", gold)?.ToString() ?? "null"}", "null");
+        var rnd = new Random(7);
+        System.Drawing.Color Jitter(System.Drawing.Color c, int d) => System.Drawing.Color.FromArgb(Math.Clamp(c.R + rnd.Next(-d, d + 1), 0, 255), Math.Clamp(c.G + rnd.Next(-d, d + 1), 0, 255), Math.Clamp(c.B + rnd.Next(-d, d + 1), 0, 255));
+        for (int i = 0; i < 8; i++) { book.Observe("Unique", Jitter(gold, 12)); book.Observe("Legend", Jitter(blue, 12)); book.Observe("Common", Jitter(white, 8)); }
+        Check("gold is Unique, not Legend; white is Common", $"{book.Agrees("Unique", gold)} {book.Agrees("Legend", gold)} {book.Agrees("Common", white)} {book.Agrees("Legend", white)}", "True False True False");
+        Check("a dim gold is still gold", $"{book.Agrees("Unique", System.Drawing.Color.FromArgb(150, 117, 39))}", "True");
+        Check("a grade not learned yet says nothing", $"{book.Agrees("Rare", gold)?.ToString() ?? "null"}", "null");
+        var again = GradeColours.FromJson(book.ToJson());
+        Check("kept and read back", $"{again.Learned().Count} {again.Agrees("Unique", gold)}", "3 True");
+
+        // ---- the name chooser: "Kasra Breastplate" is one letter from Kaira (Unique) and Kasia (Legend) ----
+        var cp = new ChatParser(items);
+        string Item(IEnumerable<KinahLedger.Session.GameEvent> evs) => evs.OfType<KinahLedger.Session.ItemAcquired>().Select(a => items.NameOf(a.ItemId) + (a.Via.Length > 0 ? " (" + a.Via + ")" : "")).FirstOrDefault() ?? "nothing";
+        const string misread = "Kasra Breastplate acquired.";
+        string snap = Item(cp.Parse(misread, DateTime.UtcNow));
+        Check("the two names are as close as each other", string.Join(" | ", items.Near("Kasra Breastplate", 2).Select(c => $"{c.Name} {c.Grade} {c.Distance}")), "Kaira Breastplate Unique 1 | Kasia Breastplate Legend 1");
+        cp.Colours = book;
+        cp.NoteAccents(new[] { (misread, gold) });
+        Check("printed in gold: the Unique one", Item(cp.Parse(misread, DateTime.UtcNow)), "Kaira Breastplate");
+        cp.NoteAccents(new[] { (misread, blue) });
+        Check("printed in blue: the Legend one", Item(cp.Parse(misread, DateTime.UtcNow)), "Kasia Breastplate");
+        var cp2 = new ChatParser(items);
+        Check("no colour, nothing else known: the list's closest, as before", Item(cp2.Parse(misread, DateTime.UtcNow)), snap);
+        cp2.Likely = () => new[] { "Kasia Breastplate" };
+        Check("the enemy's loot table holds one of them: that one", Item(cp2.Parse(misread, DateTime.UtcNow)), "Kasia Breastplate");
+        cp2.Likely = () => new[] { "Kaira Breastplate" };
+        Check("...and the other way round", Item(cp2.Parse(misread, DateTime.UtcNow)), "Kaira Breastplate");
+        var cp3 = new ChatParser(items) { Colours = book };
+        cp3.NoteAccents(new[] { ("Kaira Breastplate acquired.", gold) });
+        int seenBefore = book.Observed;
+        Check("an exact name is never second-guessed", Item(cp3.Parse("Kaira Breastplate acquired.", DateTime.UtcNow)), "Kaira Breastplate");
+        Check("...and teaches its grade's colour", $"{book.Observed - seenBefore}", "1");
+
+        // ---- a guess no loot table backs, while fighting enemies whose tables are known ----
+        const string cut = "ctral Greatsword acquired.";
+        var gp = new ChatParser(items);
+        Check("a name cut at the start is guessed", Item(gp.Parse(cut, DateTime.UtcNow)), "Spectral Greatsword (guessed)");
+        gp.Fighting = () => new[] { "Abandoned Daeva" };
+        Check("fighting an enemy whose table lacks it: held back", $"{Item(gp.Parse(cut, DateTime.UtcNow))} {gp.HeldUnlisted}", "nothing 1");
+        gp.Fighting = () => new[] { "Advisor Resana" };
+        Check("fighting one whose table has it: counted", Item(gp.Parse(cut, DateTime.UtcNow)), "Spectral Greatsword (guessed)");
+        gp.Fighting = () => new[] { "Nobody We Know" };
+        Check("an enemy with no table known: counted, as before", Item(gp.Parse(cut, DateTime.UtcNow)), "Spectral Greatsword (guessed)");
+
+        // ---- the loot list's icon verdict ----
+        string V(PopupIcons.Verdict? v) => v == null ? "none" : $"{v.Name} {v.Distance:0}";
+        Check("one icon clearly closest: named", V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 40.0), (2L, "Raw Leather", "IconB", 80.0) })), "Spiritstone 40");
+        Check("two icons nearly as close: no answer", V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 40.0), (2L, "Raw Leather", "IconB", 45.0) })), "none");
+        Check("the closest isn't close enough: no answer", V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 90.0) })), "none");
+        Check("two items share the icon: no answer", V(PopupIcons.Decide(new[] { (1L, "Fine Odyle", "IconA", 30.0), (2L, "Pure Odyle", "IconA", 30.0) })), "none");
+        Check("a tradable and a bound copy share the art: the row's own kind", $"{V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 30.0), (2L, "Spiritstone (Bound)", "IconA", 30.0) }))} | {V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 30.0), (2L, "Spiritstone (Bound)", "IconA", 30.0) }, bound: true))}", "Spiritstone 30 | Spiritstone (Bound) 30");
+        Check("a scrolled name's letters find their item first", items.Fragment("itstone", PopupIcons.MaxCandidates).FirstOrDefault()?.Name ?? "none", "Spiritstone");
+        return ok;
+    }
+
     static bool BestTest(ItemDictionary items)
     {
         bool ok = true;

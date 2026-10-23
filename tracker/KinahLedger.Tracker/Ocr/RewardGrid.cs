@@ -37,6 +37,42 @@ public static class IconIndex
         return list;
     }
 
+    /// <summary>A picture's area as a 16×16 grid of RGB, the way an icon is compared (Distance).</summary>
+    public static double[] Cell(Bitmap f, Rectangle area)
+    {
+        var cell = new double[N * N * 3];
+        using var small = new Bitmap(N, N, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(small)) { g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic; g.DrawImage(f, new Rectangle(0, 0, N, N), area, GraphicsUnit.Pixel); }
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) { var c = small.GetPixel(x, y); int i = (y * N + x) * 3; cell[i] = c.R; cell[i + 1] = c.G; cell[i + 2] = c.B; }
+        return cell;
+    }
+
+    /// <summary>
+    /// How far a picture's grid (Cell) is from an icon laid on the backing colour <paramref name="bg"/>: the mean difference
+    /// per channel, the icon's own pixels counting most. Under about 70 is the same art (RewardGrid's sure distance).
+    /// </summary>
+    public static double Distance(double[] cell, Color bg, Entry e)
+    {
+        double sum = 0, wsum = 0;
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                // the lower corners carry the count and the lock: they say nothing about the icon
+                if (y >= N - 4 && (x < 4 || x >= N - 6)) continue;
+                int i = (y * N + x), j = i * 4, k = i * 3;
+                double a = e.Rgba[j + 3] / 255.0;
+                double r = e.Rgba[j] * a + bg.R * (1 - a), g = e.Rgba[j + 1] * a + bg.G * (1 - a), bl = e.Rgba[j + 2] * a + bg.B * (1 - a);
+                double w = 0.35 + a;   // the icon's own pixels count most
+                sum += w * (Math.Abs(r - cell[k]) + Math.Abs(g - cell[k + 1]) + Math.Abs(bl - cell[k + 2]));
+                wsum += w;
+            }
+        return sum / Math.Max(wsum, 1);
+    }
+
+    static Dictionary<string, List<Entry>>? _byKey;
+    /// <summary>The fingerprints of one icon key (an icon can have two: the file and its art as drawn in a slot).</summary>
+    public static IReadOnlyList<Entry> Of(string key) => (_byKey ??= All.GroupBy(e => e.Key).ToDictionary(g => g.Key, g => g.ToList())).TryGetValue(key, out var l) ? l : Array.Empty<Entry>();
+
     /// <summary>A 16×16 RGBA fingerprint of an icon image.</summary>
     public static byte[] Fingerprint(Bitmap icon)
     {
@@ -231,7 +267,7 @@ public static class RewardGrid
     }
 
     /// <summary>The backing's colour: the four corners averaged.</summary>
-    static Color Background(Bitmap f, Rectangle b)
+    internal static Color Background(Bitmap f, Rectangle b)
     {
         int d = Math.Max(3, b.Width / 20);
         var cs = new[] { f.GetPixel(b.Left + d, b.Top + d), f.GetPixel(b.Right - d, b.Top + d), f.GetPixel(b.Left + d, b.Bottom - d), f.GetPixel(b.Right - d, b.Bottom - d) };
@@ -255,31 +291,9 @@ public static class RewardGrid
     {
         // the icon fills the slot but for a thin margin; a 16×16 grid over that area
         int m = (int)Math.Round(b.Width * 0.04);
-        var area = Rectangle.Inflate(b, -m, -m);
-        var cell = new double[IconIndex.N * IconIndex.N * 3];
-        using (var small = new Bitmap(IconIndex.N, IconIndex.N, PixelFormat.Format32bppArgb))
-        {
-            using (var g = Graphics.FromImage(small)) { g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic; g.DrawImage(f, new Rectangle(0, 0, IconIndex.N, IconIndex.N), area, GraphicsUnit.Pixel); }
-            for (int y = 0; y < IconIndex.N; y++) for (int x = 0; x < IconIndex.N; x++) { var c = small.GetPixel(x, y); int i = (y * IconIndex.N + x) * 3; cell[i] = c.R; cell[i + 1] = c.G; cell[i + 2] = c.B; }
-        }
+        var cell = IconIndex.Cell(f, Rectangle.Inflate(b, -m, -m));
         var res = new List<(string, double)>();
-        foreach (var e in IconIndex.All)
-        {
-            double sum = 0, wsum = 0;
-            for (int y = 0; y < IconIndex.N; y++)
-                for (int x = 0; x < IconIndex.N; x++)
-                {
-                    // the lower corners carry the count and the lock: they say nothing about the icon
-                    if (y >= IconIndex.N - 4 && (x < 4 || x >= IconIndex.N - 6)) continue;
-                    int i = (y * IconIndex.N + x), j = i * 4, k = i * 3;
-                    double a = e.Rgba[j + 3] / 255.0;
-                    double r = e.Rgba[j] * a + bg.R * (1 - a), g = e.Rgba[j + 1] * a + bg.G * (1 - a), bl = e.Rgba[j + 2] * a + bg.B * (1 - a);
-                    double w = 0.35 + a;   // the icon's own pixels count most
-                    sum += w * (Math.Abs(r - cell[k]) + Math.Abs(g - cell[k + 1]) + Math.Abs(bl - cell[k + 2]));
-                    wsum += w;
-                }
-            res.Add((e.Key, sum / Math.Max(wsum, 1)));
-        }
+        foreach (var e in IconIndex.All) res.Add((e.Key, IconIndex.Distance(cell, bg, e)));
         // the best per icon: an icon with two fingerprints (the game's file and its art as drawn in a slot) is one answer
         return res.GroupBy(x => x.Item1).Select(g => g.OrderBy(x => x.Item2).First()).OrderBy(x => x.Item2).Take(5).ToList();
     }

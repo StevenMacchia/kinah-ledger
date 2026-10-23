@@ -57,6 +57,17 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
 
    **Kinah by enemy (a best guess).** The tracker reads the target bar at the top-centre of the game every 2 seconds. Kinah, drops and Soul Crystals that land within 8 seconds of it naming an enemy are credited to that enemy, in the zone you fought it in. With several enemies on you the bar shows only one of them, so these figures are a guess, and the window and the site say so. Only enemy names on the tracker's enemy list (`data/mobs.txt`) count. If the panel over the game sits on the target bar, the window asks you to drag it aside.
 
+   **Reading names right.** A name read with a letter or two wrong is settled by more than its letters. The tracker learns
+   the colour each item grade is printed in from names it reads exactly (kept in `grade-colours.json` beside the logs), so a
+   garbled name in gold can only be a gold-grade item. Of two items as close to what was read, the one on this run or on the
+   loot table of the enemy you are fighting (the target bar and the nameplates around you) wins. A name guessed from a cut-off
+   line that none of those enemies' tables lists isn't counted from the chat; the loot list beside your character counts it
+   if it showed it. That loot list's rows are also named by the icon beside them when their text is cut off or garbled and
+   one icon is clearly the one shown. The chat is enlarged before it is read by how tall its text is on your screen (never
+   less than 2x), so a 1080p screen reads as well as a 4K one. Each can be turned off in `settings.json` (`ocr.nameColours`,
+   `ocr.lootIcons`, `ocr.autoScale`, with `ocr.targetTextPx` for the text size aimed at), and `reads.log` says each time one
+   of them changed what was counted.
+
    **Crafting** is its own part of the window: press **Crafting** at the top. Each recipe shows how many times you tried it, how often it worked, what came out (a great success included), what one try costs and what the result sells for, with the profit or loss. Costs come from the recipe's materials at the lowest Market prices on your server; a failed try uses them too. Bound vendor materials can't be priced and are left out, and the row says so. The recipes come from [MetaBot.GG](https://metabot.gg/en/aion-2/crafting). Crafted items are never drops, crafting is never farming time, and none of it goes into a zone's numbers. Market settlement payouts ("A total payment of … completed") are never farming Kinah either.
 4. **Options** (its own window, with **Save** and **Cancel**) holds everything that can be set, page by page:
    - **General**: start with Windows (it then waits in the tray until Aion 2 is running), what happens when Aion 2
@@ -164,6 +175,8 @@ the notes file is missing.
 KinahLedger locate                       find the game, the chat, the zone and the Market; saves an annotated frame
 KinahLedger pick                         drag a box around the chat's loot lines (remembered)
 KinahLedger ocr-test [--save]            read the box once and show what was recognized
+KinahLedger ocr-test --scales            read the chat at each enlarging factor (--image chat.png for a saved one)
+KinahLedger popup-test --image shot.png  read the loot list beside the character in a game picture, with each row's icon match
 KinahLedger watch --activity "name"      a farming run in the console, Market reader beside it (--server "Siel (Elyos)", --no-market)
 KinahLedger market-watch                 only the Market reader, as the window runs it in the background
 KinahLedger parse-test                   self-test of the chat-line parser

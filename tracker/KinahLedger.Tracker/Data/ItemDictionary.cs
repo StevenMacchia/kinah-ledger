@@ -15,6 +15,8 @@ public sealed class ItemDictionary
     /// <summary>Weapons, armour and accessories (the list's "Equip_" groups).</summary>
     readonly HashSet<long> _gear = new();
     readonly Dictionary<string, long> _byName = new();
+    /// <summary>Misreads remembered under the item they snapped to (IdOf): never a name of their own, so never a candidate.</summary>
+    readonly HashSet<string> _snapped = new();
     readonly object _lock = new();
 
     public int Count { get { lock (_lock) return _byId.Count; } }
@@ -59,7 +61,7 @@ public sealed class ItemDictionary
 
             // a misread of a known name ("Fresh Frult") snaps to the closest real item, so one drop doesn't become two rows
             var close = Closest(key);
-            if (close != null) { _byName[key] = close.Value; return close.Value; }
+            if (close != null) { _byName[key] = close.Value; _snapped.Add(key); return close.Value; }
 
             long synthetic = -(long)(Fnv(key) & 0x7FFFFFFF) - 1;
             _byId.TryAdd(synthetic, new ItemInfo(synthetic, name.Trim(), "", !key.EndsWith("(bound)"), "", ""));
@@ -89,25 +91,33 @@ public sealed class ItemDictionary
     /// <paramref name="likely"/> (this run's items, the current enemy's loot table) are tried first. Only a single
     /// answer counts: two items that fit equally well give none. Needs five letters at least.
     /// </summary>
-    public long? Guess(string read, IEnumerable<string>? likely = null)
+    public long? Guess(string read, IEnumerable<string>? likely = null) => GuessWhy(read, likely).Id;
+
+    /// <summary>
+    /// <see cref="Guess"/>, saying whether the answer came from the likely items (this run's, the enemies' loot tables) or
+    /// only from being the one item near the name. <paramref name="allow"/> leaves out items it says no to (a grade the
+    /// name's colour rules out), so two names that tie can still give one answer.
+    /// </summary>
+    public (long? Id, bool FromLikely) GuessWhy(string read, IEnumerable<string>? likely = null, Func<long, bool>? allow = null)
     {
         lock (_lock)
         {
             var key = Norm(read);
-            if (key.Count(char.IsLetter) < 5 || key.Contains("(bound)")) return null;
+            if (key.Count(char.IsLetter) < 5 || key.Contains("(bound)")) return (null, false);
             int budget = Math.Max(2, key.Length / 5);
             var score = new Dictionary<long, int>();
             foreach (var kv in _byName)
             {
                 var id = kv.Value;
                 if (!(id > 0 || (_byId.TryGetValue(id, out var info) && info.Category.Length > 0))) continue;
+                if (_snapped.Contains(kv.Key) || (allow != null && !allow(id))) continue;
                 var n = kv.Key;
                 int s = -1;
                 if (n.Length > key.Length && (n.StartsWith(key, StringComparison.Ordinal) || n.EndsWith(key, StringComparison.Ordinal))) s = 1;
                 else if (Math.Abs(n.Length - key.Length) <= budget) { int d = Edit(key, n, budget); if (d <= budget) s = 1 + d; }
                 if (s > 0 && (!score.TryGetValue(id, out var old) || s < old)) score[id] = s;
             }
-            if (score.Count == 0) return null;
+            if (score.Count == 0) return (null, false);
             long? Pick(IEnumerable<KeyValuePair<long, int>> c)
             {
                 var l = c.OrderBy(x => x.Value).ToList();
@@ -117,10 +127,78 @@ public sealed class ItemDictionary
             if (likely != null)
             {
                 var ids = likely.Select(x => _byName.TryGetValue(Norm(x), out var i) ? i : 0).Where(i => i != 0).ToHashSet();
-                if (Pick(score.Where(x => ids.Contains(x.Key))) is long hit) return hit;
+                if (Pick(score.Where(x => ids.Contains(x.Key))) is long hit) return (hit, true);
             }
             // without a hint, only an answer no other item comes near
-            return score.Count == 1 ? score.Keys.First() : null;
+            return (score.Count == 1 ? score.Keys.First() : null, false);
+        }
+    }
+
+    /// <summary>One item a name read off the screen could be: how many letters apart it is, and its grade.</summary>
+    public sealed record NameCandidate(long Id, string Name, string Grade, int Distance);
+
+    bool Real(long id) => id > 0 || (_byId.TryGetValue(id, out var info) && info.Category.Length > 0);
+
+    /// <summary>
+    /// True when the name is an item's own name as the list spells it (case, accents and stray marks aside), or one of the
+    /// names it is also known by (a skin's chat form, a currency without "(Bound)"); false for a misread that snapped to it.
+    /// </summary>
+    public bool IsExact(string name)
+    {
+        lock (_lock)
+        {
+            var key = Norm(name);
+            return _byName.TryGetValue(key, out var id) && !_snapped.Contains(key) && Real(id);
+        }
+    }
+
+    /// <summary>
+    /// Every item within <paramref name="budget"/> letters of a name read off the screen, closest first, each once. What
+    /// <see cref="IdOf"/> snaps to is the first of these; when two are as close, the caller can choose between them on
+    /// other grounds (the enemy's loot table, the name's colour) instead of taking whichever the list holds first.
+    /// </summary>
+    public List<NameCandidate> Near(string read, int budget)
+    {
+        lock (_lock)
+        {
+            var key = Norm(read);
+            var best = new Dictionary<long, int>();
+            if (key.Length < 4) return new();
+            foreach (var kv in _byName)
+            {
+                if (Math.Abs(kv.Key.Length - key.Length) > budget || _snapped.Contains(kv.Key) || !Real(kv.Value)) continue;
+                int d = Edit(key, kv.Key, budget);
+                if (d <= budget && (!best.TryGetValue(kv.Value, out var o) || d < o)) best[kv.Value] = d;
+            }
+            return best.Select(kv => new NameCandidate(kv.Key, _byId[kv.Key].Name, _byId[kv.Key].Grade, kv.Value))
+                .OrderBy(c => c.Distance).ThenBy(c => c.Name, StringComparer.Ordinal).ToList();
+        }
+    }
+
+    /// <summary>
+    /// The items a cut-off or garbled name could be, for the loot list beside the character, where a long name scrolls so
+    /// that a read shows its middle or its end ("itstone x1"): every item whose name holds the read's letters, and every
+    /// item a few letters from it. At most <paramref name="max"/> + 1 (more means the read says too little to choose).
+    /// </summary>
+    public List<NameCandidate> Fragment(string read, int max)
+    {
+        lock (_lock)
+        {
+            var key = Norm(read);
+            if (key.Count(char.IsLetter) < 4) return new();
+            var found = new Dictionary<long, int>();
+            int budget = Math.Max(2, key.Length / 4);
+            foreach (var kv in _byName)
+            {
+                if (_snapped.Contains(kv.Key) || !Real(kv.Value)) continue;
+                int d = kv.Key.Contains(key, StringComparison.Ordinal) ? kv.Key.Length - key.Length
+                      : Math.Abs(kv.Key.Length - key.Length) <= budget ? Edit(key, kv.Key, budget) : int.MaxValue;
+                if (d == int.MaxValue || (!kv.Key.Contains(key, StringComparison.Ordinal) && d > budget)) continue;
+                if (!found.TryGetValue(kv.Value, out var o) || d < o) found[kv.Value] = d;
+                if (found.Count > max) break;
+            }
+            return found.Select(kv => new NameCandidate(kv.Key, _byId[kv.Key].Name, _byId[kv.Key].Grade, kv.Value))
+                .OrderBy(c => c.Distance).ThenBy(c => c.Name, StringComparer.Ordinal).ToList();
         }
     }
 
