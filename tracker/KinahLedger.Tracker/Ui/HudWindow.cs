@@ -81,7 +81,10 @@ public sealed class HudWindow : Window
         finally { if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Show); } catch (Exception) { /* closing */ } } }
     }
 
-    static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x7D, 0x84, 0xA8));
+    // frozen: the readers touch this class from their own threads (HiddenIfOver) before the panel exists, and an unfrozen
+    // brush made there can't be drawn on the window's thread (2026-10-22: every window refresh failed, crafts never showed)
+    static readonly Brush Muted = Frozen(Color.FromRgb(0x7D, 0x84, 0xA8));
+    static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
     /// <param name="fields">The figures to show (HudFields keys); the default set when null.</param>
     public HudWindow(IEnumerable<string>? fields = null)

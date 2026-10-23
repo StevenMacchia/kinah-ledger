@@ -277,6 +277,7 @@ public static class WpfApp
         }
         // the Discord card for the same count, and the panel over the game with the window's own figures (every field, then the default set)
         if (demo && kind != "Crafting") w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
+        if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         w.Close();
 

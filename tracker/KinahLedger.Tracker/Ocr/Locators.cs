@@ -268,6 +268,12 @@ public static class ZoneLocator
     public const string Ignored = "Ignored";
 
     /// <summary>"Expedition", "Event", "Arena", "Legion" or "Ignored" for an instanced area; null for an open-world zone or none.</summary>
+    /// <summary>
+    /// A base ("Dawn Legion Base", "Andsha Forward Base"): the only farming there is the zone's Odyle (Steven, 2026-10-22),
+    /// so other pickups in a base are shop buys, mail, rewards or crafts, never drops.
+    /// </summary>
+    public static bool IsBase(string? zone) => zone != null && zone.TrimEnd().EndsWith(" Base", StringComparison.OrdinalIgnoreCase);
+
     public static string? KindOf(string? zone) => zone != null && Instances.TryGetValue(zone, out var k) ? k : null;
 
     static Dictionary<string, string> LoadInstances()

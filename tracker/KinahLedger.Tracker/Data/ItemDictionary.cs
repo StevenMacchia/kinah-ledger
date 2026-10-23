@@ -74,6 +74,16 @@ public sealed class ItemDictionary
     /// <summary>Every item the list holds (real ids), for indexes built over the whole list.</summary>
     public List<ItemInfo> AllItems() { lock (_lock) return _byId.Values.Where(i => i.Id > 0).ToList(); }
 
+    /// <summary>True when the name is a real item's own name (case and spacing aside), not a misread snapped to one.</summary>
+    public bool KnowsExactly(string name)
+    {
+        lock (_lock)
+        {
+            var key = Norm(name);
+            return _byName.TryGetValue(key, out var id) && id > 0 && _byId.TryGetValue(id, out var info) && Norm(info.Name) == key;
+        }
+    }
+
     public bool Knows(string name)
     {
         lock (_lock)
