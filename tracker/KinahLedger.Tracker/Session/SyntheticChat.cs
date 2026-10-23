@@ -89,16 +89,12 @@ public static class SyntheticChat
         // items: what the fight dropped against what was counted, and the log lines that counted the extras
         var gotItems = e.Items.ToDictionary(kv => items.NameOf(kv.Key), kv => kv.Value);
         var diffs = gotItems.Keys.Union(truth.Items.Keys).Where(n => gotItems.GetValueOrDefault(n) != truth.Items.GetValueOrDefault(n)).ToList();
-        if (diffs.Count > 0) around.Add("
-    items: " + string.Join(", ", diffs.Select(n => $"{n} {gotItems.GetValueOrDefault(n)} of {truth.Items.GetValueOrDefault(n)}")));
+        const string NL = "\n             ";
+        if (diffs.Count > 0) around.Add("\n    items: " + string.Join(", ", diffs.Select(n => $"{n} {gotItems.GetValueOrDefault(n)} of {truth.Items.GetValueOrDefault(n)}")));
         foreach (var n in diffs.Where(n => gotItems.GetValueOrDefault(n) > truth.Items.GetValueOrDefault(n)).Take(2))
-            around.Add("
-    counted " + n + ": " + string.Join("
-             ", log.Where(l => l.Contains("  ok  ") && l.Contains(n.Split(' ')[0][..Math.Min(5, n.Length)], StringComparison.OrdinalIgnoreCase)).Take(8)));
+            around.Add("\n    counted " + n + ": " + string.Join(NL, log.Where(l => l.Contains("  ok  ") && l.Contains(n.Split(' ')[0][..Math.Min(5, n.Split(' ')[0].Length)], StringComparison.OrdinalIgnoreCase)).Take(8)));
         foreach (var x in extra.Distinct().Take(2))
-            around.Add($"
-    extra {x}: " + string.Join("
-             ", log.Where(l => l.Contains($"{x} Kina")).Take(6)));
+            around.Add($"\n    extra {x}: " + string.Join(NL, log.Where(l => l.Contains($"{x} Kina")).Take(6)));
         return $"seed {seed} noise {noise} quest {quest}: kills true {truth.Kills}, counted {e.Totals().Kills} (seen {e.KillsSeen}, Kinah drops {e.KinahDrops}, currency lines {e.CurrencyLines}, defeated {e.KillsDefeated}, xp {e.KillsXp}) · Kinah lines missed [{string.Join(", ", missing)}] extra [{string.Join(", ", extra)}]" + string.Concat(around);
     }
 
