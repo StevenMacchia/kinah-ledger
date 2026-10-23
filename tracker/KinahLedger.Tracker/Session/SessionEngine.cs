@@ -81,7 +81,43 @@ public sealed class SessionEngine
 
     // when the last kills and gathers happened, so the window can show what the player is doing now
     readonly Queue<DateTime> _recentKills = new(), _recentGathers = new();
-    static void Mark(Queue<DateTime> q, DateTime t) { q.Enqueue(t); while (q.Count > 0 && (t - q.Peek()).TotalMinutes > 3) q.Dequeue(); }
+    static void Mark(Queue<DateTime> q, DateTime t) { q.Enqueue(t); while (q.Count > 0 && (t - q.Peek()).TotalMinutes > MixedMinutes + 1) q.Dequeue(); }
+    // the distinct minutes with a kill and with a gather, for how focused the run was (RunPayload.focus)
+    readonly HashSet<long> _killMinutes = new(), _gatherMinutes = new();
+    void MarkKill(DateTime t) { Mark(_recentKills, t); _killMinutes.Add(t.Ticks / TimeSpan.TicksPerMinute); }
+    void MarkGather(DateTime t) { Mark(_recentGathers, t); _gatherMinutes.Add(t.Ticks / TimeSpan.TicksPerMinute); }
+
+    /// <summary>Farming and gathering at once: both a kill and a gather in this many minutes, and the tiles show both.</summary>
+    public const double MixedMinutes = 5;
+
+    /// <summary>
+    /// True while both kills and gathers happened in the last <see cref="MixedMinutes"/> (Steven, 2026-10-23: the top tiles
+    /// flipped between the farming and the gathering set while he did both). It ends only once one of them has been
+    /// absent that long, so a stretch of mobs between two nodes doesn't flip the tiles back and forth.
+    /// </summary>
+    public bool MixedAt(DateTime now)
+    {
+        lock (_lock)
+            return _recentKills.Count > 0 && _recentGathers.Count > 0
+                && (now - _recentKills.Last()).TotalMinutes <= MixedMinutes && (now - _recentGathers.Last()).TotalMinutes <= MixedMinutes;
+    }
+
+    /// <summary>
+    /// How much of the run was one activity: max(K, G) / (K + G), K and G the distinct minutes with a kill and with a
+    /// gather, rounded to 0.05; null when neither happened. The site keeps runs under 0.8 out of its per-hour figures.
+    /// </summary>
+    public double? Focus
+    {
+        get
+        {
+            lock (_lock)
+            {
+                int k = _killMinutes.Count, g = _gatherMinutes.Count;
+                if (k + g == 0) return null;
+                return Math.Round(Math.Round(Math.Max(k, g) / (double)(k + g) / 0.05) * 0.05, 2);
+            }
+        }
+    }
 
     /// <summary>
     /// "Gathering" or "Open world" from the last three minutes (more gathers or more kills), null when neither happened.
@@ -475,7 +511,7 @@ public sealed class SessionEngine
                     if (g != null)
                     {
                         var sk = Skill(g.Skill); sk.Items += a.Count;
-                        if (g.IsNode) { Nodes++; sk.Nodes++; Z().Nodes++; Mark(_recentGathers, a.Time); _lastSkill = g.Skill; _lastSkillAt = a.Time; if (a.Count >= 2) { Plentiful++; sk.Plentiful++; } }
+                        if (g.IsNode) { Nodes++; sk.Nodes++; Z().Nodes++; MarkGather(a.Time); _lastSkill = g.Skill; _lastSkillAt = a.Time; if (a.Count >= 2) { Plentiful++; sk.Plentiful++; } }
                         if (g.Bonus) { BonusFinds += a.Count; sk.Bonus += a.Count; }
                     }
                     else
@@ -491,7 +527,7 @@ public sealed class SessionEngine
                     if (MobFor(p.Time) is { } mp) mp.Crystals += p.Count;
                     break;
                 case GatherFailed f:
-                    Nodes++; NodesFailed++; Z().Nodes++; Mark(_recentGathers, f.Time);
+                    Nodes++; NodesFailed++; Z().Nodes++; MarkGather(f.Time);
                     var ff = _lastSkill != null && (f.Time - _lastSkillAt).TotalSeconds <= 45 ? _lastSkill : GatherSkills.FromSkillText(f.Skill);
                     if (ff != null) { var sk = Skill(ff.Value); sk.Nodes++; sk.Failed++; }
                     break;
@@ -503,7 +539,7 @@ public sealed class SessionEngine
                         Kinah += k.Delta;
                         if (k.Delta > 0)
                         {
-                            KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; Mark(_recentKills, k.Time);
+                            KinahDrops++; var zk = Z(); zk.Kinah += k.Delta; zk.KinahDrops++; MarkKill(k.Time);
                             KillEvidence(k.Time, 'k');
                             _recentPickups.Add(k.Delta); if (_recentPickups.Count > 50) _recentPickups.RemoveAt(0);
                             // the enemy whose bar just went, else the one on the target bar
@@ -517,7 +553,7 @@ public sealed class SessionEngine
                     RewardsSkipped++;
                     break;
                 case MobKilled mk:
-                    KillsDefeated++; Z().Defeated++; Mark(_recentKills, mk.Time);
+                    KillsDefeated++; Z().Defeated++; MarkKill(mk.Time);
                     KillEvidence(mk.Time, 'd');
                     break;
                 case XpGained:
@@ -525,7 +561,7 @@ public sealed class SessionEngine
                     break;
                 case CurrencyGained c:
                     // only Soul Points come one per kill; another currency ("Stigma Shard points") is kept, never a kill
-                    if (c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) { CurrencyLines++; Z().CurrencyLines++; Mark(_recentKills, c.Time); }
+                    if (c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) { CurrencyLines++; Z().CurrencyLines++; MarkKill(c.Time); }
                     // a Soul Points line names the kind of enemy that died: one kill of it, and the Kinah of that kill goes with it,
                     // whatever the target bar read (Steven, 2026-10-22: three different enemies killed, one shown)
                     if (c.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase))
@@ -539,7 +575,7 @@ public sealed class SessionEngine
                     break;
                 case EnemySoul es:
                     // a "Soul: <enemy>" row in the loot list beside the character: every enemy drops its soul, so a new row is a kill of it
-                    Mark(_recentKills, es.Time); Z();
+                    MarkKill(es.Time); Z();
                     CreditSoul(es.Kind, es.Time, KillEvidence(es.Time, 'l'));
                     break;
                 case CraftResult cr:

@@ -631,7 +631,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -888,6 +888,7 @@ options: --process aion[,other]");
         ok &= TradeTest(items);
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
+        ok &= MixedTest(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }
@@ -1021,6 +1022,40 @@ options: --process aion[,other]");
             Check("no pictures unless the player said yes", $"{Directory.Exists(Path.Combine(rdir, "frames"))} {File.Exists(Path.Combine(rdir, "counted.jsonl"))} {File.Exists(Path.Combine(rdir, "README.txt"))}", "False True True");
         }
         finally { try { Directory.Delete(rtmp, true); } catch { } }
+        return ok;
+    }
+
+    /// <summary>
+    /// Farming and gathering at once (Steven, 2026-10-23): the tiles show one mixed set while both happened in the last
+    /// five minutes, and the run says how focused it was (focus), which the site's per-hour figures go by.
+    /// </summary>
+    static bool MixedTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nFarming and gathering at once (2026-10-23):");
+        var t0 = new DateTime(2026, 10, 23, 18, 0, 0, DateTimeKind.Utc);
+        var e = new SessionEngine(items);
+        Check("nothing yet: no focus, not mixed", $"{e.Focus?.ToString() ?? "none"} {e.MixedAt(t0)}", "none False");
+        // twelve minutes of mobs, one a minute
+        for (int i = 0; i < 12; i++) { e.Apply(new KinahChanged(t0.AddMinutes(i), 300, false)); e.Apply(new CurrencyGained(t0.AddMinutes(i), "Papis Soul Points", 1, "Papis")); }
+        Check("mobs only: focus 1, not mixed", $"{e.Focus} {e.MixedAt(t0.AddMinutes(11.5))}", "1 False");
+        // then a node between the mobs
+        e.Apply(new ItemAcquired(t0.AddMinutes(12), items.IdOf("Orichalcum Ore"), 1, false));
+        Check("a node among the mobs: mixed", $"{e.MixedAt(t0.AddMinutes(12.2))}", "True");
+        e.Apply(new KinahChanged(t0.AddMinutes(13), 300, false));
+        Check("mobs again, four minutes on: still mixed (no flip back)", $"{e.MixedAt(t0.AddMinutes(16))}", "True");
+        Check("five minutes and more of mobs alone: back to farming", $"{e.MixedAt(t0.AddMinutes(17.5))}", "False");
+        // as many minutes gathering as farming
+        for (int i = 0; i < 12; i++) e.Apply(new ItemAcquired(t0.AddMinutes(20 + i), items.IdOf("Orichalcum Ore"), 1, false));
+        Check("13 kill minutes, 13 gather minutes: focus 0.5", $"{e.Focus}", "0.5");
+        var json = System.Text.Json.JsonSerializer.Serialize(RunPayload.Build(e, settings, "run", "Open world", "na_e", "", items));
+        Check("the run carries its focus", System.Text.RegularExpressions.Regex.Match(json, "\"focus\":[0-9.]+").Value, "\"focus\":0.5");
+        Check("...and a run with neither carries none", System.Text.Json.JsonSerializer.Serialize(RunPayload.Build(new SessionEngine(items), settings, "run", "Open world", "na_e", "", items)).Contains("focus") ? "focus" : "absent", "absent");
         return ok;
     }
 
