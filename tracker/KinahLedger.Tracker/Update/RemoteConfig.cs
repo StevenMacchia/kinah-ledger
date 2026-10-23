@@ -53,7 +53,7 @@ public sealed class RemoteConfig
     /// <summary>An item out in the world is a drop only with a kill or a gather this close to it, either side; 0 turns the rule off.</summary>
     public double WitnessSeconds { get; init; } = 6;
     /// <summary>The loot ledger (a loot line no read showed, wherever it sits) counts. Off: it only logs what it would count.</summary>
-    public bool Ledger { get; init; } = true;
+    public bool Ledger { get; init; }   // off until it stops overcounting noisy chat (synthetic, 2026-10-23: +2.7% Kinah)
 
     // ---- kill switches: true turns that reader off ----
     public HashSet<string> Killed { get; init; } = new(StringComparer.OrdinalIgnoreCase);
@@ -144,7 +144,7 @@ public sealed class RemoteConfig
             MaxOnePickup = (int)Num(pick, "max_one", b.MaxOnePickup, 20, 10000),
             MaxOneCrystal = (int)Num(pick, "max_crystals", b.MaxOneCrystal, 3, 1000),
             WitnessSeconds = Num(pick, "witness_seconds", b.WitnessSeconds, 0, 20),
-            Ledger = !(pick is { } pl && pl.TryGetProperty("ledger", out var lg) && lg.ValueKind == JsonValueKind.False),
+            Ledger = pick is { } pl && pl.TryGetProperty("ledger", out var lg) && lg.ValueKind == JsonValueKind.True,
             Killed = killed,
             LegendMaterialsRare = !(rare is { } ra && ra.TryGetProperty("legend_materials", out var lm) && lm.ValueKind == JsonValueKind.False),
             RolloutVersion = Str(roll, "version", ""),
