@@ -24,9 +24,12 @@ public partial class MainWindow
     }
 
     /// <summary>The card's content for one row, in the zone given.</summary>
-    internal Border BuildItemCard(DropRow r, string? zone)
+    /// <param name="tradeable">How many copies can be sold, as worked out when the card first opened (kept when a typed price redraws it).</param>
+    internal Border BuildItemCard(DropRow r, string? zone, int? tradeable = null)
     {
         var name = r.Report; var id = _items.IdOf(name);
+        // the row's worth is its tradeable copies at the price the table used: how many copies that is, so a new price can value them
+        int sell = tradeable ?? (PriceBook.Price(name) is long p00 && p00 > 0 && r.Worth > 0 ? (int)Math.Round(r.Worth / (double)p00) : 0);
         var info = _items.Get(id);
         bool gathered = r.Sub.StartsWith("Gathering");
         var (card, body) = CkShell(440);
@@ -49,14 +52,22 @@ public partial class MainWindow
         Stat(1, r.DropPct is { Length: > 0 } dp && dp != "—" ? dp : "", gathered ? "per try" : "odds per kill");
         Stat(2, r.PerHour, "an hour");
         body.Children.Add(tiles);
-        bool priced = r.Price is { Length: > 0 } p0 && p0 != "—" && p0 != "-";
-        if (priced)
+        // the price: where it is from under it, a click to type what the game shows; the board's and the other servers' own lines
+        var q = PriceBook.QuoteOf(name);
+        bool priced = q != null;
+        var server = Server?.Name ?? "";
+        body.Children.Add(CkSection(("PRICE · " + (server.Length > 0 ? server : "YOUR SERVER")).ToUpperInvariant()));
+        void Redo() { if (_card is { IsOpen: true }) _card.Child = BuildItemCard(r, zone, sell); }
+        body.Children.Add(CkPriceLine(name, "Lowest Market price", Redo, server: server));
+        if (CardSourceOnLine && q != null)
         {
-            body.Children.Add(new Border { Height = 8 });
-            body.Children.Add(CkKv("Lowest Market price", r.Price, CkGold));
-            if (r.Value is { Length: > 0 } v && v != "—") body.Children.Add(CkKv("Yours are worth", v, CkGold, "before the Market's cut"));
+            if (q.Mine && PriceBook.BoardOf(name) is { } b)
+                body.Children.Add(CkKv($"{(server.Length > 0 ? server : "Your server")}'s board", b.Price.ToString("N0"), CkMuted, PriceBook.Describe(new PriceBook.Quote(b.Price, b.From, b.Readings, b.Sure, b.At))));
+            if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } rg)
+                body.Children.Add(CkKv($"Other {Server?.Region.Name ?? ""} {Server?.Faction ?? ""} servers".Replace("  ", " "), rg.Price.ToString("N0"), CkMuted, $"middle of {rg.Servers} servers"));
         }
-        else { body.Children.Add(new Border { Height = 8 }); body.Children.Add(CkNote("No Market price on your server yet.")); }
+        if (q is { Sure: true } && sell > 0) body.Children.Add(CkKv("Yours are worth", (q.Price * sell).ToString("N0"), CkGold, $"{sell} × {q.Price:N0}, before the Market's cut"));
+        else if (q is { Sure: false }) body.Children.Add(CkNote("One listing isn't a price: it stays out of the session total and the value per hour until a second reading backs it. Click it to type what you see."));
 
         // the site's figures for this zone, last seven days
         body.Children.Add(CkSection(("KINAHLEDGER.COM · " + (zone ?? "THIS ZONE")).ToUpperInvariant()));
@@ -96,6 +107,9 @@ public partial class MainWindow
             if (from.Count > 0) foreach (var (m, ch) in from) body.Children.Add(CkKv(m, ch is double c2 && c2 > 0 ? OneIn(c2) : "listed", CkGold));
             else body.Children.Add(CkNote(gathered ? "Gathered, not dropped: no enemy lists it." : "No enemy table lists it yet."));
         }
+
+        // a price alert on this item, on the player's server (Ui/MainWindow.PriceAlerts.cs)
+        if (!gathered || priced) body.Children.Add(CkAlertSection(name));
 
         var links = new List<(string, string)> { ("Drops on kinahledger.com", SiteUrl + "/#drops") };
         if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) links.Add(("MetaBot.GG page", mu));

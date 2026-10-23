@@ -28,7 +28,7 @@ public static class SessionStore
             var drops = new Dictionary<string, int>();
             foreach (var r in e.ItemRows()) drops[r.Name] = r.Count + r.Bound;
             var zones = e.ZoneSnapshot().ToDictionary(kv => kv.Key, kv => new Upload.ZoneRun((int)Math.Round(kv.Value.Seconds / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName, ByName(kv.Value.Items, items), ByName(kv.Value.ItemsBound, items)));
-            var rec = new Saved(e.Started.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), (int)Math.Round(e.Active.TotalMinutes), activity, s.GearBracket, s.Region,
+            var rec = new Saved(e.Started.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), (int)Math.Round(e.Active.TotalMinutes), activity, Upload.RunPayload.Gear, s.Region,
                 t.Kinah, t.KinahBound, t.Kills, e.KinahDrops, t.Nodes, t.Bonus, drops, e.PetSnapshot(), zones, shared,
                 e.NetKinah, Upload.OddsPayload.From(e), e.Sold, e.SoldKinah, server);
             File.AppendAllText(PathFor(), JsonSerializer.Serialize(rec) + "\n");

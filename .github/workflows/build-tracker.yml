@@ -62,6 +62,31 @@ jobs:
           dist/KinahLedger.exe replay-bank tracker/tests/replays | cat
           dist/KinahLedger.exe options-test | cat
 
+      # Options and the window in a demo (player features), and the window and its cards drawn for layout review
+      - name: options-test
+        id: options
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
+        shell: bash
+        run: dist/KinahLedger.exe options-test | cat
+
+      - name: Layout renders
+        if: always() && steps.publish.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p shots
+          dist/KinahLedger.exe ui-shot shots --demo --compact
+          dist/KinahLedger.exe ui-shot shots --demo --full
+          dist/KinahLedger.exe ui-shot shots --demo --crafting
+          dist/KinahLedger.exe ui-shot shots --options
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.publish.outcome == 'success'
+        with:
+          name: layout-renders
+          path: shots/*.png
+          if-no-files-found: ignore
+
       - name: Write latest.json
         id: latest
         continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
@@ -83,7 +108,7 @@ jobs:
         shell: bash
         run: |
           failed=""
-          for s in "manifest:${{ steps.manifest.outcome }}" "aliases:${{ steps.aliases.outcome }}" "publish:${{ steps.publish.outcome }}" "tests:${{ steps.tests.outcome }}" "latest:${{ steps.latest.outcome }}"; do
+          for s in "manifest:${{ steps.manifest.outcome }}" "aliases:${{ steps.aliases.outcome }}" "publish:${{ steps.publish.outcome }}" "tests:${{ steps.tests.outcome }}" "options:${{ steps.options.outcome }}" "latest:${{ steps.latest.outcome }}"; do
             [ "${s#*:}" = "failure" ] && failed="$failed ${s%%:*}"
           done
           if [ -n "$failed" ]; then r="RESULT: FAIL ($failed )"; else r="RESULT: PASS"; fi

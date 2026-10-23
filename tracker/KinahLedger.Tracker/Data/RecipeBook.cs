@@ -11,11 +11,21 @@ public static class RecipeBook
 {
     public sealed record Material(string Item, int Qty);
     public sealed record Great(string Item, int Qty, double? Chance);
-    public sealed record Recipe(string Name, string Skill, string Output, int OutputQty, List<Material> Materials, long? Kinah, double? SuccessRate, List<Great> GreatOutcomes);
+    public sealed record Recipe(string Name, string Skill, string Output, int OutputQty, List<Material> Materials, long? Kinah, double? SuccessRate, List<Great> GreatOutcomes)
+    {
+        /// <summary>'E' (Elyos) or 'A' (Asmodian): the two factions craft the same items from different materials.</summary>
+        public char Faction { get; init; }
+        /// <summary>The chance a combo (great success) that rolled then succeeds; with the combo chance, how often a success turns into the upgrade.</summary>
+        public double? ComboSuccess { get; init; }
+        public int Mastery { get; init; }
+    }
+
+    /// <summary>The player's faction ('E' or 'A', from the chosen server), so a recipe's materials are the ones they craft with.</summary>
+    public static char PreferFaction { get; set; }
 
     public static readonly IReadOnlyList<Recipe> All = Load();
     public static string Credit { get; private set; } = "";
-    static readonly Dictionary<string, Recipe> ByOutput = All.GroupBy(r => r.Output, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+    static readonly Dictionary<string, List<Recipe>> ByOutput = All.GroupBy(r => r.Output, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
     static List<Recipe> Load()
     {
@@ -44,7 +54,11 @@ public static class RecipeBook
                     foreach (var x in g.EnumerateArray())
                         if (x.TryGetProperty("item", out var it) && it.ValueKind == JsonValueKind.String) great.Add(new Great(it.GetString()!, Math.Max(1, Int(x, "qty", 1)), Dbl(x, "chance")));
                 long? kinah = r.TryGetProperty("kinah", out var k) && k.ValueKind == JsonValueKind.Number && k.TryGetInt64(out var kv) ? kv : null;
-                list.Add(new Recipe(Str("name").Length > 0 ? Str("name") : output, Str("skill"), output, Math.Max(1, Int(r, "output_qty", 1)), mats, kinah, Dbl(r, "success_rate"), great));
+                // recipe_id: the second digit is the faction (221044001 Asmodian, 211044001 Elyos)
+                var rid = r.TryGetProperty("recipe_id", out var ri) && ri.ValueKind == JsonValueKind.Number ? ri.GetRawText() : "";
+                char faction = rid.Length > 1 ? (rid[1] == '1' ? 'E' : rid[1] == '2' ? 'A' : '\0') : '\0';
+                list.Add(new Recipe(Str("name").Length > 0 ? Str("name") : output, Str("skill"), output, Math.Max(1, Int(r, "output_qty", 1)), mats, kinah, Dbl(r, "success_rate"), great)
+                    { Faction = faction, ComboSuccess = Dbl(r, "combo_success_rate"), Mastery = Int(r, "mastery", 0) });
             }
         }
         catch (Exception) { /* no recipes: costs show as unknown */ }
@@ -52,14 +66,27 @@ public static class RecipeBook
     }
 
     /// <summary>The recipe that makes this item, or null when the book doesn't have it.</summary>
-    public static Recipe? ForOutput(string item) => ByOutput.GetValueOrDefault(item.Trim());
+    public static Recipe? ForOutput(string item) => For(item, 0);
+
+    /// <summary>
+    /// The recipe for an item in the player's faction; with <paramref name="makes"/> above 0, the one that makes that many
+    /// (Sapphire Powder: ×3 at mastery 20, ×30 at 45). Falls back to any recipe for the item.
+    /// </summary>
+    public static Recipe? For(string item, int makes)
+    {
+        if (!ByOutput.TryGetValue(item.Trim(), out var all) || all.Count == 0) return null;
+        IEnumerable<Recipe> mine = all.Where(r => PreferFaction == '\0' || r.Faction == '\0' || r.Faction == PreferFaction);
+        if (!mine.Any()) mine = all;
+        if (makes > 0 && mine.FirstOrDefault(r => r.OutputQty == makes) is { } m) return m;
+        return mine.First();
+    }
 
     /// <summary>The one recipe whose output starts with a name the chat cut short ("Artisan's Orichalcum"), or null when none or several do.</summary>
     public static string? Complete(string cut)
     {
         var c = cut.Trim();
         if (c.Length < 3) return null;
-        if (ByOutput.ContainsKey(c)) return ByOutput[c].Output;
+        if (ByOutput.TryGetValue(c, out var exact)) return exact[0].Output;
         string? found = null;
         foreach (var k in ByOutput.Keys)
         {

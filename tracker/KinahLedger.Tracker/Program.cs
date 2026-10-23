@@ -1462,6 +1462,38 @@ options: --process aion[,other]");
         sa.FlushVotes(b0.AddSeconds(123));
         Check("an old achievement line still on screen: a new drop counts", $"{n(sa.Engine, "Lesser Soulstone")}", "1");
 
+        // ---- a reward line wrapped in two (Steven, 2026-10-23 12:39, Ellun River Midstream, his miscount report) ----
+        // "Acquired Artisan's Ultimate Refining Stone" read as a whole name, so the "(Bound) x2." under it was left out and
+        // one stone counted as a drop; the 11,000 Kina (Bound) printed with it is a payout, and so is what comes with it
+        var wp = new ChatParser(items);
+        var wrapped = wp.ParseBatch(new List<string> { "Acquired 11,000 Kina (Bound).", "Acquired Artisan's Ultimate Refining Stone", "(Bound) x2." }, b0);
+        Check("a wrapped \"(Bound) x2.\" joins the line above: a reward of 2", string.Join(" | ", wrapped.Select(x => string.Join(",", x.Events.Select(e => e switch { RewardReceived r => $"reward {r.Name} x{r.Count}", KinahChanged k => $"{k.Delta} Kina{(k.Bound ? " bound" : "")}", ItemAcquired a => $"drop {items.NameOf(a.ItemId)} x{a.Count}", _ => e.GetType().Name })))), "11000 Kina bound | reward Artisan's Ultimate Refining Stone x2 | ");
+        var countTail = wp.ParseBatch(new List<string> { "Acquired Fine Odyle", "x2." }, b0.AddMinutes(1));
+        Check("...and a wrapped count alone gives the line its count", string.Join(" | ", countTail.Select(x => string.Join(",", x.Events.Select(e => e is ItemAcquired a ? $"{items.NameOf(a.ItemId)} x{a.Count}" : e.GetType().Name)))), "Fine Odyle x2 | ");
+        var sw2 = new TrackerSession(null, settings, items, "Test");
+        sw2.Engine.SetZone("Ellun River Midstream");
+        var wrapAt = b0.AddMinutes(10);
+        sw2.ProcessChat(new List<string> { "[Player1] hi" }, wrapAt);
+        var wrapLines = new List<string> { "[Player1] hi", "Acquired 11,000 Kina (Bound).", "Acquired Artisan's Ultimate Refining Stone", "(Bound) x2." };
+        for (int i = 1; i <= 5; i++) sw2.ProcessChat(wrapLines, wrapAt.AddSeconds(i * 0.4));
+        sw2.FlushVotes(wrapAt.AddSeconds(3));
+        Check("as read live: the stone is a reward, not a drop from a kill", $"{n(sw2.Engine, "Artisan's Ultimate Refining Stone")}", "0");
+        // a bound Kina payout with an item that didn't wrap: the item is the payout's; a drop seconds later is a drop
+        var sp2 = new TrackerSession(null, settings, items, "Test");
+        sp2.Engine.SetZone("Ellun River Midstream");
+        var payAt = b0.AddMinutes(20);
+        sp2.ProcessChat(new List<string> { "[Player1] hi" }, payAt);
+        var payLines = new List<string> { "[Player1] hi", "Acquired 11,000 Kina (Bound).", "Spiritstone acquired." };
+        for (int i = 1; i <= 5; i++) sp2.ProcessChat(payLines, payAt.AddSeconds(i * 0.4));
+        sp2.FlushVotes(payAt.AddSeconds(3));
+        Check("an item printed with a bound Kina payout: the payout's", $"{n(sp2.Engine, "Spiritstone")}", "0");
+        var payLater = new List<string> { "[Player1] hi", "Acquired 11,000 Kina (Bound).", "Spiritstone acquired.", "Acquired 300 Kina.", "Spiritstone acquired." };
+        for (int i = 0; i < 5; i++) sp2.ProcessChat(payLater, payAt.AddSeconds(10 + i * 0.4));
+        sp2.FlushVotes(payAt.AddSeconds(13));
+        Check("...a kill's drop 10 s later: a drop", $"{n(sp2.Engine, "Spiritstone")}", "1");
+        if (n(sp2.Engine, "Spiritstone") != 1)
+            foreach (var nl in File.ReadLines(CrashLog.ReadsPath).TakeLast(40)) Console.WriteLine("      note: " + nl);
+
         // ---- gathering (Steven, 2026-10-23 11:28-11:29, Orichalcum: "like a 25% accuracy") ----
         // the loot list band read the gathering panel (node, proficiency, item, Success) as rows; the game upgraded the ore
         // to Fine in place; one chat line came, late; then a gather he stopped showed the panel again and "failed"
@@ -2412,6 +2444,8 @@ options: --process aion[,other]");
                      && Servers.Find("na_e", "Siel (Elyos)")?.Key == "na_e-siel-elyos";
         ok &= rosterOk;
         Console.WriteLine($"  {roster.Count} servers in {Servers.Regions.Length} regions, keys {rosterKeys[0]} .. {rosterKeys[^1]}  {(rosterOk ? "ok" : "MISMATCH: expected 86 distinct well-formed keys")}");
+        Console.WriteLine("\nPlayer features (best crafts, where to farm, gear score, price alerts):");
+        ok &= PlayerTests.Run();
         Console.WriteLine(ok ? "\nAll market cases passed." : "\nMarket mismatch, see above.");
         return ok ? 0 : 1;
     }

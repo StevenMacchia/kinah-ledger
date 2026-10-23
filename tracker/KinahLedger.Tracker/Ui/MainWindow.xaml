@@ -74,7 +74,9 @@
           <TextBlock Grid.Column="1" Style="{StaticResource Td}" Text="{Binding Drops}"/>
           <TextBlock Grid.Column="2" Style="{StaticResource Td}" Text="{Binding DropPct}" FontFamily="{DynamicResource BodyFont}"/>
           <TextBlock Grid.Column="3" Style="{StaticResource Td}" Text="{Binding PerHour}" Foreground="{DynamicResource Muted}"/>
-          <TextBlock Grid.Column="4" Style="{StaticResource Td}" Text="{Binding Price}" Foreground="{DynamicResource Gold}"/>
+          <!-- the price: teal when it is the player's own (typed, or read on this PC), dimmed when unsure (one listing: left out of
+               totals); where it is from, its readings and age on hover (Ui/MainWindow.Prices.cs) -->
+          <TextBlock x:Name="PriceText" Grid.Column="4" Style="{StaticResource Td}" Text="{Binding Price}" Foreground="{DynamicResource Gold}" Background="Transparent" ToolTip="{Binding PriceTip}" ToolTipService.InitialShowDelay="250"/>
           <TextBlock x:Name="ValueText" Grid.Column="5" Style="{StaticResource Td}" Text="{Binding Value}" FontWeight="SemiBold" Margin="0,0,20,0"/>
         </Grid>
       </Border>
@@ -84,6 +86,9 @@
         <!-- how a row was read or worked out: on hover only (Steven, 0.7.6: no reading jargon on the rows themselves) -->
         <DataTrigger Binding="{Binding Tip}" Value=""><Setter TargetName="RowBorder" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <!-- a craft's profit: green when it made Kinah, red when it lost some -->
+        <DataTrigger Binding="{Binding PriceTone}" Value="Mine"><Setter TargetName="PriceText" Property="Foreground" Value="{DynamicResource Mint}"/></DataTrigger>
+        <DataTrigger Binding="{Binding PriceTone}" Value="Unsure"><Setter TargetName="PriceText" Property="Opacity" Value="0.5"/></DataTrigger>
+        <DataTrigger Binding="{Binding PriceTip}" Value=""><Setter TargetName="PriceText" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <DataTrigger Binding="{Binding Tone}" Value="Good"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Good}"/></DataTrigger>
         <DataTrigger Binding="{Binding Tone}" Value="Bad"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Bad}"/></DataTrigger>
         <!-- a drop no enemy you fought can drop, by their loot tables: the line under it says check -->
@@ -209,6 +214,12 @@
           <TextBlock Style="{StaticResource LabelStyle}" Text="SERVER" Margin="0,8,0,8"/>
           <WrapPanel x:Name="ServerChips"/>
           <TextBlock x:Name="WelcomeHint" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,2,0,0"/>
+          <!-- gear score (0.8.12): the run card compares the player with players at the same gear; empty is every player -->
+          <TextBlock Style="{StaticResource LabelStyle}" Text="GEAR SCORE" Margin="0,12,0,8"/>
+          <StackPanel Orientation="Horizontal">
+            <TextBox x:Name="WelcomeGear" Width="120" MaxLength="5" VerticalAlignment="Center" AutomationProperties.Name="Gear score"/>
+            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center" Text="Optional. Compares your runs with players at your gear. Change it in Options."/>
+          </StackPanel>
           <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,12,0,8"/>
           <WrapPanel x:Name="SkinChips"/>
           <!-- sharing, chosen here before anything is read or sent (the same switch as Options › Sharing) -->
@@ -255,6 +266,8 @@
               <TextBlock x:Name="HeadRateLbl" Text="Kinah plus loot, after tax" Foreground="{DynamicResource Faint}" FontSize="12.5" HorizontalAlignment="Right" Margin="0,2,0,0" Visibility="Collapsed"/>
               <!-- the player's best hour in this zone (BestRuns), or a note when this stay beats it -->
               <TextBlock x:Name="BestLine" FontSize="12.5" FontWeight="SemiBold" HorizontalAlignment="Right" Margin="0,6,0,0" Visibility="Collapsed"/>
+              <!-- what players at the player's gear make here (kinahledger.com /farm, Ui/MainWindow.PlayerBoards.cs) -->
+              <TextBlock x:Name="FarmLine" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Mint}" HorizontalAlignment="Right" Margin="0,3,0,0" Visibility="Collapsed" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
             </StackPanel>
           </Grid>
 
@@ -351,6 +364,11 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </StackPanel>
+      </Border>
+
+      <!-- Full view: where players at the player's gear make the most an hour on the server (built in Ui/MainWindow.PlayerBoards.cs) -->
+      <Border x:Name="WhereFarmCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,14,20,14" Visibility="Collapsed">
+        <StackPanel x:Name="WhereFarmHost"/>
       </Border>
 
     </StackPanel>
@@ -553,6 +571,11 @@
 
       <!-- Crafting: every recipe crafted since the tracker started, with what a try costs, how often it worked, what came
            out and what that sells for. Crafted items never count as drops, and crafting is never farming time. -->
+      <!-- the server's most profitable recipes today (kinahledger.com /crafts); a row opens its recipe card (Ui/MainWindow.PlayerBoards.cs) -->
+      <Border x:Name="BestCraftsCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,14,20,12" Visibility="Collapsed">
+        <StackPanel x:Name="BestCraftsHost"/>
+      </Border>
+
       <Border x:Name="CraftCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="0,8,0,0" Visibility="Collapsed">
         <StackPanel>
           <Grid Margin="16,12,16,12">
@@ -569,7 +592,7 @@
               <TextBlock Style="{StaticResource Th}" Text="RECIPE · WHAT CAME OUT" Margin="20,0,0,0" HorizontalAlignment="Left"/>
               <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="TRIES"/>
               <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="SUCCESS" ToolTip="Tries that worked, out of all tries. The recipe's listed rate at the required mastery is shown under the recipe."/>
-              <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="COST" ToolTip="What one try costs: the recipe's materials at the lowest Market prices on your server. A failed try uses them too."/>
+              <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="COST / TRY" ToolTip="What one try costs: the recipe's materials at the lowest Market prices on your server. A failed try uses them too."/>
               <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="SELLS FOR" ToolTip="What one of the item sells for at the lowest Market price, after the Market's fee and tax."/>
               <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PROFIT" Margin="0,0,20,0" ToolTip="What came out, at Market prices after the Market's cut, minus the cost of every try."/>
             </Grid>

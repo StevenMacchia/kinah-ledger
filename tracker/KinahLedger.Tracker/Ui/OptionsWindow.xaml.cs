@@ -101,6 +101,8 @@ public partial class OptionsWindow : Window
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
         ShareChk.IsChecked = c.Share;
+        GearBox.Text = c.GearScore > 0 ? c.GearScore.ToString() : "";
+        BuildAlerts(c.Server);
         ReportFramesChk.IsChecked = c.ReportFrames;
         SendFramesChk.IsChecked = c.SendFrames;
         HudChk.IsChecked = c.Hud;
@@ -164,6 +166,7 @@ public partial class OptionsWindow : Window
             Edit(_edit with { Region = r.Key, Server = (ServerPick.SelectedItem as GameServer)?.Label ?? "" });
         };
         ServerPick.SelectionChanged += (_, _) => Edit(_edit with { Server = (ServerPick.SelectedItem as GameServer)?.Label ?? "" });
+        GearBox.TextChanged += (_, _) => { if (!_loading) Edit(_edit with { GearScore = int.TryParse(new string(GearBox.Text.Where(char.IsDigit).ToArray()), out var g) ? g : 0 }); };
         ShareChk.Click += (_, _) => Edit(_edit with { Share = ShareChk.IsChecked == true });
         ReportFramesChk.Click += (_, _) => Edit(_edit with { ReportFrames = ReportFramesChk.IsChecked == true });
         SendFramesChk.Click += (_, _) => Edit(_edit with { SendFrames = SendFramesChk.IsChecked == true });

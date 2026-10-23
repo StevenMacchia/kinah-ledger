@@ -224,6 +224,8 @@ public static class AccuracyTests
         Check("gear is not a wardrobe unlock", $"{PickupCheck.IsSkinUnlock("Riverside Helm acquired.")} {PickupCheck.IsSkinUnlock("Acquired Silentium (Bound) x2.")}", "False False");
         Check("a box line, read garbled", $"{PickupCheck.IsBoxLine("Obtained Mystic Light Weapon Skin Chest")} {PickupCheck.IsBoxLine("Obtained Mystic LighEWeapon Skin Chess")} {PickupCheck.IsBoxLine("Pnyn Loot Chest (Bound) acquired.")}", "True True False");
         Check("Kina is never an item", $"{PickupCheck.IsKina("Kina")} {PickupCheck.IsKina("Kinah")} {PickupCheck.IsKina("Kina (Bound)")} {PickupCheck.IsKina("Kinah Pouch")}", "True True True False");
+        Check("the crafting panel's title, garbled (17:12)", $"{TrackerSession.IsCraftTitle("Grafting Progress 1 /TY")} {TrackerSession.IsCraftTitle("Gråfting in Progresso / TY")} {TrackerSession.IsCraftTitle("•raftingQsin Progresso 2")} {TrackerSession.IsCraftTitle("Crafting in Progress 0 / 2")}", "True True True True");
+        Check("...and a gathering or cube panel isn't crafting", $"{TrackerSession.IsCraftTitle("Orichalcum")} {TrackerSession.IsCraftTitle("Proficiency")} {TrackerSession.IsCraftTitle("Orichalcum Ore x1")} {TrackerSession.IsCraftTitle("Success")}", "False False False False");
         Check("Kina read as an item, garbled", $"{PickupCheck.IsKina("Kina (Bognd)")}", "True");
         Check("a quest done is a reward's line; a craft isn't", $"{Reread.IsAchievement("Protect the Odyle Collector completed.")} {Reread.IsAchievement("Crafting completed.")} {Reread.IsAchievement("[Someone] quest completed")}", "True False False");
         Check("200 Soul Crystals at once: a reward; 2 a kill's", $"{PickupCheck.TooManyCrystals(200) != null} {PickupCheck.TooManyCrystals(2) == null}", "True True");
@@ -282,8 +284,8 @@ public static class AccuracyTests
         Check("...its kill's Kinah a read later: a drop", $"{N(sv, "Riverside Helm")}", "1");
         // a wrapped reward line keeps its count: "Acquired Artisan's Ultimate Refining Stone" / "(Bound) x2."
         var wp2 = new ChatParser(items);
-        var wrapped = wp2.ParseBatch(new List<string> { "Acquired Spiritstone", "(Bound) x2." }, q0).SelectMany(x => x.Events).OfType<ItemAcquired>().ToList();
-        Check("a wrapped (Bound) x2 tail: x2, bound", string.Join(",", wrapped.Select(w => $"{items.NameOf(w.ItemId)} {w.Count} {w.Bound}")), "Spiritstone 2 True");
+        var wrapped = wp2.ParseBatch(new List<string> { "Acquired Spiritstone", "(Bound) x2." }, q0).SelectMany(x => x.Events).Select(w => w switch { ItemAcquired ia => ia.Count, RewardReceived rr => rr.Count, _ => 0 }).Where(n => n > 0).ToList();
+        Check("a wrapped (Bound) x2 tail keeps its count", string.Join(",", wrapped), "2");
 
         // a stack no enemy drops, out in the world, on its own
         var sp = new TrackerSession(null, settings, items, "Test");

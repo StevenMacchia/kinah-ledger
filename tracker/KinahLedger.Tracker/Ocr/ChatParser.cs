@@ -207,19 +207,6 @@ public sealed partial class ChatParser
     List<(string Text, List<GameEvent> Events)> Unwrap(IReadOnlyList<string> lines, DateTime time)
     {
         var res = lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
-        // a line wrapped after its name: "Acquired Artisan's Ultimate Refining Stone" / "(Bound) x2." The first half
-        // already reads as one item, so the tail carries the count (Steven's 12:39 report: counted as a drop x1)
-        for (int i = 0; i + 1 < res.Count; i++)
-        {
-            if (res[i].Events.Count != 1 || res[i].Events[0] is not ItemAcquired head || head.Count != 1) continue;
-            var tail = WrapTail().Match(res[i + 1].Text);
-            if (!tail.Success || res[i + 1].Events.Count > 0 || (!tail.Groups["b"].Success && !tail.Groups["n"].Success)) continue;
-            int n = tail.Groups["n"].Success ? Math.Clamp(int.Parse(tail.Groups["n"].Value), 1, 99999) : 1;
-            bool bound = tail.Groups["b"].Success || head.Bound;
-            res[i] = (res[i].Text.Trim() + " " + res[i + 1].Text.Trim(), new List<GameEvent> { head with { Count = n, Bound = bound } });
-            res[i + 1] = (JoinedMark, new List<GameEvent>());
-            i++;
-        }
         string? carry = _wrapCarry != null && (time - _wrapAt).TotalSeconds <= WrapSeconds ? _wrapCarry : null;
         _wrapCarry = null;
         for (int i = carry != null ? -1 : 0; i + 1 < res.Count; i++)
@@ -242,6 +229,19 @@ public sealed partial class ChatParser
             if (i >= 0) res[i] = (JoinedMark, new List<GameEvent>());
             i++;
         }
+        // a wrapped tail under an item line that already read as a whole name: "Acquired Artisan's Ultimate Refining Stone"
+        // then "(Bound) x2." (Steven, 2026-10-23 12:39: counted as one drop, though the "(Bound)" made it a reward). The
+        // tail belongs to the line above: joined, its count and its "(Bound)" count too
+        for (int i = 0; i + 1 < res.Count; i++)
+        {
+            if (!WrappedTail.IsMatch(res[i + 1].Text) || res[i + 1].Events.Count > 0 || ReferenceEquals(res[i].Text, JoinedMark)) continue;
+            if (res[i].Events.Count != 1 || res[i].Events[0] is not ItemAcquired || Regex.IsMatch(res[i].Text, @"\(\s*b[o0]und\s*\)", RegexOptions.IgnoreCase)) continue;
+            var joined = res[i].Text.Trim() + " " + res[i + 1].Text.Trim();
+            var j = Parse(joined, time).ToList();
+            if (j.Count != 1 || j[0] is not (ItemAcquired or RewardReceived)) continue;
+            res[i] = (joined, j);
+            res[i + 1] = (JoinedMark, new List<GameEvent>());
+        }
         if (res.Count > 0 && res[^1].Events.Count == 0 && !ReferenceEquals(res[^1].Text, JoinedMark) && Joinable(res[^1].Text) && res[^1].Text.Trim().Length >= 3)
         { _wrapCarry = res[^1].Text; _wrapAt = time; }
         return res;
@@ -249,6 +249,8 @@ public sealed partial class ChatParser
 
     /// <summary>The text returned in place of the first half of a line joined to the one after it.</summary>
     public const string JoinedMark = "(wrapped: joined to the next line)";
+    /// <summary>The end of a wrapped item line on its own: "(Bound) x2.", "(Bound).", "x12.".</summary>
+    static readonly Regex WrappedTail = new(@"^\s*(?:\(\s*b[o0]und\s*\)\s*(?:[x×*]\s*[0-9][0-9,]*)?|[x×]\s*[0-9][0-9,]*)\s*[.,:;]?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     public const double WrapSeconds = 3;
     string? _wrapCarry; DateTime _wrapAt;
     static bool Joinable(string s) { var t = s.TrimStart(); return t.Length > 0 && !t.StartsWith('[') && !Payment().IsMatch(t) && !Purchase().IsMatch(t); }
@@ -256,9 +258,6 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"^\W*purchase\s+(?:complete|completed|successful)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Purchase();
 
-    // the tail of a wrapped loot line: "(Bound) x2.", "(Bound)", "x9."
-    [GeneratedRegex(@"^\W*(?:(?<b>\(\s*b[o0]u?n?d\s*\))\s*)?(?:[x×]\s*(?<n>\d{1,5}))?\W*$", RegexOptions.IgnoreCase)]
-    private static partial Regex WrapTail();
 
     public const double PurchaseSeconds = 5;
     DateTime _purchaseAt; bool _purchaseCarry;

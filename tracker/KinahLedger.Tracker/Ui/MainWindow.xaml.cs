@@ -17,7 +17,7 @@ namespace KinahLedger.Ui;
 /// <summary>One table row. Icon is the item's icon slot (filled as the file arrives) and Initial the letter shown until then; both empty on a header row.</summary>
 /// <param name="Tip">How the row was read or worked out, shown on hover only; the line under the name gets a ⓘ when there is one.</param>
 /// <param name="Worth">The row's tradeable copies at the lowest Market price, before the fee: what Top drops and the Discord card rank by.</param>
-public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false, string Report = "", bool Reported = false, string Tip = "", long Worth = 0)
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false, string Report = "", bool Reported = false, string Tip = "", long Worth = 0, string PriceTone = "", string PriceTip = "")
 {
     /// <summary>The row's report link: "Looks wrong?" flags the drop so the site never gets it; "Undo" takes the flag off.</summary>
     public string ReportText => Reported ? "Undo" : "Looks wrong?";
@@ -71,6 +71,7 @@ public partial class MainWindow : Window
         _settings = settings;
         _items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         IconCache.Enabled = settings.Ui.Icons;
+        Upload.RunPayload.Gear = GearScore.Payload(_prefs.GearScore);   // runs are shared under the player's gear bracket, or "unknown"
         if (!_prefs.ManualMarket) _marketRegion = null;
         _settings.Upload.Enabled = _prefs.Share;
         // the site's item list, so drops are shared under real ids and show their icons; one conditional request per start
@@ -78,7 +79,8 @@ public partial class MainWindow : Window
         _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.ManualChat ? _region : null, _prefs.Server) { RegionKey = _prefs.Region, Server = _prefs.Server };
         // another character in the world: close the run and start fresh (MainWindow.Shell.cs)
         _watcher.CharacterChanged += why => Dispatcher.BeginInvoke(() => { _ = StartFresh("Another character"); });
-        _watcher.Market.Enabled = settings.Market.Enabled && _prefs.Share;   // prices ride on the one Share switch
+        // the Market is read for this PC whatever the Share switch says; only sending follows it (MarketCapture.Sharing)
+        _watcher.Market.Enabled = settings.Market.Enabled;
         Icon = Native.AppIconSource();
 
         // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
@@ -595,6 +597,7 @@ public partial class MainWindow : Window
         if (_part == "Crafting") FillCraft(chat?.CraftView);
         FillPickups();
         AlertTick();
+        PriceAlertTick();
         UpdateHud();
     }
 
@@ -696,9 +699,8 @@ public partial class MainWindow : Window
                 bool flagged = ReportedDrops.Has(r.Name);
                 // copies the chat never confirmed (the loot list beside the character, or a guessed name): counted, and said on hover
                 if (e.Unconfirmed(r.Id) is int unc && unc > 0) tips.Add($"{unc} of these came from the loot list beside your character or a partly hidden name, not a clear chat line.");
-                if (PriceTip(r.Name) is { Length: > 0 } pt) tips.Add(pt);
                 if (flagged) { sub = "Reported · not sent to the site"; tone = "Warn"; }
-                drops.Add(new DropRow(r.Name, total.ToString("N0"), odds, Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceText(r.Name), Value: rowValue, Sub: sub, Tone: tone, Report: r.Name, Reported: flagged,
+                drops.Add(new DropRow(r.Name, total.ToString("N0"), odds, Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceCell(r.Name).Text, PriceTone: PriceCell(r.Name).Tone, PriceTip: PriceCell(r.Name).Tip, Value: rowValue, Sub: sub, Tone: tone, Report: r.Name, Reported: flagged,
                     Tip: string.Join("\n\n", tips), Worth: worthN.GetValueOrDefault(r.Name)));
             }
         }
@@ -724,8 +726,7 @@ public partial class MainWindow : Window
                 bool rep = ReportedDrops.Has(name);
                 var gtips = new List<string>();
                 if (e.Unconfirmed(_items.IdOf(name)) is int gu && gu > 0) gtips.Add($"{gu} of these came from the loot list beside your character or a partly hidden name, not a clear chat line.");
-                if (PriceTip(name) is { Length: > 0 } gpt) gtips.Add(gpt);
-                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceText(name), Value: worth.GetValueOrDefault(name, ""),
+                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceCell(name).Text, PriceTone: PriceCell(name).Tone, PriceTip: PriceCell(name).Tip, Value: worth.GetValueOrDefault(name, ""),
                     Sub: rep ? "Reported · not sent to the site" : "Gathering material", Tone: rep ? "Warn" : "", Report: name, Reported: rep, Tip: string.Join("\n\n", gtips), Worth: worthN.GetValueOrDefault(name)));
             }
         }
@@ -816,18 +817,10 @@ public partial class MainWindow : Window
     // the drops' Market value and how many items carried a price, from the last FillNumbers, for the panel over the game
     long _lastValue; int _lastPriced;
 
-    /// <summary>The lowest Market price for an item on this server, as the Price column shows it; "≈" when it is the region's price, a dash until one is known.</summary>
-    static string PriceText(string name) => PriceBook.Price(name) is long p ? (PriceBook.SourceOf(name) == PriceBook.From.Region ? "≈" : "") + Short(p) : "—";
-
     /// <summary>A price or value that fits its column: in full under 100,000, then "680K", "1.68M" (Steven, 2026-10-22: "1,680,000" ran out of the column).</summary>
     static string Short(long v) => Math.Abs(v) < 100_000 ? v.ToString("N0")
         : Math.Abs(v) < 1_000_000 ? $"{v / 1e3:0.#}K"
         : Math.Abs(v) < 1_000_000_000 ? $"{v / 1e6:0.##}M" : $"{v / 1e9:0.##}B";
-
-    /// <summary>A line for the row's hover when the price is not the server's own: the region's middle price stands in.</summary>
-    string PriceTip(string name) => PriceBook.SourceOf(name) == PriceBook.From.Region
-        ? $"≈ Site price: nobody has listed it on {Server?.Label ?? "your server"} yet, so this is the middle price on the other {Server?.Faction ?? ""} servers in {Server?.Region.Name ?? "your region"}."
-        : "";
 
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
     {
@@ -942,6 +935,7 @@ public partial class MainWindow : Window
     {
         var zoneView = _watcher.Chat?.ZoneView;
         var zone = zoneView?.Zone ?? shown.Zone;
+        ShowFarmLine(zone);
         var best = _demo ? new BestRuns.Best(1_400_000, 48, "2026-10-19") : BestRuns.For(Server?.Label ?? "", zone);
         // this stay: the zone view when it is live, else what the window shows (a layout render)
         var stay = zoneView != null && !_demo ? zoneView : shown;
@@ -1045,6 +1039,7 @@ public partial class MainWindow : Window
         ViewFill.Opacity = full ? 1 : 0.25;
         ViewBtn.ToolTip = full ? "Compact view: one column, three rows per table" : "Full view: twice as wide, with recent pickups and more rows per table";
         ViewBtn.Visibility = craft || _welcome ? Visibility.Collapsed : Visibility.Visible;
+        ApplyPlayerView(craft, farm, full);
         FillPickups();
         Redraw();
     }
@@ -1084,14 +1079,17 @@ public partial class MainWindow : Window
             var listed = book?.SuccessRate is double sr ? $" · listed {sr:P0}" : "";
             if (r.Upgraded + r.NotUpgraded > 0) listed += $" · combo upgraded {r.Upgraded} of {r.Upgraded + r.NotUpgraded}";
             long? profit = costKnown && madeKnown ? made - cost!.Value * r.Attempts : null;
-            var sells = PriceBook.Price(r.Name) is long sp ? Fk(sp * PriceBook.SellerKeeps) : "—";
+            var sellsQ = PriceBook.QuoteOf(r.Name);
+            var sells = sellsQ != null ? (sellsQ.From == PriceBook.From.Region ? "≈" : "") + Fk(sellsQ.Price * PriceBook.SellerKeeps) : "—";
+            var sellsCell = PriceCell(r.Name);
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Attempts > 0 ? $"{100.0 * r.Ok / r.Attempts:0}%" : "—", costKnown ? Fk(cost!.Value) : "—",
-                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: "Click for the materials, what a craft costs and what it makes.",
-                Price: sells, Value: profit is long pf ? Signed(pf) : "—", Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : "",
-                Sub: outcome + listed + (book == null ? " · not in the recipe book" : unpricedMats > 0 ? $" · {unpricedMats} material{(unpricedMats == 1 ? "" : "s")} not priced" : "") + (vendorMats > 0 ? $" · plus {vendorMats} vendor item{(vendorMats == 1 ? "" : "s")}" : "")));
+                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: "Click for the materials, what a try costs and what it makes.",
+                Price: sells, PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profit is long pf ? Signed(pf) : "—", Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : "",
+                Sub: outcome + listed + (book == null ? " · not in the recipe book" : unpricedMats > 0 ? $" · {unpricedMats} material{(unpricedMats == 1 ? "" : "s")} not priced" : "") + (vendorMats > 0 ? $" · {vendorMats} vendor cost{(vendorMats == 1 ? "" : "s")} to set" : "")));
         }
         CraftRows.ItemsSource = rows;
         _crafted = e?.CraftSnapshot() ?? new();
+        FillBestCrafts();
         CraftEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftWhat.Text = tries > 0 ? $"{tries} tr{(tries == 1 ? "y" : "ies")} · {ok} worked ({100.0 * ok / tries:0}%)" : "since the tracker started";
         CraftSpent.Text = spent > 0 ? "−" + Fk(spent) : "—";
@@ -1404,7 +1402,9 @@ public partial class MainWindow : Window
     void MarketSwitch(bool on)
     {
         _settings.Upload.Enabled = on;
-        _watcher.Market.Enabled = on && _settings.Market.Enabled;
+        // the Market is still read with sharing off: the player's own asks price their drops on this PC (2026-10-23);
+        // only sending follows the switch (MarketCapture.Sharing)
+        _watcher.Market.Enabled = _settings.Market.Enabled;
     }
 
     /// <summary>Drag a box around the Market's rows by hand. The Options window hides itself around this.</summary>
@@ -1596,6 +1596,7 @@ public partial class MainWindow : Window
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false;
         ZoneLbl.Text = "Western Cantas Valley";
         ApplyServer("na_e", "Siel (Elyos)");
+        LoadPlayerDemo(_items); _demoZone = "Western Cantas Valley";   // best crafts and where to farm, sample boards
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         if (kind == "Events")
         {

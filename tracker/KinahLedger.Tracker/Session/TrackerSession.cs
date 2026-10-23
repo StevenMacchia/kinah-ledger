@@ -885,7 +885,9 @@ public sealed class TrackerSession
                 if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
                 var ev = (reward || why != null || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
-                NoteReward(ev, now);
+                // an item that is a reward only because a window was open doesn't open a new one: a window would chain on
+                // and take the next kill's drop (a payout's item, then a Spiritstone 10 s later, 2026-10-23)
+                if (why == null) NoteReward(ev, now);
                 any = true; _lastActivity = DateTime.UtcNow;
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
@@ -1313,6 +1315,8 @@ public sealed class TrackerSession
     // ---- achievement rewards and box contents: never drops (Steven, 2026-10-23) ----
     /// <summary>After an achievement line, or a reward or box line out in the world, what lands this long after is a reward.</summary>
     public const double RewardWindowSeconds = 10;
+    /// <summary>After a bound Kina payout, what lands this long after is the payout's: short, so a kill just after it still counts.</summary>
+    public const double PayoutWindowSeconds = 3;
     /// <summary>A loot list row out in the world with no kill or gather this long before it is a box or a reward.</summary>
     public const double NoKillSeconds = 15;
     DateTime _achieveUntil = DateTime.MinValue, _boxUntil = DateTime.MinValue, _lastKillAt = DateTime.MinValue, _lastGatherAt = DateTime.MinValue;
@@ -1339,10 +1343,27 @@ public sealed class TrackerSession
     void NoteReward(GameEvent ev, DateTime now)
     {
         if (InRun || _boss != null) return;
+        // a Kina payout marked (Bound) (a quest, a pass or a claim): an item printed with it, in the same read or the next
+        // few seconds, is the payout's too (Steven, 2026-10-23 12:39: 11,000 Kina (Bound) and a refining stone, counted as a drop)
+        if (ev is KinahChanged { Bound: true, Delta: > 0 })
+        {
+            var until = now.AddSeconds(PayoutWindowSeconds);
+            if (until > _boxUntil) _boxUntil = until;
+            return;
+        }
         string? name = ev switch { RewardReceived r => r.Name, ItemAcquired a => _items.NameOf(a.ItemId), _ => null };
         if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return;
         if (ev is RewardReceived || BoxName.IsMatch(name)) _boxUntil = now.AddSeconds(RewardWindowSeconds);
     }
+
+    /// <summary>
+    /// The crafting panel's title, read the way the recognizer reads it: "Crafting in Progress", but also "Grafting
+    /// Progress", "Gråfting in Progresso" and "•raftingQsin Progresso" (Steven, 2026-10-23 17:12: both Superior Courage
+    /// Scrolls were left to the chat because the title came back garbled, so a batch counted only after it ended).
+    /// </summary>
+    public static bool IsCraftTitle(string line) =>
+        Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.CraftPanelWords)
+        || Regex.IsMatch(line, @"r[aåäà4]ft(?:ing|in|ng)|r[aåäà4]fting", RegexOptions.IgnoreCase);
 
     // ---- the gathering bar as a witness (Steven's plan, step 1, 2026-10-23) ----
     // The gathering panel is the crafting panel's widget: one race per gather, Success or Fail, and when the game rolls an
@@ -1892,7 +1913,7 @@ public sealed class TrackerSession
                 // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
                 // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
                 // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
-                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(l => Update.RemoteConfig.HasAny(l, Update.RemoteConfig.Current.CraftPanelWords));
+                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(IsCraftTitle);
                 if (craft != _panelIsCraft || !_panelUp) CrashLog.Note(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
                 _panelIsCraft = craft;
                 var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
@@ -2127,6 +2148,8 @@ public sealed class UserPrefs
     public string HudFields { get; set; } = Ui.HudFields.Default;
     /// <summary>Full view: the window doubles in width with every table beside the summary. Off (Compact, the default since 0.7.6): the run card and the summary only.</summary>
     public bool FullView { get; set; }
+    /// <summary>The player's gear score, typed on the first-run screen or in Options; 0 is not set. Runs are compared with players at the same bracket (Data.GearScore).</summary>
+    public int GearScore { get; set; }
     /// <summary>The start/stop shortcut, as "Ctrl+Shift+K"; empty is off.</summary>
     public string Hotkey { get; set; } = Platform.Hotkey.Default;
     public int? WinX { get; set; }

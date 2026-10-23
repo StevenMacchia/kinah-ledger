@@ -141,7 +141,8 @@ public static class WpfApp
         var other = Skins.All.First(s => s.Key != startSkin).Key;
         Click((System.Windows.Controls.Button)o.SkinHost.Children[Array.FindIndex(Skins.All, s => s.Key == other)]);
         Check(Skins.Current == other, "a theme chip previews the theme at once");
-        Check(!w.Prefs.CloseToTray && w.Prefs.Share, "nothing applies before Save");
+        o.GearBox.Text = "1450";
+        Check(!w.Prefs.CloseToTray && w.Prefs.Share && w.Prefs.GearScore != 1450, "nothing applies before Save");
         Click(o.SaveBtn);
         DoEvents();
         Check(!o.IsVisible, "Save closes the window");
@@ -152,6 +153,7 @@ public static class WpfApp
         Check(w.RegionKey == eu.Key && w.Server?.Label == euServer.Label, "server saved: " + w.Server?.Label);
         Check(p.Hotkey == "" && w.HotkeyText == "", "shortcut turned off");
         Check(p.Skin == other && Skins.Current == other, "theme saved");
+        Check(p.GearScore == 1450 && Upload.RunPayload.Gear == "gs:1400-1599", "gear score saved and shared as its bracket: " + Upload.RunPayload.Gear);
 
         o = Open();
         Check(o.CloseToTrayChk.IsChecked == true && o.GameStartBox.SelectedIndex == 1 && o.ServerPick.SelectedItem is Data.GameServer gs && gs.Label == euServer.Label, "Options opens with the saved choices");
@@ -281,6 +283,7 @@ public static class WpfApp
         // the Discord card for the same count, and the panel over the game with the window's own figures (every field, then the default set)
         if (demo && kind != "Crafting") w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
         if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
+        if (demo) w.ShotPlayerCards(dir, kind);
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         w.Close();
 
