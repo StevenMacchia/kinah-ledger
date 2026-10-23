@@ -1155,6 +1155,24 @@ options: --process aion[,other]");
         so.FlushVotes(g0.AddSeconds(41));
         Check("one gather, upgraded in place, then a stopped one: one Fine ore", $"{n(so.Engine, "Fine Orichalcum Ore")} {n(so.Engine, "Orichalcum Ore")}", "1 0");
         Check("...the failed gather is an attempt, not an item", $"{so.Engine.Totals().Nodes}", "2");
+        // the gathering bar as the second witness for a gather the chat missed (step 1)
+        var sg = new TrackerSession(null, settings, items, "Test");
+        sg.Engine.SetZone("Ellun River Midstream");
+        var w0 = new DateTime(2026, 10, 23, 16, 30, 0, DateTimeKind.Utc);
+        List(sg, w0, "Orichalcum Ore x1");
+        Check("loot list gather, no gathering bar seen: not counted", $"{n(sg.Engine, "Orichalcum Ore")}", "0");
+        sg.GatherOutcome(w0.AddSeconds(20), true, false);
+        List(sg, w0.AddSeconds(21), "Orichalcum Ore x1");
+        Check("...the bar finished on Success: counted", $"{n(sg.Engine, "Orichalcum Ore")}", "1");
+        sg.GatherOutcome(w0.AddSeconds(40), false, false);
+        List(sg, w0.AddSeconds(41), "Orichalcum Ore x1");
+        Check("...the bar ended on Fail: not counted", $"{n(sg.Engine, "Orichalcum Ore")}", "1");
+        sg.GatherOutcome(w0.AddSeconds(60), true, false);
+        sg.ProcessChat(new List<string> { "[Player1] hi" }, w0.AddSeconds(59));
+        for (int i = 0; i < 4; i++) sg.ProcessChat(new List<string> { "[Player1] hi", "Orichalcum Ore acquired." }, w0.AddSeconds(60.5 + i * 0.4));
+        sg.FlushVotes(w0.AddSeconds(62.5));
+        List(sg, w0.AddSeconds(61), "Orichalcum Ore x1");
+        Check("...a gather the chat named: once, not twice", $"{n(sg.Engine, "Orichalcum Ore")}", "2");
 
         // garbled reads over lines that were already on screen: nothing more
         var s2 = new TrackerSession(null, settings, items, "Test");
