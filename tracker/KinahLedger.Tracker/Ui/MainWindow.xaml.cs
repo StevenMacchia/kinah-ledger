@@ -31,7 +31,8 @@ public partial class MainWindow : Window
     // Soul Crystals are still counted and shared (the site's Pets page needs them); the window shows them as a count only
     // open world or gathering is worked out from what the chat shows (0.7.6: the picker is gone); a run is saved and shared
     // under what it turned out to be (GameWatcher.DominantKind)
-    enum Mode { Open, Gather }
+    /// <summary>Mixed: kills and gathers both in the last few minutes (SessionEngine.MixedAt), the tiles show both.</summary>
+    enum Mode { Open, Gather, Mixed }
     public const string RepoUrl = "https://github.com/StevenMacchia/kinah-ledger";
     public const string SiteUrl = "https://kinahledger.com";
     public const string SupportUrl = "https://ko-fi.com/swoly";
@@ -227,6 +228,7 @@ public partial class MainWindow : Window
         (Tile1Label.Text, Tile2Label.Text, Tile3Label.Text, Tile4Label.Text) = m switch
         {
             Mode.Gather => ("attempts/hr", "items/hr", "per try", "rare/hr"),
+            Mode.Mixed => ("Kinah/hr", "total/hr", "kills/hr", "attempts/hr"),
             _ => ("Kinah/hr", "Kinah/kill", "kills/hr", "drops/hr"),
         };
         // the fifth tile: what the hour is worth if the tradeable items are sold on the Market (plus the Kinah, in open world)
@@ -370,7 +372,7 @@ public partial class MainWindow : Window
 
     string ViewTitle() => _watcher.Farm != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "counted while the game is open" : "this zone");
 
-    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode == Mode.Open ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = "—"; }
+    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = "—"; }
 
     async Task Toggle() { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(); }
 
@@ -550,7 +552,8 @@ public partial class MainWindow : Window
         {
             // the tiles follow what the player is doing now (kills or gathers in the last few minutes), in a run or not:
             // a stretch of gathering shows attempts per hour, mob farming Kinah per hour
-            var dom = show.RecentKind is { } rk ? (rk == "Gathering" ? Mode.Gather : Mode.Open) : show.Events > 0 ? ModeOf(show) : _mode;
+            // both at once (a node between mobs): one mixed set that holds until one of them has stopped for a few minutes
+            var dom = show.MixedAt(DateTime.UtcNow) ? Mode.Mixed : show.RecentKind is { } rk ? (rk == "Gathering" ? Mode.Gather : Mode.Open) : show.Events > 0 ? ModeOf(show) : _mode;
             if (dom != _mode) { _mode = dom; ApplyModeLabels(); }
             if (show != _lastRun) _tableWhat = ViewTitle();
             FillNumbers(show, show.Active);
@@ -848,6 +851,13 @@ public partial class MainWindow : Window
                 _ = fails; _ = plent; _ = worth; _ = crystals;
                 break;
             }
+            case Mode.Mixed:
+                // Kinah, the whole hour (Kinah plus the drops and the gathered items after the Market's cut), kills and attempts
+                KinahHr.Text = Fk(kinah / h);
+                KinahKill.Text = kinah + s.Value > 0 ? Fk((kinah + s.Value) / h) : "—";
+                KillsHr.Text = Fk(t.Kills / h);
+                DropsHr.Text = Fk(t.Nodes / h);
+                break;
             default:
                 KinahHr.Text = Fk(kinah / h);
                 KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
@@ -866,7 +876,7 @@ public partial class MainWindow : Window
                   + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
             + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
         // the card's head: what and how long, then the hour's total (Kinah plus the loot after the Market's cut)
-        TableTitle.Text = $"{(ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : "Open world"))} · {Clock(elapsed)}";
+        TableTitle.Text = $"{(ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : _mode == Mode.Mixed ? "Farming and gathering" : "Open world"))} · {Clock(elapsed)}";
         TableWhat.Text = _tableWhat;
         TableWhatChip.Visibility = _tableWhat.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         long totalNow = kinah + s.Value;
@@ -1611,9 +1621,17 @@ public partial class MainWindow : Window
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new ItemAcquired(t, _items.IdOf(n), 1, b)); }
         void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new CurrencyGained(t, "Oculazen Soul Points", 1)); } }
         void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new PetCrystal(t, n + " Soul Crystal", 1)); }
-        _mode = kind == "Gathering" ? Mode.Gather : Mode.Open;
+        _mode = kind == "Gathering" ? Mode.Gather : kind == "Mixed" ? Mode.Mixed : Mode.Open;
         switch (_mode)
         {
+            case Mode.Mixed:
+                // a layout render of farming and gathering at once: mobs and nodes in the same stretch
+                e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
+                e.SetTarget("Abyss Drakan Scout", t); Kills(61, 3690);
+                Drop("Thick hide", 22); Drop("Spiritstone", 14);
+                Drop("Orichalcum Ore", 38); Drop("Sapphire Gemstone", 4); Drop("Odyle", 12);
+                for (int i = 0; i < 5; i++) e.Apply(new GatherFailed(t, "Essence Extraction"));
+                break;
             case Mode.Gather:
                 e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
                 Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));
