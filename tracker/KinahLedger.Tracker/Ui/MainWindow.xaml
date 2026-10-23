@@ -558,6 +558,7 @@
               <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="RUNS"/>
               <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="AVG TIME" ToolTip="From entering to the last loot picked up there, averaged over the runs."/>
               <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="PER HR" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per hour inside the runs."/>
+              <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="TOTAL" ToolTip="Everything made here over the runs shown: Kinah plus loot at the lowest Market price after the Market's cut."/>
               <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PER RUN" Margin="0,0,20,0" ToolTip="Kinah plus loot at the lowest Market price after the Market's cut, per run. Events come round about once an hour, so this is their number."/>
             </Grid>
           </Border>

@@ -1231,7 +1231,7 @@ public partial class MainWindow : Window
         InstSessionBtn.Style = (Style)FindResource(allShown ? "SegOff" : "SegOn");
         InstEarlierBtn.Style = (Style)FindResource(allShown ? "SegOn" : "SegOff");
         InstEarlierBtn.Content = $"Earlier ({(_demoInst != null ? all.Count : earlier)})";
-        var rows = new List<DropRow>();
+        var rows = new List<DropRow>(); long made = 0;
         foreach (var g in runs.GroupBy(r => r.Zone).OrderByDescending(g => g.Max(r => r.LastLoot)))
         {
             long value = 0; double secs = 0; int n = 0;
@@ -1239,14 +1239,16 @@ public partial class MainWindow : Window
             var kind = g.Last().Kind;
             var last = g.Max(r => r.LastLoot) ?? DateTime.UtcNow;
             bool shown = _openInst.Contains(g.Key);
-            var sub = (log?.Open == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}") + (shown ? " · ▾ Hide drops" : " · ▸ Show drops");
+            var sub = (log?.Open == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}") + (shown ? " · ▾ Hide runs and drops" : " · ▸ Show runs and drops");
+            // per run (the average) and the total made there (Steven, 2026-10-23: "the per run and the total made")
             rows.Add(new DropRow(g.Key, n.ToString("N0"), Clock(TimeSpan.FromSeconds(secs / n)), Fk(value / Math.Max(secs, 10) * 3600),
-                Initial: InitialOf(g.Key), Value: Short(value / n), Sub: sub, Key: g.Key,
-                Tip: "Click to " + (shown ? "hide" : "show") + " what dropped here, rarest first."));
-            if (shown) rows.AddRange(InstDrops(g.ToList()));
+                Initial: InitialOf(g.Key), Price: Short(value), Value: Short(value / n), Sub: sub, Key: g.Key,
+                Tip: "Click to " + (shown ? "hide" : "show") + " each run and what dropped here, rarest first."));
+            if (shown) { rows.AddRange(InstRunRows(g.ToList())); rows.AddRange(InstDrops(g.ToList())); }
+            made += value;
         }
         InstRows.ItemsSource = rows;
-        InstWhat.Text = rows.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} kept on this PC" + (log?.Open is { } open ? $" · in {open} now" : "") : "";
+        InstWhat.Text = rows.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · {Short(made)} made" + (log?.Open is { } open ? $" · in {open} now" : "") : "";
         InstEmpty.Visibility = rows.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -1260,6 +1262,27 @@ public partial class MainWindow : Window
         foreach (var (id, count) in r.Items)
             if (!_items.IsGear(id) && PriceBook.Price(_items.NameOf(id)) is long p) v += p * count * PriceBook.SellerKeeps;
         return (long)Math.Round(v);
+    }
+
+    /// <summary>
+    /// Each run in one place, newest first: when, how long, what it made (Kinah plus sellable loot after the Market's cut).
+    /// A run whose reward screen wasn't read says so instead of a guess. The ten newest show; older ones are counted in a line.
+    /// </summary>
+    List<DropRow> InstRunRows(List<InstanceRun> runs)
+    {
+        var rows = new List<DropRow>();
+        var order = runs.OrderByDescending(r => r.LastLoot ?? r.Start).ToList();
+        foreach (var r in order.Take(10))
+        {
+            int items = r.Items.Values.Sum() + r.Bound;
+            var sub = r.RewardsNotRead ? "rewards not read" : items == 0 ? "Kinah only" : $"{items} item{(items == 1 ? "" : "s")}";
+            rows.Add(new DropRow($"Run at {r.Start.ToLocalTime():HH:mm}" + (r.Start.ToLocalTime().Date != DateTime.Now.Date ? $" · {r.Start.ToLocalTime():MMM d}" : ""),
+                "", Clock(TimeSpan.FromSeconds(r.Seconds)), "", Initial: "#", Value: Short(RunValue(r)), Sub: sub, Child: true));
+        }
+        if (order.Count > 10)
+            rows.Add(new DropRow($"{order.Count - 10} earlier run{(order.Count - 10 == 1 ? "" : "s")}", "", "", "", Initial: "…",
+                Value: Short(order.Skip(10).Sum(RunValue)), Sub: "made in total", Child: true));
+        return rows;
     }
 
     readonly HashSet<string> _openInst = new();

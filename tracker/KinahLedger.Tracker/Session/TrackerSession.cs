@@ -1230,6 +1230,8 @@ public sealed class TrackerSession
 
     internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
     {
+        // a second table in a run that was paid already is the next run's (an empty read changes nothing)
+        if (slots.Count > 0) Instances.TableStarting(now);
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         int added = 0, known = 0, unnamed = 0;
         var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
