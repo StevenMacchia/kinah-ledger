@@ -820,10 +820,18 @@ public sealed class LineTracker
     {
         if (a == b) return true;
         if (a.Length < 8 || b.Length < 8) return false;
+        // a different number is a different line: "acquired285kina" isn't "acquired286kina", and the quest's "(19/25)"
+        // isn't "(20/25)". Matching them took the newest Kina line or kill for one already seen (Steven, 2026-10-23: 25
+        // kills counted as 20, 20 Hard Kalgolem as 12). Only a digit lost to a letter (a different count of digits) is
+        // left to the letter allowance below.
+        var da = Digits(a); var db = Digits(b);
+        if (da.Length == db.Length && da != db) return false;
         int max = Math.Max(1, Math.Min(a.Length, b.Length) / 8);
         if (Math.Abs(a.Length - b.Length) > max) return false;
         return Lev(a, b, max) <= max;
     }
+
+    static string Digits(string s) => new(s.Where(char.IsDigit).ToArray());
 
     static int Lev(string a, string b, int max)
     {

@@ -76,7 +76,7 @@ public static class ReplayBank
     {
         var d = new List<string>();
         static long N(JsonNode? n) => n == null ? 0 : long.TryParse(n.ToJsonString(), out var v) ? v : 0;
-        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah" })
+        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         if (expect["runs"] is JsonObject er)
         {
@@ -156,6 +156,9 @@ public static class ReplayBank
         foreach (var (id, n) in e.Items.OrderBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal)) outItems[items.NameOf(id)] = n;
         var res = new JsonObject { ["craft_ok"] = ok, ["craft_fail"] = fail, ["items"] = outItems };
         if (e.Totals().Kinah > 0) res["kinah"] = e.Totals().Kinah;
+        // Soul Crystals from kills and the kills counted, for the cases about them (2026-10-23)
+        if (e.PetCrystals > 0) res["pets"] = e.PetCrystals;
+        if (e.Totals().Kills > 0) res["kills"] = e.Totals().Kills;
         // what went to expedition and event runs rather than farming: items per run
         var runs = new JsonObject();
         foreach (var run in session.Instances.Snapshot()) runs[run.Zone] = run.Items.Values.Sum() + run.BoundItems.Values.Sum();
