@@ -264,6 +264,7 @@ public static class AccuracyTests
         var sk = new TrackerSession(null, settings, items, "Test");
         void Q(string l, double sec) => sk.QuestCounter(new List<string> { "Defeat Hard Kalgolem", l }, q0.AddSeconds(sec));
         Q("(1/20)", 0); Q("(2/20)", 1); Q("(2/20)", 2); Q("(7/20)", 3); Q("(3/20)", 6); Q("(3/20)", 7);
+        sk.FlushVotes(q0.AddSeconds(20));   // steps settle once their kill has had time to show
         Check("quest counter 1 to 3, one misread between: 2 kills", $"{sk.Engine.Totals().Kills}", "2");
 
         // two witnesses: an item with no kill or gather around it is not a drop (a claim, mail, a cube)...

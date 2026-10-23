@@ -70,6 +70,24 @@ public static class SyntheticChat
             int at = Array.FindIndex(log, l => l.Contains($"{m} Kina"));
             if (at >= 0) around.Add($"\n    [{m}] " + string.Join("\n         ", log.Skip(Math.Max(0, at - 6)).Take(10)));
         }
+        // the line matcher alone over the same reads: what it called new around each miss
+        var lt = new KinahLedger.Ocr.LineTracker();
+        var trail = new List<string>();
+        foreach (var m in missing.Distinct().Take(2))
+        {
+            int first = reads.FindIndex(x => x.Lines.Any(l => l.Contains($" {m} Kina")));
+            if (first < 0) continue;
+            lt = new KinahLedger.Ocr.LineTracker();
+            for (int i = 0; i < reads.Count; i++)
+            {
+                var fresh = lt.NewLines(reads[i].Lines);
+                if (i >= first - 2 && i <= first + 2)
+                    trail.Add($"
+    [{m}] read {i}: {string.Join(" | ", reads[i].Lines.Select(l => l.Length > 22 ? l[..22] : l))}
+           new: {string.Join(" | ", fresh)}");
+            }
+        }
+        around.AddRange(trail);
         return $"seed {seed} noise {noise} quest {quest}: kills true {truth.Kills}, counted {e.Totals().Kills} (seen {e.KillsSeen}, Kinah drops {e.KinahDrops}, currency lines {e.CurrencyLines}, defeated {e.KillsDefeated}, xp {e.KillsXp}) · Kinah lines missed [{string.Join(", ", missing)}] extra [{string.Join(", ", extra)}]" + string.Concat(around);
     }
 
