@@ -207,8 +207,8 @@ public static class AccuracyTests
             Accuracy.Reset(); Accuracy.Add("chat_reads", 5);
             var sent = AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
             Check("health report: not sent, and dropped (not retried every run)", $"{sent} {Accuracy.Get("chat_reads")}", "False 0");
-            var hints = AccuracyClient.LayoutAsync(u, 1234, 777).GetAwaiter().GetResult();
-            Check("layout hints: none", $"{hints == null}", "True");
+            var noHints = AccuracyClient.LayoutAsync(u, 1234, 777).GetAwaiter().GetResult();
+            Check("layout hints: none", $"{noHints == null}", "True");
             var (fok, fnote) = AccuracyClient.SendFramesAsync(u, rd, "test").GetAwaiter().GetResult();
             Check("report pictures: not sent, said plainly", $"{fok} {fnote}", "False the site answered 404");
             Check("the site was asked each time", $"{site.Requests >= 4}", "True");
