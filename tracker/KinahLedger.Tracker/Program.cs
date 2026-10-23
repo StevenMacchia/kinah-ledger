@@ -1287,6 +1287,8 @@ options: --process aion[,other]");
         su.ApplyZone("Urugugu Village", leftU.AddSeconds(43));
         var runsU = su.Instances.Snapshot().Where(r => r.Start >= u0.AddSeconds(-1)).ToList();
         Check("the late payout is the run's, not farming", $"{ri(runsU.FirstOrDefault(), "Enhance Stone")} {runsU.FirstOrDefault()?.Kinah} {n(su.Engine, "Enhance Stone")}", "470 20000 0");
+        if (ri(runsU.FirstOrDefault(), "Enhance Stone") != 470)
+            foreach (var nl in File.ReadLines(CrashLog.ReadsPath).TakeLast(30)) Console.WriteLine("      note: " + nl);
         Check("in again 43 s after leaving: a new run", $"{runsU.Count} closed: {runsU.FirstOrDefault()?.Ended} / open: {su.Instances.Open}", "1 closed: left, then a new entry / open: Urugugu Canyon");
 
         // Urugugu Canyon, 15:23: out, then a Daeva Pass screen pays out: that is the screen's, not the run's
