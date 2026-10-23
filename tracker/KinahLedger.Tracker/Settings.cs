@@ -48,6 +48,12 @@ public sealed class OcrSettings
     public bool NameColours { get; set; } = true;
     /// <summary>Name a loot list row whose text is cut off or garbled by its icon, among the items its letters could be.</summary>
     public bool LootIcons { get; set; } = true;
+    /// <summary>
+    /// Count a loot list row the chat never named, after a few seconds (the old "the chat read missed it" rule). Off since
+    /// 2026-10-23 (Steven: about a quarter of gathers right): redraws, the in-game upgrade animation and a cancelled
+    /// gather's panel turned into pickups. Rows still confirm chat lines, and the crafting panel's flow is unchanged.
+    /// </summary>
+    public bool LootListAdds { get; set; }
     public int IntervalMs { get; set; } = 700;
     /// <summary>What you're farming, for the shared totals. Override per run with --activity.</summary>
     public string Activity { get; set; } = "unknown";

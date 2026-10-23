@@ -40,6 +40,21 @@ public sealed class LootCrossCheck
     public const double ReturnSeconds = 4;
 
     public int Added { get; private set; }
+
+    /// <summary>
+    /// A row that turned into another in place (the same slot, a moment later: "Orichalcum Ore" became "Fine Orichalcum
+    /// Ore" as the game upgraded it) was one item: the earlier text stops waiting, the final one stands. Returns whether
+    /// anything was waiting under the earlier key.
+    /// </summary>
+    public bool Supersede(string earlierKey)
+    {
+        int n = _waiting.RemoveAll(w => w.Key == earlierKey);
+        _credited.Remove(earlierKey);
+        return n > 0;
+    }
+
+    /// <summary>The key a row is waited on under (what <see cref="Supersede"/> takes).</summary>
+    public string KeyOf(LootPopup.Row row) => row.IsKinah ? KinahKey(row.Amount) : ItemKey(_items.IdOf(row.Name), row.Count);
     /// <summary>The longest a real loot row stays up; one showing longer belongs to a window.</summary>
     public const double MaxRowSeconds = 6;
     readonly HashSet<string> _visible = new();

@@ -676,6 +676,16 @@ public sealed class TrackerSession
     {
         var (ev, ok, note) = RareGate.Decide(p, s, _items);
         bool unsure = p.Event.Unconfirmed;
+        // loot list rows count only with a second witness (chat-confirmed only, 2026-10-23): for a rare one only the list
+        // showed, the second read is that witness; unconfirmed, its proof is kept and it isn't counted
+        if (p.Source == "list" && !ok && !_settings.Ocr.LootListAdds)
+        {
+            string? kept = null;
+            if (s?.Crop is { } c0) { using (c0) kept = RareGate.SaveProof(c0, ev is ItemAcquired ka ? _items.NameOf(ka.ItemId) : "item", p.Source, p.At); }
+            CrashLog.Note("rare drop only the loot list showed, and the second read didn't confirm it: not counted" + (kept != null ? $" (proof: {Path.GetFileName(kept)})" : ""));
+            if (unsure) Accuracy.Add("rare_second_read");
+            return;
+        }
         Accuracy.Add("rare_seen"); RareCounted++;
         if (unsure && attempted) Accuracy.Add("rare_second_read");
         if (ok) { RareConfirmed++; if (unsure) Accuracy.Add("rare_confirmed"); }
@@ -781,8 +791,28 @@ public sealed class TrackerSession
                 if (after.Count > 0) { CrashLog.Note($"counted {after.Count} loot line(s) below the last line this read shares with the last one: {string.Join(" | ", after)}"); reread.AddRange(after); }
             }
         }
+        // garbled reads in a row (a reward burst fading in): once the chat settles, the clean read's loot lines count
+        var settled = new List<string>();
+        DateTime settledAt = now; bool settledAny = false, settledAchievement = false;
+        if (_tracker.Unaligned > unaligned)
+        {
+            if (_garbledSince == null)
+            {
+                _garbledSince = now;
+                _beforeGarbled = new HashSet<string>(_recent.Where(kv => (now - kv.Value).TotalMinutes <= 10).Select(kv => kv.Key));
+                _countedGarbled.Clear();
+            }
+        }
+        else if (_garbledSince is { } gs && lines.Count > 0)
+        {
+            // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up
+            if ((now - gs).TotalSeconds > SettleSeconds) _garbledSince = null;
+            else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs; }
+        }
+        Reread.NoteFirstSeen(_firstSeen, lines, now);
         Reread.Remember(_recent, lines, now);
         _lastLines = lines;
+        bool batchAchievement = false;
         bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat")
         {
             bool any = false;
@@ -793,8 +823,12 @@ public sealed class TrackerSession
                 if (_cross.Chat(parsed, now)) { any = true; continue; }
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
+                var why = parsed is ItemAcquired && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time)) : null;
+                if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
-                var ev = (reward || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
+                var ev = (reward || why != null || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
+                NoteReward(ev, now);
                 any = true; _lastActivity = DateTime.UtcNow;
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
@@ -804,18 +838,40 @@ public sealed class TrackerSession
         }
         // each new line is voted on across the next reads before it counts (ChatVoter); lines come out in order
         var voted = Vote ? _voter.Push(fresh, lines, now, _parser.Meaning) : fresh;
+        // an achievement line among them: the items printed with it are its reward, and those in the next few seconds too
+        // only an achievement line that is new: one that stays on screen is read a little differently each time
+        batchAchievement = voted.Any(l => Reread.IsAchievement(l) && NewLine(l, now));
+        if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
         foreach (var (l, events) in _parser.ParseBatch(voted, now))
         {
             bool any = Apply(events, l);
             CrashLog.Read(l, any, afterFade);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
+        batchAchievement = reread.Concat(fresh).Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         foreach (var l in reread)
         {
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, l, "chat · recovered");
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
-            if (any) { LastLine = l; LootLine?.Invoke(l); }
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
+        }
+        // dated when the garbling began, which is when they landed (an event's rewards: inside its time for rewards)
+        // only an achievement line that first showed with the garbled reads: one that sat in the chat before is an old one
+        if (settledAchievement) settledAchievement = _lastLines.Any(l => Reread.IsAchievement(l) && (Reread.FirstSeen(l, _firstSeen) is not DateTime f || f >= settledAt.AddSeconds(-5)));
+        batchAchievement = settledAchievement;
+        if (settledAchievement) { _achieveUntil = settledAt.AddSeconds(RewardWindowSeconds); CrashLog.Note("the settled lines came with an achievement: they are its reward, not drops"); }
+        foreach (var l in settled)
+        {
+            bool any = false;
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) any |= Apply(events, l, "chat · recovered");
+            CrashLog.Read(l + "    (counted once the chat settled)", any);
+            if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; }
+        }
+        if (settledAny)
+        {
+            CrashLog.Note($"the chat settled after {(now - settledAt).TotalSeconds:0} s of reads that didn't line up; its loot lines counted from the clean read: {string.Join(" | ", settled)}");
+            _garbledSince = null;
         }
         LastError = "";
     }
@@ -1047,10 +1103,43 @@ public sealed class TrackerSession
         _ => ev.GetType().Name,
     };
 
+    // ---- achievement rewards and box contents: never drops (Steven, 2026-10-23) ----
+    /// <summary>After an achievement line, or a reward or box line out in the world, what lands this long after is a reward.</summary>
+    public const double RewardWindowSeconds = 10;
+    /// <summary>A loot list row out in the world with no kill or gather this long before it is a box or a reward.</summary>
+    public const double NoKillSeconds = 15;
+    DateTime _achieveUntil = DateTime.MinValue, _boxUntil = DateTime.MinValue, _lastKillAt = DateTime.MinValue, _lastGatherAt = DateTime.MinValue;
+    static readonly Regex BoxName = new(@"\b(?:chest|box|pouch|bundle|cube|coffer|crate|package|parcel)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static HashSet<string>? _gatherNames;
+    bool InRun => ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored;
+
+    /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
+    string? RewardWhy(DateTime t) => t <= _achieveUntil ? "an achievement's reward" : !InRun && t <= _boxUntil ? "a box's or a reward's contents" : null;
+
+    /// <summary>A reward line, or an item that is a box ("Growth Pet Chest"), out in the world opens the window for what comes out of it.</summary>
+    void NoteReward(GameEvent ev, DateTime now)
+    {
+        if (InRun || _boss != null) return;
+        string? name = ev switch { RewardReceived r => r.Name, ItemAcquired a => _items.NameOf(a.ItemId), _ => null };
+        if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return;
+        if (ev is RewardReceived || BoxName.IsMatch(name)) _boxUntil = now.AddSeconds(RewardWindowSeconds);
+    }
+
     void Count(GameEvent ev)
     {
+        // what a kill or a gather looks like, for telling a box's contents in the loot list from a drop
+        if (ev is MobKilled or EnemySoul or XpGained || ev is CurrencyGained { Enemy.Length: > 0 } || (ev is CurrencyGained cg && cg.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) || ev is KinahChanged { Bound: false, Delta: > 0 })
+            _lastKillAt = ev.Time;
+        if (ev is GatherFailed) _lastGatherAt = ev.Time;
+        else if (ev is ItemAcquired ga)
+        {
+            _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (_gatherNames.Contains(_items.NameOf(ga.ItemId))) _lastGatherAt = ev.Time;
+        }
         if (ev is not CraftResult && BossTakes(ev)) return;
-        if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored)
+        // inside an event or expedition, or just out of one while its rewards still land (InstanceLog.RewardGraceSeconds)
+        bool ending = ZoneLocator.KindOf(Zone) == null && Instances.Ending(ev.Time);
+        if ((ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored) || ending)
         {
             // the reward table's coin slot, read first, then the same Kina in the chat: once
             if (ev is KinahChanged { Delta: > 0 } dup && _gridKina.FindIndex(g => (ev.Time - g.At).TotalSeconds is >= 0 and <= 90 && g.Amount == dup.Delta) is int gi and >= 0)
@@ -1208,6 +1297,11 @@ public sealed class TrackerSession
             CommitHeld();   // anything a step without a picture left waiting (a replay) counts as read first
             // a shop or reward screen covers the place the loot list shows: nothing there is loot
             if (Target.RewardOpen(now)) return;
+            // the gathering panel ("Orichalcum · Proficiency · Orichalcum Ore x1 · Success") sits at the bottom of the band:
+            // its lines are what is being gathered, never a pickup (Steven, 2026-10-23 11:28)
+            lines = WithoutGatherPanel(lines, now);
+            // a row that changed in place a moment ago is the same item, its final text (an upgrade, a redraw)
+            Supersede(lines, now);
             var rows = LootPopup.Rows(lines);
             if (rows.Count > 0) _lastActivity = DateTime.UtcNow;
             if (rows.Count > 0 && !_lootSeen) { _lootSeen = true; ReportLayout(); }
@@ -1231,6 +1325,14 @@ public sealed class TrackerSession
                     continue;
                 }
                 bool made = (panel && parsed is ItemAcquired) || (crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null);
+                // loot list rows count only with a chat line (Steven, 2026-10-23: "chat-confirmed only"); what a craft made
+                // still counts from the list, as the crafting panel's flow did; an enemy's soul row is a kill, not a pickup
+                // a rare drop is the exception: it goes to its second read, and counts when that read confirms it (CommitRare)
+                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired or KinahChanged && !(parsed is ItemAcquired rl && IsRare(rl.ItemId)))
+                {
+                    CrashLog.Note($"loot list: {(parsed is ItemAcquired na ? $"{_items.NameOf(na.ItemId)} x{na.Count}" : $"{((KinahChanged)parsed).Delta:N0} Kina")} not counted: no chat line confirmed it");
+                    continue;
+                }
                 // with the crafting window open, the loot list shows what the crafts gave: a recipe's item is a craft (the
                 // engines take it as one), anything else is set aside until the window itself can be read, never a drop
                 if (crafting && !made && parsed is ItemAcquired other)
@@ -1240,6 +1342,17 @@ public sealed class TrackerSession
                 }
                 // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
                 if (!made && InBaseNotOdyle(parsed)) { CrashLog.Note($"in a base, so not counted from the loot list: {_items.NameOf(((ItemAcquired)parsed).ItemId)}"); continue; }
+                // an achievement's reward or a box's contents shows in the list too; out in the world, a row with no kill or
+                // gather around it is one (a box opened in town). Never a drop (Steven, 2026-10-23)
+                if (!made && parsed is ItemAcquired lr)
+                {
+                    var why = RewardWhy(now);
+                    // a gathering material is a gather itself (the chat may have missed its line), never a box's contents
+                    _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    bool gathered = _gatherNames.Contains(_items.NameOf(lr.ItemId));
+                    if (why == null && !gathered && !InRun && (now - _lastKillAt).TotalSeconds > NoKillSeconds && (now - _lastGatherAt).TotalSeconds > NoKillSeconds) why = $"no kill or gather in the last {NoKillSeconds:0} s, so a box or a reward";
+                    if (why != null) { CrashLog.Note($"loot list: {_items.NameOf(lr.ItemId)} x{lr.Count} set aside: {why}"); continue; }
+                }
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
                 // a rare drop only the list showed waits for its second read (LootProcess, this pass)
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "list", _items.NameOf(ra.ItemId), now)); continue; }
@@ -1251,6 +1364,14 @@ public sealed class TrackerSession
     /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
     List<string> _prevRead = new();
     readonly Reread _reread = new();
+    // when each line was first on screen: an achievement line that stays up is read a little differently each time, and
+    // only a new one makes the items with it its reward
+    readonly Dictionary<string, (DateTime First, DateTime Last)> _firstSeen = new();
+    bool NewLine(string line, DateTime now) => Reread.FirstSeen(line, _firstSeen) is not DateTime f || (now - f).TotalSeconds <= 20;
+    // reads that couldn't be lined up, in a row: since when, the lines seen before them, what was counted meanwhile
+    DateTime? _garbledSince; HashSet<string> _beforeGarbled = new(); readonly List<string> _countedGarbled = new();
+    /// <summary>Garbled reads longer than this before the chat settles aren't one burst; nothing is taken from the settled read.</summary>
+    public const double SettleSeconds = 45;
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
     List<string> _lastLines = new();
@@ -1341,6 +1462,65 @@ public sealed class TrackerSession
     // bar for each craft; see CraftPanel. Its strip is read every pass (pixels only; a race lasts about five seconds), its
     // recipe line by OCR when the panel opens and every few seconds after, and each race's outcome is one craft.
     readonly CraftPanelTracker _panel = new();
+    // the same Success/Fail bars when a node is gathered: each race's outcome, for the audit and the loot list's gathers
+    readonly CraftPanelTracker _gatherBar = new();
+    readonly List<(DateTime At, bool Ok)> _gatherRaces = new();
+    /// <summary>Gathers the bar finished, ok and failed, since the start (the panel's own count).</summary>
+    public int GatherBarOk { get; private set; }
+    public int GatherBarFailed { get; private set; }
+
+    // ---- the loot list band: the gathering panel, and rows that change in place ----
+    DateTime _gatherPanelNoted = DateTime.MinValue;
+    List<(int Top, string Text, DateTime At)> _prevRows = new();
+
+    /// <summary>
+    /// The lines of a loot list read without the gathering panel's: a "Success" or "Fail" bar label (or "Proficiency")
+    /// marks it, and its block (title, proficiency, item, bars) runs from about three lines above that label down.
+    /// </summary>
+    internal List<(int Top, string Text)> WithoutGatherPanel(List<(int Top, string Text)> lines, DateTime now)
+    {
+        if (lines.Count == 0) return lines;
+        var marks = lines.Where(l => System.Text.RegularExpressions.Regex.IsMatch(l.Text.Trim(), @"^\W*[il1|]?\s*(?:success|fail(?:ed|ure)?|profic\w*|profes\w*|pr\w{0,3}fes\w*)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).ToList();
+        if (marks.Count == 0) return lines;
+        var tops = lines.Select(l => l.Top).OrderBy(t => t).ToList();
+        var gaps = tops.Zip(tops.Skip(1), (a, b) => b - a).Where(d => d > 4).OrderBy(d => d).ToList();
+        int gap = gaps.Count > 0 ? gaps[gaps.Count / 2] : 30;
+        // the panel's block: from three lines above its first marker (the node's name, its proficiency) to the bottom
+        int cut = marks.Min(m => m.Top) - (int)(gap * 2.5);
+        var kept = lines.Where(l => l.Top < cut).ToList();
+        if ((now - _gatherPanelNoted).TotalSeconds > 20)
+        {
+            _gatherPanelNoted = now;
+            CrashLog.Note($"the gathering panel shows at the bottom of the loot list's place: its lines aren't pickups ({string.Join(" | ", lines.Where(l => l.Top >= cut).Select(l => l.Text))})");
+        }
+        return kept;
+    }
+
+    /// <summary>
+    /// A row whose text changed in its place within two seconds (the game upgrading "Orichalcum Ore" to "Fine Orichalcum
+    /// Ore", a redraw) is one item: the earlier text stops waiting for the chat, so only the final one can be a pickup.
+    /// </summary>
+    void Supersede(List<(int Top, string Text)> lines, DateTime now)
+    {
+        var tops = lines.Select(l => l.Top).OrderBy(t => t).ToList();
+        var gaps = tops.Zip(tops.Skip(1), (a, b) => b - a).Where(d => d > 4).OrderBy(d => d).ToList();
+        int near = Math.Max(6, (int)((gaps.Count > 0 ? gaps[gaps.Count / 2] : 30) * 0.6));
+        foreach (var (top, text) in lines)
+        {
+            var row = LootPopup.Rows(new[] { (top, text) }).FirstOrDefault();
+            if (row == null || row.IsKinah) continue;
+            foreach (var p in _prevRows.Where(p => Math.Abs(p.Top - top) <= near && (now - p.At).TotalSeconds <= 2))
+            {
+                var was = LootPopup.Rows(new[] { (p.Top, p.Text) }).FirstOrDefault();
+                if (was == null || was.IsKinah || string.Equals(was.Name, row.Name, StringComparison.OrdinalIgnoreCase)) continue;
+                // the same item's family: one name holds the other ("Fine Orichalcum Ore" holds "Orichalcum Ore")
+                string a = was.Name.ToLowerInvariant(), b = row.Name.ToLowerInvariant();
+                if (!(a.Contains(b) || b.Contains(a))) continue;
+                if (_cross.Supersede(_cross.KeyOf(was))) CrashLog.Note($"loot list: \"{was.Name}\" turned into \"{row.Name}\" in its place: one item, the last text");
+            }
+        }
+        _prevRows = lines.Select(l => (l.Top, l.Text, now)).ToList();
+    }
     string _panelRecipe = ""; DateTime _panelTextAt = DateTime.MinValue; bool _panelUp, _panelIsCraft;
 
     async Task CraftPanelDue()
@@ -1373,7 +1553,17 @@ public sealed class TrackerSession
                 if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", CraftPanel.LastLines)})"); }
             }
             _panelUp = true;
-            if (!_panelIsCraft) return;
+            if (!_panelIsCraft)
+            {
+                // a node being gathered: its bar's outcome, for the audit (a stopped gather's bar never fills: no outcome)
+                if (_gatherBar.Feed(now, s) is { } go)
+                {
+                    _gatherRaces.Add((now, go.Ok)); if (_gatherRaces.Count > 50) _gatherRaces.RemoveAt(0);
+                    if (go.Ok) GatherBarOk++; else GatherBarFailed++;
+                    CrashLog.Note($"gathering bar: {(go.Ok ? "success" : "fail")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
+                }
+                return;
+            }
             if (!_craftSeen) { _craftSeen = true; ReportLayout(); }
             // the panel's picture for a miscount report (the panel's own strip only, at most once a second)
             if (ReportBuffer.Keeps("craft")) try { Report.Picture("craft", bmp, region.Location, now, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
