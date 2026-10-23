@@ -1583,6 +1583,7 @@ public partial class MainWindow : Window
             Say("Reading · 3,620 reads · last: Artisan's Fruit Salad acquired.", "Faint");
             return;
         }
+        ShowPart("Farming", remember: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
         PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });
