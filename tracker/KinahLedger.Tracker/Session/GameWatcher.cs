@@ -104,10 +104,13 @@ public sealed class GameWatcher
         using var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All }) { Timeout = TimeSpan.FromSeconds(10) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
         var r = await http.GetAsync($"{u.Scheme}://{u.Authority}/prices/{Market.ServerKey}.json");
-        if (r.IsSuccessStatusCode) PriceBook.SetBoard(PriceBook.ParseBoard(await r.Content.ReadAsStringAsync(), _items));
+        // every item with where its price is from, its readings and age (the site's price pick), unsure ones included for display
+        if (r.IsSuccessStatusCode) PriceBook.SetBoardQuotes(PriceBook.ParseQuotes(await r.Content.ReadAsStringAsync(), _items));
         await FetchRegionBoardsAsync(http, $"{u.Scheme}://{u.Authority}");
         // the community's drop rates for this server's zones and the listed drop chances, for the card a click on a drop opens
         await SiteData.RefreshAsync(http, $"{u.Scheme}://{u.Authority}", Market.ServerKey);
+        // the server's best crafts today and where players farm (the Crafting part, the run card, Full view)
+        await PlayerBoards.RefreshAsync(http, $"{u.Scheme}://{u.Authority}", Market.ServerKey);
     }
 
     DateTime _regionAt = DateTime.MinValue; string _regionFor = "";
