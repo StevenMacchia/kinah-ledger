@@ -299,6 +299,14 @@ public static class AccuracyTests
         sx.FlushVotes(q0.AddSeconds(3));
         Check("a skin box: its skin is not a drop", $"{sx.Engine.Items.Keys.Count(k => items.NameOf(k).Contains("(Skin:"))}", "0");
 
+        // ---- the synthetic stress test: scripted fights through a noisy chat box, scored against the truth ----
+        RemoteConfig.Current = RemoteConfig.BuiltIn;
+        var clean = SyntheticChat.Run(settings, items, seeds: 6, noise: 0);
+        var noisy = SyntheticChat.Run(settings, items, seeds: 12, noise: 1);
+        var rough = SyntheticChat.Run(settings, items, seeds: 12, noise: 2);
+        Console.WriteLine($"\nSynthetic chat, clean: {clean}\nSynthetic chat, noisy: {noisy}\nSynthetic chat, rough: {rough}");
+        Check("synthetic, clean chat: every Kina, item and kill", $"{clean.KinahCounted == clean.KinahTrue} {clean.Phantom} {clean.Missed} {clean.KillsCounted == clean.KillsTrue}", "True 0 0 True");
+
         CrashLog.DirOverride = null; RemoteConfig.PathOverride = null; RemoteConfig.Current = RemoteConfig.BuiltIn; Accuracy.Reset();
         Console.WriteLine(fails == 0 ? "\nAll accuracy cases passed." : $"\n{fails} accuracy case(s) failed.");
         return fails == 0 ? 0 : 1;

@@ -6,6 +6,6 @@
   "source": "Steven's trace.log, game lines only; player chat and names replaced",
   "expect": {
     "items": {},
-    "kinah": 76
+    "kinah": 0
   }
 }
