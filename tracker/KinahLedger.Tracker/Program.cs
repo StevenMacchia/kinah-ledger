@@ -1204,7 +1204,7 @@ options: --process aion[,other]");
         Console.WriteLine("\nWhat the player is doing, which event, the run's edges (2026-10-23):");
         try { File.Delete(Path.Combine(CrashLog.Dir, "instances.jsonl")); } catch (Exception) { }
         int n(SessionEngine e, string name) => e.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
-        // where a run's items went: the run (an event's chat items are set aside since 0.8.18, its reward picture counts them)
+        // where a run's items went: the run (its chat items are set aside since 0.8.18, the reward picture counts them)
         int ri(InstanceRun? r, string name) => r == null ? 0 : r.Items.Concat(r.BoundItems).Concat(r.ChatItems).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
         string notes() { try { return File.ReadAllText(CrashLog.ReadsPath); } catch (Exception) { return ""; } }
         string Local(DateTime t) => t.ToLocalTime().ToString("HH:mm:ss");
@@ -1406,7 +1406,7 @@ options: --process aion[,other]");
                 s.ProcessChat(settled, left.AddSeconds(40));
                 Check("read again later: counted once", $"{r("Odyle")}", "9");
                 s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(InstanceLog.RewardGraceSeconds + 5));
-                Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum() + run()?.ChatItems.Values.Sum()}", "none 18");
+                Check("its time for rewards over: the run closes, kept (the bound Soul Codex x3 is the run's too since 0.8.18)", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum() + run()?.ChatItems.Values.Sum()}", "none 21");
             }
             else
             {
@@ -1926,7 +1926,7 @@ options: --process aion[,other]");
                 ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(1));
                 ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(2.2));   // the vote's next read
                 var run = ts.Instances.Snapshot().LastOrDefault(r => r.Zone == "Urugugu Canyon" && r.Start >= u0.AddSeconds(-1));
-                Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {run?.Items.Values.Sum() ?? 0} items {run?.Kinah ?? 0} Kinah", "farming: 0 items 0 Kinah · run: 1 items 600 Kinah");
+                Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {(run?.Items.Values.Sum() ?? 0) + (run?.ChatItems.Values.Sum() ?? 0)} items {run?.Kinah ?? 0} Kinah", "farming: 0 items 0 Kinah · run: 1 items 600 Kinah");
             }
             {
                 // the reward table at the end of an expedition: a slot the chat already counted is skipped, a sure one is added
@@ -1960,19 +1960,83 @@ options: --process aion[,other]");
                 cs2.Engine.SetZone("Urugugu Canyon"); cs2.Instances.Zone("Urugugu Canyon", cz);
                 cs2.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "600.0K", 600_000, new() { (IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon), 4.4), (coin, 84.4) }) }, cz.AddSeconds(1));
                 Check("a clear coin match is Kinah without the counter", $"{cs2.Instances.Snapshot().LastOrDefault(r => r.Start >= cz.AddSeconds(-1))?.Kinah ?? 0:N0}", "600,000");
-                // an event is counted from its reward screen's picture (Steven, 2026-10-23): until its cards can be read, its chat
-                // lines are set aside by name, the run is not read, and nothing from the chat uploads
+                Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
+                // counted from the picture alone (Steven, 2026-10-23 Urugugu): what the chat put in the run gives way to the slots
+                var pt = new TrackerSession(null, new Settings(), items, "Test"); var pt0 = DateTime.UtcNow;
+                pt.Engine.SetZone("Urugugu Canyon"); pt.ZoneView.SetZone("Urugugu Canyon"); pt.Instances.Zone("Urugugu Canyon", pt0);
+                pt.ProcessChat(new List<string> { "[x] a" }, pt0);
+                for (int i = 1; i <= 3; i++) pt.ProcessChat(new List<string> { "[x] a", "Spiritstone acquired.", "Spiritstone acquired." }, pt0.AddSeconds(i * 0.6));
+                pt.ApplyGrid(new List<RewardGrid.Slot> {
+                    new(box, rs.Grade, "4", 4, new() { (key, 30.0), ("Other", 98.7) }),
+                    new(box, "Rare", "", 0, new() { ("Icon_GM_0044_T06_Cape", 112), ("Other", 113) }) }, pt0.AddSeconds(3));
+                for (int i = 1; i <= 3; i++) pt.ProcessChat(new List<string> { "[x] a", "Spiritstone acquired.", "Spiritstone acquired.", "Riverside Helm acquired." }, pt0.AddSeconds(4 + i * 0.6));
+                pt.FlushVotes(pt0.AddSeconds(8));
+                var prun = pt.Instances.Snapshot().LastOrDefault();
+                Check("the reward table is the run's count: the chat's items give way, a later chat line adds nothing",
+                    $"{string.Join(", ", (prun?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}"))} · picture {prun?.FromPicture} · unread {prun?.SlotsUnread}",
+                    "Refining Stone x4 · picture True · unread 1");
+                // no reward table read: the run keeps its Kinah, its items are marked not read, never filled in from the chat
+                var nt = new TrackerSession(null, new Settings(), items, "Test"); var nt0 = DateTime.UtcNow;
+                nt.Engine.SetZone("Urugugu Canyon"); nt.Instances.Zone("Urugugu Canyon", nt0);
+                nt.ProcessChat(new List<string> { "[x] a" }, nt0);
+                for (int i = 1; i <= 3; i++) nt.ProcessChat(new List<string> { "[x] a", "Divine Canyon Greaves acquired.", "Acquired 600 Kina." }, nt0.AddSeconds(i * 0.6));
+                nt.FlushVotes(nt0.AddSeconds(4));
+                nt.Instances.Close();
+                var nrun = nt.Instances.Snapshot().LastOrDefault();
+                Check("no reward picture read: items not read, Kinah kept, the chat's items set aside",
+                    $"{nrun?.Items.Count} {nrun?.RewardsNotRead} {nrun?.Kinah} {nrun?.ChatItemsSetAside}", "0 True 600 1");
+                // a Transcendence: its stage set in town ("Set to Stage 1."), then the dungeon: its own kind
+                var tt = new TrackerSession(null, new Settings(), items, "Test"); var tt0 = DateTime.UtcNow;
+                tt.ProcessChat(new List<string> { "[x] a" }, tt0);
+                tt.ProcessChat(new List<string> { "[x] a", "Joined Shattered Arkanis Dungeon room.", "Set to Stage 1." }, tt0.AddSeconds(1));
+                tt.Engine.SetZone("Shattered Floating Temple"); tt.Instances.Zone("Shattered Floating Temple", tt0.AddSeconds(30));
+                Check("a stage set in town makes the next Shattered Arkanis run a Transcendence", $"{tt.Instances.Open}", "Shattered Arkanis");
+                Check("...of its own kind", $"{tt.Instances.CurrentKind}", "Transcendence");
+                // a table still fading in: two early reads (the wrong icons at 80 to 112, no counts) then two clean ones. Not settled
+                // until the clean pair; only sure reads vote, so the two early ones can't outvote the clean ones
+                var fade = new List<RewardGrid.Slot> { new(box, "Common", "", 0, new() { ("Icon_GM_0072_T05_Helmet", 88) }), new(box, "Rare", "", 0, new() { ("Icon_GM_0044_T06_Cape", 112) }) };
+                var clean = new List<RewardGrid.Slot> { new(box, "Legend", "1", 1, new() { ("Greaves", 31) }), new(box, "Unique", "14", 14, new() { ("Silentium", 27) }) };
+                var fadeReads = new List<List<RewardGrid.Slot>> { fade, fade };
+                bool early = RewardGrid.Settled(fadeReads, TrackerSession.GridSureDistance);
+                fadeReads.Add(clean); bool one = RewardGrid.Settled(fadeReads, TrackerSession.GridSureDistance);
+                fadeReads.Add(clean); bool two = RewardGrid.Settled(fadeReads, TrackerSession.GridSureDistance);
+                var sv = RewardGrid.Vote(fadeReads, TrackerSession.GridSureDistance);
+                Check("a table fading in: settled only once two clean reads agree", $"{early} {one} {two}", "False False True");
+                Check("...and the early reads don't outvote the clean ones", string.Join(" | ", sv.Select(s => $"{s.Icons[0].Key} {s.Grade} x{s.Count}")), "Greaves Legend x1 | Silentium Unique x14");
+                Check("Transcendence from its own lines only, never an item's name",
+                    $"{TrackerSession.IsTranscendenceLine("Set to Stage 1.")} {TrackerSession.IsTranscendenceLine("Shattered Arkanis [Stage 1] | Transcendence")} {TrackerSession.IsTranscendenceLine("Transcendence Stone acquired.")} {TrackerSession.IsTranscendenceLine("[Kael] transcendence stage 2 lfg")}",
+                    "True True False False");
+                // every reward of an event run counts and uploads, sellable or not (Steven, 2026-10-23); the same lines while farming don't
+                var rewardLines = new List<string> { "Acquired Soul Codex (Bound) x3.", "Acquired 1,000 Abyss Point(s).", "Acquired Candy Key Fragment (Event) x6." };
                 var et = new TrackerSession(null, new Settings(), items, "Test"); var et0 = DateTime.UtcNow;
                 et.Engine.SetZone("Shugo Festival"); et.ZoneView.SetZone("Shugo Festival"); et.Instances.Zone("Shugo Festival", et0);
                 et.ProcessChat(new List<string> { "[x] a" }, et0);
-                for (int i = 1; i <= 3; i++) et.ProcessChat(new List<string> { "[x] a", "Spiritstone acquired.", "Acquired Refining Stone x6." }, et0.AddSeconds(i * 0.6));
+                for (int i = 1; i <= 3; i++) et.ProcessChat(new List<string> { "[x] a" }.Concat(rewardLines).ToList(), et0.AddSeconds(i * 0.6));
                 et.FlushVotes(et0.AddSeconds(4)); et.Instances.Close();
                 var erun = et.Instances.Snapshot().LastOrDefault();
-                Check("an event run: the chat's items set aside, the run not read", $"{erun?.Items.Count} {erun?.ChatItemsSetAside} {erun?.RewardsNotRead}", "0 7 True");
-                Check("...and nothing from the chat uploads", $"{InstanceRunPayload.From(new[] { erun! }, id => items.KeyOf(id))?[0].items.Count ?? 0}", "0");
+                string RunList(InstanceRun? r) => r == null ? "none" : string.Join(", ", r.Items.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}").Concat(r.BoundItems.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value} bound")).OrderBy(x => x));
+                // events are counted from their reward screen's picture (Steven, 2026-10-23); until its cards can be read the run's
+                // rewards are not read: the chat's lines (a bound item, a currency, an item the list lacks) are only set aside, by name
+                string Aside(InstanceRun? r) => r == null ? "none" : string.Join(", ", r.ChatItems.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}").OrderBy(x => x));
+                Check("an event run: the chat's rewards set aside by name, the run not read", $"{RunList(erun)} | {Aside(erun)} | not read {erun?.RewardsNotRead}",
+                    " | Abyss Points x1000, Candy Key Fragment (Event) x6, Soul Codex (Bound) x3 | not read True");
+                var epay = InstanceRunPayload.From(new[] { erun! }, id => items.KeyOf(id));
+                Check("...and nothing from the chat uploads", $"{epay?[0].items.Count ?? 0}", "0");
                 Check("an event's reward screen by its words", $"{TrackerSession.IsEventRewardTitle("Rewards have been sent to your cube.")} {TrackerSession.IsEventRewardTitle("Can select 0 time(s)")} {TrackerSession.IsEventRewardTitle("Reward collected.")}", "True True False");
                 Check("kept pictures by kind", string.Join(" ", new[] { "x-reward-table.jpg", "x-event-rewards.jpg", "x-Quna-Shop.jpg", "x-in-run.jpg", "x-Daeva-Pass.jpg" }.Select(n => TrackerSession.KindOfShot(n).ToString())), "RunEnd RunEnd Shop Frequent Screen");
-                Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
+                var ft = new TrackerSession(null, new Settings(), items, "Test"); var ft0 = DateTime.UtcNow;
+                ft.Engine.SetZone("Ellun River Midstream"); ft.ZoneView.SetZone("Ellun River Midstream");
+                ft.ProcessChat(new List<string> { "[x] a" }, ft0);
+                for (int i = 1; i <= 3; i++) ft.ProcessChat(new List<string> { "[x] a" }.Concat(rewardLines).ToList(), ft0.AddSeconds(i * 0.6));
+                ft.FlushVotes(ft0.AddSeconds(4));
+                Check("...the same lines while farming, no kill: nothing counts", $"{ft.Engine.Items.Count} {ft.Engine.Totals().Drops}", "0 0");
+                Check("the reward table's line, garbled", $"{TrackerSession.IsRewardCollected("Reward collected.")} {TrackerSession.IsRewardCollected("Reward cooectedo ///////;")} {TrackerSession.IsRewardCollected("Rewards have been sent to your cube.")}", "True True False");
+                // three reads of one table, voted slot by slot: an empty count and a glare on one read are outvoted
+                var v1 = new List<RewardGrid.Slot> { new(box, "Rare", "", 0, new() { ("A", 40) }), new(box, "Common", "6", 6, new() { ("B", 35) }) };
+                var v2 = new List<RewardGrid.Slot> { new(box, "Rare", "2", 2, new() { ("A", 44) }), new(box, "Common", "6", 6, new() { ("Z", 90) }) };
+                var v3 = new List<RewardGrid.Slot> { new(box, "Rare", "2", 2, new() { ("A", 38) }), new(box, "Common", "6", 6, new() { ("B", 33) }) };
+                var voted = RewardGrid.Vote(new() { v1, v2, v3 });
+                Check("reward table reads voted slot by slot", string.Join(" | ", voted.Select(s => $"{s.Icons[0].Key} {s.Icons[0].Distance:0} x{s.Count}")), "A 38 x2 | B 33 x6");
                 // five Urugugu runs back to back (Steven, 2026-10-23 18:26 to 19:04): village, valley, temple, sanctum, the table, and
                 // back to the village. Five runs, each with its own table, never one of 37:04
                 var fv = new TrackerSession(null, new Settings(), items, "Test"); var fv0 = DateTime.UtcNow.AddHours(-1);
@@ -2035,8 +2099,8 @@ options: --process aion[,other]");
                 sv2.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "5", 5, new() { (key, 30.0), ("Other", 98.7) }) }, sv0.AddSeconds(300));
                 sv2.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "3", 3, new() { (key, 30.0), ("Other", 98.7) }) }, sv0.AddSeconds(780));
                 sv2.Instances.Close();
-                var two = sv2.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= sv0.AddMinutes(-1) && r.Start <= sv0.AddMinutes(30)).ToList();
-                Check("a second reward table in one run: two runs", $"{two.Count} · {string.Join(" ", two.Select(r => r.Items.Values.Sum()))}", "2 · 5 3");
+                var twoRuns = sv2.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= sv0.AddMinutes(-1) && r.Start <= sv0.AddMinutes(30)).ToList();
+                Check("a second reward table in one run: two runs", $"{twoRuns.Count} · {string.Join(" ", twoRuns.Select(r => r.Items.Values.Sum()))}", "2 · 5 3");
             }
             {
                 // Nightmare is known but left alone: its rewards never change, so nothing there is counted

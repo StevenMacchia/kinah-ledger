@@ -1317,16 +1317,18 @@ public partial class MainWindow : Window
             foreach (var id in r.Items.Keys.Concat(r.BoundItems.Keys).Distinct()) inRuns[id] = inRuns.GetValueOrDefault(id) + 1;
         }
         var rows = new List<DropRow>();
-        // runs whose reward screen wasn't read: shown, never filled in from the chat
-        int notRead = runs.Count(r => r.RewardsNotRead);
+        // what the reward screen showed but the reader couldn't name, and runs whose reward screen wasn't read: shown, never dropped
+        int unknown = runs.Sum(r => r.SlotsUnread), notRead = runs.Count(r => r.RewardsNotRead && !r.FromPicture);
         void Unread()
         {
+            if (unknown > 0) rows.Add(new DropRow("Unknown item", unknown.ToString("N0"), $"{runs.Count(r => r.SlotsUnread > 0)} of {runs.Count} runs", "",
+                Initial: "?", Sub: "on the reward screen, not read · its picture is kept", Child: true));
             if (notRead > 0) rows.Add(new DropRow("Rewards not read", "", $"{notRead} of {runs.Count} runs", "",
                 Initial: "?", Sub: "the reward screen wasn't read, so these runs show no items", Child: true));
         }
         if (total.Count == 0)
         {
-            if (notRead > 0) { Unread(); return rows; }
+            if (unknown > 0 || notRead > 0) { Unread(); return rows; }
             rows.Add(new DropRow("No item drops yet", "", "", "", Sub: runs.Sum(r => r.Bound) > 0 ? "only bound items, from runs before 0.8.5" : "only Kinah so far", Child: true));
             return rows;
         }

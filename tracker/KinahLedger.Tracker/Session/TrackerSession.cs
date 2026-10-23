@@ -262,6 +262,7 @@ public sealed class TrackerSession
         // a partly hidden name is guessed among this run's items and the current enemy's loot table first
         // a partly hidden or close name is settled among this run's items and the loot tables of the enemies being fought:
         // the one on the target bar and those whose nameplates show around the character (2026-10-23)
+        _parser.InRun = () => InRun;
         _parser.Likely = () => Engine.ItemRows().Select(r => r.Name)
             .Concat(new[] { Target.Name }.Concat(Engaged).Where(e => e != null).Distinct().SelectMany(e => LootBook.Current.TableOf(e!).Select(x => x.Item))).ToList();
         _parser.Fighting = Fighting;
@@ -822,6 +823,8 @@ public sealed class TrackerSession
             _distributionAt = now;
             if (_boss != null) BossTick(now, died: true);
         }
+        // a Transcendence: the dungeon at a stage ("Shattered Arkanis [Stage 1] | Transcendence", "Set to Stage 1")
+        if (lines.Any(IsTranscendenceLine)) Instances.MarkTranscendence(now);
         // "[Force Recruitment] WB Bloodfang": a world boss's name, learned for this session
         foreach (var l in lines)
             if (Regex.Match(l, @"\bWB\s+([A-Z][A-Za-z']{3,})") is { Success: true } wb && _learnedBosses.Add(wb.Groups[1].Value))
@@ -1159,7 +1162,7 @@ public sealed class TrackerSession
             var band = new Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
             using var bandBmp = frame.Clone(band, frame.PixelFormat);
             var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
-            var rc = lines.FirstOrDefault(l => Update.RemoteConfig.HasAny(l.Text, Update.RemoteConfig.Current.RewardCollectedWords));
+            var rc = lines.FirstOrDefault(l => IsRewardCollected(l.Text));
             // an event's reward screen (Shugo Festival "Jump Jump": "Rewards have been sent to your cube.", "Can select 0 time(s)",
             // five cards, the received ones bright with a card icon): its rewards are the run's and come from this picture,
             // never the chat. Until its cards can be read, the picture is kept (a few, a second or two apart) and the run's
@@ -1176,23 +1179,150 @@ public sealed class TrackerSession
             _gridSeenAt = now;
             if (_gridDone) return;
             _gridDone = true;
-            var slots = await RewardGrid.ReadAsync(frame, rc.Box.Bottom + (int)(frame.Height * 0.016));
+            int top = rc.Box.Bottom + (int)(frame.Height * 0.016);
+            var reads = new List<List<RewardGrid.Slot>> { await RewardGrid.ReadAsync(frame, top) };
+            // the picture the run is counted from, kept (Steven, 2026-10-23: no frame of the Urugugu table existed to check)
+            SaveShot(frame, "reward-table");
+            // The table fades and slides in after "Reward collected." shows: read it again every 300 ms, up to 3 s, until two
+            // reads in a row agree with every slot surely matched (2026-10-23 Urugugu: one early read, 5 slots 80 to 112, no
+            // counts; the 10-22 table read right, 23 to 60). The last read is kept as a picture too.
+            var started = DateTime.UtcNow;
+            while (!RewardGrid.Settled(reads, GridSureDistance) && (DateTime.UtcNow - started).TotalSeconds < 3)
+            {
+                await Task.Delay(300);
+                try
+                {
+                    using var again = ScreenReader.Capture(g);
+                    reads.Add(await RewardGrid.ReadAsync(again, top));
+                    if (RewardGrid.Settled(reads, GridSureDistance) || (DateTime.UtcNow - started).TotalSeconds >= 3) SaveShot(again, "reward-table-settled");
+                }
+                catch (Exception ex) { CrashLog.Write("reward table again", ex); break; }
+            }
+            var slots = RewardGrid.Vote(reads, GridSureDistance);
+            CrashLog.Note($"reward table: {reads.Count} reads in {(DateTime.UtcNow - started).TotalSeconds:0.0} s ({string.Join(", ", reads.Select(r => r.Count))} slots, {(RewardGrid.Settled(reads, GridSureDistance) ? "settled" : "never settled")}), voted slot by slot: " +
+                string.Join(" | ", slots.Select(s => $"{s.Grade} x{s.CountText} {(s.Icons.Count > 0 ? s.Icons[0].Key + " " + s.Icons[0].Distance.ToString("0") : "no icon")}")));
             ApplyGrid(slots, now);
         }
         catch (Exception ex) { CrashLog.Write("reward table", ex); }
     }
 
     /// <summary>The reward table's slots into the run: each named item once, skipping what the chat already counted.</summary>
+    /// <summary>A slot's closest icon is sure: close (right ones 23 to 60, wrong ones 82 to 114), clearly closer than the next, and of the slot's grade.</summary>
+    /// <summary>
+    /// The slot's sure item among its closest icons, judged against the others of the slot's own grade (2026-10-23
+    /// Urugugu: the class gear's runner-up was the same art at another tier, e.g. a bow at 49 against 54, dual swords at 37
+    /// against 39, so no gear for another class was ever named). The closest icon with items of the slot's grade wins when
+    /// it is close, clearly closer than the next icon of that grade that names something else, and not far behind the
+    /// closest icon of any grade (a much closer icon of another grade says the grade or the list is wrong). Null: not sure.
+    /// </summary>
+    internal static (string Key, double Distance, List<ItemInfo> Graded)? GradedPick(RewardGrid.Slot sl, Dictionary<string, List<ItemInfo>> byIcon, Func<string, bool>? prefer = null)
+    {
+        var cands = new List<(string Key, double Distance, List<ItemInfo> Graded, HashSet<string> Names)>();
+        foreach (var (key, d) in sl.Icons)
+        {
+            if (key == null || !byIcon.TryGetValue(key, out var its)) continue;
+            var g = its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (g.Count > 0) cands.Add((key, d, g, g.Select(i => Unbound(i.Name)).ToHashSet(StringComparer.OrdinalIgnoreCase)));
+        }
+        if (cands.Count == 0) return null;
+        var c0 = cands[0];
+        if (c0.Distance > GridSureDistance) return null;
+        if (sl.Icons.Count > 0 && c0.Distance > sl.Icons[0].Distance * 1.25) return null;
+        var rival = cands.Skip(1).FirstOrDefault(c => !c.Names.SetEquals(c0.Names));
+        if (rival.Key != null && rival.Distance < c0.Distance * 1.25)
+        {
+            // too close to call by the picture: when exactly one of the close ones belongs to a set this table names surely, or
+            // came in this expedition's runs before, it is that one (Steven, 2026-10-23: the bow and the earrings tied at 54
+            // and 68, Divine Canyon among Divine Canyon pieces; the dagger 49 to 61, Earth among Earth pieces)
+            if (prefer == null) return null;
+            var liked = cands.Where(c => c.Distance <= GridSureDistance && c.Distance < c0.Distance * 1.25 && c.Names.Count == 1 && prefer(c.Names.First()))
+                             .GroupBy(c => c.Names.First(), StringComparer.OrdinalIgnoreCase).ToList();
+            if (liked.Count != 1) return null;
+            var w = liked[0].OrderBy(c => c.Distance).First();
+            return (w.Key, w.Distance, w.Graded);
+        }
+        return (c0.Key, c0.Distance, c0.Graded);
+    }
+
+    /// <summary>A gear set's name: the item's name less its last word ("Divine Canyon Orb" is of "Divine Canyon").</summary>
+    internal static string? SetOf(string name)
+    {
+        var w = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return w.Length >= 2 && string.Join(" ", w[..^1]).Length >= 3 ? string.Join(" ", w[..^1]) : null;
+    }
+
+    /// <summary>
+    /// What a table's own sure names say about its close calls: an item of a set another slot names surely (expedition tables
+    /// give out sets), or one this expedition gave before (<paramref name="history"/>).
+    /// </summary>
+    internal static Func<string, bool> SetMates(IEnumerable<RewardGrid.Slot> slots, Dictionary<string, List<ItemInfo>> byIcon, IEnumerable<string>? history = null)
+    {
+        var sets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in slots)
+            if (s.Count > 0 && GradedPick(s, byIcon) is { } p && p.Graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() is { Count: 1 } n && SetOf(n[0]) is { } set)
+                sets.Add(set);
+        var seen = new HashSet<string>(history ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        return name => seen.Contains(name) || (SetOf(name) is { } set && sets.Contains(set));
+    }
+
+    /// <summary>For the replay's report: the slot's closest icons that hold items of its grade, with the names they hold.</summary>
+    internal static List<(string Key, double Distance, string Names)> GradedCandidates(ItemDictionary items, RewardGrid.Slot sl)
+    {
+        var byIcon = items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        var res = new List<(string, double, string)>();
+        foreach (var (key, d) in sl.Icons)
+            if (key != null && byIcon.TryGetValue(key, out var its) && its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() is { Count: > 0 } n)
+                res.Add((key, d, string.Join(" / ", n)));
+        return res;
+    }
+
+    internal static bool SureMatch(RewardGrid.Slot sl, int gradedCount) =>
+        sl.Icons.Count > 0 && sl.Icons[0].Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= sl.Icons[0].Distance * 1.25) && gradedCount > 0;
+
+    /// <summary>
+    /// The item a slot names, the way ApplyGrid takes it (the replay bank scores the reader with it): the gold coin as "Kina",
+    /// a sure match of one name, or null (not read: unsure, or one of several names).
+    /// </summary>
+    internal static string? SlotName(ItemDictionary items, RewardGrid.Slot sl, Func<string, bool>? prefer = null)
+    {
+        if (sl.Count <= 0) return null;
+        var byIcon = ByIcon(items);
+        var best = sl.Icons.FirstOrDefault();
+        if (best.Key == null || !byIcon.TryGetValue(best.Key, out var its)) return null;
+        if (its.Any(i => string.Equals(Unbound(i.Name), "Kina", StringComparison.OrdinalIgnoreCase)) && best.Distance <= 100 && sl.Count >= 1000) return "Kina";
+        if (GradedPick(sl, byIcon, prefer) is not { } pick) return null;
+        var names = pick.Graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return names.Count == 1 ? names[0] : null;
+    }
+
+    static Dictionary<string, List<ItemInfo>>? _byIconAll;
+    static ItemDictionary? _byIconOf;
+    /// <summary>The item list's items by icon key (kept while the list is the same).</summary>
+    internal static Dictionary<string, List<ItemInfo>> ByIcon(ItemDictionary items)
+    {
+        if (_byIconAll == null || !ReferenceEquals(_byIconOf, items))
+        { _byIconAll = items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList()); _byIconOf = items; }
+        return _byIconAll;
+    }
+
     internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
     {
         // a second table in a run that was paid already is the next run's (an empty read changes nothing)
         if (slots.Count > 0) Instances.TableStarting(now);
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         int added = 0, known = 0, unnamed = 0;
+        var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
+        // a close call is settled by the table's own sets, or by what this expedition gave in runs before (GradedPick)
+        var history = Instances.Snapshot().Where(r => string.Equals(r.Zone, Instances.Open, StringComparison.OrdinalIgnoreCase)).SelectMany(r => r.Items.Keys.Concat(r.BoundItems.Keys)).Select(id => _items.NameOf(id)).ToList();
+        var prefer = SetMates(slots, _byIcon!, history);
+        var notRead = new List<string>();       // every slot it can't name, as "Rare x14 (picture)": shown as Unknown item, never dropped
+        void NotRead(RewardGrid.Slot s) => notRead.Add($"{s.Grade} x{(s.Count > 0 ? s.Count.ToString() : "?")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
         foreach (var sl in slots)
         {
+            // figures on the slot the reader couldn't tell: its count isn't known, so the slot is not read (never one assumed)
+            if (sl.Count <= 0) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot's count couldn't be read (\"{sl.CountText}\"); not counted"); continue; }
             var best = sl.Icons.FirstOrDefault();
-            if (best.Key == null || !_byIcon.TryGetValue(best.Key, out var its)) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} with no item to its icon; not counted"); continue; }
+            if (best.Key == null || !_byIcon.TryGetValue(best.Key, out var its)) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} with no item to its icon; not counted"); continue; }
             // the gold coin: Kinah when the Kinah counter rose by exactly the slot's amount around then (2026-10-22, Urugugu:
             // 17,889 to 617,889 for the 600.0K slot). The coin's picture on the item list differs a little from the game's
             // (closest 84), so the counter, not the picture alone, makes it sure; without it the slot isn't counted.
@@ -1200,20 +1330,24 @@ public sealed class TrackerSession
             {
                 long amt = Math.Min(sl.Count, 1_000_000_000);
                 int kseen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Name == "Kina" && p.Count == amt);
-                if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; continue; }
+                if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; fromGrid.Add(new KinahChanged(now, amt, false) { Via = "reward table" }); continue; }
                 // a clear match to the coin as the game draws it is sure on its own; a closer call needs the counter to agree
                 bool clearCoin = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25);
-                if (!clearCoin && !BalanceRose(amt, now)) { unnamed++; CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
+                if (!clearCoin && !BalanceRose(amt, now)) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
                 Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" }); _gridKina.Add((now, amt));
                 Feed(new KinahChanged(now, amt, false) { Via = "reward table" }, RunWhere());
+                fromGrid.Add(new KinahChanged(now, amt, false) { Via = "reward table" });
                 added++;
                 continue;
             }
-            var graded = its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).ToList();
             // a sure match only: close (measured on the Urugugu table: right ones 23 to 60, wrong ones 82 to 114), clearly
-            // closer than the next icon, and of the slot's own grade; anything else is the event's own item the list lacks
-            bool sure = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25) && graded.Count > 0;
-            if (!sure) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
+            // closer than the next icon of the slot's own grade that names something else (GradedPick); anything else is the
+            // event's own item the list lacks, or a twin too close to call
+            var pick = GradedPick(sl, _byIcon, prefer);
+            if (pick != null && GradedPick(sl, _byIcon) == null) CrashLog.Note($"reward table: a {sl.Grade} slot too close to call by its picture, named {_items.NameOf(pick.Value.Graded[0].Id)} by the table's set or this expedition's runs");
+            var graded = pick?.Graded ?? new List<ItemInfo>();
+            bool sure = pick != null;
+            if (!sure) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
             // the bound and tradeable copies of an item are the same item
             var names = graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             // the gold coin is Kinah, not an item (600.0K on the Urugugu table): the run's Kinah, bound when the list says so
@@ -1230,14 +1364,21 @@ public sealed class TrackerSession
             }
             int count = (int)Math.Clamp(sl.Count, 1, 99999);
             int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
-            if (seen >= 0) { _runPickups.RemoveAt(seen); known++; continue; }
-            if (names.Count != 1) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}; not counted"); continue; }
+            bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
+            var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
+            // every slot ends counted or not read: a chat line can't decide between the names a picture leaves open
+            if (seen >= 0 && names.Count == 1) { _runPickups.RemoveAt(seen); known++; fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" }); continue; }
+            if (names.Count != 1) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}; not counted"); continue; }
             var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
             Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
             Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" }, RunWhere());
+            fromGrid.Add(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" });
             added++;
         }
-        if (slots.Count > 0) Instances.RewardTable(now);
+        // the run is counted from the picture alone (Steven: expeditions, dungeons and events come from the reward pictures,
+        // never the chat): what the chat put in the run gives way to the table's slots, and a slot it can't name is kept as
+        // a slot not read, never filled in from the chat
+        if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead);
         CrashLog.Note($"reward table read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
     }
 
@@ -1382,9 +1523,26 @@ public sealed class TrackerSession
     /// Progress", "Gråfting in Progresso" and "•raftingQsin Progresso" (Steven, 2026-10-23 17:12: both Superior Courage
     /// Scrolls were left to the chat because the title came back garbled, so a batch counted only after it ended).
     /// </summary>
+    /// <summary>
+    /// A Transcendence's own system lines, never an item or a notice that happens to hold the word: the room's stage line
+    /// ("Set to Stage 1.") and the room title ("Shattered Arkanis [Stage 1] | Transcendence").
+    /// </summary>
+    public static bool IsTranscendenceLine(string line) =>
+        !PickupCheck.PlayerChat(line)
+        && (Regex.IsMatch(line.Trim(), @"^\W*set\s*to\s*stage\s*\d{1,2}\W*$", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(line, @"\[\s*stage\s*\d{1,2}\s*\]\s*\W{0,3}\s*transcend", RegexOptions.IgnoreCase));
+
     bool _eventScreenUp; int _eventShots; DateTime _eventShotAt = DateTime.MinValue;
 
     /// <summary>An event's reward screen by its words: "Rewards have been sent to your cube.", "Can select 0 time(s)".</summary>
+    /// <summary>
+    /// The expedition table's "Reward collected." line as the recognizer reads it: "Reward cooectedo" too (the CI reader on
+    /// the 2026-10-23 Urugugu table). The word alone was missed, and with it the whole table.
+    /// </summary>
+    public static bool IsRewardCollected(string line) =>
+        Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.RewardCollectedWords)
+        || Regex.IsMatch(line, @"rew[a-z]{0,2}r?d\W{0,2}c[a-z]{1,6}t", RegexOptions.IgnoreCase);
+
     public static bool IsEventRewardTitle(string line) =>
         Regex.IsMatch(line, @"sent\s*to\s*your\s*cube|can\s*select\s*\d+\s*time", RegexOptions.IgnoreCase);
 
@@ -1872,7 +2030,7 @@ public sealed class TrackerSession
             if (!reward) _rewardShotsOpen = 0;
             bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2
                      : crafting ? (now - _rewardShotAt).TotalSeconds >= 2
-                     : inside && (now - _rewardShotAt).TotalSeconds >= 30;
+                     : inside && (now - _rewardShotAt).TotalSeconds >= (Instances.EventPaidWithin(now, 20) ? 2 : 30);
             if (!due) return;
             var today = DateTime.Now.ToString("yyyyMMdd");
             if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;

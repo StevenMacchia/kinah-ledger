@@ -332,6 +332,8 @@ public sealed partial class ChatParser
 
     /// <summary>True for an item that must always count (Legend, Unique, Epic, boss gear): a guess at one is never held back.</summary>
     public Func<long, bool>? Rare { get; set; }
+    /// <summary>A run is open (an event, an expedition, a Transcendence, or just left): every reward there is the run's. Never set while farming.</summary>
+    public Func<bool>? InRun { get; set; }
 
     /// <summary>Each grade's colour as printed on this PC, learned from names read exactly (null: names aren't judged by colour).</summary>
     public GradeColours? Colours { get; set; }
@@ -559,9 +561,11 @@ public sealed partial class ChatParser
             var name = it.Groups["name"].Value.Trim().TrimEnd('.', ',', ';', ':', '\'', '"', '`', '-', ' ').Trim('[', ']', ' ');
             if (name.Length < 2) yield break;
             // "Acquired 3 Iron Ore" puts the count first; keep the name clean and the count right
-            var lead = System.Text.RegularExpressions.Regex.Match(name, @"^(\d{1,4})[\s\-]+(.+)$");
+            // ...and a big one with its thousands mark ("Acquired 1,000 Abyss Point(s)."): the count, not part of the name
+            var lead = System.Text.RegularExpressions.Regex.Match(name, @"^(\d{1,3}(?:,\d{3})+|\d{1,6})[\s\-]+(.+)$");
             int lead_n = 0;
-            if (lead.Success) { lead_n = int.Parse(lead.Groups[1].Value); name = lead.Groups[2].Value; }
+            if (lead.Success) { lead_n = (int)Math.Min(int.MaxValue, long.Parse(lead.Groups[1].Value.Replace(",", ""))); name = lead.Groups[2].Value; }
+            name = System.Text.RegularExpressions.Regex.Replace(name, @"\(s\)$", "s");   // "Abyss Point(s)" is "Abyss Points"
             bool bound = name.Contains("(bound)", StringComparison.OrdinalIgnoreCase);
             // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
@@ -587,11 +591,24 @@ public sealed partial class ChatParser
             var pts = System.Text.RegularExpressions.Regex.Match(name, @"^(?<pet>.+?)[\s\-]*sou[l1iu]{1,2}(?:[\s\-]*po[i1l]n[^a-z]*t?[^a-z]*s?[^a-z]*)?$", RegexOptions.IgnoreCase);
             if (pts.Success || System.Text.RegularExpressions.Regex.IsMatch(name, @"\b(?:points?|souls?)$", RegexOptions.IgnoreCase))
             {
+                // inside a run a currency other than an enemy's Soul Points (Abyss Points, a token) is one of the run's rewards
+                if (!pts.Success && InRun?.Invoke() == true)
+                {
+                    yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 999999), bound) { Via = _items.Knows(name) ? "" : "unlisted" };
+                    yield break;
+                }
                 yield return new CurrencyGained(time, pts.Success ? pts.Groups["pet"].Value.Trim() + " Soul Points" : name, Math.Clamp(n, 1, 999999), pts.Success ? pts.Groups["pet"].Value.Trim() : "");
                 yield break;
             }
             // common pickups are name-first ("Odyle acquired."), rarer ones verb-first ("Acquired Fine Odyle x2.");
             // quest, title and box rewards are the verb-first lines marked (Bound), and only those are skipped
+            // ...except inside a run (an event, an expedition, a Transcendence): there every reward is the run's, bound or not,
+            // sellable or not (Steven, 2026-10-23: "even if they are not rewards that can sell or gear they should display")
+            if (!nameFirst && bound && InRun?.Invoke() == true)
+            {
+                yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 99999), true) { Via = _items.Knows(name) ? "" : "unlisted" };
+                yield break;
+            }
             if (!nameFirst && bound)
             {
                 yield return new RewardReceived(time, name, Math.Clamp(n, 1, 9999));
@@ -622,6 +639,13 @@ public sealed partial class ChatParser
                     }
                     CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)} (closest match{(fromLikely ? ", on this run or the enemy's loot table" : "")})");
                     yield return new ItemAcquired(time, gid, Math.Clamp(n, 1, 9999), bound) { Via = "guessed" };
+                    yield break;
+                }
+                // inside a run a reward the item list lacks (an event's own token, a voucher) is still the run's, by its name
+                if (InRun?.Invoke() == true && System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z][A-Za-z0-9'’:\-\s\(\)]{2,60}$"))
+                {
+                    CrashLog.Note($"not in the item list, counted for the run by its name: {name}");
+                    yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 99999), bound) { Via = "unlisted" };
                     yield break;
                 }
                 CrashLog.Note($"not in the item list, not counted: {name}");

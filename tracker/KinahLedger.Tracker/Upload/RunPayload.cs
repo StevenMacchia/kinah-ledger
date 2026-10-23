@@ -209,7 +209,8 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
             .Select(r =>
             {
                 var d = new Dictionary<string, int>();
-                foreach (var (id, n) in r.Items) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
+                // every reward of the run, bound ones too: the site tracks how often each comes, sellable or not (Steven, 2026-10-23)
+                foreach (var (id, n) in r.Items.Concat(r.BoundItems)) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
                 r.FileUnderFamily();
                 return new InstanceRunPayload(r.Zone, KindOf(r)!, (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
                     r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null);
