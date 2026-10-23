@@ -1987,7 +1987,7 @@ options: --process aion[,other]");
                 }
                 fv.Engine.SetZone("Urugugu Canyon"); fv.Instances.Zone("Urugugu Canyon", fv0.AddMinutes(40));
                 fv.Engine.SetZone("Pilgrim's Ridge"); fv.Instances.Zone("Pilgrim's Ridge", fv0.AddMinutes(41)); fv.Instances.Zone("Pilgrim's Ridge", fv0.AddMinutes(42));
-                var five = fv.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= fv0.AddMinutes(-1)).ToList();
+                var five = fv.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= fv0.AddMinutes(-1) && r.Start <= fv0.AddMinutes(45)).ToList();
                 Check("five Urugugu runs back to back: five runs, each its own table",
                     $"{five.Count} · {string.Join(" ", five.Select(r => r.Items.Values.Sum()))} · longest {(five.Count > 0 ? five.Max(r => r.Seconds) : 0):0} s", "5 · 5 5 5 5 5 · longest 400 s");
                 // today's exact times: tables at 18:33:57, 18:41:01, 18:48:56, 18:56:35, 19:04:02 (each with the 600.0K coin), an empty
@@ -2017,17 +2017,17 @@ options: --process aion[,other]");
                 }
                 Area("Pilgrim's Ridge", At("19:05:00")); Area("Pilgrim's Ridge", At("19:06:00"));
                 ex.Instances.Close();
-                var today = ex.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= entry.AddMinutes(-1)).OrderBy(r => r.Start).ToList();
+                var today = ex.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= entry.AddMinutes(-1) && r.Start <= At("19:10:00")).OrderBy(r => r.Start).ToList();
                 Check("today's five runs, exact times: five runs, each its own 600K, the late payout the first run's, the flicker nothing",
                     $"{today.Count} · {string.Join(" ", today.Select(r => r.Kinah.ToString()))} · first ends {(today.Count > 0 ? today[0].LastLoot?.ToString("HH:mm:ss") : "-")}",
                     $"5 · 620000 600300 600000 600000 600000 · first ends {tables[0].AddSeconds(25):HH:mm:ss}");
                 // a second table with no change of area between: the next run's, never added onto the first
-                var sv2 = new TrackerSession(null, new Settings(), items, "Test"); var sv0 = DateTime.UtcNow.AddHours(-1);
+                var sv2 = new TrackerSession(null, new Settings(), items, "Test"); var sv0 = DateTime.UtcNow.AddHours(-5);
                 sv2.Engine.SetZone("Auldor's Sanctum"); sv2.Instances.Zone("Auldor's Sanctum", sv0);
                 sv2.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "5", 5, new() { (key, 30.0), ("Other", 98.7) }) }, sv0.AddSeconds(300));
                 sv2.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "3", 3, new() { (key, 30.0), ("Other", 98.7) }) }, sv0.AddSeconds(780));
                 sv2.Instances.Close();
-                var two = sv2.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= sv0.AddMinutes(-1)).ToList();
+                var two = sv2.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= sv0.AddMinutes(-1) && r.Start <= sv0.AddMinutes(30)).ToList();
                 Check("a second reward table in one run: two runs", $"{two.Count} · {string.Join(" ", two.Select(r => r.Items.Values.Sum()))}", "2 · 5 3");
             }
             {
