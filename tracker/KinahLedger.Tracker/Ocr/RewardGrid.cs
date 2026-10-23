@@ -263,7 +263,7 @@ public static class RewardGrid
                 var corner = new Rectangle(box.Left + box.Width / 8, box.Top + box.Height * 3 / 5, box.Width * 7 / 8 - 2, box.Height * 2 / 5 - 2);
                 // no white figures there: the game shows no count for one of an item
                 string num = "";
-                bool figures = false;
+                bool figures = false, glyphFigure = false;
                 if (HasFigures(frame, corner))
                 {
                     figures = true;
@@ -288,10 +288,10 @@ public static class RewardGrid
                 if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
                 {
                     var tight = new Rectangle(box.Left + box.Width * 11 / 20, box.Top + box.Height * 13 / 20, box.Width * 2 / 5, box.Height * 3 / 10);
-                    num = Glyphs.Read(frame, tight);
+                    num = Glyphs.Read(frame, tight, out glyphFigure);
                 }
                 // figures the reader can't tell are a count not read (0), never one assumed (2026-10-23: four counts read as 1)
-                long count = figures && !System.Text.RegularExpressions.Regex.IsMatch(num, @"\d") ? 0 : ParseCount(num);
+                long count = figures && glyphFigure && !System.Text.RegularExpressions.Regex.IsMatch(num, @"\d") ? 0 : ParseCount(num);
                 slots.Add(new Slot(box, grade, num, count, Match(frame, box, bg)));
             }
             if (found == 0 || found < 8 && row > 0 && slots.Count > 0 && found < 8) { if (found == 0) break; }
@@ -400,7 +400,13 @@ public static class RewardGrid
         }
         var inside = Mean(b.Left + 8, b.Top + 8, b.Right - 8, b.Bottom - 8);
         double D((double R, double G, double B) o) => o.R < 0 ? 0 : Math.Abs(inside.R - o.R) + Math.Abs(inside.G - o.G) + Math.Abs(inside.B - o.B);
-        return Math.Max(D(Mean(b.Left - 10, b.Top, b.Left - 3, b.Bottom)), D(Mean(b.Left, b.Top - 10, b.Right, b.Top - 3)));
+        // all four sides: the world shows in every gap round a slot, and a slot stands out from at least one (the gold ore of
+        // 2026-10-23 differed little from its left gap, 26, and plenty from the others); floor is floor on every side
+        return new[]
+        {
+            D(Mean(b.Left - 10, b.Top, b.Left - 3, b.Bottom)), D(Mean(b.Right + 3, b.Top, b.Right + 10, b.Bottom)),
+            D(Mean(b.Left, b.Top - 10, b.Right, b.Top - 3)), D(Mean(b.Left, b.Bottom + 3, b.Right, b.Bottom + 10)),
+        }.Max();
     }
 
     /// <summary>A slot's top edge stands out at least this much (mean colour difference across it).</summary>
@@ -508,9 +514,21 @@ public static class Glyphs
     static List<(char C, bool[] Px)>? _templates;
     static List<(char, bool[])> Templates => _templates ??= Build();
 
+    // The game's own figures, cut from the 2026-10-23 Urugugu table (12 x 18, row by row): its font is thin and narrow,
+    // unlike any Windows font, and a lone "4" or "6" read as 1 or 7 against those.
+    static readonly (char C, string Px)[] GameFigures =
+    {
+        ('4', "000000011100000000011100000000111100000000111100000000111100000001111100000011011100000011011100000111011100001110011100001100011100011100011100111111111111111111111111000000011100000000011100000000011100000000011100"),
+        ('4', "000000001110000000001110000000011110000000111110000000111110000001111110000011101110000011001110000111001110001110001110001100001110011100001110111111111111111111111111000000001110000000001110000000001110000000001110"),
+        ('6', "000000011100000000111000000001111000000001110000000011100000000111100000000111000000001111111000011111111110011111011111011100000111111000000011111000000011111000000011111000000011011100000111011111011111001111111110"),
+        ('5', "011111111110011111111110011100000000011100000000011100000000011100000000011100000000011111100000011111111000010000111100000000001110000000000110000000000111000000000111000000000110010000001110111100011100011111111000"),
+        ('1', "000000000111000000111111000011111111001111111111111111011111001100011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111"),
+    };
+
     static List<(char, bool[])> Build()
     {
         var list = new List<(char, bool[])>();
+        foreach (var (c, px) in GameFigures) list.Add((c, px.Select(ch => ch == '1').ToArray()));
         foreach (var fam in new[] { "Arial", "Segoe UI", "Tahoma", "Verdana", "Bahnschrift" })
         {
             try
@@ -563,10 +581,24 @@ public static class Glyphs
     }
 
     /// <summary>The count in the area as text ("4", "600.0K"); empty when no figure can be told.</summary>
-    public static string Read(Bitmap f, Rectangle area)
+    public static string Read(Bitmap f, Rectangle area) => Read(f, area, out _);
+
+    /// <summary>The same, saying whether a count's figure is there at all (white, edged dark, on the count's line, at the right).</summary>
+    public static string Read(Bitmap f, Rectangle area, out bool figure)
     {
+        figure = false;
         var m = new bool[area.Width, area.Height];
         for (int y = 0; y < area.Height; y++) for (int x = 0; x < area.Width; x++) { var c = f.GetPixel(area.Left + x, area.Top + y); m[x, y] = Math.Min(c.R, Math.Min(c.G, c.B)) > 150; }   // the game's figures are thin: most of a stroke is 120 to 185, so 200 kept only a 4's upright (read 1) and broke a 3 in two (11)
+        // only the lowest band of rows with white in it: the count's line. Art above it (a blade, a feather) shared its
+        // columns and was cut out with the figure (2026-10-23: the 3 came out 35 rows tall, the 2 27)
+        {
+            int yb = -1;
+            for (int y = area.Height - 1; y >= 0 && yb < 0; y--) for (int x = 0; x < area.Width; x++) if (m[x, y]) { yb = y; break; }
+            if (yb < 0) return "";
+            // a figure is about half the corner tall (19 of 40 rows): keep that much above the lowest white row
+            int ya = Math.Max(0, yb - area.Height / 2 - 1);
+            for (int y = 0; y < area.Height; y++) if (y < ya || y > yb) for (int x = 0; x < area.Width; x++) m[x, y] = false;
+        }
         // figures: runs of columns with white in them, read from the right, since the count is right-aligned
         var cols = Enumerable.Range(0, area.Width).Select(x => Enumerable.Range(0, area.Height).Count(y => m[x, y])).ToArray();
         var runs = new List<(int A, int B)>();
@@ -604,6 +636,7 @@ public static class Glyphs
         // a count is right-aligned: its last figure ends close to the slot's right edge
         var lastFig = boxes.Where(x => Math.Abs(x.b.Bottom - foot) <= tall / 4 && x.b.Height >= tall * 0.7).Select(x => x.b.Right).DefaultIfEmpty(0).Max();
         if (lastFig < area.Width * 0.72) return "";
+        figure = true;   // white, edged dark, on the line, at the right: a count is there, read or not
         var text = sb.ToString().Trim('.');
         return System.Text.RegularExpressions.Regex.IsMatch(text, @"^\d+(\.\d+)?[KM]?$") ? text : "";
     }
