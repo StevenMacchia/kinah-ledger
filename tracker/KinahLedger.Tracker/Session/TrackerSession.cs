@@ -136,6 +136,8 @@ public sealed class TrackerSession
     public Rectangle? Region { get; private set; }
     public bool ManualRegion { get; }
     public string? Zone => Engine.Zone;
+    /// <summary>When the minimap's zone name was last read (RelogDetector: the interface is gone when this goes stale).</summary>
+    public DateTime ZoneSeenAt { get; private set; } = DateTime.UtcNow;
     /// <summary>Seconds spent per detected zone, so the run can be attributed to where most of it happened.</summary>
     public Dictionary<string, double> ZoneSeconds => Engine.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).ToDictionary(kv => kv.Key, kv => kv.Value.Seconds);
     public long Reads { get; private set; }
@@ -345,6 +347,7 @@ public sealed class TrackerSession
         {
             var (zone, note) = await ZoneLocator.DetectAsync(game);
             ZoneNote = zone == null ? note : "";
+            if (zone != null) ZoneSeenAt = DateTime.UtcNow;
             if (zone != null && !ZoneLocator.IsVerified(zone))
             {
                 // an unfamiliar label becomes the zone only when two reads in a row agree; a stray read (a button, a tooltip) keeps the last zone

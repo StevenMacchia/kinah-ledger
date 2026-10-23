@@ -82,8 +82,36 @@ public partial class MainWindow
 
     void OnGameClosed()
     {
+        // the game is gone: the run so far is saved and shared like Stop, and counting starts fresh next time
+        _ = StartFresh("Aion 2 closed");
         if (!_prefs.HideWhenGameCloses || Farming || !IsVisible || _options != null) return;
         HideToTray();
+    }
+
+    bool _startingFresh;
+
+    /// <summary>
+    /// Logging off and another character (Steven, 2026-10-23: "Close the run, start fresh"): a farming run in progress
+    /// stops and is saved and shared as one run, as Stop does; the always-on count is shared and starts over, the crafting
+    /// part too; counting goes on from here for whoever is in the world next.
+    /// </summary>
+    async Task StartFresh(string why)
+    {
+        if (_startingFresh || _demo) return;
+        _startingFresh = true;
+        try
+        {
+            CrashLog.Note($"starting fresh: {why}");
+            bool had = Farming || (_watcher.Chat?.Engine.Events ?? 0) > 0;
+            if (Farming) await StopTracking();
+            await _watcher.ClearFarmingAsync();
+            _watcher.Chat?.ResetCraftView();
+            _lastRun = null;
+            Redraw();
+            if (had) Say($"{why}: the run so far is saved, and counting starts fresh.", "Faint");
+        }
+        catch (Exception ex) { CrashLog.Write("start fresh", ex); }
+        finally { _startingFresh = false; }
     }
 
     /* ---------------- the start/stop shortcut ---------------- */

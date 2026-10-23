@@ -76,6 +76,8 @@ public partial class MainWindow : Window
         // the site's item list, so drops are shared under real ids and show their icons; one conditional request per start
         if (watch && (settings.Ui.Icons || _settings.Upload.Enabled)) _ = DictionaryCache.RefreshAsync(_items);
         _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.ManualChat ? _region : null, _prefs.Server) { RegionKey = _prefs.Region, Server = _prefs.Server };
+        // another character in the world: close the run and start fresh (MainWindow.Shell.cs)
+        _watcher.CharacterChanged += why => Dispatcher.BeginInvoke(() => { _ = StartFresh("Another character"); });
         _watcher.Market.Enabled = settings.Market.Enabled && _prefs.Share;   // prices ride on the one Share switch
         Icon = Native.AppIconSource();
 

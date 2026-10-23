@@ -913,6 +913,7 @@ options: --process aion[,other]");
         ok &= TradeTest(items);
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
+        ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
@@ -1246,6 +1247,49 @@ options: --process aion[,other]");
         var json = System.Text.Json.JsonSerializer.Serialize(RunPayload.Build(e, settings, "run", "Open world", "na_e", "", items));
         Check("the run carries its focus", System.Text.RegularExpressions.Regex.Match(json, "\"focus\":[0-9.]+").Value, "\"focus\":0.5");
         Check("...and a run with neither carries none", System.Text.Json.JsonSerializer.Serialize(RunPayload.Build(new SessionEngine(items), settings, "run", "Open world", "na_e", "", items)).Contains("focus") ? "focus" : "absent", "absent");
+        return ok;
+    }
+
+    /// <summary>Another character in the world (Steven, 2026-10-23: log off or switch character, close the run and start fresh).</summary>
+    static bool RelogTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nLogging off and another character (2026-10-23):");
+        var t0 = new DateTime(2026, 10, 23, 18, 0, 0, DateTimeKind.Utc);
+        // one tick: whether the counter shows, the balance it was last trusted at (and when), when the zone was last read
+        string Tick(RelogDetector d, double s, bool counter, long? bal, double? trustedAt, double zoneAt) =>
+            d.Observe(t0.AddSeconds(s), counter, bal, trustedAt is double ta ? (DateTime?)t0.AddSeconds(ta) : null, t0.AddSeconds(zoneAt)) ?? "none";
+        var d1 = new RelogDetector();
+        Tick(d1, 0, true, 500_000, 0, 0); Tick(d1, 10, true, 500_000, 10, 10);
+        // a loading screen: both gone a while, the same balance after
+        Tick(d1, 20, false, 500_000, 10, 10); Tick(d1, 30, false, 500_000, 10, 10); Tick(d1, 40, false, 500_000, 10, 10);
+        Check("a loading screen (same balance after): nothing", $"{Tick(d1, 50, true, 500_000, 50, 50)}", "none");
+        // a window over the counter while the zone still reads, and a sale meanwhile: nothing
+        var d2 = new RelogDetector();
+        Tick(d2, 0, true, 500_000, 0, 0);
+        for (int s = 10; s <= 60; s += 10) Tick(d2, s, false, 500_000, 0, s);
+        Check("the counter hidden, the zone still read, a sale: nothing", $"{Tick(d2, 70, true, 650_000, 70, 70)}", "none");
+        // the character screen, then another character: both gone 40 s, then a new balance read twice
+        var d3 = new RelogDetector();
+        Tick(d3, 0, true, 500_000, 0, 0);
+        for (int s = 10; s <= 50; s += 10) Tick(d3, s, false, 500_000, 0, 0);
+        Check("...back with a balance not yet read twice: wait", $"{Tick(d3, 60, true, 500_000, 0, 60)}", "none");
+        Check("another character (a new balance, read twice): reset", Tick(d3, 70, true, 1_250_000, 70, 70).Contains("another character") ? "reset" : "none", "reset");
+        Check("...and not again on the next read", $"{Tick(d3, 80, true, 1_250_000, 80, 80)}", "none");
+        // the same character logging back in: the same balance, nothing
+        var d4 = new RelogDetector();
+        Tick(d4, 0, true, 777, 0, 0);
+        for (int s = 10; s <= 60; s += 10) Tick(d4, s, false, 777, 0, 0);
+        Check("the same character back (the same balance): nothing", $"{Tick(d4, 70, true, 777, 70, 70)}", "none");
+        // a short blink of both (under 20 s) with a changed balance is not a log-off
+        var d5 = new RelogDetector();
+        Tick(d5, 0, true, 1000, 0, 0); Tick(d5, 5, false, 1000, 0, -30);
+        Check("both gone under 20 s: nothing", $"{Tick(d5, 15, true, 2000, 15, 15)}", "none");
         return ok;
     }
 
