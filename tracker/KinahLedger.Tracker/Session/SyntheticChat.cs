@@ -82,9 +82,7 @@ public static class SyntheticChat
             {
                 var fresh = lt.NewLines(reads[i].Lines);
                 if (i >= first - 2 && i <= first + 2)
-                    trail.Add($"
-    [{m}] read {i}: {string.Join(" | ", reads[i].Lines.Select(l => l.Length > 22 ? l[..22] : l))}
-           new: {string.Join(" | ", fresh)}");
+                    trail.Add($"\n    [{m}] read {i}: {string.Join(" | ", reads[i].Lines.Select(l => l.Length > 22 ? l[..22] : l))}\n           new: {string.Join(" | ", fresh)}");
             }
         }
         around.AddRange(trail);
