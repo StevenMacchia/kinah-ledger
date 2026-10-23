@@ -2015,9 +2015,15 @@ options: --process aion[,other]");
                 et.FlushVotes(et0.AddSeconds(4)); et.Instances.Close();
                 var erun = et.Instances.Snapshot().LastOrDefault();
                 string RunList(InstanceRun? r) => r == null ? "none" : string.Join(", ", r.Items.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}").Concat(r.BoundItems.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value} bound")).OrderBy(x => x));
-                Check("an event run: a bound item, a currency and an item the list lacks, all the run's", RunList(erun), "Abyss Points x1000, Candy Key Fragment (Event) x6, Soul Codex (Bound) x3 bound");
+                // events are counted from their reward screen's picture (Steven, 2026-10-23); until its cards can be read the run's
+                // rewards are not read: the chat's lines (a bound item, a currency, an item the list lacks) are only set aside, by name
+                string Aside(InstanceRun? r) => r == null ? "none" : string.Join(", ", r.ChatItems.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}").OrderBy(x => x));
+                Check("an event run: the chat's rewards set aside by name, the run not read", $"{RunList(erun)} | {Aside(erun)} | not read {erun?.RewardsNotRead}",
+                    " | Abyss Points x1000, Candy Key Fragment (Event) x6, Soul Codex (Bound) x3 | not read True");
                 var epay = InstanceRunPayload.From(new[] { erun! }, id => items.KeyOf(id));
-                Check("...and all three upload", $"{epay?[0].items.Count} {epay?[0].items.Values.Sum()}", "3 1009");
+                Check("...and nothing from the chat uploads", $"{epay?[0].items.Count ?? 0}", "0");
+                Check("an event's reward screen by its words", $"{TrackerSession.IsEventRewardTitle("Rewards have been sent to your cube.")} {TrackerSession.IsEventRewardTitle("Can select 0 time(s)")} {TrackerSession.IsEventRewardTitle("Reward collected.")}", "True True False");
+                Check("kept pictures by kind", string.Join(" ", new[] { "x-reward-table.jpg", "x-event-rewards.jpg", "x-Quna-Shop.jpg", "x-in-run.jpg", "x-Daeva-Pass.jpg" }.Select(n => TrackerSession.KindOfShot(n).ToString())), "RunEnd RunEnd Shop Frequent Screen");
                 var ft = new TrackerSession(null, new Settings(), items, "Test"); var ft0 = DateTime.UtcNow;
                 ft.Engine.SetZone("Ellun River Midstream"); ft.ZoneView.SetZone("Ellun River Midstream");
                 ft.ProcessChat(new List<string> { "[x] a" }, ft0);
@@ -2315,6 +2321,17 @@ options: --process aion[,other]");
             int rsGone = TrackerSession.PruneRewardShots(rs, DateTime.Now);
             var rsLeft = string.Join(" ", Directory.GetFiles(rs).Select(Path.GetFileName).OrderBy(n => n));
             Directory.Delete(rs, true);
+            // too big: shop screens go first, then the frequent pictures; a run's end from today never goes (2026-10-23)
+            var rs2 = Path.Combine(Path.GetTempPath(), "kl-rs-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(rs2);
+            void Pic2(string n, double hoursOld) { var f = Path.Combine(rs2, n); File.WriteAllBytes(f, new byte[100]); File.SetLastWriteTime(f, DateTime.Now.AddHours(-hoursOld)); }
+            Pic2("20261023-175637-Auldors-Sanctum-reward-table.jpg", 5); Pic2("20261023-180812-Hidden-Lugi-event-rewards.jpg", 4);
+            Pic2("20261023-160003-Ellun-River-Midstream-Quna-Shop.jpg", 6); Pic2("20261023-171457-Deserter-Encampment-Trade-Shop.jpg", 5.5);
+            Pic2("20261023-175617-Auldors-Sanctum-in-run.jpg", 5.2); Pic2("20261023-100159-Ellun-River-Midstream-Attendance-Rewards.jpg", 12);
+            int rs2Gone = TrackerSession.PruneRewardShots(rs2, DateTime.Now, maxBytes: 300);
+            var rs2Left = string.Join(" ", Directory.GetFiles(rs2).Select(Path.GetFileName).OrderBy(n => n));
+            Directory.Delete(rs2, true);
+            Check("reward-shots too big: shops first, then in-run; today's run ends stay", $"{rs2Gone} · {rs2Left}",
+                "3 · 20261023-100159-Ellun-River-Midstream-Attendance-Rewards.jpg 20261023-175637-Auldors-Sanctum-reward-table.jpg 20261023-180812-Hidden-Lugi-event-rewards.jpg");
             // a craft queue: the loot list shows each result long after the window's last sign (16:52, 16 s and 40 s);
             // within the 60 s hold a recipe's item is a craft, after it a drop, and a drop before the window opened stays one
             var ce = new SessionEngine(items); var cw = x0;
