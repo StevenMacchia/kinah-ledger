@@ -828,7 +828,9 @@ public sealed class TrackerSession
                 if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
                 var ev = (reward || why != null || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
-                NoteReward(ev, now);
+                // an item that is a reward only because a window was open doesn't open a new one: a window would chain on
+                // and take the next kill's drop (a payout's item, then a Spiritstone 10 s later, 2026-10-23)
+                if (why == null) NoteReward(ev, now);
                 any = true; _lastActivity = DateTime.UtcNow;
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
