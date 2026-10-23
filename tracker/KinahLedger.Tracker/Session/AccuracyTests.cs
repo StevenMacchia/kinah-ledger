@@ -309,6 +309,10 @@ public static class AccuracyTests
         RemoteConfig.Current = new RemoteConfig { WitnessSeconds = 0 };
         Console.WriteLine($"Synthetic chat, clean, no witness rule: {SyntheticChat.Run(settings, items, seeds: 6, noise: 0)}");
         Console.WriteLine($"Synthetic chat, noisy, no witness rule: {SyntheticChat.Run(settings, items, seeds: 12, noise: 1)}");
+        RemoteConfig.Current = new RemoteConfig { Ledger = false };
+        Console.WriteLine($"Synthetic chat, clean, no ledger: {SyntheticChat.Run(settings, items, seeds: 6, noise: 0)}");
+        Console.WriteLine($"Synthetic chat, noisy, no ledger: {SyntheticChat.Run(settings, items, seeds: 12, noise: 1)}");
+        Console.WriteLine($"Synthetic chat, rough, no ledger: {SyntheticChat.Run(settings, items, seeds: 12, noise: 2)}");
         RemoteConfig.Current = RemoteConfig.BuiltIn;
         for (int sd = 1; sd <= 3; sd++) Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, sd, 0, true));
         Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, 1, 0, false));

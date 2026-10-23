@@ -936,7 +936,7 @@ public sealed class TrackerSession
             if (!_ledgerPrimed) { foreach (var x in keyed) _keySeen[x.M.Key] = now; _ledgerPrimed = true; }
             var unseen = keyed.Where(x => !handled.Contains(x.M.Key) && !(_keySeen.TryGetValue(x.M.Key, out var ks) && (now - ks).TotalMinutes <= LedgerMinutes)).ToList();
             bool aligned = _tracker.Unaligned == unaligned;
-            if (aligned && unseen.Count is > 0 and <= 2)
+            if (aligned && unseen.Count is > 0 and <= 2 && Update.RemoteConfig.Current.Ledger)
                 foreach (var (l, m) in unseen.GroupBy(x => x.M.Key).Select(g => g.First()))
                 {
                     if (!m.Exact || Handled(l)) continue;
