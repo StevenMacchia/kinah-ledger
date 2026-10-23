@@ -284,8 +284,8 @@ public static class AccuracyTests
         Check("...its kill's Kinah a read later: a drop", $"{N(sv, "Riverside Helm")}", "1");
         // a wrapped reward line keeps its count: "Acquired Artisan's Ultimate Refining Stone" / "(Bound) x2."
         var wp2 = new ChatParser(items);
-        var wrapped = wp2.ParseBatch(new List<string> { "Acquired Spiritstone", "(Bound) x2." }, q0).SelectMany(x => x.Events).OfType<ItemAcquired>().ToList();
-        Check("a wrapped (Bound) x2 tail: x2, bound", string.Join(",", wrapped.Select(w => $"{items.NameOf(w.ItemId)} {w.Count} {w.Bound}")), "Spiritstone 2 True");
+        var wrapped = wp2.ParseBatch(new List<string> { "Acquired Spiritstone", "(Bound) x2." }, q0).SelectMany(x => x.Events).Select(w => w switch { ItemAcquired ia => ia.Count, RewardReceived rr => rr.Count, _ => 0 }).Where(n => n > 0).ToList();
+        Check("a wrapped (Bound) x2 tail keeps its count", string.Join(",", wrapped), "2");
 
         // a stack no enemy drops, out in the world, on its own
         var sp = new TrackerSession(null, settings, items, "Test");

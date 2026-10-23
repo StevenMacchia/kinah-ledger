@@ -207,19 +207,6 @@ public sealed partial class ChatParser
     List<(string Text, List<GameEvent> Events)> Unwrap(IReadOnlyList<string> lines, DateTime time)
     {
         var res = lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
-        // a line wrapped after its name: "Acquired Artisan's Ultimate Refining Stone" / "(Bound) x2." The first half
-        // already reads as one item, so the tail carries the count (Steven's 12:39 report: counted as a drop x1)
-        for (int i = 0; i + 1 < res.Count; i++)
-        {
-            if (res[i].Events.Count != 1 || res[i].Events[0] is not ItemAcquired head || head.Count != 1) continue;
-            var tail = WrapTail().Match(res[i + 1].Text);
-            if (!tail.Success || res[i + 1].Events.Count > 0 || (!tail.Groups["b"].Success && !tail.Groups["n"].Success)) continue;
-            int n = tail.Groups["n"].Success ? Math.Clamp(int.Parse(tail.Groups["n"].Value), 1, 99999) : 1;
-            bool bound = tail.Groups["b"].Success || head.Bound;
-            res[i] = (res[i].Text.Trim() + " " + res[i + 1].Text.Trim(), new List<GameEvent> { head with { Count = n, Bound = bound } });
-            res[i + 1] = (JoinedMark, new List<GameEvent>());
-            i++;
-        }
         string? carry = _wrapCarry != null && (time - _wrapAt).TotalSeconds <= WrapSeconds ? _wrapCarry : null;
         _wrapCarry = null;
         for (int i = carry != null ? -1 : 0; i + 1 < res.Count; i++)
@@ -271,9 +258,6 @@ public sealed partial class ChatParser
     [GeneratedRegex(@"^\W*purchase\s+(?:complete|completed|successful)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Purchase();
 
-    // the tail of a wrapped loot line: "(Bound) x2.", "(Bound)", "x9."
-    [GeneratedRegex(@"^\W*(?:(?<b>\(\s*b[o0]u?n?d\s*\))\s*)?(?:[x×]\s*(?<n>\d{1,5}))?\W*$", RegexOptions.IgnoreCase)]
-    private static partial Regex WrapTail();
 
     public const double PurchaseSeconds = 5;
     DateTime _purchaseAt; bool _purchaseCarry;
