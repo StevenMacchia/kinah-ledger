@@ -115,13 +115,10 @@ public partial class MainWindow
         if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) links.Add(("MetaBot.GG page", mu));
         var linkLine = CkLinks(links.ToArray());
         // Watch: this item alerts like a rare drop (Ui/MainWindow.Alerts.cs)
-        if (linkLine is TextBlock lt)
-        {
-            lt.Inlines.Add(new Run("   ·   ") { Foreground = Ck(CkFaint) });
-            var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop watching" : "Watch: alert me when it drops")) { Foreground = Ck(CkGold), TextDecorations = null };
-            watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop watching" : "Watch: alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
-            lt.Inlines.Add(watch);
-        }
+        var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop watching" : "Watch: alert me when it drops")) { Foreground = Ck(CkGold), TextDecorations = null };
+        watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop watching" : "Watch: alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
+        linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
+        linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, watch);
         body.Children.Add(linkLine);
         return card;
     }

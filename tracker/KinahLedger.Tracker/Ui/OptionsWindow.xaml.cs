@@ -104,6 +104,7 @@ public partial class OptionsWindow : Window
         GearBox.Text = c.GearScore > 0 ? c.GearScore.ToString() : "";
         BuildAlerts(c.Server);
         ReportFramesChk.IsChecked = c.ReportFrames;
+        SendFramesChk.IsChecked = c.SendFrames;
         HudChk.IsChecked = c.Hud;
         AutoUpdateChk.IsChecked = c.AutoUpdate;
         AutoUpdateChk.IsEnabled = _host.AppSettings.Update.Check;
@@ -168,6 +169,7 @@ public partial class OptionsWindow : Window
         GearBox.TextChanged += (_, _) => { if (!_loading) Edit(_edit with { GearScore = int.TryParse(new string(GearBox.Text.Where(char.IsDigit).ToArray()), out var g) ? g : 0 }); };
         ShareChk.Click += (_, _) => Edit(_edit with { Share = ShareChk.IsChecked == true });
         ReportFramesChk.Click += (_, _) => Edit(_edit with { ReportFrames = ReportFramesChk.IsChecked == true });
+        SendFramesChk.Click += (_, _) => Edit(_edit with { SendFrames = SendFramesChk.IsChecked == true });
         HudChk.Click += (_, _) => Edit(_edit with { Hud = HudChk.IsChecked == true });
         HudOpacity.Value = Math.Clamp(_host.Prefs.HudOpacity, 0.3, 1);
         HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";

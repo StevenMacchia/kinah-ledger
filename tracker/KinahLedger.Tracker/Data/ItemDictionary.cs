@@ -17,6 +17,8 @@ public sealed class ItemDictionary
     readonly Dictionary<string, long> _byName = new();
     /// <summary>Misreads remembered under the item they snapped to (IdOf): never a name of their own, so never a candidate.</summary>
     readonly HashSet<string> _snapped = new();
+    /// <summary>Misreads the crowd settled (data/aliases.json): looked up like a snapped misread, never reported as one.</summary>
+    readonly HashSet<string> _aliased = new();
     readonly object _lock = new();
 
     public int Count { get { lock (_lock) return _byId.Count; } }
@@ -57,11 +59,21 @@ public sealed class ItemDictionary
         lock (_lock)
         {
             var key = Norm(name);
-            if (_byName.TryGetValue(key, out var id)) return id;
+            if (_byName.TryGetValue(key, out var id))
+            {
+                // the same misread again: reported each time it is read, so the site sees how common it is
+                if (_snapped.Contains(key) && !_aliased.Contains(key) && Real(id)) { KinahLedger.Session.Accuracy.Name(name, id, "snapped"); KinahLedger.Session.Accuracy.Add("snapped"); }
+                return id;
+            }
 
             // a misread of a known name ("Fresh Frult") snaps to the closest real item, so one drop doesn't become two rows
             var close = Closest(key);
-            if (close != null) { _byName[key] = close.Value; _snapped.Add(key); return close.Value; }
+            if (close != null)
+            {
+                _byName[key] = close.Value; _snapped.Add(key);
+                if (Real(close.Value)) { KinahLedger.Session.Accuracy.Name(name, close.Value, "snapped"); KinahLedger.Session.Accuracy.Add("snapped"); }
+                return close.Value;
+            }
 
             long synthetic = -(long)(Fnv(key) & 0x7FFFFFFF) - 1;
             _byId.TryAdd(synthetic, new ItemInfo(synthetic, name.Trim(), "", !key.EndsWith("(bound)"), "", ""));
@@ -73,6 +85,16 @@ public sealed class ItemDictionary
     /// <summary>True when the name is a real item, exactly or by a close misread: a dictionary entry or a gathering material. Adds nothing.</summary>
     /// <summary>Every item the list holds (real ids), for indexes built over the whole list.</summary>
     public List<ItemInfo> AllItems() { lock (_lock) return _byId.Values.Where(i => i.Id > 0).ToList(); }
+
+    /// <summary>True when the name is a real item's own name (case and spacing aside), not a misread snapped to one.</summary>
+    public bool KnowsExactly(string name)
+    {
+        lock (_lock)
+        {
+            var key = Norm(name);
+            return _byName.TryGetValue(key, out var id) && id > 0 && _byId.TryGetValue(id, out var info) && Norm(info.Name) == key;
+        }
+    }
 
     public bool Knows(string name)
     {
@@ -278,7 +300,37 @@ public sealed class ItemDictionary
         d.LoadGatheringIcons(p);
         d.LoadSkins();
         d.LoadExtras();
+        d.LoadAliases();
         return d;
+    }
+
+    /// <summary>How many crowd-learned misread fixes are loaded (data/aliases.json).</summary>
+    public int AliasCount { get { lock (_lock) return _aliased.Count; } }
+
+    /// <summary>
+    /// Crowd-learned misread fixes (2026-10-23): reads that several trackers snapped or guessed to the same item, from
+    /// data/aliases.json (the daily game-data update carries it; the site builds it, see /v1/aliases.json). Each is looked
+    /// up like a misread that snapped: it counts as its item, is never a candidate of its own, and a real item's name
+    /// always wins over it. The site never promotes a Legend, Unique or Epic item this way.
+    /// </summary>
+    internal void LoadAliases(Stream? from = null)
+    {
+        try
+        {
+            using var s = from ?? DataFiles.Open("aliases.json");
+            if (s == null) return;
+            using var doc = JsonDocument.Parse(s);
+            if (!doc.RootElement.TryGetProperty("aliases", out var a) || a.ValueKind != JsonValueKind.Object) return;
+            lock (_lock)
+                foreach (var p in a.EnumerateObject())
+                {
+                    if (p.Value.ValueKind != JsonValueKind.Number || !p.Value.TryGetInt64(out var id) || id <= 0 || !_byId.ContainsKey(id)) continue;
+                    var key = Norm(p.Name);
+                    if (key.Length < 3 || _byName.ContainsKey(key)) continue;
+                    _byName[key] = id; _snapped.Add(key); _aliased.Add(key);
+                }
+        }
+        catch (Exception ex) { CrashLog.Note("aliases: " + ex.Message); }
     }
 
     /// <summary>
@@ -398,7 +450,8 @@ public sealed class ItemDictionary
             var icon = Str(e, "icon"); if (icon.Length == 0) icon = Str(e, "i");
             var cat = Str(e, "categoryName"); if (cat.Length == 0) cat = System.Text.RegularExpressions.Regex.Replace(Str(e, "c2"), "(?<=[a-z])(?=[A-Z])", " ");   // the site's list keeps the code ("CraftResource"): spaced for the rows
             _byId[id] = new ItemInfo(id, name.Trim(), grade, tradable, icon, cat);
-            if (Str(e, "c1").StartsWith("Equip_", StringComparison.OrdinalIgnoreCase)) _gear.Add(id);
+            // the site's list calls the group c1, the crawler's (the copy built into the exe) cat1: either marks gear
+            if ((Str(e, "c1") + Str(e, "cat1")).StartsWith("Equip_", StringComparison.OrdinalIgnoreCase)) _gear.Add(id);
             n++;
             // first real ID wins per name, so a later duplicate doesn't flip the mapping; a synthetic one gives way
             var key = Norm(name);

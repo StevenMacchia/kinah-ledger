@@ -31,7 +31,8 @@ public partial class MainWindow : Window
     // Soul Crystals are still counted and shared (the site's Pets page needs them); the window shows them as a count only
     // open world or gathering is worked out from what the chat shows (0.7.6: the picker is gone); a run is saved and shared
     // under what it turned out to be (GameWatcher.DominantKind)
-    enum Mode { Open, Gather }
+    /// <summary>Mixed: kills and gathers both in the last few minutes (SessionEngine.MixedAt), the tiles show both.</summary>
+    enum Mode { Open, Gather, Mixed }
     public const string RepoUrl = "https://github.com/StevenMacchia/kinah-ledger";
     public const string SiteUrl = "https://kinahledger.com";
     public const string SupportUrl = "https://ko-fi.com/swoly";
@@ -76,6 +77,8 @@ public partial class MainWindow : Window
         // the site's item list, so drops are shared under real ids and show their icons; one conditional request per start
         if (watch && (settings.Ui.Icons || _settings.Upload.Enabled)) _ = DictionaryCache.RefreshAsync(_items);
         _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.ManualChat ? _region : null, _prefs.Server) { RegionKey = _prefs.Region, Server = _prefs.Server };
+        // another character in the world: close the run and start fresh (MainWindow.Shell.cs)
+        _watcher.CharacterChanged += why => Dispatcher.BeginInvoke(() => { _ = StartFresh("Another character"); });
         // the Market is read for this PC whatever the Share switch says; only sending follows it (MarketCapture.Sharing)
         _watcher.Market.Enabled = settings.Market.Enabled;
         Icon = Native.AppIconSource();
@@ -103,6 +106,7 @@ public partial class MainWindow : Window
         ShareCardBtn.Click += (_, _) => CopyShareCard();
         // the miscount report keeps pictures only once the player said yes (Options › Sharing, or the question on its first use)
         ReportBuffer.KeepFrames = _prefs.ReportFrames;
+        ReportBuffer.KeepUiFrames = _prefs.SendReportFrames;
         MiscountLink.Click += (_, _) => ReportMiscount();
         // Compact and Full view: the header button switches, and the summary's link opens Full view
         ViewBtn.Click += (_, _) => SetView(!_prefs.FullView);
@@ -119,6 +123,10 @@ public partial class MainWindow : Window
             link.Click += (_, _) => { if (!_allRows.Remove(name)) _allRows.Add(name); Redraw(); };
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
+        // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
+        CraftRows.MouseLeftButtonUp += CraftRowClick;
+        InstSessionBtn.Click += (_, _) => { _eventsAll = false; ShowInstances(); };
+        InstEarlierBtn.Click += (_, _) => { _eventsAll = true; ShowInstances(); };
         // a click on an enemy opens or closes its loot table
         // a click on an expedition or event opens or closes what dropped there
         InstRows.MouseLeftButtonUp += (_, ev) =>
@@ -140,8 +148,6 @@ public partial class MainWindow : Window
         // Farming and Crafting are two parts of the window; crafting never shows in the farming tables
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
-        // a click on a recipe opens its card: materials, what a try costs, what it makes, a price alert
-        CraftRows.MouseLeftButtonUp += CraftRowClick;
         EventsTab.Click += (_, _) => ShowPart("Events");
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
@@ -150,12 +156,12 @@ public partial class MainWindow : Window
             if (MessageBox.Show(this, "Start crafting over? The recipes, tries and profit shown here are cleared.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView);
         };
-        InstClearLink.Click += (_, _) =>
+        InstClearBtn.Click += (_, _) =>
         {
             if (MessageBox.Show(this, "Clear the expedition and event runs shown here? Runs not sent to the site yet are still sent.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             _watcher.Chat?.Instances.ClearShown(); ShowInstances();
         };
-        FarmClearLink.Click += async (_, _) =>
+        FarmClearBtn.Click += async (_, _) =>
         {
             if (Farming) { Say("A farming run is on: Stop ends it and starts the tables over.", "Warn"); return; }
             if (MessageBox.Show(this, "Clear the farming tables and start counting again? What was counted is shared with the site first, as usual.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
@@ -227,6 +233,7 @@ public partial class MainWindow : Window
         (Tile1Label.Text, Tile2Label.Text, Tile3Label.Text, Tile4Label.Text) = m switch
         {
             Mode.Gather => ("attempts/hr", "items/hr", "per try", "rare/hr"),
+            Mode.Mixed => ("Kinah/hr", "total/hr", "kills/hr", "attempts/hr"),
             _ => ("Kinah/hr", "Kinah/kill", "kills/hr", "drops/hr"),
         };
         // the fifth tile: what the hour is worth if the tradeable items are sold on the Market (plus the Kinah, in open world)
@@ -247,7 +254,24 @@ public partial class MainWindow : Window
         if (on && _watcher.Chat is { } c) { try { saved = c.WriteReport(r.Report); } catch (Exception ex) { CrashLog.Write("miscount report", ex); } }
         Say(on ? $"{r.Report} won't be sent to the site. Thanks for flagging it." + (saved != null ? " The last minute is saved in your reports folder." : "") : $"{r.Report} counts again.", "Faint");
         if (saved != null) Status.ToolTip = saved;
+        if (saved != null) _ = SendReportPictures(saved, "Looks wrong? on " + r.Report);
         Redraw();
+    }
+
+    /// <summary>
+    /// A saved report's loot list and crafting panel pictures go to the site when the player turned that on (Options ›
+    /// Sharing, off by default) and sharing is on; never the chat. The status line says how it went.
+    /// </summary>
+    async Task SendReportPictures(string dir, string why)
+    {
+        if (!_prefs.SendReportFrames || !_prefs.Share) return;
+        try
+        {
+            var (ok, note) = await Upload.AccuracyClient.SendFramesAsync(_settings.Upload, dir, why);
+            CrashLog.Note($"miscount pictures: {(ok ? "sent" : "not sent")} ({note})");
+            Say(ok ? $"Report saved and its pictures sent ({note}). Thanks: they become tests the tracker must pass." : $"Report saved on this PC; its pictures weren't sent ({note}).", ok ? "Good" : "Faint");
+        }
+        catch (Exception ex) { CrashLog.Write("miscount pictures", ex); }
     }
 
     /// <summary>
@@ -273,6 +297,7 @@ public partial class MainWindow : Window
         {
             var dir = c.WriteReport("");
             Open(dir);
+            _ = SendReportPictures(dir, "Report a miscount");
             Say("Saved the last minute to a folder on this PC" + (asked ? "; pictures are kept from now on" : "") + ". Zip it to attach to a bug report.", "Good");
             Status.ToolTip = dir;
         }
@@ -352,7 +377,7 @@ public partial class MainWindow : Window
 
     string ViewTitle() => _watcher.Farm != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "counted while the game is open" : "this zone");
 
-    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode == Mode.Open ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = "—"; }
+    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = "—"; }
 
     async Task Toggle() { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(); }
 
@@ -532,7 +557,8 @@ public partial class MainWindow : Window
         {
             // the tiles follow what the player is doing now (kills or gathers in the last few minutes), in a run or not:
             // a stretch of gathering shows attempts per hour, mob farming Kinah per hour
-            var dom = show.RecentKind is { } rk ? (rk == "Gathering" ? Mode.Gather : Mode.Open) : show.Events > 0 ? ModeOf(show) : _mode;
+            // both at once (a node between mobs): one mixed set that holds until one of them has stopped for a few minutes
+            var dom = show.MixedAt(DateTime.UtcNow) ? Mode.Mixed : show.RecentKind is { } rk ? (rk == "Gathering" ? Mode.Gather : Mode.Open) : show.Events > 0 ? ModeOf(show) : _mode;
             if (dom != _mode) { _mode = dom; ApplyModeLabels(); }
             if (show != _lastRun) _tableWhat = ViewTitle();
             FillNumbers(show, show.Active);
@@ -553,7 +579,8 @@ public partial class MainWindow : Window
         else
         {
             // one plain line; the reader's details (reads, Market, the Kinah counter, uploads) are on hover
-            Say((farm != null ? "Run on · reading the chat" : "Reading the chat") + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : ""), "Faint");
+            Say(!chat.ChatFound ? "Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows."
+                : (farm != null ? "Run on · reading the chat" : "Reading the chat") + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : ""), "Faint");
             Status.ToolTip = $"{chat.Reads:N0} chat reads so far.\n{MarketShort()}.\n{BalanceShort()}." + (_watcher.Flushed > 0 ? $"\n{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "");
         }
         if (chat != null && _options is { WantsPreview: true } && ++_ticks % 4 == 0 && !_framing)
@@ -565,7 +592,8 @@ public partial class MainWindow : Window
         }
         // the panel over the game shows whenever its switch is on and the chat is being read: the run while one is on, the
         // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
-        if (_prefs.Hud && chat != null) EnsureHud();
+        // the panel over the game can't stop the rest of the refresh (the Crafting table, the pickups) if it fails to open
+        if (_prefs.Hud && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
         if (_part == "Crafting") FillCraft(chat?.CraftView);
         FillPickups();
         AlertTick();
@@ -819,6 +847,13 @@ public partial class MainWindow : Window
                 _ = fails; _ = plent; _ = worth; _ = crystals;
                 break;
             }
+            case Mode.Mixed:
+                // Kinah, the whole hour (Kinah plus the drops and the gathered items after the Market's cut), kills and attempts
+                KinahHr.Text = Fk(kinah / h);
+                KinahKill.Text = kinah + s.Value > 0 ? Fk((kinah + s.Value) / h) : "—";
+                KillsHr.Text = Fk(t.Kills / h);
+                DropsHr.Text = Fk(t.Nodes / h);
+                break;
             default:
                 KinahHr.Text = Fk(kinah / h);
                 KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
@@ -837,7 +872,7 @@ public partial class MainWindow : Window
                   + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
             + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
         // the card's head: what and how long, then the hour's total (Kinah plus the loot after the Market's cut)
-        TableTitle.Text = $"{(ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : "Open world"))} · {Clock(elapsed)}";
+        TableTitle.Text = $"{(ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : _mode == Mode.Mixed ? "Farming and gathering" : "Open world"))} · {Clock(elapsed)}";
         TableWhat.Text = _tableWhat;
         TableWhatChip.Visibility = _tableWhat.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         long totalNow = kinah + s.Value;
@@ -1183,7 +1218,19 @@ public partial class MainWindow : Window
     void ShowInstances()
     {
         var log = _watcher.Chat?.Instances ?? _demoInst;
-        var runs = log?.Snapshot() ?? new List<InstanceRun>();
+        var all = log?.Snapshot() ?? new List<InstanceRun>();
+        // this session's runs; earlier ones kept on this PC only on request, so yesterday's trip doesn't sit there all day
+        // (Steven, 2026-10-22: "it says last run 14 hr ago")
+        var since = _watcher.ChatSince == default ? DateTime.UtcNow : _watcher.ChatSince;
+        bool Now(InstanceRun r) => (r.LastLoot ?? r.Start) >= since || log?.Open == r.Zone;
+        var runs = _eventsAll || _demoInst != null ? all : all.Where(Now).ToList();
+        int earlier = all.Count(r => !Now(r));
+        // the switch shows once there is something earlier to switch to (a render shows it with the demo's runs)
+        InstScope.Visibility = earlier > 0 || _demoInst != null ? Visibility.Visible : Visibility.Collapsed;
+        bool allShown = _eventsAll || _demoInst != null;
+        InstSessionBtn.Style = (Style)FindResource(allShown ? "SegOff" : "SegOn");
+        InstEarlierBtn.Style = (Style)FindResource(allShown ? "SegOn" : "SegOff");
+        InstEarlierBtn.Content = $"Earlier ({(_demoInst != null ? all.Count : earlier)})";
         var rows = new List<DropRow>();
         foreach (var g in runs.GroupBy(r => r.Zone).OrderByDescending(g => g.Max(r => r.LastLoot)))
         {
@@ -1216,6 +1263,9 @@ public partial class MainWindow : Window
     }
 
     readonly HashSet<string> _openInst = new();
+    /// <summary>True when Events shows every run kept on this PC, not only this session's.</summary>
+    bool _eventsAll;
+    bool _hudFailed;
     InstanceLog? _demoInst;
     static int GradeRank(string g) => g switch { "Epic" => 4, "Unique" => 3, "Legend" => 2, "Rare" => 1, _ => 0 };
 
@@ -1314,7 +1364,9 @@ public partial class MainWindow : Window
         "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
         "Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.\n\n" +
         "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
-        "Updates: at start and every six hours the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.",
+        "Updates: at start and every six hours the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.\n\n" +
+        "Reading checks: with each shared run, counts of how reading went (reads that didn't line up, names guessed or not found, pickups only the loot list saw, crafting panel counts), the item names the tracker couldn't read exactly (names only, never chat), and where the chat sits as fractions of the game window with the window's size go to kinahledger.com (https://kinahledger.com/v1/accuracy) with the app version and the install ID. At start and every six hours the tracker also reads small reading settings and the staged rollout of new versions from kinahledger.com/v1/config; only the app version goes with that request.\n\n" +
+        "Report pictures stay on this PC.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- server (everything shared is per server) ---------------- */
@@ -1570,16 +1622,24 @@ public partial class MainWindow : Window
             Say("Reading · 3,620 reads · last: Artisan's Fruit Salad acquired.", "Faint");
             return;
         }
-        ShowPart("Farming", remember: false);   // a farming render, whichever part the player left open
+        ShowPart("Farming", remember: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
         PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new ItemAcquired(t, _items.IdOf(n), 1, b)); }
         void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new CurrencyGained(t, "Oculazen Soul Points", 1)); } }
         void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new PetCrystal(t, n + " Soul Crystal", 1)); }
-        _mode = kind == "Gathering" ? Mode.Gather : Mode.Open;
+        _mode = kind == "Gathering" ? Mode.Gather : kind == "Mixed" ? Mode.Mixed : Mode.Open;
         switch (_mode)
         {
+            case Mode.Mixed:
+                // a layout render of farming and gathering at once: mobs and nodes in the same stretch
+                e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
+                e.SetTarget("Abyss Drakan Scout", t); Kills(61, 3690);
+                Drop("Thick hide", 22); Drop("Spiritstone", 14);
+                Drop("Orichalcum Ore", 38); Drop("Sapphire Gemstone", 4); Drop("Odyle", 12);
+                for (int i = 0; i < 5; i++) e.Apply(new GatherFailed(t, "Essence Extraction"));
+                break;
             case Mode.Gather:
                 e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
                 Drop("Orichalcum Ore", 82); for (int i = 0; i < 14; i++) e.Apply(new ItemAcquired(t, _items.IdOf("Orichalcum Ore"), 2, false));

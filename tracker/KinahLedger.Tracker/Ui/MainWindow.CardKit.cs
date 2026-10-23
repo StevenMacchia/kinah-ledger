@@ -185,7 +185,7 @@ public partial class MainWindow
     }
 
     /// <summary>A link at the bottom of a card.</summary>
-    FrameworkElement CkLinks(params (string Text, string Url)[] links)
+    TextBlock CkLinks(params (string Text, string Url)[] links)
     {
         var t = new TextBlock { Margin = new Thickness(20, 12, 20, 14), FontSize = 12 };
         foreach (var (text, url) in links)

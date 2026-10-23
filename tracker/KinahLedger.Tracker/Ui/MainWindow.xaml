@@ -394,9 +394,9 @@
       <Border x:Name="TablesCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="0,8,0,0">
         <StackPanel x:Name="TableStack">
           <!-- start the farming tables over (Steven, 2026-10-22); hidden during a farming run, which Stop ends -->
-          <TextBlock x:Name="FarmClear" FontSize="12" Margin="20,8,20,-24" HorizontalAlignment="Right" Panel.ZIndex="1"><Hyperlink x:Name="FarmClearLink" Style="{StaticResource LinkStyle}">Clear</Hyperlink></TextBlock>
+          <Button x:Name="FarmClearBtn" Content="Clear" Height="32" FontSize="12.5" Padding="14,0" Margin="20,8,20,-36" HorizontalAlignment="Right" Panel.ZIndex="1" ToolTip="Start the farming tables over (what was counted is shared first)"/>
           <!-- idle time and skipped reward lines; net Kinah, crafts and sales: each shown only once there is something to say -->
-          <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,8,64,4" TextWrapping="Wrap" Visibility="Collapsed"/>
+          <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,8,100,4" TextWrapping="Wrap" Visibility="Collapsed"/>
           <TextBlock x:Name="ExtraLine" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,4,20,4" TextWrapping="Wrap" Visibility="Collapsed"/>
           <!-- how the count holds up against what the game itself counts (Steven, 2026-10-22: an accuracy meter) -->
           <TextBlock x:Name="AccuracyLine" Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="20,0,20,4" TextWrapping="Wrap" Visibility="Collapsed"
@@ -537,7 +537,17 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Text="Expeditions and events"/>
             <TextBlock x:Name="InstWhat" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Grid.Column="2" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"><Hyperlink x:Name="InstClearLink" Style="{StaticResource LinkStyle}">Clear</Hyperlink></TextBlock>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+              <!-- this session's runs by default, or with the ones kept on this PC from earlier (Steven, 2026-10-22); a switch
+                   and a button, not small links (Steven, 2026-10-23: "more prevalent") -->
+              <Border x:Name="InstScope" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="#08FFFFFF" VerticalAlignment="Center" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                  <Button x:Name="InstSessionBtn" Style="{StaticResource SegOn}" Content="This session" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Only the runs since the tracker started"/>
+                  <Button x:Name="InstEarlierBtn" Style="{StaticResource SegOff}" Content="Earlier" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Every run kept on this PC, earlier ones too"/>
+                </StackPanel>
+              </Border>
+              <Button x:Name="InstClearBtn" Content="Clear" Height="32" FontSize="12.5" Padding="14,0" Margin="10,0,0,0" VerticalAlignment="Center" ToolTip="Clear the runs shown here"/>
+            </StackPanel>
           </Grid>
           <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44">
             <Grid>

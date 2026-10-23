@@ -207,6 +207,19 @@ public sealed partial class ChatParser
     List<(string Text, List<GameEvent> Events)> Unwrap(IReadOnlyList<string> lines, DateTime time)
     {
         var res = lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
+        // a line wrapped after its name: "Acquired Artisan's Ultimate Refining Stone" / "(Bound) x2." The first half
+        // already reads as one item, so the tail carries the count (Steven's 12:39 report: counted as a drop x1)
+        for (int i = 0; i + 1 < res.Count; i++)
+        {
+            if (res[i].Events.Count != 1 || res[i].Events[0] is not ItemAcquired head || head.Count != 1) continue;
+            var tail = WrapTail().Match(res[i + 1].Text);
+            if (!tail.Success || res[i + 1].Events.Count > 0 || (!tail.Groups["b"].Success && !tail.Groups["n"].Success)) continue;
+            int n = tail.Groups["n"].Success ? Math.Clamp(int.Parse(tail.Groups["n"].Value), 1, 99999) : 1;
+            bool bound = tail.Groups["b"].Success || head.Bound;
+            res[i] = (res[i].Text.Trim() + " " + res[i + 1].Text.Trim(), new List<GameEvent> { head with { Count = n, Bound = bound } });
+            res[i + 1] = (JoinedMark, new List<GameEvent>());
+            i++;
+        }
         string? carry = _wrapCarry != null && (time - _wrapAt).TotalSeconds <= WrapSeconds ? _wrapCarry : null;
         _wrapCarry = null;
         for (int i = carry != null ? -1 : 0; i + 1 < res.Count; i++)
@@ -242,6 +255,10 @@ public sealed partial class ChatParser
 
     [GeneratedRegex(@"^\W*purchase\s+(?:complete|completed|successful)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Purchase();
+
+    // the tail of a wrapped loot line: "(Bound) x2.", "(Bound)", "x9."
+    [GeneratedRegex(@"^\W*(?:(?<b>\(\s*b[o0]u?n?d\s*\))\s*)?(?:[x×]\s*(?<n>\d{1,5}))?\W*$", RegexOptions.IgnoreCase)]
+    private static partial Regex WrapTail();
 
     public const double PurchaseSeconds = 5;
     DateTime _purchaseAt; bool _purchaseCarry;
@@ -313,6 +330,9 @@ public sealed partial class ChatParser
     /// item can't drop here. Empty inside events and expeditions, where loot comes from chests and rewards.
     /// </summary>
     public Func<IReadOnlyCollection<string>>? Fighting { get; set; }
+
+    /// <summary>True for an item that must always count (Legend, Unique, Epic, boss gear): a guess at one is never held back.</summary>
+    public Func<long, bool>? Rare { get; set; }
 
     /// <summary>Each grade's colour as printed on this PC, learned from names read exactly (null: names aren't judged by colour).</summary>
     public GradeColours? Colours { get; set; }
@@ -549,6 +569,9 @@ public sealed partial class ChatParser
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
             // the chat names a skin "Dawn Frost (Cloak) Skin"; the item list as "Dawn Frost (Skin: Cloak)"
             var skin = System.Text.RegularExpressions.Regex.Match(name, @"^(?<set>.+?)\s*\((?<slot>[^()]+)\)\s*Skin$", RegexOptions.IgnoreCase);
+            // ...but that line is the wardrobe unlocking an appearance (five and eight at a time, with Enhance Stones for the
+            // duplicates), not loot: not a pickup unless the site turns skins back on (Steven, 2026-10-23 16:09)
+            if (skin.Success && !Update.RemoteConfig.Current.SkinsCount) yield break;
             if (skin.Success) name = $"{skin.Groups["set"].Value.Trim()} (Skin: {skin.Groups["slot"].Value.Trim()})";
             // "Acquired .107 Kina" with a mark the Kina rule didn't expect: Kina is never an item, and a garbled amount isn't counted
             if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\bk[i1l]nah?\s*$", RegexOptions.IgnoreCase)) yield break;
@@ -588,9 +611,13 @@ public sealed partial class ChatParser
                 {
                     // a guess no loot table backs while fighting enemies whose tables are known: left for the loot list
                     // beside the character to confirm (it adds the pickup itself if it showed it), never counted from a guess
-                    if (!fromLikely && Unlisted(gid) is { } fought)
+                    Session.Accuracy.Name(name, gid, "guessed");
+                    // a Legend, Unique or Epic item, or boss gear, is never held back (Steven, 2026-10-23: rare drops always
+                    // count): it goes to the session's second read instead (RareGate), which confirms or corrects it
+                    if (!fromLikely && Rare?.Invoke(gid) != true && Unlisted(gid) is { } fought)
                     {
                         HeldUnlisted++;
+                        Session.Accuracy.Add("held");
                         CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)}, but {string.Join(", ", fought)} doesn't drop it: not counted from the chat, left for the loot list");
                         yield break;
                     }
@@ -598,7 +625,11 @@ public sealed partial class ChatParser
                     yield return new ItemAcquired(time, gid, Math.Clamp(n, 1, 9999), bound) { Via = "guessed" };
                     yield break;
                 }
-                CrashLog.Note($"not in the item list, not counted: {name}"); yield break;
+                CrashLog.Note($"not in the item list, not counted: {name}");
+                Session.Accuracy.Add("unknown");
+                // reported only when it reads like a garbled item name (some item is near it), never other text
+                if (_items.Near(name, Math.Max(2, name.Length / 3)).Count > 0 || _items.Fragment(name, 3).Count > 0) Session.Accuracy.Name(name, null, "unknown");
+                yield break;
             }
             yield return new ItemAcquired(time, Choose(name, accent), Math.Clamp(n, 1, 9999), bound);
         }
@@ -789,7 +820,20 @@ public sealed class LineTracker
                     // either read garbled them ("mria acquired."): skip one line here for each. Only world text (short,
                     // nothing chat-like) can really be gone, so it holds nothing back. Comparing the text instead re-counted
                     // every garbled line as new.
-                    if (j < prev.Count - 1) fresh = fresh.Skip(prev.Skip(j + 1).Count(Persists)).ToList();
+                    // ...except a loot line standing where the last read had a chat line that is gone now: the chat line
+                    // was garbled out of this read, and the loot line is new (Steven, 2026-10-23 10:45: 355 Kina skipped)
+                    if (j < prev.Count - 1)
+                    {
+                        int skip = 0;
+                        foreach (var pl in prev.Skip(j + 1).Where(Persists))
+                        {
+                            if (skip >= fresh.Count) break;
+                            var fk = Key(fresh[skip]);
+                            if (!Similar(fk, pl) && LootKey(fk) && !LootKey(pl)) continue;
+                            skip++;
+                        }
+                        fresh = fresh.Skip(skip).ToList();
+                    }
                     return fresh;
                 }
             }
@@ -806,10 +850,18 @@ public sealed class LineTracker
     {
         if (a == b) return true;
         if (a.Length < 8 || b.Length < 8) return false;
+        // a different number is a different line: "acquired285kina" isn't "acquired286kina", and the quest's "(19/25)"
+        // isn't "(20/25)". Matching them took the newest Kina line or kill for one already seen (Steven, 2026-10-23: 25
+        // kills counted as 20, 20 Hard Kalgolem as 12). Only a digit lost to a letter (a different count of digits) is
+        // left to the letter allowance below.
+        var da = DigitsOf(a); var db = DigitsOf(b);
+        if (da.Length == db.Length && da != db) return false;
         int max = Math.Max(1, Math.Min(a.Length, b.Length) / 8);
         if (Math.Abs(a.Length - b.Length) > max) return false;
         return Lev(a, b, max) <= max;
     }
+
+    static string DigitsOf(string s) => new(s.Where(char.IsDigit).ToArray());
 
     static int Lev(string a, string b, int max)
     {
@@ -830,6 +882,8 @@ public sealed class LineTracker
     }
 
     /// <summary>A chat line, as opposed to text from the world behind the frameless chat ("Targena", "Cairn Tc"): long, or with a word the chat's own lines use.</summary>
+    static bool LootKey(string key) => key.Contains("acqui") || key.Contains("obtain") || key.EndsWith("kina");
+
     static bool Persists(string key) => key.Length >= 10 || key.Contains("acqui") || key.Contains("obtain") || key.Contains("kina") || key.Contains("fail");
 
     /// <summary>The same test on a line as read: a player's line ("[Theo] next") is chat however short it is.</summary>

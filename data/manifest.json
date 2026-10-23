@@ -32,6 +32,10 @@
     "gathering-items.json": {
       "sha256": "9da423765dc82c6944a92921fed886deb4f00bbea6130cf31e7343fc93b381e1",
       "size": 8190
+    },
+    "aliases.json": {
+      "sha256": "0f5a7d1a22dc58d279d0bf2f5d991f3b8f972c56daf6f48573b36c0f5422b77c",
+      "size": 175
     }
   }
 }

@@ -23,7 +23,11 @@ internal static class Program
         if (args.Length > 0 && Platform.Installer.IsLink(args[0])) args = Array.Empty<string>();
         if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
         {
-            // double-clicked, started with Windows (in the tray), or restarted by an update: open the window
+            // double-clicked, started with Windows (in the tray), or restarted by an update: open the window.
+            // The site's reading settings as last fetched (Update/RemoteConfig.cs) apply first; settings.json's own values win.
+            Update.RemoteConfig.Current = Update.RemoteConfig.LoadKept();
+            try { var sp = Path.Combine(AppContext.BaseDirectory, "settings.json"); Update.RemoteConfig.Current.ApplyTo(settings, File.Exists(sp) ? File.ReadAllText(sp) : null); }
+            catch (Exception ex) { CrashLog.Write("remote config", ex); }
             return WpfApp.Run(settings, background: args.Contains(Platform.AutoStart.BackgroundArg), afterUpdate: args.Contains(Ui.MainWindow.AfterUpdateArg));
         }
         // command line: write to the terminal that started us; if there's none and no pipe either, open one
@@ -34,7 +38,7 @@ internal static class Program
             settings.ProcessHints = hints.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         // test and measuring commands log to a temp folder, never into the player's own reads.log
-        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench")
+        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank")
             CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-test-logs");
         try
         {
@@ -96,6 +100,9 @@ internal static class Program
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
+                case "accuracy-test": return Session.AccuracyTests.Run(settings);
+                case "accuracy-sample": return Session.AccuracyTests.Sample(settings, pos, opts);
+                case "replay-bank": return ReplayBankCmd(settings, pos, opts);
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
                 case "market-test": return MarketTest(settings, opts);
@@ -539,7 +546,7 @@ options: --process aion[,other]");
                     reader ??= new ScreenReader(new System.Drawing.Rectangle(origin, bmp.Size), settings.Ocr.Scale, auto);
                     var lines = Task.Run(() => reader.ReadCaptureAsync(bmp)).GetAwaiter().GetResult();
                     s.Parser.NoteAccents(reader.LastAccents);
-                    s.QuestCounter(lines); s.ProcessChat(lines, t); chats++;
+                    s.QuestCounter(lines, t); s.ProcessChat(lines, t); chats++;
                 }
                 else
                 {
@@ -600,7 +607,7 @@ options: --process aion[,other]");
                 if ((from != null && local < from) || (to != null && local > to)) continue;
                 var lines = r.GetProperty("l").EnumerateArray().Select(x => x.GetString() ?? "").ToList();
                 first ??= t; last = t;
-                if (r.GetProperty("k").GetString() == "chat") { s.QuestCounter(lines); s.ProcessChat(lines, t); chats++; }
+                if (r.GetProperty("k").GetString() == "chat") { s.QuestCounter(lines, t); s.ProcessChat(lines, t); chats++; }
                 else
                 {
                     // the trace keeps list rows as "463 Kina" and "Name x2"; the list's own form is "Kina x463"
@@ -626,12 +633,30 @@ options: --process aion[,other]");
         return 0;
     }
 
+    /// <summary>
+    /// The replay test bank (Session/ReplayBank.cs): `replay-bank <dir>` runs every case and fails on a miscount (the
+    /// release workflow runs it before publishing); `--record <case>` writes what this version counts into that case;
+    /// `--seed` writes the generated cases into <dir>.
+    /// </summary>
+    static int ReplayBankCmd(Settings settings, List<string> pos, Dictionary<string, string> opts)
+    {
+        var dir = pos.FirstOrDefault() ?? Path.Combine("..", "tests", "replays");
+        if (opts.ContainsKey("seed-full")) { Console.WriteLine($"wrote {Session.ReplayBank.SeedFullFrames(dir)} whole-window crafting pictures to {Path.GetFullPath(dir)}"); return 0; }
+        if (opts.ContainsKey("seed")) { Directory.CreateDirectory(dir); foreach (var c in Session.ReplayBank.Seed(dir)) Console.WriteLine($"wrote {c}"); return 0; }
+        if (!Directory.Exists(dir)) { Console.Error.WriteLine($"no replay bank at {Path.GetFullPath(dir)}"); return 1; }
+        var results = Session.ReplayBank.Run(dir, settings, opts.GetValueOrDefault("record"));
+        foreach (var r in results) Console.WriteLine($"{r.Status,-9} {r.Case}  {r.Detail}");
+        int failed = results.Count(r => r.Status == "FAIL");
+        Console.WriteLine($"replay bank: {results.Count(r => r.Status == "pass")} passed, {failed} failed, {results.Count(r => r.Status == "pending")} pending, {results.Count(r => r.Status == "skipped")} skipped" + (Session.ReplayBank.OcrAvailable() ? "" : " (no text recognition here)"));
+        return failed > 0 || results.Count == 0 ? 1 : 0;
+    }
+
     /// <summary>Renders the window (and the panel) off-screen to PNG files, so the layout can be reviewed without a desktop session.</summary>
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -775,7 +800,7 @@ options: --process aion[,other]");
         {
             var gp = new ChatParser(items);
             foreach (var (gline, gexpect) in new[] { ("Raw Leather *acquired.«", "Raw Leather ×1"), ("Raw Leatheracquired.", "Raw Leather ×1"), ("Spiritstone acquired:-", "Spiritstone ×1"),
-                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("Acquiréd 169 Kina.", "Kinah +169"), ("Acquired 31>2. Kina.", "Kinah +312"), ("Obtained 2 Stigma Shard points.", "Stigma Shard points +2"), ("AcquireÖ 212 Kina.", "Kinah +212"), ("Raw Leather acquíred.", "Raw Leather ×1"), ("Restored Recon Team (Helm) Skin acquired.", "Restored Recon Team (Skin: Helm) ×1"), ("Dawn Frost (Cloak) Skin acquired.", "Dawn Frost (Skin: Cloak) ×1"), ("Forbidden Ritual (Orb) Skin acquired.", "Forbidden Ritual (Skin: Orb) ×1"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
+                                                   ("SpiritStone—acquired.", "Spiritstone ×1"), ("Orichalcum Ore acquiréd.i", "Orichalcum Ore ×1"), ("cquired 347 Kina.", "Kinah +347"), ("Acquiréd 169 Kina.", "Kinah +169"), ("Acquired 31>2. Kina.", "Kinah +312"), ("Obtained 2 Stigma Shard points.", "Stigma Shard points +2"), ("AcquireÖ 212 Kina.", "Kinah +212"), ("Raw Leather acquíred.", "Raw Leather ×1"), ("Restored Recon Team (Helm) Skin acquired.", "(nothing)"), ("Dawn Frost (Cloak) Skin acquired.", "(nothing)"), ("Forbidden Ritual (Orb) Skin acquired.", "(nothing)"), ("[Theo] Raw Leatheracquired lol", "(nothing)") })
             {
                 var gevs = gp.Parse(gline, DateTime.UtcNow).Select(e => Describe(e, items)).ToList();
                 var ggot = gevs.Count == 0 ? "(nothing)" : string.Join("; ", gevs);
@@ -888,6 +913,9 @@ options: --process aion[,other]");
         ok &= TradeTest(items);
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
+        ok &= RelogTest();
+        ok &= MixedTest(items, s);
+        ok &= EventRewardsTest(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }
@@ -1024,6 +1052,247 @@ options: --process aion[,other]");
         return ok;
     }
 
+    /// <summary>
+    /// Steven, 2026-10-23, Hidden Lugi: the event's rewards printed 11 s after the game moved him out, while the chat faded
+    /// in garbled, and none of them counted, toward the event or anywhere. Modelled on that trace (other players' lines
+    /// replaced): the rewards count once the chat settles, dated when they landed, and go to the event run just left.
+    /// </summary>
+    static bool EventRewardsTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nAn event's rewards after leaving it, read while the chat fades in (2026-10-23):");
+        var t0 = new DateTime(2026, 10, 23, 15, 1, 0, DateTimeKind.Utc);
+        int n(SessionEngine e, string name) => e.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+        // the same reads twice: as they came (an achievement line printed with the items), and without that line
+        foreach (bool achievement in new[] { false, true })
+        {
+            var tb = t0.AddHours(achievement ? 1 : 0);   // its own run, apart from the first pass's, kept on disk
+            string ach = achievement ? "One-of-a-Kind Gear III achieved." : "[Player5] gg";
+            var s = new TrackerSession(null, settings, items, "Test");
+            InstanceRun? run() => s.Instances.Snapshot().LastOrDefault(x => x.Zone == "Shugo Festival" && x.Start == tb);
+            int r(string name) => (run()?.Items ?? new()).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+            s.Engine.SetZone("Hidden Lugi"); s.Instances.Zone("Hidden Lugi", tb);
+            if (!achievement) Check("Hidden Lugi opens a Shugo Festival run", s.Instances.Open ?? "none", "Shugo Festival");
+            var before = new List<string> { "Player1 (Shugo) found Player2 (Lugi).", "Player3 (Shugo) found Player1 (Lugi)." };
+            s.ProcessChat(before, tb.AddSeconds(300));
+            s.ProcessChat(before, tb.AddSeconds(301));
+            // the game moves the player out; the minimap names the campsite
+            var left = tb.AddSeconds(383);
+            s.Engine.SetZone("Ruin Exploration Campsite"); s.Instances.Zone("Ruin Exploration Campsite", left);
+            if (!achievement) Check("left the event: its run stays open for its rewards", $"{s.Instances.Open} {s.Instances.Ending(left.AddSeconds(11))} {s.Instances.Ending(left.AddSeconds(40))}", "Shugo Festival True False");
+            // the rewards fade in garbled three ways, then a clean read, then one that lines up with it
+            s.ProcessChat(new List<string> { "Forgotten Hatquired.", "Forgotten", "Illusion", "AcquirGdylO", "Codex (Bomd)", ach }, left.AddSeconds(11));
+            s.ProcessChat(new List<string> { "rorgotten Cloak", "Acquire d Fine OJy1e", "*quire d", "Odyle", "Acquire d Refining stone", "Acquire d soul codex (BoulJ) x]", "One-" }, left.AddSeconds(12.2));
+            s.ProcessChat(new List<string> { "• vrgotten Cloak", "Acquire d F•", "acquired", "Acquire d", "Ine Odyle", "Acquire d Refining stone", "Acquire d soul codex (Bounjl", "One-" }, left.AddSeconds(13.5));
+            s.ProcessChat(new List<string> { "SEA", "Forgotten Cloak acquired.", "Acquired Fine Odyle x2.", "Acquired Odyle x9.", "Acquired Refining Stone", "Acquired Soul Codex (Bound) x3", ach, "[Player4] a chat line" }, left.AddSeconds(18.5));
+            var settled = new List<string> { "Acquired Fine Odyle x2.", "Acquired Odyle x9.", "Acquired Refining Stone x6.", "Acquired Soul Codex (Bound) x3.", ach, "[Player4] a chat line" };
+            for (int i = 0; i < 4; i++) s.ProcessChat(settled, left.AddSeconds(29 + i));
+            s.FlushVotes(left.AddSeconds(33));
+            if (!achievement)
+            {
+                Check("the rewards count once the chat settles, in the run", $"{r("Forgotten Cloak")} {r("Fine Odyle")} {r("Odyle")} {r("Refining Stone")}", "1 2 9 6");
+                Check("...and not as farming in the campsite", $"{n(s.Engine, "Odyle")} {n(s.Engine, "Refining Stone")}", "0 0");
+                s.ProcessChat(settled, left.AddSeconds(40));
+                Check("read again later: counted once", $"{r("Odyle")}", "9");
+                s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(45));
+                Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum()}", "none 18");
+            }
+            else
+            {
+                // Steven, 2026-10-23: achievement rewards never count; items printed with an achievement line are its reward
+                Check("printed with an achievement line: its reward, not drops", $"{r("Forgotten Cloak")} {r("Odyle")} {n(s.Engine, "Odyle")} {n(s.Engine, "Refining Stone")}", "0 0 0 0");
+                s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(45));
+                Check("...so the run has no loot and isn't kept", $"{s.Instances.Open ?? "none"} {run() == null}", "none True");
+            }
+        }
+        // ---- achievement rewards and box contents: never drops (Steven, 2026-10-23) ----
+        int List(TrackerSession ss, DateTime at, params string[] rows)
+        {
+            // a row up for two seconds, read four times, then gone; the chat never shows it
+            for (int i = 0; i < 4; i++) ss.ProcessList(rows.Select((r0, k) => (k * 20, r0)).ToList(), at.AddSeconds(i * 0.5));
+            foreach (var dt in new[] { 5.0, 9.0 }) ss.ProcessList(new List<(int, string)>(), at.AddSeconds(dt));
+            return 0;
+        }
+        var b0 = new DateTime(2026, 10, 23, 16, 0, 0, DateTimeKind.Utc);
+        // with list-only adds off (the default since 2026-10-23), a row the chat never names counts nothing
+        var s0 = new TrackerSession(null, settings, items, "Test");
+        s0.Engine.SetZone("Ruin Exploration Campsite");
+        List(s0, b0, "Spiritstone x1");
+        Check("loot list row the chat never names: not counted (chat-confirmed only)", $"{n(s0.Engine, "Spiritstone")}", "0");
+        // the reward rules below hold for when list-only adds are switched back on (ocr.lootListAdds)
+        bool addsWere = settings.Ocr.LootListAdds; settings.Ocr.LootListAdds = true;
+        var sb = new TrackerSession(null, settings, items, "Test");
+        sb.Engine.SetZone("Ruin Exploration Campsite");
+        List(sb, b0, "Spiritstone x1");
+        Check("loot list, no kill or gather around it: a box's contents, set aside", $"{n(sb.Engine, "Spiritstone")}", "0");
+        List(sb, b0.AddSeconds(60), "Orichalcum Ore x1");
+        Check("...but a gathering material is a gather, counted", $"{n(sb.Engine, "Orichalcum Ore")}", "1");
+        sb.ProcessChat(new List<string> { "[Player1] hi" }, b0.AddSeconds(120));
+        for (int i = 1; i <= 4; i++) sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina." }, b0.AddSeconds(120 + i * 0.4));
+        sb.FlushVotes(b0.AddSeconds(122));
+        List(sb, b0.AddSeconds(123), "Spiritstone x1");
+        Check("a row right after a kill: a drop the chat missed, counted", $"{n(sb.Engine, "Spiritstone")}", "1");
+        sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Acquired Growth Pet Chest (Bound) x2." }, b0.AddSeconds(130));
+        for (int i = 1; i <= 3; i++) sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Acquired Growth Pet Chest (Bound) x2." }, b0.AddSeconds(130 + i * 0.4));
+        sb.FlushVotes(b0.AddSeconds(132));
+        sb.ProcessChat(new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Acquired Growth Pet Chest (Bound) x2.", "Acquired 520 Kina." }, b0.AddSeconds(133));
+        List(sb, b0.AddSeconds(133.5), "Spiritstone x1");
+        Check("a row just after a box or reward line, even near a kill: set aside", $"{n(sb.Engine, "Spiritstone")}", "1");
+        settings.Ocr.LootListAdds = addsWere;
+        var sa = new TrackerSession(null, settings, items, "Test");
+        sa.Engine.SetZone("Ruin Exploration Campsite");
+        sa.ProcessChat(new List<string> { "[Player1] hi" }, b0);
+        var achLines = new List<string> { "[Player1] hi", "Acquired 300 Kina.", "Spiritstone acquired.", "Fortress Guardian Notun III achieved.", "Lesser Manastone (Bound) acquired." };
+        for (int i = 1; i <= 5; i++) sa.ProcessChat(achLines, b0.AddSeconds(i * 0.4));
+        sa.FlushVotes(b0.AddSeconds(3));
+        Check("items printed with an achievement line: its reward, not drops", $"{n(sa.Engine, "Spiritstone")} {n(sa.Engine, "Lesser Manastone")} {sa.Engine.Totals().Kinah}", "0 0 300");
+        // the achievement line stays on screen, read a little differently now and then; a drop two minutes later is a drop
+        var later = new List<string> { "Acquired 300 Kina.", "Spiritstone acquired.", "Fortress Guardian Notun Ill achieved.", "Lesser Manastone (Bound) acquired.", "Acquired 410 Kina.", "Lesser Soulstone acquired." };
+        for (int i = 0; i < 5; i++) sa.ProcessChat(later, b0.AddSeconds(120 + i * 0.4));
+        sa.FlushVotes(b0.AddSeconds(123));
+        Check("an old achievement line still on screen: a new drop counts", $"{n(sa.Engine, "Lesser Soulstone")}", "1");
+
+        // ---- gathering (Steven, 2026-10-23 11:28-11:29, Orichalcum: "like a 25% accuracy") ----
+        // the loot list band read the gathering panel (node, proficiency, item, Success) as rows; the game upgraded the ore
+        // to Fine in place; one chat line came, late; then a gather he stopped showed the panel again and "failed"
+        var so = new TrackerSession(null, settings, items, "Test");
+        so.Engine.SetZone("Ruin Exploration Campsite");
+        var g0 = new DateTime(2026, 10, 23, 15, 28, 40, DateTimeKind.Utc);
+        List<(int, string)> L(params string[] r) => r.Select((x, k) => (100 + k * 30, x)).ToList();
+        var chatBase = new List<string> { "[Player1] a chat line", "Cannot end flight in current state." };
+        so.ProcessChat(chatBase, g0);
+        so.ProcessList(L("Orich x1", "Profes x1", "Orichalcum Ore x1", "Success x1"), g0.AddSeconds(11.7));
+        so.ProcessList(L("Orich x1", "AProfes x1", "Fine Orichalcum Ore x1", "Success x1"), g0.AddSeconds(12.4));
+        so.ProcessList(L("Orich x1", "APrdfes x1", "Fine Orichalcum Ore x1", "Success x1"), g0.AddSeconds(13.3));
+        so.ProcessList(L("Orich x1", "Fihe Orichalcum Ore x1", "Success x1"), g0.AddSeconds(15.0));
+        so.ProcessList(L("Orich x1", "EPFOfes x1", "Success x1"), g0.AddSeconds(16.1));
+        var chatOre = new List<string> { "[Player1] a chat line", "Cannot end flight in current state.", "Fine Orichalcum Ore acquired." };
+        for (int i = 0; i < 4; i++) so.ProcessChat(chatOre, g0.AddSeconds(16.8 + i));
+        so.ProcessList(L("Fine Orichalcum x1"), g0.AddSeconds(17.2));
+        so.ProcessList(L("Orichal x1", "Pero(eS x1", "Orichalcum Ore x1", "Success x1"), g0.AddSeconds(18.3));
+        for (int i = 0; i < 6; i++) so.ProcessList(L("Vangt x1", "Orichalcum x1", "Orichalcum Ore x1", "Success x1"), g0.AddSeconds(19.4 + i));
+        var chatFail = new List<string> { "Cannot end flight in current state.", "Fine Orichalcum Ore acquired.", "Essence Extraction failed" };
+        for (int i = 0; i < 4; i++) so.ProcessChat(chatFail, g0.AddSeconds(24.1 + i));
+        foreach (var dt in new[] { 30.0, 34.0, 40.0 }) so.ProcessList(new List<(int, string)>(), g0.AddSeconds(dt));
+        so.FlushVotes(g0.AddSeconds(41));
+        Check("one gather, upgraded in place, then a stopped one: one Fine ore", $"{n(so.Engine, "Fine Orichalcum Ore")} {n(so.Engine, "Orichalcum Ore")}", "1 0");
+        Check("...the failed gather is an attempt, not an item", $"{so.Engine.Totals().Nodes}", "2");
+        // the gathering bar as the second witness for a gather the chat missed (step 1)
+        var sg = new TrackerSession(null, settings, items, "Test");
+        sg.Engine.SetZone("Ellun River Midstream");
+        var w0 = new DateTime(2026, 10, 23, 16, 30, 0, DateTimeKind.Utc);
+        List(sg, w0, "Orichalcum Ore x1");
+        Check("loot list gather, no gathering bar seen: not counted", $"{n(sg.Engine, "Orichalcum Ore")}", "0");
+        sg.GatherOutcome(w0.AddSeconds(20), true, false);
+        List(sg, w0.AddSeconds(21), "Orichalcum Ore x1");
+        Check("...the bar finished on Success: counted", $"{n(sg.Engine, "Orichalcum Ore")}", "1");
+        sg.GatherOutcome(w0.AddSeconds(40), false, false);
+        List(sg, w0.AddSeconds(41), "Orichalcum Ore x1");
+        Check("...the bar ended on Fail: not counted", $"{n(sg.Engine, "Orichalcum Ore")}", "1");
+        sg.GatherOutcome(w0.AddSeconds(60), true, false);
+        sg.ProcessChat(new List<string> { "[Player1] hi" }, w0.AddSeconds(59));
+        for (int i = 0; i < 4; i++) sg.ProcessChat(new List<string> { "[Player1] hi", "Orichalcum Ore acquired." }, w0.AddSeconds(60.5 + i * 0.4));
+        sg.FlushVotes(w0.AddSeconds(62.5));
+        List(sg, w0.AddSeconds(61), "Orichalcum Ore x1");
+        Check("...a gather the chat named: once, not twice", $"{n(sg.Engine, "Orichalcum Ore")}", "2");
+
+        // garbled reads over lines that were already on screen: nothing more
+        var s2 = new TrackerSession(null, settings, items, "Test");
+        var old = new List<string> { "Acquired Odyle x3.", "[Player1] hello" };
+        s2.ProcessChat(new List<string> { "[Player2] hi" }, t0);
+        s2.ProcessChat(new List<string> { "[Player2] hi", "Acquired Odyle x3.", "[Player1] hello" }, t0.AddSeconds(1));
+        for (int i = 2; i < 5; i++) s2.ProcessChat(new List<string> { "[Player2] hi", "Acquired Odyle x3.", "[Player1] hello" }, t0.AddSeconds(i));
+        int counted = n(s2.Engine, "Odyle");
+        s2.ProcessChat(new List<string> { "xqzv", "Acqu ired 0dyle x3", "pl ayerl hel" }, t0.AddSeconds(6));
+        s2.ProcessChat(new List<string> { "Acquired Odyle x3.", "[Player1] hello", "[Player5] new" }, t0.AddSeconds(7));
+        s2.ProcessChat(new List<string> { "Acquired Odyle x3.", "[Player1] hello", "[Player5] new" }, t0.AddSeconds(8));
+        s2.FlushVotes(t0.AddSeconds(9));
+        Check("a line already on screen before the garble: not again", $"{counted} {n(s2.Engine, "Odyle")}", "3 3");
+        return ok;
+    }
+
+    /// <summary>
+    /// Farming and gathering at once (Steven, 2026-10-23): the tiles show one mixed set while both happened in the last
+    /// five minutes, and the run says how focused it was (focus), which the site's per-hour figures go by.
+    /// </summary>
+    static bool MixedTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nFarming and gathering at once (2026-10-23):");
+        var t0 = new DateTime(2026, 10, 23, 18, 0, 0, DateTimeKind.Utc);
+        var e = new SessionEngine(items);
+        Check("nothing yet: no focus, not mixed", $"{e.Focus?.ToString() ?? "none"} {e.MixedAt(t0)}", "none False");
+        // twelve minutes of mobs, one a minute
+        for (int i = 0; i < 12; i++) { e.Apply(new KinahChanged(t0.AddMinutes(i), 300, false)); e.Apply(new CurrencyGained(t0.AddMinutes(i), "Papis Soul Points", 1, "Papis")); }
+        Check("mobs only: focus 1, not mixed", $"{e.Focus} {e.MixedAt(t0.AddMinutes(11.5))}", "1 False");
+        // then a node between the mobs
+        e.Apply(new ItemAcquired(t0.AddMinutes(12), items.IdOf("Orichalcum Ore"), 1, false));
+        Check("a node among the mobs: mixed", $"{e.MixedAt(t0.AddMinutes(12.2))}", "True");
+        e.Apply(new KinahChanged(t0.AddMinutes(13), 300, false));
+        Check("mobs again, four minutes on: still mixed (no flip back)", $"{e.MixedAt(t0.AddMinutes(16))}", "True");
+        Check("five minutes and more of mobs alone: back to farming", $"{e.MixedAt(t0.AddMinutes(17.5))}", "False");
+        // as many minutes gathering as farming
+        for (int i = 0; i < 12; i++) e.Apply(new ItemAcquired(t0.AddMinutes(20 + i), items.IdOf("Orichalcum Ore"), 1, false));
+        Check("13 kill minutes, 13 gather minutes: focus 0.5", $"{e.Focus}", "0.5");
+        var json = System.Text.Json.JsonSerializer.Serialize(RunPayload.Build(e, settings, "run", "Open world", "na_e", "", items));
+        Check("the run carries its focus", System.Text.RegularExpressions.Regex.Match(json, "\"focus\":[0-9.]+").Value, "\"focus\":0.5");
+        Check("...and a run with neither carries none", System.Text.Json.JsonSerializer.Serialize(RunPayload.Build(new SessionEngine(items), settings, "run", "Open world", "na_e", "", items)).Contains("focus") ? "focus" : "absent", "absent");
+        return ok;
+    }
+
+    /// <summary>Another character in the world (Steven, 2026-10-23: log off or switch character, close the run and start fresh).</summary>
+    static bool RelogTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nLogging off and another character (2026-10-23):");
+        var t0 = new DateTime(2026, 10, 23, 18, 0, 0, DateTimeKind.Utc);
+        // one tick: whether the counter shows, the balance it was last trusted at (and when), when the zone was last read
+        string Tick(RelogDetector d, double s, bool counter, long? bal, double? trustedAt, double zoneAt) =>
+            d.Observe(t0.AddSeconds(s), counter, bal, trustedAt is double ta ? (DateTime?)t0.AddSeconds(ta) : null, t0.AddSeconds(zoneAt)) ?? "none";
+        var d1 = new RelogDetector();
+        Tick(d1, 0, true, 500_000, 0, 0); Tick(d1, 10, true, 500_000, 10, 10);
+        // a loading screen: both gone a while, the same balance after
+        Tick(d1, 20, false, 500_000, 10, 10); Tick(d1, 30, false, 500_000, 10, 10); Tick(d1, 40, false, 500_000, 10, 10);
+        Check("a loading screen (same balance after): nothing", $"{Tick(d1, 50, true, 500_000, 50, 50)}", "none");
+        // a window over the counter while the zone still reads, and a sale meanwhile: nothing
+        var d2 = new RelogDetector();
+        Tick(d2, 0, true, 500_000, 0, 0);
+        for (int s = 10; s <= 60; s += 10) Tick(d2, s, false, 500_000, 0, s);
+        Check("the counter hidden, the zone still read, a sale: nothing", $"{Tick(d2, 70, true, 650_000, 70, 70)}", "none");
+        // the character screen, then another character: both gone 40 s, then a new balance read twice
+        var d3 = new RelogDetector();
+        Tick(d3, 0, true, 500_000, 0, 0);
+        for (int s = 10; s <= 50; s += 10) Tick(d3, s, false, 500_000, 0, 0);
+        Check("...back with a balance not yet read twice: wait", $"{Tick(d3, 60, true, 500_000, 0, 60)}", "none");
+        Check("another character (a new balance, read twice): reset", Tick(d3, 70, true, 1_250_000, 70, 70).Contains("another character") ? "reset" : "none", "reset");
+        Check("...and not again on the next read", $"{Tick(d3, 80, true, 1_250_000, 80, 80)}", "none");
+        // the same character logging back in: the same balance, nothing
+        var d4 = new RelogDetector();
+        Tick(d4, 0, true, 777, 0, 0);
+        for (int s = 10; s <= 60; s += 10) Tick(d4, s, false, 777, 0, 0);
+        Check("the same character back (the same balance): nothing", $"{Tick(d4, 70, true, 777, 70, 70)}", "none");
+        // a short blink of both (under 20 s) with a changed balance is not a log-off
+        var d5 = new RelogDetector();
+        Tick(d5, 0, true, 1000, 0, 0); Tick(d5, 5, false, 1000, 0, -30);
+        Check("both gone under 20 s: nothing", $"{Tick(d5, 15, true, 2000, 15, 15)}", "none");
+        return ok;
+    }
+
     static bool BestTest(ItemDictionary items)
     {
         bool ok = true;
@@ -1059,6 +1328,20 @@ options: --process aion[,other]");
 
             Check("panel fields in panel order", string.Join(",", Ui.HudFields.Parse("total, rate,time,nope")), "time,rate,total");
             Check("an empty choice keeps the clock", string.Join(",", Ui.HudFields.Parse("")), "time");
+
+            // the 0.7.7 test work, ported: bases, short loot-list names, vendor costs
+            Check("a base is a base, a field isn't", $"{ZoneLocator.IsBase("Dawn Legion Base")} {ZoneLocator.IsBase("Andsha Forward Base")} {ZoneLocator.IsBase("Western Cantas Valley")}", "True True False");
+            Check("a short name counts only read exactly", $"{items.KnowsExactly("Aria")} {items.KnowsExactly("Aryia")}", "True False");
+            var pepper = RecipeBook.ForOutput("Artisan's Fruit Salad")?.Materials.FirstOrDefault(m => m.Item.Contains("(Bound)"))?.Item;
+            if (pepper != null)
+            {
+                PriceBook.SetBoard(new() { ["Fresh Fruit"] = 900 });
+                var before = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int vendorBefore);
+                PriceBook.SetVendorPrice(pepper, 150);
+                var after = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int vendorAfter);
+                PriceBook.SetVendorPrice(pepper, 0);
+                Check("a typed NPC cost joins the recipe's cost", $"{before} vendor {vendorBefore} -> {after} vendor {vendorAfter}", "4500 vendor 1 -> 4800 vendor 0");
+            }
         }
         finally
         {
@@ -1365,6 +1648,8 @@ options: --process aion[,other]");
                 log.Zone("Auldor's Sanctum", b0);
                 log.Loot(new KinahChanged(b0.AddMinutes(3), 50_000, false));
                 log.Zone("Eastern Cantas Valley", b0.AddMinutes(4));
+                // out in the open world, the run takes its rewards for InstanceLog.RewardGraceSeconds, then closes
+                log.Zone("Eastern Cantas Valley", b0.AddMinutes(4).AddSeconds(InstanceLog.RewardGraceSeconds + 1));
                 var first = log.TakeUnshared(b0); var second = log.TakeUnshared(b0);
                 log.Restore(first); var third = log.TakeUnshared(b0);
                 log.Restore(third); var stale = log.TakeUnshared(b0.AddHours(1));

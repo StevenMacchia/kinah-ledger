@@ -11,7 +11,7 @@ namespace KinahLedger.Ui;
 public sealed record OptionsChoice(
     string Region, string Server, bool Share, bool Hud, string Hotkey, string Skin, bool AutoUpdate,
     bool StartWithWindows, string OnGameStart, bool HideWhenGameCloses, bool CloseToTray, bool MinimizeToTray, string HudFields,
-    bool ReportFrames = false, int GearScore = 0);
+    bool ReportFrames = false, bool SendFrames = false, int GearScore = 0);
 
 /// <summary>
 /// The app around the live count: the tray, starting with Windows, reacting to the game starting and closing, the
@@ -82,8 +82,36 @@ public partial class MainWindow
 
     void OnGameClosed()
     {
+        // the game is gone: the run so far is saved and shared like Stop, and counting starts fresh next time
+        _ = StartFresh("Aion 2 closed");
         if (!_prefs.HideWhenGameCloses || Farming || !IsVisible || _options != null) return;
         HideToTray();
+    }
+
+    bool _startingFresh;
+
+    /// <summary>
+    /// Logging off and another character (Steven, 2026-10-23: "Close the run, start fresh"): a farming run in progress
+    /// stops and is saved and shared as one run, as Stop does; the always-on count is shared and starts over, the crafting
+    /// part too; counting goes on from here for whoever is in the world next.
+    /// </summary>
+    async Task StartFresh(string why)
+    {
+        if (_startingFresh || _demo) return;
+        _startingFresh = true;
+        try
+        {
+            CrashLog.Note($"starting fresh: {why}");
+            bool had = Farming || (_watcher.Chat?.Engine.Events ?? 0) > 0;
+            if (Farming) await StopTracking();
+            await _watcher.ClearFarmingAsync();
+            _watcher.Chat?.ResetCraftView();
+            _lastRun = null;
+            Redraw();
+            if (had) Say($"{why}: the run so far is saved, and counting starts fresh.", "Faint");
+        }
+        catch (Exception ex) { CrashLog.Write("start fresh", ex); }
+        finally { _startingFresh = false; }
     }
 
     /* ---------------- the start/stop shortcut ---------------- */
@@ -138,7 +166,7 @@ public partial class MainWindow
     public OptionsChoice CurrentOptions() => new(
         RegionKey, Server?.Label ?? "", _prefs.Share, _prefs.Hud, HotkeyText, Skins.Get(_prefs.Skin).Key, _prefs.AutoUpdate,
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
-        _prefs.ReportFrames, _prefs.GearScore);
+        _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore);
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -177,6 +205,7 @@ public partial class MainWindow
         _prefs.MinimizeToTray = c.MinimizeToTray;
         _prefs.ReportFrames = ReportBuffer.KeepFrames = c.ReportFrames;
         if (c.GearScore != was.GearScore) SetGearScore(c.GearScore);
+        _prefs.SendReportFrames = ReportBuffer.KeepUiFrames = c.SendFrames;
         if (c.StartWithWindows != was.StartWithWindows)
         {
             if (_exe == null) problems.Add("Starting with Windows needs the downloaded KinahLedger.exe.");

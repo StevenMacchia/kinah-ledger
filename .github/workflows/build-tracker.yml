@@ -17,6 +17,11 @@ on:
 permissions:
   contents: read
 
+# A run started by hand on a branch (how sessions test their work) never fails the run itself, so Steven isn't
+# emailed for every try: each check still runs, and the last step writes "RESULT: PASS" or "RESULT: FAIL" with the
+# failed checks to the run summary and log (read it with `gh run view <id> --log | grep "RESULT:"`). On main, and in
+# the release workflow, a failed check fails the run as before.
+
 jobs:
   build:
     runs-on: windows-latest
@@ -29,34 +34,42 @@ jobs:
 
       # trackers download game data by this manifest's checksums: a data change committed without it would never reach them
       - name: Check data/manifest.json is current
+        id: manifest
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
         run: node tools/data/manifest.js --check
 
+      # crowd-learned aliases ship with the game data: every one an item, none of them rare, none an item's own name
+      - name: Check data/aliases.json
+        id: aliases
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
+        run: node tools/data/aliases.js --check
+
       - name: Publish the single-file exe
+        id: publish
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
 
-      # the self-tests that need no game, on GitHub's machine rather than a player's PC (Steven, 2026-10-23)
-      - name: parse-test
+      # the self-tests that need no game window (parse, market, accuracy) and the replay test bank the release workflow also runs
+      - name: Accuracy self-test and replay tests
+        id: tests
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
         shell: bash
         run: |
-          set +e; dist/KinahLedger.exe parse-test > parse.txt; s=$?
-          grep -E "MISMATCH|FAIL" parse.txt; tail -2 parse.txt; exit $s
-      - name: market-test
-        if: always()
-        shell: bash
-        run: |
-          set +e; dist/KinahLedger.exe market-test > market.txt; s=$?
-          grep -E "MISMATCH|FAIL" market.txt; grep -A40 "^Player features" market.txt; tail -2 market.txt; exit $s
-      - name: options-test
-        if: always()
-        shell: bash
-        run: |
-          set +e; dist/KinahLedger.exe options-test > options.txt; s=$?
-          grep -E "FAIL" options.txt; tail -2 options.txt; exit $s
+          dist/KinahLedger.exe parse-test | cat
+          dist/KinahLedger.exe market-test | cat
+          dist/KinahLedger.exe accuracy-test | cat
+          dist/KinahLedger.exe replay-bank tracker/tests/replays | cat
 
-      # the window and its cards drawn with sample data, kept as an artifact for layout review
+      # Options and the window in a demo (player features), and the window and its cards drawn for layout review
+      - name: options-test
+        id: options
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
+        shell: bash
+        run: dist/KinahLedger.exe options-test | cat
+
       - name: Layout renders
-        if: always()
+        if: always() && steps.publish.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
@@ -67,16 +80,19 @@ jobs:
           dist/KinahLedger.exe ui-shot shots --options
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.publish.outcome == 'success'
         with:
           name: layout-renders
           path: shots/*.png
           if-no-files-found: ignore
 
       - name: Write latest.json
+        id: latest
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
         run: node tools/release-manifest.js dist/KinahLedger.exe
 
       - uses: actions/upload-artifact@v4
+        if: steps.publish.outcome == 'success'
         with:
           name: kinah-ledger-tracker
           path: |
@@ -84,3 +100,15 @@ jobs:
             dist/latest.json
           if-no-files-found: error
           retention-days: 30
+
+      # one line that says how the checks went, for branch runs that never fail on their own
+      - name: Result
+        if: always()
+        shell: bash
+        run: |
+          failed=""
+          for s in "manifest:${{ steps.manifest.outcome }}" "aliases:${{ steps.aliases.outcome }}" "publish:${{ steps.publish.outcome }}" "tests:${{ steps.tests.outcome }}" "options:${{ steps.options.outcome }}" "latest:${{ steps.latest.outcome }}"; do
+            [ "${s#*:}" = "failure" ] && failed="$failed ${s%%:*}"
+          done
+          if [ -n "$failed" ]; then r="RESULT: FAIL ($failed )"; else r="RESULT: PASS"; fi
+          echo "$r"; echo "## $r" >> "$GITHUB_STEP_SUMMARY"

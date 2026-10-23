@@ -38,7 +38,25 @@ public sealed class TrackerSession
 
     /// <summary>A reader for the chat at <paramref name="r"/>: sized to its text, its captures handed to the miscount report.</summary>
     ScreenReader NewReader(System.Drawing.Rectangle r) =>
-        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow) };
+        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow), Keep = b => KeepChatShot(b, r.Location) };
+
+    // ---- rare drops: held for a second read of the picture they came from (RareGate) ----
+    readonly RareGate _rare = new();
+    public RareGate Rare => _rare;
+    // the last chat capture, for a rare pickup's second read and its proof picture; this PC only, replaced every read
+    System.Drawing.Bitmap? _chatShot; System.Drawing.Point _chatShotAt;
+    readonly object _chatShotLock = new();
+    void KeepChatShot(System.Drawing.Bitmap b, System.Drawing.Point at)
+    {
+        // the reader hands the capture over once read (no copy); the one before it goes
+        lock (_chatShotLock) { _chatShot?.Dispose(); _chatShot = b; _chatShotAt = at; }
+    }
+    /// <summary>A world boss is being fought or looted now: its gear counts as rare.</summary>
+    bool BossNow => _boss != null || (Instances.Open is { } open && WorldBossOf(open, _learnedBosses) != null);
+    bool IsRare(long id) => RareGate.IsRare(_items, id, BossNow);
+    /// <summary>Rare pickups: counted, read a second time, and confirmed (for the audit line).</summary>
+    public int RareCounted { get; private set; }
+    public int RareConfirmed { get; private set; }
 
     /// <summary>The last minute of reads, pickups and (when the player said yes) pictures, for "Report a miscount".</summary>
     public ReportBuffer Report { get; } = new();
@@ -64,10 +82,13 @@ public sealed class TrackerSession
         sb.AppendLine($"Checks: Kinah counter agreed {bc.Agreed}×, over {bc.Over:N0}, under {bc.Under:N0} · quest kills {QuestKillsGame}, counted {QuestKillsCounted} · loot list added {_cross.Added}, matched {_cross.Matched}, chat repeats skipped {_cross.Duplicates}");
         sb.AppendLine($"Names: settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, loot list rows named by icon {IconNamed}, lines changed by the vote {_voter.Changed}, reads that didn't line up {_tracker.Unaligned}");
         if (_parser.Colours is { } book) sb.AppendLine("Grade colours learned: " + (book.Learned() is { Count: > 0 } l ? string.Join(", ", l.Select(g => $"{g.Grade} {g.Colour.R},{g.Colour.G},{g.Colour.B} ({g.Seen})")) : "none yet"));
+        sb.AppendLine($"Rare drops: {RareCounted} counted, {RareConfirmed} read exactly or confirmed by a second read; {_rare.Waiting} waiting · aliases loaded {_items.AliasCount} · remote config {Update.RemoteConfig.Current.Id}");
         sb.AppendLine($"Settings: autoScale {_settings.Ocr.AutoScale} (target {_settings.Ocr.TargetTextPx} px, scale {_settings.Ocr.Scale}) · nameColours {_settings.Ocr.NameColours} · lootIcons {_settings.Ocr.LootIcons} · window capture {WindowCapture.Active} · pictures kept {ReportBuffer.KeepFrames}");
         IEnumerable<string> tail = Array.Empty<string>();
         try { if (File.Exists(CrashLog.ReadsPath)) tail = File.ReadLines(CrashLog.ReadsPath).TakeLast(600).ToList(); } catch (Exception) { /* the log is being written: the report goes without it */ }
         var dir = Report.Write(CrashLog.Dir, sb.ToString(), tail, now);
+        // where the game window sat, so the pictures' places can be made relative to it (AccuracyClient.BuildFrames)
+        if (GameRect is { } gr) try { File.WriteAllText(Path.Combine(dir, "game.json"), JsonSerializer.Serialize(new { x = gr.X, y = gr.Y, w = gr.Width, h = gr.Height })); } catch (Exception) { }
         CrashLog.Note($"miscount report saved: {dir}" + (why.Length > 0 ? $" ({why})" : ""));
         return dir;
     }
@@ -115,6 +136,8 @@ public sealed class TrackerSession
     public Rectangle? Region { get; private set; }
     public bool ManualRegion { get; }
     public string? Zone => Engine.Zone;
+    /// <summary>When the minimap's zone name was last read (RelogDetector: the interface is gone when this goes stale).</summary>
+    public DateTime ZoneSeenAt { get; private set; } = DateTime.UtcNow;
     /// <summary>Seconds spent per detected zone, so the run can be attributed to where most of it happened.</summary>
     public Dictionary<string, double> ZoneSeconds => Engine.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).ToDictionary(kv => kv.Key, kv => kv.Value.Seconds);
     public long Reads { get; private set; }
@@ -192,6 +215,7 @@ public sealed class TrackerSession
     /// </summary>
     public void CheckBalance(long balance, DateTime at)
     {
+        if (Update.RemoteConfig.Current.Off("balance")) return;
         lock (_balanceHist) { if (_balanceHist.Count == 0 || _balanceHist[^1].Balance != balance) _balanceHist.Add((at, balance)); _balanceHist.RemoveAll(b => (at - b.At).TotalMinutes > 3); }
         long gap = _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);
         if (gap == 0) return;
@@ -237,6 +261,7 @@ public sealed class TrackerSession
         _parser.Likely = () => Engine.ItemRows().Select(r => r.Name)
             .Concat(new[] { Target.Name }.Concat(Engaged).Where(e => e != null).Distinct().SelectMany(e => LootBook.Current.TableOf(e!).Select(x => x.Item))).ToList();
         _parser.Fighting = Fighting;
+        _parser.Rare = IsRare;
         if (s.Ocr.NameColours) _parser.Colours = GradeColours.Load(ColoursPath);
         _textScale = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) : null;
         Engine = new SessionEngine(items);
@@ -257,17 +282,43 @@ public sealed class TrackerSession
         if (Region == null)
         {
             if (game == null) throw new InvalidOperationException("The game window wasn't found. Start the game (borderless or windowed), or choose the chat yourself.");
-            if (Cover(ChatLocator.Corner(game.Value)) is { } cover)
-                throw new InvalidOperationException($"The chat corner of the game is out of view ({cover} is over it). Bring the game to the front, or move that window off the bottom-left of the game.");
-            var (region, note) = await ChatLocator.DetectAsync(game.Value);
+            // the chat isn't needed to start (Steven, 2026-10-22: the crafting screen hides it): the crafting panel, the loot
+            // list, the zone and the target bar are read without it, and the chat is looked for every ten seconds
+            Rectangle? region = null; string note = "";
+            if (Cover(ChatLocator.Corner(game.Value)) is null) (region, note) = await ChatLocator.DetectAsync(game.Value);
             DetectNote = note;
-            if (region == null) throw new InvalidOperationException("Couldn't see the chat. Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.");
-            Region = region;
-            _anchor = game;
+            if (region is { } found) LastChat.Save(game.Value, found);
+            else if (LastChat.For(game.Value) is { } last) { region = last; DetectNote = "where the chat was last found (it's hidden now)"; CrashLog.Note($"chat not visible at start: reading from its last place {last}"); }
+            // nothing found and nothing kept (a frameless chat has no input box): where other trackers with this screen size found it
+            if (region == null && await HintedChatAsync(game.Value) is { } hinted) { region = hinted; DetectNote = "found where other trackers with this screen size found the chat"; }
+            if (region == null) { CrashLog.Note("chat not in view at start: reading the crafting panel, the loot list and the zone meanwhile, and looking for the chat every 10 seconds"); _chatTryAt = DateTime.UtcNow; }
+            else { Region = region; _anchor = game; }
         }
-        _reader = NewReader(Region.Value);
+        if (Region is { } r0) _reader = NewReader(r0);
+        ReportLayout();
         if (game != null && Cover(ZoneLocator.Strip(game.Value)) == null) await ReadZone(game.Value);
         _loop ??= Task.Run(() => Loop(_cts.Token));
+    }
+
+    /// <summary>
+    /// The chat area other trackers found on a game window of this size (/v1/layout), when a read there shows chat
+    /// lines; null otherwise. Only ever a first place to look: the reading itself is the same as anywhere.
+    /// </summary>
+    async Task<Rectangle?> HintedChatAsync(Rectangle game)
+    {
+        try
+        {
+            var hints = await AccuracyClient.LayoutAsync(_settings.Upload, game.Width, game.Height);
+            if (hints == null || hints.Count == 0) return null;
+            var best = LayoutProfile.Best(hints, 0);
+            if (best == null) return null;
+            var r = LayoutProfile.ToRect(best.Box, game);
+            var lines = await ScreenReader.ReadBoxesAsync(r, 2, boost: true);
+            if (!ChatLocator.LooksLikeChat(lines)) { CrashLog.Note($"the chat area other trackers use on {game.Width}x{game.Height} shows no chat lines here"); return null; }
+            CrashLog.Note($"chat found where {best.Installs} other tracker(s) on {game.Width}x{game.Height} found it");
+            return r;
+        }
+        catch (Exception ex) { CrashLog.Write("layout hint", ex); return null; }
     }
 
     string? _pendingZone; string? _unlistedTitle;
@@ -296,6 +347,7 @@ public sealed class TrackerSession
         {
             var (zone, note) = await ZoneLocator.DetectAsync(game);
             ZoneNote = zone == null ? note : "";
+            if (zone != null) ZoneSeenAt = DateTime.UtcNow;
             if (zone != null && !ZoneLocator.IsVerified(zone))
             {
                 // an unfamiliar label becomes the zone only when two reads in a row agree; a stray read (a button, a tooltip) keeps the last zone
@@ -337,6 +389,57 @@ public sealed class TrackerSession
     DateTime _refindAt = DateTime.MinValue;
 
     /// <summary>Keeps the chat area on the game: shifted when the game moved, found again when the game changed size.</summary>
+    /// <summary>True once the chat has been found; until then the rest of the game's screen is read without it.</summary>
+    public bool ChatFound => Region != null;
+    DateTime _chatTryAt = DateTime.MinValue;
+
+    /// <summary>With no chat yet, looks for it every ten seconds; found, it is read from then on and its place kept for next time.</summary>
+    async Task FindChatAsync()
+    {
+        if (ManualRegion || (DateTime.UtcNow - _chatTryAt).TotalSeconds < 10) return;
+        _chatTryAt = DateTime.UtcNow;
+        if (GameWindow.Find(_settings.ProcessHints) is not { } g) return;
+        GameRect = g;
+        if (Cover(ChatLocator.Corner(g)) != null) return;
+        var (region, note) = await ChatLocator.DetectAsync(g);
+        if (region is not { } r) return;
+        Region = r; _anchor = g; _reader = NewReader(r); DetectNote = note;
+        _tracker.Rebase();
+        LastChat.Save(g, r);
+        CrashLog.Note($"chat found: {r.Width} x {r.Height} at {r.X}, {r.Y}");
+        ReportLayout();
+    }
+
+    /// <summary>
+    /// Where the chat was last found automatically, per game window size, in %LOCALAPPDATA%\KinahLedger\chat-last.json
+    /// (relative to the game window), so a start while the chat is hidden still reads it once it shows.
+    /// </summary>
+    static class LastChat
+    {
+        static string PathOf => Path.Combine(CrashLog.Dir, "chat-last.json");
+
+        public static void Save(Rectangle game, Rectangle chat)
+        {
+            try { File.WriteAllText(PathOf, System.Text.Json.JsonSerializer.Serialize(new[] { game.Width, game.Height, chat.X - game.X, chat.Y - game.Y, chat.Width, chat.Height })); }
+            catch (Exception ex) { CrashLog.Write("chat last place", ex); }
+        }
+
+        public static Rectangle? For(Rectangle game)
+        {
+            try
+            {
+                if (!File.Exists(PathOf)) return null;
+                var v = System.Text.Json.JsonSerializer.Deserialize<int[]>(File.ReadAllText(PathOf));
+                if (v is not { Length: 6 } || v[0] != game.Width || v[1] != game.Height) return null;
+                return new Rectangle(game.X + v[2], game.Y + v[3], v[4], v[5]);
+            }
+            catch (Exception) { return null; }
+        }
+    }
+
+    /// <summary>An item picked up in a base that isn't Odyle: the only thing farmed in a base (Steven, 2026-10-22).</summary>
+    bool InBaseNotOdyle(GameEvent ev) => ev is ItemAcquired a && ZoneLocator.IsBase(Zone) && !_items.NameOf(a.ItemId).Contains("Odyle", StringComparison.OrdinalIgnoreCase);
+
     async Task FollowGameAsync()
     {
         if (ManualRegion || _anchor is not { } a) return;
@@ -359,6 +462,7 @@ public sealed class TrackerSession
         Region = again; _reader = NewReader(again.Value); _anchor = g;
         _tracker.Rebase();
         DetectNote = "re-found after the game changed size: " + note;
+        ReportLayout();
     }
 
     async Task Loop(CancellationToken ct)
@@ -366,11 +470,31 @@ public sealed class TrackerSession
         while (!ct.IsCancellationRequested)
         {
             var t0 = DateTime.UtcNow;
+            bool reading = false;
             try
             {
                 await FollowGameAsync();
+                if (Region == null) await FindChatAsync();
+                if (Region == null)
+                {
+                    // no chat yet: everything else on the game's screen is still read
+                    if (GameWindow.Find(_settings.ProcessHints) is { } gw) GameRect = gw;
+                    Paused = "";
+                    var p0 = DateTime.UtcNow;
+                    var off = Update.RemoteConfig.Current;
+                    var list = off.Off("loot_list") ? Task.FromResult<(List<OcrLineBox>, System.Drawing.Bitmap, System.Drawing.Point)?>(null) : LootReadAsync();
+                    if (!off.Off("target")) await TargetDueAsync();
+                    if (!off.Off("craft_panel")) await CraftPanelDue();
+                    await LootProcess(await list);
+                    if (!off.Off("reward_grid")) await RewardGridDue();
+                    _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
+                    Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
+                    // the game is read, but not its chat: chat-not-found time for the health numbers
+                    reading = true; Accuracy.AddChatLost((DateTime.UtcNow - t0).TotalSeconds);
+                }
                 // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
-                if (Cover(Region!.Value) is { } cover)
+                else if (Cover(Region.Value) is { } cover)
                 {
                     Engine.Pause(); Secondary?.Pause(); ZoneView.Pause();
                     Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
@@ -380,19 +504,24 @@ public sealed class TrackerSession
                 {
                     // the loot list is read beside the chat, not after it: a pass takes the slower of the two
                     var p0 = DateTime.UtcNow;
-                    var list = LootReadAsync();
+                    var off = Update.RemoteConfig.Current;
+                    var list = off.Off("loot_list") ? Task.FromResult<(List<OcrLineBox>, System.Drawing.Bitmap, System.Drawing.Point)?>(null) : LootReadAsync();
                     await ReadOnce();
                     _chatMs += (DateTime.UtcNow - p0).TotalMilliseconds;
-                    await TargetDueAsync();
-                    await CraftPanelDue();
-                    LootProcess(await list);
+                    if (!off.Off("target")) await TargetDueAsync();
+                    if (!off.Off("craft_panel")) await CraftPanelDue();
+                    await LootProcess(await list);
                     RewardShot();
-                    await RewardGridDue();
-                    await PlatesDue();
+                    if (!off.Off("reward_grid")) await RewardGridDue();
+                    if (!off.Off("nameplates")) await PlatesDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    // the loot list's part in the health numbers: pickups only it saw, and rows that matched a chat line
+                    Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
+                    Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
+                    reading = true;
                     Audit();
                 }
-                await ZoneDueAsync();
+                if (!Update.RemoteConfig.Current.Off("zone")) await ZoneDueAsync();
             }
             catch (System.ComponentModel.Win32Exception)
             {
@@ -407,8 +536,10 @@ public sealed class TrackerSession
             int spent = (int)(DateTime.UtcNow - t0).TotalMilliseconds;
             // during a fight (loot, a kill or a loot list row in the last FightSeconds) about three reads a second, so a line
             // or a row up for a moment is read more than once; idle, the usual pace, since back-to-back reading costs a CPU core
-            int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, FightIntervalMs) : _interval;
+            int every = (DateTime.UtcNow - _lastActivity).TotalSeconds <= FightSeconds ? Math.Min(_interval, Update.RemoteConfig.Current.FightIntervalMs) : _interval;
             if (spent < every) { try { await Task.Delay(every - spent, ct); } catch (TaskCanceledException) { } }
+            // reading time for the health numbers: the passes the game was read, wait included
+            if (reading) Accuracy.AddReading((DateTime.UtcNow - t0).TotalSeconds);
         }
         SaveColours();
         Engine.Finish();
@@ -424,6 +555,12 @@ public sealed class TrackerSession
         _parser.NoteAccents(_reader.LastAccents);
         if (lines.Count > 0) { ReadTrace.Chat(DateTime.UtcNow, lines); Report.Lines("chat", lines, DateTime.UtcNow); QuestCounter(lines); }
         Reads++;
+        Accuracy.Add("chat_reads");
+        var readAt = DateTime.UtcNow;
+        // chat-not-found time: from a re-find that found nothing until a read shows lines again
+        if (lines.Count > 0) _chatLost = false;
+        else if (_chatLost && _lastChatReadAt != DateTime.MinValue) Accuracy.AddChatLost((readAt - _lastChatReadAt).TotalSeconds);
+        _lastChatReadAt = readAt;
         // the chat moved or the UI was toggled: after a stretch of empty reads, find it again (auto mode only)
         _emptyReads = lines.Count == 0 ? _emptyReads + 1 : 0;
         if (!ManualRegion && _emptyReads >= 20)
@@ -433,14 +570,178 @@ public sealed class TrackerSession
             if (g != null && Cover(ChatLocator.Corner(g.Value)) == null)
             {
                 var (again, note) = await ChatLocator.DetectAsync(g.Value);
-                if (again != null && again != Region) { Region = again; _reader = NewReader(again.Value); _anchor = g; DetectNote = "re-found: " + note; }
+                if (again != null && again != Region) { Region = again; _reader = NewReader(again.Value); _anchor = g; DetectNote = "re-found: " + note; ReportLayout(); }
+                _chatLost = again == null;
             }
         }
         ProcessChat(lines, DateTime.UtcNow);
+        // a rare drop in this read: the same picture read again, then counted (RareGate)
+        if (_rare.Waiting > 0)
+        {
+            System.Drawing.Bitmap? shot; System.Drawing.Point at;
+            lock (_chatShotLock) { shot = _chatShot; at = _chatShotAt; _chatShot = null; }
+            using (shot) await ResolveRareAsync("chat", shot, at);
+        }
+    }
+    bool _chatLost; DateTime _lastChatReadAt = DateTime.MinValue;
+    int _accAdded, _accMatched;
+
+    // ---- rare drops: second read and commit ----
+
+    ChatParser? _secondParser;
+
+    /// <summary>
+    /// Reads the picture a held rare pickup came from a second time (larger, boosted, by the row's icon on the loot list)
+    /// and counts each pickup as <see cref="RareGate.Decide"/> says, keeping the crop of its line as proof.
+    /// </summary>
+    async Task ResolveRareAsync(string source, System.Drawing.Bitmap? shot, System.Drawing.Point origin)
+    {
+        var held = _rare.Take(source);
+        if (held.Count == 0) return;
+        List<OcrLineBox>? again = null;
+        if (shot != null)
+        {
+            try { again = await ScreenReader.ReadBoxesAsync(shot, origin, source == "list" ? 4 : 3, boost: true); }
+            catch (Exception ex) { CrashLog.Write("rare second read", ex); }
+        }
+        foreach (var p in held)
+        {
+            RareGate.Second? s = null;
+            if (shot != null && again != null)
+                try { s = SecondRead(p, shot, origin, again); } catch (Exception ex) { CrashLog.Write("rare second read", ex); }
+            CommitRare(p, s, attempted: shot != null && again != null);
+        }
+    }
+
+    /// <summary>The line of the second read that is the held pickup's, what it names exactly, and its crop.</summary>
+    RareGate.Second SecondRead(RareGate.Pending p, System.Drawing.Bitmap shot, System.Drawing.Point origin, List<OcrLineBox> again)
+    {
+        var target = p.Source == "list" && p.Event is ItemAcquired li ? _items.NameOf(li.ItemId) : p.Raw;
+        var line = again.Select(l => (L: l, S: Similarity(l.Text, target))).Where(x => x.S >= 0.45).OrderByDescending(x => x.S).Select(x => x.L).FirstOrDefault();
+        if (line == null) return new RareGate.Second(null, "", null);
+        long? id = null;
+        Accuracy.Muted = true;
+        try
+        {
+            if (p.Source == "list")
+            {
+                var row = LootPopup.Rows(new[] { (line.Box.Top, line.Text) }).FirstOrDefault();
+                if (row != null && !row.IsKinah && _items.IsExact(row.Name)) id = _items.IdOf(row.Name);
+                else if (_settings.Ocr.LootIcons)
+                {
+                    var look = PopupIcons.Name(_items, shot, origin, line);
+                    var named = LootPopup.Rows(new[] { (line.Box.Top, look.Text) }).FirstOrDefault();
+                    if (look.Text != line.Text && named != null && _items.IsExact(named.Name)) id = _items.IdOf(named.Name);
+                }
+            }
+            else
+            {
+                // parsed the way a chat line is, with no hints: only a name the line spells out counts as exact
+                _secondParser ??= new ChatParser(_items);
+                foreach (var ev in _secondParser.Parse(line.Text, p.At))
+                    if (ev is ItemAcquired a && ev.Via.Length == 0 && Contains(line.Text, _items.NameOf(a.ItemId))) { id = a.ItemId; break; }
+            }
+        }
+        finally { Accuracy.Muted = false; }
+        var crop = RareGate.CropAround(line.Box, origin, shot.Size, withIcon: p.Source == "list");
+        var bmp = crop.Width > 4 && crop.Height > 4 ? shot.Clone(crop, shot.PixelFormat) : null;
+        return new RareGate.Second(id, line.Text, bmp);
+    }
+
+    /// <summary>True when <paramref name="line"/> spells <paramref name="name"/> (letters and digits only, "(Bound)" aside).</summary>
+    static bool Contains(string line, string name)
+    {
+        static string K(string s) => Regex.Replace(Regex.Replace(s, @"\(bound\)", "", RegexOptions.IgnoreCase).ToLowerInvariant(), @"[^a-z0-9]", "");
+        var n = K(name);
+        return n.Length >= 3 && K(line).Contains(n);
+    }
+
+    /// <summary>How alike two texts are, 0 to 1 (letters and digits only, case aside).</summary>
+    static double Similarity(string a, string b)
+    {
+        static string K(string s) => Regex.Replace(s.ToLowerInvariant(), @"[^a-z0-9]", "");
+        string x = K(a), y = K(b);
+        if (x.Length == 0 || y.Length == 0) return 0;
+        if (x.Contains(y) || y.Contains(x)) return Math.Min(x.Length, y.Length) / (double)Math.Max(x.Length, y.Length) * 0.5 + 0.5;
+        var prev = new int[y.Length + 1]; var cur = new int[y.Length + 1];
+        for (int j = 0; j <= y.Length; j++) prev[j] = j;
+        for (int i = 1; i <= x.Length; i++)
+        {
+            cur[0] = i;
+            for (int j = 1; j <= y.Length; j++) cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (x[i - 1] == y[j - 1] ? 0 : 1));
+            (prev, cur) = (cur, prev);
+        }
+        return 1 - prev[y.Length] / (double)Math.Max(x.Length, y.Length);
+    }
+
+    /// <summary>One held rare pickup decided and counted, its proof kept, the audit and the health counters told.</summary>
+    void CommitRare(RareGate.Pending p, RareGate.Second? s, bool attempted)
+    {
+        var (ev, ok, note) = RareGate.Decide(p, s, _items);
+        bool unsure = p.Event.Unconfirmed;
+        // loot list rows count only with a second witness (chat-confirmed only, 2026-10-23): for a rare one only the list
+        // showed, the second read is that witness; unconfirmed, its proof is kept and it isn't counted
+        if (p.Source == "list" && !ok && !_settings.Ocr.LootListAdds)
+        {
+            string? kept = null;
+            if (s?.Crop is { } c0) { using (c0) kept = RareGate.SaveProof(c0, ev is ItemAcquired ka ? _items.NameOf(ka.ItemId) : "item", p.Source, p.At); }
+            CrashLog.Note("rare drop only the loot list showed, and the second read didn't confirm it: not counted" + (kept != null ? $" (proof: {Path.GetFileName(kept)})" : ""));
+            if (unsure) Accuracy.Add("rare_second_read");
+            return;
+        }
+        Accuracy.Add("rare_seen"); RareCounted++;
+        if (unsure && attempted) Accuracy.Add("rare_second_read");
+        if (ok) { RareConfirmed++; if (unsure) Accuracy.Add("rare_confirmed"); }
+        string? proof = null;
+        if (s?.Crop is { } crop) { using (crop) proof = RareGate.SaveProof(crop, ev is ItemAcquired a ? _items.NameOf(a.ItemId) : "item", p.Source, p.At); }
+        CrashLog.Note("rare drop: " + note + (proof != null ? $" (proof: {Path.GetFileName(proof)})" : ""));
+        Commit(ev);
+    }
+
+    /// <summary>Held rare pickups with no picture to read again (a replay, a stop): counted as read.</summary>
+    internal void CommitHeld()
+    {
+        foreach (var p in _rare.Take()) CommitRare(p, null, attempted: false);
+    }
+
+    /// <summary>One pickup counted everywhere it goes: the run, the window, the crafting part, the balance check, listeners.</summary>
+    void Commit(GameEvent ev)
+    {
+        Count(ev);
+        Feed(ev);
+        if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
+        if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
+        else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
+        if (ev.Via.Contains("guessed")) Accuracy.Add("guessed");
+        try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+    }
+
+    // ---- layout reports (LayoutProfile) ----
+    bool _lootSeen, _craftSeen;
+
+    /// <summary>Where the chat is (and whether the loot list and the panel showed where they were looked for), for the next accuracy report.</summary>
+    void ReportLayout()
+    {
+        try
+        {
+            if (GameRect is not { } g || g.Width < 200 || g.Height < 200) return;
+            var chat = Region is { } r ? LayoutProfile.Fractions(r, g) : null;
+            if (chat != null && !LayoutProfile.Plausible(chat)) chat = null;
+            Accuracy.Layout(new LayoutReport(g.Width, g.Height, LayoutProfile.UiKey(_textScale?.TextPx, g.Height), chat, ManualRegion ? "chosen" : "found", _lootSeen, _craftSeen, Update.RemoteConfig.Current.RegionsId));
+        }
+        catch (Exception ex) { CrashLog.Write("layout report", ex); }
     }
 
     /// <summary>One read of the chat, counted: lined up with the last, parsed, checked against the loot list and applied. Also what replay feeds a recorded fight through.</summary>
     internal void ProcessChat(List<string> lines, DateTime now)
+    {
+        // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
+        CommitHeld();
+        try { ProcessChatCore(lines, now); }
+        finally { ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(now); }
+    }
+
+    void ProcessChatCore(List<string> lines, DateTime now)
     {
         int unaligned = _tracker.Unaligned;
         var fresh = _tracker.NewLines(lines);
@@ -449,7 +750,8 @@ public sealed class TrackerSession
         if (_tracker.LastFromAnchor) CrashLog.Note($"the last read was a stray line, so this one was lined up with the last full read of the chat ({fresh.Count} new)");
         if (_tracker.Unaligned > unaligned)
         {
-            CrashLog.Note($"couldn't line this read up with the last one, so nothing in it was counted ({lines.Count} lines; last: {lines[^1]})");
+            Accuracy.Add("unaligned");
+            CrashLog.Note($"couldn't line this read up with the last one, so only a burst or the lines after the overlap can count from it ({lines.Count} lines; last: {lines[^1]})");
             // both reads in full, so a lost burst of kills can be traced line by line
             CrashLog.Note("   before: " + string.Join("  |  ", _prevRead));
             CrashLog.Note("   now:    " + string.Join("  |  ", lines));
@@ -463,17 +765,31 @@ public sealed class TrackerSession
         // run's, and a level-up popup mid-event must not set the event's loot aside (Accursed Sword, 2026-10-22 14:35)
         bool reward = Target.RewardOpen(now) && !(ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored);
         // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
-        if (lines.Any(l => l.Contains("acquired design", StringComparison.OrdinalIgnoreCase)))
+        if (lines.Any(l => Update.RemoteConfig.HasAny(l, Update.RemoteConfig.Current.CraftWindowWords)))
         {
             if ((now - Target.CraftAt).TotalSeconds > 5) CrashLog.Note("crafting window seen (its \"Show acquired designs only\" over the chat)");
             Target.MarkCraft(now);
         }
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
         bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
+        // ---- the pickup check (PickupCheck; Steven, 2026-10-23: "you need some type of quality assurance check") ----
+        // the player's own inventory at work (storage, Quick Register, an exchange) or the wardrobe unlocking skins: what
+        // prints with it, and in the next few seconds, moved or unlocked; it didn't drop (16:09: Enhance Stone x446)
+        if (lines.FirstOrDefault(l => (PickupCheck.IsInventoryLine(l) || PickupCheck.IsSkinUnlock(l)) && NewLine(l, now)) is { } invLine)
+        {
+            if (now > _inventoryUntil) CrashLog.Note($"the inventory at work (\"{invLine}\"): what prints with it is not a drop");
+            _inventoryUntil = now.AddSeconds(RewardWindowSeconds);
+        }
+        // a box obtained in this read, out in the world: what prints with it is its contents, even the lines read before its own
+        if (!InRun && _boss == null && lines.FirstOrDefault(l => PickupCheck.IsBoxLine(l) && NewLine(l, now)) is { } boxLine)
+        {
+            if (now > _boxUntil) CrashLog.Note($"a box (\"{boxLine}\"): what prints with it is its contents, not drops");
+            _boxUntil = now.AddSeconds(RewardWindowSeconds);
+        }
         // a Force's loot being handed out ("Yarie acquired Soul: Ursus (Bound) through Force distribution."): a world boss
         // died, and for a while the panel beside the character shows the boss's loot table, not the player's pickups
         // A boss's loot chest ("Pnyn Loot Chest (Bound) acquired.") shows its loot table in the same place (2026-10-22 18:39)
-        if (lines.Any(l => Regex.IsMatch(l, @"distri\S*|through\s+Fo\S*ce|loot\s*chest", RegexOptions.IgnoreCase)))
+        if (lines.Any(l => Regex.IsMatch(l, @"distri\S*|through\s+Fo\S*ce|loot\s*chest", RegexOptions.IgnoreCase) || Update.RemoteConfig.HasAny(Regex.Replace(l, @"\s+", " "), Update.RemoteConfig.Current.DistributionWords)))
         {
             if ((now - _distributionAt).TotalSeconds > DistributionSeconds) CrashLog.Note("a Force is handing out loot or a loot chest came: rows beside the character count only when the chat says they are yours");
             _distributionAt = now;
@@ -498,9 +814,31 @@ public sealed class TrackerSession
                 if (after.Count > 0) { CrashLog.Note($"counted {after.Count} loot line(s) below the last line this read shares with the last one: {string.Join(" | ", after)}"); reread.AddRange(after); }
             }
         }
+        // garbled reads in a row (a reward burst fading in): once the chat settles, the clean read's loot lines count
+        var settled = new List<string>();
+        DateTime settledAt = now; bool settledAny = false, settledAchievement = false;
+        if (_tracker.Unaligned > unaligned)
+        {
+            if (_garbledSince == null)
+            {
+                _garbledSince = now;
+                _beforeGarbled = new HashSet<string>(_recent.Where(kv => (now - kv.Value).TotalMinutes <= 10).Select(kv => kv.Key));
+                _countedGarbled.Clear();
+            }
+        }
+        else if (_garbledSince is { } gs && lines.Count > 0)
+        {
+            // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up
+            if ((now - gs).TotalSeconds > SettleSeconds) _garbledSince = null;
+            else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs; }
+        }
+        Reread.NoteFirstSeen(_firstSeen, lines, now);
         Reread.Remember(_recent, lines, now);
-        _lastLines = lines;
-        bool Apply(IEnumerable<GameEvent> events, string via = "chat")
+        // an empty read (the chat fading out) is not the last read: the settle needs the last read that showed lines
+        // (Steven, 2026-10-23 11:07: all 21 event rewards lost when the chat faded right after the clean read)
+        if (lines.Count > 0) _lastLines = lines;
+        bool batchAchievement = false;
+        bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat")
         {
             bool any = false;
             foreach (var p0 in events)
@@ -510,35 +848,126 @@ public sealed class TrackerSession
                 if (_cross.Chat(parsed, now)) { any = true; continue; }
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
-                var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
-                Count(ev); any = true; _lastActivity = DateTime.UtcNow;
-                Feed(ev);
-                if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
-                if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
-                else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
-                try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+                // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
+                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)))) : null;
+                // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
+                if (why == null && !made && parsed is ItemAcquired big && !InRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
+                if (why == null && parsed is PetCrystal bigc && !InRun) why = PickupCheck.TooManyCrystals(bigc.Count);
+                // Soul Crystals from a quest or a reward are not crystals from kills: left out, so the per hour stays the kills'
+                if (why != null && parsed is PetCrystal wp) { CrashLog.Note($"{wp.Name} x{wp.Count}: {why}, not counted with the kills"); any = true; continue; }
+                if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
+                // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
+                var ev = (reward || why != null || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
+                NoteReward(ev, now);
+                any = true; _lastActivity = DateTime.UtcNow;
+                // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
+                if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
+                // no single-signal counting: out in the world, an item is a drop only with a kill or a gather around it
+                if (ev is ItemAcquired wi && NeedsWitness(wi, made, crafting)) { lock (_awaiting) _awaiting.Add((ev, now)); continue; }
+                Commit(ev);
             }
             return any;
         }
         // each new line is voted on across the next reads before it counts (ChatVoter); lines come out in order
         var voted = Vote ? _voter.Push(fresh, lines, now, _parser.Meaning) : fresh;
+        // an achievement line among them: the items printed with it are its reward, and those in the next few seconds too
+        // only an achievement line that is new: one that stays on screen is read a little differently each time
+        batchAchievement = voted.Any(l => Reread.IsAchievement(l) && NewLine(l, now));
+        if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
+        // a line the settle just counted shows up again as new once the reads line up: the same pickup, counted once
+        // (Steven, 2026-10-23 16:22: 200 Natura Soul Crystals and 50,000 Kina counted twice)
+        lock (_settledCounted)
+        {
+            _settledCounted.RemoveAll(x => (now - x.At).TotalSeconds > SettledDupSeconds);
+            if (_settledCounted.Count > 0)
+                voted = voted.Where(l =>
+                {
+                    int i = _settledCounted.FindIndex(x => Reread.Same(x.Line, l.Trim()));
+                    if (i < 0) return true;
+                    _settledCounted.RemoveAt(i);
+                    CrashLog.Note($"{l}: counted already when the chat settled, not again");
+                    return false;
+                }).ToList();
+        }
         foreach (var (l, events) in _parser.ParseBatch(voted, now))
         {
-            bool any = Apply(events);
+            bool any = Apply(events, l);
             CrashLog.Read(l, any, afterFade);
-            if (any) { LastLine = l; LootLine?.Invoke(l); }
+            // while the chat is garbled, what the vote counts is remembered too, so the settle doesn't count it again
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
         }
+        batchAchievement = reread.Concat(fresh).Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         foreach (var l in reread)
         {
             bool any = false;
-            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, "chat · recovered");
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, l, "chat · recovered");
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
-            if (any) { LastLine = l; LootLine?.Invoke(l); }
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
+        }
+        // dated when the garbling began, which is when they landed (an event's rewards: inside its time for rewards)
+        // only an achievement line that first showed with the garbled reads: one that sat in the chat before is an old one
+        if (settledAchievement) settledAchievement = _lastLines.Any(l => Reread.IsAchievement(l) && (Reread.FirstSeen(l, _firstSeen) is not DateTime f || f >= settledAt.AddSeconds(-5)));
+        batchAchievement = settledAchievement;
+        if (settledAchievement) { _achieveUntil = settledAt.AddSeconds(RewardWindowSeconds); CrashLog.Note("the settled lines came with an achievement: they are its reward, not drops"); }
+        foreach (var l in settled)
+        {
+            bool any = false;
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) any |= Apply(events, l, "chat · recovered");
+            CrashLog.Read(l + "    (counted once the chat settled)", any);
+            if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; lock (_settledCounted) _settledCounted.Add((l.Trim(), now)); }
+        }
+        if (settledAny)
+        {
+            CrashLog.Note($"the chat settled after {(now - settledAt).TotalSeconds:0} s of reads that didn't line up; its loot lines counted from the clean read: {string.Join(" | ", settled)}");
+            _garbledSince = null;
+        }
+        // ---- the loot ledger: a loot line no read in ten minutes showed, that nothing counted, is new wherever it sits ----
+        // Lining reads up finds new lines at the bottom. A line one read lost and the next showed sits between lines
+        // already seen, and was never counted (the synthetic fights; 497 Kina at 16:16 on 2026-10-23). Read exactly, in
+        // two reads in a row, in a read that lined up, and at most two at once (more is history scrolled back into view).
+        {
+            // what any path took in the last few seconds, by meaning and by text: a garbled copy still waiting for its vote
+            // is the same line as the clean one the ledger sees (the noisy synthetic fights counted those twice)
+            foreach (var l in fresh.Concat(reread).Concat(settled)) _recentHandled.Add((l.Trim(), _parser.Meaning(l).Key, now));
+            _recentHandled.RemoveAll(x => (now - x.At).TotalSeconds > HandledSeconds);
+            var handled = new HashSet<string>(_recentHandled.Select(x => x.Key).Where(k => k.Length > 0));
+            bool Handled(string line) => _recentHandled.Any(x => Reread.Same(x.Line, line.Trim()));
+            var keyed = lines.Select(l => (Line: l, M: _parser.Meaning(l))).Where(x => x.M.Key.Length > 0).ToList();
+            if (!_ledgerPrimed) { foreach (var x in keyed) _keySeen[x.M.Key] = now; _ledgerPrimed = true; }
+            var unseen = keyed.Where(x => !handled.Contains(x.M.Key) && !(_keySeen.TryGetValue(x.M.Key, out var ks) && (now - ks).TotalMinutes <= LedgerMinutes)).ToList();
+            bool aligned = _tracker.Unaligned == unaligned;
+            if (aligned && unseen.Count is > 0 and <= 2 && Update.RemoteConfig.Current.Ledger)
+                foreach (var (l, m) in unseen.GroupBy(x => x.M.Key).Select(g => g.First()))
+                {
+                    if (!m.Exact || Handled(l)) continue;
+                    int c = _keyCandidate.GetValueOrDefault(m.Key) + 1;
+                    if (c < 2) { _keyCandidate[m.Key] = c; continue; }
+                    _keyCandidate.Remove(m.Key);
+                    bool any = false;
+                    foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, l, "chat · ledger");
+                    CrashLog.Read(l + "    (between lines already seen: no read had shown it)", any);
+                    if (any) { LastLine = l; LootLine?.Invoke(l); }
+                    _keySeen[m.Key] = now;
+                }
+            var present = keyed.Select(x => x.M.Key).ToHashSet();
+            foreach (var k in _keyCandidate.Keys.Where(k => !present.Contains(k)).ToList()) _keyCandidate.Remove(k);
+            foreach (var k in present) if (!_keyCandidate.ContainsKey(k)) _keySeen[k] = now;
+            foreach (var k in _keySeen.Where(kv => (now - kv.Value).TotalMinutes > LedgerMinutes).Select(kv => kv.Key).ToList()) _keySeen.Remove(k);
         }
         LastError = "";
     }
 
+    readonly Dictionary<string, DateTime> _keySeen = new();
+    readonly Dictionary<string, int> _keyCandidate = new();
+    readonly List<(string Line, string Key, DateTime At)> _recentHandled = new();
+    const double HandledSeconds = 8;
+    bool _ledgerPrimed;
+    const double LedgerMinutes = 10;
+
     DateTime _targetAt = DateTime.MinValue;
+    /// <summary>Lines the settle counted, for the next reads not to count them again (each once).</summary>
+    readonly List<(string Line, DateTime At)> _settledCounted = new();
+    const double SettledDupSeconds = 15;
     readonly ChatVoter _voter = new();
     internal bool Vote = true;   // off only for replay --novote, to measure what voting changes
     public ChatVoter Voter => _voter;
@@ -606,7 +1035,7 @@ public sealed class TrackerSession
             var band = new Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
             using var bandBmp = frame.Clone(band, frame.PixelFormat);
             var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
-            var rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+            var rc = lines.FirstOrDefault(l => Update.RemoteConfig.HasAny(l.Text, Update.RemoteConfig.Current.RewardCollectedWords));
             if (rc == null) { if ((now - _gridSeenAt).TotalSeconds > 5) _gridDone = false; return; }
             _gridSeenAt = now;
             if (_gridDone) return;
@@ -739,6 +1168,12 @@ public sealed class TrackerSession
         if (_boss == null) return false;
         if (_bossDeadAt == DateTime.MinValue)
         {
+            // a rare drop (boss gear, Legend, Unique, Epic) is never set aside, fight or not (Steven, 2026-10-23)
+            if (ev is ItemAcquired ra && IsRare(ra.ItemId))
+            {
+                CrashLog.Note($"world boss fight: {Describe(ev)} is a rare drop, so it counts");
+                return false;
+            }
             if (ev is ItemAcquired or KinahChanged or MobKilled or CurrencyGained or EnemySoul or XpGained or PetCrystal)
             {
                 _bossSetAside++;
@@ -759,10 +1194,92 @@ public sealed class TrackerSession
         _ => ev.GetType().Name,
     };
 
+    // ---- achievement rewards and box contents: never drops (Steven, 2026-10-23) ----
+    /// <summary>After an achievement line, or a reward or box line out in the world, what lands this long after is a reward.</summary>
+    public const double RewardWindowSeconds = 10;
+    /// <summary>A loot list row out in the world with no kill or gather this long before it is a box or a reward.</summary>
+    public const double NoKillSeconds = 15;
+    DateTime _achieveUntil = DateTime.MinValue, _boxUntil = DateTime.MinValue, _lastKillAt = DateTime.MinValue, _lastGatherAt = DateTime.MinValue;
+    static readonly Regex BoxName = new(@"\b(?:chest|box|pouch|bundle|cube|coffer|crate|package|parcel)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static HashSet<string>? _gatherNames;
+    bool InRun => ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored;
+
+    /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
+    string? RewardWhy(DateTime t, bool isBox = false) =>
+        t <= _achieveUntil ? "an achievement's reward"
+        : t <= _inventoryUntil ? "the inventory at work (storage, Quick Register, the wardrobe)"
+        : !InRun && !isBox && t <= _boxUntil ? "a box's or a reward's contents" : null;
+    /// <summary>Until when what lands is the player's own inventory at work (PickupCheck.IsInventoryLine, IsSkinUnlock).</summary>
+    DateTime _inventoryUntil = DateTime.MinValue;
+
+    /// <summary>A reward line, or an item that is a box ("Growth Pet Chest"), out in the world opens the window for what comes out of it.</summary>
+    void NoteReward(GameEvent ev, DateTime now)
+    {
+        if (InRun || _boss != null) return;
+        string? name = ev switch { RewardReceived r => r.Name, ItemAcquired a => _items.NameOf(a.ItemId), _ => null };
+        if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return;
+        if (ev is RewardReceived || BoxName.IsMatch(name)) _boxUntil = now.AddSeconds(RewardWindowSeconds);
+    }
+
+    // ---- the gathering bar as a witness (Steven's plan, step 1, 2026-10-23) ----
+    // The gathering panel is the crafting panel's widget: one race per gather, Success or Fail, and when the game rolls an
+    // upgrade (the panel turns blue, an "x3" badge) a second race on the same gather. Each base race that ends on Success
+    // is one gather that happened; a chat line for a gathering material claims it, and a loot list row the chat missed
+    // may only count by claiming one. A stopped gather never finishes its race, so it leaves nothing to claim.
+    public const double GatherTokenSeconds = 10;
+    readonly List<(DateTime At, bool Upgraded, bool Used)> _gatherTokens = new();
+
+    /// <summary>One finished race of the gathering bar (also what tests feed).</summary>
+    internal void GatherOutcome(DateTime at, bool ok, bool upgradeRoll)
+    {
+        lock (_gatherTokens)
+        {
+            if (upgradeRoll) { if (_gatherTokens.Count > 0) _gatherTokens[^1] = _gatherTokens[^1] with { Upgraded = ok }; return; }
+            if (ok) _gatherTokens.Add((at, false, false));
+            _gatherTokens.RemoveAll(t => (at - t.At).TotalSeconds > 60);
+        }
+    }
+
+    /// <summary>Claims the latest unclaimed successful gather of the last few seconds; false when there is none.</summary>
+    bool TakeGatherToken(DateTime now, string by)
+    {
+        lock (_gatherTokens)
+        {
+            for (int i = _gatherTokens.Count - 1; i >= 0; i--)
+            {
+                var t = _gatherTokens[i];
+                if (t.Used || (now - t.At).TotalSeconds > GatherTokenSeconds || (now - t.At).TotalSeconds < -2) continue;
+                _gatherTokens[i] = t with { Used = true };
+                return true;
+            }
+            return false;
+        }
+    }
+
+    bool IsGatherMaterial(long id)
+    {
+        _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return _gatherNames.Contains(_items.NameOf(id));
+    }
+
     void Count(GameEvent ev)
     {
+        // a chat line for a gathering material claims the gathering bar's success, so the loot list can't count it again
+        if (ev is ItemAcquired cg0 && !ev.Via.Contains("loot list") && IsGatherMaterial(cg0.ItemId)) TakeGatherToken(ev.Time, "the chat");
+        // what a kill or a gather looks like, for telling a box's contents in the loot list from a drop
+        if (ev is MobKilled or EnemySoul or XpGained || ev is CurrencyGained { Enemy.Length: > 0 } || (ev is CurrencyGained cg && cg.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) || ev is KinahChanged { Bound: false, Delta: > 0 })
+        { _lastKillAt = ev.Time; Witness(ev.Time); }
+        if (ev is PetCrystal) Witness(ev.Time);
+        if (ev is GatherFailed) { _lastGatherAt = ev.Time; Witness(ev.Time); }
+        else if (ev is ItemAcquired ga)
+        {
+            _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (_gatherNames.Contains(_items.NameOf(ga.ItemId))) { _lastGatherAt = ev.Time; Witness(ev.Time); }
+        }
         if (ev is not CraftResult && BossTakes(ev)) return;
-        if (ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored)
+        // inside an event or expedition, or just out of one while its rewards still land (InstanceLog.RewardGraceSeconds)
+        bool ending = ZoneLocator.KindOf(Zone) == null && Instances.Ending(ev.Time);
+        if ((ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored) || ending)
         {
             // the reward table's coin slot, read first, then the same Kina in the chat: once
             if (ev is KinahChanged { Delta: > 0 } dup && _gridKina.FindIndex(g => (ev.Time - g.At).TotalSeconds is >= 0 and <= 90 && g.Amount == dup.Delta) is int gi and >= 0)
@@ -787,13 +1304,16 @@ public sealed class TrackerSession
     // quest enemy, the kills counted should rise as fast as the counter. Pass times say how often the screen is read.
     int _passes; double _passMs, _chatMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
     readonly Dictionary<int, int> _questMax = new();
+    /// <summary>A new quest number seen once, waiting for the next read to agree (and when it was first seen).</summary>
+    readonly Dictionary<int, (int N, DateTime At)> _questPending = new();
     /// <summary>Steps of the quest tracker's kill counters seen since the start: kills of quest enemies, counted by the game.</summary>
     public int QuestStepsTotal { get; private set; }
     /// <summary>For the accuracy meter: in the minutes the quest counter moved, the kills it counted and the kills the tracker counted.</summary>
     public int QuestKillsGame { get; private set; }
     public int QuestKillsCounted { get; private set; }
-    internal void QuestCounter(IReadOnlyList<string> lines)
+    internal void QuestCounter(IReadOnlyList<string> lines, DateTime? at = null)
     {
+        var t = at ?? DateTime.UtcNow;
         var best = new Dictionary<int, int>();
         for (int i = 0; i < lines.Count; i++)
         {
@@ -808,8 +1328,21 @@ public sealed class TrackerSession
         }
         foreach (var (of, n) in best)
         {
-            if (_questMax.TryGetValue(of, out var was) && n > was && n - was <= 5) { _questSteps += n - was; QuestStepsTotal += n - was; }
-            if (!_questMax.ContainsKey(of) || n > was || n < was - 3) _questMax[of] = n;
+            bool known = _questMax.TryGetValue(of, out var was);
+            if (known && n > was && n - was <= 5)
+            {
+                // two reads agree on the new number before it counts: one misread "(24/25)" is not three kills
+                if (!(_questPending.TryGetValue(of, out var p) && p.N == n)) { _questPending[of] = (n, t); continue; }
+                _questPending.Remove(of);
+                int steps = n - was;
+                _questSteps += steps; QuestStepsTotal += steps;
+                // each step is a kill the game counted: evidence for the kill count, joining the kill its Kinah or Soul
+                // line showed, or a kill of its own when those were lost (Steven, 2026-10-23: 25 kills counted as 20)
+                for (int s = 0; s < steps; s++) foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.QuestStep(p.At);
+                Witness(p.At);
+            }
+            else _questPending.Remove(of);
+            if (!known || n > was || n < was - 3) _questMax[of] = n;
         }
     }
     void Audit()
@@ -818,6 +1351,7 @@ public sealed class TrackerSession
         if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
         SaveColours();
+        ReportLayout();   // the text size is known by now: the layout's key gets it
         int kills = Engine.Totals().Kills;
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
@@ -833,6 +1367,13 @@ public sealed class TrackerSession
     public List<Pickup> RecentPickups(int n) { lock (_pickups) return _pickups.TakeLast(n).Reverse().ToList(); }
     void Feed(GameEvent ev)
     {
+        // Kina is money, never an item: a loot list row the icon named Kina, its amount cut off ("Vana" read as "Kina x1"),
+        // landed in Drops from kills (Steven, 2026-10-23 16:17). The amount is unknown, so nothing counts from it
+        if (ev is ItemAcquired km && PickupCheck.IsKina(_items.NameOf(km.ItemId)))
+        {
+            CrashLog.Note($"Kina x{km.Count} as an item ({ev.Via}): Kina is money, not a drop, and its amount wasn't read; not counted");
+            return;
+        }
         string? what = ev switch
         {
             ItemAcquired a => $"{_items.NameOf(a.ItemId)} ×{a.Count}" + (a.Bound ? " (bound)" : ""),
@@ -840,6 +1381,7 @@ public sealed class TrackerSession
             _ => null,
         };
         if (what == null) return;
+        Accuracy.Add("pickups");
         Report.Counted(ev.Time, what, ev.Via);
         lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
     }
@@ -871,16 +1413,24 @@ public sealed class TrackerSession
     /// <summary>Loot list rows named by their icon (PopupIcons), for the audit line.</summary>
     public int IconNamed { get; private set; }
 
-    void LootProcess((List<OcrLineBox> Lines, System.Drawing.Bitmap Raw, System.Drawing.Point Origin)? read)
+    /// <summary>One loot list picture read and counted the way a live pass does it (text, icons, the rare drops' second read): replays and the replay bank.</summary>
+    internal async Task ReplayListFrameAsync(System.Drawing.Bitmap raw, System.Drawing.Point origin, DateTime t)
+    {
+        var lines = await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
+        await LootProcess((lines, (System.Drawing.Bitmap)raw.Clone(), origin), t);   // LootProcess disposes its picture
+    }
+
+    async Task LootProcess((List<OcrLineBox> Lines, System.Drawing.Bitmap Raw, System.Drawing.Point Origin)? read, DateTime? at = null)
     {
         if (read is not { } r) return;
+        var now = at ?? DateTime.UtcNow;
         using (r.Raw)
         {
             var lines = r.Lines.Select(l => (l.Box.Top, l.Text)).ToList();
             // the list's picture for the miscount report, when it shows rows (at most once a second: the world moves behind it)
-            if (ReportBuffer.KeepFrames && LootPopup.Rows(lines).Count > 0)
-                try { Report.Picture("loot", r.Raw, r.Origin, DateTime.UtcNow, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
-            if (_settings.Ocr.LootIcons && r.Lines.Count > 0)
+            if (ReportBuffer.Keeps("loot") && LootPopup.Rows(lines).Count > 0)
+                try { Report.Picture("loot", r.Raw, r.Origin, now, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
+            if (_settings.Ocr.LootIcons && !Update.RemoteConfig.Current.Off("loot_icons") && r.Lines.Count > 0)
             {
                 // a row whose text is cut off or garbled is named by the icon beside it, when one icon is clearly it
                 for (int i = 0; i < r.Lines.Count; i++)
@@ -896,7 +1446,9 @@ public sealed class TrackerSession
                     catch (Exception ex) { CrashLog.Write("loot list icon", ex); }
                 }
             }
-            ProcessList(lines, DateTime.UtcNow);
+            ProcessList(lines, now);
+            // a rare drop only the list showed: this picture read again before it counts (RareGate)
+            if (_rare.Waiting > 0) await ResolveRareAsync("list", r.Raw, r.Origin);
         }
     }
 
@@ -905,10 +1457,17 @@ public sealed class TrackerSession
     {
         try
         {
+            CommitHeld();   // anything a step without a picture left waiting (a replay) counts as read first
             // a shop or reward screen covers the place the loot list shows: nothing there is loot
             if (Target.RewardOpen(now)) return;
+            // the gathering panel ("Orichalcum · Proficiency · Orichalcum Ore x1 · Success") sits at the bottom of the band:
+            // its lines are what is being gathered, never a pickup (Steven, 2026-10-23 11:28)
+            lines = WithoutGatherPanel(lines, now);
+            // a row that changed in place a moment ago is the same item, its final text (an upgrade, a redraw)
+            Supersede(lines, now);
             var rows = LootPopup.Rows(lines);
             if (rows.Count > 0) _lastActivity = DateTime.UtcNow;
+            if (rows.Count > 0 && !_lootSeen) { _lootSeen = true; ReportLayout(); }
             if (rows.Count > 0) { var traced = rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}").ToList(); ReadTrace.List(now, traced); Report.Lines("list", traced, now); }
             var add = _cross.Popup(rows, now);
             if (add.Count == 0) return;
@@ -929,6 +1488,18 @@ public sealed class TrackerSession
                     continue;
                 }
                 bool made = (panel && parsed is ItemAcquired) || (crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null);
+                // loot list rows count only with a chat line (Steven, 2026-10-23: "chat-confirmed only"); what a craft made
+                // still counts from the list, as the crafting panel's flow did; an enemy's soul row is a kill, not a pickup
+                // ...except a gather the chat missed: a gathering material, with a gathering bar that finished on Success in
+                // the last few seconds that no chat line has claimed (step 1 of Steven's plan, 2026-10-23): two witnesses
+                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && TakeGatherToken(now, "the loot list"))
+                    CrashLog.Note($"loot list: {_items.NameOf(gl.ItemId)} x{gl.Count} counted: the chat missed it, and the gathering bar finished on Success");
+                // a rare drop is the other exception: it goes to its second read, and counts when that read confirms it (CommitRare)
+                else if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired or KinahChanged && !(parsed is ItemAcquired rl && IsRare(rl.ItemId)))
+                {
+                    CrashLog.Note($"loot list: {(parsed is ItemAcquired na ? $"{_items.NameOf(na.ItemId)} x{na.Count}" : $"{((KinahChanged)parsed).Delta:N0} Kina")} not counted: no chat line confirmed it");
+                    continue;
+                }
                 // with the crafting window open, the loot list shows what the crafts gave: a recipe's item is a craft (the
                 // engines take it as one), anything else is set aside until the window itself can be read, never a drop
                 if (crafting && !made && parsed is ItemAcquired other)
@@ -936,13 +1507,24 @@ public sealed class TrackerSession
                     CrashLog.Note($"crafting window open: {_items.NameOf(other.ItemId)} x{other.Count} from the loot list set aside, not a drop");
                     continue;
                 }
+                // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
+                if (!made && InBaseNotOdyle(parsed)) { CrashLog.Note($"in a base, so not counted from the loot list: {_items.NameOf(((ItemAcquired)parsed).ItemId)}"); continue; }
+                // an achievement's reward or a box's contents shows in the list too; out in the world, a row with no kill or
+                // gather around it is one (a box opened in town). Never a drop (Steven, 2026-10-23)
+                if (!made && parsed is ItemAcquired lr)
+                {
+                    var why = RewardWhy(now);
+                    // a gathering material is a gather itself (the chat may have missed its line), never a box's contents
+                    _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    bool gathered = _gatherNames.Contains(_items.NameOf(lr.ItemId));
+                    if (why == null && !gathered && !InRun && (now - _lastKillAt).TotalSeconds > NoKillSeconds && (now - _lastGatherAt).TotalSeconds > NoKillSeconds) why = $"no kill or gather in the last {NoKillSeconds:0} s, so a box or a reward";
+                    if (why == null && !gathered && !InRun) why = PickupCheck.TooMany(lr.Count);
+                    if (why != null) { CrashLog.Note($"loot list: {_items.NameOf(lr.ItemId)} x{lr.Count} set aside: {why}"); continue; }
+                }
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
-                Count(ev);
-                Feed(ev);
-                if (ev is ItemAcquired) CraftView.Apply(ev);
-                if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
-                else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
-                try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+                // a rare drop only the list showed waits for its second read (LootProcess, this pass)
+                if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "list", _items.NameOf(ra.ItemId), now)); continue; }
+                Commit(ev);
             }
         }
         catch (Exception ex) { CrashLog.Write("loot list", ex); }
@@ -950,6 +1532,14 @@ public sealed class TrackerSession
     /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
     List<string> _prevRead = new();
     readonly Reread _reread = new();
+    // when each line was first on screen: an achievement line that stays up is read a little differently each time, and
+    // only a new one makes the items with it its reward
+    readonly Dictionary<string, (DateTime First, DateTime Last)> _firstSeen = new();
+    bool NewLine(string line, DateTime now) => Reread.FirstSeen(line, _firstSeen) is not DateTime f || (now - f).TotalSeconds <= 20;
+    // reads that couldn't be lined up, in a row: since when, the lines seen before them, what was counted meanwhile
+    DateTime? _garbledSince; HashSet<string> _beforeGarbled = new(); readonly List<string> _countedGarbled = new();
+    /// <summary>Garbled reads longer than this before the chat settles aren't one burst; nothing is taken from the settled read.</summary>
+    public const double SettleSeconds = 45;
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
     List<string> _lastLines = new();
@@ -1040,6 +1630,65 @@ public sealed class TrackerSession
     // bar for each craft; see CraftPanel. Its strip is read every pass (pixels only; a race lasts about five seconds), its
     // recipe line by OCR when the panel opens and every few seconds after, and each race's outcome is one craft.
     readonly CraftPanelTracker _panel = new();
+    // the same Success/Fail bars when a node is gathered: each race's outcome, for the audit and the loot list's gathers
+    readonly CraftPanelTracker _gatherBar = new();
+    readonly List<(DateTime At, bool Ok)> _gatherRaces = new();
+    /// <summary>Gathers the bar finished, ok and failed, since the start (the panel's own count).</summary>
+    public int GatherBarOk { get; private set; }
+    public int GatherBarFailed { get; private set; }
+
+    // ---- the loot list band: the gathering panel, and rows that change in place ----
+    DateTime _gatherPanelNoted = DateTime.MinValue;
+    List<(int Top, string Text, DateTime At)> _prevRows = new();
+
+    /// <summary>
+    /// The lines of a loot list read without the gathering panel's: a "Success" or "Fail" bar label (or "Proficiency")
+    /// marks it, and its block (title, proficiency, item, bars) runs from about three lines above that label down.
+    /// </summary>
+    internal List<(int Top, string Text)> WithoutGatherPanel(List<(int Top, string Text)> lines, DateTime now)
+    {
+        if (lines.Count == 0) return lines;
+        var marks = lines.Where(l => System.Text.RegularExpressions.Regex.IsMatch(l.Text.Trim(), @"^\W*[il1|]?\s*(?:success|fail(?:ed|ure)?|profic\w*|profes\w*|pr\w{0,3}fes\w*)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).ToList();
+        if (marks.Count == 0) return lines;
+        var tops = lines.Select(l => l.Top).OrderBy(t => t).ToList();
+        var gaps = tops.Zip(tops.Skip(1), (a, b) => b - a).Where(d => d > 4).OrderBy(d => d).ToList();
+        int gap = gaps.Count > 0 ? gaps[gaps.Count / 2] : 30;
+        // the panel's block: from three lines above its first marker (the node's name, its proficiency) to the bottom
+        int cut = marks.Min(m => m.Top) - (int)(gap * 2.5);
+        var kept = lines.Where(l => l.Top < cut).ToList();
+        if ((now - _gatherPanelNoted).TotalSeconds > 20)
+        {
+            _gatherPanelNoted = now;
+            CrashLog.Note($"the gathering panel shows at the bottom of the loot list's place: its lines aren't pickups ({string.Join(" | ", lines.Where(l => l.Top >= cut).Select(l => l.Text))})");
+        }
+        return kept;
+    }
+
+    /// <summary>
+    /// A row whose text changed in its place within two seconds (the game upgrading "Orichalcum Ore" to "Fine Orichalcum
+    /// Ore", a redraw) is one item: the earlier text stops waiting for the chat, so only the final one can be a pickup.
+    /// </summary>
+    void Supersede(List<(int Top, string Text)> lines, DateTime now)
+    {
+        var tops = lines.Select(l => l.Top).OrderBy(t => t).ToList();
+        var gaps = tops.Zip(tops.Skip(1), (a, b) => b - a).Where(d => d > 4).OrderBy(d => d).ToList();
+        int near = Math.Max(6, (int)((gaps.Count > 0 ? gaps[gaps.Count / 2] : 30) * 0.6));
+        foreach (var (top, text) in lines)
+        {
+            var row = LootPopup.Rows(new[] { (top, text) }).FirstOrDefault();
+            if (row == null || row.IsKinah) continue;
+            foreach (var p in _prevRows.Where(p => Math.Abs(p.Top - top) <= near && (now - p.At).TotalSeconds <= 2))
+            {
+                var was = LootPopup.Rows(new[] { (p.Top, p.Text) }).FirstOrDefault();
+                if (was == null || was.IsKinah || string.Equals(was.Name, row.Name, StringComparison.OrdinalIgnoreCase)) continue;
+                // the same item's family: one name holds the other ("Fine Orichalcum Ore" holds "Orichalcum Ore")
+                string a = was.Name.ToLowerInvariant(), b = row.Name.ToLowerInvariant();
+                if (!(a.Contains(b) || b.Contains(a))) continue;
+                if (_cross.Supersede(_cross.KeyOf(was))) CrashLog.Note($"loot list: \"{was.Name}\" turned into \"{row.Name}\" in its place: one item, the last text");
+            }
+        }
+        _prevRows = lines.Select(l => (l.Top, l.Text, now)).ToList();
+    }
     string _panelRecipe = ""; DateTime _panelTextAt = DateTime.MinValue; bool _panelUp, _panelIsCraft;
 
     async Task CraftPanelDue()
@@ -1054,7 +1703,7 @@ public sealed class TrackerSession
             var s = CraftPanel.Measure(bmp, region, g);
             if (!s.Visible)
             {
-                if (_panelUp && _panelIsCraft) CrashLog.Note("crafting panel gone");
+                if (_panelUp && _panelIsCraft) { CrashLog.Note("crafting panel gone"); Accuracy.Add("craft_batches"); }
                 _panelUp = false; _panelIsCraft = false;
                 return;
             }
@@ -1065,14 +1714,28 @@ public sealed class TrackerSession
                 // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
                 // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
                 // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
-                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(l => l.Contains("Crafting", StringComparison.OrdinalIgnoreCase));
+                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(l => Update.RemoteConfig.HasAny(l, Update.RemoteConfig.Current.CraftPanelWords));
                 if (craft != _panelIsCraft || !_panelUp) CrashLog.Note(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
                 _panelIsCraft = craft;
                 var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
                 if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", CraftPanel.LastLines)})"); }
             }
             _panelUp = true;
-            if (!_panelIsCraft) return;
+            if (!_panelIsCraft)
+            {
+                // a node being gathered: its bar's outcome, for the audit (a stopped gather's bar never fills: no outcome)
+                if (_gatherBar.Feed(now, s) is { } go)
+                {
+                    _gatherRaces.Add((now, go.Ok)); if (_gatherRaces.Count > 50) _gatherRaces.RemoveAt(0);
+                    if (go.Ok) GatherBarOk++; else GatherBarFailed++;
+                    CrashLog.Note($"gathering bar: {(go.Combo ? "upgrade roll " : "")}{(go.Ok ? "success" : "fail")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
+                    GatherOutcome(now, go.Ok, go.Combo);
+                }
+                return;
+            }
+            if (!_craftSeen) { _craftSeen = true; ReportLayout(); }
+            // the panel's picture for a miscount report (the panel's own strip only, at most once a second)
+            if (ReportBuffer.Keeps("craft")) try { Report.Picture("craft", bmp, region.Location, now, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
             // the crafting window's hold and its pictures last as long as the queue runs, and the passes keep a fight's pace
             Target.MarkCraft(now); _lastActivity = now;
             foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.CraftPanelSeen(_panelRecipe, now);
@@ -1081,6 +1744,8 @@ public sealed class TrackerSession
             CrashLog.Note($"crafting panel: {(o.Combo ? "combo roll " : "")}{(o.Ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
             Count(ev);
             CraftView.Apply(ev);
+            Accuracy.Add("craft_panel");
+            Report.Counted(now, $"craft {(o.Ok ? "success" : "fail")}{(o.Combo ? " (combo)" : "")}: {(_panelRecipe.Length > 0 ? _panelRecipe : "?")}", ev.Via);
             try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
         }
         catch (System.ComponentModel.Win32Exception) { throw; }
@@ -1141,6 +1806,8 @@ public sealed class TrackerSession
         _cts.Cancel();
         if (_loop != null) { try { await _loop; } catch (Exception) { /* loop ended */ } }
         FlushVotes();   // lines still waiting for their vote count as read, before the run closes
+        CommitHeld();   // and a rare pickup still waiting for its second read
+        lock (_chatShotLock) { _chatShot?.Dispose(); _chatShot = null; }
         Instances.Close();
         Engine.Finish();
     }
@@ -1151,8 +1818,46 @@ public sealed class TrackerSession
     /// </summary>
     internal void FlushVotes(DateTime? at = null)
     {
-        if (_voter.Waiting == 0 || _prevRead.Count == 0) return;
-        ProcessChat(new List<string>(_prevRead), (at ?? DateTime.UtcNow).AddSeconds(ChatVoter.MaxSeconds + 0.1));
+        var t = (at ?? DateTime.UtcNow).AddSeconds(ChatVoter.MaxSeconds + 0.1);
+        if (_voter.Waiting > 0 && _prevRead.Count > 0) ProcessChat(new List<string>(_prevRead), t);
+        CommitHeld();
+        ReleaseAwaiting(t.AddSeconds(WitnessWaitSeconds), final: true);   // a stop or the end of a replay: decided now
+        foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(t, final: true);
+    }
+
+    // ---- two witnesses for a drop (Steven's rule: no single-signal counting; the audit of 2026-10-23) ----
+    // Claims, cubes, mail, storage, quest items and wardrobe unlocks print "acquired" like a drop, and new ones turn up
+    // with every patch. What they never have is a kill or a gather: an enemy's Kinah, Soul Points or Soul Crystal line, a
+    // soul row, the quest counter moving, or a gather. So out in the world an item line waits up to a few seconds for one,
+    // either side of it, and without one it is a reward, not a drop. Rare drops keep their own rule (always counted).
+    readonly List<(GameEvent Ev, DateTime At)> _awaiting = new();
+    readonly List<DateTime> _witnessAt = new();
+    static double WitnessSeconds => Update.RemoteConfig.Current.WitnessSeconds;
+    const double WitnessWaitSeconds = 8;
+
+    bool NeedsWitness(ItemAcquired a, bool made, bool crafting) =>
+        WitnessSeconds > 0 && !InRun && _boss == null && !made && !crafting && !IsGatherMaterial(a.ItemId) && !IsRare(a.ItemId);
+
+    void Witness(DateTime t) { lock (_witnessAt) { _witnessAt.Add(t); _witnessAt.RemoveAll(w => (t - w).TotalSeconds > 120); } }
+
+    bool Witnessed(DateTime t) { lock (_witnessAt) return _witnessAt.Any(w => Math.Abs((w - t).TotalSeconds) <= WitnessSeconds); }
+
+    /// <summary>Items waiting for a kill or a gather: counted once one is seen, a reward once the wait is over.</summary>
+    internal void ReleaseAwaiting(DateTime now, bool final = false)
+    {
+        List<(GameEvent Ev, DateTime At)> due;
+        lock (_awaiting)
+        {
+            if (_awaiting.Count == 0) return;
+            due = _awaiting.Where(x => final || Witnessed(x.Ev.Time) || (now - x.At).TotalSeconds > WitnessWaitSeconds).ToList();
+            foreach (var d in due) _awaiting.Remove(d);
+        }
+        foreach (var (ev, _) in due)
+        {
+            if (Witnessed(ev.Time)) { Commit(ev); continue; }
+            if (ev is ItemAcquired a) CrashLog.Note($"{_items.NameOf(a.ItemId)} x{a.Count}: no kill or gather within {WitnessSeconds:0} s of it, so a claim, a box or the inventory; not a drop");
+            Commit(_parser.AsReward(ev));
+        }
     }
 
     /// <summary>The player's region key and server label ("na_e", "Siel (Elyos)"), sent with the run so the site can keep drops per server.</summary>
@@ -1172,6 +1877,8 @@ public sealed class TrackerSession
         var runs = Instances.TakeUnshared(e.Started);
         bool ok = await Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, runs), s.Upload);
         if (!ok && s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint)) Instances.Restore(runs);
+        // the reading health since the last report goes with the run (numbers, item names as read, the layout)
+        try { await AccuracyClient.SendAsync(s.Upload); } catch (Exception ex) { CrashLog.Write("accuracy report", ex); }
         return ok;
     }
 }
@@ -1187,6 +1894,8 @@ public sealed class UserPrefs
     public bool Share { get; set; } = true;
     /// <summary>Keep the last minute of chat and loot list pictures for miscount reports (ReportBuffer). Off until the player says yes: they can show other players' names.</summary>
     public bool ReportFrames { get; set; }
+    /// <summary>Send a miscount report's loot list and crafting panel pictures (never the chat) to the site, where they become replay tests. Off until the player turns it on.</summary>
+    public bool SendReportFrames { get; set; }
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>
     public bool ManualChat { get; set; }
     /// <summary>No longer used: the window is always the live count, with setup in Options. Kept so older ui.json files load.</summary>

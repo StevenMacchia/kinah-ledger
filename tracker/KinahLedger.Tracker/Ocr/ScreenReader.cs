@@ -212,12 +212,23 @@ public sealed class ScreenReader
     /// <summary>Handed each capture before it is read (the miscount report keeps the last minute of them, when the player said yes).</summary>
     public Action<Bitmap>? Tap { get; set; }
 
+    /// <summary>Handed each capture once it has been read, to keep (the caller then owns and disposes it): a rare drop's second read uses it.</summary>
+    public Action<Bitmap>? Keep { get; set; }
+
     public async Task<List<string>> ReadAsync(string? savePng = null)
     {
-        using var raw = Capture();
-        if (savePng != null) raw.Save(savePng, ImageFormat.Png);
-        try { Tap?.Invoke(raw); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
-        return await ReadCaptureAsync(raw);
+        var raw = Capture();
+        try
+        {
+            if (savePng != null) raw.Save(savePng, ImageFormat.Png);
+            try { Tap?.Invoke(raw); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
+            return await ReadCaptureAsync(raw);
+        }
+        finally
+        {
+            if (Keep != null) { try { Keep(raw); } catch (Exception) { raw.Dispose(); } }
+            else raw.Dispose();
+        }
     }
 
     /// <summary>

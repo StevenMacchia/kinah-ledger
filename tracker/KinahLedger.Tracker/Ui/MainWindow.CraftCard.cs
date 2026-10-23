@@ -107,6 +107,8 @@ public partial class MainWindow
         {
             double rate = (double)mine.Ok / mine.Attempts;
             body.Children.Add(CkKv($"{mine.Attempts} craft{(mine.Attempts == 1 ? "" : "s")} · {mine.Ok} worked · {mine.Fail} failed", $"{rate:P0}", rate >= 0.5 ? CkGood : CkBad));
+            // the upgrade rolls the crafting panel showed after a craft worked
+            if (mine.Upgraded + mine.NotUpgraded > 0) body.Children.Add(CkKv($"Upgrade rolls · {mine.Upgraded} won · {mine.NotUpgraded} lost", $"{mine.Upgraded}/{mine.Upgraded + mine.NotUpgraded}", mine.Upgraded > 0 ? CkGood : CkMuted));
             if (mine.Made.Count > 0)
             {
                 var came = new WrapPanel { Margin = new Thickness(20, 6, 14, 0) };

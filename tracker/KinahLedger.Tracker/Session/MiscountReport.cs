@@ -23,6 +23,10 @@ public sealed class ReportBuffer
 
     /// <summary>Keep the pictures too (UserPrefs.ReportFrames; off until the player says yes).</summary>
     public static bool KeepFrames { get; set; }
+    /// <summary>Keep the loot list and crafting panel pictures (never the chat) for sending with a report (UserPrefs.SendReportFrames).</summary>
+    public static bool KeepUiFrames { get; set; }
+    /// <summary>Whether pictures of this kind are kept: the chat only with <see cref="KeepFrames"/>; the loot list and crafting panel with either switch.</summary>
+    public static bool Keeps(string kind) => kind == "chat" ? KeepFrames : KeepFrames || KeepUiFrames;
 
     sealed record Shot(DateTime At, string Kind, Point Origin, byte[] Png);
     readonly List<Shot> _shots = new();
@@ -38,7 +42,7 @@ public sealed class ReportBuffer
     /// </summary>
     public void Picture(string kind, Bitmap bmp, Point origin, DateTime at, double minGapSeconds = 0)
     {
-        if (!KeepFrames) return;
+        if (!Keeps(kind)) return;
         ulong h = Hash(bmp);
         lock (_lock)
         {

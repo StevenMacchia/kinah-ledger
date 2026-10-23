@@ -24,7 +24,10 @@ public sealed class Reread
     public static bool LooksLikeLoot(string line)
     {
         var k = Key(line);
-        return k.Contains("acqui") || k.Contains("obtain") || k.Contains("cquired") || k.EndsWith("kina") || k.EndsWith("kinah");
+        // a letter or two off the verb is still loot ("Asquired Fine Odyle x4.", "Acquiied", "Obtaincd"): the burst dropped
+        // Fine Odyle x4 from the 10:06 event rewards over one letter (Steven, 2026-10-23)
+        return k.Contains("acqui") || k.Contains("obtain") || k.Contains("cquired") || k.Contains("quired") || k.Contains("acqu") || k.Contains("btain")
+            || k.EndsWith("kina") || k.EndsWith("kinah") || System.Text.RegularExpressions.Regex.IsMatch(k, @"[a-z]x\d{1,4}$");
     }
 
     /// <summary>A new line that looked like loot and parsed to nothing, at its place counted from the bottom (0 = the last line).</summary>
@@ -162,8 +165,77 @@ public sealed class Reread
         return take;
     }
 
+    /// <summary>
+    /// The chat settled after reads that couldn't be lined up (Steven, 2026-10-23, Hidden Lugi: the event's rewards came in
+    /// all at once while the chat faded in, three reads garbled three ways, then a clean one; none of it was counted).
+    /// <paramref name="prev"/> is the read this one lined up with, so it is as clean as this one. From its bottom up, its
+    /// loot lines are new up to the first line that was on screen before the garbled reads began (<paramref name="before"/>,
+    /// keys of the lines seen in the ten minutes before): the chat is in order, so anything above that is older. Lines
+    /// already counted while it was garbled (<paramref name="counted"/>) are left out, and a line this read shows whole
+    /// ("Acquired Refining Stone x6." where the last read had cut it at "Refining Stone") is taken in its whole form.
+    /// </summary>
+    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted) => Settled(prev, cur, before, counted, out _);
+
+    /// <summary>The same, saying whether the new lines hold an achievement ("One-of-a-Kind Gear III achieved."): then they are its reward.</summary>
+    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted, out bool achievement)
+    {
+        var take = new List<string>();
+        var used = new HashSet<int>();
+        achievement = false;
+        for (int i = prev.Count - 1; i >= 0; i--)
+        {
+            var line = prev[i]; var k = Key(line);
+            if (k.Length == 0) continue;
+            if (before.Any(p => Same(k, p))) break;
+            // an achievement line that stays on screen reads a little differently each time: new only if nothing like it was seen
+            if (IsAchievement(line) && !before.Any(p => Near(k, p))) achievement = true;
+            if (!LooksLikeLoot(line) || line.TrimStart().StartsWith('[')) continue;
+            // garbled reads line up with each other too ("Acquire d Refining stone" three reads running): only a line whose
+            // verb was read whole is a clean read of it
+            if (!CleanVerb(line)) continue;
+            if (counted.Any(c => Near(Key(c), k))) continue;
+            // the same line, a little more of it (its count): most of it already read, and each fuller line used once
+            int f = -1;
+            for (int j = 0; j < cur.Count && f < 0; j++)
+            {
+                var ck = Key(cur[j]);
+                if (!used.Contains(j) && ck.Length > k.Length && k.Length >= 10 && k.Length * 10 >= ck.Length * 7 && ck.StartsWith(k, StringComparison.Ordinal) && CleanVerb(cur[j])) f = j;
+            }
+            if (f >= 0) used.Add(f);
+            take.Insert(0, f >= 0 ? cur[f] : line);
+        }
+        return take;
+    }
+
+    /// <summary>When each line was first on screen, by key; kept ten minutes after it was last seen. Call once per read.</summary>
+    public static void NoteFirstSeen(Dictionary<string, (DateTime First, DateTime Last)> seen, IReadOnlyList<string> lines, DateTime now)
+    {
+        foreach (var l in lines) { var k = Key(l); if (k.Length == 0) continue; seen[k] = seen.TryGetValue(k, out var v) && (now - v.Last).TotalMinutes <= 10 ? (v.First, now) : (now, now); }
+        if (seen.Count > 800) foreach (var k in seen.Where(kv => (now - kv.Value.Last).TotalMinutes > 10).Select(kv => kv.Key).ToList()) seen.Remove(k);
+    }
+
+    /// <summary>The first time a line like this one (the same, or a misread or two apart) was on screen; null when never.</summary>
+    public static DateTime? FirstSeen(string line, Dictionary<string, (DateTime First, DateTime Last)> seen)
+    {
+        var k = Key(line);
+        if (k.Length == 0) return null;
+        DateTime? best = null;
+        foreach (var (key, v) in seen) if ((key == k || Near(k, key)) && (best == null || v.First < best)) best = v.First;
+        return best;
+    }
+
+    /// <summary>An achievement line ("Fortress Guardian Notun III achieved."), never a player's message.</summary>
+    // A quest done ("Protect the Odyle Collector completed.") is the same: what prints with it is the quest's reward
+    // (Steven, 2026-10-23 16:22: its 200 Natura Soul Crystals landed in Soul Crystals from kills). Not a craft or a gather.
+    public static bool IsAchievement(string line) => !line.TrimStart().StartsWith('[')
+        && System.Text.RegularExpressions.Regex.IsMatch(line.Trim(), @"\b(?:achieved|completed)\W{0,3}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        && !System.Text.RegularExpressions.Regex.IsMatch(line, @"craft|gather|extract|enchant|refin|design", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>"acquired" or "obtained" read as a whole word: "Acquire d", "AcquirGdylO" and "Hatquired" are garbled.</summary>
+    static bool CleanVerb(string line) => System.Text.RegularExpressions.Regex.IsMatch(line, @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     /// <summary>One line read twice: the same digits, and the letters a misread or two apart at most.</summary>
-    static bool Same(string a, string b)
+    internal static bool Same(string a, string b)
     {
         if (a == b) return true;
         if (!new string(a.Where(char.IsDigit).ToArray()).Equals(new string(b.Where(char.IsDigit).ToArray()))) return false;

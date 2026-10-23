@@ -1,0 +1,12 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Orichalcum, 2026-10-23 11:28: the gathering panel in the loot list, an upgrade to Fine in place, a stopped gather",
+  "source": "Steven's trace.log, game lines only; player chat and names replaced",
+  "expect": {
+    "items": {
+      "Fine Orichalcum Ore": 1
+    }
+  }
+}
