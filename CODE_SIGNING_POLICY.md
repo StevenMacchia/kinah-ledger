@@ -37,7 +37,15 @@ and never sends input to the game. It sends data to these places, and nowhere el
     (`https://kinahledger.com/v1/runs`).
   - While the Market is open: the listings on your screen, item, quantity and unit price, never seller names
     (`https://kinahledger.com/v1/prices`).
-  - Never your character name, account, class, level, chat text or screenshots.
+  - With each shared run (since 0.8.12): counts of how reading went (reads that didn't line up, names guessed or not
+    found, pickups only the loot list saw, crafting panel counts), the item names the tracker couldn't read exactly
+    (names only), and where the chat sits as fractions of the game window with the window's size, with the app version
+    and the install ID (`https://kinahledger.com/v1/accuracy`). At start and every few hours the tracker reads small
+    reading settings and the staged rollout of new versions; only the app version goes with that request
+    (`https://kinahledger.com/v1/config`).
+  - Only if you turn on Options › Sharing › Send report pictures: a miscount report's pictures of the loot list and
+    the crafting panel, never the chat or the whole screen (`https://kinahledger.com/v1/frames`).
+  - Never your character name, account, class, level, chat text or screenshots of the chat or the whole screen.
   - If you paste the profile link code into a profile on the site, runs from that PC show there; profiles are
     private unless you make them public.
 - **kinahledger.com, for reference data.** The item list (`/data/items.json`) and your server's price board
