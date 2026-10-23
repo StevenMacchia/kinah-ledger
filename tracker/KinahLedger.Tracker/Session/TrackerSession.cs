@@ -1233,6 +1233,17 @@ public sealed class TrackerSession
         return (c0.Key, c0.Distance, c0.Graded);
     }
 
+    /// <summary>For the replay's report: the slot's closest icons that hold items of its grade, with the names they hold.</summary>
+    internal static List<(string Key, double Distance, string Names)> GradedCandidates(ItemDictionary items, RewardGrid.Slot sl)
+    {
+        var byIcon = items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        var res = new List<(string, double, string)>();
+        foreach (var (key, d) in sl.Icons)
+            if (key != null && byIcon.TryGetValue(key, out var its) && its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() is { Count: > 0 } n)
+                res.Add((key, d, string.Join(" / ", n)));
+        return res;
+    }
+
     internal static bool SureMatch(RewardGrid.Slot sl, int gradedCount) =>
         sl.Icons.Count > 0 && sl.Icons[0].Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= sl.Icons[0].Distance * 1.25) && gradedCount > 0;
 

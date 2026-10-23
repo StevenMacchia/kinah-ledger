@@ -201,12 +201,15 @@ public static class ReplayBank
                         table.Add(new JsonObject
                         {
                             ["n"] = sl.Count, ["grade"] = sl.Grade, ["name"] = TrackerSession.SlotName(items, sl) ?? "?",
+                            ["cands"] = string.Join(" | ", TrackerSession.GradedCandidates(items, sl).Take(3).Select(c => $"{c.Names} ({c.Key} {c.Distance:0})")),
                             ["icon"] = sl.Icons.Count > 0 ? $"{sl.Icons[0].Key} {sl.Icons[0].Distance:0}" + (sl.Icons.Count > 1 ? $" / {sl.Icons[1].Distance:0}" : "") : "none",
                         });
             }
             else Task.Run(() => session.ReplayListFrameAsync(bmp, at, t)).GetAwaiter().GetResult();
             if (table != null)
             {
+                for (int si = 0; si < table.Count; si++)
+                    Console.WriteLine($"  slot {si + 1,2} {table[si]!["grade"]} x{table[si]!["n"]}: {table[si]!["name"]} · best {table[si]!["icon"]} · same grade: {table[si]!["cands"]}");
                 int namedMasked = table.Count(x => x!["name"]?.GetValue<string>() != "?");
                 int namedFirst = table.Take(29).Count(x => x!["name"]?.GetValue<string>() != "?");
                 Console.WriteLine("  table with the badge mask: " + namedMasked + " of " + table.Count + " slots named, " + namedFirst + " of the first 29");
