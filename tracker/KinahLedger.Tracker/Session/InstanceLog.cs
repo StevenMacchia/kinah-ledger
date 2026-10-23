@@ -270,35 +270,49 @@ public sealed class InstanceLog
     {
         lock (_lock)
         {
-            if (_cur == null || _cur.Kind == WorldBoss || _leftAt is not { } left) return RunRoute.NotRun;
-            // dated well before it was left (a read that settled late): it happened inside. Within the minimap's few seconds of
-            // lag before the change it may be the open world's already, so it takes the test below
-            if (ev.Time < left.AddSeconds(-MinimapLagSeconds) && ev.Time >= _cur.Start.AddSeconds(-3)) return RunRoute.Run;
-            if ((ev.Time - left).TotalSeconds > RewardGraceSeconds) { CloseLocked("time for rewards over"); return RunRoute.NotRun; }
-            if (rewardScreen) return RunRoute.NotRun;
-            switch (ev)
-            {
-                case RewardReceived:
-                case ItemAcquired { Bound: true }:
-                case KinahChanged { Bound: true, Delta: > 0 }:
-                case KinahChanged { Delta: >= 1000 }:
-                case ItemAcquired { Count: >= 2 }:
-                    return RunRoute.Run;
-                case ItemAcquired when batch >= 3:
-                    return RunRoute.Run;
-                case ItemAcquired:
-                    return _cur.PaidAt == null ? RunRoute.Run : RunRoute.NotRun;
-                case KinahChanged { Delta: > 0 }:
-                case MobKilled:
-                case CurrencyGained:
-                case EnemySoul:
-                case XpGained:
-                case GatherFailed:
-                    CloseLocked((ev.Time - left).TotalSeconds >= 1 ? $"farming began {(ev.Time - left).TotalSeconds:0} s after leaving ({ev.GetType().Name})" : $"farming began as it was left ({ev.GetType().Name})");
-                    return RunRoute.NotRun;
-                default:
-                    return RunRoute.NotRun;
-            }
+            var r = Decide(ev, batch, rewardScreen, out var close);
+            if (close != null) CloseLocked(close);
+            return r;
+        }
+    }
+
+    /// <summary>The same decision as <see cref="Route"/>, without closing anything: whether the run would take this pickup.</summary>
+    public bool WouldTake(GameEvent ev, int batch, bool rewardScreen)
+    {
+        lock (_lock) return Decide(ev, batch, rewardScreen, out _) == RunRoute.Run;
+    }
+
+    RunRoute Decide(GameEvent ev, int batch, bool rewardScreen, out string? close)
+    {
+        close = null;
+        if (_cur == null || _cur.Kind == WorldBoss || _leftAt is not { } left) return RunRoute.NotRun;
+        // dated well before it was left (a read that settled late): it happened inside. Within the minimap's few seconds of
+        // lag before the change it may be the open world's already, so it takes the test below
+        if (ev.Time < left.AddSeconds(-MinimapLagSeconds) && ev.Time >= _cur.Start.AddSeconds(-3)) return RunRoute.Run;
+        if ((ev.Time - left).TotalSeconds > RewardGraceSeconds) { close = "time for rewards over"; return RunRoute.NotRun; }
+        if (rewardScreen) return RunRoute.NotRun;
+        switch (ev)
+        {
+            case RewardReceived:
+            case ItemAcquired { Bound: true }:
+            case KinahChanged { Bound: true, Delta: > 0 }:
+            case KinahChanged { Delta: >= 1000 }:
+            case ItemAcquired { Count: >= 2 }:
+                return RunRoute.Run;
+            case ItemAcquired when batch >= 3:
+                return RunRoute.Run;
+            case ItemAcquired:
+                return _cur.PaidAt == null ? RunRoute.Run : RunRoute.NotRun;
+            case KinahChanged { Delta: > 0 }:
+            case MobKilled:
+            case CurrencyGained:
+            case EnemySoul:
+            case XpGained:
+            case GatherFailed:
+                close = (ev.Time - left).TotalSeconds >= 1 ? $"farming began {(ev.Time - left).TotalSeconds:0} s after leaving ({ev.GetType().Name})" : $"farming began as it was left ({ev.GetType().Name})";
+                return RunRoute.NotRun;
+            default:
+                return RunRoute.NotRun;
         }
     }
 

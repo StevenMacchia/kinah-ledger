@@ -2007,7 +2007,16 @@ public sealed class TrackerSession
     const double WitnessWaitSeconds = 8;
 
     bool NeedsWitness(ItemAcquired a, bool made, bool crafting) =>
-        WitnessSeconds > 0 && !InRun && _boss == null && !made && !crafting && !IsGatherMaterial(a.ItemId) && !IsRare(a.ItemId);
+        WitnessSeconds > 0 && !InRun && _boss == null && !made && !crafting && !IsGatherMaterial(a.ItemId) && !IsRare(a.ItemId) && !RunTakes(a);
+
+    /// <summary>
+    /// The open run takes this pickup on its own rules, with no kill or gather to witness it: inside it while the minimap
+    /// names no listed zone, or just out of it when it looks like the run's reward (InstanceLog.Route). Hidden Lugi's and
+    /// Urugugu Canyon's rewards print after the game has moved the player out (2026-10-22/23).
+    /// </summary>
+    bool RunTakes(GameEvent ev) =>
+        Instances.Current is { } r && r.Kind != InstanceLog.WorldBoss && ZoneLocator.KindOf(Zone) == null
+        && (r.Leaving ? Instances.WouldTake(ev, _batch, Target.RewardOpen(ev.Time)) : Zone == null || Zone == SessionEngine.UnknownZone);
 
     void Witness(DateTime t) { lock (_witnessAt) { _witnessAt.Add(t); _witnessAt.RemoveAll(w => (t - w).TotalSeconds > 120); } }
 
