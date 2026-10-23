@@ -1221,6 +1221,15 @@ public sealed class TrackerSession
         if (ev is RewardReceived || BoxName.IsMatch(name)) _boxUntil = now.AddSeconds(RewardWindowSeconds);
     }
 
+    /// <summary>
+    /// The crafting panel's title, read the way the recognizer reads it: "Crafting in Progress", but also "Grafting
+    /// Progress", "Gråfting in Progresso" and "•raftingQsin Progresso" (Steven, 2026-10-23 17:12: both Superior Courage
+    /// Scrolls were left to the chat because the title came back garbled, so a batch counted only after it ended).
+    /// </summary>
+    public static bool IsCraftTitle(string line) =>
+        Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.CraftPanelWords)
+        || Regex.IsMatch(line, @"r[aåäà4]ft(?:ing|in|ng)|r[aåäà4]fting", RegexOptions.IgnoreCase);
+
     // ---- the gathering bar as a witness (Steven's plan, step 1, 2026-10-23) ----
     // The gathering panel is the crafting panel's widget: one race per gather, Success or Fail, and when the game rolls an
     // upgrade (the panel turns blue, an "x3" badge) a second race on the same gather. Each base race that ends on Success
@@ -1714,7 +1723,7 @@ public sealed class TrackerSession
                 // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
                 // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
                 // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
-                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(l => Update.RemoteConfig.HasAny(l, Update.RemoteConfig.Current.CraftPanelWords));
+                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(IsCraftTitle);
                 if (craft != _panelIsCraft || !_panelUp) CrashLog.Note(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
                 _panelIsCraft = craft;
                 var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
