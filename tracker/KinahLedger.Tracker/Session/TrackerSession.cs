@@ -1125,8 +1125,51 @@ public sealed class TrackerSession
         if (ev is RewardReceived || BoxName.IsMatch(name)) _boxUntil = now.AddSeconds(RewardWindowSeconds);
     }
 
+    // ---- the gathering bar as a witness (Steven's plan, step 1, 2026-10-23) ----
+    // The gathering panel is the crafting panel's widget: one race per gather, Success or Fail, and when the game rolls an
+    // upgrade (the panel turns blue, an "x3" badge) a second race on the same gather. Each base race that ends on Success
+    // is one gather that happened; a chat line for a gathering material claims it, and a loot list row the chat missed
+    // may only count by claiming one. A stopped gather never finishes its race, so it leaves nothing to claim.
+    public const double GatherTokenSeconds = 10;
+    readonly List<(DateTime At, bool Upgraded, bool Used)> _gatherTokens = new();
+
+    /// <summary>One finished race of the gathering bar (also what tests feed).</summary>
+    internal void GatherOutcome(DateTime at, bool ok, bool upgradeRoll)
+    {
+        lock (_gatherTokens)
+        {
+            if (upgradeRoll) { if (_gatherTokens.Count > 0) _gatherTokens[^1] = _gatherTokens[^1] with { Upgraded = ok }; return; }
+            if (ok) _gatherTokens.Add((at, false, false));
+            _gatherTokens.RemoveAll(t => (at - t.At).TotalSeconds > 60);
+        }
+    }
+
+    /// <summary>Claims the latest unclaimed successful gather of the last few seconds; false when there is none.</summary>
+    bool TakeGatherToken(DateTime now, string by)
+    {
+        lock (_gatherTokens)
+        {
+            for (int i = _gatherTokens.Count - 1; i >= 0; i--)
+            {
+                var t = _gatherTokens[i];
+                if (t.Used || (now - t.At).TotalSeconds > GatherTokenSeconds || (now - t.At).TotalSeconds < -2) continue;
+                _gatherTokens[i] = t with { Used = true };
+                return true;
+            }
+            return false;
+        }
+    }
+
+    bool IsGatherMaterial(long id)
+    {
+        _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return _gatherNames.Contains(_items.NameOf(id));
+    }
+
     void Count(GameEvent ev)
     {
+        // a chat line for a gathering material claims the gathering bar's success, so the loot list can't count it again
+        if (ev is ItemAcquired cg0 && !ev.Via.Contains("loot list") && IsGatherMaterial(cg0.ItemId)) TakeGatherToken(ev.Time, "the chat");
         // what a kill or a gather looks like, for telling a box's contents in the loot list from a drop
         if (ev is MobKilled or EnemySoul or XpGained || ev is CurrencyGained { Enemy.Length: > 0 } || (ev is CurrencyGained cg && cg.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) || ev is KinahChanged { Bound: false, Delta: > 0 })
             _lastKillAt = ev.Time;
@@ -1327,8 +1370,12 @@ public sealed class TrackerSession
                 bool made = (panel && parsed is ItemAcquired) || (crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null);
                 // loot list rows count only with a chat line (Steven, 2026-10-23: "chat-confirmed only"); what a craft made
                 // still counts from the list, as the crafting panel's flow did; an enemy's soul row is a kill, not a pickup
-                // a rare drop is the exception: it goes to its second read, and counts when that read confirms it (CommitRare)
-                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired or KinahChanged && !(parsed is ItemAcquired rl && IsRare(rl.ItemId)))
+                // ...except a gather the chat missed: a gathering material, with a gathering bar that finished on Success in
+                // the last few seconds that no chat line has claimed (step 1 of Steven's plan, 2026-10-23): two witnesses
+                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && TakeGatherToken(now, "the loot list"))
+                    CrashLog.Note($"loot list: {_items.NameOf(gl.ItemId)} x{gl.Count} counted: the chat missed it, and the gathering bar finished on Success");
+                // a rare drop is the other exception: it goes to its second read, and counts when that read confirms it (CommitRare)
+                else if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired or KinahChanged && !(parsed is ItemAcquired rl && IsRare(rl.ItemId)))
                 {
                     CrashLog.Note($"loot list: {(parsed is ItemAcquired na ? $"{_items.NameOf(na.ItemId)} x{na.Count}" : $"{((KinahChanged)parsed).Delta:N0} Kina")} not counted: no chat line confirmed it");
                     continue;
@@ -1560,7 +1607,8 @@ public sealed class TrackerSession
                 {
                     _gatherRaces.Add((now, go.Ok)); if (_gatherRaces.Count > 50) _gatherRaces.RemoveAt(0);
                     if (go.Ok) GatherBarOk++; else GatherBarFailed++;
-                    CrashLog.Note($"gathering bar: {(go.Ok ? "success" : "fail")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
+                    CrashLog.Note($"gathering bar: {(go.Combo ? "upgrade roll " : "")}{(go.Ok ? "success" : "fail")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
+                    GatherOutcome(now, go.Ok, go.Combo);
                 }
                 return;
             }
