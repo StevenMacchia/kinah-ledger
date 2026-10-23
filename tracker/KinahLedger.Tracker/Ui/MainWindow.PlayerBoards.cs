@@ -73,8 +73,9 @@ public partial class MainWindow
             host.Children.Add(Faint(HasServer && _prefs.Share ? "Loads with the price board, every 15 minutes." : "Shows once a server is picked and sharing is on (Options)."));
             return;
         }
-        // the site's profit with the vendor costs this player typed taken off; a recipe still missing one says so
-        var rows = PlayerBoards.Crafts.Select(c => (c, adj: CraftMath.WithVendor(c, id => PriceBook.VendorPrice(_items.NameOf(id)))))
+        // the site's profit, redone with this player's own prices (typed, or read on this PC) where they have them, and the
+        // vendor costs they typed taken off; a recipe still missing a vendor cost says so
+        var rows = PlayerBoards.Crafts.Select(c => (c, adj: CraftMath.WithVendor(c with { Profit = OwnProfit(c) }, id => PriceBook.VendorPrice(_items.NameOf(id)))))
             .OrderByDescending(x => x.adj.Profit).ToList();
         if (rows.Count == 0) { host.Children.Add(Faint($"No recipe makes a profit at today's lowest asks on {server}.")); return; }
         int shown = _bestAll ? rows.Count : Math.Min(5, rows.Count);
@@ -95,6 +96,10 @@ public partial class MainWindow
         host.Children.Add(foot);
     }
 
+    /// <summary>A best craft's profit with this player's own prices (typed or read on this PC) in place of the board's.</summary>
+    long OwnProfit(PlayerBoards.BestCraft c) =>
+        CraftMath.OwnProfit(c, id => PriceBook.QuoteOf(_items.NameOf(id)) is { Mine: true } q ? q.Price : null, PriceBook.SellerKeeps);
+
     FrameworkElement BestCraftRow(int rank, PlayerBoards.BestCraft c, long profit, int vendorUnpriced, bool rule)
     {
         var name = _items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name;
@@ -114,6 +119,11 @@ public partial class MainWindow
         var sub = new TextBlock { Text = string.Join(" · ", bits.Where(b => b.Trim().Length > 0)) + (vendorUnpriced > 0 ? $" + {vendorUnpriced} vendor item{(vendorUnpriced == 1 ? "" : "s")}" : ""), FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis };
         sub.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         mid.Children.Add(nt); mid.Children.Add(sub);
+        // where the sell price is from: the player's own, or the board's with its readings and age
+        var oq = PriceBook.QuoteOf(name);
+        var src = new TextBlock { Text = $"sells {(oq?.Price ?? c.Price):N0} · " + (oq != null ? PriceBook.Describe(oq) : $"kinahledger.com · {c.NObs} readings"), FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis };
+        src.SetResourceReference(TextBlock.ForegroundProperty, oq is { Mine: true } ? "Mint" : "Faint");
+        mid.Children.Add(src);
         Grid.SetColumn(mid, 2); g.Children.Add(mid);
         var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(10, 0, 0, 0) };
         var pt = new TextBlock { Text = Signed(profit), FontSize = 17, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right };

@@ -135,6 +135,22 @@ public static class CraftMath
         => success * keeps * ((1 - combo) * normal + combo * (upgrade ?? normal)) - cost;
 
     /// <summary>
+    /// A best craft's profit at this player's own prices where they have one (typed, or read on their PC: they win over the
+    /// board), the site's for the rest. With no own price at all it is the site's profit unchanged.
+    /// </summary>
+    public static long OwnProfit(PlayerBoards.BestCraft c, Func<long, long?> own, double keeps)
+    {
+        bool any = false;
+        long? Own(long id) { var p = own(id); if (p is > 0) { any = true; return p; } return null; }
+        double cost = 0;
+        foreach (var m in c.Materials.Where(m => !m.Vendor)) cost += (Own(m.Id) ?? m.Price ?? 0) * m.Qty;
+        var output = Own(c.Id) ?? c.Price;
+        var upgrade = c.UpgradeId is long u ? Own(u) ?? c.UpgradePrice : null;
+        if (!any) return c.Profit;
+        return (long)Math.Round(ProfitPerTry(c.Success, c.Combo, (double)output * c.Makes, upgrade, cost, keeps));
+    }
+
+    /// <summary>
     /// A best craft with the vendor costs this player typed added: the site can't price vendor materials, so its profit
     /// leaves them out. Unpriced counts the vendor materials still without a cost.
     /// </summary>

@@ -34,12 +34,18 @@ public sealed class MarketCapture
         if (manualRegion is { } r) { Layout = MarketLayout.FromRegion(r); Manual = true; }
     }
 
-    /// <summary>The window's switch: off means the Market is never read. Can be flipped while a run is on.</summary>
+    /// <summary>
+    /// The Market reading switch (settings.json market.enabled): off means the Market is never read. Reading is for this
+    /// PC too (the player's own asks price their drops at once), so it stays on with sharing off; only queueing for the
+    /// site follows the Share switch (<see cref="Sharing"/>). Can be flipped while a run is on.
+    /// </summary>
     public bool Enabled { get => Volatile.Read(ref _enabled); set => Volatile.Write(ref _enabled, value); }
     /// <summary>The server as the player typed it ("Siel (Elyos)"); prices mean nothing without one, so none is sent until it's set.</summary>
     public string Server { get; set; }
     public string Region { get; set; }
     public string ServerKey => ServerKeys.Build(Region, Server);
+    /// <summary>The Share switch: asks, sales and typed prices are queued for the site only while it is on.</summary>
+    public bool Sharing => _upload.Enabled;
     public MarketLayout? Layout { get; private set; }
     public bool Manual { get; private set; }
     /// <summary>True while listings are being read: the table was found (auto) or the chosen area is showing listings (manual).</summary>
@@ -102,7 +108,7 @@ public sealed class MarketCapture
             lock (_lock)
             {
                 fresh = !_seen.TryGetValue(ask.Key, out var at) || (now - at).TotalMinutes >= _cfg.RepeatMinutes;
-                if (fresh)
+                if (fresh && Sharing)
                 {
                     _seen[ask.Key] = now;
                     _items.Add(ask.Item);
@@ -134,7 +140,7 @@ public sealed class MarketCapture
             case MarketListed l:
                 ListingBook.Add(Canonical(l.Item), l.Qty, now);
                 break;
-            case MarketSold s:
+            case MarketSold s when Sharing:
             {
                 var item = Canonical(s.Item);
                 var listed = ListingBook.Take(item, s.Qty);
@@ -148,7 +154,7 @@ public sealed class MarketCapture
                 SalesSeen++; LastAsk = $"sold {item} ×{s.Qty} @ {unit:N0}";
                 break;
             }
-            case MarketExpired x:
+            case MarketExpired x when Sharing:
             {
                 var item = Canonical(x.Item);
                 ListingBook.Take(item, x.Qty);
@@ -165,6 +171,18 @@ public sealed class MarketCapture
 
     /// <summary>The name asks for the same item go out under, so a sale and an ask land on the same row of the site's board.</summary>
     string Canonical(string name) => _dict.NameOf(_dict.IdOf(name));
+
+    /// <summary>A price the player typed on a card ("what I see in the game"), queued as their read when sharing is on.</summary>
+    public void QueueTyped(string item, long unitPrice)
+    {
+        if (!Sharing || unitPrice <= 0 || string.IsNullOrWhiteSpace(item)) return;
+        var now = DateTime.UtcNow;
+        lock (_lock)
+        {
+            if (_pending.Count == 0) _firstPendingAt = now;
+            if (_pending.Count < 2000) _pending.Add(new PriceAsk(Canonical(item), unitPrice, 1, now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+        }
+    }
 
     public bool FlushDue
     {

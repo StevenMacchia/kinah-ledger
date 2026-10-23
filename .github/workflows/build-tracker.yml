@@ -35,6 +35,33 @@ jobs:
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
 
+      # the self-tests that need no game, on GitHub's machine rather than a player's PC (Steven, 2026-10-23)
+      - name: Self-tests (parse, market, options)
+        shell: bash
+        run: |
+          dist/KinahLedger.exe parse-test | tail -25
+          dist/KinahLedger.exe market-test | tail -45
+          dist/KinahLedger.exe options-test | tail -15
+
+      # the window and its cards drawn with sample data, kept as an artifact for layout review
+      - name: Layout renders
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p shots
+          dist/KinahLedger.exe ui-shot shots --demo --compact
+          dist/KinahLedger.exe ui-shot shots --demo --full
+          dist/KinahLedger.exe ui-shot shots --demo --crafting
+          dist/KinahLedger.exe ui-shot shots --options
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: layout-renders
+          path: shots/*.png
+          if-no-files-found: ignore
+
       - name: Write latest.json
         run: node tools/release-manifest.js dist/KinahLedger.exe
 

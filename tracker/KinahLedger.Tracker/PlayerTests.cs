@@ -78,6 +78,68 @@ static class PlayerTests
         RecipeBook.PreferFaction = 'E';
         Check("recipe book: the recipe that makes ×30", $"{RecipeBook.For("Sapphire Powder", 30)?.OutputQty} {RecipeBook.For("Sapphire Powder", 30)?.Materials[0].Qty}", "30 10");
         RecipeBook.PreferFaction = was;
+
+        Prices(Check);
         return ok;
+    }
+
+    /// <summary>
+    /// Prices (2026-10-23, "prices are super inaccurate"): the Siel Expert's Orichalcum Longsword case. The board's 43,500
+    /// is the lowest of 42 aion2.exchange listings; Steven saw 80,000 in game; the 330K was the recipe's COST / TRY.
+    /// </summary>
+    static void Prices(Action<string, string, string> Check)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KinahLedger-price-test");
+        Directory.CreateDirectory(dir);
+        foreach (var f in new[] { "prices.json", "typed-prices.json", "vendor-prices.json" }) if (File.Exists(Path.Combine(dir, f))) File.Delete(Path.Combine(dir, f));
+        var oldPath = PriceBook.PathOverride;
+        PriceBook.PathOverride = Path.Combine(dir, "prices.json"); PriceBook.Reset();
+        try
+        {
+            const string sword = "Expert's Orichalcum Longsword";
+            var now = DateTime.UtcNow; var seen = now.AddMinutes(-40).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
+            // the site's board as price-pick.ts writes it (names in place of ids, so no item list is needed)
+            var board = "{\"items\":[" +
+                $"{{\"item\":\"{sword}\",\"lowest_ask\":43500,\"stale\":false,\"n_obs\":42,\"price\":43500,\"price_from\":\"feed\",\"readings\":42,\"sure\":true,\"price_seen_at\":\"{seen}\",\"region_price\":192000,\"region_servers\":7}}," +
+                "{\"item\":\"Chaos Longsword\",\"lowest_ask\":5000000,\"stale\":false,\"n_obs\":1,\"price\":5000000,\"price_from\":\"feed\",\"readings\":1,\"sure\":false}," +
+                "{\"item\":\"Splendent Orichalcum Longsword\",\"price\":139998,\"price_from\":\"feed\",\"readings\":12,\"sure\":true}," +
+                "{\"item\":\"Expert's Refining Stone\",\"price\":59000,\"price_from\":\"feed\",\"readings\":350,\"sure\":true}," +
+                "{\"item\":\"Fine Orichalcum Ore\",\"price\":997,\"price_from\":\"feed\",\"readings\":40,\"sure\":true}," +
+                "{\"item\":\"Fine Odyle\",\"price\":3098,\"price_from\":\"feed\",\"readings\":117,\"sure\":true}," +
+                "{\"item\":\"Old Board Item\",\"lowest_ask\":777,\"stale\":false,\"n_obs\":1}," +
+                "{\"item\":\"Artisan's Splendent Orichalcum Longsword\",\"price\":23999999,\"price_from\":\"feed\",\"readings\":12,\"sure\":true}]}";
+            PriceBook.SetBoardQuotes(PriceBook.ParseQuotes(board, null));
+            PriceBook.SetRegionBoards(new[] { 2_000_000L, 2_100_000L, 1_900_000L }.Select(p => new Dictionary<string, long> { ["Artisan's Splendent Orichalcum Longsword"] = p }));
+
+            string Q(string n) => PriceBook.QuoteOf(n) is { } q ? $"{q.Price:N0} {q.From} {(q.Sure ? "sure" : "unsure")}" : "none";
+            Check("the sword on the board: the lowest of 42 listings, sure", Q(sword) + " · " + PriceBook.Describe(PriceBook.QuoteOf(sword)!, now), "43,500 Feed sure · aion2.exchange · lowest of 42 listings · 40 min ago");
+            Check("a lone listing is shown, unsure, and out of totals", $"{Q("Chaos Longsword")} · Price {PriceBook.Price("Chaos Longsword")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Chaos Longsword")!, now)}", "5,000,000 Feed unsure · Price null · aion2.exchange · 1 listing · unsure");
+            Check("an older board's single listing is unsure too", Q("Old Board Item"), "777 Feed unsure");
+            Check("over 3x the other servers' middle: the region's ≈ price instead", Q("Artisan's Splendent Orichalcum Longsword"), "2,000,000 Region sure");
+            Check("the 330K was the recipe's cost per try, not the sword's price", $"cost/try {RecipeBook.CostPerTry(sword, out var unp):N0} ({unp} unpriced) · sword {PriceBook.Price(sword):N0}", "cost/try 450,274 (0 unpriced) · sword 43,500");
+
+            // his Market read wins at once (read with sharing off too: only sending follows the switch)
+            PriceBook.Observe(sword, 80_000, now.AddMinutes(-2));
+            Check("this PC's Market read wins over the board", Q(sword) + " · " + PriceBook.Describe(PriceBook.QuoteOf(sword)!, now) + $" · board still {PriceBook.BoardOf(sword)?.Price:N0}", "80,000 Market sure · your Market read · 2 min ago · board still 43,500");
+            PriceBook.SetTyped(sword, 82_000, now.AddMinutes(-1));
+            Check("a typed price is newer: it wins", Q(sword), "82,000 Typed sure");
+            PriceBook.Observe(sword, 79_000, now);
+            Check("a newer Market read replaces the typed one", Q(sword), "79,000 Market sure");
+            PriceBook.Reset();
+            Check("typed and read prices are kept on this PC", $"{PriceBook.TypedPrice(sword):N0} {Q(sword)}", "82,000 79,000 Market sure");
+            PriceBook.SetTyped("Chaos Longsword", 4_200_000, now);
+            Check("a typed price for an unsure item makes it count", $"{PriceBook.Price("Chaos Longsword"):N0}", "4,200,000");
+
+            // best crafts at his own prices: his 80,000 for the sword in place of the board's 43,500
+            var c = new PlayerBoards.BestCraft(1, sword, "Blacksmithing", 15, 1, 0.768285, 0.192, 2, 1_630_000, 43_500, 42,
+                new() { new(10, 1, 139_998, false), new(11, 5, 59_000, false), new(12, 6, 997, false), new(13, 3, 3_098, false) }, 450_274, 0, -214_845);
+            Check("best craft: the site's profit when there's no own price", CraftMath.OwnProfit(c, _ => null, 0.88).ToString("N0"), "-214,845");
+            Check("best craft: his read of the sword redoes the profit", CraftMath.OwnProfit(c, id => id == 1 ? 80_000 : null, 0.88).ToString("N0"), $"{Math.Round(CraftMath.ProfitPerTry(0.768285, 0.192, 80_000, 1_630_000, 450_274, 0.88)):N0}");
+        }
+        finally
+        {
+            PriceBook.PathOverride = oldPath; PriceBook.Reset();
+            PriceBook.SetBoard(new()); PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>());
+        }
     }
 }

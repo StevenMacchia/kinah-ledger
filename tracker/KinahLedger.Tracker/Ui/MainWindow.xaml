@@ -74,7 +74,9 @@
           <TextBlock Grid.Column="1" Style="{StaticResource Td}" Text="{Binding Drops}"/>
           <TextBlock Grid.Column="2" Style="{StaticResource Td}" Text="{Binding DropPct}" FontFamily="{DynamicResource BodyFont}"/>
           <TextBlock Grid.Column="3" Style="{StaticResource Td}" Text="{Binding PerHour}" Foreground="{DynamicResource Muted}"/>
-          <TextBlock Grid.Column="4" Style="{StaticResource Td}" Text="{Binding Price}" Foreground="{DynamicResource Gold}"/>
+          <!-- the price: teal when it is the player's own (typed, or read on this PC), dimmed when unsure (one listing: left out of
+               totals); where it is from, its readings and age on hover (Ui/MainWindow.Prices.cs) -->
+          <TextBlock x:Name="PriceText" Grid.Column="4" Style="{StaticResource Td}" Text="{Binding Price}" Foreground="{DynamicResource Gold}" Background="Transparent" ToolTip="{Binding PriceTip}" ToolTipService.InitialShowDelay="250"/>
           <TextBlock x:Name="ValueText" Grid.Column="5" Style="{StaticResource Td}" Text="{Binding Value}" FontWeight="SemiBold" Margin="0,0,20,0"/>
         </Grid>
       </Border>
@@ -84,6 +86,9 @@
         <!-- how a row was read or worked out: on hover only (Steven, 0.7.6: no reading jargon on the rows themselves) -->
         <DataTrigger Binding="{Binding Tip}" Value=""><Setter TargetName="RowBorder" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <!-- a craft's profit: green when it made Kinah, red when it lost some -->
+        <DataTrigger Binding="{Binding PriceTone}" Value="Mine"><Setter TargetName="PriceText" Property="Foreground" Value="{DynamicResource Mint}"/></DataTrigger>
+        <DataTrigger Binding="{Binding PriceTone}" Value="Unsure"><Setter TargetName="PriceText" Property="Opacity" Value="0.5"/></DataTrigger>
+        <DataTrigger Binding="{Binding PriceTip}" Value=""><Setter TargetName="PriceText" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <DataTrigger Binding="{Binding Tone}" Value="Good"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Good}"/></DataTrigger>
         <DataTrigger Binding="{Binding Tone}" Value="Bad"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Bad}"/></DataTrigger>
         <!-- a drop no enemy you fought can drop, by their loot tables: the line under it says check -->
@@ -577,7 +582,7 @@
               <TextBlock Style="{StaticResource Th}" Text="RECIPE · WHAT CAME OUT" Margin="20,0,0,0" HorizontalAlignment="Left"/>
               <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="TRIES"/>
               <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="SUCCESS" ToolTip="Tries that worked, out of all tries. The recipe's listed rate at the required mastery is shown under the recipe."/>
-              <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="COST" ToolTip="What one try costs: the recipe's materials at the lowest Market prices on your server. A failed try uses them too."/>
+              <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="COST / TRY" ToolTip="What one try costs: the recipe's materials at the lowest Market prices on your server. A failed try uses them too."/>
               <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="SELLS FOR" ToolTip="What one of the item sells for at the lowest Market price, after the Market's fee and tax."/>
               <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PROFIT" Margin="0,0,20,0" ToolTip="What came out, at Market prices after the Market's cut, minus the cost of every try."/>
             </Grid>
