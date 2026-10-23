@@ -59,6 +59,10 @@ public sealed class TrackerSession
         var factor = _reader?.Factor ?? _settings.Ocr.Scale;
         var textPx = _textScale?.TextPx is double px ? $"{px:0} px tall" : "height not measured yet";
         sb.AppendLine($"Zone: {Zone ?? "unknown"} · fighting: {(fighting.Length > 0 ? fighting : "nobody seen")} · target bar: {Target.Name ?? "none"}");
+        // what the tracker thought was going on, and how it changed over the last ten minutes
+        sb.AppendLine($"Doing now: {Doing.Current.Label} (since {Doing.Current.Since.ToLocalTime():HH:mm:ss})" + (Instances.Pending is { } pend ? $" · the chat says {pend} is starting" : ""));
+        sb.AppendLine("Activity, last 10 minutes: " + string.Join(" → ", Doing.Since(now.AddMinutes(-10)).Select(a => $"{a.Since.ToLocalTime():HH:mm:ss} {a.Label}")));
+        if (Instances.Snapshot().LastOrDefault() is { } lastRun) sb.AppendLine($"Last run: {lastRun.Kind} · {lastRun.Label}, {lastRun.Start.ToLocalTime():HH:mm:ss} to {lastRun.LastLoot?.ToLocalTime():HH:mm:ss}{(lastRun.Ended.Length > 0 ? $", closed: {lastRun.Ended}" : ", open")} · seen by {lastRun.Witnesses}");
         sb.AppendLine($"Chat area: {Region} ({(ManualRegion ? "chosen by hand" : "found by itself")}) · read at {factor:0.##}x · text {textPx}");
         sb.AppendLine($"Counted this session: {t.Kinah:N0} Kinah · {t.Kills} kills · {Engine.Items.Values.Sum()} drops");
         sb.AppendLine($"Checks: Kinah counter agreed {bc.Agreed}×, over {bc.Over:N0}, under {bc.Under:N0} · quest kills {QuestKillsGame}, counted {QuestKillsCounted} · loot list added {_cross.Added}, matched {_cross.Matched}, chat repeats skipped {_cross.Duplicates}");
@@ -198,7 +202,7 @@ public sealed class TrackerSession
         if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && _cross.TakeSingleKinah(gap, at))
         {
             var ev = new KinahChanged(at, gap, false) { Via = "loot list · balance" };
-            Count(ev); Feed(ev);
+            Feed(ev, Count(ev));
             Interlocked.Add(ref _kinahPicked, gap);
             _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);   // the count matches the counter again
             CrashLog.Note($"the Kinah counter rose {gap:N0} more than counted, and the loot list showed {gap:N0} Kina once: counted from the two");
@@ -317,17 +321,32 @@ public sealed class TrackerSession
                 _unlistedTitle = u;
             }
             else if (zone != null) _unlistedTitle = null;
-            if (zone != null && zone != Engine.Zone && zone != SessionEngine.UnknownZone) CrashLog.Note($"zone: {zone}" + (ZoneLocator.KindOf(zone) is { } kind ? $" ({kind})" : ""));
-            else if (zone == null && Engine.Zone == null && (DateTime.UtcNow - _zoneNoteAt).TotalSeconds >= 60) { _zoneNoteAt = DateTime.UtcNow; CrashLog.Note($"zone read: {note}"); }
-            Engine.SetZone(zone);
-            Secondary?.SetZone(zone);
-            Instances.Zone(zone, DateTime.UtcNow);
-            // a new zone starts the zone view over: its tables are this zone's alone
-            if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { OfferBest(); var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
-            else ZoneView.SetZone(zone);
+            if (zone == null && Engine.Zone == null && (DateTime.UtcNow - _zoneNoteAt).TotalSeconds >= 60) { _zoneNoteAt = DateTime.UtcNow; CrashLog.Note($"zone read: {note}"); }
+            ApplyZone(zone, DateTime.UtcNow);
         }
         catch (Exception ex) { CrashLog.Write("zone", ex); }
         _zoneAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// A zone read, after the checks above (null: nothing new to say). Also what replay feeds the recorded zone reads
+    /// through, so a run's edges are measured on what the minimap really showed.
+    /// </summary>
+    internal void ApplyZone(string? zone, DateTime now)
+    {
+        if (zone != null && zone != Engine.Zone)
+        {
+            if (zone != SessionEngine.UnknownZone) CrashLog.Note($"zone: {zone}" + (ZoneLocator.KindOf(zone) is { } kind ? $" ({kind})" : ""));
+            // the trace keeps every zone change beside the chat, so a replay knows where each read happened
+            ReadTrace.Signal(now, "zone", zone);
+            Report.Lines("zone", new[] { zone }, now);
+        }
+        Engine.SetZone(zone);
+        Secondary?.SetZone(zone);
+        Instances.Zone(zone, now);
+        // a new zone starts the zone view over: its tables are this zone's alone
+        if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { OfferBest(); var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
+        else ZoneView.SetZone(zone);
     }
 
     int _emptyReads;
@@ -455,10 +474,12 @@ public sealed class TrackerSession
                     RewardShot();
                     await RewardGridDue();
                     await PlatesDue();
+                    await HeaderDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     Audit();
                 }
                 await ZoneDueAsync();
+                UpdateDoing(DateTime.UtcNow);
             }
             catch (System.ComponentModel.Win32Exception)
             {
@@ -508,8 +529,14 @@ public sealed class TrackerSession
     /// <summary>One read of the chat, counted: lined up with the last, parsed, checked against the loot list and applied. Also what replay feeds a recorded fight through.</summary>
     internal void ProcessChat(List<string> lines, DateTime now)
     {
+        Seen(now);
         int unaligned = _tracker.Unaligned;
         var fresh = _tracker.NewLines(lines);
+        // the chat's own word on an event: "joined event" in its lobby, its NPC's lines (EventWitness). A lobby filling up
+        // scrolls the chat faster than reads line up (11:33:16 today, ten "joined event" lines at once): from such a read, the
+        // lines not seen in the last ten minutes
+        var witnessed = _tracker.Unaligned > unaligned ? Reread.Unseen(_recent, lines, now) : fresh;
+        foreach (var (src, name) in EventWitness.Read(witnessed)) Instances.Witness(src, name, now, Zone);
         bool afterFade = _tracker.LastAfterFade;
         // a read that couldn't be lined up with the last one counts nothing; the log says so, so a missed line can be traced
         if (_tracker.LastFromAnchor) CrashLog.Note($"the last read was a stray line, so this one was lined up with the last full read of the chat ({fresh.Count} new)");
@@ -596,8 +623,8 @@ public sealed class TrackerSession
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
                 var ev = (reward || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
-                Count(ev); any = true; _lastActivity = DateTime.UtcNow;
-                Feed(ev);
+                var where = Count(ev); any = true; _lastActivity = DateTime.UtcNow;
+                Feed(ev, where);
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
@@ -607,6 +634,8 @@ public sealed class TrackerSession
         }
         // each new line is voted on across the next reads before it counts (ChatVoter); lines come out in order
         var voted = Vote ? _voter.Push(fresh, lines, now, _parser.Meaning) : fresh;
+        // how many loot lines land at once: three or more are a run's rewards coming in (InstanceLog.Route, Loot)
+        _batch = voted.Count(Reread.LooksLikeLoot) + reread.Count + settled.Count;
         foreach (var (l, events) in _parser.ParseBatch(voted, now))
         {
             bool any = Apply(events);
@@ -633,7 +662,92 @@ public sealed class TrackerSession
             CrashLog.Note($"the chat settled after {(now - settledAt).TotalSeconds:0} s of reads that didn't line up; its loot lines counted from the clean read: {string.Join(" | ", settled)}");
             _garbledSince = null;
         }
+        _batch = 1;
+        UpdateDoing(now);
         LastError = "";
+    }
+
+    // ---- what the player is doing (Activity) ----
+    /// <summary>What the player is doing now, as one state; every change is in reads.log. See <see cref="Activity"/>.</summary>
+    public ActivityTracker Doing { get; } = new();
+    /// <summary>True while the Market's listings are being read (set by the watcher, which runs the Market reader).</summary>
+    public Func<DateTime, bool>? MarketOpen { get; set; }
+    // the last farming sign in the open world (a kill, a drop, a gather, an enemy on the bar or around the character)
+    DateTime _farmAt = DateTime.MinValue;
+    /// <summary>Farming stops being the activity this long after its last sign.</summary>
+    public const double FarmingIdleSeconds = 120;
+    // how many loot lines are landing at once (set per read): three or more are a run's rewards
+    int _batch = 1;
+    // the last read of the game, for telling a pause from reading (InstanceLog.Away)
+    DateTime _seenAt = DateTime.MinValue;
+
+    /// <summary>A read happened at <paramref name="now"/>: a long gap since the last one closes an event that can't still be on.</summary>
+    void Seen(DateTime now)
+    {
+        if (_seenAt != DateTime.MinValue && Instances.Away(_seenAt, now))
+        {
+            // the zone read before the pause isn't known to hold: Unknown zone until the minimap is read again
+            if (ZoneLocator.KindOf(Zone) is { } k && k != ZoneLocator.Ignored) { Engine.SetZone(SessionEngine.UnknownZone); Secondary?.SetZone(SessionEngine.UnknownZone); _zoneAt = DateTime.MinValue; }
+        }
+        if (now > _seenAt) _seenAt = now;
+    }
+
+    /// <summary>Works out the activity from every signal (InstanceLog, the boss, crafting, the Market, reward screens, farming signs, the zone) and logs a change.</summary>
+    internal void UpdateDoing(DateTime now)
+    {
+        Activity next;
+        string why;
+        var zone = Zone;
+        if (_boss != null) { next = new Activity(ActivityKind.WorldBoss, _boss); why = _bossDeadAt == DateTime.MinValue ? "on the target bar" : "its loot window"; }
+        else if (Instances.Current is { } run && run.Kind != InstanceLog.WorldBoss && !(run.Leaving && Target.RewardOpen(now) && Target.RewardTitle.Length > 0))
+        {
+            var kind = run.Kind switch { "Event" => ActivityKind.Event, "Arena" => ActivityKind.Arena, "Legion" => ActivityKind.Legion, _ => ActivityKind.Expedition };
+            next = new Activity(kind, run.Zone, run.Event, run.Family, Leaving: run.Leaving);
+            why = run.Leaving ? $"the minimap names {zone}" : "the run";
+        }
+        else if (CraftView.CraftPanelActive(now) || (TargetReader.CraftOpen(Target.CraftAt, now) && now >= Target.CraftAt)) { next = new Activity(ActivityKind.Crafting); why = "the crafting window or panel"; }
+        else if (MarketOpen?.Invoke(now) == true) { next = new Activity(ActivityKind.Market); why = "the Market's listings"; }
+        else if (Target.RewardOpen(now) && Target.RewardTitle.Length > 0) { next = new Activity(ActivityKind.RewardScreen, Target.RewardTitle); why = "its title at the top"; }
+        else if (zone == null) { next = new Activity(ActivityKind.NotRead); why = "no zone read"; }
+        else if (((now - _farmAt).TotalSeconds <= FarmingIdleSeconds || (Target.Name != null && (now - Target.NameAt).TotalSeconds is >= 0 and <= 15)) && !ZoneLocator.IsBase(zone)) { next = new Activity(ActivityKind.Farming, zone); why = "kills and drops"; }
+        else if (ZoneLocator.IsBase(zone)) { next = new Activity(ActivityKind.Town, zone); why = "a base"; }
+        else { next = new Activity(ActivityKind.Idle, zone == SessionEngine.UnknownZone ? "" : zone); why = $"nothing farmed for {FarmingIdleSeconds / 60:0} min"; }
+        if (Instances.Pending is { } p && next.Kind is not ActivityKind.Event) why += $"; the chat says {p} is starting";
+        Doing.Set(next, now, why);
+    }
+
+    /// <summary>The event header under the minimap (EventHeader), read or replayed: a witness for the run.</summary>
+    internal void EventHeaderSeen(string name, DateTime t)
+    {
+        if (!string.Equals(name, _headerSaid, StringComparison.OrdinalIgnoreCase)) { CrashLog.Note($"event header: {name}"); ReadTrace.Signal(t, "header", name); Report.Lines("header", new[] { name }, t); _headerSaid = name; }
+        Instances.Witness("header", name, t, Zone);
+    }
+    string? _headerSaid;
+    DateTime _headerAt = DateTime.MinValue;
+
+    /// <summary>
+    /// The event header, every 3 s while an event is open or the chat says one is starting, and every 5 s while the zone
+    /// is unknown; never while a reward screen is open (the Festival Shop lists the games) and never otherwise in the open
+    /// world (its quest list can show a game's countdown in the same place).
+    /// </summary>
+    async Task HeaderDue()
+    {
+        var now = DateTime.UtcNow;
+        if (GameRect is not { } g || Target.RewardOpen(now)) return;
+        bool inEvent = Instances.Current is { Kind: "Event", Leaving: false };
+        bool due = inEvent || Instances.Pending != null ? (now - _headerAt).TotalSeconds >= 3 : Zone == SessionEngine.UnknownZone && (now - _headerAt).TotalSeconds >= 5;
+        if (!due) return;
+        _headerAt = now;
+        try
+        {
+            var region = EventHeader.Region(g);
+            if (Cover(region) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
+            using var bmp = ScreenReader.Capture(region);
+            var (name, _) = await EventHeader.ReadAsync(bmp, region.Location);
+            if (name != null) EventHeaderSeen(name, now);
+        }
+        catch (System.ComponentModel.Win32Exception) { throw; }
+        catch (Exception ex) { CrashLog.Write("event header", ex); }
     }
 
     DateTime _targetAt = DateTime.MinValue;
@@ -672,6 +786,7 @@ public sealed class TrackerSession
             var names = kept.Select(p => p.Enemy).ToList();
             if (!names.SequenceEqual(Engaged)) CrashLog.Note("fighting: " + (names.Count == 0 ? "nobody" : string.Join(", ", names)));
             Engaged = names;
+            if (names.Count > 0) _farmAt = now;
             foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SetEngaged(names, now);
         }
         catch (Exception ex) { CrashLog.Write("nameplates", ex); }
@@ -736,7 +851,7 @@ public sealed class TrackerSession
                 bool clearCoin = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25);
                 if (!clearCoin && !BalanceRose(amt, now)) { unnamed++; CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
                 Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" }); _gridKina.Add((now, amt));
-                Feed(new KinahChanged(now, amt, false) { Via = "reward table" });
+                Feed(new KinahChanged(now, amt, false) { Via = "reward table" }, RunWhere());
                 added++;
                 continue;
             }
@@ -755,7 +870,7 @@ public sealed class TrackerSession
                 if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; continue; }
                 bool bnd = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
                 Instances.Loot(new KinahChanged(now, amt, bnd) { Via = "reward table" }); _gridKina.Add((now, amt));
-                Feed(new KinahChanged(now, amt, bnd) { Via = "reward table" });
+                Feed(new KinahChanged(now, amt, bnd) { Via = "reward table" }, RunWhere());
                 added++;
                 continue;
             }
@@ -765,9 +880,10 @@ public sealed class TrackerSession
             if (names.Count != 1) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}; not counted"); continue; }
             var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
             Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
-            Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
+            Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" }, RunWhere());
             added++;
         }
+        if (slots.Count > 0) Instances.RewardTable(now);
         CrashLog.Note($"reward table read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
     }
 
@@ -857,30 +973,80 @@ public sealed class TrackerSession
         _ => ev.GetType().Name,
     };
 
-    void Count(GameEvent ev)
+    /// <summary>
+    /// Counts one event where it belongs and says where that was, as the activity's label ("Event · Hidden Lugi (Shugo
+    /// Festival)", "Farming · Eastern Cantas Valley", "World boss · Bloodfang"): the stamp each pickup carries.
+    /// <para>Inside a run (the minimap names an instance, or names no zone on the list while a run is open) everything is
+    /// the run's. Just out of one, InstanceLog.Route decides: what looks like its rewards is the run's, loose Kina and kills
+    /// are the open world's and close it. Everywhere else it is farming.</para>
+    /// </summary>
+    string Count(GameEvent ev)
     {
-        if (ev is not CraftResult && BossTakes(ev)) return;
-        // inside an event or expedition, or just out of one while its rewards still land (InstanceLog.RewardGraceSeconds)
-        bool ending = ZoneLocator.KindOf(Zone) == null && Instances.Ending(ev.Time);
-        if ((ZoneLocator.KindOf(Zone) is { } kind && kind != ZoneLocator.Ignored) || ending)
+        if (ev is not CraftResult && BossTakes(ev)) return _boss is { } b ? $"World boss · {b}" : "World boss";
+        var kind = ZoneLocator.KindOf(Zone);
+        bool inside = kind != null && kind != ZoneLocator.Ignored;
+        // out of an event already (its rewards came, then the open world's Kina or a kill), the minimap a read behind
+        if (inside && kind == "Event" && Instances.OutAfterRewards(ev))
+        {
+            inside = false; kind = null;
+            Engine.SetZone(SessionEngine.UnknownZone); Secondary?.SetZone(SessionEngine.UnknownZone); ZoneView.SetZone(SessionEngine.UnknownZone);
+            _zoneAt = DateTime.MinValue;
+        }
+        if (!inside && kind == null && Instances.Current is { } run && run.Kind != InstanceLog.WorldBoss && ev is not CraftResult)
+        {
+            // an inner area the list lacks (Unknown zone), or no zone read yet, while a run is open: the run's
+            if (!run.Leaving && (Zone == null || Zone == SessionEngine.UnknownZone)) inside = true;
+            // just out of it: its rewards may still be landing
+            else if (run.Leaving) inside = Instances.Route(ev, _batch, Target.RewardOpen(ev.Time)) == RunRoute.Run;
+        }
+        if (inside)
         {
             // the reward table's coin slot, read first, then the same Kina in the chat: once
             if (ev is KinahChanged { Delta: > 0 } dup && _gridKina.FindIndex(g => (ev.Time - g.At).TotalSeconds is >= 0 and <= 90 && g.Amount == dup.Delta) is int gi and >= 0)
             {
                 _gridKina.RemoveAt(gi);
                 CrashLog.Note($"{dup.Delta:N0} Kina in the chat was the reward table's, already counted");
-                return;
+                return RunWhere();
             }
-            Instances.Loot(ev);
+            var where = RunWhere();
+            Instances.Loot(ev, _batch);
+            Landed?.Invoke(ev, where);
             // kept a while, so the reward table read after it doesn't count the same items again
             if (ev is ItemAcquired ra) _runPickups.Add((ev.Time, Unbound(_items.NameOf(ra.ItemId)), ra.Count));
             else if (ev is RewardReceived rr) _runPickups.Add((ev.Time, Unbound(rr.Name), rr.Count));
             else if (ev is KinahChanged { Delta: > 0 } rk) _runPickups.Add((ev.Time, "Kina", (int)Math.Min(rk.Delta, int.MaxValue)));
             if (_runPickups.Count > 60) _runPickups.RemoveAt(0);
-            return;
+            return where;
         }
-        Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev); Instances.Loot(ev);
+        Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev);
+        // a farming sign: the activity is farming in this zone for a while
+        if (ev is MobKilled or EnemySoul or GatherFailed or XpGained or CurrencyGained or ItemAcquired { Bound: false } or KinahChanged { Bound: false, Delta: > 0 } && kind != ZoneLocator.Ignored && !ZoneLocator.IsBase(Zone)) _farmAt = ev.Time;
+        UpdateDoing(ev.Time);
+        var label = FarmWhere(ev);
+        Landed?.Invoke(ev, label);
+        return label;
     }
+
+    /// <summary>The open run as an activity label, for a pickup that went to it.</summary>
+    string RunWhere()
+    {
+        if (Instances.Current is not { } r) return "Event or expedition";
+        var kind = r.Kind switch { "Event" => ActivityKind.Event, "Arena" => ActivityKind.Arena, "Legion" => ActivityKind.Legion, InstanceLog.WorldBoss => ActivityKind.WorldBoss, _ => ActivityKind.Expedition };
+        return new Activity(kind, r.Zone, r.Event, r.Family, Leaving: r.Leaving).Label;
+    }
+
+    /// <summary>Where a pickup that didn't go to a run landed: farming in the zone, a reward screen, crafting, a base.</summary>
+    string FarmWhere(GameEvent ev)
+    {
+        var a = Doing.Current;
+        if (ev is CraftResult || a.Kind == ActivityKind.Crafting) return "Crafting";
+        if (ev is RewardReceived or KinahChanged { Bound: true }) return a.Kind == ActivityKind.RewardScreen ? a.Label : $"Reward · {Zone ?? "no zone"}";
+        if (a.Kind is ActivityKind.RewardScreen or ActivityKind.Market or ActivityKind.Town) return a.Label;
+        return $"Farming · {Zone ?? "no zone"}";
+    }
+
+    /// <summary>For replay: each counted event and where it landed ("run: Shugo Festival", "farming: Eastern Cantas Valley").</summary>
+    internal Action<GameEvent, string>? Landed;
 
     // ---- the audit: how the count holds up, once a minute in reads.log ----
     // The quest tracker's "Defeat … (n/20)" lines count kills of quest enemies exactly, so where every enemy fought is a
@@ -927,11 +1093,12 @@ public sealed class TrackerSession
     }
 
     /// <summary>One pickup as counted, for the recent pickups strip: when, what, and how it was read.</summary>
-    public sealed record Pickup(DateTime At, string What, string Via, bool Unconfirmed);
+    /// <param name="Where">The activity it landed in ("Event · Hidden Lugi (Shugo Festival)", "Farming · Eastern Cantas Valley").</param>
+    public sealed record Pickup(DateTime At, string What, string Via, bool Unconfirmed, string Where = "");
     readonly List<Pickup> _pickups = new();
     /// <summary>The last pickups counted, newest first: items and Kinah only, rewards and bound Kinah left out.</summary>
     public List<Pickup> RecentPickups(int n) { lock (_pickups) return _pickups.TakeLast(n).Reverse().ToList(); }
-    void Feed(GameEvent ev)
+    void Feed(GameEvent ev, string where = "")
     {
         string? what = ev switch
         {
@@ -940,8 +1107,8 @@ public sealed class TrackerSession
             _ => null,
         };
         if (what == null) return;
-        Report.Counted(ev.Time, what, ev.Via);
-        lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
+        Report.Counted(ev.Time, what, ev.Via, where);
+        lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed, where)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
     }
 
     /// <summary>The chat and the loot list beside the character, checked against each other: see <see cref="LootCrossCheck"/>.</summary>
@@ -1010,8 +1177,10 @@ public sealed class TrackerSession
             var rows = LootPopup.Rows(lines);
             if (rows.Count > 0) _lastActivity = DateTime.UtcNow;
             if (rows.Count > 0) { var traced = rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}").ToList(); ReadTrace.List(now, traced); Report.Lines("list", traced, now); }
+            Seen(now);
             var add = _cross.Popup(rows, now);
-            if (add.Count == 0) return;
+            if (add.Count == 0) { UpdateDoing(now); return; }
+            _batch = add.Count;
             bool reward = Target.RewardOpen(now);
             foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
             Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt);
@@ -1039,13 +1208,14 @@ public sealed class TrackerSession
                 // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
                 if (!made && InBaseNotOdyle(parsed)) { CrashLog.Note($"in a base, so not counted from the loot list: {_items.NameOf(((ItemAcquired)parsed).ItemId)}"); continue; }
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
-                Count(ev);
-                Feed(ev);
+                Feed(ev, Count(ev));
                 if (ev is ItemAcquired) CraftView.Apply(ev);
                 if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
                 else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
                 try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
             }
+            _batch = 1;
+            UpdateDoing(now);
         }
         catch (Exception ex) { CrashLog.Write("loot list", ex); }
     }

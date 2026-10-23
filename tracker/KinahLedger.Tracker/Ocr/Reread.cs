@@ -85,6 +85,10 @@ public sealed class Reread
     }
 
     /// <summary>Every line of a read, by key, with when it was last on screen; keys older than ten minutes go.</summary>
+    /// <summary>The lines of a read not seen in the last ten minutes (<paramref name="recent"/>, as kept by <see cref="Remember"/>).</summary>
+    public static List<string> Unseen(Dictionary<string, DateTime> recent, IReadOnlyList<string> lines, DateTime now) =>
+        lines.Where(l => Key(l) is { Length: > 0 } k && !(recent.TryGetValue(k, out var at) && (now - at).TotalMinutes <= 10)).ToList();
+
     public static void Remember(Dictionary<string, DateTime> recent, IReadOnlyList<string> lines, DateTime now)
     {
         foreach (var l in lines) { var k = Key(l); if (k.Length > 0) recent[k] = now; }

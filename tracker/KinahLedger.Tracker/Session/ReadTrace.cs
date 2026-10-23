@@ -16,6 +16,12 @@ public static class ReadTrace
 
     public static void Chat(DateTime at, IEnumerable<string> lines) => Write(at, "chat", lines);
     public static void List(DateTime at, IEnumerable<string> rows) => Write(at, "list", rows);
+    /// <summary>
+    /// What else the tracker read that decides where a pickup lands, as it changes (since 2026-10-23): "zone" (the minimap's
+    /// zone, or Unknown zone), "reward" (a reward screen's title as it opens, "" as it closes), "header" (the event named under
+    /// the minimap). Names from the game's lists only, never a player's.
+    /// </summary>
+    public static void Signal(DateTime at, string kind, string value) => Write(at, kind, new[] { value });
 
     static void Write(DateTime at, string kind, IEnumerable<string> lines)
     {

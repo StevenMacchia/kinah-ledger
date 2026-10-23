@@ -139,6 +139,7 @@ public sealed class GameWatcher
             if (c != null && c.Running) return c;
             var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server };
             s.Parsed += ev => { if (ev is MarketSold or MarketListed or MarketExpired) Market.OnChatEvent(ev); };
+            s.MarketOpen = t => (t - Market.SeenAt).TotalSeconds is >= -2 and <= 10;
             await s.StartAsync();
             Chat = s; ChatSince = DateTime.UtcNow; ChatNote = s.DetectNote; _flushAt = DateTime.UtcNow;
             return s;

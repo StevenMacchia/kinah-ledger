@@ -61,6 +61,8 @@ public sealed class MarketCapture
     public int ExpiredSeen { get; private set; }
     public int SalesShared { get; private set; }
     public DateTime LastReadAt { get; private set; } = DateTime.MinValue;
+    /// <summary>When a read last found listings on screen: the Market is open (the activity says so for a few seconds after).</summary>
+    public DateTime SeenAt { get; private set; } = DateTime.MinValue;
     public string LastAsk { get; private set; } = "";
     /// <summary>How the screen is read; tests swap in a screenshot.</summary>
     public MarketLocator.Reader Read { get; set; } = MarketLocator.ScreenRead;
@@ -117,7 +119,7 @@ public sealed class MarketCapture
             // the Market closed or moved: after a few empty reads go back to looking for it (a chosen area just waits)
             if (++_emptyReads >= _cfg.LostAfterReads) { Detected = false; if (!Manual) Layout = null; }
         }
-        else { _emptyReads = 0; Detected = true; }
+        else { _emptyReads = 0; Detected = true; SeenAt = now; }
         if (Reads % 60 == 0)
             lock (_lock) foreach (var k in _seen.Where(kv => (now - kv.Value).TotalMinutes >= _cfg.RepeatMinutes).Select(kv => kv.Key).ToList()) _seen.Remove(k);
     }

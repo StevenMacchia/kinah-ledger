@@ -181,9 +181,13 @@ public sealed record MobRun(string name, string zone, int kills, long kinah, Dic
 /// <summary>
 /// One trip into an expedition or event area, entry to the last loot: how long it took, the Kinah, the kills and the
 /// tradeable items. Only areas on the instance list (data/instances.txt) are sent; nothing else about the run or the player.
-/// The site shows these per run and per hour inside runs.
+/// The site shows these per run and per hour inside runs. An event is filed under its family ("Shugo Festival"), the
+/// same on every send; <c>event</c> names the game itself ("Hidden Lugi") when it was read and <c>family</c> repeats the
+/// family, both left out when empty (since 0.8.12; the site files by <c>zone</c> and ignores fields it doesn't know).
 /// </summary>
-public sealed record InstanceRunPayload(string zone, string kind, int seconds, long kinah, int kills, Dictionary<string, int> items)
+public sealed record InstanceRunPayload(string zone, string kind, int seconds, long kinah, int kills, Dictionary<string, int> items,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? @event = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? family = null)
 {
     /// <summary>Most runs per payload, and the longest run, as the site accepts them.</summary>
     public const int MaxRuns = 50;
@@ -199,7 +203,9 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
             {
                 var d = new Dictionary<string, int>();
                 foreach (var (id, n) in r.Items) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
-                return new InstanceRunPayload(r.Zone, KindOf(r)!, (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d);
+                r.FileUnderFamily();
+                return new InstanceRunPayload(r.Zone, KindOf(r)!, (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
+                    r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null);
             }).ToList();
         return list.Count > 0 ? list : null;
     }

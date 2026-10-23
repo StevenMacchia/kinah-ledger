@@ -244,6 +244,43 @@ public static class ZoneLocator
     /// <summary>The name a run in this area is filed under: its expedition's, or its own.</summary>
     public static string RunName(string zone) => Parents.TryGetValue(zone, out var p) ? p : zone;
 
+    /// <summary>
+    /// An event's family ("Hidden Lugi" → "Shugo Festival"), the family itself for a family's own name ("Shugo Festival"),
+    /// or "" for an event in no family and for anything that isn't an event.
+    /// </summary>
+    public static string FamilyOf(string? name)
+    {
+        if (name == null || KindOf(name) != "Event") return "";
+        if (Parents.TryGetValue(name, out var p)) return p;
+        return Parents.Values.Any(v => string.Equals(v, name, StringComparison.OrdinalIgnoreCase)) ? name : "";
+    }
+
+    /// <summary>Every event name on the list, families included.</summary>
+    public static readonly string[] EventNames = Instances.Where(kv => kv.Value == "Event").Select(kv => kv.Key).ToArray();
+
+    /// <summary>The event on the list a piece of text names (a header, an NPC's line): exactly, or within a letter per seven of a name.</summary>
+    public static string? MatchEvent(string read)
+    {
+        var low = Regex.Replace(read.Trim().ToLowerInvariant(), @"\s+", " ");
+        string? best = null; int bestD = int.MaxValue;
+        foreach (var k in EventNames)
+        {
+            var kl = k.ToLowerInvariant();
+            if (kl == low) return k;
+            int d = Edit(kl, low);
+            if (d <= Math.Max(1, k.Length / 7) && d < bestD) { best = k; bestD = d; }
+        }
+        return best;
+    }
+
+    /// <summary>The first event on the list named anywhere inside <paramref name="text"/> ("Welcome to the Jump Jump tournament"), the longest name first.</summary>
+    public static string? EventIn(string text)
+    {
+        var low = Regex.Replace(text.ToLowerInvariant(), @"[^a-z0-9'!? ]+", " ");
+        low = Regex.Replace(low, @"\s+", " ");
+        return EventNames.OrderByDescending(n => n.Length).FirstOrDefault(n => Regex.IsMatch(low, $@"(?:^|\s){Regex.Escape(n.ToLowerInvariant())}(?:\s|$|[!?])"));
+    }
+
     static Dictionary<string, string> LoadParents()
     {
         var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

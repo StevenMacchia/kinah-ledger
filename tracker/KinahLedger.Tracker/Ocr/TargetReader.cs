@@ -161,6 +161,8 @@ public sealed partial class TargetReader
     public DateTime RewardAt { get; private set; } = DateTime.MinValue;
     bool _rewardSeen;
     public void MarkReward(DateTime t) => RewardAt = t;
+    /// <summary>For replay: a reward screen recorded open at <paramref name="t"/> with this title.</summary>
+    internal void MarkReward(DateTime t, string title) { RewardAt = t; RewardTitle = title; }
     /// <summary>The reward screen's title as last read ("Victory Reward", "Trade Shop").</summary>
     public string RewardTitle { get; private set; } = "";
     /// <summary>True while a reward screen is open, or was seen within the last <see cref="RewardGraceSeconds"/>.</summary>
@@ -205,13 +207,19 @@ public sealed partial class TargetReader
         // logged, so a craft counted wrong can be checked against when the window was really seen
         if (_craftSeen != was) CrashLog.Note(_craftSeen ? "crafting window seen (its skill tabs at the top)" : "crafting window's tabs gone");
         var title = _craftSeen ? null : lines.Select(l => l.Text.Trim()).FirstOrDefault(IsRewardTitle);
+        bool wasReward = _rewardSeen;
         _rewardSeen = title != null;
         if (title != null)
         {
-            if ((DateTime.UtcNow - RewardAt).TotalSeconds > RewardGraceSeconds) CrashLog.Note($"reward screen open ({title}): its Kinah and items are rewards, not farming");
+            if ((DateTime.UtcNow - RewardAt).TotalSeconds > RewardGraceSeconds)
+            {
+                CrashLog.Note($"reward screen open ({title}): its Kinah and items are rewards, not farming");
+                KinahLedger.Session.ReadTrace.Signal(DateTime.UtcNow, "reward", title);
+            }
             RewardAt = DateTime.UtcNow;
             RewardTitle = title;
         }
+        else if (wasReward) KinahLedger.Session.ReadTrace.Signal(DateTime.UtcNow, "reward", "");
         var found = FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
         if (found == null && unlisted.Length > 0)
         {

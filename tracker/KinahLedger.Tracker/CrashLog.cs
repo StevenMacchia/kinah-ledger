@@ -34,17 +34,20 @@ public static class CrashLog
             lock (ReadsLock)
             {
                 var p = ReadsPath;
-                if (File.Exists(p) && new FileInfo(p).Length > 2_000_000) File.WriteAllText(p, "");
-                File.AppendAllText(p, $"{DateTime.Now:HH:mm:ss.f}  {(parsed ? "ok" : "--")}  {line}{(afterFade ? "    (after a fade)" : "")}\n");
+                if (Clock == null && File.Exists(p) && new FileInfo(p).Length > 2_000_000) File.WriteAllText(p, "");
+                File.AppendAllText(p, $"{Clock?.Invoke() ?? DateTime.Now:HH:mm:ss.f}  {(parsed ? "ok" : "--")}  {line}{(afterFade ? "    (after a fade)" : "")}\n");
             }
         }
         catch (Exception) { /* logging must never break tracking */ }
     }
 
+    /// <summary>For replay: the time each line of reads.log is stamped with (the replayed read's, in local time), and no trimming.</summary>
+    public static Func<DateTime>? Clock { get; set; }
+
     /// <summary>A note about the reading itself (not a chat line) in reads.log, marked ?? so it stands apart from the lines.</summary>
     public static void Note(string text)
     {
-        try { lock (ReadsLock) File.AppendAllText(ReadsPath, $"{DateTime.Now:HH:mm:ss.f}  ??  {text}\n"); }
+        try { lock (ReadsLock) File.AppendAllText(ReadsPath, $"{Clock?.Invoke() ?? DateTime.Now:HH:mm:ss.f}  ??  {text}\n"); }
         catch (Exception) { /* logging must never break tracking */ }
     }
 }

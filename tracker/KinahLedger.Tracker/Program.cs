@@ -119,6 +119,21 @@ internal static class Program
                     PopupIconsReport(ItemDictionary.LoadOrEmpty(settings.ItemsFile), crop, reg.Location, lines);
                     return 0;
                 }
+                case "header-test":
+                {
+                    // the event header under the minimap, on whole-game pictures: header-test <picture>... (or --dir <folder>)
+                    var files = pos.Concat(opts.TryGetValue("dir", out var hd) ? Directory.GetFiles(hd, opts.GetValueOrDefault("glob") ?? "*.jpg").OrderBy(p => p) : Enumerable.Empty<string>()).ToList();
+                    foreach (var hf in files)
+                    {
+                        using var hb = Task.Run(() => ScreenReader.LoadAsync(hf)).GetAwaiter().GetResult();
+                        var hg = new System.Drawing.Rectangle(0, 0, hb.Width, hb.Height);
+                        var hr = EventHeader.Region(hg);
+                        using var hcrop = hb.Clone(hr, hb.PixelFormat);
+                        var (hname, hlines) = Task.Run(() => EventHeader.ReadAsync(hcrop, hr.Location)).GetAwaiter().GetResult();
+                        Console.WriteLine($"{Path.GetFileName(hf)}  ->  {hname ?? "no event"}   [{string.Join(" | ", hlines.Take(8))}]");
+                    }
+                    return 0;
+                }
                 case "replay": return Replay(settings, pos, opts);
                 case "report-replay": return ReportReplay(settings, pos);
                 case "icon-index":
@@ -585,10 +600,25 @@ options: --process aion[,other]");
         CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kinah-replay");   // the replay's own notes, never the player's logs
         Directory.CreateDirectory(CrashLog.DirOverride);
         File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), "");
+        // runs closed by an earlier replay are not this one's
+        try { File.Delete(Path.Combine(CrashLog.DirOverride, "instances.jsonl")); } catch (Exception) { }
         var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         var s = new TrackerSession(null, settings, items, "Replay");
         s.Vote = !opts.ContainsKey("novote");
-        int chats = 0, lists = 0; DateTime? first = null, last = null;
+        var landed = new List<(DateTime At, string What, string Where)>();
+        s.Landed = (ev, where) =>
+        {
+            string? what = ev switch
+            {
+                ItemAcquired a => $"{items.NameOf(a.ItemId)} x{a.Count}" + (a.Bound ? " (bound)" : ""),
+                KinahChanged { Delta: > 0 } k => $"{k.Delta:N0} Kina" + (k.Bound ? " (bound)" : ""),
+                RewardReceived rr => $"{rr.Name} x{rr.Count} (reward)",
+                _ => null,
+            };
+            if (what != null) landed.Add((ev.Time, what, where));
+        };
+        // the zone and reward screen reads: from the trace when it has them, else from the notes in reads.log beside it
+        var records = new List<(DateTime T, string K, List<string> L)>();
         foreach (var raw in File.ReadLines(path))
         {
             try
@@ -596,11 +626,71 @@ options: --process aion[,other]");
                 using var doc = System.Text.Json.JsonDocument.Parse(raw);
                 var r = doc.RootElement;
                 var t = DateTime.Parse(r.GetProperty("t").GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+                records.Add((t, r.GetProperty("k").GetString() ?? "", r.GetProperty("l").EnumerateArray().Select(x => x.GetString() ?? "").ToList()));
+            }
+            catch (Exception ex) { Console.Error.WriteLine("skipped a trace line: " + ex.Message); }
+        }
+        var signals = records.Where(x => x.K is "zone" or "reward" or "header").Select(x => new ReplaySignal(x.T, x.K, x.L.FirstOrDefault() ?? "")).ToList();
+        var readsPath = opts.GetValueOrDefault("reads") ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "reads.log");
+        if (!opts.ContainsKey("noreads") && File.Exists(readsPath))
+        {
+            // reads.log fills in what the trace didn't record yet (traces before 2026-10-23 have no zone lines)
+            var firstTraced = signals.Count > 0 ? signals.Min(x => x.At) : DateTime.MaxValue;
+            var fromLog = ReplaySignals.FromReadsLog(readsPath, ReplaySignals.Date(opts.GetValueOrDefault("reads-date"))).Where(x => x.At < firstTraced).ToList();
+            signals.AddRange(fromLog.Select(x => x.Kind == "reward" ? x with { Kind = "reward-once" } : x));
+            Console.WriteLine($"Zone and reward screen reads: {signals.Count(x => x.Kind == "zone")} zone changes, {signals.Count(x => x.Kind.StartsWith("reward"))} reward screens ({fromLog.Count} from {Path.GetFileName(readsPath)}).");
+        }
+        signals = signals.OrderBy(x => x.At).ToList();
+        int si = 0; string? zoneNow = null; string rewardNow = ""; DateTime tickAt = DateTime.MinValue, rewardUntil = DateTime.MinValue, clock = DateTime.MinValue;
+        // the replay's notes carry the replayed reads' times, so they line up with the player's own reads.log
+        CrashLog.Clock = () => clock == DateTime.MinValue ? DateTime.Now : clock.ToLocalTime();
+        // the live tracker reads the minimap every few seconds (3 s in an instance): the replay repeats the last zone as often
+        void SignalsUntil(DateTime t)
+        {
+            while (true)
+            {
+                var nextTick = zoneNow == null ? DateTime.MaxValue : tickAt.AddSeconds(3);
+                var nextSig = si < signals.Count ? signals[si].At : DateTime.MaxValue;
+                var next = nextTick < nextSig ? nextTick : nextSig;
+                if (next > t) return;
+                if (nextTick <= nextSig)
+                {
+                    tickAt = nextTick; clock = nextTick;
+                    s.ApplyZone(zoneNow, nextTick);
+                    if (rewardNow.Length > 0) s.Target.MarkReward(nextTick, rewardNow);
+                    // reads.log noted only that a reward screen opened: it is taken as open for 10 s, as a typical one stays
+                    else if (nextTick <= rewardUntil) s.Target.MarkReward(nextTick, s.Target.RewardTitle);
+                    s.UpdateDoing(nextTick);
+                    continue;
+                }
+                var sg = signals[si++];
+                clock = sg.At;
+                switch (sg.Kind)
+                {
+                    case "zone": zoneNow = sg.Value; tickAt = sg.At; s.ApplyZone(sg.Value, sg.At); break;
+                    case "reward": rewardNow = sg.Value; if (sg.Value.Length > 0) s.Target.MarkReward(sg.At, sg.Value); break;
+                    case "reward-once": s.Target.MarkReward(sg.At, sg.Value); rewardUntil = sg.At.AddSeconds(10); break;
+                    case "header": s.EventHeaderSeen(sg.Value, sg.At); break;
+                }
+            }
+        }
+        int chats = 0, lists = 0; DateTime? first = null, last = null;
+        foreach (var (t, k, lines) in records)
+        {
+            if (k is not ("chat" or "list")) continue;
+            try
+            {
                 var local = t.ToLocalTime().TimeOfDay;
                 if ((from != null && local < from) || (to != null && local > to)) continue;
-                var lines = r.GetProperty("l").EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+                // the zone as it was when the cut begins, without the runs of the hours before it
+                if (first == null) { while (si < signals.Count && signals[si].At <= t) { var sg = signals[si++]; if (sg.Kind == "zone") zoneNow = sg.Value; } if (zoneNow != null) { tickAt = t; s.ApplyZone(zoneNow, t); } }
+                // a pause in the reads (the game covered, the tracker stopped): the live tracker reads the minimap afresh after it,
+                // so the replay stops repeating the old zone until the next zone read it has
+                if (last is { } prevT && (t - prevT).TotalSeconds > 60) zoneNow = null;
+                SignalsUntil(t);
+                clock = t;
                 first ??= t; last = t;
-                if (r.GetProperty("k").GetString() == "chat") { s.QuestCounter(lines); s.ProcessChat(lines, t); chats++; }
+                if (k == "chat") { s.QuestCounter(lines); s.ProcessChat(lines, t); chats++; }
                 else
                 {
                     // the trace keeps list rows as "463 Kina" and "Name x2"; the list's own form is "Kina x463"
@@ -610,7 +700,8 @@ options: --process aion[,other]");
             }
             catch (Exception ex) { Console.Error.WriteLine("skipped a trace line: " + ex.Message); }
         }
-        if (last != null) s.FlushVotes(last.Value);
+        if (last != null) { s.FlushVotes(last.Value); SignalsUntil(last.Value.AddSeconds(ReplayTailSeconds)); }
+        s.Instances.Close();
         var e = s.Engine; var tot = e.Totals();
         Console.WriteLine($"Replayed {chats} chat reads and {lists} loot list reads, {first?.ToLocalTime():HH:mm:ss} to {last?.ToLocalTime():HH:mm:ss}.");
         Console.WriteLine($"  kills counted        {tot.Kills}   (evidence: {e.KillsSeen} · Kinah pickups {e.KinahDrops} · Soul Points lines {e.CurrencyLines})");
@@ -622,9 +713,52 @@ options: --process aion[,other]");
         foreach (var m in e.MobSnapshot().Take(12)) Console.WriteLine($"    {m.Name,-36} {m.Kills,4} kills  {m.Kinah,9:N0} Kinah");
         var notes = File.ReadAllLines(Path.Combine(CrashLog.DirOverride, "reads.log"));
         Console.WriteLine($"  reads that didn't line up: {notes.Count(n => n.Contains("couldn't line"))}");
-        CrashLog.DirOverride = null; _ = real;
+        PrintRuns(s, items, landed, first, signals);
+        if (opts.TryGetValue("notes", out var notesOut)) File.Copy(Path.Combine(CrashLog.DirOverride, "reads.log"), notesOut, true);
+        CrashLog.DirOverride = null; CrashLog.Clock = null; _ = real;
         return 0;
     }
+
+    /// <summary>A replay's tail: how long after the last read the zone keeps being read, so a run left at the end closes as it would live.</summary>
+    const double ReplayTailSeconds = 60;
+
+    /// <summary>
+    /// The expedition and event runs the replay counted, each with what it holds, and every pickup counted from a minute
+    /// before an instance was entered to two minutes after it was left, with where it landed: a drop of the run that
+    /// landed in farming (or the other way round) shows here.
+    /// </summary>
+    static void PrintRuns(TrackerSession s, ItemDictionary items, List<(DateTime At, string What, string Where)> landed, DateTime? first, List<ReplaySignal> signals)
+    {
+        var runs = s.Instances.Snapshot().Where(r => first == null || r.Start >= first.Value.AddMinutes(-1)).ToList();
+        Console.WriteLine($"  runs kept: {runs.Count}");
+        foreach (var r in runs)
+        {
+            var what = r.Items.Select(kv => (Name: items.NameOf(kv.Key), N: kv.Value)).Concat(r.BoundItems.Select(kv => (Name: items.NameOf(kv.Key) + " (bound)", N: kv.Value)))
+                .OrderBy(x => x.Name).Select(x => $"{x.Name} x{x.N}");
+            Console.WriteLine($"    {r.Kind} · {RunLabel(r)}  {r.Start.ToLocalTime():HH:mm:ss}–{r.LastLoot?.ToLocalTime():HH:mm:ss}  {(r.Seconds >= 3600 ? TimeSpan.FromSeconds(r.Seconds).ToString(@"h\:mm\:ss") : TimeSpan.FromSeconds(r.Seconds).ToString(@"m\:ss"))}  {r.Kinah:N0} Kinah · {r.Items.Values.Sum() + r.Bound} items");
+            Console.WriteLine($"        {string.Join(", ", what)}");
+            if (r.Witnesses.Length > 0 || r.Ended.Length > 0) Console.WriteLine($"        seen by: {r.Witnesses} · closed: {r.Ended}");
+        }
+        // the instance windows, from the zone reads: entered, left
+        var windows = new List<(DateTime In, DateTime Out, string Zone)>();
+        DateTime? enteredAt = null; string inZone = "";
+        foreach (var sg in signals.Where(x => x.Kind == "zone"))
+        {
+            bool inst = KinahLedger.Ocr.ZoneLocator.KindOf(sg.Value) is { } k && k != KinahLedger.Ocr.ZoneLocator.Ignored;
+            if (inst && enteredAt == null) { enteredAt = sg.At; inZone = sg.Value; }
+            else if (!inst && sg.Value != SessionEngine.UnknownZone && enteredAt != null) { windows.Add((enteredAt.Value, sg.At, inZone)); enteredAt = null; }
+        }
+        if (enteredAt != null) windows.Add((enteredAt.Value, DateTime.MaxValue, inZone));
+        foreach (var w in windows)
+        {
+            var near = landed.Where(x => x.At >= w.In.AddSeconds(-60) && (w.Out == DateTime.MaxValue || x.At <= w.Out.AddSeconds(120))).ToList();
+            if (near.Count == 0) continue;
+            Console.WriteLine($"  in and around {KinahLedger.Ocr.ZoneLocator.RunName(w.Zone)} ({w.In.ToLocalTime():HH:mm:ss} to {(w.Out == DateTime.MaxValue ? "the end" : w.Out.ToLocalTime().ToString("HH:mm:ss"))}):");
+            foreach (var x in near) Console.WriteLine($"    {x.At.ToLocalTime():HH:mm:ss}  {x.What,-40} -> {x.Where}");
+        }
+    }
+
+    static string RunLabel(InstanceRun r) => r.Label;
 
     /// <summary>Renders the window (and the panel) off-screen to PNG files, so the layout can be reviewed without a desktop session.</summary>
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
@@ -889,6 +1023,7 @@ options: --process aion[,other]");
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
         ok &= EventRewardsTest(items, s);
+        ok &= EventActivityTest(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }
@@ -1026,6 +1161,171 @@ options: --process aion[,other]");
     }
 
     /// <summary>
+    /// What the player is doing, which event and family, the run's edges and where each pickup lands (2026-10-23).
+    /// Modelled on Steven's reads of 2026-10-22 and 23 (Accursed Sword, Incursion of the Spirits, Jump Jump, Hidden Lugi,
+    /// Urugugu Canyon), other players' names and lines replaced.
+    /// </summary>
+    static bool EventActivityTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-62} -> {got,-48} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nWhat the player is doing, which event, the run's edges (2026-10-23):");
+        try { File.Delete(Path.Combine(CrashLog.Dir, "instances.jsonl")); } catch (Exception) { }
+        int n(SessionEngine e, string name) => e.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+        int ri(InstanceRun? r, string name) => r == null ? 0 : r.Items.Concat(r.BoundItems).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+        string notes() { try { return File.ReadAllText(CrashLog.ReadsPath); } catch (Exception) { return ""; } }
+        string Local(DateTime t) => t.ToLocalTime().ToString("HH:mm:ss");
+        // a chat window that scrolls: each read shows the last ten lines, so every read lines up with the one before
+        (TrackerSession S, Action<DateTime, string[]> Say) Session(DateTime t, string zone)
+        {
+            var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+            var window = new List<string> { "[Player1] hello", "[Player4] hi" };
+            var last = t;
+            // the live tracker reads the chat several times a second: the same window is read again every 30 s up to each new line
+            void Say(DateTime at, params string[] lines) { while ((at - last).TotalSeconds > 30) { last = last.AddSeconds(30); s.ProcessChat(new List<string>(window), last); } last = at; window.AddRange(lines); if (window.Count > 10) window.RemoveRange(0, window.Count - 10); s.ProcessChat(new List<string>(window), at); }
+            s.ApplyZone(zone, t);
+            Say(t);   // the first read is history
+            return (s, Say);
+        }
+
+        // the chat's witnesses, as read (garbled ones from the logs)
+        Check("\"joined event\" read garbled still counts", string.Join(" ", new[] { "Hellfire joined event:", "SorkyxA joified event.", "Nesrynn Jodned evento", "Gizmojoined event.", "Regent joined event.-" }.Select(l => EventWitness.Joined(l) ? "y" : "n")), "y y y y y");
+        Check("...a player's chat and party lines don't", string.Join(" ", new[] { "[Player5] i joined event", "Ghostt joined the party.", "Joined party.", "Party leadership has been reassigned to" }.Select(l => EventWitness.Joined(l) ? "y" : "n")), "n n n n");
+        Check("an event's NPC, read garbled", $"{EventWitness.Npc("[Lugi;Manager] Transform into a Lugi or")?.Event} / {EventWitness.Npc("[Shugo FestivaVManager] Welcome-to the")?.Family} / {EventWitness.Npc("[Storage Manager] I can promise you")?.Npc ?? "none"}", "Hidden Lugi / Shugo Festival / none");
+        var said = EventWitness.Read(new[] { "[Player6] go siege soon", "[Shugo Festival Manager] Wel€oms»-the", "Jump Jump tournameng, nyerk!", "[Player7] yippee." });
+        Check("the Shugo Festival Manager's words name the game", string.Join(" | ", said.Select(x => $"{x.Source}: {x.Name}")), "chat: Shugo Festival Manager names it: Jump Jump");
+        // the header under the minimap, as read on Steven's pictures
+        Check("event header: name, then its clock", $"{EventHeader.Find(new[] { (10, "Hidden Lugi"), (40, "Until Event Start"), (60, "01:12") })} / {EventHeader.Find(new[] { (10, "Accursed Sword"), (40, "@ 09:44"), (60, "(0) Remove all Wraith Tombs") })}", "Hidden Lugi / Accursed Sword");
+        Check("...not the open world's list of games, nor an expedition", $"{EventHeader.Find(new[] { (10, "Shugo Festival"), (40, "01:15"), (60, "Enter") }) ?? "none"} / {EventHeader.Find(new[] { (10, "Urugugu Canyon"), (40, "Urugugu Canyon") }) ?? "none"} / {EventHeader.Find(new[] { (10, "pants"), (40, "Time Limit") }) ?? "none"}", "none / none / none");
+
+        // Accursed Sword, 2026-10-22 14:31: "joined event" 9 s before the minimap; its rewards at 14:35; out at 14:43
+        var a0 = new DateTime(2026, 10, 22, 18, 32, 7, DateTimeKind.Utc);
+        var (sa, sayA) = Session(a0.AddMinutes(-2), "Northern Tolbas Forest");
+        sayA(a0.AddSeconds(-9), new[] { "Player2 joined event." });
+        Check("\"joined event\" alone opens no run", $"{sa.Instances.Open ?? "none"} / {sa.Instances.Pending}", "none / an event");
+        sa.ApplyZone("Accursed Sword", a0); sa.UpdateDoing(a0);
+        var runA = sa.Instances.Current;
+        Check("the minimap names it: the event, its family", $"{runA?.Zone} / {runA?.Event} / {runA?.Family}", "Dimensional Invasion / Accursed Sword / Dimensional Invasion");
+        Check("doing now", sa.Doing.Current.Label, "Event · Accursed Sword (Dimensional Invasion)");
+        sayA(a0.AddSeconds(183), new[] { "Forgotten Bow acquired.", "Forgotten Pauldrons acquired.", "Riverside Helm acquired.", "Ethereal Cloak acquired.", "Acquired Fine Odyle x4.", "Acquired Odyle x6." });
+        sayA(a0.AddSeconds(653), new[] { "Acquired 498 Kina." });
+        var keptA = sa.Instances.Snapshot().LastOrDefault();
+        Check("its rewards in the run, which starts at the first witness", $"{Local(keptA?.Start ?? default)} {ri(keptA, "Forgotten Bow")} {ri(keptA, "Odyle")} {keptA?.Kinah}", $"{Local(a0.AddSeconds(-9))} 1 6 0");
+        Check("then loose Kina before the minimap changed: farming", $"{sa.Engine.Totals().Kinah} / {sa.Instances.Open ?? "closed"} / {sa.Zone}", $"498 / closed / {SessionEngine.UnknownZone}");
+        sa.ApplyZone("Northern Tolbas Forest", a0.AddSeconds(655));
+        sayA(a0.AddSeconds(670), new[] { "Acquired 236 Kina.", "Refining Stone acquired." });
+        Check("...and after it: farming in the zone", $"{sa.Engine.Totals().Kinah} {n(sa.Engine, "Refining Stone")} {sa.Doing.Current.Label}", "734 1 Farming · Northern Tolbas Forest");
+        Check("each pickup carries where it landed", sa.RecentPickups(1).FirstOrDefault()?.Where ?? "", "Farming · Northern Tolbas Forest");
+
+        // Hidden Lugi with a minimap that can't be read: the chat opens the run, the drops are the run's, not farming
+        var h0 = new DateTime(2026, 10, 23, 15, 1, 3, DateTimeKind.Utc);
+        var (sh, sayH) = Session(h0.AddMinutes(-2), "Ruin Exploration Campsite");
+        sayH(h0.AddSeconds(-5), new[] { "Player3 joined event." });
+        sh.ApplyZone(SessionEngine.UnknownZone, h0);
+        sayH(h0.AddSeconds(50), new[] { "[Lugi Manager] Transform into a Lugi or", "Shugo, and weed out the fakes, nyerk!" });
+        Check("Unknown zone: the event's NPC opens the run", $"{sh.Instances.Current?.Label} / {sh.Instances.Current?.Kind}", "Hidden Lugi (Shugo Festival) / Event");
+        sayH(h0.AddSeconds(300), new[] { "Forgotten Cloak acquired.", "Acquired Fine Odyle x2.", "Acquired Odyle x9." });
+        var runH = sh.Instances.Snapshot().LastOrDefault();
+        Check("...its drops land in the run, never farming", $"{ri(runH, "Odyle")} {n(sh.Engine, "Odyle")} {Local(runH?.Start ?? default)}", $"9 0 {Local(h0.AddSeconds(-5))}");
+        Check("...and say so", sh.RecentPickups(1).FirstOrDefault()?.Where ?? "", "Event · Hidden Lugi (Shugo Festival)");
+        sh.ApplyZone("Hidden Lugi", h0.AddSeconds(310));
+        sh.EventHeaderSeen("Jump Jump", h0.AddSeconds(320));
+        Check("the header disagrees with the minimap: logged, minimap kept", $"{sh.Instances.Current?.Event} / {(notes().Contains("witnesses disagree: the minimap says Hidden Lugi, header says Jump Jump") ? "logged" : "not logged")}", "Hidden Lugi / logged");
+        Check("every witness kept with the run", runH?.Witnesses ?? "", $"chat: joined event {Local(h0.AddSeconds(-5))} · chat: Lugi Manager {Local(h0.AddSeconds(50))} · minimap {Local(h0.AddSeconds(310))}");
+
+        // a minimap title that names only the family: the NPC's words name the game
+        var j0 = new DateTime(2026, 10, 23, 14, 2, 23, DateTimeKind.Utc);
+        var (sj, sayJ) = Session(j0.AddMinutes(-1), "Ruin Exploration Campsite");
+        sj.ApplyZone("Shugo Festival", j0);
+        sayJ(j0.AddSeconds(22), new[] { "[Shugo FestivaVManager] Welcome-to the", "Jump Jump tournameng, nyerk!" });
+        Check("the family on the minimap, the game from the NPC", sj.Instances.Current?.Label ?? "", "Jump Jump (Shugo Festival)");
+
+        // Urugugu Canyon, 2026-10-22 19:19: out at :56, its end payout 37 s later, in again at 19:20:39
+        var u0 = new DateTime(2026, 10, 22, 23, 11, 41, DateTimeKind.Utc);
+        var (su, sayU) = Session(u0.AddMinutes(-1), "Ruin Exploration Campsite");
+        su.ApplyZone("Urugugu Village", u0);
+        su.ApplyZone("Ellun River Midstream", u0.AddSeconds(300)); su.ApplyZone("Urugugu Temple", u0.AddSeconds(303));
+        Check("an open-world name on the minimap for one read: the same run", $"{su.Instances.Current?.Label} {su.Instances.Current?.Leaving} {Local(su.Instances.Current?.Start ?? default)}", $"Urugugu Canyon False {Local(u0)}");
+        sayU(u0.AddSeconds(467), new[] { "Divine Canyon Gloves acquired.", "Earth Cloak acquired.", "Earth Pauldrons acquired." });
+        var leftU = u0.AddSeconds(495);
+        su.ApplyZone("Ellun River Midstream", leftU);
+        sayU(leftU.AddSeconds(37), new[] { "Acquired Enhance Stone x470.", "Acquired 20,000 Kina (Bound)." });
+        su.ApplyZone("Urugugu Village", leftU.AddSeconds(43));
+        var runsU = su.Instances.Snapshot().Where(r => r.Start >= u0.AddSeconds(-1)).ToList();
+        Check("the late payout is the run's, not farming", $"{ri(runsU.FirstOrDefault(), "Enhance Stone")} {runsU.FirstOrDefault()?.Kinah} {n(su.Engine, "Enhance Stone")}", "470 20000 0");
+        Check("in again 43 s after leaving: a new run", $"{runsU.Count} closed: {runsU.FirstOrDefault()?.Ended} / open: {su.Instances.Open}", "1 closed: left, then a new entry / open: Urugugu Canyon");
+
+        // Urugugu Canyon, 15:23: out, then a Daeva Pass screen pays out: that is the screen's, not the run's
+        var v0 = new DateTime(2026, 10, 22, 19, 13, 46, DateTimeKind.Utc);
+        var (sv, sayV) = Session(v0.AddMinutes(-1), "Eastern Cantas Valley");
+        sv.ApplyZone("Urugugu Village", v0);
+        sayV(v0.AddSeconds(530), new[] { "Earth Gloves acquired.", "Vagabond Gloves acquired.", "Acquired Refining Stone x5." });
+        sv.ApplyZone("Eastern Cantas Valley", v0.AddSeconds(591));
+        sv.Target.MarkReward(v0.AddSeconds(620), "Daeva Pass");
+        sayV(v0.AddSeconds(623), new[] { "Acquired 100,000 Kina (Bound)." });
+        sv.UpdateDoing(v0.AddSeconds(623));
+        Check("a reward screen after leaving: not the run's", $"{sv.Instances.Current?.Label} {sv.Instances.Snapshot().LastOrDefault()?.Kinah} / {sv.Doing.Current.Label}", "Urugugu Canyon 0 / Reward screen · Daeva Pass");
+        sayV(v0.AddSeconds(630), new[] { "Acquired 312 Kina." });
+        Check("loose Kina after leaving closes the run: farming", $"{sv.Instances.Open ?? "closed"} {sv.Engine.Totals().Kinah}", "closed 312");
+
+        // Incursion of the Spirits, 2026-10-22: the reader away 52 minutes with the event open; skins claimed after
+        var w0 = new DateTime(2026, 10, 22, 19, 32, 48, DateTimeKind.Utc);
+        var (sw, sayW) = Session(w0.AddMinutes(-1), "Southern Tolbas Forest");
+        sw.ApplyZone("Incursion of the Spirits", w0);
+        sayW(w0.AddSeconds(205), new[] { "Temple Guardian Breastplate acquired.", "Rainy Forest Helm acquired.", "Acquired Odyle x8." });
+        // read until 4 minutes in, then nothing for 52 minutes (the game covered), then the skins
+        sayW(w0.AddMinutes(4), Array.Empty<string>());
+        sw.ProcessChat(new List<string> { "[Player1] hello", "[Player4] hi", "Temple Guardian Breastplate acquired.", "Rainy Forest Helm acquired.", "Acquired Odyle x8.", "Dawn Frost (Breastplate) Skin acquired.", "Dawn Frost (Helm) Skin acquired.", "Dawn Frost (Boots) Skin acquired." }, w0.AddMinutes(56));
+        var runW = sw.Instances.Snapshot().LastOrDefault();
+        Check("an event open across a long pause closes where it was", $"{runW?.Items.Values.Sum()} {sw.Instances.Open ?? "closed"} {sw.Zone}", $"10 closed {SessionEngine.UnknownZone}");
+        Check("...saying why", runW?.Ended.StartsWith("the reader was away 52 min") == true ? "yes" : runW?.Ended ?? "", "yes");
+
+        // a lobby filling up scrolls the chat past what lines up (Accursed Sword, 2026-10-23 11:33:16): those lines still count
+        var q0 = new DateTime(2026, 10, 23, 15, 33, 16, DateTimeKind.Utc);
+        var (sq, _) = Session(q0.AddMinutes(-1), "Ellun River Midstream");
+        sq.ProcessChat(new List<string> { "Player10 joined event.", "Player11 joined event.", "Player12 joined event.", "Player13 joined event.", "Player14 joined event.", "Player15 joined event." }, q0);
+        sq.ApplyZone("Accursed Sword", q0.AddSeconds(8));
+        Check("\"joined event\" in a read that didn't line up: the run starts there", $"{sq.Unaligned} {Local(sq.Instances.Current?.Start ?? default)}", $"1 {Local(q0)}");
+
+        // a "joined event" that leads nowhere is let go
+        var p0 = new DateTime(2026, 10, 23, 12, 0, 0, DateTimeKind.Utc);
+        var (sp, sayP) = Session(p0.AddMinutes(-1), "Eastern Cantas Valley");
+        sayP(p0, new[] { "Player8 joined event." });
+        sp.ApplyZone("Eastern Cantas Valley", p0.AddSeconds(150));
+        Check("\"joined event\" and no event in 2 minutes: no run", $"{sp.Instances.Open ?? "none"} {sp.Instances.Pending ?? "none"} {(notes().Contains("no event followed") ? "logged" : "")}", "none none logged");
+
+        // shared: filed under the family, the game beside it; a run from before families files under its family too
+        var old = new InstanceRun { Zone = "Odyle Flight Frenzy", Kind = "Event", Start = p0, LastLoot = p0.AddMinutes(5), Kinah = 8000 };
+        var lugi = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Event = "Hidden Lugi", Family = "Shugo Festival", Start = p0, LastLoot = p0.AddMinutes(6) };
+        var urug = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = p0, LastLoot = p0.AddMinutes(8), Kinah = 600_000 };
+        var json = System.Text.Json.JsonSerializer.Serialize(InstanceRunPayload.From(new[] { old, lugi, urug }, id => id.ToString()));
+        Check("shared: an old run's event files under its family", json.Contains("\"zone\":\"Shugo Festival\",\"kind\":\"Event\",\"seconds\":300,\"kinah\":8000,\"kills\":0,\"items\":{},\"event\":\"Odyle Flight Frenzy\",\"family\":\"Shugo Festival\"") ? "yes" : json, "yes");
+        Check("shared: the game and its family beside the zone", json.Contains("\"seconds\":360,\"kinah\":0,\"kills\":0,\"items\":{},\"event\":\"Hidden Lugi\",\"family\":\"Shugo Festival\"") ? "yes" : json, "yes");
+        Check("shared: an expedition sends no event or family", json.Contains("\"zone\":\"Urugugu Canyon\",\"kind\":\"Expedition\",\"seconds\":480,\"kinah\":600000,\"kills\":0,\"items\":{}}") ? "yes" : json, "yes");
+
+        // the miscount report says what the tracker thought was going on, and where each pickup landed (it keeps the last minute)
+        var r0 = DateTime.UtcNow.AddSeconds(-20);
+        var (sr, sayR) = Session(r0, "Eastern Cantas Valley");
+        sayR(r0.AddSeconds(5), new[] { "Player9 joined event." });
+        sr.ApplyZone("Accursed Sword", r0.AddSeconds(8));
+        sayR(r0.AddSeconds(10), new[] { "Forgotten Bow acquired.", "Riverside Helm acquired.", "Acquired Odyle x6." });
+        sr.ApplyZone("Northern Tolbas Forest", r0.AddSeconds(12));
+        sayR(r0.AddSeconds(15), new[] { "Acquired 236 Kina." });
+        var dir = sr.WriteReport("test");
+        var summary = File.ReadAllText(Path.Combine(dir, "summary.txt"));
+        var counted = File.ReadAllText(Path.Combine(dir, "counted.jsonl"));
+        Check("report: doing now, the activity's changes, the last run", $"{summary.Contains("Doing now: Farming · Northern Tolbas Forest")} {summary.Contains("Event · Accursed Sword (Dimensional Invasion) →")} {summary.Contains("Last run: Event · Accursed Sword (Dimensional Invasion)")}", "True True True");
+        var wheres = File.ReadAllLines(Path.Combine(dir, "counted.jsonl")).Where(l => l.Length > 2).Select(l => { using var d = System.Text.Json.JsonDocument.Parse(l); return d.RootElement.GetProperty("where").GetString(); });
+        Check("report: each pickup with where it landed", string.Join(" | ", wheres.Distinct()), "Event · Accursed Sword (Dimensional Invasion) | Farming · Northern Tolbas Forest");
+        try { Directory.Delete(dir, true); } catch (Exception) { }
+        return ok;
+    }
+
+    /// <summary>
     /// Steven, 2026-10-23, Hidden Lugi: the event's rewards printed 11 s after the game moved him out, while the chat faded
     /// in garbled, and none of them counted, toward the event or anywhere. Modelled on that trace (other players' lines
     /// replaced): the rewards count once the chat settles, dated when they landed, and go to the event run just left.
@@ -1051,7 +1351,7 @@ options: --process aion[,other]");
         // the game moves the player out; the minimap names the campsite
         var left = t0.AddSeconds(383);
         s.Engine.SetZone("Ruin Exploration Campsite"); s.Instances.Zone("Ruin Exploration Campsite", left);
-        Check("left the event: its run stays open for its rewards", $"{s.Instances.Open} {s.Instances.Ending(left.AddSeconds(11))} {s.Instances.Ending(left.AddSeconds(40))}", "Shugo Festival True False");
+        Check("left the event: its run stays open for its rewards", $"{s.Instances.Open} {s.Instances.Ending(left.AddSeconds(11))} {s.Instances.Ending(left.AddSeconds(InstanceLog.RewardGraceSeconds + 5))}", "Shugo Festival True False");
         // the rewards fade in garbled three ways, then a clean read, then one that lines up with it
         s.ProcessChat(new List<string> { "Forgotten Hatquired.", "Forgotten", "Illusion", "AcquirGdylO", "Codex (Bomd)", "One-of-a-Kind Gear III achieved." }, left.AddSeconds(11));
         s.ProcessChat(new List<string> { "rorgotten Cloak", "Acquire d Fine OJy1e", "*quire d", "Odyle", "Acquire d Refining stone", "Acquire d soul codex (BoulJ) x]", "One-" }, left.AddSeconds(12.2));
@@ -1064,7 +1364,7 @@ options: --process aion[,other]");
         Check("...and not as farming in the campsite", $"{n(s.Engine, "Odyle")} {n(s.Engine, "Refining Stone")}", "0 0");
         s.ProcessChat(settled, left.AddSeconds(40));
         Check("read again later: counted once", $"{r("Odyle")}", "9");
-        s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(45));
+        s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(InstanceLog.RewardGraceSeconds + 5));
         Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {s.Instances.Snapshot().LastOrDefault()?.Zone} {s.Instances.Snapshot().LastOrDefault()?.Items.Values.Sum()}", "none Shugo Festival 18");
         // garbled reads over lines that were already on screen: nothing more
         var s2 = new TrackerSession(null, settings, items, "Test");

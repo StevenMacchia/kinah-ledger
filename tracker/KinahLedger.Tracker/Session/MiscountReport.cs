@@ -27,7 +27,7 @@ public sealed class ReportBuffer
     sealed record Shot(DateTime At, string Kind, Point Origin, byte[] Png);
     readonly List<Shot> _shots = new();
     readonly List<(DateTime At, string Kind, string[] Lines)> _reads = new();
-    readonly List<(DateTime At, string What, string Via)> _counted = new();
+    readonly List<(DateTime At, string What, string Via, string Where)> _counted = new();
     readonly Dictionary<string, (ulong Hash, DateTime At)> _last = new();
     readonly object _lock = new();
     long _bytes;
@@ -56,10 +56,10 @@ public sealed class ReportBuffer
         lock (_lock) { _reads.Add((at, kind, lines.ToArray())); Trim(at); }
     }
 
-    /// <summary>A pickup as counted: what, and how it was read (GameEvent.Via).</summary>
-    public void Counted(DateTime at, string what, string via)
+    /// <summary>A pickup as counted: what, how it was read (GameEvent.Via), and where it landed (the activity: "Event · Hidden Lugi (Shugo Festival)", "Farming · Eastern Cantas Valley").</summary>
+    public void Counted(DateTime at, string what, string via, string where = "")
     {
-        lock (_lock) { _counted.Add((at, what, via)); Trim(at); }
+        lock (_lock) { _counted.Add((at, what, via, where)); Trim(at); }
     }
 
     /// <summary>How much is held now: pictures, reads, pickups.</summary>
@@ -79,7 +79,7 @@ public sealed class ReportBuffer
     /// </summary>
     public string Write(string root, string summary, IEnumerable<string> logTail, DateTime now)
     {
-        List<Shot> shots; List<(DateTime At, string Kind, string[] Lines)> reads; List<(DateTime At, string What, string Via)> counted;
+        List<Shot> shots; List<(DateTime At, string Kind, string[] Lines)> reads; List<(DateTime At, string What, string Via, string Where)> counted;
         lock (_lock) { Trim(now); shots = _shots.ToList(); reads = _reads.ToList(); counted = _counted.ToList(); }
         var dir = Path.Combine(root, "reports", now.ToLocalTime().ToString("yyyyMMdd-HHmmss"));
         for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(root, "reports", now.ToLocalTime().ToString("yyyyMMdd-HHmmss") + "-" + i);
@@ -99,14 +99,14 @@ public sealed class ReportBuffer
             File.WriteAllLines(Path.Combine(dir, "frames.jsonl"), index);
         }
         File.WriteAllLines(Path.Combine(dir, "trace.jsonl"), reads.Select(r => JsonSerializer.Serialize(new { t = r.At.ToString("O"), k = r.Kind, l = r.Lines })));
-        File.WriteAllLines(Path.Combine(dir, "counted.jsonl"), counted.Select(c => JsonSerializer.Serialize(new { t = c.At.ToString("O"), what = c.What, via = c.Via })));
+        File.WriteAllLines(Path.Combine(dir, "counted.jsonl"), counted.Select(c => JsonSerializer.Serialize(new { t = c.At.ToString("O"), what = c.What, via = c.Via, where = c.Where })));
         File.WriteAllText(Path.Combine(dir, "summary.txt"), summary);
         File.WriteAllLines(Path.Combine(dir, "reads-log.txt"), logTail);
         File.WriteAllText(Path.Combine(dir, "README.txt"),
             "Kinah Ledger miscount report: the last minute before it was saved, on this PC only.\r\n\r\n" +
             "summary.txt     the tracker's state (version, chat area, text size, checks so far)\r\n" +
-            "counted.jsonl   every pickup counted, and how it was read\r\n" +
-            "trace.jsonl     every chat and loot list read as text; `KinahLedger replay trace.jsonl` counts it again\r\n" +
+            "counted.jsonl   every pickup counted, how it was read, and where it landed (a run or farming)\r\n" +
+            "trace.jsonl     every chat and loot list read as text, and the zone as it changed; `KinahLedger replay trace.jsonl` counts it again\r\n" +
             "reads-log.txt   the end of reads.log: what the tracker noted while reading\r\n" +
             (shots.Count > 0 ? "frames/         the pictures those reads came from (frames.jsonl says when and where);\r\n" +
                                "                `KinahLedger report-replay <this folder>` reads them again with the current reader\r\n" : "") +
