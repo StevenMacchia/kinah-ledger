@@ -1973,6 +1973,31 @@ options: --process aion[,other]");
                 Check("an event's reward screen by its words", $"{TrackerSession.IsEventRewardTitle("Rewards have been sent to your cube.")} {TrackerSession.IsEventRewardTitle("Can select 0 time(s)")} {TrackerSession.IsEventRewardTitle("Reward collected.")}", "True True False");
                 Check("kept pictures by kind", string.Join(" ", new[] { "x-reward-table.jpg", "x-event-rewards.jpg", "x-Quna-Shop.jpg", "x-in-run.jpg", "x-Daeva-Pass.jpg" }.Select(n => TrackerSession.KindOfShot(n).ToString())), "RunEnd RunEnd Shop Frequent Screen");
                 Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
+                // five Urugugu runs back to back (Steven, 2026-10-23 18:26 to 19:04): village, valley, temple, sanctum, the table, and
+                // back to the village. Five runs, each with its own table, never one of 37:04
+                var fv = new TrackerSession(null, new Settings(), items, "Test"); var fv0 = DateTime.UtcNow.AddHours(-1);
+                string[] areas = { "Urugugu Village", "Windy Valley", "Urugugu Temple", "Auldor's Sanctum" };
+                for (int r = 0; r < 5; r++)
+                {
+                    var rt = fv0.AddMinutes(r * 8);
+                    for (int a = 0; a < areas.Length; a++) { fv.Engine.SetZone(areas[a]); fv.Instances.Zone(areas[a], rt.AddSeconds(a * 90)); }
+                    fv.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "5", 5, new() { (key, 30.0), ("Other", 98.7) }) }, rt.AddSeconds(400));
+                    fv.Instances.Zone("Auldor's Sanctum", rt.AddSeconds(410));
+                    if (r == 3) fv.ApplyGrid(new List<RewardGrid.Slot>(), rt.AddSeconds(450));   // an empty read (18:57:25): nothing opens or closes
+                }
+                fv.Engine.SetZone("Urugugu Canyon"); fv.Instances.Zone("Urugugu Canyon", fv0.AddMinutes(40));
+                fv.Engine.SetZone("Pilgrim's Ridge"); fv.Instances.Zone("Pilgrim's Ridge", fv0.AddMinutes(41)); fv.Instances.Zone("Pilgrim's Ridge", fv0.AddMinutes(42));
+                var five = fv.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= fv0.AddMinutes(-1)).ToList();
+                Check("five Urugugu runs back to back: five runs, each its own table",
+                    $"{five.Count} · {string.Join(" ", five.Select(r => r.Items.Values.Sum()))} · longest {(five.Count > 0 ? five.Max(r => r.Seconds) : 0):0} s", "5 · 5 5 5 5 5 · longest 400 s");
+                // a second table with no change of area between: the next run's, never added onto the first
+                var sv2 = new TrackerSession(null, new Settings(), items, "Test"); var sv0 = DateTime.UtcNow.AddHours(-1);
+                sv2.Engine.SetZone("Auldor's Sanctum"); sv2.Instances.Zone("Auldor's Sanctum", sv0);
+                sv2.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "5", 5, new() { (key, 30.0), ("Other", 98.7) }) }, sv0.AddSeconds(300));
+                sv2.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "3", 3, new() { (key, 30.0), ("Other", 98.7) }) }, sv0.AddSeconds(780));
+                sv2.Instances.Close();
+                var two = sv2.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= sv0.AddMinutes(-1)).ToList();
+                Check("a second reward table in one run: two runs", $"{two.Count} · {string.Join(" ", two.Select(r => r.Items.Values.Sum()))}", "2 · 5 3");
             }
             {
                 // Nightmare is known but left alone: its rewards never change, so nothing there is counted

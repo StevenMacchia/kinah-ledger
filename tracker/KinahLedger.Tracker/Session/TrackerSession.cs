@@ -1185,6 +1185,8 @@ public sealed class TrackerSession
     /// <summary>The reward table's slots into the run: each named item once, skipping what the chat already counted.</summary>
     internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
     {
+        // a second table in a run that was paid already is the next run's (an empty read changes nothing)
+        if (slots.Count > 0) Instances.TableStarting(now);
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         int added = 0, known = 0, unnamed = 0;
         foreach (var sl in slots)

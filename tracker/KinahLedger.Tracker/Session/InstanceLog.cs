@@ -127,10 +127,16 @@ public sealed class InstanceLog
             var kind = ZoneLocator.KindOf(zone);
             // an area left alone (Nightmare: the same rewards every time): no run, and the one before ends here
             if (kind == ZoneLocator.Ignored) { CloseLocked("an area that isn't counted"); return; }
+            // the area the minimap names now, and when it changed (an expedition's areas all file under the expedition)
+            if (!string.Equals(zone, _area, StringComparison.OrdinalIgnoreCase)) { _area = zone; _areaSince = now; }
             if (kind != null)
             {
                 // an area of an expedition is that expedition: walking from one area to the next is the same run
                 var name = ZoneLocator.RunName(zone);
+                // ...until its reward table was read: moving on from there (back to the village, into the canyon) is the end of
+                // that run, and the way into the next one (Steven, 2026-10-23: five Urugugu runs from 18:26 to 19:04 were one)
+                if (_cur != null && _cur.Kind != WorldBoss && _paidArea != null && !string.Equals(zone, _paidArea, StringComparison.OrdinalIgnoreCase))
+                    CloseLocked($"its reward table was read, then {zone}");
                 var ev = kind == "Event" && !string.Equals(name, zone, StringComparison.OrdinalIgnoreCase) ? zone : kind == "Event" && ZoneLocator.FamilyOf(zone) == "" ? zone : "";
                 // the event just closed by the open world's Kina or a kill, still on the minimap for a read: not a new run
                 if (_cur == null && _outZone != null && string.Equals(_outZone, name, StringComparison.OrdinalIgnoreCase) && (now - _outAt).TotalSeconds <= 30) return;
@@ -408,7 +414,35 @@ public sealed class InstanceLog
     }
 
     /// <summary>The reward table at the end was read: the run's rewards are in.</summary>
-    public void RewardTable(DateTime t) { lock (_lock) Paid(t); }
+    public void RewardTable(DateTime t)
+    {
+        lock (_lock)
+        {
+            Paid(t);
+            if (_cur == null || _cur.Kind == WorldBoss) return;
+            _tableAt = t; _paidArea = _area;
+        }
+    }
+
+    /// <summary>
+    /// A reward table is about to be read into the open run. When this run's table was read already (a minute or more ago),
+    /// this one is the next run's, never added onto the first: the first closes and the next starts, from the last change
+    /// of area since that table (2026-10-23: five tables, one run of 37:04 with 3,000,000 Kinah).
+    /// </summary>
+    public void TableStarting(DateTime t)
+    {
+        lock (_lock)
+        {
+            if (_cur == null || _cur.Kind == WorldBoss || _tableAt is not DateTime prev || (t - prev).TotalSeconds < 60) return;
+            var zone = _cur.Zone; var kind = _cur.Kind; var ev = _cur.Event; var fam = _cur.Family;
+            var start = _areaSince is DateTime a && a > prev ? a : t;
+            CloseLocked("a second reward table: the next run's");
+            _cur = new InstanceRun { Zone = zone, Kind = kind, Event = ev, Family = fam, Start = start };
+            _byMinimap = true;
+            CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (a second reward table at {t.ToLocalTime():HH:mm:ss})");
+        }
+    }
+    string? _area, _paidArea; DateTime? _areaSince, _tableAt;
 
     /// <summary>An event's rewards came in the last <paramref name="seconds"/> s (for its reward pictures, every 2 s).</summary>
     public bool EventPaidWithin(DateTime now, double seconds)
@@ -445,7 +479,7 @@ public sealed class InstanceLog
 
     void CloseLocked(string why)
     {
-        _leftAt = null;
+        _leftAt = null; _paidArea = null; _tableAt = null;
         if (_cur != null) _cur.Ended = why;
         if (_cur != null && _cur.Kind == "Event")
         {
