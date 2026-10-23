@@ -178,6 +178,12 @@ public static class ReplayBank
                 using var bandBmp = bmp.Clone(band, bmp.PixelFormat);
                 var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1)).GetAwaiter().GetResult();
                 var rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+                if (rc == null)
+                {
+                    lines = Task.Run(() => ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 2)).GetAwaiter().GetResult();
+                    rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+                }
+                Console.WriteLine($"  table band ({bmp.Width}x{bmp.Height}, {bmp.PixelFormat}): " + string.Join(" | ", lines.Select(l => $"{l.Text} @{l.Box.Y}")) + (rc == null ? " -- no \"collected\" line" : ""));
                 table = new JsonArray();
                 // the same picture read as 0.8.17 read it (no badge mask), for the before-and-after in the log
                 if (rc != null)
