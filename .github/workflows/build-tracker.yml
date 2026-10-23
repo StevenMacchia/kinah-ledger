@@ -41,6 +41,7 @@ jobs:
         run: |
           dist/KinahLedger.exe parse-test | cat
           dist/KinahLedger.exe market-test | cat
+          dist/KinahLedger.exe options-test | cat
 
       - name: Write latest.json
         run: node tools/release-manifest.js dist/KinahLedger.exe
