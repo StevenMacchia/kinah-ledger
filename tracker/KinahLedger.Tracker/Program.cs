@@ -2006,6 +2006,24 @@ options: --process aion[,other]");
                 Check("Transcendence from its own lines only, never an item's name",
                     $"{TrackerSession.IsTranscendenceLine("Set to Stage 1.")} {TrackerSession.IsTranscendenceLine("Shattered Arkanis [Stage 1] | Transcendence")} {TrackerSession.IsTranscendenceLine("Transcendence Stone acquired.")} {TrackerSession.IsTranscendenceLine("[Kael] transcendence stage 2 lfg")}",
                     "True True False False");
+                // every reward of an event run counts and uploads, sellable or not (Steven, 2026-10-23); the same lines while farming don't
+                var rewardLines = new List<string> { "Acquired Soul Codex (Bound) x3.", "Acquired 1,000 Abyss Point(s).", "Acquired Candy Key Fragment (Event) x6." };
+                var et = new TrackerSession(null, new Settings(), items, "Test"); var et0 = DateTime.UtcNow;
+                et.Engine.SetZone("Shugo Festival"); et.ZoneView.SetZone("Shugo Festival"); et.Instances.Zone("Shugo Festival", et0);
+                et.ProcessChat(new List<string> { "[x] a" }, et0);
+                for (int i = 1; i <= 3; i++) et.ProcessChat(new List<string> { "[x] a" }.Concat(rewardLines).ToList(), et0.AddSeconds(i * 0.6));
+                et.FlushVotes(et0.AddSeconds(4)); et.Instances.Close();
+                var erun = et.Instances.Snapshot().LastOrDefault();
+                string RunList(InstanceRun? r) => r == null ? "none" : string.Join(", ", r.Items.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}").Concat(r.BoundItems.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value} bound")).OrderBy(x => x));
+                Check("an event run: a bound item, a currency and an item the list lacks, all the run's", RunList(erun), "Abyss Points x1000, Candy Key Fragment (Event) x6, Soul Codex x3 bound");
+                var epay = InstanceRunPayload.From(new[] { erun! }, id => items.KeyOf(id));
+                Check("...and all three upload", $"{epay?[0].items.Count} {epay?[0].items.Values.Sum()}", "3 1009");
+                var ft = new TrackerSession(null, new Settings(), items, "Test"); var ft0 = DateTime.UtcNow;
+                ft.Engine.SetZone("Ellun River Midstream"); ft.ZoneView.SetZone("Ellun River Midstream");
+                ft.ProcessChat(new List<string> { "[x] a" }, ft0);
+                for (int i = 1; i <= 3; i++) ft.ProcessChat(new List<string> { "[x] a" }.Concat(rewardLines).ToList(), ft0.AddSeconds(i * 0.6));
+                ft.FlushVotes(ft0.AddSeconds(4));
+                Check("...the same lines while farming, no kill: nothing counts", $"{ft.Engine.Items.Count} {ft.Engine.Totals().Drops}", "0 0");
                 // three reads of one table, voted slot by slot: an empty count and a glare on one read are outvoted
                 var v1 = new List<RewardGrid.Slot> { new(box, "Rare", "", 0, new() { ("A", 40) }), new(box, "Common", "6", 6, new() { ("B", 35) }) };
                 var v2 = new List<RewardGrid.Slot> { new(box, "Rare", "2", 2, new() { ("A", 44) }), new(box, "Common", "6", 6, new() { ("Z", 90) }) };

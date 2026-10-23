@@ -38,6 +38,8 @@ public sealed class InstanceRun
     public bool FromPicture { get; set; }
     /// <summary>Slots on the reward table the reader couldn't name (since 0.8.18).</summary>
     public int SlotsUnread { get; set; }
+    /// <summary>Those slots as the picture shows them ("Rare x14 · 20261023-175637-...-reward-table.jpg"): shown as Unknown item, never dropped.</summary>
+    public List<string> UnknownSlots { get; set; } = new();
     /// <summary>Items the chat printed in the run, never counted: a run's items come from its reward picture (since 0.8.18).</summary>
     public int ChatItemsSetAside { get; set; }
     /// <summary>Those chat items by id, for the log and the tests: where they went, never what the run counts.</summary>
@@ -451,7 +453,7 @@ public sealed class InstanceLog
     /// The reward table was read: the open run's items are its slots, and only those. What the chat had put in the run gives
     /// way, bound rewards count as the table shows them, and later chat items don't reach this run.
     /// </summary>
-    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread)
+    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread, IEnumerable<string>? unknown = null)
     {
         lock (_lock)
         {
@@ -467,6 +469,7 @@ public sealed class InstanceLog
                     _cur.LastLoot = t;
                 }
             _cur.FromPicture = true; _cur.SlotsUnread += unread;
+            if (unknown != null) _cur.UnknownSlots.AddRange(unknown);
             CrashLog.Note($"{_cur.Label}: counted from the reward table: {_cur.Items.Values.Sum() + _cur.Bound} item(s) from its slots, {unread} slot(s) not read; the chat's {chatItems} set aside");
         }
     }
