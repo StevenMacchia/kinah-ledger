@@ -135,10 +135,23 @@
                 </StackPanel>
                 <ComboBox x:Name="ServerPick" Grid.Column="1" Width="220" VerticalAlignment="Center"/>
               </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Gear score"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="So the run card compares you with players at your gear. Empty: every player."/>
+                </StackPanel>
+                <TextBox x:Name="GearBox" Grid.Column="1" Width="220" VerticalAlignment="Center" MaxLength="5" AutomationProperties.Name="Gear score"/>
+              </Grid>
             </StackPanel>
           </Border>
           <TextBlock x:Name="ServerWarn" Style="{StaticResource BodyStyle}" FontSize="12" Foreground="{DynamicResource Warn}" Margin="2,8,0,0" Visibility="Collapsed"
                      Text="Pick a server: runs and prices aren't shared without one, and Start farming waits for it."/>
+          <TextBlock Style="{StaticResource GroupLabel}" Text="PRICE ALERTS"/>
+          <Border Style="{StaticResource Group}">
+            <StackPanel x:Name="AlertsHost" Margin="0,4,0,4"/>
+          </Border>
         </StackPanel>
 
         <!-- Sharing and profile -->

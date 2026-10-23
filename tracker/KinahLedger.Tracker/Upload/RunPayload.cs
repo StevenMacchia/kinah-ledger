@@ -64,6 +64,9 @@ public sealed record RunPayload(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<MobRun>? mobs = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<InstanceRunPayload>? instance_runs = null)
 {
+    /// <summary>The gear the runs are shared under: "gs:1400-1599" from the player's gear score (Options), "unknown" until it is set (Data.GearScore).</summary>
+    public static string Gear { get; set; } = "unknown";
+
     public static string AppVersion => typeof(RunPayload).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
 
     /// <summary>Most keys per odds map, as the site accepts them; the most-tried recipes and steps are kept.</summary>
@@ -90,7 +93,7 @@ public sealed record RunPayload(
             activity,
             kind,
             main,
-            cfg.GearBracket,
+            Gear,
             // farming minutes, not wall minutes: time within a minute of a loot, kill or gather line. The site's per-hour
             // rates divide by this; drop rates per kill and per attempt don't depend on it. At least one minute once anything happened.
             Math.Max(s.Events > 0 ? 1 : 0, (int)Math.Round(s.Active.TotalMinutes)),

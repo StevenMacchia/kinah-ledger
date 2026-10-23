@@ -98,6 +98,8 @@ public sealed class GameWatcher
         await FetchRegionBoardsAsync(http, $"{u.Scheme}://{u.Authority}");
         // the community's drop rates for this server's zones and the listed drop chances, for the card a click on a drop opens
         await SiteData.RefreshAsync(http, $"{u.Scheme}://{u.Authority}", Market.ServerKey);
+        // the server's best crafts today and where players farm (the Crafting part, the run card, Full view)
+        await PlayerBoards.RefreshAsync(http, $"{u.Scheme}://{u.Authority}", Market.ServerKey);
     }
 
     DateTime _regionAt = DateTime.MinValue; string _regionFor = "";

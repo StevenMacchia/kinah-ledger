@@ -11,7 +11,7 @@ namespace KinahLedger.Ui;
 public sealed record OptionsChoice(
     string Region, string Server, bool Share, bool Hud, string Hotkey, string Skin, bool AutoUpdate,
     bool StartWithWindows, string OnGameStart, bool HideWhenGameCloses, bool CloseToTray, bool MinimizeToTray, string HudFields,
-    bool ReportFrames = false);
+    bool ReportFrames = false, int GearScore = 0);
 
 /// <summary>
 /// The app around the live count: the tray, starting with Windows, reacting to the game starting and closing, the
@@ -138,7 +138,7 @@ public partial class MainWindow
     public OptionsChoice CurrentOptions() => new(
         RegionKey, Server?.Label ?? "", _prefs.Share, _prefs.Hud, HotkeyText, Skins.Get(_prefs.Skin).Key, _prefs.AutoUpdate,
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
-        _prefs.ReportFrames);
+        _prefs.ReportFrames, _prefs.GearScore);
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -176,6 +176,7 @@ public partial class MainWindow
         _prefs.CloseToTray = c.CloseToTray;
         _prefs.MinimizeToTray = c.MinimizeToTray;
         _prefs.ReportFrames = ReportBuffer.KeepFrames = c.ReportFrames;
+        if (c.GearScore != was.GearScore) SetGearScore(c.GearScore);
         if (c.StartWithWindows != was.StartWithWindows)
         {
             if (_exe == null) problems.Add("Starting with Windows needs the downloaded KinahLedger.exe.");

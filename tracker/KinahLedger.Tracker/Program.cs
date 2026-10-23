@@ -1822,6 +1822,8 @@ options: --process aion[,other]");
                      && Servers.Find("na_e", "Siel (Elyos)")?.Key == "na_e-siel-elyos";
         ok &= rosterOk;
         Console.WriteLine($"  {roster.Count} servers in {Servers.Regions.Length} regions, keys {rosterKeys[0]} .. {rosterKeys[^1]}  {(rosterOk ? "ok" : "MISMATCH: expected 86 distinct well-formed keys")}");
+        Console.WriteLine("\nPlayer features (best crafts, where to farm, gear score, price alerts):");
+        ok &= PlayerTests.Run();
         Console.WriteLine(ok ? "\nAll market cases passed." : "\nMarket mismatch, see above.");
         return ok ? 0 : 1;
     }

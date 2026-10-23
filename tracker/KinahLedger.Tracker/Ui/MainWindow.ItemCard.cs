@@ -28,93 +28,91 @@ public partial class MainWindow
     {
         var name = r.Report; var id = _items.IdOf(name);
         var info = _items.Get(id);
+        bool gathered = r.Sub.StartsWith("Gathering");
+        var (card, body) = CkShell(440);
+        body.Children.Add(CkBand(name, r.Grade, string.Join(" · ", new[] { info?.Category is { Length: > 0 } c ? c : (gathered ? "Gathering material" : "Drop"), r.Grade }.Where(x => x.Length > 0))));
+        if (r.Reported) body.Children.Add(CkNote("Reported: kept out of what's sent to the site."));
 
-        var body = new StackPanel { Width = 360 };
-        TextBlock Line(string text, string brush = "Ink", double size = 13, bool bold = false, Thickness? margin = null)
+        // this run: three slot boxes with the count, the odds and the hour
+        body.Children.Add(CkSection("THIS RUN"));
+        var tiles = new Grid { Margin = new Thickness(20, 0, 20, 0) };
+        for (int i = 0; i < 3; i++) tiles.ColumnDefinitions.Add(new ColumnDefinition());
+        void Stat(int col, string value, string label)
         {
-            var t = new TextBlock { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap, Margin = margin ?? new Thickness(0, 2, 0, 0) };
-            t.SetResourceReference(TextBlock.ForegroundProperty, brush);
-            if (bold) t.FontWeight = FontWeights.SemiBold;
-            body.Children.Add(t); return t;
+            var sp = new StackPanel();
+            sp.Children.Add(CkText(value.Length > 0 ? value : "—", CkInk, 19, FontWeights.SemiBold, display: true));
+            sp.Children.Add(CkText(label, CkFaint, 11.5));
+            var b = CkBox(sp, new Thickness(col == 0 ? 0 : 8, 0, 0, 0), new Thickness(12, 8, 12, 8));
+            Grid.SetColumn(b, col); tiles.Children.Add(b);
         }
-        void Head(string text) { var t = Line(text, "Gold", 11, true, new Thickness(0, 12, 0, 2)); t.SetResourceReference(TextBlock.FontFamilyProperty, "BodyFont"); }
+        Stat(0, r.Drops, "picked up");
+        Stat(1, r.DropPct is { Length: > 0 } dp && dp != "—" ? dp : "", gathered ? "per try" : "odds per kill");
+        Stat(2, r.PerHour, "an hour");
+        body.Children.Add(tiles);
+        bool priced = r.Price is { Length: > 0 } p0 && p0 != "—" && p0 != "-";
+        if (priced)
+        {
+            body.Children.Add(new Border { Height = 8 });
+            body.Children.Add(CkKv("Lowest Market price", r.Price, CkGold));
+            if (r.Value is { Length: > 0 } v && v != "—") body.Children.Add(CkKv("Yours are worth", v, CkGold, "before the Market's cut"));
+        }
+        else { body.Children.Add(new Border { Height = 8 }); body.Children.Add(CkNote("No Market price on your server yet.")); }
 
-        var title = Line(name, r.Grade switch { "Rare" => "GradeRare", "Legend" => "GradeLegend", "Unique" => "GradeUnique", "Epic" => "GradeEpic", _ => "CommonInk" }, 16, true, new Thickness(0));
-        var kind = string.Join(" · ", new[] { info?.Category is { Length: > 0 } c ? c : (r.Sub.StartsWith("Gathering") ? "Gathering material" : "Drop"), r.Grade }.Where(x => x.Length > 0));
-        Line(kind, "Faint", 12);
-
-        Head("THIS RUN");
-        var run = new List<string> { $"{r.Drops} picked up" };
-        if (r.DropPct.Length > 0 && r.DropPct != "—") run.Add(r.DropPct + (r.Sub.StartsWith("Gathering") ? " per try" : " per kill"));
-        if (r.PerHour.Length > 0) run.Add(r.PerHour + " an hour");
-        Line(string.Join(" · ", run));
-        if (r.Reported) Line("Reported: not sent to the site.", "Warn", 12);
-        Line(r.Price is { Length: > 0 } p && p != "—" && p != "-" ? $"Lowest Market price {p}" + (r.Value is { Length: > 0 } v && v != "—" ? $" · yours worth {v}" : "") : "No Market price seen yet on your server.", "Muted", 12.5);
-
-        Head(("ON KINAHLEDGER.COM · " + (zone ?? "zone not read yet") + " · LAST 7 DAYS").ToUpperInvariant());
+        // the site's figures for this zone, last seven days
+        body.Children.Add(CkSection(("KINAHLEDGER.COM · " + (zone ?? "THIS ZONE")).ToUpperInvariant()));
         var ze = SiteData.Zone(zone);
-        if (SiteData.ZonesAt == null) Line("Not loaded yet. It loads every 15 minutes while sharing is on and a server is picked.", "Faint", 12.5);
-        else if (zone == null) Line("Once the zone is read, the site's figures for it show here.", "Faint", 12.5);
-        else if (ze == null) Line($"No runs from {zone} on your server yet. Yours will be the first.", "Faint", 12.5);
-        else if (!ze.Published) Line($"Not published yet: {ze.Runs} of {SiteData.MinRuns} runs. Your runs count toward it.", "Faint", 12.5);
+        if (SiteData.ZonesAt == null) body.Children.Add(CkNote("Loads every 15 minutes while sharing is on and a server is picked."));
+        else if (zone == null) body.Children.Add(CkNote("Shows once the zone is read."));
+        else if (ze == null) body.Children.Add(CkNote($"No runs from {zone} on your server yet. Yours will be the first."));
+        else if (!ze.Published) body.Children.Add(CkNote($"{ze.Runs} of {SiteData.MinRuns} runs needed before it's shown. Yours count."));
         else if ((ze.Drops.TryGetValue(id.ToString(), out var rate) || ze.Drops.TryGetValue(name, out rate)) && rate != null)
         {
-            var parts = new List<string>();
-            if (rate.PerKill is double k && k > 0) parts.Add(OneIn(k) + " per kill");
-            if (rate.PerNode is double n && n > 0) parts.Add($"{n:0.##} per try");
-            parts.Add($"{rate.PerHour:0.#} an hour");
-            Line(string.Join(" · ", parts));
-            Line($"seen in {rate.Runs} of {ze.Runs} runs", "Faint", 12);
+            if (rate.PerKill is double k && k > 0) body.Children.Add(CkKv("Odds per kill", OneIn(k), CkGold));
+            if (rate.PerNode is double n && n > 0) body.Children.Add(CkKv("Per try", $"{n:0.##}", CkGold));
+            body.Children.Add(CkKv("An hour", $"{rate.PerHour:0.#}", CkGold, $"seen in {rate.Runs} of {ze.Runs} runs, last 7 days"));
         }
-        else Line($"Not seen in {zone} yet, across {ze.Runs} runs.", "Faint", 12.5);
+        else body.Children.Add(CkNote($"Not seen in {zone} yet, across {ze.Runs} runs."));
 
-        Head("LISTED DROP CHANCE · GAME FILES VIA METABOT.GG");
+        // the game's listed chances: enemies here first, else the best elsewhere
+        body.Children.Add(CkSection("LISTED DROP CHANCE"));
         var listed = SiteData.ListedFor(id, name);
         bool Here(SiteData.Source s) => zone != null && (string.Equals(s.Zone, zone, StringComparison.OrdinalIgnoreCase) || string.Equals(s.Map, zone, StringComparison.OrdinalIgnoreCase));
         if (listed != null && listed.Sources.Count > 0)
         {
             var here = listed.Sources.Where(Here).OrderByDescending(s => s.Chance).Take(4).ToList();
-            if (here.Count > 0) foreach (var s in here) Line($"{s.Monster}{(s.Level > 0 ? $" (Lv {s.Level})" : "")} · {OneIn(s.Chance)}");
+            if (here.Count > 0) foreach (var s in here) body.Children.Add(CkKv(s.Monster, OneIn(s.Chance), CkGold, s.Level > 0 ? $"Lv {s.Level}" : ""));
             else
             {
-                Line(zone != null ? $"No enemy in {zone} lists it. Best elsewhere:" : "Best listed chances:", "Faint", 12.5);
-                foreach (var s in listed.Sources.OrderByDescending(s => s.Chance).Take(3)) Line($"{s.Monster} · {OneIn(s.Chance)} · {(s.Zone.Length > 0 ? s.Zone : s.Map)}");
+                body.Children.Add(CkNote(zone != null ? $"No enemy in {zone} lists it. Best elsewhere:" : "Best listed chances:"));
+                foreach (var s in listed.Sources.OrderByDescending(s => s.Chance).Take(3)) body.Children.Add(CkKv(s.Monster, OneIn(s.Chance), CkGold, s.Zone.Length > 0 ? s.Zone : s.Map));
             }
-            if (listed.Sources.Count > 4) Line($"{listed.Sources.Count} enemies list it in all.", "Faint", 12);
+            if (listed.Sources.Count > 4) body.Children.Add(CkNote($"{listed.Sources.Count} enemies list it in all."));
         }
         else
         {
             // the tables built into the tracker, when the site's list doesn't have the item yet
             var book = LootBook.Current;
             var from = book.SourcesOf(name).Select(m => (m, book.Find(m, name, id)?.Chance)).OrderByDescending(x => x.Chance ?? 0).Take(4).ToList();
-            if (from.Count > 0) foreach (var (m, ch) in from) Line(m + (ch is double c2 && c2 > 0 ? " · " + OneIn(c2) : ""));
-            else Line(r.Sub.StartsWith("Gathering") ? "Gathered, not dropped: no enemy table." : "No enemy table lists it yet.", "Faint", 12.5);
+            if (from.Count > 0) foreach (var (m, ch) in from) body.Children.Add(CkKv(m, ch is double c2 && c2 > 0 ? OneIn(c2) : "listed", CkGold));
+            else body.Children.Add(CkNote(gathered ? "Gathered, not dropped: no enemy lists it." : "No enemy table lists it yet."));
         }
 
-        // links: the site, and MetaBot.GG's page for the item when there is one (its terms ask for the link)
-        var links = new TextBlock { Margin = new Thickness(0, 12, 0, 0), FontSize = 12.5 };
-        void Link(string text, string url)
-        {
-            if (links.Inlines.Count > 0) links.Inlines.Add(new Run("   ·   "));
-            var h = new Hyperlink(new Run(text)) { NavigateUri = new Uri(url) };
-            h.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
-            h.Click += (_, _) => { Open(url); if (_card != null) _card.IsOpen = false; };
-            links.Inlines.Add(h);
-        }
+        // a price alert on this item, on the player's server (Ui/MainWindow.PriceAlerts.cs)
+        if (!gathered || priced) body.Children.Add(CkAlertSection(name));
+
+        var links = new List<(string, string)> { ("Drops on kinahledger.com", SiteUrl + "/#drops") };
+        if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) links.Add(("MetaBot.GG page", mu));
+        var linkLine = CkLinks(links.ToArray());
         // Watch: this item alerts like a rare drop (Ui/MainWindow.Alerts.cs)
-        var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop watching" : "Watch: alert me when it drops"));
-        watch.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
-        watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop watching" : "Watch: alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
-        links.Inlines.Add(watch);
-        Link("Drops on kinahledger.com", SiteUrl + "/#drops");
-        if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) Link("MetaBot.GG page", mu);
-        body.Children.Add(links);
-
-        var border = new Border { Child = body, Padding = new Thickness(18, 14, 18, 14), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1),
-            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 3, Opacity = 0.45 }, Margin = new Thickness(8) };
-        border.SetResourceReference(Border.BackgroundProperty, "Bg");
-        border.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
-        return border;
+        if (linkLine is TextBlock lt)
+        {
+            lt.Inlines.Add(new Run("   ·   ") { Foreground = Ck(CkFaint) });
+            var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop watching" : "Watch: alert me when it drops")) { Foreground = Ck(CkGold), TextDecorations = null };
+            watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop watching" : "Watch: alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
+            lt.Inlines.Add(watch);
+        }
+        body.Children.Add(linkLine);
+        return card;
     }
 
     /// <summary>For layout review: the card for the first drop row, drawn to a PNG.</summary>

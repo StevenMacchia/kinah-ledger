@@ -1231,6 +1231,8 @@ public sealed class UserPrefs
     public string HudFields { get; set; } = Ui.HudFields.Default;
     /// <summary>Full view: the window doubles in width with every table beside the summary. Off (Compact, the default since 0.7.6): the run card and the summary only.</summary>
     public bool FullView { get; set; }
+    /// <summary>The player's gear score, typed on the first-run screen or in Options; 0 is not set. Runs are compared with players at the same bracket (Data.GearScore).</summary>
+    public int GearScore { get; set; }
     /// <summary>The start/stop shortcut, as "Ctrl+Shift+K"; empty is off.</summary>
     public string Hotkey { get; set; } = Platform.Hotkey.Default;
     public int? WinX { get; set; }

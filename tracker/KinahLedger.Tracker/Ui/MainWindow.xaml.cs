@@ -70,6 +70,7 @@ public partial class MainWindow : Window
         _settings = settings;
         _items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         IconCache.Enabled = settings.Ui.Icons;
+        Upload.RunPayload.Gear = GearScore.Payload(_prefs.GearScore);   // runs are shared under the player's gear bracket, or "unknown"
         if (!_prefs.ManualMarket) _marketRegion = null;
         _settings.Upload.Enabled = _prefs.Share;
         // the site's item list, so drops are shared under real ids and show their icons; one conditional request per start
@@ -138,6 +139,8 @@ public partial class MainWindow : Window
         // Farming and Crafting are two parts of the window; crafting never shows in the farming tables
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
+        // a click on a recipe opens its card: materials, what a try costs, what it makes, a price alert
+        CraftRows.MouseLeftButtonUp += CraftRowClick;
         EventsTab.Click += (_, _) => ShowPart("Events");
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
@@ -565,6 +568,7 @@ public partial class MainWindow : Window
         if (_part == "Crafting") FillCraft(chat?.CraftView);
         FillPickups();
         AlertTick();
+        PriceAlertTick();
         UpdateHud();
     }
 
@@ -905,6 +909,7 @@ public partial class MainWindow : Window
     {
         var zoneView = _watcher.Chat?.ZoneView;
         var zone = zoneView?.Zone ?? shown.Zone;
+        ShowFarmLine(zone);
         var best = _demo ? new BestRuns.Best(1_400_000, 48, "2026-10-19") : BestRuns.For(Server?.Label ?? "", zone);
         // this stay: the zone view when it is live, else what the window shows (a layout render)
         var stay = zoneView != null && !_demo ? zoneView : shown;
@@ -1008,6 +1013,7 @@ public partial class MainWindow : Window
         ViewFill.Opacity = full ? 1 : 0.25;
         ViewBtn.ToolTip = full ? "Compact view: one column, three rows per table" : "Full view: twice as wide, with recent pickups and more rows per table";
         ViewBtn.Visibility = craft || _welcome ? Visibility.Collapsed : Visibility.Visible;
+        ApplyPlayerView(craft, farm, full);
         FillPickups();
         Redraw();
     }
@@ -1049,11 +1055,13 @@ public partial class MainWindow : Window
             long? profit = costKnown && madeKnown ? made - cost!.Value * r.Attempts : null;
             var sells = PriceBook.Price(r.Name) is long sp ? Fk(sp * PriceBook.SellerKeeps) : "—";
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Attempts > 0 ? $"{100.0 * r.Ok / r.Attempts:0}%" : "—", costKnown ? Fk(cost!.Value) : "—",
-                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "",
+                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: "Click for the materials, what a try costs and what it makes.",
                 Price: sells, Value: profit is long pf ? Signed(pf) : "—", Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : "",
-                Sub: outcome + listed + (book == null ? " · not in the recipe book" : unpricedMats > 0 ? $" · {unpricedMats} material{(unpricedMats == 1 ? "" : "s")} not priced" : "") + (vendorMats > 0 ? $" · plus {vendorMats} vendor item{(vendorMats == 1 ? "" : "s")}" : "")));
+                Sub: outcome + listed + (book == null ? " · not in the recipe book" : unpricedMats > 0 ? $" · {unpricedMats} material{(unpricedMats == 1 ? "" : "s")} not priced" : "") + (vendorMats > 0 ? $" · {vendorMats} vendor cost{(vendorMats == 1 ? "" : "s")} to set" : "")));
         }
         CraftRows.ItemsSource = rows;
+        _crafted = e?.CraftSnapshot() ?? new();
+        FillBestCrafts();
         CraftEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftWhat.Text = tries > 0 ? $"{tries} tr{(tries == 1 ? "y" : "ies")} · {ok} worked ({100.0 * ok / tries:0}%)" : "since the tracker started";
         CraftSpent.Text = spent > 0 ? "−" + Fk(spent) : "—";
@@ -1541,6 +1549,7 @@ public partial class MainWindow : Window
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false;
         ZoneLbl.Text = "Western Cantas Valley";
         ApplyServer("na_e", "Siel (Elyos)");
+        LoadPlayerDemo(_items); _demoZone = "Western Cantas Valley";   // best crafts and where to farm, sample boards
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         if (kind == "Events")
         {
@@ -1566,6 +1575,7 @@ public partial class MainWindow : Window
             Say("Reading · 3,620 reads · last: Artisan's Fruit Salad acquired.", "Faint");
             return;
         }
+        ShowPart("Farming", remember: false);   // a farming render, whichever part the player left open
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
         PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });
