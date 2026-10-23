@@ -1217,6 +1217,7 @@ public sealed class TrackerSession
     /// </summary>
     internal static string? SlotName(ItemDictionary items, RewardGrid.Slot sl)
     {
+        if (sl.Count <= 0) return null;
         var byIcon = items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         var best = sl.Icons.FirstOrDefault();
         if (best.Key == null || !byIcon.TryGetValue(best.Key, out var its)) return null;
@@ -1236,6 +1237,8 @@ public sealed class TrackerSession
         void NotRead(RewardGrid.Slot s) => notRead.Add($"{s.Grade} x{(s.Count > 0 ? s.Count.ToString() : "?")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
         foreach (var sl in slots)
         {
+            // figures on the slot the reader couldn't tell: its count isn't known, so the slot is not read (never one assumed)
+            if (sl.Count <= 0) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot's count couldn't be read (\"{sl.CountText}\"); not counted"); continue; }
             var best = sl.Icons.FirstOrDefault();
             if (best.Key == null || !_byIcon.TryGetValue(best.Key, out var its)) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} with no item to its icon; not counted"); continue; }
             // the gold coin: Kinah when the Kinah counter rose by exactly the slot's amount around then (2026-10-22, Urugugu:

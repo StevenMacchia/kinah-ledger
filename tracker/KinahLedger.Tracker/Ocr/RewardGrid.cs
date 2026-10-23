@@ -255,7 +255,7 @@ public static class RewardGrid
             {
                 var box = new Rectangle(x0 + col * p, y, s, s);
                 // the slots fill each row from the left: the first gap ends the row, and a row with none ends the grid
-                if ((!IsSlot(frame, box) && TopEdge(frame, box) < EdgeMin) || Flat(frame, box)) break;
+                if ((!IsSlot(frame, box) && TopEdge(frame, box) < EdgeMin) || Flat(frame, box) || Contrast(frame, box) < ContrastMin) break;
                 found++;
                 var bg = Background(frame, box);
                 var grade = GradeOf(bg);
@@ -263,8 +263,10 @@ public static class RewardGrid
                 var corner = new Rectangle(box.Left + box.Width / 8, box.Top + box.Height * 3 / 5, box.Width * 7 / 8 - 2, box.Height * 2 / 5 - 2);
                 // no white figures there: the game shows no count for one of an item
                 string num = "";
+                bool figures = false;
                 if (HasFigures(frame, corner))
                 {
+                    figures = true;
                     // the reader skips a lone figure ("4", "6") but reads it after a word: "Qty 4" (2026-10-23 Urugugu: 4, 2, 6, 3
                     // and 5 read as 1, 1, 7, 11 and 1 without it)
                     using (var cq = WhiteText(frame, corner, prefix: true))
@@ -288,7 +290,9 @@ public static class RewardGrid
                     var tight = new Rectangle(box.Left + box.Width * 11 / 20, box.Top + box.Height * 13 / 20, box.Width * 2 / 5, box.Height * 3 / 10);
                     num = Glyphs.Read(frame, tight);
                 }
-                slots.Add(new Slot(box, grade, num, ParseCount(num), Match(frame, box, bg)));
+                // figures the reader can't tell are a count not read (0), never one assumed (2026-10-23: four counts read as 1)
+                long count = figures && !System.Text.RegularExpressions.Regex.IsMatch(num, @"\d") ? 0 : ParseCount(num);
+                slots.Add(new Slot(box, grade, num, count, Match(frame, box, bg)));
             }
             if (found == 0 || found < 8 && row > 0 && slots.Count > 0 && found < 8) { if (found == 0) break; }
             if (found < 8) break;   // a short row is the last one
@@ -376,6 +380,27 @@ public static class RewardGrid
         if (n == 0) return true;
         double mean = sum / n, sd = Math.Sqrt(Math.Max(0, sum2 / n - mean * mean));
         return sd < 6;
+    }
+
+    /// <summary>A slot's inside differs from the gaps around it at least this much (real slots 83 and up, floor 62 at most, 2026-10-23).</summary>
+    public const double ContrastMin = 72;
+
+    /// <summary>
+    /// How far the box's inside is from the world in the gaps beside and above it (mean colour, the larger of the two). Past
+    /// the last slot the box is the world itself and differs little (the Urugugu replay read 3 boxes of floor as slots).
+    /// </summary>
+    internal static double Contrast(Bitmap f, Rectangle b)
+    {
+        (double R, double G, double B) Mean(int x1, int y1, int x2, int y2)
+        {
+            double r = 0, g = 0, bl = 0; int n = 0;
+            for (int y = Math.Max(0, y1); y < Math.Min(f.Height, y2); y += 3)
+                for (int x = Math.Max(0, x1); x < Math.Min(f.Width, x2); x += 3) { var c = f.GetPixel(x, y); r += c.R; g += c.G; bl += c.B; n++; }
+            return n == 0 ? (-1, -1, -1) : (r / n, g / n, bl / n);
+        }
+        var inside = Mean(b.Left + 8, b.Top + 8, b.Right - 8, b.Bottom - 8);
+        double D((double R, double G, double B) o) => o.R < 0 ? 0 : Math.Abs(inside.R - o.R) + Math.Abs(inside.G - o.G) + Math.Abs(inside.B - o.B);
+        return Math.Max(D(Mean(b.Left - 10, b.Top, b.Left - 3, b.Bottom)), D(Mean(b.Left, b.Top - 10, b.Right, b.Top - 3)));
     }
 
     /// <summary>A slot's top edge stands out at least this much (mean colour difference across it).</summary>
@@ -541,7 +566,7 @@ public static class Glyphs
     public static string Read(Bitmap f, Rectangle area)
     {
         var m = new bool[area.Width, area.Height];
-        for (int y = 0; y < area.Height; y++) for (int x = 0; x < area.Width; x++) { var c = f.GetPixel(area.Left + x, area.Top + y); m[x, y] = Math.Min(c.R, Math.Min(c.G, c.B)) > 200; }
+        for (int y = 0; y < area.Height; y++) for (int x = 0; x < area.Width; x++) { var c = f.GetPixel(area.Left + x, area.Top + y); m[x, y] = Math.Min(c.R, Math.Min(c.G, c.B)) > 150; }   // the game's figures are thin: most of a stroke is 120 to 185, so 200 kept only a 4's upright (read 1) and broke a 3 in two (11)
         // figures: runs of columns with white in them, read from the right, since the count is right-aligned
         var cols = Enumerable.Range(0, area.Width).Select(x => Enumerable.Range(0, area.Height).Count(y => m[x, y])).ToArray();
         var runs = new List<(int A, int B)>();
