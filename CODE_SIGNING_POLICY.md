@@ -43,7 +43,7 @@ and never sends input to the game. It sends data to these places, and nowhere el
     and the install ID (`https://kinahledger.com/v1/accuracy`). At start and every few hours the tracker reads small
     reading settings and the staged rollout of new versions; only the app version goes with that request
     (`https://kinahledger.com/v1/config`).
-  - Only if you turn on Options › Sharing › Send report pictures: a miscount report's pictures of the loot list and
+  - Only once Options › Sharing offers "Send report pictures" (not in this version yet) and you turn it on: a miscount report's pictures of the loot list and
     the crafting panel, never the chat or the whole screen (`https://kinahledger.com/v1/frames`).
   - Never your character name, account, class, level, chat text or screenshots of the chat or the whole screen.
   - If you paste the profile link code into a profile on the site, runs from that PC show there; profiles are

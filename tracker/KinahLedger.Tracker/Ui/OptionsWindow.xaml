@@ -212,12 +212,13 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Pictures in miscount reports"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Keeps the last minute of the chat and the loot list as pictures, so Report a miscount can save what the screen showed. They can show other players' names. They stay on this PC; the switch below sends only the loot list and panel pictures."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Keeps the last minute of the chat and the loot list as pictures, so Report a miscount can save what the screen showed. They can show other players' names. They stay on this PC; nothing is sent."/>
                 </StackPanel>
                 <CheckBox x:Name="ReportFramesChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
-              <Border Style="{StaticResource Divider}"/>
-              <Grid Style="{StaticResource Row}">
+              <!-- held until the site takes the pictures (kinahledger.com/v1/frames) and Steven approves the row: 0.8.12 ships it hidden -->
+              <Border x:Name="SendFramesDivider" Style="{StaticResource Divider}" Visibility="Collapsed"/>
+              <Grid x:Name="SendFramesRow" Style="{StaticResource Row}" Visibility="Collapsed">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Send report pictures to fix the reader"/>

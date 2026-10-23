@@ -1366,7 +1366,7 @@ public partial class MainWindow : Window
         "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
         "Updates: at start and every six hours the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.\n\n" +
         "Reading checks: with each shared run, counts of how reading went (reads that didn't line up, names guessed or not found, pickups only the loot list saw, crafting panel counts), the item names the tracker couldn't read exactly (names only, never chat), and where the chat sits as fractions of the game window with the window's size go to kinahledger.com (https://kinahledger.com/v1/accuracy) with the app version and the install ID. At start and every six hours the tracker also reads small reading settings and the staged rollout of new versions from kinahledger.com/v1/config; only the app version goes with that request.\n\n" +
-        "Report pictures: only if you turn on Send report pictures in Options › Sharing, a miscount report's pictures of the loot list and the crafting panel go to kinahledger.com (https://kinahledger.com/v1/frames). Never the chat, never the whole screen.",
+        "Report pictures stay on this PC.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- server (everything shared is per server) ---------------- */

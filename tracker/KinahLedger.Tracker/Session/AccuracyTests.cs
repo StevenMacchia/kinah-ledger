@@ -195,6 +195,25 @@ public static class AccuracyTests
         Check("--record writes what this version counts", ReplayBank.Run(bank, settings).First(x => x.Case == "seed-craft-1920x1080").Status, "pass");
         Check("compare: an item counted that nobody expected", string.Join(";", ReplayBank.Compare(JsonNode.Parse("{\"items\":{}}")!.AsObject(), JsonNode.Parse("{\"items\":{\"X\":1}}")!.AsObject())), "X: not expected, counted 1");
 
+        Console.WriteLine("A site without the accuracy routes (the live one until its update):");
+        using (var site = new NotFoundSite())
+        {
+            var u = new UploadSettings { Endpoint = $"http://127.0.0.1:{site.Port}/v1/runs" };
+            RemoteConfig.Current = RemoteConfig.BuiltIn;
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var fetched = RemoteConfig.FetchAsync(http, RemoteConfig.UrlFor(u)).GetAwaiter().GetResult();
+            Check("remote config: no answer, the built-in settings stay", $"{fetched == null} {RemoteConfig.Current.Id}", "True built-in");
+            Check("...and updates install as before (nothing held back)", $"{RemoteConfig.Current.AutoInstall(new Version(0, 8, 13), "x").Auto}", "True");
+            Accuracy.Reset(); Accuracy.Add("chat_reads", 5);
+            var sent = AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            Check("health report: not sent, and dropped (not retried every run)", $"{sent} {Accuracy.Get("chat_reads")}", "False 0");
+            var hints = AccuracyClient.LayoutAsync(u, 1234, 777).GetAwaiter().GetResult();
+            Check("layout hints: none", $"{hints == null}", "True");
+            var (fok, fnote) = AccuracyClient.SendFramesAsync(u, rd, "test").GetAwaiter().GetResult();
+            Check("report pictures: not sent, said plainly", $"{fok} {fnote}", "False the site answered 404");
+            Check("the site was asked each time", $"{site.Requests >= 4}", "True");
+        }
+
         CrashLog.DirOverride = null; RemoteConfig.PathOverride = null; RemoteConfig.Current = RemoteConfig.BuiltIn; Accuracy.Reset();
         Console.WriteLine(fails == 0 ? "\nAll accuracy cases passed." : $"\n{fails} accuracy case(s) failed.");
         return fails == 0 ? 0 : 1;
@@ -249,6 +268,53 @@ public static class AccuracyTests
         Console.WriteLine($"wrote accuracy.json ({json.Length} bytes) and frames.json ({fp.frames.Count} pictures) to {Path.GetFullPath(dir)}");
         CrashLog.DirOverride = null; Accuracy.Reset();
         return 0;
+    }
+
+    /// <summary>A local web server that answers every request 404 (an API that doesn't know a route), for the tests above.</summary>
+    sealed class NotFoundSite : IDisposable
+    {
+        readonly System.Net.Sockets.TcpListener _l = new(System.Net.IPAddress.Loopback, 0);
+        readonly CancellationTokenSource _cts = new();
+        public int Port { get; }
+        int _requests;
+        public int Requests => Volatile.Read(ref _requests);
+        public NotFoundSite()
+        {
+            _l.Start();
+            Port = ((System.Net.IPEndPoint)_l.LocalEndpoint).Port;
+            _ = Task.Run(Serve);
+        }
+        async Task Serve()
+        {
+            while (!_cts.IsCancellationRequested)
+            {
+                try
+                {
+                    using var c = await _l.AcceptTcpClientAsync(_cts.Token);
+                    using var ns = c.GetStream();
+                    // read the headers, then the body the request says it has, so a POST is never cut off mid-send
+                    var got = new List<byte>(); var buf = new byte[8192];
+                    int end = -1, length = 0;
+                    while (end < 0)
+                    {
+                        int n = await ns.ReadAsync(buf, _cts.Token); if (n <= 0) break;
+                        got.AddRange(buf.Take(n));
+                        var head = Encoding.ASCII.GetString(got.ToArray());
+                        end = head.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                        if (end >= 0) { var m = System.Text.RegularExpressions.Regex.Match(head[..end], @"content-length:\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase); length = m.Success ? int.Parse(m.Groups[1].Value) : 0; }
+                    }
+                    int have = end < 0 ? 0 : got.Count - end - 4;
+                    while (have < length) { int n = await ns.ReadAsync(buf, _cts.Token); if (n <= 0) break; have += n; }
+                    Interlocked.Increment(ref _requests);
+                    var body = "{\"ok\":false,\"error\":\"not found\"}";
+                    var resp = $"HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
+                    await ns.WriteAsync(Encoding.ASCII.GetBytes(resp), _cts.Token);
+                }
+                catch (Exception) when (!_cts.IsCancellationRequested) { }
+                catch (Exception) { return; }
+            }
+        }
+        public void Dispose() { _cts.Cancel(); _l.Stop(); }
     }
 
     static string Regex(string s, string pattern) => string.Join(",", System.Text.RegularExpressions.Regex.Matches(s, pattern).Select(m => m.Groups[1].Value));
