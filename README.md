@@ -68,6 +68,14 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
    `ocr.lootIcons`, `ocr.autoScale`, with `ocr.targetTextPx` for the text size aimed at), and `reads.log` says each time one
    of them changed what was counted.
 
+   **Report a miscount.** The tracker keeps the last minute of what it read (chat and loot list, as text) and what it
+   counted. **Report a miscount** at the bottom of the window, or **Looks wrong?** on a drop, saves that minute to a folder
+   under `reports` beside the logs, with the tracker's state and the end of `reads.log`, and opens it for attaching to a bug
+   report. Pictures of the chat and the loot list are kept too only when you say yes (asked the first time, and in
+   Options › Sharing), since they can show other players' names and messages. Nothing is sent anywhere.
+   `KinahLedger replay <report>/trace.jsonl` counts the text again, and `KinahLedger report-replay <report>` reads the
+   pictures again with the current reader, beside what was counted at the time.
+
    **Crafting** is its own part of the window: press **Crafting** at the top. Each recipe shows how many times you tried it, how often it worked, what came out (a great success included), what one try costs and what the result sells for, with the profit or loss. Costs come from the recipe's materials at the lowest Market prices on your server; a failed try uses them too. Bound vendor materials can't be priced and are left out, and the row says so. The recipes come from [MetaBot.GG](https://metabot.gg/en/aion-2/crafting). Crafted items are never drops, crafting is never farming time, and none of it goes into a zone's numbers. Market settlement payouts ("A total payment of … completed") are never farming Kinah either.
 4. **Options** (its own window, with **Save** and **Cancel**) holds everything that can be set, page by page:
    - **General**: start with Windows (it then waits in the tray until Aion 2 is running), what happens when Aion 2
@@ -177,6 +185,8 @@ KinahLedger pick                         drag a box around the chat's loot lines
 KinahLedger ocr-test [--save]            read the box once and show what was recognized
 KinahLedger ocr-test --scales            read the chat at each enlarging factor (--image chat.png for a saved one)
 KinahLedger popup-test --image shot.png  read the loot list beside the character in a game picture, with each row's icon match
+KinahLedger replay [trace.log]           count recorded reads again (a miscount report's trace.jsonl too)
+KinahLedger report-replay <folder>       read a miscount report's pictures again with this version's reader
 KinahLedger watch --activity "name"      a farming run in the console, Market reader beside it (--server "Siel (Elyos)", --no-market)
 KinahLedger market-watch                 only the Market reader, as the window runs it in the background
 KinahLedger parse-test                   self-test of the chat-line parser

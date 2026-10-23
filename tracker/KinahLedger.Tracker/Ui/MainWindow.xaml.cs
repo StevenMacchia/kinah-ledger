@@ -98,6 +98,9 @@ public partial class MainWindow : Window
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
 
         ShareCardBtn.Click += (_, _) => CopyShareCard();
+        // the miscount report keeps pictures only once the player said yes (Options › Sharing, or the question on its first use)
+        ReportBuffer.KeepFrames = _prefs.ReportFrames;
+        MiscountLink.Click += (_, _) => ReportMiscount();
         // Compact and Full view: the header button switches, and the summary's link opens Full view
         ViewBtn.Click += (_, _) => SetView(!_prefs.FullView);
         FullLink.Click += (_, _) => SetView(true);
@@ -234,8 +237,41 @@ public partial class MainWindow : Window
         if ((sender as FrameworkContentElement)?.DataContext is not DropRow r || r.Report.Length == 0) return;
         bool on = ReportedDrops.Toggle(r.Report);
         CrashLog.Note(on ? $"reported: {r.Report} (not sent to the site)" : $"report undone: {r.Report}");
-        Say(on ? $"{r.Report} won't be sent to the site. Thanks for flagging it." : $"{r.Report} counts again.", "Faint");
+        // a flagged drop also keeps the last minute of what was read, so the misread can be found and fixed
+        string? saved = null;
+        if (on && _watcher.Chat is { } c) { try { saved = c.WriteReport(r.Report); } catch (Exception ex) { CrashLog.Write("miscount report", ex); } }
+        Say(on ? $"{r.Report} won't be sent to the site. Thanks for flagging it." + (saved != null ? " The last minute is saved in your reports folder." : "") : $"{r.Report} counts again.", "Faint");
+        if (saved != null) Status.ToolTip = saved;
         Redraw();
+    }
+
+    /// <summary>
+    /// "Report a miscount": the last minute of what the tracker read and counted (ReportBuffer), saved to a folder on this
+    /// PC that opens for attaching to a bug report. The first time, while pictures are off, it asks whether to keep them.
+    /// </summary>
+    void ReportMiscount()
+    {
+        var c = _watcher.Chat;
+        if (c == null) { Say("Nothing to report yet: the last minute is kept once the tracker is reading the game.", "Warn"); return; }
+        bool asked = false;
+        if (!_prefs.ReportFrames)
+        {
+            var answer = MessageBox.Show(this,
+                "Also keep the last minute of the chat and the loot list as pictures, for the next reports?\n\n" +
+                "Pictures show exactly what the screen said, which is what finds a misread. They can show other players' names " +
+                "and messages. They stay on this PC; nothing is sent. Options › Sharing turns them off again.\n\n" +
+                "This report has the text the tracker read and what it counted either way.",
+                "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Yes) { _prefs.ReportFrames = ReportBuffer.KeepFrames = true; SavePrefs(); asked = true; }
+        }
+        try
+        {
+            var dir = c.WriteReport("");
+            Open(dir);
+            Say("Saved the last minute to a folder on this PC" + (asked ? "; pictures are kept from now on" : "") + ". Zip it to attach to a bug report.", "Good");
+            Status.ToolTip = dir;
+        }
+        catch (Exception ex) { CrashLog.Write("miscount report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); }
     }
 
     /// <summary>

@@ -209,10 +209,23 @@ public sealed class ScreenReader
         return bmp;
     }
 
+    /// <summary>Handed each capture before it is read (the miscount report keeps the last minute of them, when the player said yes).</summary>
+    public Action<Bitmap>? Tap { get; set; }
+
     public async Task<List<string>> ReadAsync(string? savePng = null)
     {
         using var raw = Capture();
         if (savePng != null) raw.Save(savePng, ImageFormat.Png);
+        try { Tap?.Invoke(raw); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
+        return await ReadCaptureAsync(raw);
+    }
+
+    /// <summary>
+    /// Reads a capture of the chat the way every live read does (boost, enlarge, recognize, name colours, text size). Also
+    /// how report-replay reads a saved picture again.
+    /// </summary>
+    public async Task<List<string>> ReadCaptureAsync(Bitmap raw)
+    {
         var k = Math.Min(1.0, Math.Min(166.0 / raw.Width, 76.0 / raw.Height));
         var small = new Bitmap(raw, new Size(Math.Max(1, (int)(raw.Width * k)), Math.Max(1, (int)(raw.Height * k))));
         lock (_lock) { _thumb?.Dispose(); _thumb = small; }

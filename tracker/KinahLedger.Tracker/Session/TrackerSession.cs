@@ -36,6 +36,42 @@ public sealed class TrackerSession
         return list.Distinct().ToList();
     }
 
+    /// <summary>A reader for the chat at <paramref name="r"/>: sized to its text, its captures handed to the miscount report.</summary>
+    ScreenReader NewReader(System.Drawing.Rectangle r) =>
+        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow) };
+
+    /// <summary>The last minute of reads, pickups and (when the player said yes) pictures, for "Report a miscount".</summary>
+    public ReportBuffer Report { get; } = new();
+
+    /// <summary>
+    /// Saves the last minute (ReportBuffer) with the tracker's state to a new folder under reports/ and returns it.
+    /// <paramref name="why"/> is what the player flagged, or "" for the button.
+    /// </summary>
+    public string WriteReport(string why)
+    {
+        var now = DateTime.UtcNow;
+        var t = Engine.Totals();
+        var bc = _balanceCheck;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Kinah Ledger {Upload.RunPayload.AppVersion} · miscount report · {now.ToLocalTime():yyyy-MM-dd HH:mm:ss}");
+        if (why.Length > 0) sb.AppendLine($"Flagged: {why}");
+        var fighting = string.Join(", ", Fighting());
+        var factor = _reader?.Factor ?? _settings.Ocr.Scale;
+        var textPx = _textScale?.TextPx is double px ? $"{px:0} px tall" : "height not measured yet";
+        sb.AppendLine($"Zone: {Zone ?? "unknown"} · fighting: {(fighting.Length > 0 ? fighting : "nobody seen")} · target bar: {Target.Name ?? "none"}");
+        sb.AppendLine($"Chat area: {Region} ({(ManualRegion ? "chosen by hand" : "found by itself")}) · read at {factor:0.##}x · text {textPx}");
+        sb.AppendLine($"Counted this session: {t.Kinah:N0} Kinah · {t.Kills} kills · {Engine.Items.Values.Sum()} drops");
+        sb.AppendLine($"Checks: Kinah counter agreed {bc.Agreed}×, over {bc.Over:N0}, under {bc.Under:N0} · quest kills {QuestKillsGame}, counted {QuestKillsCounted} · loot list added {_cross.Added}, matched {_cross.Matched}, chat repeats skipped {_cross.Duplicates}");
+        sb.AppendLine($"Names: settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, loot list rows named by icon {IconNamed}, lines changed by the vote {_voter.Changed}, reads that didn't line up {_tracker.Unaligned}");
+        if (_parser.Colours is { } book) sb.AppendLine("Grade colours learned: " + (book.Learned() is { Count: > 0 } l ? string.Join(", ", l.Select(g => $"{g.Grade} {g.Colour.R},{g.Colour.G},{g.Colour.B} ({g.Seen})")) : "none yet"));
+        sb.AppendLine($"Settings: autoScale {_settings.Ocr.AutoScale} (target {_settings.Ocr.TargetTextPx} px, scale {_settings.Ocr.Scale}) · nameColours {_settings.Ocr.NameColours} · lootIcons {_settings.Ocr.LootIcons} · window capture {WindowCapture.Active} · pictures kept {ReportBuffer.KeepFrames}");
+        IEnumerable<string> tail = Array.Empty<string>();
+        try { if (File.Exists(CrashLog.ReadsPath)) tail = File.ReadLines(CrashLog.ReadsPath).TakeLast(600).ToList(); } catch (Exception) { /* the log is being written: the report goes without it */ }
+        var dir = Report.Write(CrashLog.Dir, sb.ToString(), tail, now);
+        CrashLog.Note($"miscount report saved: {dir}" + (why.Length > 0 ? $" ({why})" : ""));
+        return dir;
+    }
+
     /// <summary>Saves the grade colours when names taught it something since the last save.</summary>
     void SaveColours()
     {
@@ -229,7 +265,7 @@ public sealed class TrackerSession
             Region = region;
             _anchor = game;
         }
-        _reader = new ScreenReader(Region.Value, _settings.Ocr.Scale, _textScale);
+        _reader = NewReader(Region.Value);
         if (game != null && Cover(ZoneLocator.Strip(game.Value)) == null) await ReadZone(game.Value);
         _loop ??= Task.Run(() => Loop(_cts.Token));
     }
@@ -312,7 +348,7 @@ public sealed class TrackerSession
         {
             // same window, new place: the chat sits where it did inside it
             var moved = Region!.Value; moved.Offset(g.X - a.X, g.Y - a.Y);
-            Region = moved; _reader = new ScreenReader(moved, _settings.Ocr.Scale, _textScale); _anchor = g;
+            Region = moved; _reader = NewReader(moved); _anchor = g;
             DetectNote = "the chat area moved with the game";
             return;
         }
@@ -320,7 +356,7 @@ public sealed class TrackerSession
         _refindAt = DateTime.UtcNow;
         var (again, note) = await ChatLocator.DetectAsync(g);
         if (again == null) return;   // the chat may be faded: the empty-read rule keeps trying
-        Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale, _textScale); _anchor = g;
+        Region = again; _reader = NewReader(again.Value); _anchor = g;
         _tracker.Rebase();
         DetectNote = "re-found after the game changed size: " + note;
     }
@@ -386,7 +422,7 @@ public sealed class TrackerSession
         Engine.Resume(); Secondary?.Resume(); ZoneView.Resume();
         var lines = await _reader!.ReadAsync();
         _parser.NoteAccents(_reader.LastAccents);
-        if (lines.Count > 0) { ReadTrace.Chat(DateTime.UtcNow, lines); QuestCounter(lines); }
+        if (lines.Count > 0) { ReadTrace.Chat(DateTime.UtcNow, lines); Report.Lines("chat", lines, DateTime.UtcNow); QuestCounter(lines); }
         Reads++;
         // the chat moved or the UI was toggled: after a stretch of empty reads, find it again (auto mode only)
         _emptyReads = lines.Count == 0 ? _emptyReads + 1 : 0;
@@ -397,7 +433,7 @@ public sealed class TrackerSession
             if (g != null && Cover(ChatLocator.Corner(g.Value)) == null)
             {
                 var (again, note) = await ChatLocator.DetectAsync(g.Value);
-                if (again != null && again != Region) { Region = again; _reader = new ScreenReader(again.Value, _settings.Ocr.Scale, _textScale); _anchor = g; DetectNote = "re-found: " + note; }
+                if (again != null && again != Region) { Region = again; _reader = NewReader(again.Value); _anchor = g; DetectNote = "re-found: " + note; }
             }
         }
         ProcessChat(lines, DateTime.UtcNow);
@@ -804,6 +840,7 @@ public sealed class TrackerSession
             _ => null,
         };
         if (what == null) return;
+        Report.Counted(ev.Time, what, ev.Via);
         lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
     }
 
@@ -840,6 +877,9 @@ public sealed class TrackerSession
         using (r.Raw)
         {
             var lines = r.Lines.Select(l => (l.Box.Top, l.Text)).ToList();
+            // the list's picture for the miscount report, when it shows rows (at most once a second: the world moves behind it)
+            if (ReportBuffer.KeepFrames && LootPopup.Rows(lines).Count > 0)
+                try { Report.Picture("loot", r.Raw, r.Origin, DateTime.UtcNow, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
             if (_settings.Ocr.LootIcons && r.Lines.Count > 0)
             {
                 // a row whose text is cut off or garbled is named by the icon beside it, when one icon is clearly it
@@ -869,7 +909,7 @@ public sealed class TrackerSession
             if (Target.RewardOpen(now)) return;
             var rows = LootPopup.Rows(lines);
             if (rows.Count > 0) _lastActivity = DateTime.UtcNow;
-            if (rows.Count > 0) ReadTrace.List(now, rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}"));
+            if (rows.Count > 0) { var traced = rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name} x{r.Count}").ToList(); ReadTrace.List(now, traced); Report.Lines("list", traced, now); }
             var add = _cross.Popup(rows, now);
             if (add.Count == 0) return;
             bool reward = Target.RewardOpen(now);
@@ -1145,6 +1185,8 @@ public sealed class UserPrefs
     /// <summary>How solid the panel over the game is, 0.3 to 1.</summary>
     public double HudOpacity { get; set; } = 0.9;
     public bool Share { get; set; } = true;
+    /// <summary>Keep the last minute of chat and loot list pictures for miscount reports (ReportBuffer). Off until the player says yes: they can show other players' names.</summary>
+    public bool ReportFrames { get; set; }
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>
     public bool ManualChat { get; set; }
     /// <summary>No longer used: the window is always the live count, with setup in Options. Kept so older ui.json files load.</summary>

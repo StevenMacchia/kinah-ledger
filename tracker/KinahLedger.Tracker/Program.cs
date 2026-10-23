@@ -120,6 +120,7 @@ internal static class Program
                     return 0;
                 }
                 case "replay": return Replay(settings, pos, opts);
+                case "report-replay": return ReportReplay(settings, pos);
                 case "icon-index":
                 {
                     // every distinct item icon, fingerprinted for the reward grid: icon-index [tw-items.json] [out.bin] [cache dir]
@@ -283,6 +284,8 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   ocr-test [--save]             read the box once and show what was recognized (--save keeps a PNG)
   ocr-test --scales [--image p] read the chat (or a saved picture of it) at each enlarging factor, to see which reads best
   popup-test --image shot.png   read the loot list beside the character in a game picture, with each row's icon match (--crop, --save, --scale n)
+  replay [trace.log]            count a recorded fight's reads again (a miscount report's trace.jsonl too; --from/--to HH:mm, --novote)
+  report-replay <folder>        read a miscount report's pictures again with this version's reader, beside what was counted then
   ocr-file <image> [--scale 2]  run recognition on a screenshot, plain and boosted
   watch [--activity name]       a farming run in the console, with the Market reader beside it; Ctrl+C to stop
         [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]
@@ -502,6 +505,69 @@ options: --process aion[,other]");
         var name = TargetReader.FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
         Console.WriteLine(name != null ? $"Enemy: {name}" : $"No enemy on the list" + (unlisted.Length > 0 ? $" (name-shaped text: {unlisted})" : ""));
         return name != null ? 0 : 1;
+    }
+
+    /// <summary>
+    /// A miscount report's pictures (frames.jsonl, in order) read again with this version's reader and counted as a live run
+    /// counts them, printed beside what was counted when the report was saved (counted.jsonl). A reader fix is measured
+    /// here on what the screen really showed (2026-10-23).
+    /// </summary>
+    static int ReportReplay(Settings settings, List<string> pos)
+    {
+        var dir = pos.FirstOrDefault();
+        var index = dir == null ? "" : Path.Combine(dir, "frames.jsonl");
+        if (dir == null || !File.Exists(index)) { Console.Error.WriteLine("report-replay <a miscount report folder with pictures (frames.jsonl)>"); return 1; }
+        CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kinah-report-replay");   // the replay's own notes, never the player's logs
+        Directory.CreateDirectory(CrashLog.DirOverride);
+        File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), "");
+        var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+        var s = new TrackerSession(null, settings, items, "Replay");
+        var auto = settings.Ocr.AutoScale ? new TextScale(settings.Ocr.Scale, settings.Ocr.TargetTextPx) : null;
+        ScreenReader? reader = null;
+        int chats = 0, lists = 0; DateTime? last = null;
+        foreach (var raw in File.ReadLines(index))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(raw);
+                var r = doc.RootElement;
+                var t = DateTime.Parse(r.GetProperty("t").GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+                var origin = new System.Drawing.Point(r.GetProperty("x").GetInt32(), r.GetProperty("y").GetInt32());
+                using var bmp = Task.Run(() => ScreenReader.LoadAsync(Path.Combine(dir, r.GetProperty("f").GetString()!))).GetAwaiter().GetResult();
+                if (r.GetProperty("k").GetString() == "chat")
+                {
+                    reader ??= new ScreenReader(new System.Drawing.Rectangle(origin, bmp.Size), settings.Ocr.Scale, auto);
+                    var lines = Task.Run(() => reader.ReadCaptureAsync(bmp)).GetAwaiter().GetResult();
+                    s.Parser.NoteAccents(reader.LastAccents);
+                    s.QuestCounter(lines); s.ProcessChat(lines, t); chats++;
+                }
+                else
+                {
+                    var boxes = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, origin, 3, boost: true)).GetAwaiter().GetResult();
+                    var rows = boxes.Select(l => (l.Box.Top, l.Text)).ToList();
+                    if (settings.Ocr.LootIcons) for (int i = 0; i < boxes.Count; i++) rows[i] = (rows[i].Top, PopupIcons.Name(items, bmp, origin, boxes[i]).Text);
+                    s.ProcessList(rows, t); lists++;
+                }
+                last = t;
+            }
+            catch (Exception ex) { Console.Error.WriteLine("skipped a picture: " + ex.Message); }
+        }
+        if (last != null) s.FlushVotes(last.Value);
+        var e = s.Engine; var tot = e.Totals();
+        Console.WriteLine($"Read {chats} chat and {lists} loot list pictures again with {Upload.RunPayload.AppVersion}" + (auto?.TextPx is double px ? $" (chat text {px:0} px, read at {auto.Factor:0.##}x)" : "") + ":");
+        Console.WriteLine($"  Kinah {tot.Kinah:N0} · kills {tot.Kills} · drops {e.Items.Values.Sum()}");
+        foreach (var (id, n) in e.Items.OrderByDescending(kv => kv.Value).Take(20)) Console.WriteLine($"    {items.NameOf(id)} ×{n}");
+        var counted = Path.Combine(dir, "counted.jsonl");
+        if (File.Exists(counted))
+        {
+            var then = File.ReadLines(counted).Select(l => { using var d = System.Text.Json.JsonDocument.Parse(l); return (What: d.RootElement.GetProperty("what").GetString() ?? "", Via: d.RootElement.GetProperty("via").GetString() ?? ""); }).ToList();
+            Console.WriteLine($"When the report was saved, {then.Count} pickups were counted in that minute:");
+            foreach (var (what, via) in then) Console.WriteLine($"    {what}" + (via.Length > 0 ? $"   ({via})" : ""));
+        }
+        var notes = File.ReadAllLines(Path.Combine(CrashLog.DirOverride, "reads.log"));
+        Console.WriteLine($"  reads that didn't line up: {notes.Count(n => n.Contains("couldn't line"))} · names settled by colour {s.Parser.ColourPicks}, by loot table {s.Parser.TablePicks} · guesses held {s.Parser.HeldUnlisted}");
+        CrashLog.DirOverride = null;
+        return 0;
     }
 
     /// <summary>
@@ -935,6 +1001,26 @@ options: --process aion[,other]");
         Check("two items share the icon: no answer", V(PopupIcons.Decide(new[] { (1L, "Fine Odyle", "IconA", 30.0), (2L, "Pure Odyle", "IconA", 30.0) })), "none");
         Check("a tradable and a bound copy share the art: the row's own kind", $"{V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 30.0), (2L, "Spiritstone (Bound)", "IconA", 30.0) }))} | {V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 30.0), (2L, "Spiritstone (Bound)", "IconA", 30.0) }, bound: true))}", "Spiritstone 30 | Spiritstone (Bound) 30");
         Check("a scrolled name's letters find their item first", items.Fragment("itstone", PopupIcons.MaxCandidates).FirstOrDefault()?.Name ?? "none", "Spiritstone");
+
+        // ---- the miscount report: the last minute only, in trace.log's own form ----
+        var rb = new ReportBuffer();
+        var r0 = new DateTime(2026, 10, 23, 12, 0, 0, DateTimeKind.Utc);
+        rb.Lines("chat", new[] { "Spiritstone acquired." }, r0);
+        rb.Counted(r0, "Spiritstone ×1", "chat");
+        rb.Lines("chat", new[] { "Acquired 463 Kina." }, r0.AddSeconds(70));
+        rb.Lines("list", new[] { "463 Kina" }, r0.AddSeconds(71));
+        rb.Counted(r0.AddSeconds(70), "463 Kinah", "chat");
+        Check("only the last minute is held", $"{rb.Held.Reads} reads, {rb.Held.Counted} counted", "2 reads, 1 counted");
+        var rtmp = Path.Combine(Path.GetTempPath(), "kl-report-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var rdir = rb.Write(rtmp, "state", new[] { "a log line" }, r0.AddSeconds(72));
+            var traced = File.ReadAllLines(Path.Combine(rdir, "trace.jsonl"));
+            using var first = System.Text.Json.JsonDocument.Parse(traced[0]);
+            Check("trace.jsonl reads like trace.log", $"{traced.Length} {first.RootElement.GetProperty("k").GetString()} {first.RootElement.GetProperty("l")[0].GetString()}", "2 chat Acquired 463 Kina.");
+            Check("no pictures unless the player said yes", $"{Directory.Exists(Path.Combine(rdir, "frames"))} {File.Exists(Path.Combine(rdir, "counted.jsonl"))} {File.Exists(Path.Combine(rdir, "README.txt"))}", "False True True");
+        }
+        finally { try { Directory.Delete(rtmp, true); } catch { } }
         return ok;
     }
 

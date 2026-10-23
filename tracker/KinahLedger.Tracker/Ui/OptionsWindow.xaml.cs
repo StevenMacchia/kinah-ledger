@@ -101,6 +101,7 @@ public partial class OptionsWindow : Window
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
         ShareChk.IsChecked = c.Share;
+        ReportFramesChk.IsChecked = c.ReportFrames;
         HudChk.IsChecked = c.Hud;
         AutoUpdateChk.IsChecked = c.AutoUpdate;
         AutoUpdateChk.IsEnabled = _host.AppSettings.Update.Check;
@@ -163,6 +164,7 @@ public partial class OptionsWindow : Window
         };
         ServerPick.SelectionChanged += (_, _) => Edit(_edit with { Server = (ServerPick.SelectedItem as GameServer)?.Label ?? "" });
         ShareChk.Click += (_, _) => Edit(_edit with { Share = ShareChk.IsChecked == true });
+        ReportFramesChk.Click += (_, _) => Edit(_edit with { ReportFrames = ReportFramesChk.IsChecked == true });
         HudChk.Click += (_, _) => Edit(_edit with { Hud = HudChk.IsChecked == true });
         HudOpacity.Value = Math.Clamp(_host.Prefs.HudOpacity, 0.3, 1);
         HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
