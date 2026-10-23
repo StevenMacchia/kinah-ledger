@@ -255,7 +255,7 @@ public static class RewardGrid
             {
                 var box = new Rectangle(x0 + col * p, y, s, s);
                 // the slots fill each row from the left: the first gap ends the row, and a row with none ends the grid
-                if (!IsSlot(frame, box) && TopEdge(frame, box) < EdgeMin) break;
+                if ((!IsSlot(frame, box) && TopEdge(frame, box) < EdgeMin) || Flat(frame, box)) break;
                 found++;
                 var bg = Background(frame, box);
                 var grade = GradeOf(bg);
@@ -264,12 +264,24 @@ public static class RewardGrid
                 // no white figures there: the game shows no count for one of an item
                 string num = "";
                 if (HasFigures(frame, corner))
-                    using (var cb = WhiteText(frame, corner))
-                        foreach (var scale in new[] { 2, 3, 4, 1 })
+                {
+                    // the reader skips a lone figure ("4", "6") but reads it after a word: "Qty 4" (2026-10-23 Urugugu: 4, 2, 6, 3
+                    // and 5 read as 1, 1, 7, 11 and 1 without it)
+                    using (var cq = WhiteText(frame, corner, prefix: true))
+                        foreach (var scale in new[] { 2, 3, 1 })
                         {
-                            num = string.Join(" ", (await ScreenReader.ReadBoxesAsync(cb, corner.Location, scale)).Select(l => l.Text.Trim())).Trim();
-                            if (System.Text.RegularExpressions.Regex.IsMatch(num, @"\d")) break;
+                            var q = string.Join(" ", (await ScreenReader.ReadBoxesAsync(cq, corner.Location, scale)).Select(l => l.Text.Trim())).Trim();
+                            var after = System.Text.RegularExpressions.Regex.Match(q, @"q\W?t\W?y\W*(?<n>[0-9OoIl|SB.,]+\s?[KkMm]?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            if (after.Success && System.Text.RegularExpressions.Regex.IsMatch(after.Groups["n"].Value, @"\d")) { num = after.Groups["n"].Value; break; }
                         }
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
+                        using (var cb = WhiteText(frame, corner))
+                            foreach (var scale in new[] { 2, 3, 4, 1 })
+                            {
+                                num = string.Join(" ", (await ScreenReader.ReadBoxesAsync(cb, corner.Location, scale)).Select(l => l.Text.Trim())).Trim();
+                                if (System.Text.RegularExpressions.Regex.IsMatch(num, @"\d")) break;
+                            }
+                }
                 // the reader skips a lone digit: then its shape, in the tight lower-right corner where a count ends
                 if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
                 {
@@ -288,16 +300,30 @@ public static class RewardGrid
     /// The count's white figures alone, black on white and padded: the slot's art behind them confuses the reader, and a
     /// lone digit is read far more often this way.
     /// </summary>
-    static Bitmap WhiteText(Bitmap f, Rectangle area)
+    static Bitmap WhiteText(Bitmap f, Rectangle area, bool prefix = false)
     {
         const int pad = 24;
-        var outBmp = new Bitmap(area.Width + 2 * pad, area.Height + 2 * pad, PixelFormat.Format24bppRgb);
-        using (var g = Graphics.FromImage(outBmp)) g.Clear(Color.White);
+        // with a word drawn before the figures, in black like them, a little shorter than the slot's corner
+        int lead = prefix ? area.Height * 2 : 0;
+        var outBmp = new Bitmap(area.Width + 2 * pad + lead, area.Height + 2 * pad, PixelFormat.Format24bppRgb);
+        using (var g = Graphics.FromImage(outBmp))
+        {
+            g.Clear(Color.White);
+            if (prefix)
+            {
+                // the figures sit low in the corner; the word on their line, about their height
+                float em = Math.Max(10, area.Height * 0.42f);
+                using var font = new Font("Arial", em, FontStyle.Bold, GraphicsUnit.Pixel);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                g.DrawString("Qty", font, Brushes.Black, pad / 2f, pad + area.Height - em * 1.35f);
+            }
+        }
+        int shift = lead;
         for (int y = 0; y < area.Height; y++)
             for (int x = 0; x < area.Width; x++)
             {
                 var c = f.GetPixel(area.Left + x, area.Top + y);
-                if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) outBmp.SetPixel(x + pad, y + pad, Color.Black);
+                if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) outBmp.SetPixel(x + pad + shift, y + pad, Color.Black);
             }
         return outBmp;
     }
@@ -331,6 +357,25 @@ public static class RewardGrid
         var tl = f.GetPixel(b.Left + d, b.Top + d); var tr = f.GetPixel(b.Right - d, b.Top + d);
         var bl = f.GetPixel(b.Left + d, b.Bottom - d); var br = f.GetPixel(b.Right - d, b.Bottom - d);
         return Diff(tl, tr) < 45 && Diff(bl, br) < 160;
+    }
+
+    /// <summary>
+    /// A box with no art in it: nearly one colour all over (the black past a picture's edge, plain floor). A slot always holds
+    /// an icon, so a flat box ends the grid (the Urugugu replay read 48 slots, 19 of them black, without this).
+    /// </summary>
+    internal static bool Flat(Bitmap f, Rectangle b)
+    {
+        double sum = 0, sum2 = 0; int n = 0;
+        for (int y = b.Top + b.Height / 5; y < b.Bottom - b.Height / 5; y += 4)
+            for (int x = b.Left + b.Width / 5; x < b.Right - b.Width / 5; x += 4)
+            {
+                if (x < 0 || y < 0 || x >= f.Width || y >= f.Height) continue;
+                var c = f.GetPixel(x, y); double v = (c.R + c.G + c.B) / 3.0;
+                sum += v; sum2 += v * v; n++;
+            }
+        if (n == 0) return true;
+        double mean = sum / n, sd = Math.Sqrt(Math.Max(0, sum2 / n - mean * mean));
+        return sd < 6;
     }
 
     /// <summary>A slot's top edge stands out at least this much (mean colour difference across it).</summary>

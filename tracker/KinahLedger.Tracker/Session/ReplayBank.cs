@@ -192,7 +192,7 @@ public static class ReplayBank
                     try
                     {
                         var before = Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016))).GetAwaiter().GetResult();
-                        Console.WriteLine($"  table without the badge mask: {before.Count(s => TrackerSession.SlotName(items, s) != null)} of {before.Count} slots named: " + string.Join(" | ", before.Select(s => $"{TrackerSession.SlotName(items, s) ?? "?"} x{s.Count} ({(s.Icons.Count > 0 ? s.Icons[0].Distance.ToString("0") : "-")})")));
+                        Console.WriteLine($"  table without the badge mask: {before.Count(s => TrackerSession.SlotName(items, s) != null)} of {before.Count} slots named, {before.Take(29).Count(s => TrackerSession.SlotName(items, s) != null)} of the first 29: " + string.Join(" | ", before.Select(s => $"{TrackerSession.SlotName(items, s) ?? "?"} x{s.Count} ({(s.Icons.Count > 0 ? s.Icons[0].Distance.ToString("0") : "-")})")));
                     }
                     finally { RewardGrid.MaskBadges = true; }
                 }
@@ -205,6 +205,12 @@ public static class ReplayBank
                         });
             }
             else Task.Run(() => session.ReplayListFrameAsync(bmp, at, t)).GetAwaiter().GetResult();
+            if (table != null)
+            {
+                int namedMasked = table.Count(x => x!["name"]?.GetValue<string>() != "?");
+                int namedFirst = table.Take(29).Count(x => x!["name"]?.GetValue<string>() != "?");
+                Console.WriteLine("  table with the badge mask: " + namedMasked + " of " + table.Count + " slots named, " + namedFirst + " of the first 29");
+            }
             last = t;
         }
         // rows still waiting for a chat line that never comes are settled the way a live run settles them: later reads
