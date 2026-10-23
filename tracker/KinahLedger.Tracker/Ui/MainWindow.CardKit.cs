@@ -53,8 +53,19 @@ public partial class MainWindow
             Background = glow ? new RadialGradientBrush(Color.FromArgb(0x55, frame.R, frame.G, frame.B), CkSlot) { Center = new Point(0.5, 0.4), GradientOrigin = new Point(0.5, 0.4) } : Ck(Color.FromRgb(0x15, 0x1A, 0x30)),
             Effect = glow ? new DropShadowEffect { Color = frame, BlurRadius = 16, ShadowDepth = 0, Opacity = 0.45 } : null,
         };
-        box.Child = slot.Image is ImageSource img ? new Image { Source = img, Stretch = Stretch.Uniform, Margin = new Thickness(2) }
-            : new TextBlock { Text = InitialOf(item), FontSize = size * 0.38, FontWeight = FontWeights.Bold, Foreground = Ck(CkMuted), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        // the icon, or the item's initial only while the icon is still downloading: a card drawn before the file is on
+        // disk fills in when it lands (every item in the game has one; a letter that stayed read as a missing picture)
+        var pic = new Image { Source = slot.Image, Stretch = Stretch.Uniform, Margin = new Thickness(2) };
+        var letter = new TextBlock { Text = InitialOf(item), FontSize = size * 0.38, FontWeight = FontWeights.Bold, Foreground = Ck(CkMuted), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed };
+        if (slot.Image == null && !ReferenceEquals(slot, IconCache.None))
+        {
+            System.ComponentModel.PropertyChangedEventHandler? on = null;
+            on = (_, _) => { if (slot.Image == null) return; pic.Source = slot.Image; letter.Visibility = Visibility.Collapsed; slot.PropertyChanged -= on; };
+            slot.PropertyChanged += on;
+        }
+        var face = new Grid(); face.Children.Add(letter); face.Children.Add(pic);
+        box.Child = face;
         if (badge.Length == 0) return box;
         var g = new Grid { Width = size + 6, Height = size + 6 };
         box.HorizontalAlignment = HorizontalAlignment.Left; box.VerticalAlignment = VerticalAlignment.Top;

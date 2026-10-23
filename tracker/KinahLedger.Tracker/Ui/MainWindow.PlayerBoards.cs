@@ -27,7 +27,18 @@ public partial class MainWindow
     /// <summary>For layout review: the recipe card of a best craft (Crafting) or the first drop's card (farming), drawn to a PNG.</summary>
     internal void ShotPlayerCards(string dir, string kind)
     {
-        if (kind == "Crafting" && PlayerBoards.Crafts.Count > 2) { var c = PlayerBoards.Crafts[2]; SaveCard(BuildCraftCard(_items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name, c, 3), Path.Combine(dir, "ui-craft-card.png")); }
+        // a card's icons are fetched when it is built: wait for them, let them land, then draw
+        void Save(Border card, string file)
+        {
+            IconCache.Drain(TimeSpan.FromSeconds(8));
+            Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+            SaveCard(card, Path.Combine(dir, file));
+        }
+        if (kind == "Crafting")
+        {
+            if (PlayerBoards.Crafts.Count > 2) { var c = PlayerBoards.Crafts[2]; Save(BuildCraftCard(_items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name, c, 3), "ui-craft-card.png"); }
+            Save(BuildCraftCard("Artisan's Orichalcum Longsword"), "ui-craft-card-longsword.png");
+        }
         else if (kind == "Open world") ShotItemCard(Path.Combine(dir, "ui-drop-card.png"), _demoZone ?? "Western Cantas Valley");
     }
 

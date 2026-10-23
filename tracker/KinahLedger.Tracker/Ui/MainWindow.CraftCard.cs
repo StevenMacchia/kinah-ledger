@@ -135,7 +135,7 @@ public partial class MainWindow
             if (upPrice == null) combo = 0;
             double normal = Price(recipe.Output) is long op ? op * recipe.OutputQty : 0;
             double per = CraftMath.ProfitPerTry(rate, combo, normal, upPrice, total, PriceBook.SellerKeeps);
-            body.Children.Add(CkFooter("Profit per craft", $"at {rate:P0} success{(combo > 0 ? $", {combo:P0} chance of the upgrade" : "")}, after the Market's cut", $"{(per >= 0 ? "+" : "−")}{Math.Abs(per):N0}", per >= 0));
+            body.Children.Add(CkFooter("Profit per craft", $"at {rate:P0} success{(combo > 0 ? $" · {combo:P0} upgrade chance" : "")} · after tax", $"{(per >= 0 ? "+" : "−")}{Math.Abs(per):N0}", per >= 0));
         }
         else
         {
