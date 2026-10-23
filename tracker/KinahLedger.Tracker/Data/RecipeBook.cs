@@ -85,7 +85,7 @@ public static class RecipeBook
         long cost = r.Kinah ?? 0;
         foreach (var m in r.Materials)
         {
-            if (m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)) vendor++;
+            if (m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)) { if (PriceBook.VendorPrice(m.Item) is long vp) cost += vp * m.Qty; else vendor++; }
             else if (PriceBook.Price(m.Item) is long p) cost += p * m.Qty;
             else unpriced++;
         }

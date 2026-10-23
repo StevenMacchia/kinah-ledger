@@ -139,7 +139,8 @@ public sealed class LootCrossCheck
             var soul = row.IsKinah ? null : SoulOf(row.Name);
             string? key = row.IsKinah ? (row.Amount >= MinKinah ? KinahKey(row.Amount) : null)
                         : soul != null ? "s:" + soul
-                        : _items.Knows(row.Name) ? ItemKey(_items.IdOf(row.Name), row.Count) : null;
+                        // a short name only counts read exactly: "Aryia" off a sign in a base is no Aria (Steven, 2026-10-22)
+                        : _items.Knows(row.Name) && (row.Name.Trim().Length >= 8 || _items.KnowsExactly(row.Name)) ? ItemKey(_items.IdOf(row.Name), row.Count) : null;
             if (key == null) continue;
             shown[key] = (shown.TryGetValue(key, out var x) ? x.Count + 1 : 1, row);
         }

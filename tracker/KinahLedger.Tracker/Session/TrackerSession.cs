@@ -280,17 +280,19 @@ public sealed class TrackerSession
         if (Region == null)
         {
             if (game == null) throw new InvalidOperationException("The game window wasn't found. Start the game (borderless or windowed), or choose the chat yourself.");
-            if (Cover(ChatLocator.Corner(game.Value)) is { } cover)
-                throw new InvalidOperationException($"The chat corner of the game is out of view ({cover} is over it). Bring the game to the front, or move that window off the bottom-left of the game.");
-            var (region, note) = await ChatLocator.DetectAsync(game.Value);
+            // the chat isn't needed to start (Steven, 2026-10-22: the crafting screen hides it): the crafting panel, the loot
+            // list, the zone and the target bar are read without it, and the chat is looked for every ten seconds
+            Rectangle? region = null; string note = "";
+            if (Cover(ChatLocator.Corner(game.Value)) is null) (region, note) = await ChatLocator.DetectAsync(game.Value);
             DetectNote = note;
-            // nothing found by itself (a frameless chat has no input box): where other trackers with this screen size found it
+            if (region is { } found) LastChat.Save(game.Value, found);
+            else if (LastChat.For(game.Value) is { } last) { region = last; DetectNote = "where the chat was last found (it's hidden now)"; CrashLog.Note($"chat not visible at start: reading from its last place {last}"); }
+            // nothing found and nothing kept (a frameless chat has no input box): where other trackers with this screen size found it
             if (region == null && await HintedChatAsync(game.Value) is { } hinted) { region = hinted; DetectNote = "found where other trackers with this screen size found the chat"; }
-            if (region == null) throw new InvalidOperationException("Couldn't see the chat. Open the chat so its input box shows (press Enter once, or pin the chat window in the game's chat settings), then Detect again, or choose the chat yourself.");
-            Region = region;
-            _anchor = game;
+            if (region == null) { CrashLog.Note("chat not in view at start: reading the crafting panel, the loot list and the zone meanwhile, and looking for the chat every 10 seconds"); _chatTryAt = DateTime.UtcNow; }
+            else { Region = region; _anchor = game; }
         }
-        _reader = NewReader(Region.Value);
+        if (Region is { } r0) _reader = NewReader(r0);
         ReportLayout();
         if (game != null && Cover(ZoneLocator.Strip(game.Value)) == null) await ReadZone(game.Value);
         _loop ??= Task.Run(() => Loop(_cts.Token));
@@ -384,6 +386,57 @@ public sealed class TrackerSession
     DateTime _refindAt = DateTime.MinValue;
 
     /// <summary>Keeps the chat area on the game: shifted when the game moved, found again when the game changed size.</summary>
+    /// <summary>True once the chat has been found; until then the rest of the game's screen is read without it.</summary>
+    public bool ChatFound => Region != null;
+    DateTime _chatTryAt = DateTime.MinValue;
+
+    /// <summary>With no chat yet, looks for it every ten seconds; found, it is read from then on and its place kept for next time.</summary>
+    async Task FindChatAsync()
+    {
+        if (ManualRegion || (DateTime.UtcNow - _chatTryAt).TotalSeconds < 10) return;
+        _chatTryAt = DateTime.UtcNow;
+        if (GameWindow.Find(_settings.ProcessHints) is not { } g) return;
+        GameRect = g;
+        if (Cover(ChatLocator.Corner(g)) != null) return;
+        var (region, note) = await ChatLocator.DetectAsync(g);
+        if (region is not { } r) return;
+        Region = r; _anchor = g; _reader = NewReader(r); DetectNote = note;
+        _tracker.Rebase();
+        LastChat.Save(g, r);
+        CrashLog.Note($"chat found: {r.Width} x {r.Height} at {r.X}, {r.Y}");
+        ReportLayout();
+    }
+
+    /// <summary>
+    /// Where the chat was last found automatically, per game window size, in %LOCALAPPDATA%\KinahLedger\chat-last.json
+    /// (relative to the game window), so a start while the chat is hidden still reads it once it shows.
+    /// </summary>
+    static class LastChat
+    {
+        static string PathOf => Path.Combine(CrashLog.Dir, "chat-last.json");
+
+        public static void Save(Rectangle game, Rectangle chat)
+        {
+            try { File.WriteAllText(PathOf, System.Text.Json.JsonSerializer.Serialize(new[] { game.Width, game.Height, chat.X - game.X, chat.Y - game.Y, chat.Width, chat.Height })); }
+            catch (Exception ex) { CrashLog.Write("chat last place", ex); }
+        }
+
+        public static Rectangle? For(Rectangle game)
+        {
+            try
+            {
+                if (!File.Exists(PathOf)) return null;
+                var v = System.Text.Json.JsonSerializer.Deserialize<int[]>(File.ReadAllText(PathOf));
+                if (v is not { Length: 6 } || v[0] != game.Width || v[1] != game.Height) return null;
+                return new Rectangle(game.X + v[2], game.Y + v[3], v[4], v[5]);
+            }
+            catch (Exception) { return null; }
+        }
+    }
+
+    /// <summary>An item picked up in a base that isn't Odyle: the only thing farmed in a base (Steven, 2026-10-22).</summary>
+    bool InBaseNotOdyle(GameEvent ev) => ev is ItemAcquired a && ZoneLocator.IsBase(Zone) && !_items.NameOf(a.ItemId).Contains("Odyle", StringComparison.OrdinalIgnoreCase);
+
     async Task FollowGameAsync()
     {
         if (ManualRegion || _anchor is not { } a) return;
@@ -418,8 +471,27 @@ public sealed class TrackerSession
             try
             {
                 await FollowGameAsync();
+                if (Region == null) await FindChatAsync();
+                if (Region == null)
+                {
+                    // no chat yet: everything else on the game's screen is still read
+                    if (GameWindow.Find(_settings.ProcessHints) is { } gw) GameRect = gw;
+                    Paused = "";
+                    var p0 = DateTime.UtcNow;
+                    var off = Update.RemoteConfig.Current;
+                    var list = off.Off("loot_list") ? Task.FromResult<(List<OcrLineBox>, System.Drawing.Bitmap, System.Drawing.Point)?>(null) : LootReadAsync();
+                    if (!off.Off("target")) await TargetDueAsync();
+                    if (!off.Off("craft_panel")) await CraftPanelDue();
+                    await LootProcess(await list);
+                    if (!off.Off("reward_grid")) await RewardGridDue();
+                    _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
+                    Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
+                    // the game is read, but not its chat: chat-not-found time for the health numbers
+                    reading = true; Accuracy.AddChatLost((DateTime.UtcNow - t0).TotalSeconds);
+                }
                 // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
-                if (Cover(Region!.Value) is { } cover)
+                else if (Cover(Region.Value) is { } cover)
                 {
                     Engine.Pause(); Secondary?.Pause(); ZoneView.Pause();
                     Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
@@ -721,7 +793,8 @@ public sealed class TrackerSession
                 if (_cross.Chat(parsed, now)) { any = true; continue; }
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
-                var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
+                // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
+                var ev = (reward || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
                 any = true; _lastActivity = DateTime.UtcNow;
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
@@ -1165,6 +1238,8 @@ public sealed class TrackerSession
                     CrashLog.Note($"crafting window open: {_items.NameOf(other.ItemId)} x{other.Count} from the loot list set aside, not a drop");
                     continue;
                 }
+                // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
+                if (!made && InBaseNotOdyle(parsed)) { CrashLog.Note($"in a base, so not counted from the loot list: {_items.NameOf(((ItemAcquired)parsed).ItemId)}"); continue; }
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
                 // a rare drop only the list showed waits for its second read (LootProcess, this pass)
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "list", _items.NameOf(ra.ItemId), now)); continue; }

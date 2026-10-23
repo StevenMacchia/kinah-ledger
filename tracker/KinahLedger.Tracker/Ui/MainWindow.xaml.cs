@@ -118,6 +118,9 @@ public partial class MainWindow : Window
             link.Click += (_, _) => { if (!_allRows.Remove(name)) _allRows.Add(name); Redraw(); };
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
+        // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
+        CraftRows.MouseLeftButtonUp += CraftRowClick;
+        InstEarlierLink.Click += (_, _) => { _eventsAll = !_eventsAll; ShowInstances(); };
         // a click on an enemy opens or closes its loot table
         // a click on an expedition or event opens or closes what dropped there
         InstRows.MouseLeftButtonUp += (_, ev) =>
@@ -568,7 +571,8 @@ public partial class MainWindow : Window
         else
         {
             // one plain line; the reader's details (reads, Market, the Kinah counter, uploads) are on hover
-            Say((farm != null ? "Run on · reading the chat" : "Reading the chat") + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : ""), "Faint");
+            Say(!chat.ChatFound ? "Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows."
+                : (farm != null ? "Run on · reading the chat" : "Reading the chat") + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : ""), "Faint");
             Status.ToolTip = $"{chat.Reads:N0} chat reads so far.\n{MarketShort()}.\n{BalanceShort()}." + (_watcher.Flushed > 0 ? $"\n{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "");
         }
         if (chat != null && _options is { WantsPreview: true } && ++_ticks % 4 == 0 && !_framing)
@@ -580,7 +584,8 @@ public partial class MainWindow : Window
         }
         // the panel over the game shows whenever its switch is on and the chat is being read: the run while one is on, the
         // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
-        if (_prefs.Hud && chat != null) EnsureHud();
+        // the panel over the game can't stop the rest of the refresh (the Crafting table, the pickups) if it fails to open
+        if (_prefs.Hud && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
         if (_part == "Crafting") FillCraft(chat?.CraftView);
         FillPickups();
         AlertTick();
@@ -1068,11 +1073,12 @@ public partial class MainWindow : Window
             long? profit = costKnown && madeKnown ? made - cost!.Value * r.Attempts : null;
             var sells = PriceBook.Price(r.Name) is long sp ? Fk(sp * PriceBook.SellerKeeps) : "—";
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Attempts > 0 ? $"{100.0 * r.Ok / r.Attempts:0}%" : "—", costKnown ? Fk(cost!.Value) : "—",
-                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "",
+                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: "Click for the materials, what a craft costs and what it makes.",
                 Price: sells, Value: profit is long pf ? Signed(pf) : "—", Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : "",
                 Sub: outcome + listed + (book == null ? " · not in the recipe book" : unpricedMats > 0 ? $" · {unpricedMats} material{(unpricedMats == 1 ? "" : "s")} not priced" : "") + (vendorMats > 0 ? $" · plus {vendorMats} vendor item{(vendorMats == 1 ? "" : "s")}" : "")));
         }
         CraftRows.ItemsSource = rows;
+        _crafted = e?.CraftSnapshot() ?? new();
         CraftEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftWhat.Text = tries > 0 ? $"{tries} tr{(tries == 1 ? "y" : "ies")} · {ok} worked ({100.0 * ok / tries:0}%)" : "since the tracker started";
         CraftSpent.Text = spent > 0 ? "−" + Fk(spent) : "—";
@@ -1201,7 +1207,15 @@ public partial class MainWindow : Window
     void ShowInstances()
     {
         var log = _watcher.Chat?.Instances ?? _demoInst;
-        var runs = log?.Snapshot() ?? new List<InstanceRun>();
+        var all = log?.Snapshot() ?? new List<InstanceRun>();
+        // this session's runs; earlier ones kept on this PC only on request, so yesterday's trip doesn't sit there all day
+        // (Steven, 2026-10-22: "it says last run 14 hr ago")
+        var since = _watcher.ChatSince == default ? DateTime.UtcNow : _watcher.ChatSince;
+        bool Now(InstanceRun r) => (r.LastLoot ?? r.Start) >= since || log?.Open == r.Zone;
+        var runs = _eventsAll || _demoInst != null ? all : all.Where(Now).ToList();
+        int earlier = all.Count(r => !Now(r));
+        InstEarlierText.Visibility = earlier > 0 && _demoInst == null ? Visibility.Visible : Visibility.Collapsed;
+        InstEarlierRun.Text = _eventsAll ? "This session only" : $"Earlier ({earlier})";
         var rows = new List<DropRow>();
         foreach (var g in runs.GroupBy(r => r.Zone).OrderByDescending(g => g.Max(r => r.LastLoot)))
         {
@@ -1234,6 +1248,9 @@ public partial class MainWindow : Window
     }
 
     readonly HashSet<string> _openInst = new();
+    /// <summary>True when Events shows every run kept on this PC, not only this session's.</summary>
+    bool _eventsAll;
+    bool _hudFailed;
     InstanceLog? _demoInst;
     static int GradeRank(string g) => g switch { "Epic" => 4, "Unique" => 3, "Legend" => 2, "Rare" => 1, _ => 0 };
 
@@ -1587,6 +1604,7 @@ public partial class MainWindow : Window
             Say("Reading · 3,620 reads · last: Artisan's Fruit Salad acquired.", "Faint");
             return;
         }
+        ShowPart("Farming", remember: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
         PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });

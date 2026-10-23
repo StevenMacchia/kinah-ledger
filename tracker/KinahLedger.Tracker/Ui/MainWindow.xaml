@@ -519,7 +519,11 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Text="Expeditions and events"/>
             <TextBlock x:Name="InstWhat" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Grid.Column="2" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"><Hyperlink x:Name="InstClearLink" Style="{StaticResource LinkStyle}">Clear</Hyperlink></TextBlock>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+              <!-- this session's runs by default; the ones kept on this PC from earlier behind this link (Steven, 2026-10-22) -->
+              <TextBlock x:Name="InstEarlierText" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0" Visibility="Collapsed"><Hyperlink x:Name="InstEarlierLink" Style="{StaticResource LinkStyle}"><Run x:Name="InstEarlierRun" Text="Earlier"/></Hyperlink></TextBlock>
+              <TextBlock FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"><Hyperlink x:Name="InstClearLink" Style="{StaticResource LinkStyle}">Clear</Hyperlink></TextBlock>
+            </StackPanel>
           </Grid>
           <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Height="44">
             <Grid>

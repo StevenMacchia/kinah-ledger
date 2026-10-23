@@ -83,6 +83,34 @@ public static class PriceBook
         }
     }
 
+    /// <summary>
+    /// What the player pays an NPC for a vendor material (a "(Bound)" one, never on the Market), typed in the recipe card
+    /// and kept on this PC in vendor-prices.json, so recipes that need it get a full cost.
+    /// </summary>
+    static Dictionary<string, long>? _vendor;
+    static string VendorPath => Path.Combine(Path.GetDirectoryName(PathOverride ?? Path.Combine(CrashLog.Dir, "prices.json"))!, "vendor-prices.json");
+    static Dictionary<string, long> Vendor()
+    {
+        if (_vendor != null) return _vendor;
+        _vendor = new();
+        try { if (File.Exists(VendorPath)) foreach (var (k, v) in JsonSerializer.Deserialize<Dictionary<string, long>>(File.ReadAllText(VendorPath)) ?? new()) _vendor[Norm(k)] = v; }
+        catch (Exception ex) { CrashLog.Write("vendor prices", ex); }
+        return _vendor;
+    }
+
+    public static long? VendorPrice(string name) { lock (Lock) return Vendor().TryGetValue(Norm(name), out var v) && v > 0 ? v : null; }
+
+    /// <summary>Sets (or, with 0, clears) what the NPC charges for one.</summary>
+    public static void SetVendorPrice(string name, long price)
+    {
+        lock (Lock)
+        {
+            var d = Vendor();
+            if (price > 0) d[Norm(name)] = price; else d.Remove(Norm(name));
+            try { File.WriteAllText(VendorPath, JsonSerializer.Serialize(d)); } catch (Exception ex) { CrashLog.Write("vendor prices", ex); }
+        }
+    }
+
     /// <summary>The community board for the player's server, replacing the last one.</summary>
     public static void SetBoard(Dictionary<string, long> prices)
     {

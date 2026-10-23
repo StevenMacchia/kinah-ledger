@@ -1084,6 +1084,20 @@ options: --process aion[,other]");
 
             Check("panel fields in panel order", string.Join(",", Ui.HudFields.Parse("total, rate,time,nope")), "time,rate,total");
             Check("an empty choice keeps the clock", string.Join(",", Ui.HudFields.Parse("")), "time");
+
+            // the 0.7.7 test work, ported: bases, short loot-list names, vendor costs
+            Check("a base is a base, a field isn't", $"{ZoneLocator.IsBase("Dawn Legion Base")} {ZoneLocator.IsBase("Andsha Forward Base")} {ZoneLocator.IsBase("Western Cantas Valley")}", "True True False");
+            Check("a short name counts only read exactly", $"{items.KnowsExactly("Aria")} {items.KnowsExactly("Aryia")}", "True False");
+            var pepper = RecipeBook.ForOutput("Artisan's Fruit Salad")?.Materials.FirstOrDefault(m => m.Item.Contains("(Bound)"))?.Item;
+            if (pepper != null)
+            {
+                PriceBook.SetBoard(new() { ["Fresh Fruit"] = 900 });
+                var before = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int vendorBefore);
+                PriceBook.SetVendorPrice(pepper, 150);
+                var after = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int vendorAfter);
+                PriceBook.SetVendorPrice(pepper, 0);
+                Check("a typed NPC cost joins the recipe's cost", $"{before} vendor {vendorBefore} -> {after} vendor {vendorAfter}", "4500 vendor 1 -> 4800 vendor 0");
+            }
         }
         finally
         {
