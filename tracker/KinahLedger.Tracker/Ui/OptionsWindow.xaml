@@ -378,7 +378,7 @@
             </StackPanel>
           </StackPanel>
           <TextBlock Style="{StaticResource BodyStyle}" Margin="0,18,0,0"
-                     Text="Kinah per hour, drop rates and Market prices for Aion 2, read from the chat on your screen and shared, anonymously, into tables everyone can use. Made by players for players."/>
+                     Text="Kinah per hour, drop rates and Market prices for Aion 2, read from the chat on your screen and shared, anonymously, into tables everyone can use. Made by players for players. Free, with no ads; if it helps you, you can support development on Ko-fi."/>
           <Border Style="{StaticResource Group}" Margin="0,18,0,0">
             <StackPanel Margin="18,14,18,16">
               <TextBlock Style="{StaticResource RowTitle}" Text="Screen reading only"/>
@@ -386,6 +386,7 @@
             </StackPanel>
           </Border>
           <WrapPanel Margin="0,18,0,0">
+            <Button x:Name="AboutSupportBtn" Content="♥  Support on Ko-fi" Margin="0,0,8,8" ToolTip="ko-fi.com/swoly: help keep Kinah Ledger free and updated"/>
             <Button x:Name="AboutSiteBtn" Content="kinahledger.com" Margin="0,0,8,8"/>
             <Button x:Name="AboutSourceBtn" Content="Source code" Margin="0,0,8,8"/>
             <Button x:Name="AboutSentBtn" Content="What's shared" Margin="0,0,8,8"/>

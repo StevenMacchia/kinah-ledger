@@ -208,6 +208,7 @@ public partial class OptionsWindow : Window
         RestartUpdateBtn.Click += async (_, _) => await _host.RestartToUpdate();
         ReleasesLink.Click += (_, _) => MainWindow.Open(MainWindow.RepoUrl + "/releases");
 
+        AboutSupportBtn.Click += (_, _) => MainWindow.Open(MainWindow.SupportUrl);
         AboutSiteBtn.Click += (_, _) => MainWindow.Open(MainWindow.SiteUrl);
         AboutSourceBtn.Click += (_, _) => MainWindow.Open(MainWindow.RepoUrl);
         AboutSentBtn.Click += (_, _) => _host.WhatsSent(this);
