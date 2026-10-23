@@ -1282,6 +1282,8 @@ options: --process aion[,other]");
         var leftU = u0.AddSeconds(495);
         su.ApplyZone("Ellun River Midstream", leftU);
         sayU(leftU.AddSeconds(37), new[] { "Acquired Enhance Stone x470.", "Acquired 20,000 Kina (Bound)." });
+        // the next read (a rare item waits for one, RareGate; live it comes in the same pass)
+        sayU(leftU.AddSeconds(38), Array.Empty<string>());
         su.ApplyZone("Urugugu Village", leftU.AddSeconds(43));
         var runsU = su.Instances.Snapshot().Where(r => r.Start >= u0.AddSeconds(-1)).ToList();
         Check("the late payout is the run's, not farming", $"{ri(runsU.FirstOrDefault(), "Enhance Stone")} {runsU.FirstOrDefault()?.Kinah} {n(su.Engine, "Enhance Stone")}", "470 20000 0");
