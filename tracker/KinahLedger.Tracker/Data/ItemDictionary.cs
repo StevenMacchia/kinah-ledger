@@ -408,7 +408,8 @@ public sealed class ItemDictionary
             var icon = Str(e, "icon"); if (icon.Length == 0) icon = Str(e, "i");
             var cat = Str(e, "categoryName"); if (cat.Length == 0) cat = System.Text.RegularExpressions.Regex.Replace(Str(e, "c2"), "(?<=[a-z])(?=[A-Z])", " ");   // the site's list keeps the code ("CraftResource"): spaced for the rows
             _byId[id] = new ItemInfo(id, name.Trim(), grade, tradable, icon, cat);
-            if (Str(e, "c1").StartsWith("Equip_", StringComparison.OrdinalIgnoreCase)) _gear.Add(id);
+            // the site's list calls the group c1, the crawler's (the copy built into the exe) cat1: either marks gear
+            if ((Str(e, "c1") + Str(e, "cat1")).StartsWith("Equip_", StringComparison.OrdinalIgnoreCase)) _gear.Add(id);
             n++;
             // first real ID wins per name, so a later duplicate doesn't flip the mapping; a synthetic one gives way
             var key = Norm(name);
