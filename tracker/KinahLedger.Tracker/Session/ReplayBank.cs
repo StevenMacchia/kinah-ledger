@@ -83,6 +83,30 @@ public static class ReplayBank
             var gr = got["runs"] as JsonObject ?? new JsonObject();
             foreach (var (n, v) in er) if (N(gr[n]) != N(v)) d.Add($"run {n}: expected {v} item(s), counted {gr[n]?.ToString() ?? "0"}");
         }
+        // a reward table, slot by slot: the count always; the name when the truth knows it; "?" (not read) when the item list
+        // lacks it. A slot whose name the truth doesn't know may be named surely or left not read, never something else
+        if (expect["table"] is JsonArray et)
+        {
+            var gt = got["table"] as JsonArray ?? new JsonArray();
+            if (gt.Count != et.Count) d.Add($"table: expected {et.Count} slots, read {gt.Count}");
+            int right = 0;
+            for (int i = 0; i < Math.Min(gt.Count, et.Count); i++)
+            {
+                var e = et[i]!.AsObject(); var g = gt[i]!.AsObject();
+                long en = N(e["n"]), gn = N(g["n"]);
+                string gname = g["name"]?.GetValue<string>() ?? "?";
+                string? ename = e["name"]?.GetValue<string>();
+                bool unlisted = e["unlisted"]?.GetValue<bool>() ?? false;
+                var miss = new List<string>();
+                if (en != gn) miss.Add($"count {gn}, expected {en}");
+                if (unlisted && gname != "?") miss.Add($"named {gname}, but the item list lacks it");
+                else if (ename != null && !unlisted && !gname.Contains(ename, StringComparison.OrdinalIgnoreCase)) miss.Add(gname == "?" ? $"not read, expected {ename}" : $"named {gname}, expected {ename}");
+                if (miss.Count == 0) right++;
+                else d.Add($"slot {i + 1} ({g["grade"]}, {g["icon"]}): {string.Join("; ", miss)}");
+            }
+            d.Insert(0, $"table score: {right} of {et.Count} slots right");
+            if (right == et.Count && gt.Count == et.Count) d.RemoveAt(0);
+        }
         if (expect["items"] is JsonObject ei)
         {
             var gi = got["items"] as JsonObject ?? new JsonObject();
@@ -114,6 +138,7 @@ public static class ReplayBank
         var session = new TrackerSession(null, settings, items, "Replay");
         var panel = new CraftPanelTracker();
         int ok = 0, fail = 0;
+        JsonArray? table = null;
         DateTime last = DateTime.UtcNow;
         // a text case: the reads as trace.log keeps them (chat lines, loot list rows), and the zone as the minimap read it
         if (node["trace"]?.GetValue<string>() is { } traceFile)
@@ -145,6 +170,34 @@ public static class ReplayBank
                 var s = CraftPanel.Measure(bmp, new Rectangle(at, bmp.Size), game);
                 if (panel.Feed(t, s) is { } o) { if (o.Ok) ok++; else fail++; }
             }
+            else if (f["k"]!.GetValue<string>() == "table")
+            {
+                // an expedition's reward table: the picture is the game window; read as RewardGridDue reads it, each slot named
+                // the way ApplyGrid names it (2026-10-23 Urugugu: 29 slots, 14 not named by 0.8.17)
+                var band = new Rectangle(bmp.Width / 4, 0, bmp.Width / 2, bmp.Height / 3);
+                using var bandBmp = bmp.Clone(band, bmp.PixelFormat);
+                var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1)).GetAwaiter().GetResult();
+                var rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+                table = new JsonArray();
+                // the same picture read as 0.8.17 read it (no badge mask), for the before-and-after in the log
+                if (rc != null)
+                {
+                    RewardGrid.MaskBadges = false;
+                    try
+                    {
+                        var before = Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016))).GetAwaiter().GetResult();
+                        Console.WriteLine($"  table without the badge mask: {before.Count(s => TrackerSession.SlotName(items, s) != null)} of {before.Count} slots named: " + string.Join(" | ", before.Select(s => $"{TrackerSession.SlotName(items, s) ?? "?"} x{s.Count} ({(s.Icons.Count > 0 ? s.Icons[0].Distance.ToString("0") : "-")})")));
+                    }
+                    finally { RewardGrid.MaskBadges = true; }
+                }
+                if (rc != null)
+                    foreach (var sl in Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016))).GetAwaiter().GetResult())
+                        table.Add(new JsonObject
+                        {
+                            ["n"] = sl.Count, ["grade"] = sl.Grade, ["name"] = TrackerSession.SlotName(items, sl) ?? "?",
+                            ["icon"] = sl.Icons.Count > 0 ? $"{sl.Icons[0].Key} {sl.Icons[0].Distance:0}" + (sl.Icons.Count > 1 ? $" / {sl.Icons[1].Distance:0}" : "") : "none",
+                        });
+            }
             else Task.Run(() => session.ReplayListFrameAsync(bmp, at, t)).GetAwaiter().GetResult();
             last = t;
         }
@@ -156,6 +209,7 @@ public static class ReplayBank
         var outItems = new JsonObject();
         foreach (var (id, n) in e.Items.OrderBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal)) outItems[items.NameOf(id)] = n;
         var res = new JsonObject { ["craft_ok"] = ok, ["craft_fail"] = fail, ["items"] = outItems };
+        if (table != null) res["table"] = table;
         if (e.Totals().Kinah > 0) res["kinah"] = e.Totals().Kinah;
         // Soul Crystals from kills and the kills counted, for the cases about them (2026-10-23)
         if (e.PetCrystals > 0) res["pets"] = e.PetCrystals;

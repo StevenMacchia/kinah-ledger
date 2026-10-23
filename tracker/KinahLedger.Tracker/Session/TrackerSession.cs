@@ -1207,6 +1207,26 @@ public sealed class TrackerSession
     }
 
     /// <summary>The reward table's slots into the run: each named item once, skipping what the chat already counted.</summary>
+    /// <summary>A slot's closest icon is sure: close (right ones 23 to 60, wrong ones 82 to 114), clearly closer than the next, and of the slot's grade.</summary>
+    internal static bool SureMatch(RewardGrid.Slot sl, int gradedCount) =>
+        sl.Icons.Count > 0 && sl.Icons[0].Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= sl.Icons[0].Distance * 1.25) && gradedCount > 0;
+
+    /// <summary>
+    /// The item a slot names, the way ApplyGrid takes it (the replay bank scores the reader with it): the gold coin as "Kina",
+    /// a sure match of one name, or null (not read: unsure, or one of several names).
+    /// </summary>
+    internal static string? SlotName(ItemDictionary items, RewardGrid.Slot sl)
+    {
+        var byIcon = items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        var best = sl.Icons.FirstOrDefault();
+        if (best.Key == null || !byIcon.TryGetValue(best.Key, out var its)) return null;
+        if (its.Any(i => string.Equals(Unbound(i.Name), "Kina", StringComparison.OrdinalIgnoreCase)) && best.Distance <= 100 && sl.Count >= 1000) return "Kina";
+        var graded = its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (!SureMatch(sl, graded.Count)) return null;
+        var names = graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return names.Count == 1 ? names[0] : null;
+    }
+
     internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
     {
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
@@ -1238,7 +1258,7 @@ public sealed class TrackerSession
             var graded = its.Where(i => string.Equals(i.Grade, sl.Grade, StringComparison.OrdinalIgnoreCase)).ToList();
             // a sure match only: close (measured on the Urugugu table: right ones 23 to 60, wrong ones 82 to 114), clearly
             // closer than the next icon, and of the slot's own grade; anything else is the event's own item the list lacks
-            bool sure = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25) && graded.Count > 0;
+            bool sure = SureMatch(sl, graded.Count);
             if (!sure) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
             // the bound and tradeable copies of an item are the same item
             var names = graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

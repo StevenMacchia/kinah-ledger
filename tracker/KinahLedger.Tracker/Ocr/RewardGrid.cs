@@ -51,7 +51,10 @@ public static class IconIndex
     /// How far a picture's grid (Cell) is from an icon laid on the backing colour <paramref name="bg"/>: the mean difference
     /// per channel, the icon's own pixels counting most. Under about 70 is the same art (RewardGrid's sure distance).
     /// </summary>
-    public static double Distance(double[] cell, Color bg, Entry e)
+    public static double Distance(double[] cell, Color bg, Entry e) => Distance(cell, bg, e, null);
+
+    /// <summary>The same, leaving out the grid cells <paramref name="skip"/> marks (a badge the game draws over the art).</summary>
+    public static double Distance(double[] cell, Color bg, Entry e, bool[]? skip)
     {
         double sum = 0, wsum = 0;
         for (int y = 0; y < N; y++)
@@ -59,6 +62,7 @@ public static class IconIndex
             {
                 // the lower corners carry the count and the lock: they say nothing about the icon
                 if (y >= N - 4 && (x < 4 || x >= N - 6)) continue;
+                if (skip != null && skip[y * N + x]) continue;
                 int i = (y * N + x), j = i * 4, k = i * 3;
                 double a = e.Rgba[j + 3] / 255.0;
                 double r = e.Rgba[j] * a + bg.R * (1 - a), g = e.Rgba[j + 1] * a + bg.G * (1 - a), bl = e.Rgba[j + 2] * a + bg.B * (1 - a);
@@ -346,14 +350,40 @@ public static class RewardGrid
         return "Common";                                                      // dark grey
     }
 
+    /// <summary>
+    /// The red square with a white diamond the game draws in the middle of gear another class wears (2026-10-23 Urugugu: 13
+    /// of 29 slots carry it, and every one of them missed its icon at 70 to 100). Its cells, and the ring around them, are
+    /// left out of the comparison; null when the slot has no badge.
+    /// </summary>
+    /// <summary>Leave the class badge out of the comparison (off only to score the reader as it was).</summary>
+    public static bool MaskBadges { get; set; } = true;
+
+    internal static bool[]? BadgeMask(double[] cell)
+    {
+        const int n = 16;
+        bool Red(int x, int y) { int k = (y * n + x) * 3; double r = cell[k], g = cell[k + 1], b = cell[k + 2]; return r > 140 && r > g * 1.9 && r > b * 1.9; }
+        int minX = n, minY = n, maxX = -1, maxY = -1, count = 0;
+        for (int y = 3; y <= 12; y++)
+            for (int x = 3; x <= 12; x++)
+                if (Red(x, y)) { count++; minX = Math.Min(minX, x); minY = Math.Min(minY, y); maxX = Math.Max(maxX, x); maxY = Math.Max(maxY, y); }
+        // a badge is a compact red block (about 3x3 to 4x4 cells here), not red art spread over the icon
+        if (count < 3 || maxX - minX > 5 || maxY - minY > 5) return null;
+        var skip = new bool[n * n];
+        for (int y = Math.Max(0, minY - 1); y <= Math.Min(n - 1, maxY + 1); y++)
+            for (int x = Math.Max(0, minX - 1); x <= Math.Min(n - 1, maxX + 1); x++)
+                skip[y * n + x] = true;
+        return skip;
+    }
+
     /// <summary>The icons closest to the slot's picture: each icon laid on the slot's own colour, compared where it is drawn.</summary>
     static List<(string, double)> Match(Bitmap f, Rectangle b, Color bg)
     {
         // the icon fills the slot but for a thin margin; a 16×16 grid over that area
         int m = (int)Math.Round(b.Width * 0.04);
         var cell = IconIndex.Cell(f, Rectangle.Inflate(b, -m, -m));
+        var skip = MaskBadges ? BadgeMask(cell) : null;
         var res = new List<(string, double)>();
-        foreach (var e in IconIndex.All) res.Add((e.Key, IconIndex.Distance(cell, bg, e)));
+        foreach (var e in IconIndex.All) res.Add((e.Key, IconIndex.Distance(cell, bg, e, skip)));
         // the best per icon: an icon with two fingerprints (the game's file and its art as drawn in a slot) is one answer
         return res.GroupBy(x => x.Item1).Select(g => g.OrderBy(x => x.Item2).First()).OrderBy(x => x.Item2).Take(5).ToList();
     }
