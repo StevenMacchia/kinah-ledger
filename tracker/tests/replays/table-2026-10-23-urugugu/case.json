@@ -1,16 +1,119 @@
 {
-  "pending": true,
+  "pending": false,
   "needs_ocr": true,
   "name": "Urugugu Canyon reward table, 2026-10-23 18:33:55: 29 slots (8 x 4), 13 gear icons with the red class badge; captured with Steven's OK, everything but the title and the slots blacked out",
   "source": "captures/rewards/2026-10-23-1833-urugugu-expedition/frame-183355.jpg, game window (y 627 to 2787) only",
-  "game": { "w": 5117, "h": 2160 },
-  "frames": [ { "f": "table.jpg", "k": "table", "t": "2026-10-23T22:33:55Z", "x": 0, "y": 0 } ],
+  "game": {
+    "w": 5117,
+    "h": 2160
+  },
+  "frames": [
+    {
+      "f": "table.jpg",
+      "k": "table",
+      "t": "2026-10-23T22:33:55Z",
+      "x": 0,
+      "y": 0
+    }
+  ],
   "expect": {
     "table": [
-      { "n": 4, "name": "Amplify Stone Fragment" }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
-      { "n": 1 }, { "n": 2, "unlisted": true }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 4000 }, { "n": 600000, "name": "Kina" },
-      { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1, "name": "Earth Breastplate" }, { "n": 1 },
-      { "n": 1 }, { "n": 6, "unlisted": true }, { "n": 3, "name": "Refining Stone" }, { "n": 5, "name": "Soul Codex" }, { "n": 14, "name": "Silentium" }
+      {
+        "n": 4,
+        "name": "Amplify Stone Fragment"
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 2,
+        "unlisted": true
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1,
+        "name": "Vagabond Gloves"
+      },
+      {
+        "n": 4000
+      },
+      {
+        "n": 600000,
+        "name": "Kina"
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1,
+        "name": "Earth Breastplate"
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      {
+        "n": 6,
+        "unlisted": true
+      },
+      {
+        "n": 3,
+        "name": "Refining Stone"
+      },
+      {
+        "n": 5,
+        "name": "Soul Codex"
+      },
+      {
+        "n": 14,
+        "name": "Silentium"
+      }
     ]
   }
 }
