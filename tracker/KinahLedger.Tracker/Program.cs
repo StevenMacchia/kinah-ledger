@@ -2015,7 +2015,7 @@ options: --process aion[,other]");
                 et.FlushVotes(et0.AddSeconds(4)); et.Instances.Close();
                 var erun = et.Instances.Snapshot().LastOrDefault();
                 string RunList(InstanceRun? r) => r == null ? "none" : string.Join(", ", r.Items.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}").Concat(r.BoundItems.Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value} bound")).OrderBy(x => x));
-                Check("an event run: a bound item, a currency and an item the list lacks, all the run's", RunList(erun), "Abyss Points x1000, Candy Key Fragment (Event) x6, Soul Codex x3 bound");
+                Check("an event run: a bound item, a currency and an item the list lacks, all the run's", RunList(erun), "Abyss Points x1000, Candy Key Fragment (Event) x6, Soul Codex (Bound) x3 bound");
                 var epay = InstanceRunPayload.From(new[] { erun! }, id => items.KeyOf(id));
                 Check("...and all three upload", $"{epay?[0].items.Count} {epay?[0].items.Values.Sum()}", "3 1009");
                 var ft = new TrackerSession(null, new Settings(), items, "Test"); var ft0 = DateTime.UtcNow;
