@@ -26,22 +26,28 @@
         "n": 1
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Divine Canyon Orb"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Divine Canyon Staff"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Divine Canyon Helm"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Divine Canyon Boots"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Divine Canyon Boots"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Divine Canyon Necklace"
       },
       {
         "n": 1
@@ -51,52 +57,63 @@
         "unlisted": true
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Vagabond Dagger"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Vagabond Dagger"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Vagabond Staff"
       },
       {
         "n": 1,
         "name": "Vagabond Gloves"
       },
       {
-        "n": 4000
+        "n": 4000,
+        "name": "Enhance Stone"
       },
       {
         "n": 600000,
         "name": "Kina"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Earth Greatsword"
       },
       {
-        "n": 1
-      },
-      {
-        "n": 1
-      },
-      {
-        "n": 1
-      },
-      {
-        "n": 1
+        "n": 1,
+        "name": "Earth Dagger"
       },
       {
         "n": 1
       },
       {
         "n": 1,
+        "name": "Earth Spellbook"
+      },
+      {
+        "n": 1,
+        "name": "Earth Spellbook"
+      },
+      {
+        "n": 1,
+        "name": "Earth Orb"
+      },
+      {
+        "n": 1,
         "name": "Earth Breastplate"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Earth Gloves"
       },
       {
-        "n": 1
+        "n": 1,
+        "name": "Earth Cloak"
       },
       {
         "n": 6,
@@ -115,5 +132,6 @@
         "name": "Silentium"
       }
     ]
-  }
+  },
+  "confirmed": "Slot names confirmed by Steven against his inventory, 2026-10-23 (\"All look right\"): every named slot here must keep its name. Slots 2 (bow), 9 (earrings) and 19 (dagger) are twins the reader leaves not read; 10 (Balaur's Essence) and 26 (Candy Key Fragment) are not on the item list."
 }
