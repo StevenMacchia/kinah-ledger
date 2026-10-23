@@ -1162,7 +1162,7 @@ public sealed class TrackerSession
             var band = new Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
             using var bandBmp = frame.Clone(band, frame.PixelFormat);
             var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
-            var rc = lines.FirstOrDefault(l => Update.RemoteConfig.HasAny(l.Text, Update.RemoteConfig.Current.RewardCollectedWords));
+            var rc = lines.FirstOrDefault(l => IsRewardCollected(l.Text));
             // an event's reward screen (Shugo Festival "Jump Jump": "Rewards have been sent to your cube.", "Can select 0 time(s)",
             // five cards, the received ones bright with a card icon): its rewards are the run's and come from this picture,
             // never the chat. Until its cards can be read, the picture is kept (a few, a second or two apart) and the run's
@@ -1447,6 +1447,14 @@ public sealed class TrackerSession
     bool _eventScreenUp; int _eventShots; DateTime _eventShotAt = DateTime.MinValue;
 
     /// <summary>An event's reward screen by its words: "Rewards have been sent to your cube.", "Can select 0 time(s)".</summary>
+    /// <summary>
+    /// The expedition table's "Reward collected." line as the recognizer reads it: "Reward cooectedo" too (the CI reader on
+    /// the 2026-10-23 Urugugu table). The word alone was missed, and with it the whole table.
+    /// </summary>
+    public static bool IsRewardCollected(string line) =>
+        Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.RewardCollectedWords)
+        || Regex.IsMatch(line, @"rew[a-z]{0,2}r?d\W{0,2}c[a-z]{1,6}t", RegexOptions.IgnoreCase);
+
     public static bool IsEventRewardTitle(string line) =>
         Regex.IsMatch(line, @"sent\s*to\s*your\s*cube|can\s*select\s*\d+\s*time", RegexOptions.IgnoreCase);
 

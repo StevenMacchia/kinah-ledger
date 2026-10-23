@@ -2030,6 +2030,7 @@ options: --process aion[,other]");
                 for (int i = 1; i <= 3; i++) ft.ProcessChat(new List<string> { "[x] a" }.Concat(rewardLines).ToList(), ft0.AddSeconds(i * 0.6));
                 ft.FlushVotes(ft0.AddSeconds(4));
                 Check("...the same lines while farming, no kill: nothing counts", $"{ft.Engine.Items.Count} {ft.Engine.Totals().Drops}", "0 0");
+                Check("the reward table's line, garbled", $"{TrackerSession.IsRewardCollected("Reward collected.")} {TrackerSession.IsRewardCollected("Reward cooectedo ///////;")} {TrackerSession.IsRewardCollected("Rewards have been sent to your cube.")}", "True True False");
                 // three reads of one table, voted slot by slot: an empty count and a glare on one read are outvoted
                 var v1 = new List<RewardGrid.Slot> { new(box, "Rare", "", 0, new() { ("A", 40) }), new(box, "Common", "6", 6, new() { ("B", 35) }) };
                 var v2 = new List<RewardGrid.Slot> { new(box, "Rare", "2", 2, new() { ("A", 44) }), new(box, "Common", "6", 6, new() { ("Z", 90) }) };

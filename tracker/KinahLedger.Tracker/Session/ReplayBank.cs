@@ -177,11 +177,11 @@ public static class ReplayBank
                 var band = new Rectangle(bmp.Width / 4, 0, bmp.Width / 2, bmp.Height / 3);
                 using var bandBmp = bmp.Clone(band, bmp.PixelFormat);
                 var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1)).GetAwaiter().GetResult();
-                var rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+                var rc = lines.FirstOrDefault(l => TrackerSession.IsRewardCollected(l.Text));
                 if (rc == null)
                 {
                     lines = Task.Run(() => ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 2)).GetAwaiter().GetResult();
-                    rc = lines.FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
+                    rc = lines.FirstOrDefault(l => TrackerSession.IsRewardCollected(l.Text));
                 }
                 Console.WriteLine($"  table band ({bmp.Width}x{bmp.Height}, {bmp.PixelFormat}): " + string.Join(" | ", lines.Select(l => $"{l.Text} @{l.Box.Y}")) + (rc == null ? " -- no \"collected\" line" : ""));
                 table = new JsonArray();
