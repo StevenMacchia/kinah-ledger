@@ -242,6 +242,19 @@ public sealed partial class ChatParser
             if (i >= 0) res[i] = (JoinedMark, new List<GameEvent>());
             i++;
         }
+        // a wrapped tail under an item line that already read as a whole name: "Acquired Artisan's Ultimate Refining Stone"
+        // then "(Bound) x2." (Steven, 2026-10-23 12:39: counted as one drop, though the "(Bound)" made it a reward). The
+        // tail belongs to the line above: joined, its count and its "(Bound)" count too
+        for (int i = 0; i + 1 < res.Count; i++)
+        {
+            if (!WrappedTail.IsMatch(res[i + 1].Text) || res[i + 1].Events.Count > 0 || ReferenceEquals(res[i].Text, JoinedMark)) continue;
+            if (res[i].Events.Count != 1 || res[i].Events[0] is not ItemAcquired || Regex.IsMatch(res[i].Text, @"\(\s*b[o0]und\s*\)", RegexOptions.IgnoreCase)) continue;
+            var joined = res[i].Text.Trim() + " " + res[i + 1].Text.Trim();
+            var j = Parse(joined, time).ToList();
+            if (j.Count != 1 || j[0] is not (ItemAcquired or RewardReceived)) continue;
+            res[i] = (joined, j);
+            res[i + 1] = (JoinedMark, new List<GameEvent>());
+        }
         if (res.Count > 0 && res[^1].Events.Count == 0 && !ReferenceEquals(res[^1].Text, JoinedMark) && Joinable(res[^1].Text) && res[^1].Text.Trim().Length >= 3)
         { _wrapCarry = res[^1].Text; _wrapAt = time; }
         return res;
@@ -249,6 +262,8 @@ public sealed partial class ChatParser
 
     /// <summary>The text returned in place of the first half of a line joined to the one after it.</summary>
     public const string JoinedMark = "(wrapped: joined to the next line)";
+    /// <summary>The end of a wrapped item line on its own: "(Bound) x2.", "(Bound).", "x12.".</summary>
+    static readonly Regex WrappedTail = new(@"^\s*(?:\(\s*b[o0]und\s*\)\s*(?:[x×*]\s*[0-9][0-9,]*)?|[x×]\s*[0-9][0-9,]*)\s*[.,:;]?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     public const double WrapSeconds = 3;
     string? _wrapCarry; DateTime _wrapAt;
     static bool Joinable(string s) { var t = s.TrimStart(); return t.Length > 0 && !t.StartsWith('[') && !Payment().IsMatch(t) && !Purchase().IsMatch(t); }

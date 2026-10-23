@@ -858,7 +858,9 @@ public sealed class TrackerSession
                 if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
                 var ev = (reward || why != null || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
-                NoteReward(ev, now);
+                // an item that is a reward only because a window was open doesn't open a new one: a window would chain on
+                // and take the next kill's drop (a payout's item, then a Spiritstone 10 s later, 2026-10-23)
+                if (why == null) NoteReward(ev, now);
                 any = true; _lastActivity = DateTime.UtcNow;
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
@@ -1197,6 +1199,8 @@ public sealed class TrackerSession
     // ---- achievement rewards and box contents: never drops (Steven, 2026-10-23) ----
     /// <summary>After an achievement line, or a reward or box line out in the world, what lands this long after is a reward.</summary>
     public const double RewardWindowSeconds = 10;
+    /// <summary>After a bound Kina payout, what lands this long after is the payout's: short, so a kill just after it still counts.</summary>
+    public const double PayoutWindowSeconds = 3;
     /// <summary>A loot list row out in the world with no kill or gather this long before it is a box or a reward.</summary>
     public const double NoKillSeconds = 15;
     DateTime _achieveUntil = DateTime.MinValue, _boxUntil = DateTime.MinValue, _lastKillAt = DateTime.MinValue, _lastGatherAt = DateTime.MinValue;
@@ -1216,6 +1220,14 @@ public sealed class TrackerSession
     void NoteReward(GameEvent ev, DateTime now)
     {
         if (InRun || _boss != null) return;
+        // a Kina payout marked (Bound) (a quest, a pass or a claim): an item printed with it, in the same read or the next
+        // few seconds, is the payout's too (Steven, 2026-10-23 12:39: 11,000 Kina (Bound) and a refining stone, counted as a drop)
+        if (ev is KinahChanged { Bound: true, Delta: > 0 })
+        {
+            var until = now.AddSeconds(PayoutWindowSeconds);
+            if (until > _boxUntil) _boxUntil = until;
+            return;
+        }
         string? name = ev switch { RewardReceived r => r.Name, ItemAcquired a => _items.NameOf(a.ItemId), _ => null };
         if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return;
         if (ev is RewardReceived || BoxName.IsMatch(name)) _boxUntil = now.AddSeconds(RewardWindowSeconds);
