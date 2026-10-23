@@ -39,10 +39,12 @@ jobs:
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
 
-      # the accuracy pipeline's own checks, and the replay test bank the release workflow also runs
+      # the self-tests that need no game window (parse, market, accuracy) and the replay test bank the release workflow also runs
       - name: Accuracy self-test and replay tests
         shell: bash
         run: |
+          dist/KinahLedger.exe parse-test | cat
+          dist/KinahLedger.exe market-test | cat
           dist/KinahLedger.exe accuracy-test | cat
           dist/KinahLedger.exe replay-bank tracker/tests/replays | cat
 

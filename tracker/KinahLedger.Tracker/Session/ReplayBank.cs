@@ -48,7 +48,7 @@ public static class ReplayBank
             try
             {
                 var node = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
-                bool needsOcr = node["needs_ocr"]?.GetValue<bool>() ?? node["frames"]!.AsArray().Any(f => f!["k"]!.GetValue<string>() == "loot");
+                bool needsOcr = node["needs_ocr"]?.GetValue<bool>() ?? (node["frames"] is JsonArray fa && fa.Any(f => f!["k"]!.GetValue<string>() == "loot"));
                 if (needsOcr && !ocr) { results.Add(new Result(name, "skipped", "no text recognition on this machine")); continue; }
                 var got = RunCase(caseDir, node, settings, items);
                 if (record != null)
@@ -78,6 +78,11 @@ public static class ReplayBank
         static long N(JsonNode? n) => n == null ? 0 : long.TryParse(n.ToJsonString(), out var v) ? v : 0;
         foreach (var k in new[] { "craft_ok", "craft_fail", "kinah" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
+        if (expect["runs"] is JsonObject er)
+        {
+            var gr = got["runs"] as JsonObject ?? new JsonObject();
+            foreach (var (n, v) in er) if (N(gr[n]) != N(v)) d.Add($"run {n}: expected {v} item(s), counted {gr[n]?.ToString() ?? "0"}");
+        }
         if (expect["items"] is JsonObject ei)
         {
             var gi = got["items"] as JsonObject ?? new JsonObject();
@@ -96,11 +101,41 @@ public static class ReplayBank
         int w = node["game"]?["w"]?.GetValue<int>() ?? 1920, h = node["game"]?["h"]?.GetValue<int>() ?? 1080;
         // the game window off the screen's origin, as on a real desktop, so a place mixed up with a size shows
         var game = new Rectangle(100, 50, w, h);
+        // each case keeps its runs in a folder of its own, so the runs log (instances.jsonl) starts empty
+        var keptDir = CrashLog.DirOverride;
+        CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kl-bank-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(CrashLog.DirOverride);
+        try { return RunCaseIn(caseDir, node, settings, items, game); }
+        finally { var made = CrashLog.DirOverride; CrashLog.DirOverride = keptDir; try { Directory.Delete(made, true); } catch (Exception) { } }
+    }
+
+    static JsonObject RunCaseIn(string caseDir, JsonObject node, Settings settings, ItemDictionary items, Rectangle game)
+    {
         var session = new TrackerSession(null, settings, items, "Replay");
         var panel = new CraftPanelTracker();
         int ok = 0, fail = 0;
         DateTime last = DateTime.UtcNow;
-        foreach (var f in node["frames"]!.AsArray())
+        // a text case: the reads as trace.log keeps them (chat lines, loot list rows), and the zone as the minimap read it
+        if (node["trace"]?.GetValue<string>() is { } traceFile)
+        {
+            foreach (var raw in File.ReadLines(Path.Combine(caseDir, traceFile)))
+            {
+                if (raw.Trim().Length == 0) continue;
+                using var d = JsonDocument.Parse(raw);
+                var r = d.RootElement;
+                var t = DateTime.Parse(r.GetProperty("t").GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+                var ls = r.GetProperty("l").EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+                switch (r.GetProperty("k").GetString())
+                {
+                    case "chat": session.QuestCounter(ls); session.ProcessChat(ls, t); break;
+                    case "list": session.ProcessList(ls.Select((x, i) => (100 + i * 30, System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"))).ToList(), t); break;
+                    case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t); } break;
+                }
+                last = t;
+            }
+            session.FlushVotes(last);
+        }
+        foreach (var f in node["frames"] as JsonArray ?? new JsonArray())
         {
             var t = DateTime.Parse(f!["t"]!.GetValue<string>(), null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
             var at = new Point(game.X + f["x"]!.GetValue<int>(), game.Y + f["y"]!.GetValue<int>());
@@ -121,6 +156,10 @@ public static class ReplayBank
         foreach (var (id, n) in e.Items.OrderBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal)) outItems[items.NameOf(id)] = n;
         var res = new JsonObject { ["craft_ok"] = ok, ["craft_fail"] = fail, ["items"] = outItems };
         if (e.Totals().Kinah > 0) res["kinah"] = e.Totals().Kinah;
+        // what went to expedition and event runs rather than farming: items per run
+        var runs = new JsonObject();
+        foreach (var run in session.Instances.Snapshot()) runs[run.Zone] = run.Items.Values.Sum() + run.BoundItems.Values.Sum();
+        if (runs.Count > 0) res["runs"] = runs;
         return res;
     }
 
