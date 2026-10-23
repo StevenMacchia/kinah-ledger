@@ -566,7 +566,7 @@ public sealed class TrackerSession
         }
         // garbled reads in a row (a reward burst fading in): once the chat settles, the clean read's loot lines count
         var settled = new List<string>();
-        DateTime settledAt = now; bool settledAny = false;
+        DateTime settledAt = now; bool settledAny = false, settledAchievement = false;
         if (_tracker.Unaligned > unaligned)
         {
             if (_garbledSince == null)
@@ -580,10 +580,11 @@ public sealed class TrackerSession
         {
             // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up
             if ((now - gs).TotalSeconds > SettleSeconds) _garbledSince = null;
-            else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled); settledAt = gs; }
+            else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs; }
         }
         Reread.Remember(_recent, lines, now);
         _lastLines = lines;
+        bool batchAchievement = false;
         bool Apply(IEnumerable<GameEvent> events, string via = "chat")
         {
             bool any = false;
@@ -594,8 +595,12 @@ public sealed class TrackerSession
                 if (_cross.Chat(parsed, now)) { any = true; continue; }
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
+                var why = parsed is ItemAcquired && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time)) : null;
+                if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
-                var ev = (reward || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
+                var ev = (reward || why != null || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
+                NoteReward(ev, now);
                 Count(ev); any = true; _lastActivity = DateTime.UtcNow;
                 Feed(ev);
                 if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
@@ -607,12 +612,16 @@ public sealed class TrackerSession
         }
         // each new line is voted on across the next reads before it counts (ChatVoter); lines come out in order
         var voted = Vote ? _voter.Push(fresh, lines, now, _parser.Meaning) : fresh;
+        // an achievement line among them: the items printed with it are its reward, and those in the next few seconds too
+        batchAchievement = voted.Any(Reread.IsAchievement);
+        if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
         foreach (var (l, events) in _parser.ParseBatch(voted, now))
         {
             bool any = Apply(events);
             CrashLog.Read(l, any, afterFade);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
+        batchAchievement = reread.Any(Reread.IsAchievement) || fresh.Any(Reread.IsAchievement);
         foreach (var l in reread)
         {
             bool any = false;
@@ -620,7 +629,9 @@ public sealed class TrackerSession
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
             if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
         }
-        // dated when the garbled reads began, which is when they landed (an event's rewards: inside its time for rewards)
+        // dated when the garbling began, which is when they landed (an event's rewards: inside its time for rewards)
+        batchAchievement = settledAchievement;
+        if (settledAchievement) { _achieveUntil = settledAt.AddSeconds(RewardWindowSeconds); CrashLog.Note("the settled lines came with an achievement: they are its reward, not drops"); }
         foreach (var l in settled)
         {
             bool any = false;
@@ -857,8 +868,39 @@ public sealed class TrackerSession
         _ => ev.GetType().Name,
     };
 
+    // ---- achievement rewards and box contents: never drops (Steven, 2026-10-23) ----
+    /// <summary>After an achievement line, or a reward or box line out in the world, what lands this long after is a reward.</summary>
+    public const double RewardWindowSeconds = 10;
+    /// <summary>A loot list row out in the world with no kill or gather this long before it is a box or a reward.</summary>
+    public const double NoKillSeconds = 15;
+    DateTime _achieveUntil = DateTime.MinValue, _boxUntil = DateTime.MinValue, _lastKillAt = DateTime.MinValue, _lastGatherAt = DateTime.MinValue;
+    static readonly Regex BoxName = new(@"\b(?:chest|box|pouch|bundle|cube|coffer|crate|package|parcel)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static HashSet<string>? _gatherNames;
+    bool InRun => ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored;
+
+    /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
+    string? RewardWhy(DateTime t) => t <= _achieveUntil ? "an achievement's reward" : !InRun && t <= _boxUntil ? "a box's or a reward's contents" : null;
+
+    /// <summary>A reward line, or an item that is a box ("Growth Pet Chest"), out in the world opens the window for what comes out of it.</summary>
+    void NoteReward(GameEvent ev, DateTime now)
+    {
+        if (InRun || _boss != null) return;
+        string? name = ev switch { RewardReceived r => r.Name, ItemAcquired a => _items.NameOf(a.ItemId), _ => null };
+        if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return;
+        if (ev is RewardReceived || BoxName.IsMatch(name)) _boxUntil = now.AddSeconds(RewardWindowSeconds);
+    }
+
     void Count(GameEvent ev)
     {
+        // what a kill or a gather looks like, for telling a box's contents in the loot list from a drop
+        if (ev is MobKilled or EnemySoul or XpGained || ev is CurrencyGained { Enemy.Length: > 0 } || (ev is CurrencyGained cg && cg.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) || ev is KinahChanged { Bound: false, Delta: > 0 })
+            _lastKillAt = ev.Time;
+        if (ev is GatherFailed) _lastGatherAt = ev.Time;
+        else if (ev is ItemAcquired ga)
+        {
+            _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (_gatherNames.Contains(_items.NameOf(ga.ItemId))) _lastGatherAt = ev.Time;
+        }
         if (ev is not CraftResult && BossTakes(ev)) return;
         // inside an event or expedition, or just out of one while its rewards still land (InstanceLog.RewardGraceSeconds)
         bool ending = ZoneLocator.KindOf(Zone) == null && Instances.Ending(ev.Time);
@@ -1038,6 +1080,17 @@ public sealed class TrackerSession
                 }
                 // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
                 if (!made && InBaseNotOdyle(parsed)) { CrashLog.Note($"in a base, so not counted from the loot list: {_items.NameOf(((ItemAcquired)parsed).ItemId)}"); continue; }
+                // an achievement's reward or a box's contents shows in the list too; out in the world, a row with no kill or
+                // gather around it is one (a box opened in town). Never a drop (Steven, 2026-10-23)
+                if (!made && parsed is ItemAcquired lr)
+                {
+                    var why = RewardWhy(now);
+                    // a gathering material is a gather itself (the chat may have missed its line), never a box's contents
+                    _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    bool gathered = _gatherNames.Contains(_items.NameOf(lr.ItemId));
+                    if (why == null && !gathered && !InRun && (now - _lastKillAt).TotalSeconds > NoKillSeconds && (now - _lastGatherAt).TotalSeconds > NoKillSeconds) why = $"no kill or gather in the last {NoKillSeconds:0} s, so a box or a reward";
+                    if (why != null) { CrashLog.Note($"loot list: {_items.NameOf(lr.ItemId)} x{lr.Count} set aside: {why}"); continue; }
+                }
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
                 Count(ev);
                 Feed(ev);

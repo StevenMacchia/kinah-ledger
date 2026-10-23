@@ -171,15 +171,20 @@ public sealed class Reread
     /// already counted while it was garbled (<paramref name="counted"/>) are left out, and a line this read shows whole
     /// ("Acquired Refining Stone x6." where the last read had cut it at "Refining Stone") is taken in its whole form.
     /// </summary>
-    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted)
+    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted) => Settled(prev, cur, before, counted, out _);
+
+    /// <summary>The same, saying whether the new lines hold an achievement ("One-of-a-Kind Gear III achieved."): then they are its reward.</summary>
+    public static List<string> Settled(IReadOnlyList<string> prev, IReadOnlyList<string> cur, ICollection<string> before, IReadOnlyList<string> counted, out bool achievement)
     {
         var take = new List<string>();
         var used = new HashSet<int>();
+        achievement = false;
         for (int i = prev.Count - 1; i >= 0; i--)
         {
             var line = prev[i]; var k = Key(line);
             if (k.Length == 0) continue;
             if (before.Any(p => Same(k, p))) break;
+            if (IsAchievement(line)) achievement = true;
             if (!LooksLikeLoot(line) || line.TrimStart().StartsWith('[')) continue;
             // garbled reads line up with each other too ("Acquire d Refining stone" three reads running): only a line whose
             // verb was read whole is a clean read of it
@@ -197,6 +202,9 @@ public sealed class Reread
         }
         return take;
     }
+
+    /// <summary>An achievement line ("Fortress Guardian Notun III achieved."), never a player's message.</summary>
+    public static bool IsAchievement(string line) => !line.TrimStart().StartsWith('[') && System.Text.RegularExpressions.Regex.IsMatch(line.Trim(), @"\bachieved\W{0,3}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>"acquired" or "obtained" read as a whole word: "Acquire d", "AcquirGdylO" and "Hatquired" are garbled.</summary>
     static bool CleanVerb(string line) => System.Text.RegularExpressions.Regex.IsMatch(line, @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
