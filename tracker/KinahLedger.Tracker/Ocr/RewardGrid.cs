@@ -167,6 +167,33 @@ public static class RewardGrid
     /// <summary>One slot as read: where, its grade by colour, its count as read, and the closest icons, best first.</summary>
     public sealed record Slot(Rectangle Box, string Grade, string CountText, long Count, List<(string Key, double Distance)> Icons);
 
+    /// <summary>
+    /// Several reads of one reward table, slot by slot: the number of slots most reads saw; for each slot, the icon most
+    /// reads put first (at its closest), the count most reads agree on, and the grade most reads saw. A single read's slip
+    /// (an empty count, a glare on one icon) is outvoted (2026-10-23 Urugugu: five slots, every count read empty).
+    /// </summary>
+    public static List<Slot> Vote(List<List<Slot>> reads)
+    {
+        var seen = reads.Where(r => r.Count > 0).ToList();
+        if (seen.Count == 0) return new List<Slot>();
+        int n = seen.GroupBy(r => r.Count).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).First().Key;
+        var same = seen.Where(r => r.Count == n).ToList();
+        var res = new List<Slot>();
+        for (int i = 0; i < n; i++)
+        {
+            var col = same.Select(r => r[i]).ToList();
+            var byIcon = col.Where(s => s.Icons.Count > 0).GroupBy(s => s.Icons[0].Key)
+                            .OrderByDescending(g => g.Count()).ThenBy(g => g.Min(s => s.Icons[0].Distance)).FirstOrDefault();
+            var pick = byIcon == null ? col[0] : byIcon.OrderBy(s => s.Icons[0].Distance).First();
+            var counts = col.Where(s => s.Count > 0).GroupBy(s => s.Count).OrderByDescending(g => g.Count()).FirstOrDefault();
+            long count = counts?.Key ?? pick.Count;
+            string text = counts?.First().CountText ?? pick.CountText;
+            string grade = col.GroupBy(s => s.Grade).OrderByDescending(g => g.Count()).First().Key;
+            res.Add(pick with { Count = count, CountText = text, Grade = grade });
+        }
+        return res;
+    }
+
     // geometry measured on a 5120×2160 frame (2026-10-22 15:22): a slot is 135 px with a 148 px pitch, i.e. in screen heights
     public const double SlotH = 135.0 / 2160, PitchH = 148.0 / 2160;
 

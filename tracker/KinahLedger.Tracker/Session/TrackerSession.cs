@@ -1164,7 +1164,20 @@ public sealed class TrackerSession
             _gridSeenAt = now;
             if (_gridDone) return;
             _gridDone = true;
-            var slots = await RewardGrid.ReadAsync(frame, rc.Box.Bottom + (int)(frame.Height * 0.016));
+            int top = rc.Box.Bottom + (int)(frame.Height * 0.016);
+            var reads = new List<List<RewardGrid.Slot>> { await RewardGrid.ReadAsync(frame, top) };
+            // the picture the run is counted from, kept (Steven, 2026-10-23: no frame of the Urugugu table existed to check)
+            SaveShot(frame, "reward-table");
+            // two more reads of the same table a moment apart: each slot is decided by the reads, not by one of them
+            for (int k = 0; k < 2; k++)
+            {
+                await Task.Delay(350);
+                try { using var again = ScreenReader.Capture(g); reads.Add(await RewardGrid.ReadAsync(again, top)); }
+                catch (Exception ex) { CrashLog.Write("reward table again", ex); }
+            }
+            var slots = RewardGrid.Vote(reads);
+            CrashLog.Note($"reward table: {reads.Count} reads ({string.Join(", ", reads.Select(r => r.Count))} slots), voted slot by slot: " +
+                string.Join(" | ", slots.Select(s => $"{s.Grade} x{s.CountText} {(s.Icons.Count > 0 ? s.Icons[0].Key + " " + s.Icons[0].Distance.ToString("0") : "no icon")}")));
             ApplyGrid(slots, now);
         }
         catch (Exception ex) { CrashLog.Write("reward table", ex); }
@@ -1175,6 +1188,7 @@ public sealed class TrackerSession
     {
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         int added = 0, known = 0, unnamed = 0;
+        var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
         foreach (var sl in slots)
         {
             var best = sl.Icons.FirstOrDefault();
@@ -1186,12 +1200,13 @@ public sealed class TrackerSession
             {
                 long amt = Math.Min(sl.Count, 1_000_000_000);
                 int kseen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Name == "Kina" && p.Count == amt);
-                if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; continue; }
+                if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; fromGrid.Add(new KinahChanged(now, amt, false) { Via = "reward table" }); continue; }
                 // a clear match to the coin as the game draws it is sure on its own; a closer call needs the counter to agree
                 bool clearCoin = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25);
                 if (!clearCoin && !BalanceRose(amt, now)) { unnamed++; CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
                 Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" }); _gridKina.Add((now, amt));
                 Feed(new KinahChanged(now, amt, false) { Via = "reward table" }, RunWhere());
+                fromGrid.Add(new KinahChanged(now, amt, false) { Via = "reward table" });
                 added++;
                 continue;
             }
@@ -1216,14 +1231,20 @@ public sealed class TrackerSession
             }
             int count = (int)Math.Clamp(sl.Count, 1, 99999);
             int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
-            if (seen >= 0) { _runPickups.RemoveAt(seen); known++; continue; }
+            bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
+            var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
+            if (seen >= 0) { _runPickups.RemoveAt(seen); known++; if (names.Count == 1) fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" }); continue; }
             if (names.Count != 1) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}; not counted"); continue; }
             var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
             Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
             Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" }, RunWhere());
+            fromGrid.Add(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" });
             added++;
         }
-        if (slots.Count > 0) Instances.RewardTable(now);
+        // the run is counted from the picture alone (Steven: expeditions, dungeons and events come from the reward pictures,
+        // never the chat): what the chat put in the run gives way to the table's slots, and a slot it can't name is kept as
+        // a slot not read, never filled in from the chat
+        if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed);
         CrashLog.Note($"reward table read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
     }
 
@@ -1772,6 +1793,25 @@ public sealed class TrackerSession
     bool _craftShotNoted;
     public const long RewardShotsMaxMB = 300;
     DateTime _rewardShotAt = DateTime.MinValue, _rewardPrunedAt = DateTime.MinValue; int _rewardShotsOpen;
+
+    /// <summary>A picture of the game kept in reward-shots (only where that folder exists, within the day's limit), named for the zone and what it shows.</summary>
+    void SaveShot(System.Drawing.Bitmap bmp, string title)
+    {
+        try
+        {
+            var dir = Path.Combine(CrashLog.Dir, "reward-shots");
+            if (!Directory.Exists(dir)) return;
+            if (Directory.GetFiles(dir, DateTime.Now.ToString("yyyyMMdd") + "-*.jpg").Length >= RewardShotsPerDay) return;
+            var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
+            using var ps = new System.Drawing.Imaging.EncoderParameters(1);
+            ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L);
+            var file = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{zoneName}-{title}.jpg");
+            bmp.Save(file, jpg, ps);
+            CrashLog.Note($"{title.Replace('-', ' ')} kept as a picture: {Path.GetFileName(file)}");
+        }
+        catch (Exception ex) { CrashLog.Write("picture", ex); }
+    }
 
     /// <summary>Deletes old pictures from reward-shots (see above). Only ever .jpg files the tracker named itself.</summary>
     internal static int PruneRewardShots(string dir, DateTime now)

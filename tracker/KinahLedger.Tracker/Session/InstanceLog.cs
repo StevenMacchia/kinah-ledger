@@ -34,6 +34,10 @@ public sealed class InstanceRun
     public int Bound { get; set; }
     /// <summary>The bound items by id, so a run's drop list shows them too (they still carry no value). Since 0.8.5.</summary>
     public Dictionary<long, int> BoundItems { get; set; } = new();
+    /// <summary>The items came from the reward table's picture, not the chat (since 0.8.18).</summary>
+    public bool FromPicture { get; set; }
+    /// <summary>Slots on the reward table the reader couldn't name (since 0.8.18).</summary>
+    public int SlotsUnread { get; set; }
     /// <summary>Entry to last loot, never under ten seconds.</summary>
     public double Seconds => LastLoot is { } l ? Math.Max(10, (l - Start).TotalSeconds) : 0;
 
@@ -360,6 +364,8 @@ public sealed class InstanceLog
             if (_cur == null) return;
             // the run was left and its time for rewards is over: it closes, and this pickup is farming's
             if (_leftAt is { } left && (ev.Time - left).TotalSeconds > RewardGraceSeconds) { CloseLocked("time for rewards over"); return; }
+            // counted from the reward table already: the chat adds nothing more to it
+            if (_cur.FromPicture && ev is ItemAcquired && !ev.Via.Contains("reward table")) return;
             switch (ev)
             {
                 case ItemAcquired a:
@@ -395,6 +401,30 @@ public sealed class InstanceLog
 
     /// <summary>The reward table at the end was read: the run's rewards are in.</summary>
     public void RewardTable(DateTime t) { lock (_lock) Paid(t); }
+
+    /// <summary>
+    /// The reward table was read: the open run's items are its slots, and only those. What the chat had put in the run gives
+    /// way, bound rewards count as the table shows them, and later chat items don't reach this run.
+    /// </summary>
+    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread)
+    {
+        lock (_lock)
+        {
+            Paid(t);
+            if (_cur == null || _cur.Kind == WorldBoss) return;
+            int chatItems = _cur.Items.Values.Sum() + _cur.Bound;
+            _cur.Items.Clear(); _cur.BoundItems.Clear(); _cur.Bound = 0;
+            foreach (var ev in slots)
+                if (ev is ItemAcquired a)
+                {
+                    if (a.Bound) { _cur.Bound += a.Count; _cur.BoundItems[a.ItemId] = _cur.BoundItems.GetValueOrDefault(a.ItemId) + a.Count; }
+                    else _cur.Items[a.ItemId] = _cur.Items.GetValueOrDefault(a.ItemId) + a.Count;
+                    _cur.LastLoot = t;
+                }
+            _cur.FromPicture = true; _cur.SlotsUnread += unread;
+            CrashLog.Note($"{_cur.Label}: counted from the reward table: {_cur.Items.Values.Sum() + _cur.Bound} item(s) from its slots, {unread} slot(s) not read; the chat's {chatItems} set aside");
+        }
+    }
 
     /// <summary>Closes the open run (the reader is stopping).</summary>
     public void Close() { lock (_lock) CloseLocked("the reader stopped"); }

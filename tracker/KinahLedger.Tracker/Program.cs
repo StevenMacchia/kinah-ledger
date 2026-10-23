@@ -1960,6 +1960,26 @@ options: --process aion[,other]");
                 cs2.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "600.0K", 600_000, new() { (IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon), 4.4), (coin, 84.4) }) }, cz.AddSeconds(1));
                 Check("a clear coin match is Kinah without the counter", $"{cs2.Instances.Snapshot().LastOrDefault(r => r.Start >= cz.AddSeconds(-1))?.Kinah ?? 0:N0}", "600,000");
                 Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
+                // counted from the picture alone (Steven, 2026-10-23 Urugugu): what the chat put in the run gives way to the slots
+                var pt = new TrackerSession(null, new Settings(), items, "Test"); var pt0 = DateTime.UtcNow;
+                pt.Engine.SetZone("Urugugu Canyon"); pt.ZoneView.SetZone("Urugugu Canyon"); pt.Instances.Zone("Urugugu Canyon", pt0);
+                pt.ProcessChat(new List<string> { "[x] a" }, pt0);
+                for (int i = 1; i <= 3; i++) pt.ProcessChat(new List<string> { "[x] a", "Spiritstone acquired.", "Spiritstone acquired." }, pt0.AddSeconds(i * 0.6));
+                pt.ApplyGrid(new List<RewardGrid.Slot> {
+                    new(box, rs.Grade, "4", 4, new() { (key, 30.0), ("Other", 98.7) }),
+                    new(box, "Rare", "", 0, new() { ("Icon_GM_0044_T06_Cape", 112), ("Other", 113) }) }, pt0.AddSeconds(3));
+                for (int i = 1; i <= 3; i++) pt.ProcessChat(new List<string> { "[x] a", "Spiritstone acquired.", "Spiritstone acquired.", "Riverside Helm acquired." }, pt0.AddSeconds(4 + i * 0.6));
+                pt.FlushVotes(pt0.AddSeconds(8));
+                var prun = pt.Instances.Snapshot().LastOrDefault();
+                Check("the reward table is the run's count: the chat's items give way, a later chat line adds nothing",
+                    $"{string.Join(", ", (prun?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}"))} · picture {prun?.FromPicture} · unread {prun?.SlotsUnread}",
+                    "Refining Stone x4 · picture True · unread 1");
+                // three reads of one table, voted slot by slot: an empty count and a glare on one read are outvoted
+                var v1 = new List<RewardGrid.Slot> { new(box, "Rare", "", 0, new() { ("A", 40) }), new(box, "Common", "6", 6, new() { ("B", 35) }) };
+                var v2 = new List<RewardGrid.Slot> { new(box, "Rare", "2", 2, new() { ("A", 44) }), new(box, "Common", "6", 6, new() { ("Z", 90) }) };
+                var v3 = new List<RewardGrid.Slot> { new(box, "Rare", "2", 2, new() { ("A", 38) }), new(box, "Common", "6", 6, new() { ("B", 33) }) };
+                var voted = RewardGrid.Vote(new() { v1, v2, v3 });
+                Check("reward table reads voted slot by slot", string.Join(" | ", voted.Select(s => $"{s.Icons[0].Key} {s.Icons[0].Distance:0} x{s.Count}")), "A 38 x2 | B 33 x6");
             }
             {
                 // Nightmare is known but left alone: its rewards never change, so nothing there is counted
