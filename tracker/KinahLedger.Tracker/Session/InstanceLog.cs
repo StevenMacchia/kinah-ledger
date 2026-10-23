@@ -40,6 +40,8 @@ public sealed class InstanceRun
     public int SlotsUnread { get; set; }
     /// <summary>Items the chat printed in the run, never counted: a run's items come from its reward picture (since 0.8.18).</summary>
     public int ChatItemsSetAside { get; set; }
+    /// <summary>Those chat items by id, for the log and the tests: where they went, never what the run counts.</summary>
+    public Dictionary<long, int> ChatItems { get; set; } = new();
     /// <summary>No reward picture was read for the run, so its rewards are not known (since 0.8.18). Kinah and kills still count.</summary>
     public bool RewardsNotRead { get; set; }
     /// <summary>Entry to last loot, never under ten seconds.</summary>
@@ -374,7 +376,7 @@ public sealed class InstanceLog
             // events). A chat item is set aside, counted for the log; it still dates the run and its rewards' arrival
             if (_cur.Kind != WorldBoss && ev is ItemAcquired ci && !ev.Via.Contains("reward table"))
             {
-                _cur.ChatItemsSetAside += ci.Count; _cur.LastLoot = ci.Time;
+                _cur.ChatItemsSetAside += ci.Count; _cur.ChatItems[ci.ItemId] = _cur.ChatItems.GetValueOrDefault(ci.ItemId) + ci.Count; _cur.LastLoot = ci.Time;
                 if (batch >= 3) Paid(ci.Time);
                 return;
             }
@@ -513,6 +515,8 @@ public sealed class InstanceLog
     }
 
     public string? Open { get { lock (_lock) return _cur?.Zone; } }
+    /// <summary>The open run's kind ("Expedition", "Transcendence", "Event"), or null.</summary>
+    public string? CurrentKind { get { lock (_lock) return _cur?.Kind; } }
 
     /// <summary>The open run as it stands (kind, name, event, family, left or not), or null. A copy of its labels only.</summary>
     public (string Kind, string Zone, string Event, string Family, string Label, bool Leaving, DateTime Start)? Current

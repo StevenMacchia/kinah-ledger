@@ -1204,7 +1204,8 @@ options: --process aion[,other]");
         Console.WriteLine("\nWhat the player is doing, which event, the run's edges (2026-10-23):");
         try { File.Delete(Path.Combine(CrashLog.Dir, "instances.jsonl")); } catch (Exception) { }
         int n(SessionEngine e, string name) => e.Items.Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
-        int ri(InstanceRun? r, string name) => r == null ? 0 : r.Items.Concat(r.BoundItems).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+        // where a run's items went: the run (its chat items are set aside since 0.8.18, the reward picture counts them)
+        int ri(InstanceRun? r, string name) => r == null ? 0 : r.Items.Concat(r.BoundItems).Concat(r.ChatItems).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
         string notes() { try { return File.ReadAllText(CrashLog.ReadsPath); } catch (Exception) { return ""; } }
         string Local(DateTime t) => t.ToLocalTime().ToString("HH:mm:ss");
         // a chat window that scrolls: each read shows the last ten lines, so every read lines up with the one before
@@ -1313,7 +1314,7 @@ options: --process aion[,other]");
         sayW(w0.AddMinutes(4), Array.Empty<string>());
         sw.ProcessChat(new List<string> { "[Player1] hello", "[Player4] hi", "Temple Guardian Breastplate acquired.", "Rainy Forest Helm acquired.", "Acquired Odyle x8.", "Dawn Frost (Breastplate) Skin acquired.", "Dawn Frost (Helm) Skin acquired.", "Dawn Frost (Boots) Skin acquired." }, w0.AddMinutes(56));
         var runW = sw.Instances.Snapshot().LastOrDefault();
-        Check("an event open across a long pause closes where it was", $"{runW?.Items.Values.Sum()} {sw.Instances.Open ?? "closed"} {sw.Zone}", $"10 closed {SessionEngine.UnknownZone}");
+        Check("an event open across a long pause closes where it was", $"{runW?.Items.Values.Sum() + runW?.ChatItems.Values.Sum()} {sw.Instances.Open ?? "closed"} {sw.Zone}", $"10 closed {SessionEngine.UnknownZone}");
         Check("...saying why", runW?.Ended.StartsWith("the reader was away 52 min") == true ? "yes" : runW?.Ended ?? "", "yes");
 
         // a lobby filling up scrolls the chat past what lines up (Accursed Sword, 2026-10-23 11:33:16): those lines still count
@@ -1380,7 +1381,7 @@ options: --process aion[,other]");
             string ach = achievement ? "One-of-a-Kind Gear III achieved." : "[Player5] gg";
             var s = new TrackerSession(null, settings, items, "Test");
             InstanceRun? run() => s.Instances.Snapshot().LastOrDefault(x => x.Zone == "Shugo Festival" && x.Start == tb);
-            int r(string name) => (run()?.Items ?? new()).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
+            int r(string name) => (run()?.Items ?? new()).Concat(run()?.ChatItems ?? new()).Where(kv => items.NameOf(kv.Key) == name).Sum(kv => kv.Value);
             s.Engine.SetZone("Hidden Lugi"); s.Instances.Zone("Hidden Lugi", tb);
             if (!achievement) Check("Hidden Lugi opens a Shugo Festival run", s.Instances.Open ?? "none", "Shugo Festival");
             var before = new List<string> { "Player1 (Shugo) found Player2 (Lugi).", "Player3 (Shugo) found Player1 (Lugi)." };
@@ -1405,7 +1406,7 @@ options: --process aion[,other]");
                 s.ProcessChat(settled, left.AddSeconds(40));
                 Check("read again later: counted once", $"{r("Odyle")}", "9");
                 s.Instances.Zone("Ruin Exploration Campsite", left.AddSeconds(InstanceLog.RewardGraceSeconds + 5));
-                Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum()}", "none 18");
+                Check("its time for rewards over: the run closes, kept", $"{s.Instances.Open ?? "none"} {run()?.Items.Values.Sum() + run()?.ChatItems.Values.Sum()}", "none 18");
             }
             else
             {
@@ -1925,7 +1926,7 @@ options: --process aion[,other]");
                 ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(1));
                 ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(2.2));   // the vote's next read
                 var run = ts.Instances.Snapshot().LastOrDefault(r => r.Zone == "Urugugu Canyon" && r.Start >= u0.AddSeconds(-1));
-                Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {run?.Items.Values.Sum() ?? 0} items {run?.Kinah ?? 0} Kinah", "farming: 0 items 0 Kinah · run: 1 items 600 Kinah");
+                Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {(run?.Items.Values.Sum() ?? 0) + (run?.ChatItems.Values.Sum() ?? 0)} items {run?.Kinah ?? 0} Kinah", "farming: 0 items 0 Kinah · run: 1 items 600 Kinah");
             }
             {
                 // the reward table at the end of an expedition: a slot the chat already counted is skipped, a sure one is added
@@ -1974,6 +1975,23 @@ options: --process aion[,other]");
                 Check("the reward table is the run's count: the chat's items give way, a later chat line adds nothing",
                     $"{string.Join(", ", (prun?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}"))} · picture {prun?.FromPicture} · unread {prun?.SlotsUnread}",
                     "Refining Stone x4 · picture True · unread 1");
+                // no reward table read: the run keeps its Kinah, its items are marked not read, never filled in from the chat
+                var nt = new TrackerSession(null, new Settings(), items, "Test"); var nt0 = DateTime.UtcNow;
+                nt.Engine.SetZone("Urugugu Canyon"); nt.Instances.Zone("Urugugu Canyon", nt0);
+                nt.ProcessChat(new List<string> { "[x] a" }, nt0);
+                for (int i = 1; i <= 3; i++) nt.ProcessChat(new List<string> { "[x] a", "Divine Canyon Greaves acquired.", "Acquired 600 Kina." }, nt0.AddSeconds(i * 0.6));
+                nt.FlushVotes(nt0.AddSeconds(4));
+                nt.Instances.Close();
+                var nrun = nt.Instances.Snapshot().LastOrDefault();
+                Check("no reward picture read: items not read, Kinah kept, the chat's items set aside",
+                    $"{nrun?.Items.Count} {nrun?.RewardsNotRead} {nrun?.Kinah} {nrun?.ChatItemsSetAside}", "0 True 600 1");
+                // a Transcendence: its stage set in town ("Set to Stage 1."), then the dungeon: its own kind
+                var tt = new TrackerSession(null, new Settings(), items, "Test"); var tt0 = DateTime.UtcNow;
+                tt.ProcessChat(new List<string> { "[x] a" }, tt0);
+                tt.ProcessChat(new List<string> { "[x] a", "Joined Shattered Arkanis Dungeon room.", "Set to Stage 1." }, tt0.AddSeconds(1));
+                tt.Engine.SetZone("Shattered Floating Temple"); tt.Instances.Zone("Shattered Floating Temple", tt0.AddSeconds(30));
+                Check("a stage set in town makes the next Shattered Arkanis run a Transcendence", $"{tt.Instances.Open}", "Shattered Arkanis");
+                Check("...of its own kind", $"{tt.Instances.CurrentKind}", "Transcendence");
                 // three reads of one table, voted slot by slot: an empty count and a glare on one read are outvoted
                 var v1 = new List<RewardGrid.Slot> { new(box, "Rare", "", 0, new() { ("A", 40) }), new(box, "Common", "6", 6, new() { ("B", 35) }) };
                 var v2 = new List<RewardGrid.Slot> { new(box, "Rare", "2", 2, new() { ("A", 44) }), new(box, "Common", "6", 6, new() { ("Z", 90) }) };
