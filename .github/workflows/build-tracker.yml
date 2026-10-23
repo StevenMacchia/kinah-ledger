@@ -35,6 +35,13 @@ jobs:
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
 
+      # the self-tests that need no game window (the same step as tracker/accuracy's, less the commands that live there)
+      - name: Self-tests
+        shell: bash
+        run: |
+          dist/KinahLedger.exe parse-test | cat
+          dist/KinahLedger.exe market-test | cat
+
       - name: Write latest.json
         run: node tools/release-manifest.js dist/KinahLedger.exe
 
