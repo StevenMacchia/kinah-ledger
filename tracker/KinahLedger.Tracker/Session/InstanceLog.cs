@@ -580,6 +580,45 @@ public sealed class InstanceLog
         }
     }
 
+    /// <summary>
+    /// Removes one finished run the player says is wrong (Steven, 2026-10-23: five Urugugu runs saved as one before 0.8.20).
+    /// It leaves the list and the history file, is never sent to the site from here on, and is kept aside in
+    /// instances.removed.jsonl so it can be put back by hand. The open run can't be removed. True when it was found.
+    /// </summary>
+    public bool Remove(DateTime start, string zone)
+    {
+        lock (_lock)
+        {
+            bool Same(InstanceRun r) => r.Start == start && string.Equals(r.Zone, zone, StringComparison.OrdinalIgnoreCase);
+            int gone = _done.RemoveAll(Same);
+            _unshared.RemoveAll(Same);
+            if (gone == 0) return false;
+            try
+            {
+                if (File.Exists(PathOf))
+                {
+                    var keep = new List<string>(); var removed = new List<string>();
+                    foreach (var line in File.ReadAllLines(PathOf))
+                    {
+                        InstanceRun? r = null;
+                        try { if (line.Length > 2) r = JsonSerializer.Deserialize<InstanceRun>(line); } catch (Exception) { }
+                        if (r != null && Same(r)) removed.Add(line); else keep.Add(line);
+                    }
+                    if (removed.Count > 0)
+                    {
+                        File.AppendAllLines(PathOf.Replace(".jsonl", ".removed.jsonl"), removed);
+                        var tmp = PathOf + ".tmp";
+                        File.WriteAllLines(tmp, keep);
+                        File.Move(tmp, PathOf, overwrite: true);
+                    }
+                }
+            }
+            catch (Exception ex) { CrashLog.Write("remove a run", ex); }
+            CrashLog.Note($"run removed by the player: {zone} started {start.ToLocalTime():HH:mm:ss} (kept aside in instances.removed.jsonl)");
+            return true;
+        }
+    }
+
     /// <summary>Puts runs back after a send that didn't reach the site, so the next share takes them.</summary>
     public void Restore(IEnumerable<InstanceRun> runs)
     {

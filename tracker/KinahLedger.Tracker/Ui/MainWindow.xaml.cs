@@ -136,6 +136,16 @@ public partial class MainWindow : Window
                 if (!_openInst.Remove(r.Key)) _openInst.Add(r.Key);
                 ShowInstances();
             }
+            // a click on one run under a place: remove it when it is wrong (Steven, 2026-10-23)
+            else if ((ev.OriginalSource as FrameworkElement)?.DataContext is DropRow { Child: true } rr && rr.Key.StartsWith("run|") && _watcher.Chat?.Instances is { } il)
+            {
+                var parts = rr.Key.Split('|', 3);
+                if (parts.Length < 3 || !long.TryParse(parts[1], out var ticks)) return;
+                if (MessageBox.Show(this, $"Remove this run ({rr.Name}, {rr.Value} made)?\n\nUse it for a run the tracker got wrong. It leaves the list and won't be sent to the site; a copy is kept aside in instances.removed.jsonl.",
+                        "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+                il.Remove(new DateTime(ticks, DateTimeKind.Utc), parts[2]);
+                ShowInstances();
+            }
         };
         MobRows.MouseLeftButtonUp += (_, ev) =>
         {
@@ -1277,7 +1287,8 @@ public partial class MainWindow : Window
             int items = r.Items.Values.Sum() + r.Bound;
             var sub = r.RewardsNotRead ? "rewards not read" : items == 0 ? "Kinah only" : $"{items} item{(items == 1 ? "" : "s")}";
             rows.Add(new DropRow($"Run at {r.Start.ToLocalTime():HH:mm}" + (r.Start.ToLocalTime().Date != DateTime.Now.Date ? $" · {r.Start.ToLocalTime():MMM d}" : ""),
-                "", Clock(TimeSpan.FromSeconds(r.Seconds)), "", Initial: "#", Value: Short(RunValue(r)), Sub: sub, Child: true));
+                "", Clock(TimeSpan.FromSeconds(r.Seconds)), "", Initial: "#", Value: Short(RunValue(r)), Sub: sub + " · click to remove if wrong", Child: true,
+                Key: $"run|{r.Start.ToUniversalTime().Ticks}|{r.Zone}", Tip: "Wrong run? Click to remove it. It won't be sent to the site."));
         }
         if (order.Count > 10)
             rows.Add(new DropRow($"{order.Count - 10} earlier run{(order.Count - 10 == 1 ? "" : "s")}", "", "", "", Initial: "…",

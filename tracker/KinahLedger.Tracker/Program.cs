@@ -1990,6 +1990,14 @@ options: --process aion[,other]");
                 var five = fv.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= fv0.AddMinutes(-1) && r.Start <= fv0.AddMinutes(45)).ToList();
                 Check("five Urugugu runs back to back: five runs, each its own table",
                     $"{five.Count} · {string.Join(" ", five.Select(r => r.Items.Values.Sum()))} · longest {(five.Count > 0 ? five.Max(r => r.Seconds) : 0):0} s", "5 · 5 5 5 5 5 · longest 400 s");
+                // the player removes one run as wrong: it leaves the list, the others stay, and it can't be removed twice
+                if (five.Count == 5)
+                {
+                    var wrong = five[2];
+                    bool removed = fv.Instances.Remove(wrong.Start, wrong.Zone), again = fv.Instances.Remove(wrong.Start, wrong.Zone);
+                    var left = fv.Instances.Snapshot().Count(r => r.Zone == "Urugugu Canyon" && r.Start >= fv0.AddMinutes(-1) && r.Start <= fv0.AddMinutes(45));
+                    Check("a run removed as wrong: gone from the list, the other four stay", $"{removed} {again} {left}", "True False 4");
+                }
                 // today's exact times: tables at 18:33:57, 18:41:01, 18:48:56, 18:56:35, 19:04:02 (each with the 600.0K coin), an empty
                 // read at 18:57:25; a flicker of "Urugugu Canyon" for one read after the second table; a late bound payout 25 s
                 // after the first table, once he was back in the village, and the next run's first Kinah after it
