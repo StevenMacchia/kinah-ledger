@@ -17,6 +17,8 @@ public sealed class ItemDictionary
     readonly Dictionary<string, long> _byName = new();
     /// <summary>Misreads remembered under the item they snapped to (IdOf): never a name of their own, so never a candidate.</summary>
     readonly HashSet<string> _snapped = new();
+    /// <summary>Misreads the crowd settled (data/aliases.json): looked up like a snapped misread, never reported as one.</summary>
+    readonly HashSet<string> _aliased = new();
     readonly object _lock = new();
 
     public int Count { get { lock (_lock) return _byId.Count; } }
@@ -57,11 +59,21 @@ public sealed class ItemDictionary
         lock (_lock)
         {
             var key = Norm(name);
-            if (_byName.TryGetValue(key, out var id)) return id;
+            if (_byName.TryGetValue(key, out var id))
+            {
+                // the same misread again: reported each time it is read, so the site sees how common it is
+                if (_snapped.Contains(key) && !_aliased.Contains(key) && Real(id)) { KinahLedger.Session.Accuracy.Name(name, id, "snapped"); KinahLedger.Session.Accuracy.Add("snapped"); }
+                return id;
+            }
 
             // a misread of a known name ("Fresh Frult") snaps to the closest real item, so one drop doesn't become two rows
             var close = Closest(key);
-            if (close != null) { _byName[key] = close.Value; _snapped.Add(key); return close.Value; }
+            if (close != null)
+            {
+                _byName[key] = close.Value; _snapped.Add(key);
+                if (Real(close.Value)) { KinahLedger.Session.Accuracy.Name(name, close.Value, "snapped"); KinahLedger.Session.Accuracy.Add("snapped"); }
+                return close.Value;
+            }
 
             long synthetic = -(long)(Fnv(key) & 0x7FFFFFFF) - 1;
             _byId.TryAdd(synthetic, new ItemInfo(synthetic, name.Trim(), "", !key.EndsWith("(bound)"), "", ""));
@@ -288,7 +300,37 @@ public sealed class ItemDictionary
         d.LoadGatheringIcons(p);
         d.LoadSkins();
         d.LoadExtras();
+        d.LoadAliases();
         return d;
+    }
+
+    /// <summary>How many crowd-learned misread fixes are loaded (data/aliases.json).</summary>
+    public int AliasCount { get { lock (_lock) return _aliased.Count; } }
+
+    /// <summary>
+    /// Crowd-learned misread fixes (2026-10-23): reads that several trackers snapped or guessed to the same item, from
+    /// data/aliases.json (the daily game-data update carries it; the site builds it, see /v1/aliases.json). Each is looked
+    /// up like a misread that snapped: it counts as its item, is never a candidate of its own, and a real item's name
+    /// always wins over it. The site never promotes a Legend, Unique or Epic item this way.
+    /// </summary>
+    internal void LoadAliases(Stream? from = null)
+    {
+        try
+        {
+            using var s = from ?? DataFiles.Open("aliases.json");
+            if (s == null) return;
+            using var doc = JsonDocument.Parse(s);
+            if (!doc.RootElement.TryGetProperty("aliases", out var a) || a.ValueKind != JsonValueKind.Object) return;
+            lock (_lock)
+                foreach (var p in a.EnumerateObject())
+                {
+                    if (p.Value.ValueKind != JsonValueKind.Number || !p.Value.TryGetInt64(out var id) || id <= 0 || !_byId.ContainsKey(id)) continue;
+                    var key = Norm(p.Name);
+                    if (key.Length < 3 || _byName.ContainsKey(key)) continue;
+                    _byName[key] = id; _snapped.Add(key); _aliased.Add(key);
+                }
+        }
+        catch (Exception ex) { CrashLog.Note("aliases: " + ex.Message); }
     }
 
     /// <summary>

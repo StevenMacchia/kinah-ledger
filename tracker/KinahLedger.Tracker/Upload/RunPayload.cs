@@ -62,7 +62,10 @@ public sealed record RunPayload(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? kinah_net = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] OddsPayload? odds = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<MobRun>? mobs = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<InstanceRunPayload>? instance_runs = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<InstanceRunPayload>? instance_runs = null,
+    // since 0.8.12: max(K, G) / (K + G) over the distinct minutes with a kill (K) and with a gather (G), rounded to 0.05;
+    // the site leaves runs under 0.8 out of its per-hour figures (farming and gathering at once). Absent with neither
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? focus = null)
 {
     public static string AppVersion => typeof(RunPayload).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
 
@@ -108,7 +111,8 @@ public sealed record RunPayload(
             net,
             OddsPayload.From(s),
             MobRun.From(s, Key, Off),
-            InstanceRunPayload.From(instances, Key, Off));
+            InstanceRunPayload.From(instances, Key, Off),
+            s.Focus);
     }
 
     /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>

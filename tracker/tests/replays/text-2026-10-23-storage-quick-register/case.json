@@ -1,0 +1,11 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Storage and Quick Register, 2026-10-23 16:09: three skins and Enhance Stone x446 print with Stored item(s) in Storage; none is a drop",
+  "source": "Steven's trace.log, game lines only; player chat and names replaced",
+  "expect": {
+    "items": {},
+    "kinah": 0
+  }
+}

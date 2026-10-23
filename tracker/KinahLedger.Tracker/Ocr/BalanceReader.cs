@@ -111,6 +111,8 @@ public sealed class BalanceTracker
     public long? Balance { get; private set; }
     public DateTime? BalanceAt { get; private set; }
     public string Note { get; private set; } = "looking for the Kinah counter: pick up some Kina";
+    /// <summary>The Kinah counter showed on the strip in the last read (false while it isn't found yet, or the interface is gone).</summary>
+    public bool CounterSeen { get; private set; }
 
     public void Observe(List<CounterRead> cur, long pickupsTotal, bool samePixels, DateTime? now = null)
     {
@@ -143,6 +145,7 @@ public sealed class BalanceTracker
             if (trusted) { Balance = k.Value; BalanceAt = t; Note = "Kinah balance read"; }
             _lastRaw = k.Value;
         }
+        CounterSeen = KinahLeft is int seenLeft && Near(cur, seenLeft) != null;
         _prev = cur; _prevPickups = pickupsTotal;
     }
 

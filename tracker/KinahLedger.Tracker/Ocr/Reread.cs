@@ -24,7 +24,10 @@ public sealed class Reread
     public static bool LooksLikeLoot(string line)
     {
         var k = Key(line);
-        return k.Contains("acqui") || k.Contains("obtain") || k.Contains("cquired") || k.EndsWith("kina") || k.EndsWith("kinah");
+        // a letter or two off the verb is still loot ("Asquired Fine Odyle x4.", "Acquiied", "Obtaincd"): the burst dropped
+        // Fine Odyle x4 from the 10:06 event rewards over one letter (Steven, 2026-10-23)
+        return k.Contains("acqui") || k.Contains("obtain") || k.Contains("cquired") || k.Contains("quired") || k.Contains("acqu") || k.Contains("btain")
+            || k.EndsWith("kina") || k.EndsWith("kinah") || System.Text.RegularExpressions.Regex.IsMatch(k, @"[a-z]x\d{1,4}$");
     }
 
     /// <summary>A new line that looked like loot and parsed to nothing, at its place counted from the bottom (0 = the last line).</summary>
@@ -226,13 +229,17 @@ public sealed class Reread
     }
 
     /// <summary>An achievement line ("Fortress Guardian Notun III achieved."), never a player's message.</summary>
-    public static bool IsAchievement(string line) => !line.TrimStart().StartsWith('[') && System.Text.RegularExpressions.Regex.IsMatch(line.Trim(), @"\bachieved\W{0,3}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    // A quest done ("Protect the Odyle Collector completed.") is the same: what prints with it is the quest's reward
+    // (Steven, 2026-10-23 16:22: its 200 Natura Soul Crystals landed in Soul Crystals from kills). Not a craft or a gather.
+    public static bool IsAchievement(string line) => !line.TrimStart().StartsWith('[')
+        && System.Text.RegularExpressions.Regex.IsMatch(line.Trim(), @"\b(?:achieved|completed)\W{0,3}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        && !System.Text.RegularExpressions.Regex.IsMatch(line, @"craft|gather|extract|enchant|refin|design", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>"acquired" or "obtained" read as a whole word: "Acquire d", "AcquirGdylO" and "Hatquired" are garbled.</summary>
     static bool CleanVerb(string line) => System.Text.RegularExpressions.Regex.IsMatch(line, @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>One line read twice: the same digits, and the letters a misread or two apart at most.</summary>
-    static bool Same(string a, string b)
+    internal static bool Same(string a, string b)
     {
         if (a == b) return true;
         if (!new string(a.Where(char.IsDigit).ToArray()).Equals(new string(b.Where(char.IsDigit).ToArray()))) return false;

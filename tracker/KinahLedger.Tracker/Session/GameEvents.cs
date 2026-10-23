@@ -9,8 +9,8 @@ public abstract record GameEvent(DateTime Time)
     /// chat never confirmed), or with " · guessed" when the name was partly hidden and taken as its closest item.
     /// </summary>
     public string Via { get; init; } = "";
-    /// <summary>True when the chat never confirmed this pickup as read: from the loot list, or a guessed name.</summary>
-    public bool Unconfirmed => Via.Contains("loot list") || Via.Contains("guessed");
+    /// <summary>True when the chat never confirmed this pickup as read: from the loot list, or a guessed name, unless a second read of a rare drop confirmed it (RareGate).</summary>
+    public bool Unconfirmed => !Via.Contains("confirmed") && (Via.Contains("loot list") || Via.Contains("guessed"));
 }
 
 public sealed record ItemAcquired(DateTime Time, long ItemId, int Count, bool Bound) : GameEvent(Time);

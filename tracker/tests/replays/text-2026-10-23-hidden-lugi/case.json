@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Hidden Lugi, 2026-10-23 11:07: the rewards print 11 s after leaving, fading in garbled, with an achievement line",
+  "source": "Steven's trace.log, game lines only; player chat and names replaced",
+  "expect": {
+    "items": {},
+    "runs": {
+      "Shugo Festival": 0
+    }
+  }
+}

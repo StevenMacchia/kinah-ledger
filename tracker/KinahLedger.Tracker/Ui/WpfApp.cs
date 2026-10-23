@@ -185,14 +185,15 @@ public static class WpfApp
 
         // Compact and Full view (0.7.6): the tables and pickups only in Full, which doubles the width; Crafting is one column either way
         w.ShowCompact(); DoEvents();
-        double compactW = w.ActualWidth;
+        // the layout's own width, not the window's: a small screen (the CI runner's) squeezes the window but not the layout
+        double compactW = w.ActualWidth, compactLayout = w.HeadStack.Width;
         Check(w.TablesCard.Visibility == Visibility.Visible && w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility != Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
             "Compact: run card, slim total, tables at three rows, no pickups");
         w.ShowFull(); DoEvents();
-        Check(w.TablesCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.ActualWidth > compactW * 1.8,
+        Check(w.TablesCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.HeadStack.Width > compactLayout * 1.8,
             $"Full view: pickups, top drops, more rows, {compactW:0} -> {w.ActualWidth:0} px wide");
         w.ShowCompact(); DoEvents();
-        Check(Math.Abs(w.ActualWidth - compactW) < 2, "back to Compact: the width it had");
+        Check(Math.Abs(w.HeadStack.Width - compactLayout) < 1, "back to Compact: the width it had");
 
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
@@ -229,6 +230,8 @@ public static class WpfApp
         foreach (var page in Enum.GetValues<OptionsWindow.Page>())
         {
             var o = new OptionsWindow(w, page) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            // KL_OPTIONS_H=1400: render the page that tall, to see rows below the fold
+            if (double.TryParse(Environment.GetEnvironmentVariable("KL_OPTIONS_H"), out var oh) && oh > 300) { o.MaxHeight = oh; o.Height = oh; }
             o.Show();
             DoEvents();
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-{page.ToString().ToLowerInvariant()}{(skin != null ? "-" + skin : "")}.png"), 0);

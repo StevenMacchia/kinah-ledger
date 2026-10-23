@@ -79,6 +79,9 @@ public static class CraftPanel
         return Rectangle.FromLTRB(cx + (int)(PanelLeft * h), game.Y + (int)(TextTop * h), cx + (int)(PanelRight * h) + 2, game.Y + (int)(1975 / 2160.0 * h));
     }
 
+    /// <summary>The two labels' measured cells, for drawing test panels (ReplayBank.Seed).</summary>
+    internal static IReadOnlyList<(int X0, int X1, int Y0, int Y1, string Mask)> LabelShapes => Labels;
+
     /// <summary>How well a label's white pixels match its shape: intersection over union of the two grids, 0 to 1.</summary>
     static double LabelScore(View v, (int X0, int X1, int Y0, int Y1, string Mask) l)
     {

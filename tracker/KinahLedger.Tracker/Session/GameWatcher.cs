@@ -46,6 +46,9 @@ public sealed class GameWatcher
 
     /// <summary>The currency counter at the top-left, read every <see cref="BalanceEverySec"/> while the game is open.</summary>
     public BalanceReader Balance { get; } = new();
+    readonly RelogDetector _relog = new();
+    /// <summary>Another character is in the world (the reason, for the status line); the window closes the run and starts fresh.</summary>
+    public event Action<string>? CharacterChanged;
     public int BalanceEverySec { get; set; } = 10;
     DateTime _balanceTickAt = DateTime.MinValue;
     DateTime? _balanceApplied;
@@ -67,6 +70,13 @@ public sealed class GameWatcher
         // only the game's own counter is read: another window over the top-left corner is skipped, like the chat and the Market
         if ((WindowCapture.Active ? null : GameWindow.Covered(BalanceReader.Strip(game), _settings.ProcessHints)) != null) return;
         await Balance.TickAsync(game, c.KinahPicked);
+        // another character in the world: the run closes and counting starts fresh (RelogDetector, MainWindow.StartFresh)
+        if (_relog.Observe(DateTime.UtcNow, Balance.Tracker.CounterSeen, Balance.Tracker.Balance, Balance.Tracker.BalanceAt, c.ZoneSeenAt) is { } switched)
+        {
+            CrashLog.Note("character switch: " + switched);
+            try { CharacterChanged?.Invoke(switched); } catch (Exception ex) { CrashLog.Write("character switch", ex); }
+            return;   // the old character's balance mustn't reach the new count
+        }
         // the counter against the count, on every tick: a gap has to hold a few seconds before it is judged
         if (Balance.Tracker.Balance is long bal && Balance.Tracker.BalanceAt is DateTime bat && (DateTime.UtcNow - bat).TotalSeconds <= 60) c.CheckBalance(bal, DateTime.UtcNow);
         // a new trusted value goes to the always-on count and the farming run; each keeps its first and last
@@ -213,7 +223,7 @@ public sealed class GameWatcher
                         try { var c = await EnsureChatAsync(); if (Farm != null) { c.Secondary = Farm; } }
                         catch (Exception ex) { ChatNote = ex.Message; }
                     }
-                    if (Market.Enabled && MarketInView()) await Market.TickAsync(game, _settings.Ocr.Scale);
+                    if (Market.Enabled && !Update.RemoteConfig.Current.Off("market") && MarketInView()) await Market.TickAsync(game, _settings.Ocr.Scale);
                     try { await TickBalanceAsync(game); } catch (Exception ex) { CrashLog.Write("balance", ex); }
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
