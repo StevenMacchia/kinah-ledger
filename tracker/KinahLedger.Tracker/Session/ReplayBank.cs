@@ -151,6 +151,7 @@ public static class ReplayBank
         // rows still waiting for a chat line that never comes are settled the way a live run settles them: later reads
         foreach (var dt in new[] { 2.0, 5.0, 9.0 }) session.ProcessList(new List<(int, string)>(), last.AddSeconds(dt));
         session.CommitHeld();
+        session.ReleaseAwaiting(last.AddSeconds(30), final: true);
         var e = session.Engine;
         var outItems = new JsonObject();
         foreach (var (id, n) in e.Items.OrderBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal)) outItems[items.NameOf(id)] = n;

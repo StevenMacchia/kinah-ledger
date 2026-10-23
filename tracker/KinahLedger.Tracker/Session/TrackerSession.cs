@@ -737,6 +737,12 @@ public sealed class TrackerSession
     {
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
         CommitHeld();
+        try { ProcessChatCore(lines, now); }
+        finally { ReleaseAwaiting(now); }
+    }
+
+    void ProcessChatCore(List<string> lines, DateTime now)
+    {
         int unaligned = _tracker.Unaligned;
         var fresh = _tracker.NewLines(lines);
         bool afterFade = _tracker.LastAfterFade;
@@ -828,7 +834,9 @@ public sealed class TrackerSession
         }
         Reread.NoteFirstSeen(_firstSeen, lines, now);
         Reread.Remember(_recent, lines, now);
-        _lastLines = lines;
+        // an empty read (the chat fading out) is not the last read: the settle needs the last read that showed lines
+        // (Steven, 2026-10-23 11:07: all 21 event rewards lost when the chat faded right after the clean read)
+        if (lines.Count > 0) _lastLines = lines;
         bool batchAchievement = false;
         bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat")
         {
@@ -854,6 +862,8 @@ public sealed class TrackerSession
                 any = true; _lastActivity = DateTime.UtcNow;
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
+                // no single-signal counting: out in the world, an item is a drop only with a kill or a gather around it
+                if (ev is ItemAcquired wi && NeedsWitness(wi, made, crafting)) { lock (_awaiting) _awaiting.Add((ev, now)); continue; }
                 Commit(ev);
             }
             return any;
@@ -883,7 +893,8 @@ public sealed class TrackerSession
         {
             bool any = Apply(events, l);
             CrashLog.Read(l, any, afterFade);
-            if (any) { LastLine = l; LootLine?.Invoke(l); }
+            // while the chat is garbled, what the vote counts is remembered too, so the settle doesn't count it again
+            if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
         }
         batchAchievement = reread.Concat(fresh).Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         foreach (var l in reread)
@@ -1217,12 +1228,13 @@ public sealed class TrackerSession
         if (ev is ItemAcquired cg0 && !ev.Via.Contains("loot list") && IsGatherMaterial(cg0.ItemId)) TakeGatherToken(ev.Time, "the chat");
         // what a kill or a gather looks like, for telling a box's contents in the loot list from a drop
         if (ev is MobKilled or EnemySoul or XpGained || ev is CurrencyGained { Enemy.Length: > 0 } || (ev is CurrencyGained cg && cg.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) || ev is KinahChanged { Bound: false, Delta: > 0 })
-            _lastKillAt = ev.Time;
-        if (ev is GatherFailed) _lastGatherAt = ev.Time;
+        { _lastKillAt = ev.Time; Witness(ev.Time); }
+        if (ev is PetCrystal) Witness(ev.Time);
+        if (ev is GatherFailed) { _lastGatherAt = ev.Time; Witness(ev.Time); }
         else if (ev is ItemAcquired ga)
         {
             _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            if (_gatherNames.Contains(_items.NameOf(ga.ItemId))) _lastGatherAt = ev.Time;
+            if (_gatherNames.Contains(_items.NameOf(ga.ItemId))) { _lastGatherAt = ev.Time; Witness(ev.Time); }
         }
         if (ev is not CraftResult && BossTakes(ev)) return;
         // inside an event or expedition, or just out of one while its rewards still land (InstanceLog.RewardGraceSeconds)
@@ -1287,6 +1299,7 @@ public sealed class TrackerSession
                 // each step is a kill the game counted: evidence for the kill count, joining the kill its Kinah or Soul
                 // line showed, or a kill of its own when those were lost (Steven, 2026-10-23: 25 kills counted as 20)
                 for (int s = 0; s < steps; s++) foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.QuestStep(p.At);
+                Witness(p.At);
             }
             else _questPending.Remove(of);
             if (!known || n > was || n < was - 3) _questMax[of] = n;
@@ -1765,9 +1778,45 @@ public sealed class TrackerSession
     /// </summary>
     internal void FlushVotes(DateTime? at = null)
     {
-        if (_voter.Waiting == 0 || _prevRead.Count == 0) return;
-        ProcessChat(new List<string>(_prevRead), (at ?? DateTime.UtcNow).AddSeconds(ChatVoter.MaxSeconds + 0.1));
+        var t = (at ?? DateTime.UtcNow).AddSeconds(ChatVoter.MaxSeconds + 0.1);
+        if (_voter.Waiting > 0 && _prevRead.Count > 0) ProcessChat(new List<string>(_prevRead), t);
         CommitHeld();
+        ReleaseAwaiting(t.AddSeconds(WitnessWaitSeconds), final: true);   // a stop or the end of a replay: decided now
+    }
+
+    // ---- two witnesses for a drop (Steven's rule: no single-signal counting; the audit of 2026-10-23) ----
+    // Claims, cubes, mail, storage, quest items and wardrobe unlocks print "acquired" like a drop, and new ones turn up
+    // with every patch. What they never have is a kill or a gather: an enemy's Kinah, Soul Points or Soul Crystal line, a
+    // soul row, the quest counter moving, or a gather. So out in the world an item line waits up to a few seconds for one,
+    // either side of it, and without one it is a reward, not a drop. Rare drops keep their own rule (always counted).
+    readonly List<(GameEvent Ev, DateTime At)> _awaiting = new();
+    readonly List<DateTime> _witnessAt = new();
+    static double WitnessSeconds => Update.RemoteConfig.Current.WitnessSeconds;
+    const double WitnessWaitSeconds = 8;
+
+    bool NeedsWitness(ItemAcquired a, bool made, bool crafting) =>
+        WitnessSeconds > 0 && !InRun && _boss == null && !made && !crafting && !IsGatherMaterial(a.ItemId) && !IsRare(a.ItemId);
+
+    void Witness(DateTime t) { lock (_witnessAt) { _witnessAt.Add(t); _witnessAt.RemoveAll(w => (t - w).TotalSeconds > 120); } }
+
+    bool Witnessed(DateTime t) { lock (_witnessAt) return _witnessAt.Any(w => Math.Abs((w - t).TotalSeconds) <= WitnessSeconds); }
+
+    /// <summary>Items waiting for a kill or a gather: counted once one is seen, a reward once the wait is over.</summary>
+    internal void ReleaseAwaiting(DateTime now, bool final = false)
+    {
+        List<(GameEvent Ev, DateTime At)> due;
+        lock (_awaiting)
+        {
+            if (_awaiting.Count == 0) return;
+            due = _awaiting.Where(x => final || Witnessed(x.Ev.Time) || (now - x.At).TotalSeconds > WitnessWaitSeconds).ToList();
+            foreach (var d in due) _awaiting.Remove(d);
+        }
+        foreach (var (ev, _) in due)
+        {
+            if (Witnessed(ev.Time)) { Commit(ev); continue; }
+            if (ev is ItemAcquired a) CrashLog.Note($"{_items.NameOf(a.ItemId)} x{a.Count}: no kill or gather within {WitnessSeconds:0} s of it, so a claim, a box or the inventory; not a drop");
+            Commit(_parser.AsReward(ev));
+        }
     }
 
     /// <summary>The player's region key and server label ("na_e", "Siel (Elyos)"), sent with the run so the site can keep drops per server.</summary>

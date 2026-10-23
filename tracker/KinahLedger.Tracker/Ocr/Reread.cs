@@ -24,7 +24,10 @@ public sealed class Reread
     public static bool LooksLikeLoot(string line)
     {
         var k = Key(line);
-        return k.Contains("acqui") || k.Contains("obtain") || k.Contains("cquired") || k.EndsWith("kina") || k.EndsWith("kinah");
+        // a letter or two off the verb is still loot ("Asquired Fine Odyle x4.", "Acquiied", "Obtaincd"): the burst dropped
+        // Fine Odyle x4 from the 10:06 event rewards over one letter (Steven, 2026-10-23)
+        return k.Contains("acqui") || k.Contains("obtain") || k.Contains("cquired") || k.Contains("quired") || k.Contains("acqu") || k.Contains("btain")
+            || k.EndsWith("kina") || k.EndsWith("kinah") || System.Text.RegularExpressions.Regex.IsMatch(k, @"[a-z]x\d{1,4}$");
     }
 
     /// <summary>A new line that looked like loot and parsed to nothing, at its place counted from the bottom (0 = the last line).</summary>

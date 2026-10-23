@@ -50,6 +50,8 @@ public sealed class RemoteConfig
     public int MaxOnePickup { get; init; } = 100;
     /// <summary>More Soul Crystals than this in one line, out in the world, are a reward, not a kill's.</summary>
     public int MaxOneCrystal { get; init; } = 10;
+    /// <summary>An item out in the world is a drop only with a kill or a gather this close to it, either side; 0 turns the rule off.</summary>
+    public double WitnessSeconds { get; init; } = 6;
 
     // ---- kill switches: true turns that reader off ----
     public HashSet<string> Killed { get; init; } = new(StringComparer.OrdinalIgnoreCase);
@@ -139,6 +141,7 @@ public sealed class RemoteConfig
             SkinsCount = pick is { } pk && pk.TryGetProperty("skins_count", out var sc) && sc.ValueKind == JsonValueKind.True,
             MaxOnePickup = (int)Num(pick, "max_one", b.MaxOnePickup, 20, 10000),
             MaxOneCrystal = (int)Num(pick, "max_crystals", b.MaxOneCrystal, 3, 1000),
+            WitnessSeconds = Num(pick, "witness_seconds", b.WitnessSeconds, 0, 20),
             Killed = killed,
             LegendMaterialsRare = !(rare is { } ra && ra.TryGetProperty("legend_materials", out var lm) && lm.ValueKind == JsonValueKind.False),
             RolloutVersion = Str(roll, "version", ""),

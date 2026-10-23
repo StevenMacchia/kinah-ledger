@@ -240,7 +240,7 @@ public static class AccuracyTests
         sq.FlushVotes(q0.AddSeconds(3));
         Check("storage burst: no Enhance Stone, no skins", $"{N(sq, "Enhance Stone")} {sq.Engine.Items.Keys.Count(k => items.NameOf(k).Contains("(Skin:"))}", "0 0");
         // ...and a drop well after it counts again
-        var later = new List<string> { "Acquired 120 Kina." }.Concat(burst).Append("Riverside Helm acquired.").ToList();
+        var later = new List<string> { "Acquired 120 Kina." }.Concat(burst).Append("Riverside Helm acquired.").Append("Acquired 214 Kina.").ToList();
         for (int i = 1; i <= 4; i++) sq.ProcessChat(later, q0.AddSeconds(60 + i * 0.5));
         sq.FlushVotes(q0.AddSeconds(63));
         Check("...a drop a minute later: counted", $"{N(sq, "Riverside Helm")}", "1");
@@ -266,11 +266,29 @@ public static class AccuracyTests
         Q("(1/20)", 0); Q("(2/20)", 1); Q("(2/20)", 2); Q("(7/20)", 3); Q("(3/20)", 6); Q("(3/20)", 7);
         Check("quest counter 1 to 3, one misread between: 2 kills", $"{sk.Engine.Totals().Kills}", "2");
 
+        // two witnesses: an item with no kill or gather around it is not a drop (a claim, mail, a cube)...
+        var sw = new TrackerSession(null, settings, items, "Test");
+        sw.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
+        for (int i = 1; i <= 4; i++) sw.ProcessChat(new List<string> { "Acquired 120 Kina.", "Riverside Helm acquired." }, q0.AddSeconds(30 + i * 0.5));
+        sw.FlushVotes(q0.AddSeconds(33));
+        Check("an item with no kill around it: not a drop", $"{N(sw, "Riverside Helm")}", "0");
+        // ...but one whose kill's Kinah line comes a read later is
+        var sv = new TrackerSession(null, settings, items, "Test");
+        sv.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
+        for (int i = 1; i <= 3; i++) sv.ProcessChat(new List<string> { "Acquired 120 Kina.", "Riverside Helm acquired." }, q0.AddSeconds(30 + i * 0.5));
+        for (int i = 1; i <= 4; i++) sv.ProcessChat(new List<string> { "Acquired 120 Kina.", "Riverside Helm acquired.", "Acquired 301 Kina." }, q0.AddSeconds(32 + i * 0.5));
+        sv.FlushVotes(q0.AddSeconds(36));
+        Check("...its kill's Kinah a read later: a drop", $"{N(sv, "Riverside Helm")}", "1");
+        // a wrapped reward line keeps its count: "Acquired Artisan's Ultimate Refining Stone" / "(Bound) x2."
+        var wp2 = new ChatParser(items);
+        var wrapped = wp2.ParseBatch(new List<string> { "Acquired Spiritstone", "(Bound) x2." }, q0).SelectMany(x => x.Events).OfType<ItemAcquired>().ToList();
+        Check("a wrapped (Bound) x2 tail: x2, bound", string.Join(",", wrapped.Select(w => $"{items.NameOf(w.ItemId)} {w.Count} {w.Bound}")), "Spiritstone 2 True");
+
         // a stack no enemy drops, out in the world, on its own
         var sp = new TrackerSession(null, settings, items, "Test");
         sp.ProcessChat(new List<string> { "Acquired 120 Kina." }, q0);
         for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300." }, q0.AddSeconds(i * 0.5));
-        for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300.", "Acquired Spiritstone x6." }, q0.AddSeconds(30 + i * 0.5));
+        for (int i = 1; i <= 4; i++) sp.ProcessChat(new List<string> { "Acquired 120 Kina.", "Acquired Power Shard (Bound) x300.", "Acquired Spiritstone x6.", "Acquired 88 Kina." }, q0.AddSeconds(30 + i * 0.5));
         sp.FlushVotes(q0.AddSeconds(33));
         Check("x300 out in the world: not a drop; x6 is", $"{N(sp, "Power Shard")} {N(sp, "Spiritstone")}", "0 6");
 

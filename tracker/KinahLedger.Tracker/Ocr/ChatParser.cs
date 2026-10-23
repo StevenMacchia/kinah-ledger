@@ -207,6 +207,19 @@ public sealed partial class ChatParser
     List<(string Text, List<GameEvent> Events)> Unwrap(IReadOnlyList<string> lines, DateTime time)
     {
         var res = lines.Select(l => (Text: l, Events: Parse(l, time).ToList())).ToList();
+        // a line wrapped after its name: "Acquired Artisan's Ultimate Refining Stone" / "(Bound) x2." The first half
+        // already reads as one item, so the tail carries the count (Steven's 12:39 report: counted as a drop x1)
+        for (int i = 0; i + 1 < res.Count; i++)
+        {
+            if (res[i].Events.Count != 1 || res[i].Events[0] is not ItemAcquired head || head.Count != 1) continue;
+            var tail = WrapTail().Match(res[i + 1].Text);
+            if (!tail.Success || res[i + 1].Events.Count > 0 || (!tail.Groups["b"].Success && !tail.Groups["n"].Success)) continue;
+            int n = tail.Groups["n"].Success ? Math.Clamp(int.Parse(tail.Groups["n"].Value), 1, 99999) : 1;
+            bool bound = tail.Groups["b"].Success || head.Bound;
+            res[i] = (res[i].Text.Trim() + " " + res[i + 1].Text.Trim(), new List<GameEvent> { head with { Count = n, Bound = bound } });
+            res[i + 1] = (JoinedMark, new List<GameEvent>());
+            i++;
+        }
         string? carry = _wrapCarry != null && (time - _wrapAt).TotalSeconds <= WrapSeconds ? _wrapCarry : null;
         _wrapCarry = null;
         for (int i = carry != null ? -1 : 0; i + 1 < res.Count; i++)
@@ -242,6 +255,10 @@ public sealed partial class ChatParser
 
     [GeneratedRegex(@"^\W*purchase\s+(?:complete|completed|successful)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Purchase();
+
+    // the tail of a wrapped loot line: "(Bound) x2.", "(Bound)", "x9."
+    [GeneratedRegex(@"^\W*(?:(?<b>\(\s*b[o0]u?n?d\s*\))\s*)?(?:[x×]\s*(?<n>\d{1,5}))?\W*$", RegexOptions.IgnoreCase)]
+    private static partial Regex WrapTail();
 
     public const double PurchaseSeconds = 5;
     DateTime _purchaseAt; bool _purchaseCarry;
@@ -803,7 +820,20 @@ public sealed class LineTracker
                     // either read garbled them ("mria acquired."): skip one line here for each. Only world text (short,
                     // nothing chat-like) can really be gone, so it holds nothing back. Comparing the text instead re-counted
                     // every garbled line as new.
-                    if (j < prev.Count - 1) fresh = fresh.Skip(prev.Skip(j + 1).Count(Persists)).ToList();
+                    // ...except a loot line standing where the last read had a chat line that is gone now: the chat line
+                    // was garbled out of this read, and the loot line is new (Steven, 2026-10-23 10:45: 355 Kina skipped)
+                    if (j < prev.Count - 1)
+                    {
+                        int skip = 0;
+                        foreach (var pl in prev.Skip(j + 1).Where(Persists))
+                        {
+                            if (skip >= fresh.Count) break;
+                            var fk = Key(fresh[skip]);
+                            if (!Similar(fk, pl) && LootKey(fk) && !LootKey(pl)) continue;
+                            skip++;
+                        }
+                        fresh = fresh.Skip(skip).ToList();
+                    }
                     return fresh;
                 }
             }
@@ -852,6 +882,8 @@ public sealed class LineTracker
     }
 
     /// <summary>A chat line, as opposed to text from the world behind the frameless chat ("Targena", "Cairn Tc"): long, or with a word the chat's own lines use.</summary>
+    static bool LootKey(string key) => key.Contains("acqui") || key.Contains("obtain") || key.EndsWith("kina");
+
     static bool Persists(string key) => key.Length >= 10 || key.Contains("acqui") || key.Contains("obtain") || key.Contains("kina") || key.Contains("fail");
 
     /// <summary>The same test on a line as read: a player's line ("[Theo] next") is chat however short it is.</summary>
