@@ -185,7 +185,36 @@ public sealed class SessionEngine
     }
 
     /// <summary>The quest tracker counted one more kill ("Defeat ... (21/25)" to 22): evidence q for <see cref="KillEvidence"/>.</summary>
-    public void QuestStep(DateTime t) { lock (_lock) KillEvidence(t, 'q'); }
+    public void QuestStep(DateTime t) { lock (_lock) _questSteps.Add(t); }
+
+    // A quest step claims a kill its Kinah or Soul line already made, within QuestClaimSeconds either side, once that
+    // evidence has had time to come in; only a step with no kill around it is a kill of its own (one whose loot lines
+    // were lost). Joining it straight away made kills of its own too often: 46 to 49 for 40 in the synthetic fights.
+    readonly List<DateTime> _questSteps = new();
+    public const double QuestClaimSeconds = 6;
+
+    /// <summary>Settles the quest steps old enough to have their kill's evidence in.</summary>
+    public void SettleQuest(DateTime now, bool final = false)
+    {
+        lock (_lock)
+        {
+            for (int i = 0; i < _questSteps.Count; i++)
+            {
+                var q = _questSteps[i];
+                if (!final && (now - q).TotalSeconds < QuestClaimSeconds) continue;
+                var claim = _kills.Where(k => !k.Kinds.Contains('q') && Math.Abs((k.At - q).TotalSeconds) <= QuestClaimSeconds)
+                                  .OrderBy(k => Math.Abs((k.At - q).TotalSeconds)).FirstOrDefault();
+                if (claim != null) claim.Kinds += 'q';
+                else
+                {
+                    _kills.Add(new KillRec { At = q, Kinds = "q" });
+                    if (_kills.Count > 64) _kills.RemoveAt(0);
+                    KillsSeen++; Z().KillsSeen++;
+                }
+                _questSteps.RemoveAt(i--);
+            }
+        }
+    }
 
     // ---- the enemies fighting the player, from their nameplates (Nameplates: a red health bar under a gold name) ----
     // How many of each are up, and the ones whose bar just went: an enemy whose bar vanishes as its loot lands is the one

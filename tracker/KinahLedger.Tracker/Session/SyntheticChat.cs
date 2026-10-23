@@ -53,6 +53,7 @@ public static class SyntheticChat
     public static string Diagnose(Settings settings, ItemDictionary items, int seed, double noise, bool quest)
     {
         var (truth, reads) = Fight(new Random(seed * 7919), noise, quest);
+        try { File.Delete(CrashLog.ReadsPath); } catch (Exception) { }
         var s = new TrackerSession(null, settings, items, "Synthetic");
         foreach (var (t, lines) in reads) { s.QuestCounter(lines, t); s.ProcessChat(lines, t); }
         s.FlushVotes(reads[^1].T.AddSeconds(2));
@@ -61,7 +62,15 @@ public static class SyntheticChat
         var want = truth.KinahLines.ToList();
         var missing = new List<long>(want); foreach (var c in counted) missing.Remove(c);
         var extra = new List<long>(counted); foreach (var w in want) extra.Remove(w);
-        return $"seed {seed} noise {noise} quest {quest}: kills true {truth.Kills}, counted {e.Totals().Kills} (seen {e.KillsSeen}, Kinah drops {e.KinahDrops}, currency lines {e.CurrencyLines}, defeated {e.KillsDefeated}, xp {e.KillsXp}) · Kinah lines missed [{string.Join(", ", missing)}] extra [{string.Join(", ", extra)}]";
+        // the tracker's own notes around each missed line, to see which step lost it
+        var log = File.Exists(CrashLog.ReadsPath) ? File.ReadAllLines(CrashLog.ReadsPath) : Array.Empty<string>();
+        var around = new List<string>();
+        foreach (var m in missing.Concat(extra).Distinct().Take(3))
+        {
+            int at = Array.FindIndex(log, l => l.Contains($"{m} Kina"));
+            if (at >= 0) around.Add($"\n    [{m}] " + string.Join("\n         ", log.Skip(Math.Max(0, at - 6)).Take(10)));
+        }
+        return $"seed {seed} noise {noise} quest {quest}: kills true {truth.Kills}, counted {e.Totals().Kills} (seen {e.KillsSeen}, Kinah drops {e.KinahDrops}, currency lines {e.CurrencyLines}, defeated {e.KillsDefeated}, xp {e.KillsXp}) · Kinah lines missed [{string.Join(", ", missing)}] extra [{string.Join(", ", extra)}]" + string.Concat(around);
     }
 
     sealed class Truth { public long Kinah; public int Kills; public Dictionary<string, int> Items = new(); public List<long> KinahLines = new(); }
@@ -90,8 +99,9 @@ public static class SyntheticChat
                 kill.Insert(r.Next(kill.Count + 1), n == 1 ? $"{d} acquired." : $"Acquired {d} x{n}.");
                 truth.Items[d] = truth.Items.GetValueOrDefault(d) + n;
             }
-            if (withQuest && quest < 30) { quest++; kill.Add("Defeat Kalgolem"); kill.Add($"and Papis ({quest}/30)"); }
             foreach (var l in kill) printed.Add((now + r.NextDouble() * 0.4, l));
+            // the quest's two lines print together, in order, just after the kill's
+            if (withQuest && quest < 30) { quest++; printed.Add((now + 0.45, "Defeat Kalgolem")); printed.Add((now + 0.451, $"and Papis ({quest}/30)")); }
             // players talk between kills
             for (int c = r.Next(0, 3); c > 0; c--) printed.Add((now + 0.5 + r.NextDouble() * 2, $"[Player{r.Next(1, 9)}] {Words(r)}"));
         }

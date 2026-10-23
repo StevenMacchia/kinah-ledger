@@ -738,7 +738,7 @@ public sealed class TrackerSession
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
         CommitHeld();
         try { ProcessChatCore(lines, now); }
-        finally { ReleaseAwaiting(now); }
+        finally { ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(now); }
     }
 
     void ProcessChatCore(List<string> lines, DateTime now)
@@ -1782,6 +1782,7 @@ public sealed class TrackerSession
         if (_voter.Waiting > 0 && _prevRead.Count > 0) ProcessChat(new List<string>(_prevRead), t);
         CommitHeld();
         ReleaseAwaiting(t.AddSeconds(WitnessWaitSeconds), final: true);   // a stop or the end of a replay: decided now
+        foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(t, final: true);
     }
 
     // ---- two witnesses for a drop (Steven's rule: no single-signal counting; the audit of 2026-10-23) ----
