@@ -152,7 +152,7 @@ public sealed class InstanceLog
                         if (_moveReads >= 2 || (now - _moveAt.Value).TotalSeconds >= MoveHoldSeconds) _moveConfirmed = true;
                     }
                     else if (!_moveConfirmed) { _moveAt = null; _moveReads = 0; }
-                    if (_moveConfirmed && _tableAt is DateTime ta && (now - ta).TotalSeconds >= RewardLateSeconds) SplitLocked($"its reward table was read, then {zone}");
+                    if (_moveConfirmed && _tableAt is DateTime tableT && (now - tableT).TotalSeconds >= RewardLateSeconds) SplitLocked($"its reward table was read, then {zone}");
                     if (_cur != null && _moveConfirmed) return;   // still the paid run's time for late reward lines
                 }
                 var ev = kind == "Event" && !string.Equals(name, zone, StringComparison.OrdinalIgnoreCase) ? zone : kind == "Event" && ZoneLocator.FamilyOf(zone) == "" ? zone : "";
