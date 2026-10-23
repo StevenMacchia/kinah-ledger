@@ -1318,7 +1318,14 @@ public sealed class TrackerSession
     DateTime _achieveUntil = DateTime.MinValue, _boxUntil = DateTime.MinValue, _lastKillAt = DateTime.MinValue, _lastGatherAt = DateTime.MinValue;
     static readonly Regex BoxName = new(@"\b(?:chest|box|pouch|bundle|cube|coffer|crate|package|parcel)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     static HashSet<string>? _gatherNames;
-    bool InRun => ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored;
+    /// <summary>
+    /// Inside an expedition or event: the minimap names one, or a run is open while the minimap names no listed zone, or
+    /// the run was just left and its rewards may still land (InstanceLog.Route decides those). The open world's checks
+    /// (box contents, oversized stacks, a kill to witness a drop) don't apply there: Urugugu Canyon's payout, Enhance
+    /// Stone x470 37 s after leaving, is the run's, not a claim (2026-10-22).
+    /// </summary>
+    bool InRun => (ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored)
+        || (Instances.Current is { } cur && cur.Kind != InstanceLog.WorldBoss && (cur.Leaving || Zone == null || Zone == SessionEngine.UnknownZone));
 
     /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
     string? RewardWhy(DateTime t, bool isBox = false) =>
