@@ -632,6 +632,8 @@ public sealed class TrackerSession
             if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); }
         }
         // dated when the garbling began, which is when they landed (an event's rewards: inside its time for rewards)
+        // only an achievement line that first showed with the garbled reads: one that sat in the chat before is an old one
+        if (settledAchievement) settledAchievement = _lastLines.Any(l => Reread.IsAchievement(l) && (Reread.FirstSeen(l, _firstSeen) is not DateTime f || f >= settledAt.AddSeconds(-5)));
         batchAchievement = settledAchievement;
         if (settledAchievement) { _achieveUntil = settledAt.AddSeconds(RewardWindowSeconds); CrashLog.Note("the settled lines came with an achievement: they are its reward, not drops"); }
         foreach (var l in settled)
