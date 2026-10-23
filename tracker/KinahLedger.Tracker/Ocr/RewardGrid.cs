@@ -242,6 +242,9 @@ public static class RewardGrid
     {
         int h = frame.Height, s = (int)Math.Round(SlotH * h), p = (int)Math.Round(PitchH * h);
         int x0 = frame.Width / 2 - 4 * p + (p - s) / 2;
+        // the first row's top edge, found where it is: the header's line gives it within a few pixels, and 7 px low put the
+        // corners in the gap (2026-10-23 Urugugu: the gold slot read Common, its "4" cut off, the row ended at slot 7)
+        top = RefineTop(frame, top, x0, s, p);
         var slots = new List<Slot>();
         for (int row = 0; row < 6; row++)
         {
@@ -252,7 +255,7 @@ public static class RewardGrid
             {
                 var box = new Rectangle(x0 + col * p, y, s, s);
                 // the slots fill each row from the left: the first gap ends the row, and a row with none ends the grid
-                if (!IsSlot(frame, box)) break;
+                if (!IsSlot(frame, box) && TopEdge(frame, box) < EdgeMin) break;
                 found++;
                 var bg = Background(frame, box);
                 var grade = GradeOf(bg);
@@ -328,6 +331,41 @@ public static class RewardGrid
         var tl = f.GetPixel(b.Left + d, b.Top + d); var tr = f.GetPixel(b.Right - d, b.Top + d);
         var bl = f.GetPixel(b.Left + d, b.Bottom - d); var br = f.GetPixel(b.Right - d, b.Bottom - d);
         return Diff(tl, tr) < 45 && Diff(bl, br) < 160;
+    }
+
+    /// <summary>A slot's top edge stands out at least this much (mean colour difference across it).</summary>
+    public const double EdgeMin = 30;
+
+    /// <summary>
+    /// How sharply the colour changes across a box's top edge: the line just inside against the line just outside, over the
+    /// middle of its width. A slot's backing starts there whatever its art (the art can reach a corner: 2026-10-23, the
+    /// pendant and the orb, 50 and 59 across the top corners); the world behind has no edge at that line.
+    /// </summary>
+    internal static double TopEdge(Bitmap f, Rectangle b)
+    {
+        int yIn = b.Top + 2, yOut = b.Top - 3;
+        if (yOut < 0 || yIn >= f.Height) return 0;
+        double sum = 0; int n = 0;
+        for (int x = b.Left + b.Width / 6; x < b.Right - b.Width / 6; x += 3)
+        {
+            var a = f.GetPixel(x, yIn); var o = f.GetPixel(x, yOut);
+            sum += Math.Abs(a.R - o.R) + Math.Abs(a.G - o.G) + Math.Abs(a.B - o.B); n++;
+        }
+        return n == 0 ? 0 : sum / n;
+    }
+
+    /// <summary>The first row's top: within 15 px of the estimate, the line where the eight boxes' top edges are sharpest.</summary>
+    internal static int RefineTop(Bitmap f, int top, int x0, int s, int p)
+    {
+        int best = top; double bestScore = -1;
+        for (int y = top - 15; y <= top + 15; y++)
+        {
+            if (y - 5 < 0 || y + s >= f.Height) continue;
+            double score = 0;
+            for (int col = 0; col < 8; col++) score += TopEdge(f, new Rectangle(x0 + col * p, y, s, s));
+            if (score > bestScore) { bestScore = score; best = y; }
+        }
+        return best;
     }
 
     /// <summary>The backing's colour: the four corners averaged.</summary>
