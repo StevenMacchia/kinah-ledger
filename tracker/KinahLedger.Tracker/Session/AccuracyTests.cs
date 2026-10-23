@@ -312,7 +312,7 @@ public static class AccuracyTests
         RemoteConfig.Current = RemoteConfig.BuiltIn;
         for (int sd = 1; sd <= 3; sd++) Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, sd, 0, true));
         Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, 1, 0, false));
-        Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, 1, 1, true));
+        for (int sd = 1; sd <= 6; sd++) Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, sd, 1, true));
         Console.WriteLine($"\nSynthetic chat, clean: {clean}\nSynthetic chat, noisy: {noisy}\nSynthetic chat, rough: {rough}");
         Check("synthetic, clean chat: every Kina, item and kill", $"{clean.KinahCounted == clean.KinahTrue} {clean.Phantom} {clean.Missed} {clean.KillsCounted == clean.KillsTrue}", "True 0 0 True");
 
