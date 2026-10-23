@@ -101,6 +101,7 @@ public partial class MainWindow : Window
         ShareCardBtn.Click += (_, _) => CopyShareCard();
         // the miscount report keeps pictures only once the player said yes (Options › Sharing, or the question on its first use)
         ReportBuffer.KeepFrames = _prefs.ReportFrames;
+        ReportBuffer.KeepUiFrames = _prefs.SendReportFrames;
         MiscountLink.Click += (_, _) => ReportMiscount();
         // Compact and Full view: the header button switches, and the summary's link opens Full view
         ViewBtn.Click += (_, _) => SetView(!_prefs.FullView);
@@ -243,7 +244,24 @@ public partial class MainWindow : Window
         if (on && _watcher.Chat is { } c) { try { saved = c.WriteReport(r.Report); } catch (Exception ex) { CrashLog.Write("miscount report", ex); } }
         Say(on ? $"{r.Report} won't be sent to the site. Thanks for flagging it." + (saved != null ? " The last minute is saved in your reports folder." : "") : $"{r.Report} counts again.", "Faint");
         if (saved != null) Status.ToolTip = saved;
+        if (saved != null) _ = SendReportPictures(saved, "Looks wrong? on " + r.Report);
         Redraw();
+    }
+
+    /// <summary>
+    /// A saved report's loot list and crafting panel pictures go to the site when the player turned that on (Options ›
+    /// Sharing, off by default) and sharing is on; never the chat. The status line says how it went.
+    /// </summary>
+    async Task SendReportPictures(string dir, string why)
+    {
+        if (!_prefs.SendReportFrames || !_prefs.Share) return;
+        try
+        {
+            var (ok, note) = await Upload.AccuracyClient.SendFramesAsync(_settings.Upload, dir, why);
+            CrashLog.Note($"miscount pictures: {(ok ? "sent" : "not sent")} ({note})");
+            Say(ok ? $"Report saved and its pictures sent ({note}). Thanks: they become tests the tracker must pass." : $"Report saved on this PC; its pictures weren't sent ({note}).", ok ? "Good" : "Faint");
+        }
+        catch (Exception ex) { CrashLog.Write("miscount pictures", ex); }
     }
 
     /// <summary>
@@ -269,6 +287,7 @@ public partial class MainWindow : Window
         {
             var dir = c.WriteReport("");
             Open(dir);
+            _ = SendReportPictures(dir, "Report a miscount");
             Say("Saved the last minute to a folder on this PC" + (asked ? "; pictures are kept from now on" : "") + ". Zip it to attach to a bug report.", "Good");
             Status.ToolTip = dir;
         }
@@ -1313,7 +1332,9 @@ public partial class MainWindow : Window
         "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
         "Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.\n\n" +
         "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
-        "Updates: at start and every six hours the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.",
+        "Updates: at start and every six hours the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.\n\n" +
+        "Reading checks: with each shared run, counts of how reading went (reads that didn't line up, names guessed or not found, pickups only the loot list saw, crafting panel counts), the item names the tracker couldn't read exactly (names only, never chat), and where the chat sits as fractions of the game window with the window's size go to kinahledger.com (https://kinahledger.com/v1/accuracy) with the app version and the install ID. At start and every six hours the tracker also reads small reading settings and the staged rollout of new versions from kinahledger.com/v1/config; only the app version goes with that request.\n\n" +
+        "Report pictures: only if you turn on Send report pictures in Options › Sharing, a miscount report's pictures of the loot list and the crafting panel go to kinahledger.com (https://kinahledger.com/v1/frames). Never the chat, never the whole screen.",
         "What's shared", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /* ---------------- server (everything shared is per server) ---------------- */

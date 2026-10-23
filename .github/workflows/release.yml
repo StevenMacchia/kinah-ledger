@@ -51,6 +51,13 @@ jobs:
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
 
+      # the replay test bank (tracker/tests/replays): saved loot list and crafting panel crops, from players' miscount
+      # reports and generated cases, must count as their case says, or nothing is released. Cases that need text
+      # recognition are skipped (not failed) on a runner without it; pending cases print without failing.
+      - name: Replay tests
+        shell: bash
+        run: dist/KinahLedger.exe replay-bank tracker/tests/replays | cat
+
       - name: Sign in to Azure for signing
         if: ${{ vars.AZURE_SIGNING_ACCOUNT != '' }}
         uses: azure/login@v2

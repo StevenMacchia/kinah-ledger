@@ -78,6 +78,8 @@
     <EmbeddedResource Include="..\..\data\skins.json" LogicalName="skins.json" Condition="Exists('..\..\data\skins.json')" />
     <EmbeddedResource Include="..\..\data\icon-index.bin" LogicalName="icon-index.bin" Condition="Exists('..\..\data\icon-index.bin')" />
     <EmbeddedResource Include="..\..\data\extra-items.json" LogicalName="extra-items.json" Condition="Exists('..\..\data\extra-items.json')" />
+    <!-- crowd-learned misread fixes (kinahledger.com/v1/aliases.json via tools/data/aliases.js), updated daily like the lists above -->
+    <EmbeddedResource Include="..\..\data\aliases.json" LogicalName="aliases.json" Condition="Exists('..\..\data\aliases.json')" />
   </ItemGroup>
 
   <ItemGroup>

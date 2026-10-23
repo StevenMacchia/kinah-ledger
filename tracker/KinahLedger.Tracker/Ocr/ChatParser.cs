@@ -314,6 +314,9 @@ public sealed partial class ChatParser
     /// </summary>
     public Func<IReadOnlyCollection<string>>? Fighting { get; set; }
 
+    /// <summary>True for an item that must always count (Legend, Unique, Epic, boss gear): a guess at one is never held back.</summary>
+    public Func<long, bool>? Rare { get; set; }
+
     /// <summary>Each grade's colour as printed on this PC, learned from names read exactly (null: names aren't judged by colour).</summary>
     public GradeColours? Colours { get; set; }
 
@@ -588,9 +591,13 @@ public sealed partial class ChatParser
                 {
                     // a guess no loot table backs while fighting enemies whose tables are known: left for the loot list
                     // beside the character to confirm (it adds the pickup itself if it showed it), never counted from a guess
-                    if (!fromLikely && Unlisted(gid) is { } fought)
+                    Session.Accuracy.Name(name, gid, "guessed");
+                    // a Legend, Unique or Epic item, or boss gear, is never held back (Steven, 2026-10-23: rare drops always
+                    // count): it goes to the session's second read instead (RareGate), which confirms or corrects it
+                    if (!fromLikely && Rare?.Invoke(gid) != true && Unlisted(gid) is { } fought)
                     {
                         HeldUnlisted++;
+                        Session.Accuracy.Add("held");
                         CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)}, but {string.Join(", ", fought)} doesn't drop it: not counted from the chat, left for the loot list");
                         yield break;
                     }
@@ -598,7 +605,11 @@ public sealed partial class ChatParser
                     yield return new ItemAcquired(time, gid, Math.Clamp(n, 1, 9999), bound) { Via = "guessed" };
                     yield break;
                 }
-                CrashLog.Note($"not in the item list, not counted: {name}"); yield break;
+                CrashLog.Note($"not in the item list, not counted: {name}");
+                Session.Accuracy.Add("unknown");
+                // reported only when it reads like a garbled item name (some item is near it), never other text
+                if (_items.Near(name, Math.Max(2, name.Length / 3)).Count > 0 || _items.Fragment(name, 3).Count > 0) Session.Accuracy.Name(name, null, "unknown");
+                yield break;
             }
             yield return new ItemAcquired(time, Choose(name, accent), Math.Clamp(n, 1, 9999), bound);
         }

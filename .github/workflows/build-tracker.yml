@@ -31,9 +31,20 @@ jobs:
       - name: Check data/manifest.json is current
         run: node tools/data/manifest.js --check
 
+      # crowd-learned aliases ship with the game data: every one an item, none of them rare, none an item's own name
+      - name: Check data/aliases.json
+        run: node tools/data/aliases.js --check
+
       - name: Publish the single-file exe
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
+
+      # the accuracy pipeline's own checks, and the replay test bank the release workflow also runs
+      - name: Accuracy self-test and replay tests
+        shell: bash
+        run: |
+          dist/KinahLedger.exe accuracy-test | cat
+          dist/KinahLedger.exe replay-bank tracker/tests/replays | cat
 
       - name: Write latest.json
         run: node tools/release-manifest.js dist/KinahLedger.exe

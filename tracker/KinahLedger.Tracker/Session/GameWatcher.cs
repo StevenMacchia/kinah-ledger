@@ -212,7 +212,7 @@ public sealed class GameWatcher
                         try { var c = await EnsureChatAsync(); if (Farm != null) { c.Secondary = Farm; } }
                         catch (Exception ex) { ChatNote = ex.Message; }
                     }
-                    if (Market.Enabled && MarketInView()) await Market.TickAsync(game, _settings.Ocr.Scale);
+                    if (Market.Enabled && !Update.RemoteConfig.Current.Off("market") && MarketInView()) await Market.TickAsync(game, _settings.Ocr.Scale);
                     try { await TickBalanceAsync(game); } catch (Exception ex) { CrashLog.Write("balance", ex); }
                 }
                 if (Market.FlushDue) await Market.FlushAsync();

@@ -229,6 +229,8 @@ public static class WpfApp
         foreach (var page in Enum.GetValues<OptionsWindow.Page>())
         {
             var o = new OptionsWindow(w, page) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            // KL_OPTIONS_H=1400: render the page that tall, to see rows below the fold
+            if (double.TryParse(Environment.GetEnvironmentVariable("KL_OPTIONS_H"), out var oh) && oh > 300) { o.MaxHeight = oh; o.Height = oh; }
             o.Show();
             DoEvents();
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-{page.ToString().ToLowerInvariant()}{(skin != null ? "-" + skin : "")}.png"), 0);

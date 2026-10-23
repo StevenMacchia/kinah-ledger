@@ -212,9 +212,18 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Pictures in miscount reports"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Keeps the last minute of the chat and the loot list as pictures, so Report a miscount can save what the screen showed. They can show other players' names. They stay on this PC; nothing is sent."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Keeps the last minute of the chat and the loot list as pictures, so Report a miscount can save what the screen showed. They can show other players' names. They stay on this PC; the switch below sends only the loot list and panel pictures."/>
                 </StackPanel>
                 <CheckBox x:Name="ReportFramesChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Send report pictures to fix the reader"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="With each miscount report, the loot list and crafting panel pictures go to kinahledger.com and become tests the tracker must pass before each release. Never the chat, never the whole screen."/>
+                </StackPanel>
+                <CheckBox x:Name="SendFramesChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
             </StackPanel>
           </Border>

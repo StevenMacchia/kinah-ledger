@@ -47,6 +47,8 @@ public partial class MainWindow
         UpdateBtn.Click += async (_, _) => await UpdateClicked();
         UpdateNotesLink.Click += (_, _) => { if (_release?.NotesUrl is { Length: > 0 } u) Open(u); };
         AnnounceUpdated();
+        // the site's reading settings and staged rollout (Update/RemoteConfig.cs): fetched with sharing or update checks on
+        if (_settings.Upload.Enabled || _settings.Update.Check) _ = ConfigLoop();
         if (!_settings.Update.Check)
         {
             SetUpdateStatus("Update checks are off (update.check in settings.json). New versions are on the releases page.");
@@ -67,6 +69,42 @@ public partial class MainWindow
             Say($"Updated to {now}. Everything you set is kept.", "Good");
             SetUpdateStatus($"Updated from {was} to {now}.");
         }
+    }
+
+    /// <summary>The remote config at start (a few seconds in) and every few hours; a failed fetch keeps what is in use.</summary>
+    async Task ConfigLoop()
+    {
+        await Task.Delay(TimeSpan.FromSeconds(5));
+        while (true)
+        {
+            try
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
+                if (await RemoteConfig.FetchAsync(http, RemoteConfig.UrlFor(_settings.Upload)) is { } rc)
+                {
+                    RemoteConfig.Current = rc;
+                    var sp = System.IO.Path.Combine(AppContext.BaseDirectory, "settings.json");
+                    rc.ApplyTo(_settings, System.IO.File.Exists(sp) ? System.IO.File.ReadAllText(sp) : null);
+                }
+            }
+            catch (Exception ex) { CrashLog.Note("remote config: " + ex.Message); }
+            await Task.Delay(TimeSpan.FromHours(RemoteConfig.Current.TtlHours));
+        }
+    }
+
+    /// <summary>
+    /// Staged rollout: whether a found version installs on its own here (RemoteConfig.AutoInstall). When not, nothing is
+    /// shown; the Options line says it comes a little later, and Check now there installs it at once.
+    /// </summary>
+    bool RolloutAllows(Version v, bool manual)
+    {
+        if (manual) return true;
+        var (auto, why) = RemoteConfig.Current.AutoInstall(v, Upload.InstallId.Get());
+        if (auto) return true;
+        CrashLog.Note($"update {Updater.Show(v)} found, not installed yet: {why}");
+        SetUpdateStatus($"Version {Updater.Show(v)} is out and reaches this tracker a little later ({why}). Check now installs it today.");
+        return false;
     }
 
     async Task UpdateLoop()
@@ -115,7 +153,7 @@ public partial class MainWindow
                 // for installed copies (it shouldn't happen; the release workflow refuses one) still reaches the player,
                 // as its installer, which updates the installed copy in place
                 var gh = await Updater.CheckAsync(_settings.Update.Manifest);
-                if (gh.Ok && gh.Newer != null)
+                if (gh.Ok && gh.Newer != null && RolloutAllows(gh.Newer.Version, manual))
                 {
                     _release = gh.Newer; _vInfo = null; _staged = null; _updateNeedsSite = true;
                     _updateError = "this version comes as an installer";
@@ -127,6 +165,7 @@ public partial class MainWindow
             }
             var tv = info.TargetFullRelease.Version;
             var rel = new Release(new Version(tv.Major, tv.Minor, tv.Patch), "", info.TargetFullRelease.SHA1 ?? "", info.TargetFullRelease.Size, $"{Installer.RepoUrl}/releases/tag/v{tv.Major}.{tv.Minor}.{tv.Patch}");
+            if (_release == null && !RolloutAllows(rel.Version, manual)) return;
             if (_release != null && rel.Version == _release.Version && _updateError == null) { ShowUpdate(); return; }
             _vInfo = info; _release = rel; _staged = null; _updateError = null; _updateNeedsSite = false;
             if (_prefs.AutoUpdate) await FetchUpdate(_release); else ShowUpdate();
@@ -136,6 +175,7 @@ public partial class MainWindow
         var at = DateTime.Now.ToString("t");
         if (!r.Ok) { if (_release == null) SetUpdateStatus($"Couldn't check for updates at {at}: {r.Note}. It tries again in a few hours."); return; }
         if (r.Newer == null) { if (_release == null) SetUpdateStatus($"{r.Note} Checked at {at}."); return; }
+        if (_release == null && !RolloutAllows(r.Newer.Version, manual)) return;
         if (_release != null && r.Newer.Version == _release.Version && _updateError == null) { ShowUpdate(); return; }
         _release = r.Newer; _staged = null; _updateError = null; _updateNeedsSite = false;
         if (_prefs.AutoUpdate && _exe != null) await FetchUpdate(_release);

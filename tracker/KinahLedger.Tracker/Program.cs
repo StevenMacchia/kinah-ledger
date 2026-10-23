@@ -23,7 +23,11 @@ internal static class Program
         if (args.Length > 0 && Platform.Installer.IsLink(args[0])) args = Array.Empty<string>();
         if (args.Length == 0 || args[0] is Platform.AutoStart.BackgroundArg or Ui.MainWindow.AfterUpdateArg)
         {
-            // double-clicked, started with Windows (in the tray), or restarted by an update: open the window
+            // double-clicked, started with Windows (in the tray), or restarted by an update: open the window.
+            // The site's reading settings as last fetched (Update/RemoteConfig.cs) apply first; settings.json's own values win.
+            Update.RemoteConfig.Current = Update.RemoteConfig.LoadKept();
+            try { var sp = Path.Combine(AppContext.BaseDirectory, "settings.json"); Update.RemoteConfig.Current.ApplyTo(settings, File.Exists(sp) ? File.ReadAllText(sp) : null); }
+            catch (Exception ex) { CrashLog.Write("remote config", ex); }
             return WpfApp.Run(settings, background: args.Contains(Platform.AutoStart.BackgroundArg), afterUpdate: args.Contains(Ui.MainWindow.AfterUpdateArg));
         }
         // command line: write to the terminal that started us; if there's none and no pipe either, open one
@@ -34,7 +38,7 @@ internal static class Program
             settings.ProcessHints = hints.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         // test and measuring commands log to a temp folder, never into the player's own reads.log
-        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench")
+        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank")
             CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-test-logs");
         try
         {
@@ -96,6 +100,9 @@ internal static class Program
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
                 case "parse-test": return ParseTest(settings);
+                case "accuracy-test": return Session.AccuracyTests.Run(settings);
+                case "accuracy-sample": return Session.AccuracyTests.Sample(settings, pos, opts);
+                case "replay-bank": return ReplayBankCmd(settings, pos, opts);
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
                 case "market-test": return MarketTest(settings, opts);
@@ -624,6 +631,24 @@ options: --process aion[,other]");
         Console.WriteLine($"  reads that didn't line up: {notes.Count(n => n.Contains("couldn't line"))}");
         CrashLog.DirOverride = null; _ = real;
         return 0;
+    }
+
+    /// <summary>
+    /// The replay test bank (Session/ReplayBank.cs): `replay-bank <dir>` runs every case and fails on a miscount (the
+    /// release workflow runs it before publishing); `--record <case>` writes what this version counts into that case;
+    /// `--seed` writes the generated cases into <dir>.
+    /// </summary>
+    static int ReplayBankCmd(Settings settings, List<string> pos, Dictionary<string, string> opts)
+    {
+        var dir = pos.FirstOrDefault() ?? Path.Combine("..", "tests", "replays");
+        if (opts.ContainsKey("seed-full")) { Console.WriteLine($"wrote {Session.ReplayBank.SeedFullFrames(dir)} whole-window crafting pictures to {Path.GetFullPath(dir)}"); return 0; }
+        if (opts.ContainsKey("seed")) { Directory.CreateDirectory(dir); foreach (var c in Session.ReplayBank.Seed(dir)) Console.WriteLine($"wrote {c}"); return 0; }
+        if (!Directory.Exists(dir)) { Console.Error.WriteLine($"no replay bank at {Path.GetFullPath(dir)}"); return 1; }
+        var results = Session.ReplayBank.Run(dir, settings, opts.GetValueOrDefault("record"));
+        foreach (var r in results) Console.WriteLine($"{r.Status,-9} {r.Case}  {r.Detail}");
+        int failed = results.Count(r => r.Status == "FAIL");
+        Console.WriteLine($"replay bank: {results.Count(r => r.Status == "pass")} passed, {failed} failed, {results.Count(r => r.Status == "pending")} pending, {results.Count(r => r.Status == "skipped")} skipped" + (Session.ReplayBank.OcrAvailable() ? "" : " (no text recognition here)"));
+        return failed > 0 || results.Count == 0 ? 1 : 0;
     }
 
     /// <summary>Renders the window (and the panel) off-screen to PNG files, so the layout can be reviewed without a desktop session.</summary>

@@ -204,6 +204,9 @@ public static class ChatLocator
         return (region, $"chat found from its lines; the input box isn't shown ({chat.Count} lines{(boosted ? ", boosted read" : "")})");
     }
 
+    /// <summary>Two or more chat-shaped lines sharing a left edge: what a read of a chat area shows (used to check a layout hint).</summary>
+    public static bool LooksLikeChat(List<OcrLineBox> lines) => ChatLines(lines).Count >= 2;
+
     /// <summary>Chat-shaped lines that share the most common left edge (within 40 px): the chat is left-aligned, stray UI text isn't.</summary>
     static List<OcrLineBox> ChatLines(List<OcrLineBox> lines)
     {

@@ -17,8 +17,10 @@ public static partial class LootPopup
     public static Rectangle Region(Rectangle game)
     {
         double h = game.Height, cx = game.Left + game.Width / 2.0, cy = game.Top + h / 2.0;
-        int left = (int)(cx - 0.42 * h), right = (int)(cx - 0.02 * h);
-        int top = (int)(cy - 0.06 * h), bottom = (int)(cy + 0.30 * h);
+        // the band's edges come from the remote config (built in: 0.42 to 0.02 left of centre, 0.06 above to 0.30 below)
+        var c = KinahLedger.Update.RemoteConfig.Current;
+        int left = (int)(cx + c.LootLeft * h), right = (int)(cx + c.LootRight * h);
+        int top = (int)(cy + c.LootTop * h), bottom = (int)(cy + c.LootBottom * h);
         return Rectangle.FromLTRB(Math.Max(game.Left, left), Math.Max(game.Top, top), Math.Min(game.Right, right), Math.Min(game.Bottom, bottom));
     }
 
