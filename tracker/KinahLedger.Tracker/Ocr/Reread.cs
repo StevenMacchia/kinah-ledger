@@ -184,7 +184,8 @@ public sealed class Reread
             var line = prev[i]; var k = Key(line);
             if (k.Length == 0) continue;
             if (before.Any(p => Same(k, p))) break;
-            if (IsAchievement(line)) achievement = true;
+            // an achievement line that stays on screen reads a little differently each time: new only if nothing like it was seen
+            if (IsAchievement(line) && !before.Any(p => Near(k, p))) achievement = true;
             if (!LooksLikeLoot(line) || line.TrimStart().StartsWith('[')) continue;
             // garbled reads line up with each other too ("Acquire d Refining stone" three reads running): only a line whose
             // verb was read whole is a clean read of it
@@ -201,6 +202,23 @@ public sealed class Reread
             take.Insert(0, f >= 0 ? cur[f] : line);
         }
         return take;
+    }
+
+    /// <summary>When each line was first on screen, by key; kept ten minutes after it was last seen. Call once per read.</summary>
+    public static void NoteFirstSeen(Dictionary<string, (DateTime First, DateTime Last)> seen, IReadOnlyList<string> lines, DateTime now)
+    {
+        foreach (var l in lines) { var k = Key(l); if (k.Length == 0) continue; seen[k] = seen.TryGetValue(k, out var v) && (now - v.Last).TotalMinutes <= 10 ? (v.First, now) : (now, now); }
+        if (seen.Count > 800) foreach (var k in seen.Where(kv => (now - kv.Value.Last).TotalMinutes > 10).Select(kv => kv.Key).ToList()) seen.Remove(k);
+    }
+
+    /// <summary>The first time a line like this one (the same, or a misread or two apart) was on screen; null when never.</summary>
+    public static DateTime? FirstSeen(string line, Dictionary<string, (DateTime First, DateTime Last)> seen)
+    {
+        var k = Key(line);
+        if (k.Length == 0) return null;
+        DateTime? best = null;
+        foreach (var (key, v) in seen) if ((key == k || Near(k, key)) && (best == null || v.First < best)) best = v.First;
+        return best;
     }
 
     /// <summary>An achievement line ("Fortress Guardian Notun III achieved."), never a player's message.</summary>

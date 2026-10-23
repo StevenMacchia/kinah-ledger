@@ -1116,6 +1116,11 @@ options: --process aion[,other]");
         for (int i = 1; i <= 5; i++) sa.ProcessChat(achLines, b0.AddSeconds(i * 0.4));
         sa.FlushVotes(b0.AddSeconds(3));
         Check("items printed with an achievement line: its reward, not drops", $"{n(sa.Engine, "Spiritstone")} {n(sa.Engine, "Lesser Manastone")} {sa.Engine.Totals().Kinah}", "0 0 300");
+        // the achievement line stays on screen, read a little differently now and then; a drop two minutes later is a drop
+        var later = new List<string> { "Acquired 300 Kina.", "Spiritstone acquired.", "Fortress Guardian Notun Ill achieved.", "Lesser Manastone (Bound) acquired.", "Acquired 410 Kina.", "Lesser Soulstone acquired." };
+        for (int i = 0; i < 5; i++) sa.ProcessChat(later, b0.AddSeconds(120 + i * 0.4));
+        sa.FlushVotes(b0.AddSeconds(123));
+        Check("an old achievement line still on screen: a new drop counts", $"{n(sa.Engine, "Lesser Soulstone")}", "1");
 
         // garbled reads over lines that were already on screen: nothing more
         var s2 = new TrackerSession(null, settings, items, "Test");

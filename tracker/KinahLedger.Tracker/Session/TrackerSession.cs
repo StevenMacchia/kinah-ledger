@@ -582,6 +582,7 @@ public sealed class TrackerSession
             if ((now - gs).TotalSeconds > SettleSeconds) _garbledSince = null;
             else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs; }
         }
+        Reread.NoteFirstSeen(_firstSeen, lines, now);
         Reread.Remember(_recent, lines, now);
         _lastLines = lines;
         bool batchAchievement = false;
@@ -613,7 +614,8 @@ public sealed class TrackerSession
         // each new line is voted on across the next reads before it counts (ChatVoter); lines come out in order
         var voted = Vote ? _voter.Push(fresh, lines, now, _parser.Meaning) : fresh;
         // an achievement line among them: the items printed with it are its reward, and those in the next few seconds too
-        batchAchievement = voted.Any(Reread.IsAchievement);
+        // only an achievement line that is new: one that stays on screen is read a little differently each time
+        batchAchievement = voted.Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
         foreach (var (l, events) in _parser.ParseBatch(voted, now))
         {
@@ -621,7 +623,7 @@ public sealed class TrackerSession
             CrashLog.Read(l, any, afterFade);
             if (any) { LastLine = l; LootLine?.Invoke(l); }
         }
-        batchAchievement = reread.Any(Reread.IsAchievement) || fresh.Any(Reread.IsAchievement);
+        batchAchievement = reread.Concat(fresh).Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         foreach (var l in reread)
         {
             bool any = false;
@@ -1105,6 +1107,10 @@ public sealed class TrackerSession
     /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
     List<string> _prevRead = new();
     readonly Reread _reread = new();
+    // when each line was first on screen: an achievement line that stays up is read a little differently each time, and
+    // only a new one makes the items with it its reward
+    readonly Dictionary<string, (DateTime First, DateTime Last)> _firstSeen = new();
+    bool NewLine(string line, DateTime now) => Reread.FirstSeen(line, _firstSeen) is not DateTime f || (now - f).TotalSeconds <= 20;
     // reads that couldn't be lined up, in a row: since when, the lines seen before them, what was counted meanwhile
     DateTime? _garbledSince; HashSet<string> _beforeGarbled = new(); readonly List<string> _countedGarbled = new();
     /// <summary>Garbled reads longer than this before the chat settles aren't one burst; nothing is taken from the settled read.</summary>
