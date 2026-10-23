@@ -197,13 +197,17 @@ public static class ReplayBank
                     finally { RewardGrid.MaskBadges = true; }
                 }
                 if (rc != null)
-                    foreach (var sl in Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016))).GetAwaiter().GetResult())
+                {
+                    var read = Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016))).GetAwaiter().GetResult();
+                    var prefer = TrackerSession.SetMates(read, TrackerSession.ByIcon(items));
+                    foreach (var sl in read)
                         table.Add(new JsonObject
                         {
-                            ["n"] = sl.Count, ["grade"] = sl.Grade, ["name"] = TrackerSession.SlotName(items, sl) ?? "?",
+                            ["n"] = sl.Count, ["grade"] = sl.Grade, ["name"] = TrackerSession.SlotName(items, sl, prefer) ?? "?",
                             ["cands"] = string.Join(" | ", TrackerSession.GradedCandidates(items, sl).Take(3).Select(c => $"{c.Names} ({c.Key} {c.Distance:0})")),
                             ["icon"] = sl.Icons.Count > 0 ? $"{sl.Icons[0].Key} {sl.Icons[0].Distance:0}" + (sl.Icons.Count > 1 ? $" / {sl.Icons[1].Distance:0}" : "") : "none",
                         });
+                }
             }
             else Task.Run(() => session.ReplayListFrameAsync(bmp, at, t)).GetAwaiter().GetResult();
             if (table != null)

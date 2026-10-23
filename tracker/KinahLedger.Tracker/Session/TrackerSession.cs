@@ -1215,7 +1215,7 @@ public sealed class TrackerSession
     /// it is close, clearly closer than the next icon of that grade that names something else, and not far behind the
     /// closest icon of any grade (a much closer icon of another grade says the grade or the list is wrong). Null: not sure.
     /// </summary>
-    internal static (string Key, double Distance, List<ItemInfo> Graded)? GradedPick(RewardGrid.Slot sl, Dictionary<string, List<ItemInfo>> byIcon)
+    internal static (string Key, double Distance, List<ItemInfo> Graded)? GradedPick(RewardGrid.Slot sl, Dictionary<string, List<ItemInfo>> byIcon, Func<string, bool>? prefer = null)
     {
         var cands = new List<(string Key, double Distance, List<ItemInfo> Graded, HashSet<string> Names)>();
         foreach (var (key, d) in sl.Icons)
@@ -1229,8 +1229,40 @@ public sealed class TrackerSession
         if (c0.Distance > GridSureDistance) return null;
         if (sl.Icons.Count > 0 && c0.Distance > sl.Icons[0].Distance * 1.25) return null;
         var rival = cands.Skip(1).FirstOrDefault(c => !c.Names.SetEquals(c0.Names));
-        if (rival.Key != null && rival.Distance < c0.Distance * 1.25) return null;
+        if (rival.Key != null && rival.Distance < c0.Distance * 1.25)
+        {
+            // too close to call by the picture: when exactly one of the close ones belongs to a set this table names surely, or
+            // came in this expedition's runs before, it is that one (Steven, 2026-10-23: the bow and the earrings tied at 54
+            // and 68, Divine Canyon among Divine Canyon pieces; the dagger 49 to 61, Earth among Earth pieces)
+            if (prefer == null) return null;
+            var liked = cands.Where(c => c.Distance <= GridSureDistance && c.Distance < c0.Distance * 1.25 && c.Names.Count == 1 && prefer(c.Names.First()))
+                             .GroupBy(c => c.Names.First(), StringComparer.OrdinalIgnoreCase).ToList();
+            if (liked.Count != 1) return null;
+            var w = liked[0].OrderBy(c => c.Distance).First();
+            return (w.Key, w.Distance, w.Graded);
+        }
         return (c0.Key, c0.Distance, c0.Graded);
+    }
+
+    /// <summary>A gear set's name: the item's name less its last word ("Divine Canyon Orb" is of "Divine Canyon").</summary>
+    internal static string? SetOf(string name)
+    {
+        var w = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return w.Length >= 2 && string.Join(" ", w[..^1]).Length >= 3 ? string.Join(" ", w[..^1]) : null;
+    }
+
+    /// <summary>
+    /// What a table's own sure names say about its close calls: an item of a set another slot names surely (expedition tables
+    /// give out sets), or one this expedition gave before (<paramref name="history"/>).
+    /// </summary>
+    internal static Func<string, bool> SetMates(IEnumerable<RewardGrid.Slot> slots, Dictionary<string, List<ItemInfo>> byIcon, IEnumerable<string>? history = null)
+    {
+        var sets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in slots)
+            if (s.Count > 0 && GradedPick(s, byIcon) is { } p && p.Graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() is { Count: 1 } n && SetOf(n[0]) is { } set)
+                sets.Add(set);
+        var seen = new HashSet<string>(history ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        return name => seen.Contains(name) || (SetOf(name) is { } set && sets.Contains(set));
     }
 
     /// <summary>For the replay's report: the slot's closest icons that hold items of its grade, with the names they hold.</summary>
@@ -1251,16 +1283,26 @@ public sealed class TrackerSession
     /// The item a slot names, the way ApplyGrid takes it (the replay bank scores the reader with it): the gold coin as "Kina",
     /// a sure match of one name, or null (not read: unsure, or one of several names).
     /// </summary>
-    internal static string? SlotName(ItemDictionary items, RewardGrid.Slot sl)
+    internal static string? SlotName(ItemDictionary items, RewardGrid.Slot sl, Func<string, bool>? prefer = null)
     {
         if (sl.Count <= 0) return null;
-        var byIcon = items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        var byIcon = ByIcon(items);
         var best = sl.Icons.FirstOrDefault();
         if (best.Key == null || !byIcon.TryGetValue(best.Key, out var its)) return null;
         if (its.Any(i => string.Equals(Unbound(i.Name), "Kina", StringComparison.OrdinalIgnoreCase)) && best.Distance <= 100 && sl.Count >= 1000) return "Kina";
-        if (GradedPick(sl, byIcon) is not { } pick) return null;
+        if (GradedPick(sl, byIcon, prefer) is not { } pick) return null;
         var names = pick.Graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         return names.Count == 1 ? names[0] : null;
+    }
+
+    static Dictionary<string, List<ItemInfo>>? _byIconAll;
+    static ItemDictionary? _byIconOf;
+    /// <summary>The item list's items by icon key (kept while the list is the same).</summary>
+    internal static Dictionary<string, List<ItemInfo>> ByIcon(ItemDictionary items)
+    {
+        if (_byIconAll == null || !ReferenceEquals(_byIconOf, items))
+        { _byIconAll = items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList()); _byIconOf = items; }
+        return _byIconAll;
     }
 
     internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
@@ -1270,6 +1312,9 @@ public sealed class TrackerSession
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         int added = 0, known = 0, unnamed = 0;
         var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
+        // a close call is settled by the table's own sets, or by what this expedition gave in runs before (GradedPick)
+        var history = Instances.Snapshot().Where(r => string.Equals(r.Zone, Instances.Open, StringComparison.OrdinalIgnoreCase)).SelectMany(r => r.Items.Keys.Concat(r.BoundItems.Keys)).Select(id => _items.NameOf(id)).ToList();
+        var prefer = SetMates(slots, _byIcon!, history);
         var notRead = new List<string>();       // every slot it can't name, as "Rare x14 (picture)": shown as Unknown item, never dropped
         void NotRead(RewardGrid.Slot s) => notRead.Add($"{s.Grade} x{(s.Count > 0 ? s.Count.ToString() : "?")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
         foreach (var sl in slots)
@@ -1298,7 +1343,8 @@ public sealed class TrackerSession
             // a sure match only: close (measured on the Urugugu table: right ones 23 to 60, wrong ones 82 to 114), clearly
             // closer than the next icon of the slot's own grade that names something else (GradedPick); anything else is the
             // event's own item the list lacks, or a twin too close to call
-            var pick = GradedPick(sl, _byIcon);
+            var pick = GradedPick(sl, _byIcon, prefer);
+            if (pick != null && GradedPick(sl, _byIcon) == null) CrashLog.Note($"reward table: a {sl.Grade} slot too close to call by its picture, named {_items.NameOf(pick.Value.Graded[0].Id)} by the table's set or this expedition's runs");
             var graded = pick?.Graded ?? new List<ItemInfo>();
             bool sure = pick != null;
             if (!sure) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
