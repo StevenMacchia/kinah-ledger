@@ -304,6 +304,14 @@ public static class AccuracyTests
         var clean = SyntheticChat.Run(settings, items, seeds: 6, noise: 0);
         var noisy = SyntheticChat.Run(settings, items, seeds: 12, noise: 1);
         var rough = SyntheticChat.Run(settings, items, seeds: 12, noise: 2);
+        Console.WriteLine($"Synthetic chat, clean, no quest: {SyntheticChat.Run(settings, items, seeds: 6, noise: 0, quest: false)}");
+        RemoteConfig.Current = new RemoteConfig { WitnessSeconds = 0 };
+        Console.WriteLine($"Synthetic chat, clean, no witness rule: {SyntheticChat.Run(settings, items, seeds: 6, noise: 0)}");
+        Console.WriteLine($"Synthetic chat, noisy, no witness rule: {SyntheticChat.Run(settings, items, seeds: 12, noise: 1)}");
+        RemoteConfig.Current = RemoteConfig.BuiltIn;
+        for (int sd = 1; sd <= 3; sd++) Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, sd, 0, true));
+        Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, 1, 0, false));
+        Console.WriteLine("Synthetic detail: " + SyntheticChat.Diagnose(settings, items, 1, 1, true));
         Console.WriteLine($"\nSynthetic chat, clean: {clean}\nSynthetic chat, noisy: {noisy}\nSynthetic chat, rough: {rough}");
         Check("synthetic, clean chat: every Kina, item and kill", $"{clean.KinahCounted == clean.KinahTrue} {clean.Phantom} {clean.Missed} {clean.KillsCounted == clean.KillsTrue}", "True 0 0 True");
 

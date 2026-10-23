@@ -25,12 +25,12 @@ public static class SyntheticChat
     const string Pet = "Varian";
 
     /// <summary>Runs <paramref name="seeds"/> fights with the given noise and sums the score.</summary>
-    public static Score Run(Settings settings, ItemDictionary items, int seeds = 12, double noise = 1.0)
+    public static Score Run(Settings settings, ItemDictionary items, int seeds = 12, double noise = 1.0, bool quest = true)
     {
         long kt = 0, kc = 0; int it = 0, ic = 0, ph = 0, mi = 0, lt = 0, lc = 0;
         for (int seed = 1; seed <= seeds; seed++)
         {
-            var (truth, reads) = Fight(new Random(seed * 7919), noise);
+            var (truth, reads) = Fight(new Random(seed * 7919), noise, quest);
             var s = new TrackerSession(null, settings, items, "Synthetic");
             foreach (var (t, lines) in reads) { s.QuestCounter(lines, t); s.ProcessChat(lines, t); }
             s.FlushVotes(reads[^1].T.AddSeconds(2));
@@ -49,10 +49,25 @@ public static class SyntheticChat
         return new Score(seeds, kt, kc, it, ic, ph, mi, lt, lc);
     }
 
-    sealed class Truth { public long Kinah; public int Kills; public Dictionary<string, int> Items = new(); }
+    /// <summary>One fight in detail, for finding what the score counts: Kinah missed and extra, and the kill counters.</summary>
+    public static string Diagnose(Settings settings, ItemDictionary items, int seed, double noise, bool quest)
+    {
+        var (truth, reads) = Fight(new Random(seed * 7919), noise, quest);
+        var s = new TrackerSession(null, settings, items, "Synthetic");
+        foreach (var (t, lines) in reads) { s.QuestCounter(lines, t); s.ProcessChat(lines, t); }
+        s.FlushVotes(reads[^1].T.AddSeconds(2));
+        var e = s.Engine;
+        var counted = s.RecentPickups(100000).Select(p => p.What).Where(w => w.EndsWith(" Kinah")).Select(w => long.Parse(w[..^6].Replace(",", ""))).ToList();
+        var want = truth.KinahLines.ToList();
+        var missing = new List<long>(want); foreach (var c in counted) missing.Remove(c);
+        var extra = new List<long>(counted); foreach (var w in want) extra.Remove(w);
+        return $"seed {seed} noise {noise} quest {quest}: kills true {truth.Kills}, counted {e.Totals().Kills} (seen {e.KillsSeen}, Kinah drops {e.KinahDrops}, currency lines {e.CurrencyLines}, defeated {e.KillsDefeated}, xp {e.KillsXp}) · Kinah lines missed [{string.Join(", ", missing)}] extra [{string.Join(", ", extra)}]";
+    }
+
+    sealed class Truth { public long Kinah; public int Kills; public Dictionary<string, int> Items = new(); public List<long> KinahLines = new(); }
 
     /// <summary>One fight: about 40 kills over four minutes, player chat between them, a kill quest's counter.</summary>
-    static (Truth, List<(DateTime T, List<string> Lines)>) Fight(Random r, double noise)
+    static (Truth, List<(DateTime T, List<string> Lines)>) Fight(Random r, double noise, bool withQuest = true)
     {
         var truth = new Truth();
         var t0 = new DateTime(2026, 10, 23, 18, 0, 0, DateTimeKind.Utc);
@@ -65,7 +80,7 @@ public static class SyntheticChat
             now += 2 + r.NextDouble() * 6;
             truth.Kills++;
             long kina = r.Next(20, 600);
-            truth.Kinah += kina;
+            truth.Kinah += kina; truth.KinahLines.Add(kina);
             var kill = new List<string> { $"Acquired {kina} Kina." };
             if (r.NextDouble() < 0.5) kill.Add($"Obtained 1 {Pet} Soul Crystals.");
             if (r.NextDouble() < 0.25)
@@ -75,7 +90,7 @@ public static class SyntheticChat
                 kill.Insert(r.Next(kill.Count + 1), n == 1 ? $"{d} acquired." : $"Acquired {d} x{n}.");
                 truth.Items[d] = truth.Items.GetValueOrDefault(d) + n;
             }
-            if (quest < 30) { quest++; kill.Add("Defeat Kalgolem"); kill.Add($"and Papis ({quest}/30)"); }
+            if (withQuest && quest < 30) { quest++; kill.Add("Defeat Kalgolem"); kill.Add($"and Papis ({quest}/30)"); }
             foreach (var l in kill) printed.Add((now + r.NextDouble() * 0.4, l));
             // players talk between kills
             for (int c = r.Next(0, 3); c > 0; c--) printed.Add((now + 0.5 + r.NextDouble() * 2, $"[Player{r.Next(1, 9)}] {Words(r)}"));
