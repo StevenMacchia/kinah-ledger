@@ -244,9 +244,9 @@ public static class PriceBook
         return d;
     }
 
-    /// <summary>A board's sure prices only, by name: what the other servers' boards contribute to the region middle.</summary>
+    /// <summary>A board's prices by name, sure or not: what the other servers' boards give the region middle (a lower middle, so one listing can't lift it).</summary>
     public static Dictionary<string, long> ParseBoard(string json, ItemDictionary? items) =>
-        ParseQuotes(json, items).Where(kv => kv.Value.Sure).ToDictionary(kv => kv.Key, kv => kv.Value.Price);
+        ParseQuotes(json, items).ToDictionary(kv => kv.Key, kv => kv.Value.Price);
 
     static long? Num(JsonElement e, string prop) => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var x) ? (long)Math.Round(x) : null;
     static DateTime? Time(JsonElement e, string prop) => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String && v.TryGetDateTime(out var t) ? t.ToUniversalTime() : null;
