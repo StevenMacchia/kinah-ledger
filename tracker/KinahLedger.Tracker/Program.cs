@@ -1185,6 +1185,8 @@ options: --process aion[,other]");
         for (int i = 0; i < 5; i++) sp2.ProcessChat(payLater, payAt.AddSeconds(10 + i * 0.4));
         sp2.FlushVotes(payAt.AddSeconds(13));
         Check("...a kill's drop 10 s later: a drop", $"{n(sp2.Engine, "Spiritstone")}", "1");
+        if (n(sp2.Engine, "Spiritstone") != 1)
+            foreach (var nl in File.ReadLines(CrashLog.ReadsPath).TakeLast(40)) Console.WriteLine("      note: " + nl);
 
         // ---- gathering (Steven, 2026-10-23 11:28-11:29, Orichalcum: "like a 25% accuracy") ----
         // the loot list band read the gathering panel (node, proficiency, item, Success) as rows; the game upgraded the ore
