@@ -823,8 +823,7 @@ public sealed class TrackerSession
             if (_boss != null) BossTick(now, died: true);
         }
         // a Transcendence: the dungeon at a stage ("Shattered Arkanis [Stage 1] | Transcendence", "Set to Stage 1")
-        if (lines.Any(l => !PickupCheck.PlayerChat(l) && (Regex.IsMatch(l, @"transcend", RegexOptions.IgnoreCase) || Regex.IsMatch(l, @"\bset\s*to\s*stage\s*\d", RegexOptions.IgnoreCase))))
-            Instances.MarkTranscendence(now);
+        if (lines.Any(IsTranscendenceLine)) Instances.MarkTranscendence(now);
         // "[Force Recruitment] WB Bloodfang": a world boss's name, learned for this session
         foreach (var l in lines)
             if (Regex.Match(l, @"\bWB\s+([A-Z][A-Za-z']{3,})") is { Success: true } wb && _learnedBosses.Add(wb.Groups[1].Value))
@@ -1171,15 +1170,23 @@ public sealed class TrackerSession
             var reads = new List<List<RewardGrid.Slot>> { await RewardGrid.ReadAsync(frame, top) };
             // the picture the run is counted from, kept (Steven, 2026-10-23: no frame of the Urugugu table existed to check)
             SaveShot(frame, "reward-table");
-            // two more reads of the same table a moment apart: each slot is decided by the reads, not by one of them
-            for (int k = 0; k < 2; k++)
+            // The table fades and slides in after "Reward collected." shows: read it again every 300 ms, up to 3 s, until two
+            // reads in a row agree with every slot surely matched (2026-10-23 Urugugu: one early read, 5 slots 80 to 112, no
+            // counts; the 10-22 table read right, 23 to 60). The last read is kept as a picture too.
+            var started = DateTime.UtcNow;
+            while (!RewardGrid.Settled(reads, GridSureDistance) && (DateTime.UtcNow - started).TotalSeconds < 3)
             {
-                await Task.Delay(350);
-                try { using var again = ScreenReader.Capture(g); reads.Add(await RewardGrid.ReadAsync(again, top)); }
-                catch (Exception ex) { CrashLog.Write("reward table again", ex); }
+                await Task.Delay(300);
+                try
+                {
+                    using var again = ScreenReader.Capture(g);
+                    reads.Add(await RewardGrid.ReadAsync(again, top));
+                    if (RewardGrid.Settled(reads, GridSureDistance) || (DateTime.UtcNow - started).TotalSeconds >= 3) SaveShot(again, "reward-table-settled");
+                }
+                catch (Exception ex) { CrashLog.Write("reward table again", ex); break; }
             }
-            var slots = RewardGrid.Vote(reads);
-            CrashLog.Note($"reward table: {reads.Count} reads ({string.Join(", ", reads.Select(r => r.Count))} slots), voted slot by slot: " +
+            var slots = RewardGrid.Vote(reads, GridSureDistance);
+            CrashLog.Note($"reward table: {reads.Count} reads in {(DateTime.UtcNow - started).TotalSeconds:0.0} s ({string.Join(", ", reads.Select(r => r.Count))} slots, {(RewardGrid.Settled(reads, GridSureDistance) ? "settled" : "never settled")}), voted slot by slot: " +
                 string.Join(" | ", slots.Select(s => $"{s.Grade} x{s.CountText} {(s.Icons.Count > 0 ? s.Icons[0].Key + " " + s.Icons[0].Distance.ToString("0") : "no icon")}")));
             ApplyGrid(slots, now);
         }
@@ -1236,7 +1243,8 @@ public sealed class TrackerSession
             int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
             bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
             var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
-            if (seen >= 0) { _runPickups.RemoveAt(seen); known++; if (names.Count == 1) fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" }); continue; }
+            // every slot ends counted or not read: a chat line can't decide between the names a picture leaves open
+            if (seen >= 0 && names.Count == 1) { _runPickups.RemoveAt(seen); known++; fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" }); continue; }
             if (names.Count != 1) { unnamed++; CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}; not counted"); continue; }
             var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
             Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
@@ -1392,6 +1400,15 @@ public sealed class TrackerSession
     /// Progress", "Gråfting in Progresso" and "•raftingQsin Progresso" (Steven, 2026-10-23 17:12: both Superior Courage
     /// Scrolls were left to the chat because the title came back garbled, so a batch counted only after it ended).
     /// </summary>
+    /// <summary>
+    /// A Transcendence's own system lines, never an item or a notice that happens to hold the word: the room's stage line
+    /// ("Set to Stage 1.") and the room title ("Shattered Arkanis [Stage 1] | Transcendence").
+    /// </summary>
+    public static bool IsTranscendenceLine(string line) =>
+        !PickupCheck.PlayerChat(line)
+        && (Regex.IsMatch(line.Trim(), @"^\W*set\s*to\s*stage\s*\d{1,2}\W*$", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(line, @"\[\s*stage\s*\d{1,2}\s*\]\s*\W{0,3}\s*transcend", RegexOptions.IgnoreCase));
+
     public static bool IsCraftTitle(string line) =>
         Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.CraftPanelWords)
         || Regex.IsMatch(line, @"r[aåäà4]ft(?:ing|in|ng)|r[aåäà4]fting", RegexOptions.IgnoreCase);
@@ -1853,7 +1870,7 @@ public sealed class TrackerSession
             if (!reward) _rewardShotsOpen = 0;
             bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2
                      : crafting ? (now - _rewardShotAt).TotalSeconds >= 2
-                     : inside && (now - _rewardShotAt).TotalSeconds >= 30;
+                     : inside && (now - _rewardShotAt).TotalSeconds >= (Instances.EventPaidWithin(now, 20) ? 2 : 30);
             if (!due) return;
             var today = DateTime.Now.ToString("yyyyMMdd");
             if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;

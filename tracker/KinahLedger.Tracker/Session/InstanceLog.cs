@@ -374,7 +374,7 @@ public sealed class InstanceLog
             if (_leftAt is { } left && (ev.Time - left).TotalSeconds > RewardGraceSeconds) { CloseLocked("time for rewards over"); return; }
             // a run's items come from its reward picture, never the chat (Steven, 2026-10-23: expeditions, Transcendence and
             // events). A chat item is set aside, counted for the log; it still dates the run and its rewards' arrival
-            if (_cur.Kind != WorldBoss && ev is ItemAcquired ci && !ev.Via.Contains("reward table"))
+            if (PictureOnly(_cur) && ev is ItemAcquired ci && !ev.Via.Contains("reward table"))
             {
                 _cur.ChatItemsSetAside += ci.Count; _cur.ChatItems[ci.ItemId] = _cur.ChatItems.GetValueOrDefault(ci.ItemId) + ci.Count; _cur.LastLoot = ci.Time;
                 if (batch >= 3) Paid(ci.Time);
@@ -433,6 +433,18 @@ public sealed class InstanceLog
         }
     }
     public const string Transcendence = "Transcendence";
+
+    /// <summary>
+    /// Runs counted from the reward table's picture alone: expeditions and Transcendence. Events keep their chat lines until
+    /// the event reward screens can be read (no picture of one has been kept yet; their rewards print in the chat).
+    /// </summary>
+    static bool PictureOnly(InstanceRun r) => r.Kind is "Expedition" or Transcendence;
+
+    /// <summary>An event's rewards came in the last <paramref name="seconds"/> s (for its reward pictures, every 2 s).</summary>
+    public bool EventPaidWithin(DateTime now, double seconds)
+    {
+        lock (_lock) return _cur is { Kind: "Event", PaidAt: DateTime p } && (now - p).TotalSeconds <= seconds;
+    }
     DateTime? _transcendAt;
 
     /// <summary>
@@ -487,7 +499,7 @@ public sealed class InstanceLog
     {
         _leftAt = null;
         if (_cur != null) _cur.Ended = why;
-        if (_cur != null && _cur.Kind != WorldBoss && !_cur.FromPicture)
+        if (_cur != null && PictureOnly(_cur) && !_cur.FromPicture)
         {
             _cur.RewardsNotRead = true;
             if (_cur.LastLoot != null) CrashLog.Note($"{_cur.Label}: no reward picture was read, so its rewards are marked not read ({_cur.ChatItemsSetAside} chat item(s) not counted)");

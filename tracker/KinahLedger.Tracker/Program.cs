@@ -1992,6 +1992,20 @@ options: --process aion[,other]");
                 tt.Engine.SetZone("Shattered Floating Temple"); tt.Instances.Zone("Shattered Floating Temple", tt0.AddSeconds(30));
                 Check("a stage set in town makes the next Shattered Arkanis run a Transcendence", $"{tt.Instances.Open}", "Shattered Arkanis");
                 Check("...of its own kind", $"{tt.Instances.CurrentKind}", "Transcendence");
+                // a table still fading in: two early reads (the wrong icons at 80 to 112, no counts) then two clean ones. Not settled
+                // until the clean pair; only sure reads vote, so the two early ones can't outvote the clean ones
+                var fade = new List<RewardGrid.Slot> { new(box, "Common", "", 0, new() { ("Icon_GM_0072_T05_Helmet", 88) }), new(box, "Rare", "", 0, new() { ("Icon_GM_0044_T06_Cape", 112) }) };
+                var clean = new List<RewardGrid.Slot> { new(box, "Legend", "1", 1, new() { ("Greaves", 31) }), new(box, "Unique", "14", 14, new() { ("Silentium", 27) }) };
+                var fadeReads = new List<List<RewardGrid.Slot>> { fade, fade };
+                bool early = RewardGrid.Settled(fadeReads, TrackerSession.GridSureDistance);
+                fadeReads.Add(clean); bool one = RewardGrid.Settled(fadeReads, TrackerSession.GridSureDistance);
+                fadeReads.Add(clean); bool two = RewardGrid.Settled(fadeReads, TrackerSession.GridSureDistance);
+                var sv = RewardGrid.Vote(fadeReads, TrackerSession.GridSureDistance);
+                Check("a table fading in: settled only once two clean reads agree", $"{early} {one} {two}", "False False True");
+                Check("...and the early reads don't outvote the clean ones", string.Join(" | ", sv.Select(s => $"{s.Icons[0].Key} {s.Grade} x{s.Count}")), "Greaves Legend x1 | Silentium Unique x14");
+                Check("Transcendence from its own lines only, never an item's name",
+                    $"{TrackerSession.IsTranscendenceLine("Set to Stage 1.")} {TrackerSession.IsTranscendenceLine("Shattered Arkanis [Stage 1] | Transcendence")} {TrackerSession.IsTranscendenceLine("Transcendence Stone acquired.")} {TrackerSession.IsTranscendenceLine("[Kael] transcendence stage 2 lfg")}",
+                    "True True False False");
                 // three reads of one table, voted slot by slot: an empty count and a glare on one read are outvoted
                 var v1 = new List<RewardGrid.Slot> { new(box, "Rare", "", 0, new() { ("A", 40) }), new(box, "Common", "6", 6, new() { ("B", 35) }) };
                 var v2 = new List<RewardGrid.Slot> { new(box, "Rare", "2", 2, new() { ("A", 44) }), new(box, "Common", "6", 6, new() { ("Z", 90) }) };

@@ -172,6 +172,39 @@ public static class RewardGrid
     /// reads put first (at its closest), the count most reads agree on, and the grade most reads saw. A single read's slip
     /// (an empty count, a glare on one icon) is outvoted (2026-10-23 Urugugu: five slots, every count read empty).
     /// </summary>
+    /// <summary>The last two reads agree on the slots, and every slot of both is a sure match: the table has stopped moving.</summary>
+    public static bool Settled(List<List<Slot>> reads, double sure)
+    {
+        if (reads.Count < 2) return false;
+        var a = reads[^2]; var b = reads[^1];
+        if (a.Count == 0 || a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (a[i].Icons.Count == 0 || b[i].Icons.Count == 0) return false;
+            if (a[i].Icons[0].Key != b[i].Icons[0].Key || a[i].Icons[0].Distance > sure || b[i].Icons[0].Distance > sure) return false;
+            if (a[i].Count != b[i].Count) return false;
+        }
+        return true;
+    }
+
+    /// <summary>The same, where only sure reads of a slot (closest icon within <paramref name="sure"/>) vote on it: early reads of a table still fading in can't outvote one clean read.</summary>
+    public static List<Slot> Vote(List<List<Slot>> reads, double sure)
+    {
+        var seen = reads.Where(r => r.Count > 0).ToList();
+        if (seen.Count == 0) return new List<Slot>();
+        // the slot count of the reads with the most sure slots
+        int n = seen.GroupBy(r => r.Count).OrderByDescending(g => g.Max(r => r.Count(s => s.Icons.Count > 0 && s.Icons[0].Distance <= sure))).ThenByDescending(g => g.Count()).First().Key;
+        var same = seen.Where(r => r.Count == n).ToList();
+        var res = new List<Slot>();
+        for (int i = 0; i < n; i++)
+        {
+            var col = same.Select(r => r[i]).ToList();
+            var sureOnes = col.Where(s => s.Icons.Count > 0 && s.Icons[0].Distance <= sure).ToList();
+            res.Add(Vote(new List<List<Slot>> { }.Concat((sureOnes.Count > 0 ? sureOnes : col).Select(s => new List<Slot> { s })).ToList())[0]);
+        }
+        return res;
+    }
+
     public static List<Slot> Vote(List<List<Slot>> reads)
     {
         var seen = reads.Where(r => r.Count > 0).ToList();
