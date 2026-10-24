@@ -20,6 +20,8 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     bool _bestAll;
+    /// <summary>Best crafts rows before "Show all".</summary>
+    const int BestCraftsShown = 3;
 
     /// <summary>The player's gear bracket ("1400-1599"), or null when the gear score isn't set.</summary>
     string? GearBracket => _demo ? "1400-1599" : GearScore.Bracket(_prefs.GearScore);
@@ -53,6 +55,7 @@ public partial class MainWindow
     /// <summary>Which of the three show, for the part and the view (called from ApplyView).</summary>
     void ApplyPlayerView(bool craft, bool farm, bool full)
     {
+        if (!craft) _bestAll = false;   // folded again the next time the Crafting part opens
         BestCraftsCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
         if (craft) FillBestCrafts();
         if (!(full && farm)) WhereFarmCard.Visibility = Visibility.Collapsed;
@@ -78,16 +81,18 @@ public partial class MainWindow
         var rows = PlayerBoards.Crafts.Select(c => (c, adj: CraftMath.WithVendor(c with { Profit = OwnProfit(c) }, id => PriceBook.VendorPrice(_items.NameOf(id)))))
             .OrderByDescending(x => x.adj.Profit).ToList();
         if (rows.Count == 0) { host.Children.Add(Faint($"No recipe makes a profit at today's lowest asks on {server}.")); return; }
-        int shown = _bestAll ? rows.Count : Math.Min(5, rows.Count);
+        // the top three; all of them only after a click, and folded again whenever the Crafting part opens (Steven, 2026-10-24)
+        int shown = _bestAll ? rows.Count : Math.Min(BestCraftsShown, rows.Count);
         for (int i = 0; i < shown; i++) host.Children.Add(BestCraftRow(i + 1, rows[i].c, rows[i].adj.Profit, rows[i].adj.Unpriced, i > 0));
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         foot.ColumnDefinitions.Add(new ColumnDefinition()); foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var age = (int)Math.Max(0, (DateTime.UtcNow - PlayerBoards.CraftsAt.Value).TotalMinutes);
-        foot.Children.Add(Faint($"Lowest asks, updated {(age < 1 ? "just now" : $"{age} min ago")} · profit after the Market's cut"));
-        if (rows.Count > 5)
+        // one age for the whole list: how old the server's prices are (the board the site ranked from), not each listing's
+        var boardAt = PlayerBoards.CraftsBoardAt ?? PlayerBoards.CraftsAt.Value;
+        foot.Children.Add(Faint($"{server}'s prices from {PriceBook.Ago(boardAt, DateTime.UtcNow)} · profit after the Market's cut"));
+        if (rows.Count > BestCraftsShown)
         {
             var more = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
-            var h = new Hyperlink(new Run(_bestAll ? "Show fewer" : $"Show {rows.Count - 5} more"));
+            var h = new Hyperlink(new Run(_bestAll ? "Show top 3" : $"Show all {rows.Count}"));
             h.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
             h.Click += (_, _) => { _bestAll = !_bestAll; FillBestCrafts(); };
             more.Inlines.Add(h);
@@ -121,7 +126,7 @@ public partial class MainWindow
         mid.Children.Add(nt); mid.Children.Add(sub);
         // where the sell price is from: the player's own, or the board's with its readings and age
         var oq = PriceBook.QuoteOf(name);
-        var src = new TextBlock { Text = $"sells {(oq?.Price ?? c.Price):N0} · " + (oq != null ? PriceBook.Describe(oq) : $"kinahledger.com · {c.NObs} readings"), FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis };
+        var src = new TextBlock { Text = $"sells {(oq?.Price ?? c.Price):N0} · " + (oq != null ? PriceBook.Describe(oq, withAge: false) : $"kinahledger.com · {c.NObs} readings"), FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis };
         src.SetResourceReference(TextBlock.ForegroundProperty, oq is { Mine: true } ? "Mint" : "Faint");
         mid.Children.Add(src);
         Grid.SetColumn(mid, 2); g.Children.Add(mid);

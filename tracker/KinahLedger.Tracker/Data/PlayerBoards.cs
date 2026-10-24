@@ -20,6 +20,8 @@ public static class PlayerBoards
     static List<BestCraft> _crafts = new();
     static Dictionary<string, List<FarmZone>> _farm = new(StringComparer.OrdinalIgnoreCase);
     public static DateTime? CraftsAt { get; private set; }
+    /// <summary>When the site built the best crafts from the server's board (its generated_at): the age the list shows.</summary>
+    public static DateTime? CraftsBoardAt { get; private set; }
     public static DateTime? FarmAt { get; private set; }
     public static int MinRuns { get; private set; } = 5;
     public static int MinPlayers { get; private set; } = 3;
@@ -32,7 +34,7 @@ public static class PlayerBoards
         try
         {
             var r = await http.GetAsync($"{origin}/crafts/{serverKey}.json");
-            if (r.IsSuccessStatusCode) { var c = ParseCrafts(await r.Content.ReadAsStringAsync()); lock (Lock) { _crafts = c; CraftsAt = DateTime.UtcNow; } }
+            if (r.IsSuccessStatusCode) { var body = await r.Content.ReadAsStringAsync(); var c = ParseCrafts(body); lock (Lock) { _crafts = c; CraftsAt = DateTime.UtcNow; CraftsBoardAt = GeneratedAt(body); } }
         }
         catch (Exception ex) { CrashLog.Note("site crafts: " + ex.Message); }
         try
@@ -114,8 +116,14 @@ public static class PlayerBoards
     /// <summary>For tests and layout renders: replace both boards.</summary>
     public static void Load(string? craftsJson, string? farmJson)
     {
-        if (craftsJson != null) { var c = ParseCrafts(craftsJson); lock (Lock) { _crafts = c; CraftsAt = DateTime.UtcNow; } }
+        if (craftsJson != null) { var c = ParseCrafts(craftsJson); lock (Lock) { _crafts = c; CraftsAt = DateTime.UtcNow; CraftsBoardAt = GeneratedAt(craftsJson); } }
         if (farmJson != null) LoadFarm(farmJson);
+    }
+
+    static DateTime? GeneratedAt(string json)
+    {
+        try { using var d = JsonDocument.Parse(json); return d.RootElement.TryGetProperty("generated_at", out var g) && g.ValueKind == JsonValueKind.String && g.TryGetDateTime(out var t) ? t.ToUniversalTime() : null; }
+        catch (Exception) { return null; }
     }
 
     static long LongOf(string s) => long.TryParse(s, out var v) ? v : 0;
