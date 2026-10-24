@@ -1220,6 +1220,7 @@ options: --process aion[,other]");
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
         ok &= EventActivityTest(items, s);
+        ok &= Ocr.ChatCountTests.Run(items, s);
         ok &= UnsentRunsTest(items, s);
         ok &= Session.RunDataTests.Run(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");

@@ -266,6 +266,8 @@ public static class ReplayBank
                         session.ApplyGrid(ls.Select(x => x.Split('|')).Select(p => new RewardGrid.Slot(new Rectangle(0, 0, 10, 10), p[0], p[1], RewardGrid.ParseCount(p[1]),
                             p.Length >= 4 && p[2].Length > 0 ? new List<(string, double)> { (p[2], double.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture)) } : new List<(string, double)>())).ToList(), t);
                         break;
+                    // a trusted reading of the Kinah counter (the watcher's BalanceTracker, as live): the Kina witness's evidence
+                    case "balance": if (ls.FirstOrDefault() is { } bv && long.TryParse(bv, out var bal)) session.CheckBalance(bal, t); break;
                 }
                 last = t;
             }

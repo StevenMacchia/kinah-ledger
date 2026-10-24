@@ -208,6 +208,76 @@ it names a wrong item no more often than OCR plus NameMatch does; and its "other
 rows (most labeled garbled rows come out other, and few clean rows do). Until then OCR plus NameMatch decides and the
 decoder only logs.
 
+**Live tally, 2026-10-24 (Steven's reads.log, build main eee36b2, chat lines):** across the day the decoder agreed with
+OCR plus NameMatch 97 times and named a wrong item 0 times. It disagreed 7 times in the 13:10 to 13:15 farming log
+(run-20261024-131029), every one a garbled "Kina" word ("Kinå.æe", "Kipa-", "King.", "Kirfy—", "Kin%.", "Kinta+tt;$t.ds",
+the loot list's "Kinæx382"), and the footage shows it was right all 7 times. In the 13:07 reward burst it settled
+Forgotten Gloves over "Forgotteh GCoves" and Riverside Pauldrons over "RiveTSi4e" with OCR, and its two "disagree" lines
+there were OCR carrying a count ("Refining Stonevx6.") or garbage (p 0.07). So on chat item names the first two
+conditions hold on what has been labeled (more right than OCR plus NameMatch, never a wrong item). **What is left before
+chat item names switch to the decoder:** the third condition, measured rather than assumed: a labeled set of garbled and
+cut-off chat lines (Prompt 2's table and the report crops hold loot list rows, not chat lines) showing that "other"
+catches them and few clean lines; and the per-line time on Steven's PC under the 5 ms budget (14 ms measured) or the
+decode kept off the counting path. Kina words are the first candidates: 7 of 7 right where OCR garbled them. Since this
+branch the decoder also reads the count after a chat line's name (the crop runs to the line's end, past it when OCR read
+no count; the search's count accepts the digit slips below) and logs `qty xN vs ocr xM agree|disagree` (tallies
+`decode_qty_agree` / `decode_qty_disagree`, this PC only); its counts wait for the same rule.
+
+## Chat counts, repeated lines and the Kinah counter as Kina's witness (branch tracker/chat-qty, 2026-10-24)
+
+Scored against footage (kinah-bench `compare-130149.md`, `compare-131029.md`): the 13:07 Monster Cube rewards filed
+"Acquired Odyle x7." as x1 and lost the second of two "Riverside Pauldrons acquired." lines; the 13:10 farming run missed
+four Kina lines (382, 665, 293, 508) and counted three twice (408, 189, 344) while the Kinah counter rose by exactly the
+footage's 15,660.
+
+- **Counts** (`ChatParser.QuantityTail`, `Parse`): a count the recognizer garbled is read through its digit slips (O/o 0,
+  l/I/| 1, S/s 5, b 6, T/t 7; "Refining StonevxT" x7, "Kinæx382" x382); letters alone must follow the x directly, so a
+  numeral after a space ("Field Boss I", "Treasure Box II") is never a count. A verb-first line whose name is settled but
+  whose count is gone ("Acquired Odyle") takes the count of the loot list's row for the same item read with its icon
+  within 3 s (`TrackerSession.ListCount`, tally `qty_from_list`); else it counts one for now and is watched
+  (`Reread.CountWatch`): its place in the next three reads (moved up by new lines, one either side), and when the same
+  item shows a count there the difference is added (`chat · count read again`, `qty_recovered`). Nothing found: reads.log
+  `"Acquired Odyle": quantity unsure, 1 assumed (...)` and `qty_assumed`. A name-first line ("Odyle acquired.") is one.
+  The three tallies stay on this PC (not in `Accuracy.Keys`).
+- **Glued and garbled verbs** (`CleanSystemLine`): "Pauldröns:acquired." (a colon or semicolon before the verb) and
+  "acquited" (t for r) are the verb. The settle (`Reread.Settled`) takes a glued verb ("Pauldtonsacquired.") as whole
+  once the line is put back in shape. Burst lines that still parse to nothing are looked at in place again (`Reread.Take`).
+- **Repeats are by place, not by text.** Two identical lines are a repeat only where the alignment puts them on the same
+  screen line: `LineTracker.Align` lining up on a run of one line repeated counts the copies past the last read's run as
+  new (a stray line between copies is no new copy); `Reread.Consume` lets each counted line stand for one line on screen
+  in the settle (one counted Pauldrons line no longer hides a second); a loot line a read lost at its bottom and the next
+  read shows in the same place is the same line (`LineTracker.Back`: 189 and 344); below the overlap of a read that didn't
+  line up, the last read's own line read differently ("cquihed 408 Kina") is still that line, and a line counted in the
+  last 10 s is not counted again there (`RecountSeconds`). A fragment read while its line faded in ("3 Kina.", "d 382
+  Kina.", "508 Kina.") takes the whole line that then shows in its place (`ChatVoter.Fragments`). A loot line first shown
+  by a read that couldn't be lined up and read the same in three reads, which nothing counted, counts (`chat · unaligned`:
+  the 665 line). "chat repeats skipped" (the loot list's Kina rule) is unchanged.
+- **The Kinah counter decides Kina** (`Session/KinaWitness.cs`). While the counter is read and trusted (a reading at
+  most 15 s old; remote switch `kina_witness`), a Kina chat line waits for the counter: it counts when the counter rose by
+  its amount, or by the sum of a burst; once two readings after it show no room for it, it is refused (a re-read, a line
+  pushed up by a scroll, a misread amount such as "2367" for 236: `<line>: the Kinah counter didn't rise by N for it ...`).
+  A suspected repeat (its amount confirmed in the last 15 s) counts only on a rise of exactly its amount. A rise no line
+  claims, quiet for 8 s, counts: named after the uncounted Kina lines the chat showed when their amounts make it up
+  (`chat · unaligned · counter`, "never counted (garbled, or in a read that didn't line up) ... counted (unaligned)"),
+  else as Kina from the counter (`counter`, or `loot list · counter` when the list showed that amount once), at most
+  5,000 at a time (more is a sale, mail or a claim: logged only). A late line for a rise already counted that way is that
+  rise's line, once. Bound and payment Kina explain their own rise. A fall (Kinah spent) can't be judged: waiting lines
+  count as read and the pool starts again; a counter gone quiet does the same. Without a trusted counter nothing changes.
+- **Why the counter never compared** (every audit said "agreed 0×"): the strip's 2nd and 3rd figures both rise with every
+  pickup, so the counter finder (`BalanceTracker`) never had a single winner and never locked. A tie at three votes or
+  more now takes the rightmost, the one that doesn't fall on a spend (kinah-bench `kinah-counter.md`); a value read the
+  same twice running is trusted (the count lags the counter while lines wait); the strip is read every 3 s instead of 10
+  (`GameWatcher.BalanceEverySec`); each reading reaches the check at its own time, so a stale one never passes for a new
+  one. Kill evidence now joins either side within 3 s (`SessionEngine.KillEvidence`), since a Kina line can be fed after
+  a later kill's Soul Points line.
+- **Bank:** `text-2026-10-24-farm-kina-counter` (the 131029 trace, player names shifted, with the counter's readings
+  written from the footage every 2.5 s: 15,660 Kina, 52 kills, the 9 gathers and 3 items right; main eee36b2 counts
+  17,120 in the same replay, and live it filed 15,121, 14,753 after its 368 skip), `text-2026-10-24-chat-repeat-two-pickups`
+  (two Pauldrons, two; main one) and `-reread` (the same screen garbled, one). Without the counter's readings the same trace
+  now counts 18,027: every line-level miss and double above is fixed, and what is left is the misread "2367" that only the
+  counter can refuse. The counter's live behaviour (the lock, the 3 s reads, readings during busy farming) has not yet
+  been checked on Steven's PC: read the next farming log's `the Kinah counter ...` lines against the footage.
+
 ## Scene state: every reader gated by what is on screen (branch tracker/scene-state, 2026-10-24)
 
 `Session/SceneState.cs` decides once per pass what the game window shows, before any reader runs, and

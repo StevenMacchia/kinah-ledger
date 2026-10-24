@@ -91,11 +91,14 @@ public sealed class TrackerSession
     /// The name decoder's shadow on the chat (counts nothing): each pickup line's item name cropped from the capture it was
     /// read from, with what OCR plus NameMatch made of the same name (<see cref="ResolveName"/>), for the decoder's thread.
     /// </summary>
+    /// <summary>The count OCR read on a chat pickup line (1 when none), for the decoder's count beside it; null when the line names no item.</summary>
+    int? ChatCount(string line) => _parser.Meaning(line).Key is { Length: > 0 } k && k.StartsWith("i:") ? Math.Max(1, CountWatch.CountOf(k)) : null;
+
     void ShadowChatNames(System.Drawing.Bitmap raw, IReadOnlyList<(string Line, string Name, System.Drawing.Rectangle Box)> spans)
     {
         foreach (var s in spans)
             if (NameDecoder.PickupLine(s.Line))
-                NameDecoder.Shadow("chat", NameDecoder.Crop(raw, s.Box), s.Name, ResolveName(s.Name).Id);
+                NameDecoder.Shadow("chat", NameDecoder.Crop(raw, s.Box), s.Name, ResolveName(s.Name).Id, ChatCount(s.Line));
     }
 
     /// <summary>
@@ -295,8 +298,14 @@ public sealed class TrackerSession
     {
         if (Update.RemoteConfig.Current.Off("balance")) return;
         lock (_balanceHist) { if (_balanceHist.Count == 0 || _balanceHist[^1].Balance != balance) _balanceHist.Add((at, balance)); _balanceHist.RemoveAll(b => (at - b.At).TotalMinutes > 3); }
-        long gap = _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);
+        // each new trusted reading goes to the Kina witness (the same reading handed again adds nothing)
+        bool fresh = at > _kinaFedAt;
+        if (fresh && !Update.RemoteConfig.Current.Off("kina_witness")) { _kinaFedAt = at; SettleKina(_kina.Observe(balance, at), at); }
+        if (!fresh) return;
+        long gap = _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound) + _kina.PendingSum, at);
         if (gap == 0) return;
+        // the witness counts what the counter shows and no line claims; the old rule (a row the list showed once) is its fallback
+        if (KinaWitnessOn(at)) return;
         if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && _cross.TakeSingleKinah(gap, at))
         {
             var ev = new KinahChanged(at, gap, false) { Via = "loot list · balance" };
@@ -313,6 +322,43 @@ public sealed class TrackerSession
             : $"the Kinah counter rose {-gap:N0} less than counted (Kinah spent, or a pickup counted twice)");
     }
     public int BalanceAdded { get; private set; }
+
+    // ---- the Kinah counter as the deciding witness for Kina (KinaWitness, 2026-10-24) ----
+    readonly KinaWitness _kina = new();
+    public KinaWitness Kina => _kina;
+    DateTime _kinaFedAt = DateTime.MinValue;
+    /// <summary>Kina lines refused because the counter didn't rise for them (a re-read, a scrolled line, a misread amount).</summary>
+    public int KinaRefused { get; private set; }
+
+    /// <summary>The counter is read and trusted lately, and the remote switch "kina_witness" isn't off.</summary>
+    bool KinaWitnessOn(DateTime now) => _kina.Live(now) && !Update.RemoteConfig.Current.Off("kina_witness");
+
+    /// <summary>What the witness decided: confirmed and unjudged lines count, refused ones are logged, a rise no line claims counts from the counter.</summary>
+    void SettleKina(KinaWitness.Outcome o, DateTime now)
+    {
+        if (!o.Any) return;
+        foreach (var n in o.Notes) CrashLog.Note(n);
+        foreach (var c in o.Confirmed) if (c.Tag is GameEvent ev) Commit(ev);
+        foreach (var c in o.Unjudged) if (c.Tag is GameEvent ev) Commit(ev);
+        foreach (var c in o.Absorbed) CrashLog.Note($"{c.Line}: counted already from the Kinah counter's rise before this line was read: once");
+        foreach (var c in o.Refused)
+        {
+            KinaRefused++;
+            CrashLog.Note($"{c.Line}: the Kinah counter didn't rise by {c.Amount:N0} for it (a line read again, pushed up by a scroll, or misread): not counted");
+        }
+        foreach (var (amount, line, at) in o.FromCounter)
+        {
+            bool row = _cross.TakeSingleKinah(amount, now);
+            // dated when the chat first showed it, else when the counter rose: that is when the kill was
+            var ev = new KinahChanged(at == default || at > now ? now : at, amount, false) { Via = line != null ? "chat · unaligned · counter" : row ? "loot list · counter" : "counter" };
+            CrashLog.Note(line != null
+                ? $"{line}: never counted (garbled, or in a read that didn't line up), and the Kinah counter rose by {amount:N0} that no line claimed: counted (unaligned)"
+                : row ? $"the Kinah counter rose {amount:N0} that no chat line claimed, and the loot list showed {amount:N0} Kina: counted from the two"
+                      : $"the Kinah counter rose {amount:N0} that no chat line claimed: counted as Kina from the counter");
+            if (row) BalanceAdded++;
+            Commit(ev);
+        }
+    }
     // the Kinah counter's readings of the last few minutes, for confirming a reward table's coin slot
     readonly List<(DateTime At, long Balance)> _balanceHist = new();
     /// <summary>True when the Kinah counter rose by exactly <paramref name="amount"/> between two readings within a minute of <paramref name="t"/>.</summary>
@@ -368,6 +414,8 @@ public sealed class TrackerSession
         _parser.Rare = IsRare;
         // a misread settled by the candidate sets of the moment, and refused when it fits none of them (brief item 1)
         _parser.Context = NameContextNow;
+        // a chat line whose count was lost takes it from the loot list's row for the same item (2026-10-24 13:07, Odyle x7)
+        _parser.ListCount = ListCount;
         if (s.Ocr.NameColours) _parser.Colours = GradeColours.Load(ColoursPath);
         _textScale = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) { ToTarget = () => Update.RemoteConfig.Current.ChatScaleToTarget } : null;
         Engine = new SessionEngine(items);
@@ -1009,7 +1057,12 @@ public sealed class TrackerSession
         Feed(ev, Count(ev));
         // crafting is fed by the crafting panel's races alone (CraftPanelDue), never by a pickup or a chat line
         if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
-        else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
+        else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb)
+        {
+            Interlocked.Add(ref _kinahBound, kb.Delta);
+            // reward or payment Kina raises the counter too: it explains that rise, so it is never counted again from it
+            if (KinaWitnessOn(ev.Time)) SettleKina(_kina.Offer(new KinaWitness.Candidate(kb.Delta, ev.Time, "", null), ev.Time), ev.Time);
+        }
         if (ev.Via.Contains("guessed")) Accuracy.Add("guessed");
         try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
@@ -1043,6 +1096,8 @@ public sealed class TrackerSession
 
     void ProcessChatCore(List<string> lines, DateTime now)
     {
+        // Kina lines waiting for the counter: judged when old enough, released as read when the counter went quiet
+        if (_kina.Readings > 0) SettleKina(_kina.Tick(now), now);
         int unaligned = _tracker.Unaligned;
         var fresh = _tracker.NewLines(lines);
         // the chat's own word on an event: "joined event" in its lobby, its NPC's lines (EventWitness). A lobby filling up
@@ -1118,9 +1173,36 @@ public sealed class TrackerSession
             {
                 // it shares lines with the last read but no run of them lined up: what follows the last shared line is new
                 var after = Reread.AfterOverlap(_lastLines, lines);
+                // a line counted moments ago, read again below the overlap (the reads garbled it differently): the same line,
+                // each counted line standing for one (2026-10-24 13:12:08: Refining Stone and 408 Kina came back this way)
+                if (after.Count > 0)
+                    lock (_countedLines)
+                    {
+                        var recentCounted = _countedLines.Where(x => (now - x.At).TotalSeconds <= RecountSeconds).Select(x => ChatKey(x.Line)).ToList();
+                        after = after.Where(l =>
+                        {
+                            int c = recentCounted.FindIndex(x => Reread.Same(x, ChatKey(l)));
+                            if (c < 0) return true;
+                            recentCounted.RemoveAt(c);
+                            CrashLog.Note($"{l}: below the overlap of a read that didn't line up, but counted {RecountSeconds:0} s ago or less: the same line, not again");
+                            return false;
+                        }).ToList();
+                    }
                 if (after.Count > 0) { CrashLog.Note($"counted {after.Count} loot line(s) below the last line this read shares with the last one: {string.Join(" | ", after)}"); reread.AddRange(after); }
             }
         }
+        // a loot line first shown by a read that couldn't be lined up, and read the same in the next reads, is a line no
+        // path may count (it sits above the overlap or is that read's last line): watched until three reads agree on it
+        // (2026-10-24 13:11:38: "Acquired 665 Kina." was the last line of such a read, read clean twice after, never counted)
+        if (_tracker.Unaligned > unaligned)
+            foreach (var l in lines)
+            {
+                if (l.TrimStart().StartsWith('[') || !Reread.LooksLikeLoot(l)) continue;
+                var m = _parser.Meaning(l);
+                if (!m.Exact || m.Key.Length == 0 || _unalignedSeen.ContainsKey(m.Key)) continue;
+                if (_keySeen.TryGetValue(m.Key, out var ks0) && (now - ks0).TotalMinutes <= LedgerMinutes) continue;
+                _unalignedSeen[m.Key] = (now, 0, l.Trim());
+            }
         // garbled reads in a row (a reward burst fading in): once the chat settles, the clean read's loot lines count
         var settled = new List<string>();
         DateTime settledAt = now; bool settledAny = false, settledAchievement = false;
@@ -1143,6 +1225,8 @@ public sealed class TrackerSession
             else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs; }
         }
         Reread.NoteFirstSeen(_firstSeen, lines, now);
+        // every Kina amount this read shows, counted or not: a rise of the counter no line claims is named after them
+        if (KinaWitnessOn(now)) foreach (var l in lines) if (_parser.Meaning(l) is { Exact: true } km && km.Key.StartsWith("k:") && long.TryParse(km.Key[2..], out var ka)) _kina.Seen(ka, l.Trim(), now);
         Reread.Remember(_recent, lines, now);
         // an empty read (the chat fading out) is not the last read: the settle needs the last read that showed lines
         // (Steven, 2026-10-23 11:07: all 21 event rewards lost when the chat faded right after the clean read)
@@ -1172,6 +1256,8 @@ public sealed class TrackerSession
                 // and take the next kill's drop (a payout's item, then a Spiritstone 10 s later, 2026-10-23)
                 if (why == null) NoteReward(ev, now);
                 any = true; _lastActivity = DateTime.UtcNow;
+                // the Kinah counter is the deciding witness for Kina while it is read (KinaWitness): the line waits for its rise
+                if (ev is KinahChanged { Bound: false, Delta: > 0 } kw && KinaWitnessOn(now)) { SettleKina(_kina.Offer(new KinaWitness.Candidate(kw.Delta, now, raw.Trim(), ev), now), now); continue; }
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
                 // no single-signal counting: out in the world, an item is a drop only with a kill or a gather around it
@@ -1189,6 +1275,29 @@ public sealed class TrackerSession
         batchAchievement = voted.Any(l => Reread.IsAchievement(l) && NewLine(l, now));
         if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
         var thisRead = new List<string>();   // lines the vote and the read-again count in this read, for the settle below
+        // ---- counts lost on a line's first read (2026-10-24 13:07: "Acquired Odyle" for x7) ----
+        // a pickup counted as one from a line with no readable count: the line's place in this read, if it shows the count now
+        foreach (var (wp, wn, wline) in _counts.Look(lines, fresh.Count, now, _parser.Meaning, ChatParser.HasCount))
+        {
+            if (wn == 0) { CountAssumed(wp.Raw); continue; }
+            if (wn == 1) { CrashLog.Note($"\"{wp.Raw}\": its count read in a later read as x1"); continue; }
+            GameEvent? delta = wp.Event switch { ItemAcquired a => a with { Count = wn - 1, Time = now }, RewardReceived r => r with { Count = wn - 1, Time = now }, _ => null };
+            if (delta == null) continue;
+            bool dany = Apply(new[] { delta }, wline, "chat · count read again");
+            CrashLog.Read($"{wline}    (the count the first read of \"{wp.Raw}\" lost: x{wn}, {wn - 1} more counted)", dany);
+            Accuracy.Add("qty_recovered");
+        }
+        void WatchCount(string l, List<GameEvent> events)
+        {
+            if (!_parser.CountUnsure(l)) return;
+            var ev = events.FirstOrDefault(e => e is ItemAcquired or RewardReceived);
+            if (ev == null) return;
+            var item = CountWatch.ItemOf(_parser.Meaning(l).Key);
+            int at = lines.Count - 1;
+            while (at >= 0 && lines[at].Trim() != l.Trim()) at--;
+            if (item.Length == 0 || at < 0) { CountAssumed(l); return; }
+            _counts.Watch(l, item, ev, lines.Count - 1 - at, now);
+        }
         // a line the settle just counted shows up again as new once the reads line up: the same pickup, counted once
         // (Steven, 2026-10-23 16:22: 200 Natura Soul Crystals and 50,000 Kina counted twice)
         lock (_settledCounted)
@@ -1208,6 +1317,7 @@ public sealed class TrackerSession
         {
             bool any = Apply(events, l);
             CrashLog.Read(l, any, afterFade);
+            if (any) WatchCount(l, events);
             // while the chat is garbled, what the vote counts is remembered too, so the settle doesn't count it again
             if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); thisRead.Add(l.Trim()); }
         }
@@ -1215,8 +1325,11 @@ public sealed class TrackerSession
         foreach (var l in reread)
         {
             bool any = false;
-            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) any |= Apply(events, l, "chat · recovered");
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) { bool a1 = Apply(events, l, "chat · recovered"); any |= a1; if (a1) WatchCount(l, events); }
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
+            // still nothing, and loot-shaped: look at its place once more in the next read (Reread.Take); the vote can't,
+            // since it never sees a line of a read that didn't line up
+            if (!any && Reread.LooksLikeLoot(l) && lines.LastIndexOf(l) is int ri and >= 0) _reread.Remember(l, lines.Count - 1 - ri, now);
             if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); thisRead.Add(l.Trim()); }
         }
         // dated when the garbling began, which is when they landed (an event's rewards: inside its time for rewards)
@@ -1230,7 +1343,7 @@ public sealed class TrackerSession
             int dup = thisRead.FindIndex(x => Reread.Same(x, l.Trim()));
             if (dup >= 0) { thisRead.RemoveAt(dup); CrashLog.Read(l + "    (counted already in this read, not again)", false); continue; }
             bool any = false;
-            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) any |= Apply(events, l, "chat · recovered");
+            foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) { bool a1 = Apply(events, l, "chat · recovered"); any |= a1; if (a1) WatchCount(l, events); }
             CrashLog.Read(l + "    (counted once the chat settled)", any);
             if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; lock (_settledCounted) _settledCounted.Add((l.Trim(), now)); NoteCounted(l, now); }
         }
@@ -1238,6 +1351,26 @@ public sealed class TrackerSession
         {
             CrashLog.Note($"the chat settled after {(now - settledAt).TotalSeconds:0} s of reads that didn't line up; its loot lines counted from the clean read: {string.Join(" | ", settled)}");
             _garbledSince = null;
+        }
+        // ---- lines first shown by a read that didn't line up: three exact reads and nothing counted it, it counts ----
+        if (_unalignedSeen.Count > 0)
+        {
+            var present = lines.Select(l => _parser.Meaning(l)).Where(m => m.Exact).Select(m => m.Key).ToHashSet();
+            foreach (var (key, v) in _unalignedSeen.ToList())
+            {
+                if ((now - v.First).TotalSeconds > UnalignedWatchSeconds) { _unalignedSeen.Remove(key); continue; }
+                if (!present.Contains(key)) continue;
+                int reads = v.Reads + 1;
+                bool counted;
+                lock (_countedLines) counted = _countedLines.Any(x => (now - x.At).TotalSeconds <= 60 && x.At >= v.First.AddSeconds(-10) && _parser.Meaning(x.Line).Key == key);
+                if (counted) { _unalignedSeen.Remove(key); continue; }
+                if (reads < UnalignedReads) { _unalignedSeen[key] = (v.First, reads, v.Line); continue; }
+                _unalignedSeen.Remove(key);
+                bool any = false;
+                foreach (var (_, events) in _parser.ParseBatch(new List<string> { v.Line }, v.First, wrap: false)) any |= Apply(events, v.Line, "chat · unaligned");
+                CrashLog.Read(v.Line + $"    (unaligned: first shown by a read that didn't line up, read the same {reads} times, never counted)", any);
+                if (any) { LastLine = v.Line; LootLine?.Invoke(v.Line); NoteCounted(v.Line, now); }
+            }
         }
         // ---- the loot ledger: a loot line no read in ten minutes showed, that nothing counted, is new wherever it sits ----
         // Lining reads up finds new lines at the bottom. A line one read lost and the next showed sits between lines
@@ -1366,6 +1499,11 @@ public sealed class TrackerSession
     const double HandledSeconds = 8;
     bool _ledgerPrimed;
     const double LedgerMinutes = 10;
+    // loot lines first shown by a read that couldn't be lined up: by meaning, when, in how many reads since, the line
+    readonly Dictionary<string, (DateTime First, int Reads, string Line)> _unalignedSeen = new();
+    /// <summary>Reads that must show such a line the same way before it counts, and how long it is watched.</summary>
+    public const int UnalignedReads = 3;
+    public const double UnalignedWatchSeconds = 20;
 
     DateTime _targetAt = DateTime.MinValue;
     /// <summary>Lines the settle counted, for the next reads not to count them again (each once).</summary>
@@ -2554,6 +2692,18 @@ public sealed class TrackerSession
         _listKeys.RemoveAll(x => Math.Abs((now - x.At).TotalSeconds) > ListKeySeconds);
     }
 
+    /// <summary>
+    /// The count of the loot list's row for this item, read with its icon within <see cref="ListCountSeconds"/> of
+    /// <paramref name="now"/> (the newest), for a chat line that lost its own (ChatParser.ListCount); null when none.
+    /// </summary>
+    int? ListCount(long id, DateTime now)
+    {
+        var prefix = "i:" + _items.NameOf(id).ToLowerInvariant() + "x";
+        var hit = _listKeys.Where(x => x.Key.StartsWith(prefix, StringComparison.Ordinal) && Math.Abs((now - x.At).TotalSeconds) <= ListCountSeconds).OrderByDescending(x => x.At).FirstOrDefault();
+        return hit.Key != null && int.TryParse(hit.Key[prefix.Length..], out var n) && n >= 1 ? n : null;
+    }
+    public const double ListCountSeconds = 3;
+
     /// <summary>Whether the list showed this pickup lately: the same key, or for "i:name x2" two "i:name x1" rows in one read.</summary>
     bool ListShows(string key, DateTime now)
     {
@@ -2711,6 +2861,18 @@ public sealed class TrackerSession
     List<string> _prevRead = new();
     DateTime _craftListNoteAt = DateTime.MinValue;
     readonly Reread _reread = new();
+    // pickups counted as one from a line whose count was lost, looked for in the next reads (Reread.CountWatch)
+    readonly CountWatch _counts = new();
+
+    /// <summary>A pickup whose count no read showed: one is counted, and the log and the health counters say so.</summary>
+    void CountAssumed(string raw)
+    {
+        CrashLog.Note($"\"{raw.Trim()}\": quantity unsure, 1 assumed (no count in the line, on the loot list or in the next reads)");
+        Accuracy.Add("qty_assumed");
+        CountsAssumed++;
+    }
+    /// <summary>Pickups counted as one because no read showed their count (the log says "quantity unsure, 1 assumed").</summary>
+    public int CountsAssumed { get; private set; }
     // when each line was first on screen: an achievement line that stays up is read a little differently each time, and
     // only a new one makes the items with it its reward
     readonly Dictionary<string, (DateTime First, DateTime Last)> _firstSeen = new();
@@ -2719,6 +2881,9 @@ public sealed class TrackerSession
     DateTime? _garbledSince; HashSet<string> _beforeGarbled = new(); readonly List<string> _countedGarbled = new();
     /// <summary>Every chat line counted in the last minute, by any path, for the settle not to count it again.</summary>
     readonly List<(string Line, DateTime At)> _countedLines = new();
+    /// <summary>A line counted this lately and read again below the overlap of a read that didn't line up is the same line.</summary>
+    public const double RecountSeconds = 10;
+    static string ChatKey(string s) => new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     void NoteCounted(string l, DateTime now) { lock (_countedLines) { _countedLines.Add((l, now)); _countedLines.RemoveAll(x => (now - x.At).TotalSeconds > 60); } }
     /// <summary>Garbled reads longer than this before the chat settles aren't one burst; nothing is taken from the settled read.</summary>
     public const double SettleSeconds = 45;
@@ -3117,6 +3282,8 @@ public sealed class TrackerSession
     {
         var t = (at ?? DateTime.UtcNow).AddSeconds(ChatVoter.MaxSeconds + 0.1);
         if (_voter.Waiting > 0 && _prevRead.Count > 0) ProcessChat(new List<string>(_prevRead), t);
+        foreach (var w in _counts.Flush()) CountAssumed(w.Raw);
+        if (_kina.Readings > 0) SettleKina(_kina.Flush(t), t);
         CommitHeld();
         ReleaseAwaiting(t.AddSeconds(WitnessWaitSeconds), final: true);   // a stop or the end of a replay: decided now
         foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(t, final: true);

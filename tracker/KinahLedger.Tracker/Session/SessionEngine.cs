@@ -170,7 +170,8 @@ public sealed class SessionEngine
             var k = _kills[i];
             double d = (t - k.At).TotalSeconds;
             if (d > KillJoinSeconds) break;
-            if (d < -1) continue;
+            // evidence can come in after a later kill's (a Kina line waits for the Kinah counter, KinaWitness): the same reach either side
+            if (d < -KillJoinSeconds) continue;
             if (k.Kinds.Contains(kind)) continue;
             // a Soul Points line and a Soul row are the same thing seen twice: either one names the kill
             if ((kind == 's' && k.Kinds.Contains('l')) || (kind == 'l' && k.Kinds.Contains('s'))) { if (join == null || k.At < join.At) join = k; continue; }

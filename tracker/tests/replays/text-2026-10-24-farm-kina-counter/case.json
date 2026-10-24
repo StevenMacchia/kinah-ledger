@@ -1,0 +1,19 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "farming, 2026-10-24 13:10:30 to 13:15:22 (131029): 52 kills' Kina lines in a busy, garbled chat. The footage counts 15,660 Kina and the Kinah counter rose by exactly that. 0.8.27 (main eee36b2) missed 382, 665, 293 and 508 (fragments, the last line of a read that didn't line up, a line above the overlap) and counted 408, 189 and 344 twice (a re-read, a read that lost its last line). The counter's readings are written from the footage (every 2.5 s while the game shows, the value after each kill's line). With the Kinah counter as the witness (KinaWitness): 15,660, the three doubles and a misread \"2367\" refused, 382, 665 and 293 named after their lines, 508 from the counter; the 9 gathers and 3 items as the footage shows them, 52 kills",
+  "source": "Steven's trace.log (chat, list, zone as read), player names shifted; balance reads from kinah-bench truth-131029.csv",
+  "expect": {
+    "kinah": 15660,
+    "kills": 52,
+    "items": {
+      "Fine Orichalcum Ore": 1,
+      "Forgotten Pauldrons": 1,
+      "Fresh Fruit": 1,
+      "Orichalcum Ore": 2,
+      "Refining Stone": 1,
+      "Sapphire Gemstone": 4
+    }
+  }
+}

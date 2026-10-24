@@ -29,6 +29,9 @@ public sealed class ChatVoter
     /// </summary>
     public Func<string, bool>? Confirmed { get; set; }
 
+    /// <summary>Fragments ("3 Kina.") whose whole line the next reads showed in their place.</summary>
+    public int Fragments { get; private set; }
+
     /// <summary>Lines counted before their vote was over because the loot list showed the same pickup.</summary>
     public int Fast { get; private set; }
 
@@ -53,6 +56,10 @@ public sealed class ChatVoter
             int found = -1;
             for (int i = cursor; i >= 0 && i >= cursor - 3; i--) if (Key(w.First) == Key(read[i])) { found = i; break; }
             if (found < 0 && cursor >= 0 && Close(w.First, read[cursor])) found = cursor;
+            // a fragment read while the line faded in ("3 Kina.", "d 382 Kina.", "508 Kina.": nothing to count) and now the
+            // whole line in its place, ending the same way: the same line, read better (2026-10-24, 293, 382 and 508 lost)
+            if (found < 0 && cursor >= 0 && Key(w.First) is { Length: >= 4 } fk && meaning(w.First).Key.Length == 0
+                && Key(read[cursor]) is var rk && rk.Length > fk.Length && rk.EndsWith(fk, StringComparison.Ordinal) && meaning(read[cursor]).Key.Length > 0) { found = cursor; Fragments++; }
             if (found >= 0) { w.Readings.Add(read[found]); cursor = found - 1; }
             else w.Gone = true;
         }

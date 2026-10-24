@@ -317,6 +317,19 @@ public sealed class ScreenReader
             if (words.Count == 0) continue;
             double l = words.Min(w => w.BoundingRect.X), t = words.Min(w => w.BoundingRect.Y);
             double r = words.Max(w => w.BoundingRect.X + w.BoundingRect.Width), b = words.Max(w => w.BoundingRect.Y + w.BoundingRect.Height);
+            // a verb-first line ("Acquired Odyle x7."): its count follows the name, so the crop runs to the line's end and,
+            // when OCR read no count, a little past it (the count's pixels are there even when OCR lost them, 2026-10-24
+            // 13:07: "Acquired Odyle" for x7): the decoder reads the count with the name. A name-first line ends in its verb.
+            var all = line.Words.ToList();
+            int lastName = all.FindLastIndex(w => TextColour.NameWord(w.Text));
+            bool verbAfter = all.Skip(lastName + 1).Any(w => System.Text.RegularExpressions.Regex.IsMatch(w.Text, @"^\W*acqu", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+            if (!verbAfter && lastName >= 0)
+            {
+                double lineRight = all.Max(w => w.BoundingRect.X + w.BoundingRect.Width);
+                bool count = all.Skip(lastName + 1).Any(w => System.Text.RegularExpressions.Regex.IsMatch(w.Text, @"^[x×*]", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+                double h = b - t;
+                r = Math.Max(r, lineRight + (count ? 0 : h * 2.5));
+            }
             var box = Rectangle.FromLTRB((int)(l / f), (int)(t / f), (int)Math.Ceiling(r / f), (int)Math.Ceiling(b / f));
             list.Add((line.Text.Trim(), string.Join(' ', words.Select(w => w.Text.Trim())), box));
         }
