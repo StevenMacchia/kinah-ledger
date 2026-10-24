@@ -41,6 +41,36 @@ public static partial class LootPopup
     [GeneratedRegex(@"^k[i1l]n(?:a|ah)$", RegexOptions.IgnoreCase)]
     private static partial Regex KinaWord();
 
+    /// <summary>A gathering panel's line: a bar's label ("Success", "Fail") or its "Proficiency", read whole or cut short ("Succe", "P rofes").</summary>
+    public static bool PanelMark(string text) => PanelMarkRx().IsMatch(text.Trim());
+
+    [GeneratedRegex(@"^\W*[il1|]?\s*(?:succ\w*|fail(?:ed|ure)?|profic\w*|profes\w*|p\s?r\w{0,3}fes\w*)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex PanelMarkRx();
+
+    /// <summary>A gap between two lines under this many pixels is one line read in two pieces, not the panel's spacing.</summary>
+    public const int PanelMinGap = 20;
+
+    /// <summary>
+    /// Where the gathering panel's block starts in a read (lines from there down are the panel's), from every line's top and
+    /// its first marker's (2026-10-24). The panel's spacing is the smallest gap from the line just above that marker down,
+    /// not the read's median gap: with the player's title at the top of the band and a row between, the median was the
+    /// gap from the title or a row to the panel (223 to 424 px at 5120x2160) and the cut reached up over the list's rows
+    /// ("Vangt | Sapphire Gemstone | Success", the row at y 1197 cut with it). From the marker the block takes the lines
+    /// above while they stay within 1.6 of that spacing, and reaches no further up than 2.5 of it (as before); a line
+    /// further up is the list's.
+    /// </summary>
+    public static int PanelCut(IReadOnlyList<int> tops, int firstMark)
+    {
+        var t = tops.OrderBy(x => x).ToList();
+        int i = Math.Max(0, t.IndexOf(firstMark));
+        var gaps = new List<int>();
+        for (int k = Math.Max(0, i - 1); k + 1 < t.Count; k++) if (t[k + 1] - t[k] >= PanelMinGap) gaps.Add(t[k + 1] - t[k]);
+        int gap = gaps.Count > 0 ? gaps.Min() : 30;
+        int top = firstMark;
+        for (int k = i - 1; k >= 0 && top - t[k] <= gap * 1.6; k--) top = t[k];
+        return Math.Max(firstMark - (int)(gap * 2.5), top - gap / 2);
+    }
+
     /// <summary>The rows in one read of the region, top to bottom. Anything that isn't "name x count" is left out.</summary>
     public static List<Row> Rows(IEnumerable<(int Top, string Text)> lines)
     {
@@ -113,6 +143,7 @@ public sealed class LootPopupTracker
 /// average hash; 0 unknown). Rows are tracked by these, not by their text (Session.LootRows). Also, for telling a row
 /// from text that isn't one (Session.LootNotRow, 2026-10-24): what is behind the letters (<see cref="Background"/>, the
 /// darker 30% of the line's box, 0 to 1; -1 unknown) and how much the place left of it, where the icon sits, varies
-/// (<see cref="Spread"/>, 0 to 1, about 0 for flat background; -1 unknown).
+/// (<see cref="Spread"/>, 0 to 1, about 0 for flat background; -1 unknown). And where its text starts (<see cref="Left"/>,
+/// in the window; -1 unknown): rows' text starts at one column, the player's title far right of it.
 /// </summary>
-public readonly record struct LootLine(int Top, string Text, double Contrast = -1, ulong Icon = 0, double Background = -1, double Spread = -1);
+public readonly record struct LootLine(int Top, string Text, double Contrast = -1, ulong Icon = 0, double Background = -1, double Spread = -1, int Left = -1);

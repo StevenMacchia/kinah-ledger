@@ -1749,9 +1749,22 @@ options: --process aion[,other]");
             foreach (var s in new[] { 1.0, 2.5, 4.0 }) br.Feed(new(), t0.AddSeconds(s));
             t0 = t0.AddSeconds(5);
         }
+        // read once with its icon: a row (a pass can take over a second, so a real 2.5 s row can be read once; 2026-10-24)
         var once = Ids(br.Feed(new() { R(1195, "Riverside Gloves x1", IcD, 0.6) }, t0));
         foreach (var s in new[] { 0.5, 1.0, 2.0 }) br.Feed(new(), t0.AddSeconds(s));
-        Check("read once and gone: not a row, the cross-check told", $"{once} · brief {br.ShortLived} unsure {br.Unsure} told {string.Join(",", told)}", "Riverside Gloves#4 · brief 1 unsure 0 told 4");
+        Check("read once with its icon: a row all the same", $"{once} · brief {br.ShortLived} unsure {br.Unsure} told {string.Join(",", told)}", "Riverside Gloves#4 · brief 0 unsure 0 told ");
+        // read once with no icon, and missing from the read 0.5 s later, the read before 1.5 s earlier: up under 2.5 s, not a row
+        t0 = t0.AddSeconds(5);
+        br.Feed(new(), t0.AddSeconds(-1.5));
+        var flat = Ids(br.Feed(new() { new(1195, "Riverside Gloves x1", 0.6, IcD, 0.2, 0.02) }, t0));
+        foreach (var s in new[] { 0.5, 1.0, 2.0 }) br.Feed(new(), t0.AddSeconds(s));
+        Check("read once, no icon, up under 2.5 s: not a row, told", $"{flat} · brief {br.ShortLived} unsure {br.Unsure} told {string.Join(",", told)}", "Riverside Gloves#5 · brief 1 unsure 0 told 5");
+        // the same with passes 1.3 s apart: it may have been up 2.5 s, so it is a row (time since the read before, not reads)
+        t0 = t0.AddSeconds(5);
+        br.Feed(new(), t0.AddSeconds(-1.3));
+        br.Feed(new() { new(1195, "Riverside Gloves x1", 0.6, IcD, 0.2, 0.02) }, t0);
+        foreach (var s in new[] { 1.3, 2.6, 4.0 }) br.Feed(new(), t0.AddSeconds(s));
+        Check("read once, no icon, passes 1.3 s apart: a row", $"brief {br.ShortLived} unsure {br.Unsure}", "brief 1 unsure 0");
         // covered by a full-screen window and back: the same row, its time covered not counted
         var cv = new Session.LootRows(items);
         cv.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0);
@@ -1925,6 +1938,68 @@ options: --process aion[,other]");
         var ns = new Session.LootNotRow(items);
         ns.See("Drakan Guard Dog", t0, Session.LootNotRow.Plate);
         Check("a soul row with (Bound) read badly stays", Kept(ns, new[] { "Drakan Guard Dog (Boc x1", "Drakan Guard Dog" }, t0), "Drakan Guard Dog (Boc x1");
+
+        // ---- the thresholds against Steven's trace.log of 2026-10-24 12:47 to 13:25 (1,209 title reads, 131 real rows) ----
+        {
+            var nt = new Session.LootNotRow(items);
+            string W(LootLine l) { var row = LootPopup.Rows(new[] { (l.Top, l.Text) }).First(); return nt.Why(l, row, 0.12, out _) ?? "a row"; }
+            // real rows at their extremes: spread 0.112 (the least), 0.23 of the contrast (the least), background 0.29 (the most)
+            var rowLow = new LootLine(1197, "Orichalcum Orc x1", 0.48, 0x70f070701010101, 0.29, 0.112);
+            var rowFaint = new LootLine(1197, "Sapphire Gemstohe x1", 0.69, 0x7070707070f0f07, 0.25, 0.16);
+            // the title at its median (spread 0.028, contrast 0.54, background 0.10) and at the (b) edge
+            var title = new LootLine(974, "Vangt x1", 0.541, 0xe0fccfe1f0, 0.102, 0.028);
+            var edge = new LootLine(974, "Vangi x1", 0.40, 0xe0fccfe1f0, 0.10, 0.05);
+            Check("tuned (b)/(c): real rows' extremes stay, the title's median goes", $"{W(rowLow)} | {W(rowFaint)} | {W(title)} | {W(edge)}", "a row | a row | not on the list | not on the list");
+            Check("margins: rows' least spread over (b), most background under (c)", $"{0.112 / Session.LootNotRow.FlatSpread:0.0}x {0.23 / Session.LootNotRow.FlatShare:0.0}x {0.12 + Session.LootNotRow.OffStripGap - 0.29:0.00}", "2.2x 1.5x 0.05");
+        }
+
+        // ---- (d) static text: the title at one y for seconds, whatever its text and whatever the world behind it ----
+        {
+            var nd2 = new Session.LootNotRow(items);
+            string[] tt = { "Vangi x1", "Vangt x1", "Vqng( x1", "Yang( x1", "Vanga x1", "Vang x1", "Vangu x1" };
+            var kept = new List<string>();
+            for (int i = 0; i < tt.Length; i++)
+            {
+                // spread 0.17 (grass behind it: neither flat nor off the strip), a Kina row in the bottom slot
+                var read = new List<LootLine> { new(974 + i % 3 - 1, tt[i], 0.5, 0x3fcf4dcf8f070180, 0.10, 0.17), new(1197, "Kina x" + (200 + i), 0.6, 0x7070f0f0f070707, 0.12, 0.27) };
+                kept.Add(string.Join("+", nd2.Filter(read, t0.AddSeconds(i * 1.5)).Select(l => l.Text.Split(' ')[0])));
+            }
+            Check("static: kept until 3 reads over 6 s, then dropped at once", string.Join(" ", kept), "Vangi+Kina Vangt+Kina Vqng(+Kina Yang(+Kina Vanga+Kina Kina Kina");
+            Check("...logged once, counted as static", $"{nd2.StaticDropped} {nd2.Logged}", "2 1");
+            // a real row moving up into the band from the slot below, its text not an item's own: a row
+            var up1 = nd2.Filter(new() { new(1051, "Raw Leathe x1", 0.6, 0xaa55aa55aa55aa55, 0.12, 0.15), new(1124, "Kina x300", 0.6, 0x7070f0f0f070707, 0.12, 0.27) }, t0.AddSeconds(11));
+            var up2 = nd2.Filter(new() { new(978, "Raw Leathe x1", 0.6, 0xaa55aa55aa55aa55, 0.12, 0.15), new(1051, "Kina x300", 0.6, 0x7070f0f0f070707, 0.12, 0.27) }, t0.AddSeconds(11.6));
+            Check("static: a row moved up into the band stays", string.Join(" | ", up2.Select(l => l.Text)), "Raw Leathe x1 | Kina x300");
+            // where rows sit (the bottom slot), a line with its icon stays even when no-icon text stood there for seconds
+            var ns2 = new Session.LootNotRow(items);
+            for (int i = 0; i < 8; i++)
+                ns2.Filter(new() { new(1124, "Kina x300", 0.6, 0x7070f0f0f070707, 0.12, 0.27), i % 2 == 0 ? new(1197, "Kina x" + (500 + i), 0.6, 0x7070f0f0f070707, 0.12, 0.27) : new(1197, "Press F to talk x1", 0.5, 0, 0.10, 0.01) }, t0.AddSeconds(i * 1.5));
+            var bottom = ns2.Filter(new() { new(1124, "Kina x300", 0.6, 0x7070f0f0f070707, 0.12, 0.27), new(1197, "Sapphire Gemstohe x1", 0.6, 0x7070707070f0f07, 0.12, 0.16), new(1198, "Talk x1", 0.5, 0, 0.10, 0.01) }, t0.AddSeconds(11.5));
+            Check("static in a row slot: the icon row stays, the flat text goes", string.Join(" | ", bottom.Select(l => l.Text)), "Kina x300 | Sapphire Gemstohe x1");
+
+            // the gathering panel's parse skips the title: the panel's item line is its first, and a row above it is kept
+            var title = new LootLine(974, "Vangt x1", 0.5, 0x3fcf4dcf8f070180, 0.10, 0.17);
+            Check("the panel's parse: the title is ignorable, its labels never", $"{nd2.Ignorable(title, t0.AddSeconds(12))} {nd2.Ignorable(new LootLine(1687, "Success x1", 0.95, 0xf0f0f0f0f0f0f0f, 0.02, 0.13), t0.AddSeconds(12))}", "True False");
+            Check("panel cut: by the panel's own spacing, never over the list's rows",
+                $"{LootPopup.PanelCut(new[] { 974, 1621, 1687 }, 1687)} {LootPopup.PanelCut(new[] { 1197, 1531, 1687 }, 1531)} {LootPopup.PanelCut(new[] { 1197, 1530, 1621, 1687 }, 1530)} {LootPopup.PanelCut(new[] { 100, 130, 160, 190 }, 160)} {LootPopup.PanelCut(new[] { 100, 130 }, 130)}",
+                "1588 1453 1497 85 85");
+        }
+
+        // ---- (e) far right of the rows' text column: the player's own nameplate at screen centre ----
+        {
+            var np = new Session.LootNotRow(items);
+            for (int i = 0; i < 3; i++)
+                np.Filter(new() { new(1124, "Kina x" + (300 + i), 0.6, 0x7070f0f0f070707, 0.12, 0.27, 1920), new(1197, "Kina x" + (400 + i), 0.6, 0x7070f0f0f070707, 0.12, 0.27, 1920) }, t0.AddSeconds(i));
+            var pos = np.Filter(new()
+            {
+                new(974, "Vangi x1", 0.55, 0x3fcf4dcf8f070180, 0.10, 0.17, 2437),          // the title: 517 px, 7.1 pitches right
+                new(1051, "Raw Leathe x1", 0.6, 0xaa55aa55aa55aa55, 0.12, 0.15, 2220),     // 300 px right (a row sliding in): stays
+                new(1197, "Sapphire Gemstohe x1", 0.44, 0x3f3f371b3e2e2c18, 0.25, 0.165, 1921),
+            }, t0.AddSeconds(3));
+            Check("position: the title 7 pitches right of the rows' text goes, rows stay", $"{np.Column} {np.Pitch} | {string.Join(" | ", pos.Select(l => l.Text))}", "1920 73 | Raw Leathe x1 | Sapphire Gemstohe x1");
+            var np2 = new Session.LootNotRow(items);
+            Check("position: no column known yet, nothing dropped by it", string.Join(" | ", np2.Filter(new() { new(974, "Vangi x1", 0.55, 0x3fcf4dcf8f070180, 0.10, 0.17, 2437) }, t0).Select(l => l.Text)), "Vangi x1");
+        }
         Console.WriteLine($"  ({lines.Count} lines measured in {ms} ms)");
         return ok;
     }
