@@ -117,7 +117,7 @@ public partial class MainWindow
             rate.Children.Add(kv);
         }
         // the health line for runs: how many reward screens were read
-        int read = here.Count(r => r.FromPicture && !r.RewardsNotRead && !r.KinahUnknown);
+        int read = here.Count(r => r.FromPicture && !r.RewardsNotRead && !r.KinahUnknown && !r.PartlyRead);
         var ok = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
         var mk = new Path { Width = 13, Height = 13, Stretch = Stretch.Uniform, StrokeThickness = 1.6, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Data = Geometry.Parse("M3.5,8.5 L6.5,11.5 L12.5,4.5"), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         mk.SetResourceReference(Shape.StrokeProperty, "Gold");
@@ -241,6 +241,14 @@ public partial class MainWindow
             var keep = Btn("Keep as one");
             keep.Click += (_, _) => { if (_demoInst != null) return; RunFixes.KeepAsOne(r); _fixOpen = null; Say($"Kept as one run: {r.Zone}, {r.Start.ToLocalTime():MMM d HH:mm}. It counts in the figures now.", "Good"); redraw(); };
             left.Children.Add(keep);
+        }
+        else if (r.PartlyRead && !r.KinahUnknown && !r.OldUnread)
+        {
+            // partly read (0.8.30, the event cards): what was read counts and was sent, marked partly read; nothing to type
+            var title = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = Ck(CkInk) };
+            title.Inlines.Add(new Run($"Partly read: {r.SlotsUnread} slot{(r.SlotsUnread == 1 ? "" : "s")} on its reward cards weren't read. "));
+            title.Inlines.Add(new Run("What was read counts, and was sent marked partly read. Remove it if the run is wrong.") { Foreground = Ck(CkFaint) });
+            sp.Children.Add(title);
         }
         else
         {
