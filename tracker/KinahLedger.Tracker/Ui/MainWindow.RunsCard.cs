@@ -149,11 +149,16 @@ public partial class MainWindow
         body.Children.Add(list);
 
         // what the counted runs brought, by group: materials (with their value), gear (bound: no value), what wasn't read
-        var mats = new Dictionary<long, (int Count, int Runs, long Value, bool Priced)>(); var gear = new Dictionary<long, int>(); int unread = 0;
+        var mats = new Dictionary<long, (int Count, int Runs, long Value, bool Priced)>(); var gear = new Dictionary<long, int>(); int unread = 0, unknownGear = 0;
+        // currencies (Abyss Points, Enhance Stone, tokens) are amounts, not pieces: a group of their own
+        var curr = new Dictionary<long, long>();
         foreach (var r in counted)
         {
+            unknownGear += r.UnknownGear;
+            foreach (var (id, c) in r.Currencies(IsCurrency)) curr[id] = curr.GetValueOrDefault(id) + c;
             foreach (var (id, c) in r.Items.Where(x => x.Value > 0))
             {
+                if (IsCurrency(id)) continue;
                 if (_items.IsGear(id)) { gear[id] = gear.GetValueOrDefault(id) + c; continue; }
                 var p = PriceBook.Price(_items.NameOf(id));
                 var o = mats.GetValueOrDefault(id);
@@ -161,11 +166,12 @@ public partial class MainWindow
             }
             foreach (var (id, c) in r.BoundItems.Where(x => x.Value > 0))
             {
+                if (IsCurrency(id)) continue;
                 if (_items.IsGear(id)) { gear[id] = gear.GetValueOrDefault(id) + c; continue; }
                 var o = mats.GetValueOrDefault(id);
                 mats[id] = (o.Count + c, o.Runs, o.Value, o.Priced);
             }
-            foreach (var id in r.Items.Where(x => x.Value > 0).Select(x => x.Key).Concat(r.BoundItems.Where(x => x.Value > 0).Select(x => x.Key)).Distinct().Where(id => !_items.IsGear(id)))
+            foreach (var id in r.Items.Where(x => x.Value > 0).Select(x => x.Key).Concat(r.BoundItems.Where(x => x.Value > 0).Select(x => x.Key)).Distinct().Where(id => !_items.IsGear(id) && !IsCurrency(id)))
                 mats[id] = mats[id] with { Runs = mats[id].Runs + 1 };
             unread += r.SlotsUnread;
         }
@@ -189,14 +195,26 @@ public partial class MainWindow
                 return sp;
             }, redraw));
         }
-        if (gear.Count > 0)
+        if (curr.Count > 0)
         {
-            int pieces = gear.Values.Sum();
+            groups.Children.Add(RunsGroup(zone, "Currencies", new List<Inline> { new Run($"{curr.Count} kind{(curr.Count == 1 ? "" : "s")}") }, () =>
+            {
+                var sp = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+                foreach (var (id, c) in curr.OrderByDescending(x => x.Value))
+                    sp.Children.Add(RunsItem(_items.NameOf(id), (int)Math.Min(c, int.MaxValue), "", "", ""));
+                return sp;
+            }, redraw));
+        }
+        if (gear.Count > 0 || unknownGear > 0)
+        {
+            int pieces = gear.Values.Sum() + unknownGear;
             groups.Children.Add(RunsGroup(zone, "Gear (bound)", new List<Inline> { new Run($"{pieces} piece{(pieces == 1 ? "" : "s")}") }, () =>
             {
                 var sp = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
                 foreach (var (id, c) in gear.OrderByDescending(x => GradeRank(_items.Get(x.Key)?.Grade ?? "")).ThenByDescending(x => x.Value))
                     sp.Children.Add(RunsItem(_items.NameOf(id), c, "", "", ""));
+                // a piece whose icon two items share: gear all the same, its name not known
+                if (unknownGear > 0) sp.Children.Add(RunsItem("Unknown gear", unknownGear, "its icon is shared by two items", "", "", unknown: true));
                 return sp;
             }, redraw));
         }
@@ -266,8 +284,9 @@ public partial class MainWindow
     /// <summary>"31 pieces · 2 gear" (InstanceRun.Pieces: each piece of gear, each other item once), or "Kinah only".</summary>
     string PiecesText(InstanceRun r)
     {
-        var (gearN, other) = r.Pieces(_items.IsGear);
-        int pcs = gearN + other;
+        // currencies are amounts, never pieces (the 16:02 Hidden Lugi run read as "3,740 items": its Abyss Points and stones)
+        var (gearN, other) = r.Pieces(_items.IsGear, IsCurrency, withUnknown: true);
+        int pcs = gearN + other + r.UnknownItems;
         if (pcs == 0) return r.RewardsNotRead ? "rewards not read" : "Kinah only";
         return $"{pcs} piece{(pcs == 1 ? "" : "s")}" + (gearN > 0 ? $" · {gearN} gear" : "");
     }
@@ -284,8 +303,12 @@ public partial class MainWindow
         if (r.Suspect.Length > 0) return char.ToUpperInvariant(r.Suspect[0]) + string.Join(' ', r.Suspect.Split(' ').Take(3))[1..];
         if (r.RewardsNotRead) return "Rewards not read";
         if (r.KinahNotRead || r.OldUnread) return "Kinah not read";
+        if (r.PartlyRead) return $"Partly read: {r.SlotsUnread}";
         return "";
     }
+
+    /// <summary>A currency (Abyss Points, Enhance Stone, a token): an amount, never a piece.</summary>
+    bool IsCurrency(long id) => _items.Get(id)?.Category == "Currency";
 
     /// <summary>The flag's reason in a sentence, on hover.</summary>
     static string FlagTip(InstanceRun r, double medianSecs) =>
@@ -293,6 +316,7 @@ public partial class MainWindow
         : r.Suspect == "not a run" ? "Not a run: no Kinah, and its one reward screen came moments after entering."
         : r.RewardsNotRead ? "Its reward screen wasn't read, so what it paid isn't known."
         : r.KinahNotRead || r.OldUnread ? "The Kinah on its reward screen wasn't read, so it isn't counted as 0."
+        : r.PartlyRead ? $"Partly read: {r.SlotsUnread} slot{(r.SlotsUnread == 1 ? "" : "s")} on its reward cards weren't read (cut by a card's window, or below what the screen showed). What was read counts and was sent, marked partly read."
         : r.Suspect;
 
     /// <summary>A folded group under Items: one line (name, its summary) until a click opens it.</summary>

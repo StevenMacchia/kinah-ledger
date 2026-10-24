@@ -49,7 +49,10 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   window, everything but the title and the cards blacked out), with the run open in the case's `zone`. `expect.cards`
   lists the five cards: `received`, and for a received one `slots` in list order (`n`, `name` when the truth knows it,
   `hidden` for a slot the screen only showed cut by the card's window, which must stay not read) and `more` (its list
-  may run past what the screen showed).
+  may run past what the screen showed). Run keys for partly read runs (2026-10-24): `runs_partly_read`, `runs_sent`
+  (runs the payload keeps), `run_not_read`, `run_pieces` (currencies left out, unknown gear in), `run_unknown_gear`,
+  `run_unknown_items`, `run_abyss_points`. `event-2026-10-24-hidden-lugi-1602`: the two pictures of a screen that closed
+  after 6 s, card 1 placed from a scrolled read, card 3 from its fullest read; partly read, sent.
 - `text-2026-10-24-farm-kina-counter`: the 131029 farming trace (player names shifted) with `balance` reads, a trusted
   reading of the Kinah counter (`{"t", "k": "balance", "l": ["29281753"]}`, written from the footage every 2.5 s). The
   counter decides Kina (`Session/KinaWitness.cs`): 15,660 Kina, where main counts 17,120. `text-2026-10-24-chat-repeat-*`:

@@ -1813,10 +1813,13 @@ public sealed class TrackerSession
         var history = Instances.Snapshot().Where(r => string.Equals(r.Zone, Instances.Open, StringComparison.OrdinalIgnoreCase)).SelectMany(r => r.Items.Keys.Concat(r.BoundItems.Keys)).Select(id => _items.NameOf(id)).ToList();
         var prefer = SetMates(slots, _byIcon!, history);
         var notRead = new List<string>();       // every slot it can't name, as "Rare x14 (picture)": shown as Unknown item, never dropped
+        var gearNotes = new List<string>();     // gear whose icon two items share: one piece of unknown gear each ("Legend gear, one of A / B")
+        int unknownItems = 0;                   // visible slots not named: one unknown item each, never dropped
         // a slot not read that shows a K or M count, or whose closest icon is the coin, leaves the run's Kinah not known
         bool kinahUnread = false, bigUnread = false;   // the second: a K or M slot not read, Kinah unknown unless the table's coin was read
         void NotRead(RewardGrid.Slot s)
         {
+            unknownItems++;
             notRead.Add($"{s.Grade} x{(s.Count > 0 ? s.Count.ToString() : "?")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
             bool coinLike = s.Icons.Count > 0 && s.Icons[0].Key is { } k && _byIcon!.TryGetValue(k, out var ci) && ci.Any(i => string.Equals(Unbound(i.Name), "Kina", StringComparison.OrdinalIgnoreCase));
             if (coinLike) kinahUnread = true;
@@ -1825,7 +1828,7 @@ public sealed class TrackerSession
         foreach (var sl in slots)
         {
             // figures on the slot the reader couldn't tell: its count isn't known, so the slot is not read (never one assumed)
-            if (sl.Count <= 0) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot's count couldn't be read (\"{sl.CountText}\"); not counted"); continue; }
+            if (sl.Count <= 0) { unnamed++; NotRead(sl); CrashLog.Note($"{what}: a {sl.Grade} slot's count couldn't be read (\"{sl.CountText}\"){(sl.Icons.Count == 0 ? ", only ever seen cut" : "")}: counted as one unknown item, count not read"); continue; }
             var best = sl.Icons.FirstOrDefault();
             bool kCount = sl.Count >= 1000 && System.Text.RegularExpressions.Regex.IsMatch(sl.CountText ?? "", "[KkMm]");
             bool coinIcon = best.Key != null && _byIcon.TryGetValue(best.Key, out var its0) && best.Distance <= 100
@@ -1894,7 +1897,16 @@ public sealed class TrackerSession
             var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
             // every slot ends counted or not read: a chat line can't decide between the names a picture leaves open
             if (seen >= 0 && names.Count == 1) { _runPickups.RemoveAt(seen); known++; fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" }); continue; }
-            if (names.Count != 1) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}; not counted"); continue; }
+            // gear whose icon two items share (Elder Gloves / Relic Collector Gloves): a piece of gear all the same, counted as
+            // one piece of unknown gear with what it may be, never dropped (Steven, 2026-10-24)
+            if (names.Count != 1 && graded.All(i => _items.IsGear(i.Id)))
+            {
+                var maybe = $"{sl.Grade} gear, one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}";
+                gearNotes.Add(maybe);
+                CrashLog.Note($"{what}: a {sl.Grade} slot is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}: counted as one piece of unknown gear");
+                continue;
+            }
+            if (names.Count != 1) { unnamed++; NotRead(sl); CrashLog.Note($"{what}: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}: counted as one unknown item"); continue; }
             var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
             Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
             Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" }, RunWhere());
@@ -1907,8 +1919,12 @@ public sealed class TrackerSession
         // places the picture never showed (an event card's list past its window): each one more slot not read, and the run's
         // Kinah not known, since a coin may be among them
         if (moreNotRead != null) { notRead.AddRange(moreNotRead); unnamed += moreNotRead.Count; }
-        if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead, kinahHidden || kinahUnread || (bigUnread && !fromGrid.OfType<KinahChanged>().Any()));
-        CrashLog.Note($"{what} read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
+        // an event's cards with places not read are a partly read run: what was read is filed and sent, the run flagged and
+        // kept out of the averages; its Kinah isn't marked unknown (that would park it unsent, 2026-10-24 16:02 Hidden Lugi)
+        bool cards = what == "event cards", partly = cards && unnamed > 0;
+        bool kinahFlag = !cards && (kinahHidden || kinahUnread || (bigUnread && !fromGrid.OfType<KinahChanged>().Any()));
+        if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead, kinahFlag, unknownItems, gearNotes, partly, cards ? slots.Count : 0);
+        CrashLog.Note($"{what} read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {gearNotes.Count} unknown gear, {unnamed} not named{(partly ? $": partly read, {unnamed} slot(s) not read" : "")}");
     }
 
     /// <summary>
@@ -2091,6 +2107,9 @@ public sealed class TrackerSession
     // Filed once per screen (a screen back within CardsRearmSeconds is the same one).
     EventCards.Merger? _cards; DateTime _cardsFirst, _cardsProbeAt = DateTime.MinValue; bool _cardsFiled, _cardsByFrames; int _cardsUnknownLayout; string _cardsWhy = "";
     public const int MaxCardReads = 12;
+    /// <summary>Said once a session when a screen's cards weren't all read to their ends (reads.log; the HUD's hint when it shows one).</summary>
+    public const string CardsHint = "event cards: hold the reward screen open and scroll each card for a full read";
+    bool _cardsHintSaid;
     public const double CardsSeconds = 20, CardsRearmSeconds = 10, CardsGoneSeconds = 2.5;
     /// <summary>What the last filed event screen held, card by card, for the replay bank: received, its list as voted, whether its list ran past what was seen.</summary>
     internal List<(int Card, bool Received, List<RewardGrid.Slot> Slots, bool More)>? LastEventCards { get; private set; }
@@ -2159,7 +2178,9 @@ public sealed class TrackerSession
                 // pauldrons "x5"). A slot whose sure icon holds only gear is one piece
                 var list = m.Voted(i).Select(x => x.Icons.Count > 0 && x.Icons[0].Distance <= GridSureDistance && byIcon.TryGetValue(x.Icons[0].Key, out var its) && its.All(it => _items.IsGear(it.Id)) && x.Count != 1
                     ? x with { Count = 1, CountText = "" } : x).ToList();
-                bool open = !m.Cards.TryGetValue(i, out var cl) || cl.Length == null;
+                // a card filed from a read that couldn't be placed in its list (EventCards.Merger.Loose): where it starts isn't known
+                bool open = !m.Cards.TryGetValue(i, out var cl) || cl.Length == null || cl.FromLoose;
+                if (cl?.FromLoose == true) CrashLog.Note($"event cards: card {i + 1}: no read of it could be placed in its list (scrolled in each), so it is counted from its fullest read");
                 int cut = list.Count(x => x.Count <= 0 && x.Icons.Count == 0);
                 CrashLog.Note($"event cards: card {i + 1} received, {list.Count} slot(s){(cut > 0 ? $", {cut} only ever seen cut by the card's window (count not shown: not read)" : "")}{(open ? ", and its list may run on past what was seen" : "")}: "
                     + string.Join(" | ", list.Select(x => $"{x.Grade} x{(x.Count > 0 ? x.CountText.Length > 0 ? x.CountText : "1" : "?")} {(x.Icons.Count > 0 ? $"{x.Icons[0].Key} {x.Icons[0].Distance:0} → {SlotName(_items, x) ?? "not sure"}" : "cut")}")));
@@ -2169,12 +2190,16 @@ public sealed class TrackerSession
                 // the crop of each slot that can't be named, kept beside the logs
                 if (cl != null)
                     for (int at = 0; at < list.Count; at++)
-                        if (SlotName(_items, list[at]) == null && cl.Crops.TryGetValue(at, out var crop))
+                        if (SlotName(_items, list[at]) == null && m.CropAt(i, at) is { } crop)
                             RareGate.SaveProof(crop, $"card{i + 1}-slot{at + 1}-{list[at].Grade}", "event", now);
             }
             LastEventCards = report;
             CrashLog.Note($"event cards: filed after {m.Reads} read(s) ({why}){(m.Unaligned > 0 ? $"; {m.Unaligned} card read(s) left out, not placeable in their lists" : "")}");
-            ApplyGrid(all, now, more, kinahHidden: more.Count > 0, what: "event cards");
+            // a list cut, running on or never placed: once a session, how to give the reader a full read (the HUD can show it)
+            if ((more.Count > 0 || all.Any(x => x.Icons.Count == 0)) && !_cardsHintSaid) { _cardsHintSaid = true; CrashLog.Note(CardsHint); }
+            // no received card read at all (not one slot named or matched): the run's rewards stay not read, never filed as empty
+            if (!all.Any(x => x.Icons.Count > 0)) { CrashLog.Note($"event cards: no card read ({m.Reads} read(s), {all.Count} slot(s) seen only cut or not at all): the run's rewards stay not read"); return; }
+            ApplyGrid(all, now, more, what: "event cards");
         }
         catch (Exception ex) { CrashLog.Write("event cards filing", ex); }
         finally { m.Dispose(); _cards = null; }
@@ -3420,11 +3445,14 @@ public sealed class TrackerSession
                 var pics = EventShotRecovery.PicturesFor(r);
                 try
                 {
-                    if (pics.Count == 0) continue;
+                    // no pictures: a partly read run goes up as it was read; one not read is parked below
+                    if (pics.Count == 0) { if (!r.KinahUnknown) Instances.Requeue(r); continue; }
                     var res = await EventShotRecovery.ReadKeptAsync(r, s, _items);
-                    if (!res.Read) { CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s), still not read"); continue; }
-                    r.TakeRewardsFrom(res.Run);
-                    CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s): {res.Slots} slot(s), {res.Unknown} not read, {res.AbyssPoints:N0} Abyss Points");
+                    if (!res.Read) { CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s), still not read"); if (!r.KinahUnknown) Instances.Requeue(r); continue; }
+                    // a partly read run: the pictures' read replaces the live one only when it reads more slots (or the same with fewer not read)
+                    if (TakeReread(r, res.Run))
+                        CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s): {res.Slots} slot(s), {res.Unknown} not read, {res.AbyssPoints:N0} Abyss Points{(r.PartlyRead ? " (still partly read)" : "")}");
+                    else CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s): {res.Slots} slot(s), {res.Unknown} not read; the live read ({r.PictureSlots} slot(s), {r.SlotsUnread} not read) is kept");
                     if (!r.KinahUnknown) Instances.Requeue(r);
                 }
                 catch (Exception ex) { CrashLog.Write("unread run retry", ex); }
@@ -3439,6 +3467,18 @@ public sealed class TrackerSession
     }
 
     /// <summary>
+    /// A read of a run's kept pictures onto the run: always for one whose rewards weren't read; for a partly read one only
+    /// when it read more slots than the live read, or as many with fewer not read. True when taken.
+    /// </summary>
+    internal static bool TakeReread(InstanceRun r, InstanceRun read)
+    {
+        if (!read.FromPicture) return false;
+        bool better = r.KinahUnknown || !r.FromPicture || read.PictureSlots > r.PictureSlots || (read.PictureSlots == r.PictureSlots && read.SlotsUnread < r.SlotsUnread);
+        if (better) r.TakeRewardsFrom(read);
+        return better;
+    }
+
+    /// <summary>
     /// The runs to send, without those whose rewards were not read: an event run not yet read again from its pictures goes
     /// back in the queue for that (<see cref="RetryUnreadRuns"/>); any other is parked, one log line each.
     /// </summary>
@@ -3447,8 +3487,9 @@ public sealed class TrackerSession
         var send = new List<InstanceRun>(); var wait = new List<InstanceRun>();
         foreach (var r in runs)
         {
-            if (!r.KinahUnknown) send.Add(r);
-            else if (r.Kind == "Event" && !r.Retried) wait.Add(r);
+            // a partly read event run waits for its one read again from its pictures too, then goes up flagged (never parked)
+            if (r.Kind == "Event" && !r.Retried && (r.KinahUnknown || r.PartlyRead)) wait.Add(r);
+            else if (!r.KinahUnknown) send.Add(r);
             else Instances.Park(r, r.Pictures.Count > 0 ? r.Pictures : EventShotRecovery.PicturesFor(r));
         }
         if (wait.Count > 0) Instances.Restore(wait);
