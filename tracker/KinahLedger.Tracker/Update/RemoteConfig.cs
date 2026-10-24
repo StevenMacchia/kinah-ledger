@@ -106,12 +106,35 @@ public sealed class RemoteConfig
     /// read's lines stand. On in code; "ocr": {"chat_skip_same": false} turns it off.
     /// </summary>
     public bool ChatSkipSame { get; init; } = true;
-    /// <summary>A built-in switch by its config name (layout.anchor.chat, layout.anchor.balance, ocr.chat_skip_same).</summary>
+
+    // ---- OCR sizing at high resolution (2026-10-24) ----
+    /// <summary>
+    /// ocr.chat_scale_to_target: the chat is enlarged to aim its text at ocr.target_text_px from its measured height, with
+    /// ocr.scale as a floor only for text under <see cref="KinahLedger.Ocr.TextScale.SmallPx"/> px, never under 1.25x, and
+    /// text at or above the target never past 1.25x (TextScale). OFF in code: on 72 drawn 5120x2160 chats at 29 px the
+    /// lower factor read 193 of 240 lines exactly against 218 at the 2x floor (bench --sizing --sweep chat), so the chat
+    /// keeps its floor until real crops say otherwise; "ocr": {"chat_scale_to_target": true} turns it on.
+    /// </summary>
+    public bool ChatScaleToTarget { get; init; }
+    /// <summary>
+    /// ocr.target_sized: the target bar is read around its own text (the gold name's and the bright text's extent in the
+    /// band, with a margin) and enlarged only as far as its text needs (TargetReader); off, the whole band at 3x. On in code.
+    /// </summary>
+    public bool TargetSized { get; init; } = true;
+    /// <summary>
+    /// ocr.plates_half: the nameplate bars are looked for on every second pixel of every second row, in the capture's own
+    /// 32-bit pixels, and each one found is measured again at full size (Nameplates); off, the old full 24-bit scan. On in code.
+    /// </summary>
+    public bool PlatesHalf { get; init; } = true;
+    /// <summary>A built-in switch by its config name (layout.anchor.chat, layout.anchor.balance, ocr.chat_skip_same, ocr.chat_scale_to_target, ocr.target_sized, ocr.plates_half).</summary>
     public bool Flag(string name) => name switch
     {
         "layout.anchor.chat" => AnchorChat,
         "layout.anchor.balance" => AnchorBalance,
         "ocr.chat_skip_same" => ChatSkipSame,
+        "ocr.chat_scale_to_target" => ChatScaleToTarget,
+        "ocr.target_sized" => TargetSized,
+        "ocr.plates_half" => PlatesHalf,
         _ => false,
     };
 
@@ -209,6 +232,9 @@ public sealed class RemoteConfig
             AnchorChat = !Off2(anchor, "chat"),
             AnchorBalance = !Off2(anchor, "balance"),
             ChatSkipSame = !Off2(ocr, "chat_skip_same"),
+            ChatScaleToTarget = ocr is { } cst && cst.TryGetProperty("chat_scale_to_target", out var cstv) && cstv.ValueKind == JsonValueKind.True,
+            TargetSized = !Off2(ocr, "target_sized"),
+            PlatesHalf = !Off2(ocr, "plates_half"),
             RolloutVersion = Str(roll, "version", ""),
             RolloutPercent = (int)Num(roll, "percent", 100, 0, 100),
             RolloutHold = roll is { } ro && ro.TryGetProperty("hold", out var h) && h.ValueKind == JsonValueKind.True,

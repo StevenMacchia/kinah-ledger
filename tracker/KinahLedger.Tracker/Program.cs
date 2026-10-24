@@ -93,7 +93,7 @@ internal static class Program
                     WindowCapture.Stop();
                     return 0;
                 }
-                case "bench": return Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
+                case "bench": return opts.ContainsKey("sizing") ? Platform.BenchSizing.Run(settings, opts) : Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
                 case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);
                 case "ui-shot": return UiShot(settings, opts, pos);
@@ -305,6 +305,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   pick                         drag a box around the chat's loot lines; remembered for next time
   ocr-test [--save]             read the box once and show what was recognized (--save keeps a PNG)
   ocr-test --scales [--image p] read the chat (or a saved picture of it) at each enlarging factor, to see which reads best
+  bench --sizing [--n 7] [--chat dir] [--frames dir] [--verbose]  the OCR sizing switches off and on, offline, on drawn 5120x2160 pictures (and real ones from the folders)
   popup-test --image shot.png   read the loot list beside the character in a game picture, with each row's icon match (--crop, --save, --scale n)
   replay [trace.log]            count a recorded fight's reads again (a miscount report's trace.jsonl too; --from/--to HH:mm, --novote)
   report-replay <folder>        read a miscount report's pictures again with this version's reader, beside what was counted then
@@ -458,7 +459,7 @@ options: --process aion[,other]");
     {
         var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
         if (o.ContainsKey("scales")) return ScalesTest(s, items, o);
-        var auto = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) : null;
+        var auto = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) { ToTarget = () => Update.RemoteConfig.Current.ChatScaleToTarget } : null;
         var reader = new ScreenReader(RegionFor(o), s.Ocr.Scale, auto);
         var parser = new ChatParser(items);
         string? png = o.ContainsKey("save") ? $"ocr-test-{DateTime.Now:HHmmss}.png" : null;
@@ -544,7 +545,7 @@ options: --process aion[,other]");
         File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), "");
         var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         var s = new TrackerSession(null, settings, items, "Replay");
-        var auto = settings.Ocr.AutoScale ? new TextScale(settings.Ocr.Scale, settings.Ocr.TargetTextPx) : null;
+        var auto = settings.Ocr.AutoScale ? new TextScale(settings.Ocr.Scale, settings.Ocr.TargetTextPx) { ToTarget = () => Update.RemoteConfig.Current.ChatScaleToTarget } : null;
         ScreenReader? reader = null;
         int chats = 0, lists = 0; DateTime? last = null;
         foreach (var raw in File.ReadLines(index))
@@ -1713,6 +1714,78 @@ options: --process aion[,other]");
         Check("25 px text: never below the configured 2x", $"{big.Observe(Enumerable.Repeat(25.0, 8))} {big.Factor}", "False 2");
         var tiny = new TextScale(2, 36);
         Check("7 px text: no more than 4x", $"{tiny.Observe(Enumerable.Repeat(7.0, 8))} {tiny.Factor}", "True 4");
+        // ocr.chat_scale_to_target (2026-10-24): the floor only under 18 px, text at or past the target at most 1.25x
+        TextScale Sized() => new(2, 36) { ToTarget = () => true };
+        var hi = Sized();
+        Check("to target: 29 px chat on 5120x2160 read at 1.25x", $"{hi.Observe(Enumerable.Repeat(29.0, 8))} {hi.Factor}", "True 1.25");
+        var k4 = Sized();
+        Check("to target: 25 px text read at 1.5x, under the old 2x floor", $"{k4.Observe(Enumerable.Repeat(25.0, 8))} {k4.Factor}", "True 1.5");
+        var lo = Sized();
+        Check("to target: 12 px text keeps the floor and reads at 3x", $"{lo.Observe(Enumerable.Repeat(12.0, 8))} {lo.Factor}", "True 3");
+        var s17 = Sized();
+        Check("to target: 17 px text, under 18 px, keeps the 2x floor", $"{s17.Observe(Enumerable.Repeat(17.0, 8))} {s17.Factor}", "False 2");
+        var huge = Sized();
+        Check("to target: 40 px text read at 1.25x, never more", $"{huge.Observe(Enumerable.Repeat(40.0, 8))} {huge.Factor}", "True 1.25");
+        Check("to target: 1.25x at or above the target, quarter steps up", $"{Sized().Want(36)} {Sized().Want(60)} {Sized().Want(32)} {Sized().Want(24.01)} {Sized().Want(19)} {Sized().Want(15)}", "1.25 1.25 1.25 1.5 2 2.5");
+        var offTs = new TextScale(2, 36) { ToTarget = () => false };
+        Check("switch off: 29 px text keeps the 2x floor", $"{offTs.Observe(Enumerable.Repeat(29.0, 8))} {offTs.Factor}", "False 2");
+        var band = new TextScale(3, 36) { ToTarget = () => true, Least = 2 };
+        Check("target band: 3x until measured, 2x for 29 px, 3x under 18 px", $"{band.Factor} {band.Want(29)} {band.Want(40)} {band.Want(14)}", "3 2 2 3");
+
+        // ---- OCR sizing switches and their pixel work (2026-10-24; the timed comparison is bench --sizing) ----
+        {
+            var b0 = Update.RemoteConfig.BuiltIn;
+            var e0 = Update.RemoteConfig.Parse("{}");
+            var flip = Update.RemoteConfig.Parse("""{"ocr": {"chat_scale_to_target": true, "target_sized": false, "plates_half": false}}""");
+            Check("sizing switches: chat off, target and plates on, built in", $"{b0.ChatScaleToTarget} {b0.TargetSized} {b0.PlatesHalf} / {e0.ChatScaleToTarget} {e0.TargetSized} {e0.PlatesHalf}", "False True True / False True True");
+            Check("...the site can flip each", $"{flip.Flag("ocr.chat_scale_to_target")} {flip.Flag("ocr.target_sized")} {flip.Flag("ocr.plates_half")}", "True False False");
+            // the ink box: the extent of dark pixels with a margin, the whole picture when it covers most of it, none when blank
+            using var bw = new System.Drawing.Bitmap(400, 100, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            using (var g = System.Drawing.Graphics.FromImage(bw)) { g.Clear(System.Drawing.Color.White); g.FillRectangle(System.Drawing.Brushes.Black, 150, 40, 60, 20); }
+            Check("ink box: dark pixels and a margin", $"{TargetReader.InkBox(bw, 10)}", "{X=140,Y=30,Width=80,Height=40}");
+            using (var g = System.Drawing.Graphics.FromImage(bw)) g.Clear(System.Drawing.Color.White);
+            Check("ink box: a blank picture has none (no recognition)", $"{TargetReader.InkBox(bw, 10)?.ToString() ?? "none"}", "none");
+            using (var g = System.Drawing.Graphics.FromImage(bw)) { g.FillRectangle(System.Drawing.Brushes.Black, 2, 2, 3, 3); g.FillRectangle(System.Drawing.Brushes.Black, 395, 95, 3, 3); }
+            Check("ink box: dark at both corners is the whole picture", $"{TargetReader.InkBox(bw, 10)}", "{X=0,Y=0,Width=400,Height=100}");
+            // the nameplate bars: the half search finds exactly the full scan's bars on a drawn 5120x2160 frame (bars, a
+            // plate with no bar, the player's bar, a tall red banner and red specks), dark and bright
+            foreach (var bright in new[] { false, true })
+            {
+                using var fr = KinahLedger.Platform.BenchSizing.DrawFrame(5120, 2160, bright, out _, out _);
+                var full = Nameplates.FindBars(fr, false).OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
+                var halfBars = Nameplates.FindBars(fr, true);
+                Check($"nameplates, {(bright ? "bright" : "dark")} 5120x2160: half search = full scan", $"{halfBars.Count} {full.SequenceEqual(halfBars)}", "5 True");
+            }
+            // and on random frames at four window sizes: red boxes of every size around the bar limits (0.4% to 1.2% of the
+            // height tall), touching, stacked, cut at the area's edge, odd and even places, plus near-red that isn't
+            int frames = 0, agree = 0, barsSeen = 0;
+            var rr = new Random(2024);
+            foreach (var (fw, fh) in new[] { (1920, 1080), (2560, 1440), (3840, 2160), (5120, 2160) })
+                for (int k = 0; k < 10; k++)
+                {
+                    using var fr = new System.Drawing.Bitmap(fw, fh, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (var g = System.Drawing.Graphics.FromImage(fr))
+                    {
+                        g.Clear(System.Drawing.Color.FromArgb(40 + k * 10, 60, 50));
+                        using var red = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(241, 54, 82));
+                        using var near = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(200, 100, 90));
+                        for (int i = 0; i < 120; i++)
+                        {
+                            int bh = rr.Next(1, (int)(fh * 0.016) + 2), bwid = rr.Next(1, (int)(fh * 0.12));
+                            int x = rr.Next((int)(fw * 0.08), (int)(fw * 0.92)), y = rr.Next((int)(fh * 0.02), (int)(fh * 0.84));
+                            g.FillRectangle(i % 7 == 0 ? near : red, x, y, bwid, bh);
+                            // a ragged row under some: runs that start a pixel or two off
+                            if (i % 5 == 0) g.FillRectangle(red, x + rr.Next(-3, 4), y + bh, bwid, rr.Next(1, 4));
+                        }
+                    }
+                    var full = Nameplates.FindBars(fr, false).OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
+                    var halfBars = Nameplates.FindBars(fr, true);
+                    frames++; barsSeen += full.Count;
+                    if (full.SequenceEqual(halfBars)) agree++;
+                    else Console.WriteLine($"    {fw}x{fh} #{k}: full {string.Join(" ", full)} / half {string.Join(" ", halfBars)}");
+                }
+            Check($"nameplates, {frames} random frames ({barsSeen} bars): half search = full scan", $"{agree}", $"{frames}");
+        }
 
         // ---- a word's colour from its brightest pixels ----
         int w = 20, h = 10, stride = w * 4;

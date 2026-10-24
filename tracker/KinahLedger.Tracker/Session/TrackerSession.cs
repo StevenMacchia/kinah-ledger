@@ -368,7 +368,7 @@ public sealed class TrackerSession
         // a misread settled by the candidate sets of the moment, and refused when it fits none of them (brief item 1)
         _parser.Context = NameContextNow;
         if (s.Ocr.NameColours) _parser.Colours = GradeColours.Load(ColoursPath);
-        _textScale = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) : null;
+        _textScale = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) { ToTarget = () => Update.RemoteConfig.Current.ChatScaleToTarget } : null;
         Engine = new SessionEngine(items);
         ZoneView = new SessionEngine(items);
         _cross = new LootCrossCheck(items) { Resolve = ResolveName };

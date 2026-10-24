@@ -383,7 +383,7 @@ public sealed class ScreenReader
     }
 
     /// <summary>The same for a bitmap already in hand (a crop of a screenshot, in tests); origin is where its top-left sits on screen.</summary>
-    public static async Task<List<OcrLineBox>> ReadBoxesAsync(Bitmap raw, Point origin, int scale, bool boost = false)
+    public static async Task<List<OcrLineBox>> ReadBoxesAsync(Bitmap raw, Point origin, double scale, bool boost = false)
     {
         using var src = boost ? Boost(raw) : (Bitmap)raw.Clone();
         var (bmp, f) = Prepare(src, scale);
