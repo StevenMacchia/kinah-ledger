@@ -70,6 +70,17 @@ public sealed class InstanceRun
     public DateTime? SentLate { get; set; }
 
     /// <summary>
+    /// When the one-time repair of gear counts ran on this record (2026-10-24): until PR 17 a gear slot whose corner read
+    /// "x1K" was filed as 1,000 pieces, so each 1,000 in a gear count was one piece (<see cref="InstanceLog.RepairGear"/>).
+    /// Set once, so the repair never runs on the record again.
+    /// </summary>
+    public DateTime? GearRepaired { get; set; }
+    /// <summary>The repaired items' counts as they stood before the repair, by id: what the site was sent.</summary>
+    public Dictionary<long, int> RepairedFrom { get; set; } = new();
+    /// <summary>The repaired run goes to the site again as a correction of the copy it already has; cleared once sent.</summary>
+    public bool Resend { get; set; }
+
+    /// <summary>
     /// What a read of its pictures found, onto this run: the items, the Kinah, the slots not read and the flags. Its times,
     /// witnesses and the chat items set aside stay as they were.
     /// </summary>
@@ -710,8 +721,140 @@ public sealed class InstanceLog
         {
             _nameOf = id => items.Get(id) is { } i ? i.Name : null;
             foreach (var r in _done) foreach (var (id, name) in r.Names) items.Remember(id, name);
+            RepairGearLocked(items);
         }
     }
+
+    // ---- gear counts inflated by the "x1K" misread (2026-10-24) ----
+    // Until PR 17 a gear slot whose corner read "x1K" in a reward table was filed as 1,000 pieces (two Divine Canyon
+    // Pauldrons made 2,000; the Events card said "3163 pieces"), and those runs went to the site that way. Gear never
+    // stacks, so each 1,000 in a gear count was one piece. On load, once per record, such counts are repaired, the original
+    // line is kept in instances.repaired.jsonl, and a run the site already has is sent again as a correction
+    // (InstanceRunPayload.correction), which the site takes in place of the counts it holds.
+
+    /// <summary>A gear count this big holds at least one "x1K" misread.</summary>
+    public const int GearMisread = 1000;
+
+    /// <summary>Each 1,000 was one piece read "x1K": 3,004 is 3 + 4 = 7.</summary>
+    public static int RepairedGearCount(int q) => q % GearMisread + q / GearMisread;
+
+    /// <summary>
+    /// Repairs the gear counts of <see cref="GearMisread"/> or more on records not repaired before. <paramref name="gearOf"/>
+    /// says whether an item is gear: true, false, or null when it can't be known (no name in the item list or in the record),
+    /// and such an item is left as it is. Items that are not gear are never touched. A repaired record is stamped
+    /// (<see cref="InstanceRun.GearRepaired"/>), keeps its old counts in <see cref="InstanceRun.RepairedFrom"/>, and is marked to
+    /// be sent again (<see cref="InstanceRun.Resend"/>) when the site already has it. One entry per record touched.
+    /// </summary>
+    internal static List<(InstanceRun Run, List<string> Fixed, List<(long Id, int Count)> Unknown)> RepairGear(IEnumerable<InstanceRun> runs, Func<long, InstanceRun, bool?> gearOf, Func<long, string> nameOf, DateTime now)
+    {
+        var outp = new List<(InstanceRun, List<string>, List<(long, int)>)>();
+        foreach (var r in runs)
+        {
+            if (r.GearRepaired != null) continue;
+            var fixedParts = new List<string>(); var unknown = new List<(long, int)>();
+            var before = new Dictionary<long, int>();
+            foreach (var (id, n) in r.Items.Concat(r.BoundItems)) before[id] = before.GetValueOrDefault(id) + n;
+            foreach (var bound in new[] { false, true })
+            {
+                var d = bound ? r.BoundItems : r.Items;
+                foreach (var (id, q) in d.ToList())
+                {
+                    if (q < GearMisread) continue;
+                    var gear = gearOf(id, r);
+                    if (gear == null) { unknown.Add((id, q)); continue; }
+                    if (gear == false) continue;
+                    int nq = RepairedGearCount(q);
+                    d[id] = nq;
+                    if (bound) r.Bound = Math.Max(0, r.Bound - (q - nq));
+                    r.RepairedFrom[id] = before[id];
+                    fixedParts.Add($"{nameOf(id)} {q:N0} -> {nq:N0}");
+                }
+            }
+            if (fixedParts.Count > 0) { r.GearRepaired = now; r.Resend = WentToSite(r); }
+            if (fixedParts.Count > 0 || unknown.Count > 0) outp.Add((r, fixedParts, unknown));
+        }
+        return outp;
+    }
+
+    /// <summary>The site has the run: it wasn't parked as unsent, and its rewards were read (or it was sent later from its pictures).</summary>
+    static bool WentToSite(InstanceRun r) => !r.Unsent && (r.SentLate != null || !r.KinahUnknown);
+
+    /// <summary>
+    /// The repair on the runs loaded from instances.jsonl, with the item list that says what is gear: a real id by the
+    /// list's own groups, a synthetic one by its name (the list's, or the one the run saved) matched to a real item.
+    /// Repaired records are written back in place (the original lines appended to instances.repaired.jsonl first) and get
+    /// one line each in reads.log; an item that can't be known gets "not repaired: unknown item", once ever.
+    /// </summary>
+    void RepairGearLocked(ItemDictionary items)
+    {
+        // without the item list nothing can be told gear: the next start that has it repairs
+        if (items.AllItems().Count == 0) return;
+        bool? GearOf(long id, InstanceRun r)
+        {
+            if (id > 0) return items.Get(id) != null ? items.IsGear(id) : null;
+            var name = items.Get(id)?.Name ?? r.Names.GetValueOrDefault(id);
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            return items.Find(name) is long real && real > 0 && items.IsGear(real);
+        }
+        List<(InstanceRun Run, List<string> Fixed, List<(long Id, int Count)> Unknown)> done;
+        try { done = RepairGear(_done, GearOf, items.NameOf, DateTime.UtcNow); }
+        catch (Exception ex) { CrashLog.Write("repair gear counts", ex); return; }
+        if (done.Count == 0) return;
+        var repaired = done.Where(x => x.Fixed.Count > 0).Select(x => x.Run).ToList();
+        if (repaired.Count > 0) PersistRepairs(repaired);
+        foreach (var (r, fx, _) in done)
+            if (fx.Count > 0) CrashLog.Note($"run {r.Zone} {r.Start.ToLocalTime():MMM d HH:mm:ss}: gear counts repaired ({string.Join(", ", fx)})" + (r.Resend ? "; to be sent to the site again as a correction" : ""));
+        try
+        {
+            var seenPath = PathOf.Replace(".jsonl", ".flagged.txt");
+            var seen = File.Exists(seenPath) ? File.ReadAllLines(seenPath).ToHashSet() : new HashSet<string>();
+            var fresh = new List<string>();
+            foreach (var (r, _, unk) in done)
+            {
+                if (unk.Count == 0) continue;
+                var key = $"{r.Start.ToUniversalTime():O}|{r.Zone}|gear unknown|{string.Join(",", unk.Select(u => u.Id))}";
+                if (!seen.Add(key)) continue;
+                fresh.Add(key);
+                CrashLog.Note($"run {r.Zone} {r.Start.ToLocalTime():MMM d HH:mm:ss}: not repaired: unknown item ({string.Join(", ", unk.Select(u => $"item {u.Id} x{u.Count:N0}"))})");
+            }
+            if (fresh.Count > 0) File.AppendAllLines(seenPath, fresh);
+        }
+        catch (Exception) { /* said again on the next start */ }
+    }
+
+    /// <summary>Writes the repaired records over their lines in instances.jsonl, the original lines appended to instances.repaired.jsonl first.</summary>
+    void PersistRepairs(List<InstanceRun> runs)
+    {
+        try
+        {
+            var path = PathOf;
+            if (!File.Exists(path)) return;
+            var lines = File.ReadAllLines(path).ToList();
+            var backup = new List<string>();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                InstanceRun? k = null;
+                try { if (lines[i].Length > 2) k = JsonSerializer.Deserialize<InstanceRun>(lines[i]); } catch (Exception) { }
+                if (k == null || k.GearRepaired != null) continue;
+                var r = runs.FirstOrDefault(x => x.Start == k.Start && x.Kind == k.Kind);
+                if (r == null) continue;
+                backup.Add(lines[i]);
+                lines[i] = JsonSerializer.Serialize(r);
+            }
+            if (backup.Count == 0) return;
+            File.AppendAllLines(path.Replace(".jsonl", ".repaired.jsonl"), backup);
+            var tmp = path + ".tmp";
+            File.WriteAllLines(tmp, lines);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch (Exception ex) { CrashLog.Write("repair gear counts: write", ex); }
+    }
+
+    /// <summary>Repaired runs the site holds with the old counts, to send again as corrections, oldest first.</summary>
+    public List<InstanceRun> Resends { get { lock (_lock) return _done.Where(r => r.Resend).OrderBy(r => r.Start).ToList(); } }
+
+    /// <summary>A correction reached the site (or can't be sent at all): the run is no longer to be sent again.</summary>
+    public void Resent(InstanceRun r) { lock (_lock) { r.Resend = false; RewriteLocked(r); } }
 
     void NameIds(InstanceRun r)
     {
