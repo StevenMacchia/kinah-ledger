@@ -81,9 +81,9 @@ public static class RunDataTests
             // "Special Reward Chest" passed for "Reward collected.") and filed as run 23: no Kinah, 13 slots, none named
             Check("\"Reward Chest\" is not the table's line; the real one, garbled too, is",
                 $"{TrackerSession.IsRewardCollected("Special Reward Chest")} {TrackerSession.IsRewardCollected("Reward collected.")} {TrackerSession.IsRewardCollected("Reward cooectedo ///////;")}", "False True True");
-            var centred = new OcrLineBox("Reward collected.", new Rectangle(2400, 280, 320, 40));   // the middle of a 5120 frame
-            var aside = new OcrLineBox("Reward collected.", new Rectangle(3380, 180, 400, 40));     // 0.70 of the width: a tooltip
-            Check("...and the line sits in the middle of the frame", $"{TrackerSession.CollectedLine(new[] { aside }, 5120) == null} {TrackerSession.CollectedLine(new[] { aside, centred }, 5120)?.Box.X}", "True 2400");
+            var midLine = new OcrLineBox("Reward collected.", new Rectangle(2400, 280, 320, 40));   // the middle of a 5120 frame
+            var offSide = new OcrLineBox("Reward collected.", new Rectangle(3380, 180, 400, 40));     // 0.70 of the width: a tooltip
+            Check("...and the line sits in the middle of the frame", $"{TrackerSession.CollectedLine(new[] { offSide }, 5120) == null} {TrackerSession.CollectedLine(new[] { offSide, midLine }, 5120)?.Box.X}", "True 2400");
             var bag = new TrackerSession(null, settings, items, "Test");
             bag.Engine.SetZone("Urugugu Canyon"); bag.Instances.Zone("Urugugu Canyon", t0);
             bag.ApplyGrid(Enumerable.Range(0, 13).Select(_ => Slot("Common", "1", "Other", 104)).ToList(), t0.AddMinutes(2));
