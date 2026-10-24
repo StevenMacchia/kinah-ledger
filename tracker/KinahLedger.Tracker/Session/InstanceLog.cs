@@ -57,6 +57,21 @@ public sealed class InstanceRun
     [System.Text.Json.Serialization.JsonIgnore]
     public bool KinahUnknown => KinahNotRead || RewardsNotRead;
     /// <summary>
+    /// Partly read (since 2026-10-24): its reward cards were read, at least one received card of them, but some places
+    /// weren't (seen only cut by a card's window, a list running past what was seen, a slot no item matches): what was read
+    /// is filed and sent, with this flag so the site can say so, and the run stays out of the averages. Distinct from
+    /// <see cref="RewardsNotRead"/> (no card read at all: not sent, parked). <see cref="SlotsUnread"/> says how many.
+    /// </summary>
+    public bool PartlyRead { get; set; }
+    /// <summary>Gear pieces whose icon two items share ("one of Elder Gloves / Relic Collector Gloves"): each counted as a piece of unknown gear, never dropped (since 2026-10-24).</summary>
+    public int UnknownGear { get; set; }
+    /// <summary>Visible slots no item could be named for, each one unknown item (a count not read counts one); among <see cref="SlotsUnread"/> (since 2026-10-24).</summary>
+    public int UnknownItems { get; set; }
+    /// <summary>What the unknown gear could be, one line a piece ("Legend gear, one of Elder Gloves / Relic Collector Gloves").</summary>
+    public List<string> GearNotes { get; set; } = new();
+    /// <summary>Slots on the reward picture it was filed from (a read again from the pictures replaces it only when it reads more).</summary>
+    public int PictureSlots { get; set; }
+    /// <summary>
     /// Not sent: its rewards were not read when it was due to go to the site, so it is parked here (in instances.jsonl,
     /// never back in the queue, never retried every tick) until <c>replay-event-shots --send</c> reads its saved pictures
     /// and sends it (since 2026-10-24; before that such a run was dropped without a word).
@@ -70,6 +85,17 @@ public sealed class InstanceRun
     public DateTime? SentLate { get; set; }
 
     /// <summary>
+    /// When the one-time repair of gear counts ran on this record (2026-10-24): until PR 17 a gear slot whose corner read
+    /// "x1K" was filed as 1,000 pieces, so each 1,000 in a gear count was one piece (<see cref="InstanceLog.RepairGear"/>).
+    /// Set once, so the repair never runs on the record again.
+    /// </summary>
+    public DateTime? GearRepaired { get; set; }
+    /// <summary>The repaired items' counts as they stood before the repair, by id: what the site was sent.</summary>
+    public Dictionary<long, int> RepairedFrom { get; set; } = new();
+    /// <summary>The repaired run goes to the site again as a correction of the copy it already has; cleared once sent.</summary>
+    public bool Resend { get; set; }
+
+    /// <summary>
     /// What a read of its pictures found, onto this run: the items, the Kinah, the slots not read and the flags. Its times,
     /// witnesses and the chat items set aside stay as they were.
     /// </summary>
@@ -78,6 +104,7 @@ public sealed class InstanceRun
         Items = new(read.Items); BoundItems = new(read.BoundItems); Bound = read.Bound; Kinah = read.Kinah;
         FromPicture = read.FromPicture; SlotsUnread = read.SlotsUnread; UnknownSlots = new(read.UnknownSlots);
         KinahNotRead = read.KinahNotRead; RewardsNotRead = !read.FromPicture;
+        PartlyRead = read.PartlyRead; UnknownGear = read.UnknownGear; UnknownItems = read.UnknownItems; GearNotes = new(read.GearNotes); PictureSlots = read.PictureSlots;
         PaidAt ??= read.PaidAt;
     }
 
@@ -109,21 +136,32 @@ public sealed class InstanceRun
     public string Suspect { get; set; } = "";
     /// <summary>Left out of the per-run, per-hour and total figures: its Kinah isn't known, or the record looks wrong.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool OutOfAverages => KinahUnknown || OldUnread || Suspect.Length > 0;
+    public bool OutOfAverages => KinahUnknown || PartlyRead || OldUnread || Suspect.Length > 0;
 
     /// <summary>
     /// The run's pieces, not a quantity sum (Steven, 2026-10-24: two pauldrons read "x1K" made "2,000 items"): every piece
-    /// of gear one by one, and each other item (materials, currencies, consumables) once however big its stack, bound or not.
+    /// of gear one by one, and each other item (materials, consumables) once however big its stack, bound or not. With
+    /// <paramref name="isCurrency"/>, currencies (Abyss Points, Enhance Stone, tokens) are no pieces at all: they are
+    /// amounts, kept apart (<see cref="Currencies"/>; the 16:02 Hidden Lugi run showed "3,740 items", its Abyss Points and
+    /// stones added up). Unknown gear counts with the gear when <paramref name="withUnknown"/>.
     /// </summary>
-    public (int Gear, int Materials) Pieces(Func<long, bool> isGear)
+    public (int Gear, int Materials) Pieces(Func<long, bool> isGear, Func<long, bool>? isCurrency = null, bool withUnknown = false)
     {
-        int gear = 0; var other = new HashSet<long>();
+        int gear = withUnknown ? UnknownGear : 0; var other = new HashSet<long>();
         foreach (var (id, n) in Items.Concat(BoundItems))
         {
             if (n <= 0) continue;
-            if (isGear(id)) gear += n; else other.Add(id);
+            if (isGear(id)) gear += n; else if (isCurrency?.Invoke(id) != true) other.Add(id);
         }
         return (gear, other.Count);
+    }
+
+    /// <summary>The run's currencies by item, their amounts (bound and tradeable together): never pieces.</summary>
+    public Dictionary<long, long> Currencies(Func<long, bool> isCurrency)
+    {
+        var d = new Dictionary<long, long>();
+        foreach (var (id, n) in Items.Concat(BoundItems)) if (n > 0 && isCurrency(id)) d[id] = d.GetValueOrDefault(id) + n;
+        return d;
     }
 
     /// <summary>Entry to last loot, never under ten seconds.</summary>
@@ -604,7 +642,8 @@ public sealed class InstanceLog
     /// The reward table was read: the open run's items are its slots, and only those. What the chat had put in the run gives
     /// way, bound rewards count as the table shows them, and later chat items don't reach this run.
     /// </summary>
-    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread, IEnumerable<string>? unknown = null, bool kinahUnread = false)
+    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread, IEnumerable<string>? unknown = null, bool kinahUnread = false,
+        int unknownItems = 0, IReadOnlyList<string>? unknownGear = null, bool partly = false, int pictureSlots = 0)
     {
         lock (_lock)
         {
@@ -624,7 +663,10 @@ public sealed class InstanceLog
             _cur.FromPicture = true; _cur.SlotsUnread += unread;
             if (kinahUnread) _cur.KinahNotRead = true;
             if (unknown != null) _cur.UnknownSlots.AddRange(unknown);
-            CrashLog.Note($"{_cur.Label}: counted from the reward table: {_cur.Items.Values.Sum() + _cur.Bound} item(s) from its slots, {unread} slot(s) not read; the chat's {chatItems} set aside");
+            _cur.UnknownItems += unknownItems; _cur.PictureSlots += pictureSlots;
+            if (unknownGear != null) { _cur.UnknownGear += unknownGear.Count; _cur.GearNotes.AddRange(unknownGear); }
+            if (partly) _cur.PartlyRead = true;
+            CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, out of the averages)" : "")}; the chat's {chatItems} set aside");
         }
     }
 
@@ -676,7 +718,7 @@ public sealed class InstanceLog
             _done.Add(_cur);
             _unshared.Add(_cur);
             try { File.AppendAllText(PathOf, JsonSerializer.Serialize(_cur) + "\n"); } catch (Exception) { /* a read-only profile keeps it for this session */ }
-            CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run done: {_cur.Label}, {TimeSpan.FromSeconds(_cur.Seconds):m\\:ss}, {_cur.Kinah:N0} Kinah, {_cur.Items.Values.Sum()} items ({why}; {_cur.Witnesses})");
+            CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run done: {_cur.Label}, {TimeSpan.FromSeconds(_cur.Seconds):m\\:ss}, {_cur.Kinah:N0} Kinah, {PiecesNote(_cur)}{(_cur.PartlyRead ? $", partly read: {_cur.SlotsUnread} slot(s) not read" : "")} ({why}; {_cur.Witnesses})");
         }
         else if (_cur != null) CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run closed with no loot, not kept: {_cur.Label} ({why})");
         _cur = null; _byMinimap = false;
@@ -699,6 +741,21 @@ public sealed class InstanceLog
         && r.Witnesses.Length > 0 && r.Witnesses.Split(" · ", StringSplitOptions.RemoveEmptyEntries).All(w => w.StartsWith("minimap ", StringComparison.Ordinal));
 
     Func<long, string?>? _nameOf;
+    ItemDictionary? _dict;
+
+    /// <summary>
+    /// A run's rewards in a log line: its pieces (each piece of gear, each other item once, currencies never) and its
+    /// currencies by amount ("12 piece(s), 5 gear, 2 unknown gear; currencies: Abyss Points x1,760, Enhance Stone x2,500").
+    /// </summary>
+    string PiecesNote(InstanceRun r)
+    {
+        if (_dict is not { } d) return $"{r.Items.Values.Sum() + r.Bound} item(s)";
+        bool Cur(long id) => d.Get(id)?.Category == "Currency";
+        var (gear, mats) = r.Pieces(d.IsGear, Cur, withUnknown: true);
+        var cur = r.Currencies(Cur);
+        return $"{gear + mats + r.UnknownItems} piece(s) ({gear} gear{(r.UnknownGear > 0 ? $", {r.UnknownGear} of it unknown" : "")}{(r.UnknownItems > 0 ? $", {r.UnknownItems} unknown item(s)" : "")})"
+            + (cur.Count > 0 ? "; currencies: " + string.Join(", ", cur.OrderByDescending(kv => kv.Value).Select(kv => $"{d.NameOf(kv.Key)} x{kv.Value:N0}")) : "");
+    }
 
     /// <summary>
     /// The item list the runs are named from: a closing run keeps the names of its synthetic ids (<see cref="InstanceRun.Names"/>),
@@ -708,10 +765,142 @@ public sealed class InstanceLog
     {
         lock (_lock)
         {
-            _nameOf = id => items.Get(id) is { } i ? i.Name : null;
+            _nameOf = id => items.Get(id) is { } i ? i.Name : null; _dict = items;
             foreach (var r in _done) foreach (var (id, name) in r.Names) items.Remember(id, name);
+            RepairGearLocked(items);
         }
     }
+
+    // ---- gear counts inflated by the "x1K" misread (2026-10-24) ----
+    // Until PR 17 a gear slot whose corner read "x1K" in a reward table was filed as 1,000 pieces (two Divine Canyon
+    // Pauldrons made 2,000; the Events card said "3163 pieces"), and those runs went to the site that way. Gear never
+    // stacks, so each 1,000 in a gear count was one piece. On load, once per record, such counts are repaired, the original
+    // line is kept in instances.repaired.jsonl, and a run the site already has is sent again as a correction
+    // (InstanceRunPayload.correction), which the site takes in place of the counts it holds.
+
+    /// <summary>A gear count this big holds at least one "x1K" misread.</summary>
+    public const int GearMisread = 1000;
+
+    /// <summary>Each 1,000 was one piece read "x1K": 3,004 is 3 + 4 = 7.</summary>
+    public static int RepairedGearCount(int q) => q % GearMisread + q / GearMisread;
+
+    /// <summary>
+    /// Repairs the gear counts of <see cref="GearMisread"/> or more on records not repaired before. <paramref name="gearOf"/>
+    /// says whether an item is gear: true, false, or null when it can't be known (no name in the item list or in the record),
+    /// and such an item is left as it is. Items that are not gear are never touched. A repaired record is stamped
+    /// (<see cref="InstanceRun.GearRepaired"/>), keeps its old counts in <see cref="InstanceRun.RepairedFrom"/>, and is marked to
+    /// be sent again (<see cref="InstanceRun.Resend"/>) when the site already has it. One entry per record touched.
+    /// </summary>
+    internal static List<(InstanceRun Run, List<string> Fixed, List<(long Id, int Count)> Unknown)> RepairGear(IEnumerable<InstanceRun> runs, Func<long, InstanceRun, bool?> gearOf, Func<long, string> nameOf, DateTime now)
+    {
+        var outp = new List<(InstanceRun, List<string>, List<(long, int)>)>();
+        foreach (var r in runs)
+        {
+            if (r.GearRepaired != null) continue;
+            var fixedParts = new List<string>(); var unknown = new List<(long, int)>();
+            var before = new Dictionary<long, int>();
+            foreach (var (id, n) in r.Items.Concat(r.BoundItems)) before[id] = before.GetValueOrDefault(id) + n;
+            foreach (var bound in new[] { false, true })
+            {
+                var d = bound ? r.BoundItems : r.Items;
+                foreach (var (id, q) in d.ToList())
+                {
+                    if (q < GearMisread) continue;
+                    var gear = gearOf(id, r);
+                    if (gear == null) { unknown.Add((id, q)); continue; }
+                    if (gear == false) continue;
+                    int nq = RepairedGearCount(q);
+                    d[id] = nq;
+                    if (bound) r.Bound = Math.Max(0, r.Bound - (q - nq));
+                    r.RepairedFrom[id] = before[id];
+                    fixedParts.Add($"{nameOf(id)} {q:N0} -> {nq:N0}");
+                }
+            }
+            if (fixedParts.Count > 0) { r.GearRepaired = now; r.Resend = WentToSite(r); }
+            if (fixedParts.Count > 0 || unknown.Count > 0) outp.Add((r, fixedParts, unknown));
+        }
+        return outp;
+    }
+
+    /// <summary>The site has the run: it wasn't parked as unsent, and its rewards were read (or it was sent later from its pictures).</summary>
+    static bool WentToSite(InstanceRun r) => !r.Unsent && (r.SentLate != null || !r.KinahUnknown);
+
+    /// <summary>
+    /// The repair on the runs loaded from instances.jsonl, with the item list that says what is gear: a real id by the
+    /// list's own groups, a synthetic one by its name (the list's, or the one the run saved) matched to a real item.
+    /// Repaired records are written back in place (the original lines appended to instances.repaired.jsonl first) and get
+    /// one line each in reads.log; an item that can't be known gets "not repaired: unknown item", once ever.
+    /// </summary>
+    void RepairGearLocked(ItemDictionary items)
+    {
+        // without the item list nothing can be told gear: the next start that has it repairs
+        if (items.AllItems().Count == 0) return;
+        bool? GearOf(long id, InstanceRun r)
+        {
+            if (id > 0) return items.Get(id) != null ? items.IsGear(id) : null;
+            var name = items.Get(id)?.Name ?? r.Names.GetValueOrDefault(id);
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            return items.Find(name) is long real && real > 0 && items.IsGear(real);
+        }
+        List<(InstanceRun Run, List<string> Fixed, List<(long Id, int Count)> Unknown)> done;
+        try { done = RepairGear(_done, GearOf, items.NameOf, DateTime.UtcNow); }
+        catch (Exception ex) { CrashLog.Write("repair gear counts", ex); return; }
+        if (done.Count == 0) return;
+        var repaired = done.Where(x => x.Fixed.Count > 0).Select(x => x.Run).ToList();
+        if (repaired.Count > 0) PersistRepairs(repaired);
+        foreach (var (r, fx, _) in done)
+            if (fx.Count > 0) CrashLog.Note($"run {r.Zone} {r.Start.ToLocalTime():MMM d HH:mm:ss}: gear counts repaired ({string.Join(", ", fx)})" + (r.Resend ? "; to be sent to the site again as a correction" : ""));
+        try
+        {
+            var seenPath = PathOf.Replace(".jsonl", ".flagged.txt");
+            var seen = File.Exists(seenPath) ? File.ReadAllLines(seenPath).ToHashSet() : new HashSet<string>();
+            var fresh = new List<string>();
+            foreach (var (r, _, unk) in done)
+            {
+                if (unk.Count == 0) continue;
+                var key = $"{r.Start.ToUniversalTime():O}|{r.Zone}|gear unknown|{string.Join(",", unk.Select(u => u.Id))}";
+                if (!seen.Add(key)) continue;
+                fresh.Add(key);
+                CrashLog.Note($"run {r.Zone} {r.Start.ToLocalTime():MMM d HH:mm:ss}: not repaired: unknown item ({string.Join(", ", unk.Select(u => $"item {u.Id} x{u.Count:N0}"))})");
+            }
+            if (fresh.Count > 0) File.AppendAllLines(seenPath, fresh);
+        }
+        catch (Exception) { /* said again on the next start */ }
+    }
+
+    /// <summary>Writes the repaired records over their lines in instances.jsonl, the original lines appended to instances.repaired.jsonl first.</summary>
+    void PersistRepairs(List<InstanceRun> runs)
+    {
+        try
+        {
+            var path = PathOf;
+            if (!File.Exists(path)) return;
+            var lines = File.ReadAllLines(path).ToList();
+            var backup = new List<string>();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                InstanceRun? k = null;
+                try { if (lines[i].Length > 2) k = JsonSerializer.Deserialize<InstanceRun>(lines[i]); } catch (Exception) { }
+                if (k == null || k.GearRepaired != null) continue;
+                var r = runs.FirstOrDefault(x => x.Start == k.Start && x.Kind == k.Kind);
+                if (r == null) continue;
+                backup.Add(lines[i]);
+                lines[i] = JsonSerializer.Serialize(r);
+            }
+            if (backup.Count == 0) return;
+            File.AppendAllLines(path.Replace(".jsonl", ".repaired.jsonl"), backup);
+            var tmp = path + ".tmp";
+            File.WriteAllLines(tmp, lines);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch (Exception ex) { CrashLog.Write("repair gear counts: write", ex); }
+    }
+
+    /// <summary>Repaired runs the site holds with the old counts, to send again as corrections, oldest first.</summary>
+    public List<InstanceRun> Resends { get { lock (_lock) return _done.Where(r => r.Resend).OrderBy(r => r.Start).ToList(); } }
+
+    /// <summary>A correction reached the site (or can't be sent at all): the run is no longer to be sent again.</summary>
+    public void Resent(InstanceRun r) { lock (_lock) { r.Resend = false; RewriteLocked(r); } }
 
     void NameIds(InstanceRun r)
     {
@@ -935,7 +1124,7 @@ public sealed class InstanceLog
     public List<InstanceRun> ToRetry(DateTime since)
     {
         lock (_lock) return _unshared.Concat(_done.Where(r => r.LastLoot is { } l && l >= since)).Distinct()
-            .Where(r => r.Kind == "Event" && r.KinahUnknown && !r.Retried && !r.Unsent && r.SentLate == null).ToList();
+            .Where(r => r.Kind == "Event" && (r.KinahUnknown || r.PartlyRead) && !r.Retried && !r.Unsent && r.SentLate == null).ToList();
     }
 
     /// <summary>
