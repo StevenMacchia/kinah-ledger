@@ -568,7 +568,8 @@ options: --process aion[,other]");
                     var boxes = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, origin, 3, boost: true)).GetAwaiter().GetResult();
                     var rows = boxes.Select(l => (l.Box.Top, l.Text)).ToList();
                     if (settings.Ocr.LootIcons) for (int i = 0; i < boxes.Count; i++) rows[i] = (rows[i].Top, PopupIcons.Name(items, bmp, origin, boxes[i]).Text);
-                    s.ProcessList(rows, t); lists++;
+                    // each line's contrast and icon measured as the live read measures them, so rows are tracked the same way
+                    s.ProcessList(rows.Select((x, i) => { var (c, h) = Session.LootRows.Measure(bmp, origin, boxes[i].Box); return new LootLine(x.Top, x.Text, c, h); }).ToList(), t); lists++;
                 }
                 last = t;
             }
@@ -1049,6 +1050,7 @@ options: --process aion[,other]");
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
         ok &= NameMatchTest();
+        ok &= LootRowsTest(items);
         ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
@@ -1151,6 +1153,68 @@ options: --process aion[,other]");
         Check("chat: a rare item is never refused", Got("Bxld Leathex acquired."), "Bold Leather");
         p.Rare = null; p.Context = null;
         Check("chat: without a context, the list's closest as before", Got("Bxld Leathex acquired."), "Bold Leather");
+        return ok;
+    }
+
+    /// <summary>The loot list's rows as tracked objects (brief item 2, 2026-10-24): settling, slots, changes in place, the contrast measure.</summary>
+    static bool LootRowsTest(ItemDictionary items)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nLoot list rows tracked by their slot (2026-10-24):");
+        var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+        string Show(List<LootPopup.Row> rows) => string.Join(" | ", rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name}#{r.Obj}"));
+        // fading in: held back until the contrast stops rising, then shown with its object
+        var lr = new Session.LootRows(items);
+        var a = Show(lr.Feed(new() { new(400, "Raw Leather x1", 0.30) }, t0));
+        var b = Show(lr.Feed(new() { new(400, "Raw Leather x1", 0.85) }, t0.AddSeconds(0.7)));
+        var c = Show(lr.Feed(new() { new(400, "Raw Leather x1", 0.86) }, t0.AddSeconds(1.4)));
+        Check("held while fading in, shown once settled", $"[{a}] [{b}] [{c}]", "[] [] [Raw Leather#1]");
+        // Kinah rows pass through as read (two reads agreeing is their own rule)
+        Check("a Kinah row passes through", Show(lr.Feed(new() { new(380, "Kina x463", 0.2), new(400, "Raw Leather x1", 0.85) }, t0.AddSeconds(2.1))), "463 Kina | Raw Leather#1");
+        // the list moving up as the top row expires: the same rows, the same objects
+        var mv = new Session.LootRows(items);
+        mv.Feed(new() { new(100, "Raw Leather x1"), new(130, "Spiritstone x1") }, t0);
+        Check("the list moves up a slot: same objects", Show(mv.Feed(new() { new(100, "Spiritstone x1") }, t0.AddSeconds(0.7))), "Spiritstone#2");
+        // no contrast (a trace, a test): every read counts and the first is shown at once, as before
+        var lg = new Session.LootRows(items);
+        Check("no contrast: shown on its first read", Show(lg.Feed(new() { new(100, "Raw Leather x1") }, t0)), "Raw Leather#1");
+        // a change in place lasting two reads wins; one stray read doesn't
+        var ch = new Session.LootRows(items);
+        foreach (var (s, txt) in new[] { (0.0, "Orichalcum Ore x1"), (0.7, "Orichalcum Ore x1"), (1.4, "Fine Orichalcum Ore x1") }) ch.Feed(new() { new(200, txt) }, t0.AddSeconds(s));
+        var one = Show(ch.Feed(new() { new(200, "Orichalcum Ore x1") }, t0.AddSeconds(2.1)));
+        foreach (var s in new[] { 2.8, 3.5 }) ch.Feed(new() { new(200, "Fine Orichalcum Ore x1") }, t0.AddSeconds(s));
+        var two = Show(ch.Feed(new() { new(200, "Fine Orichalcum Ore x1") }, t0.AddSeconds(4.2)));
+        Check("one stray read: the row's text stands", one, "Orichalcum Ore#1");
+        Check("a change lasting two reads: the final text, same row", two, "Fine Orichalcum Ore#1");
+        // a row that goes before it settles is unsure
+        var un = new Session.LootRows(items);
+        un.Feed(new() { new(300, "Raw Leather x1", 0.2) }, t0);
+        foreach (var s in new[] { 0.7, 1.4, 2.1 }) un.Feed(new(), t0.AddSeconds(s));
+        Check("gone before it settled: unsure", $"{un.Unsure}", "1");
+
+        // the contrast measure: the same text drawn faint and full; a faint read measures lower, a blank one about nothing
+        double Draw(int alpha)
+        {
+            using var bmp = new System.Drawing.Bitmap(400, 40);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.Clear(System.Drawing.Color.FromArgb(40, 44, 52));
+                using var f = new System.Drawing.Font("Segoe UI", 18, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+                using var br = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(alpha, 240, 240, 240));
+                g.DrawString("Raw Leather x1", f, br, 80, 8);
+            }
+            return Session.LootRows.Measure(bmp, new System.Drawing.Point(1000, 500), new System.Drawing.Rectangle(1080, 506, 200, 28)).Contrast;
+        }
+        double faint = Draw(70), full = Draw(255), none = Draw(0);
+        Check("contrast: faint < full, blank ~ 0", $"{faint < full * 0.6} {none < 0.05} {full > 0.3}", "True True True");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 50; i++) Draw(255);
+        Console.WriteLine($"  (50 draws and measures in {sw.ElapsedMilliseconds} ms)");
         return ok;
     }
 

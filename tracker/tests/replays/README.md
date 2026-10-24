@@ -18,3 +18,12 @@ before committing it; drop one that shows anything but loot rows or the crafting
 `case.json`: `game` (the window size the crops come from), `frames` (`t` time, `k` loot or craft, `f` file, `x`/`y`
 the crop's place in the game window), `expect` (`craft_ok`, `craft_fail`, `items` by name, `kinah`; only what is named
 is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text recognition), `pending`.
+
+- `text-*`: a trace instead of pictures (`"trace": "trace.jsonl"`), one read per line: `{"t", "k", "l": [...]}` with `k`
+  `chat`, `list`, `zone` or `gather` (the gathering bar finishing a race: `ok`, `fail`, `upgrade ok`, `upgrade fail`). A
+  `list` read may also carry `y` (each row's top in the window) and `c` (its text's contrast, 0 to 1), as trace.log
+  writes them since 2026-10-24; without them rows sit 30 px apart and every read counts, as before. `expect` may name
+  `list_unsure`: loot list rows that went before their text settled (logged, never counted).
+- `text-2026-10-24-row-*`: the loot list's rows tracked by their slot (brief item 2): a change in place, a row seen once
+  while fading in, two identical rows in two slots, a settled row misread as it fades out. Each fails on 0.8.25's
+  text-keyed rows and passes with `Session/LootRows.cs`.

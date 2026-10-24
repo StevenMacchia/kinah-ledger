@@ -16,6 +16,16 @@ public static class ReadTrace
 
     public static void Chat(DateTime at, IEnumerable<string> lines) => Write(at, "chat", lines);
     public static void List(DateTime at, IEnumerable<string> rows) => Write(at, "list", rows);
+
+    /// <summary>
+    /// A loot list read with each row's top ("y") and, when measured, its text's contrast ("c"), so a replay tracks the
+    /// rows by their slots and settles their text the way the live read did (LootRows); old readers ignore both.
+    /// </summary>
+    public static void List(DateTime at, IReadOnlyList<string> rows, IReadOnlyList<int> tops, IReadOnlyList<double>? contrast)
+    {
+        try { Append(contrast != null ? JsonSerializer.Serialize(new { t = at.ToString("O"), k = "list", l = rows, y = tops, c = contrast }) : JsonSerializer.Serialize(new { t = at.ToString("O"), k = "list", l = rows, y = tops })); }
+        catch (Exception) { /* the trace is for later analysis */ }
+    }
     /// <summary>
     /// What else the tracker read that decides where a pickup lands, as it changes (since 2026-10-23): "zone" (the minimap's
     /// zone, or Unknown zone), "reward" (a reward screen's title as it opens, "" as it closes), "header" (the event named under
@@ -27,7 +37,15 @@ public static class ReadTrace
     {
         try
         {
-            var json = JsonSerializer.Serialize(new { t = at.ToString("O"), k = kind, l = lines.ToArray() });
+            Append(JsonSerializer.Serialize(new { t = at.ToString("O"), k = kind, l = lines.ToArray() }));
+        }
+        catch (Exception) { /* the trace is for later analysis; a failed write never stops the reading */ }
+    }
+
+    static void Append(string json)
+    {
+        try
+        {
             lock (Lock)
             {
                 var p = PathNow;

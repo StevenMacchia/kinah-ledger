@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "a settled Fine Orichalcum Ore row read as \"Orichalcum Ore\" and then \"Orichal\" while it fades out (contrast 0.35, 0.15); the chat missed it, the gathering bar finished on Success: one Fine Orichalcum Ore (0.8.25 took each fading text for an in-place change, so nothing was left waiting and it counted none)",
+  "source": "hand-written from the shapes in Steven's trace.log (2026-10-23 Orichalcum gather), with each row's place and contrast as LootRows measures them (2026-10-24)",
+  "expect": {
+    "items": {
+      "Fine Orichalcum Ore": 1,
+      "Orichalcum Ore": 0
+    }
+  }
+}

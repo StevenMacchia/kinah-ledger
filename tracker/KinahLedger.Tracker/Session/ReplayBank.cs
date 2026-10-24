@@ -17,7 +17,11 @@ namespace KinahLedger.Session;
 /// A case folder holds case.json and its frames:
 ///   { "name", "source", "game": {"w","h"}, "pending": false, "needs_ocr": true|false,
 ///     "frames": [{"t": ISO time, "k": "loot"|"craft", "f": "frames/x.png", "x", "y"}],   x, y: the crop's place in the game window
-///     "expect": {"craft_ok", "craft_fail", "items": {"Name": n}, "kinah": n} }
+///     "expect": {"craft_ok", "craft_fail", "items": {"Name": n}, "kinah": n, "list_unsure": n} }
+/// A text case ("trace": "trace.jsonl") holds the reads instead: {"t", "k": "chat"|"list"|"zone"|"gather", "l": [...]}.
+/// A "list" read may carry, beside its rows, "y" (each row's top in the window), "c" (its text's contrast, 0 to 1, as
+/// LootRows measures it) and "h" (its icon's hash, hex); without them rows sit 30 px apart and contrast is unknown.
+/// A "gather" read is the gathering bar finishing a race: "ok", "fail", "upgrade ok" or "upgrade fail".
 /// Only what "expect" names is checked. A pending case (a fresh report nobody has checked yet) runs and prints, never
 /// fails. `replay-bank <dir> --record <case>` writes what this version counts into that case's "expect" and clears
 /// pending: run it only once the count it prints is known to be right.
@@ -76,7 +80,7 @@ public static class ReplayBank
     {
         var d = new List<string>();
         static long N(JsonNode? n) => n == null ? 0 : long.TryParse(n.ToJsonString(), out var v) ? v : 0;
-        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills" })
+        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         if (expect["runs"] is JsonObject er)
         {
@@ -153,7 +157,21 @@ public static class ReplayBank
                 switch (r.GetProperty("k").GetString())
                 {
                     case "chat": session.QuestCounter(ls, t); session.ProcessChat(ls, t); break;
-                    case "list": session.ProcessList(ls.Select((x, i) => (100 + i * 30, System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"))).ToList(), t); break;
+                    case "list":
+                    {
+                        // where each row sat, how settled its text was and its icon, when the trace kept them (LootRows)
+                        var ys = r.TryGetProperty("y", out var ye) ? ye.EnumerateArray().Select(v => v.GetInt32()).ToList() : null;
+                        var cs = r.TryGetProperty("c", out var ce) ? ce.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
+                        var hs = r.TryGetProperty("h", out var he) ? he.EnumerateArray().Select(v => Convert.ToUInt64(v.GetString() ?? "0", 16)).ToList() : null;
+                        session.ProcessList(ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
+                            System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
+                            cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0)).ToList(), t);
+                        break;
+                    }
+                    case "gather":
+                        // the gathering bar finishing a race (what CraftPanelDue feeds GatherOutcome live)
+                        foreach (var g in ls) session.GatherOutcome(t, g.EndsWith("ok", StringComparison.OrdinalIgnoreCase), g.StartsWith("upgrade", StringComparison.OrdinalIgnoreCase));
+                        break;
                     case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t); } break;
                 }
                 last = t;
@@ -233,6 +251,8 @@ public static class ReplayBank
         // Soul Crystals from kills and the kills counted, for the cases about them (2026-10-23)
         if (e.PetCrystals > 0) res["pets"] = e.PetCrystals;
         if (e.Totals().Kills > 0) res["kills"] = e.Totals().Kills;
+        // loot list rows that went before their text settled: logged as unsure, never counted (LootRows)
+        if (session.ListUnsure > 0) res["list_unsure"] = session.ListUnsure;
         // what went to expedition and event runs rather than farming: items per run
         var runs = new JsonObject();
         foreach (var run in session.Instances.Snapshot()) runs[run.Zone] = run.Items.Values.Sum() + run.BoundItems.Values.Sum();

@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "a gathered row turns into Fine Orichalcum Ore in its place, the new text first read \"Fine Orichalcum 0re\"; the chat missed it, the gathering bar finished on Success: one Fine Orichalcum Ore, the final text (0.8.25 counted Orichalcum Ore)",
+  "source": "hand-written from the shapes in Steven's trace.log (2026-10-23 Orichalcum gather), with each row's place and contrast as LootRows measures them (2026-10-24)",
+  "expect": {
+    "items": {
+      "Fine Orichalcum Ore": 1,
+      "Orichalcum Ore": 0
+    }
+  }
+}

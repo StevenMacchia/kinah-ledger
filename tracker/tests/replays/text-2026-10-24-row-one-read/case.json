@@ -1,0 +1,14 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "two gathers; the first row settles and the chat confirms it, the second shows in one read only while fading in (contrast 0.25 against 0.85 settled) and the chat misses it: the first counts, the second is unsure and logged, never counted (0.8.25 counted it)",
+  "source": "hand-written from the shapes in Steven's trace.log (2026-10-23 Orichalcum gather), with each row's place and contrast as LootRows measures them (2026-10-24)",
+  "expect": {
+    "items": {
+      "Orichalcum Ore": 1,
+      "Fine Orichalcum Ore": 0
+    },
+    "list_unsure": 1
+  }
+}
