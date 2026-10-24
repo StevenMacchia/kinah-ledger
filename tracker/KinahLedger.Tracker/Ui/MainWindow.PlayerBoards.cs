@@ -159,7 +159,7 @@ public partial class MainWindow
         var here = PlayerBoards.Here(GearBracket, zone);
         if (here is not { } h || h.Row.ValueHr is not long v) { FarmLine.Visibility = Visibility.Collapsed; return; }
         FarmLine.Visibility = Visibility.Visible;
-        FarmLine.Text = h.AtGear ? $"Players at your gear: {Fk(v)}/hr here" : $"Players here: {Fk(v)}/hr";
+        FarmLine.Text = h.AtGear ? $"Players at your gear {Fk(v)}" : $"Players here {Fk(v)}";   // after "Your best here 1.40M · " (JoinCompare)
         var who = $"{h.Row.Runs} runs from {h.Row.Players} players on {Server?.Label ?? "your server"} in the last 7 days";
         var gear = h.AtGear ? $", gear score {GearBracket}." : GearBracket != null ? $". Not enough players at gear score {GearBracket} yet, so this is everyone's." : ". Set your gear score in Options › Server to compare with players at your gear.";
         FarmLine.ToolTip = $"What players made an hour in {h.Row.Zone}: Kinah plus tradeable loot at today's prices, after the Market's cut.\n{who}{gear}";
