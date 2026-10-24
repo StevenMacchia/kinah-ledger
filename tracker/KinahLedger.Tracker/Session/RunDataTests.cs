@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Text.Json;
 using KinahLedger.Data;
 using KinahLedger.Ocr;
+using KinahLedger.Upload;
 
 namespace KinahLedger.Session;
 
@@ -130,6 +131,48 @@ public static class RunDataTests
             Check("a restart without the name: unknown before the runs load", d2.NameOf(odd), $"item {odd}");
             new InstanceLog().UseNames(d2);
             Check("...named again from the run's record", $"{odd < 0} {d2.NameOf(odd)}", "True Zzyzx Shard");
+
+            // f. gear counts inflated by the "x1K" misread before PR 17: repaired once on load, materials untouched, an
+            // unknown item left, the original kept aside, and the repaired run sent again marked as a correction
+            long pauldrons = items.Get(210440027) is { } pi && items.IsGear(pi.Id) ? pi.Id : items.AllItems().First(i => items.IsGear(i.Id)).Id;
+            long enhance = items.Find("Enhance Stone") ?? -1222936757;
+            long mystery = -987654321;   // a synthetic id with no name anywhere
+            Check("the repair rule: 3,004 -> 7, 1,000 -> 1, 2,000 -> 2", $"{InstanceLog.RepairedGearCount(3004)} {InstanceLog.RepairedGearCount(1000)} {InstanceLog.RepairedGearCount(2000)}", "7 1 2");
+            InstanceRun Old(int minute, Dictionary<long, int> its, bool unsent = false)
+            {
+                var st = new DateTime(2026, 10, 24, 18, 0, 0, DateTimeKind.Utc).AddMinutes(minute);
+                return new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = st, LastLoot = st.AddSeconds(400), Kinah = 605_000, FromPicture = true, Witnesses = "minimap 18:00:00", Ended = "left; rewards in", Tables = 1, TableAt = st.AddSeconds(390), Items = its, Unsent = unsent };
+            }
+            var olds = new List<InstanceRun>
+            {
+                Old(7, new() { [pauldrons] = 3004, [enhance] = 4000 }),
+                Old(20, new() { [enhance] = 4000, [mystery] = 2000 }),
+                Old(40, new() { [pauldrons] = 1000 }, unsent: true),
+                Old(60, new() { [pauldrons] = 2, [enhance] = 4000 }),
+            };
+            File.WriteAllLines(file, olds.Select(r => JsonSerializer.Serialize(r)));
+            int RepairLines(string what) => File.ReadAllText(CrashLog.ReadsPath).Split('\n').Count(l => l.Contains(what));
+            var rl = new InstanceLog(); rl.UseNames(items);
+            var got = rl.Snapshot().OrderBy(r => r.Start).ToList();
+            string Q(InstanceRun r, long id) => r.Items.TryGetValue(id, out var n) ? n.ToString() : "-";
+            Check("gear 3,004 -> 7, the Enhance Stone 4,000 beside it stays", $"{Q(got[0], pauldrons)} {Q(got[0], enhance)}", "7 4000");
+            Check("an unknown item is left as it is", $"{Q(got[1], mystery)} {got[1].GearRepaired == null}", "2000 True");
+            Check("a parked run is repaired but not sent again", $"{Q(got[2], pauldrons)} {got[2].Resend}", "1 False");
+            Check("a run that was sent is marked to go again", $"{got[0].Resend} {got[0].RepairedFrom.GetValueOrDefault(pauldrons)} {got[3].GearRepaired == null}", "True 3004 True");
+            Check("...logged once per record", $"{RepairLines("gear counts repaired (")} {RepairLines($"{items.NameOf(pauldrons)} 3,004 -> 7")} {RepairLines("not repaired: unknown item")}", "2 1 1");
+            var saved = File.ReadAllLines(file).Select(l => JsonSerializer.Deserialize<InstanceRun>(l)!).OrderBy(r => r.Start).ToList();
+            var aside = Path.Combine(dir, "instances.repaired.jsonl");
+            Check("...written back, the original lines kept aside", $"{saved[0].Items[pauldrons]} {saved[0].GearRepaired != null} {File.ReadAllLines(aside).Length} {File.ReadAllLines(aside)[0].Contains("3004")}", "7 True 2 True");
+            var rl2 = new InstanceLog(); rl2.UseNames(items);
+            Check("runs once: a second load changes and says nothing more", $"{rl2.Snapshot().OrderBy(r => r.Start).First().Items[pauldrons]} {RepairLines("gear counts repaired (")} {RepairLines("not repaired: unknown item")} {File.ReadAllLines(aside).Length}", "7 2 1 2");
+            var fix = InstanceRunPayload.From(rl2.Resends, id => items.KeyOf(id))!;
+            var fixJson = JsonSerializer.Serialize(fix[0]);
+            Check("the resend carries the correction: the old count and the end", $"{fix.Count} {fix[0].items[pauldrons.ToString()]} {fix[0].correction?.was[pauldrons.ToString()]} {fix[0].correction?.ended}", $"1 7 3004 {got[0].LastLoot!.Value:yyyy-MM-dd'T'HH:mm:ss'Z'}");
+            Check("...as no new run: 0 seconds (a site from before corrections refuses it)", $"{fix[0].seconds}", "0");
+            var plain = InstanceRunPayload.From(new[] { got[3] }, id => items.KeyOf(id))![0];
+            Check("...an ordinary run's payload has no correction", $"{plain.correction == null} {plain.seconds} {JsonSerializer.Serialize(plain).Contains("correction")} {fixJson.Contains("\"correction\":{\"ended\"")}", "True 400 False True");
+            rl2.Resent(rl2.Resends[0]);
+            Check("...sent: cleared in the file, nothing left to send", $"{new InstanceLog().Resends.Count} {File.ReadAllLines(file).Count(l => l.Contains("\"Resend\":true"))}", "0 0");
         }
         finally { CrashLog.DirOverride = keepDir; try { Directory.Delete(dir, true); } catch (Exception) { } }
         return ok;
