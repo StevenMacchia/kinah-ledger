@@ -1071,6 +1071,7 @@ options: --process aion[,other]");
         ok &= LootNotRowTest(items);
         ok &= AnchorsTest();
         ok &= SceneTest(items, s);
+        ok &= AuditLineTest(items, s);
         ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
@@ -1335,12 +1336,45 @@ options: --process aion[,other]");
             Check("...a read with no numbers: fixed", $"{an.BalanceCrop.Active}", "False");
             for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chosen", true, t0);
             Check("Anchors: a chat chosen by hand never anchors", $"{an.ChatCrop.Active}", "False");
-            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0);
+            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0.AddSeconds(2 * i));
             Check("...a found one does", $"{an.ChatCrop.Active}", "True");
             Update.RemoteConfig.Current = offCfg;
             an.ObserveBalance(game, nums, t0.AddSeconds(40));
             Check("layout.anchor.balance off from the site: nothing locks", $"{an.BalanceCrop.Active} {an.BalanceCrop.Crop(game, Update.RemoteConfig.Current.AnchorBalance)?.ToString() ?? "fixed"}", "False fixed");
             Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+
+            // the chat's hysteresis (2026-10-24: one failed look around the anchor dropped it, and the same box re-took it a
+            // second later, back and forth while the chat was on screen): three misses in a row over 10 s drop it, sightings
+            // count 1.5 s apart, a switch is logged at most once a minute
+            var hl = new List<string>();
+            var hc = new AnchoredCrop("chat", AnchoredCrop.ChatFrom, 0.4) { Hold = new(), Log = hl.Add };
+            var h0 = new DateTime(2026, 10, 24, 13, 7, 0, DateTimeKind.Utc);
+            hc.Observe(game, chatBox, 1.0, true, h0); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(0.5)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(1));
+            Check("hysteresis: three sightings in 1 s are one: no lock", $"{hc.Active}", "False");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(2)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(4));
+            Check("...three stable observations 2 s apart: anchored, logged", $"{hc.Active} {hl.Count}", "True 1");
+            bool kept = hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(10));
+            Check("a single miss keeps the anchored crop", $"{kept} {hc.Active} {hc.Misses} {hl.Count}", "True True 1 1");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(12));
+            Check("...a sighting in its place starts the count again", $"{hc.Misses}", "0");
+            for (int i = 0; i < 3; i++) hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(20 + 2 * i));
+            Check("three misses within 4 s: still anchored", $"{hc.Active} {hc.Misses}", "True 3");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(27));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(30));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(35));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(40));
+            Check("three misses in a row over 10 s: the fixed crop", $"{hc.Active} {hc.Crop(game, true)?.ToString() ?? "fixed"} {hc.Off}", "False fixed 1");
+            Check("...a switch within a minute of the last line isn't logged", $"{hl.Count} {hc.Unlogged}", "1 1");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(41)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(43));
+            Check("...two sightings after it: still the fixed crop", $"{hc.Active}", "False");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(45));
+            Check("the lock re-taken after three stable observations", $"{hc.Active} {hc.On}", "True 2");
+            var movedBox = new System.Drawing.Rectangle(chatBox.X + 40, chatBox.Y, chatBox.Width, chatBox.Height);
+            hc.Observe(game, movedBox, 1.0, true, h0.AddSeconds(70));
+            Check("the anchor moving drops it at once, the line says what wasn't logged", $"{hc.Active} {hl.Count} {hl.Last().Contains("the anchor moved 40 px")} {hl.Last().Contains("(2 switch(es) since the last line not logged)")}", "False 2 True True");
+            var noHold = new AnchoredCrop("balance", AnchoredCrop.BalanceFrom, 0.25) { Log = _ => { } };
+            for (int i = 0; i < 3; i++) noHold.Observe(game, strip, 0.5, true);
+            Check("without hysteresis (the Kinah strip) a miss still drops at once", $"{noHold.Missing(game, "no numbers")} {noHold.Active}", "False False");
 
             // the audit line's pass part: each region's ms per pass over the minute
             var times = new KinahLedger.Session.PassTimes();
@@ -1383,6 +1417,40 @@ options: --process aion[,other]");
     /// Crafting; a one-pass flicker changes nothing; Unknown holds reads and the next settled state releases or drops
     /// them; scene.gate off gates nothing; the classifier stays under 3 ms; the replay bank counts the same through the gate.
     /// </summary>
+    /// <summary>
+    /// The once-a-minute audit line from a session (2026-10-24: 12:47 to 13:08 had none, because it was written only in
+    /// minutes with a kill or a quest step): a simulated minute of passes with no kill writes it, with the per-region times.
+    /// </summary>
+    static bool AuditLineTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nThe audit line, once a minute in reads.log (2026-10-24):");
+        string[] AuditLines() { try { return File.ReadAllLines(CrashLog.ReadsPath).Where(l => l.Contains("  ??  audit: ")).ToArray(); } catch (Exception) { return Array.Empty<string>(); } }
+        var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+        var a0 = DateTime.UtcNow;
+        int before = AuditLines().Length;
+        s.Audit(a0);   // the first call takes the counts it measures from
+        for (int i = 0; i < 50; i++) { s.NotePass(900); s.Times.Add("chat", 240); s.Times.Add("list", 500); }
+        s.Audit(a0.AddSeconds(30));
+        Check("half a minute: no line yet", $"{AuditLines().Length - before}", "0");
+        s.Audit(a0.AddSeconds(61));
+        var got = AuditLines().Skip(before).ToArray();
+        Check("a minute of passes with no kill: one audit line", $"{got.Length}", "1");
+        string line = got.LastOrDefault() ?? "";
+        Check("...kills +0, the passes and each region's time", $"{line.Contains("kills counted +0")} {line.Contains("50 passes, 900 ms each (per pass: chat 240 · list 500 · target 0")}", "True True");
+        s.Audit(a0.AddSeconds(122));
+        Check("a minute with no pass (covered, minimized): no line", $"{AuditLines().Length - before}", "1");
+        s.NotePass(800);
+        s.Audit(a0.AddSeconds(183));
+        Check("...the next minute read writes one again", $"{AuditLines().Length - before}", "2");
+        return ok;
+    }
+
     static bool SceneTest(ItemDictionary items, Settings settings)
     {
         bool ok = true;
@@ -1485,12 +1553,34 @@ options: --process aion[,other]");
             Text(g, 30, (int)(H * 0.14), (int)(W * 0.36), (int)(H * 0.93), 7);
         });
         using var blank = Frame(g => g.Clear(System.Drawing.Color.FromArgb(128, 128, 128)));
+        // the normal chat with its lines showing, as an opaque dark panel stretched up to 0.45 of the height (Steven's sits at
+        // 0.70 to 0.93): a flat dark panel with text rows above the chat box's usual top, never the top of the left column
+        using var chatTall = Frame(g =>
+        {
+            World(g); Hud(g);
+            using var back = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(20, 22, 28));
+            g.FillRectangle(back, 20, (int)(H * 0.45), 820, (int)(H * 0.51));
+            Text(g, 40, (int)(H * 0.46), 800, H - 60, 23);
+        });
+        // a dark full-screen window with the Kinah counter up (the event's card screen, where the old rule fired): near-black,
+        // five lit cards across the middle, a title and buttons as text; no chat anywhere
+        using var cards = Frame(g =>
+        {
+            g.Clear(System.Drawing.Color.FromArgb(8, 10, 16));
+            using var card = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(40, 80, 120));
+            using var rim = new System.Drawing.Pen(System.Drawing.Color.FromArgb(150, 200, 230), 6);
+            for (int i = 0; i < 5; i++) { int x = (int)(W * (0.235 + i * 0.109)); g.FillRectangle(card, x, (int)(H * 0.28), (int)(W * 0.095), (int)(H * 0.46)); g.DrawRectangle(rim, x, (int)(H * 0.28), (int)(W * 0.095), (int)(H * 0.46)); }
+            Text(g, (int)(W * 0.40), (int)(H * 0.06), (int)(W * 0.60), (int)(H * 0.16), 29);
+            Text(g, 20, 20, (int)(W * 0.12), 60, 31);
+            for (int k = 0; k < 4; k++) for (int d = 0; d < 6; d++) g.FillRectangle(light, (int)(W * 0.74) + k * 120 + d * 16, 30, 10, 22);
+            Text(g, (int)(W * 0.02), (int)(H * 0.20), (int)(W * 0.10), (int)(H * 0.50), 37);   // a few labels down the left edge
+        });
 
         FrameStats Stats(System.Drawing.Bitmap f) { using var t = FrameThumb.Shrink(f); return FrameStats.Of(t); }
         var sw0 = System.Diagnostics.Stopwatch.StartNew();
         var sWorld = Stats(world);
         double shrinkMs = sw0.Elapsed.TotalMilliseconds;
-        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("blank", blank) }
+        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("chattall", chatTall), ("cards", cards), ("blank", blank) }
             .ToDictionary(x => x.Name, x => (Frame: x.F, Stats: Stats(x.F), Signs: SceneSignals.FromFrame(x.F)));
 
         // each frame on its own (a scene that has seen the HUD, as a running tracker has)
@@ -1509,6 +1599,18 @@ options: --process aion[,other]");
         Check("a flat dark panel on the right: the bag", Cls("bag"), "Bag");
         Check("a flat dark panel with text rows top-left: chat expanded", Cls("chatx"), "ChatExpanded");
         Check("nothing a rule explains, after the HUD was seen: Unknown", Cls("blank"), "Unknown");
+        Check("the normal chat, dark, lines up, stretched tall: the world", Cls("chattall"), "World");
+        var cardSigns = new SceneSignals { CounterStrip = true };
+        Check("a dark full-screen window, counter up: not the chat expanded", $"{Cls("cards", cardSigns) != "ChatExpanded"} (old rule {(all["cards"].Stats.ExpandedChatOld ? "ChatExpanded" : "no")})", "True (old rule ChatExpanded)");
+        // real frames: KL_SCENE_FILES=<folder of game screenshots> prints each one's measures and verdict (counter taken as read)
+        if (Environment.GetEnvironmentVariable("KL_SCENE_FILES") is { } shots && Directory.Exists(shots))
+            foreach (var file in Directory.GetFiles(shots).Where(p => p.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).OrderBy(p => p))
+            {
+                using var shot = new System.Drawing.Bitmap(file);
+                var st = Stats(shot);
+                var (v, vwhy) = sc.Classify(st, new SceneSignals { CounterStrip = true });
+                Console.WriteLine($"    {Path.GetFileName(file)}: {v} (old rule {(st.ExpandedChatOld ? "ChatExpanded" : "no")}) · {st}");
+            }
         Check("...and before any HUD was seen: the world, as before", new SceneState().Classify(all["blank"].Stats, new SceneSignals()).State.ToString(), "World");
         Check("the Market reader's table: Market", Cls("world", new SceneSignals { Market = true }), "Market");
         Check("a reward window's title or the reward table: Reward", $"{Cls("world", new SceneSignals { RewardTitle = true })} {Cls("world", new SceneSignals { RewardTable = true })}", "Reward Reward");

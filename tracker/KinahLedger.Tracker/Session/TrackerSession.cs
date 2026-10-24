@@ -655,11 +655,12 @@ public sealed class TrackerSession
                     await Times.Time("list", () => LootGated(listRead, listGate));
                     if (!off.Off("reward_grid") && Runs("reward_grid")) await Times.Time("grid", RewardGridDue);
                     Times.Time("anchors", AnchorsDue);
-                    _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    NotePass((DateTime.UtcNow - p0).TotalMilliseconds);
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
                     Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
                     // the game is read, but not its chat: chat-not-found time for the health numbers
                     reading = true; Accuracy.AddChatLost((DateTime.UtcNow - t0).TotalSeconds);
+                    Audit();
                 }
                 // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
                 else if (Cover(Region.Value) is { } cover)
@@ -690,7 +691,7 @@ public sealed class TrackerSession
                     if (!off.Off("nameplates") && Runs("nameplates")) await Times.Time("nameplates", PlatesDue);
                     if (Runs("header")) await Times.Time("header", HeaderDue);
                     Times.Time("anchors", AnchorsDue);
-                    _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    NotePass((DateTime.UtcNow - p0).TotalMilliseconds);
                     // the loot list's part in the health numbers: pickups only it saw, and rows that matched a chat line
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
                     Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
@@ -856,8 +857,14 @@ public sealed class TrackerSession
                 // around the chat's anchor once it has held still (layout.anchor.chat), else the whole bottom-left quarter
                 var near = Anchors.ChatCrop.Crop(g.Value, Update.RemoteConfig.Current.AnchorChat);
                 var (again, note) = await ChatLocator.DetectAsync(g.Value, near);
-                // not there: the anchor is gone, and the next look takes the whole quarter again
-                if (again == null && near != null) Anchors.ChatCrop.Missing(g.Value, "the chat wasn't found around its anchor");
+                // not there: the whole quarter for this one look, the lock kept (2026-10-24: one miss dropped it and the next
+                // pass took it again, 13:07:23 to 13:07:41, the chat on screen throughout). Only a miss in the whole quarter
+                // too counts against the anchor; found elsewhere, the next sighting moves it (AnchoredCrop drops it then)
+                if (again == null && near != null)
+                {
+                    (again, note) = await ChatLocator.DetectAsync(g.Value);
+                    if (again == null) Anchors.ChatCrop.Missing(g.Value, "the chat wasn't found around its anchor or in the corner");
+                }
                 if (again != null && again != Region) { Region = again; _reader = NewReader(again.Value); _anchor = g; DetectNote = "re-found: " + note; ReportLayout(); }
                 _chatLost = again == null;
             }
@@ -2150,9 +2157,17 @@ public sealed class TrackerSession
         return $", {same} of {reads} reads unchanged and not recognized again";
     }
 
-    void Audit()
+    /// <summary>One pass's time into the audit (the read loop; tests).</summary>
+    internal void NotePass(double ms) { _passes++; _passMs += ms; }
+
+    /// <summary>
+    /// The once-a-minute audit line. Written every minute the game was read (2026-10-24: it was written only in minutes
+    /// with a kill or a quest step, so a run of events, the arena or a market stop left no audit and no pass times at all,
+    /// 12:47 to 13:08), and from passes that read the game without its chat too.
+    /// </summary>
+    internal void Audit(DateTime? at = null)
     {
-        var now = DateTime.UtcNow;
+        var now = at ?? DateTime.UtcNow;
         if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
         var sameNote = ChatSameNote();
@@ -2163,7 +2178,7 @@ public sealed class TrackerSession
         int kills = Engine.Totals().Kills;
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
-        if (_passes > 0 && (kills > _auditKills || _questSteps > 0))
+        if (_passes > 0)
             CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {PassTimes.AuditPart(_passes, _passMs, Times)} · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, by a candidate set {_parser.ContextPicks}, refused as on no nearby table {_parser.Refused + _cross.Refused}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x{sameNote}");
         _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; Times.Reset(); _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
     }
@@ -2545,7 +2560,7 @@ public sealed class TrackerSession
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
     List<string> _lastLines = new();
-    DateTime _chatLinesAt = DateTime.MinValue;
+    DateTime _chatLinesAt = DateTime.MinValue, _chatSightedAt = DateTime.MinValue;
 
     // ---- anchors, shadow only (brief item 4, 2026-10-24) ----
     /// <summary>Where the interface really is, from anchors, logged beside the fixed-fraction crops; changes nothing read.</summary>
@@ -2561,8 +2576,13 @@ public sealed class TrackerSession
         {
             if (GameRect is not { } g) return;
             var now = DateTime.UtcNow;
-            if (Region is { } chat && (now - _chatLinesAt).TotalSeconds <= 30) Anchors.ObserveChat(g, chat, DetectNote, ManualRegion, _chatLinesAt);
-            else Anchors.ChatCrop.Missing(g, "no chat lines in 30 s");
+            // a sighting only when a read showed lines since the last one: the same box handed over again on every pass is no
+            // new evidence (2026-10-24 it re-took the lock a second after a drop)
+            if (Region is { } chat && (now - _chatLinesAt).TotalSeconds <= 30)
+            {
+                if (_chatLinesAt != _chatSightedAt) { _chatSightedAt = _chatLinesAt; Anchors.ObserveChat(g, chat, DetectNote, ManualRegion, _chatLinesAt); }
+            }
+            else Anchors.ChatCrop.Missing(g, "no chat lines in 30 s", now);
             Anchors.Tick(g, now, r => ScreenReader.Capture(r));
         }
         catch (Exception ex) { CrashLog.Write("anchors", ex); }

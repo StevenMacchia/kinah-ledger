@@ -82,6 +82,20 @@ public sealed class FrameStats
     public double LeftFlat { get; private init; }
     public double LeftMedian { get; private init; }
     public int LeftTextRows { get; private init; }
+    /// <summary>
+    /// The three places an expanded chat must cover that nothing else covers together (2026-10-24: the rule fired 31 times
+    /// in 21 minutes on dark full-screen windows and dark scenes, with no chat expanded): the top of the left column
+    /// (0.15 to 0.35 of the height, where the normal chat never reaches), the normal chat's own area (0.60 to 0.92: the
+    /// expanded panel continues down to its input row, text in it), and beside the panel (0.40 to 0.62 across: a panel
+    /// ends, so the world beside it is brighter; a dark full-screen window is dark there too).
+    /// </summary>
+    public double UpperFlat { get; private init; }
+    public double UpperMedian { get; private init; }
+    public int UpperTextRows { get; private init; }
+    public double LowFlat { get; private init; }
+    public double LowMedian { get; private init; }
+    public int LowTextRows { get; private init; }
+    public double BesideMedian { get; private init; }
 
     public const float Dark = 0.08f, Black = 0.04f, EdgeStep = 0.10f, FlatStep = 0.06f;
     /// <summary>The HUD regions with at least this edge density count as drawn.</summary>
@@ -91,7 +105,9 @@ public sealed class FrameStats
     // where things sit, as fractions of the window (x0, y0, x1, y1)
     static readonly RectangleF StripBox = RectangleF.FromLTRB(0f, 0f, 0.28f, 0.06f), MapBox = RectangleF.FromLTRB(0.76f, 0f, 1f, 0.14f),
         BarBox = RectangleF.FromLTRB(0.30f, 0.86f, 0.70f, 1f), ChatBox = RectangleF.FromLTRB(0f, 0.55f, 0.35f, 0.98f),
-        RightBox = RectangleF.FromLTRB(0.62f, 0.12f, 0.96f, 0.85f), LeftBox = RectangleF.FromLTRB(0.02f, 0.15f, 0.36f, 0.55f);
+        RightBox = RectangleF.FromLTRB(0.62f, 0.12f, 0.96f, 0.85f), LeftBox = RectangleF.FromLTRB(0.02f, 0.15f, 0.36f, 0.55f),
+        UpperBox = RectangleF.FromLTRB(0.02f, 0.15f, 0.36f, 0.35f), LowBox = RectangleF.FromLTRB(0.02f, 0.60f, 0.36f, 0.92f),
+        BesideBox = RectangleF.FromLTRB(0.40f, 0.15f, 0.62f, 0.55f);
     const double Band = 0.11;
 
     /// <summary>The measures of one thumbnail.</summary>
@@ -182,6 +198,9 @@ public sealed class FrameStats
         int band = Math.Max(1, (int)Math.Round(h * Band));
         var (rf, rm) = Flatness(RightBox);
         var (lf, lm) = Flatness(LeftBox);
+        var (uf, um) = Flatness(UpperBox);
+        var (wf, wm) = Flatness(LowBox);
+        var (_, bm) = Flatness(BesideBox);
         return new FrameStats
         {
             W = w, H = h, Rgb = rgb, Luma = luma,
@@ -190,13 +209,31 @@ public sealed class FrameStats
             StripEdges = Edges(StripBox), MapEdges = Edges(MapBox), BarEdges = Edges(BarBox), ChatEdges = Edges(ChatBox),
             RightFlat = rf, RightMedian = rm, RightEdges = Edges(RightBox),
             LeftFlat = lf, LeftMedian = lm, LeftTextRows = TextRows(LeftBox),
+            UpperFlat = uf, UpperMedian = um, UpperTextRows = TextRows(UpperBox),
+            LowFlat = wf, LowMedian = wm, LowTextRows = TextRows(LowBox), BesideMedian = bm,
         };
     }
 
     public override string ToString() =>
         $"mean {Mean:0.00}, dark {DarkShare:P0}, red {RedShare:P0}, bands {TopBlack:P0}/{BottomBlack:P0} middle {MiddleMean:0.00}, " +
         $"HUD edges strip {StripEdges:0.00} map {MapEdges:0.00} bar {BarEdges:0.00} chat {ChatEdges:0.00}, " +
-        $"right flat {RightFlat:P0} at {RightMedian:0.00}, left flat {LeftFlat:P0} at {LeftMedian:0.00} with {LeftTextRows} text rows";
+        $"right flat {RightFlat:P0} at {RightMedian:0.00}, left flat {LeftFlat:P0} at {LeftMedian:0.00} with {LeftTextRows} text rows, " +
+        $"upper flat {UpperFlat:P0} at {UpperMedian:0.00} with {UpperTextRows} rows, low flat {LowFlat:P0} at {LowMedian:0.00} with {LowTextRows} rows, beside {BesideMedian:0.00}";
+
+    /// <summary>
+    /// An expanded chat: one flat dark panel, darker than the frame, with text, that reaches from the top of the left
+    /// column (where the normal chat never is) down through the normal chat's own area, with brighter world beside it.
+    /// The rule before 2026-10-24 asked only the left column (0.15 to 0.55 of the height) and fired on dark full-screen
+    /// windows (the event's card screen, the arena) and dark scenes; <see cref="ExpandedChatOld"/> keeps it for the tests.
+    /// </summary>
+    public bool ExpandedChat =>
+        ExpandedChatOld
+        && UpperFlat >= 0.5 && UpperMedian < 0.25 && UpperTextRows >= 2
+        && LowFlat >= 0.5 && Math.Abs(LowMedian - LeftMedian) <= FlatStep && LowTextRows >= 4
+        && BesideMedian >= LeftMedian + FlatStep;
+
+    /// <summary>The rule as it was (the left column alone): kept so the tests show which frames it misfired on.</summary>
+    public bool ExpandedChatOld => LeftFlat >= 0.5 && LeftMedian < 0.25 && LeftMedian <= 0.6 * Mean && LeftTextRows >= 4;
 }
 
 /// <summary>
@@ -347,8 +384,9 @@ public sealed class SceneState
         bool hud = s.CounterStrip || s.ChatBox || f.HudRegions >= 2;
         string hudWhy = s.CounterStrip ? "the Kinah counter read" : s.ChatBox ? "the chat box showing lines" : $"the HUD drawn in {f.HudRegions} of 3 places";
         // a panel is flat, dark, and darker than the rest of the picture (a dark scene is dark everywhere, not in one panel)
-        if (hud && f.LeftFlat >= 0.5 && f.LeftMedian < 0.25 && f.LeftMedian <= 0.6 * f.Mean && f.LeftTextRows >= 4)
-            return (Scene.ChatExpanded, $"{hudWhy}, and a flat dark panel with {f.LeftTextRows} text rows above the chat box ({f.LeftFlat:P0} flat at {f.LeftMedian:0.00}, the frame {f.Mean:0.00})");
+        // the expanded chat: the panel reaches the top of the left column and down through the chat's own area, world beside it
+        if (hud && f.ExpandedChat)
+            return (Scene.ChatExpanded, $"{hudWhy}, and a flat dark panel with {f.LeftTextRows} text rows from the top of the left column down to the chat box ({f.LeftFlat:P0} flat at {f.LeftMedian:0.00}, its top {f.UpperTextRows} rows, the chat's area {f.LowTextRows} rows at {f.LowMedian:0.00}, beside it {f.BesideMedian:0.00}, the frame {f.Mean:0.00})");
         if (hud && f.RightFlat >= 0.6 && f.RightMedian < 0.25 && f.RightMedian <= 0.6 * f.Mean && f.RightEdges >= 0.01)
             return (Scene.Bag, $"{hudWhy}, and a flat dark panel on the right ({f.RightFlat:P0} flat at {f.RightMedian:0.00}, the frame {f.Mean:0.00})");
         if (hud) return (Scene.World, hudWhy);
