@@ -56,17 +56,6 @@ public static class IconIndex
     /// <summary>The same, leaving out the grid cells <paramref name="skip"/> marks (a badge the game draws over the art).</summary>
     public static double Distance(double[] cell, Color bg, Entry e, bool[]? skip)
     {
-        // the picture's brightness brought to the icon's, measured on the icon's own pixels: the tracker's own captures come
-        // out about a quarter brighter than the screen (2026-10-23, the Vakron coin 191 against 153 for the same art), and
-        // raw colours put a right match at 113 instead of 68. Held to 0.6 to 1.6 so a dark icon can't be stretched to fit
-        double li = 0, lc = 0;
-        for (int i = 0; i < N * N; i++)
-        {
-            if (e.Rgba[i * 4 + 3] < 128 || (skip != null && skip[i])) continue;
-            li += e.Rgba[i * 4] + e.Rgba[i * 4 + 1] + e.Rgba[i * 4 + 2];
-            lc += cell[i * 3] + cell[i * 3 + 1] + cell[i * 3 + 2];
-        }
-        double gain = lc > 30 && li > 30 ? Math.Clamp(li / lc, 0.6, 1.6) : 1;
         double sum = 0, wsum = 0;
         for (int y = 0; y < N; y++)
             for (int x = 0; x < N; x++)
@@ -78,7 +67,7 @@ public static class IconIndex
                 double a = e.Rgba[j + 3] / 255.0;
                 double r = e.Rgba[j] * a + bg.R * (1 - a), g = e.Rgba[j + 1] * a + bg.G * (1 - a), bl = e.Rgba[j + 2] * a + bg.B * (1 - a);
                 double w = 0.35 + a;   // the icon's own pixels count most
-                sum += w * (Math.Abs(r - cell[k] * gain) + Math.Abs(g - cell[k + 1] * gain) + Math.Abs(bl - cell[k + 2] * gain));
+                sum += w * (Math.Abs(r - cell[k]) + Math.Abs(g - cell[k + 1]) + Math.Abs(bl - cell[k + 2]));
                 wsum += w;
             }
         return sum / Math.Max(wsum, 1);
@@ -467,18 +456,13 @@ public static class RewardGrid
     /// <summary>The slot's grade by its backing colour, in the game's colours.</summary>
     public static string GradeOf(Color c)
     {
-        // by hue, not brightness: the backing is see-through, so a gold slot over a dark forest is (100, 64, 4) where over
-        // the sky it is (194, 157, 24) (2026-10-23: Vakron read every slot Common). Grey (little colour) is Common
         int r = c.R, g = c.G, b = c.B;
-        int max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), chroma = max - min;
-        if (chroma < 35) return "Common";
-        double h = max == r ? 60.0 * (g - b) / chroma : max == g ? 60.0 * (b - r) / chroma + 120 : 60.0 * (r - g) / chroma + 240;
-        if (h < 0) h += 360;
-        if (h < 65 || h >= 345) return "Unique";   // gold
-        if (h < 165) return "Rare";                // green
-        if (h < 192) return "Special";             // teal
-        if (h < 255) return "Legend";              // blue
-        return "Epic";                             // violet
+        if (r > 120 && g > 80 && b < 70 && r > b + 60) return "Unique";        // gold
+        if (r > 80 && b > 90 && g < Math.Min(r, b) - 15) return "Epic";      // violet
+        if (g > r + 20 && g > b + 10) return "Rare";                         // green
+        if (b > r + 25 && g > r + 10 && Math.Abs(g - b) < 40 && g > 90) return "Special";   // teal
+        if (b > r + 25 && b > g) return "Legend";                            // blue
+        return "Common";                                                      // dark grey
     }
 
     /// <summary>
