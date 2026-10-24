@@ -1700,18 +1700,23 @@ public sealed class TrackerSession
     }
 
     /// <summary>Claims the latest unclaimed successful gather of the last few seconds; false when there is none.</summary>
-    bool TakeGatherToken(DateTime now, string by)
+    /// With <paramref name="near"/> (a loot list row's first sight), the race nearest it: back-to-back gathers each keep
+    /// their own (Steven's Kukuru, 2026-10-24: a row judged at 10:01:07 would otherwise take the race of the gather after it).
+    bool TakeGatherToken(DateTime now, string by, DateTime? near = null)
     {
         lock (_gatherTokens)
         {
+            int best = -1;
             for (int i = _gatherTokens.Count - 1; i >= 0; i--)
             {
                 var t = _gatherTokens[i];
                 if (t.Used || (now - t.At).TotalSeconds > GatherTokenSeconds || (now - t.At).TotalSeconds < -2) continue;
-                _gatherTokens[i] = t with { Used = true };
-                return true;
+                if (near is not DateTime n) { best = i; break; }
+                if (best < 0 || Math.Abs((t.At - n).TotalSeconds) < Math.Abs((_gatherTokens[best].At - n).TotalSeconds)) best = i;
             }
-            return false;
+            if (best < 0) return false;
+            _gatherTokens[best] = _gatherTokens[best] with { Used = true };
+            return true;
         }
     }
 
@@ -2109,7 +2114,7 @@ public sealed class TrackerSession
                 // While gathering the chat is only a cross-check (2026-10-24): its pickup lines come 6 to 11 s after the row,
                 // when they come at all (world chat buried them), so the row counts on the race and a late chat line for it
                 // adds nothing (LootCrossCheck.Chat). The panel's item line has to agree when it was read (PanelAgrees).
-                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && PanelAgrees(_items.NameOf(gl.ItemId), now) && TakeGatherToken(now, "the loot list"))
+                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && PanelAgrees(_items.NameOf(gl.ItemId), now) && TakeGatherToken(now, "the loot list", gl.Time))
                     CrashLog.Note(gl.Count >= 5
                         ? $"gathering: {_items.NameOf(gl.ItemId)} x{gl.Count} counted as shown, the gathering bar's Success race is the second witness"
                         : $"gathering: {_items.NameOf(gl.ItemId)} x{gl.Count} counted, the gathering bar's Success race is the second witness (no chat line yet)");

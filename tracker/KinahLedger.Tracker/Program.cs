@@ -1748,6 +1748,23 @@ options: --process aion[,other]");
         sg.FlushVotes(w0.AddSeconds(62.5));
         List(sg, w0.AddSeconds(61), "Orichalcum Ore x1");
         Check("...a gather the chat named: once, not twice", $"{n(sg.Engine, "Orichalcum Ore")}", "2");
+        // a stack gathered with its race behind it: counted as shown, the chat a cross-check only (2026-10-24)
+        sg.GatherOutcome(w0.AddSeconds(80), true, false);
+        List(sg, w0.AddSeconds(80.3), "Orichalcum Ore x3");
+        Check("...a stack row with a race behind it: counted as shown", $"{n(sg.Engine, "Orichalcum Ore")}", "5");
+        // a row refused for no second witness, then its chat line late: the line counts, once (Steven's Kukuru, 2026-10-24:
+        // the cross-check took the late line for the refused row's duplicate and the pickup counted zero times)
+        var sl = new TrackerSession(null, settings, items, "Test");
+        sl.Engine.SetZone("Ellun River Midstream");
+        var l0 = new DateTime(2026, 10, 24, 14, 0, 0, DateTimeKind.Utc);
+        sl.ProcessChat(new List<string> { "[Player1] hi" }, l0);
+        for (int i = 0; i < 4; i++) sl.ProcessList(new List<(int, string)> { (0, "Kina x480") }, l0.AddSeconds(i * 0.5));
+        sl.ProcessList(new List<(int, string)>(), l0.AddSeconds(5));
+        Check("a Kinah row the chat hadn't named yet: not counted", $"{sl.Engine.Totals().Kinah}", "0");
+        for (int i = 0; i < 4; i++) sl.ProcessChat(new List<string> { "[Player1] hi", "Acquired 480 Kina." }, l0.AddSeconds(7 + i * 0.4));
+        sl.FlushVotes(l0.AddSeconds(9));
+        sl.ProcessList(new List<(int, string)>(), l0.AddSeconds(10));
+        Check("...its chat line 7 s later: counted once, not swallowed", $"{sl.Engine.Totals().Kinah}", "480");
 
         // garbled reads over lines that were already on screen: nothing more
         var s2 = new TrackerSession(null, settings, items, "Test");

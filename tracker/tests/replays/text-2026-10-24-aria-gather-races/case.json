@@ -1,0 +1,8 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Aria, 2026-10-24 09:58:00 to :45 (gathering, world chat busy): three gathers 10 s apart, each with its bar race; the chat's lines came 6 to 11 s after the rows; the panel's title read as a row over \"Succe\" twice; one row read x7 once in place of x1. Three Aria",
+  "source": "Steven's trace.log, 13:58:00 to 13:58:45 UTC; player chat and unknown rows replaced. The trace kept no panel lines then (they were cut before tracing): the panel's lines are added where reads.log logged them, and one Success race per gather is placed 0.3 s before its row (the bar wasn't read live then: 0 gathering bar lines that day)",
+  "expect": { "items": { "Aria": 3 } }
+}
