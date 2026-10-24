@@ -1770,7 +1770,7 @@ options: --process aion[,other]");
         Check("net Kinah rounded to 100", $"{RunPayload.RoundNet(123_449)} {RunPayload.RoundNet(-1_250)} {RunPayload.RoundNet(49)}", "123400 -1300 0");
         var board = PriceBook.ParseBoard("""{"items":[{"item":"Spiritstone","lowest_ask":7499,"stale":false,"median_24h":7600},{"item":"Raw Leather","lowest_ask":15000,"stale":true,"median_24h":null,"median_7d":14900},{"item":"Fine Odyle","lowest_ask":null,"ref_price":18900,"ref_source":"a2"}]}""", items);
         Check("price board: fresh ask, else medians, else the reference", string.Join(" ", board.OrderBy(k => k.Key).Select(k => $"{k.Key}={k.Value}")), "Fine Odyle=18900 Raw Leather=14900 Spiritstone=7499");
-        var idle = new SessionEngine(items); idle.Apply(new CraftResult(t0, "Orichalcum Ingot", true));
+        var idle = new SessionEngine(items); idle.Apply(new CraftResult(t0, "Orichalcum Ingot", true) { Via = SessionEngine.CraftPanelVia });
         Check("a craft-only count is shared as Crafting", GameWatcher.DominantKind(idle), "Crafting");
         var town = new SessionEngine(items); town.Apply(new ItemAcquired(t0, ingot, 1, false));
         Check("a stray pickup in town is not worth sharing", GameWatcher.Worth(town).ToString(), "False");
