@@ -61,6 +61,12 @@ public sealed class LootRows
 
     public LootRows(ItemDictionary items) { _items = items; }
 
+    /// <summary>
+    /// Set by the session: whether a gathering bar race finished on Success after a row of this item (its name, lower
+    /// case) first showed. Then a row back in its slot is the next gather, not the same row flickering (2026-10-24).
+    /// </summary>
+    public Func<string, DateTime, bool>? NewGather { get; set; }
+
     /// <summary>The usual contrast of a settled row on this screen (the median of the last ones), or null before three.</summary>
     public double? Typical
     {
@@ -172,6 +178,12 @@ public sealed class LootRows
         var g = _gone.Where(x => Math.Abs(x.Row.Top - line.Top) <= near && (x.Row.Canon ?? x.Row.LastCanon) == canon && !Fresh(x.Row, line))
             .OrderByDescending(x => x.Gone).FirstOrDefault();
         if (g.Row == null) return null;
+        // gathering: a gathering bar race finished on Success after the gone row showed, so this is the next gather's row
+        if (NewGather?.Invoke(canon, g.Row.First) == true)
+        {
+            CrashLog.Note($"gathering: \"{line.Text}\" at y {line.Top} is back where a row went a moment ago, and a gathering bar race finished since: a new gather, not the same row");
+            return null;
+        }
         _gone.Remove(g);
         _live.Add(g.Row);
         return g.Row;

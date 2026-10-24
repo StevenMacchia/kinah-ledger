@@ -1,0 +1,8 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Aria, 2026-10-24 09:58:00 to :45, as it ran live (no bar races read): two rows refused for no chat line, then their chat lines came late and count now (0.8.25 took each for a duplicate of a row it never counted, and dropped it). The third row's line came while it waited. Three Aria",
+  "source": "Steven's trace.log, 13:58:00 to 13:58:45 UTC; player chat and unknown rows replaced. The trace kept no panel lines then (they were cut before tracing): the panel's lines are added where reads.log logged them",
+  "expect": { "items": { "Aria": 3 } }
+}
