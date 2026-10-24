@@ -1739,8 +1739,8 @@ options: --process aion[,other]");
         ev2.RewardScreenSeen(e0);
         ev2.ProcessChat(new List<string> { "[Player1] hi", "Pure Odyle acquired.", "Fine Odyle acquired." }, e0.AddSeconds(13));
         ev2.ProcessList(new List<(int, string)> { (0, "Kukuru"), (30, "Profes"), (60, "Success") }, e0.AddSeconds(50));
-        ev2.ProcessChat(new List<string> { "[Player1] hi", "Pure Odyle acquired.", "Fine Odyle acquired.", "Odyle acquired.", "Kukuru acquired." }, e0.AddSeconds(53));
-        ev2.FlushVotes(e0.AddSeconds(70));
+        for (int i = 0; i < 3; i++) ev2.ProcessChat(new List<string> { "[Player1] hi", "Pure Odyle acquired.", "Fine Odyle acquired.", "Odyle acquired.", "Kukuru acquired." }, e0.AddSeconds(53 + i));
+        ev2.FlushVotes(e0.AddSeconds(56));
         Check("after an event's reward screen: its Odyle are rewards, a gather the panel names still counts",
             $"{n(ev2.Engine, "Pure Odyle")} {n(ev2.Engine, "Fine Odyle")} {n(ev2.Engine, "Odyle")} {n(ev2.Engine, "Kukuru")}", "0 0 0 1");
         // the gathering bar as the second witness for a gather the chat missed (step 1)
