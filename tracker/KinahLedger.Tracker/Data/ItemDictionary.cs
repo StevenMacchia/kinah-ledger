@@ -36,6 +36,20 @@ public sealed class ItemDictionary
         }
     }
     public ItemInfo? Get(long id) { lock (_lock) return _byId.GetValueOrDefault(id); }
+
+    /// <summary>
+    /// A synthetic id's name, as a kept run wrote it (InstanceRun.Names): known again after a restart even before the
+    /// name is read off the screen again. A real id, or one the list already names, is left as it is.
+    /// </summary>
+    public void Remember(long id, string name)
+    {
+        if (id >= 0 || string.IsNullOrWhiteSpace(name)) return;
+        lock (_lock)
+        {
+            if (!_byId.TryAdd(id, new ItemInfo(id, name.Trim(), "", !Norm(name).EndsWith("(bound)"), "", ""))) return;
+            _byName.TryAdd(Norm(name), id);
+        }
+    }
     /// <summary>
     /// A weapon, armour or accessory. Gear from an event or expedition is bound to the character and can't be sold, so it
     /// carries no value in a run (Steven, 2026-10-22); only the materials can be sold. The list's own tradable flag can't

@@ -402,6 +402,7 @@ public sealed class TrackerSession
     {
         _settings = s;
         _items = items;
+        Instances.UseNames(items);   // synthetic ids keep their names across restarts (InstanceRun.Names)
         _parser = new ChatParser(items);
         // a partly hidden name is guessed among this run's items and the current enemy's loot table first
         // a partly hidden or close name is settled among this run's items and the loot tables of the enemies being fought:
@@ -1752,8 +1753,49 @@ public sealed class TrackerSession
         return _byIconAll;
     }
 
+    /// <summary>
+    /// What a table slot's item can count, from its figures: gear never stacks, so a piece is one whatever the corner shows
+    /// (2026-10-24 14:12 Urugugu: two Pauldrons slots read "x1K" made 2,000 items; the event cards force the same); a K or
+    /// M count only on what stacks by the thousand (materials, currencies: Enhance Stone x4.0K is 4,000), while a potion, a
+    /// box, food or a skin keeps the figures without the suffix. <paramref name="clamped"/> says what was changed, or null.
+    /// </summary>
+    internal static int TableCount(ItemDictionary items, IReadOnlyList<ItemInfo> graded, RewardGrid.Slot sl, out string? clamped)
+    {
+        clamped = null;
+        int n = (int)Math.Clamp(sl.Count, 1, 99999);
+        if (graded.Count > 0 && graded.All(i => items.IsGear(i.Id)))
+        {
+            if (n != 1) clamped = $"gear never stacks: x{sl.CountText} counts 1";
+            return 1;
+        }
+        if (graded.Count > 0 && Regex.IsMatch(sl.CountText ?? "", @"\d\s*[KkMm]") && !graded.All(i => StacksByThousands(i.Category)))
+        {
+            int bare = (int)Math.Clamp(RewardGrid.ParseCount(Regex.Replace(sl.CountText ?? "", "[KkMm]", "")), 1, 999);
+            clamped = $"a {graded[0].Category} doesn't stack by the thousand: x{sl.CountText} counts {bare}";
+            return bare;
+        }
+        return n;
+    }
+
+    /// <summary>Materials and currencies stack by the thousand; an item of no known group is left as read.</summary>
+    internal static bool StacksByThousands(string category) =>
+        category.Length == 0 || Regex.IsMatch(category, "Resource|Material|Currency|Gather", RegexOptions.IgnoreCase);
+
+    /// <summary>A reward table read while another reward screen's title is up (a pass, a shop, attendance): that screen, not the run's table.</summary>
+    // the table is read again for up to 3 s after now, so a title seen during those reads counts too
+    internal bool OtherRewardScreenUp(DateTime now) =>
+        (now - Target.RewardAt).TotalSeconds is >= -5 and <= TargetReader.RewardGraceSeconds && Target.RewardTitle.Length > 0 && !IsRewardCollected(Target.RewardTitle)
+        && !Target.RewardTitle.Contains("Obtained", StringComparison.OrdinalIgnoreCase);
+
     internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now, IReadOnlyList<string>? moreNotRead = null, bool kinahHidden = false, string what = "reward table")
     {
+        // another reward screen is up (2026-10-24 14:03:29: the Daeva Pass Level Reward, read as a 5-slot table 4 s after
+        // the minimap named Urugugu Village, paid a 10 s run with 1,008 items): it isn't the run's table, nothing is filed
+        if (what == "reward table" && slots.Count > 0 && OtherRewardScreenUp(now))
+        {
+            CrashLog.Note($"reward table refused: the {Target.RewardTitle} screen is up, so these {slots.Count} slot(s) are that screen's, not the run's table");
+            return;
+        }
         // a read of one slot or none, with nothing on it surely matched, is no reward table (2026-10-23 21:12:30: a Daeva Pass
         // screen read 11 times, 0 to 1 slot): it can't start, split or pay a run. A lone coin (a K or M count) still counts
         if (slots.Count <= 1 && !slots.Any(s => (s.Icons.Count > 0 && s.Icons[0].Distance <= GridSureDistance)
@@ -1845,7 +1887,8 @@ public sealed class TrackerSession
                 added++;
                 continue;
             }
-            int count = (int)Math.Clamp(sl.Count, 1, 99999);
+            int count = TableCount(_items, graded, sl, out var clamped);
+            if (clamped != null) CrashLog.Note($"{what}: a {sl.Grade} slot named {names[0]}: {clamped}");
             int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
             bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
             var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
