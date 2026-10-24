@@ -562,6 +562,7 @@ public static class NameDecoder
         LastSearchMs = ms - LastModelMs;
         lock (LoadGate)
         {
+            _totalMs += ms;
             if (!_timed)
             {
                 // the first decode warms the model up; the next twenty are the time per line
@@ -571,6 +572,10 @@ public static class NameDecoder
         }
         return r;
     }
+
+    static double _totalMs;
+    /// <summary>All the time spent decoding since the start, ms (the audit line's decoder figure).</summary>
+    public static double TotalMs { get { lock (LoadGate) return _totalMs; } }
 
     /// <summary>The last decode's time in the model and in the search, ms (parse-test prints them).</summary>
     public static double LastModelMs { get; private set; }

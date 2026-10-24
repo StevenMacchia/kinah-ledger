@@ -93,7 +93,7 @@ internal static class Program
                     WindowCapture.Stop();
                     return 0;
                 }
-                case "bench": return Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
+                case "bench": return opts.ContainsKey("sizing") ? Platform.BenchSizing.Run(settings, opts) : Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
                 case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);
                 case "ui-shot": return UiShot(settings, opts, pos);
@@ -305,6 +305,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   pick                         drag a box around the chat's loot lines; remembered for next time
   ocr-test [--save]             read the box once and show what was recognized (--save keeps a PNG)
   ocr-test --scales [--image p] read the chat (or a saved picture of it) at each enlarging factor, to see which reads best
+  bench --sizing [--n 7] [--chat dir] [--frames dir] [--verbose]  the OCR sizing switches off and on, offline, on drawn 5120x2160 pictures (and real ones from the folders)
   popup-test --image shot.png   read the loot list beside the character in a game picture, with each row's icon match (--crop, --save, --scale n)
   replay [trace.log]            count a recorded fight's reads again (a miscount report's trace.jsonl too; --from/--to HH:mm, --novote)
   report-replay <folder>        read a miscount report's pictures again with this version's reader, beside what was counted then
@@ -458,7 +459,7 @@ options: --process aion[,other]");
     {
         var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
         if (o.ContainsKey("scales")) return ScalesTest(s, items, o);
-        var auto = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) : null;
+        var auto = s.Ocr.AutoScale ? new TextScale(s.Ocr.Scale, s.Ocr.TargetTextPx) { ToTarget = () => Update.RemoteConfig.Current.ChatScaleToTarget } : null;
         var reader = new ScreenReader(RegionFor(o), s.Ocr.Scale, auto);
         var parser = new ChatParser(items);
         string? png = o.ContainsKey("save") ? $"ocr-test-{DateTime.Now:HHmmss}.png" : null;
@@ -544,7 +545,7 @@ options: --process aion[,other]");
         File.WriteAllText(Path.Combine(CrashLog.DirOverride, "reads.log"), "");
         var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         var s = new TrackerSession(null, settings, items, "Replay");
-        var auto = settings.Ocr.AutoScale ? new TextScale(settings.Ocr.Scale, settings.Ocr.TargetTextPx) : null;
+        var auto = settings.Ocr.AutoScale ? new TextScale(settings.Ocr.Scale, settings.Ocr.TargetTextPx) { ToTarget = () => Update.RemoteConfig.Current.ChatScaleToTarget } : null;
         ScreenReader? reader = null;
         int chats = 0, lists = 0; DateTime? last = null;
         foreach (var raw in File.ReadLines(index))
@@ -784,7 +785,7 @@ options: --process aion[,other]");
         foreach (var r in results) Console.WriteLine($"{r.Status,-9} {r.Case}  {r.Detail}");
         int failed = results.Count(r => r.Status == "FAIL");
         // the chat's vote, first read to counted (the loot list showing the same pickup lets a line count on its first read)
-        static string Lat(List<double> l, int fast) { var s = l.OrderBy(x => x).ToList(); return s.Count == 0 ? "no loot lines" : $"{s.Count} loot lines, median {s[s.Count / 2]:0.00} s, max {s[^1]:0.00} s, {fast} on their first read by the loot list"; }
+        static string Lat(List<double> l, int fast) { var s = l.OrderBy(x => x).ToList(); return s.Count == 0 ? "no loot lines" : $"{s.Count} loot lines, mean {s.Average():0.00} s, median {s[s.Count / 2]:0.00} s, max {s[^1]:0.00} s, {fast} on their first read by the loot list"; }
         Console.WriteLine("chat vote, first read to counted: " + Lat(Session.ReplayBank.ChatLatencies, Session.ReplayBank.ChatFast));
         if (opts.ContainsKey("latency"))
         {
@@ -1240,6 +1241,139 @@ options: --process aion[,other]");
         var sw2 = System.Diagnostics.Stopwatch.StartNew();
         for (int i = 0; i < 10; i++) at3.Tick(game, t0.AddSeconds(2 * (i + 1)), Crop);
         Console.WriteLine($"  (one template: first check {ms:0.0} ms, then {sw2.Elapsed.TotalMilliseconds / 10:0.0} ms each; none shipped yet, so 0 today)");
+        ok &= AnchoredCropTest();
+        return ok;
+    }
+
+    /// <summary>
+    /// Anchors phase two (2026-10-24): the chat's search area and the Kinah strip read from their anchors once those held
+    /// still; the crops from Steven's 5120x2160 evidence, the three-steady-checks gate, every way back to the fixed crop,
+    /// the built-in switches, the per-region pass times in the audit line, and the unchanged-chat fingerprint.
+    /// </summary>
+    static bool AnchoredCropTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nAnchors phase two: chat and Kinah strip read from their anchors (2026-10-24):");
+        var keepCfg = Update.RemoteConfig.Current;
+        Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+        try
+        {
+            // the switches: on in code, so a site that answers 404 still has them; the site can turn each off
+            var b = Update.RemoteConfig.BuiltIn;
+            var empty = Update.RemoteConfig.Parse("{}");
+            var offCfg = Update.RemoteConfig.Parse("""{"layout": {"anchor": {"chat": false, "balance": false}}, "ocr": {"chat_skip_same": false}}""");
+            Check("switches on by default (built in, empty config)", $"{b.AnchorChat} {b.AnchorBalance} {b.ChatSkipSame} / {empty.AnchorChat} {empty.AnchorBalance} {empty.ChatSkipSame}", "True True True / True True True");
+            Check("...the site can turn each off", $"{offCfg.Flag("layout.anchor.chat")} {offCfg.Flag("layout.anchor.balance")} {offCfg.Flag("ocr.chat_skip_same")}", "False False False");
+            Check("...a value that isn't false leaves it on", $"{Update.RemoteConfig.Parse("""{"layout": {"anchor": {"chat": 0}}}""").AnchorChat}", "True");
+
+            // the crops, from the anchors Steven's window logged three sessions running (5120x2160, 2026-10-24)
+            var game = new System.Drawing.Rectangle(0, 0, 5120, 2160);
+            var strip = new System.Drawing.Rectangle(94, 1, 124, 54);          // anchor balance dx=94 dy=1, size 124x54
+            var chatBox = new System.Drawing.Rectangle(105, 2160 - 258 - 504, 864, 504);   // anchor chat dx=105 dy=-258, size 864x504
+            Check("the strip's crop: its numbers, 3 heights each side", $"{AnchoredCrop.BalanceFrom(game, strip)} of {BalanceReader.Strip(game).Width}x{BalanceReader.Strip(game).Height}", "{X=0,Y=0,Width=326,Height=73} of 1296x97");
+            var cc = AnchoredCrop.ChatFrom(game, chatBox);
+            Check("the chat's area: the box, a line up, 3 down for the input", $"{cc}", "{X=21,Y=1356,Width=1074,Height=672}");
+            Check("...holds the box and the row below it", $"{cc.Contains(chatBox)} {cc.Bottom - chatBox.Bottom >= 2 * (chatBox.Height / 12)}", "True True");
+            var corner = ChatLocator.Corner(game);
+            Check("...a quarter of the corner's pixels or less", $"{(double)cc.Width * cc.Height / (corner.Width * corner.Height) <= 0.27}", "True");
+            // a small window: never outside the fixed crop
+            var small = new System.Drawing.Rectangle(0, 0, 1280, 720);
+            Check("never outside the fixed strip or corner", $"{BalanceReader.Strip(small).Contains(AnchoredCrop.BalanceFrom(small, new System.Drawing.Rectangle(2, 0, 60, 20)))} {ChatLocator.Corner(small).Contains(AnchoredCrop.ChatFrom(small, new System.Drawing.Rectangle(0, 500, 288, 168)))}", "True True");
+
+            // the gate: three sightings within 4 px lock it; one more than 4 px off, a lower confidence, a gap, the switch or a
+            // new window size each go back to the fixed crop at once, logged once each way
+            var log = new List<string>();
+            var crop = new AnchoredCrop("balance", AnchoredCrop.BalanceFrom, 0.25) { Log = log.Add };
+            System.Drawing.Rectangle At(int dx, int dy) => new(strip.X + dx, strip.Y + dy, strip.Width, strip.Height);
+            crop.Observe(game, At(0, 0), 0.5, true);
+            crop.Observe(game, At(3, -1), 0.5, true);
+            Check("two steady sightings: still the fixed crop", $"{crop.Crop(game, true)?.ToString() ?? "fixed"}", "fixed");
+            crop.Observe(game, At(1, 2), 0.5, true);
+            Check("the third within 4 px: read from the anchor", $"{crop.Active} {crop.Crop(game, true)?.Size}", "True {Width=327, Height=75}");
+            Check("...logged once", $"{log.Count} {(log.LastOrDefault() ?? "").StartsWith("anchor balance: reading around the anchor now, 327x75")}", "1 True");
+            crop.Observe(game, At(3, 2), 0.5, true);
+            Check("a sighting 2 px off keeps it, and logs nothing", $"{crop.Active} {log.Count}", "True 1");
+            crop.Observe(game, At(9, 2), 0.5, true);
+            Check("8 px off: back to the fixed crop, logged", $"{crop.Crop(game, true)?.ToString() ?? "fixed"} {log.Count} {log.Last()}", "fixed 2 anchor balance: back to the fixed crop (the anchor moved 8 px)");
+            var spread = new AnchoredCrop("balance", AnchoredCrop.BalanceFrom, 0.25) { Log = _ => { } };
+            spread.Observe(game, At(0, 0), 0.5, true); spread.Observe(game, At(4, 0), 0.5, true); spread.Observe(game, At(8, 0), 0.5, true);
+            Check("three sightings drifting 4 px each: no lock (8 apart)", $"{spread.Active}", "False");
+            crop.Observe(game, At(9, 2), 0.5, true); crop.Observe(game, At(9, 2), 0.5, true);
+            Check("steady again in its new place: anchored again", $"{crop.Active} {crop.On} {crop.Off}", "True 2 1");
+            crop.Observe(game, At(9, 2), 0.25, true);
+            Check("confidence below what it locked at: fixed", $"{crop.Active} {log.Last()}", "False anchor balance: back to the fixed crop (the anchor's confidence fell from 0.50 to 0.25)");
+            for (int i = 0; i < 3; i++) crop.Observe(game, At(9, 2), 0.5, true);
+            crop.Missing(game, "a read of the strip showed no numbers");
+            Check("the anchor missing: fixed at once", $"{crop.Crop(game, true)?.ToString() ?? "fixed"} {log.Last()}", "fixed anchor balance: back to the fixed crop (a read of the strip showed no numbers)");
+            crop.Missing(game, "again");
+            Check("...and logged once, not on every miss", $"{log.Count(l => l.Contains("back to the fixed"))}", "3");
+            for (int i = 0; i < 3; i++) crop.Observe(game, At(9, 2), 0.5, true);
+            Check("the switch off: fixed", $"{crop.Crop(game, false)?.ToString() ?? "fixed"} {crop.Active}", "fixed False");
+            for (int i = 0; i < 3; i++) crop.Observe(game, At(9, 2), 0.5, false);
+            Check("...and nothing locks while it is off", $"{crop.Active}", "False");
+            for (int i = 0; i < 3; i++) crop.Observe(game, At(9, 2), 0.5, true);
+            Check("a new window size: fixed", $"{crop.Crop(new System.Drawing.Rectangle(0, 0, 3840, 1620), true)?.ToString() ?? "fixed"} {crop.Active}", "fixed False");
+            var low = new AnchoredCrop("chat", AnchoredCrop.ChatFrom, 0.4) { Log = _ => { } };
+            for (int i = 0; i < 3; i++) low.Observe(game, chatBox, 0.3, true);
+            Check("sightings under the floor never lock", $"{low.Active}", "False");
+            for (int i = 0; i < 3; i++) low.Observe(game, chatBox, 0.4, true);
+            Check("the chat at Steven's conf 0.40 locks", $"{low.Crop(game, true)}", "{X=21,Y=1356,Width=1074,Height=672}");
+
+            // through the anchors themselves: the strip's numbers three reads running, then a read with none
+            var an = new Anchors(new List<AnchorTemplate>());
+            an.BalanceCrop.Log = _ => { }; an.ChatCrop.Log = _ => { };
+            var nums = new[] { new System.Drawing.Rectangle(103, 10, 50, 36), new System.Drawing.Rectangle(163, 10, 46, 36) };
+            var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+            for (int i = 0; i < 3; i++) an.ObserveBalance(game, nums, t0.AddSeconds(10 * i));
+            Check("Anchors: the strip's numbers, three reads: anchored", $"{an.BalanceCrop.Active} {an.BalanceCrop.Anchor}", "True {X=94,Y=1,Width=124,Height=54}");
+            an.ObserveBalance(game, Array.Empty<System.Drawing.Rectangle>(), t0.AddSeconds(30));
+            Check("...a read with no numbers: fixed", $"{an.BalanceCrop.Active}", "False");
+            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chosen", true, t0);
+            Check("Anchors: a chat chosen by hand never anchors", $"{an.ChatCrop.Active}", "False");
+            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0);
+            Check("...a found one does", $"{an.ChatCrop.Active}", "True");
+            Update.RemoteConfig.Current = offCfg;
+            an.ObserveBalance(game, nums, t0.AddSeconds(40));
+            Check("layout.anchor.balance off from the site: nothing locks", $"{an.BalanceCrop.Active} {an.BalanceCrop.Crop(game, Update.RemoteConfig.Current.AnchorBalance)?.ToString() ?? "fixed"}", "False fixed");
+            Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+
+            // the audit line's pass part: each region's ms per pass over the minute
+            var times = new KinahLedger.Session.PassTimes();
+            times.Add("chat", 57 * 310); times.Add("list", 57 * 180); times.Add("target", 57 * 95.4); times.Add("scene", 57 * 40); times.Add("nowhere", 999);
+            Check("the audit's pass part", KinahLedger.Session.PassTimes.AuditPart(57, 57 * 1016, times),
+                "57 passes, 1016 ms each (per pass: chat 310 · list 180 · target 95 · balance 0 · craft 0 · grid 0 · nameplates 0 · header 0 · anchors 0 · scene 40 · decoder 0 ms)");
+            times.Time("anchors", () => System.Threading.Thread.Sleep(2));
+            bool timed = times.Total("anchors") >= 1; times.Reset();
+            Check("...a timed region counts, a reset clears it", $"{timed} {times.Total("chat")} {times.Total("anchors")}", "True 0 0");
+            Check("...no passes: zeros, not a division by zero", KinahLedger.Session.PassTimes.AuditPart(0, 0, times), "0 passes, 0 ms each (per pass: chat 0 · list 0 · target 0 · balance 0 · craft 0 · grid 0 · nameplates 0 · header 0 · anchors 0 · scene 0 · decoder 0 ms)");
+
+            // the unchanged-chat fingerprint: the same pixels the same, one pixel different
+            using var pic = new System.Drawing.Bitmap(864, 504, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            using (var g = System.Drawing.Graphics.FromImage(pic)) { g.Clear(System.Drawing.Color.White); g.DrawString("[Steven] Acquired Raw Leather.", new System.Drawing.Font("Arial", 18), System.Drawing.Brushes.Black, 10, 400); }
+            ulong h1 = ScreenReader.PixelHash(pic), h2 = ScreenReader.PixelHash(pic);
+            pic.SetPixel(500, 10, System.Drawing.Color.FromArgb(254, 255, 255));
+            Check("chat fingerprint: same pixels same, one pixel off not", $"{h1 == h2} {ScreenReader.PixelHash(pic) != h1}", "True True");
+            if (ReplayBank.OcrAvailable())
+            {
+                // a reader skipping a capture it has just read: the same lines, no second recognition
+                using var raw = new System.Drawing.Bitmap(864, 504, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var g = System.Drawing.Graphics.FromImage(raw)) { g.Clear(System.Drawing.Color.FromArgb(20, 22, 28)); g.DrawString("Acquired Raw Leather x3.", new System.Drawing.Font("Arial", 22), System.Drawing.Brushes.White, 10, 440); }
+                var rd = new ScreenReader(new System.Drawing.Rectangle(0, 0, 864, 504), 2) { SkipSame = () => true };
+                var first = Task.Run(() => rd.ReadCaptureAsync(raw)).GetAwaiter().GetResult();
+                var second = Task.Run(() => rd.ReadCaptureAsync(raw)).GetAwaiter().GetResult();
+                Check("an unchanged chat capture isn't recognized again", $"{string.Join("|", first) == string.Join("|", second)} {rd.SameSkips} of {rd.CaptureReads}", "True 1 of 2");
+                var noSkip = new ScreenReader(new System.Drawing.Rectangle(0, 0, 864, 504), 2) { SkipSame = () => false };
+                Task.Run(() => noSkip.ReadCaptureAsync(raw)).GetAwaiter().GetResult(); Task.Run(() => noSkip.ReadCaptureAsync(raw)).GetAwaiter().GetResult();
+                Check("...ocr.chat_skip_same off: read every time", $"{noSkip.SameSkips} of {noSkip.CaptureReads}", "0 of 2");
+            }
+            else Console.WriteLine("  (no text recognition here: the unchanged-chat read is checked where Windows OCR is installed)");
+        }
+        finally { Update.RemoteConfig.Current = keepCfg; }
         return ok;
     }
 
@@ -1815,6 +1949,78 @@ options: --process aion[,other]");
         Check("25 px text: never below the configured 2x", $"{big.Observe(Enumerable.Repeat(25.0, 8))} {big.Factor}", "False 2");
         var tiny = new TextScale(2, 36);
         Check("7 px text: no more than 4x", $"{tiny.Observe(Enumerable.Repeat(7.0, 8))} {tiny.Factor}", "True 4");
+        // ocr.chat_scale_to_target (2026-10-24): the floor only under 18 px, text at or past the target at most 1.25x
+        TextScale Sized() => new(2, 36) { ToTarget = () => true };
+        var hi = Sized();
+        Check("to target: 29 px chat on 5120x2160 read at 1.25x", $"{hi.Observe(Enumerable.Repeat(29.0, 8))} {hi.Factor}", "True 1.25");
+        var k4 = Sized();
+        Check("to target: 25 px text read at 1.5x, under the old 2x floor", $"{k4.Observe(Enumerable.Repeat(25.0, 8))} {k4.Factor}", "True 1.5");
+        var lo = Sized();
+        Check("to target: 12 px text keeps the floor and reads at 3x", $"{lo.Observe(Enumerable.Repeat(12.0, 8))} {lo.Factor}", "True 3");
+        var s17 = Sized();
+        Check("to target: 17 px text, under 18 px, keeps the 2x floor", $"{s17.Observe(Enumerable.Repeat(17.0, 8))} {s17.Factor}", "False 2");
+        var huge = Sized();
+        Check("to target: 40 px text read at 1.25x, never more", $"{huge.Observe(Enumerable.Repeat(40.0, 8))} {huge.Factor}", "True 1.25");
+        Check("to target: 1.25x at or above the target, quarter steps up", $"{Sized().Want(36)} {Sized().Want(60)} {Sized().Want(32)} {Sized().Want(24.01)} {Sized().Want(19)} {Sized().Want(15)}", "1.25 1.25 1.25 1.5 2 2.5");
+        var offTs = new TextScale(2, 36) { ToTarget = () => false };
+        Check("switch off: 29 px text keeps the 2x floor", $"{offTs.Observe(Enumerable.Repeat(29.0, 8))} {offTs.Factor}", "False 2");
+        var band = new TextScale(3, 36) { ToTarget = () => true, Least = 2 };
+        Check("target band: 3x until measured, 2x for 29 px, 3x under 18 px", $"{band.Factor} {band.Want(29)} {band.Want(40)} {band.Want(14)}", "3 2 2 3");
+
+        // ---- OCR sizing switches and their pixel work (2026-10-24; the timed comparison is bench --sizing) ----
+        {
+            var b0 = Update.RemoteConfig.BuiltIn;
+            var e0 = Update.RemoteConfig.Parse("{}");
+            var flip = Update.RemoteConfig.Parse("""{"ocr": {"chat_scale_to_target": true, "target_sized": false, "plates_half": false}}""");
+            Check("sizing switches: chat off, target and plates on, built in", $"{b0.ChatScaleToTarget} {b0.TargetSized} {b0.PlatesHalf} / {e0.ChatScaleToTarget} {e0.TargetSized} {e0.PlatesHalf}", "False True True / False True True");
+            Check("...the site can flip each", $"{flip.Flag("ocr.chat_scale_to_target")} {flip.Flag("ocr.target_sized")} {flip.Flag("ocr.plates_half")}", "True False False");
+            // the ink box: the extent of dark pixels with a margin, the whole picture when it covers most of it, none when blank
+            using var bw = new System.Drawing.Bitmap(400, 100, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            using (var g = System.Drawing.Graphics.FromImage(bw)) { g.Clear(System.Drawing.Color.White); g.FillRectangle(System.Drawing.Brushes.Black, 150, 40, 60, 20); }
+            Check("ink box: dark pixels and a margin", $"{TargetReader.InkBox(bw, 10)}", "{X=140,Y=30,Width=80,Height=40}");
+            using (var g = System.Drawing.Graphics.FromImage(bw)) g.Clear(System.Drawing.Color.White);
+            Check("ink box: a blank picture has none (no recognition)", $"{TargetReader.InkBox(bw, 10)?.ToString() ?? "none"}", "none");
+            using (var g = System.Drawing.Graphics.FromImage(bw)) { g.FillRectangle(System.Drawing.Brushes.Black, 2, 2, 3, 3); g.FillRectangle(System.Drawing.Brushes.Black, 395, 95, 3, 3); }
+            Check("ink box: dark at both corners is the whole picture", $"{TargetReader.InkBox(bw, 10)}", "{X=0,Y=0,Width=400,Height=100}");
+            // the nameplate bars: the half search finds exactly the full scan's bars on a drawn 5120x2160 frame (bars, a
+            // plate with no bar, the player's bar, a tall red banner and red specks), dark and bright
+            foreach (var bright in new[] { false, true })
+            {
+                using var fr = KinahLedger.Platform.BenchSizing.DrawFrame(5120, 2160, bright, out _, out _);
+                var full = Nameplates.FindBars(fr, false).OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
+                var halfBars = Nameplates.FindBars(fr, true);
+                Check($"nameplates, {(bright ? "bright" : "dark")} 5120x2160: half search = full scan", $"{halfBars.Count} {full.SequenceEqual(halfBars)}", "5 True");
+            }
+            // and on random frames at four window sizes: red boxes of every size around the bar limits (0.4% to 1.2% of the
+            // height tall), touching, stacked, cut at the area's edge, odd and even places, plus near-red that isn't
+            int frames = 0, agree = 0, barsSeen = 0;
+            var rr = new Random(2024);
+            foreach (var (fw, fh) in new[] { (1920, 1080), (2560, 1440), (3840, 2160), (5120, 2160) })
+                for (int k = 0; k < 10; k++)
+                {
+                    using var fr = new System.Drawing.Bitmap(fw, fh, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (var g = System.Drawing.Graphics.FromImage(fr))
+                    {
+                        g.Clear(System.Drawing.Color.FromArgb(40 + k * 10, 60, 50));
+                        using var red = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(241, 54, 82));
+                        using var near = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(200, 100, 90));
+                        for (int i = 0; i < 120; i++)
+                        {
+                            int bh = rr.Next(1, (int)(fh * 0.016) + 2), bwid = rr.Next(1, (int)(fh * 0.12));
+                            int x = rr.Next((int)(fw * 0.08), (int)(fw * 0.92)), y = rr.Next((int)(fh * 0.02), (int)(fh * 0.84));
+                            g.FillRectangle(i % 7 == 0 ? near : red, x, y, bwid, bh);
+                            // a ragged row under some: runs that start a pixel or two off
+                            if (i % 5 == 0) g.FillRectangle(red, x + rr.Next(-3, 4), y + bh, bwid, rr.Next(1, 4));
+                        }
+                    }
+                    var full = Nameplates.FindBars(fr, false).OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
+                    var halfBars = Nameplates.FindBars(fr, true);
+                    frames++; barsSeen += full.Count;
+                    if (full.SequenceEqual(halfBars)) agree++;
+                    else Console.WriteLine($"    {fw}x{fh} #{k}: full {string.Join(" ", full)} / half {string.Join(" ", halfBars)}");
+                }
+            Check($"nameplates, {frames} random frames ({barsSeen} bars): half search = full scan", $"{agree}", $"{frames}");
+        }
 
         // ---- a word's colour from its brightest pixels ----
         int w = 20, h = 10, stride = w * 4;

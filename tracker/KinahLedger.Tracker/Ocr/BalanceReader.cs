@@ -32,9 +32,10 @@ public sealed partial class BalanceReader
     public BalanceTracker Tracker { get; } = new();
 
     /// <summary>One read: capture the strip, skip recognition when it looks the same as last time, and hand the counters to the tracker.</summary>
-    public async Task TickAsync(Rectangle game, long pickupsTotal)
+    /// <param name="crop">The strip around its numbers once they held still (Anchors.BalanceCrop); null: the fixed strip.</param>
+    public async Task TickAsync(Rectangle game, long pickupsTotal, Rectangle? crop = null)
     {
-        var strip = Strip(game);
+        var strip = crop ?? Strip(game);
         using var raw = ScreenReader.Capture(strip);
         var h = Hash(raw);
         if (h == _hash && Reads > 0) { Skipped++; LastBoxesAt = DateTime.UtcNow; Tracker.Observe(_last, pickupsTotal, samePixels: true); return; }

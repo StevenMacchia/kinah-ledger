@@ -92,6 +92,52 @@ public sealed class RemoteConfig
     /// </summary>
     public bool LegendMaterialsRare { get; init; } = true;
 
+    // ---- anchors, phase two (Ocr.AnchoredCrop, 2026-10-24) ----
+    /// <summary>
+    /// layout.anchor.chat: once the chat box has held still (3 checks within 4 px), the chat is looked for again around it,
+    /// not across the whole bottom-left quarter. On in code; the site turns it off with
+    /// "layout": {"anchor": {"chat": false}}.
+    /// </summary>
+    public bool AnchorChat { get; init; } = true;
+    /// <summary>layout.anchor.balance: the same for the Kinah counter strip, read around its numbers. On in code.</summary>
+    public bool AnchorBalance { get; init; } = true;
+    /// <summary>
+    /// ocr.chat_skip_same: a chat capture whose pixels are exactly those of the last read isn't recognized again; the last
+    /// read's lines stand. On in code; "ocr": {"chat_skip_same": false} turns it off.
+    /// </summary>
+    public bool ChatSkipSame { get; init; } = true;
+
+    // ---- OCR sizing at high resolution (2026-10-24) ----
+    /// <summary>
+    /// ocr.chat_scale_to_target: the chat is enlarged to aim its text at ocr.target_text_px from its measured height, with
+    /// ocr.scale as a floor only for text under <see cref="KinahLedger.Ocr.TextScale.SmallPx"/> px, never under 1.25x, and
+    /// text at or above the target never past 1.25x (TextScale). OFF in code: on 72 drawn 5120x2160 chats at 29 px the
+    /// lower factor read 193 of 240 lines exactly against 218 at the 2x floor (bench --sizing --sweep chat), so the chat
+    /// keeps its floor until real crops say otherwise; "ocr": {"chat_scale_to_target": true} turns it on.
+    /// </summary>
+    public bool ChatScaleToTarget { get; init; }
+    /// <summary>
+    /// ocr.target_sized: the target bar is read around its own text (the gold name's and the bright text's extent in the
+    /// band, with a margin) and enlarged only as far as its text needs (TargetReader); off, the whole band at 3x. On in code.
+    /// </summary>
+    public bool TargetSized { get; init; } = true;
+    /// <summary>
+    /// ocr.plates_half: the nameplate bars are looked for on every second pixel of every second row, in the capture's own
+    /// 32-bit pixels, and each one found is measured again at full size (Nameplates); off, the old full 24-bit scan. On in code.
+    /// </summary>
+    public bool PlatesHalf { get; init; } = true;
+    /// <summary>A built-in switch by its config name (layout.anchor.chat, layout.anchor.balance, ocr.chat_skip_same, ocr.chat_scale_to_target, ocr.target_sized, ocr.plates_half).</summary>
+    public bool Flag(string name) => name switch
+    {
+        "layout.anchor.chat" => AnchorChat,
+        "layout.anchor.balance" => AnchorBalance,
+        "ocr.chat_skip_same" => ChatSkipSame,
+        "ocr.chat_scale_to_target" => ChatScaleToTarget,
+        "ocr.target_sized" => TargetSized,
+        "ocr.plates_half" => PlatesHalf,
+        _ => false,
+    };
+
     // ---- staged rollout ----
     public string RolloutVersion { get; init; } = "";
     public int RolloutPercent { get; init; } = 100;
@@ -142,6 +188,10 @@ public sealed class RemoteConfig
         var rare = Obj(r, "rare");
         var pick = Obj(r, "pickup");
         var scene = Obj(r, "scene");
+        var layout = Obj(r, "layout");
+        var anchor = layout is { } lay ? Obj(lay, "anchor") : null;
+        // a switch that is on unless the config says false in so many words
+        static bool Off2(JsonElement? e, string k) => e is { } o && o.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.False;
         // the loot band moves at most a little from where it was measured, and never turns inside out
         double ll = Num(loot, "left", b.LootLeft, -0.60, -0.25), lr = Num(loot, "right", b.LootRight, -0.10, 0.10);
         double lt = Num(loot, "top", b.LootTop, -0.20, 0.05), lb = Num(loot, "bottom", b.LootBottom, 0.15, 0.45);
@@ -179,6 +229,12 @@ public sealed class RemoteConfig
                 || (sgv.ValueKind == JsonValueKind.Object && sgv.TryGetProperty("on", out var sgo) && sgo.ValueKind == JsonValueKind.False))),
             SceneGateStates = GateStates(scene, b.SceneGateStates),
             LegendMaterialsRare = !(rare is { } ra && ra.TryGetProperty("legend_materials", out var lm) && lm.ValueKind == JsonValueKind.False),
+            AnchorChat = !Off2(anchor, "chat"),
+            AnchorBalance = !Off2(anchor, "balance"),
+            ChatSkipSame = !Off2(ocr, "chat_skip_same"),
+            ChatScaleToTarget = ocr is { } cst && cst.TryGetProperty("chat_scale_to_target", out var cstv) && cstv.ValueKind == JsonValueKind.True,
+            TargetSized = !Off2(ocr, "target_sized"),
+            PlatesHalf = !Off2(ocr, "plates_half"),
             RolloutVersion = Str(roll, "version", ""),
             RolloutPercent = (int)Num(roll, "percent", 100, 0, 100),
             RolloutHold = roll is { } ro && ro.TryGetProperty("hold", out var h) && h.ValueKind == JsonValueKind.True,
