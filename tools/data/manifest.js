@@ -12,7 +12,11 @@ for (const n of NAMES) {
   const buf = Buffer.from(fs.readFileSync(path.join(root, 'data', n), 'utf8').replace(/\r\n/g, '\n'), 'utf8');
   files[n] = { sha256: crypto.createHash('sha256').update(buf).digest('hex'), size: buf.length };
 }
-const out = JSON.stringify({ min_tracker: MIN_TRACKER, files }, null, 2) + '\n';
+// the name decoder's model files (data/models.json) are never in the repository, so they are listed with their pinned
+// URL: a tracker checks them by SHA-256 and does not download them on its own (tools/data/models.js fetches them)
+const pins = JSON.parse(fs.readFileSync(path.join(root, 'data', 'models.json'), 'utf8')).files;
+const models = Object.fromEntries(Object.entries(pins).map(([n, p]) => [n, { url: p.url, sha256: p.sha256, size: p.size }]));
+const out = JSON.stringify({ min_tracker: MIN_TRACKER, files, models }, null, 2) + '\n';
 const target = path.join(root, 'data', 'manifest.json');
 if (process.argv.includes('--check')) {
   const was = fs.existsSync(target) ? fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') : '';

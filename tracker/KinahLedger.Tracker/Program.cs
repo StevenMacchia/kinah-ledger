@@ -1050,6 +1050,7 @@ options: --process aion[,other]");
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
         ok &= NameMatchTest();
+        ok &= Ocr.NameDecoderTests.Run(items, s);
         ok &= LootRowsTest(items);
         ok &= AnchorsTest();
         ok &= SceneTest(items, s);

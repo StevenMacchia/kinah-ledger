@@ -86,6 +86,23 @@ public sealed class ItemDictionary
     /// <summary>Every item the list holds (real ids), for indexes built over the whole list.</summary>
     public List<ItemInfo> AllItems() { lock (_lock) return _byId.Values.Where(i => i.Id > 0).ToList(); }
 
+    /// <summary>
+    /// Every name an item is known by, as <see cref="Norm"/> writes it, with the item it maps to and that item's own name:
+    /// the list's items, the gathering materials, skins and extras, and the plain forms they are also known by. Misreads
+    /// (snapped or crowd-settled aliases) and the synthetic ids of unknown reads are left out. The name decoder's lexicon
+    /// (Ocr/NameDecoder.cs). Adds nothing.
+    /// </summary>
+    public List<(string Key, long Id, string Name)> Lexicon()
+    {
+        lock (_lock)
+        {
+            var l = new List<(string, long, string)>(_byName.Count);
+            foreach (var (key, id) in _byName)
+                if (!_snapped.Contains(key) && !_aliased.Contains(key) && Real(id) && _byId.TryGetValue(id, out var info)) l.Add((key, id, info.Name));
+            return l;
+        }
+    }
+
     /// <summary>True when the name is a real item's own name (case and spacing aside), not a misread snapped to one.</summary>
     public bool KnowsExactly(string name)
     {
@@ -338,7 +355,7 @@ public sealed class ItemDictionary
     /// A name as it is looked up: lower case, accents off and stray marks gone, so "Raw Léather", "Raw Leather~" and
     /// "Raw Leather" are the same item (Steven, 2026-10-21: a drop that looks like a normal drop is that drop).
     /// </summary>
-    static string Norm(string s)
+    public static string Norm(string s)
     {
         var t = KinahLedger.Ocr.ChatParser.StripAccents(s).ToLowerInvariant().Replace('’', '\'');
         t = System.Text.RegularExpressions.Regex.Replace(t, @"[^a-z0-9'():+.,&\- ]", " ");

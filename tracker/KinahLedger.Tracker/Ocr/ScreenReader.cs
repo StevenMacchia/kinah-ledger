@@ -247,6 +247,8 @@ public sealed class ScreenReader
             var result = await Recognize(bmp);
             try { LastAccents = Accents(raw, result, f); }
             catch (Exception ex) { LastAccents = Array.Empty<(string, Color)>(); CrashLog.Write("name colours", ex); }
+            if (NameSpans != null)
+                try { NameSpans(raw, Spans(result, f)); } catch (Exception ex) { CrashLog.Write("name spans", ex); }
             if (_auto != null)
             {
                 double was = _auto.Factor;
@@ -255,6 +257,28 @@ public sealed class ScreenReader
             }
             return result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
         }
+    }
+
+    /// <summary>
+    /// Handed each read's item-name spans (the line, its name words, their box in the capture) with the capture, before
+    /// the capture is disposed: the name decoder's shadow crops them (Ocr/NameDecoder.cs). Unset: nothing is measured.
+    /// </summary>
+    public Action<Bitmap, IReadOnlyList<(string Line, string Name, Rectangle Box)>>? NameSpans { get; set; }
+
+    /// <summary>Each line's name words (TextColour.NameWord) as one span, in the capture's pixels.</summary>
+    static List<(string Line, string Name, Rectangle Box)> Spans(OcrResult result, double f)
+    {
+        var list = new List<(string, string, Rectangle)>();
+        foreach (var line in result.Lines)
+        {
+            var words = line.Words.Where(w => TextColour.NameWord(w.Text)).ToList();
+            if (words.Count == 0) continue;
+            double l = words.Min(w => w.BoundingRect.X), t = words.Min(w => w.BoundingRect.Y);
+            double r = words.Max(w => w.BoundingRect.X + w.BoundingRect.Width), b = words.Max(w => w.BoundingRect.Y + w.BoundingRect.Height);
+            var box = Rectangle.FromLTRB((int)(l / f), (int)(t / f), (int)Math.Ceiling(r / f), (int)Math.Ceiling(b / f));
+            list.Add((line.Text.Trim(), string.Join(' ', words.Select(w => w.Text.Trim())), box));
+        }
+        return list;
     }
 
     /// <summary>Each line's item name colour, from the capture before it was turned grey (TextColour, NameWord).</summary>
