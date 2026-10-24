@@ -66,7 +66,7 @@ static class ChatCountTests
         {
             var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
             s.ProcessChat(new List<string> { "[P1] hello", "[P2] hi there" }, t0);
-            s.ProcessList(new List<LootLine> { new(1100, "Odyle x7", 0.8, 0xF0F0F0F0F0F0F0F0UL, 0.1, 0.05) }, t0.AddSeconds(0.5));
+            s.ProcessList(new List<LootLine> { new(1197, "Odyle x7", 0.62, 0xF0F0F0F0F0F0F0F0UL, 0.14, 0.12, 1920) }, t0.AddSeconds(0.5));
             s.ProcessChat(new List<string> { "[P1] hello", "[P2] hi there", "Acquired Odyle" }, t0.AddSeconds(1));
             s.FlushVotes(t0.AddSeconds(2));
             Check("session: \"Acquired Odyle\" with an Odyle x7 row up: seven", N(s, "Odyle").ToString(), "7");
