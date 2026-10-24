@@ -14,7 +14,16 @@ namespace KinahLedger.Ocr;
 public static class CraftPanel
 {
     /// <summary>One look at the panel: whether it is up, how full each bar is (0 to 1), and whether it is a combo roll.</summary>
-    public sealed record Sample(bool Visible, double Success, double Fail, bool Combo);
+    public sealed record Sample(bool Visible, double Success, double Fail, bool Combo)
+    {
+        /// <summary>The panel sits higher, above the skill bar: the gathering panel (never a craft).</summary>
+        public bool Raised { get; init; }
+    }
+
+    // The gathering panel is the same widget, raised above the skill bar by 213 px on a 2160-high screen (measured
+    // 2026-10-24 on the 2026-10-23 Inina frames at 1080: labels at 848 and 871 against the crafting panel's 955 and 978).
+    // Until then its bars were never read, so a gather the chat missed had no second witness (Steven's missed Aria)
+    const double GatherShift = 213 / 2160.0;
 
     // measured 2026-10-22 on 5120×2160: bars from x 2227 to 2998 (centre 2560), Success at y 1910, Fail at y 1956
     const double BarLeft = (2227 - 2560) / 2160.0, BarRight = (2998 - 2560) / 2160.0;
@@ -60,14 +69,14 @@ public static class CraftPanel
     /// A picture of part of the game: <paramref name="bmp"/> shows <paramref name="area"/>, both in screen pixels, of the
     /// game window <paramref name="game"/>. Positions are worked out on the game and looked up in the picture.
     /// </summary>
-    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game)
+    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game, int Dy = 0)
     {
         public int H => Game.Height;
         public int Cx => Game.Width / 2;
         /// <summary>The pixel at a point of the game window, or null outside the picture.</summary>
         public Color? At(int gx, int gy)
         {
-            int x = Game.X + gx - Area.X, y = Game.Y + gy - Area.Y;
+            int x = Game.X + gx - Area.X, y = Game.Y + gy + Dy - Area.Y;
             return x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height ? null : Bmp.GetPixel(x, y);
         }
     }
@@ -76,7 +85,8 @@ public static class CraftPanel
     public static Rectangle Region(Rectangle game)
     {
         int h = game.Height, cx = game.X + game.Width / 2;
-        return Rectangle.FromLTRB(cx + (int)(PanelLeft * h), game.Y + (int)(TextTop * h), cx + (int)(PanelRight * h) + 2, game.Y + (int)(1975 / 2160.0 * h));
+        // from the raised (gathering) panel's text to the crafting panel's bars
+        return Rectangle.FromLTRB(cx + (int)(PanelLeft * h), game.Y + (int)((TextTop - GatherShift) * h), cx + (int)(PanelRight * h) + 2, game.Y + (int)(1975 / 2160.0 * h));
     }
 
     /// <summary>The two labels' measured cells, for drawing test panels (ReplayBank.Seed).</summary>
@@ -112,6 +122,14 @@ public static class CraftPanel
     public static Sample Measure(Bitmap bmp, Rectangle area, Rectangle game) => Measure(new View(bmp, area, game));
 
     static Sample Measure(View v)
+    {
+        var s = MeasureAt(v);
+        if (s.Visible) return s;
+        var raised = MeasureAt(v with { Dy = -(int)Math.Round(GatherShift * v.H) });
+        return raised.Visible ? raised with { Raised = true } : s;
+    }
+
+    static Sample MeasureAt(View v)
     {
         int h = v.H, cx = v.Cx;
         int x0 = cx + (int)(BarLeft * h), x1 = cx + (int)(BarRight * h);

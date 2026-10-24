@@ -2302,7 +2302,8 @@ public sealed class TrackerSession
                 // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
                 // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
                 // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
-                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(IsCraftTitle);
+                // the raised panel above the skill bar is the gathering panel, never crafting
+                bool craft = !s.Raised && ((_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(IsCraftTitle));
                 if (craft != _panelIsCraft || !_panelUp) CrashLog.Note(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
                 _panelIsCraft = craft;
                 var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";

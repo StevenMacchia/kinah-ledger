@@ -1,0 +1,23 @@
+{
+  "name": "the gathering panel, raised above the skill bar: two Inina gathers that finish on Success (2026-10-23 frames, 2558x1080 game)",
+  "source": "captures/gathering-2026-10-23 g000 to g012, cropped to the panel's place (no names)",
+  "game": { "w": 2558, "h": 1080 },
+  "pending": false,
+  "needs_ocr": false,
+  "frames": [
+    { "t": "2026-10-23T15:51:00.000Z", "k": "craft", "f": "frames/g000.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:00.500Z", "k": "craft", "f": "frames/g001.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:01.000Z", "k": "craft", "f": "frames/g002.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:01.500Z", "k": "craft", "f": "frames/g003.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:02.000Z", "k": "craft", "f": "frames/g004.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:02.500Z", "k": "craft", "f": "frames/g005.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:03.000Z", "k": "craft", "f": "frames/g006.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:03.500Z", "k": "craft", "f": "frames/g007.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:04.000Z", "k": "craft", "f": "frames/g008.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:04.500Z", "k": "craft", "f": "frames/g009.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:05.000Z", "k": "craft", "f": "frames/g010.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:05.500Z", "k": "craft", "f": "frames/g011.png", "x": 1042, "y": 756 },
+    { "t": "2026-10-23T15:51:06.000Z", "k": "craft", "f": "frames/g012.png", "x": 1042, "y": 756 }
+  ],
+  "expect": { "craft_ok": 2, "craft_fail": 0 }
+}
