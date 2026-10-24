@@ -85,7 +85,7 @@ public sealed partial class TrackerSession
 
     /// <summary>A reader for the chat at <paramref name="r"/>: sized to its text, its captures handed to the miscount report.</summary>
     ScreenReader NewReader(System.Drawing.Rectangle r) =>
-        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow), Keep = b => KeepChatShot(b, r.Location), NameSpans = NameDecoder.Present ? ShadowChatNames : null, SkipSame = () => Update.RemoteConfig.Current.ChatSkipSame };
+        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow), Keep = b => KeepChatShot(b, r.Location), NameSpans = NameDecoder.Present || Labels.Enabled ? ShadowChatNames : null, SkipSame = () => Update.RemoteConfig.Current.ChatSkipSame };
 
     /// <summary>
     /// The name decoder's shadow on the chat (counts nothing): each pickup line's item name cropped from the capture it was
@@ -96,6 +96,8 @@ public sealed partial class TrackerSession
 
     void ShadowChatNames(System.Drawing.Bitmap raw, IReadOnlyList<(string Line, string Name, System.Drawing.Rectangle Box)> spans)
     {
+        LabelChatSpans(raw, spans);   // Help improve counting: the item words of own pickup lines, never the line
+        if (!NameDecoder.Present) return;
         foreach (var s in spans)
             if (NameDecoder.PickupLine(s.Line))
                 NameDecoder.Shadow("chat", NameDecoder.Crop(raw, s.Box), s.Name, ResolveName(s.Name).Id, ChatCount(s.Line));
@@ -358,7 +360,7 @@ public sealed partial class TrackerSession
     {
         if (!o.Any) return;
         foreach (var n in o.Notes) CrashLog.Note(n);
-        foreach (var c in o.Confirmed) if (c.Tag is GameEvent ev) CommitWith(ev, "counter");
+        foreach (var c in o.Confirmed) if (c.Tag is GameEvent ev) { CommitWith(ev, "counter"); LabelKina(c); }
         foreach (var c in o.Unjudged) if (c.Tag is GameEvent ev) CommitWith(ev, "unjudged");
         foreach (var c in o.Absorbed) CrashLog.Note($"{c.Line}: counted already from the Kinah counter's rise before this line was read: once");
         foreach (var c in o.Refused)
@@ -1086,6 +1088,7 @@ public sealed partial class TrackerSession
             if (KinaWitnessOn(ev.Time)) SettleKina(_kina.Offer(new KinaWitness.Candidate(kb.Delta, ev.Time, "", null), ev.Time), ev.Time);
         }
         if (ev.Via.Contains("guessed")) Accuracy.Add("guessed");
+        LabelCommitted(ev);   // a count a second witness confirmed becomes a training pair (Help improve counting)
         try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
 
@@ -2246,6 +2249,7 @@ public sealed partial class TrackerSession
             if ((more.Count > 0 || all.Any(x => x.Icons.Count == 0)) && !_cardsHintSaid) { _cardsHintSaid = true; CrashLog.Note(CardsHint); }
             // no received card read at all (not one slot named or matched): the run's rewards stay not read, never filed as empty
             if (!all.Any(x => x.Icons.Count > 0)) { CrashLog.Note($"event cards: no card read ({m.Reads} read(s), {all.Count} slot(s) seen only cut or not at all): the run's rewards stay not read"); return; }
+            LabelCards(m, report, now);   // Help improve counting: sure slots and their crops
             ApplyGrid(all, now, more, what: "event cards");
         }
         catch (Exception ex) { CrashLog.Write("event cards filing", ex); }
@@ -2712,6 +2716,7 @@ public sealed partial class TrackerSession
             }
             // the name decoder's shadow read of the rows (logs only, counts nothing), on the picture while it is here
             if (NameDecoder.Present) try { ShadowListNames(r.Raw, r.Origin, r.Lines, lines, now); } catch (Exception ex) { CrashLog.Write("name decoder", ex); }
+            LabelListPicture(r.Raw, r.Origin, r.Lines, lines, now);   // Help improve counting: name and icon crops only
             return measured;
         }
     }
@@ -2888,6 +2893,7 @@ public sealed partial class TrackerSession
             var rows = _rows.Feed(lines, now);
             // each row a witness of a pickup of its item, from when it first showed (ItemRepeatGuard)
             RepeatRows(rows, now);
+            LabelListRead(lines, now);   // Help improve counting: the rows a chat line or a race may confirm
             var add = _cross.Popup(rows, now);
             if (add.Count == 0) { UpdateDoing(now); return; }
             _batch = add.Count;
@@ -3605,6 +3611,10 @@ public sealed class UserPrefs
     public bool ReportFrames { get; set; }
     /// <summary>Send a miscount report's loot list and crafting panel pictures (never the chat) to the site, where they become replay tests. Off until the player turns it on.</summary>
     public bool SendReportFrames { get; set; }
+    /// <summary>Help improve counting (Options › Sharing): confirmed reads and small item crops become training pairs (Session/LabelWriter.cs). On by default, said once on first run.</summary>
+    public bool HelpImproveCounting { get; set; } = true;
+    /// <summary>True once the one-time "Help improve counting" notice was answered.</summary>
+    public bool CountingNoticeSeen { get; set; }
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>
     public bool ManualChat { get; set; }
     /// <summary>No longer used: the window is always the live count, with setup in Options. Kept so older ui.json files load.</summary>
