@@ -1,0 +1,17 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Urugugu Canyon, 2026-10-24 14:03 to 14:19 local: the minimap names Urugugu Village during the \"Starting in 9s\" countdown, a Daeva Pass Level Reward pops up at 14:03:29 and the table reader reads it as a 5-slot table (0.8.27 opened a 10 s run with 1,008 items and no Kinah, then split the real run at 14:07). Now the table is refused while that screen's title is up, and the expedition is one run from 14:03:25 with its real table at 14:12:48: the two Pauldrons slots read \"x1K\" count one piece each (gear never stacks), Enhance Stone x4.0K counts 4,000",
+  "source": "Steven's trace.log 2026-10-24 18:03:15 to 18:19:31 UTC (14:03:15 to 14:19:31 local): chat kept only for the game's own lines (pickups, Kina, the countdown), every other line replaced by a filler keyed by its text's hash; loot list reads left out (other players' names); zone and reward-title reads as recorded; the two reward tables as reads.log voted them (\"voted slot by slot\", grade|count as read|closest icon|distance), at the times ApplyGrid took them. Kinah isn't checked: the filler changes how the chat's reads line up (this replay counts two 10,000 bound Kina lines live never counted)",
+  "expect": {
+    "runs": {
+      "Urugugu Canyon": 4044
+    },
+    "runs_kept": 1,
+    "runs_from_picture": 1,
+    "run_gear": 20,
+    "run_materials": 4,
+    "run_start": "18:03:25Z"
+  }
+}

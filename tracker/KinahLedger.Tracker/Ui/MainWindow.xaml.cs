@@ -1244,7 +1244,7 @@ public partial class MainWindow : Window
         // this session's runs; earlier ones kept on this PC only on request, so yesterday's trip doesn't sit there all day
         // (Steven, 2026-10-22: "it says last run 14 hr ago")
         var since = _watcher.ChatSince == default ? DateTime.UtcNow : _watcher.ChatSince;
-        bool Now(InstanceRun r) => (r.LastLoot ?? r.Start) >= since || log?.Open == r.Zone;
+        bool Now(InstanceRun r) => (r.LastLoot ?? r.Start) >= since || log?.InProgress == r.Zone;
         var runs = _eventsAll || _demoInst != null ? all : all.Where(Now).ToList();
         int earlier = all.Count(r => !Now(r));
         // the switch shows once there is something earlier to switch to (a render shows it with the demo's runs)
@@ -1259,11 +1259,11 @@ public partial class MainWindow : Window
             // a run whose Kinah wasn't read is left out of the run count, per hour, per run and the total, never counted as 0
             // (Steven, 2026-10-23: "should NEVER average 176k kinah a run when I'm getting 600k")
             long value = 0; double secs = 0; int n = 0, unread = 0;
-            foreach (var r in g) { if (r.KinahUnknown) { unread++; continue; } value += RunValue(r); secs += r.Seconds; n++; }
+            foreach (var r in g) { if (r.OutOfAverages) { unread++; continue; } value += RunValue(r); secs += r.Seconds; n++; }
             var kind = g.Last().Kind;
             var last = g.Max(r => r.LastLoot) ?? DateTime.UtcNow;
             bool shown = _openInst.Contains(g.Key);
-            var sub = (log?.Open == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}")
+            var sub = (log?.InProgress == g.Key ? $"{kind} · in progress" : $"{kind} · last run {Ago(last)}")
                       + (unread > 0 ? $" · {unread} run{(unread == 1 ? "" : "s")} not read" : "")
                       + (shown ? " · ▾ Hide runs and drops" : " · ▸ Show runs and drops");
             // per run (the average) and the total made there (Steven, 2026-10-23: "the per run and the total made")
@@ -1274,8 +1274,8 @@ public partial class MainWindow : Window
             made += value;
         }
         InstRows.ItemsSource = rows;
-        int known = runs.Count(r => !r.KinahUnknown), unknownRuns = runs.Count - known;
-        InstWhat.Text = rows.Count > 0 ? $"{known} run{(known == 1 ? "" : "s")} · {Short(made)} made" + (unknownRuns > 0 ? $" · {unknownRuns} not read" : "") + (log?.Open is { } open ? $" · in {open} now" : "") : "";
+        int known = runs.Count(r => !r.OutOfAverages), unknownRuns = runs.Count - known;
+        InstWhat.Text = rows.Count > 0 ? $"{known} run{(known == 1 ? "" : "s")} · {Short(made)} made" + (unknownRuns > 0 ? $" · {unknownRuns} not read" : "") + (log?.InProgress is { } open ? $" · in {open} now" : "") : "";
         InstEmpty.Visibility = rows.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -1302,15 +1302,15 @@ public partial class MainWindow : Window
         foreach (var r in order.Take(10))
         {
             int items = r.Items.Values.Sum() + r.Bound;
-            var sub = r.RewardsNotRead ? "rewards not read" : r.KinahNotRead ? "Kinah not read" + (items > 0 ? $" · {items} item{(items == 1 ? "" : "s")}" : "")
+            var sub = r.Suspect.Length > 0 ? r.Suspect : r.RewardsNotRead ? "rewards not read" : r.KinahNotRead || r.OldUnread ? "Kinah not read" + (items > 0 ? $" · {items} item{(items == 1 ? "" : "s")}" : "")
                     : items == 0 ? "Kinah only" : $"{items} item{(items == 1 ? "" : "s")}";
             rows.Add(new DropRow($"Run at {r.Start.ToLocalTime():HH:mm}" + (r.Start.ToLocalTime().Date != DateTime.Now.Date ? $" · {r.Start.ToLocalTime():MMM d}" : ""),
-                "", Clock(TimeSpan.FromSeconds(r.Seconds)), "", Initial: "#", Value: r.KinahUnknown ? "—" : Short(RunValue(r)), Sub: sub + " · click to remove if wrong", Child: true,
+                "", Clock(TimeSpan.FromSeconds(r.Seconds)), "", Initial: "#", Value: r.OutOfAverages ? "—" : Short(RunValue(r)), Sub: sub + " · click to remove if wrong", Child: true,
                 Key: $"run|{r.Start.ToUniversalTime().Ticks}|{r.Zone}", Tip: "Wrong run? Click to remove it. It won't be sent to the site."));
         }
         if (order.Count > 10)
             rows.Add(new DropRow($"{order.Count - 10} earlier run{(order.Count - 10 == 1 ? "" : "s")}", "", "", "", Initial: "…",
-                Value: Short(order.Skip(10).Where(r => !r.KinahUnknown).Sum(RunValue)), Sub: "made in total", Child: true));
+                Value: Short(order.Skip(10).Where(r => !r.OutOfAverages).Sum(RunValue)), Sub: "made in total", Child: true));
         return rows;
     }
 

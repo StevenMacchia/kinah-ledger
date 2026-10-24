@@ -94,8 +94,9 @@ public static class ReplayBank
     {
         var d = new List<string>();
         static long N(JsonNode? n) => n == null ? 0 : long.TryParse(n.ToJsonString(), out var v) ? v : 0;
-        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow" })
+        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow", "runs_kept", "runs_from_picture", "run_kinah", "run_gear", "run_materials" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
+        if (expect["run_start"] is { } rstart && rstart.ToString() != (got["run_start"]?.ToString() ?? "")) d.Add($"run_start: expected {rstart}, counted {got["run_start"]?.ToString() ?? "none"}");
         if (expect["runs"] is JsonObject er)
         {
             var gr = got["runs"] as JsonObject ?? new JsonObject();
@@ -257,6 +258,14 @@ public static class ReplayBank
                     case "plate": foreach (var p in ls) session.NotRow.See(p, t, LootNotRow.Plate); break;
                     // the list covered (a full-screen window, a scene it isn't read in): this pass skips it, as the scene gate does
                     case "cover": session.ListGated(new List<LootLine>(), t, Gate.Skip); break;
+                    // a pass, shop or reward window's title in the top band (reads.log's "reward screen open (...)")
+                    case "reward": if (ls.FirstOrDefault() is { Length: > 0 } title) session.Target.MarkReward(t, title); break;
+                    // a reward table as voted (reads.log's "voted slot by slot" line), one slot per entry:
+                    // "grade|count as read|closest icon|its distance", through ApplyGrid as RewardGridDue files it
+                    case "table":
+                        session.ApplyGrid(ls.Select(x => x.Split('|')).Select(p => new RewardGrid.Slot(new Rectangle(0, 0, 10, 10), p[0], p[1], RewardGrid.ParseCount(p[1]),
+                            p.Length >= 4 && p[2].Length > 0 ? new List<(string, double)> { (p[2], double.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture)) } : new List<(string, double)>())).ToList(), t);
+                        break;
                 }
                 last = t;
             }
@@ -377,6 +386,18 @@ public static class ReplayBank
         var runs = new JsonObject();
         foreach (var run in session.Instances.Snapshot()) runs[run.Zone] = run.Items.Values.Sum() + run.BoundItems.Values.Sum();
         if (runs.Count > 0) res["runs"] = runs;
+        // how the runs were kept: how many, how many counted from a reward picture, their Kinah, their pieces and when the
+        // first began (UTC), for the run data cases (2026-10-24)
+        var kept = session.Instances.Snapshot();
+        if (kept.Count > 0)
+        {
+            res["runs_kept"] = kept.Count;
+            res["runs_from_picture"] = kept.Count(r => r.FromPicture);
+            res["run_kinah"] = kept.Sum(r => r.Kinah);
+            res["run_gear"] = kept.Sum(r => r.Pieces(items.IsGear).Gear);
+            res["run_materials"] = kept.Sum(r => r.Pieces(items.IsGear).Materials);
+            res["run_start"] = kept[0].Start.ToUniversalTime().ToString("HH:mm:ss") + "Z";
+        }
         return res;
     }
 

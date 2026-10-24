@@ -1,5 +1,6 @@
 using System.Text.Json;
 using KinahLedger.Ocr;
+using KinahLedger.Data;
 
 namespace KinahLedger.Session;
 
@@ -82,6 +83,47 @@ public sealed class InstanceRun
 
     /// <summary>A copy through its own JSON (what instances.jsonl keeps).</summary>
     public InstanceRun Clone() => JsonSerializer.Deserialize<InstanceRun>(JsonSerializer.Serialize(this))!;
+
+    /// <summary>Reward tables (or event card screens) read into the run, and when the first came (since 2026-10-24, run data).</summary>
+    public int Tables { get; set; }
+    public DateTime? TableAt { get; set; }
+    /// <summary>
+    /// The names of the run's synthetic item ids (negative: a name the item list lacks, hashed), written with the run so
+    /// they still read as names after a restart, when the name may not have been read again yet (since 2026-10-24).
+    /// </summary>
+    public Dictionary<long, string> Names { get; set; } = new();
+
+    /// <summary>
+    /// Set on load, never written back: a record from before the tracker kept its flags (no FromPicture, no Ended, no
+    /// witnesses: chat-counted, before 0.8.18), so what it says of its Kinah isn't known (the 17:48 Oct 23 Urugugu run
+    /// with Kinah 0 averaged in as a real run). Shown as "not read", left out of the averages.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool OldUnread { get; set; }
+    /// <summary>
+    /// Set on load, never written back: why the record looks wrong ("looks like several runs": over 3x the zone's median
+    /// length; "not a run": a false run's shape, see <see cref="InstanceLog.FalseRun"/>), or "". Left out of the averages.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string Suspect { get; set; } = "";
+    /// <summary>Left out of the per-run, per-hour and total figures: its Kinah isn't known, or the record looks wrong.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool OutOfAverages => KinahUnknown || OldUnread || Suspect.Length > 0;
+
+    /// <summary>
+    /// The run's pieces, not a quantity sum (Steven, 2026-10-24: two pauldrons read "x1K" made "2,000 items"): every piece
+    /// of gear one by one, and each other item (materials, currencies, consumables) once however big its stack, bound or not.
+    /// </summary>
+    public (int Gear, int Materials) Pieces(Func<long, bool> isGear)
+    {
+        int gear = 0; var other = new HashSet<long>();
+        foreach (var (id, n) in Items.Concat(BoundItems))
+        {
+            if (n <= 0) continue;
+            if (isGear(id)) gear += n; else other.Add(id);
+        }
+        return (gear, other.Count);
+    }
 
     /// <summary>Entry to last loot, never under ten seconds.</summary>
     public double Seconds => LastLoot is { } l ? Math.Max(10, (l - Start).TotalSeconds) : 0;
@@ -568,6 +610,7 @@ public sealed class InstanceLog
             Paid(t);
             if (_cur == null || _cur.Kind == WorldBoss) return;
             _tableAt = t; _paidArea = _area;   // the run ends when the player moves on from here (0.8.20)
+            _cur.Tables++; _cur.TableAt ??= t;
             int chatItems = _cur.Items.Values.Sum() + _cur.Bound;
             _cur.Items.Clear(); _cur.BoundItems.Clear(); _cur.Bound = 0;
             foreach (var ev in slots)
@@ -617,8 +660,18 @@ public sealed class InstanceLog
             _cur.RewardsNotRead = true;
             if (_cur.LastLoot != null) CrashLog.Note($"{_cur.Label}: no reward picture was read, so its rewards are marked not read ({_cur.ChatItemsSetAside} chat item(s) not counted)");
         }
+        if (_cur?.LastLoot != null && FalseRun(_cur))
+        {
+            // a reward screen read as the run's table moments after the minimap named the instance (2026-10-24 14:03:25:
+            // "Urugugu Village" during the "Starting in 9s" countdown, a Daeva Pass Level Reward read as a 5-slot table at
+            // 14:03:29, kept as a 10 s run with 1,008 items and no Kinah): never kept, never sent
+            CrashLog.Note($"not a run: {_cur.Label} {_cur.Start.ToLocalTime():HH:mm:ss}, {(_cur.LastLoot.Value - _cur.Start).TotalSeconds:0} s, no Kinah, only the minimap saw it, its one table {(_cur.TableAt!.Value - _cur.Start).TotalSeconds:0} s after entry ({why}); not kept");
+            _cur = null; _byMinimap = false;
+            return;
+        }
         if (_cur?.LastLoot != null)
         {
+            NameIds(_cur);
             _done.Add(_cur);
             _unshared.Add(_cur);
             try { File.AppendAllText(PathOf, JsonSerializer.Serialize(_cur) + "\n"); } catch (Exception) { /* a read-only profile keeps it for this session */ }
@@ -626,6 +679,100 @@ public sealed class InstanceLog
         }
         else if (_cur != null) CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run closed with no loot, not kept: {_cur.Label} ({why})");
         _cur = null; _byMinimap = false;
+    }
+
+    // ---- run data rules (2026-10-24) ----
+
+    /// <summary>The false run's limits: shorter than this, and its one table this soon after entry.</summary>
+    public const double FalseRunSeconds = 60, FalseRunTableSeconds = 15;
+
+    /// <summary>
+    /// A false run: no Kinah, opened by the minimap and seen by nothing else (a run a split or a second table opened has
+    /// no witness and starts at its table, so it never counts as one), under <see cref="FalseRunSeconds"/> from entry to last loot,
+    /// and its only reward table read within <see cref="FalseRunTableSeconds"/> of entry. No expedition pays that soon:
+    /// it was another reward screen read as a table while the minimap already named the instance.
+    /// </summary>
+    public static bool FalseRun(InstanceRun r) =>
+        r.Kind != WorldBoss && r.Kinah == 0 && r.Tables == 1 && r.TableAt is DateTime ta && r.LastLoot is DateTime l
+        && (l - r.Start).TotalSeconds < FalseRunSeconds && (ta - r.Start).TotalSeconds <= FalseRunTableSeconds
+        && r.Witnesses.Length > 0 && r.Witnesses.Split(" · ", StringSplitOptions.RemoveEmptyEntries).All(w => w.StartsWith("minimap ", StringComparison.Ordinal));
+
+    Func<long, string?>? _nameOf;
+
+    /// <summary>
+    /// The item list the runs are named from: a closing run keeps the names of its synthetic ids (<see cref="InstanceRun.Names"/>),
+    /// and the names kept with the runs already loaded go back into the list, so "item -1222936757" never shows after a restart.
+    /// </summary>
+    public void UseNames(ItemDictionary items)
+    {
+        lock (_lock)
+        {
+            _nameOf = id => items.Get(id) is { } i ? i.Name : null;
+            foreach (var r in _done) foreach (var (id, name) in r.Names) items.Remember(id, name);
+        }
+    }
+
+    void NameIds(InstanceRun r)
+    {
+        if (_nameOf == null) return;
+        foreach (var id in r.Items.Keys.Concat(r.BoundItems.Keys).Concat(r.ChatItems.Keys))
+            if (id < 0 && !r.Names.ContainsKey(id) && _nameOf(id) is { Length: > 0 } n) r.Names[id] = n;
+    }
+
+    /// <summary>A zone's figures this many times its median are not one run.</summary>
+    public const double SeveralRunsFactor = 3;
+
+    /// <summary>
+    /// Marks the records loaded from instances.jsonl that can't count as they stand, in memory only (the file is never
+    /// rewritten for it): <see cref="InstanceRun.OldUnread"/> for a record with no FromPicture, no Ended and no witnesses;
+    /// "looks like several runs" for one over 3x its zone's median length, or over 3x its median Kinah while also over
+    /// 1.5x its median length (the 18:26 Oct 23 record: five Urugugu runs, 37:04 and 3,000,000 Kinah); "not a run" for a
+    /// record of a false run's shape (<see cref="FalseRun"/>). The median is taken over the zone's clean records, at
+    /// least three of them. Each newly marked record gets one line in reads.log, once ever (instances.flagged.txt).
+    /// </summary>
+    internal static List<(InstanceRun Run, string Why)> MarkOld(List<InstanceRun> runs)
+    {
+        var marked = new List<(InstanceRun, string)>();
+        foreach (var r in runs)
+        {
+            if (PictureOnly(r) && !r.FromPicture && r.Ended.Length == 0 && r.Witnesses.Length == 0 && !r.KinahUnknown)
+            { r.OldUnread = true; marked.Add((r, "a record from before the tracker kept its flags (chat-counted): Kinah not read")); }
+            if (r.FromPicture && FalseRun(r)) { r.Suspect = "not a run"; marked.Add((r, "not a run: no Kinah, only the minimap saw it, its one table moments after entry")); }
+        }
+        foreach (var zone in runs.Where(r => r.Kind != WorldBoss).GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase))
+        {
+            var clean = zone.Where(r => !r.OutOfAverages && r.LastLoot != null).ToList();
+            if (clean.Count < 3) continue;
+            double medSecs = Median(clean.Select(r => r.Seconds));
+            var paid = clean.Where(r => r.Kinah > 0).Select(r => (double)r.Kinah).ToList();
+            double medKinah = paid.Count >= 3 ? Median(paid) : 0;
+            foreach (var r in zone)
+            {
+                if (r.Suspect.Length > 0 || r.LastLoot == null) continue;
+                bool longRun = r.Seconds > SeveralRunsFactor * medSecs;
+                bool richRun = medKinah > 0 && r.Kinah > SeveralRunsFactor * medKinah && r.Seconds > 1.5 * medSecs;
+                if (!longRun && !richRun) continue;
+                r.Suspect = "looks like several runs";
+                marked.Add((r, $"looks like several runs: {TimeSpan.FromSeconds(r.Seconds):m\\:ss} and {r.Kinah:N0} Kinah against the zone's median {TimeSpan.FromSeconds(medSecs):m\\:ss}" + (medKinah > 0 ? $" and {medKinah:N0}" : "")));
+            }
+        }
+        return marked;
+    }
+
+    static double Median(IEnumerable<double> xs)
+    {
+        var l = xs.OrderBy(x => x).ToList();
+        if (l.Count == 0) return 0;
+        return l.Count % 2 == 1 ? l[l.Count / 2] : (l[l.Count / 2 - 1] + l[l.Count / 2]) / 2;
+    }
+
+    /// <summary>
+    /// The open run, when it is one: it has loot or a reward table and hasn't closed. A run just opened by a split or a
+    /// second table, with nothing in it yet, is not in progress (the card said "in progress" while the player stood in town).
+    /// </summary>
+    public string? InProgress
+    {
+        get { lock (_lock) return _cur is { } c && (c.LastLoot != null || c.PaidAt != null || c.Tables > 0) ? c.Zone : null; }
     }
 
     /// <summary>Every kept run plus the open one when it has loot, oldest first.</summary>
@@ -858,5 +1005,23 @@ public sealed class InstanceLog
                 if (line.Length > 2 && JsonSerializer.Deserialize<InstanceRun>(line) is { } r && r.LastLoot != null) { r.FileUnderFamily(); _done.Add(r); if (r.Unsent) _parked.Add(r); }
         }
         catch (Exception) { /* a damaged history starts over; the file is kept for a look */ }
+        // old records that can't count as they stand: marked in memory, said once ever in reads.log, never rewritten
+        try
+        {
+            var marked = MarkOld(_done);
+            if (marked.Count == 0) return;
+            var seenPath = PathOf.Replace(".jsonl", ".flagged.txt");
+            var seen = File.Exists(seenPath) ? File.ReadAllLines(seenPath).ToHashSet() : new HashSet<string>();
+            var fresh = new List<string>();
+            foreach (var (r, why) in marked)
+            {
+                var key = $"{r.Start.ToUniversalTime():O}|{r.Zone}|{why.Split(':')[0]}";
+                if (!seen.Add(key)) continue;
+                fresh.Add(key);
+                CrashLog.Note($"old run record: {r.Label} {r.Start.ToLocalTime():MMM d HH:mm:ss}: {why}; left out of the averages (kept as it is in instances.jsonl)");
+            }
+            if (fresh.Count > 0) File.AppendAllLines(seenPath, fresh);
+        }
+        catch (Exception) { /* the marks still hold for this session */ }
     }
 }
