@@ -125,6 +125,44 @@ public static class ReplayBank
             d.Insert(0, $"table score: {right} of {et.Count} slots right");
             if (right == et.Count && gt.Count == et.Count) d.RemoveAt(0);
         }
+        // an event's reward cards, card by card: received or not; a received card's list slot by slot like a table (a
+        // "hidden" slot is one the screen only ever showed cut by the card's window: it must stay not read), and "more" when
+        // the list may run on past what the screen showed
+        if (expect["cards"] is JsonArray ec)
+        {
+            var gc = got["cards"] as JsonArray ?? new JsonArray();
+            if (gc.Count != ec.Count) d.Add($"cards: expected {ec.Count}, read {gc.Count}");
+            int right = 0, total = 0;
+            for (int ci = 0; ci < Math.Min(gc.Count, ec.Count); ci++)
+            {
+                var e = ec[ci]!.AsObject(); var g = gc[ci]!.AsObject();
+                bool erc = e["received"]?.GetValue<bool>() ?? false, grc = g["received"]?.GetValue<bool>() ?? false;
+                if (erc != grc) { d.Add($"card {ci + 1}: expected {(erc ? "received" : "not received")}, read {(grc ? "received" : "not received")}"); continue; }
+                if (!erc) continue;
+                if (e["more"] is { } em && em.GetValue<bool>() != (g["more"]?.GetValue<bool>() ?? false)) d.Add($"card {ci + 1}: expected its list {(em.GetValue<bool>() ? "to run on past the screen" : "seen to its end")}");
+                var es = e["slots"] as JsonArray ?? new JsonArray(); var gs = g["slots"] as JsonArray ?? new JsonArray();
+                if (es.Count != gs.Count) d.Add($"card {ci + 1}: expected {es.Count} slots, read {gs.Count}");
+                for (int i = 0; i < Math.Min(es.Count, gs.Count); i++)
+                {
+                    total++;
+                    var x = es[i]!.AsObject(); var y = gs[i]!.AsObject();
+                    string gname = y["name"]?.GetValue<string>() ?? "?";
+                    string? ename = x["name"]?.GetValue<string>();
+                    bool hidden = x["hidden"]?.GetValue<bool>() ?? false, unlisted = x["unlisted"]?.GetValue<bool>() ?? false;
+                    var miss = new List<string>();
+                    if (hidden) { if (gname != "?" || N(y["n"]) > 0) miss.Add($"read {gname} x{y["n"]}, but the screen only showed it cut"); }
+                    else
+                    {
+                        if (N(x["n"]) != N(y["n"])) miss.Add($"count {y["n"]}, expected {x["n"]}");
+                        if (unlisted && gname != "?") miss.Add($"named {gname}, but the item list lacks it");
+                        else if (ename != null && !unlisted && !gname.Equals(ename, StringComparison.OrdinalIgnoreCase)) miss.Add(gname == "?" ? $"not read, expected {ename}" : $"named {gname}, expected {ename}");
+                    }
+                    if (miss.Count == 0) right++;
+                    else d.Add($"card {ci + 1} slot {i + 1} ({y["grade"]}, {y["icon"]}): {string.Join("; ", miss)}");
+                }
+            }
+            if (right < total || d.Any(x => x.StartsWith("card"))) d.Insert(0, $"cards score: {right} of {total} slots right");
+        }
         if (expect["items"] is JsonObject ei)
         {
             var gi = got["items"] as JsonObject ?? new JsonObject();
@@ -160,6 +198,7 @@ public static class ReplayBank
         var panel = new CraftPanelTracker();
         int ok = 0, fail = 0;
         JsonArray? table = null;
+        bool cards = false; JsonArray? res0Cards = null;
         DateTime last = DateTime.UtcNow;
         // a text case: the reads as trace.log keeps them (chat lines, loot list rows), and the zone as the minimap read it
         if (node["trace"]?.GetValue<string>() is { } traceFile)
@@ -214,6 +253,20 @@ public static class ReplayBank
                 var s = CraftPanel.Measure(bmp, new Rectangle(at, bmp.Size), game);
                 if (panel.Feed(t, s) is { } o) { if (o.Ok) ok++; else fail++; }
             }
+            else if (f["k"]!.GetValue<string>() == "cards")
+            {
+                // an event's reward screen: the picture is the game window. The run is open (the case's "zone"), the title is
+                // read as RewardGridDue reads it, and the frames of one case are one screen, read in turn and filed at the end
+                if (!cards && node["zone"]?.GetValue<string>() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t.AddMinutes(-5)); }
+                cards = true;
+                var band = new Rectangle(bmp.Width / 4, 0, bmp.Width / 2, bmp.Height / 3);
+                using var bandBmp = bmp.Clone(band, bmp.PixelFormat);
+                var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1)).GetAwaiter().GetResult();
+                bool up = lines.Any(l => TrackerSession.IsEventCardsUp(l.Text));
+                Console.WriteLine($"  cards band: " + string.Join(" | ", lines.Select(l => l.Text)) + (up ? "" : " -- no \"sent to your cube\" line"));
+                session.Instances.EventRewardScreen(t);
+                if (up) Task.Run(() => session.EventCardsRead(bmp, t)).GetAwaiter().GetResult();
+            }
             else if (f["k"]!.GetValue<string>() == "table")
             {
                 // an expedition's reward table: the picture is the game window; read as RewardGridDue reads it, each slot named
@@ -264,6 +317,30 @@ public static class ReplayBank
             }
             last = t;
         }
+        if (cards)
+        {
+            session.FlushEventCards(last.AddSeconds(5), "the case ended", force: true);
+            var outCards = new JsonArray();
+            foreach (var (ci, rec, sl, more) in session.LastEventCards ?? new())
+            {
+                var c = new JsonObject { ["received"] = rec };
+                if (rec)
+                {
+                    var arr = new JsonArray();
+                    var prefer = TrackerSession.SetMates(sl, TrackerSession.ByIcon(items));
+                    foreach (var x in sl)
+                        arr.Add(new JsonObject
+                        {
+                            ["n"] = x.Count, ["grade"] = x.Grade, ["name"] = TrackerSession.SlotName(items, x, prefer) ?? "?",
+                            ["icon"] = x.Icons.Count > 0 ? $"{x.Icons[0].Key} {x.Icons[0].Distance:0}" + (x.Icons.Count > 1 ? $" / {x.Icons[1].Key} {x.Icons[1].Distance:0}" : "") : "none",
+                        });
+                    c["slots"] = arr; c["more"] = more;
+                    for (int i = 0; i < arr.Count; i++) Console.WriteLine($"  card {ci + 1} slot {i + 1,2} {arr[i]!["grade"]} x{arr[i]!["n"]}: {arr[i]!["name"]} · {arr[i]!["icon"]} · same grade: {string.Join(" | ", TrackerSession.GradedCandidates(items, sl[i]).Take(3).Select(g => $"{g.Names} ({g.Key} {g.Distance:0})"))}");
+                }
+                outCards.Add(c);
+            }
+            res0Cards = outCards;
+        }
         // rows still waiting for a chat line that never comes are settled the way a live run settles them: later reads
         foreach (var dt in new[] { 2.0, 5.0, 9.0 }) session.ProcessList(new List<(int, string)>(), last.AddSeconds(dt));
         ChatLatencies.AddRange(session.Voter.Latencies); ChatFast += session.Voter.Fast;
@@ -274,6 +351,7 @@ public static class ReplayBank
         foreach (var (id, n) in e.Items.OrderBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal)) outItems[items.NameOf(id)] = n;
         var res = new JsonObject { ["craft_ok"] = ok, ["craft_fail"] = fail, ["items"] = outItems };
         if (table != null) res["table"] = table;
+        if (res0Cards != null) res["cards"] = res0Cards;
         if (e.Totals().Kinah > 0) res["kinah"] = e.Totals().Kinah;
         // Soul Crystals from kills and the kills counted, for the cases about them (2026-10-23)
         if (e.PetCrystals > 0) res["pets"] = e.PetCrystals;

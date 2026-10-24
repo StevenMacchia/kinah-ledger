@@ -1,0 +1,241 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Hidden Lugi (Shugo Festival) reward cards, 2026-10-24 13:06:55 to 13:07:00, four pictures of one screen: cards 1 to 3 received (14, 12 and 19 slots, 45 in all), 4 and 5 not; card 1 never scrolled, so its last row stays cut by the card's window (two slots not read); card 3 scrolled by the player before 13:07:00, so its last four slots show only in the last picture; a tooltip over card 2 in the second. Abyss Points 440 + 480 + 800 + 360 = 2,080, the counter's rise in the footage (kinah-bench compare-130149.md). Everything but the title and the cards blacked out",
+  "source": "%LocalAppData%\\KinahLedger\\reward-shots\\20261024-130655, -130657, -130659, -130700-Hidden-Lugi-event-rewards.jpg (5120x2160); truth from the pictures, the footage run-20261024-130148.mkv and the reward chat lines printed after (Soul Codex x3, Refining Stone x6, Odyle x7, Fine Odyle x2, Resurrection Spiritstone); gear slots carry no name (one icon, two names at one grade)",
+  "game": {
+    "w": 5120,
+    "h": 2160
+  },
+  "zone": "Hidden Lugi",
+  "frames": [
+    {
+      "f": "130655.jpg",
+      "k": "cards",
+      "t": "2026-10-24T17:06:55Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "130657.jpg",
+      "k": "cards",
+      "t": "2026-10-24T17:06:57Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "130659.jpg",
+      "k": "cards",
+      "t": "2026-10-24T17:06:59Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "130700.jpg",
+      "k": "cards",
+      "t": "2026-10-24T17:07:00Z",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "expect": {
+    "cards": [
+      {
+        "received": true,
+        "more": false,
+        "slots": [
+          {
+            "n": 1
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 440,
+            "name": "Abyss Points"
+          },
+          {
+            "n": 20,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 30,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 700,
+            "name": "Enhance Stone"
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Resurrection Spiritstone"
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          },
+          {
+            "n": 0,
+            "hidden": true
+          },
+          {
+            "n": 0,
+            "hidden": true
+          }
+        ]
+      },
+      {
+        "received": true,
+        "more": false,
+        "slots": [
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Fine Odyle"
+          },
+          {
+            "n": 480,
+            "name": "Abyss Points"
+          },
+          {
+            "n": 30,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 20,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 700,
+            "name": "Enhance Stone"
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          }
+        ]
+      },
+      {
+        "received": true,
+        "more": false,
+        "slots": [
+          {
+            "n": 1
+          },
+          {
+            "n": 800,
+            "name": "Abyss Points"
+          },
+          {
+            "n": 40,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 1100,
+            "name": "Enhance Stone"
+          },
+          {
+            "n": 1,
+            "name": "Soul Codex"
+          },
+          {
+            "n": 1,
+            "name": "Soul Codex"
+          },
+          {
+            "n": 1,
+            "name": "Soul Codex"
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Fine Odyle"
+          },
+          {
+            "n": 360,
+            "name": "Abyss Points"
+          },
+          {
+            "n": 30,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 20,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 700,
+            "name": "Enhance Stone"
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          }
+        ]
+      },
+      {
+        "received": false
+      },
+      {
+        "received": false
+      }
+    ],
+    "runs": {
+      "Shugo Festival": 5487
+    }
+  }
+}

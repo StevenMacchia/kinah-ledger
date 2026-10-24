@@ -3195,6 +3195,92 @@ options: --process aion[,other]");
                 Check("...and nothing from the chat uploads", $"{epay?[0].items.Count ?? 0}", "0");
                 Check("an event's reward screen by its words", $"{TrackerSession.IsEventRewardTitle("Rewards have been sent to your cube.")} {TrackerSession.IsEventRewardTitle("Can select 0 time(s)")} {TrackerSession.IsEventRewardTitle("Reward collected.")}", "True True False");
                 Check("kept pictures by kind", string.Join(" ", new[] { "x-reward-table.jpg", "x-event-rewards.jpg", "x-Quna-Shop.jpg", "x-in-run.jpg", "x-Daeva-Pass.jpg" }.Select(n => TrackerSession.KindOfShot(n).ToString())), "RunEnd RunEnd Shop Frequent Screen");
+                // the event reward cards (Ocr/EventCards.cs), on a drawn 5120x2160 screen with Hidden Lugi's geometry: five frames,
+                // received ones blue with the card icon's cyan "1", the others gold; slots three to a row in each card's window
+                System.Drawing.Bitmap DrawCards(bool[] received, int[] slots, int cards = 5, bool[]? noOne = null)
+                {
+                    var b = new System.Drawing.Bitmap(5120, 2160, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using var g = System.Drawing.Graphics.FromImage(b);
+                    g.Clear(System.Drawing.Color.FromArgb(6, 8, 12));
+                    void Fill(int x, int y, int w, int h, int r, int gg, int bb) { using var br = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(r, gg, bb)); g.FillRectangle(br, x, y, w, h); }
+                    var rng = new Random(7);
+                    for (int i = 0; i < cards; i++)
+                    {
+                        int l = 2560 + (int)Math.Round(-1355.25 + i * 556.5), r = l + 484;
+                        bool rec = received[i];
+                        Fill(l, 616, 484, 1000, rec ? 10 : 8, rec ? 20 : 12, rec ? 40 : 19);
+                        Fill(l, 615, 484, 6, rec ? 240 : 170, rec ? 240 : 152, rec ? 250 : 113);
+                        Fill(l, 620, 4, 990, rec ? 184 : 133, rec ? 222 : 131, rec ? 222 : 121); Fill(r - 3, 620, 4, 990, rec ? 184 : 133, rec ? 222 : 131, rec ? 222 : 121);
+                        if (rec && noOne?[i] != true) Fill(l + 415, 616 + 111, 22, 35, 40, 230, 240);
+                        for (int n = 0; n < slots[i]; n++)
+                        {
+                            int x = l + 32 + (n % 3) * 144, y = 787 + (n / 3) * 146;
+                            if (y >= 1482) break;
+                            int h = Math.Min(135, 1482 - y);
+                            Fill(x, y, 133, h, 37, 37, 39); Fill(x + 3, y + 3, 127, Math.Max(0, h - 6), 27, 27, 27);
+                            // a little art, no count (an item the list doesn't have)
+                            for (int k = 0; k < 6; k++) Fill(x + 20 + rng.Next(80), y + 20 + rng.Next(Math.Max(1, Math.Min(80, h - 40))), 14, 14, 60 + rng.Next(120), 40 + rng.Next(100), 30 + rng.Next(90));
+                        }
+                    }
+                    // the rows under the window's lower edge are hidden, as the game hides them
+                    for (int i = 0; i < cards; i++) { int l = 2560 + (int)Math.Round(-1355.25 + i * 556.5); Fill(l + 4, 1482, 476, 120, received[i] ? 10 : 8, received[i] ? 20 : 12, received[i] ? 40 : 19); }
+                    return b;
+                }
+                string Kinds(EventCards.Screen? sc) => sc == null ? "none" : string.Join(" ", sc.Cards.Select(c => c.Received ? "R" : "N"));
+                using (var cardsShot = DrawCards(new[] { true, true, true, false, false }, new[] { 4, 15, 0, 6, 6 }))
+                {
+                    Check("event cards: received (blue, card icon) and not (gold)", Kinds(EventCards.Locate(cardsShot, out _)), "R R R N N");
+                    Check("event cards: found by their frames alone", $"{EventCards.LooksLikeCards(cardsShot)}", "True");
+                    var (sc, _) = EventCards.ReadAsync(cardsShot).GetAwaiter().GetResult();
+                    string Card(int i) { var c = sc!.Cards[i]; return $"{c.Slots.Count(x => !x.Clipped)}+{c.Slots.Count(x => x.Clipped)}{(c.End ? " end" : "")}"; }
+                    Check("event cards: slots in each window (full + cut), and where a list's end shows", $"{Card(0)} | {Card(1)} | face up {sc!.FaceUp}", "4+0 end | 12+3 | face up False");
+                }
+                using (var faceDown = DrawCards(new[] { true, true, true, false, false }, new[] { 0, 0, 0, 0, 0 }))
+                    Check("event cards: face down (the pick) isn't read", $"{EventCards.ReadAsync(faceDown).GetAwaiter().GetResult().Screen?.FaceUp}", "False");
+                using (var four = DrawCards(new[] { true, true, true, false, false }, new[] { 3, 3, 3, 0, 0 }, cards: 4))
+                {
+                    var none4 = EventCards.Locate(four, out var why4);
+                    Check("event cards: four cards is a layout not recognised", $"{Kinds(none4)} | {why4.StartsWith("card 5's frame")}", "none | True");
+                }
+                using (var mixed = DrawCards(new[] { true, true, true, false, false }, new[] { 3, 3, 3, 0, 0 }, noOne: new[] { false, true, false, false, false }))
+                    Check("event cards: a blue frame without the card icon's 1 is not recognised", $"{Kinds(EventCards.Locate(mixed, out var whyM))} | {whyM.Contains("card 2")}", "none | True");
+                using (var black = new System.Drawing.Bitmap(5120, 2160))
+                    Check("event cards: a black frame is no cards", $"{EventCards.LooksLikeCards(black)}", "False");
+                // a list longer than its window, scrolled by the player between reads: placed by its slots, every place once
+                {
+                    RewardGrid.Slot Sl(int k) => new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "1", 1, new() { ($"key{k}", 30.0), ("Other", 99.0) });
+                    EventCards.Card CardOf(int firstTop, bool scrolled, bool end, IEnumerable<(int Row, int Col, int K, bool Cut)> sl) =>
+                        new(0, new System.Drawing.Rectangle(0, 0, 10, 10), true, firstTop, scrolled, sl.Select(x => new EventCards.CardSlot(x.Row, x.Col, x.Cut ? Sl(-1) with { Count = 0, Icons = new() } : Sl(x.K), x.Cut)).ToList(), end, false, 1);
+                    EventCards.Screen ScreenOf(EventCards.Card c) => new(new List<EventCards.Card> { c }.Concat(Enumerable.Range(1, 4).Select(i => new EventCards.Card(i, default, false, 0, false, new(), false, false, 0))).ToList());
+                    var mg = new EventCards.Merger(70);
+                    using var dummy = new System.Drawing.Bitmap(20, 20);
+                    // unscrolled: rows 0 to 3 full (places 0 to 11), row 4 cut
+                    mg.Add(ScreenOf(CardOf(787, false, false, Enumerable.Range(0, 12).Select(n => (n / 3, n % 3, n, false)).Concat(new[] { (4, 0, -1, true), (4, 1, -1, true), (4, 2, -1, true) }))), dummy);
+                    // scrolled a row and a bit: a cut row 0, then rows 1 to 4 = places 6 to 16 (17 in all, the last row two), the end showing
+                    mg.Add(ScreenOf(CardOf(700, true, true, new[] { (0, 0, -1, true), (0, 1, -1, true), (0, 2, -1, true) }.Concat(Enumerable.Range(6, 11).Select(n => (n / 3 - 1, n % 3, n, false))))), dummy);
+                    var mvoted = mg.Voted(0);
+                    Check("event cards: a scrolled read placed by its slots, the list put together",
+                        $"{mvoted.Count} {string.Join(",", mvoted.Select(v => v.Icons.Count > 0 ? v.Icons[0].Key.Replace("key", "") : "?"))} complete {mg.Complete} unplaced {mg.Unaligned}",
+                        "17 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 complete True unplaced 0");
+                    // a scrolled read that agrees with nothing it holds is left out, never guessed into place
+                    mg.Add(ScreenOf(CardOf(700, true, false, Enumerable.Range(0, 6).Select(n => (n / 3 + 1, n % 3, 100 + n, false)))), dummy);
+                    Check("event cards: a scrolled read that fits nowhere is left out", $"{mg.Voted(0).Count} unplaced {mg.Unaligned}", "17 unplaced 1");
+                }
+                // the unknown-item path: received cards whose slots the item list can't name are filed as unknown items with the
+                // run's rewards, never dropped and never guessed; a list running past the window adds a place not read and leaves
+                // the run's Kinah unknown; a card not received isn't counted
+                {
+                    var es = new TrackerSession(null, new Settings(), items, "Test"); var e0 = DateTime.UtcNow;
+                    es.Engine.SetZone("Hidden Lugi"); es.Instances.Zone("Hidden Lugi", e0.AddMinutes(-5));
+                    using var shot = DrawCards(new[] { true, true, false, false, false }, new[] { 4, 15, 6, 6, 6 });
+                    es.EventCardsRead(shot, e0).GetAwaiter().GetResult();
+                    es.EventCardsRead(shot, e0.AddSeconds(1)).GetAwaiter().GetResult();
+                    es.FlushEventCards(e0.AddSeconds(5), "the screen closed", force: true);
+                    var er2 = es.Instances.CurrentRun;
+                    Check("event cards: unknown slots filed as unknown items, the cut ones too, the open list marked",
+                        $"{string.Join(" ", (es.LastEventCards ?? new()).Select(c => c.Received ? $"R{c.Slots.Count}{(c.More ? "+" : "")}" : "N"))} | items {er2?.Items.Count} | unread {er2?.SlotsUnread} | unknown {er2?.UnknownSlots.Count} more {er2?.UnknownSlots.Count(u => u.Contains("more below"))} | from picture {er2?.FromPicture} | Kinah unknown {er2?.KinahUnknown}",
+                        "R4 R15+ N N N | items 0 | unread 20 | unknown 20 more 1 | from picture True | Kinah unknown True");
+                }
                 var ft = new TrackerSession(null, new Settings(), items, "Test"); var ft0 = DateTime.UtcNow;
                 ft.Engine.SetZone("Ellun River Midstream"); ft.ZoneView.SetZone("Ellun River Midstream");
                 ft.ProcessChat(new List<string> { "[x] a" }, ft0);

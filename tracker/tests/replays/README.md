@@ -39,3 +39,8 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   line, a soul picked 4.5 s after its kill, and a row behind a full-screen window back 6 s later. Each pass reads the list,
   then the chat. A `list` read may carry `h` (each row's icon hash, hex), as trace.log writes it since then; a `cover`
   read is a pass that skips the list (a window over it). `KL_BANK_KEEP=1` keeps each case's reads.log.
+- `event-*`: an event's reward cards (`Ocr/EventCards.cs`), several pictures of one screen (`"k": "cards"`, the game
+  window, everything but the title and the cards blacked out), with the run open in the case's `zone`. `expect.cards`
+  lists the five cards: `received`, and for a received one `slots` in list order (`n`, `name` when the truth knows it,
+  `hidden` for a slot the screen only showed cut by the card's window, which must stay not read) and `more` (its list
+  may run past what the screen showed).
