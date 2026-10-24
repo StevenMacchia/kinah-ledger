@@ -66,6 +66,44 @@ public sealed class ReportBuffer
         lock (_lock) { _counted.Add((at, what, via, where)); Trim(at); }
     }
 
+    // ---- kept past the minute around a thing to check (AccuracyScore), so its Report finds what was read then ----
+    public const double PinBefore = 8, PinAfter = 4;
+    public const long MaxPinnedBytes = 40L * 1024 * 1024;
+    readonly List<Shot> _pinShots = new();
+    readonly List<(DateTime At, string Kind, string[] Lines)> _pinReads = new();
+    readonly List<(DateTime At, string What, string Via, string Where)> _pinCounted = new();
+    long _pinBytes;
+
+    /// <summary>
+    /// Keeps what is held from <see cref="PinBefore"/> s before <paramref name="at"/> to <see cref="PinAfter"/> s after it
+    /// for the rest of the session (pictures within <see cref="MaxPinnedBytes"/>, oldest let go first): a thing to check is
+    /// found a few seconds after its moment, and the player may press Report on it minutes later.
+    /// </summary>
+    public void Pin(DateTime at)
+    {
+        lock (_lock)
+        {
+            bool In(DateTime t) => t >= at.AddSeconds(-PinBefore) && t <= at.AddSeconds(PinAfter);
+            foreach (var s in _shots.Where(s => In(s.At) && !_pinShots.Contains(s))) { _pinShots.Add(s); _pinBytes += s.Png.Length; }
+            foreach (var r in _reads.Where(r => In(r.At) && !_pinReads.Contains(r))) _pinReads.Add(r);
+            foreach (var c in _counted.Where(c => In(c.At) && !_pinCounted.Contains(c))) _pinCounted.Add(c);
+            _pinShots.Sort((a, b) => a.At.CompareTo(b.At));
+            while (_pinShots.Count > 0 && _pinBytes > MaxPinnedBytes) { _pinBytes -= _pinShots[0].Png.Length; _pinShots.RemoveAt(0); }
+            if (_pinReads.Count > 5000) _pinReads.RemoveRange(0, _pinReads.Count - 5000);
+            if (_pinCounted.Count > 5000) _pinCounted.RemoveRange(0, _pinCounted.Count - 5000);
+        }
+    }
+
+    /// <summary>What was kept around a moment: pictures, reads, pickups (the tests; a Report's folder).</summary>
+    public (int Pictures, int Reads, int Counted) PinnedAround(DateTime at)
+    {
+        lock (_lock)
+        {
+            bool In(DateTime t) => t >= at.AddSeconds(-PinBefore) && t <= at.AddSeconds(PinAfter);
+            return (_pinShots.Count(s => In(s.At)), _pinReads.Count(r => In(r.At)), _pinCounted.Count(c => In(c.At)));
+        }
+    }
+
     /// <summary>How much is held now: pictures, reads, pickups.</summary>
     public (int Pictures, int Reads, int Counted) Held { get { lock (_lock) return (_shots.Count, _reads.Count, _counted.Count); } }
 
@@ -81,10 +119,21 @@ public sealed class ReportBuffer
     /// Saves what is held to a new folder under <paramref name="root"/>/reports and returns it. <paramref name="summary"/>
     /// is the tracker's state in words; <paramref name="logTail"/> the end of reads.log.
     /// </summary>
-    public string Write(string root, string summary, IEnumerable<string> logTail, DateTime now)
+    /// <param name="focus">A thing to check's moment (AccuracyScore.Check.Handle): what was kept around it goes in too, however long ago.</param>
+    public string Write(string root, string summary, IEnumerable<string> logTail, DateTime now, DateTime? focus = null)
     {
         List<Shot> shots; List<(DateTime At, string Kind, string[] Lines)> reads; List<(DateTime At, string What, string Via, string Where)> counted;
-        lock (_lock) { Trim(now); shots = _shots.ToList(); reads = _reads.ToList(); counted = _counted.ToList(); }
+        lock (_lock)
+        {
+            Trim(now); shots = _shots.ToList(); reads = _reads.ToList(); counted = _counted.ToList();
+            if (focus is DateTime f)
+            {
+                bool In(DateTime t) => t >= f.AddSeconds(-PinBefore) && t <= f.AddSeconds(PinAfter);
+                shots = _pinShots.Where(s => In(s.At)).Concat(shots).Distinct().OrderBy(s => s.At).ToList();
+                reads = _pinReads.Where(r => In(r.At)).Concat(reads).Distinct().OrderBy(r => r.At).ToList();
+                counted = _pinCounted.Where(c => In(c.At)).Concat(counted).Distinct().OrderBy(c => c.At).ToList();
+            }
+        }
         var dir = Path.Combine(root, "reports", now.ToLocalTime().ToString("yyyyMMdd-HHmmss"));
         for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(root, "reports", now.ToLocalTime().ToString("yyyyMMdd-HHmmss") + "-" + i);
         Directory.CreateDirectory(dir);

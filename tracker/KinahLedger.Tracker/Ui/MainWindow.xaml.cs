@@ -310,9 +310,10 @@ public partial class MainWindow : Window
     void Redraw()
     {
         var e = Shown();
-        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); return; }   // a layout render keeps its sample
+        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); return; }   // a layout render keeps its sample
         if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; SummaryCard.Visibility = Visibility.Collapsed; }
         FillLive();
+        FillAccuracyCard();
     }
 
     /// <summary>One line of the recent pickups strip; Tip says, in plain words, how it was read (on hover).</summary>
@@ -565,6 +566,7 @@ public partial class MainWindow : Window
         if (_prefs.Hud && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
         if (_part == "Crafting") FillCraft(chat?.CraftView);
         FillLive();
+        FillAccuracyCard();
         AlertTick();
         PriceAlertTick();
         UpdateHud();
@@ -580,6 +582,7 @@ public partial class MainWindow : Window
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
         _hud.Update(_hudValues);
+        _hud.SetAccuracy(_accView?.Hud, _accView?.HasRows == true);
     }
 
     /// <summary>The panel's figures, for layout renders of the panel.</summary>
@@ -1581,8 +1584,10 @@ public partial class MainWindow : Window
         _tableWhat = "this run";
         if (_mode == Mode.Open) _extraOpen = "Mob";   // the mock opens Kinah by enemy in place
         _demoEngine = e; _demoElapsed = TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17);
+        LoadAccuracyDemo();
         FillNumbers(e, _demoElapsed);
         FillLive();
+        FillAccuracyCard();
         _hudValues["last"] = "Spiritstone ×1";
         using (var b = new System.Drawing.Bitmap(480, 203))
         using (var g = System.Drawing.Graphics.FromImage(b))
