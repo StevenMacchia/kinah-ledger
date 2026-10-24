@@ -703,11 +703,12 @@ public sealed class TrackerSession
                     await Times.Time("list", () => LootGated(listRead, listGate));
                     if (!off.Off("reward_grid") && Runs("reward_grid")) await Times.Time("grid", RewardGridDue);
                     Times.Time("anchors", AnchorsDue);
-                    _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    NotePass((DateTime.UtcNow - p0).TotalMilliseconds);
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
                     Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
                     // the game is read, but not its chat: chat-not-found time for the health numbers
                     reading = true; Accuracy.AddChatLost((DateTime.UtcNow - t0).TotalSeconds);
+                    Audit();
                 }
                 // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
                 else if (Cover(Region.Value) is { } cover)
@@ -738,7 +739,7 @@ public sealed class TrackerSession
                     if (!off.Off("nameplates") && Runs("nameplates")) await Times.Time("nameplates", PlatesDue);
                     if (Runs("header")) await Times.Time("header", HeaderDue);
                     Times.Time("anchors", AnchorsDue);
-                    _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
+                    NotePass((DateTime.UtcNow - p0).TotalMilliseconds);
                     // the loot list's part in the health numbers: pickups only it saw, and rows that matched a chat line
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
                     Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
@@ -904,8 +905,14 @@ public sealed class TrackerSession
                 // around the chat's anchor once it has held still (layout.anchor.chat), else the whole bottom-left quarter
                 var near = Anchors.ChatCrop.Crop(g.Value, Update.RemoteConfig.Current.AnchorChat);
                 var (again, note) = await ChatLocator.DetectAsync(g.Value, near);
-                // not there: the anchor is gone, and the next look takes the whole quarter again
-                if (again == null && near != null) Anchors.ChatCrop.Missing(g.Value, "the chat wasn't found around its anchor");
+                // not there: the whole quarter for this one look, the lock kept (2026-10-24: one miss dropped it and the next
+                // pass took it again, 13:07:23 to 13:07:41, the chat on screen throughout). Only a miss in the whole quarter
+                // too counts against the anchor; found elsewhere, the next sighting moves it (AnchoredCrop drops it then)
+                if (again == null && near != null)
+                {
+                    (again, note) = await ChatLocator.DetectAsync(g.Value);
+                    if (again == null) Anchors.ChatCrop.Missing(g.Value, "the chat wasn't found around its anchor or in the corner");
+                }
                 if (again != null && again != Region) { Region = again; _reader = NewReader(again.Value); _anchor = g; DetectNote = "re-found: " + note; ReportLayout(); }
                 _chatLost = again == null;
             }
@@ -1561,7 +1568,7 @@ public sealed class TrackerSession
         try
         {
             var now = DateTime.UtcNow;
-            if (GameRect is not { } g || ZoneLocator.KindOf(Zone) is not ("Expedition" or "Event")) { _gridDone = false; return; }
+            if (GameRect is not { } g || ZoneLocator.KindOf(Zone) is not ("Expedition" or "Event")) { _gridDone = false; FlushEventCards(now, "the event was left"); return; }
             if ((now - _gridAt).TotalSeconds < 1) return;
             _gridAt = now;
             if (Cover(g) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
@@ -1572,18 +1579,32 @@ public sealed class TrackerSession
             var rc = lines.FirstOrDefault(l => IsRewardCollected(l.Text));
             // an event's reward screen (Shugo Festival "Jump Jump": "Rewards have been sent to your cube.", "Can select 0 time(s)",
             // five cards, the received ones bright with a card icon): its rewards are the run's and come from this picture,
-            // never the chat. Until its cards can be read, the picture is kept (a few, a second or two apart) and the run's
-            // rewards stay not read (Steven, 2026-10-23)
-            if (rc == null && lines.Any(l => IsEventRewardTitle(l.Text)))
+            // never the chat (Steven, 2026-10-23). The picture is kept (a few, a second or two apart), and once the cards are
+            // face up ("sent to your cube") they are read (EventCards); a layout the reader doesn't know leaves the run's
+            // rewards not read, as before
+            // the cards' own frames count too: a banner over the title (the Daeva Pass's, 2026-10-24) must not hide the screen
+            bool titled = rc == null && lines.Any(l => IsEventRewardTitle(l.Text));
+            bool framed = false;
+            if (rc == null && !titled && ZoneLocator.KindOf(Zone) == "Event" && (now - _cardsProbeAt).TotalSeconds >= 2)
             {
-                if (!_eventScreenUp) { _eventScreenUp = true; _eventShots = 0; CrashLog.Note("event reward screen up: its cards are the run's rewards (kept as pictures until they can be read)"); }
+                // a quick look every 2 s, every read while they show
+                framed = EventCards.LooksLikeCards(frame) && EventCards.Locate(frame, out _) != null;
+                _cardsProbeAt = framed ? DateTime.MinValue : now;
+            }
+            if (titled || framed)
+            {
+                if (!_eventScreenUp) { _eventScreenUp = true; _eventShots = 0; CrashLog.Note("event reward screen up: its cards are the run's rewards"); }
                 _eventScreenAt = now;
                 Instances.EventRewardScreen(now);
                 RewardScreenSeen(now);
                 if (_eventShots < 6 && (now - _eventShotAt).TotalSeconds >= 1.5) { _eventShotAt = now; _eventShots++; SaveShot(frame, "event-rewards"); }
+                if (framed && !_cardsByFrames) { _cardsByFrames = true; CrashLog.Note("event cards: found by their frames (the screen's title wasn't read)"); }
+                // read once turned face up: "sent to your cube", or, found by the frames alone, slots on every received card
+                if (framed || lines.Any(l => IsEventCardsUp(l.Text))) await EventCardsRead(frame, now);
                 return;
             }
             _eventScreenUp = false;
+            FlushEventCards(now, "the screen closed");
             if (rc == null) { if ((now - _gridSeenAt).TotalSeconds > 5) _gridDone = false; return; }
             _gridSeenAt = now;
             RewardScreenSeen(now);
@@ -1731,14 +1752,14 @@ public sealed class TrackerSession
         return _byIconAll;
     }
 
-    internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
+    internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now, IReadOnlyList<string>? moreNotRead = null, bool kinahHidden = false, string what = "reward table")
     {
         // a read of one slot or none, with nothing on it surely matched, is no reward table (2026-10-23 21:12:30: a Daeva Pass
         // screen read 11 times, 0 to 1 slot): it can't start, split or pay a run. A lone coin (a K or M count) still counts
         if (slots.Count <= 1 && !slots.Any(s => (s.Icons.Count > 0 && s.Icons[0].Distance <= GridSureDistance)
                                                || (s.Count >= 1000 && System.Text.RegularExpressions.Regex.IsMatch(s.CountText ?? "", "[KkMm]"))))
         {
-            if (slots.Count > 0) CrashLog.Note("reward table: one slot, nothing on it surely matched; not a reward table, the run is left as it was");
+            if (slots.Count > 0) CrashLog.Note($"{what}: one slot, nothing on it surely matched; not a reward table, the run is left as it was");
             return;
         }
         // a second table in a run that was paid already is the next run's
@@ -1840,8 +1861,11 @@ public sealed class TrackerSession
         // the run is counted from the picture alone (Steven: expeditions, dungeons and events come from the reward pictures,
         // never the chat): what the chat put in the run gives way to the table's slots, and a slot it can't name is kept as
         // a slot not read, never filled in from the chat
-        if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead, kinahUnread || (bigUnread && !fromGrid.OfType<KinahChanged>().Any()));
-        CrashLog.Note($"reward table read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
+        // places the picture never showed (an event card's list past its window): each one more slot not read, and the run's
+        // Kinah not known, since a coin may be among them
+        if (moreNotRead != null) { notRead.AddRange(moreNotRead); unnamed += moreNotRead.Count; }
+        if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead, kinahHidden || kinahUnread || (bigUnread && !fromGrid.OfType<KinahChanged>().Any()));
+        CrashLog.Note($"{what} read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
     }
 
     /// <summary>
@@ -2017,6 +2041,102 @@ public sealed class TrackerSession
 
     bool _eventScreenUp; int _eventShots; DateTime _eventShotAt = DateTime.MinValue, _eventScreenAt = DateTime.MinValue;
 
+    // ---- the event reward cards (Ocr/EventCards.cs) ----
+    // Read once a second while "sent to your cube" shows, each read placed in the cards' lists and voted. Filed into the run
+    // through ApplyGrid, like an expedition's table, as soon as the last two reads agree and every received card's whole
+    // list has been seen; otherwise when the screen closes, the event is left, after MaxCardReads reads or CardsSeconds.
+    // Filed once per screen (a screen back within CardsRearmSeconds is the same one).
+    EventCards.Merger? _cards; DateTime _cardsFirst, _cardsProbeAt = DateTime.MinValue; bool _cardsFiled, _cardsByFrames; int _cardsUnknownLayout; string _cardsWhy = "";
+    public const int MaxCardReads = 12;
+    public const double CardsSeconds = 20, CardsRearmSeconds = 10, CardsGoneSeconds = 2.5;
+    /// <summary>What the last filed event screen held, card by card, for the replay bank: received, its list as voted, whether its list ran past what was seen.</summary>
+    internal List<(int Card, bool Received, List<RewardGrid.Slot> Slots, bool More)>? LastEventCards { get; private set; }
+
+    /// <summary>One read of the event reward screen's cards (live from RewardGridDue, or a kept picture in the replay bank).</summary>
+    internal async Task EventCardsRead(System.Drawing.Bitmap frame, DateTime now)
+    {
+        try
+        {
+            if (_cardsFiled) return;   // this screen's cards are in
+            var m = _cards ??= new EventCards.Merger(GridSureDistance);
+            var (screen, why) = await EventCards.ReadAsync(frame, m.Cache);
+            if (screen == null)
+            {
+                if (_cardsUnknownLayout++ == 0) CrashLog.Note($"event cards: a read not recognised, left out ({why})");
+                _cardsWhy = why;
+                return;
+            }
+            if (!screen.FaceUp) return;   // still face down, or a card mid-flip
+            if (m.Reads == 0) _cardsFirst = now;
+            if (!m.Add(screen, frame)) { CrashLog.Note("event cards: a read with other cards received than the ones before; left out"); return; }
+            CrashLog.Note($"event cards read {m.Reads}: " + string.Join(" | ", screen.Cards.Select(c => !c.Received ? $"card {c.Index + 1} not received"
+                : $"card {c.Index + 1} {c.Slots.Count(x => !x.Clipped)} slots{(c.Slots.Any(x => x.Clipped) ? $" + {c.Slots.Count(x => x.Clipped)} cut" : "")}{(c.Scrolled ? " scrolled" : "")}{(c.End ? ", end shows" : "")}{(c.Covered ? ", covered" : "")}"))
+                + (m.Unaligned > 0 ? $" ({m.Unaligned} card read(s) couldn't be placed in their lists)" : ""));
+            if ((m.Settled() && m.Complete) || m.Reads >= MaxCardReads || (now - _cardsFirst).TotalSeconds >= CardsSeconds)
+                FileEventCards(now, m.Settled() && m.Complete ? "settled, every list seen to its end" : m.Reads >= MaxCardReads ? $"{MaxCardReads} reads" : $"{CardsSeconds:0} s");
+        }
+        catch (Exception ex) { CrashLog.Write("event cards", ex); }
+    }
+
+    /// <summary>The screen closed or the event was left: what was read of its cards is filed; with no read, a layout the reader didn't know is said once.</summary>
+    internal void FlushEventCards(DateTime now, string why, bool force = false)
+    {
+        // the title missed for one read isn't the screen closing: it must have been gone a few seconds
+        bool gone = force || why == "the event was left" || (now - _eventScreenAt).TotalSeconds >= CardsGoneSeconds;
+        if (_cards != null && !_cardsFiled && gone)
+        {
+            if (_cards.Reads > 0) FileEventCards(now, why);
+            else
+            {
+                if (_cardsUnknownLayout > 0) CrashLog.Note($"event cards: layout not recognised, pictures kept ({_cardsUnknownLayout} read(s), nothing read; the run's rewards stay not read: {_cardsWhy})");
+                _cards.Dispose(); _cards = null; _cardsUnknownLayout = 0;
+            }
+        }
+        if (_cardsFiled && ((now - _eventScreenAt).TotalSeconds > CardsRearmSeconds || why == "the event was left")) { _cardsFiled = false; _cardsUnknownLayout = 0; _cardsByFrames = false; }
+    }
+
+    /// <summary>
+    /// Files the cards read as the run's rewards: every received card's list as voted, in order, through ApplyGrid (each
+    /// slot named surely, or kept as an unknown item with its crop; never guessed, never dropped). A card not received is
+    /// logged, never counted. A card whose list may run past what was seen adds one place not read, and the run's Kinah is
+    /// then not known.
+    /// </summary>
+    void FileEventCards(DateTime now, string why)
+    {
+        var m = _cards; if (m == null) return;
+        _cardsFiled = true;
+        try
+        {
+            var all = new List<RewardGrid.Slot>(); var more = new List<string>(); var report = new List<(int, bool, List<RewardGrid.Slot>, bool)>();
+            var byIcon = ByIcon(_items);
+            for (int i = 0; i < EventCards.CardCount; i++)
+            {
+                if (m.Received[i] != true) { CrashLog.Note($"event cards: card {i + 1} not received (gold frame, no card icon): not counted"); report.Add((i, false, new List<RewardGrid.Slot>(), false)); continue; }
+                // gear never stacks: a piece's slot shows no count, so figures read on it are its art (2026-10-24: greaves "x11",
+                // pauldrons "x5"). A slot whose sure icon holds only gear is one piece
+                var list = m.Voted(i).Select(x => x.Icons.Count > 0 && x.Icons[0].Distance <= GridSureDistance && byIcon.TryGetValue(x.Icons[0].Key, out var its) && its.All(it => _items.IsGear(it.Id)) && x.Count != 1
+                    ? x with { Count = 1, CountText = "" } : x).ToList();
+                bool open = !m.Cards.TryGetValue(i, out var cl) || cl.Length == null;
+                int cut = list.Count(x => x.Count <= 0 && x.Icons.Count == 0);
+                CrashLog.Note($"event cards: card {i + 1} received, {list.Count} slot(s){(cut > 0 ? $", {cut} only ever seen cut by the card's window (count not shown: not read)" : "")}{(open ? ", and its list may run on past what was seen" : "")}: "
+                    + string.Join(" | ", list.Select(x => $"{x.Grade} x{(x.Count > 0 ? x.CountText.Length > 0 ? x.CountText : "1" : "?")} {(x.Icons.Count > 0 ? $"{x.Icons[0].Key} {x.Icons[0].Distance:0} → {SlotName(_items, x) ?? "not sure"}" : "cut")}")));
+                all.AddRange(list);
+                if (open) more.Add($"card {i + 1}: partly read, {list.Count} slot(s) seen, more below what the screen showed{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
+                report.Add((i, true, list, open));
+                // the crop of each slot that can't be named, kept beside the logs
+                if (cl != null)
+                    for (int at = 0; at < list.Count; at++)
+                        if (SlotName(_items, list[at]) == null && cl.Crops.TryGetValue(at, out var crop))
+                            RareGate.SaveProof(crop, $"card{i + 1}-slot{at + 1}-{list[at].Grade}", "event", now);
+            }
+            LastEventCards = report;
+            CrashLog.Note($"event cards: filed after {m.Reads} read(s) ({why}){(m.Unaligned > 0 ? $"; {m.Unaligned} card read(s) left out, not placeable in their lists" : "")}");
+            ApplyGrid(all, now, more, kinahHidden: more.Count > 0, what: "event cards");
+        }
+        catch (Exception ex) { CrashLog.Write("event cards filing", ex); }
+        finally { m.Dispose(); _cards = null; }
+    }
+
     /// <summary>An event's reward screen by its words: "Rewards have been sent to your cube.", "Can select 0 time(s)".</summary>
     /// <summary>
     /// The expedition table's "Reward collected." line as the recognizer reads it: "Reward cooectedo" too (the CI reader on
@@ -2028,6 +2148,12 @@ public sealed class TrackerSession
 
     public static bool IsEventRewardTitle(string line) =>
         Regex.IsMatch(line, @"sent\s*to\s*your\s*cube|can\s*select\s*\d+\s*time", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// The event reward screen with its cards turned face up: "Rewards have been sent to your cube." ("Can select 0 time(s)"
+    /// shows during the pick too, over cards still face down: "Obtain rewards by clicking the Selection Complete button.").
+    /// </summary>
+    public static bool IsEventCardsUp(string line) => Regex.IsMatch(line, @"sent\s*to\s*your\s*c[uo]be", RegexOptions.IgnoreCase);
 
     public static bool IsCraftTitle(string line) =>
         Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.CraftPanelWords)
@@ -2288,9 +2414,17 @@ public sealed class TrackerSession
         return $", {same} of {reads} reads unchanged and not recognized again";
     }
 
-    void Audit()
+    /// <summary>One pass's time into the audit (the read loop; tests).</summary>
+    internal void NotePass(double ms) { _passes++; _passMs += ms; }
+
+    /// <summary>
+    /// The once-a-minute audit line. Written every minute the game was read (2026-10-24: it was written only in minutes
+    /// with a kill or a quest step, so a run of events, the arena or a market stop left no audit and no pass times at all,
+    /// 12:47 to 13:08), and from passes that read the game without its chat too.
+    /// </summary>
+    internal void Audit(DateTime? at = null)
     {
-        var now = DateTime.UtcNow;
+        var now = at ?? DateTime.UtcNow;
         if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
         var sameNote = ChatSameNote();
@@ -2301,7 +2435,7 @@ public sealed class TrackerSession
         int kills = Engine.Totals().Kills;
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
-        if (_passes > 0 && (kills > _auditKills || _questSteps > 0))
+        if (_passes > 0)
             CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {PassTimes.AuditPart(_passes, _passMs, Times)} · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, by a candidate set {_parser.ContextPicks}, refused as on no nearby table {_parser.Refused + _cross.Refused}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x{sameNote}");
         _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; Times.Reset(); _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
     }
@@ -2439,7 +2573,7 @@ public sealed class TrackerSession
             {
                 (double c, ulong h, double bg, double sp) = (-1, 0, -1, -1);
                 try { (c, h, bg, sp) = LootRows.MeasureAll(r.Raw, r.Origin, r.Lines[i].Box); } catch (Exception ex) { CrashLog.Write("loot list contrast", ex); }
-                measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h, bg, sp));
+                measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h, bg, sp, r.Lines[i].Box.Left));
             }
             // the name decoder's shadow read of the rows (logs only, counts nothing), on the picture while it is here
             if (NameDecoder.Present) try { ShadowListNames(r.Raw, r.Origin, r.Lines, lines, now); } catch (Exception ex) { CrashLog.Write("name decoder", ex); }
@@ -2583,11 +2717,13 @@ public sealed class TrackerSession
             // the gathering panel ("Orichalcum · Proficiency · Orichalcum Ore x1 · Success") sits at the bottom of the band:
             // its lines are what is being gathered, never a pickup (Steven, 2026-10-23 11:28)
             var uncut = lines;
-            if (GatherPanelCut(lines.Select(l => (l.Top, l.Text)).ToList(), now) is int cut) lines = lines.Where(l => l.Top < cut).ToList();
-            // lines that aren't loot list rows at all (a nameplate or the zone's name standing in the band, text over the
-            // world with no icon and no dark strip behind it) go before they become rows (LootNotRow, 2026-10-24); the trace
-            // keeps them, so a replay drops them the same way
+            // a line already known not to be a row (the player's title standing in the band, a nameplate) is no panel line
+            // either: "Vangt | Sapphire Gemstone | Success" took the title for the panel's first line (2026-10-24 13:11)
             NoteScreenNames(now);
+            if (GatherPanelCut(lines.Where(l => !NotRow.Ignorable(l, now)).Select(l => (l.Top, l.Text)).ToList(), now) is int cut) lines = lines.Where(l => l.Top < cut).ToList();
+            // lines that aren't loot list rows at all (a nameplate or the zone's name standing in the band, text over the
+            // world with no icon and no dark strip behind it, static text) go before they become rows (LootNotRow,
+            // 2026-10-24); the trace keeps them, so a replay drops them the same way
             lines = NotRow.Filter(lines, now);
             NoteListKeys(lines, now);
             // the rows as read, for the trace (with each one's place and contrast, so a replay tracks them the same way).
@@ -2606,7 +2742,8 @@ public sealed class TrackerSession
                 ReadTrace.List(now, traced, readAll.Select(x => x.Line.Top).ToList(), measuredAll ? readAll.Select(x => Math.Round(x.Line.Contrast, 3)).ToList() : null,
                     measuredAll && readAll.Any(x => x.Line.Background >= 0) ? readAll.Select(x => Math.Round(x.Line.Background, 3)).ToList() : null,
                     measuredAll && readAll.Any(x => x.Line.Spread >= 0) ? readAll.Select(x => Math.Round(x.Line.Spread, 3)).ToList() : null,
-                    measuredAll && readAll.Any(x => x.Line.Icon != 0) ? readAll.Select(x => x.Line.Icon.ToString("x")).ToList() : null);
+                    measuredAll && readAll.Any(x => x.Line.Icon != 0) ? readAll.Select(x => x.Line.Icon.ToString("x")).ToList() : null,
+                    readAll.Any(x => x.Line.Left >= 0) ? readAll.Select(x => x.Line.Left).ToList() : null);
                 Report.Lines("list", traced, now);
             }
             Seen(now);
@@ -2710,7 +2847,7 @@ public sealed class TrackerSession
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
     List<string> _lastLines = new();
-    DateTime _chatLinesAt = DateTime.MinValue;
+    DateTime _chatLinesAt = DateTime.MinValue, _chatSightedAt = DateTime.MinValue;
 
     // ---- anchors, shadow only (brief item 4, 2026-10-24) ----
     /// <summary>Where the interface really is, from anchors, logged beside the fixed-fraction crops; changes nothing read.</summary>
@@ -2726,8 +2863,13 @@ public sealed class TrackerSession
         {
             if (GameRect is not { } g) return;
             var now = DateTime.UtcNow;
-            if (Region is { } chat && (now - _chatLinesAt).TotalSeconds <= 30) Anchors.ObserveChat(g, chat, DetectNote, ManualRegion, _chatLinesAt);
-            else Anchors.ChatCrop.Missing(g, "no chat lines in 30 s");
+            // a sighting only when a read showed lines since the last one: the same box handed over again on every pass is no
+            // new evidence (2026-10-24 it re-took the lock a second after a drop)
+            if (Region is { } chat && (now - _chatLinesAt).TotalSeconds <= 30)
+            {
+                if (_chatLinesAt != _chatSightedAt) { _chatSightedAt = _chatLinesAt; Anchors.ObserveChat(g, chat, DetectNote, ManualRegion, _chatLinesAt); }
+            }
+            else Anchors.ChatCrop.Missing(g, "no chat lines in 30 s", now);
             Anchors.Tick(g, now, r => ScreenReader.Capture(r));
         }
         catch (Exception ex) { CrashLog.Write("anchors", ex); }
@@ -2884,13 +3026,11 @@ public sealed class TrackerSession
         if (lines.Count == 0) return null;
         // "Succe" and "P rofes" too: read cut short, the panel's title came through as a row ("Aria x1" over "Succe x1",
         // 2026-10-24 09:58:21 and :23, a gather counted that never happened)
-        var marks = lines.Where(l => System.Text.RegularExpressions.Regex.IsMatch(l.Text.Trim(), @"^\W*[il1|]?\s*(?:succ\w*|fail(?:ed|ure)?|profic\w*|profes\w*|p\s?r\w{0,3}fes\w*)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).ToList();
+        var marks = lines.Where(l => LootPopup.PanelMark(l.Text)).ToList();
         if (marks.Count == 0) return null;
-        var tops = lines.Select(l => l.Top).OrderBy(t => t).ToList();
-        var gaps = tops.Zip(tops.Skip(1), (a, b) => b - a).Where(d => d > 4).OrderBy(d => d).ToList();
-        int gap = gaps.Count > 0 ? gaps[gaps.Count / 2] : 30;
-        // the panel's block: from three lines above its first marker (the node's name, its proficiency) to the bottom
-        int cut = marks.Min(m => m.Top) - (int)(gap * 2.5);
+        // the panel's block: from the lines just above its first marker (the node's name, its proficiency) to the bottom,
+        // by the panel's own spacing (LootPopup.PanelCut)
+        int cut = LootPopup.PanelCut(lines.Select(l => l.Top).ToList(), marks.Min(m => m.Top));
         // which item the panel names: what the gathering bar's race is for (its Success and Fail are labels, not outcomes)
         var named = PanelItemOf(lines.Where(l => l.Top >= cut).Select(l => l.Text));
         if (named.Length > 0)

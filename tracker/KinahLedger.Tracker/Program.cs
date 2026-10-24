@@ -1071,6 +1071,7 @@ options: --process aion[,other]");
         ok &= LootNotRowTest(items);
         ok &= AnchorsTest();
         ok &= SceneTest(items, s);
+        ok &= AuditLineTest(items, s);
         ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
@@ -1336,12 +1337,45 @@ options: --process aion[,other]");
             Check("...a read with no numbers: fixed", $"{an.BalanceCrop.Active}", "False");
             for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chosen", true, t0);
             Check("Anchors: a chat chosen by hand never anchors", $"{an.ChatCrop.Active}", "False");
-            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0);
+            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0.AddSeconds(2 * i));
             Check("...a found one does", $"{an.ChatCrop.Active}", "True");
             Update.RemoteConfig.Current = offCfg;
             an.ObserveBalance(game, nums, t0.AddSeconds(40));
             Check("layout.anchor.balance off from the site: nothing locks", $"{an.BalanceCrop.Active} {an.BalanceCrop.Crop(game, Update.RemoteConfig.Current.AnchorBalance)?.ToString() ?? "fixed"}", "False fixed");
             Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+
+            // the chat's hysteresis (2026-10-24: one failed look around the anchor dropped it, and the same box re-took it a
+            // second later, back and forth while the chat was on screen): three misses in a row over 10 s drop it, sightings
+            // count 1.5 s apart, a switch is logged at most once a minute
+            var hl = new List<string>();
+            var hc = new AnchoredCrop("chat", AnchoredCrop.ChatFrom, 0.4) { Hold = new(), Log = hl.Add };
+            var h0 = new DateTime(2026, 10, 24, 13, 7, 0, DateTimeKind.Utc);
+            hc.Observe(game, chatBox, 1.0, true, h0); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(0.5)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(1));
+            Check("hysteresis: three sightings in 1 s are one: no lock", $"{hc.Active}", "False");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(2)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(4));
+            Check("...three stable observations 2 s apart: anchored, logged", $"{hc.Active} {hl.Count}", "True 1");
+            bool kept = hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(10));
+            Check("a single miss keeps the anchored crop", $"{kept} {hc.Active} {hc.Misses} {hl.Count}", "True True 1 1");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(12));
+            Check("...a sighting in its place starts the count again", $"{hc.Misses}", "0");
+            for (int i = 0; i < 3; i++) hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(20 + 2 * i));
+            Check("three misses within 4 s: still anchored", $"{hc.Active} {hc.Misses}", "True 3");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(27));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(30));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(35));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(40));
+            Check("three misses in a row over 10 s: the fixed crop", $"{hc.Active} {hc.Crop(game, true)?.ToString() ?? "fixed"} {hc.Off}", "False fixed 1");
+            Check("...a switch within a minute of the last line isn't logged", $"{hl.Count} {hc.Unlogged}", "1 1");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(41)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(43));
+            Check("...two sightings after it: still the fixed crop", $"{hc.Active}", "False");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(45));
+            Check("the lock re-taken after three stable observations", $"{hc.Active} {hc.On}", "True 2");
+            var movedBox = new System.Drawing.Rectangle(chatBox.X + 40, chatBox.Y, chatBox.Width, chatBox.Height);
+            hc.Observe(game, movedBox, 1.0, true, h0.AddSeconds(70));
+            Check("the anchor moving drops it at once, the line says what wasn't logged", $"{hc.Active} {hl.Count} {hl.Last().Contains("the anchor moved 40 px")} {hl.Last().Contains("(2 switch(es) since the last line not logged)")}", "False 2 True True");
+            var noHold = new AnchoredCrop("balance", AnchoredCrop.BalanceFrom, 0.25) { Log = _ => { } };
+            for (int i = 0; i < 3; i++) noHold.Observe(game, strip, 0.5, true);
+            Check("without hysteresis (the Kinah strip) a miss still drops at once", $"{noHold.Missing(game, "no numbers")} {noHold.Active}", "False False");
 
             // the audit line's pass part: each region's ms per pass over the minute
             var times = new KinahLedger.Session.PassTimes();
@@ -1384,6 +1418,40 @@ options: --process aion[,other]");
     /// Crafting; a one-pass flicker changes nothing; Unknown holds reads and the next settled state releases or drops
     /// them; scene.gate off gates nothing; the classifier stays under 3 ms; the replay bank counts the same through the gate.
     /// </summary>
+    /// <summary>
+    /// The once-a-minute audit line from a session (2026-10-24: 12:47 to 13:08 had none, because it was written only in
+    /// minutes with a kill or a quest step): a simulated minute of passes with no kill writes it, with the per-region times.
+    /// </summary>
+    static bool AuditLineTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nThe audit line, once a minute in reads.log (2026-10-24):");
+        string[] AuditLines() { try { return File.ReadAllLines(CrashLog.ReadsPath).Where(l => l.Contains("  ??  audit: ")).ToArray(); } catch (Exception) { return Array.Empty<string>(); } }
+        var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+        var a0 = DateTime.UtcNow;
+        int before = AuditLines().Length;
+        s.Audit(a0);   // the first call takes the counts it measures from
+        for (int i = 0; i < 50; i++) { s.NotePass(900); s.Times.Add("chat", 240); s.Times.Add("list", 500); }
+        s.Audit(a0.AddSeconds(30));
+        Check("half a minute: no line yet", $"{AuditLines().Length - before}", "0");
+        s.Audit(a0.AddSeconds(61));
+        var got = AuditLines().Skip(before).ToArray();
+        Check("a minute of passes with no kill: one audit line", $"{got.Length}", "1");
+        string line = got.LastOrDefault() ?? "";
+        Check("...kills +0, the passes and each region's time", $"{line.Contains("kills counted +0")} {line.Contains("50 passes, 900 ms each (per pass: chat 240 · list 500 · target 0")}", "True True");
+        s.Audit(a0.AddSeconds(122));
+        Check("a minute with no pass (covered, minimized): no line", $"{AuditLines().Length - before}", "1");
+        s.NotePass(800);
+        s.Audit(a0.AddSeconds(183));
+        Check("...the next minute read writes one again", $"{AuditLines().Length - before}", "2");
+        return ok;
+    }
+
     static bool SceneTest(ItemDictionary items, Settings settings)
     {
         bool ok = true;
@@ -1449,11 +1517,22 @@ options: --process aion[,other]");
             g.FillRectangle(System.Drawing.Brushes.DimGray, (int)(W * 0.3), H - 60, (int)(W * 0.4), 8);
             Text(g, (int)(W * 0.35), H - 140, (int)(W * 0.65), H - 90, 9);
         });
+        // death: a red-tinted frame, the HUD gone, a dark vignette, a prompt in the centre
         using var death = Frame(g =>
         {
             var rng = new Random(13);
             g.Clear(System.Drawing.Color.FromArgb(80, 14, 14));
             for (int i = 0; i < 2500; i++) { using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60 + rng.Next(60), 8 + rng.Next(18), 8 + rng.Next(18))); int sz = 8 + rng.Next(40); g.FillRectangle(b, rng.Next(W), rng.Next(H), sz, sz); }
+            using var shade = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(200, 10, 2, 2));
+            g.FillRectangle(shade, 0, 0, (int)(W * 0.2), H); g.FillRectangle(shade, (int)(W * 0.8), 0, (int)(W * 0.2), H);
+            Text(g, (int)(W * 0.40), (int)(H * 0.45), (int)(W * 0.60), (int)(H * 0.55), 51);
+        });
+        // a red world (the autumn forest of Kraka Footpath, compare-131029): red foliage everywhere, the HUD up, alive
+        using var redWorld = Frame(g =>
+        {
+            var rng = new Random(53);
+            g.Clear(System.Drawing.Color.FromArgb(90, 20, 16));
+            for (int i = 0; i < 3000; i++) { using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(70 + rng.Next(90), 10 + rng.Next(25), 8 + rng.Next(20))); int sz = 8 + rng.Next(40); g.FillRectangle(b, rng.Next(W), rng.Next(H), sz, sz); }
             Hud(g);
         });
         using var cutscene = Frame(g =>
@@ -1486,12 +1565,55 @@ options: --process aion[,other]");
             Text(g, 30, (int)(H * 0.14), (int)(W * 0.36), (int)(H * 0.93), 7);
         });
         using var blank = Frame(g => g.Clear(System.Drawing.Color.FromArgb(128, 128, 128)));
+        // the normal chat with its lines showing, as an opaque dark panel stretched up to 0.45 of the height (Steven's sits at
+        // 0.70 to 0.93): a flat dark panel with text rows above the chat box's usual top, never the top of the left column
+        using var chatTall = Frame(g =>
+        {
+            World(g); Hud(g);
+            using var back = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(20, 22, 28));
+            g.FillRectangle(back, 20, (int)(H * 0.45), 820, (int)(H * 0.51));
+            Text(g, 40, (int)(H * 0.46), 800, H - 60, 23);
+        });
+        // a dark full-screen window with the Kinah counter up (the event's card screen, where the old rule fired): near-black,
+        // five lit cards across the middle, a title and buttons as text; no chat anywhere
+        using var cards = Frame(g =>
+        {
+            g.Clear(System.Drawing.Color.FromArgb(8, 10, 16));
+            using var card = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(40, 80, 120));
+            using var rim = new System.Drawing.Pen(System.Drawing.Color.FromArgb(150, 200, 230), 6);
+            for (int i = 0; i < 5; i++) { int x = (int)(W * (0.235 + i * 0.109)); g.FillRectangle(card, x, (int)(H * 0.28), (int)(W * 0.095), (int)(H * 0.46)); g.DrawRectangle(rim, x, (int)(H * 0.28), (int)(W * 0.095), (int)(H * 0.46)); }
+            Text(g, (int)(W * 0.40), (int)(H * 0.06), (int)(W * 0.60), (int)(H * 0.16), 29);
+            Text(g, 20, 20, (int)(W * 0.12), 60, 31);
+            for (int k = 0; k < 4; k++) for (int d = 0; d < 6; d++) g.FillRectangle(light, (int)(W * 0.74) + k * 120 + d * 16, 30, 10, 22);
+            Text(g, (int)(W * 0.02), (int)(H * 0.20), (int)(W * 0.10), (int)(H * 0.50), 37);   // a few labels down the left edge
+            // the event's rank panel, dark and text-filled, on the right (compare-130149: the "flat dark panel on the right")
+            using var rank = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(22, 24, 30));
+            g.FillRectangle(rank, (int)(W * 0.78), (int)(H * 0.08), (int)(W * 0.10), (int)(H * 0.20));
+            Text(g, (int)(W * 0.785), (int)(H * 0.09), (int)(W * 0.875), (int)(H * 0.27), 41);
+        });
+        // the plain world in the Hidden Lugi event (compare-130149, 13:03:11 and 13:05:06): dark violet grass over the right,
+        // the event's rank panel top right, the normal chat bottom left. The old Bag rule took the grass for a panel
+        using var lugi = Frame(g =>
+        {
+            World(g); Hud(g);
+            var rng = new Random(43);
+            int x0 = (int)(W * 0.55), y0 = (int)(H * 0.10), x1 = W, y1 = (int)(H * 0.88);
+            using (var grass = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60, 15, 120))) g.FillRectangle(grass, x0, y0, x1 - x0, y1 - y0);
+            for (int i = 0; i < 400; i++)
+            {
+                using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(50 + rng.Next(25), 10 + rng.Next(12), 105 + rng.Next(35)));
+                g.FillRectangle(b, x0 + rng.Next(x1 - x0), y0 + rng.Next(y1 - y0), 10 + rng.Next(30), 6 + rng.Next(14));
+            }
+            using var rank = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(22, 24, 30));
+            g.FillRectangle(rank, (int)(W * 0.78), (int)(H * 0.08), (int)(W * 0.10), (int)(H * 0.20));
+            Text(g, (int)(W * 0.785), (int)(H * 0.09), (int)(W * 0.875), (int)(H * 0.27), 47);
+        });
 
         FrameStats Stats(System.Drawing.Bitmap f) { using var t = FrameThumb.Shrink(f); return FrameStats.Of(t); }
         var sw0 = System.Diagnostics.Stopwatch.StartNew();
         var sWorld = Stats(world);
         double shrinkMs = sw0.Elapsed.TotalMilliseconds;
-        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("blank", blank) }
+        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("chattall", chatTall), ("cards", cards), ("lugi", lugi), ("redworld", redWorld), ("blank", blank) }
             .ToDictionary(x => x.Name, x => (Frame: x.F, Stats: Stats(x.F), Signs: SceneSignals.FromFrame(x.F)));
 
         // each frame on its own (a scene that has seen the HUD, as a running tracker has)
@@ -1505,11 +1627,48 @@ options: --process aion[,other]");
         Check("the world: the HUD over a scene", Cls("world"), "World");
         Check("the crafting panel's labels where its locator looks", Cls("crafting"), "Crafting");
         Check("a near-black frame with no HUD: loading", Cls("loading"), "Loading");
-        Check("a dark red frame: death", Cls("death"), "Death");
+        Check("a dark red frame, HUD gone, vignette: death", Cls("death"), "Death");
+        Check("a red world with the HUD up: World (the old rule said death)", $"{Cls("redworld")} {Cls("redworld", new SceneSignals { CounterStrip = true })} (old rule {(all["redworld"].Stats.RedShare >= 0.5 && all["redworld"].Stats.Mean < 0.3 ? "Death" : "no")})", "World World (old rule Death)");
         Check("black bands top and bottom: a cutscene", Cls("cutscene"), "Cutscene");
         Check("a flat dark panel on the right: the bag", Cls("bag"), "Bag");
         Check("a flat dark panel with text rows top-left: chat expanded", Cls("chatx"), "ChatExpanded");
         Check("nothing a rule explains, after the HUD was seen: Unknown", Cls("blank"), "Unknown");
+        Check("the normal chat, dark, lines up, stretched tall: the world", Cls("chattall"), "World");
+        var cardSigns = new SceneSignals { CounterStrip = true };
+        string Old(FrameStats st) => st.ExpandedChatOld ? "ChatExpanded" : st.BagPanelOld ? "Bag" : "no";
+        Check("the card screen with its rank panel, picture only: not Bag/ChatX", $"{Cls("cards", cardSigns) is not ("Bag" or "ChatExpanded")} (old rule {Old(all["cards"].Stats)})", "True (old rule ChatExpanded)");
+        Check("...with its title sign: EventCards, or Reward for a reward title", $"{Cls("cards", new SceneSignals { CounterStrip = true, EventCards = true })} {Cls("cards", new SceneSignals { CounterStrip = true, RewardTitle = true })}", "EventCards Reward");
+        Check("the plain world in the event, normal chat, violet grass: World", $"{Cls("lugi", cardSigns)} (old rule {Old(all["lugi"].Stats)})", "World (old rule Bag)");
+        Check("...and the bag itself still the bag", Cls("bag"), "Bag");
+
+        // leaving a reward screen: a banner over the card screen for two passes doesn't relabel it (compare-130149: a Daeva
+        // Pass banner at 289.0 to 289.5 s named the card screen); a reward window that stays 3 s does; the world, two passes
+        {
+            var lv = new SceneState();
+            var l0 = new DateTime(2026, 10, 24, 13, 6, 30, DateTimeKind.Utc);
+            var cardSt = all["cards"].Stats;
+            var onCards = new SceneSignals { CounterStrip = true, EventCards = true };
+            var banner = new SceneSignals { CounterStrip = true, RewardTitle = true };
+            lv.Observe(cardSt, onCards, l0); lv.Observe(cardSt, onCards, l0.AddSeconds(0.3));
+            Check("leave hysteresis: the card screen settles", $"{lv.Current}", "EventCards");
+            lv.Observe(cardSt, banner, l0.AddSeconds(0.6)); lv.Observe(cardSt, banner, l0.AddSeconds(0.9));
+            Check("...a banner for two passes: still EventCards", $"{lv.Current}", "EventCards");
+            lv.Observe(cardSt, onCards, l0.AddSeconds(1.2));
+            Check("...and the cards again: EventCards, nothing switched", $"{lv.Current} {lv.Since == l0.AddSeconds(0.3)}", "EventCards True");
+            for (int i = 0; i <= 11; i++) lv.Observe(cardSt, banner, l0.AddSeconds(1.5 + 0.3 * i));
+            Check("...a reward window that stays 3 s: Reward", $"{lv.Current}", "Reward");
+            lv.Observe(all["world"].Stats, new SceneSignals(), l0.AddSeconds(6)); lv.Observe(all["world"].Stats, new SceneSignals(), l0.AddSeconds(6.3));
+            Check("...the world after it: two passes, as before", $"{lv.Current}", "World");
+        }
+        // real frames: KL_SCENE_FILES=<folder of game screenshots> prints each one's measures and verdict (counter taken as read)
+        if (Environment.GetEnvironmentVariable("KL_SCENE_FILES") is { } shots && Directory.Exists(shots))
+            foreach (var file in Directory.GetFiles(shots).Where(p => p.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).OrderBy(p => p))
+            {
+                using var shot = new System.Drawing.Bitmap(file);
+                var st = Stats(shot);
+                var (v, vwhy) = sc.Classify(st, new SceneSignals { CounterStrip = true });
+                Console.WriteLine($"    {Path.GetFileName(file)}: {v} (old rule {(st.ExpandedChatOld ? "ChatExpanded" : "no")}) · {st}");
+            }
         Check("...and before any HUD was seen: the world, as before", new SceneState().Classify(all["blank"].Stats, new SceneSignals()).State.ToString(), "World");
         Check("the Market reader's table: Market", Cls("world", new SceneSignals { Market = true }), "Market");
         Check("a reward window's title or the reward table: Reward", $"{Cls("world", new SceneSignals { RewardTitle = true })} {Cls("world", new SceneSignals { RewardTable = true })}", "Reward Reward");
@@ -1750,9 +1909,22 @@ options: --process aion[,other]");
             foreach (var s in new[] { 1.0, 2.5, 4.0 }) br.Feed(new(), t0.AddSeconds(s));
             t0 = t0.AddSeconds(5);
         }
+        // read once with its icon: a row (a pass can take over a second, so a real 2.5 s row can be read once; 2026-10-24)
         var once = Ids(br.Feed(new() { R(1195, "Riverside Gloves x1", IcD, 0.6) }, t0));
         foreach (var s in new[] { 0.5, 1.0, 2.0 }) br.Feed(new(), t0.AddSeconds(s));
-        Check("read once and gone: not a row, the cross-check told", $"{once} · brief {br.ShortLived} unsure {br.Unsure} told {string.Join(",", told)}", "Riverside Gloves#4 · brief 1 unsure 0 told 4");
+        Check("read once with its icon: a row all the same", $"{once} · brief {br.ShortLived} unsure {br.Unsure} told {string.Join(",", told)}", "Riverside Gloves#4 · brief 0 unsure 0 told ");
+        // read once with no icon, and missing from the read 0.5 s later, the read before 1.5 s earlier: up under 2.5 s, not a row
+        t0 = t0.AddSeconds(5);
+        br.Feed(new(), t0.AddSeconds(-1.5));
+        var flat = Ids(br.Feed(new() { new(1195, "Riverside Gloves x1", 0.6, IcD, 0.2, 0.02) }, t0));
+        foreach (var s in new[] { 0.5, 1.0, 2.0 }) br.Feed(new(), t0.AddSeconds(s));
+        Check("read once, no icon, up under 2.5 s: not a row, told", $"{flat} · brief {br.ShortLived} unsure {br.Unsure} told {string.Join(",", told)}", "Riverside Gloves#5 · brief 1 unsure 0 told 5");
+        // the same with passes 1.3 s apart: it may have been up 2.5 s, so it is a row (time since the read before, not reads)
+        t0 = t0.AddSeconds(5);
+        br.Feed(new(), t0.AddSeconds(-1.3));
+        br.Feed(new() { new(1195, "Riverside Gloves x1", 0.6, IcD, 0.2, 0.02) }, t0);
+        foreach (var s in new[] { 1.3, 2.6, 4.0 }) br.Feed(new(), t0.AddSeconds(s));
+        Check("read once, no icon, passes 1.3 s apart: a row", $"brief {br.ShortLived} unsure {br.Unsure}", "brief 1 unsure 0");
         // covered by a full-screen window and back: the same row, its time covered not counted
         var cv = new Session.LootRows(items);
         cv.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0);
@@ -1926,6 +2098,68 @@ options: --process aion[,other]");
         var ns = new Session.LootNotRow(items);
         ns.See("Drakan Guard Dog", t0, Session.LootNotRow.Plate);
         Check("a soul row with (Bound) read badly stays", Kept(ns, new[] { "Drakan Guard Dog (Boc x1", "Drakan Guard Dog" }, t0), "Drakan Guard Dog (Boc x1");
+
+        // ---- the thresholds against Steven's trace.log of 2026-10-24 12:47 to 13:25 (1,209 title reads, 131 real rows) ----
+        {
+            var nt = new Session.LootNotRow(items);
+            string W(LootLine l) { var row = LootPopup.Rows(new[] { (l.Top, l.Text) }).First(); return nt.Why(l, row, 0.12, out _) ?? "a row"; }
+            // real rows at their extremes: spread 0.112 (the least), 0.23 of the contrast (the least), background 0.29 (the most)
+            var rowLow = new LootLine(1197, "Orichalcum Orc x1", 0.48, 0x70f070701010101, 0.29, 0.112);
+            var rowFaint = new LootLine(1197, "Sapphire Gemstohe x1", 0.69, 0x7070707070f0f07, 0.25, 0.16);
+            // the title at its median (spread 0.028, contrast 0.54, background 0.10) and at the (b) edge
+            var title = new LootLine(974, "Vangt x1", 0.541, 0xe0fccfe1f0, 0.102, 0.028);
+            var edge = new LootLine(974, "Vangi x1", 0.40, 0xe0fccfe1f0, 0.10, 0.05);
+            Check("tuned (b)/(c): real rows' extremes stay, the title's median goes", $"{W(rowLow)} | {W(rowFaint)} | {W(title)} | {W(edge)}", "a row | a row | not on the list | not on the list");
+            Check("margins: rows' least spread over (b), most background under (c)", $"{0.112 / Session.LootNotRow.FlatSpread:0.0}x {0.23 / Session.LootNotRow.FlatShare:0.0}x {0.12 + Session.LootNotRow.OffStripGap - 0.29:0.00}", "2.2x 1.5x 0.05");
+        }
+
+        // ---- (d) static text: the title at one y for seconds, whatever its text and whatever the world behind it ----
+        {
+            var nd2 = new Session.LootNotRow(items);
+            string[] tt = { "Vangi x1", "Vangt x1", "Vqng( x1", "Yang( x1", "Vanga x1", "Vang x1", "Vangu x1" };
+            var kept = new List<string>();
+            for (int i = 0; i < tt.Length; i++)
+            {
+                // spread 0.17 (grass behind it: neither flat nor off the strip), a Kina row in the bottom slot
+                var read = new List<LootLine> { new(974 + i % 3 - 1, tt[i], 0.5, 0x3fcf4dcf8f070180, 0.10, 0.17), new(1197, "Kina x" + (200 + i), 0.6, 0x7070f0f0f070707, 0.12, 0.27) };
+                kept.Add(string.Join("+", nd2.Filter(read, t0.AddSeconds(i * 1.5)).Select(l => l.Text.Split(' ')[0])));
+            }
+            Check("static: kept until 3 reads over 6 s, then dropped at once", string.Join(" ", kept), "Vangi+Kina Vangt+Kina Vqng(+Kina Yang(+Kina Vanga+Kina Kina Kina");
+            Check("...logged once, counted as static", $"{nd2.StaticDropped} {nd2.Logged}", "2 1");
+            // a real row moving up into the band from the slot below, its text not an item's own: a row
+            var up1 = nd2.Filter(new() { new(1051, "Raw Leathe x1", 0.6, 0xaa55aa55aa55aa55, 0.12, 0.15), new(1124, "Kina x300", 0.6, 0x7070f0f0f070707, 0.12, 0.27) }, t0.AddSeconds(11));
+            var up2 = nd2.Filter(new() { new(978, "Raw Leathe x1", 0.6, 0xaa55aa55aa55aa55, 0.12, 0.15), new(1051, "Kina x300", 0.6, 0x7070f0f0f070707, 0.12, 0.27) }, t0.AddSeconds(11.6));
+            Check("static: a row moved up into the band stays", string.Join(" | ", up2.Select(l => l.Text)), "Raw Leathe x1 | Kina x300");
+            // where rows sit (the bottom slot), a line with its icon stays even when no-icon text stood there for seconds
+            var ns2 = new Session.LootNotRow(items);
+            for (int i = 0; i < 8; i++)
+                ns2.Filter(new() { new(1124, "Kina x300", 0.6, 0x7070f0f0f070707, 0.12, 0.27), i % 2 == 0 ? new(1197, "Kina x" + (500 + i), 0.6, 0x7070f0f0f070707, 0.12, 0.27) : new(1197, "Press F to talk x1", 0.5, 0, 0.10, 0.01) }, t0.AddSeconds(i * 1.5));
+            var bottom = ns2.Filter(new() { new(1124, "Kina x300", 0.6, 0x7070f0f0f070707, 0.12, 0.27), new(1197, "Sapphire Gemstohe x1", 0.6, 0x7070707070f0f07, 0.12, 0.16), new(1198, "Talk x1", 0.5, 0, 0.10, 0.01) }, t0.AddSeconds(11.5));
+            Check("static in a row slot: the icon row stays, the flat text goes", string.Join(" | ", bottom.Select(l => l.Text)), "Kina x300 | Sapphire Gemstohe x1");
+
+            // the gathering panel's parse skips the title: the panel's item line is its first, and a row above it is kept
+            var title = new LootLine(974, "Vangt x1", 0.5, 0x3fcf4dcf8f070180, 0.10, 0.17);
+            Check("the panel's parse: the title is ignorable, its labels never", $"{nd2.Ignorable(title, t0.AddSeconds(12))} {nd2.Ignorable(new LootLine(1687, "Success x1", 0.95, 0xf0f0f0f0f0f0f0f, 0.02, 0.13), t0.AddSeconds(12))}", "True False");
+            Check("panel cut: by the panel's own spacing, never over the list's rows",
+                $"{LootPopup.PanelCut(new[] { 974, 1621, 1687 }, 1687)} {LootPopup.PanelCut(new[] { 1197, 1531, 1687 }, 1531)} {LootPopup.PanelCut(new[] { 1197, 1530, 1621, 1687 }, 1530)} {LootPopup.PanelCut(new[] { 100, 130, 160, 190 }, 160)} {LootPopup.PanelCut(new[] { 100, 130 }, 130)}",
+                "1588 1453 1497 85 85");
+        }
+
+        // ---- (e) far right of the rows' text column: the player's own nameplate at screen centre ----
+        {
+            var np = new Session.LootNotRow(items);
+            for (int i = 0; i < 3; i++)
+                np.Filter(new() { new(1124, "Kina x" + (300 + i), 0.6, 0x7070f0f0f070707, 0.12, 0.27, 1920), new(1197, "Kina x" + (400 + i), 0.6, 0x7070f0f0f070707, 0.12, 0.27, 1920) }, t0.AddSeconds(i));
+            var pos = np.Filter(new()
+            {
+                new(974, "Vangi x1", 0.55, 0x3fcf4dcf8f070180, 0.10, 0.17, 2437),          // the title: 517 px, 7.1 pitches right
+                new(1051, "Raw Leathe x1", 0.6, 0xaa55aa55aa55aa55, 0.12, 0.15, 2220),     // 300 px right (a row sliding in): stays
+                new(1197, "Sapphire Gemstohe x1", 0.44, 0x3f3f371b3e2e2c18, 0.25, 0.165, 1921),
+            }, t0.AddSeconds(3));
+            Check("position: the title 7 pitches right of the rows' text goes, rows stay", $"{np.Column} {np.Pitch} | {string.Join(" | ", pos.Select(l => l.Text))}", "1920 73 | Raw Leathe x1 | Sapphire Gemstohe x1");
+            var np2 = new Session.LootNotRow(items);
+            Check("position: no column known yet, nothing dropped by it", string.Join(" | ", np2.Filter(new() { new(974, "Vangi x1", 0.55, 0x3fcf4dcf8f070180, 0.10, 0.17, 2437) }, t0).Select(l => l.Text)), "Vangi x1");
+        }
         Console.WriteLine($"  ({lines.Count} lines measured in {ms} ms)");
         return ok;
     }
@@ -3037,6 +3271,92 @@ options: --process aion[,other]");
                 Check("...and nothing from the chat uploads", $"{epay?[0].items.Count ?? 0}", "0");
                 Check("an event's reward screen by its words", $"{TrackerSession.IsEventRewardTitle("Rewards have been sent to your cube.")} {TrackerSession.IsEventRewardTitle("Can select 0 time(s)")} {TrackerSession.IsEventRewardTitle("Reward collected.")}", "True True False");
                 Check("kept pictures by kind", string.Join(" ", new[] { "x-reward-table.jpg", "x-event-rewards.jpg", "x-Quna-Shop.jpg", "x-in-run.jpg", "x-Daeva-Pass.jpg" }.Select(n => TrackerSession.KindOfShot(n).ToString())), "RunEnd RunEnd Shop Frequent Screen");
+                // the event reward cards (Ocr/EventCards.cs), on a drawn 5120x2160 screen with Hidden Lugi's geometry: five frames,
+                // received ones blue with the card icon's cyan "1", the others gold; slots three to a row in each card's window
+                System.Drawing.Bitmap DrawCards(bool[] received, int[] slots, int cards = 5, bool[]? noOne = null)
+                {
+                    var b = new System.Drawing.Bitmap(5120, 2160, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using var g = System.Drawing.Graphics.FromImage(b);
+                    g.Clear(System.Drawing.Color.FromArgb(6, 8, 12));
+                    void Fill(int x, int y, int w, int h, int r, int gg, int bb) { using var br = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(r, gg, bb)); g.FillRectangle(br, x, y, w, h); }
+                    var rng = new Random(7);
+                    for (int i = 0; i < cards; i++)
+                    {
+                        int l = 2560 + (int)Math.Round(-1355.25 + i * 556.5), r = l + 484;
+                        bool rec = received[i];
+                        Fill(l, 616, 484, 1000, rec ? 10 : 8, rec ? 20 : 12, rec ? 40 : 19);
+                        Fill(l, 615, 484, 6, rec ? 240 : 170, rec ? 240 : 152, rec ? 250 : 113);
+                        Fill(l, 620, 4, 990, rec ? 184 : 133, rec ? 222 : 131, rec ? 222 : 121); Fill(r - 3, 620, 4, 990, rec ? 184 : 133, rec ? 222 : 131, rec ? 222 : 121);
+                        if (rec && noOne?[i] != true) Fill(l + 415, 616 + 111, 22, 35, 40, 230, 240);
+                        for (int n = 0; n < slots[i]; n++)
+                        {
+                            int x = l + 32 + (n % 3) * 144, y = 787 + (n / 3) * 146;
+                            if (y >= 1482) break;
+                            int h = Math.Min(135, 1482 - y);
+                            Fill(x, y, 133, h, 37, 37, 39); Fill(x + 3, y + 3, 127, Math.Max(0, h - 6), 27, 27, 27);
+                            // a little art, no count (an item the list doesn't have)
+                            for (int k = 0; k < 6; k++) Fill(x + 20 + rng.Next(80), y + 20 + rng.Next(Math.Max(1, Math.Min(80, h - 40))), 14, 14, 60 + rng.Next(120), 40 + rng.Next(100), 30 + rng.Next(90));
+                        }
+                    }
+                    // the rows under the window's lower edge are hidden, as the game hides them
+                    for (int i = 0; i < cards; i++) { int l = 2560 + (int)Math.Round(-1355.25 + i * 556.5); Fill(l + 4, 1482, 476, 120, received[i] ? 10 : 8, received[i] ? 20 : 12, received[i] ? 40 : 19); }
+                    return b;
+                }
+                string Kinds(EventCards.Screen? sc) => sc == null ? "none" : string.Join(" ", sc.Cards.Select(c => c.Received ? "R" : "N"));
+                using (var cardsShot = DrawCards(new[] { true, true, true, false, false }, new[] { 4, 15, 0, 6, 6 }))
+                {
+                    Check("event cards: received (blue, card icon) and not (gold)", Kinds(EventCards.Locate(cardsShot, out _)), "R R R N N");
+                    Check("event cards: found by their frames alone", $"{EventCards.LooksLikeCards(cardsShot)}", "True");
+                    var (sc, _) = EventCards.ReadAsync(cardsShot).GetAwaiter().GetResult();
+                    string Card(int i) { var c = sc!.Cards[i]; return $"{c.Slots.Count(x => !x.Clipped)}+{c.Slots.Count(x => x.Clipped)}{(c.End ? " end" : "")}"; }
+                    Check("event cards: slots in each window (full + cut), and where a list's end shows", $"{Card(0)} | {Card(1)} | face up {sc!.FaceUp}", "4+0 end | 12+3 | face up False");
+                }
+                using (var faceDown = DrawCards(new[] { true, true, true, false, false }, new[] { 0, 0, 0, 0, 0 }))
+                    Check("event cards: face down (the pick) isn't read", $"{EventCards.ReadAsync(faceDown).GetAwaiter().GetResult().Screen?.FaceUp}", "False");
+                using (var four = DrawCards(new[] { true, true, true, false, false }, new[] { 3, 3, 3, 0, 0 }, cards: 4))
+                {
+                    var none4 = EventCards.Locate(four, out var why4);
+                    Check("event cards: four cards is a layout not recognised", $"{Kinds(none4)} | {why4.StartsWith("card 5's frame")}", "none | True");
+                }
+                using (var mixed = DrawCards(new[] { true, true, true, false, false }, new[] { 3, 3, 3, 0, 0 }, noOne: new[] { false, true, false, false, false }))
+                    Check("event cards: a blue frame without the card icon's 1 is not recognised", $"{Kinds(EventCards.Locate(mixed, out var whyM))} | {whyM.Contains("card 2")}", "none | True");
+                using (var black = new System.Drawing.Bitmap(5120, 2160))
+                    Check("event cards: a black frame is no cards", $"{EventCards.LooksLikeCards(black)}", "False");
+                // a list longer than its window, scrolled by the player between reads: placed by its slots, every place once
+                {
+                    RewardGrid.Slot Sl(int k) => new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "1", 1, new() { ($"key{k}", 30.0), ("Other", 99.0) });
+                    EventCards.Card CardOf(int firstTop, bool scrolled, bool end, IEnumerable<(int Row, int Col, int K, bool Cut)> sl) =>
+                        new(0, new System.Drawing.Rectangle(0, 0, 10, 10), true, firstTop, scrolled, sl.Select(x => new EventCards.CardSlot(x.Row, x.Col, x.Cut ? Sl(-1) with { Count = 0, Icons = new() } : Sl(x.K), x.Cut)).ToList(), end, false, 1);
+                    EventCards.Screen ScreenOf(EventCards.Card c) => new(new List<EventCards.Card> { c }.Concat(Enumerable.Range(1, 4).Select(i => new EventCards.Card(i, default, false, 0, false, new(), false, false, 0))).ToList());
+                    var mg = new EventCards.Merger(70);
+                    using var dummy = new System.Drawing.Bitmap(20, 20);
+                    // unscrolled: rows 0 to 3 full (places 0 to 11), row 4 cut
+                    mg.Add(ScreenOf(CardOf(787, false, false, Enumerable.Range(0, 12).Select(n => (n / 3, n % 3, n, false)).Concat(new[] { (4, 0, -1, true), (4, 1, -1, true), (4, 2, -1, true) }))), dummy);
+                    // scrolled a row and a bit: a cut row 0, then rows 1 to 4 = places 6 to 16 (17 in all, the last row two), the end showing
+                    mg.Add(ScreenOf(CardOf(700, true, true, new[] { (0, 0, -1, true), (0, 1, -1, true), (0, 2, -1, true) }.Concat(Enumerable.Range(6, 11).Select(n => (n / 3 - 1, n % 3, n, false))))), dummy);
+                    var mvoted = mg.Voted(0);
+                    Check("event cards: a scrolled read placed by its slots, the list put together",
+                        $"{mvoted.Count} {string.Join(",", mvoted.Select(v => v.Icons.Count > 0 ? v.Icons[0].Key.Replace("key", "") : "?"))} complete {mg.Complete} unplaced {mg.Unaligned}",
+                        "17 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 complete True unplaced 0");
+                    // a scrolled read that agrees with nothing it holds is left out, never guessed into place
+                    mg.Add(ScreenOf(CardOf(700, true, false, Enumerable.Range(0, 6).Select(n => (n / 3 + 1, n % 3, 100 + n, false)))), dummy);
+                    Check("event cards: a scrolled read that fits nowhere is left out", $"{mg.Voted(0).Count} unplaced {mg.Unaligned}", "17 unplaced 1");
+                }
+                // the unknown-item path: received cards whose slots the item list can't name are filed as unknown items with the
+                // run's rewards, never dropped and never guessed; a list running past the window adds a place not read and leaves
+                // the run's Kinah unknown; a card not received isn't counted
+                {
+                    var es = new TrackerSession(null, new Settings(), items, "Test"); var e0 = DateTime.UtcNow;
+                    es.Engine.SetZone("Hidden Lugi"); es.Instances.Zone("Hidden Lugi", e0.AddMinutes(-5));
+                    using var shot = DrawCards(new[] { true, true, false, false, false }, new[] { 4, 15, 6, 6, 6 });
+                    es.EventCardsRead(shot, e0).GetAwaiter().GetResult();
+                    es.EventCardsRead(shot, e0.AddSeconds(1)).GetAwaiter().GetResult();
+                    es.FlushEventCards(e0.AddSeconds(5), "the screen closed", force: true);
+                    var er2 = es.Instances.CurrentRun;
+                    Check("event cards: unknown slots filed as unknown items, the cut ones too, the open list marked",
+                        $"{string.Join(" ", (es.LastEventCards ?? new()).Select(c => c.Received ? $"R{c.Slots.Count}{(c.More ? "+" : "")}" : "N"))} | items {er2?.Items.Count} | unread {er2?.SlotsUnread} | unknown {er2?.UnknownSlots.Count} more {er2?.UnknownSlots.Count(u => u.Contains("more below"))} | from picture {er2?.FromPicture} | Kinah unknown {er2?.KinahUnknown}",
+                        "R4 R15+ N N N | items 0 | unread 20 | unknown 20 more 1 | from picture True | Kinah unknown True");
+                }
                 var ft = new TrackerSession(null, new Settings(), items, "Test"); var ft0 = DateTime.UtcNow;
                 ft.Engine.SetZone("Ellun River Midstream"); ft.ZoneView.SetZone("Ellun River Midstream");
                 ft.ProcessChat(new List<string> { "[x] a" }, ft0);
