@@ -54,6 +54,12 @@ public sealed class RemoteConfig
     public int MaxOneCrystal { get; init; } = 10;
     /// <summary>An item out in the world is a drop only with a kill or a gather this close to it, either side; 0 turns the rule off.</summary>
     public double WitnessSeconds { get; init; } = 6;
+    /// <summary>
+    /// Each finished expedition, Transcendence or event run is sent the moment it ends, on its own (Steven, 2026-10-23:
+    /// "the expeditions transcendence and events need to sync after each one to the profile"). Off until the site takes a
+    /// runs-only send ("runs": {"sync": true}); until then runs ride with the farming chunks as before.
+    /// </summary>
+    public bool RunSync { get; init; }
     /// <summary>The loot ledger (a loot line no read showed, wherever it sits) counts. Off: it only logs what it would count.</summary>
     public bool Ledger { get; init; }   // off until it stops overcounting noisy chat (synthetic, 2026-10-23: +2.7% Kinah)
 
@@ -147,6 +153,7 @@ public sealed class RemoteConfig
             MaxOnePickup = (int)Num(pick, "max_one", b.MaxOnePickup, 20, 10000),
             MaxOneCrystal = (int)Num(pick, "max_crystals", b.MaxOneCrystal, 3, 1000),
             WitnessSeconds = Num(pick, "witness_seconds", b.WitnessSeconds, 0, 20),
+            RunSync = r.TryGetProperty("runs", out var rs) && rs.ValueKind == JsonValueKind.Object && rs.TryGetProperty("sync", out var rsy) && rsy.ValueKind == JsonValueKind.True,
             Ledger = pick is { } pl && pl.TryGetProperty("ledger", out var lg) && lg.ValueKind == JsonValueKind.True,
             Killed = killed,
             LegendMaterialsRare = !(rare is { } ra && ra.TryGetProperty("legend_materials", out var lm) && lm.ValueKind == JsonValueKind.False),

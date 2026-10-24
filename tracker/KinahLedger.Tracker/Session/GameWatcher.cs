@@ -251,6 +251,8 @@ public sealed class GameWatcher
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
                 await FlushPassiveAsync(false);
+                // each finished run goes up on its own the moment it ends, when the site takes that (RemoteConfig.RunSync)
+                if (Chat is { } rc) try { await rc.SendRunsAsync(_settings); } catch (Exception ex) { CrashLog.Write("run sync", ex); }
                 try { await FetchBoardAsync(); } catch (Exception ex) { CrashLog.Write("price board", ex); }
                 LastError = "";
             }

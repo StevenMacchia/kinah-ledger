@@ -65,8 +65,16 @@ public sealed record RunPayload(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<InstanceRunPayload>? instance_runs = null,
     // since 0.8.12: max(K, G) / (K + G) over the distinct minutes with a kill (K) and with a gather (G), rounded to 0.05;
     // the site leaves runs under 0.8 out of its per-hour figures (farming and gathering at once). Absent with neither
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? focus = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? focus = null,
+    // since 0.8.23: true on a send that carries only finished expedition, Transcendence and event runs, sent the moment
+    // each ends; it holds no farming (no minutes, zones, kills or Kinah), so the site files only the runs
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? runs_only = null)
 {
+    /// <summary>A send of finished runs alone, with no farming in it (RunSync).</summary>
+    public static RunPayload RunsOnly(string region, string server, ItemDictionary? dict, List<InstanceRunPayload> runs) =>
+        new(AppVersion, region, ServerKeys.Build(region, server), "Runs", runs.Count > 0 ? runs[0].kind : "Expedition", null, Gear,
+            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true);
+
     /// <summary>The gear the runs are shared under: "gs:1400-1599" from the player's gear score (Options), "unknown" until it is set (Data.GearScore).</summary>
     public static string Gear { get; set; } = "unknown";
 

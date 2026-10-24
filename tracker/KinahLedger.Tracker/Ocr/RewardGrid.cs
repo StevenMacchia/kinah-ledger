@@ -552,8 +552,9 @@ public static class RewardGrid
         int r = c.R, g = c.G, b = c.B;
         if (r > 120 && g > 80 && b < 70 && r > b + 60) return "Unique";        // gold
         if (r > 80 && b > 90 && g < Math.Min(r, b) - 15) return "Epic";      // violet
-        if (g > r + 20 && g > b + 10) return "Rare";                         // green
+        // teal before green: a bright teal backing has more green than blue (2026-10-23 21:11 Vakron, the Silentium read Rare)
         if (b > r + 25 && g > r + 10 && Math.Abs(g - b) < 40 && g > 90) return "Special";   // teal
+        if (g > r + 20 && g > b + 10) return "Rare";                         // green
         if (b > r + 25 && b > g) return "Legend";                            // blue
         return "Common";                                                      // dark grey
     }

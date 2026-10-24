@@ -2398,6 +2398,26 @@ public sealed class TrackerSession
     public Task<bool> UploadAsync(Settings s) => UploadAsync(s, Engine, Kind, Activity);
 
     /// <summary>
+    /// Sends the runs that finished since the last send, on their own, when the site takes that (RemoteConfig.RunSync):
+    /// each expedition, Transcendence and event reaches the profile the moment it ends, not with the next farming chunk.
+    /// A send that doesn't reach the site puts them back for the next try. False when nothing went.
+    /// </summary>
+    public async Task<bool> SendRunsAsync(Settings s)
+    {
+        if (!Update.RemoteConfig.Current.RunSync || !s.Upload.Enabled || string.IsNullOrWhiteSpace(s.Upload.Endpoint) || Instances.UnsharedCount == 0) return false;
+        if ((DateTime.UtcNow - _runsSentAt).TotalSeconds < 30) return false;
+        _runsSentAt = DateTime.UtcNow;
+        var runs = Instances.TakeUnshared(DateTime.UtcNow.AddHours(-6));
+        var pay = InstanceRunPayload.From(runs, id => _items.KeyOf(id), id => ReportedDrops.Has(_items.NameOf(id)));
+        if (pay == null) return false;
+        bool ok = await Uploader.SendAsync(RunPayload.RunsOnly(RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, pay), s.Upload);
+        if (!ok) Instances.Restore(runs);
+        CrashLog.Note(ok ? $"runs sent on their own: {string.Join(", ", pay.Select(r => r.zone))}" : "runs not sent: the site didn't answer; kept for the next try");
+        return ok;
+    }
+    DateTime _runsSentAt = DateTime.MinValue;
+
+    /// <summary>
     /// Shares one engine's totals (a farming run, or a chunk of the always-on count) under the given kind, with the
     /// expedition and event runs that finished meanwhile. Under five minutes or empty: nothing is sent. A send that
     /// doesn't reach the site puts the runs back for the next one; with sharing off they are let go, never sent later.

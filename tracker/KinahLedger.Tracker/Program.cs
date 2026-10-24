@@ -1338,6 +1338,8 @@ options: --process aion[,other]");
         var json = System.Text.Json.JsonSerializer.Serialize(InstanceRunPayload.From(new[] { old, lugi, urug }, id => id.ToString()));
         Check("shared: an old run's event files under its family", json.Contains("\"zone\":\"Shugo Festival\",\"kind\":\"Event\",\"seconds\":300,\"kinah\":8000,\"kills\":0,\"items\":{},\"event\":\"Odyle Flight Frenzy\",\"family\":\"Shugo Festival\"") ? "yes" : json, "yes");
         Check("shared: the game and its family beside the zone", json.Contains("\"seconds\":360,\"kinah\":0,\"kills\":0,\"items\":{},\"event\":\"Hidden Lugi\",\"family\":\"Shugo Festival\"") ? "yes" : json, "yes");
+        var ro = System.Text.Json.JsonSerializer.Serialize(RunPayload.RunsOnly("na_e", "Siel (Elyos)", null, InstanceRunPayload.From(new[] { urug }, id => id.ToString())!));
+        Check("a run sent on its own: runs only, no farming", $"{ro.Contains("\"runs_only\":true")} {ro.Contains("\"minutes\":0,\"kills\":0")} {ro.Contains("\"zone\":\"Urugugu Canyon\",\"kind\":\"Expedition\",\"seconds\":480,\"kinah\":600000")}", "True True True");
         Check("shared: an expedition sends no event or family", json.Contains("\"zone\":\"Urugugu Canyon\",\"kind\":\"Expedition\",\"seconds\":480,\"kinah\":600000,\"kills\":0,\"items\":{}}") ? "yes" : json, "yes");
 
         // the miscount report says what the tracker thought was going on, and where each pickup landed (it keeps the last minute)

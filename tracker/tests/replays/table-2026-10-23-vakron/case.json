@@ -1,5 +1,5 @@
 {
-  "pending": true,
+  "pending": false,
   "needs_ocr": true,
   "name": "Vakron Sky Island reward table, 2026-10-23 20:53:31 (the frame 0.8.21 kept as -reward-table-settled): 27 slots (8, 8, 8, 3); 0.8.21 read it 4 times while it slid in (14, 14, 27, 27 slots), never settled, every grade Common, the 600.0K coin not named, so the run's Kinah was lost",
   "source": "reward-shots/20261023-205331-Vakron-Sky-Island-reward-table-settled.jpg, everything but the title and the grid blacked out",

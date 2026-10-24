@@ -645,6 +645,9 @@ public sealed class InstanceLog
     /// closed by the next zone read and goes with the next chunk). Each run is handed over once: a farming run and the
     /// always-on chunk both share, and the site counts a run with whichever goes first. Older ones are let go.
     /// </summary>
+    /// <summary>Finished runs not sent yet.</summary>
+    public int UnsharedCount { get { lock (_lock) return _unshared.Count; } }
+
     public List<InstanceRun> TakeUnshared(DateTime since)
     {
         lock (_lock)
