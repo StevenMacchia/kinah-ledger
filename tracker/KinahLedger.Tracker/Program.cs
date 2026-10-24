@@ -1052,6 +1052,7 @@ options: --process aion[,other]");
         ok &= NameMatchTest();
         ok &= LootRowsTest(items);
         ok &= AnchorsTest();
+        ok &= SceneTest(items, s);
         ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
@@ -1222,6 +1223,236 @@ options: --process aion[,other]");
         var sw2 = System.Diagnostics.Stopwatch.StartNew();
         for (int i = 0; i < 10; i++) at3.Tick(game, t0.AddSeconds(2 * (i + 1)), Crop);
         Console.WriteLine($"  (one template: first check {ms:0.0} ms, then {sw2.Elapsed.TotalMilliseconds / 10:0.0} ms each; none shipped yet, so 0 today)");
+        return ok;
+    }
+
+    /// <summary>
+    /// The scene classifier (Prompt 9, 2026-10-24): synthetic frames drawn here for each state classify right; a World,
+    /// Crafting, Crafting, World run keeps the loot list off throughout and lets the craft panel reader run only in
+    /// Crafting; a one-pass flicker changes nothing; Unknown holds reads and the next settled state releases or drops
+    /// them; scene.gate off gates nothing; the classifier stays under 3 ms; the replay bank counts the same through the gate.
+    /// </summary>
+    static bool SceneTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nScene state: one classifier per frame, readers gated by it (Prompt 9, 2026-10-24):");
+        const int W = 2560, H = 1080;
+        var game = new System.Drawing.Rectangle(0, 0, W, H);
+        using var dim = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(215, 14, 16, 22));
+        using var light = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(225, 225, 230));
+        // the world: a field of blocks of every size and colour, so it has edges everywhere, as a real scene does
+        void World(System.Drawing.Graphics g, int seed = 11)
+        {
+            g.Clear(System.Drawing.Color.FromArgb(70, 95, 70));
+            var rng = new Random(seed);
+            for (int i = 0; i < 3000; i++)
+            {
+                using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(40 + rng.Next(140), 60 + rng.Next(140), 40 + rng.Next(110)));
+                int sz = 8 + rng.Next(40);
+                g.FillRectangle(b, rng.Next(W), rng.Next(H), sz, sz);
+            }
+        }
+        // words of text: blocks a word wide, a line apart (what a 256 px picture of a line of text looks like)
+        void Text(System.Drawing.Graphics g, int x0, int y0, int x1, int y1, int seed)
+        {
+            var rng = new Random(seed);
+            for (int y = y0; y + 14 <= y1; y += 32)
+                for (int x = x0 + rng.Next(10); x < x1 - 60; x += 16 + rng.Next(12)) { int ww = 20 + rng.Next(40); g.FillRectangle(light, x, y, ww, 14); x += ww; }
+        }
+        // the HUD: the Kinah counter strip top-left, the minimap top-right, the skill bar, the chat box bottom-left
+        void Hud(System.Drawing.Graphics g)
+        {
+            g.FillRectangle(dim, 0, 0, 700, 48);
+            for (int k = 0; k < 4; k++) for (int d = 0; d < 6; d++) g.FillRectangle(light, 30 + k * 170 + d * 18, 12, 10, 24);
+            using var ring = new System.Drawing.Pen(System.Drawing.Color.FromArgb(200, 190, 150), 8);
+            g.FillEllipse(dim, W - 330, 20, 300, 300); g.DrawEllipse(ring, W - 330, 20, 300, 300);
+            for (int i = 0; i < 12; i++) { g.FillRectangle(dim, W / 2 - 600 + i * 100, H - 110, 80, 80); g.FillRectangle(light, W / 2 - 590 + i * 100, H - 100, 30, 30); }
+            g.FillRectangle(dim, 20, H - 420, 820, 380);
+            Text(g, 40, H - 400, 800, H - 60, 5);
+        }
+        System.Drawing.Bitmap Frame(Action<System.Drawing.Graphics> draw)
+        {
+            var b = new System.Drawing.Bitmap(W, H, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using var g = System.Drawing.Graphics.FromImage(b);
+            draw(g);
+            return b;
+        }
+        using var world = Frame(g => { World(g); Hud(g); });
+        // the crafting panel where its locator looks: its dark backing, the Success and Fail labels, the two bars
+        using var crafting = Frame(g =>
+        {
+            World(g); Hud(g);
+            var region = CraftPanel.Region(game);
+            using var panel = ReplayBank.DrawPanel(region, game, (0.4, 0.2));
+            g.DrawImageUnscaled(panel, region.X, region.Y);
+        });
+        using var loading = Frame(g =>
+        {
+            g.Clear(System.Drawing.Color.FromArgb(4, 4, 6));
+            g.FillRectangle(System.Drawing.Brushes.DimGray, (int)(W * 0.3), H - 60, (int)(W * 0.4), 8);
+            Text(g, (int)(W * 0.35), H - 140, (int)(W * 0.65), H - 90, 9);
+        });
+        using var death = Frame(g =>
+        {
+            var rng = new Random(13);
+            g.Clear(System.Drawing.Color.FromArgb(80, 14, 14));
+            for (int i = 0; i < 2500; i++) { using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60 + rng.Next(60), 8 + rng.Next(18), 8 + rng.Next(18))); int sz = 8 + rng.Next(40); g.FillRectangle(b, rng.Next(W), rng.Next(H), sz, sz); }
+            Hud(g);
+        });
+        using var cutscene = Frame(g =>
+        {
+            World(g, 17);
+            g.FillRectangle(System.Drawing.Brushes.Black, 0, 0, W, 130);
+            g.FillRectangle(System.Drawing.Brushes.Black, 0, H - 130, W, 130);
+        });
+        using var bag = Frame(g =>
+        {
+            World(g); Hud(g);
+            int x0 = (int)(W * 0.60), y0 = (int)(H * 0.10), x1 = (int)(W * 0.97), y1 = (int)(H * 0.88);
+            using var back = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(25, 28, 35));
+            using var slot = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(32, 35, 43));
+            using var edge = new System.Drawing.Pen(System.Drawing.Color.FromArgb(150, 140, 110), 4);
+            g.FillRectangle(back, x0, y0, x1 - x0, y1 - y0); g.DrawRectangle(edge, x0, y0, x1 - x0, y1 - y0);
+            var rng = new Random(21);
+            for (int r = 0; r < 8; r++) for (int c = 0; c < 8; c++)
+            {
+                int sx = x0 + 30 + c * 110, sy = y0 + 40 + r * 100;
+                g.FillRectangle(slot, sx, sy, 96, 88);
+                if (rng.Next(6) == 0) { using var ic = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(120 + rng.Next(130), 80 + rng.Next(120), 40 + rng.Next(120))); g.FillRectangle(ic, sx + 12, sy + 10, 70, 66); }
+            }
+        });
+        using var chatx = Frame(g =>
+        {
+            World(g); Hud(g);
+            using var back = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(20, 22, 28));
+            g.FillRectangle(back, 10, (int)(H * 0.12), (int)(W * 0.37), (int)(H * 0.83));
+            Text(g, 30, (int)(H * 0.14), (int)(W * 0.36), (int)(H * 0.93), 7);
+        });
+        using var blank = Frame(g => g.Clear(System.Drawing.Color.FromArgb(128, 128, 128)));
+
+        FrameStats Stats(System.Drawing.Bitmap f) { using var t = FrameThumb.Shrink(f); return FrameStats.Of(t); }
+        var sw0 = System.Diagnostics.Stopwatch.StartNew();
+        var sWorld = Stats(world);
+        double shrinkMs = sw0.Elapsed.TotalMilliseconds;
+        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("blank", blank) }
+            .ToDictionary(x => x.Name, x => (Frame: x.F, Stats: Stats(x.F), Signs: SceneSignals.FromFrame(x.F)));
+
+        // each frame on its own (a scene that has seen the HUD, as a running tracker has)
+        var sc = new SceneState();
+        sc.Observe(sWorld, new SceneSignals(), DateTime.UtcNow);
+        string Cls(string name, SceneSignals? extra = null)
+        {
+            var (st, why) = sc.Classify(all[name].Stats, extra ?? all[name].Signs);
+            return st.ToString();
+        }
+        Check("the world: the HUD over a scene", Cls("world"), "World");
+        Check("the crafting panel's labels where its locator looks", Cls("crafting"), "Crafting");
+        Check("a near-black frame with no HUD: loading", Cls("loading"), "Loading");
+        Check("a dark red frame: death", Cls("death"), "Death");
+        Check("black bands top and bottom: a cutscene", Cls("cutscene"), "Cutscene");
+        Check("a flat dark panel on the right: the bag", Cls("bag"), "Bag");
+        Check("a flat dark panel with text rows top-left: chat expanded", Cls("chatx"), "ChatExpanded");
+        Check("nothing a rule explains, after the HUD was seen: Unknown", Cls("blank"), "Unknown");
+        Check("...and before any HUD was seen: the world, as before", new SceneState().Classify(all["blank"].Stats, new SceneSignals()).State.ToString(), "World");
+        Check("the Market reader's table: Market", Cls("world", new SceneSignals { Market = true }), "Market");
+        Check("a reward window's title or the reward table: Reward", $"{Cls("world", new SceneSignals { RewardTitle = true })} {Cls("world", new SceneSignals { RewardTable = true })}", "Reward Reward");
+        Check("an event's reward screen: EventCards", Cls("world", new SceneSignals { EventCards = true }), "EventCards");
+        Check("the crafting window's sign: Crafting", Cls("world", new SceneSignals { CraftWindow = true }), "Crafting");
+        Check("a reader's sign beats the picture (a dark crafting window)", Cls("loading", new SceneSignals { CraftWindow = true }), "Crafting");
+        Check("the HUD anchors alone make a plain frame the world", Cls("blank", new SceneSignals { CounterStrip = true }), "World");
+        foreach (var (name, v) in all) if (Environment.GetEnvironmentVariable("KL_SCENE_STATS") == "1") Console.WriteLine($"    {name}: {v.Stats}");
+
+        // the cost: one thumbnail's measures and the rules, the part that runs every pass
+        using (var thumb = FrameThumb.Shrink(world))
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 50; i++) sc.Classify(FrameStats.Of(thumb), new SceneSignals());
+            double each = sw.Elapsed.TotalMilliseconds / 50;
+            Check("the classifier (measures and rules) under 3 ms a pass", each < 3 ? "under 3 ms" : $"{each:0.00} ms", "under 3 ms");
+            Console.WriteLine($"  (classifier {each:0.000} ms a pass on a {thumb.Width}x{thumb.Height} thumbnail; shrinking a {W}x{H} test frame {shrinkMs:0.0} ms, done by window capture live)");
+        }
+
+        // the validity table: one cell per state, hold only where the scene is Unknown
+        Check("every reader has a cell per state; holds only in Unknown", SceneState.Table.All(t => t.Cells.Length == SceneState.Columns.Length && t.Cells.Select((c, i) => c != 'h' || SceneState.Columns[i] == Scene.Unknown).All(b => b) && t.Cells.All(c => c is '+' or '-' or 'h')) ? "yes" : "no", "yes");
+
+        // a run through TrackerSession, the gate as Loop asks it
+        var keepCfg = Update.RemoteConfig.Current;
+        Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+        var ts = new TrackerSession(null, settings, items, "Test") { Vote = false };
+        var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+        var tt = t0;
+        var row = new List<LootLine> { new(500, "Orichalcum Ore x1") };
+        string Pass(string name)
+        {
+            tt = tt.AddMilliseconds(300);
+            ts.ScenePass(all[name].Stats, all[name].Signs, tt);
+            ts.SettleHeldAsync(tt).GetAwaiter().GetResult();
+            var lg = ts.Verdict("loot_list");
+            int before = ts.ListReadsCounted;
+            ts.ListGated(row, tt, lg);   // what Loop does with a loot list read this pass
+            return $"{ts.Scene.Current}: list {lg}{(ts.ListReadsCounted > before ? " read" : "")}, craft {ts.Verdict("craft_panel")}";
+        }
+        Check("before any frame nothing is gated (replays, the bank)", $"{ts.Verdict("loot_list")} {ts.Verdict("craft_panel")} {ts.Verdict("chat")}", "Run Run Run");
+        Check("first frame: World seen once, the list's read held", Pass("world"), "Unknown: list Hold, craft Skip");
+        Check("second: World settles, the held read released", Pass("world") + $" (released {ts.SceneReleased})", "World: list Run read, craft Skip (released 1)");
+        var seq = new[] { "crafting", "crafting", "world", "world" }.Select(Pass).ToList();
+        Check("World→Crafting: seen once, the list already off", seq[0], "World: list Skip, craft Skip");
+        Check("Crafting settles: list off, craft panel on", seq[1], "Crafting: list Skip, craft Run");
+        Check("→World once: list still off until World settles", seq[2], "Crafting: list Skip, craft Skip");
+        Check("World again: list back, craft panel off", seq[3], "World: list Run read, craft Skip");
+        var since = ts.Scene.Since;
+        Check("a one-pass flicker into Crafting", Pass("crafting"), "World: list Skip, craft Skip");
+        Check("...doesn't change the state", Pass("world") + $" since unchanged {ts.Scene.Since == since}", "World: list Run read, craft Skip since unchanged True");
+        Check("the log line on a change", ts.Scene.ChangeLine().StartsWith("scene World since ") && ts.Scene.ChangeLine().Contains("; skipped craft_panel") ? "scene World since <t>; skipped craft_panel..." : ts.Scene.ChangeLine(), "scene World since <t>; skipped craft_panel...");
+        // Unknown holds; the next settled state releases what it allows and drops the rest
+        Check("Unknown once: the list's read held", Pass("blank") + $" held {ts.HeldNow}", "World: list Hold, craft Skip held 1");
+        Check("World again: released, read at its own time", Pass("world") + $" released {ts.SceneReleased}", "World: list Run read, craft Skip released 2");
+        Pass("blank"); Pass("blank");
+        Check("Unknown settles: reads held", $"{ts.Scene.Current} held {ts.HeldNow}", "Unknown held 2");
+        Pass("loading");
+        int dropped = ts.SceneDropped;
+        Check("Loading settles: the list isn't valid there, held reads dropped", Pass("loading") + $" held {ts.HeldNow} dropped {ts.SceneDropped - dropped}", "Loading: list Skip, craft Skip held 0 dropped 2");
+        Check("Explain says which features decided", ts.Scene.Explain().StartsWith("Loading: near-black") ? "Loading: near-black ..." : ts.Scene.Explain(), "Loading: near-black ...");
+
+        // scene.gate off: the state is still worked out and logged, nothing gated
+        Update.RemoteConfig.Current = Update.RemoteConfig.Parse("""{"scene": {"gate": false}}""");
+        var off = new TrackerSession(null, settings, items, "Test") { Vote = false };
+        tt = t0;
+        foreach (var n in new[] { "world", "world", "crafting", "crafting" }) { tt = tt.AddMilliseconds(300); off.ScenePass(all[n].Stats, all[n].Signs, tt); }
+        Check("scene.gate off: Crafting worked out, nothing gated", $"{off.Scene.Current}: list {off.Verdict("loot_list")}, craft {off.Verdict("craft_panel")}, chat {off.Verdict("chat")}", "Crafting: list Run, craft Run, chat Run");
+        Check("...and the log says what it would skip", off.Scene.ChangeLine().Contains("scene.gate off; would skip loot_list") ? "would skip loot_list..." : off.Scene.ChangeLine(), "would skip loot_list...");
+        Check("scene.gate: on by default, on with an empty config", $"{Update.RemoteConfig.BuiltIn.SceneGate} {Update.RemoteConfig.Parse("{}").SceneGate} {Update.RemoteConfig.Current.SceneGate}", "True True False");
+        Update.RemoteConfig.Current = keepCfg;
+
+        // the replay bank through the gate: a case has no frame, so it counts exactly as before, gate on or off
+        string? bank = null;
+        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+            for (var d = new DirectoryInfo(start); d != null && bank == null; d = d.Parent)
+                if (Directory.Exists(Path.Combine(d.FullName, "tracker", "tests", "replays"))) bank = Path.Combine(d.FullName, "tracker", "tests", "replays");
+        if (bank == null) Console.WriteLine("  (replay bank not found from here: its parity is checked by the replay-bank step)");
+        else
+        {
+            var keepDir = CrashLog.DirOverride;
+            var keepOut = Console.Out;
+            Console.SetOut(TextWriter.Null);   // the table cases print their slots as they read; the bank step shows them
+            List<ReplayBank.Result> on, gateOff;
+            try
+            {
+                Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+                on = ReplayBank.Run(bank, settings);
+                Update.RemoteConfig.Current = Update.RemoteConfig.Parse("""{"scene": {"gate": false}}""");
+                gateOff = ReplayBank.Run(bank, settings);
+            }
+            finally { Console.SetOut(keepOut); Update.RemoteConfig.Current = keepCfg; CrashLog.DirOverride = keepDir; }
+            int same = on.Zip(gateOff).Count(p => p.First.Case == p.Second.Case && p.First.Status == p.Second.Status && p.First.Detail == p.Second.Detail);
+            Check("replay bank: every case passes through the gate", $"{on.Count(r => r.Status is "pass" or "skipped")}/{on.Count}", $"{on.Count}/{on.Count}");
+            Check("...and counts the same JSON with scene.gate off", $"{same}/{on.Count} identical", $"{on.Count}/{on.Count} identical");
+        }
         return ok;
     }
 
