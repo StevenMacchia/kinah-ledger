@@ -92,6 +92,29 @@ public sealed class RemoteConfig
     /// </summary>
     public bool LegendMaterialsRare { get; init; } = true;
 
+    // ---- anchors, phase two (Ocr.AnchoredCrop, 2026-10-24) ----
+    /// <summary>
+    /// layout.anchor.chat: once the chat box has held still (3 checks within 4 px), the chat is looked for again around it,
+    /// not across the whole bottom-left quarter. On in code; the site turns it off with
+    /// "layout": {"anchor": {"chat": false}}.
+    /// </summary>
+    public bool AnchorChat { get; init; } = true;
+    /// <summary>layout.anchor.balance: the same for the Kinah counter strip, read around its numbers. On in code.</summary>
+    public bool AnchorBalance { get; init; } = true;
+    /// <summary>
+    /// ocr.chat_skip_same: a chat capture whose pixels are exactly those of the last read isn't recognized again; the last
+    /// read's lines stand. On in code; "ocr": {"chat_skip_same": false} turns it off.
+    /// </summary>
+    public bool ChatSkipSame { get; init; } = true;
+    /// <summary>A built-in switch by its config name (layout.anchor.chat, layout.anchor.balance, ocr.chat_skip_same).</summary>
+    public bool Flag(string name) => name switch
+    {
+        "layout.anchor.chat" => AnchorChat,
+        "layout.anchor.balance" => AnchorBalance,
+        "ocr.chat_skip_same" => ChatSkipSame,
+        _ => false,
+    };
+
     // ---- staged rollout ----
     public string RolloutVersion { get; init; } = "";
     public int RolloutPercent { get; init; } = 100;
@@ -142,6 +165,10 @@ public sealed class RemoteConfig
         var rare = Obj(r, "rare");
         var pick = Obj(r, "pickup");
         var scene = Obj(r, "scene");
+        var layout = Obj(r, "layout");
+        var anchor = layout is { } lay ? Obj(lay, "anchor") : null;
+        // a switch that is on unless the config says false in so many words
+        static bool Off2(JsonElement? e, string k) => e is { } o && o.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.False;
         // the loot band moves at most a little from where it was measured, and never turns inside out
         double ll = Num(loot, "left", b.LootLeft, -0.60, -0.25), lr = Num(loot, "right", b.LootRight, -0.10, 0.10);
         double lt = Num(loot, "top", b.LootTop, -0.20, 0.05), lb = Num(loot, "bottom", b.LootBottom, 0.15, 0.45);
@@ -179,6 +206,9 @@ public sealed class RemoteConfig
                 || (sgv.ValueKind == JsonValueKind.Object && sgv.TryGetProperty("on", out var sgo) && sgo.ValueKind == JsonValueKind.False))),
             SceneGateStates = GateStates(scene, b.SceneGateStates),
             LegendMaterialsRare = !(rare is { } ra && ra.TryGetProperty("legend_materials", out var lm) && lm.ValueKind == JsonValueKind.False),
+            AnchorChat = !Off2(anchor, "chat"),
+            AnchorBalance = !Off2(anchor, "balance"),
+            ChatSkipSame = !Off2(ocr, "chat_skip_same"),
             RolloutVersion = Str(roll, "version", ""),
             RolloutPercent = (int)Num(roll, "percent", 100, 0, 100),
             RolloutHold = roll is { } ro && ro.TryGetProperty("hold", out var h) && h.ValueKind == JsonValueKind.True,

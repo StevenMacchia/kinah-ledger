@@ -155,12 +155,148 @@ public static class TemplateMatch
 }
 
 /// <summary>
+/// Anchors phase two (2026-10-24) for one region: once its anchor has been seen in the same place on
+/// <see cref="Needed"/> checks in a row (every edge within <see cref="Tolerance"/> px, the same game window, at least
+/// <see cref="MinConf"/>), the region is read from a crop derived from the anchor instead of its fixed fractions. The
+/// moment the anchor is missing, moves, the game window changes or the confidence falls below what it locked at, the
+/// region goes back to its fixed crop and needs three steady checks again. Each switch is one line in reads.log
+/// (`anchor chat: reading around the anchor now ...`, `anchor chat: back to the fixed crop (...)`). Evidence it was
+/// needed: on Steven's 5120x2160 window the anchors sat at the same dx/dy across three sessions (2026-10-24), the
+/// Kinah strip's numbers in 124x54 of a 1296x97 crop.
+/// </summary>
+public sealed class AnchoredCrop
+{
+    public const int Tolerance = 4, Needed = 3;
+
+    public string Region { get; }
+    /// <summary>Below this an anchor sighting doesn't count towards a lock (and drops one).</summary>
+    public double MinConf { get; }
+    readonly Func<Rectangle, Rectangle, Rectangle> _derive;
+    readonly List<(Rectangle Found, Rectangle Game, double Conf)> _seen = new();
+    readonly object _lock = new();
+    Rectangle _game;
+
+    /// <summary>The anchor's box when the region locked onto it; null while the fixed crop is read.</summary>
+    public Rectangle? Anchor { get; private set; }
+    /// <summary>The lowest confidence of the sightings it locked on: a later one below it drops the lock.</summary>
+    public double LockedConf { get; private set; }
+    public bool Active { get { lock (_lock) return Anchor != null; } }
+    /// <summary>Switches to the anchored crop and back, since the start (tests and the minute line).</summary>
+    public int On { get; private set; }
+    public int Off { get; private set; }
+    /// <summary>Where the switch lines go (reads.log; tests catch them).</summary>
+    public Action<string> Log { get; set; } = CrashLog.Note;
+
+    /// <param name="derive">The crop from (game window, anchor box).</param>
+    public AnchoredCrop(string region, Func<Rectangle, Rectangle, Rectangle> derive, double minConf)
+    {
+        Region = region; _derive = derive; MinConf = minConf;
+    }
+
+    /// <summary>
+    /// One sighting of the anchor (<paramref name="found"/>, screen pixels). <paramref name="enabled"/> is the region's
+    /// layout.anchor switch: off, nothing locks and a held lock is dropped.
+    /// </summary>
+    public void Observe(Rectangle game, Rectangle found, double conf, bool enabled)
+    {
+        lock (_lock)
+        {
+            if (!enabled) { Drop($"layout.anchor.{Region} is off"); _seen.Clear(); return; }
+            if (found.Width <= 0 || found.Height <= 0 || conf < MinConf)
+            {
+                Drop($"the anchor's confidence fell to {conf:0.00}");
+                _seen.Clear();
+                return;
+            }
+            if (Anchor is Rectangle a)
+            {
+                string? why = game != _game ? "the game window changed"
+                    : conf < LockedConf ? $"the anchor's confidence fell from {LockedConf:0.00} to {conf:0.00}"
+                    : Moved(a, found) > Tolerance ? $"the anchor moved {Moved(a, found)} px"
+                    : null;
+                if (why == null) return;
+                Drop(why);
+                _seen.Clear();
+            }
+            _seen.Add((found, game, conf));
+            if (_seen.Count > Needed) _seen.RemoveAt(0);
+            // three in a row, the same window, no two of them more than the tolerance apart
+            if (_seen.Count < Needed || _seen.Any(s => s.Game != game) || _seen.Any(x => _seen.Any(y => Moved(x.Found, y.Found) > Tolerance))) return;
+            Anchor = found; _game = game; LockedConf = _seen.Min(s => s.Conf); On++;
+            var c = _derive(game, found);
+            var f = Anchors.FixedRegions(game)[Region];
+            Log($"anchor {Region}: reading around the anchor now, {c.Width}x{c.Height} at {c.X},{c.Y} instead of the fixed {f.Width}x{f.Height} (held still {Needed} times within {Tolerance} px, conf {LockedConf:0.00})");
+        }
+    }
+
+    /// <summary>The anchor wasn't there (no numbers on the strip, no chat lines lately): the fixed crop, now.</summary>
+    public void Missing(Rectangle game, string why)
+    {
+        lock (_lock) { Drop(why); _seen.Clear(); }
+    }
+
+    /// <summary>
+    /// The crop to read for this region now: derived from the anchor while locked, the switch is on and the game window is
+    /// the one it locked in; null otherwise (read the fixed crop).
+    /// </summary>
+    public Rectangle? Crop(Rectangle game, bool enabled)
+    {
+        lock (_lock)
+        {
+            if (Anchor is not Rectangle a) return null;
+            if (!enabled) { Drop($"layout.anchor.{Region} is off"); _seen.Clear(); return null; }
+            if (game != _game) { Drop("the game window changed"); _seen.Clear(); return null; }
+            var c = _derive(game, a);
+            return c.Width >= 20 && c.Height >= 10 ? c : null;
+        }
+    }
+
+    void Drop(string why)
+    {
+        if (Anchor == null) return;
+        Anchor = null; LockedConf = 0; Off++;
+        Log($"anchor {Region}: back to the fixed crop ({why})");
+    }
+
+    /// <summary>How far apart two boxes are: the largest move of any of their four edges, px.</summary>
+    public static int Moved(Rectangle a, Rectangle b) =>
+        Math.Max(Math.Max(Math.Abs(a.Left - b.Left), Math.Abs(a.Right - b.Right)), Math.Max(Math.Abs(a.Top - b.Top), Math.Abs(a.Bottom - b.Bottom)));
+
+    /// <summary>
+    /// The Kinah counter strip's crop from its anchor (the numbers' union, padded a quarter of their height): three number
+    /// heights either side, room for an icon on the left and a counter gaining digits on the right (a change of width
+    /// beyond 4 px drops the lock anyway), half a height above and below, never outside the fixed strip.
+    /// </summary>
+    public static Rectangle BalanceFrom(Rectangle game, Rectangle anchor)
+    {
+        int h = Math.Max(8, anchor.Height * 2 / 3);
+        var r = Rectangle.FromLTRB(anchor.Left - 3 * h, anchor.Top - h / 2, anchor.Right + 3 * h, anchor.Bottom + h / 2);
+        r.Intersect(BalanceReader.Strip(game));
+        return r;
+    }
+
+    /// <summary>
+    /// The chat's search area from its anchor (the box ChatLocator found, twelve lines tall): the box with a line above,
+    /// two lines left (the channel tab), three lines right, and three lines below for the input row the box sits on, never
+    /// outside the bottom-left quarter it was found in.
+    /// </summary>
+    public static Rectangle ChatFrom(Rectangle game, Rectangle anchor)
+    {
+        int line = Math.Max(14, anchor.Height / 12);
+        var r = Rectangle.FromLTRB(anchor.Left - 2 * line, anchor.Top - line, anchor.Right + 3 * line, anchor.Bottom + 3 * line);
+        r.Intersect(ChatLocator.Corner(game));
+        return r;
+    }
+}
+
+/// <summary>
 /// Where the game's interface really is, found from anchors instead of assumed from fractions of the window (brief item
 /// 4, phase one: shadow only). Two anchors come free from reads already made: the Kinah counter strip (the numbers'
 /// boxes from BalanceReader's last read) and the chat (the box ChatLocator found above its input row, or from its
 /// lines). Template anchors (data/anchors) are matched every <see cref="EverySeconds"/> s when there are any. Each
 /// region's anchored crop is compared with its fixed-fraction crop and written to reads.log once a minute
-/// ("anchor loot dx=.. dy=.. conf=.."). Nothing here changes which crops are read. With the game in view and no anchor
+/// ("anchor loot dx=.. dy=.. conf=.."). Phase two (<see cref="AnchoredCrop"/>) reads the chat's search area and the Kinah
+/// strip from their anchors once they hold still; every other region is still read from its fixed crop. With the game in view and no anchor
 /// seen for <see cref="LostSeconds"/> s, the layout is "not found": logged, nothing paused (phase two decides that).
 /// </summary>
 public sealed class Anchors
@@ -200,13 +336,21 @@ public sealed class Anchors
     /// </summary>
     public void ObserveBalance(Rectangle game, IReadOnlyList<Rectangle> numbers, DateTime at)
     {
-        if (numbers.Count == 0) return;
+        // phase two: a read with no numbers on it is the anchor gone, and the strip goes back to its fixed crop at once
+        if (numbers.Count == 0) { BalanceCrop.Missing(game, "a read of the strip showed no numbers"); return; }
         var u = numbers.Aggregate(Rectangle.Union);
         int pad = Math.Max(2, numbers.Max(n => n.Height) / 4);
         u.Inflate(pad, pad);
         u.Intersect(game);
-        lock (_lock) _hits["kinah-strip"] = new Hit("kinah-strip", "balance", u, BalanceReader.Strip(game), Math.Min(1, numbers.Count / 4.0), at);
+        double conf = Math.Min(1, numbers.Count / 4.0);
+        lock (_lock) _hits["kinah-strip"] = new Hit("kinah-strip", "balance", u, BalanceReader.Strip(game), conf, at);
+        BalanceCrop.Observe(game, u, conf, Update.RemoteConfig.Current.AnchorBalance);
     }
+
+    /// <summary>Phase two for the Kinah counter strip: read around its numbers once they hold still (layout.anchor.balance).</summary>
+    public AnchoredCrop BalanceCrop { get; } = new("balance", AnchoredCrop.BalanceFrom, 0.25);
+    /// <summary>Phase two for the chat: looked for again around its box once it holds still (layout.anchor.chat).</summary>
+    public AnchoredCrop ChatCrop { get; } = new("chat", AnchoredCrop.ChatFrom, 0.4);
 
     /// <summary>
     /// The chat box the tracker reads (found above the input row with its channel tab, or from its lines, or chosen or
@@ -217,6 +361,8 @@ public sealed class Anchors
         double conf = manual ? 0.5 : how.Contains("input box", StringComparison.OrdinalIgnoreCase) ? 1.0
             : how.Contains("from its lines", StringComparison.OrdinalIgnoreCase) ? 0.7 : 0.4;
         lock (_lock) _hits["chat-input"] = new Hit("chat-input", "chat", chat, ChatLocator.Corner(game), conf, at);
+        // phase two: a chat chosen by hand is never looked for again, so it has nothing to anchor
+        if (!manual) ChatCrop.Observe(game, chat, conf, Update.RemoteConfig.Current.AnchorChat);
     }
 
     /// <summary>
@@ -297,7 +443,7 @@ public sealed class Anchors
                 var (dx, dy) = Delta(region, f, ar);
                 CrashLog.Note($"anchor {region} dx={dx} dy={dy} conf={conf:0.00} (from {from}; size {ar.Width}x{ar.Height}, fixed {f.Width}x{f.Height})");
             }
-            CrashLog.Note($"anchor: {_ticks} checks, {(_ticks > 0 ? _costMs / _ticks : 0):0.0} ms each, {_templates.Count} template(s){(LayoutNotFound ? ", layout not found" : "")}");
+            CrashLog.Note($"anchor: {_ticks} checks, {(_ticks > 0 ? _costMs / _ticks : 0):0.0} ms each, {_templates.Count} template(s){(LayoutNotFound ? ", layout not found" : "")} · read from the anchor: chat {(ChatCrop.Active ? "yes" : "no")}, balance {(BalanceCrop.Active ? "yes" : "no")}");
             _costMs = 0; _ticks = 0;
         }
         return true;
