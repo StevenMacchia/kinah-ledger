@@ -193,7 +193,7 @@ public static class ReplayBank
         var game = new Rectangle(100, 50, w, h);
         // each case keeps its runs in a folder of its own, so the runs log (instances.jsonl) starts empty
         var keptDir = CrashLog.DirOverride;
-        CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kl-bank-" + Guid.NewGuid().ToString("N")[..8]);
+        CrashLog.DirOverride = TestTemp.Path("kl-bank-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(CrashLog.DirOverride);
         try { return RunCaseIn(caseDir, node, settings, items, game); }
         // KL_BANK_KEEP set: each case's reads.log is kept and its folder printed, for reading what a case did

@@ -13,7 +13,13 @@ public sealed class ChatVoter
     public const int Reads = 3;
     public const double MaxSeconds = 1.0;
 
-    sealed class Pending { public string First = ""; public DateTime At; public readonly List<string> Readings = new(); public bool Gone; }
+    sealed class Pending { public string First = ""; public DateTime At; public readonly List<string> Readings = new(); public bool Gone; public Out Meta; }
+
+    /// <summary>A line whose vote is over, as chosen, with when it came in, where it stood in that read (from the bottom), that read and the two lines above it (ItemRepeatGuard).</summary>
+    public readonly record struct Out(string Text, DateTime At, int FromBottom, IReadOnlyList<string> Read, string Above1, string Above2);
+
+    /// <summary>The lines the last <see cref="Push"/> or <see cref="Flush"/> returned, in order, with where each came in.</summary>
+    public List<Out> LastOut { get; } = new();
     readonly List<Pending> _pending = new();
 
     /// <summary>How many lines a vote changed, for the log and the audit.</summary>
@@ -65,8 +71,15 @@ public sealed class ChatVoter
             if (found >= 0) { w.Readings.Add(read[found]); cursor = found - 1; }
             else w.Gone = true;
         }
-        foreach (var f in fresh) { var w = new Pending { First = f, At = now }; w.Readings.Add(f); _pending.Add(w); }
+        for (int j = 0; j < fresh.Count; j++)
+        {
+            var f = fresh[j];
+            int idx = read.Count - fresh.Count + j;
+            var w = new Pending { First = f, At = now, Meta = new Out(f, now, fresh.Count - 1 - j, read, idx >= 1 ? read[idx - 1] : "", idx >= 2 ? read[idx - 2] : "") };
+            w.Readings.Add(f); _pending.Add(w);
+        }
         var outp = new List<string>();
+        LastOut.Clear();
         while (_pending.Count > 0)
         {
             var w = _pending[0];
@@ -81,6 +94,7 @@ public sealed class ChatVoter
             var chosen = sure ?? Choose(w, meaning);
             if (meaning(chosen).Key.Length > 0) { Latencies.Add((now - w.At).TotalSeconds); if (Latencies.Count > 500) Latencies.RemoveAt(0); Measured?.Invoke(now, (now - w.At).TotalSeconds); }
             outp.Add(chosen);
+            LastOut.Add(w.Meta with { Text = chosen });
             _pending.RemoveAt(0);
         }
         return outp;
@@ -90,6 +104,8 @@ public sealed class ChatVoter
     public List<string> Flush(Func<string, (string Key, bool Exact)> meaning)
     {
         var outp = _pending.Select(w => Choose(w, meaning)).ToList();
+        LastOut.Clear();
+        for (int i = 0; i < outp.Count; i++) LastOut.Add(_pending[i].Meta with { Text = outp[i] });
         _pending.Clear();
         return outp;
     }

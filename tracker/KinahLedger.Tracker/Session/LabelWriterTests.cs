@@ -25,7 +25,7 @@ public static class LabelWriterTests
         Console.WriteLine("\nHelp improve counting: training pairs, crops, consent (2026-10-24):");
         var keepDir = CrashLog.DirOverride;
         var keepWriter = LabelWriter.Shared;
-        var dir = Path.Combine(Path.GetTempPath(), "kl-labels-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = TestTemp.Path("kl-labels-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(dir);
         CrashLog.DirOverride = dir;
         try

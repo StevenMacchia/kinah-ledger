@@ -72,7 +72,7 @@ public static class LiveFeedTests
 
         // the split: a 37:04 record whose five reward screens were kept; each screen read slot by slot (within a minute)
         var keepDir = CrashLog.DirOverride;
-        var dir = Path.Combine(Path.GetTempPath(), "kl-livefeed-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = TestTemp.Path("kl-livefeed-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(dir);
         CrashLog.DirOverride = dir;
         RunFixes.ResetKept();

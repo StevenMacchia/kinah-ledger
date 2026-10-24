@@ -193,6 +193,51 @@ static class ChatCountTests
             Take(w.Tick(k0.AddSeconds(60)));
             Check("witness: the counter gone quiet: what waits counts as read", string.Join(" ", log) + " live " + w.Live(k0.AddSeconds(60)), "?150 live False");
         }
+
+        // an item line the chat shows again after a scroll (ItemRepeatGuard; 2026-10-24 15:59, Kukuru 2 and Orichalcum Ore 4
+        // for 1 and 3): a read three lines long that shares only its top two with the next one lines that one up on them, so
+        // the line counted a moment ago comes back as new. Without a second witness it is that line; with a fresh loot list
+        // row or a gathering race behind it, it is a second pickup
+        {
+            var r0 = t0.AddMinutes(40);
+            int Run(Action<TrackerSession>? second)
+            {
+                var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+                s.ProcessChat(new List<string> { "[P1] so the boss", "[P2] spawns at ten", "[P3] ok thanks" }, r0);
+                s.ProcessChat(new List<string> { "[P1] so the boss", "[P2] spawns at ten", "[P3] ok thanks", "Orichalcum Ore acquired." }, r0.AddSeconds(1));
+                s.ProcessChat(new List<string> { "[P1] so the boss", "[P2] spawns at ten", "[P9] wts" }, r0.AddSeconds(3));
+                second?.Invoke(s);
+                s.ProcessChat(new List<string> { "[P1] so the boss", "[P2] spawns at ten", "[P3] ok thanks", "Orichalcum Ore acquired." }, r0.AddSeconds(5));
+                for (int i = 6; i <= 14; i += 2) s.ProcessChat(new List<string> { "[P1] so the boss", "[P2] spawns at ten", "[P3] ok thanks", "Orichalcum Ore acquired." }, r0.AddSeconds(i));
+                s.FlushVotes(r0.AddSeconds(14));
+                return N(s, "Orichalcum Ore");
+            }
+            Check("repeat: the line back after a scroll, no witness: once", Run(null).ToString(), "1");
+            Check("repeat: a second pickup with a fresh loot list row: twice", Run(s =>
+            {
+                s.ProcessList(new List<LootLine> { new(1197, "Orichalcum Ore x1", 0.62, 0xF0F0F0F0F0F0F0F0UL, 0.14, 0.12, 1920) }, r0.AddSeconds(4.4));
+                s.ProcessList(new List<LootLine> { new(1167, "Orichalcum Ore x1", 0.62, 0xF0F0F0F0F0F0F0F0UL, 0.14, 0.12, 1920) }, r0.AddSeconds(4.9));
+            }).ToString(), "2");
+            Check("repeat: a second pickup with a new gathering race: twice", Run(s => s.GatherOutcome(r0.AddSeconds(4.6), true, false)).ToString(), "2");
+
+            // the guard alone: the same place under the same lines is the same line; a witness one copy took stands for no second
+            var g = new ItemRepeatGuard();
+            var place = new ItemRepeatGuard.Place(0, 10, "[P2] spawns at ten", "Kukuru acquired.");
+            var none = new ItemRepeatGuard.Screen(1, DateTime.MinValue);
+            g.Race(r0.AddSeconds(59.8), "", Data.GatherFamily.Unknown);
+            g.Counted("Orichalcum Ore", 1, r0.AddSeconds(60), r0.AddSeconds(61), place);
+            g.Row("Orichalcum Ore", r0.AddSeconds(61.3), 7);
+            Check("repeat: where the counted copy stood, under the same lines", g.Judge("Orichalcum Ore", 1, r0.AddSeconds(63), r0.AddSeconds(64), place with { Above1 = "[P2] spawns at tcn" }, none, false).V.ToString(), "Repeat");
+            Check("repeat: the first pickup's race and row are one witness, taken", g.Judge("Orichalcum Ore", 1, r0.AddSeconds(63), r0.AddSeconds(64), null, none, false).V.ToString(), "Wait");
+            Check("...and once the wait is over, a repeat", g.Judge("Orichalcum Ore", 1, r0.AddSeconds(63), r0.AddSeconds(69), null, none, false).V.ToString(), "Repeat");
+            Check("repeat: a read showing two such lines shows a second line", g.Judge("Orichalcum Ore", 1, r0.AddSeconds(63), r0.AddSeconds(64), null, new(2, DateTime.MinValue), false).V.ToString(), "Count");
+            Check("repeat: one line on screen, the counted copy scrolled off: a line of its own", g.Judge("Orichalcum Ore", 1, r0.AddSeconds(80), r0.AddSeconds(81), null, new(1, r0.AddSeconds(70)), false).V.ToString(), "Count");
+            Check("repeat: a kill stands behind a drop, not behind a gathered ore", g.Judge("Orichalcum Ore", 1, r0.AddSeconds(63), r0.AddSeconds(69), null, none, true).V + " " + new Func<string>(() => { g.Kill(r0.AddSeconds(62.5)); return g.Judge("Orichalcum Ore", 1, r0.AddSeconds(63), r0.AddSeconds(69), null, none, true).V.ToString(); })(), "Repeat Repeat");
+            g.Counted("Spiritstone", 1, r0.AddSeconds(60.2), r0.AddSeconds(61), null);
+            g.Kill(r0.AddSeconds(59.9));
+            Check("repeat: a drop's second copy with a kill of its own: counted", g.Judge("Spiritstone", 1, r0.AddSeconds(66), r0.AddSeconds(67), null, none, true).V.ToString(), "Count");
+            Check("repeat: an item counted over 30 s ago: no repeat check", g.Judge("Orichalcum Ore", 1, r0.AddSeconds(95), r0.AddSeconds(95), null, none, true).V.ToString(), "Count");
+        }
         return ok;
     }
 }

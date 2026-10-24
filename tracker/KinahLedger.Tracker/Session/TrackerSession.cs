@@ -447,7 +447,7 @@ public sealed partial class TrackerSession
         _cross.Gathered = GatherWitnessFor;
         _voter.Confirmed = l => FastChatOn && ListShows(_parser.Meaning(l).Key, _ctxNow);
         WireScore();
-        _rows = new LootRows(items) { NewGather = (canon, first) => IsGatherName(canon) && GatherRaceAfter(first), NotARow = (obj, why) => _cross.Withdraw(obj, why) };
+        _rows = new LootRows(items) { NewGather = (canon, first) => IsGatherName(canon) && GatherRaceAfter(first), NotARow = (obj, why) => { _repeats.Withdraw(obj); _cross.Withdraw(obj, why); } };
         // the item-name decoder, shadow only: a look for its model files now, the model itself on first use (NameDecoder)
         NameDecoder.Start(items);
         CraftView = new SessionEngine(items);
@@ -1117,7 +1117,7 @@ public sealed partial class TrackerSession
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
         CommitHeld();
         try { ProcessChatCore(lines, now); }
-        finally { ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(now); Score.Tick(now); }
+        finally { ReleaseRepeats(now); ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(now); Score.Tick(now); }
     }
 
     void ProcessChatCore(List<string> lines, DateTime now)
@@ -1258,9 +1258,11 @@ public sealed partial class TrackerSession
         // (Steven, 2026-10-23 11:07: all 21 event rewards lost when the chat faded right after the clean read)
         if (lines.Count > 0) { _lastLines = lines; _chatLinesAt = now; }
         bool batchAchievement = false;
-        bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat")
+        bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat", ChatVoter.Out? meta = null)
         {
             bool any = false;
+            int kept = 0, skipped = 0;
+            _lastRepeatOnly = false;
             foreach (var p0 in events)
             {
                 var parsed = p0 with { Via = p0.Via.Length > 0 ? via + " · " + p0.Via : via };
@@ -1287,15 +1289,31 @@ public sealed partial class TrackerSession
                 // the Kinah counter is the deciding witness for Kina while it is read (KinaWitness): the line waits for its rise
                 if (ev is KinahChanged { Bound: false, Delta: > 0 } kw && KinaWitnessOn(now)) { SettleKina(_kina.Offer(new KinaWitness.Candidate(kw.Delta, now, raw.Trim(), ev), now), now); continue; }
                 // a rare drop waits for the second read of this chat picture (ReadOnce, the same pass) before it counts
+                // an item line the chat shows again after a scroll is no second pickup without a witness of one (ItemRepeatGuard)
+                if (ev is ItemAcquired rq && !via.Contains("count read again"))
+                {
+                    bool nw = NeedsWitness(rq, made, crafting);
+                    var rkey = ItemLineKey(_items.NameOf(rq.ItemId), rq.Count);
+                    var screen = ScreenOf(rkey, raw, meta is { } mr ? mr.Read : lines, meta?.At ?? now);
+                    var place = meta is { } mp ? new ItemRepeatGuard.Place(mp.FromBottom, mp.Read.Count, mp.Above1, mp.Above2) : null;
+                    var verdict = RepeatCheck(rq, ev, raw, meta?.At ?? parsed.Time, place, screen, nw, now);
+                    if (verdict == ItemRepeatGuard.Verdict.Repeat) { skipped++; continue; }
+                    kept++;
+                    if (verdict == ItemRepeatGuard.Verdict.Count) FinishChatItem(ev, raw, nw, now);
+                    continue;
+                }
+                kept++;
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "chat", raw, now)); continue; }
                 // no single-signal counting: out in the world, an item is a drop only with a kill or a gather around it
                 if (ev is ItemAcquired wi && NeedsWitness(wi, made, crafting)) { lock (_awaiting) _awaiting.Add((ev, now)); continue; }
                 Commit(ev);
             }
+            _lastRepeatOnly = skipped > 0 && kept == 0;
             return any;
         }
         // each new line is voted on across the next reads before it counts (ChatVoter); lines come out in order
         var voted = Vote ? _voter.Push(fresh, lines, now, _parser.Meaning) : fresh;
+        var voteMeta = Vote ? _voter.LastOut.ToList() : new List<ChatVoter.Out>();
         // how many loot lines land at once: three or more are a run's rewards coming in (InstanceLog.Route, Loot)
         _batch = voted.Count(Reread.LooksLikeLoot) + reread.Count + settled.Count;
         // an achievement line among them: the items printed with it are its reward, and those in the next few seconds too
@@ -1343,8 +1361,12 @@ public sealed partial class TrackerSession
         }
         foreach (var (l, events) in _parser.ParseBatch(voted, now))
         {
-            bool any = Apply(events, l);
-            CrashLog.Read(l, any, afterFade);
+            // where the line came in (ChatVoter.LastOut), for telling a scrolled copy from a new line
+            int mi = voteMeta.FindIndex(m => m.Text == l);
+            ChatVoter.Out? meta = mi >= 0 ? voteMeta[mi] : null;
+            if (mi >= 0) voteMeta.RemoveAt(mi);
+            bool any = Apply(events, l, meta: meta);
+            CrashLog.Read(l, any && !_lastRepeatOnly, afterFade);
             if (any) WatchCount(l, events);
             // while the chat is garbled, what the vote counts is remembered too, so the settle doesn't count it again
             if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); thisRead.Add(l.Trim()); }
@@ -1354,7 +1376,7 @@ public sealed partial class TrackerSession
         {
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) { bool a1 = Apply(events, l, "chat · recovered"); any |= a1; if (a1) WatchCount(l, events); }
-            CrashLog.Read(l + "    (read again: it was garbled while fading in)", any);
+            CrashLog.Read(l + "    (read again: it was garbled while fading in)", any && !_lastRepeatOnly);
             // still nothing, and loot-shaped: look at its place once more in the next read (Reread.Take); the vote can't,
             // since it never sees a line of a read that didn't line up
             if (!any && Reread.LooksLikeLoot(l) && lines.LastIndexOf(l) is int ri and >= 0) _reread.Remember(l, lines.Count - 1 - ri, now);
@@ -1372,7 +1394,7 @@ public sealed partial class TrackerSession
             if (dup >= 0) { thisRead.RemoveAt(dup); CrashLog.Read(l + "    (counted already in this read, not again)", false); continue; }
             bool any = false;
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) { bool a1 = Apply(events, l, "chat · recovered"); any |= a1; if (a1) WatchCount(l, events); }
-            CrashLog.Read(l + "    (counted once the chat settled)", any);
+            CrashLog.Read(l + "    (counted once the chat settled)", any && !_lastRepeatOnly);
             if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; lock (_settledCounted) _settledCounted.Add((l.Trim(), now)); NoteCounted(l, now); }
         }
         if (settledAny)
@@ -2382,7 +2404,7 @@ public sealed partial class TrackerSession
         if (ev is ItemAcquired cg0 && !ev.Via.Contains("loot list") && IsGatherMaterial(cg0.ItemId)) TakeGatherToken(ev.Time, "the chat");
         // what a kill or a gather looks like, for telling a box's contents in the loot list from a drop
         if (ev is MobKilled or EnemySoul or XpGained || ev is CurrencyGained { Enemy.Length: > 0 } || (ev is CurrencyGained cg && cg.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)) || ev is KinahChanged { Bound: false, Delta: > 0 })
-        { _lastKillAt = ev.Time; Witness(ev.Time); }
+        { _lastKillAt = ev.Time; Witness(ev.Time); _repeats.Kill(ev.Time, ev.GetType().Name); }
         if (ev is PetCrystal) Witness(ev.Time);
         if (ev is GatherFailed) { _lastGatherAt = ev.Time; Witness(ev.Time); }
         else if (ev is ItemAcquired ga)
@@ -2869,6 +2891,8 @@ public sealed partial class TrackerSession
             // each row tracked as an object in the list's stack: shown once its text has settled, one row one pickup, a change in place one item
             // with its final text (LootRows); a row that went before it settled is unsure and never shown
             var rows = _rows.Feed(lines, now);
+            // each row a witness of a pickup of its item, from when it first showed (ItemRepeatGuard)
+            RepeatRows(rows, now);
             LabelListRead(lines, now);   // Help improve counting: the rows a chat line or a race may confirm
             var add = _cross.Popup(rows, now);
             if (add.Count == 0) { UpdateDoing(now); return; }
@@ -2935,6 +2959,8 @@ public sealed partial class TrackerSession
             UpdateDoing(now);
         }
         catch (Exception ex) { CrashLog.Write("loot list", ex); }
+        // item lines waiting for a witness of a second pickup: this pass's rows may be it
+        finally { try { ReleaseRepeats(now); } catch (Exception ex) { CrashLog.Write("chat repeats", ex); } }
     }
     /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
     List<string> _prevRead = new();
@@ -3366,6 +3392,7 @@ public sealed partial class TrackerSession
         foreach (var w in _counts.Flush()) CountAssumed(w.Raw);
         if (_kina.Readings > 0) SettleKina(_kina.Flush(t), t);
         CommitHeld();
+        ReleaseRepeats(t.AddSeconds(ItemRepeatGuard.HoldSeconds), final: true);   // item lines still waiting for a second pickup's witness
         ReleaseAwaiting(t.AddSeconds(WitnessWaitSeconds), final: true);   // a stop or the end of a replay: decided now
         foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(t, final: true);
     }

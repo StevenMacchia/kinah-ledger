@@ -1,0 +1,21 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Kukuru then Orichalcum, 2026-10-24 15:59:04 to 16:00:10, items as well as attempts: Kukuru 1 and Orichalcum Ore 3 picked up (1/2 and 3/0 attempts). The read at 15:59:47.8 lines up on the five-line read before it and takes \"Kukuru acquired.\" and \"Orichalcum Ore acquired.\" for new lines; 0.8.29 with PR 23 counted Kukuru 2 and Orichalcum Ore 4. A scrolled chat line is no second pickup (ItemRepeatGuard): the Orichalcum line stands where its counted copy stood, the Kukuru line has no new loot list row, race or kill behind it",
+  "source": "Steven's trace.log, 19:59:04 to 20:00:10 UTC; player chat replaced by filler, the character's name in the list replaced. The gathering bar's two races (fail 15:59:26.1, success 15:59:44.9) and the target bar's node reads (Kukuru, Veq, Vey, Vege, Vegetable, Neg, Ftable, Ore, Orichalcum) are added from reads.log, which logged them. The chat lines that come back after the misaligned read are the repeat guard's case: one stands where its counted copy stood, the other has no new row or race behind it; the third Orichalcum line is taken by a misalignment at 15:59:59 and counts through its loot list row (15:59:58.5)",
+  "expect": {
+    "items": {
+      "Kukuru": 1,
+      "Orichalcum Ore": 3
+    },
+    "attempts": {
+      "Ore": "3/0",
+      "Food": "1/2"
+    },
+    "nodes": {
+      "Kukuru": "1/2",
+      "Orichalcum Ore": "3/0"
+    }
+  }
+}

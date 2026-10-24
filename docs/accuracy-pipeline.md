@@ -550,7 +550,6 @@ count an attempt per line.
   (per skill, "worked/failed") and `nodes`; a `target` read is the target bar's text. The rest of the bank counts the
   same items.
 
-<<<<<<< HEAD
 ## Help improve counting: confirmed reads become training pairs (branch tracker/label-writer, 2026-10-24)
 
 Steven: train on everyone's play without asking anyone to do anything, but never secretly. Options › Sharing › "Help
@@ -583,7 +582,7 @@ the three readers that guess today can be measured and tuned on real screens fro
   backings) are settled by what the game draws at each size.
 A pair is only as right as its witnesses: `wit` says which agreed, so a trainer can leave out the weaker ones (a second
 read of the same picture) or weigh them. `GET /admin/labels/summary` counts pairs and crops per kind and version.
-=======
+
 ## Session accuracy: the Accuracy card (branch tracker/accuracy-card, 2026-10-24)
 
 Steven's goal: a player sees how accurate their own runs are, from the game's own numbers, with no labels. "Verified by
@@ -644,8 +643,35 @@ plus 30 s:
 | `note` | only with a reason ("fewer than 5 counted") |
 
 parse-test ("Accuracy card") checks all of it on synthetic tallies and through a session's own Kina witness.
->>>>>>> origin/main
 
+## A scrolled chat line is not a second pickup (branch tracker/chat-doubles, 2026-10-24)
+
+Steven's 15:59 gathers: Kukuru 1 and Orichalcum Ore 3, and the chat counted Kukuru 2 and Ore 4. A five-line read broke the
+lining up, the next read lined up on it, and "Kukuru acquired." and "Orichalcum Ore acquired." came back as new. Kina lines
+have the Kinah counter to refuse such a repeat; item lines had nothing (`Session/ChatRepeat.cs`, `ItemRepeatGuard`):
+
+- **By place.** The vote keeps where each new line came in (`ChatVoter.LastOut`: its place from the bottom, the read's
+  length, the two lines above). A line standing where a counted copy stood, under the same two lines, is that copy.
+- **By witness.** An identical line counted in the last 30 s makes the new one a suspect. It counts only when one more
+  pickup is witnessed than the counted copies use: a loot list row of the item first seen 12 s before to 3 s after the
+  line, a gathering bar race that worked on its node (up to 2.5 s after the line), or a kill for an item that isn't a
+  gathering material (5 s before to 4 s after). Each copy takes one witness, oldest first; a race and its row are one
+  pickup; two rows, two races or two kills' lines of one kind at once are two. A suspect without a witness waits 5 s (the
+  row is read after the line), then is left out: reads.log `chat: '<line>' seen again after a scroll: not counted again
+  (...)`, tally `chat_repeat` (this PC only).
+- **Not a suspect** when the read shows more copies of the line than the counted copies still on screen (a copy counted
+  before the read's oldest other line first showed has scrolled off): two lines on screen are two lines.
+
+Replay of the whole day (trace.log and trace.old.log from 04:00 UTC, as a bank case), before and after: Kukuru 10 to 9 and
+Orichalcum Ore 28 to 27 (the 15:59 repeats), Odyle 15 to 14 (10:07:30, a garbled read whose settle counted "Odyie
+acquired." and "Odyle acquired."; the clean reads around it show no new Odyle line); every other item, Kinah 105,975, kills
+372 and Soul Crystals 119 the same. The synthetic fights count as before. Bank:
+`text-2026-10-24-chat-repeat-gather-1559` checks the window's items and attempts.
+
+The offline test modes (parse-test, market-test, accuracy-test, replay-bank) now work in a folder of their own,
+`%TEMP%KinahLedger-tests<mode>-<pid>-<time>` (`TestTemp.cs`), removed when the run passes and printed ("test files
+kept in ...") when it fails or `KL_BANK_KEEP` is set; two runs at once no longer share `KinahLedger-test-logs` or
+`KinahLedger-parse-test`.
 ## Commands
 
 ```

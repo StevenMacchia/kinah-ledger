@@ -102,6 +102,8 @@ public sealed partial class TrackerSession
                 if (by != "panel") { a.Family = r.Node.Family; a.Node = r.Node.Name; a.By = "result"; }
             }
             Tally(a, upgradeRoll ? "the gathering bar's upgrade roll (its base race wasn't seen)" : $"the gathering bar's {(ok ? "Success" : "Fail")} race");
+            // a gather that worked: a witness of a second pickup of its node's material (ItemRepeatGuard)
+            if (a.Ok) _repeats.Race(at, a.Node == UnknownNode ? "" : a.Node, a.Family);
         }
     }
 

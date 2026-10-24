@@ -23,7 +23,7 @@ public static class AccuracyScoreTests
         }
         Console.WriteLine("\nAccuracy card: verified by the game's own numbers (2026-10-24):");
         var keepDir = CrashLog.DirOverride;
-        var dir = Path.Combine(Path.GetTempPath(), "kl-accscore-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = TestTemp.Path("kl-accscore-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(dir);
         CrashLog.DirOverride = dir;
         try
