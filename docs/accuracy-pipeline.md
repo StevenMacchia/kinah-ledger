@@ -57,6 +57,19 @@ written; `"rare": {"legend_materials": false}` in the site's config keeps Legend
   pass; balance (the watcher's 10 s timer) and decoder (its own thread) are off the pass. The chat read skips recognition
   when its boosted pixels are exactly the last read's (`ocr.chat_skip_same`, on in code): the audit ends `chat read at
   2x, N of M reads unchanged and not recognized again`.
+- **OCR sizing at high resolution** (2026-10-24, `bench --sizing`, offline, drawn 5120x2160 pictures; `--chat dir` and
+  `--frames dir` add real crops and frames). `ocr.target_sized` (on in code): the target band (1740x237 on 5120x2160)
+  is read around its own text, the gold pixels for the name-colour read and the dark pixels of the boosted band for the
+  brightness read, with an eighth of the band's height as margin (`TargetReader.InkBox`; no such pixels: no recognition),
+  at 3x until five words are measured and for text under 18 px, else 2x (`TextScale` with `Least = 2`); 48 drawn bands
+  read every enemy right at 1.5x and 2x and missed one at 1.25x. Bench: about 275 ms to about 100 ms a read, same enemy.
+  Log: `target bar: its text is N px tall on this screen: now read at 2x (was 3x)`. `ocr.plates_half` (on in code):
+  the nameplate bars are found on every second pixel of every second row of the capture's own 32-bit pixels (no 24-bit
+  copy), then each place is scanned again at full size in a window that grows until no red run crosses it, so the bars
+  are the full scan's own (parse-test: 2 drawn frames and 40 random frames at four sizes, 1,673 bars, all identical);
+  about 20 ms to 3 ms. `ocr.chat_scale_to_target` (OFF in code): the chat aimed at 36 px with the floor only under
+  18 px (1.25x for 29 px text). On 72 drawn chats at 29 px it read 193 of 240 lines exactly against 218 at 2x, so the
+  chat keeps the 2x floor; `"ocr": {"chat_scale_to_target": true}` turns it on once real crops show it holds.
 
 ## Lines in the loot list's band that aren't rows (branch tracker/loot-crop, 2026-10-24)
 

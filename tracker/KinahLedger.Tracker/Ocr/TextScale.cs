@@ -8,10 +8,18 @@ namespace KinahLedger.Ocr;
 /// <see cref="TargetPx"/>, never below the configured scale (a setup that reads well today reads the same), never above
 /// <see cref="Ceiling"/>, and moves only when the wanted factor differs by more than a tenth, so reads don't keep
 /// changing size (the vote across reads compares them). Pure arithmetic: tested in parse-test.
+/// With <see cref="ToTarget"/> (2026-10-24) the floor holds only for text under <see cref="SmallPx"/>; other text goes up
+/// to the next quarter step that reaches the target, never under <see cref="Least"/>, and text at or above the target
+/// never past <see cref="BigCap"/>. The target bar reads this way (Least 2). For the chat it is ocr.chat_scale_to_target,
+/// OFF in code: 29 px chat on 5120x2160 would read at 1.25x instead of 2x, but drawn chats read worse there (bench --sizing).
 /// </summary>
 public sealed class TextScale
 {
     public const double Ceiling = 4;
+    /// <summary>Text shorter than this, in screen pixels, keeps the configured floor (a 1080p chat at 12 px still reads at 3x).</summary>
+    public const double SmallPx = 18;
+    /// <summary>The most text already at or above the target is enlarged by, and the least any text is (at 1x the bench's 32 px chat lost a count).</summary>
+    public const double BigCap = 1.25;
     const int Keep = 60;
 
     readonly Queue<double> _heights = new();
@@ -28,6 +36,14 @@ public sealed class TextScale
     public double Floor { get; }
     /// <summary>How tall, in pixels after enlarging, the text should be (ocr.targetTextPx).</summary>
     public double TargetPx { get; }
+    /// <summary>
+    /// True: the floor holds only under <see cref="SmallPx"/> (ocr.chat_scale_to_target). Unset or false: the floor holds
+    /// for every text size, as before 2026-10-24.
+    /// </summary>
+    public Func<bool>? ToTarget { get; init; }
+    /// <summary>With <see cref="ToTarget"/>, the least factor for text of <see cref="SmallPx"/> or more (the target bar uses 2x).</summary>
+    public double Least { get; init; } = BigCap;
+
     /// <summary>The factor reads use now.</summary>
     public double Factor { get; private set; }
 
@@ -49,13 +65,26 @@ public sealed class TextScale
                 if (_heights.Count > Keep) _heights.Dequeue();
             }
             if (_heights.Count < 5 || TargetPx <= 0) return false;
-            double want = Math.Clamp(TargetPx / Median(_heights), Floor, Ceiling);
-            // quarter steps, so tiny drifts in the measure never move it
-            want = Math.Round(want * 4) / 4;
+            double want = Want(Median(_heights));
             if (Math.Abs(want - Factor) / Factor <= 0.1) return false;
-            Factor = Math.Max(Floor, want);
+            Factor = want;
             return true;
         }
+    }
+
+    /// <summary>The factor for text <paramref name="px"/> tall on screen, in quarter steps (tiny drifts in the measure never move it).</summary>
+    public double Want(double px)
+    {
+        double want = TargetPx / px;
+        if (ToTarget?.Invoke() == true && px >= SmallPx)
+        {
+            // up to the next quarter step (a hair of slack, so 24.01 px doesn't jump a step), so the text reaches the target:
+            // the bench's 32 px chat read at 1x lost an "x3" that 1.25x kept, so 1.25x is also the least
+            want = Math.Ceiling(want * 4 - 0.05) / 4;
+            return Math.Clamp(want, Least, px >= TargetPx ? Math.Max(Least, BigCap) : Math.Max(Least, Ceiling));
+        }
+        want = Math.Clamp(want, Floor, Ceiling);
+        return Math.Round(want * 4) / 4;
     }
 
     static double Median(IEnumerable<double> xs)

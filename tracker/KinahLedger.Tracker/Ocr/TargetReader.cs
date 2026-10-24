@@ -195,11 +195,7 @@ public sealed partial class TargetReader
             return;
         }
         _hash = h;
-        // the enemy's name is gold over bright scenery: the name-colour read finds it where the brightness read can't;
-        // the brightness read covers names drawn in white
-        using var gold = ScreenReader.NameMask(raw);
-        var lines = await ScreenReader.ReadBoxesAsync(gold, strip.Location, 3);
-        lines.AddRange(await ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true));
+        var lines = await ReadStripAsync(raw, strip.Location, KinahLedger.Update.RemoteConfig.Current.TargetSized);
         Reads++;
         bool was = _craftSeen;
         _craftSeen = lines.Any(l => IsCraftTab(l.Text));
@@ -236,6 +232,85 @@ public sealed partial class TargetReader
         // a name on the enemy list is trusted on its first read: the list is the guard against garbage, and a mob that
         // dies in two seconds was never read twice (Steven, 2026-10-21: 8 kills, 1 credited)
         Name = found; NameAt = DateTime.UtcNow; _pending = found;
+    }
+
+    // ---- sizing the band's reads (ocr.target_sized, 2026-10-24) ----
+    // On a 5120x2160 window the band is 1740x237 and both reads ran at 3x: two recognitions of 5220x711 once a second in
+    // fights. Sized, each read is cut to the extent of its own text (the gold pixels for the name-colour read, the dark
+    // pixels of the boosted band for the brightness read, a margin of an eighth of the band's height around them; no text
+    // at all: no recognition, since a blank page reads as nothing) and enlarged from the band's own measured text height
+    // (TextScale): 3x until five words have been measured and for text under 18 px, else aimed at 36 px but never under
+    // 2x. The bench's 48 drawn bands (bench --sizing --sweep target) read every enemy right at 1.5x and 2x, and missed one
+    // at 1.25x; drawn chats read worse at 1.25x than at 2x, so the band keeps a margin.
+
+    /// <summary>The band's enlarging factor, measured from its own words (3x until five words have been read).</summary>
+    readonly TextScale _scale = new(3, 36) { ToTarget = () => true, Least = 2 };
+    /// <summary>The factor the band's next sized read uses.</summary>
+    public double Factor => _scale.Factor;
+    /// <summary>The band text's height on screen, once measured.</summary>
+    public double? TextPx => _scale.TextPx;
+    /// <summary>The pixels the last read recognized, before enlarging (for the bench).</summary>
+    public long LastPixels { get; private set; }
+
+    /// <summary>
+    /// The lines in a capture of the band, from both reads: the name-colour read (gold over bright scenery, where the
+    /// brightness read has no contrast) and the brightness read (names drawn in white, reward titles, the crafting tabs).
+    /// <paramref name="sized"/> false: the whole band, 3x, both reads, as before 2026-10-24.
+    /// </summary>
+    public async Task<List<OcrLineBox>> ReadStripAsync(Bitmap raw, Point origin, bool sized, double? factor = null)
+    {
+        using var gold = ScreenReader.NameMask(raw);
+        if (!sized)
+        {
+            LastPixels = 2L * raw.Width * raw.Height;
+            var all = await ScreenReader.ReadBoxesAsync(gold, origin, 3);
+            all.AddRange(await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true));
+            return all;
+        }
+        using var bright = ScreenReader.Boost(raw);
+        double f = factor ?? _scale.Factor;
+        int margin = Math.Max(8, raw.Height / 8);
+        var lines = new List<OcrLineBox>();
+        long px = 0;
+        foreach (var bw in new[] { gold, bright })
+        {
+            if (InkBox(bw, margin) is not { } box) continue;
+            px += (long)box.Width * box.Height;
+            using var cut = box.Size == bw.Size ? (Bitmap)bw.Clone() : bw.Clone(box, bw.PixelFormat);
+            // the brightness read's picture is already boosted (Boost works pixel by pixel, so a cut of it is the cut's boost)
+            lines.AddRange(await ScreenReader.ReadBoxesAsync(cut, new Point(origin.X + box.X, origin.Y + box.Y), f));
+        }
+        LastPixels = px;
+        var heights = lines.SelectMany(l => l.Words ?? Array.Empty<OcrWordBox>()).Where(w => w.Text.Count(char.IsLetter) >= 3).Select(w => (double)w.Box.Height).ToList();
+        if (factor == null && _scale.Observe(heights)) CrashLog.Note($"target bar: its text is {_scale.TextPx:0} px tall on this screen: now read at {_scale.Factor:0.##}x (was {f:0.##}x)");
+        return lines;
+    }
+
+    /// <summary>
+    /// The extent of the dark pixels in a black-on-white picture (rows and columns with two or more), grown by
+    /// <paramref name="margin"/> and kept inside the picture; the whole picture when that covers nine tenths of it; null
+    /// when it has no dark pixels at all.
+    /// </summary>
+    internal static unsafe Rectangle? InkBox(Bitmap bw, int margin)
+    {
+        int w = bw.Width, h = bw.Height;
+        var rows = new int[h]; var cols = new int[w];
+        var data = bw.LockBits(new Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+        try
+        {
+            for (int y = 0; y < h; y++)
+            {
+                byte* p = (byte*)data.Scan0 + y * data.Stride;
+                for (int x = 0; x < w; x++, p += 3)
+                    if (p[0] < 128) { rows[y]++; cols[x]++; }
+            }
+        }
+        finally { bw.UnlockBits(data); }
+        int top = Array.FindIndex(rows, n => n >= 2), bottom = Array.FindLastIndex(rows, n => n >= 2);
+        int left = Array.FindIndex(cols, n => n >= 2), right = Array.FindLastIndex(cols, n => n >= 2);
+        if (top < 0 || left < 0) return null;
+        var box = Rectangle.FromLTRB(Math.Max(0, left - margin), Math.Max(0, top - margin), Math.Min(w, right + 1 + margin), Math.Min(h, bottom + 1 + margin));
+        return (long)box.Width * box.Height >= 0.9 * w * h ? new Rectangle(0, 0, w, h) : box;
     }
 
     /// <summary>
