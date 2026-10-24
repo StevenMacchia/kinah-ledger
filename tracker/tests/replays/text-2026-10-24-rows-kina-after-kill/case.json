@@ -1,0 +1,12 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "the kill's \"Acquired 343 Kina.\" prints at 36.1 and its row's first pixels come at 36.3 (110725, 10 fps): the chat line counts once, on the read the row agrees with it, and the row adds nothing. 343 Kina",
+  "source": "rebuilt from the 10 fps footage of 2026-10-24 (kinah-bench timing.md, kills.md, truth-110725.csv): rows placed as the footage shows the list (a new row at the bottom pushes the older ones up 73 px; 2.5 s up; nothing moves down), the Soul row's name scrolling (only the parseable slices), chat lines when they print; each pass reads the list, then the chat; icons, contrast, background and spread as LootRows measures real rows",
+  "expect": {
+    "items": {},
+    "kinah": 343,
+    "kills": 1
+  }
+}

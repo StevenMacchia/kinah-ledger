@@ -35,6 +35,20 @@ written; `"rare": {"legend_materials": false}` in the site's config keeps Legend
 - **Loot list rows** (`Session/LootRows.cs`): rows are tracked by slot; text is taken once its contrast settles and voted
   over the last three reads. reads.log: `now reads ... one item, the final text`, `went before its text settled ...:
   unsure, not counted`. trace.log list reads carry `y` and `c`.
+- **Rows as a stack** (branch tracker/loot-rows-v2, 2026-10-24, from 10 fps footage in `kinah-bench`): a new row takes
+  the bottom slot and pushes every older row up 73 px; nothing moves down; a row is up 2.5 s; long names scroll for the
+  row's whole life. `LootRows` matches each read to the live rows in order from the bottom (a small cost alignment:
+  shifts up to four slots, never down), by icon hash and name family, not by y. Slices of one name are one row and never
+  "the final text"; with an icon, a slice that is part of exactly one item's name names it. A soul row passes as
+  `Soul: Kind (Bound)` on its slices too. Read once and gone, or up over 6 s: not a row (`was read 1 time(s) and went`,
+  `has been up 7.0 s ... ignored`, once per text per minute; the cross-check stops waiting for it). Covered by a window
+  (`Reset`) and back within 12 s: the same row (`is the row the list showed before it was covered`). trace.log list
+  reads now carry `h` (icon hash); the bank has a `cover` read.
+- **Chat latency**: the chat line counts on its first read when the loot list shows the same pickup with an icon
+  (`ChatVoter.Confirmed`, remote kill switch `chat_fast`); `replay-bank` prints the vote's first-read-to-counted times
+  (`--latency` adds the same bank with it off). A chat area kept from an earlier session (`chat not visible at start`)
+  is looked for again every 30 s until its input box is found (`chat found on screen at ...`): on 2026-10-24 the kept
+  area's bottom sat three lines above the newest line, which was the 2.3 to 9.4 s lag.
 - **Anchors, shadow only** (`Ocr/Anchors.cs`): once a minute `anchor <region> dx=.. dy=.. conf=..` (or `none`) and the
   check's cost; `anchor: layout not found` / `found again`. Before any region is switched to its anchored crop, the
   log must show, across several of Steven's sessions and at least two window sizes, that region's dx/dy steady to a few

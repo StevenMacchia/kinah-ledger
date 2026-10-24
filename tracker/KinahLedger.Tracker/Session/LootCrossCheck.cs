@@ -58,6 +58,20 @@ public sealed class LootCrossCheck
         return n > 0;
     }
 
+    /// <summary>
+    /// A tracked row (LootRows) that turned out not to be a row: read once and gone, or up longer than any row stays (the
+    /// player's title, a prompt). It stops waiting for a chat line, so it can't be added from the list. Returns whether
+    /// anything was waiting for it.
+    /// </summary>
+    public bool Withdraw(int obj, string why)
+    {
+        var gone = _waiting.Where(w => w.Obj == obj).ToList();
+        if (gone.Count == 0) return false;
+        _waiting.RemoveAll(w => w.Obj == obj);
+        foreach (var w in gone) CrashLog.Note($"loot list: {Label(w.Key)} stops waiting: {why}, so it was no row");
+        return true;
+    }
+
     /// <summary>The key a row is waited on under (what <see cref="Supersede"/> takes).</summary>
     public string KeyOf(LootPopup.Row row) => row.IsKinah ? KinahKey(row.Amount) : ItemKey(_items.IdOf(row.Name), row.Count);
     /// <summary>The longest a real loot row stays up; one showing longer belongs to a window.</summary>

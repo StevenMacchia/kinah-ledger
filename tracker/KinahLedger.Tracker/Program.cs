@@ -784,6 +784,21 @@ options: --process aion[,other]");
         var results = Session.ReplayBank.Run(dir, settings, opts.GetValueOrDefault("record"));
         foreach (var r in results) Console.WriteLine($"{r.Status,-9} {r.Case}  {r.Detail}");
         int failed = results.Count(r => r.Status == "FAIL");
+        // the chat's vote, first read to counted (the loot list showing the same pickup lets a line count on its first read)
+        static string Lat(List<double> l, int fast) { var s = l.OrderBy(x => x).ToList(); return s.Count == 0 ? "no loot lines" : $"{s.Count} loot lines, mean {s.Average():0.00} s, median {s[s.Count / 2]:0.00} s, max {s[^1]:0.00} s, {fast} on their first read by the loot list"; }
+        Console.WriteLine("chat vote, first read to counted: " + Lat(Session.ReplayBank.ChatLatencies, Session.ReplayBank.ChatFast));
+        if (opts.ContainsKey("latency"))
+        {
+            // the same bank with the loot list's agreement off, for the before-and-after (the counts must not change)
+            var keepOut = Console.Out;
+            Console.SetOut(TextWriter.Null);
+            List<Session.ReplayBank.Result> off;
+            try { off = Session.ReplayBank.Run(dir, settings, fastChat: false); }
+            finally { Console.SetOut(keepOut); }
+            Console.WriteLine("...with it off: " + Lat(Session.ReplayBank.ChatLatencies, Session.ReplayBank.ChatFast));
+            int same = results.Zip(off).Count(p => p.First.Case == p.Second.Case && p.First.Status == p.Second.Status && p.First.Detail == p.Second.Detail);
+            Console.WriteLine($"...counts the same with it off: {same}/{results.Count}");
+        }
         Console.WriteLine($"replay bank: {results.Count(r => r.Status == "pass")} passed, {failed} failed, {results.Count(r => r.Status == "pending")} pending, {results.Count(r => r.Status == "skipped")} skipped" + (Session.ReplayBank.OcrAvailable() ? "" : " (no text recognition here)"));
         return failed > 0 || results.Count == 0 ? 1 : 0;
     }
@@ -1657,6 +1672,94 @@ options: --process aion[,other]");
         un.Feed(new() { new(300, "Raw Leather x1", 0.2) }, t0);
         foreach (var s in new[] { 0.7, 1.4, 2.1 }) un.Feed(new(), t0.AddSeconds(s));
         Check("gone before it settled: unsure", $"{un.Unsure}", "1");
+
+        // the list as the 2026-10-24 footage shows it: a new row takes the bottom slot (1195) and pushes the older ones up a
+        // slot (73 px); nothing moves down; a row is up 2.5 s; icons and contrast as measured on real rows
+        Console.WriteLine("Loot list rows as a stack, by order and icon (2026-10-24 footage):");
+        const ulong IcA = 0xaa55aa55aa55aa55, IcB = 0x00ff00ff00ff00ff, IcC = 0x0f1f3f7ffefcf8f0, IcD = 0x3c7effffff7e3c18;
+        LootLine R(int y, string text, ulong icon, double c = 0.6) => new(y, text, c, icon, 0.2, 0.13);
+        string Ids(List<LootPopup.Row> rows) => string.Join(" ", rows.Select(r => r.IsKinah ? $"k{r.Amount}" : $"{r.Name}#{r.Obj}"));
+        var st = new Session.LootRows(items);
+        st.Feed(new() { R(1122, "Raw Leather x1", IcA), R(1195, "Spiritstone x1", IcB) }, t0);
+        st.Feed(new() { R(1049, "Raw Leather x1", IcA), R(1122, "Spiritstone x1", IcB), R(1195, "Fresh Fruit x1", IcC) }, t0.AddSeconds(0.5));
+        var pushed = Ids(st.Feed(new() { R(976, "Raw Leather x1", IcA), R(1049, "Spiritstone x1", IcB), R(1122, "Fresh Fruit x1", IcC), R(1195, "Riverside Gloves x1", IcD) }, t0.AddSeconds(1.0)));
+        Check("a new row pushes three older rows up: the same objects", $"{pushed} · shifted {st.Shifted}", "Raw Leather#1 Spiritstone#2 Fresh Fruit#3 Riverside Gloves#4 · shifted 5");
+        // a row that expires leaves the rows below it where they are
+        var stay = Ids(st.Feed(new() { R(1049, "Spiritstone x1", IcB), R(1122, "Fresh Fruit x1", IcC), R(1195, "Riverside Gloves x1", IcD) }, t0.AddSeconds(1.5)));
+        Check("the top row expires: nothing below moves", stay, "Spiritstone#2 Fresh Fruit#3 Riverside Gloves#4");
+        // two identical drops: the new one is the one at the bottom, the old one moved up
+        var tw = new Session.LootRows(items);
+        tw.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0);
+        tw.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0.AddSeconds(0.5));
+        tw.Feed(new() { R(1122, "Spiritstone x1", IcB), R(1195, "Spiritstone x1", IcB) }, t0.AddSeconds(1.0));
+        var twin = Ids(tw.Feed(new() { R(1122, "Spiritstone x1", IcB), R(1195, "Spiritstone x1", IcB) }, t0.AddSeconds(1.5)));
+        Check("two identical rows: the new one below, the old one moved up", twin, "Spiritstone#1 Spiritstone#2");
+        // a row a slot lower than a row was is never that row moved down
+        var dn = new Session.LootRows(items);
+        dn.Feed(new() { R(1122, "Spiritstone x1", IcB) }, t0);
+        dn.Feed(new() { R(1122, "Spiritstone x1", IcB) }, t0.AddSeconds(0.5));
+        dn.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0.AddSeconds(1.0));
+        var down = Ids(dn.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0.AddSeconds(1.5)));
+        Check("a row lower than one was: another row, never it moved down", down, "Spiritstone#2");
+        // a Soul row's name scrolls for its whole life: slices of one name are one row and no change of text
+        var mq = new Session.LootRows(items);
+        foreach (var (s, txt) in new[] { (0.0, "l: Starturtle (Bound) x1"), (0.5, "Starturtle (Bound) x1"), (1.0, "rturtle (Bound) x1"), (1.5, "turtle (Bound) x1"), (2.0, "le (Bound) x1") })
+            mq.Feed(new() { R(1195, txt, IcC) }, t0.AddSeconds(s));
+        foreach (var s in new[] { 2.5, 3.0, 3.5, 4.0, 4.5 }) mq.Feed(new(), t0.AddSeconds(s));
+        Check("a marquee's slices: one row, never \"the final text\"", $"changed {mq.Changed} unsure {mq.Unsure} brief {mq.ShortLived} long {mq.LongLived}", "changed 0 unsure 0 brief 0 long 0");
+        // once one read shows "Soul:", every slice of it passes as that soul
+        var so = new Session.LootRows(items);
+        var souls = new List<string>();
+        foreach (var (s, txt) in new[] { (0.0, "Soul: Starturtle (Bound) x1"), (0.5, "l: Starturtle (Bound) x1"), (1.0, "turtle (Bound) x1") })
+            souls.Add(Ids(so.Feed(new() { R(1195, txt, IcC) }, t0.AddSeconds(s))));
+        Check("a soul row's slices pass as its soul", string.Join(" | ", souls), "Soul: Starturtle (Bound)#0 | Soul: Starturtle (Bound)#0 | Soul: Starturtle (Bound)#0");
+        // a long item name scrolling, with its icon: a slice that is part of one item's name names that item
+        {
+            string? longName = null, slice = null;
+            foreach (var it in items.AllItems().Select(i => i.Name).Where(n => n.Length >= 22 && !n.Contains('(') && !n.Contains(':')).Distinct().OrderBy(n => n, StringComparer.Ordinal))
+            {
+                var tail = it[^13..].TrimStart();
+                if (!char.IsLetter(tail[0]) || char.IsUpper(tail[0])) continue;   // a cut word, as a marquee shows it
+                var holders = items.Fragment(tail, 40).Where(x => ItemDictionary.Norm(x.Name).Contains(ItemDictionary.Norm(tail))).Select(x => x.Name.ToLowerInvariant()).Distinct().ToList();
+                if (holders.Count == 1 && !items.Knows(tail)) { longName = it; slice = tail; break; }
+            }
+            if (longName == null) Console.WriteLine("  (no long item name on this item list to scroll: skipped)");
+            else
+            {
+                var ln = new Session.LootRows(items);
+                var a1 = Ids(ln.Feed(new() { R(1195, slice + " x1", IcA, 0.6) }, t0));
+                var a2 = Ids(ln.Feed(new() { R(1195, slice![2..] + " x1", IcA, 0.6) }, t0.AddSeconds(0.5)));
+                Check($"\"{slice} x1\" with its icon: {longName}", $"{a1} | {a2}", $"{longName}#1 | {longName}#1");
+            }
+        }
+        // the player's title in the band for a minute: one object, not a row once it has been up 6 s; never unsure every second
+        var ti = new Session.LootRows(items);
+        var shownTitle = new List<string>();
+        string[] tt = { "Vang(", "Vangi", "Vangt", "Vangi", "Vanc", "Vangu" };
+        for (int i = 0; i < 60; i++) if (i % 4 != 3) shownTitle.Add(Ids(ti.Feed(new() { new(975 - i % 2, tt[i % tt.Length], 0.3, 0x5a5a5a5a00000000, 0.35, 0.05) }, t0.AddSeconds(i))));
+        foreach (var s in new[] { 61, 63, 66 }) ti.Feed(new(), t0.AddSeconds(s));
+        Check("the title for 60 s: up over 6 s, not a row, once", $"long {ti.LongLived} unsure {ti.Unsure} brief {ti.ShortLived} shown after 10 s: {shownTitle.Skip(8).Count(x => x.Length > 0)}", "long 1 unsure 0 brief 0 shown after 10 s: 0");
+        // read once at full contrast and gone: shown (settled), then not a row: the cross-check is told
+        var br = new Session.LootRows(items);
+        var told = new List<int>();
+        br.NotARow = (obj, why) => told.Add(obj);
+        foreach (var (y, txt, ic) in new[] { (1195, "Raw Leather x1", IcA), (1122, "Spiritstone x1", IcB), (1049, "Fresh Fruit x1", IcC) })
+        {
+            br.Feed(new() { R(y, txt, ic) }, t0); br.Feed(new() { R(y, txt, ic) }, t0.AddSeconds(0.5));
+            foreach (var s in new[] { 1.0, 2.5, 4.0 }) br.Feed(new(), t0.AddSeconds(s));
+            t0 = t0.AddSeconds(5);
+        }
+        var once = Ids(br.Feed(new() { R(1195, "Riverside Gloves x1", IcD, 0.6) }, t0));
+        foreach (var s in new[] { 0.5, 1.0, 2.0 }) br.Feed(new(), t0.AddSeconds(s));
+        Check("read once and gone: not a row, the cross-check told", $"{once} · brief {br.ShortLived} unsure {br.Unsure} told {string.Join(",", told)}", "Riverside Gloves#4 · brief 1 unsure 0 told 4");
+        // covered by a full-screen window and back: the same row, its time covered not counted
+        var cv = new Session.LootRows(items);
+        cv.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0);
+        cv.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0.AddSeconds(0.5));
+        cv.Reset();
+        var back = Ids(cv.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0.AddSeconds(5.0)));
+        var back2 = Ids(cv.Feed(new() { R(1195, "Spiritstone x1", IcB) }, t0.AddSeconds(5.5)));
+        Check("covered 4 s and back: the same row", $"{back} {back2} · resumed {cv.Resumed} long {cv.LongLived}", "Spiritstone#1 Spiritstone#1 · resumed 1 long 0");
 
         // the contrast measure: the same text drawn faint and full; a faint read measures lower, a blank one about nothing
         double Draw(int alpha)
@@ -3283,6 +3386,16 @@ options: --process aion[,other]");
             Check("votes: a digit apart is another pickup", string.Join(" | ", vo4), "Acquired 386 Kina.");
             Check("votes across reads", $"{vp.Meaning("Acquired 463 Kina.").Key} · {string.Join(" | ", vo)} · {string.Join(" | ", vo2)} · changed {v1.Changed}",
                 "k:463 · Acquired 468 Kina. | You have acquired [Raw Leather]. · Acquired 352 Kina. · changed 1");
+            // the loot list showing the same pickup: the line counts on its first read, the reading the list agrees with,
+            // in order (2026-10-24); a line the list doesn't show still waits for its vote
+            var v5 = new ChatVoter { Confirmed = l => vp.Meaning(l).Key == "k:343" };
+            var vo5 = new List<string>();
+            vo5.AddRange(v5.Push(new[] { "Acquired 343 Kina." }, new[] { "Acquired 343 Kina." }, vt, vp.Meaning));
+            var first5 = string.Join(" | ", vo5);
+            vo5.AddRange(v5.Push(new[] { "Acquired 18 Kina." }, new[] { "Acquired 343 Kina.", "Acquired 18 Kina." }, vt.AddSeconds(0.33), vp.Meaning));
+            var second5 = string.Join(" | ", vo5);
+            vo5.AddRange(v5.Flush(vp.Meaning));
+            Check("votes: a line the loot list shows counts on its first read", $"[{first5}] [{second5}] fast {v5.Fast} latency {string.Join(",", v5.Latencies)}", "[Acquired 343 Kina.] [Acquired 343 Kina.] fast 1 latency 0");
 
             // reward-shots cleans itself: in-run pictures after a day, reward screens after a week, never other files
             var rs = Path.Combine(Path.GetTempPath(), "kl-rs-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(rs);
