@@ -103,6 +103,7 @@ internal static class Program
                 case "accuracy-test": return Session.AccuracyTests.Run(settings);
                 case "accuracy-sample": return Session.AccuracyTests.Sample(settings, pos, opts);
                 case "replay-bank": return ReplayBankCmd(settings, pos, opts);
+                case "replay-event-shots": return ReplayEventShots(settings, opts);
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
                 case "market-test": return MarketTest(settings, opts);
@@ -322,6 +323,10 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   ui-shot [dir] [--demo] [--gathering|--market|--crafting] [--compact|--full] [--welcome] [--skin night|abyss|daylight]
                                 render the window to PNG files for layout review (--options: every Options page)
   market-shot [dir]             the window with the Market card in its tracking state
+  replay-event-shots [--since 2026-10-24] [--send] [--dir folder] [--verbose]
+                                event runs whose rewards were not read, read again from their kept reward pictures; prints
+                                what each reads (--send uploads the ones read and marks them sent; --dir: a copy of the
+                                KinahLedger folder with instances.jsonl and reward-shots)
   reset-id                      replace the random install ID used for uploads
   update [--check]              install the newest version from kinahledger.com now (--check only says whether there is one)
         [--manifest url]        read another version file (a local test server)
@@ -803,6 +808,145 @@ options: --process aion[,other]");
         return failed > 0 || results.Count == 0 ? 1 : 0;
     }
 
+    /// <summary>
+    /// `replay-event-shots`: every run not sent because its rewards were not read (parked, or kept from before parking
+    /// existed), started since --since (a week back by default, as long as reward pictures are kept), read again from its
+    /// kept event-rewards pictures through the bank's own feeding (EventShotRecovery). Prints what each reads; with --send,
+    /// a run now read goes up through the normal sender and is marked sent in instances.jsonl. Without --send nothing is
+    /// written to the folder (the reading's notes go to a temp log).
+    /// </summary>
+    static int ReplayEventShots(Settings settings, Dictionary<string, string> opts)
+    {
+        var dir = opts.GetValueOrDefault("dir") is { Length: > 0 } d0 && d0 != "true" ? Path.GetFullPath(d0) : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger");
+        bool send = opts.ContainsKey("send"), verbose = opts.ContainsKey("verbose");
+        var since = opts.GetValueOrDefault("since") is { } sv && DateTime.TryParse(sv, null, System.Globalization.DateTimeStyles.AssumeLocal, out var sd) ? sd.ToUniversalTime() : DateTime.UtcNow.AddDays(-7);
+        if (!File.Exists(Path.Combine(dir, "instances.jsonl"))) { Console.Error.WriteLine($"no instances.jsonl in {dir}"); return 1; }
+        var shots = Path.Combine(dir, "reward-shots");
+        CrashLog.DirOverride = dir;
+        var log = new InstanceLog();
+        // only a send writes to the folder; a look leaves it as it was
+        if (!send) { CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-replay-event-shots"); Directory.CreateDirectory(CrashLog.DirOverride); }
+        var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+        var runs = log.Unsent(since);
+        Console.WriteLine($"{runs.Count} run(s) not sent since {since.ToLocalTime():yyyy-MM-dd HH:mm} ({log.Parked.Count} parked), from {dir}" + (send ? "" : "; printing only (--send uploads)"));
+        string region = "", server = "";
+        if (send)
+        {
+            Update.RemoteConfig.Current = Update.RemoteConfig.LoadKept();
+            var prefs = UserPrefs.Load();
+            region = prefs.Region.Length > 0 ? prefs.Region : settings.Region; server = prefs.Server;
+            RunPayload.Gear = GearScore.Payload(prefs.GearScore);
+            if (!settings.Upload.Enabled || string.IsNullOrWhiteSpace(settings.Upload.Endpoint)) { Console.Error.WriteLine("sharing is off in settings.json: nothing can be sent"); return 1; }
+            if (!Update.RemoteConfig.Current.RunSync) Console.WriteLine("note: the site's config doesn't take runs on their own (run sync off); sending anyway");
+        }
+        int read = 0, sent = 0;
+        foreach (var run in runs)
+        {
+            var names = run.Pictures.Count > 0 ? run.Pictures : EventShotRecovery.PicturesFor(run, shots);
+            Console.WriteLine($"\n{run.Label} {run.Start.ToLocalTime():yyyy-MM-dd HH:mm:ss}, {TimeSpan.FromSeconds(run.Seconds):m\\:ss}, ended \"{run.Ended}\"{(run.Unsent ? ", parked" : "")}: {names.Count} event-rewards picture(s) kept");
+            if (run.Kind != "Event" || names.Count == 0) { Console.WriteLine("  no event-card pictures to read: left as it is"); continue; }
+            Console.WriteLine("  " + string.Join(", ", names));
+            var res = EventShotRecovery.ReadKeptAsync(run, settings, items, shots, verbose ? Console.WriteLine : null).GetAwaiter().GetResult();
+            foreach (var (ci, rec, sl, more) in res.Cards)
+                Console.WriteLine($"  card {ci + 1}: " + (!rec ? "not received" : $"{sl.Count} slot(s){(more ? ", its list may run on" : "")}: " + string.Join(" | ", sl.Select(x => $"{TrackerSession.SlotName(items, x) ?? "?"} x{(x.Count > 0 ? x.Count.ToString() : "?")}"))));
+            if (!res.Read) { Console.WriteLine($"  not read from {res.Pictures} picture(s): {(res.Cards.Count == 0 ? "no face-up card screen recognised" : "nothing filed")}"); continue; }
+            read++;
+            var top = res.Run.Items.Concat(res.Run.BoundItems).GroupBy(kv => items.NameOf(kv.Key).Replace(" (Bound)", "")).Select(g => (Name: g.Key, N: g.Sum(kv => kv.Value))).OrderByDescending(x => x.N);
+            Console.WriteLine($"  read: {res.Slots} slot(s), {res.Named} named, {res.Unknown} not read, {res.AbyssPoints:N0} Abyss Points, Kinah {(res.Run.KinahNotRead ? "not read" : res.Run.Kinah.ToString("N0"))}");
+            Console.WriteLine("  items: " + string.Join(", ", top.Select(x => $"{x.Name} {x.N:N0}")));
+            if (!send) continue;
+            run.TakeRewardsFrom(res.Run); run.Pictures = names; run.Retried = true;
+            var pay = InstanceRunPayload.From(new[] { run }, id => items.KeyOf(id), id => ReportedDrops.Has(items.NameOf(id)));
+            if (pay == null) { log.Park(run, names); Console.WriteLine($"  not sendable ({(run.KinahUnknown ? "its Kinah still isn't known" : "no listed area, or too short or long")}): kept, parked"); continue; }
+            bool ok = Uploader.SendAsync(RunPayload.RunsOnly(region, server, items, pay), settings.Upload).GetAwaiter().GetResult();
+            if (ok) { log.SentLater(run, DateTime.UtcNow); sent++; Console.WriteLine($"  sent to {settings.Upload.Endpoint} as {ServerKeys.Build(region, server)}; marked sent"); CrashLog.Note($"run sent late: {run.Label} {run.Start.ToLocalTime():HH:mm:ss}, read again from {names.Count} kept picture(s)"); }
+            else { log.Park(run, names); log.Save(run); Console.WriteLine($"  not sent: {Uploader.LastError}; kept with what was read, parked"); }
+        }
+        Console.WriteLine($"\nreplay-event-shots: {runs.Count} run(s), {read} read from their pictures" + (send ? $", {sent} sent" : ""));
+        return 0;
+    }
+
+    /// <summary>
+    /// A run whose rewards were not read is never lost (2026-10-24): parked with a log line and a tally, kept across a save
+    /// and a load, and read again from its event card pictures (the bank's Hidden Lugi 13:06 case) into the run.
+    /// </summary>
+    static bool UnsentRunsTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nRuns whose rewards were not read: parked, kept, recovered (2026-10-24):");
+        var keepDir = CrashLog.DirOverride;
+        var dir = Path.Combine(Path.GetTempPath(), "kl-unsent-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        CrashLog.DirOverride = dir;
+        try
+        {
+            var t0 = new DateTime(2026, 10, 24, 17, 2, 8, DateTimeKind.Utc);
+            var s = new TrackerSession(null, settings, items, "Test");
+            s.Engine.SetZone("Hidden Lugi"); s.Instances.Zone("Hidden Lugi", t0);
+            s.Instances.Loot(new ItemAcquired(t0.AddMinutes(5), items.IdOf("Odyle"), 6, false), 3);
+            s.Instances.Close();
+            var run = s.Instances.Snapshot().Single();
+            Check("an event closed with no reward picture: rewards not read", $"{run.RewardsNotRead} {run.ChatItemsSetAside}", "True 6");
+            Check("...and the payload leaves it out", $"{InstanceRunPayload.From(new[] { run }, id => id.ToString())?.Count ?? 0}", "0");
+            long before = Accuracy.Get("runs_unsent");
+            // first pass: an event run waits in the queue for its one read again from its pictures
+            var send1 = s.KeepUnread(s.Instances.TakeUnshared(t0));
+            Check("first pass: nothing sent, the event waits for its retry", $"{send1.Count} queued {s.Instances.UnsharedCount} parked {s.Instances.Parked.Count}", "0 queued 1 parked 0");
+            run.Retried = true;   // the retry found no pictures
+            var send2 = s.KeepUnread(s.Instances.TakeUnshared(t0));
+            var logText = File.ReadAllText(CrashLog.ReadsPath);
+            string line = $"run not sent: Hidden Lugi (Shugo Festival) {t0.ToLocalTime():HH:mm:ss}: rewards not read (kept; 0 picture(s) saved)";
+            Check("after it: parked, out of the queue", $"{send2.Count} queued {s.Instances.UnsharedCount} parked {s.Instances.Parked.Count}", "0 queued 0 parked 1");
+            Check("one log line says so", logText.Contains(line) ? "logged" : logText.Split('\n').LastOrDefault(l => l.Contains("not sent")) ?? "no line", "logged");
+            Check("runs_unsent tallied", $"{Accuracy.Get("runs_unsent") - before}", "1");
+            s.KeepUnread(new List<InstanceRun> { run });
+            Check("parked once, never twice", $"{s.Instances.Parked.Count} {Accuracy.Get("runs_unsent") - before}", "1 1");
+            // an expedition read nowhere is parked at once: there are no cards to read again
+            var ex = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = t0.AddHours(1), LastLoot = t0.AddHours(1).AddMinutes(7), RewardsNotRead = true };
+            s.KeepUnread(new List<InstanceRun> { ex });
+            Check("an expedition not read is parked at once", $"{s.Instances.Parked.Count} {ex.Unsent}", "2 True");
+            // the parked list is in instances.jsonl: one line per run, rewritten in place, and back after a load
+            var file = Path.Combine(dir, "instances.jsonl");
+            var loaded = new InstanceLog();
+            Check("instances.jsonl: one line per run, the flag in it", $"{File.ReadAllLines(file).Length} {File.ReadAllText(file).Contains("\"Unsent\":true")}", "2 True");
+            Check("the parked list survives a save and a load", string.Join(" | ", loaded.Parked.Select(r => $"{r.Label} {r.Start:HH:mm:ss} {r.Unsent}")), $"Hidden Lugi (Shugo Festival) 17:02:08 True | Urugugu Canyon 18:02:08 True");
+            Check("...and is not retried every tick", $"{loaded.ToRetry(DateTime.MinValue).Count} {loaded.UnsharedCount}", "0 0");
+            Check("replay-event-shots finds both", $"{loaded.Unsent(t0.AddMinutes(-1)).Count}", "2");
+
+            // recovery: the bank's Hidden Lugi 13:06 pictures read into a parked run through the bank's own feeding
+            string? bank = null;
+            foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+                for (var d = new DirectoryInfo(start); d != null && bank == null; d = d.Parent)
+                    if (Directory.Exists(Path.Combine(d.FullName, "tracker", "tests", "replays"))) bank = Path.Combine(d.FullName, "tracker", "tests", "replays");
+            var caseDir = bank == null ? null : Path.Combine(bank, "event-2026-10-24-hidden-lugi-1306");
+            if (caseDir == null || !Directory.Exists(caseDir) || !ReplayBank.OcrAvailable()) Console.WriteLine("  (recovery: the bank's event case or text recognition isn't here; the replay-bank step reads the same pictures)");
+            else
+            {
+                var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(caseDir, "case.json")))!;
+                var pics = (node["frames"] as System.Text.Json.Nodes.JsonArray)!.Select(f => (Path: Path.Combine(caseDir, f!["f"]!.GetValue<string>()),
+                    T: DateTime.Parse(f["t"]!.GetValue<string>(), null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime())).ToList();
+                var parked = loaded.Parked[0];
+                parked.LastLoot = new DateTime(2026, 10, 24, 17, 7, 59, DateTimeKind.Utc);
+                var res = EventShotRecovery.ReadAsync(parked, pics, settings, items).GetAwaiter().GetResult();
+                Check("recovery: the four pictures read as the bank reads them", $"{res.Pictures} pictures, {res.Slots} slots, {res.AbyssPoints:N0} Abyss Points", "4 pictures, 45 slots, 2,080 Abyss Points");
+                Check("...filed into the run as the live path files them", $"{res.Read} {res.Run.FromPicture} {res.Run.RewardsNotRead} {res.Run.Items.Values.Sum() + res.Run.BoundItems.Values.Sum()}", "True True False 5487");
+                Check("...the run itself untouched until the caller takes it", $"{parked.FromPicture} {parked.Items.Count}", "False 0");
+                parked.TakeRewardsFrom(res.Run);
+                Check("taken: the run is sendable, its times kept", $"{InstanceRunPayload.From(new[] { parked }, id => id.ToString())?.Count ?? 0} {parked.LastLoot:HH:mm:ss}", "1 17:07:59");
+                loaded.SentLater(parked, DateTime.UtcNow);
+                var again = new InstanceLog();
+                Check("sent: off the parked list, still kept, never offered again", $"{again.Parked.Count} {again.Snapshot().Count} {again.Unsent(t0.AddMinutes(-1)).Count}", "1 2 1");
+            }
+        }
+        finally { CrashLog.DirOverride = keepDir; try { Directory.Delete(dir, true); } catch (Exception) { } }
+        return ok;
+    }
+
     /// <summary>Renders the window (and the panel) off-screen to PNG files, so the layout can be reviewed without a desktop session.</summary>
     static int UiShot(Settings s, Dictionary<string, string> o, List<string> pos)
     {
@@ -1077,6 +1221,7 @@ options: --process aion[,other]");
         ok &= EventRewardsTest(items, s);
         ok &= EventActivityTest(items, s);
         ok &= Ocr.ChatCountTests.Run(items, s);
+        ok &= UnsentRunsTest(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }

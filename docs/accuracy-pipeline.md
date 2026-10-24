@@ -427,6 +427,42 @@ screen was only kept as pictures and the run's rewards stayed "not read". `Ocr/E
   5120x2160 has been seen; the geometry scales with the window's height and is centred, as the expedition table's does,
   unchecked here.
 
+## When a run's rewards were not read (branch tracker/runs-kept, 2026-10-24)
+
+A run whose rewards were not read (`RewardsNotRead`: no reward picture was read; `KinahNotRead`: its coin slot wasn't)
+is never sent, since the site would average in the little the chat saw. Until this branch such a run also left the
+send queue with the rest and vanished without a log line: Hidden Lugi at 10:02 and 13:06 on 2026-10-24, while 17
+pictures of their reward cards sat in `reward-shots`.
+
+- **Parked, never dropped.** When a send (`SendRunsAsync`, or a farming chunk's `UploadAsync`) meets such a run, it is
+  parked (`InstanceLog.Park`): one line in reads.log,
+  `run not sent: Hidden Lugi (Shugo Festival) 13:02:08: rewards not read (kept; 8 picture(s) saved)`, the counter
+  `runs_unsent` in `Accuracy` (kept on this PC, not in the keys sent to the site), and its line in instances.jsonl
+  rewritten in place with `"Unsent": true` and `"Pictures": [...]` (the event-rewards pictures taken from its first
+  witness to 90 s after its last loot). Parked runs load back into `InstanceLog.Parked` on start and are not put back in
+  the queue, so they aren't retried every tick. Runs with their rewards read are sent as before.
+- **One retry first.** An event run closed unread is read once more from its kept pictures before it is parked
+  (`EventShotRecovery`, in the background so the reading loop never waits): the pictures go through the replay bank's own
+  feeding (`ReplayBank.FeedCardsAsync`) into a session of their own whose open run is a copy of this one, so the cards are
+  filed by `EventCardsRead` and `ApplyGrid` exactly as live. Read, the run goes up like any other; not read, it is parked.
+  On a start the same one retry runs for the last session's unread event runs whose last loot came within 6 h (the send
+  queue's window). `"Retried": true` marks it done.
+- **Recovery.** `replay-event-shots` lists every run not sent because its rewards were not read (parked ones, and runs
+  kept from before parking existed that are marked not read and never sent), reads each event run's kept pictures the same
+  way and prints card by card what it read: slots, names, slots not read, Abyss Points, the run's items. With `--send` a
+  run now read goes up through the normal sender (a runs-only send with the server and gear bracket from ui.json) and is
+  marked `"SentLate"` in instances.jsonl; without it nothing in the folder changes. Expeditions have no cards to read and
+  are listed only.
+
+```
+KinahLedger.exe replay-event-shots [--since 2026-10-24] [--send] [--dir <copy of %LocalAppData%\KinahLedger>] [--verbose]
+```
+
+On 2026-10-24's copies: 10:02 read 46 slots from 9 pictures (12 not read, 2,240 Abyss Points); 13:02 read 45 slots
+from 8 pictures (13 not read: gear slots, which carry no name, and two only ever seen cut; 2,080 Abyss Points, the
+counter's rise in the footage). parse-test checks the log line, the tally, the parked list across a save and a load, and
+the bank's 13:06 pictures read into a parked run (45 slots, 2,080 Abyss Points, 5,487 items, as the bank counts them).
+
 ## Commands
 
 ```
@@ -435,5 +471,6 @@ KinahLedger.exe replay-bank tracker/tests/replays  # the bank (CI runs it before
 KinahLedger.exe replay-bank <dir> --seed           # write the generated cases
 KinahLedger.exe replay-bank <dir> --seed-full      # whole-window crafting pictures for craft-test --glob *.png
 KinahLedger.exe accuracy-sample <dir>              # the payloads as sent, for checking against the backend
+KinahLedger.exe replay-event-shots [--send]        # runs whose rewards were not read, read again from their pictures
 node tools/data/models.js [--out data/models]      # the name decoder's model files, checked by SHA-256 (--check: only check)
 ```

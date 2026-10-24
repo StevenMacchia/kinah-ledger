@@ -192,6 +192,23 @@ public static class ReplayBank
 
     static bool _fastChat = true;
 
+    /// <summary>
+    /// One picture of an event's reward screen into a session, as RewardGridDue reads it live: the title band read, the
+    /// screen marked up, and once "sent to your cube" shows, its cards read (EventCardsRead). The bank's cases and the
+    /// recovery of a run whose rewards were not read (EventShotRecovery, `replay-event-shots`) both feed pictures here; the
+    /// cards are filed with <see cref="TrackerSession.FlushEventCards"/> after the last one.
+    /// </summary>
+    internal static async Task FeedCardsAsync(TrackerSession session, Bitmap bmp, DateTime t, Action<string>? say)
+    {
+        var band = new Rectangle(bmp.Width / 4, 0, bmp.Width / 2, bmp.Height / 3);
+        using var bandBmp = bmp.Clone(band, bmp.PixelFormat);
+        var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
+        bool up = lines.Any(l => TrackerSession.IsEventCardsUp(l.Text));
+        say?.Invoke($"  cards band: " + string.Join(" | ", lines.Select(l => l.Text)) + (up ? "" : " -- no \"sent to your cube\" line"));
+        session.Instances.EventRewardScreen(t);
+        if (up) await session.EventCardsRead(bmp, t);
+    }
+
     static JsonObject RunCaseIn(string caseDir, JsonObject node, Settings settings, ItemDictionary items, Rectangle game)
     {
         var session = new TrackerSession(null, settings, items, "Replay") { FastChat = _fastChat };
@@ -263,13 +280,7 @@ public static class ReplayBank
                 // read as RewardGridDue reads it, and the frames of one case are one screen, read in turn and filed at the end
                 if (!cards && node["zone"]?.GetValue<string>() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t.AddMinutes(-5)); }
                 cards = true;
-                var band = new Rectangle(bmp.Width / 4, 0, bmp.Width / 2, bmp.Height / 3);
-                using var bandBmp = bmp.Clone(band, bmp.PixelFormat);
-                var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1)).GetAwaiter().GetResult();
-                bool up = lines.Any(l => TrackerSession.IsEventCardsUp(l.Text));
-                Console.WriteLine($"  cards band: " + string.Join(" | ", lines.Select(l => l.Text)) + (up ? "" : " -- no \"sent to your cube\" line"));
-                session.Instances.EventRewardScreen(t);
-                if (up) Task.Run(() => session.EventCardsRead(bmp, t)).GetAwaiter().GetResult();
+                Task.Run(() => FeedCardsAsync(session, bmp, t, Console.WriteLine)).GetAwaiter().GetResult();
             }
             else if (f["k"]!.GetValue<string>() == "table")
             {

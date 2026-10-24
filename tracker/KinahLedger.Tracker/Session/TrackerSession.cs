@@ -3303,18 +3303,86 @@ public sealed class TrackerSession
     /// </summary>
     public async Task<bool> SendRunsAsync(Settings s)
     {
+        // a run that closed with its rewards not read is read once more from its kept pictures, in the background, before
+        // it is sent or parked (and on the first pass after a start, the last session's within RunsSendHours)
+        RetryUnreadRuns(s);
         if (!Update.RemoteConfig.Current.RunSync || !s.Upload.Enabled || string.IsNullOrWhiteSpace(s.Upload.Endpoint) || Instances.UnsharedCount == 0) return false;
         if ((DateTime.UtcNow - _runsSentAt).TotalSeconds < 30) return false;
         _runsSentAt = DateTime.UtcNow;
-        var runs = Instances.TakeUnshared(DateTime.UtcNow.AddHours(-6));
+        var runs = KeepUnread(Instances.TakeUnshared(DateTime.UtcNow.AddHours(-RunsSendHours)));
         var pay = InstanceRunPayload.From(runs, id => _items.KeyOf(id), id => ReportedDrops.Has(_items.NameOf(id)));
-        if (pay == null) return false;
+        if (pay == null)
+        {
+            if (runs.Count > 0) CrashLog.Note($"runs not sent: {string.Join(", ", runs.Select(r => $"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}"))}: in no listed area, or under a second or over {InstanceRunPayload.MaxSeconds / 3600} h");
+            return false;
+        }
         bool ok = await Uploader.SendAsync(RunPayload.RunsOnly(RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, pay), s.Upload);
         if (!ok) Instances.Restore(runs);
         CrashLog.Note(ok ? $"runs sent on their own: {string.Join(", ", pay.Select(r => r.zone))}" : "runs not sent: the site didn't answer; kept for the next try");
         return ok;
     }
     DateTime _runsSentAt = DateTime.MinValue;
+    /// <summary>How old a finished run may be and still go to the site from the queue.</summary>
+    public const double RunsSendHours = 6;
+
+    // ---- runs whose rewards were not read (2026-10-24) ----
+    // InstanceRunPayload.From leaves out a run whose rewards or coin weren't read; such a run used to leave the queue with
+    // the rest and vanish. Now: an event run among them is first read once more from the pictures kept of its reward screen
+    // (EventShotRecovery, in the background, so the reading loop never waits on it); read, it goes up like any run. Not
+    // read, or not an event, it is parked (InstanceLog.Park: a log line, runs_unsent, instances.jsonl) for
+    // `replay-event-shots`. On a start, the last session's unread event runs get the same one retry.
+    Task? _retryTask;
+    bool _retriedOnStart;
+
+    /// <summary>Starts the one background retry of unread event runs, when there are any and none is running.</summary>
+    void RetryUnreadRuns(Settings s)
+    {
+        if (_retryTask is { IsCompleted: false }) return;
+        var since = _retriedOnStart ? DateTime.MaxValue : DateTime.UtcNow.AddHours(-RunsSendHours);
+        _retriedOnStart = true;
+        var todo = Instances.ToRetry(since);
+        if (todo.Count == 0) return;
+        _retryTask = Task.Run(async () =>
+        {
+            foreach (var r in todo)
+            {
+                var pics = EventShotRecovery.PicturesFor(r);
+                try
+                {
+                    if (pics.Count == 0) continue;
+                    var res = await EventShotRecovery.ReadKeptAsync(r, s, _items);
+                    if (!res.Read) { CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s), still not read"); continue; }
+                    r.TakeRewardsFrom(res.Run);
+                    CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s): {res.Slots} slot(s), {res.Unknown} not read, {res.AbyssPoints:N0} Abyss Points");
+                    if (!r.KinahUnknown) Instances.Requeue(r);
+                }
+                catch (Exception ex) { CrashLog.Write("unread run retry", ex); }
+                finally
+                {
+                    r.Pictures = pics; r.Retried = true; Instances.Save(r);
+                    // still not read: one in the queue is parked by the next send; one from the last session, here
+                    if (r.KinahUnknown && !Instances.Queued(r)) Instances.Park(r, pics);
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// The runs to send, without those whose rewards were not read: an event run not yet read again from its pictures goes
+    /// back in the queue for that (<see cref="RetryUnreadRuns"/>); any other is parked, one log line each.
+    /// </summary>
+    internal List<InstanceRun> KeepUnread(List<InstanceRun> runs)
+    {
+        var send = new List<InstanceRun>(); var wait = new List<InstanceRun>();
+        foreach (var r in runs)
+        {
+            if (!r.KinahUnknown) send.Add(r);
+            else if (r.Kind == "Event" && !r.Retried) wait.Add(r);
+            else Instances.Park(r, r.Pictures.Count > 0 ? r.Pictures : EventShotRecovery.PicturesFor(r));
+        }
+        if (wait.Count > 0) Instances.Restore(wait);
+        return send;
+    }
 
     /// <summary>
     /// Shares one engine's totals (a farming run, or a chunk of the always-on count) under the given kind, with the
@@ -3324,7 +3392,7 @@ public sealed class TrackerSession
     public async Task<bool> UploadAsync(Settings s, SessionEngine e, string kind, string activity)
     {
         if (e.Elapsed.TotalMinutes < 5 || e.Events == 0) return false;
-        var runs = Instances.TakeUnshared(e.Started);
+        var runs = KeepUnread(Instances.TakeUnshared(e.Started));
         bool ok = await Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, runs), s.Upload);
         if (!ok && s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint)) Instances.Restore(runs);
         // the reading health since the last report goes with the run (numbers, item names as read, the layout)
