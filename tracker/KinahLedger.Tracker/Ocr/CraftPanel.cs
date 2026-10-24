@@ -162,7 +162,7 @@ public static class CraftPanel
 
     /// <summary>The recipe's item name without the level the panel adds: "Life Serum (Bound) (Novice Lv. 1)" → "Life Serum (Bound)".</summary>
     /// <summary>The recipe's mastery level in the panel's title ("Orichalcum Ingot (Novice Lv. 25)" → 25), 0 when it isn't read.</summary>
-    public static int LevelOf(string recipe) => Regex.Match(recipe, @"bLv\.?\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
+    public static int LevelOf(string recipe) => Regex.Match(recipe, @"\bLv\.?\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
     public static string ItemOf(string recipe) => Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)\s*$", "", RegexOptions.IgnoreCase).Trim();
 }
