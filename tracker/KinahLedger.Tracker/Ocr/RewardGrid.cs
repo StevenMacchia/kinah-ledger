@@ -246,6 +246,9 @@ public static class RewardGrid
         // the first row's top edge, found where it is: the header's line gives it within a few pixels, and 7 px low put the
         // corners in the gap (2026-10-23 Urugugu: the gold slot read Common, its "4" cut off, the row ended at slot 7)
         top = RefineTop(frame, top, x0, s, p);
+        // and its left edge: two pixels off put the outline test on the slot's own backing (2026-10-23, the Urugugu picture
+        // is 5117 wide, so the centre gave 1972 for 1974 and the row ended at its seventh slot)
+        x0 = RefineLeft(frame, top, x0, s, p);
         var slots = new List<Slot>();
         for (int row = 0; row < 6; row++)
         {
@@ -287,6 +290,8 @@ public static class RewardGrid
                                 if (System.Text.RegularExpressions.Regex.IsMatch(num, @"\d")) break;
                             }
                 }
+                // more digits than the corner has figures is a misread (2026-10-23 Vakron: a lone 5 read as 75), so the shape decides
+                if (figures && System.Text.RegularExpressions.Regex.Matches(num, @"\d").Count > FigureRuns(frame, corner)) num = "";
                 // the reader skips a lone digit: then its shape, in the tight lower-right corner where a count ends
                 if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
                 {
@@ -340,6 +345,25 @@ public static class RewardGrid
         int n = 0;
         for (int y = 0; y < area.Height; y += 2) for (int x = 0; x < area.Width; x += 2) { var c = f.GetPixel(area.Left + x, area.Top + y); if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) n++; }
         return n >= 12;
+    }
+
+    /// <summary>
+    /// How many separate runs of white columns the corner holds: each figure, dot or letter of a count is one (touching ones
+    /// make one run, and white specks in the art add runs, so a count can have fewer digits than this but never more).
+    /// </summary>
+    internal static int FigureRuns(Bitmap f, Rectangle area)
+    {
+        int runs = 0; bool inRun = false;
+        for (int x = Math.Max(0, area.Left); x < Math.Min(f.Width, area.Right); x++)
+        {
+            int n = 0;
+            for (int y = Math.Max(0, area.Top); y < Math.Min(f.Height, area.Bottom); y++)
+            { var c = f.GetPixel(x, y); if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) n++; }
+            bool white = n >= 2;
+            if (white && !inRun) runs++;
+            inRun = white;
+        }
+        return runs;
     }
 
     /// <summary>"4" → 4, "4.0K" → 4,000, "600.0K" → 600,000, "1.2M" → 1,200,000; no number → 1. Letters that look like digits count as them.</summary>
@@ -456,6 +480,29 @@ public static class RewardGrid
             sum += Math.Abs(a.R - o.R) + Math.Abs(a.G - o.G) + Math.Abs(a.B - o.B); n++;
         }
         return n == 0 ? 0 : sum / n;
+    }
+
+    /// <summary>
+    /// The grid's left: within 6 px of the centred estimate, where the first row's side edges are sharpest (the line just
+    /// inside each side against the line just outside it, over the middle of the slot's height).
+    /// </summary>
+    internal static int RefineLeft(Bitmap f, int top, int x0, int s, int p)
+    {
+        int best = x0; double bestScore = -1;
+        static int Diff(Color x, Color y) => Math.Abs(x.R - y.R) + Math.Abs(x.G - y.G) + Math.Abs(x.B - y.B);
+        for (int x = x0 - 6; x <= x0 + 6; x++)
+        {
+            if (x - 4 < 0 || x + 7 * p + s + 3 >= f.Width || top + s >= f.Height) continue;
+            double score = 0;
+            for (int col = 0; col < 8; col++)
+            {
+                int l = x + col * p, r = l + s;
+                for (int y = top + s / 6; y < top + s - s / 6; y += 3)
+                    score += Diff(f.GetPixel(l + 2, y), f.GetPixel(l - 3, y)) + Diff(f.GetPixel(r - 3, y), f.GetPixel(r + 2, y));
+            }
+            if (score > bestScore) { bestScore = score; best = x; }
+        }
+        return best;
     }
 
     /// <summary>The first row's top: from 15 px above the estimate to 3 px below it, the line where the eight boxes' top edges are sharpest.</summary>
