@@ -1,0 +1,14 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "the campsite's name (\"Kraka Footpath Campsite\", \"Kraka Footpath hmpsite\", \"eampsite\") stands in the loot list's band at y 1096 to 1116 with a steady contrast, so it settled as a row and changed in place over and over; the zone is Kraka Footpath; one Raw Leather comes up beside it with its chat line: one Raw Leather, the campsite's name dropped before it becomes a row",
+  "source": "Steven's trace.log 2026-10-24 14:53:24 to 14:55:40 UTC (the campsite text's reads, y, c as recorded; text-only, no b or s) and 14:58:29 (the Raw Leather row at y 1197), put on one clock; the zone as reads.log had it from 10:56:47 local; chat replaced by filler and the one pickup line",
+  "expect": {
+    "items": {
+      "Raw Leather": 1
+    },
+    "list_unsure": 0,
+    "list_notrow": 4
+  }
+}

@@ -2234,9 +2234,9 @@ public sealed class TrackerSession
             var measured = new List<LootLine>(lines.Count);
             for (int i = 0; i < lines.Count; i++)
             {
-                (double c, ulong h) = (-1, 0);
-                try { (c, h) = LootRows.Measure(r.Raw, r.Origin, r.Lines[i].Box); } catch (Exception ex) { CrashLog.Write("loot list contrast", ex); }
-                measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h));
+                (double c, ulong h, double bg, double sp) = (-1, 0, -1, -1);
+                try { (c, h, bg, sp) = LootRows.MeasureAll(r.Raw, r.Origin, r.Lines[i].Box); } catch (Exception ex) { CrashLog.Write("loot list contrast", ex); }
+                measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h, bg, sp));
             }
             // the name decoder's shadow read of the rows (logs only, counts nothing), on the picture while it is here
             if (NameDecoder.Present) try { ShadowListNames(r.Raw, r.Origin, r.Lines, lines, now); } catch (Exception ex) { CrashLog.Write("name decoder", ex); }
@@ -2252,6 +2252,26 @@ public sealed class TrackerSession
     public LootRows Rows => _rows;
     /// <summary>Loot list rows that went before their text settled: unsure, logged, never counted.</summary>
     public int ListUnsure => _rows.Unsure;
+
+    /// <summary>Lines in the loot list's band that aren't rows (a nameplate, a zone's name, text over the world): dropped before LootRows.</summary>
+    internal LootNotRow NotRow => _notRow ??= new LootNotRow(_items);
+    LootNotRow? _notRow;
+    /// <summary>Those drops as logged and counted (list_notrow): once per text per minute.</summary>
+    public int ListNotRow => _notRow?.Logged ?? 0;
+
+    /// <summary>
+    /// The names on screen that the loot list's band can catch, for LootNotRow: the nameplates around the character, the
+    /// target bar's name (an enemy on the list, or the last name-shaped read that isn't, 8 letters or more), the zone.
+    /// </summary>
+    void NoteScreenNames(DateTime now)
+    {
+        var nr = NotRow;
+        foreach (var e in Engaged) nr.See(e, now, LootNotRow.Plate);
+        if (Target.Name is { } tn && (DateTime.UtcNow - Target.NameAt).TotalSeconds <= LootNotRow.NameSeconds) nr.See(tn, now, LootNotRow.Plate);
+        if (Target.Unlisted.Count(char.IsLetter) >= 8 && (DateTime.UtcNow - Target.UnlistedAt).TotalSeconds <= LootNotRow.NameSeconds) nr.See(Target.Unlisted, now, LootNotRow.Plate);
+        if (Zone is { } z && z != SessionEngine.UnknownZone) nr.See(z, now, LootNotRow.Zone);
+        if (ZoneLocator.LastUnlisted is { } u && u.Count(char.IsLetter) >= 8) nr.See(u, now, LootNotRow.Zone);
+    }
 
     /// <summary>One read of the loot list as text only (a trace, a test): no contrast, no icons, every read counts.</summary>
     internal void ProcessList(List<(int Top, string Text)> lines, DateTime now) => ProcessList(lines.Select(l => new LootLine(l.Top, l.Text)).ToList(), now);
@@ -2282,6 +2302,11 @@ public sealed class TrackerSession
             // its lines are what is being gathered, never a pickup (Steven, 2026-10-23 11:28)
             var uncut = lines;
             if (GatherPanelCut(lines.Select(l => (l.Top, l.Text)).ToList(), now) is int cut) lines = lines.Where(l => l.Top < cut).ToList();
+            // lines that aren't loot list rows at all (a nameplate or the zone's name standing in the band, text over the
+            // world with no icon and no dark strip behind it) go before they become rows (LootNotRow, 2026-10-24); the trace
+            // keeps them, so a replay drops them the same way
+            NoteScreenNames(now);
+            lines = NotRow.Filter(lines, now);
             // the rows as read, for the trace (with each one's place and contrast, so a replay tracks them the same way).
             // The trace keeps the gathering panel's lines too, before the cut: a replay cuts them again, and can see which
             // item the panel named (2026-10-24: the panel's lines weren't kept, so a gathering miscount couldn't be replayed)
@@ -2294,7 +2319,10 @@ public sealed class TrackerSession
             if (readAll.Count > 0)
             {
                 var traced = readAll.Select(x => x.Row.IsKinah ? $"{x.Row.Amount} Kina" : $"{x.Row.Name} x{x.Row.Count}").ToList();
-                ReadTrace.List(now, traced, readAll.Select(x => x.Line.Top).ToList(), readAll.All(x => x.Line.Contrast >= 0) ? readAll.Select(x => Math.Round(x.Line.Contrast, 3)).ToList() : null);
+                bool measuredAll = readAll.All(x => x.Line.Contrast >= 0);
+                ReadTrace.List(now, traced, readAll.Select(x => x.Line.Top).ToList(), measuredAll ? readAll.Select(x => Math.Round(x.Line.Contrast, 3)).ToList() : null,
+                    measuredAll && readAll.Any(x => x.Line.Background >= 0) ? readAll.Select(x => Math.Round(x.Line.Background, 3)).ToList() : null,
+                    measuredAll && readAll.Any(x => x.Line.Spread >= 0) ? readAll.Select(x => Math.Round(x.Line.Spread, 3)).ToList() : null);
                 Report.Lines("list", traced, now);
             }
             Seen(now);

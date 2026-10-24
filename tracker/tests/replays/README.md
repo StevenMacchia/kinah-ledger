@@ -27,3 +27,9 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
 - `text-2026-10-24-row-*`: the loot list's rows tracked by their slot (brief item 2): a change in place, a row seen once
   while fading in, two identical rows in two slots, a settled row misread as it fades out. Each fails on 0.8.25's
   text-keyed rows and passes with `Session/LootRows.cs`.
+- `text-2026-10-24-notrow-*`: lines in the loot list's band that aren't rows (`Session/LootNotRow.cs`): the nameplate
+  "Vanguard of Atreia" read as "Vangi" in the top slot beside a fight's rows, and the campsite's name standing in the
+  band in Kraka Footpath. Each counts only the real pickup and names `list_notrow` (lines dropped, logged once per text
+  per minute); both fail on 0.8.26. A `list` read may also carry `b` (each row's background) and `s` (the spread where
+  its icon sits), as trace.log writes them since then; a `plate` read names a nameplate or target name on screen
+  (hand-written from reads.log's `fighting:` lines; trace.log doesn't keep them).

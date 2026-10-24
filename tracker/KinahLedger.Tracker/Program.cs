@@ -1052,6 +1052,7 @@ options: --process aion[,other]");
         ok &= NameMatchTest();
         ok &= Ocr.NameDecoderTests.Run(items, s);
         ok &= LootRowsTest(items);
+        ok &= LootNotRowTest(items);
         ok &= AnchorsTest();
         ok &= SceneTest(items, s);
         ok &= RelogTest();
@@ -1557,6 +1558,137 @@ options: --process aion[,other]");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         for (int i = 0; i < 50; i++) Draw(255);
         Console.WriteLine($"  (50 draws and measures in {sw.ElapsedMilliseconds} ms)");
+        return ok;
+    }
+
+    /// <summary>
+    /// Lines in the loot list's band that aren't rows (LootNotRow, 2026-10-24): names on screen by the fuzzy rules, and drawn
+    /// frames measured the way the live read measures them: a nameplate with no icon and no dark strip is dropped; a real
+    /// row with an icon on the strip, a faint one fading in, a cut-off long name, Kinah and bound rows all pass.
+    /// </summary>
+    static bool LootNotRowTest(ItemDictionary items)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nLoot list lines that aren't rows (2026-10-24):");
+        var t0 = new DateTime(2026, 10, 24, 14, 53, 0, DateTimeKind.Utc);
+        string Kept(Session.LootNotRow nr, IEnumerable<string> texts, DateTime t) =>
+            string.Join(" | ", nr.Filter(texts.Select((x, i) => new LootLine(975 + i * 73, x)).ToList(), t).Select(l => l.Text));
+
+        // (a) names on screen: the nameplate cut by the band's edge, the zone and its campsite's banner
+        var na = new Session.LootNotRow(items);
+        na.See("Vanguard of Atreia", t0, Session.LootNotRow.Plate);
+        na.See("Withered Fairy", t0, Session.LootNotRow.Plate);
+        na.See("Pond Starturtle", t0, Session.LootNotRow.Plate);
+        na.See("Kraka Footpath", t0, Session.LootNotRow.Zone);
+        Check("nameplate fragments go, rows stay", Kept(na, new[] { "Vangi", "Vangt", "Vang(", "Vanc", "Withered Fairy", "Spiritstone x1" }, t0), "Spiritstone x1");
+        Check("the zone's campsite banner goes", Kept(na, new[] { "Kraka Footpath Campsite", "Kraka Footpath hmpsite", "Kina x222" }, t0.AddSeconds(1)), "Kina x222");
+        Check("bound, soul and cut-off rows of a nameplate's enemy stay",
+            Kept(na, new[] { "Starturtle (Bound) x1", "turtle (Bound) x1", "<Soul: Starturtle (Bound)> x1", "itstone x1", "Raw Leather x1" }, t0.AddSeconds(2)),
+            "Starturtle (Bound) x1 | turtle (Bound) x1 | <Soul: Starturtle (Bound)> x1 | itstone x1 | Raw Leather x1");
+        Check("logged once per text per minute", $"{na.Dropped} {na.Logged}", "7 7");
+        Kept(na, new[] { "Vangi", "Kraka Footpath Campsite" }, t0.AddSeconds(8));
+        Check("...the same texts again within the minute: dropped, not logged", $"{na.Dropped} {na.Logged}", "9 7");
+        // a nameplate last seen more than ten seconds ago is no longer on screen: its name drops nothing
+        Check("an old nameplate's name drops nothing", Kept(na, new[] { "Vangi" }, t0.AddSeconds(25)), "Vangi");
+        Check("fuzzy: zone whole and starts-with, plate prefix", $"{Session.LootNotRow.Like("Kraka Footpath eampsite", "Kraka Footpath Campsite", false, false)} {Session.LootNotRow.Like("Kraka Footpath Campsite", "Kraka Footpath", false, true)} {Session.LootNotRow.Like("Vangu", "Vanguard of Atreia", true, false)} {Session.LootNotRow.Like("Spiritstone", "Spirit Guardian", true, false)}", "True True True False");
+
+        // drawn frames: a bright world with nameplates over it, the list's translucent dark strip with rows and icons
+        using var frame = new System.Drawing.Bitmap(1100, 560, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        var origin = new System.Drawing.Point(1500, 900);
+        using var font = new System.Drawing.Font("Segoe UI", 28, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel);
+        // where the recognizer would put each line's box: its ink, measured on the text drawn alone
+        System.Drawing.Rectangle Ink(string text, float x, float y, int clipLeft)
+        {
+            using var solo = new System.Drawing.Bitmap(1100, 560, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g2 = System.Drawing.Graphics.FromImage(solo)) { g2.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit; g2.DrawString(text, font, System.Drawing.Brushes.White, x, y); }
+            int l = 9999, t = 9999, r = -1, b = -1;
+            for (int yy = 0; yy < solo.Height; yy++) for (int xx = Math.Max(0, clipLeft); xx < solo.Width; xx++) if (solo.GetPixel(xx, yy).A > 60) { l = Math.Min(l, xx); t = Math.Min(t, yy); r = Math.Max(r, xx); b = Math.Max(b, yy); }
+            return new System.Drawing.Rectangle(origin.X + l, origin.Y + t, r - l + 1, b - t + 1);
+        }
+        var boxes = new List<(string Text, System.Drawing.Rectangle Box)>();
+        using (var g = System.Drawing.Graphics.FromImage(frame))
+        {
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            // the world: a smooth bright evening sky on top, a textured bright field lower down
+            using (var sky = new System.Drawing.Drawing2D.LinearGradientBrush(new System.Drawing.Rectangle(0, 0, 1100, 560), System.Drawing.Color.FromArgb(150, 160, 170), System.Drawing.Color.FromArgb(120, 140, 120), 90f))
+                g.FillRectangle(sky, 0, 0, 1100, 560);
+            var rnd = new Random(7);
+            for (int i = 0; i < 400; i++)
+            {
+                int v = rnd.Next(80, 200);
+                using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, v, Math.Min(255, v + 10), v - 20));
+                g.FillEllipse(b, rnd.Next(0, 1100), rnd.Next(300, 560), rnd.Next(6, 30), rnd.Next(6, 30));
+            }
+            // the list's strip: translucent dark, over the field, rows 73 px apart as on Steven's screen
+            using (var strip = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(185, 12, 14, 20)))
+                g.FillRectangle(strip, 120, 150, 640, 380);
+            void Row(string text, int x, int y, int alpha, bool clip = false)
+            {
+                // the icon: an item's art, textured, in a darker frame
+                var icon = new System.Drawing.Rectangle(x - 12 - 42, y + 2, 42, 42);
+                using (var frameB = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(alpha, 60, 50, 40))) g.FillRectangle(frameB, icon);
+                using (var art1 = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(alpha, 210, 180, 90)))
+                using (var art2 = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(alpha, 90, 140, 200)))
+                {
+                    g.FillEllipse(art1, icon.X + 6, icon.Y + 6, 22, 26);
+                    g.FillRectangle(art2, icon.X + 24, icon.Y + 18, 12, 16);
+                }
+                using var br = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(alpha, 245, 245, 240));
+                var state = g.Save();
+                // a long name scrolling sideways: its start is cut off by the text area's left edge
+                if (clip) g.SetClip(new System.Drawing.Rectangle(x, y - 10, 600, 60));
+                float dx = clip ? -70 : 0;
+                g.DrawString(text, font, br, x + dx, y);
+                g.Restore(state);
+                boxes.Add((text, Ink(text, x + dx, y, clip ? x : -1)));
+            }
+            // a nameplate standing in the band over the sky: no icon, no strip
+            using (var gold = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 255, 245, 200)))
+                g.DrawString("Vangi", font, gold, 560, 40);
+            boxes.Add(("Vangi", Ink("Vangi", 560, 40, -1)));
+            // a nameplate over the textured field, off the strip (the field isn't flat, so only its background tells)
+            using (var gold = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 255, 245, 200)))
+                g.DrawString("Withe", font, gold, 880, 470);
+            boxes.Add(("Withe", Ink("Withe", 880, 470, -1)));
+            Row("Spiritstone x1", 220, 160, 255);
+            Row("Kina x222", 220, 233, 255);
+            Row("itstone Fragment x1", 220, 306, 255, clip: true);
+            Row("Raw Leathe x1", 220, 379, 80);   // fading in: icon and text at a third of their strength
+            Row("Withered Fairy x1", 220, 452, 255);   // an enemy's soul row cut at the left: the enemy's name, on the strip
+        }
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var lines = boxes.Select(b0 => { var m = Session.LootRows.MeasureAll(frame, origin, b0.Box); return new LootLine(b0.Box.Top, b0.Text, m.Contrast, m.Icon, m.Background, m.Spread); }).ToList();
+        long ms = sw.ElapsedMilliseconds;
+        foreach (var l in lines) Console.WriteLine($"    {l.Text,-22} y {l.Top,4}  contrast {l.Contrast:0.00}  background {l.Background:0.00}  spread {l.Spread:0.000}");
+        var nb = new Session.LootNotRow(items);
+        Check("drawn: nameplates go, rows on the strip stay", string.Join(" | ", nb.Filter(lines, t0).Select(l => l.Text)), "Spiritstone x1 | Kina x222 | itstone Fragment x1 | Raw Leathe x1 | Withered Fairy x1");
+        string Why(string text) { var l = lines.First(x => x.Text == text); var row = LootPopup.Rows(new[] { (l.Top, l.Text) }).First(); return nb.Why(l, row, 0.1, out var d) is { } w ? $"{w} ({d})" : "a row"; }
+        Console.WriteLine($"    Vangi: {Why("Vangi")}; Withe: {Why("Withe")}");
+        var vangi = lines.First(x => x.Text == "Vangi"); var withe = lines.First(x => x.Text == "Withe");
+        Check("the sky: flat, no icon; the field: not flat, off the strip", $"{vangi.Spread <= Session.LootNotRow.FlatSpread} {withe.Spread > Session.LootNotRow.FlatSpread} {withe.Background > 0.3}", "True True True");
+        var faint = lines.First(x => x.Text == "Raw Leathe x1"); var full = lines.First(x => x.Text == "Spiritstone x1");
+        Check("the faint row: fainter than the full one, still an icon", $"{faint.Contrast < full.Contrast * 0.6} {faint.Spread > Session.LootNotRow.FlatShare * faint.Contrast}", "True True");
+        // with no sure row in the read, the strip learned a moment ago stands
+        var nc = new Session.LootNotRow(items);
+        var kina = lines.First(x => x.Text == "Kina x222");
+        nc.Filter(new() { kina, kina with { Top = 300 } }, t0);
+        Check("learned strip: a lone nameplate read later goes", string.Join(" | ", nc.Filter(new() { withe, full }, t0.AddSeconds(5)).Select(l => l.Text)), "Spiritstone x1");
+        // no strip known at all: only a very bright background is off it; rows with icons stay
+        var nd = new Session.LootNotRow(items);
+        Check("no strip known: rows with icons stay", string.Join(" | ", nd.Filter(lines.Where(x => x.Text != "Kina x222" && x.Text != "Withe").ToList(), t0).Select(l => l.Text)), "Spiritstone x1 | itstone Fragment x1 | Raw Leathe x1 | Withered Fairy x1");
+        // the enemy's nameplate on screen: its name off the strip goes, the same name on the strip with an icon stays
+        var ne = new Session.LootNotRow(items);
+        ne.See("Withered Fairy", t0, Session.LootNotRow.Plate);
+        Check("a nameplate's name on the strip with an icon stays", string.Join(" | ", ne.Filter(lines.Where(x => x.Text is "Withe" or "Withered Fairy x1" or "Kina x222").ToList(), t0).Select(l => l.Text)), "Kina x222 | Withered Fairy x1");
+        var ns = new Session.LootNotRow(items);
+        ns.See("Drakan Guard Dog", t0, Session.LootNotRow.Plate);
+        Check("a soul row with (Bound) read badly stays", Kept(ns, new[] { "Drakan Guard Dog (Boc x1", "Drakan Guard Dog" }, t0), "Drakan Guard Dog (Boc x1");
+        Console.WriteLine($"  ({lines.Count} lines measured in {ms} ms)");
         return ok;
     }
 

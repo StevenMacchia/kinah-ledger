@@ -41,6 +41,46 @@ written; `"rare": {"legend_materials": false}` in the site's config keeps Legend
   pixels at conf 0.7 or more, and "layout not found" only while the game is genuinely hidden. Templates for the loot list,
   the crafting panel, the zone strip and the target bar still have to be cut from real frames into `data/anchors/`.
 
+## Lines in the loot list's band that aren't rows (branch tracker/loot-crop, 2026-10-24)
+
+The band sits beside the character, so the world's own text lands in it. Steven's 5120x2160 reads.log, 35 minutes:
+157 lines refused only as "went before its text settled" (27x "Vangi", 21x "Vang", 11x "Vangt": the nameplate
+"Vanguard of Atreia" next to the character; "Kraka Footpath hmpsite": the campsite's name; "Withered Fairy"), and in
+trace.log many more that settled (899 reads of "Vangi" at a median contrast of 0.54, a real row's level; the campsite's
+name settled and "changed in place" over and over). `Session/LootNotRow.cs` drops them in `ProcessList`, after the
+gathering panel's cut and before `LootRows.Feed`; the trace keeps them, so a replay drops them the same way.
+
+- **(a) a name on screen**: by NameMatch's OCR-aware distance, the text is a nameplate (`Engaged`) or the target bar's
+  name (an enemy on the list, or the last unlisted read of 8+ letters) seen in the last 10 s, also as a prefix (cut by
+  the band's edge: "Vangt"); the zone, or one read in the last 2 min, also with more after it ("Kraka Footpath
+  Campsite" in Kraka Footpath); or any zone on the list read whole.
+- **(b) no icon**: the whole place an icon could be (3.2 to 0.15 line heights left of the text, 2.4 tall; it covers
+  every size and gap PopupIcons tries, since the icon's exact place isn't measured on real frames) is flat: spread
+  (standard deviation of a 12x8 grid of cell means) at most 0.012 and under a tenth of the text's contrast, so a row
+  fading in, whose icon fades with it, keeps its icon. The 8x8 icon hash being 1 is the same verdict on a smaller square
+  and isn't used on its own.
+- **(c) not on the dark strip**: background (the darker 30% of the line's box, what is behind the letters) at least
+  0.18 above the strip's and 1.8 times it. The strip's is what sure rows in the same read sit on (Kinah, "(Bound)", a
+  count of 2+), else the same over the last 30 s, else only a background of 0.6 or more counts. Only for text at
+  contrast 0.35 or more: a row fading in fades with its strip.
+- **Never dropped**: Kinah, soul and shop rows, "(Bound)" (or "(B" read badly), anything opening with "<", a count of
+  2+, an item's own name, and a line the picture vouches for (spread 0.03+ on a background within 0.08 of the strip's):
+  an enemy's soul row cut at the left reads as the enemy's name.
+- **reads.log**: `loot list: "Vangi" is a nameplate|a zone|not on the list: ignored (<why>)`, once per text per
+  minute; each such line adds one to `list_notrow` (Accuracy, on this PC; not in `Accuracy.Keys`, the payload is
+  unchanged). trace.log list reads now also carry `b` (background) and `s` (spread) per row.
+- **Measured on Steven's trace** (14:36 to 15:22 UTC, text only, nameplates from reads.log's `fighting:` lines): 93
+  logged drops, every one a nameplate or the campsite's name, and unsure rows 62 to 55. "Vangi" itself isn't caught by
+  rule (a) that session (the target bar never read the Vanguard, and `Engaged` holds only enemies with a health bar);
+  rules (b) and (c) need the picture's measures, which trace.log only keeps from this version on. The thresholds are
+  set on drawn frames: check them against Steven's next trace.log (`b`, `s` beside each `Vangi` and each real row).
+- **The band at 5120x2160** (y from trace.log, cy = 1080): rows sit in four slots at y 979, 1050, 1123, 1197 (73 px,
+  0.034h, apart), so the list runs from about cy-0.047h to cy+0.072h; the band is cy-0.06h to cy+0.30h (950 to 1728),
+  over three times that, and its lower part holds the gathering panel (1512 to 1693), which the band's reader needs for
+  its cut. The nameplate (950 to 997) overlaps the top slot and the campsite's name (1096 to 1116) sits between slots
+  two and three, so no crop separates them from rows; a fifth slot would be at about 906, above the band, and wasn't
+  seen. Left and right can't be checked from the logs (no x). Geometry is the anchor work's, not changed here.
+
 ## Item-name decoder, shadow only (branch tracker/name-decoder, 2026-10-24)
 
 Windows OCR returns a string with no per-letter confidence, so every name fix after it works on a guess.

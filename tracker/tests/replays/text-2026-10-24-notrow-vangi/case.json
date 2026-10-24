@@ -1,0 +1,14 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "the nameplate \"Vanguard of Atreia\" stands in the loot list's top slot (\"Vangi\", \"Vang\", \"Vanc\", y 959 to 967), and the spider being fought's nameplate (\"Aullaeu For\") in the next, while a fight's rows come and go below; only the Spiritstone has a chat line: one Spiritstone, the nameplate lines dropped before they become rows (0.8.26 kept them as rows, three went unsure; the one left is a real row read once, before the screen's usual contrast was known)",
+  "source": "Steven's trace.log 2026-10-24 14:37:06 to 14:37:20 UTC (rows, y, c as recorded; chat replaced by filler and the one pickup line); \"plate\" from reads.log (fighting: Aullaeu Forest Odyle Spider, 10:37:23 local); b and s added as parse-test's drawn frames measure them, since trace.log didn't keep them before 2026-10-24",
+  "expect": {
+    "items": {
+      "Spiritstone": 1
+    },
+    "list_unsure": 1,
+    "list_notrow": 5
+  }
+}
