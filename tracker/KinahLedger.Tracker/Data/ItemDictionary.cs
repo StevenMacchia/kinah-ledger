@@ -56,6 +56,23 @@ public sealed class ItemDictionary
     /// say this: one name has a tradable and a bound copy (Ethereal Longsword).
     /// </summary>
     public bool IsGear(long id) { lock (_lock) return _gear.Contains(id); }
+
+    /// <summary>
+    /// The item a name is known by, as the list, the extras, the skins or a misread already snapped spell it, or null.
+    /// Adds nothing (unlike <see cref="IdOf"/>): the gear repair of old records asks what a saved name was (2026-10-24).
+    /// </summary>
+    public long? Find(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        lock (_lock)
+        {
+            var key = Norm(name);
+            if (_byName.TryGetValue(key, out var id)) return id;
+            var plain = System.Text.RegularExpressions.Regex.Replace(key, @"\s*\(bound\)$", "");
+            return plain != key && _byName.TryGetValue(plain, out var pid) ? pid : null;
+        }
+    }
+
     public string NameOf(long id) { lock (_lock) return _byId.TryGetValue(id, out var i) ? i.Name : $"item {id}"; }
 
     /// <summary>

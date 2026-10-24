@@ -208,6 +208,8 @@ public sealed record MobRun(string name, string zone, int kills, long kinah, Dic
 public sealed record InstanceRunPayload(string zone, string kind, int seconds, long kinah, int kills, Dictionary<string, int> items,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? @event = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? family = null,
+    // 2026-10-24: only on a run sent again after the gear repair (InstanceLog.RepairGear); an ordinary run never has it
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RunCorrection? correction = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? partly_read = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? not_read = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, int>? unknown = null,
@@ -237,8 +239,11 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
                 var unknown = new Dictionary<string, int>();
                 if (r.UnknownItems > 0) unknown["Unknown item"] = r.UnknownItems;
                 if (r.UnknownGear > 0) unknown["Unknown gear"] = r.UnknownGear;
-                return new InstanceRunPayload(r.Zone, KindOf(r)!, (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
-                    r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null,
+                // a correction is no new run: it goes with 0 seconds, which a site from before corrections refuses, so there
+                // it can never count twice; the run stays marked and is sent again later
+                var fix = RunCorrection.Of(r, key, off);
+                return new InstanceRunPayload(r.Zone, KindOf(r)!, fix != null ? 0 : (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
+                    r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null, fix,
                     r.PartlyRead ? true : null, r.SlotsUnread > 0 ? r.SlotsUnread : null, unknown.Count > 0 ? unknown : null,
                     r.GearNotes.Count > 0 ? r.GearNotes.Take(MaxNotes).ToList() : null);
             }).ToList();
@@ -250,6 +255,22 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     /// on no area list; the site keeps it as its own loot table, never Kinah/hr or an event). Null: not sent.
     /// </summary>
     static string? KindOf(InstanceRun r) => r.Kind == InstanceLog.WorldBoss ? InstanceLog.WorldBoss : KinahLedger.Ocr.ZoneLocator.KindOf(r.Zone);
+}
+
+/// <summary>
+/// What marks a run sent again after the gear repair (2026-10-24): the site already holds it with the counts it had before
+/// (<c>was</c>, keyed like <c>items</c>), filed when it arrived, shortly after the run ended (<c>ended</c>, UTC). The site
+/// takes the difference back from the rows it filed then and adds no second run. The run's <c>items</c> carry the repaired counts.
+/// </summary>
+public sealed record RunCorrection(string ended, Dictionary<string, int> was)
+{
+    public static RunCorrection? Of(InstanceRun r, Func<long, string> key, Func<long, bool>? off = null)
+    {
+        if (!r.Resend || r.RepairedFrom.Count == 0 || r.LastLoot is not DateTime ended) return null;
+        var was = new Dictionary<string, int>();
+        foreach (var (id, n) in r.RepairedFrom) { if (off?.Invoke(id) == true) continue; var k = key(id); was[k] = was.GetValueOrDefault(k) + n; }
+        return was.Count > 0 ? new RunCorrection(ended.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"), was) : null;
+    }
 }
 
 /// <summary>Successes and failures for one recipe or enchant step.</summary>
