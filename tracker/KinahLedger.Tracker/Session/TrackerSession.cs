@@ -1193,6 +1193,9 @@ public sealed class TrackerSession
                 try
                 {
                     using var again = ScreenReader.Capture(g);
+                    // the table slides in: its header is found again in each frame, never taken from the first (2026-10-23 20:53,
+                    // Vakron: every read after the first was off the slots, every grade Common, the 600.0K coin not named)
+                    if (await TableTop(again) is int t2) top = t2;
                     reads.Add(await RewardGrid.ReadAsync(again, top));
                     if (RewardGrid.Settled(reads, GridSureDistance) || (DateTime.UtcNow - started).TotalSeconds >= 3) SaveShot(again, "reward-table-settled");
                 }
@@ -1207,6 +1210,16 @@ public sealed class TrackerSession
     }
 
     /// <summary>The reward table's slots into the run: each named item once, skipping what the chat already counted.</summary>
+    /// <summary>Where a frame's reward table starts: just under its "Reward collected." line, or null when the line isn't there.</summary>
+    static async Task<int?> TableTop(System.Drawing.Bitmap frame)
+    {
+        var band = new System.Drawing.Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
+        using var bandBmp = frame.Clone(band, frame.PixelFormat);
+        var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
+        var rc = lines.FirstOrDefault(l => IsRewardCollected(l.Text));
+        return rc == null ? null : rc.Box.Bottom + (int)(frame.Height * 0.016);
+    }
+
     /// <summary>A slot's closest icon is sure: close (right ones 23 to 60, wrong ones 82 to 114), clearly closer than the next, and of the slot's grade.</summary>
     /// <summary>
     /// The slot's sure item among its closest icons, judged against the others of the slot's own grade (2026-10-23

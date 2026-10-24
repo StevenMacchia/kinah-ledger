@@ -197,7 +197,8 @@ public static class RewardGrid
         var seen = reads.Where(r => r.Count > 0).ToList();
         if (seen.Count == 0) return new List<Slot>();
         // the slot count of the reads with the most sure slots
-        int n = seen.GroupBy(r => r.Count).OrderByDescending(g => g.Max(r => r.Count(s => s.Icons.Count > 0 && s.Icons[0].Distance <= sure))).ThenByDescending(g => g.Count()).First().Key;
+        // slots appear as the table slides in (14, then 27): the most slots two reads agree on, else the last read's
+        int n = seen.GroupBy(r => r.Count).Where(g => g.Count() >= 2).Select(g => g.Key).DefaultIfEmpty(seen[^1].Count).Max();
         var same = seen.Where(r => r.Count == n).ToList();
         var res = new List<Slot>();
         for (int i = 0; i < n; i++)

@@ -1,0 +1,16 @@
+{
+  "pending": true,
+  "needs_ocr": true,
+  "name": "Vakron Sky Island reward table, 2026-10-23 20:53:31 (the frame 0.8.21 kept as -reward-table-settled): 27 slots (8, 8, 8, 3); 0.8.21 read it 4 times while it slid in (14, 14, 27, 27 slots), never settled, every grade Common, the 600.0K coin not named, so the run's Kinah was lost",
+  "source": "reward-shots/20261023-205331-Vakron-Sky-Island-reward-table-settled.jpg, everything but the title and the grid blacked out",
+  "game": { "w": 5120, "h": 2160 },
+  "frames": [ { "f": "table.jpg", "k": "table", "t": "2026-10-24T00:53:31Z", "x": 0, "y": 0 } ],
+  "expect": {
+    "table": [
+      { "n": 1 }, { "n": 1, "name": "Amplify Stone Fragment" }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
+      { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 4000, "name": "Enhance Stone" }, { "n": 600000, "name": "Kina" },
+      { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 6, "unlisted": true },
+      { "n": 4, "name": "Refining Stone" }, { "n": 5, "name": "Soul Codex" }, { "n": 14, "name": "Silentium" }
+    ]
+  }
+}
