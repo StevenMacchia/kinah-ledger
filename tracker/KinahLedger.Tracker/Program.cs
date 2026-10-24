@@ -1071,6 +1071,7 @@ options: --process aion[,other]");
         ok &= LootNotRowTest(items);
         ok &= AnchorsTest();
         ok &= SceneTest(items, s);
+        ok &= AuditLineTest(items, s);
         ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
@@ -1335,12 +1336,45 @@ options: --process aion[,other]");
             Check("...a read with no numbers: fixed", $"{an.BalanceCrop.Active}", "False");
             for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chosen", true, t0);
             Check("Anchors: a chat chosen by hand never anchors", $"{an.ChatCrop.Active}", "False");
-            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0);
+            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0.AddSeconds(2 * i));
             Check("...a found one does", $"{an.ChatCrop.Active}", "True");
             Update.RemoteConfig.Current = offCfg;
             an.ObserveBalance(game, nums, t0.AddSeconds(40));
             Check("layout.anchor.balance off from the site: nothing locks", $"{an.BalanceCrop.Active} {an.BalanceCrop.Crop(game, Update.RemoteConfig.Current.AnchorBalance)?.ToString() ?? "fixed"}", "False fixed");
             Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+
+            // the chat's hysteresis (2026-10-24: one failed look around the anchor dropped it, and the same box re-took it a
+            // second later, back and forth while the chat was on screen): three misses in a row over 10 s drop it, sightings
+            // count 1.5 s apart, a switch is logged at most once a minute
+            var hl = new List<string>();
+            var hc = new AnchoredCrop("chat", AnchoredCrop.ChatFrom, 0.4) { Hold = new(), Log = hl.Add };
+            var h0 = new DateTime(2026, 10, 24, 13, 7, 0, DateTimeKind.Utc);
+            hc.Observe(game, chatBox, 1.0, true, h0); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(0.5)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(1));
+            Check("hysteresis: three sightings in 1 s are one: no lock", $"{hc.Active}", "False");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(2)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(4));
+            Check("...three stable observations 2 s apart: anchored, logged", $"{hc.Active} {hl.Count}", "True 1");
+            bool kept = hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(10));
+            Check("a single miss keeps the anchored crop", $"{kept} {hc.Active} {hc.Misses} {hl.Count}", "True True 1 1");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(12));
+            Check("...a sighting in its place starts the count again", $"{hc.Misses}", "0");
+            for (int i = 0; i < 3; i++) hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(20 + 2 * i));
+            Check("three misses within 4 s: still anchored", $"{hc.Active} {hc.Misses}", "True 3");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(27));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(30));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(35));
+            hc.Missing(game, "the chat wasn't found around its anchor", h0.AddSeconds(40));
+            Check("three misses in a row over 10 s: the fixed crop", $"{hc.Active} {hc.Crop(game, true)?.ToString() ?? "fixed"} {hc.Off}", "False fixed 1");
+            Check("...a switch within a minute of the last line isn't logged", $"{hl.Count} {hc.Unlogged}", "1 1");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(41)); hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(43));
+            Check("...two sightings after it: still the fixed crop", $"{hc.Active}", "False");
+            hc.Observe(game, chatBox, 1.0, true, h0.AddSeconds(45));
+            Check("the lock re-taken after three stable observations", $"{hc.Active} {hc.On}", "True 2");
+            var movedBox = new System.Drawing.Rectangle(chatBox.X + 40, chatBox.Y, chatBox.Width, chatBox.Height);
+            hc.Observe(game, movedBox, 1.0, true, h0.AddSeconds(70));
+            Check("the anchor moving drops it at once, the line says what wasn't logged", $"{hc.Active} {hl.Count} {hl.Last().Contains("the anchor moved 40 px")} {hl.Last().Contains("(2 switch(es) since the last line not logged)")}", "False 2 True True");
+            var noHold = new AnchoredCrop("balance", AnchoredCrop.BalanceFrom, 0.25) { Log = _ => { } };
+            for (int i = 0; i < 3; i++) noHold.Observe(game, strip, 0.5, true);
+            Check("without hysteresis (the Kinah strip) a miss still drops at once", $"{noHold.Missing(game, "no numbers")} {noHold.Active}", "False False");
 
             // the audit line's pass part: each region's ms per pass over the minute
             var times = new KinahLedger.Session.PassTimes();
@@ -1383,6 +1417,40 @@ options: --process aion[,other]");
     /// Crafting; a one-pass flicker changes nothing; Unknown holds reads and the next settled state releases or drops
     /// them; scene.gate off gates nothing; the classifier stays under 3 ms; the replay bank counts the same through the gate.
     /// </summary>
+    /// <summary>
+    /// The once-a-minute audit line from a session (2026-10-24: 12:47 to 13:08 had none, because it was written only in
+    /// minutes with a kill or a quest step): a simulated minute of passes with no kill writes it, with the per-region times.
+    /// </summary>
+    static bool AuditLineTest(ItemDictionary items, Settings settings)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nThe audit line, once a minute in reads.log (2026-10-24):");
+        string[] AuditLines() { try { return File.ReadAllLines(CrashLog.ReadsPath).Where(l => l.Contains("  ??  audit: ")).ToArray(); } catch (Exception) { return Array.Empty<string>(); } }
+        var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+        var a0 = DateTime.UtcNow;
+        int before = AuditLines().Length;
+        s.Audit(a0);   // the first call takes the counts it measures from
+        for (int i = 0; i < 50; i++) { s.NotePass(900); s.Times.Add("chat", 240); s.Times.Add("list", 500); }
+        s.Audit(a0.AddSeconds(30));
+        Check("half a minute: no line yet", $"{AuditLines().Length - before}", "0");
+        s.Audit(a0.AddSeconds(61));
+        var got = AuditLines().Skip(before).ToArray();
+        Check("a minute of passes with no kill: one audit line", $"{got.Length}", "1");
+        string line = got.LastOrDefault() ?? "";
+        Check("...kills +0, the passes and each region's time", $"{line.Contains("kills counted +0")} {line.Contains("50 passes, 900 ms each (per pass: chat 240 · list 500 · target 0")}", "True True");
+        s.Audit(a0.AddSeconds(122));
+        Check("a minute with no pass (covered, minimized): no line", $"{AuditLines().Length - before}", "1");
+        s.NotePass(800);
+        s.Audit(a0.AddSeconds(183));
+        Check("...the next minute read writes one again", $"{AuditLines().Length - before}", "2");
+        return ok;
+    }
+
     static bool SceneTest(ItemDictionary items, Settings settings)
     {
         bool ok = true;
@@ -1448,11 +1516,22 @@ options: --process aion[,other]");
             g.FillRectangle(System.Drawing.Brushes.DimGray, (int)(W * 0.3), H - 60, (int)(W * 0.4), 8);
             Text(g, (int)(W * 0.35), H - 140, (int)(W * 0.65), H - 90, 9);
         });
+        // death: a red-tinted frame, the HUD gone, a dark vignette, a prompt in the centre
         using var death = Frame(g =>
         {
             var rng = new Random(13);
             g.Clear(System.Drawing.Color.FromArgb(80, 14, 14));
             for (int i = 0; i < 2500; i++) { using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60 + rng.Next(60), 8 + rng.Next(18), 8 + rng.Next(18))); int sz = 8 + rng.Next(40); g.FillRectangle(b, rng.Next(W), rng.Next(H), sz, sz); }
+            using var shade = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(200, 10, 2, 2));
+            g.FillRectangle(shade, 0, 0, (int)(W * 0.2), H); g.FillRectangle(shade, (int)(W * 0.8), 0, (int)(W * 0.2), H);
+            Text(g, (int)(W * 0.40), (int)(H * 0.45), (int)(W * 0.60), (int)(H * 0.55), 51);
+        });
+        // a red world (the autumn forest of Kraka Footpath, compare-131029): red foliage everywhere, the HUD up, alive
+        using var redWorld = Frame(g =>
+        {
+            var rng = new Random(53);
+            g.Clear(System.Drawing.Color.FromArgb(90, 20, 16));
+            for (int i = 0; i < 3000; i++) { using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(70 + rng.Next(90), 10 + rng.Next(25), 8 + rng.Next(20))); int sz = 8 + rng.Next(40); g.FillRectangle(b, rng.Next(W), rng.Next(H), sz, sz); }
             Hud(g);
         });
         using var cutscene = Frame(g =>
@@ -1485,12 +1564,55 @@ options: --process aion[,other]");
             Text(g, 30, (int)(H * 0.14), (int)(W * 0.36), (int)(H * 0.93), 7);
         });
         using var blank = Frame(g => g.Clear(System.Drawing.Color.FromArgb(128, 128, 128)));
+        // the normal chat with its lines showing, as an opaque dark panel stretched up to 0.45 of the height (Steven's sits at
+        // 0.70 to 0.93): a flat dark panel with text rows above the chat box's usual top, never the top of the left column
+        using var chatTall = Frame(g =>
+        {
+            World(g); Hud(g);
+            using var back = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(20, 22, 28));
+            g.FillRectangle(back, 20, (int)(H * 0.45), 820, (int)(H * 0.51));
+            Text(g, 40, (int)(H * 0.46), 800, H - 60, 23);
+        });
+        // a dark full-screen window with the Kinah counter up (the event's card screen, where the old rule fired): near-black,
+        // five lit cards across the middle, a title and buttons as text; no chat anywhere
+        using var cards = Frame(g =>
+        {
+            g.Clear(System.Drawing.Color.FromArgb(8, 10, 16));
+            using var card = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(40, 80, 120));
+            using var rim = new System.Drawing.Pen(System.Drawing.Color.FromArgb(150, 200, 230), 6);
+            for (int i = 0; i < 5; i++) { int x = (int)(W * (0.235 + i * 0.109)); g.FillRectangle(card, x, (int)(H * 0.28), (int)(W * 0.095), (int)(H * 0.46)); g.DrawRectangle(rim, x, (int)(H * 0.28), (int)(W * 0.095), (int)(H * 0.46)); }
+            Text(g, (int)(W * 0.40), (int)(H * 0.06), (int)(W * 0.60), (int)(H * 0.16), 29);
+            Text(g, 20, 20, (int)(W * 0.12), 60, 31);
+            for (int k = 0; k < 4; k++) for (int d = 0; d < 6; d++) g.FillRectangle(light, (int)(W * 0.74) + k * 120 + d * 16, 30, 10, 22);
+            Text(g, (int)(W * 0.02), (int)(H * 0.20), (int)(W * 0.10), (int)(H * 0.50), 37);   // a few labels down the left edge
+            // the event's rank panel, dark and text-filled, on the right (compare-130149: the "flat dark panel on the right")
+            using var rank = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(22, 24, 30));
+            g.FillRectangle(rank, (int)(W * 0.78), (int)(H * 0.08), (int)(W * 0.10), (int)(H * 0.20));
+            Text(g, (int)(W * 0.785), (int)(H * 0.09), (int)(W * 0.875), (int)(H * 0.27), 41);
+        });
+        // the plain world in the Hidden Lugi event (compare-130149, 13:03:11 and 13:05:06): dark violet grass over the right,
+        // the event's rank panel top right, the normal chat bottom left. The old Bag rule took the grass for a panel
+        using var lugi = Frame(g =>
+        {
+            World(g); Hud(g);
+            var rng = new Random(43);
+            int x0 = (int)(W * 0.55), y0 = (int)(H * 0.10), x1 = W, y1 = (int)(H * 0.88);
+            using (var grass = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60, 15, 120))) g.FillRectangle(grass, x0, y0, x1 - x0, y1 - y0);
+            for (int i = 0; i < 400; i++)
+            {
+                using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(50 + rng.Next(25), 10 + rng.Next(12), 105 + rng.Next(35)));
+                g.FillRectangle(b, x0 + rng.Next(x1 - x0), y0 + rng.Next(y1 - y0), 10 + rng.Next(30), 6 + rng.Next(14));
+            }
+            using var rank = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(22, 24, 30));
+            g.FillRectangle(rank, (int)(W * 0.78), (int)(H * 0.08), (int)(W * 0.10), (int)(H * 0.20));
+            Text(g, (int)(W * 0.785), (int)(H * 0.09), (int)(W * 0.875), (int)(H * 0.27), 47);
+        });
 
         FrameStats Stats(System.Drawing.Bitmap f) { using var t = FrameThumb.Shrink(f); return FrameStats.Of(t); }
         var sw0 = System.Diagnostics.Stopwatch.StartNew();
         var sWorld = Stats(world);
         double shrinkMs = sw0.Elapsed.TotalMilliseconds;
-        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("blank", blank) }
+        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("chattall", chatTall), ("cards", cards), ("lugi", lugi), ("redworld", redWorld), ("blank", blank) }
             .ToDictionary(x => x.Name, x => (Frame: x.F, Stats: Stats(x.F), Signs: SceneSignals.FromFrame(x.F)));
 
         // each frame on its own (a scene that has seen the HUD, as a running tracker has)
@@ -1504,11 +1626,48 @@ options: --process aion[,other]");
         Check("the world: the HUD over a scene", Cls("world"), "World");
         Check("the crafting panel's labels where its locator looks", Cls("crafting"), "Crafting");
         Check("a near-black frame with no HUD: loading", Cls("loading"), "Loading");
-        Check("a dark red frame: death", Cls("death"), "Death");
+        Check("a dark red frame, HUD gone, vignette: death", Cls("death"), "Death");
+        Check("a red world with the HUD up: World (the old rule said death)", $"{Cls("redworld")} {Cls("redworld", new SceneSignals { CounterStrip = true })} (old rule {(all["redworld"].Stats.RedShare >= 0.5 && all["redworld"].Stats.Mean < 0.3 ? "Death" : "no")})", "World World (old rule Death)");
         Check("black bands top and bottom: a cutscene", Cls("cutscene"), "Cutscene");
         Check("a flat dark panel on the right: the bag", Cls("bag"), "Bag");
         Check("a flat dark panel with text rows top-left: chat expanded", Cls("chatx"), "ChatExpanded");
         Check("nothing a rule explains, after the HUD was seen: Unknown", Cls("blank"), "Unknown");
+        Check("the normal chat, dark, lines up, stretched tall: the world", Cls("chattall"), "World");
+        var cardSigns = new SceneSignals { CounterStrip = true };
+        string Old(FrameStats st) => st.ExpandedChatOld ? "ChatExpanded" : st.BagPanelOld ? "Bag" : "no";
+        Check("the card screen with its rank panel, picture only: not Bag/ChatX", $"{Cls("cards", cardSigns) is not ("Bag" or "ChatExpanded")} (old rule {Old(all["cards"].Stats)})", "True (old rule ChatExpanded)");
+        Check("...with its title sign: EventCards, or Reward for a reward title", $"{Cls("cards", new SceneSignals { CounterStrip = true, EventCards = true })} {Cls("cards", new SceneSignals { CounterStrip = true, RewardTitle = true })}", "EventCards Reward");
+        Check("the plain world in the event, normal chat, violet grass: World", $"{Cls("lugi", cardSigns)} (old rule {Old(all["lugi"].Stats)})", "World (old rule Bag)");
+        Check("...and the bag itself still the bag", Cls("bag"), "Bag");
+
+        // leaving a reward screen: a banner over the card screen for two passes doesn't relabel it (compare-130149: a Daeva
+        // Pass banner at 289.0 to 289.5 s named the card screen); a reward window that stays 3 s does; the world, two passes
+        {
+            var lv = new SceneState();
+            var l0 = new DateTime(2026, 10, 24, 13, 6, 30, DateTimeKind.Utc);
+            var cardSt = all["cards"].Stats;
+            var onCards = new SceneSignals { CounterStrip = true, EventCards = true };
+            var banner = new SceneSignals { CounterStrip = true, RewardTitle = true };
+            lv.Observe(cardSt, onCards, l0); lv.Observe(cardSt, onCards, l0.AddSeconds(0.3));
+            Check("leave hysteresis: the card screen settles", $"{lv.Current}", "EventCards");
+            lv.Observe(cardSt, banner, l0.AddSeconds(0.6)); lv.Observe(cardSt, banner, l0.AddSeconds(0.9));
+            Check("...a banner for two passes: still EventCards", $"{lv.Current}", "EventCards");
+            lv.Observe(cardSt, onCards, l0.AddSeconds(1.2));
+            Check("...and the cards again: EventCards, nothing switched", $"{lv.Current} {lv.Since == l0.AddSeconds(0.3)}", "EventCards True");
+            for (int i = 0; i <= 11; i++) lv.Observe(cardSt, banner, l0.AddSeconds(1.5 + 0.3 * i));
+            Check("...a reward window that stays 3 s: Reward", $"{lv.Current}", "Reward");
+            lv.Observe(all["world"].Stats, new SceneSignals(), l0.AddSeconds(6)); lv.Observe(all["world"].Stats, new SceneSignals(), l0.AddSeconds(6.3));
+            Check("...the world after it: two passes, as before", $"{lv.Current}", "World");
+        }
+        // real frames: KL_SCENE_FILES=<folder of game screenshots> prints each one's measures and verdict (counter taken as read)
+        if (Environment.GetEnvironmentVariable("KL_SCENE_FILES") is { } shots && Directory.Exists(shots))
+            foreach (var file in Directory.GetFiles(shots).Where(p => p.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).OrderBy(p => p))
+            {
+                using var shot = new System.Drawing.Bitmap(file);
+                var st = Stats(shot);
+                var (v, vwhy) = sc.Classify(st, new SceneSignals { CounterStrip = true });
+                Console.WriteLine($"    {Path.GetFileName(file)}: {v} (old rule {(st.ExpandedChatOld ? "ChatExpanded" : "no")}) · {st}");
+            }
         Check("...and before any HUD was seen: the world, as before", new SceneState().Classify(all["blank"].Stats, new SceneSignals()).State.ToString(), "World");
         Check("the Market reader's table: Market", Cls("world", new SceneSignals { Market = true }), "Market");
         Check("a reward window's title or the reward table: Reward", $"{Cls("world", new SceneSignals { RewardTitle = true })} {Cls("world", new SceneSignals { RewardTable = true })}", "Reward Reward");
