@@ -25,6 +25,9 @@ public sealed partial class BalanceReader
     List<CounterRead> _last = new();
 
     public long Reads { get; private set; }
+    /// <summary>Where the numbers were on screen in the last read (an anchor for the strip, Ocr.Anchors), and when.</summary>
+    public IReadOnlyList<Rectangle> LastBoxes { get; private set; } = Array.Empty<Rectangle>();
+    public DateTime LastBoxesAt { get; private set; } = DateTime.MinValue;
     public long Skipped { get; private set; }
     public BalanceTracker Tracker { get; } = new();
 
@@ -34,11 +37,12 @@ public sealed partial class BalanceReader
         var strip = Strip(game);
         using var raw = ScreenReader.Capture(strip);
         var h = Hash(raw);
-        if (h == _hash && Reads > 0) { Skipped++; Tracker.Observe(_last, pickupsTotal, samePixels: true); return; }
+        if (h == _hash && Reads > 0) { Skipped++; LastBoxesAt = DateTime.UtcNow; Tracker.Observe(_last, pickupsTotal, samePixels: true); return; }
         _hash = h;
         var lines = await ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true);
         Reads++;
         _last = Counters(lines);
+        LastBoxes = NumberBoxes(lines); LastBoxesAt = DateTime.UtcNow;
         Tracker.Observe(_last, pickupsTotal, samePixels: false);
     }
 
@@ -47,7 +51,13 @@ public sealed partial class BalanceReader
     /// piece that ends or starts with a separator, or a three-digit piece right after another number, is joined back.
     /// Icons and anything else that isn't digits are dropped.
     /// </summary>
-    public static List<CounterRead> Counters(IEnumerable<OcrLineBox> lines)
+    public static List<CounterRead> Counters(IEnumerable<OcrLineBox> lines) =>
+        Merged(lines).Select(m => new CounterRead(ChatParser.Digits(m.Text), m.Box.Left)).Where(c => c.Value >= 0 && c.Value <= 1_000_000_000_000).ToList();
+
+    /// <summary>The numbers' boxes on screen, left to right, joined the way <see cref="Counters"/> joins them.</summary>
+    public static List<Rectangle> NumberBoxes(IEnumerable<OcrLineBox> lines) => Merged(lines).Select(m => m.Box).ToList();
+
+    static List<(string Text, Rectangle Box)> Merged(IEnumerable<OcrLineBox> lines)
     {
         var words = lines.SelectMany(l => l.Words ?? new[] { new OcrWordBox(l.Text, l.Box) })
             .Select(w => (Text: w.Text.Trim('(', ')', '[', ']', '|', ' ', ':', ';'), w.Box))
@@ -66,7 +76,7 @@ public sealed partial class BalanceReader
             }
             merged.Add(w);
         }
-        return merged.Select(m => new CounterRead(ChatParser.Digits(m.Text), m.Box.Left)).Where(c => c.Value >= 0 && c.Value <= 1_000_000_000_000).ToList();
+        return merged;
     }
 
     /// <summary>A cheap fingerprint of the strip (every fourth pixel), so an unchanged strip isn't recognized again.</summary>

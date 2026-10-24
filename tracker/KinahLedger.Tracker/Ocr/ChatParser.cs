@@ -343,6 +343,15 @@ public sealed partial class ChatParser
     public int TablePicks { get; private set; }
     public int HeldUnlisted { get; private set; }
 
+    /// <summary>
+    /// The candidate sets for the moment (Data.NameContext: the enemies' loot tables, the gathering materials, the open
+    /// recipe, the run's items), for settling a misread name; null: the whole list only, as before 2026-10-24.
+    /// </summary>
+    public Func<Data.NameContext?>? Context { get; set; }
+    /// <summary>Misreads settled by a context set other than the list's own closest, and misreads refused as on no nearby table.</summary>
+    public int ContextPicks { get; private set; }
+    public int Refused { get; private set; }
+
     // the last reads' name colours by line text (ScreenReader.LastAccents): a voted or re-read line is one of those texts
     readonly Dictionary<string, System.Drawing.Color> _accents = new();
     readonly Queue<string> _accentOrder = new();
@@ -653,6 +662,33 @@ public sealed partial class ChatParser
                 // reported only when it reads like a garbled item name (some item is near it), never other text
                 if (_items.Near(name, Math.Max(2, name.Length / 3)).Count > 0 || _items.Fragment(name, 3).Count > 0) Session.Accuracy.Name(name, null, "unknown");
                 yield break;
+            }
+            // a misread (never an exact name): settled by what could drop or be made here first (brief item 1, 2026-10-24)
+            if (!_items.IsExact(name) && Context?.Invoke() is { Empty: false } ctx)
+            {
+                var m = _items.Match(name, ctx);
+                // closest to an item no table nearby lists, and more than a slip or two off: unsure, never counted. A rare
+                // item is never refused (Steven's rule): it goes to its second read like any rare pickup
+                if (m.Source == Data.NameMatch.Refused && m.Id is long rid && Rare?.Invoke(rid) != true)
+                {
+                    Refused++;
+                    Session.Accuracy.Add("refused");
+                    Session.Accuracy.Name(name, null, "unknown", Data.NameMatch.Refused);
+                    CrashLog.Note($"\"{name}\" is nearest {_items.NameOf(rid)} ({m.Cost / (double)Data.NameMatch.Unit:0.#} edits), which no loot table, gathering or recipe nearby has: unsure, not counted");
+                    yield break;
+                }
+                if (m.Id is long cid && Data.NameMatch.IsContext(m.Source) && (GradeFilter(accent)?.Invoke(cid) ?? true))
+                {
+                    Session.Accuracy.Name(name, cid, "snapped", m.Source);
+                    Session.Accuracy.Add("snapped");
+                    if (m.FullId is long fid && fid != cid)
+                    {
+                        ContextPicks++;
+                        CrashLog.Note($"\"{name}\" is {_items.NameOf(cid)}, not {_items.NameOf(fid)}: {m.Source} has it");
+                    }
+                    yield return new ItemAcquired(time, cid, Math.Clamp(n, 1, 9999), bound);
+                    yield break;
+                }
             }
             yield return new ItemAcquired(time, Choose(name, accent), Math.Clamp(n, 1, 9999), bound);
         }

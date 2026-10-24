@@ -1,0 +1,12 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "two gathers of Orichalcum Ore 3 s apart, the chat missing both: the second row fades in one slot lower in the read the first one left; two rows, two pickups (0.8.25 took the second for the first and counted one)",
+  "source": "hand-written from the shapes in Steven's trace.log (2026-10-23 Orichalcum gather), with each row's place and contrast as LootRows measures them (2026-10-24)",
+  "expect": {
+    "items": {
+      "Orichalcum Ore": 2
+    }
+  }
+}

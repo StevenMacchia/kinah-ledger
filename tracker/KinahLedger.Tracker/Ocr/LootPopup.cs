@@ -29,6 +29,9 @@ public static partial class LootPopup
     {
         /// <summary>The count wasn't read; the row stands for one of the item.</summary>
         public bool NoCount { get; init; }
+        /// <summary>The tracked row this read belongs to (Session.LootRows), 0 when rows aren't tracked; and when it first showed.</summary>
+        public int Obj { get; init; }
+        public DateTime? First { get; init; }
         public string Key => IsKinah ? "kina" + Amount : Regex.Replace(Name.ToLowerInvariant(), @"[^a-z0-9]", "") + "x" + Count;
     }
 
@@ -103,3 +106,10 @@ public sealed class LootPopupTracker
         return x == y || x.Contains(y) || y.Contains(x) || (x.Length >= 6 && y.Length >= 6 && (x[^6..] == y[^6..]));
     }
 }
+
+/// <summary>
+/// One line of a loot list read: its top in the window, its text, and when the picture was there to measure them, how
+/// settled the text looked (<see cref="Contrast"/>, 0 to 1; -1 unknown) and the icon left of it (<see cref="Icon"/>, an
+/// average hash; 0 unknown). Rows are tracked by these, not by their text (Session.LootRows).
+/// </summary>
+public readonly record struct LootLine(int Top, string Text, double Contrast = -1, ulong Icon = 0);

@@ -568,7 +568,8 @@ options: --process aion[,other]");
                     var boxes = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, origin, 3, boost: true)).GetAwaiter().GetResult();
                     var rows = boxes.Select(l => (l.Box.Top, l.Text)).ToList();
                     if (settings.Ocr.LootIcons) for (int i = 0; i < boxes.Count; i++) rows[i] = (rows[i].Top, PopupIcons.Name(items, bmp, origin, boxes[i]).Text);
-                    s.ProcessList(rows, t); lists++;
+                    // each line's contrast and icon measured as the live read measures them, so rows are tracked the same way
+                    s.ProcessList(rows.Select((x, i) => { var (c, h) = Session.LootRows.Measure(bmp, origin, boxes[i].Box); return new LootLine(x.Top, x.Text, c, h); }).ToList(), t); lists++;
                 }
                 last = t;
             }
@@ -1048,6 +1049,9 @@ options: --process aion[,other]");
         ok &= TradeTest(items);
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
+        ok &= NameMatchTest();
+        ok &= LootRowsTest(items);
+        ok &= AnchorsTest();
         ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
@@ -1079,6 +1083,210 @@ options: --process aion[,other]");
     /// is kept only past ten minutes and a better rate, and the panel's field list always has one figure in panel order.
     /// Everything runs on temporary files, never the player's own.
     /// </summary>
+    /// <summary>
+    /// The OCR-aware distance and the candidate sets (brief item 1, 2026-10-24), on a small item list of their own so the
+    /// answers don't move with the game's list: each confusion pair, a read the plain distance can't reach, the same read
+    /// settled differently under two targets, a read on no nearby table refused, an exact name never second-guessed.
+    /// </summary>
+    static bool NameMatchTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nNames: the OCR-aware distance and the candidate sets (2026-10-24):");
+        var tmp = Path.Combine(Path.GetTempPath(), "kl-namematch-test.json");
+        File.WriteAllText(tmp, "{\"items\":[" + string.Join(",", new[]
+        {
+            (900001, "Silver Ore"), (900002, "Silver Orb"), (900003, "Bold Leather"), (900004, "Wolf Pelt"), (900005, "Odyle Shard"),
+            (900006, "Orichalcum Ore"), (900007, "Gold Shield"), (900008, "Iron Ingot"), (900009, "Sapphire Gem"), (900010, "Brass Bolt"),
+        }.Select(x => $"{{\"id\":{x.Item1},\"n\":\"{x.Item2}\",\"g\":\"Common\",\"t\":1}}")) + "]}");
+        var d = new ItemDictionary(); d.Merge(tmp);
+        try { File.Delete(tmp); } catch (Exception) { }
+        string N(long? id) => id is long v ? d.NameOf(v) : "none";
+
+        // each confusion pair: a third of an edit for the usual slips, half for the next ones, two letters for one
+        foreach (var (read, name, cost) in new[]
+        {
+            ("lron ingot", "iron ingot", 3), ("1ron ingot", "iron ingot", 3), ("odyle 5hard", "odyle shard", 3), ("0dyle shard", "odyle shard", 3),
+            ("8rass bolt", "brass bolt", 3), ("qdyle shard", "odyle shard", 5), ("sapphire 9em", "sapphire gem", 5), ("orichalcurn ore", "orichalcum ore", 3),
+            ("gold shielcl", "gold shield", 3), ("vvolf pelt", "wolf pelt", 3), ("odyle shard", "odyle shard", 0), ("iron ingoz", "iron ingot", 10),
+        })
+            Check($"distance \"{read}\" ~ \"{name}\"", $"{NameMatch.Distance(read, name, 100)}", $"{cost}");
+        // three slips the plain distance counts as four edits (over the old budget of two): now within it
+        Check("\"0richalcurn 0re\" snaps to Orichalcum Ore", N(d.IdOf("0richalcurn 0re")), "Orichalcum Ore");
+        Check("\"Vvolf Pelt\" snaps to Wolf Pelt", N(d.IdOf("Vvolf Pelt")), "Wolf Pelt");
+
+        // the same read, two targets: "Silver Or" is as close to Silver Ore as to Silver Orb
+        var ore = new NameContext { Closed = true }.Add(NameMatch.TargetTable, new[] { "Silver Ore", "Wolf Pelt" });
+        var orb = new NameContext { Closed = true }.Add(NameMatch.TargetTable, new[] { "Silver Orb", "Brass Bolt" });
+        var m1 = d.Match("Silver Or", ore); var m2 = d.Match("Silver Or", orb);
+        Check("\"Silver Or\" under the ore enemy", $"{N(m1.Id)} ({m1.Source})", "Silver Ore (target-table)");
+        Check("\"Silver Or\" under the orb enemy", $"{N(m2.Id)} ({m2.Source})", "Silver Orb (target-table)");
+        Check("\"Silver Or\" with no context: the whole list", d.Match("Silver Or").Source, "full");
+        // a set tried later only when the earlier ones say nothing; a gathering set settles a gather's misread
+        var two = new NameContext().Add(NameMatch.TargetTable, new[] { "Wolf Pelt" }).Add(NameMatch.ZoneGather, new[] { "Orichalcum Ore" });
+        var m3 = d.Match("Orichalcurn 0re", two);
+        Check("a gather's misread: from the gathering set", $"{N(m3.Id)} ({m3.Source})", "Orichalcum Ore (zone-gather)");
+        // out of every nearby table and two edits off: refused when the context is closed, the list's closest when it isn't
+        var m4 = d.Match("Bxld Leathex", ore);
+        Check("on no nearby table, two edits off: refused", $"{N(m4.Id)} ({m4.Source})", "Bold Leather (refused)");
+        Check("...the same read with the context open", d.Match("Bxld Leathex", new NameContext().Add(NameMatch.TargetTable, new[] { "Wolf Pelt" })).Source, "full");
+        Check("...a slip or two off is never refused", d.Match("Bold Lcathcr", ore).Source, "full");
+        Check("...a gathering material is never refused", d.Match("0richalcurn 0rc", ore).Source, "full");
+        Check("...and on the enemy's table it is that item", d.Match("Bxld Leathex", new NameContext { Closed = true }.Add(NameMatch.TargetTable, new[] { "Bold Leather" })).Source, "target-table");
+        // an exact name is never second-guessed, on a table or not
+        var m5 = d.Match("Bold Leather", ore);
+        Check("an exact name off every table: itself", $"{N(m5.Id)} ({m5.Source})", "Bold Leather (exact)");
+
+        // the chat parser with a context: the same paths end to end
+        var p = new ChatParser(d);
+        var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+        string Got(string line) => string.Join(",", p.Parse(line, t0).OfType<ItemAcquired>().Select(a => d.NameOf(a.ItemId)));
+        p.Context = () => ore;
+        Check("chat: \"Silver Or acquired.\" under the ore enemy", Got("Silver Or acquired."), "Silver Ore");
+        p.Context = () => orb;
+        Check("chat: \"Silver Or acquired.\" under the orb enemy", Got("Silver Or acquired."), "Silver Orb");
+        Check("chat: a read on no nearby table is not counted", $"{Got("Bxld Leathex acquired.")}|{p.Refused}", "|1");
+        Check("chat: an exact name off every table counts", Got("Bold Leather acquired."), "Bold Leather");
+        p.Rare = _ => true;
+        Check("chat: a rare item is never refused", Got("Bxld Leathex acquired."), "Bold Leather");
+        p.Rare = null; p.Context = null;
+        Check("chat: without a context, the list's closest as before", Got("Bxld Leathex acquired."), "Bold Leather");
+        return ok;
+    }
+
+    /// <summary>Anchors, shadow only (brief item 4, 2026-10-24): the template matcher, the anchored crops, "layout not found", the cost.</summary>
+    static bool AnchorsTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nLayout anchors, shadow only (2026-10-24):");
+        // the matcher: a patch cut from noise is found where it was, also in a dimmer, flatter copy; a flat template finds nothing
+        var rng = new Random(7);
+        int iw = 200, ih = 100;
+        var img = new float[iw * ih]; for (int i = 0; i < img.Length; i++) img[i] = (float)rng.NextDouble();
+        int tw = 24, th = 16; var tpl = new float[tw * th];
+        for (int y = 0; y < th; y++) for (int x = 0; x < tw; x++) tpl[y * tw + x] = img[(21 + y) * iw + 37 + x];
+        var (at, score) = TemplateMatch.Find(img, iw, ih, tpl, tw, th);
+        Check("a patch is found where it was cut", $"{at.X},{at.Y} {score:0.00}", "37,21 1.00");
+        var dim = img.Select(v => v * 0.5f + 0.2f).ToArray();
+        var (at2, score2) = TemplateMatch.Find(dim, iw, ih, tpl, tw, th);
+        Check("...in a dimmer, flatter picture too", $"{at2.X},{at2.Y} {score2:0.00}", "37,21 1.00");
+        Check("a flat template scores nothing", $"{TemplateMatch.Find(img, iw, ih, new float[tw * th], tw, th).Score:0.00}", "0.00");
+
+        // the free anchors: the counter strip's numbers and the chat box, against their fixed crops
+        var game = new System.Drawing.Rectangle(100, 50, 2560, 1440);
+        var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+        var an = new Anchors(new List<AnchorTemplate>());
+        an.Tick(game, t0, _ => null);
+        Check("no anchor at first: not judged before a minute", $"{an.LayoutNotFound}", "False");
+        an.Tick(game, t0.AddSeconds(61), _ => null);
+        Check("a minute without any: layout not found", $"{an.LayoutNotFound}", "True");
+        an.ObserveBalance(game, new[] { new System.Drawing.Rectangle(160, 60, 80, 20), new System.Drawing.Rectangle(260, 60, 60, 20), new System.Drawing.Rectangle(340, 60, 70, 20) }, t0.AddSeconds(62));
+        an.ObserveChat(game, new System.Drawing.Rectangle(112, 1000, 1000, 400), "chat found above the input box: 9 line(s) visible", false, t0.AddSeconds(62));
+        an.Tick(game, t0.AddSeconds(64), _ => null);
+        Check("an anchor again: layout found", $"{an.LayoutNotFound}", "False");
+        var lay = an.Layout(game, t0.AddSeconds(64));
+        var bal = lay["balance"]; var (bdx, bdy) = Anchors.Delta("balance", bal.Fixed, bal.Anchored!.Value);
+        Check("the strip from its numbers", $"{bal.Anchored} dx={bdx} dy={bdy} conf={bal.Conf:0.00}", "{X=155,Y=55,Width=260,Height=30} dx=55 dy=5 conf=0.75");
+        var ch = lay["chat"]; var (cdx, cdy) = Anchors.Delta("chat", ch.Fixed, ch.Anchored!.Value);
+        Check("the chat by its bottom-left", $"dx={cdx} dy={cdy} conf={ch.Conf:0.00}", "dx=12 dy=-90 conf=1.00");
+        Check("a region with no anchor yet: none", $"{lay["loot"].Anchored?.ToString() ?? "none"}", "none");
+
+        // a template anchor: a patch drawn 12 px right and 8 px down of where its reference frame had it
+        using var frame = new System.Drawing.Bitmap(game.Width, game.Height);
+        using var patch = new System.Drawing.Bitmap(40, 32);
+        var prng = new Random(3);
+        for (int y = 0; y < 32; y++) for (int x = 0; x < 40; x++) { int v = prng.Next(256); patch.SetPixel(x, y, System.Drawing.Color.FromArgb(v, 255 - v, (v * 7) % 256)); }
+        using (var g = System.Drawing.Graphics.FromImage(frame))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(30, 34, 40));
+            g.DrawImageUnscaled(patch, (int)(0.40 * game.Width) + 12, (int)(0.55 * game.Height) + 8);
+        }
+        var tmpl = new AnchorTemplate { Name = "test", Region = "loot", Where = new System.Drawing.RectangleF(0.40f, 0.55f, 0, 0), RefHeight = game.Height, Search = 0.02, Picture = new System.Drawing.Bitmap(patch) };
+        var at3 = new Anchors(new List<AnchorTemplate> { tmpl });
+        System.Drawing.Bitmap Crop(System.Drawing.Rectangle r) => frame.Clone(new System.Drawing.Rectangle(r.X - game.X, r.Y - game.Y, r.Width, r.Height), frame.PixelFormat);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        at3.Tick(game, t0, Crop);
+        double ms = sw.Elapsed.TotalMilliseconds;
+        var loot = at3.Layout(game, t0)["loot"];
+        var (ldx, ldy) = loot.Anchored is { } la ? Anchors.Delta("loot", loot.Fixed, la) : (0, 0);
+        Check("a template anchor moves its region's crop", $"dx={ldx} dy={ldy} conf>0.9 {loot.Conf > 0.9}", "dx=12 dy=8 conf>0.9 True");
+        var sw2 = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 10; i++) at3.Tick(game, t0.AddSeconds(2 * (i + 1)), Crop);
+        Console.WriteLine($"  (one template: first check {ms:0.0} ms, then {sw2.Elapsed.TotalMilliseconds / 10:0.0} ms each; none shipped yet, so 0 today)");
+        return ok;
+    }
+
+    /// <summary>The loot list's rows as tracked objects (brief item 2, 2026-10-24): settling, slots, changes in place, the contrast measure.</summary>
+    static bool LootRowsTest(ItemDictionary items)
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nLoot list rows tracked by their slot (2026-10-24):");
+        var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+        string Show(List<LootPopup.Row> rows) => string.Join(" | ", rows.Select(r => r.IsKinah ? $"{r.Amount} Kina" : $"{r.Name}#{r.Obj}"));
+        // fading in: held back until the contrast stops rising, then shown with its object
+        var lr = new Session.LootRows(items);
+        var a = Show(lr.Feed(new() { new(400, "Raw Leather x1", 0.30) }, t0));
+        var b = Show(lr.Feed(new() { new(400, "Raw Leather x1", 0.85) }, t0.AddSeconds(0.7)));
+        var c = Show(lr.Feed(new() { new(400, "Raw Leather x1", 0.86) }, t0.AddSeconds(1.4)));
+        Check("held while fading in, shown once settled", $"[{a}] [{b}] [{c}]", "[] [] [Raw Leather#1]");
+        // Kinah rows pass through as read (two reads agreeing is their own rule)
+        Check("a Kinah row passes through", Show(lr.Feed(new() { new(380, "Kina x463", 0.2), new(400, "Raw Leather x1", 0.85) }, t0.AddSeconds(2.1))), "463 Kina | Raw Leather#1");
+        // the list moving up as the top row expires: the same rows, the same objects
+        var mv = new Session.LootRows(items);
+        mv.Feed(new() { new(100, "Raw Leather x1"), new(130, "Spiritstone x1") }, t0);
+        Check("the list moves up a slot: same objects", Show(mv.Feed(new() { new(100, "Spiritstone x1") }, t0.AddSeconds(0.7))), "Spiritstone#2");
+        // no contrast (a trace, a test): every read counts and the first is shown at once, as before
+        var lg = new Session.LootRows(items);
+        Check("no contrast: shown on its first read", Show(lg.Feed(new() { new(100, "Raw Leather x1") }, t0)), "Raw Leather#1");
+        // a change in place lasting two reads wins; one stray read doesn't
+        var ch = new Session.LootRows(items);
+        foreach (var (s, txt) in new[] { (0.0, "Orichalcum Ore x1"), (0.7, "Orichalcum Ore x1"), (1.4, "Fine Orichalcum Ore x1") }) ch.Feed(new() { new(200, txt) }, t0.AddSeconds(s));
+        var one = Show(ch.Feed(new() { new(200, "Orichalcum Ore x1") }, t0.AddSeconds(2.1)));
+        foreach (var s in new[] { 2.8, 3.5 }) ch.Feed(new() { new(200, "Fine Orichalcum Ore x1") }, t0.AddSeconds(s));
+        var two = Show(ch.Feed(new() { new(200, "Fine Orichalcum Ore x1") }, t0.AddSeconds(4.2)));
+        Check("one stray read: the row's text stands", one, "Orichalcum Ore#1");
+        Check("a change lasting two reads: the final text, same row", two, "Fine Orichalcum Ore#1");
+        // a row that goes before it settles is unsure
+        var un = new Session.LootRows(items);
+        un.Feed(new() { new(300, "Raw Leather x1", 0.2) }, t0);
+        foreach (var s in new[] { 0.7, 1.4, 2.1 }) un.Feed(new(), t0.AddSeconds(s));
+        Check("gone before it settled: unsure", $"{un.Unsure}", "1");
+
+        // the contrast measure: the same text drawn faint and full; a faint read measures lower, a blank one about nothing
+        double Draw(int alpha)
+        {
+            using var bmp = new System.Drawing.Bitmap(400, 40);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.Clear(System.Drawing.Color.FromArgb(40, 44, 52));
+                using var f = new System.Drawing.Font("Segoe UI", 18, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+                using var br = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(alpha, 240, 240, 240));
+                g.DrawString("Raw Leather x1", f, br, 80, 8);
+            }
+            return Session.LootRows.Measure(bmp, new System.Drawing.Point(1000, 500), new System.Drawing.Rectangle(1080, 506, 200, 28)).Contrast;
+        }
+        double faint = Draw(70), full = Draw(255), none = Draw(0);
+        Check("contrast: faint < full, blank ~ 0", $"{faint < full * 0.6} {none < 0.05} {full > 0.3}", "True True True");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 50; i++) Draw(255);
+        Console.WriteLine($"  (50 draws and measures in {sw.ElapsedMilliseconds} ms)");
+        return ok;
+    }
+
     /// <summary>Text sizing, name colours, the name chooser, loot tables against guesses, the loot list's icon verdict (2026-10-23).</summary>
     static bool AccuracyTest(ItemDictionary items)
     {

@@ -25,6 +25,9 @@ public static class Accuracy
     static double _readingS, _chatLostS;
     /// <summary>Names read, by (read as normalised, item key or "", how): how many times.</summary>
     static readonly Dictionary<(string Read, string Item, string How), int> Names = new();
+    /// <summary>Names settled per candidate set (NameMatch sources), since the tracker started; never sent.</summary>
+    static readonly Dictionary<string, int> SourceCounts = new();
+    public static Dictionary<string, int> Sources() { lock (Lock) return new(SourceCounts); }
     static LayoutReport? _layout;
     static bool _layoutSent;
     public const int MaxNames = 50, MaxNameKeys = 400;
@@ -47,9 +50,15 @@ public static class Accuracy
     /// <summary>Set around a rare drop's second read: its look-ups are not the reader's own misreads.</summary>
     [ThreadStatic] public static bool Muted;
 
-    public static void Name(string read, long? item, string how)
+    /// <summary>
+    /// <paramref name="source"/> says which candidate set settled the name (Data.NameMatch: target-table, zone-gather,
+    /// recipe, run, full, refused). It is tallied here and written to reads.log by the caller, on this PC only: what goes to
+    /// the site stays "how" (snapped, guessed, unknown), so the backend's protocol doesn't change.
+    /// </summary>
+    public static void Name(string read, long? item, string how, string source = "")
     {
         if (Muted) return;
+        if (source.Length > 0) lock (Lock) SourceCounts[source] = SourceCounts.GetValueOrDefault(source) + 1;
         var norm = SafeName(read);
         if (norm == null) return;
         var key = (norm, item is long id && id > 0 ? id.ToString() : "", how);
@@ -134,7 +143,7 @@ public static class Accuracy
     }
 
     /// <summary>For tests: everything back to zero.</summary>
-    internal static void Reset() { lock (Lock) { Counts.Clear(); Names.Clear(); _readingS = 0; _chatLostS = 0; _layout = null; _layoutSent = false; } }
+    internal static void Reset() { lock (Lock) { Counts.Clear(); Names.Clear(); SourceCounts.Clear();_readingS = 0; _chatLostS = 0; _layout = null; _layoutSent = false; } }
 }
 
 /// <summary>One name read as an item: snapped, guessed or unknown (no item), and how often.</summary>

@@ -34,7 +34,12 @@ public sealed class LootCrossCheck
     readonly List<(DateTime At, string Key, bool Used)> _chat = new();
     // Back: the row came back within ReturnSeconds of vanishing, so it may be the same row read again; counted from the
     // chat only, never from the list alone
-    readonly List<(DateTime At, LootPopup.Row Row, string Key, bool Back)> _waiting = new();
+    // Obj: the tracked row it stands for (LootRows), 0 for a row known only by its text
+    readonly List<(DateTime At, LootPopup.Row Row, string Key, bool Back, int Obj)> _waiting = new();
+    // each tracked row's key as last shown, and when: one row waits once, and a change of its text replaces what it waits as
+    readonly Dictionary<int, (string Key, DateTime At)> _objKey = new();
+    /// <summary>Tracked rows whose text changed in place while they waited: one item, the final text.</summary>
+    public int Replaced { get; private set; }
     readonly Dictionary<string, DateTime> _gone = new();
     /// <summary>A row that vanishes and is back within this long is the same row (it flickered out of a read or two), unless the chat says otherwise.</summary>
     public const double ReturnSeconds = 4;
@@ -62,6 +67,8 @@ public sealed class LootCrossCheck
     readonly Dictionary<string, DateTime> _since = new();
     static readonly System.Text.RegularExpressions.Regex _shopWord = new(@"\b(?:sold\s*out|purchase|price|buy|owned|limit|stock|exchange)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
     static System.Text.RegularExpressions.Regex ShopWord() => _shopWord;
+    /// <summary>A word of a shop or reward window ("Sold Out", "Purchase"): the read is that window, not loot.</summary>
+    public static bool IsShopWord(string name) => _shopWord.IsMatch(name);
     // Kinah rows the list showed in one read only, never confirmed by a second read or the chat
     readonly List<(long Amount, DateTime At)> _singleKinah = new();
     /// <summary>How long a one-read Kinah row waits for the balance counter to confirm it.</summary>
@@ -96,6 +103,47 @@ public sealed class LootCrossCheck
     public int Matched { get; private set; }
 
     public LootCrossCheck(ItemDictionary items) { _items = items; }
+
+    /// <summary>
+    /// Settles a row's misread name among the candidate sets of the moment (ItemDictionary.Match with the session's
+    /// context, brief item 1); null: the whole list's closest, as before. An exact name never goes through it.
+    /// </summary>
+    public Func<string, NameMatchResult>? Resolve { get; set; }
+    /// <summary>Rows whose misread name fits no nearby table and was refused (not keyed, so never counted).</summary>
+    public int Refused { get; private set; }
+    readonly Dictionary<string, DateTime> _refusedNoted = new();
+
+    /// <summary>
+    /// The row as it is keyed: its name, or the item a context set settled a misread to (so every later look-up of the row
+    /// is exact); null when the misread was refused.
+    /// </summary>
+    LootPopup.Row? Settled(LootPopup.Row row, DateTime now)
+    {
+        if (Resolve == null || row.IsKinah || _items.IsExact(row.Name)) return row;
+        var m = Resolve(row.Name);
+        if (m.Source == NameMatch.Refused)
+        {
+            var k = row.Name.ToLowerInvariant();
+            if (!_refusedNoted.TryGetValue(k, out var at) || (now - at).TotalSeconds > 10)
+            {
+                _refusedNoted[k] = now; Refused++;
+                Accuracy.Name(row.Name, null, "unknown", NameMatch.Refused);
+                CrashLog.Note($"loot list: \"{row.Name}\" is nearest {(m.Id is long r ? _items.NameOf(r) : "?")}, which no loot table, gathering or recipe nearby has: unsure, not counted");
+                if (_refusedNoted.Count > 100) _refusedNoted.Clear();
+            }
+            return null;
+        }
+        if (m.Id is long cid && NameMatch.IsContext(m.Source))
+        {
+            var canon = _items.NameOf(cid);
+            if (!string.Equals(canon, row.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                if (m.FullId is long fid && fid != cid) CrashLog.Note($"loot list: \"{row.Name}\" is {canon}, not {_items.NameOf(fid)}: {m.Source} has it");
+                return row with { Name = canon };
+            }
+        }
+        return row;
+    }
 
     static string KinahKey(long amount) => "k:" + amount;
     // by the item's name, not its id: the list holds a few names twice under different ids, and a row read cut short
@@ -146,18 +194,24 @@ public sealed class LootCrossCheck
         if (raw.Any(r => !r.IsKinah && ShopWord().IsMatch(r.Name))) { _visible.Clear(); return Settle(now); }
         // what this read shows, by pickup: unknown names and Kinah under 10 never count
         var shown = new Dictionary<string, (int Count, LootPopup.Row Row)>();
-        foreach (var row in raw)
+        var objRows = new Dictionary<string, List<LootPopup.Row>>();
+        foreach (var read in raw)
         {
+            var row = read;
             // "Soul: Drakan Probe (Bound) x1": the soul every enemy drops, so one kill of that kind (Steven, 2026-10-22)
             // a Kinah row read without its amount ("Kina x1") is not an item called Kina (0.8.2 put Kina on the item list)
             if (!row.IsKinah && System.Text.RegularExpressions.Regex.IsMatch(row.Name, @"^\W*kin[ae]h?\W*(\(bound\))?\W*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;
             var soul = row.IsKinah ? null : SoulOf(row.Name);
+            // a misread item name settled by the candidate sets of the moment, or refused (brief item 1)
+            if (!row.IsKinah && soul == null && _items.Knows(row.Name)) { if (Settled(row, now) is not { } st) continue; row = st; }
             string? key = row.IsKinah ? (row.Amount >= MinKinah ? KinahKey(row.Amount) : null)
                         : soul != null ? "s:" + soul
                         // a short name only counts read exactly: "Aryia" off a sign in a base is no Aria (Steven, 2026-10-22)
                         : _items.Knows(row.Name) && (row.Name.Trim().Length >= 8 || _items.KnowsExactly(row.Name)) ? ItemKey(_items.IdOf(row.Name), row.Count) : null;
             if (key == null) continue;
             shown[key] = (shown.TryGetValue(key, out var x) ? x.Count + 1 : 1, row);
+            // a tracked row (LootRows) is credited by what it is, one row one pickup, whatever other rows share its text
+            if (row.Obj > 0 && !row.IsKinah && soul == null) { if (!objRows.TryGetValue(key, out var tl)) objRows[key] = tl = new(); tl.Add(row); }
         }
         var souls = new List<GameEvent>();
         foreach (var k in shown.Keys) if (!_visible.Contains(k)) _since[k] = now;
@@ -168,6 +222,12 @@ public sealed class LootCrossCheck
         foreach (var (key, (n, row)) in shown)
         {
             if (row.IsKinah) _listShown[key] = (Math.Max(n, _listShown.TryGetValue(key, out var lsn) && (now - lsn.At).TotalSeconds <= MatchSeconds ? lsn.Count : 0), now);
+            if (objRows.TryGetValue(key, out var tracked))
+            {
+                foreach (var r in tracked) Track(r, key, now);
+                _credited[key] = (n, now, 0);
+                continue;
+            }
             var had = _credited.TryGetValue(key, out var c) && (now - c.Seen).TotalSeconds <= HoldSeconds ? c : (0, now, 0);
             int more = n - had.Item1;
             if (more > 0 && row.IsKinah)
@@ -186,7 +246,7 @@ public sealed class LootCrossCheck
             else if (more > 0)
             {
                 bool back = _gone.TryGetValue(key, out var goneAt) && (now - goneAt).TotalSeconds <= ReturnSeconds;
-                for (int i = 0; i < more; i++) _waiting.Add((now, row, key, back));
+                for (int i = 0; i < more; i++) _waiting.Add((now, row, key, back, 0));
                 CrashLog.Note($"loot list: {(row.IsKinah ? row.Amount.ToString("N0") + " Kina" : row.Name + " x" + row.Count)}" + (more > 1 ? $" ({more} rows)" : ""));
                 _credited[key] = (n, now, 0);
             }
@@ -215,6 +275,36 @@ public sealed class LootCrossCheck
         return settled;
     }
 
+    /// <summary>
+    /// One tracked row in this read: new, it waits for the chat once (from when it first showed); already waiting under
+    /// another text, its text changed in place (an upgrade, a misread settled), so what it waits as is replaced, one item,
+    /// the final text. Once matched or counted it is done: a later change of its text adds nothing.
+    /// </summary>
+    void Track(LootPopup.Row r, string key, DateTime now)
+    {
+        if (_objKey.TryGetValue(r.Obj, out var was))
+        {
+            if (was.Key != key)
+            {
+                int wi = _waiting.FindIndex(w => w.Obj == r.Obj);
+                if (wi >= 0)
+                {
+                    var w = _waiting[wi];
+                    _waiting[wi] = (w.At, r, key, w.Back, w.Obj);
+                    Replaced++;
+                    CrashLog.Note($"loot list: the row waiting as {was.Key[2..]} now reads {r.Name} x{r.Count} in its place: one item, the final text");
+                }
+                else CrashLog.Note($"loot list: the row already settled as {was.Key[2..]} now reads {r.Name} x{r.Count}: one item, nothing added");
+                _credited.Remove(was.Key);
+            }
+            _objKey[r.Obj] = (key, now);
+            return;
+        }
+        _waiting.Add((r.First ?? now, r, key, false, r.Obj));
+        _objKey[r.Obj] = (key, now);
+        CrashLog.Note($"loot list: {r.Name} x{r.Count}");
+    }
+
     /// <summary>The enemy kind a "Soul: Drakan Probe (Bound)" row names, "" when the row shows only "Soul" (a kill, name unread); null for any other row. Soul Crystals are pets, not this.</summary>
     public static string? SoulOf(string name)
     {
@@ -228,7 +318,7 @@ public sealed class LootCrossCheck
         var add = new List<GameEvent>();
         for (int i = 0; i < _waiting.Count; i++)
         {
-            var (at, row, key, back) = _waiting[i];
+            var (at, row, key, back, _) = _waiting[i];
             int c = _chat.FindIndex(x => !x.Used && x.Key == key && Math.Abs((x.At - at).TotalSeconds) <= MatchSeconds);
             // a Kinah amount the chat misread by one digit (460 for the list's 463) is the same pickup
             if (c < 0 && row.IsKinah) c = _chat.FindIndex(x => !x.Used && Same(x.Key, key) && Math.Abs((x.At - at).TotalSeconds) <= MatchSeconds);
@@ -274,6 +364,7 @@ public sealed class LootCrossCheck
         _chat.RemoveAll(x => (now - x.At).TotalSeconds > MatchSeconds * 2);
         foreach (var k in _gone.Where(kv => (now - kv.Value).TotalSeconds > ReturnSeconds * 2).Select(kv => kv.Key).ToList()) _gone.Remove(k);
         _added.RemoveAll(x => (now - x.At).TotalSeconds > MatchSeconds);
+        foreach (var o in _objKey.Where(kv => (now - kv.Value.At).TotalSeconds > 60).Select(kv => kv.Key).ToList()) _objKey.Remove(o);
         return add;
     }
 }

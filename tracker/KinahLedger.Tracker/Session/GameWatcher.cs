@@ -71,6 +71,8 @@ public sealed class GameWatcher
         // only the game's own counter is read: another window over the top-left corner is skipped, like the chat and the Market
         if ((WindowCapture.Active ? null : GameWindow.Covered(BalanceReader.Strip(game), _settings.ProcessHints)) != null) return;
         await Balance.TickAsync(game, c.KinahPicked);
+        // the numbers' place: the Kinah counter strip's anchor (shadow only, Ocr.Anchors)
+        if (Balance.LastBoxes.Count > 0) c.Anchors.ObserveBalance(game, Balance.LastBoxes, Balance.LastBoxesAt);
         // another character in the world: the run closes and counting starts fresh (RelogDetector, MainWindow.StartFresh)
         if (_relog.Observe(DateTime.UtcNow, Balance.Tracker.CounterSeen, Balance.Tracker.Balance, Balance.Tracker.BalanceAt, c.ZoneSeenAt) is { } switched)
         {
