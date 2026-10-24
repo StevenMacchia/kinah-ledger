@@ -69,14 +69,14 @@ public static class CraftPanel
     /// A picture of part of the game: <paramref name="bmp"/> shows <paramref name="area"/>, both in screen pixels, of the
     /// game window <paramref name="game"/>. Positions are worked out on the game and looked up in the picture.
     /// </summary>
-    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game, int Dy = 0)
+    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game, int Dy = 0, int Dx = 0)
     {
         public int H => Game.Height;
         public int Cx => Game.Width / 2;
         /// <summary>The pixel at a point of the game window, or null outside the picture.</summary>
         public Color? At(int gx, int gy)
         {
-            int x = Game.X + gx - Area.X, y = Game.Y + gy + Dy - Area.Y;
+            int x = Game.X + gx + Dx - Area.X, y = Game.Y + gy + Dy - Area.Y;
             return x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height ? null : Bmp.GetPixel(x, y);
         }
     }
@@ -110,6 +110,37 @@ public static class CraftPanel
         return any == 0 ? 0 : both / (double)any;
     }
 
+    /// <summary>
+    /// The same match, with each grid cell white when any pixel in its area is (not only its centre): the raised gathering
+    /// panel's labels draw a little thinner and shifted against the crafting panel's shapes (the 2026-10-23 Inina frames:
+    /// 0.49 and 0.56 this way, 0 on frames without the panel, where centre sampling gave 0.32).
+    /// </summary>
+    static double AreaScore(View v, (int X0, int X1, int Y0, int Y1, string Mask) l)
+    {
+        double k = v.H / 2160.0;
+        int both = 0, any = 0;
+        for (int j = 0; j < GridH; j++)
+            for (int i = 0; i < GridW; i++)
+            {
+                int xa = v.Cx + (int)Math.Floor((l.X0 - 2560 + (l.X1 - l.X0) * i / (double)GridW) * k), xb = v.Cx + (int)Math.Ceiling((l.X0 - 2560 + (l.X1 - l.X0) * (i + 1) / (double)GridW) * k);
+                int ya = (int)Math.Floor((l.Y0 + (l.Y1 - l.Y0) * j / (double)GridH) * k), yb = (int)Math.Ceiling((l.Y0 + (l.Y1 - l.Y0) * (j + 1) / (double)GridH) * k);
+                bool white = false;
+                for (int y = ya; y < yb && !white; y++)
+                    for (int x = xa; x < xb; x++)
+                    {
+                        if (v.At(x, y) is not { } c) return 0;
+                        if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) { white = true; break; }
+                    }
+                bool want = l.Mask[j * GridW + i] == '1';
+                if (white || want) any++;
+                if (white && want) both++;
+            }
+        return any == 0 ? 0 : both / (double)any;
+    }
+
+    /// <summary>The raised panel's labels: both at least this (AreaScore).</summary>
+    const double RaisedMatch = 0.4;
+
     /// <summary>Whether the crafting panel is on screen in a picture of the whole game window: both bar labels in place.</summary>
     public static bool IsUp(Bitmap f) { var v = Whole(f); return Labels.All(l => LabelScore(v, l) >= LabelMatch); }
 
@@ -125,17 +156,28 @@ public static class CraftPanel
     {
         var s = MeasureAt(v);
         if (s.Visible) return s;
-        var raised = MeasureAt(v with { Dy = -(int)Math.Round(GatherShift * v.H) });
+        // the raised (gathering) panel: its labels found within a couple of pixels of where they should be
+        int dy0 = -(int)Math.Round(GatherShift * v.H), r = Math.Max(2, (int)Math.Round(2 * v.H / 1080.0));
+        View? best = null; double bestScore = 0;
+        for (int dy = dy0 - r; dy <= dy0 + r; dy++)
+            for (int dx = -r; dx <= r; dx++)
+            {
+                var w = v with { Dy = dy, Dx = dx };
+                double sc = Labels.Min(l => AreaScore(w, l));
+                if (sc > bestScore) { bestScore = sc; best = w; }
+            }
+        if (best is not { } bv || bestScore < RaisedMatch) return s;
+        var raised = MeasureAt(bv, labelsChecked: true);
         return raised.Visible ? raised with { Raised = true } : s;
     }
 
-    static Sample MeasureAt(View v)
+    static Sample MeasureAt(View v, bool labelsChecked = false)
     {
         int h = v.H, cx = v.Cx;
         int x0 = cx + (int)(BarLeft * h), x1 = cx + (int)(BarRight * h);
         int ys = (int)(SuccessY * h), yf = (int)(FailY * h);
         if (v.At(x0, ys) == null || v.At(x1, yf) == null) return new Sample(false, 0, 0, false);
-        if (!Labels.All(l => LabelScore(v, l) >= LabelMatch)) return new Sample(false, 0, 0, false);
+        if (!labelsChecked && !Labels.All(l => LabelScore(v, l) >= LabelMatch)) return new Sample(false, 0, 0, false);
         double Fill(int y, Func<Color, bool> isFill)
         {
             // the rightmost filled pixel: the bar's label sits over its left end, so only the fill's reach counts
