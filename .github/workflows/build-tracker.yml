@@ -87,6 +87,12 @@ jobs:
           dist/KinahLedger.exe ui-shot shots --demo --full
           dist/KinahLedger.exe ui-shot shots --demo --crafting
           dist/KinahLedger.exe ui-shot shots --options
+          # the whole Farming view at both widths (however tall), the Events part with its Runs card alone (folded and
+          # with Materials open), and the Crafting part before anything is crafted
+          dist/KinahLedger.exe ui-shot shots --demo --compact --tall
+          dist/KinahLedger.exe ui-shot shots --demo --full --tall
+          dist/KinahLedger.exe ui-shot shots --demo --events
+          dist/KinahLedger.exe ui-shot shots --demo --crafting --empty
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.publish.outcome == 'success'
