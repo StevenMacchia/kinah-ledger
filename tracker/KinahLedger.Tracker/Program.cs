@@ -1135,6 +1135,7 @@ options: --process aion[,other]");
         Check("on no nearby table, two edits off: refused", $"{N(m4.Id)} ({m4.Source})", "Bold Leather (refused)");
         Check("...the same read with the context open", d.Match("Bxld Leathex", new NameContext().Add(NameMatch.TargetTable, new[] { "Wolf Pelt" })).Source, "full");
         Check("...a slip or two off is never refused", d.Match("Bold Lcathcr", ore).Source, "full");
+        Check("...a gathering material is never refused", d.Match("0richalcurn 0rc", ore).Source, "full");
         Check("...and on the enemy's table it is that item", d.Match("Bxld Leathex", new NameContext { Closed = true }.Add(NameMatch.TargetTable, new[] { "Bold Leather" })).Source, "target-table");
         // an exact name is never second-guessed, on a table or not
         var m5 = d.Match("Bold Leather", ore);

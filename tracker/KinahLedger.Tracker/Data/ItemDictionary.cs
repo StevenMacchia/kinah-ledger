@@ -207,7 +207,9 @@ public sealed class ItemDictionary
                 }
             }
             if (full is not long fid) return new(null, NameMatch.None, 0);
-            if (context is { Closed: true } && fullCost > NameMatch.TightCost && !ctxIds.Contains(fid)) return new(fid, NameMatch.Refused, fullCost, fid);
+            // a gathering material comes from nodes, never a loot table: it is never refused for lacking one (as ChatParser.Unlisted)
+            if (context is { Closed: true } && fullCost > NameMatch.TightCost && !ctxIds.Contains(fid) && GatheringCatalog.Find(_byId[fid].Name) == null)
+                return new(fid, NameMatch.Refused, fullCost, fid);
             return new(fid, NameMatch.Full, fullCost, fid);
         }
     }
