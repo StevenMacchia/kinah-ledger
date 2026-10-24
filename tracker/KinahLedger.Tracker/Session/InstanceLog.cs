@@ -55,6 +55,34 @@ public sealed class InstanceRun
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool KinahUnknown => KinahNotRead || RewardsNotRead;
+    /// <summary>
+    /// Not sent: its rewards were not read when it was due to go to the site, so it is parked here (in instances.jsonl,
+    /// never back in the queue, never retried every tick) until <c>replay-event-shots --send</c> reads its saved pictures
+    /// and sends it (since 2026-10-24; before that such a run was dropped without a word).
+    /// </summary>
+    public bool Unsent { get; set; }
+    /// <summary>The reward pictures kept for the run (file names in reward-shots), what a recovery reads it from.</summary>
+    public List<string> Pictures { get; set; } = new();
+    /// <summary>Its saved pictures were read once more after it closed (the retry before it is parked), read or not.</summary>
+    public bool Retried { get; set; }
+    /// <summary>When a run parked as unsent was read from its pictures and sent.</summary>
+    public DateTime? SentLate { get; set; }
+
+    /// <summary>
+    /// What a read of its pictures found, onto this run: the items, the Kinah, the slots not read and the flags. Its times,
+    /// witnesses and the chat items set aside stay as they were.
+    /// </summary>
+    public void TakeRewardsFrom(InstanceRun read)
+    {
+        Items = new(read.Items); BoundItems = new(read.BoundItems); Bound = read.Bound; Kinah = read.Kinah;
+        FromPicture = read.FromPicture; SlotsUnread = read.SlotsUnread; UnknownSlots = new(read.UnknownSlots);
+        KinahNotRead = read.KinahNotRead; RewardsNotRead = !read.FromPicture;
+        PaidAt ??= read.PaidAt;
+    }
+
+    /// <summary>A copy through its own JSON (what instances.jsonl keeps).</summary>
+    public InstanceRun Clone() => JsonSerializer.Deserialize<InstanceRun>(JsonSerializer.Serialize(this))!;
+
     /// <summary>Entry to last loot, never under ten seconds.</summary>
     public double Seconds => LastLoot is { } l ? Math.Max(10, (l - Start).TotalSeconds) : 0;
 
@@ -92,6 +120,8 @@ public sealed class InstanceLog
     readonly List<InstanceRun> _done = new();
     /// <summary>Runs closed since this reader started that haven't gone to the site yet.</summary>
     readonly List<InstanceRun> _unshared = new();
+    /// <summary>Runs not sent because their rewards were not read (<see cref="InstanceRun.Unsent"/>), kept across restarts.</summary>
+    readonly List<InstanceRun> _parked = new();
     InstanceRun? _cur;
     /// <summary>True when the minimap itself named the open run (not only the chat or the header).</summary>
     bool _byMinimap;
@@ -697,6 +727,122 @@ public sealed class InstanceLog
         }
     }
 
+    // ---- runs whose rewards were not read (2026-10-24) ----
+    // A run whose rewards (or its coin) weren't read is never sent (the site would average in the little the chat saw).
+    // Before, it left the queue with the rest and was dropped without a line in the log (Hidden Lugi 10:02 and 13:06 that
+    // day). Now it is parked: said once in the log, tallied, marked in instances.jsonl with its pictures, and recovered by
+    // `replay-event-shots` (Program.cs), which reads its event cards from those pictures and sends it.
+
+    /// <summary>The runs parked as not sent, oldest first.</summary>
+    public List<InstanceRun> Parked { get { lock (_lock) return new(_parked); } }
+
+    /// <summary>
+    /// Runs not sent because their rewards were not read, started since <paramref name="since"/>: the parked ones, and kept
+    /// runs from before parking existed whose rewards were marked not read and that were never sent later.
+    /// </summary>
+    public List<InstanceRun> Unsent(DateTime since)
+    {
+        lock (_lock) return _done.Concat(_parked).Distinct().Where(r => r.Start >= since && r.SentLate == null && (r.Unsent || r.KinahUnknown)).OrderBy(r => r.Start).ToList();
+    }
+
+    /// <summary>
+    /// Runs closed unread whose pictures haven't been read again yet: those in the queue, and on a start those kept from
+    /// the last session whose last loot came since <paramref name="since"/> (never parked, never sent, never retried).
+    /// Events only: their cards are what a recovery can read.
+    /// </summary>
+    public List<InstanceRun> ToRetry(DateTime since)
+    {
+        lock (_lock) return _unshared.Concat(_done.Where(r => r.LastLoot is { } l && l >= since)).Distinct()
+            .Where(r => r.Kind == "Event" && r.KinahUnknown && !r.Retried && !r.Unsent && r.SentLate == null).ToList();
+    }
+
+    /// <summary>
+    /// Parks a run whose rewards were not read: one line in the log, <c>runs_unsent</c> tallied, marked in instances.jsonl
+    /// with the names of its saved pictures, out of the queue. A run parked already is left as it is.
+    /// </summary>
+    public void Park(InstanceRun r, IReadOnlyList<string>? pictures = null)
+    {
+        lock (_lock)
+        {
+            _unshared.Remove(r);
+            if (pictures != null && pictures.Count > 0) r.Pictures = pictures.ToList();
+            if (_parked.Contains(r)) return;
+            r.Unsent = true;
+            _parked.Add(r);
+            if (!_done.Contains(r)) _done.Add(r);
+            RewriteLocked(r);
+            Accuracy.Add("runs_unsent");
+            CrashLog.Note($"run not sent: {r.Label} {r.Start.ToLocalTime():HH:mm:ss}: {(r.RewardsNotRead ? "rewards" : "its Kinah")} not read (kept; {r.Pictures.Count} picture(s) saved)");
+        }
+    }
+
+    /// <summary>A parked or old unread run read from its pictures and sent: it leaves the parked list, marked sent in instances.jsonl.</summary>
+    public void SentLater(InstanceRun r, DateTime at)
+    {
+        lock (_lock)
+        {
+            r.Unsent = false; r.SentLate = at;
+            _parked.Remove(r);
+            RewriteLocked(r);
+        }
+    }
+
+    /// <summary>A kept run changed (read again, parked, sent): its line in instances.jsonl is written again in place.</summary>
+    public void Save(InstanceRun r) { lock (_lock) RewriteLocked(r); }
+
+    /// <summary>A run read from its pictures after the queue let it go (a retry on a start): back in the queue to be sent.</summary>
+    public void Requeue(InstanceRun r) { lock (_lock) if (!_unshared.Contains(r)) _unshared.Add(r); }
+
+    /// <summary>True when the run waits in the queue to be sent.</summary>
+    public bool Queued(InstanceRun r) { lock (_lock) return _unshared.Contains(r); }
+
+    void RewriteLocked(InstanceRun r)
+    {
+        try
+        {
+            var path = PathOf;
+            var lines = File.Exists(path) ? File.ReadAllLines(path).ToList() : new List<string>();
+            bool found = false;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                InstanceRun? k = null;
+                try { if (lines[i].Length > 2) k = JsonSerializer.Deserialize<InstanceRun>(lines[i]); } catch (Exception) { }
+                if (k == null || k.Start != r.Start || k.Kind != r.Kind) continue;
+                lines[i] = JsonSerializer.Serialize(r); found = true;
+            }
+            if (!found) lines.Add(JsonSerializer.Serialize(r));
+            var tmp = path + ".tmp";
+            File.WriteAllLines(tmp, lines);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch (Exception ex) { CrashLog.Write("rewrite a run", ex); }
+    }
+
+    /// <summary>
+    /// For a read of a closed run's pictures (EventShotRecovery): the run becomes this log's open run, so the reward path
+    /// (ApplyGrid and <c>RewardTable</c>) files into it exactly as it would live. Only on a log of its own, with no run open.
+    /// </summary>
+    internal void Adopt(InstanceRun r)
+    {
+        lock (_lock)
+        {
+            if (_cur != null) throw new InvalidOperationException("a run is open");
+            _leftAt = null; _paidArea = null; _tableAt = null; _moveAt = null; _moveReads = 0; _moveConfirmed = false;
+            _cur = r; _byMinimap = true;
+        }
+    }
+
+    /// <summary>The adopted run back, as its pictures left it, without closing it (nothing written, nothing queued).</summary>
+    internal InstanceRun? Release()
+    {
+        lock (_lock)
+        {
+            var r = _cur; _cur = null; _byMinimap = false;
+            _leftAt = null; _paidArea = null; _tableAt = null; _moveAt = null; _moveReads = 0; _moveConfirmed = false;
+            return r;
+        }
+    }
+
     /// <summary>Puts runs back after a send that didn't reach the site, so the next share takes them.</summary>
     public void Restore(IEnumerable<InstanceRun> runs)
     {
@@ -709,7 +855,7 @@ public sealed class InstanceLog
         {
             if (!File.Exists(PathOf)) return;
             foreach (var line in File.ReadLines(PathOf).TakeLast(2000))
-                if (line.Length > 2 && JsonSerializer.Deserialize<InstanceRun>(line) is { } r && r.LastLoot != null) { r.FileUnderFamily(); _done.Add(r); }
+                if (line.Length > 2 && JsonSerializer.Deserialize<InstanceRun>(line) is { } r && r.LastLoot != null) { r.FileUnderFamily(); _done.Add(r); if (r.Unsent) _parked.Add(r); }
         }
         catch (Exception) { /* a damaged history starts over; the file is kept for a look */ }
     }
