@@ -203,7 +203,9 @@ public sealed record MobRun(string name, string zone, int kills, long kinah, Dic
 /// show it as partly read and leave it out of its averages), <c>not_read</c> (how many slots weren't read), <c>unknown</c>
 /// (pieces the picture showed that couldn't be named: "Unknown item" and "Unknown gear", each a count of pieces) and
 /// <c>notes</c> (what each piece of unknown gear may be, "Legend gear, one of Elder Gloves / Relic Collector Gloves");
-/// each left out when empty.
+/// each left out when empty. Since the accuracy card (2026-10-24): <c>acc</c>, the run's accuracy from the game's own
+/// numbers (<see cref="RunAccuracy"/>: status, kina_confirmed, rows_confirmed, unsure, not_read, partly_read, delay_ms,
+/// ver, and note when it applies), left out when nothing in the run was judged.
 /// </summary>
 public sealed record InstanceRunPayload(string zone, string kind, int seconds, long kinah, int kills, Dictionary<string, int> items,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? @event = null,
@@ -213,7 +215,9 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? partly_read = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? not_read = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, int>? unknown = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? notes = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? notes = null,
+    // since 2026-10-24: how much of the run the game's own numbers backed up (AccuracyScore.ForRun); absent with nothing judged
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RunAccuracy? acc = null)
 {
     /// <summary>Most notes per run, as sent.</summary>
     public const int MaxNotes = 20;
@@ -245,7 +249,7 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
                 return new InstanceRunPayload(r.Zone, KindOf(r)!, fix != null ? 0 : (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
                     r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null, fix,
                     r.PartlyRead ? true : null, r.SlotsUnread > 0 ? r.SlotsUnread : null, unknown.Count > 0 ? unknown : null,
-                    r.GearNotes.Count > 0 ? r.GearNotes.Take(MaxNotes).ToList() : null);
+                    r.GearNotes.Count > 0 ? r.GearNotes.Take(MaxNotes).ToList() : null, r.Acc);
             }).ToList();
         return list.Count > 0 ? list : null;
     }

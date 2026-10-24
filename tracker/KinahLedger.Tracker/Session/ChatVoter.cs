@@ -37,6 +37,8 @@ public sealed class ChatVoter
 
     /// <summary>For each loot line counted (a line with a meaning), the seconds from the read it came in to the read it counted on; the last 500.</summary>
     public List<double> Latencies { get; } = new();
+    /// <summary>Each of those as it is measured, with when it counted (AccuracyScore's median counting delay).</summary>
+    public Action<DateTime, double>? Measured { get; set; }
 
     /// <summary>
     /// One read: the new lines it brought (at the bottom of <paramref name="read"/>) and the whole read. Returns the lines
@@ -77,7 +79,7 @@ public sealed class ChatVoter
                 Fast++;
             }
             var chosen = sure ?? Choose(w, meaning);
-            if (meaning(chosen).Key.Length > 0) { Latencies.Add((now - w.At).TotalSeconds); if (Latencies.Count > 500) Latencies.RemoveAt(0); }
+            if (meaning(chosen).Key.Length > 0) { Latencies.Add((now - w.At).TotalSeconds); if (Latencies.Count > 500) Latencies.RemoveAt(0); Measured?.Invoke(now, (now - w.At).TotalSeconds); }
             outp.Add(chosen);
             _pending.RemoveAt(0);
         }

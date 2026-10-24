@@ -83,6 +83,11 @@ public sealed class InstanceRun
     public bool Retried { get; set; }
     /// <summary>When a run parked as unsent was read from its pictures and sent.</summary>
     public DateTime? SentLate { get; set; }
+    /// <summary>
+    /// How much of the run the game's own numbers backed up (AccuracyScore.ForRun), worked out as it is handed to a send
+    /// and sent as the payload's <c>acc</c> (since 2026-10-24); null on runs from before, and with nothing judged.
+    /// </summary>
+    public RunAccuracy? Acc { get; set; }
 
     /// <summary>
     /// When the one-time repair of gear counts ran on this record (2026-10-24): until PR 17 a gear slot whose corner read

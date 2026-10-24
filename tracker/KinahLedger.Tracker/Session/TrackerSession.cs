@@ -142,7 +142,7 @@ public sealed partial class TrackerSession
     /// Saves the last minute (ReportBuffer) with the tracker's state to a new folder under reports/ and returns it.
     /// <paramref name="why"/> is what the player flagged, or "" for the button.
     /// </summary>
-    public string WriteReport(string why)
+    public string WriteReport(string why, DateTime? focus = null)
     {
         var now = DateTime.UtcNow;
         var t = Engine.Totals();
@@ -167,7 +167,7 @@ public sealed partial class TrackerSession
         sb.AppendLine($"Settings: autoScale {_settings.Ocr.AutoScale} (target {_settings.Ocr.TargetTextPx} px, scale {_settings.Ocr.Scale}) · nameColours {_settings.Ocr.NameColours} · lootIcons {_settings.Ocr.LootIcons} · window capture {WindowCapture.Active} · pictures kept {ReportBuffer.KeepFrames}");
         IEnumerable<string> tail = Array.Empty<string>();
         try { if (File.Exists(CrashLog.ReadsPath)) tail = File.ReadLines(CrashLog.ReadsPath).TakeLast(600).ToList(); } catch (Exception) { /* the log is being written: the report goes without it */ }
-        var dir = Report.Write(CrashLog.Dir, sb.ToString(), tail, now);
+        var dir = Report.Write(CrashLog.Dir, sb.ToString(), tail, now, focus);
         // where the game window sat, so the pictures' places can be made relative to it (AccuracyClient.BuildFrames)
         if (GameRect is { } gr) try { File.WriteAllText(Path.Combine(dir, "game.json"), JsonSerializer.Serialize(new { x = gr.X, y = gr.Y, w = gr.Width, h = gr.Height })); } catch (Exception) { }
         CrashLog.Note($"miscount report saved: {dir}" + (why.Length > 0 ? $" ({why})" : ""));
@@ -302,6 +302,8 @@ public sealed partial class TrackerSession
         bool fresh = at > _kinaFedAt;
         if (fresh && !Update.RemoteConfig.Current.Off("kina_witness")) { _kinaFedAt = at; SettleKina(_kina.Observe(balance, at), at); }
         if (!fresh) return;
+        // what is counted by now (the witness has just settled this reading): a line still waiting isn't counted yet
+        Score.Reading(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);
         long gap = _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound) + _kina.PendingSum, at);
         if (gap == 0) return;
         // the witness counts what the counter shows and no line claims; the old rule (a row the list showed once) is its fallback
@@ -323,6 +325,24 @@ public sealed partial class TrackerSession
     }
     public int BalanceAdded { get; private set; }
 
+    // ---- how much of the count the game's own numbers backed up (AccuracyScore, the Accuracy card, 2026-10-24) ----
+    /// <summary>The session's accuracy: each pickup and what backed it, the things to check, the counter's reconciliation.</summary>
+    public AccuracyScore Score { get; } = new();
+    // the second witness known when the next pickup is counted ("counter", "race", "second read", "unjudged"), set around Commit
+    string? _scoreWitness;
+    void WireScore()
+    {
+        _cross.RowMatched = (key, at) => Score.RowMatched(key, at);
+        _cross.LateConfirmed = (key, at) => Score.RowConfirmed(key, at);
+        _voter.Measured = (at, s) => Score.Delay(at, s);
+        // a thing to check keeps the miscount report's pictures and reads around its moment, for its Report button
+        Score.Added += c => { if (!c.Handle.StartsWith("run:")) Report.Pin(c.At); };
+    }
+    void CommitWith(GameEvent ev, string witness) { _scoreWitness = witness; try { Commit(ev); } finally { _scoreWitness = null; } }
+    /// <summary>The Accuracy card's figures now: this session's pickups and the runs counted since it started.</summary>
+    public AccuracyScore.Summary AccuracySummary() =>
+        Score.Snapshot(Instances.Snapshot().Where(r => r.Start >= Engine.Started.AddMinutes(-1)), ListUnsure, ListNotRow + _rows.ShortLived + _rows.LongLived, Accuracy.Shadows());
+
     // ---- the Kinah counter as the deciding witness for Kina (KinaWitness, 2026-10-24) ----
     readonly KinaWitness _kina = new();
     public KinaWitness Kina => _kina;
@@ -338,12 +358,13 @@ public sealed partial class TrackerSession
     {
         if (!o.Any) return;
         foreach (var n in o.Notes) CrashLog.Note(n);
-        foreach (var c in o.Confirmed) if (c.Tag is GameEvent ev) Commit(ev);
-        foreach (var c in o.Unjudged) if (c.Tag is GameEvent ev) Commit(ev);
+        foreach (var c in o.Confirmed) if (c.Tag is GameEvent ev) CommitWith(ev, "counter");
+        foreach (var c in o.Unjudged) if (c.Tag is GameEvent ev) CommitWith(ev, "unjudged");
         foreach (var c in o.Absorbed) CrashLog.Note($"{c.Line}: counted already from the Kinah counter's rise before this line was read: once");
         foreach (var c in o.Refused)
         {
             KinaRefused++;
+            Score.Refused(c.At, c.Line, c.Amount);
             CrashLog.Note($"{c.Line}: the Kinah counter didn't rise by {c.Amount:N0} for it (a line read again, pushed up by a scroll, or misread): not counted");
         }
         foreach (var (amount, line, at) in o.FromCounter)
@@ -356,7 +377,7 @@ public sealed partial class TrackerSession
                 : row ? $"the Kinah counter rose {amount:N0} that no chat line claimed, and the loot list showed {amount:N0} Kina: counted from the two"
                       : $"the Kinah counter rose {amount:N0} that no chat line claimed: counted as Kina from the counter");
             if (row) BalanceAdded++;
-            Commit(ev);
+            CommitWith(ev, "counter");
         }
     }
     // the Kinah counter's readings of the last few minutes, for confirming a reward table's coin slot
@@ -423,6 +444,7 @@ public sealed partial class TrackerSession
         _cross = new LootCrossCheck(items) { Resolve = ResolveName };
         _cross.Gathered = GatherWitnessFor;
         _voter.Confirmed = l => FastChatOn && ListShows(_parser.Meaning(l).Key, _ctxNow);
+        WireScore();
         _rows = new LootRows(items) { NewGather = (canon, first) => IsGatherName(canon) && GatherRaceAfter(first), NotARow = (obj, why) => _cross.Withdraw(obj, why) };
         // the item-name decoder, shadow only: a look for its model files now, the model itself on first use (NameDecoder)
         NameDecoder.Start(items);
@@ -1041,7 +1063,7 @@ public sealed partial class TrackerSession
         string? proof = null;
         if (s?.Crop is { } crop) { using (crop) proof = RareGate.SaveProof(crop, ev is ItemAcquired a ? _items.NameOf(a.ItemId) : "item", p.Source, p.At); }
         CrashLog.Note("rare drop: " + note + (proof != null ? $" (proof: {Path.GetFileName(proof)})" : ""));
-        Commit(ev);
+        if (ok) CommitWith(ev, "second read"); else Commit(ev);
     }
 
     /// <summary>Held rare pickups with no picture to read again (a replay, a stop): counted as read.</summary>
@@ -1092,7 +1114,7 @@ public sealed partial class TrackerSession
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
         CommitHeld();
         try { ProcessChatCore(lines, now); }
-        finally { ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(now); }
+        finally { ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(now); Score.Tick(now); }
     }
 
     void ProcessChatCore(List<string> lines, DateTime now)
@@ -2517,7 +2539,7 @@ public sealed partial class TrackerSession
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
         if (_passes > 0)
-            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {PassTimes.AuditPart(_passes, _passMs, Times)} · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, by a candidate set {_parser.ContextPicks}, refused as on no nearby table {_parser.Refused + _cross.Refused}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x{sameNote}");
+            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {PassTimes.AuditPart(_passes, _passMs, Times)} · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, by a candidate set {_parser.ContextPicks}, refused as on no nearby table {_parser.Refused + _cross.Refused}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x{sameNote} · {AccuracyScore.AuditClause(AccuracySummary())}");
         _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; Times.Reset(); _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
     }
 
@@ -2544,6 +2566,7 @@ public sealed partial class TrackerSession
         };
         if (what == null) return;
         Accuracy.Add("pickups");
+        Score.Counted(ev.Time, what, ev is KinahChanged, _cross.KeyOf(ev), _scoreWitness, ev is KinahChanged && KinaWitnessOn(ev.Time));
         Report.Counted(ev.Time, what, ev.Via, where);
         lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed, where)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
         // the live feed at the top of each tab (0.8.30): the same pickup, on the tab its activity belongs to; Kinah with the enemy it was credited to
@@ -2865,7 +2888,8 @@ public sealed partial class TrackerSession
                 // While gathering the chat is only a cross-check (2026-10-24): its pickup lines come 6 to 11 s after the row,
                 // when they come at all (world chat buried them), so the row counts on the race and a late chat line for it
                 // adds nothing (LootCrossCheck.Chat). The panel's item line has to agree when it was read (PanelAgrees).
-                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && PanelAgrees(_items.NameOf(gl.ItemId), now) && TakeGatherToken(now, "the loot list", gl.Time))
+                bool race = false;
+                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && PanelAgrees(_items.NameOf(gl.ItemId), now) && (race = TakeGatherToken(now, "the loot list", gl.Time)))
                     CrashLog.Note(gl.Count >= 5
                         ? $"gathering: {_items.NameOf(gl.ItemId)} x{gl.Count} counted as shown, the gathering bar's Success race is the second witness"
                         : $"gathering: {_items.NameOf(gl.ItemId)} x{gl.Count} counted, the gathering bar's Success race is the second witness (no chat line yet)");
@@ -2879,6 +2903,7 @@ public sealed partial class TrackerSession
                             : $"loot list: {what} not counted yet: the gathering panel names {_panelItem.Item}, not it; a chat line for it within {LootCrossCheck.MatchSeconds:0} s counts it")
                         : $"loot list: {what} not counted yet: no chat line confirmed it; one within {LootCrossCheck.MatchSeconds:0} s counts it");
                     _cross.Declined(parsed, now);
+                    Score.RowWaiting(now, parsed is ItemAcquired sw ? $"{_items.NameOf(sw.ItemId)} ×{sw.Count}" : $"{((KinahChanged)parsed).Delta:N0} Kinah", _cross.KeyOf(parsed));
                     continue;
                 }
                 // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
@@ -2898,7 +2923,7 @@ public sealed partial class TrackerSession
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;
                 // a rare drop only the list showed waits for its second read (LootProcess, this pass)
                 if (ev is ItemAcquired ra && IsRare(ra.ItemId)) { _rare.Hold(new RareGate.Pending(ev, "list", _items.NameOf(ra.ItemId), now)); continue; }
-                Commit(ev);
+                if (race) CommitWith(ev, "race"); else Commit(ev);
             }
             _batch = 1;
             UpdateDoing(now);
@@ -2918,6 +2943,7 @@ public sealed partial class TrackerSession
         CrashLog.Note($"\"{raw.Trim()}\": quantity unsure, 1 assumed (no count in the line, on the loot list or in the next reads)");
         Accuracy.Add("qty_assumed");
         CountsAssumed++;
+        Score.CountAssumed(_ctxNow == default ? DateTime.UtcNow : _ctxNow, raw);
     }
     /// <summary>Pickups counted as one because no read showed their count (the log says "quantity unsure, 1 assumed").</summary>
     public int CountsAssumed { get; private set; }
@@ -3517,6 +3543,8 @@ public sealed partial class TrackerSession
             else Instances.Park(r, r.Pictures.Count > 0 ? r.Pictures : EventShotRecovery.PicturesFor(r));
         }
         if (wait.Count > 0) Instances.Restore(wait);
+        // how much of each run the game's own numbers backed up, worked out as it goes (the payload's acc)
+        foreach (var r in send) { try { r.Acc ??= Score.ForRun(r); } catch (Exception ex) { CrashLog.Write("run accuracy", ex); } }
         return send;
     }
 
