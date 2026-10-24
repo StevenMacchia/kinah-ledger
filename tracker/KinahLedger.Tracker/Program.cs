@@ -1574,13 +1574,34 @@ options: --process aion[,other]");
             Text(g, 20, 20, (int)(W * 0.12), 60, 31);
             for (int k = 0; k < 4; k++) for (int d = 0; d < 6; d++) g.FillRectangle(light, (int)(W * 0.74) + k * 120 + d * 16, 30, 10, 22);
             Text(g, (int)(W * 0.02), (int)(H * 0.20), (int)(W * 0.10), (int)(H * 0.50), 37);   // a few labels down the left edge
+            // the event's rank panel, dark and text-filled, on the right (compare-130149: the "flat dark panel on the right")
+            using var rank = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(22, 24, 30));
+            g.FillRectangle(rank, (int)(W * 0.78), (int)(H * 0.08), (int)(W * 0.10), (int)(H * 0.20));
+            Text(g, (int)(W * 0.785), (int)(H * 0.09), (int)(W * 0.875), (int)(H * 0.27), 41);
+        });
+        // the plain world in the Hidden Lugi event (compare-130149, 13:03:11 and 13:05:06): dark violet grass over the right,
+        // the event's rank panel top right, the normal chat bottom left. The old Bag rule took the grass for a panel
+        using var lugi = Frame(g =>
+        {
+            World(g); Hud(g);
+            var rng = new Random(43);
+            int x0 = (int)(W * 0.55), y0 = (int)(H * 0.10), x1 = W, y1 = (int)(H * 0.88);
+            using (var grass = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60, 15, 120))) g.FillRectangle(grass, x0, y0, x1 - x0, y1 - y0);
+            for (int i = 0; i < 400; i++)
+            {
+                using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(50 + rng.Next(25), 10 + rng.Next(12), 105 + rng.Next(35)));
+                g.FillRectangle(b, x0 + rng.Next(x1 - x0), y0 + rng.Next(y1 - y0), 10 + rng.Next(30), 6 + rng.Next(14));
+            }
+            using var rank = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(22, 24, 30));
+            g.FillRectangle(rank, (int)(W * 0.78), (int)(H * 0.08), (int)(W * 0.10), (int)(H * 0.20));
+            Text(g, (int)(W * 0.785), (int)(H * 0.09), (int)(W * 0.875), (int)(H * 0.27), 47);
         });
 
         FrameStats Stats(System.Drawing.Bitmap f) { using var t = FrameThumb.Shrink(f); return FrameStats.Of(t); }
         var sw0 = System.Diagnostics.Stopwatch.StartNew();
         var sWorld = Stats(world);
         double shrinkMs = sw0.Elapsed.TotalMilliseconds;
-        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("chattall", chatTall), ("cards", cards), ("blank", blank) }
+        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("chattall", chatTall), ("cards", cards), ("lugi", lugi), ("blank", blank) }
             .ToDictionary(x => x.Name, x => (Frame: x.F, Stats: Stats(x.F), Signs: SceneSignals.FromFrame(x.F)));
 
         // each frame on its own (a scene that has seen the HUD, as a running tracker has)
@@ -1601,7 +1622,31 @@ options: --process aion[,other]");
         Check("nothing a rule explains, after the HUD was seen: Unknown", Cls("blank"), "Unknown");
         Check("the normal chat, dark, lines up, stretched tall: the world", Cls("chattall"), "World");
         var cardSigns = new SceneSignals { CounterStrip = true };
-        Check("a dark full-screen window, counter up: not the chat expanded", $"{Cls("cards", cardSigns) != "ChatExpanded"} (old rule {(all["cards"].Stats.ExpandedChatOld ? "ChatExpanded" : "no")})", "True (old rule ChatExpanded)");
+        string Old(FrameStats st) => st.ExpandedChatOld ? "ChatExpanded" : st.BagPanelOld ? "Bag" : "no";
+        Check("the card screen with its rank panel, picture only: not Bag/ChatX", $"{Cls("cards", cardSigns) is not ("Bag" or "ChatExpanded")} (old rule {Old(all["cards"].Stats)})", "True (old rule ChatExpanded)");
+        Check("...with its title sign: EventCards, or Reward for a reward title", $"{Cls("cards", new SceneSignals { CounterStrip = true, EventCards = true })} {Cls("cards", new SceneSignals { CounterStrip = true, RewardTitle = true })}", "EventCards Reward");
+        Check("the plain world in the event, normal chat, violet grass: World", $"{Cls("lugi", cardSigns)} (old rule {Old(all["lugi"].Stats)})", "World (old rule Bag)");
+        Check("...and the bag itself still the bag", Cls("bag"), "Bag");
+
+        // leaving a reward screen: a banner over the card screen for two passes doesn't relabel it (compare-130149: a Daeva
+        // Pass banner at 289.0 to 289.5 s named the card screen); a reward window that stays 3 s does; the world, two passes
+        {
+            var lv = new SceneState();
+            var l0 = new DateTime(2026, 10, 24, 13, 6, 30, DateTimeKind.Utc);
+            var cardSt = all["cards"].Stats;
+            var onCards = new SceneSignals { CounterStrip = true, EventCards = true };
+            var banner = new SceneSignals { CounterStrip = true, RewardTitle = true };
+            lv.Observe(cardSt, onCards, l0); lv.Observe(cardSt, onCards, l0.AddSeconds(0.3));
+            Check("leave hysteresis: the card screen settles", $"{lv.Current}", "EventCards");
+            lv.Observe(cardSt, banner, l0.AddSeconds(0.6)); lv.Observe(cardSt, banner, l0.AddSeconds(0.9));
+            Check("...a banner for two passes: still EventCards", $"{lv.Current}", "EventCards");
+            lv.Observe(cardSt, onCards, l0.AddSeconds(1.2));
+            Check("...and the cards again: EventCards, nothing switched", $"{lv.Current} {lv.Since == l0.AddSeconds(0.3)}", "EventCards True");
+            for (int i = 0; i <= 11; i++) lv.Observe(cardSt, banner, l0.AddSeconds(1.5 + 0.3 * i));
+            Check("...a reward window that stays 3 s: Reward", $"{lv.Current}", "Reward");
+            lv.Observe(all["world"].Stats, new SceneSignals(), l0.AddSeconds(6)); lv.Observe(all["world"].Stats, new SceneSignals(), l0.AddSeconds(6.3));
+            Check("...the world after it: two passes, as before", $"{lv.Current}", "World");
+        }
         // real frames: KL_SCENE_FILES=<folder of game screenshots> prints each one's measures and verdict (counter taken as read)
         if (Environment.GetEnvironmentVariable("KL_SCENE_FILES") is { } shots && Directory.Exists(shots))
             foreach (var file in Directory.GetFiles(shots).Where(p => p.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).OrderBy(p => p))
