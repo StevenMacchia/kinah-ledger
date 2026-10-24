@@ -2546,7 +2546,14 @@ public sealed partial class TrackerSession
         Accuracy.Add("pickups");
         Report.Counted(ev.Time, what, ev.Via, where);
         lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed, where)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
+        // the live feed at the top of each tab (0.8.30): the same pickup, on the tab its activity belongs to; Kinah with the enemy it was credited to
+        Live.Add(ev is ItemAcquired li
+            ? new FeedLine(ev.Time, LiveFeed.TabOf(where), "item", _items.NameOf(li.ItemId), li.Count, Via: ev.Via, Where: where, ItemId: li.ItemId, Bound: li.Bound)
+            : new FeedLine(ev.Time, LiveFeed.TabOf(where), "kinah", "", ((KinahChanged)ev).Delta, Engine.CreditedTo(ev.Time, ((KinahChanged)ev).Delta) ?? "", Via: ev.Via, Where: where));
     }
+
+    /// <summary>What was counted lately, by tab, for the live feed at the top of each tab (Session/LiveFeed.cs).</summary>
+    public LiveFeed Live { get; } = new();
 
     /// <summary>The chat and the loot list beside the character, checked against each other: see <see cref="LootCrossCheck"/>.</summary>
     readonly LootCrossCheck _cross;
@@ -3252,6 +3259,7 @@ public sealed partial class TrackerSession
         CraftView.Apply(ev);
         Accuracy.Add("craft_panel");
         Report.Counted(now, $"craft {(ok ? "success" : "fail")}{(combo ? " (combo)" : "")}: {(recipe.Length > 0 ? recipe : "?")}", ev.Via);
+        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, 1, Ok: ok, Via: ev.Via, Where: "Crafting"));
         try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
 
