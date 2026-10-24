@@ -251,13 +251,15 @@ public static class RewardGrid
         {
             int y = top + row * p;
             if (y + s > h) break;
+            // the slots fill each row from the left, so the row runs to its last box whose outline stands out: a slot over ground
+            // its own colour (2026-10-23 Vakron, the grey orb on dark earth, 37) still counts when one after it is clear, and
+            // the row stops after it (the boxes past the grid 16 to 30, real slots 46 and up)
             int found = 0;
             for (int col = 0; col < 8; col++)
+                if (Border(frame, new Rectangle(x0 + col * p, y, s, s)) >= BorderMin) found = col + 1;
+            for (int col = 0; col < found; col++)
             {
                 var box = new Rectangle(x0 + col * p, y, s, s);
-                // the slots fill each row from the left: the first gap ends the row, and a row with none ends the grid
-                if ((!IsSlot(frame, box) && TopEdge(frame, box) < EdgeMin) || Flat(frame, box) || Contrast(frame, box) < ContrastMin) break;
-                found++;
                 var bg = Background(frame, box);
                 var grade = GradeOf(bg);
                 // the count, white in the lower right; a long one ("600.0K") reaches left past the middle
@@ -295,8 +297,7 @@ public static class RewardGrid
                 long count = figures && glyphFigure && !System.Text.RegularExpressions.Regex.IsMatch(num, @"\d") ? 0 : ParseCount(num);
                 slots.Add(new Slot(box, grade, num, count, Match(frame, box, bg)));
             }
-            if (found == 0 || found < 8 && row > 0 && slots.Count > 0 && found < 8) { if (found == 0) break; }
-            if (found < 8) break;   // a short row is the last one
+            if (found < 8) break;   // a short row is the last one, and a row with none ends the grid
         }
         return slots;
     }
@@ -408,6 +409,32 @@ public static class RewardGrid
             D(Mean(b.Left - 10, b.Top, b.Left - 3, b.Bottom)), D(Mean(b.Right + 3, b.Top, b.Right + 10, b.Bottom)),
             D(Mean(b.Left, b.Top - 10, b.Right, b.Top - 3)), D(Mean(b.Left, b.Bottom + 3, b.Right, b.Bottom + 10)),
         }.Max();
+    }
+
+    /// <summary>A slot's outline stands out at least this much (see <see cref="Border"/>).</summary>
+    public const double BorderMin = 40;
+
+    /// <summary>
+    /// How much a box's outline stands out all round: the colour difference between a pixel 3 px inside the box and one 4 px
+    /// outside, at points along all four sides, and the lower quartile of those (most of the outline must differ). A slot's
+    /// backing has an edge on every side whatever its art; the world past the last slot has none (texture gives a few strong
+    /// points, never most). Measured 2026-10-23 on both kept tables: real slots 46 to 335, boxes past the grid 0 to 30.
+    /// The mean-colour test this replaces read the Vakron row as ending at its third slot (a tome as dark as the forest).
+    /// </summary>
+    internal static double Border(Bitmap f, Rectangle b)
+    {
+        if (b.Left - 4 < 0 || b.Top - 4 < 0 || b.Right + 3 >= f.Width || b.Bottom + 3 >= f.Height) return 0;
+        static int Diff(Color x, Color y) => Math.Abs(x.R - y.R) + Math.Abs(x.G - y.G) + Math.Abs(x.B - y.B);
+        var d = new List<int>();
+        for (int k = 6; k < b.Width - 6; k += 2)
+        {
+            d.Add(Diff(f.GetPixel(b.Left + 3, b.Top + k), f.GetPixel(b.Left - 4, b.Top + k)));
+            d.Add(Diff(f.GetPixel(b.Right - 4, b.Top + k), f.GetPixel(b.Right + 3, b.Top + k)));
+            d.Add(Diff(f.GetPixel(b.Left + k, b.Top + 3), f.GetPixel(b.Left + k, b.Top - 4)));
+            d.Add(Diff(f.GetPixel(b.Left + k, b.Bottom - 4), f.GetPixel(b.Left + k, b.Bottom + 3)));
+        }
+        d.Sort();
+        return d.Count == 0 ? 0 : d[d.Count / 4];
     }
 
     /// <summary>A slot's top edge stands out at least this much (mean colour difference across it).</summary>
