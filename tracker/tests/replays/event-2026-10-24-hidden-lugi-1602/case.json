@@ -1,0 +1,242 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Hidden Lugi (Shugo Festival) reward cards, 2026-10-24 16:06:42 and 16:06:45, the two pictures the reader saw before the screen closed (6 s, two reads): cards 1 to 3 received, 4 and 5 not. Card 1 two rows down in the first picture and at its top in the second, so the first read is placed by the second (19 slots, the end showing, its last slot only ever cut); card 2 whole (12); card 3 a few pixels down in both, so no read of it can be placed in its list and it is counted from its fullest read (12 slots and a cut top row, its list may run on). 0.8.29 filed card 3 with 0 slots, left 10 slots not named (5 of them gear whose icon two items share), marked the run Kinah not read and parked it unsent. Now it is partly read (5 slots not read), sent, its 9 pieces of shared-icon gear counted as unknown gear, the cut slots as unknown items, and Abyss Points 800 + 480 + 480 + 360 = 2,120 kept as a currency, not pieces. Everything but the title and the cards blacked out",
+  "source": "%LocalAppData%KinahLedger\reward-shots61024-160642, -160645-Hidden-Lugi-event-rewards.jpg (5120x2160), reads.log 16:06:42 to 16:08:35; the chat after (Elder Gloves, Riverside Gloves, Illusion Boots, Fine Odyle x3, Odyle x7, Refining Stone x6, Seed of Detection, Soul Codex x3) agrees with the slots read",
+  "game": {
+    "w": 5120,
+    "h": 2160
+  },
+  "zone": "Hidden Lugi",
+  "frames": [
+    {
+      "f": "160642.jpg",
+      "k": "cards",
+      "t": "2026-10-24T20:06:42Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "160645.jpg",
+      "k": "cards",
+      "t": "2026-10-24T20:06:45Z",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "expect": {
+    "cards": [
+      {
+        "received": true,
+        "more": false,
+        "slots": [
+          {
+            "n": 1
+          },
+          {
+            "n": 800,
+            "name": "Abyss Points"
+          },
+          {
+            "n": 100,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 1100,
+            "name": "Enhance Stone"
+          },
+          {
+            "n": 1,
+            "name": "Soul Codex"
+          },
+          {
+            "n": 1,
+            "name": "Soul Codex"
+          },
+          {
+            "n": 1,
+            "name": "Soul Codex"
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Fine Odyle"
+          },
+          {
+            "n": 1,
+            "name": "Fine Odyle"
+          },
+          {
+            "n": 480,
+            "name": "Abyss Points"
+          },
+          {
+            "n": 20,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 30,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 700,
+            "name": "Enhance Stone"
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 0,
+            "hidden": true
+          }
+        ]
+      },
+      {
+        "received": true,
+        "more": false,
+        "slots": [
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Fine Odyle"
+          },
+          {
+            "n": 480,
+            "name": "Abyss Points"
+          },
+          {
+            "n": 20,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 30,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 700,
+            "name": "Enhance Stone"
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          }
+        ]
+      },
+      {
+        "received": true,
+        "more": true,
+        "slots": [
+          {
+            "n": 0,
+            "hidden": true
+          },
+          {
+            "n": 0,
+            "hidden": true
+          },
+          {
+            "n": 0,
+            "hidden": true
+          },
+          {
+            "n": 360,
+            "name": "Abyss Points"
+          },
+          {
+            "n": 20,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 30,
+            "name": "Centuryroot Token"
+          },
+          {
+            "n": 700,
+            "name": "Enhance Stone"
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Refining Stone"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          },
+          {
+            "n": 1,
+            "name": "Odyle"
+          }
+        ]
+      },
+      {
+        "received": false
+      },
+      {
+        "received": false
+      }
+    ],
+    "runs": {
+      "Shugo Festival": 5588
+    },
+    "runs_kept": 1,
+    "runs_from_picture": 1,
+    "runs_partly_read": 1,
+    "runs_sent": 1,
+    "run_not_read": 5,
+    "run_unknown_gear": 9,
+    "run_unknown_items": 4,
+    "run_pieces": 17,
+    "run_abyss_points": 2120
+  }
+}

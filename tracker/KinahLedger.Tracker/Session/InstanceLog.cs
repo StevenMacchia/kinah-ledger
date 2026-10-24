@@ -57,6 +57,21 @@ public sealed class InstanceRun
     [System.Text.Json.Serialization.JsonIgnore]
     public bool KinahUnknown => KinahNotRead || RewardsNotRead;
     /// <summary>
+    /// Partly read (since 2026-10-24): its reward cards were read, at least one received card of them, but some places
+    /// weren't (seen only cut by a card's window, a list running past what was seen, a slot no item matches): what was read
+    /// is filed and sent, with this flag so the site can say so, and the run stays out of the averages. Distinct from
+    /// <see cref="RewardsNotRead"/> (no card read at all: not sent, parked). <see cref="SlotsUnread"/> says how many.
+    /// </summary>
+    public bool PartlyRead { get; set; }
+    /// <summary>Gear pieces whose icon two items share ("one of Elder Gloves / Relic Collector Gloves"): each counted as a piece of unknown gear, never dropped (since 2026-10-24).</summary>
+    public int UnknownGear { get; set; }
+    /// <summary>Visible slots no item could be named for, each one unknown item (a count not read counts one); among <see cref="SlotsUnread"/> (since 2026-10-24).</summary>
+    public int UnknownItems { get; set; }
+    /// <summary>What the unknown gear could be, one line a piece ("Legend gear, one of Elder Gloves / Relic Collector Gloves").</summary>
+    public List<string> GearNotes { get; set; } = new();
+    /// <summary>Slots on the reward picture it was filed from (a read again from the pictures replaces it only when it reads more).</summary>
+    public int PictureSlots { get; set; }
+    /// <summary>
     /// Not sent: its rewards were not read when it was due to go to the site, so it is parked here (in instances.jsonl,
     /// never back in the queue, never retried every tick) until <c>replay-event-shots --send</c> reads its saved pictures
     /// and sends it (since 2026-10-24; before that such a run was dropped without a word).
@@ -78,6 +93,7 @@ public sealed class InstanceRun
         Items = new(read.Items); BoundItems = new(read.BoundItems); Bound = read.Bound; Kinah = read.Kinah;
         FromPicture = read.FromPicture; SlotsUnread = read.SlotsUnread; UnknownSlots = new(read.UnknownSlots);
         KinahNotRead = read.KinahNotRead; RewardsNotRead = !read.FromPicture;
+        PartlyRead = read.PartlyRead; UnknownGear = read.UnknownGear; UnknownItems = read.UnknownItems; GearNotes = new(read.GearNotes); PictureSlots = read.PictureSlots;
         PaidAt ??= read.PaidAt;
     }
 
@@ -109,21 +125,32 @@ public sealed class InstanceRun
     public string Suspect { get; set; } = "";
     /// <summary>Left out of the per-run, per-hour and total figures: its Kinah isn't known, or the record looks wrong.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool OutOfAverages => KinahUnknown || OldUnread || Suspect.Length > 0;
+    public bool OutOfAverages => KinahUnknown || PartlyRead || OldUnread || Suspect.Length > 0;
 
     /// <summary>
     /// The run's pieces, not a quantity sum (Steven, 2026-10-24: two pauldrons read "x1K" made "2,000 items"): every piece
-    /// of gear one by one, and each other item (materials, currencies, consumables) once however big its stack, bound or not.
+    /// of gear one by one, and each other item (materials, consumables) once however big its stack, bound or not. With
+    /// <paramref name="isCurrency"/>, currencies (Abyss Points, Enhance Stone, tokens) are no pieces at all: they are
+    /// amounts, kept apart (<see cref="Currencies"/>; the 16:02 Hidden Lugi run showed "3,740 items", its Abyss Points and
+    /// stones added up). Unknown gear counts with the gear when <paramref name="withUnknown"/>.
     /// </summary>
-    public (int Gear, int Materials) Pieces(Func<long, bool> isGear)
+    public (int Gear, int Materials) Pieces(Func<long, bool> isGear, Func<long, bool>? isCurrency = null, bool withUnknown = false)
     {
-        int gear = 0; var other = new HashSet<long>();
+        int gear = withUnknown ? UnknownGear : 0; var other = new HashSet<long>();
         foreach (var (id, n) in Items.Concat(BoundItems))
         {
             if (n <= 0) continue;
-            if (isGear(id)) gear += n; else other.Add(id);
+            if (isGear(id)) gear += n; else if (isCurrency?.Invoke(id) != true) other.Add(id);
         }
         return (gear, other.Count);
+    }
+
+    /// <summary>The run's currencies by item, their amounts (bound and tradeable together): never pieces.</summary>
+    public Dictionary<long, long> Currencies(Func<long, bool> isCurrency)
+    {
+        var d = new Dictionary<long, long>();
+        foreach (var (id, n) in Items.Concat(BoundItems)) if (n > 0 && isCurrency(id)) d[id] = d.GetValueOrDefault(id) + n;
+        return d;
     }
 
     /// <summary>Entry to last loot, never under ten seconds.</summary>
@@ -604,7 +631,8 @@ public sealed class InstanceLog
     /// The reward table was read: the open run's items are its slots, and only those. What the chat had put in the run gives
     /// way, bound rewards count as the table shows them, and later chat items don't reach this run.
     /// </summary>
-    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread, IEnumerable<string>? unknown = null, bool kinahUnread = false)
+    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread, IEnumerable<string>? unknown = null, bool kinahUnread = false,
+        int unknownItems = 0, IReadOnlyList<string>? unknownGear = null, bool partly = false, int pictureSlots = 0)
     {
         lock (_lock)
         {
@@ -624,7 +652,10 @@ public sealed class InstanceLog
             _cur.FromPicture = true; _cur.SlotsUnread += unread;
             if (kinahUnread) _cur.KinahNotRead = true;
             if (unknown != null) _cur.UnknownSlots.AddRange(unknown);
-            CrashLog.Note($"{_cur.Label}: counted from the reward table: {_cur.Items.Values.Sum() + _cur.Bound} item(s) from its slots, {unread} slot(s) not read; the chat's {chatItems} set aside");
+            _cur.UnknownItems += unknownItems; _cur.PictureSlots += pictureSlots;
+            if (unknownGear != null) { _cur.UnknownGear += unknownGear.Count; _cur.GearNotes.AddRange(unknownGear); }
+            if (partly) _cur.PartlyRead = true;
+            CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, out of the averages)" : "")}; the chat's {chatItems} set aside");
         }
     }
 
@@ -676,7 +707,7 @@ public sealed class InstanceLog
             _done.Add(_cur);
             _unshared.Add(_cur);
             try { File.AppendAllText(PathOf, JsonSerializer.Serialize(_cur) + "\n"); } catch (Exception) { /* a read-only profile keeps it for this session */ }
-            CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run done: {_cur.Label}, {TimeSpan.FromSeconds(_cur.Seconds):m\\:ss}, {_cur.Kinah:N0} Kinah, {_cur.Items.Values.Sum()} items ({why}; {_cur.Witnesses})");
+            CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run done: {_cur.Label}, {TimeSpan.FromSeconds(_cur.Seconds):m\\:ss}, {_cur.Kinah:N0} Kinah, {PiecesNote(_cur)}{(_cur.PartlyRead ? $", partly read: {_cur.SlotsUnread} slot(s) not read" : "")} ({why}; {_cur.Witnesses})");
         }
         else if (_cur != null) CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run closed with no loot, not kept: {_cur.Label} ({why})");
         _cur = null; _byMinimap = false;
@@ -699,6 +730,21 @@ public sealed class InstanceLog
         && r.Witnesses.Length > 0 && r.Witnesses.Split(" · ", StringSplitOptions.RemoveEmptyEntries).All(w => w.StartsWith("minimap ", StringComparison.Ordinal));
 
     Func<long, string?>? _nameOf;
+    ItemDictionary? _dict;
+
+    /// <summary>
+    /// A run's rewards in a log line: its pieces (each piece of gear, each other item once, currencies never) and its
+    /// currencies by amount ("12 piece(s), 5 gear, 2 unknown gear; currencies: Abyss Points x1,760, Enhance Stone x2,500").
+    /// </summary>
+    string PiecesNote(InstanceRun r)
+    {
+        if (_dict is not { } d) return $"{r.Items.Values.Sum() + r.Bound} item(s)";
+        bool Cur(long id) => d.Get(id)?.Category == "Currency";
+        var (gear, mats) = r.Pieces(d.IsGear, Cur, withUnknown: true);
+        var cur = r.Currencies(Cur);
+        return $"{gear + mats + r.UnknownItems} piece(s) ({gear} gear{(r.UnknownGear > 0 ? $", {r.UnknownGear} of it unknown" : "")}{(r.UnknownItems > 0 ? $", {r.UnknownItems} unknown item(s)" : "")})"
+            + (cur.Count > 0 ? "; currencies: " + string.Join(", ", cur.OrderByDescending(kv => kv.Value).Select(kv => $"{d.NameOf(kv.Key)} x{kv.Value:N0}")) : "");
+    }
 
     /// <summary>
     /// The item list the runs are named from: a closing run keeps the names of its synthetic ids (<see cref="InstanceRun.Names"/>),
@@ -708,7 +754,7 @@ public sealed class InstanceLog
     {
         lock (_lock)
         {
-            _nameOf = id => items.Get(id) is { } i ? i.Name : null;
+            _nameOf = id => items.Get(id) is { } i ? i.Name : null; _dict = items;
             foreach (var r in _done) foreach (var (id, name) in r.Names) items.Remember(id, name);
         }
     }
@@ -902,7 +948,7 @@ public sealed class InstanceLog
     public List<InstanceRun> ToRetry(DateTime since)
     {
         lock (_lock) return _unshared.Concat(_done.Where(r => r.LastLoot is { } l && l >= since)).Distinct()
-            .Where(r => r.Kind == "Event" && r.KinahUnknown && !r.Retried && !r.Unsent && r.SentLate == null).ToList();
+            .Where(r => r.Kind == "Event" && (r.KinahUnknown || r.PartlyRead) && !r.Retried && !r.Unsent && r.SentLate == null).ToList();
     }
 
     /// <summary>

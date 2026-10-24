@@ -335,7 +335,8 @@ public static class EventCards
         public readonly double Sure;
         public Merger(double sure) { Sure = sure; }
         public int Reads { get; private set; }
-        public int Unaligned { get; private set; }
+        /// <summary>Card reads not placed in their lists (yet): a later read can place them (<see cref="Add"/> tries them again).</summary>
+        public int Unaligned => Cards.Values.Sum(l => l.Loose.Count);
         public readonly Dictionary<long, RewardGrid.Slot> Cache = new();
         /// <summary>Each received card: per place in its list, every full read of the slot there; places seen only cut; where its end showed.</summary>
         public sealed class CardList
@@ -345,7 +346,16 @@ public static class EventCards
             public int? Length;
             public bool EverScrolled;
             public readonly Dictionary<int, Bitmap> Crops = new();
-            public int Count => Math.Max(Length ?? 0, Full.Keys.Concat(Cut.Keys).DefaultIfEmpty(-1).Max() + 1);
+            /// <summary>
+            /// Reads of the card not placed in its list (scrolled before any read placed it, 2026-10-24 16:06: card 1's first
+            /// read was two rows down and its second at the top; card 3 was a few pixels down in both), each with its slots'
+            /// crops. Tried again after every read that places something; a card with nothing placed is filed from its best one.
+            /// </summary>
+            public readonly List<(Card Read, Dictionary<(int, int), Bitmap> Crops)> Loose = new();
+            /// <summary>Nothing of the card was placed: its list is its loose read with the most full slots (where it starts in the list isn't known).</summary>
+            public bool FromLoose => Full.Count == 0 && Cut.Count == 0 && Loose.Count > 0;
+            public int Count => FromLoose ? LooseBest!.Slots.Count : Math.Max(Length ?? 0, Full.Keys.Concat(Cut.Keys).DefaultIfEmpty(-1).Max() + 1);
+            public Card? LooseBest => Loose.Count == 0 ? null : Loose.Select(x => x.Read).OrderByDescending(c => c.Slots.Count(x => !x.Clipped)).ThenByDescending(c => c.Slots.Count).First();
         }
         public readonly Dictionary<int, CardList> Cards = new();
         public bool?[] Received { get; } = new bool?[CardCount];
@@ -363,28 +373,58 @@ public static class EventCards
             {
                 if (!Cards.TryGetValue(c.Index, out var list)) Cards[c.Index] = list = new CardList();
                 int? offset = Place(list, c);
-                if (offset is not int o) { Unaligned++; continue; }
-                if (c.Scrolled) list.EverScrolled = true;
-                foreach (var cs in c.Slots)
-                {
-                    int at = (o + cs.Row) * Columns + cs.Col;
-                    if (cs.Clipped) { if (!list.Full.ContainsKey(at)) list.Cut[at] = cs.Slot; continue; }
-                    list.Cut.Remove(at);
-                    if (!list.Full.TryGetValue(at, out var votes)) list.Full[at] = votes = new List<RewardGrid.Slot>();
-                    votes.Add(cs.Slot);
-                    // the crop of its latest full read, kept for a slot that ends not read
-                    try { var r = Rectangle.Intersect(cs.Slot.Box, new Rectangle(0, 0, frame.Width, frame.Height)); if (r.Width > 0 && r.Height > 0) { if (list.Crops.TryGetValue(at, out var old)) old.Dispose(); list.Crops[at] = frame.Clone(r, PixelFormat.Format24bppRgb); } }
-                    catch (Exception) { /* no crop: the slot is still filed */ }
-                }
-                if (c.End && !c.Covered)
-                {
-                    int lastAt = c.Slots.Count == 0 ? -1 : c.Slots.Max(cs => (o + cs.Row) * Columns + cs.Col);
-                    list.Length = Math.Max(list.Length ?? 0, lastAt + 1);
-                }
+                if (offset is not int o) { list.Loose.Add((c, CropsOf(c, frame))); continue; }
+                Merge(list, c, o, cs => CropOf(cs, frame));
                 sig[c.Index] = (o, c.FirstTop, c.Slots.Where(x => !x.Clipped).Select(x => $"{x.Row}.{x.Col}:{Top(x.Slot)}:{x.Slot.Count}").ToList());
+                // a read placed now may place the ones left out before (their crops kept with them)
+                for (bool moved = true; moved;)
+                {
+                    moved = false;
+                    foreach (var lr in list.Loose.ToList())
+                    {
+                        if (Place(list, lr.Read) is not int lo) continue;
+                        Merge(list, lr.Read, lo, cs => lr.Crops.Remove((cs.Row, cs.Col), out var b) ? b : null);
+                        foreach (var b in lr.Crops.Values) b.Dispose();
+                        list.Loose.Remove(lr); moved = true;
+                    }
+                }
             }
             _sigs.Add(sig);
             return true;
+        }
+
+        /// <summary>One placed read into its card's list at whole-row offset <paramref name="o"/>.</summary>
+        static void Merge(CardList list, Card c, int o, Func<CardSlot, Bitmap?> crop)
+        {
+            if (c.Scrolled) list.EverScrolled = true;
+            foreach (var cs in c.Slots)
+            {
+                int at = (o + cs.Row) * Columns + cs.Col;
+                if (cs.Clipped) { if (!list.Full.ContainsKey(at)) list.Cut[at] = cs.Slot; continue; }
+                list.Cut.Remove(at);
+                if (!list.Full.TryGetValue(at, out var votes)) list.Full[at] = votes = new List<RewardGrid.Slot>();
+                votes.Add(cs.Slot);
+                // the crop of its latest full read, kept for a slot that ends not read
+                if (crop(cs) is { } b) { if (list.Crops.TryGetValue(at, out var old)) old.Dispose(); list.Crops[at] = b; }
+            }
+            if (c.End && !c.Covered)
+            {
+                int lastAt = c.Slots.Count == 0 ? -1 : c.Slots.Max(cs => (o + cs.Row) * Columns + cs.Col);
+                list.Length = Math.Max(list.Length ?? 0, lastAt + 1);
+            }
+        }
+
+        static Bitmap? CropOf(CardSlot cs, Bitmap frame)
+        {
+            try { var r = Rectangle.Intersect(cs.Slot.Box, new Rectangle(0, 0, frame.Width, frame.Height)); return r.Width > 0 && r.Height > 0 ? frame.Clone(r, PixelFormat.Format24bppRgb) : null; }
+            catch (Exception) { return null; }   // no crop: the slot is still filed
+        }
+
+        static Dictionary<(int, int), Bitmap> CropsOf(Card c, Bitmap frame)
+        {
+            var d = new Dictionary<(int, int), Bitmap>();
+            foreach (var cs in c.Slots.Where(x => !x.Clipped)) if (CropOf(cs, frame) is { } b) d[(cs.Row, cs.Col)] = b;
+            return d;
         }
 
         string Top(RewardGrid.Slot s) => s.Icons.Count > 0 && s.Icons[0].Distance <= Sure ? s.Icons[0].Key : "?";
@@ -455,6 +495,8 @@ public static class EventCards
         {
             var res = new List<RewardGrid.Slot>();
             if (!Cards.TryGetValue(card, out var l)) return res;
+            // nothing of the card placed: its best loose read as seen, in order (each slot counted once; where it starts isn't known)
+            if (l.FromLoose) return l.LooseBest!.Slots.OrderBy(x => x.Row).ThenBy(x => x.Col).Select(x => x.Slot).ToList();
             for (int at = 0; at < l.Count; at++)
             {
                 if (l.Full.TryGetValue(at, out var votes))
@@ -468,6 +510,15 @@ public static class EventCards
             return res;
         }
 
-        public void Dispose() { foreach (var l in Cards.Values) foreach (var b in l.Crops.Values) b.Dispose(); }
+        /// <summary>A slot's crop by its place in <see cref="Voted"/>: the list's, or the loose read's for a card filed from one.</summary>
+        public Bitmap? CropAt(int card, int index)
+        {
+            if (!Cards.TryGetValue(card, out var l)) return null;
+            if (!l.FromLoose) return l.Crops.TryGetValue(index, out var c) ? c : null;
+            var best = l.LooseBest!; var x = best.Slots.OrderBy(s => s.Row).ThenBy(s => s.Col).ElementAtOrDefault(index);
+            return x != null && l.Loose.First(lr => lr.Read == best).Crops.TryGetValue((x.Row, x.Col), out var b) ? b : null;
+        }
+
+        public void Dispose() { foreach (var l in Cards.Values) { foreach (var b in l.Crops.Values) b.Dispose(); foreach (var lr in l.Loose) foreach (var b in lr.Crops.Values) b.Dispose(); } }
     }
 }

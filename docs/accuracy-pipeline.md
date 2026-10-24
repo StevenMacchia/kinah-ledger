@@ -403,8 +403,10 @@ screen was only kept as pictures and the run's rewards stayed "not read". `Ocr/E
   show on the profile: Abyss Points, tokens, consumables, bound items alike). A slot not named surely (a gear icon two
   items share, a count not read, a slot only ever seen cut) is an unknown item ("Common x? · picture") and its crop goes
   to `proof\` (`...-event-cardN-slotM-Grade.png`). A card whose list may run past what was seen (partly read) adds
-  `card N: partly read, M slot(s) seen, more below what the screen showed` and leaves the run's Kinah unknown. A card not received is logged, not
-  counted. The pictures are kept as before.
+  `card N: partly read, M slot(s) seen, more below what the screen showed`. A card not received is logged, not
+  counted. The pictures are kept as before. Since tracker/event-partial a gear icon two items share is not an unknown
+  item but one piece of **unknown gear**, with what it may be (`Legend gear, one of Elder Gloves / Relic Collector
+  Gloves`); see the next section for partly read runs.
 - **Keyed on the frames too**: inside an event, every 2 s, a quick look (about 200 pixels) for the five frames, then
   `Locate`; found, the screen counts as up even when its title isn't read (a Daeva Pass banner over the title held it
   back 20 s on 2026-10-24), and face-up cards are read. reads.log: `event cards: found by their frames (the screen's
@@ -426,6 +428,36 @@ screen was only kept as pictures and the run's rewards stayed "not read". `Ocr/E
   each of their card screen before their layout is trusted; until then a different layout falls back as above. Only
   5120x2160 has been seen; the geometry scales with the window's height and is centred, as the expedition table's does,
   unchecked here.
+
+## Partly read event runs (branch tracker/event-partial, 2026-10-24)
+
+The 16:02 Hidden Lugi run showed "wasn't read" though its cards were read: the screen closed after 6 s and two reads,
+card 1's first read (two rows down) was left out because nothing was placed yet, card 3 was a few pixels down in both
+reads so neither could be placed (filed with 0 slots), and a list that might run on left the run's Kinah unknown, so it
+was parked unsent. Now:
+
+- **A read placed later places the ones before it.** `EventCards.Merger` keeps each read it couldn't place (with its
+  slots' crops) and tries them again after every read that places something. A card none of whose reads can be placed is
+  filed from its fullest read (`CardList.FromLoose`: each slot once, where the list starts unknown, the list open).
+- **Partly read is its own flag.** When at least one received card was read, the cards are filed; places not read (seen
+  only cut, a list running past what was seen, a slot no item matches) make the run `PartlyRead` with `SlotsUnread`
+  slots not read, never `KinahNotRead`. It is sent (`InstanceRunPayload` carries `partly_read`, `not_read`, `unknown`
+  with "Unknown item" and "Unknown gear" counts, and `notes` with what each unknown gear piece may be), left out of the
+  averages (`OutOfAverages`), and shown on the Events card as `Partly read: N`. Only a screen with no card read at all
+  leaves the run `RewardsNotRead` and parked (`event cards: no card read (...)`).
+- **Unknown pieces count.** A shared-icon gear slot is one piece of unknown gear (`UnknownGear`, `GearNotes`); a visible
+  slot not named, or one whose count wasn't read ("" or seen only cut), is one unknown item (`UnknownItems`).
+- **Pieces, not sums.** `InstanceRun.Pieces(isGear, isCurrency, withUnknown)` leaves currencies (category Currency:
+  Abyss Points, Enhance Stone, tokens) out of the piece count; `Currencies(isCurrency)` gives their amounts. The Events
+  card has a Currencies group, and the run lines in reads.log read `17 piece(s) (9 gear, 9 of it unknown, 4 unknown
+  item(s)); currencies: Enhance Stone x3,200, Abyss Points x2,120, Centuryroot Token x250` instead of "5,588 items".
+- **Read again at close.** A partly read event run waits in the queue for one read of its kept pictures
+  (`RetryUnreadRuns`, as for unread runs); that read replaces the live one only when it reads more slots, or as many
+  with fewer not read (`TrackerSession.TakeReread`), then the run goes up. reads.log says once a session
+  `event cards: hold the reward screen open and scroll each card for a full read` (`TrackerSession.CardsHint`).
+- **Measured** (bank `event-2026-10-24-hidden-lugi-1602`, the two 16:06 pictures): cards 19, 12 and 15 slots (0.8.29:
+  15, 12, 0), 5 not read (card 1's last slot and card 3's top row, cut; card 3 may run on), 9 unknown gear, 4 unknown
+  items, Abyss Points 800 + 480 + 480 + 360 = 2,120, partly read and sent. The 34 earlier cases count as before.
 
 ## When a run's rewards were not read (branch tracker/runs-kept, 2026-10-24)
 
