@@ -256,16 +256,24 @@ public static class RewardGrid
         // were measured (read at 1974, three Urugugu slots lost their names)
         int xb = RefineLeft(frame, top, x0, s, p);
         var slots = new List<Slot>();
+        // The game fills the table row by row, eight to a row, so only the last row is short. A box whose outline stands out
+        // all round (Border) is surely a slot; a slot over ground its own colour may not stand out (2026-10-23: the grey orb
+        // on dark earth 37, blue slots over the water 20 to 38, the boxes past the grid 0 to 30). So: the last row is the
+        // lowest with a clear slot, every row above it is full, and the last row runs to its last clear slot
+        var clearAt = new int[6];   // per row: one past its last clear slot, 0 when none
+        int lastRow = -1;
         for (int row = 0; row < 6; row++)
         {
             int y = top + row * p;
-            if (y + s > h) break;
-            // the slots fill each row from the left, so the row runs to its last box whose outline stands out: a slot over ground
-            // its own colour (2026-10-23 Vakron, the grey orb on dark earth, 37) still counts when one after it is clear, and
-            // the row stops after it (the boxes past the grid 16 to 30, real slots 46 and up)
-            int found = 0;
+            if (y + s + 4 > h) break;
             for (int col = 0; col < 8; col++)
-                if (Border(frame, new Rectangle(xb + col * p, y, s, s)) >= BorderMin) found = col + 1;
+                if (Border(frame, new Rectangle(xb + col * p, y, s, s)) >= BorderMin) clearAt[row] = col + 1;
+            if (clearAt[row] > 0) lastRow = row;
+        }
+        for (int row = 0; row <= lastRow; row++)
+        {
+            int y = top + row * p;
+            int found = row < lastRow ? 8 : clearAt[row];
             for (int col = 0; col < found; col++)
             {
                 var box = new Rectangle(x0 + col * p, y, s, s);
@@ -297,7 +305,8 @@ public static class RewardGrid
                             }
                 }
                 // more digits than the corner has figures is a misread (2026-10-23 Vakron: a lone 5 read as 75), so the shape decides
-                if (figures && System.Text.RegularExpressions.Regex.Matches(num, @"\d").Count > FigureRuns(frame, corner)) num = "";
+                // (a plain count of two or three digits only: in "600.0K" the dot and the figures can touch)
+                if (figures && System.Text.RegularExpressions.Regex.IsMatch(num.Trim(), @"^\d{2,3}$") && num.Trim().Length > FigureRuns(frame, corner)) num = "";
                 // the reader skips a lone digit: then its shape, in the tight lower-right corner where a count ends
                 if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
                 {
@@ -607,6 +616,8 @@ public static class Glyphs
         ('4', "000000001110000000001110000000011110000000111110000000111110000001111110000011101110000011001110000111001110001110001110001100001110011100001110111111111111111111111111000000001110000000001110000000001110000000001110"),
         ('6', "000000011100000000111000000001111000000001110000000011100000000111100000000111000000001111111000011111111110011111011111011100000111111000000011111000000011111000000011111000000011011100000111011111011111001111111110"),
         ('5', "011111111110011111111110011100000000011100000000011100000000011100000000011100000000011111100000011111111000010000111100000000001110000000000110000000000111000000000111000000000110010000001110111100011100011111111000"),
+        // cut from the 2026-10-23 21:11 Vakron table, where a glint in the art touched it and it read as 1
+        ('2', "000011110000001111111100011111111110111100001110111000000111001000000111000000000111000000001111000000001110000000011110000000111100000001111000000011110000000111100000001111000000011110000000111111110000111111111111"),
         ('1', "000000000111000000111111000011111111001111111111111111011111001100011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111000000011111"),
     };
 
@@ -638,6 +649,27 @@ public static class Glyphs
         int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
         for (int x = x0; x <= x1; x++) for (int y = 0; y < m.GetLength(1); y++) if (m[x, y]) { minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y); }
         return maxX < 0 ? null : Rectangle.FromLTRB(minX, minY, maxX + 1, maxY + 1);
+    }
+
+    /// <summary>Clears every piece of white (pixels joined side by side or up and down) smaller than <paramref name="min"/> pixels.</summary>
+    static void DropSpecks(bool[,] m, int min)
+    {
+        int w = m.GetLength(0), h = m.GetLength(1);
+        var seen = new bool[w, h];
+        var piece = new List<(int X, int Y)>(); var stack = new Stack<(int X, int Y)>();
+        for (int y0 = 0; y0 < h; y0++)
+            for (int x0 = 0; x0 < w; x0++)
+            {
+                if (!m[x0, y0] || seen[x0, y0]) continue;
+                piece.Clear(); stack.Push((x0, y0)); seen[x0, y0] = true;
+                while (stack.Count > 0)
+                {
+                    var (x, y) = stack.Pop(); piece.Add((x, y));
+                    foreach (var (nx, ny) in new[] { (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1) })
+                        if (nx >= 0 && ny >= 0 && nx < w && ny < h && m[nx, ny] && !seen[nx, ny]) { seen[nx, ny] = true; stack.Push((nx, ny)); }
+                }
+                if (piece.Count < min) foreach (var (x, y) in piece) m[x, y] = false;
+            }
     }
 
     static bool[] Normalise(bool[,] m, Rectangle r)
@@ -684,6 +716,9 @@ public static class Glyphs
             int ya = Math.Max(0, yb - area.Height / 2 - 1);
             for (int y = 0; y < area.Height; y++) if (y < ya || y > yb) for (int x = 0; x < area.Width; x++) m[x, y] = false;
         }
+        // a glint in the art (a thin diagonal line, a speck) is no figure: white pieces too small to be one are dropped before
+        // the figures are cut out (2026-10-23 21:11 Vakron: a glint touched the "2" and the two were read together as 1)
+        DropSpecks(m, Math.Max(4, area.Height / 4));
         // figures: runs of columns with white in them, read from the right, since the count is right-aligned
         var cols = Enumerable.Range(0, area.Width).Select(x => Enumerable.Range(0, area.Height).Count(y => m[x, y])).ToArray();
         var runs = new List<(int A, int B)>();
