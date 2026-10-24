@@ -458,6 +458,8 @@
             <!-- how the total adds up, the whole sum on hover -->
             <TextBlock x:Name="SumBreakdown" Foreground="{DynamicResource Faint}" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
           </StackPanel>
+          <!-- how much of the session the game's own numbers back up, in the game-tooltip look (Ui/MainWindow.AccuracyCard.cs) -->
+          <Border x:Name="AccuracyCard" Margin="20,0,20,16" Visibility="Collapsed"/>
         </StackPanel>
       </Border>
 

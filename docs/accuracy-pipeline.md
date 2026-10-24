@@ -578,6 +578,66 @@ The offline test modes (parse-test, market-test, accuracy-test, replay-bank) now
 `%TEMP%KinahLedger-tests<mode>-<pid>-<time>` (`TestTemp.cs`), removed when the run passes and printed ("test files
 kept in ...") when it fails or `KL_BANK_KEEP` is set; two runs at once no longer share `KinahLedger-test-logs` or
 `KinahLedger-parse-test`.
+## Session accuracy: the Accuracy card (branch tracker/accuracy-card, 2026-10-24)
+
+Steven's goal: a player sees how accurate their own runs are, from the game's own numbers, with no labels. "Verified by
+the game's own numbers: 98% · 1 pickup unsure, tap to see." `Session/AccuracyScore.cs` is the model; it reads nothing
+new from the screen, only what the session already decides (`TrackerSession.Score`, fed from `Feed`, `SettleKina`,
+`CommitRare`, the gathering race, `CountAssumed`, the loot list's "not counted yet" rows, `LootCrossCheck.RowMatched` /
+`LateConfirmed`, `CheckBalance` and `ChatVoter.Measured`).
+
+**The rules.**
+
+- A **judged event** is a pickup the tracker counted (Kinah or an item, from the chat, the loot list or the Kinah
+  counter), a pickup it set aside for want of a second source (a Kina line the counter refused, a loot list row no chat
+  line confirmed within 15 s), or a slot on a reward picture (read and named, or not read; a piece of unknown gear
+  counts as not read).
+- It is **verified** when a second source the game shows agrees: the Kinah counter rose by its amount (or it was counted
+  from that rise), the loot list showed what the chat counted (or the chat showed the row the list counted), a gathering
+  bar finished on Success for the row, a rare drop's second read confirmed it, or it is a reward slot read and named. A
+  pickup whose count was assumed 1 is never verified.
+- **Verified share** = verified / judged, rounded down to a whole percent (only every single one is 100%). Under 10
+  judged events the card says "Not enough counted yet".
+- **Things to check**: every Kina line the counter refused, every loot list row no chat line confirmed, every pickup whose
+  count was assumed 1, every run whose reward picture was read in part or not at all. Each has its time, its text, why
+  (`refused by the counter`, `no chat line`, `count assumed 1`, `partly read card`, `rewards not read`) and a handle: the
+  moment in frames.jsonl's form (UTC, "O"), or `run:` and the run's start. When a thing to check is found, the miscount
+  report's buffer keeps its pictures, reads and pickups from 8 s before to 4 s after that moment for the session
+  (`ReportBuffer.Pin`, 40 MB of pictures at most), so its Report finds them minutes later. "Fine" takes it off the list
+  for the session; the share doesn't change.
+- **Status**: Verified at 95% or more with nothing left to check; Mostly verified at 80% or more; Check these under 80%.
+- **Informational, never in the share**: loot list rows too faint to settle (unsure), lines that weren't rows, Kina lines
+  the counter couldn't judge (it fell or went quiet), the name decoder's agree / disagree / other, the median counting
+  delay (the chat vote's first read to counted), and the **counter reconciliation**: between trusted readings, the
+  counter's rise against the Kinah counted in the same stretch (bound included); a fall (spent) or a rise over 20,000 (a
+  sale, mail, a claim) is left out. Exact, or the count is under / over by N. A line still waiting for the counter isn't
+  counted yet, so a spend while lines wait can leave their amounts on the other side of the stretch.
+
+**Where it shows.** The card under the session line in the Farming view (`Ui/MainWindow.AccuracyCard.cs`, words from
+`Ui/AccuracyCardView.cs`, the game-tooltip look): title "Accuracy", the share line, one secondary line ("1 pickup unsure
+· tap to see", "Nothing to check", "Nothing to check · N seen only once"), the status as a chip, the figures on hover.
+Tapped, the things to check open inline with Report (the miscount report headed by "HH:mm:ss text: why", with the
+pinned moment; its loot list and panel pictures are sent only with Options › Sharing › Send report pictures and sharing
+on) and Fine. The panel over the game shows one line, "✓ 98% verified" or "? 2 to check", while it is up. The audit line
+ends `· verified 98%` (`, N to check`). Copy for Discord's card carries "✓ 98% verified by the game's own numbers".
+
+**Per run, for the site** (`InstanceRunPayload.acc`, from `AccuracyScore.ForRun` as a run is handed to a send, kept on the
+run as `Acc`; absent when nothing in the run was judged, and on older trackers), over the run's start to its last loot
+plus 30 s:
+
+| Field | Meaning |
+|---|---|
+| `status` | "verified": kina_confirmed ≥ 0.95, not partly read, unsure 0. "partly": partly read or unsure > 0, kina_confirmed ≥ 0.8. Else "unconfirmed". Under 5 judged events: "unconfirmed" with `note` "fewer than 5 counted". With kina_confirmed null (no Kina judged, an event paid in cards) the run's verified share stands in for it. |
+| `kina_confirmed` | 0 to 1: Kina pickups the counter confirmed over Kina pickups and refused lines; null when no Kina line in the run was judged by a read counter |
+| `rows_confirmed` | 0 to 1: loot list rows confirmed by a chat line or a gathering bar over those and rows no chat line confirmed; null when none |
+| `unsure` | things to check in the run (refused, no chat line, count assumed, and the run's own picture when read in part) |
+| `not_read` | reward slots not read (0 when fully read) |
+| `partly_read` | the run's PartlyRead flag (PR 22) |
+| `delay_ms` | median counting delay in the run, null when not measured |
+| `ver` | the tracker version |
+| `note` | only with a reason ("fewer than 5 counted") |
+
+parse-test ("Accuracy card") checks all of it on synthetic tallies and through a session's own Kina witness.
 
 ## Commands
 

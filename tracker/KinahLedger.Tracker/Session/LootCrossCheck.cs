@@ -115,6 +115,18 @@ public sealed class LootCrossCheck
         return diff == 1;
     }
     public int Matched { get; private set; }
+    /// <summary>A row matched to the chat pickup with this key read at this time (AccuracyScore: the row is its second witness).</summary>
+    public Action<string, DateTime>? RowMatched { get; set; }
+    /// <summary>A late chat line for a row that couldn't count alone (AccuracyScore: the row stops being a miss).</summary>
+    public Action<string, DateTime>? LateConfirmed { get; set; }
+
+    /// <summary>The key a pickup is matched under ("k:463", "i:name x2"), or "" for anything else.</summary>
+    public string KeyOf(GameEvent ev) => ev switch
+    {
+        KinahChanged k when k.Delta > 0 => KinahKey(k.Delta),
+        ItemAcquired a => ItemKey(a.ItemId, a.Count),
+        _ => "",
+    };
 
     public LootCrossCheck(ItemDictionary items) { _items = items; }
 
@@ -204,6 +216,7 @@ public sealed class LootCrossCheck
             _declined.RemoveAt(dec);
             CrashLog.Note($"a chat line for {Label(key)}, which the loot list showed but couldn't count alone, came late: counted now, the list and the chat are its two witnesses");
             _chat.Add((now, key, true));   // this line is that row's: it matches no other
+            LateConfirmed?.Invoke(key, now);
             return false;
         }
         _chat.Add((now, key, false));
@@ -389,6 +402,7 @@ public sealed class LootCrossCheck
             {
                 _chat[c] = (_chat[c].At, _chat[c].Key, true);
                 Matched++;
+                RowMatched?.Invoke(_chat[c].Key, _chat[c].At);
                 _waiting.RemoveAt(i--);
                 continue;
             }

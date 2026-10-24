@@ -111,6 +111,8 @@ public partial class MainWindow
             Grid.SetColumn(cell, i); stats.Children.Add(cell);
         }
         left.Children.Add(stats);
+        // one line: how much of the count the game's own numbers backed up (the Accuracy card's share)
+        if (_accView?.Discord is { } acc) { var al = T(acc, 17, CardTeal); al.Margin = new Thickness(0, 22, 0, 0); left.Children.Add(al); }
         mid.Children.Add(left);
 
         var right = new Border { VerticalAlignment = VerticalAlignment.Top, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(CardLine), Background = new SolidColorBrush(Color.FromArgb(0x66, 0x0A, 0x0D, 0x1C)), Padding = new Thickness(24, 18, 24, 12) };

@@ -1262,6 +1262,7 @@ options: --process aion[,other]");
         ok &= UnsentRunsTest(items, s);
         ok &= Session.RunDataTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);
+        ok &= Session.AccuracyScoreTests.Run(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }

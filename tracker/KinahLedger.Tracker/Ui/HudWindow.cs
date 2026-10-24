@@ -111,6 +111,7 @@ public sealed class HudWindow : Window
 
         Build();
 
+        _acc = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
         _alert = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
         _frame = new Border
         {
@@ -118,7 +119,7 @@ public sealed class HudWindow : Window
             BorderBrush = FrameBrush,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_fields.Count == 1 && _fields[0] == "feed" ? 8 : 12),
             Padding = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(16, 10, 20, 10),
-            Child = new StackPanel { Children = { _row, _alert } }
+            Child = new StackPanel { Children = { _row, _acc, _alert } }
         };
         Content = _frame;
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
@@ -127,6 +128,19 @@ public sealed class HudWindow : Window
     static readonly SolidColorBrush FrameBrush = Frozen(Color.FromRgb(0x32, 0x3A, 0x66));   // frozen, like Muted
     readonly Border _frame;
     readonly TextBlock _alert;
+    readonly TextBlock _acc;
+    static readonly Brush AccGood = Frozen(Color.FromRgb(0x62, 0xD9, 0x8B)), AccCheck = Frozen(Color.FromRgb(0xF2, 0xA3, 0x5E));
+
+    /// <summary>
+    /// The accuracy line under the figures ("✓ 98% verified", "? 2 to check"), as the window's Accuracy card works it
+    /// out; null hides it (not enough counted yet).
+    /// </summary>
+    public void SetAccuracy(string? text, bool toCheck)
+    {
+        _acc.Text = text ?? "";
+        _acc.Foreground = toCheck ? AccCheck : AccGood;
+        _acc.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+    }
     System.Windows.Threading.DispatcherTimer? _alertTimer;
 
     /// <summary>
