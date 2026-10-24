@@ -62,7 +62,7 @@ public sealed class ItemDictionary
             if (_byName.TryGetValue(key, out var id))
             {
                 // the same misread again: reported each time it is read, so the site sees how common it is
-                if (_snapped.Contains(key) && !_aliased.Contains(key) && Real(id)) { KinahLedger.Session.Accuracy.Name(name, id, "snapped"); KinahLedger.Session.Accuracy.Add("snapped"); }
+                if (_snapped.Contains(key) && !_aliased.Contains(key) && Real(id)) { KinahLedger.Session.Accuracy.Name(name, id, "snapped", NameMatch.Full); KinahLedger.Session.Accuracy.Add("snapped"); }
                 return id;
             }
 
@@ -71,7 +71,7 @@ public sealed class ItemDictionary
             if (close != null)
             {
                 _byName[key] = close.Value; _snapped.Add(key);
-                if (Real(close.Value)) { KinahLedger.Session.Accuracy.Name(name, close.Value, "snapped"); KinahLedger.Session.Accuracy.Add("snapped"); }
+                if (Real(close.Value)) { KinahLedger.Session.Accuracy.Name(name, close.Value, "snapped", NameMatch.Full); KinahLedger.Session.Accuracy.Add("snapped"); }
                 return close.Value;
             }
 
@@ -159,6 +159,59 @@ public sealed class ItemDictionary
     /// <summary>One item a name read off the screen could be: how many letters apart it is, and its grade.</summary>
     public sealed record NameCandidate(long Id, string Name, string Grade, int Distance);
 
+    /// <summary>
+    /// The item a name read off the screen is, settled by what could drop or be made right now (brief item 1, 2026-10-24).
+    /// An exact name (or a crowd-settled alias) is that item, whatever the context. Otherwise each of the context's sets is
+    /// tried in order (the enemies' loot tables, the gathering materials, the recipe's outputs, the run's items) with the
+    /// OCR-aware distance and a wider budget (a fifth of the letters, at least two edits), and one item alone closest in a
+    /// set is the answer, unless the whole list holds an item a full edit closer. Then the whole list, with the old budget.
+    /// When the context is closed and that item is on none of its sets and more than <see cref="NameMatch.TightCost"/>
+    /// away, the read is refused: "unsure", never counted. Nothing is remembered (unlike <see cref="IdOf"/>): the same read
+    /// can be another item under another target.
+    /// </summary>
+    public NameMatchResult Match(string read, NameContext? context = null)
+    {
+        lock (_lock)
+        {
+            var key = Norm(read);
+            if (key.Length == 0) return new(null, NameMatch.None, 0);
+            if (_byName.TryGetValue(key, out var id) && Real(id))
+            {
+                if (!_snapped.Contains(key)) return new(id, NameMatch.Exact, 0, id);
+                if (_aliased.Contains(key)) return new(id, NameMatch.Alias, 0, id);
+            }
+            long? full = Closest(key, out int fullCost);
+            if (full is long f0 && !Real(f0)) full = null;
+            var ctxIds = new HashSet<long>();
+            if (context != null && key.Length >= 4)
+            {
+                int max = Math.Max(2, key.Length / 5) * NameMatch.Unit;
+                foreach (var (source, names) in context.Sets)
+                {
+                    long? best = null; int bestCost = int.MaxValue; bool tie = false;
+                    foreach (var name in names)
+                    {
+                        var n = Norm(name);
+                        if (!_byName.TryGetValue(n, out var nid) || !Real(nid) || _snapped.Contains(n)) continue;
+                        ctxIds.Add(nid);
+                        if (nid == best) continue;
+                        int d = n == key ? 0 : NameMatch.Distance(key, n, Math.Min(max, bestCost));
+                        if (d == int.MaxValue) continue;
+                        if (d < bestCost) { best = nid; bestCost = d; tie = false; }
+                        else if (d == bestCost) tie = true;
+                    }
+                    if (best is not long cid || tie) continue;
+                    // the whole list knows a name a full edit closer than anything here: this set isn't what was read
+                    if (full is long f && f != cid && fullCost + NameMatch.Unit <= bestCost) continue;
+                    return new(cid, source, bestCost, full);
+                }
+            }
+            if (full is not long fid) return new(null, NameMatch.None, 0);
+            if (context is { Closed: true } && fullCost > NameMatch.TightCost && !ctxIds.Contains(fid)) return new(fid, NameMatch.Refused, fullCost, fid);
+            return new(fid, NameMatch.Full, fullCost, fid);
+        }
+    }
+
     bool Real(long id) => id > 0 || (_byId.TryGetValue(id, out var info) && info.Category.Length > 0);
 
     /// <summary>
@@ -224,18 +277,28 @@ public sealed class ItemDictionary
         }
     }
 
-    long? Closest(string key)
+    long? Closest(string key) => Closest(key, out _);
+
+    /// <summary>
+    /// The closest item to a misread on the whole list, by the OCR-aware distance (<see cref="NameMatch.Distance"/>) within
+    /// the old budget (a sixth of the letters, at least one edit), and its weighted cost. A name starts with the same
+    /// letter, or with one of the usual slips for it ("l" for "I").
+    /// </summary>
+    long? Closest(string key, out int cost)
     {
+        cost = 0;
         if (key.Length < 4) return null;
         int budget = Math.Max(1, key.Length / 6);
-        long? best = null; int bestD = budget + 1;
+        int max = budget * NameMatch.Unit;
+        long? best = null; int bestD = max + 1;
         foreach (var kv in _byName)
         {
-            if (Math.Abs(kv.Key.Length - key.Length) > budget || kv.Key[0] != key[0]) continue;
-            int d = Edit(key, kv.Key, bestD - 1);
+            if (Math.Abs(kv.Key.Length - key.Length) > budget || !NameMatch.CloseFirst(kv.Key[0], key[0])) continue;
+            int d = NameMatch.Distance(key, kv.Key, bestD - 1);
             if (d < bestD) { bestD = d; best = kv.Value; if (d == 0) break; }
         }
-        if (bestD <= budget) return best;
+        if (bestD <= max) { cost = bestD; return best; }
+        cost = NameMatch.Unit;
         // the first letter of a line fading in is the one most often misread ("mria acquired." for "Aria acquired."):
         // a name that differs from exactly one known name in its first letter only is that name
         long? only = null;
@@ -328,6 +391,8 @@ public sealed class ItemDictionary
                     var key = Norm(p.Name);
                     if (key.Length < 3 || _byName.ContainsKey(key)) continue;
                     _byName[key] = id; _snapped.Add(key); _aliased.Add(key);
+                    // a one-letter misread teaches the confusion table that pair (NameMatch.Learn)
+                    if (_byId.TryGetValue(id, out var ai)) NameMatch.Learn(key, Norm(ai.Name));
                 }
         }
         catch (Exception ex) { CrashLog.Note("aliases: " + ex.Message); }

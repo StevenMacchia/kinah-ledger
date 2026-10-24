@@ -1048,6 +1048,7 @@ options: --process aion[,other]");
         ok &= TradeTest(items);
         ok &= BestTest(items);
         ok &= AccuracyTest(items);
+        ok &= NameMatchTest();
         ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
@@ -1079,6 +1080,80 @@ options: --process aion[,other]");
     /// is kept only past ten minutes and a better rate, and the panel's field list always has one figure in panel order.
     /// Everything runs on temporary files, never the player's own.
     /// </summary>
+    /// <summary>
+    /// The OCR-aware distance and the candidate sets (brief item 1, 2026-10-24), on a small item list of their own so the
+    /// answers don't move with the game's list: each confusion pair, a read the plain distance can't reach, the same read
+    /// settled differently under two targets, a read on no nearby table refused, an exact name never second-guessed.
+    /// </summary>
+    static bool NameMatchTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nNames: the OCR-aware distance and the candidate sets (2026-10-24):");
+        var tmp = Path.Combine(Path.GetTempPath(), "kl-namematch-test.json");
+        File.WriteAllText(tmp, "{\"items\":[" + string.Join(",", new[]
+        {
+            (900001, "Silver Ore"), (900002, "Silver Orb"), (900003, "Bold Leather"), (900004, "Wolf Pelt"), (900005, "Odyle Shard"),
+            (900006, "Orichalcum Ore"), (900007, "Gold Shield"), (900008, "Iron Ingot"), (900009, "Sapphire Gem"), (900010, "Brass Bolt"),
+        }.Select(x => $"{{\"id\":{x.Item1},\"n\":\"{x.Item2}\",\"g\":\"Common\",\"t\":1}}")) + "]}");
+        var d = new ItemDictionary(); d.Merge(tmp);
+        try { File.Delete(tmp); } catch (Exception) { }
+        string N(long? id) => id is long v ? d.NameOf(v) : "none";
+
+        // each confusion pair: a third of an edit for the usual slips, half for the next ones, two letters for one
+        foreach (var (read, name, cost) in new[]
+        {
+            ("lron ingot", "iron ingot", 3), ("1ron ingot", "iron ingot", 3), ("odyle 5hard", "odyle shard", 3), ("0dyle shard", "odyle shard", 3),
+            ("8rass bolt", "brass bolt", 3), ("qdyle shard", "odyle shard", 5), ("sapphire 9em", "sapphire gem", 5), ("orichalcurn ore", "orichalcum ore", 3),
+            ("gold shielcl", "gold shield", 3), ("vvolf pelt", "wolf pelt", 3), ("odyle shard", "odyle shard", 0), ("iron ingoz", "iron ingot", 10),
+        })
+            Check($"distance \"{read}\" ~ \"{name}\"", $"{NameMatch.Distance(read, name, 100)}", $"{cost}");
+        // three slips the plain distance counts as four edits (over the old budget of two): now within it
+        Check("\"0richalcurn 0re\" snaps to Orichalcum Ore", N(d.IdOf("0richalcurn 0re")), "Orichalcum Ore");
+        Check("\"Vvolf Pelt\" snaps to Wolf Pelt", N(d.IdOf("Vvolf Pelt")), "Wolf Pelt");
+
+        // the same read, two targets: "Silver Or" is as close to Silver Ore as to Silver Orb
+        var ore = new NameContext { Closed = true }.Add(NameMatch.TargetTable, new[] { "Silver Ore", "Wolf Pelt" });
+        var orb = new NameContext { Closed = true }.Add(NameMatch.TargetTable, new[] { "Silver Orb", "Brass Bolt" });
+        var m1 = d.Match("Silver Or", ore); var m2 = d.Match("Silver Or", orb);
+        Check("\"Silver Or\" under the ore enemy", $"{N(m1.Id)} ({m1.Source})", "Silver Ore (target-table)");
+        Check("\"Silver Or\" under the orb enemy", $"{N(m2.Id)} ({m2.Source})", "Silver Orb (target-table)");
+        Check("\"Silver Or\" with no context: the whole list", d.Match("Silver Or").Source, "full");
+        // a set tried later only when the earlier ones say nothing; a gathering set settles a gather's misread
+        var two = new NameContext().Add(NameMatch.TargetTable, new[] { "Wolf Pelt" }).Add(NameMatch.ZoneGather, new[] { "Orichalcum Ore" });
+        var m3 = d.Match("Orichalcurn 0re", two);
+        Check("a gather's misread: from the gathering set", $"{N(m3.Id)} ({m3.Source})", "Orichalcum Ore (zone-gather)");
+        // out of every nearby table and two edits off: refused when the context is closed, the list's closest when it isn't
+        var m4 = d.Match("Bxld Leathex", ore);
+        Check("on no nearby table, two edits off: refused", $"{N(m4.Id)} ({m4.Source})", "Bold Leather (refused)");
+        Check("...the same read with the context open", d.Match("Bxld Leathex", new NameContext().Add(NameMatch.TargetTable, new[] { "Wolf Pelt" })).Source, "full");
+        Check("...a slip or two off is never refused", d.Match("Bold Lcathcr", ore).Source, "full");
+        Check("...and on the enemy's table it is that item", d.Match("Bxld Leathex", new NameContext { Closed = true }.Add(NameMatch.TargetTable, new[] { "Bold Leather" })).Source, "target-table");
+        // an exact name is never second-guessed, on a table or not
+        var m5 = d.Match("Bold Leather", ore);
+        Check("an exact name off every table: itself", $"{N(m5.Id)} ({m5.Source})", "Bold Leather (exact)");
+
+        // the chat parser with a context: the same paths end to end
+        var p = new ChatParser(d);
+        var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+        string Got(string line) => string.Join(",", p.Parse(line, t0).OfType<ItemAcquired>().Select(a => d.NameOf(a.ItemId)));
+        p.Context = () => ore;
+        Check("chat: \"Silver Or acquired.\" under the ore enemy", Got("Silver Or acquired."), "Silver Ore");
+        p.Context = () => orb;
+        Check("chat: \"Silver Or acquired.\" under the orb enemy", Got("Silver Or acquired."), "Silver Orb");
+        Check("chat: a read on no nearby table is not counted", $"{Got("Bxld Leathex acquired.")}|{p.Refused}", "|1");
+        Check("chat: an exact name off every table counts", Got("Bold Leather acquired."), "Bold Leather");
+        p.Rare = _ => true;
+        Check("chat: a rare item is never refused", Got("Bxld Leathex acquired."), "Bold Leather");
+        p.Rare = null; p.Context = null;
+        Check("chat: without a context, the list's closest as before", Got("Bxld Leathex acquired."), "Bold Leather");
+        return ok;
+    }
+
     /// <summary>Text sizing, name colours, the name chooser, loot tables against guesses, the loot list's icon verdict (2026-10-23).</summary>
     static bool AccuracyTest(ItemDictionary items)
     {

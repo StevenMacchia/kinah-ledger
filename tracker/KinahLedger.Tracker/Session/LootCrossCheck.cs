@@ -97,6 +97,47 @@ public sealed class LootCrossCheck
 
     public LootCrossCheck(ItemDictionary items) { _items = items; }
 
+    /// <summary>
+    /// Settles a row's misread name among the candidate sets of the moment (ItemDictionary.Match with the session's
+    /// context, brief item 1); null: the whole list's closest, as before. An exact name never goes through it.
+    /// </summary>
+    public Func<string, NameMatchResult>? Resolve { get; set; }
+    /// <summary>Rows whose misread name fits no nearby table and was refused (not keyed, so never counted).</summary>
+    public int Refused { get; private set; }
+    readonly Dictionary<string, DateTime> _refusedNoted = new();
+
+    /// <summary>
+    /// The row as it is keyed: its name, or the item a context set settled a misread to (so every later look-up of the row
+    /// is exact); null when the misread was refused.
+    /// </summary>
+    LootPopup.Row? Settled(LootPopup.Row row, DateTime now)
+    {
+        if (Resolve == null || row.IsKinah || _items.IsExact(row.Name)) return row;
+        var m = Resolve(row.Name);
+        if (m.Source == NameMatch.Refused)
+        {
+            var k = row.Name.ToLowerInvariant();
+            if (!_refusedNoted.TryGetValue(k, out var at) || (now - at).TotalSeconds > 10)
+            {
+                _refusedNoted[k] = now; Refused++;
+                Accuracy.Name(row.Name, null, "unknown", NameMatch.Refused);
+                CrashLog.Note($"loot list: \"{row.Name}\" is nearest {(m.Id is long r ? _items.NameOf(r) : "?")}, which no loot table, gathering or recipe nearby has: unsure, not counted");
+                if (_refusedNoted.Count > 100) _refusedNoted.Clear();
+            }
+            return null;
+        }
+        if (m.Id is long cid && NameMatch.IsContext(m.Source))
+        {
+            var canon = _items.NameOf(cid);
+            if (!string.Equals(canon, row.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                if (m.FullId is long fid && fid != cid) CrashLog.Note($"loot list: \"{row.Name}\" is {canon}, not {_items.NameOf(fid)}: {m.Source} has it");
+                return row with { Name = canon };
+            }
+        }
+        return row;
+    }
+
     static string KinahKey(long amount) => "k:" + amount;
     // by the item's name, not its id: the list holds a few names twice under different ids, and a row read cut short
     // ("Ethereal Longswor") snapped to the other one, so the chat's line and the list's row looked like two drops (2026-10-22 15:03)
@@ -146,12 +187,15 @@ public sealed class LootCrossCheck
         if (raw.Any(r => !r.IsKinah && ShopWord().IsMatch(r.Name))) { _visible.Clear(); return Settle(now); }
         // what this read shows, by pickup: unknown names and Kinah under 10 never count
         var shown = new Dictionary<string, (int Count, LootPopup.Row Row)>();
-        foreach (var row in raw)
+        foreach (var read in raw)
         {
+            var row = read;
             // "Soul: Drakan Probe (Bound) x1": the soul every enemy drops, so one kill of that kind (Steven, 2026-10-22)
             // a Kinah row read without its amount ("Kina x1") is not an item called Kina (0.8.2 put Kina on the item list)
             if (!row.IsKinah && System.Text.RegularExpressions.Regex.IsMatch(row.Name, @"^\W*kin[ae]h?\W*(\(bound\))?\W*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;
             var soul = row.IsKinah ? null : SoulOf(row.Name);
+            // a misread item name settled by the candidate sets of the moment, or refused (brief item 1)
+            if (!row.IsKinah && soul == null && _items.Knows(row.Name)) { if (Settled(row, now) is not { } st) continue; row = st; }
             string? key = row.IsKinah ? (row.Amount >= MinKinah ? KinahKey(row.Amount) : null)
                         : soul != null ? "s:" + soul
                         // a short name only counts read exactly: "Aryia" off a sign in a base is no Aria (Steven, 2026-10-22)
