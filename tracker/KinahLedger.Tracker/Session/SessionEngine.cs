@@ -365,6 +365,17 @@ public sealed class SessionEngine
     // the last Kinah pickups and who they were credited to; Soul tells whether a Soul Points line already confirmed it
     readonly List<(DateTime At, long Delta, MobStats? To, bool Soul)> _kinahCredits = new();
 
+    /// <summary>The enemy a Kinah pickup was credited to (the target bar's, or the one a Soul Points line named since), for the live feed; null when nobody.</summary>
+    public string? CreditedTo(DateTime at, long delta)
+    {
+        lock (_lock)
+        {
+            for (int i = _kinahCredits.Count - 1; i >= 0; i--)
+                if (_kinahCredits[i].At == at && _kinahCredits[i].Delta == delta) return _kinahCredits[i].To?.Name;
+            return null;
+        }
+    }
+
     /// <summary>An enemy name read slightly differently from one already in this zone's rows ("Dracunt Herbalist") is that one.</summary>
     string SameAs(string name)
     {
