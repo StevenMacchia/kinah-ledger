@@ -3365,6 +3365,7 @@ public sealed partial class TrackerSession
         // a run that closed with its rewards not read is read once more from its kept pictures, in the background, before
         // it is sent or parked (and on the first pass after a start, the last session's within RunsSendHours)
         RetryUnreadRuns(s);
+        await SendCorrectionsAsync(s);
         if (!Update.RemoteConfig.Current.RunSync || !s.Upload.Enabled || string.IsNullOrWhiteSpace(s.Upload.Endpoint) || Instances.UnsharedCount == 0) return false;
         if ((DateTime.UtcNow - _runsSentAt).TotalSeconds < 30) return false;
         _runsSentAt = DateTime.UtcNow;
@@ -3381,6 +3382,33 @@ public sealed partial class TrackerSession
         return ok;
     }
     DateTime _runsSentAt = DateTime.MinValue;
+
+    /// <summary>
+    /// Sends the runs the gear repair changed (InstanceLog.RepairGear) once more, each marked as a correction of the copy
+    /// the site already holds, so the site takes the old counts back instead of adding a second run. A send the site doesn't
+    /// take (unreachable, or a site from before corrections, which refuses a run of 0 seconds) is tried again half an hour
+    /// later; one it takes clears the mark in instances.jsonl.
+    /// </summary>
+    async Task SendCorrectionsAsync(Settings s)
+    {
+        if (!Update.RemoteConfig.Current.RunSync || !s.Upload.Enabled || string.IsNullOrWhiteSpace(s.Upload.Endpoint)) return;
+        if ((DateTime.UtcNow - _correctionsAt).TotalMinutes < 30) return;
+        var todo = Instances.Resends.Take(InstanceRunPayload.MaxRuns).ToList();
+        if (todo.Count == 0) return;
+        _correctionsAt = DateTime.UtcNow;
+        var pay = InstanceRunPayload.From(todo, id => _items.KeyOf(id), id => ReportedDrops.Has(_items.NameOf(id)))?.Where(p => p.correction != null).ToList();
+        if (pay == null || pay.Count == 0)
+        {
+            foreach (var r in todo) Instances.Resent(r);
+            CrashLog.Note($"corrected runs not sent again: {string.Join(", ", todo.Select(r => $"{r.Label} {r.Start.ToLocalTime():MMM d HH:mm}"))}: in no listed area, or nothing left to correct");
+            return;
+        }
+        bool ok = await Uploader.SendAsync(RunPayload.RunsOnly(RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, pay), s.Upload);
+        if (ok) foreach (var r in todo) Instances.Resent(r);
+        CrashLog.Note(ok ? $"corrected runs sent again: {string.Join(", ", todo.Select(r => $"{r.Label} {r.Start.ToLocalTime():MMM d HH:mm}"))}" : $"corrected runs not sent: {Uploader.LastError}; tried again in half an hour");
+    }
+    DateTime _correctionsAt = DateTime.MinValue;
+
     /// <summary>How old a finished run may be and still go to the site from the queue.</summary>
     public const double RunsSendHours = 6;
 
