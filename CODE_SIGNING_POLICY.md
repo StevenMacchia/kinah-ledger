@@ -45,6 +45,12 @@ and never sends input to the game. It sends data to these places, and nowhere el
     (`https://kinahledger.com/v1/config`).
   - Only once Options › Sharing offers "Send report pictures" (not in this version yet) and you turn it on: a miscount report's pictures of the loot list and
     the crafting panel, never the chat or the whole screen (`https://kinahledger.com/v1/frames`).
+  - While "Help improve counting" is on (Options › Sharing; on by default, said once on first run with a one-click
+    off): for a pickup two of the tracker's own checks agreed on, what it read and what it settled on, with the app
+    version, the install ID, the window size and the text height (`https://kinahledger.com/v1/labels`), and small
+    pictures of that item's name words, icon or reward slot, at most 60 an hour, deleted after 90 days
+    (`https://kinahledger.com/v1/label-crops`). Never the chat box, a chat line that isn't your own pickup, anyone's
+    name or a whole screenshot. Off, nothing is written or sent for it. Details: [docs/privacy.md](docs/privacy.md).
   - Never your character name, account, class, level, chat text or screenshots of the chat or the whole screen.
   - If you paste the profile link code into a profile on the site, runs from that PC show there; profiles are
     private unless you make them public.

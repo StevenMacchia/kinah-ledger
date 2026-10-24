@@ -48,7 +48,7 @@ public partial class MainWindow
         ApplyServer(_wRegion, _wServer.Label);
         bool share = WelcomeShareChk.IsChecked == true;
         if (int.TryParse(new string(WelcomeGear.Text.Where(char.IsDigit).ToArray()), out var gear) && gear > 0) SetGearScore(gear);
-        if (share != _prefs.Share) { _prefs.Share = share; MarketSwitch(share); }
+        if (share != _prefs.Share) { _prefs.Share = share; MarketSwitch(share); ApplyCounting(); }
         _prefs.Welcomed = true;
         SavePrefs();
         SetWelcome(false);

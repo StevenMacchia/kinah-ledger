@@ -532,6 +532,39 @@ count an attempt per line.
   (per skill, "worked/failed") and `nodes`; a `target` read is the target bar's text. The rest of the bank counts the
   same items.
 
+## Help improve counting: confirmed reads become training pairs (branch tracker/label-writer, 2026-10-24)
+
+Steven: train on everyone's play without asking anyone to do anything, but never secretly. Options › Sharing › "Help
+improve counting" (on by default, said once on first run with Keep on / Turn off; off with sharing off too) has
+`Session/LabelWriter.cs` write a pair for each count a second witness confirmed, from the hooks in
+`Session/TrackerSession.Labels.cs`: **kina-line** (a chat Kina line the Kinah counter's rise confirmed, KinaWitness),
+**chat-item** and **loot-row** (a chat pickup and the loot list row of the same item and count within 12 s; a Kina row
+the counter confirmed; a rare row its second read confirmed), **gather** (a gathering material's row the gathering bar's
+Success race confirmed) and **card-slot** (an event card slot named by a sure icon its backing grade agrees with). A
+pair is data: the text as read, the icon fingerprint or key, the decoder's read of the name crop (filled at send time,
+only when the decoder is already loaded), the item and quantity settled on, the witnesses, the version, the window size
+and the text height. Small crops ride with it: a loot row's name words and icon square, a chat pickup line's item
+words, a card slot, each held by `Session/Crops.cs` to the item's bounds plus 4 px (the chat panel and whole frames are
+refused; 60 an hour). `Upload/LabelClient.cs` sends them every ten minutes: `POST /v1/labels` (gzipped JSON lines, a
+head line with the version and install ID, then one pair per line) and `POST /v1/label-crops` with each crop's pair id.
+Privacy and retention: [docs/privacy.md](privacy.md). Site side: `kinah-ledger-site`, branch `api/label-uploads`,
+`backend/src/labels.ts`.
+
+**How the pairs train the readers.** Each pair is a read with its answer, labeled by agreement rather than by hand, so
+the three readers that guess today can be measured and tuned on real screens from every install:
+- **The matcher** (`ItemDictionary.Match`, NameMatch, the aliases): every pair whose text isn't the item's exact name
+  is a real misread with its right item. The ones many installs share become aliases (as `/v1/aliases.json` does from
+  the reading-health names, but with the answer known), and the rest score each candidate-set rule: how often it named
+  the right item, how often a wrong one.
+- **The name decoder** (`Ocr/NameDecoder.cs`): the name crops with their truth are its labeled set, the one its
+  promotion rule waits for. They measure "right more often than OCR plus NameMatch, wrong no more often" per kind and
+  text height, and, once there are enough, fine-tune the recogniser on the game's own font and backgrounds.
+- **The icon index** (`IconIndex`, `PopupIcons`, the card slots): icon crops and fingerprints with their item add
+  real-screen samples beside the icon server's clean art, so close calls (gear sharing art across tiers, grade
+  backings) are settled by what the game draws at each size.
+A pair is only as right as its witnesses: `wit` says which agreed, so a trainer can leave out the weaker ones (a second
+read of the same picture) or weigh them. `GET /admin/labels/summary` counts pairs and crops per kind and version.
+
 ## Commands
 
 ```

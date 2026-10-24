@@ -171,6 +171,16 @@
                 </StackPanel>
                 <CheckBox x:Name="ShareChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- Help improve counting (Session/LabelWriter.cs): on by default, the same sentence as the first-run notice -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Help improve counting"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Sends what it read and small pictures of item names and icons, never your chat or names. Off here any time."/>
+                </StackPanel>
+                <CheckBox x:Name="HelpCountingChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Help improve counting"/>
+              </Grid>
             </StackPanel>
           </Border>
 

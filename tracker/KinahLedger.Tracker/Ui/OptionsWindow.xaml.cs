@@ -105,6 +105,7 @@ public partial class OptionsWindow : Window
         BuildAlerts(c.Server);
         ReportFramesChk.IsChecked = c.ReportFrames;
         SendFramesChk.IsChecked = c.SendFrames;
+        HelpCountingChk.IsChecked = c.HelpCounting;
         HudChk.IsChecked = c.Hud;
         AutoUpdateChk.IsChecked = c.AutoUpdate;
         AutoUpdateChk.IsEnabled = _host.AppSettings.Update.Check;
@@ -170,6 +171,7 @@ public partial class OptionsWindow : Window
         ShareChk.Click += (_, _) => Edit(_edit with { Share = ShareChk.IsChecked == true });
         ReportFramesChk.Click += (_, _) => Edit(_edit with { ReportFrames = ReportFramesChk.IsChecked == true });
         SendFramesChk.Click += (_, _) => Edit(_edit with { SendFrames = SendFramesChk.IsChecked == true });
+        HelpCountingChk.Click += (_, _) => Edit(_edit with { HelpCounting = HelpCountingChk.IsChecked == true });
         HudChk.Click += (_, _) => Edit(_edit with { Hud = HudChk.IsChecked == true });
         HudOpacity.Value = Math.Clamp(_host.Prefs.HudOpacity, 0.3, 1);
         HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
