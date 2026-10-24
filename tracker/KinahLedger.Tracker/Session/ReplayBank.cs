@@ -20,7 +20,10 @@ namespace KinahLedger.Session;
 ///     "expect": {"craft_ok", "craft_fail", "items": {"Name": n}, "kinah": n, "list_unsure": n} }
 /// A text case ("trace": "trace.jsonl") holds the reads instead: {"t", "k": "chat"|"list"|"zone"|"gather", "l": [...]}.
 /// A "list" read may carry, beside its rows, "y" (each row's top in the window), "c" (its text's contrast, 0 to 1, as
-/// LootRows measures it) and "h" (its icon's hash, hex); without them rows sit 30 px apart and contrast is unknown.
+/// LootRows measures it) and "h" (its icon's hash, hex); without them rows sit 30 px apart and contrast is unknown. It
+/// may also carry "b" (each row's background) and "s" (the spread where its icon sits), as trace.log writes them since
+/// 2026-10-24, for telling rows from nameplates and world text (LootNotRow); a "plate" read names a nameplate or target
+/// name on screen then (from reads.log's "fighting:" and "target bar:" lines; trace.log doesn't keep them).
 /// A "gather" read is the gathering bar finishing a race: "ok", "fail", "upgrade ok" or "upgrade fail".
 /// Only what "expect" names is checked. A pending case (a fresh report nobody has checked yet) runs and prints, never
 /// fails. `replay-bank <dir> --record <case>` writes what this version counts into that case's "expect" and clears
@@ -80,7 +83,7 @@ public static class ReplayBank
     {
         var d = new List<string>();
         static long N(JsonNode? n) => n == null ? 0 : long.TryParse(n.ToJsonString(), out var v) ? v : 0;
-        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure" })
+        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         if (expect["runs"] is JsonObject er)
         {
@@ -165,9 +168,12 @@ public static class ReplayBank
                         var ys = r.TryGetProperty("y", out var ye) ? ye.EnumerateArray().Select(v => v.GetInt32()).ToList() : null;
                         var cs = r.TryGetProperty("c", out var ce) ? ce.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var hs = r.TryGetProperty("h", out var he) ? he.EnumerateArray().Select(v => Convert.ToUInt64(v.GetString() ?? "0", 16)).ToList() : null;
+                        var bs = r.TryGetProperty("b", out var be) ? be.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
+                        var ss = r.TryGetProperty("s", out var se) ? se.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         session.ListGated(ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
                             System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
-                            cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0)).ToList(), t, session.Verdict("loot_list"));
+                            cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0,
+                            bs != null && i < bs.Count ? bs[i] : -1, ss != null && i < ss.Count ? ss[i] : -1)).ToList(), t, session.Verdict("loot_list"));
                         break;
                     }
                     case "gather":
@@ -175,6 +181,8 @@ public static class ReplayBank
                         foreach (var g in ls) session.GatherOutcome(t, g.EndsWith("ok", StringComparison.OrdinalIgnoreCase), g.StartsWith("upgrade", StringComparison.OrdinalIgnoreCase));
                         break;
                     case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t); } break;
+                    // a nameplate or the target bar's name on screen then (LootNotRow)
+                    case "plate": foreach (var p in ls) session.NotRow.See(p, t, LootNotRow.Plate); break;
                 }
                 last = t;
             }
@@ -255,6 +263,8 @@ public static class ReplayBank
         if (e.Totals().Kills > 0) res["kills"] = e.Totals().Kills;
         // loot list rows that went before their text settled: logged as unsure, never counted (LootRows)
         if (session.ListUnsure > 0) res["list_unsure"] = session.ListUnsure;
+        // lines in the band that weren't rows (a nameplate, a zone's name, text over the world): dropped, logged once per text per minute (LootNotRow)
+        if (session.ListNotRow > 0) res["list_notrow"] = session.ListNotRow;
         // what went to expedition and event runs rather than farming: items per run
         var runs = new JsonObject();
         foreach (var run in session.Instances.Snapshot()) runs[run.Zone] = run.Items.Values.Sum() + run.BoundItems.Values.Sum();

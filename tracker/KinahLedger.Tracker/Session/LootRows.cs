@@ -248,12 +248,32 @@ public sealed class LootRows
     /// </summary>
     public static (double Contrast, ulong Icon) Measure(Bitmap raw, Point origin, Rectangle box)
     {
+        var m = MeasureAll(raw, origin, box);
+        return (m.Contrast, m.Icon);
+    }
+
+    /// <summary>
+    /// <see cref="Measure"/>, plus what tells a row from text that isn't one (LootNotRow, 2026-10-24): the line's
+    /// background (the darker 30% of its box's pixels, which is what is behind the letters: the list's dark strip under a
+    /// row, the world under a nameplate) and the spread of the place left of it where an icon would be. The icon's exact
+    /// place isn't measured on real frames yet (PopupIcons tries sizes 1.3 to 2.4 line heights at gaps of 0.15 to 0.8),
+    /// so the spread covers all of them at once: the standard deviation of a 12x8 grid of cell means over the box from
+    /// 3.2 line heights to 0.15 left of the text, 2.4 tall. Any icon anywhere in it makes it large; it is about 0 only
+    /// when the whole place is flat. -1 when less than 1.2 line heights of that place are inside the picture.
+    /// </summary>
+    public static (double Contrast, ulong Icon, double Background, double Spread) MeasureAll(Bitmap raw, Point origin, Rectangle box)
+    {
         var r = new Rectangle(box.X - origin.X, box.Y - origin.Y, box.Width, box.Height);
         r.Intersect(new Rectangle(0, 0, raw.Width, raw.Height));
-        if (r.Width < 4 || r.Height < 4) return (-1, 0);
+        if (r.Width < 4 || r.Height < 4) return (-1, 0, -1, -1);
         int h = r.Height, side = (int)(h * 1.6), gap = (int)(h * 0.3);
         var icon = new Rectangle(r.Left - gap - side, r.Top + h / 2 - side / 2, side, side);
+        int sh = (int)(h * 2.4);
+        var place = new Rectangle(r.Left - (int)(h * 3.2), r.Top + h / 2 - sh / 2, (int)(h * 3.2) - (int)(h * 0.15), sh);
+        place.Intersect(new Rectangle(0, 0, raw.Width, raw.Height));
+        bool placeOk = place.Width >= h * 1.2 && place.Height >= sh - 1;
         var whole = Rectangle.Union(r, icon);
+        if (placeOk) whole = Rectangle.Union(whole, place);
         whole.Intersect(new Rectangle(0, 0, raw.Width, raw.Height));
         var data = raw.LockBits(whole, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try
@@ -270,6 +290,24 @@ public sealed class LootRows
                 for (int x = r.Left; x < r.Right; x += step) { hist[Luma(x, y)]++; count++; }
             int Pct(double p) { int target = (int)(count * p), acc = 0; for (int v = 0; v < 256; v++) { acc += hist[v]; if (acc > target) return v; } return 255; }
             double contrast = Math.Max(0, Pct(0.9) - Pct(0.5)) / 255.0;
+            double background = Pct(0.3) / 255.0;
+            double spread = -1;
+            if (placeOk)
+            {
+                var means = new double[96];
+                for (int cy = 0; cy < 8; cy++)
+                    for (int cx = 0; cx < 12; cx++)
+                    {
+                        int x0 = place.Left + cx * place.Width / 12, y0 = place.Top + cy * place.Height / 8;
+                        int x1 = Math.Max(x0 + 1, place.Left + (cx + 1) * place.Width / 12), y1 = Math.Max(y0 + 1, place.Top + (cy + 1) * place.Height / 8);
+                        int sx = Math.Max(1, (x1 - x0) / 4), sy = Math.Max(1, (y1 - y0) / 4);
+                        double s = 0; int k = 0;
+                        for (int y = y0; y < y1; y += sy) for (int x = x0; x < x1; x += sx) { s += Luma(x, y); k++; }
+                        means[cy * 12 + cx] = s / Math.Max(1, k);
+                    }
+                double avg = means.Average();
+                spread = Math.Sqrt(means.Sum(v => (v - avg) * (v - avg)) / means.Length) / 255.0;
+            }
             ulong hash = 0;
             if (whole.Contains(icon))
             {
@@ -286,7 +324,7 @@ public sealed class LootRows
                 for (int i = 0; i < 64; i++) if (cells[i] > mean) hash |= 1UL << i;
                 if (hash == 0) hash = 1;   // a flat square still says "measured"
             }
-            return (contrast, hash);
+            return (contrast, hash, background, spread);
         }
         finally { raw.UnlockBits(data); }
     }

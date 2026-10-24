@@ -110,6 +110,9 @@ public sealed class LootPopupTracker
 /// <summary>
 /// One line of a loot list read: its top in the window, its text, and when the picture was there to measure them, how
 /// settled the text looked (<see cref="Contrast"/>, 0 to 1; -1 unknown) and the icon left of it (<see cref="Icon"/>, an
-/// average hash; 0 unknown). Rows are tracked by these, not by their text (Session.LootRows).
+/// average hash; 0 unknown). Rows are tracked by these, not by their text (Session.LootRows). Also, for telling a row
+/// from text that isn't one (Session.LootNotRow, 2026-10-24): what is behind the letters (<see cref="Background"/>, the
+/// darker 30% of the line's box, 0 to 1; -1 unknown) and how much the place left of it, where the icon sits, varies
+/// (<see cref="Spread"/>, 0 to 1, about 0 for flat background; -1 unknown).
 /// </summary>
-public readonly record struct LootLine(int Top, string Text, double Contrast = -1, ulong Icon = 0);
+public readonly record struct LootLine(int Top, string Text, double Contrast = -1, ulong Icon = 0, double Background = -1, double Spread = -1);
