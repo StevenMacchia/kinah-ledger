@@ -4,7 +4,7 @@
 // `--check` fails when the committed manifest is stale (the build workflow runs it).
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const root = path.join(__dirname, '..', '..');
-const NAMES = ['zones.txt', 'instances.txt', 'mobs.txt', 'loot-tables.json', 'skins.json', 'recipes.json', 'mob-images.json', 'gathering-items.json', 'aliases.json'];
+const NAMES = ['zones.txt', 'instances.txt', 'mobs.txt', 'loot-tables.json', 'skins.json', 'recipes.json', 'mob-images.json', 'gathering-items.json', 'aliases.json', 'vendor-prices.json'];
 // raise when a file's format changes in a way older trackers can't read; they then keep their built-in copies
 const MIN_TRACKER = '0.8.0';
 const files = {};

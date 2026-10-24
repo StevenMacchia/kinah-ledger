@@ -5,7 +5,7 @@ namespace KinahLedger.Data;
 
 /// <summary>
 /// The game data the tracker reads (zones, events, enemies, loot tables, skins, recipes, enemy pictures, gathering
-/// materials), updated without a new release (0.8, Steven 2026-10-22: "a new event zone works the same day").
+/// materials, NPC prices of vendor materials), updated without a new release (0.8, Steven 2026-10-22: "a new event zone works the same day").
 ///
 /// Every release carries a copy of each file inside the exe. Once a day the tracker reads data/manifest.json from the
 /// repository's main branch, which lists every file with its SHA-256; a file whose hash differs is downloaded, checked
@@ -19,7 +19,7 @@ public static class DataFiles
     public static string FileUrl { get; set; } = "https://raw.githubusercontent.com/StevenMacchia/kinah-ledger/main/data/";
     public static string ManifestUrl => FileUrl + "manifest.json";
     /// <summary>The files that can update this way; each is also built into the exe under the same name.</summary>
-    public static readonly string[] Names = { "zones.txt", "instances.txt", "mobs.txt", "loot-tables.json", "skins.json", "recipes.json", "mob-images.json", "gathering-items.json", "aliases.json" };
+    public static readonly string[] Names = { "zones.txt", "instances.txt", "mobs.txt", "loot-tables.json", "skins.json", "recipes.json", "mob-images.json", "gathering-items.json", "aliases.json", "vendor-prices.json" };
 
     /// <summary>Tests point this elsewhere so the player's own copies are never touched.</summary>
     public static string? DirOverride { get; set; }
@@ -129,7 +129,7 @@ public static class DataFiles
                 }
                 using var doc = JsonDocument.Parse(s);
                 var root = doc.RootElement;
-                foreach (var key in new[] { "tables", "items", "recipes", "images", "aliases" })
+                foreach (var key in new[] { "tables", "items", "recipes", "images", "aliases", "prices" })
                     if (root.TryGetProperty(key, out var v)) return v.ValueKind == JsonValueKind.Array ? v.GetArrayLength() : v.ValueKind == JsonValueKind.Object ? v.EnumerateObject().Count() : 0;
                 return root.ValueKind == JsonValueKind.Array ? root.GetArrayLength() : root.ValueKind == JsonValueKind.Object ? root.EnumerateObject().Count() : 0;
             }

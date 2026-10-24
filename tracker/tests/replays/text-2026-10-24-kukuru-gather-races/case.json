@@ -1,0 +1,8 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Kukuru, 2026-10-24 10:00:41 to 10:01:26: three gathers 9 to 10 s apart, each with its bar race, only two chat lines (one 11 s late, one lost): three Kukuru, each race kept for its own row",
+  "source": "Steven's trace.log, 14:00:41 to 14:01:26 UTC; player chat and unknown rows replaced. The trace kept no panel lines then (they were cut before tracing): the panel's lines are added where reads.log logged them, and one Success race per gather is placed 0.3 s before its row (the bar wasn't read live then)",
+  "expect": { "items": { "Kukuru": 3 } }
+}
