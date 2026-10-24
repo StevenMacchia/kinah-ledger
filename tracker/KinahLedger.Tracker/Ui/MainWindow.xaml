@@ -485,6 +485,8 @@
             </StackPanel>
             <!-- compact only: the way to every table -->
             <TextBlock x:Name="FullLinkText" FontSize="12.5" Margin="0,12,0,0" HorizontalAlignment="Right" Visibility="Collapsed"><Hyperlink x:Name="FullLink" Style="{StaticResource LinkStyle}">Full view: every table ▸</Hyperlink></TextBlock>
+            <!-- how much of the session the game's own numbers back up, in the game-tooltip look (Ui/MainWindow.AccuracyCard.cs) -->
+            <Border x:Name="AccuracyCard" Margin="0,14,0,0" Visibility="Collapsed"/>
           </StackPanel>
         </Border>
       </Border>

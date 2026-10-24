@@ -288,14 +288,18 @@ public static class WpfApp
         if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events")) w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
         if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
         if (demo) w.ShotPlayerCards(dir, kind);
+        // the Accuracy card on its own, opened on its things to check
+        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events" or "Market")) w.ShotAccuracyCard(Path.Combine(dir, "ui-accuracy-card.png"));
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
+        var hudAcc = w.HudAccuracy;
         w.Close();
 
-        foreach (var (file, fields) in new[] { ("ui-hud.png", HudFields.Parse(null)), ("ui-hud-all.png", HudFields.All.Select(f => f.Key).ToList()), ("ui-hud-alert.png", HudFields.Parse(null)) })
+        foreach (var (file, fields) in new[] { ("ui-hud.png", HudFields.Parse(null)), ("ui-hud-all.png", HudFields.All.Select(f => f.Key).ToList()), ("ui-hud-alert.png", HudFields.Parse(null)), ("ui-hud-accuracy.png", HudFields.Parse(null)) })
         {
             var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Show();
             h.Update(values);
+            if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ 98% verified", hudAcc?.StartsWith("?") == true);
             if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);

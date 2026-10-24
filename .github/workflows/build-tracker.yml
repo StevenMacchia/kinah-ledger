@@ -89,6 +89,8 @@ jobs:
           dist/KinahLedger.exe ui-shot shots --options
           # the whole Farming view at both widths (however tall), the Events part with its Runs card alone (folded and
           # with Materials open), and the Crafting part before anything is crafted
+          # (each --demo farming render also writes ui-accuracy-card.png, the Accuracy card open on its things to check,
+          # and ui-hud-accuracy.png, the panel with its accuracy line)
           dist/KinahLedger.exe ui-shot shots --demo --compact --tall
           dist/KinahLedger.exe ui-shot shots --demo --full --tall
           dist/KinahLedger.exe ui-shot shots --demo --events

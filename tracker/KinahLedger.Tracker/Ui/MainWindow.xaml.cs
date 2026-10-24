@@ -310,9 +310,10 @@ public partial class MainWindow : Window
     void Redraw()
     {
         var e = Shown();
-        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillPickups(); return; }   // a layout render keeps its sample
+        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillPickups(); FillAccuracyCard(); return; }   // a layout render keeps its sample
         if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; SummaryCard.Visibility = Visibility.Collapsed; }
         FillPickups();
+        FillAccuracyCard();
     }
 
     /// <summary>One line of the recent pickups strip; Tip says, in plain words, how it was read (on hover).</summary>
@@ -580,6 +581,7 @@ public partial class MainWindow : Window
         if (_prefs.Hud && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
         if (_part == "Crafting") FillCraft(chat?.CraftView);
         FillPickups();
+        FillAccuracyCard();
         AlertTick();
         PriceAlertTick();
         UpdateHud();
@@ -594,6 +596,7 @@ public partial class MainWindow : Window
         if (_hud == null) return;
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         _hud.Update(_hudValues);
+        _hud.SetAccuracy(_accView?.Hud, _accView?.HasRows == true);
     }
 
     /// <summary>The panel's figures, for layout renders of the panel.</summary>
@@ -1638,8 +1641,10 @@ public partial class MainWindow : Window
         ApplyModeLabels();
         _tableWhat = "this run";
         _demoEngine = e; _demoElapsed = TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17);
+        LoadAccuracyDemo();
         FillNumbers(e, _demoElapsed);
         FillPickups();
+        FillAccuracyCard();
         _hudValues["last"] = "Spiritstone ×1";
         using (var b = new System.Drawing.Bitmap(480, 203))
         using (var g = System.Drawing.Graphics.FromImage(b))
