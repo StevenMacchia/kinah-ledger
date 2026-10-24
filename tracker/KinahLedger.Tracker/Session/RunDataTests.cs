@@ -24,7 +24,7 @@ public static class RunDataTests
         }
         Console.WriteLine("\nRun data: gear in tables, false runs, old records, in progress, pieces, names (2026-10-24):");
         var keepDir = CrashLog.DirOverride;
-        var dir = Path.Combine(Path.GetTempPath(), "kl-rundata-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = TestTemp.Path("kl-rundata-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(dir);
         CrashLog.DirOverride = dir;
         try

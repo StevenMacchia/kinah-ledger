@@ -19,7 +19,7 @@ public static class AccuracyTests
 {
     public static int Run(Settings settings)
     {
-        CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-accuracy-test");
+        CrashLog.DirOverride = TestTemp.Path("KinahLedger-accuracy-test");
         Directory.CreateDirectory(CrashLog.DirOverride);
         RemoteConfig.PathOverride = Path.Combine(CrashLog.DirOverride, "remote-config.json");
         RemoteConfig.Current = RemoteConfig.BuiltIn;
@@ -347,7 +347,7 @@ public static class AccuracyTests
         }
         var dir = pos.FirstOrDefault() ?? ".";
         Directory.CreateDirectory(dir);
-        CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-accuracy-test");
+        CrashLog.DirOverride = TestTemp.Path("KinahLedger-accuracy-test");
         Accuracy.Reset();
         foreach (var k in Accuracy.Keys) Accuracy.Add(k, 3);
         for (int i = 0; i < 8; i++) Accuracy.AddReading(450.05);

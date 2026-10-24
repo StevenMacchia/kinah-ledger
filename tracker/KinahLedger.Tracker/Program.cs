@@ -15,6 +15,17 @@ internal static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        // an offline test mode works in a folder of its own (TestTemp), kept and named only when the run fails
+        var mode = args.Length > 0 ? args[0].ToLowerInvariant() : "";
+        if (!TestTemp.IsTestMode(mode)) return Run(args);
+        TestTemp.Begin(mode);
+        int rc = 2;
+        try { rc = Run(args); return rc; }
+        finally { TestTemp.End(rc == 0); }
+    }
+
+    static int Run(string[] args)
+    {
         // the installer's own runs (install, update, uninstall) end inside; a normal start returns at once
         Platform.Installer.RunHooks();
         var settings = Settings.Load();
@@ -39,7 +50,7 @@ internal static class Program
 
         // test and measuring commands log to a temp folder, never into the player's own reads.log
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank")
-            CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-test-logs");
+            CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         try
         {
             switch (cmd)
@@ -988,7 +999,7 @@ options: --process aion[,other]");
     static int ParseTest(Settings s)
     {
         // the test's made-up lines and notes go to a scratch log, never the player's reads.log
-        CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-parse-test");
+        CrashLog.DirOverride = TestTemp.Path("KinahLedger-parse-test");
         var items = ItemDictionary.LoadOrEmpty(s.ItemsFile);
         var parser = new ChatParser(items);
         string[] lines =
@@ -1220,7 +1231,7 @@ options: --process aion[,other]");
         Console.WriteLine($"  shared zones: [{sharedKeys}]  activity: {act}  {(zok ? "ok" : "MISMATCH")}");
         ok &= zok;
         Console.WriteLine("\nItem list shapes (crawler and site) and the keys drops are shared under:");
-        var tmpList = Path.Combine(Path.GetTempPath(), "kl-items-test.json");
+        var tmpList = TestTemp.Path("kl-items-test.json");
         File.WriteAllText(tmpList, "{\"items\":[{\"id\":610531002,\"n\":\"Fresh Fruit\",\"g\":\"Common\",\"t\":1,\"c2\":\"CraftResource\",\"i\":\"Icon_A.png\"},{\"id\":110120001,\"name\":\"Noble Dragon Lord Greatsword\",\"grade\":\"Epic\",\"tradable\":true,\"categoryName\":\"Greatsword\",\"icon\":\"https://assets.playnccdn.com/x/Icon_B.png\"}]}");
         var dict = new ItemDictionary();
         long before = dict.IdOf("Fresh Fruit");                      // read before the list arrived: a synthetic id
@@ -1292,7 +1303,7 @@ options: --process aion[,other]");
             Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
         }
         Console.WriteLine("\nNames: the OCR-aware distance and the candidate sets (2026-10-24):");
-        var tmp = Path.Combine(Path.GetTempPath(), "kl-namematch-test.json");
+        var tmp = TestTemp.Path("kl-namematch-test.json");
         File.WriteAllText(tmp, "{\"items\":[" + string.Join(",", new[]
         {
             (900001, "Silver Ore"), (900002, "Silver Orb"), (900003, "Bold Leather"), (900004, "Wolf Pelt"), (900005, "Odyle Shard"),
@@ -2506,7 +2517,7 @@ options: --process aion[,other]");
         rb.Lines("list", new[] { "463 Kina" }, r0.AddSeconds(71));
         rb.Counted(r0.AddSeconds(70), "463 Kinah", "chat");
         Check("only the last minute is held", $"{rb.Held.Reads} reads, {rb.Held.Counted} counted", "2 reads, 1 counted");
-        var rtmp = Path.Combine(Path.GetTempPath(), "kl-report-" + Guid.NewGuid().ToString("N"));
+        var rtmp = TestTemp.Path("kl-report-" + Guid.NewGuid().ToString("N"));
         try
         {
             var rdir = rb.Write(rtmp, "state", new[] { "a log line" }, r0.AddSeconds(72));
@@ -3066,7 +3077,7 @@ options: --process aion[,other]");
             Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
         }
         Console.WriteLine("\nRegion prices, best hour per zone, the panel's figures (0.7.6):");
-        var tmp = Path.Combine(Path.GetTempPath(), "kl-best-" + Guid.NewGuid().ToString("N"));
+        var tmp = TestTemp.Path("kl-best-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tmp);
         var oldPrices = PriceBook.PathOverride; var oldDir = BestRuns.DirOverride;
         try
@@ -3965,7 +3976,7 @@ options: --process aion[,other]");
             Check("votes: a line the loot list shows counts on its first read", $"[{first5}] [{second5}] fast {v5.Fast} latency {string.Join(",", v5.Latencies)}", "[Acquired 343 Kina.] [Acquired 343 Kina.] fast 1 latency 0");
 
             // reward-shots cleans itself: in-run pictures after a day, reward screens after a week, never other files
-            var rs = Path.Combine(Path.GetTempPath(), "kl-rs-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(rs);
+            var rs = TestTemp.Path("kl-rs-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(rs);
             void Pic(string n, double daysOld) { var f = Path.Combine(rs, n); File.WriteAllBytes(f, new byte[10]); File.SetLastWriteTime(f, DateTime.Now.AddDays(-daysOld)); }
             Pic("20261020-101010-Zone-in-run.jpg", 2); Pic("20261022-101010-Zone-in-run.jpg", 0.1);
             Pic("20261020-101010-Zone-Jump-Jump.jpg", 2); Pic("20261012-101010-Zone-Jump-Jump.jpg", 10); Pic("mine.jpg", 30);
@@ -3973,7 +3984,7 @@ options: --process aion[,other]");
             var rsLeft = string.Join(" ", Directory.GetFiles(rs).Select(Path.GetFileName).OrderBy(n => n));
             Directory.Delete(rs, true);
             // too big: shop screens go first, then the frequent pictures; a run's end from today never goes (2026-10-23)
-            var rs2 = Path.Combine(Path.GetTempPath(), "kl-rs-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(rs2);
+            var rs2 = TestTemp.Path("kl-rs-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(rs2);
             void Pic2(string n, double hoursOld) { var f = Path.Combine(rs2, n); File.WriteAllBytes(f, new byte[100]); File.SetLastWriteTime(f, DateTime.Now.AddHours(-hoursOld)); }
             Pic2("20261023-175637-Auldors-Sanctum-reward-table.jpg", 5); Pic2("20261023-180812-Hidden-Lugi-event-rewards.jpg", 4);
             Pic2("20261023-160003-Ellun-River-Midstream-Quna-Shop.jpg", 6); Pic2("20261023-171457-Deserter-Encampment-Trade-Shop.jpg", 5.5);

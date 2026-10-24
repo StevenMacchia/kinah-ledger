@@ -62,7 +62,7 @@ static class PlayerTests
         Check("gear score 1600 starts the next bracket; unset is unknown", $"{GearScore.Bracket(1600)} {GearScore.Payload(0)}", "1600-1799 unknown");
 
         // price alerts: once per crossing, re-armed when the price goes back
-        var dir = Path.Combine(Path.GetTempPath(), "KinahLedger-player-test");
+        var dir = TestTemp.Path("KinahLedger-player-test");
         Directory.CreateDirectory(dir); var file = Path.Combine(dir, "alerts.json"); if (File.Exists(file)) File.Delete(file);
         PriceAlerts.DirOverride = dir; PriceAlerts.Reset();
         const string siel = "Siel (Elyos)";
@@ -104,7 +104,7 @@ static class PlayerTests
     /// </summary>
     static void Prices(Action<string, string, string> Check)
     {
-        var dir = Path.Combine(Path.GetTempPath(), "KinahLedger-price-test");
+        var dir = TestTemp.Path("KinahLedger-price-test");
         Directory.CreateDirectory(dir);
         foreach (var f in new[] { "prices.json", "typed-prices.json", "vendor-prices.json", "farmed-materials.json" }) if (File.Exists(Path.Combine(dir, f))) File.Delete(Path.Combine(dir, f));
         var oldPath = PriceBook.PathOverride;
