@@ -58,29 +58,38 @@ minimap and skill bar sit, flatness of the right side and the upper left.
 
 **States and rules, first match wins.**
 
-| State | Decided by |
-|---|---|
-| EventCards | the event reward screen's title (RewardGridDue) |
-| Reward | "Reward collected." over a reward table, or a pass, shop or reward window's title |
-| Market | the Market reader has its table |
-| Crafting | the crafting panel's labels with a crafting title, or the crafting window's signs |
-| Cutscene | top and bottom bands 97%+ near-black, the middle lit |
-| Loading | 85%+ of the frame near-black and nothing where the counter and minimap sit |
-| Death | half the frame clearly red, the frame dark |
-| ChatExpanded | the HUD up, and a flat dark panel with text rows above the usual chat box, darker than the frame |
-| Bag | the HUD up, and a flat dark panel on the right, darker than the frame |
-| World | the HUD up (an anchor, or HUD edges in 2 of 3 places); also any frame before the HUD has been seen once this session |
-| Unknown | none of the above, after the HUD has been seen |
+| State | Decided by | Gates by default |
+|---|---|---|
+| EventCards | the event reward screen's title (RewardGridDue) | yes |
+| Reward | "Reward collected." over a reward table, or a pass, shop or reward window's title | yes |
+| Market | the Market reader has its table | yes |
+| Crafting | the crafting panel's labels with a crafting title, or the crafting window's signs | yes |
+| Cutscene | top and bottom bands 97%+ near-black, the middle lit | no, log-only |
+| Loading | 85%+ of the frame near-black and nothing where the counter and minimap sit | no, log-only |
+| Death | half the frame clearly red, the frame dark | no, log-only |
+| ChatExpanded | the HUD up, and a flat dark panel with text rows above the usual chat box, darker than the frame | no, log-only |
+| Bag | the HUD up, and a flat dark panel on the right, darker than the frame | no, log-only |
+| World | the HUD up (an anchor, or HUD edges in 2 of 3 places); also any frame before the HUD has been seen once this session | always (it only keeps the craft panel reader off) |
+| Unknown | none of the above, after the HUD has been seen | only right after a gating state (below) |
 
 A reader's sign comes before any picture rule, so a dark crafting window is Crafting, never Loading. `SceneState.Model`
 is the hook where a small image classifier can replace the picture rules (taken at 0.9 confidence or more, never over a
 reader's sign); null today.
 
+**Which states gate (`scene.gate.states`).** Only states read from a locator or a reader's own sign gate by default:
+Crafting, Market, Reward, EventCards (and World). The picture-only states (Bag, Loading, Death, Cutscene,
+ChatExpanded) are still classified, explained and counted in the minute line, but gate nothing and hold nothing:
+every reader runs in them as it does without the scene, and entering one logs `scene <state> (log-only) since <t>`.
+Turn-on rule: a picture-only state may be added to the list only after Steven's frames show no false positives for it
+over two sessions (read its `(log-only)` lines against what was on screen). The site adds it with
+`"scene": {"gate": {"states": ["Crafting", "Market", "Reward", "EventCards", "Loading"]}}`; unknown names are ignored.
+
 **Hysteresis.** A state takes over only when seen on two passes in a row; a one-pass flicker never changes it. The gate
 uses the stricter of the settled state and this pass's own verdict, so entering a stricter scene gates at once and
 leaving it waits for the new one to settle. `Explain()` says which features decided.
 
-**Per-reader validity** (`SceneState.Table`; `+` runs, `-` skipped, `h` read and held):
+**Per-reader validity** (`SceneState.Table`; `+` runs, `-` skipped, `h` read and held). A column applies only while its
+state gates; a log-only state runs every reader:
 
 | Reader | World | Bag | Crafting | Market | Reward | EventCards | Loading | Death | Cutscene | ChatExpanded | Unknown |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -99,16 +108,18 @@ and the Kinah counter (themselves the Market's and the HUD's witnesses). The rew
 and Market (which a run never shows) because its own "Reward collected." title is its evidence: a table frame a
 picture rule misjudges (dark, letterboxed, red) must never lose a run's rewards.
 
-**Unknown.** Chat and loot list reads taken while the scene is Unknown are held (lines only, never pictures; at most
+**Unknown.** Only when the settled state before it was a gating state (Crafting, Market, Reward, EventCards or one
+added to the list; not World, not a log-only state), chat and loot list reads taken while the scene is Unknown are held (lines only, never pictures; at most
 20 s and 60 reads). When the scene settles, each is counted at the time it was read if its reader is valid in the
-settled state, else dropped; one log line either way. A rare drop released from hold counts without its second read
+settled state, else dropped; one log line either way. Otherwise Unknown gates nothing. A rare drop released from hold counts without its second read
 (tagged unconfirmed).
 
-**reads.log.** `scene <state> since <t>; skipped <reader,...>; held <...> (<why>)` once per state change;
+**reads.log.** `scene <state> since <t>; skipped <reader,...>; held <...> (<why>)` once per change into a gating state,
+`scene <state> (log-only) since <t>; gates nothing (<why>)` into any other;
 `scene <state>: N read(s) held while Unknown released (...); M dropped (...)`; once a minute
 `scene: N passes, classifier X ms each, picture Y ms each, K one-pass flicker(s) ignored; <state> since <t>`.
 
-**Switch.** Remote config `"scene": {"gate": false}` turns gating off; the state is still worked out and logged (the
+**Switch.** Remote config `"scene": {"gate": false}` (or `{"gate": {"on": false}}`) turns all gating off; the state is still worked out and logged (the
 change line then says what it would skip).
 
 **Parity.** Until a first frame is seen nothing is gated (`SceneState.HasFrame`). The replay bank's cases never give
@@ -116,9 +127,8 @@ a whole frame (text traces, and crops of the loot list, the panel or the table),
 (`ChatGated`, `ListGated`, `LootGated`) and all run, exactly as before: 13/13, the same JSON, gate on or off.
 
 **Not yet seen on real frames.** Cutscene, Death, Loading, EventCards (picture side), Bag and ChatExpanded are drawn
-synthetically in parse-test only. Before trusting them, run a session with the gate on and read the `scene` lines
-against what was on screen; a wrong rule is fixed in `SceneState.Classify`, or switched off for everyone with
-`scene.gate`.
+synthetically in parse-test only, which is why the picture-only ones are log-only until the turn-on rule above is
+met. A wrong rule is fixed in `SceneState.Classify`; all gating can be switched off for everyone with `scene.gate`.
 
 ## Commands
 

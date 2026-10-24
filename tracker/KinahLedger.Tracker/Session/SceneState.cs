@@ -251,7 +251,9 @@ public sealed class SceneState
     public static readonly Scene[] Columns = (Scene[])Enum.GetValues(typeof(Scene));
 
     /// <summary>
-    /// Which states each reader is valid in: one character per state, in the order of <see cref="Scene"/>.
+    /// Which states each reader is valid in: one character per state, in the order of <see cref="Scene"/>. A column
+    /// applies only while its state may gate (<see cref="Gates"/>, remote config scene.gate.states); a log-only state
+    /// runs every reader.
     /// '+' runs, '-' is skipped, 'h' reads and holds (Unknown only, for reads that can wait). Readers not listed always
     /// run (anchors, reward pictures; in the watcher, the Market reader and the Kinah counter, which are themselves the
     /// Market's and the HUD's witnesses). Detectors (target bar, zone) run everywhere: they are where the signs come from.
@@ -285,11 +287,29 @@ public sealed class SceneState
     public Gate GateFor(string reader)
     {
         if (!HasFrame || !Enabled) return Gate.Run;
-        var a = Allowed(reader, Current); var b = Allowed(reader, Raw);
+        var a = Effective(reader, Current, _beforeUnknown); var b = Effective(reader, Raw, Current);
         if (a == Gate.Skip || b == Gate.Skip) return Gate.Skip;
         if (a == Gate.Hold || b == Gate.Hold) return Gate.Hold;
         return Gate.Run;
     }
+
+    /// <summary>
+    /// Whether state <paramref name="s"/> may gate (remote config scene.gate.states; World always). A state that may not
+    /// is still classified and logged, and every reader runs in it as it does without the scene.
+    /// </summary>
+    public static bool Gates(Scene s) => s == Scene.World || (s != Scene.Unknown && Update.RemoteConfig.Current.SceneGateStates.Contains(s.ToString()));
+
+    /// <summary>
+    /// What <paramref name="s"/> says to a reader: its table cell when it may gate, Run when it may not. Unknown holds
+    /// only when the settled state before it (<paramref name="before"/>) was one of the listed gating states.
+    /// </summary>
+    static Gate Effective(string reader, Scene s, Scene before) =>
+        s == Scene.Unknown ? (before is not (Scene.Unknown or Scene.World) && Gates(before) ? Allowed(reader, s) : Gate.Run)
+        : Gates(s) ? Allowed(reader, s) : Gate.Run;
+
+    /// <summary>Whether the settled state gates anything now (false: log-only).</summary>
+    public bool CurrentGates => Current == Scene.Unknown ? _beforeUnknown is not (Scene.Unknown or Scene.World) && Gates(_beforeUnknown) : Gates(Current);
+    Scene _beforeUnknown = Scene.Unknown;
 
     /// <summary>Settled: the state and this pass agree on something other than Unknown (held reads are judged then).</summary>
     public bool Settled => HasFrame && Current != Scene.Unknown && Raw != Scene.Unknown;
@@ -374,6 +394,7 @@ public sealed class SceneState
         if (raw == Current) { if (_pending != null) _flickers++; _pending = null; _why = why; }
         else if (_pending == raw)
         {
+            if (raw == Scene.Unknown) _beforeUnknown = Current;
             Current = raw; Since = now; _why = why; _pending = null; changed = true;
         }
         else { if (_pending != null) _flickers++; _pending = raw; }
@@ -397,6 +418,7 @@ public sealed class SceneState
     /// <summary>The line logged once per state change: "scene &lt;state&gt; since &lt;t&gt;; skipped &lt;reader,...&gt;".</summary>
     public string ChangeLine()
     {
+        if (!CurrentGates) return $"scene {Current} (log-only) since {Since.ToLocalTime():HH:mm:ss}; gates nothing, not in scene.gate.states ({_why})";
         var (skipped, held) = Effect(Current);
         string list = skipped.Count > 0 ? string.Join(",", skipped) : "none";
         string gate = Enabled ? $"skipped {list}" + (held.Count > 0 ? $"; held {string.Join(",", held)}" : "")

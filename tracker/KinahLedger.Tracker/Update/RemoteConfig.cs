@@ -75,6 +75,15 @@ public sealed class RemoteConfig
     /// {"gate": false}): the scene is still worked out and logged every pass, and nothing is gated.
     /// </summary>
     public bool SceneGate { get; init; } = true;
+    /// <summary>
+    /// The states allowed to gate (scene.gate.states): by default only those read from a locator or a reader's own sign.
+    /// The picture-only states (Bag, Loading, Death, Cutscene, ChatExpanded) are classified and logged but gate nothing
+    /// until his frames show no false positives over two sessions; then the site adds them here
+    /// ("scene": {"gate": {"states": ["Crafting", "Market", "Reward", "EventCards", "Loading"]}}). World always gates.
+    /// </summary>
+    public HashSet<string> SceneGateStates { get; init; } = new(DefaultGateStates, StringComparer.OrdinalIgnoreCase);
+    public static readonly string[] DefaultGateStates = { "Crafting", "Market", "Reward", "EventCards" };
+    public static readonly string[] GateableStates = { "Bag", "Crafting", "Market", "Reward", "EventCards", "Loading", "Death", "Cutscene", "ChatExpanded" };
 
     // ---- rare drops (RareGate) ----
     /// <summary>
@@ -166,7 +175,9 @@ public sealed class RemoteConfig
                 ? rsy.ValueKind == JsonValueKind.True : b.RunSync,
             Ledger = pick is { } pl && pl.TryGetProperty("ledger", out var lg) && lg.ValueKind == JsonValueKind.True,
             Killed = killed,
-            SceneGate = !(scene is { } sg && sg.TryGetProperty("gate", out var sgv) && sgv.ValueKind == JsonValueKind.False),
+            SceneGate = !(scene is { } sg && sg.TryGetProperty("gate", out var sgv) && (sgv.ValueKind == JsonValueKind.False
+                || (sgv.ValueKind == JsonValueKind.Object && sgv.TryGetProperty("on", out var sgo) && sgo.ValueKind == JsonValueKind.False))),
+            SceneGateStates = GateStates(scene, b.SceneGateStates),
             LegendMaterialsRare = !(rare is { } ra && ra.TryGetProperty("legend_materials", out var lm) && lm.ValueKind == JsonValueKind.False),
             RolloutVersion = Str(roll, "version", ""),
             RolloutPercent = (int)Num(roll, "percent", 100, 0, 100),
@@ -174,6 +185,17 @@ public sealed class RemoteConfig
             RolloutReason = Str(roll, "reason", "", 200),
             DefaultPercent = (int)Num(roll, "default_percent", 100, 0, 100),
         };
+    }
+
+    /// <summary>scene.gate.states: the names of states allowed to gate (unknown names ignored; an empty list leaves World alone gating).</summary>
+    static HashSet<string> GateStates(JsonElement? scene, HashSet<string> def)
+    {
+        if (scene is not { } sc || !sc.TryGetProperty("gate", out var g) || g.ValueKind != JsonValueKind.Object
+            || !g.TryGetProperty("states", out var st) || st.ValueKind != JsonValueKind.Array) return def;
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var x in st.EnumerateArray())
+            if (x.ValueKind == JsonValueKind.String && GateableStates.FirstOrDefault(n => n.Equals(x.GetString(), StringComparison.OrdinalIgnoreCase)) is { } name) set.Add(name);
+        return set;
     }
 
     // ---- words ----

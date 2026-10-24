@@ -1383,24 +1383,26 @@ options: --process aion[,other]");
         // a run through TrackerSession, the gate as Loop asks it
         var keepCfg = Update.RemoteConfig.Current;
         Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
-        var ts = new TrackerSession(null, settings, items, "Test") { Vote = false };
         var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
         var tt = t0;
         var row = new List<LootLine> { new(500, "Orichalcum Ore x1") };
-        string Pass(string name)
+        var ts = new TrackerSession(null, settings, items, "Test") { Vote = false };
+        string Pass(string name, TrackerSession? on = null)
         {
+            var x = on ?? ts;
             tt = tt.AddMilliseconds(300);
-            ts.ScenePass(all[name].Stats, all[name].Signs, tt);
-            ts.SettleHeldAsync(tt).GetAwaiter().GetResult();
-            var lg = ts.Verdict("loot_list");
-            int before = ts.ListReadsCounted;
-            ts.ListGated(row, tt, lg);   // what Loop does with a loot list read this pass
-            return $"{ts.Scene.Current}: list {lg}{(ts.ListReadsCounted > before ? " read" : "")}, craft {ts.Verdict("craft_panel")}";
+            x.ScenePass(all[name].Stats, all[name].Signs, tt);
+            x.SettleHeldAsync(tt).GetAwaiter().GetResult();
+            var lg = x.Verdict("loot_list");
+            int before = x.ListReadsCounted;
+            x.ListGated(row, tt, lg);   // what Loop does with a loot list read this pass
+            return $"{x.Scene.Current}: list {lg}{(x.ListReadsCounted > before ? " read" : "")}, craft {x.Verdict("craft_panel")}";
         }
+        string Skipped(TrackerSession x) { var s = SceneState.Table.Where(r => x.Verdict(r.Reader) != Gate.Run).Select(r => $"{r.Reader} {x.Verdict(r.Reader)}").ToList(); return s.Count == 0 ? "nothing" : string.Join(", ", s); }
         Check("before any frame nothing is gated (replays, the bank)", $"{ts.Verdict("loot_list")} {ts.Verdict("craft_panel")} {ts.Verdict("chat")}", "Run Run Run");
-        Check("first frame: World seen once, the list's read held", Pass("world"), "Unknown: list Hold, craft Skip");
-        Check("second: World settles, the held read released", Pass("world") + $" (released {ts.SceneReleased})", "World: list Run read, craft Skip (released 1)");
-        var seq = new[] { "crafting", "crafting", "world", "world" }.Select(Pass).ToList();
+        Check("first frame: World seen once (Unknown before it holds nothing)", Pass("world"), "Unknown: list Run read, craft Skip");
+        Check("second: World settles", Pass("world"), "World: list Run read, craft Skip");
+        var seq = new[] { "crafting", "crafting", "world", "world" }.Select(n => Pass(n)).ToList();
         Check("World→Crafting: seen once, the list already off", seq[0], "World: list Skip, craft Skip");
         Check("Crafting settles: list off, craft panel on", seq[1], "Crafting: list Skip, craft Run");
         Check("→World once: list still off until World settles", seq[2], "Crafting: list Skip, craft Skip");
@@ -1409,15 +1411,38 @@ options: --process aion[,other]");
         Check("a one-pass flicker into Crafting", Pass("crafting"), "World: list Skip, craft Skip");
         Check("...doesn't change the state", Pass("world") + $" since unchanged {ts.Scene.Since == since}", "World: list Run read, craft Skip since unchanged True");
         Check("the log line on a change", ts.Scene.ChangeLine().StartsWith("scene World since ") && ts.Scene.ChangeLine().Contains("; skipped craft_panel") ? "scene World since <t>; skipped craft_panel..." : ts.Scene.ChangeLine(), "scene World since <t>; skipped craft_panel...");
-        // Unknown holds; the next settled state releases what it allows and drops the rest
-        Check("Unknown once: the list's read held", Pass("blank") + $" held {ts.HeldNow}", "World: list Hold, craft Skip held 1");
-        Check("World again: released, read at its own time", Pass("world") + $" released {ts.SceneReleased}", "World: list Run read, craft Skip released 2");
-        Pass("blank"); Pass("blank");
-        Check("Unknown settles: reads held", $"{ts.Scene.Current} held {ts.HeldNow}", "Unknown held 2");
+        // Unknown holds only after a gating state (Crafting, Market, Reward, EventCards); after World it gates nothing
+        Check("Unknown after World: nothing held, the list read", Pass("blank") + $" held {ts.HeldNow}", "World: list Run read, craft Skip held 0");
+        Pass("world"); Pass("crafting"); Pass("crafting");
+        Pass("blank");
+        Check("Unknown once after Crafting: the chat's read held", $"chat {ts.Verdict("chat")}", "chat Hold");
+        ts.ChatGated(new List<string> { "[Player] hello" }, tt, ts.Verdict("chat"));
+        int rel = ts.SceneReleased;
+        Pass("world"); Pass("world");
+        Check("World settles: the held chat read released", $"{ts.Scene.Current} held {ts.HeldNow} released {ts.SceneReleased - rel}", "World held 0 released 1");
+        Pass("crafting"); Pass("crafting"); Pass("blank"); Pass("blank");
+        Check("Unknown settles after Crafting: list reads held", $"{ts.Scene.Current} list {ts.Verdict("loot_list")} held {ts.HeldNow}", "Unknown list Hold held 1");
+        rel = ts.SceneReleased;
         Pass("loading");
-        int dropped = ts.SceneDropped;
-        Check("Loading settles: the list isn't valid there, held reads dropped", Pass("loading") + $" held {ts.HeldNow} dropped {ts.SceneDropped - dropped}", "Loading: list Skip, craft Skip held 0 dropped 2");
+        Check("Loading (log-only) settles: both held reads released", Pass("loading") + $" released {ts.SceneReleased - rel}", "Loading: list Run read, craft Run released 2");
+        Check("a Loading frame with the default list skips nothing", Skipped(ts), "nothing");
+        Check("...and logs itself log-only", ts.Scene.ChangeLine().StartsWith("scene Loading (log-only) since ") ? "scene Loading (log-only) since <t>..." : ts.Scene.ChangeLine(), "scene Loading (log-only) since <t>...");
         Check("Explain says which features decided", ts.Scene.Explain().StartsWith("Loading: near-black") ? "Loading: near-black ..." : ts.Scene.Explain(), "Loading: near-black ...");
+        Check("every picture-only state logs only by default", string.Join(" ", new[] { Scene.Bag, Scene.Loading, Scene.Death, Scene.Cutscene, Scene.ChatExpanded }.Select(s => SceneState.Gates(s) ? "gates" : "log")), "log log log log log");
+        // Loading added to scene.gate.states: it skips the chat and the loot list, and drops what Unknown held
+        Update.RemoteConfig.Current = Update.RemoteConfig.Parse("""{"scene": {"gate": {"states": ["Crafting", "Market", "Reward", "EventCards", "Loading"]}}}""");
+        var ld = new TrackerSession(null, settings, items, "Test") { Vote = false };
+        foreach (var n in new[] { "world", "world", "loading", "loading" }) Pass(n, ld);
+        Check("with Loading in the list: chat and loot list skipped", $"{ld.Scene.Current}: chat {ld.Verdict("chat")}, list {ld.Verdict("loot_list")}", "Loading: chat Skip, list Skip");
+        foreach (var n in new[] { "world", "world", "crafting", "crafting", "blank", "blank" }) Pass(n, ld);
+        int dropped = ld.SceneDropped;
+        Pass("loading", ld);
+        Check("...and Unknown's held reads dropped when Loading settles", Pass("loading", ld) + $" held {ld.HeldNow} dropped {ld.SceneDropped - dropped}", "Loading: list Skip, craft Skip held 0 dropped 1");
+        Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+        var wcw = new TrackerSession(null, settings, items, "Test") { Vote = false };
+        Check("World, Crafting, World with the default list gates as before", string.Join(" | ", new[] { "world", "world", "crafting", "crafting", "world", "world" }.Select(n => Pass(n, wcw)).ToList().Skip(1)),   // ToList: Skip on a Select over an array never runs the skipped pass
+            "World: list Run read, craft Skip | World: list Skip, craft Skip | Crafting: list Skip, craft Run | Crafting: list Skip, craft Skip | World: list Run read, craft Skip");
+        Check("scene.gate.states: built-in list, unknown names ignored", $"{string.Join(",", Update.RemoteConfig.BuiltIn.SceneGateStates.OrderBy(x => x))} / {string.Join(",", Update.RemoteConfig.Parse("""{"scene": {"gate": {"states": ["loading", "Nowhere"]}}}""").SceneGateStates)}", "Crafting,EventCards,Market,Reward / Loading");
 
         // scene.gate off: the state is still worked out and logged, nothing gated
         Update.RemoteConfig.Current = Update.RemoteConfig.Parse("""{"scene": {"gate": false}}""");
