@@ -135,6 +135,36 @@ public static class WindowCapture
         }
     }
 
+    /// <summary>
+    /// The screen rectangle (the game window) shrunk to <paramref name="w"/> by <paramref name="h"/> straight out of the
+    /// newest frame, four samples per pixel, never copied at full size (FrameThumb, the scene classifier). Null when there
+    /// is no frame to use.
+    /// </summary>
+    public static unsafe Bitmap? TryThumb(Rectangle screen, int w, int h)
+    {
+        lock (Lock)
+        {
+            if (_last == null || _hwnd == IntPtr.Zero || (DateTime.UtcNow - _lastAt).TotalSeconds > 3) return null;
+            if (DwmGetWindowAttribute(_hwnd, 9, out var wr, Marshal.SizeOf<RECT>()) != 0 && !GetWindowRect(_hwnd, out wr)) return null;
+            var local = new Rectangle(screen.X - wr.Left, screen.Y - wr.Top, screen.Width, screen.Height);
+            local.Intersect(new Rectangle(0, 0, _last.PixelWidth, _last.PixelHeight));
+            if (local.Width < w || local.Height < h) return null;
+            var dst = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            var data = dst.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                using var buf = _last.LockBuffer(BitmapBufferAccessMode.Read);
+                using var reference = buf.CreateReference();
+                var plane = buf.GetPlaneDescription(0);
+                reference.As<IMemoryBufferByteAccess>().GetBuffer(out byte* p, out _);
+                FrameThumb.Sample(p + plane.StartIndex, plane.Stride, local, (byte*)data.Scan0, data.Stride, w, h);
+            }
+            catch (Exception) { dst.UnlockBits(data); dst.Dispose(); return null; }
+            dst.UnlockBits(data);
+            return dst;
+        }
+    }
+
     static unsafe Bitmap Crop(SoftwareBitmap src, Rectangle r)
     {
         var dst = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb);

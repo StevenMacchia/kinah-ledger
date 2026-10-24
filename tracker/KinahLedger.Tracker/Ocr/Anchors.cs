@@ -220,6 +220,20 @@ public sealed class Anchors
     }
 
     /// <summary>
+    /// Whether the anchor <paramref name="name"/> ("kinah-strip", "chat-input", "tpl:…") was seen within
+    /// <paramref name="seconds"/> of <paramref name="now"/>: the scene classifier's sign that the HUD is on screen.
+    /// </summary>
+    public bool SeenWithin(string name, DateTime now, double seconds)
+    {
+        lock (_lock)
+        {
+            if (!_hits.TryGetValue(name, out var h) || h.Conf <= 0) return false;
+            double age = (now - h.At).TotalSeconds;
+            return age >= -5 && age <= seconds;
+        }
+    }
+
+    /// <summary>
     /// The anchored crop of each region (null: no anchor for it yet) and how sure, beside its fixed-fraction crop. A region
     /// follows its anchor by the anchor's own displacement from where the fixed fractions expect it; the chat and the strip
     /// are their anchors' boxes themselves (the chat aligned at its bottom-left).

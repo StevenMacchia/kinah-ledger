@@ -69,6 +69,13 @@ public sealed class RemoteConfig
     public static readonly string[] Switches = { "loot_list", "craft_panel", "target", "nameplates", "reward_grid", "balance", "zone", "name_colours", "loot_icons", "market", "accuracy_upload", "layout_hint" };
     public bool Off(string reader) => Killed.Contains(reader);
 
+    // ---- the scene classifier (Session/SceneState.cs) ----
+    /// <summary>
+    /// Readers are skipped (or their reads held) when the scene on screen isn't one they are valid in. Off ("scene":
+    /// {"gate": false}): the scene is still worked out and logged every pass, and nothing is gated.
+    /// </summary>
+    public bool SceneGate { get; init; } = true;
+
     // ---- rare drops (RareGate) ----
     /// <summary>
     /// Legend-grade materials count as rare (Steven's rule as written: Legend, Unique and Epic drops). About a fifth of the
@@ -125,6 +132,7 @@ public sealed class RemoteConfig
         var roll = Obj(r, "rollout");
         var rare = Obj(r, "rare");
         var pick = Obj(r, "pickup");
+        var scene = Obj(r, "scene");
         // the loot band moves at most a little from where it was measured, and never turns inside out
         double ll = Num(loot, "left", b.LootLeft, -0.60, -0.25), lr = Num(loot, "right", b.LootRight, -0.10, 0.10);
         double lt = Num(loot, "top", b.LootTop, -0.20, 0.05), lb = Num(loot, "bottom", b.LootBottom, 0.15, 0.45);
@@ -158,6 +166,7 @@ public sealed class RemoteConfig
                 ? rsy.ValueKind == JsonValueKind.True : b.RunSync,
             Ledger = pick is { } pl && pl.TryGetProperty("ledger", out var lg) && lg.ValueKind == JsonValueKind.True,
             Killed = killed,
+            SceneGate = !(scene is { } sg && sg.TryGetProperty("gate", out var sgv) && sgv.ValueKind == JsonValueKind.False),
             LegendMaterialsRare = !(rare is { } ra && ra.TryGetProperty("legend_materials", out var lm) && lm.ValueKind == JsonValueKind.False),
             RolloutVersion = Str(roll, "version", ""),
             RolloutPercent = (int)Num(roll, "percent", 100, 0, 100),
