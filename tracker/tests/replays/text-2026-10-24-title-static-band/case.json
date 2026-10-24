@@ -2,13 +2,14 @@
   "pending": false,
   "needs_ocr": false,
   "trace": "trace.jsonl",
-  "name": "the player's own title \"Vanguard of Atreia\" stands in the loot list's band at y 950 to 1002 for over three minutes, read as \"Vangi\", \"Vangt\", \"Vqng(\", \"Yang(\" and more with its icon place over the world (spread 0.001 to 0.25), while Kina, a soul row and Sapphire Gemstone and Orichalcum gathers come and go below and the gathering panel shows at the bottom: the title is static text from its third read over 6 s (one title read goes unsure before that; main eee36b2 had 38), never the panel's first line, and every pickup counts (4 Sapphire Gemstone, 1 Fine Orichalcum Ore, 2 Orichalcum Ore, 3 Cogni Soul Crystals). The other unsure lines are a nameplate read once (\"Sqard\"), a soul row read once, a panel line read without its labels and an Orichalcum row read twice while fading in",
+  "name": "the player's own title \"Vanguard of Atreia\" stands in the loot list's band at y 950 to 1002 for over three minutes, read as \"Vangi\", \"Vangt\", \"Vqng(\", \"Yang(\" and more with its icon place over the world (spread 0.001 to 0.25), while Kina, a soul row and Sapphire Gemstone and Orichalcum gathers come and go below and the gathering panel shows at the bottom: the title is static text from its third read over 6 s (one title read goes unsure before that; main eee36b2 had 38), never the panel's first line, and every pickup counts (4 Sapphire Gemstone, 1 Fine Orichalcum Ore, 2 Orichalcum Ore, 3 Cogni Soul Crystals). The other unsure lines are a nameplate read once (\"Sqard\"), a soul row read once, a panel line read without its labels and an Orichalcum row read twice while fading in. The Refining Stone at 13:12:02 (P15 in kinah-bench truth-131029.csv) is a real pickup: its chat line counts it since tracker/chat-qty",
   "source": "Steven's trace.log 2026-10-24 17:10:28 to 17:13:40 UTC (13:10:28 to 13:13:40 local, main eee36b2): list reads as recorded (rows, y, c, b, s, h); chat kept only for the game's own lines (pickups, Kina, soul crystals, extraction), every other line replaced by a filler keyed by its text's hash so the reads line up as they did; the four gathering bar races (\"gathering bar: success\") from kinah-bench run-20261024-131029.reads.log. Kinah isn't checked: the filler changes how the chat's reads line up, and this replay reads \"Acquired 2367Kina.\" as its own pickup",
   "expect": {
     "items": {
       "Fine Orichalcum Ore": 1,
       "Orichalcum Ore": 2,
-      "Sapphire Gemstone": 4
+      "Sapphire Gemstone": 4,
+      "Refining Stone": 1
     },
     "pets": 3,
     "list_unsure": 5,

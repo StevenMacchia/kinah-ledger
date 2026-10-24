@@ -1,0 +1,12 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "one Riverside Pauldrons line, then the same screen read again with every line above it garbled: the same line in the same place, one pickup",
+  "source": "written from the 13:07 Monster Cube rewards of 2026-10-24 (kinah-bench compare-130149.md, R3 and R4), out in the world with a kill's Soul Points line as the drop's witness: the lines above the Pauldrons read garbled differently in each read",
+  "expect": {
+    "items": {
+      "Riverside Pauldrons": 1
+    }
+  }
+}

@@ -275,6 +275,79 @@ public sealed partial class ChatParser
 
     static int Count(Match m) => m.Groups["n"].Success && int.TryParse(m.Groups["n"].Value, out var n) ? Math.Clamp(n, 1, 99999) : 1;
 
+    // ---- quantities (2026-10-24, 13:07: "Acquired Odyle x7." read as "Acquired Odyle" and filed as one) ----
+
+    /// <summary>A count at the end of a name: "x", "×", "X" or "*", then up to four digits or letters the recognizer reads for digits.</summary>
+    static readonly Regex CountTailRx = new(@"^(?<head>.*?[^\s×xX\*])(?<gap>\s*)[×xX\*](?<sp>\s*)(?<n>[0-9OoIl|SsbTt]{1,4})\s*[.,:;!]?\s*$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The count at the end of a chat line's name, read through the recognizer's usual digit slips (O and o for 0; l, I and
+    /// | for 1; S and s for 5; b for 6; T and t for 7): "Refining StonevxT" is Refining Stonev x7, "Odyle xb" x6,
+    /// "Kinæx382" Kinæ x382. A count of letters only must follow the x straight away and be one or two long, so a word
+    /// after a space ("Treasure Box II") is never a count. Null when the text ends in no count. The caller keeps the whole
+    /// name when it is an item's own name.
+    /// </summary>
+    public static (string Head, int Count)? QuantityTail(string text)
+    {
+        var m = CountTailRx.Match(text.Trim());
+        if (!m.Success) return null;
+        var tok = m.Groups["n"].Value;
+        if (!tok.Any(char.IsDigit) && (tok.Length > 2 || m.Groups["sp"].Length > 0 || (m.Groups["gap"].Length > 0 && tok.All(c => c is 'I' or 'l' or '|')))) return null;
+        var sb = new StringBuilder();
+        foreach (var c in tok)
+            sb.Append(c switch { 'O' or 'o' => '0', 'I' or 'l' or '|' => '1', 'S' or 's' => '5', 'b' => '6', 'T' or 't' => '7', _ => c });
+        if (!int.TryParse(sb.ToString(), out var n) || n < 1) return null;
+        var head = m.Groups["head"].Value.TrimEnd();
+        return head.Length >= 2 ? (head, n) : null;
+    }
+
+    /// <summary>True when the line names a count after its item ("x7.", "xT", "× 12") or before it ("Acquired 3 ..."), however garbled.</summary>
+    public static bool HasCount(string raw)
+    {
+        var line = CleanSystemLine(Timestamp().Replace(raw.Trim(), ""));
+        return QuantityTail(line) != null || Regex.IsMatch(line, @"^\W*acqu\w*\s+\d", RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
+    /// Set by the session: the count of the loot list's row for this item, read in the last few seconds with its icon, or
+    /// null. Asked only when the chat line's own count is missing or unreadable and its name is settled.
+    /// </summary>
+    public Func<long, DateTime, int?>? ListCount { get; set; }
+
+    // the raw lines whose count was left unsure on their last parse (verb-first, no count readable, none on the loot list)
+    readonly HashSet<string> _countUnsure = new();
+    readonly Queue<string> _countUnsureOrder = new();
+
+    /// <summary>
+    /// Whether the last parse of this line counted an item without knowing how many: a verb-first line ("Acquired Odyle")
+    /// whose count was lost or unreadable and that the loot list didn't show. The session then looks at the line's place in
+    /// the next reads (Reread.CountWatch) and, failing that, logs "quantity unsure, 1 assumed". A name-first line ("Odyle
+    /// acquired.") is always one.
+    /// </summary>
+    public bool CountUnsure(string raw) { lock (_countUnsure) return _countUnsure.Contains(raw.Trim()); }
+
+    void NoteCount(string raw, bool unsure)
+    {
+        var k = raw.Trim();
+        lock (_countUnsure)
+        {
+            if (!unsure) { _countUnsure.Remove(k); return; }
+            if (_countUnsure.Add(k)) { _countUnsureOrder.Enqueue(k); if (_countUnsureOrder.Count > 200) _countUnsure.Remove(_countUnsureOrder.Dequeue()); }
+        }
+    }
+
+    /// <summary>Lines whose count was taken from their own garbled tail, and from the loot list's row.</summary>
+    public int CountsFromTail { get; private set; }
+    public int CountsFromList { get; private set; }
+
+    bool KnowsQuiet(string name)
+    {
+        bool was = Session.Accuracy.Muted;
+        Session.Accuracy.Muted = true;   // asking the item list isn't a misread
+        try { return _items.Knows(name); }
+        finally { Session.Accuracy.Muted = was; }
+    }
+
     static string CleanName(string s)
     {
         var name = Regex.Replace(s, @"\s+", " ").Trim().TrimEnd('.', ',', ';', ':', '\'', '"', '`', '-', ' ').Trim('[', ']', ' ');
@@ -296,8 +369,11 @@ public sealed partial class ChatParser
         // marks that never belong to a chat line; a * only stays when it is a count ("*2" for ×2)
         s = Regex.Replace(s, @"[«»•·¤~^`´¨""“”|¦]", " ");
         s = Regex.Replace(s, @"\*(?!\s?\d)", " ");
-        // a dash, underscore or no space at all between the name and the verb: "SpiritStone—acquired", "Leatheracquired"
-        s = Regex.Replace(s, @"(?<=\w)[\-—–_]+(?=acqu)", " ", RegexOptions.IgnoreCase);
+        // the verb's r read as a t ("Riverside Pauldronsacquited,", 2026-10-24 13:07): one letter, still the verb
+        s = Regex.Replace(s, @"(acqu[il1])t(?=[eé]+[dao]?(?:\W|$))", "$1r", RegexOptions.IgnoreCase);
+        // a dash, underscore, colon or no space at all between the name and the verb: "SpiritStone—acquired",
+        // "Leatheracquired", "Riverside Pauldröns:acquired." (the second of two Pauldrons lost to it, 2026-10-24 13:07)
+        s = Regex.Replace(s, @"(?<=\w)[\-—–_:;,]+(?=acqu)", " ", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"(?<=[a-z\)])(?=acqu[il1]r)", " ");
         // the first letter or two of "Acquired" lost while the line faded in, before an amount of Kina
         s = Regex.Replace(s, @"^\W*(?:a?c|c?q)?quired(?=\s*[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
@@ -459,6 +535,8 @@ public sealed partial class ChatParser
         var lead = Regex.Match(name, @"^(\d{1,4})[\s\-]+(.+)$");
         if (lead.Success) { n = int.Parse(lead.Groups[1].Value); name = lead.Groups[2].Value; }
         name = Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
+        // a count the recognizer garbled ("Odyle xT", "Refining StonevxT"): read through its digit slips
+        if (!it.Groups["n"].Success && !lead.Success && !_items.IsExact(name) && QuantityTail(name) is { } qt && KnowsQuiet(qt.Head)) { name = qt.Head; n = qt.Count; }
         if (name.Length < 2 || !_items.Knows(name)) return ("", false);
         var canon = _items.NameOf(_items.IdOf(name));
         return ("i:" + canon.ToLowerInvariant() + "x" + n, string.Equals(canon, name, StringComparison.OrdinalIgnoreCase));
@@ -579,6 +657,28 @@ public sealed partial class ChatParser
             // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
+            // the count lost or garbled (2026-10-24 13:07: "Acquired Odyle" for x7; "Refining StonevxT"): the line's own tail
+            // read through the digit slips first; a verb-first line with no count left is unsure (a name-first line is one)
+            bool countUnsure = false;
+            if (!it.Groups["n"].Success && lead_n == 0)
+            {
+                if (!_items.IsExact(name) && QuantityTail(name) is { } qt && KnowsQuiet(qt.Head))
+                {
+                    CountsFromTail++;
+                    CrashLog.Note($"\"{name}\": its count read through the recognizer's digit slips as x{qt.Count}");
+                    name = qt.Head; n = qt.Count;
+                }
+                else countUnsure = !nameFirst;
+            }
+            // the loot list's row for the same item, read in the last few seconds: its count, when the chat lost its own
+            int Filled(long id)
+            {
+                if (!countUnsure || ListCount?.Invoke(id, time) is not int ln || ln < 1) return n;
+                countUnsure = false; CountsFromList++;
+                Session.Accuracy.Add("qty_from_list");
+                CrashLog.Note($"{_items.NameOf(id)}: the chat line lost its count; the loot list's row says x{ln}");
+                return ln;
+            }
             // the chat names a skin "Dawn Frost (Cloak) Skin"; the item list as "Dawn Frost (Skin: Cloak)"
             var skin = System.Text.RegularExpressions.Regex.Match(name, @"^(?<set>.+?)\s*\((?<slot>[^()]+)\)\s*Skin$", RegexOptions.IgnoreCase);
             // ...but that line is the wardrobe unlocking an appearance (five and eight at a time, with Enhance Stones for the
@@ -615,11 +715,16 @@ public sealed partial class ChatParser
             // sellable or not (Steven, 2026-10-23: "even if they are not rewards that can sell or gear they should display")
             if (!nameFirst && bound && InRun?.Invoke() == true)
             {
-                yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 99999), true) { Via = _items.Knows(name) ? "" : "unlisted" };
+                long bid = _items.IdOf(name);
+                if (_items.Knows(name)) n = Filled(bid);
+                NoteCount(rawLine, countUnsure);
+                yield return new ItemAcquired(time, bid, Math.Clamp(n, 1, 99999), true) { Via = _items.Knows(name) ? "" : "unlisted" };
                 yield break;
             }
             if (!nameFirst && bound)
             {
+                if (KnowsQuiet(name)) n = Filled(_items.IdOf(name));
+                NoteCount(rawLine, countUnsure);
                 yield return new RewardReceived(time, name, Math.Clamp(n, 1, 9999));
                 yield break;
             }
@@ -647,6 +752,8 @@ public sealed partial class ChatParser
                         yield break;
                     }
                     CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)} (closest match{(fromLikely ? ", on this run or the enemy's loot table" : "")})");
+                    // a guessed name isn't settled: its count isn't taken from the loot list, but a lost one is still watched for
+                    NoteCount(rawLine, countUnsure);
                     yield return new ItemAcquired(time, gid, Math.Clamp(n, 1, 9999), bound) { Via = "guessed" };
                     yield break;
                 }
@@ -654,6 +761,7 @@ public sealed partial class ChatParser
                 if (InRun?.Invoke() == true && System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z][A-Za-z0-9'’:\-\s\(\)]{2,60}$"))
                 {
                     CrashLog.Note($"not in the item list, counted for the run by its name: {name}");
+                    NoteCount(rawLine, countUnsure);
                     yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 99999), bound) { Via = "unlisted" };
                     yield break;
                 }
@@ -686,11 +794,16 @@ public sealed partial class ChatParser
                         ContextPicks++;
                         CrashLog.Note($"\"{name}\" is {_items.NameOf(cid)}, not {_items.NameOf(fid)}: {m.Source} has it");
                     }
+                    n = Filled(cid);
+                    NoteCount(rawLine, countUnsure);
                     yield return new ItemAcquired(time, cid, Math.Clamp(n, 1, 9999), bound);
                     yield break;
                 }
             }
-            yield return new ItemAcquired(time, Choose(name, accent), Math.Clamp(n, 1, 9999), bound);
+            long chosen = Choose(name, accent);
+            n = Filled(chosen);
+            NoteCount(rawLine, countUnsure);
+            yield return new ItemAcquired(time, chosen, Math.Clamp(n, 1, 9999), bound);
         }
     }
 
@@ -760,6 +873,25 @@ public sealed class LineTracker
 {
     List<string> _prev = new();
     public int Unaligned { get; private set; }
+    // the last read's loot lines that this read lost at its bottom (keys), expected back in the next read
+    List<string> _lost = new();
+    /// <summary>Loot lines that came back after a read lost them at its bottom, taken for the lines they were (not new).</summary>
+    public int LostBack { get; private set; }
+
+    /// <summary>
+    /// A loot line the last read lost at its bottom (a read that cut the chat short) is back now right where it was: the
+    /// same line, not a new pickup (2026-10-24 13:12:17 and 13:15:03: 189 and 344 Kina counted twice). New lines that
+    /// begin with the lost ones, in order, lose them.
+    /// </summary>
+    List<string> Back(List<string> fresh)
+    {
+        int back = 0;
+        while (back < fresh.Count && back < _lost.Count && Similar(Key(fresh[back]), _lost[back])) back++;
+        _lost = new();
+        if (back == 0) return fresh;
+        LostBack += back;
+        return fresh.Skip(back).ToList();
+    }
     /// <summary>Reads that saw nothing: the chat faded out, or the UI was hidden. The last lines seen stay as the baseline.</summary>
     public int Empty { get; private set; }
 
@@ -829,12 +961,18 @@ public sealed class LineTracker
         // the second copy for the first and lost it (Steven, 2026-10-21 16:25).
         if (keys.Count > _prev.Count && Enumerable.Range(0, _prev.Count).All(i => Similar(keys[i], _prev[i])))
         {
-            var grown = cur.GetRange(_prev.Count, keys.Count - _prev.Count);
+            var grown = Back(cur.GetRange(_prev.Count, keys.Count - _prev.Count));
+            _lost = new();
             _prev = keys;
             return Returned(keys, grown);
         }
 
-        if (Align(_prev, keys, cur) is { } fresh) { _prev = keys; return Returned(keys, fresh); }
+        if (Align(_prev, keys, cur, out var lost) is { } fresh)
+        {
+            fresh = Back(fresh);
+            _lost = lost;
+            _prev = keys; return Returned(keys, fresh);
+        }
 
         // Couldn't line up with the read just before. When that read was a stray line or two (a game window's label over
         // the chat, like the crafting window's "Show acquired designs"), the last full read of the chat still lines up:
@@ -864,8 +1002,11 @@ public sealed class LineTracker
     /// on. Behind the frameless chat the box also catches text from the world (a nameplate, a sign) that comes and goes as
     /// the camera moves; anchoring only on the last line lost every loot line that arrived while such text vanished.
     /// </summary>
-    static List<string>? Align(List<string> prev, List<string> keys, List<string> cur)
+    static List<string>? Align(List<string> prev, List<string> keys, List<string> cur) => Align(prev, keys, cur, out _);
+
+    static List<string>? Align(List<string> prev, List<string> keys, List<string> cur, out List<string> lost)
     {
+        lost = new List<string>();
         for (int j = prev.Count - 1; j >= Math.Max(0, prev.Count - 4); j--)
         {
             for (int k = Math.Min(3, j + 1); k >= 1; k--)
@@ -874,6 +1015,17 @@ public sealed class LineTracker
                 for (int i = keys.Count - k; i >= 0; i--)        // last occurrence: fewest new lines, never a double count
                 {
                     if (!Enumerable.Range(0, k).All(x => Similar(keys[i + x], tail[x]))) continue;
+                    // the anchor is a run of one line repeated ("Riverside Pauldrons acquired." twice): lined up on its last
+                    // copy, a new copy below the old ones would be taken for an old one. The run is as long now as it was
+                    // unless new copies came: the copies past the last read's run are new (the same screen place, the same line)
+                    if (j == prev.Count - 1 && tail.All(x => Similar(x, prev[j])))
+                    {
+                        // copies in the last read's bottom lines as many as the run now holds, a stray line between them or not
+                        // (world text read between two "Kukuru acquired." is no new copy)
+                        int runCur = 0; for (int x = i + k - 1; x >= 0 && Similar(keys[x], prev[j]); x--) runCur++;
+                        int runPrev = 0; for (int x = j; x >= 0 && x >= j - runCur; x--) if (Similar(prev[x], prev[j])) runPrev++;
+                        if (runPrev >= k && runCur > runPrev) i = Math.Max(0, i - (runCur - runPrev));
+                    }
                     var fresh = cur.GetRange(i + k, keys.Count - i - k);
                     // The last read's lines after the anchor are still on screen in this one, in the same order, even when
                     // either read garbled them ("mria acquired."): skip one line here for each. Only world text (short,
@@ -883,15 +1035,19 @@ public sealed class LineTracker
                     // was garbled out of this read, and the loot line is new (Steven, 2026-10-23 10:45: 355 Kina skipped)
                     if (j < prev.Count - 1)
                     {
-                        int skip = 0;
-                        foreach (var pl in prev.Skip(j + 1).Where(Persists))
+                        int skip = 0, used = 0;
+                        var after = prev.Skip(j + 1).Where(Persists).ToList();
+                        foreach (var pl in after)
                         {
                             if (skip >= fresh.Count) break;
+                            used++;
                             var fk = Key(fresh[skip]);
                             if (!Similar(fk, pl) && LootKey(fk) && !LootKey(pl)) continue;
                             skip++;
                         }
                         fresh = fresh.Skip(skip).ToList();
+                        // the last read's loot lines below the anchor this read doesn't show: lost at its bottom, due back
+                        lost = after.Skip(used).Where(LootKey).ToList();
                     }
                     return fresh;
                 }

@@ -257,6 +257,8 @@ public static class ReplayBank
                     case "plate": foreach (var p in ls) session.NotRow.See(p, t, LootNotRow.Plate); break;
                     // the list covered (a full-screen window, a scene it isn't read in): this pass skips it, as the scene gate does
                     case "cover": session.ListGated(new List<LootLine>(), t, Gate.Skip); break;
+                    // a trusted reading of the Kinah counter (the watcher's BalanceTracker, as live): the Kina witness's evidence
+                    case "balance": if (ls.FirstOrDefault() is { } bv && long.TryParse(bv, out var bal)) session.CheckBalance(bal, t); break;
                 }
                 last = t;
             }

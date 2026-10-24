@@ -60,6 +60,12 @@ static class NameDecoderTests
         Check("a quantity suffix: \"Raw Leather x12\"", D(CtcLexiconSearch.Decode(Spell("Raw Leather x12"), lex)), "Raw Leather x12");
         Check("no space before the count: \"Wolf Peltx3\"", D(CtcLexiconSearch.Decode(Spell("Wolf Peltx3"), lex)), "Wolf Pelt x3");
         Check("\"Odyle Shard (Bound) x3.\"", D(CtcLexiconSearch.Decode(Spell("Odyle Shard (Bound) x3."), lex)), "Odyle Shard x3 bound");
+        // the count after the name decoded through the digit slips (2026-10-24: "Acquired Odyle x7." filed as x1)
+        Check("a count read as a letter: \"Raw Leather xT\" (T for 7)", D(CtcLexiconSearch.Decode(Spell("Raw Leather xT"), lex)), "Raw Leather x7");
+        Check("a count torn between digit and letter: \"Wolf Pelt x\" + b/6", D(CtcLexiconSearch.Decode(Spell("Wolf Pelt x6", new() { [11] = ('b', 0.5, '6', 0.4) }), lex)), "Wolf Pelt x6");
+        Check("\"Odyle Shard xl2.\" (l for 1)", D(CtcLexiconSearch.Decode(Spell("Odyle Shard xl2."), lex)), "Odyle Shard x12");
+        var q7 = CtcLexiconSearch.Decode(Spell("Raw Leather x7"), lex);
+        Check("log: the count beside OCR's (OCR lost it)", NameDecoder.Outcome(q7, "Raw Leather", 5, out _, 1, out var qt) + " / " + qt, $"decode Raw Leather p={q7.P:0.00} vs ocr Raw Leather agree, qty x7 vs ocr x1 disagree / decode_qty_disagree");
         Check("a count with a comma: \"Kina x1,240\" (Kinah, id 0)", D(CtcLexiconSearch.Decode(Spell("Kina x1,240"), lex)) + " id " + CtcLexiconSearch.Decode(Spell("Kina x1,240"), lex).ItemId, "Kina x1240 id 0");
         Check("marks Norm drops: \"*Raw Leather x2|\"", D(CtcLexiconSearch.Decode(Spell("*Raw Leather x2|"), lex)), "Raw Leather x2");
         Check("a case-only slip: \"RAW leather\"", D(CtcLexiconSearch.Decode(Spell("RAW leather"), lex)), "Raw Leather");

@@ -50,7 +50,7 @@ public sealed class GameWatcher
     DateTime _screenScanAt = DateTime.MinValue; bool _screenLogged;
     /// <summary>Another character is in the world (the reason, for the status line); the window closes the run and starts fresh.</summary>
     public event Action<string>? CharacterChanged;
-    public int BalanceEverySec { get; set; } = 10;
+    public int BalanceEverySec { get; set; } = 3;
     DateTime _balanceTickAt = DateTime.MinValue;
     DateTime? _balanceApplied;
 
@@ -103,7 +103,8 @@ public sealed class GameWatcher
         }
         else if (_relog.AbsentFor(nowT) == null) _screenLogged = false;
         // the counter against the count, on every tick: a gap has to hold a few seconds before it is judged
-        if (Balance.Tracker.Balance is long bal && Balance.Tracker.BalanceAt is DateTime bat && (DateTime.UtcNow - bat).TotalSeconds <= 60) c.CheckBalance(bal, DateTime.UtcNow);
+        // each reading at its own time: the Kina witness counts readings, so a stale one must never pass for a new one
+        if (Balance.Tracker.Balance is long bal && Balance.Tracker.BalanceAt is DateTime bat && (DateTime.UtcNow - bat).TotalSeconds <= 60) c.CheckBalance(bal, bat);
         // a new trusted value goes to the always-on count and the farming run; each keeps its first and last
         if (Balance.Tracker.BalanceAt is DateTime at && at != _balanceApplied)
         {

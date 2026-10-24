@@ -50,3 +50,7 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   lists the five cards: `received`, and for a received one `slots` in list order (`n`, `name` when the truth knows it,
   `hidden` for a slot the screen only showed cut by the card's window, which must stay not read) and `more` (its list
   may run past what the screen showed).
+- `text-2026-10-24-farm-kina-counter`: the 131029 farming trace (player names shifted) with `balance` reads, a trusted
+  reading of the Kinah counter (`{"t", "k": "balance", "l": ["29281753"]}`, written from the footage every 2.5 s). The
+  counter decides Kina (`Session/KinaWitness.cs`): 15,660 Kina, where main counts 17,120. `text-2026-10-24-chat-repeat-*`:
+  two identical Riverside Pauldrons lines are two pickups, the same screen read again is one (repeats by place).
