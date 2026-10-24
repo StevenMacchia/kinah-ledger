@@ -1,0 +1,12 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Odyle in Auldor's Sanctum, 2026-10-24 15:20:45 to 15:21:22: an achievement at 15:20:54, then an Odyle gathered at 15:21:02 with the panel naming it (its race went between passes), its upgrade roll at 15:21:09 and Fine Odyle x2, then the next gather (chat 15:21:17.8, race 17.9, its row 0.1 s later). 0.8.29 filed the first Odyle as the achievement's reward and counted the last one twice (chat, then its row on the race). Odyle 2, Fine Odyle 2, both gathered, never the run's loot; 2 attempts",
+  "source": "Steven's trace.log, 19:20:45 to 19:21:22 UTC; player chat replaced by filler. The gathering bar's races (upgrade roll 15:21:09.7, success 15:21:17.9) and the target bar's reads (Ody, Odyle, Odyte, Odyle-, Odyler) are added from reads.log",
+  "expect": {
+    "items": { "Odyle": 2, "Fine Odyle": 2 },
+    "attempts": { "Odyle": "2/0" },
+    "nodes": { "Odyle": "2/0" }
+  }
+}

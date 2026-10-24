@@ -513,6 +513,43 @@ first table time, so from 0.8.30 each reward screen line counted into a run is a
 `instances.repaired.jsonl`). Records from before 0.8.30 have no screens kept and can only be kept as one or removed. Keep
 as one is remembered in `instances.kept.txt`. parse-test checks the feed, the rate line, `line.json` and the split.
 
+## Gathering attempts: every race is one (branch tracker/gather-attempts, 2026-10-24)
+
+Steven, 2026-10-24: "you're not logging the mining attempts". An attempt was an item line that counted, or a failure
+line: a gather whose line the chat lost or set aside was no attempt, and every "Essence Extraction failed" (the game
+prints it for a failed gather of any kind) went to Odyle when no gather had come in the 45 s before. Now
+`Session/GatherAttempts.cs` keeps the tally, and the farming engines take attempts from it
+(`SessionEngine.GatherAttempt`, `AttemptsFromTally`); item lines are yields only. The demo and engine-only tests still
+count an attempt per line.
+
+- **A race is an attempt** the moment the gathering bar finishes it, Success or Fail, named or not. An upgrade roll is the
+  same gather's second race: no attempt of its own, unless no attempt came in the 10 s before it (its base race went
+  between passes), and its yield ("Acquired Fine Odyle x2.") is no gather of its own.
+- **Its name**, in order: the gathering panel's item line read in the 8 s before it; the gather's result within 6 s
+  after (the chat's "X acquired.", the loot list row its race released); the target bar's node; the last node named in
+  the last minute; else `unknown node` under "Gathering · node not named". A result renames an attempt only the bar,
+  a recent node or nothing named (`gather attempt of … named X by its result`); a gemstone renames only an unnamed one.
+- **Nodes on the target bar** (`GatheringCatalog.MatchNode`, `TargetReader.SeeNode`): words matched to the materials'
+  first words and a few node words (ore, vein, gem, log, vegetable → Kukuru), a misread letter per six on names of five
+  letters or more, cut short at the end (four letters, or three with the first right: "Veq") or at the start (five:
+  "Ftable"); text holding a word from an enemy's name on the list is the enemy's. Logged `node: Orichalcum Ore (target
+  bar read "Ore"), credited to gathering`, never "not an enemy on the list".
+- **A missed race**: a chat result with the gathering panel up (or a race in the last 30 s, or a node on the bar), the
+  panel naming it or nothing, no Success race in the 6 s before it or 2.5 s after, and no unclaimed one in the 15 s
+  before (the chat ran 12 s behind its row while gathering at 09:58:38): one successful attempt, `gather: race not seen,
+  counted from the result (…)`. A loot list row never stands for one: it counts only on a race already.
+- **A failure**: the bar's Fail race or a "… failed" line, one attempt for both within 3 s, under the current node.
+- **Gathered, not a reward or a run's loot**: a gathering material the panel named lately, or with an unclaimed Success
+  race, is never an achievement's reward or a box's contents, and is gathering's even in a zone the minimap calls an
+  instance (15:21 in Auldor's Sanctum). A chat line read just before its race claims that race's token, so the row of the
+  same gather doesn't count it again (15:21:17.8 chat, 17.9 race, the row counted at 20.0).
+- **Measured**: bank `text-2026-10-24-gather-kukuru-orichalcum-1559` (15:59:04 to 16:00:10): Kukuru 1 worked, 2
+  failed (cooking ingredients), Orichalcum Ore 3 worked (mining), where 0.8.29's rule gives Mining 4 (a chat line read
+  twice), Cooking 2 and Odyle 0/2. `text-2026-10-24-gather-odyle-after-achievement`: Odyle 2 and Fine Odyle 2 gathered,
+  2 attempts (0.8.29: the first Odyle an achievement's reward, the last counted twice). Bank cases may name `attempts`
+  (per skill, "worked/failed") and `nodes`; a `target` read is the target bar's text. The rest of the bank counts the
+  same items.
+
 ## Commands
 
 ```
