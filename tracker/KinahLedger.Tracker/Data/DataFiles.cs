@@ -142,4 +142,58 @@ public static class DataFiles
     }
 
     static void TryDelete(string p) { try { if (File.Exists(p)) File.Delete(p); } catch (Exception) { } }
+
+    // ---- the name decoder's model files (Ocr/NameDecoder.cs) ----
+
+    /// <summary>
+    /// The model files' pins (data/models.json, built into the exe): name to SHA-256. The files themselves are never built
+    /// in and never downloaded by the tracker; <c>node tools/data/models.js</c> puts them in the kept data folder.
+    /// </summary>
+    public static Dictionary<string, string> ModelPins()
+    {
+        var pins = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var s = typeof(DataFiles).Assembly.GetManifestResourceStream("models.json");
+            if (s == null) return pins;
+            using var doc = JsonDocument.Parse(s);
+            if (doc.RootElement.TryGetProperty("files", out var f) && f.ValueKind == JsonValueKind.Object)
+                foreach (var p in f.EnumerateObject())
+                    if (p.Value.TryGetProperty("sha256", out var h) && h.GetString() is { Length: 64 } v) pins[p.Name] = v.ToLowerInvariant();
+        }
+        catch (Exception) { /* no pins: no model is trusted */ }
+        return pins;
+    }
+
+    /// <summary>
+    /// Where a model file is looked for, in order: KINAHLEDGER_MODELS (a folder, for tests), the kept data folder (where
+    /// tools/data/models.js writes by default), and data/models under the working folder (the repository, as CI and
+    /// parse-test run). Only a file whose SHA-256 matches its pin is used, so a stray file anywhere is never loaded.
+    /// </summary>
+    public static IEnumerable<string> ModelDirs()
+    {
+        if (Environment.GetEnvironmentVariable("KINAHLEDGER_MODELS") is { Length: > 0 } env) yield return env;
+        yield return Dir;
+        yield return Path.Combine(Environment.CurrentDirectory, "data", "models");
+    }
+
+    /// <summary>The path of a model file whose hash matches its pin, or null (the decoder then stays off).</summary>
+    public static string? ModelPath(string name, Dictionary<string, string>? pins = null)
+    {
+        pins ??= ModelPins();
+        if (!pins.TryGetValue(name, out var want)) return null;
+        foreach (var dir in ModelDirs())
+        {
+            try
+            {
+                var p = Path.Combine(dir, name);
+                if (File.Exists(p) && Sha(p) == want) return p;
+            }
+            catch (Exception) { /* unreadable: try the next folder */ }
+        }
+        return null;
+    }
+
+    /// <summary>Whether a model file is in any of the folders at all, without hashing it (a quick look at start).</summary>
+    public static bool ModelPresent(string name) => ModelDirs().Any(d => { try { return File.Exists(Path.Combine(d, name)); } catch (Exception) { return false; } });
 }

@@ -28,6 +28,13 @@ public static class Accuracy
     /// <summary>Names settled per candidate set (NameMatch sources), since the tracker started; never sent.</summary>
     static readonly Dictionary<string, int> SourceCounts = new();
     public static Dictionary<string, int> Sources() { lock (Lock) return new(SourceCounts); }
+    /// <summary>
+    /// Shadow readers' tallies (the name decoder: decode_agree, decode_disagree, decode_other), since the tracker started.
+    /// On this PC only: never in <see cref="Keys"/>, never sent, never cleared by <see cref="Take"/>.
+    /// </summary>
+    static readonly Dictionary<string, long> ShadowCounts = new();
+    public static void Shadow(string key) { lock (Lock) ShadowCounts[key] = ShadowCounts.GetValueOrDefault(key) + 1; }
+    public static Dictionary<string, long> Shadows() { lock (Lock) return new(ShadowCounts); }
     static LayoutReport? _layout;
     static bool _layoutSent;
     public const int MaxNames = 50, MaxNameKeys = 400;
@@ -143,7 +150,7 @@ public static class Accuracy
     }
 
     /// <summary>For tests: everything back to zero.</summary>
-    internal static void Reset() { lock (Lock) { Counts.Clear(); Names.Clear(); SourceCounts.Clear();_readingS = 0; _chatLostS = 0; _layout = null; _layoutSent = false; } }
+    internal static void Reset() { lock (Lock) { Counts.Clear(); Names.Clear(); SourceCounts.Clear(); ShadowCounts.Clear(); _readingS = 0; _chatLostS = 0; _layout = null; _layoutSent = false; } }
 }
 
 /// <summary>One name read as an item: snapped, guessed or unknown (no item), and how often.</summary>
