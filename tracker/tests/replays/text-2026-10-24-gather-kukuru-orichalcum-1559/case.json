@@ -1,0 +1,11 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Kukuru then Orichalcum, 2026-10-24 15:59:04 to 16:00:10: two Kukuru fails (a chat line alone, then the bar's Fail race with its chat line 0.9 s later), the Kukuru gather whose race went between passes, then three Orichalcum gathers with one bar race between them. Attempts: Kukuru 1 worked, 2 failed (cooking ingredients); Orichalcum Ore 3 worked (mining). 0.8.29 counted Mining 0 and filed every \"Essence Extraction failed\" under Odyle",
+  "source": "Steven's trace.log, 19:59:04 to 20:00:10 UTC; player chat replaced by filler, the character's name in the list replaced. The gathering bar's two races (fail 15:59:26.1, success 15:59:44.9) and the target bar's node reads (Kukuru, Veq, Vey, Vege, Vegetable, Neg, Ftable, Ore, Orichalcum) are added from reads.log, which logged them. Items aren't checked here: the chat read this window again after a misaligned read and its Kukuru and Orichalcum lines count twice (Kukuru 2, Orichalcum Ore 4 for 1 and 3), a chat matter apart from the attempts",
+  "expect": {
+    "attempts": { "Ore": "3/0", "Food": "1/2" },
+    "nodes": { "Kukuru": "1/2", "Orichalcum Ore": "3/0" }
+  }
+}
