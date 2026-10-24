@@ -24,7 +24,8 @@ namespace KinahLedger.Session;
 /// may also carry "b" (each row's background) and "s" (the spread where its icon sits), as trace.log writes them since
 /// 2026-10-24, for telling rows from nameplates and world text (LootNotRow); a "plate" read names a nameplate or target
 /// name on screen then (from reads.log's "fighting:" and "target bar:" lines; trace.log doesn't keep them).
-/// A "gather" read is the gathering bar finishing a race: "ok", "fail", "upgrade ok" or "upgrade fail".
+/// A "gather" read is the gathering bar finishing a race: "ok", "fail", "upgrade ok" or "upgrade fail". A "cover" read
+/// is a pass that skips the list (a full-screen window over it): the rows up are set aside, as live (LootRows.Reset).
 /// Only what "expect" names is checked. A pending case (a fresh report nobody has checked yet) runs and prints, never
 /// fails. `replay-bank <dir> --record <case>` writes what this version counts into that case's "expect" and clears
 /// pending: run it only once the count it prints is known to be right.
@@ -32,6 +33,14 @@ namespace KinahLedger.Session;
 public static class ReplayBank
 {
     public sealed record Result(string Case, string Status, string Detail);
+
+    /// <summary>
+    /// What the last <see cref="Run"/> measured of the chat's vote (ChatVoter): for every loot line counted, the seconds
+    /// from the read it came in to the read it counted on, and how many counted on their first read because the loot list
+    /// showed the same pickup (TrackerSession.FastChat).
+    /// </summary>
+    public static List<double> ChatLatencies { get; } = new();
+    public static int ChatFast { get; private set; }
 
     /// <summary>Whether Windows' text recognition can run here (a build server may lack the language).</summary>
     public static bool OcrAvailable()
@@ -41,9 +50,11 @@ public static class ReplayBank
     }
 
     /// <summary>Runs every case under <paramref name="dir"/>; with <paramref name="record"/>, writes that case's expectations instead.</summary>
-    public static List<Result> Run(string dir, Settings settings, string? record = null)
+    public static List<Result> Run(string dir, Settings settings, string? record = null, bool fastChat = true)
     {
         var results = new List<Result>();
+        ChatLatencies.Clear(); ChatFast = 0;
+        _fastChat = fastChat;
         bool ocr = OcrAvailable();
         var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         foreach (var caseDir in Directory.GetDirectories(dir).OrderBy(d => d, StringComparer.Ordinal))
@@ -137,12 +148,15 @@ public static class ReplayBank
         CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kl-bank-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(CrashLog.DirOverride);
         try { return RunCaseIn(caseDir, node, settings, items, game); }
-        finally { var made = CrashLog.DirOverride; CrashLog.DirOverride = keptDir; try { Directory.Delete(made, true); } catch (Exception) { } }
+        // KL_BANK_KEEP set: each case's reads.log is kept and its folder printed, for reading what a case did
+        finally { var made = CrashLog.DirOverride; CrashLog.DirOverride = keptDir; if (Environment.GetEnvironmentVariable("KL_BANK_KEEP") is { Length: > 0 }) Console.WriteLine($"  ({Path.GetFileName(caseDir)}: log kept in {made})"); else try { Directory.Delete(made, true); } catch (Exception) { } }
     }
+
+    static bool _fastChat = true;
 
     static JsonObject RunCaseIn(string caseDir, JsonObject node, Settings settings, ItemDictionary items, Rectangle game)
     {
-        var session = new TrackerSession(null, settings, items, "Replay");
+        var session = new TrackerSession(null, settings, items, "Replay") { FastChat = _fastChat };
         var panel = new CraftPanelTracker();
         int ok = 0, fail = 0;
         JsonArray? table = null;
@@ -183,6 +197,8 @@ public static class ReplayBank
                     case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t); } break;
                     // a nameplate or the target bar's name on screen then (LootNotRow)
                     case "plate": foreach (var p in ls) session.NotRow.See(p, t, LootNotRow.Plate); break;
+                    // the list covered (a full-screen window, a scene it isn't read in): this pass skips it, as the scene gate does
+                    case "cover": session.ListGated(new List<LootLine>(), t, Gate.Skip); break;
                 }
                 last = t;
             }
@@ -250,6 +266,7 @@ public static class ReplayBank
         }
         // rows still waiting for a chat line that never comes are settled the way a live run settles them: later reads
         foreach (var dt in new[] { 2.0, 5.0, 9.0 }) session.ProcessList(new List<(int, string)>(), last.AddSeconds(dt));
+        ChatLatencies.AddRange(session.Voter.Latencies); ChatFast += session.Voter.Fast;
         session.CommitHeld();
         session.ReleaseAwaiting(last.AddSeconds(30), final: true);
         var e = session.Engine;

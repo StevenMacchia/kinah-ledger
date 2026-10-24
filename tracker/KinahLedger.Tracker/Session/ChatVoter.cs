@@ -23,6 +23,19 @@ public sealed class ChatVoter
     public int Waiting => _pending.Count;
 
     /// <summary>
+    /// Set by the session (2026-10-24): whether the loot list beside the character shows, with its icon, a row that means
+    /// exactly what this reading means (the same Kinah amount, the same item and count). Two places read apart agreeing
+    /// is what the vote waits for, so such a line counts on the read it came in, the reading the list agrees with.
+    /// </summary>
+    public Func<string, bool>? Confirmed { get; set; }
+
+    /// <summary>Lines counted before their vote was over because the loot list showed the same pickup.</summary>
+    public int Fast { get; private set; }
+
+    /// <summary>For each loot line counted (a line with a meaning), the seconds from the read it came in to the read it counted on; the last 500.</summary>
+    public List<double> Latencies { get; } = new();
+
+    /// <summary>
     /// One read: the new lines it brought (at the bottom of <paramref name="read"/>) and the whole read. Returns the lines
     /// whose vote is over, oldest first, each as the reading chosen. <paramref name="meaning"/> says what a line counts as
     /// ("k:463" or "i:raw leather x1", and whether the name was exact; "" for nothing).
@@ -48,8 +61,17 @@ public sealed class ChatVoter
         while (_pending.Count > 0)
         {
             var w = _pending[0];
-            if (w.Readings.Count < Reads && !w.Gone && (now - w.At).TotalSeconds < MaxSeconds) break;
-            outp.Add(Choose(w, meaning));
+            string? sure = null;
+            if (w.Readings.Count < Reads && !w.Gone && (now - w.At).TotalSeconds < MaxSeconds)
+            {
+                // the loot list shows this pickup: no vote needed (in order still: only the first waiting line can go)
+                sure = Confirmed == null ? null : w.Readings.LastOrDefault(r => Confirmed(r));
+                if (sure == null) break;
+                Fast++;
+            }
+            var chosen = sure ?? Choose(w, meaning);
+            if (meaning(chosen).Key.Length > 0) { Latencies.Add((now - w.At).TotalSeconds); if (Latencies.Count > 500) Latencies.RemoveAt(0); }
+            outp.Add(chosen);
             _pending.RemoveAt(0);
         }
         return outp;

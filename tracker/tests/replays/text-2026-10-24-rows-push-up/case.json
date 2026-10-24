@@ -1,0 +1,16 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "five rows in 1.5 s (110725 at 11.0 to 12.5: Kina 210, Kina 509, a Soul, a Soul, Raw Leather): each new row takes the bottom slot and pushes the older ones up (Soul 1 pushes three up at 12.3); one chat line \"Obtained 2 Fera Soul Crystals\" for both souls. 719 Kina, one Raw Leather, two Fera Soul Crystals, each row one object",
+  "source": "rebuilt from the 10 fps footage of 2026-10-24 (kinah-bench timing.md, kills.md, truth-110725.csv): rows placed as the footage shows the list (a new row at the bottom pushes the older ones up 73 px; 2.5 s up; nothing moves down), the Soul row's name scrolling (only the parseable slices), chat lines when they print; each pass reads the list, then the chat; icons, contrast, background and spread as LootRows measures real rows",
+  "expect": {
+    "items": {
+      "Raw Leather": 1
+    },
+    "kinah": 719,
+    "pets": 2,
+    "kills": 2,
+    "list_unsure": 0
+  }
+}

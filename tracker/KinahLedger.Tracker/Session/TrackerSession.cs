@@ -373,7 +373,8 @@ public sealed class TrackerSession
         ZoneView = new SessionEngine(items);
         _cross = new LootCrossCheck(items) { Resolve = ResolveName };
         _cross.Gathered = GatherWitnessFor;
-        _rows = new LootRows(items) { NewGather = (canon, first) => IsGatherName(canon) && GatherRaceAfter(first) };
+        _voter.Confirmed = l => FastChatOn && ListShows(_parser.Meaning(l).Key, _ctxNow);
+        _rows = new LootRows(items) { NewGather = (canon, first) => IsGatherName(canon) && GatherRaceAfter(first), NotARow = (obj, why) => _cross.Withdraw(obj, why) };
         // the item-name decoder, shadow only: a look for its model files now, the model itself on first use (NameDecoder)
         NameDecoder.Start(items);
         CraftView = new SessionEngine(items);
@@ -397,9 +398,9 @@ public sealed class TrackerSession
             if (Cover(ChatLocator.Corner(game.Value)) is null) (region, note) = await ChatLocator.DetectAsync(game.Value);
             DetectNote = note;
             if (region is { } found) LastChat.Save(game.Value, found);
-            else if (LastChat.For(game.Value) is { } last) { region = last; DetectNote = "where the chat was last found (it's hidden now)"; CrashLog.Note($"chat not visible at start: reading from its last place {last}"); }
+            else if (LastChat.For(game.Value) is { } last) { region = last; _chatKept = true; DetectNote = "where the chat was last found (it's hidden now)"; CrashLog.Note($"chat not visible at start: reading from its last place {last}"); }
             // nothing found and nothing kept (a frameless chat has no input box): where other trackers with this screen size found it
-            if (region == null && await HintedChatAsync(game.Value) is { } hinted) { region = hinted; DetectNote = "found where other trackers with this screen size found the chat"; }
+            if (region == null && await HintedChatAsync(game.Value) is { } hinted) { region = hinted; _chatKept = true; DetectNote = "found where other trackers with this screen size found the chat"; }
             if (region == null) { CrashLog.Note("chat not in view at start: reading the crafting panel, the loot list and the zone meanwhile, and looking for the chat every 10 seconds"); _chatTryAt = DateTime.UtcNow; }
             else { Region = region; _anchor = game; }
         }
@@ -534,6 +535,43 @@ public sealed class TrackerSession
         ReportLayout();
     }
 
+    // the chat area in use came from where it was found last time or from other trackers' hint, because the chat wasn't in
+    // view at start: it is looked for on screen again until it is found by its input box (RefindKeptChatAsync)
+    bool _chatKept;
+    DateTime _keptTryAt = DateTime.MinValue;
+    /// <summary>How often a kept chat area is checked against the screen.</summary>
+    public const double KeptRetrySeconds = 30;
+
+    /// <summary>
+    /// A kept chat area can be wrong for today's chat (2026-10-24, Steven's 5120x2160 screen: every start since the 23rd
+    /// read "its last place", whose bottom sat three lines above the chat's newest line, so a line was read only once three
+    /// more had pushed it up: pickups counted 2.3 to 9.4 s after they showed, and in a quiet chat not until it scrolled).
+    /// Reads that show lines never trigger the empty-read re-find, so this looks for the chat every
+    /// <see cref="KeptRetrySeconds"/> while the area is a kept one, and once its input box is found the area becomes the
+    /// found one and is saved. No rebase: the lines below the old area's bottom were never read, so the next read's lines
+    /// after the overlap count as new, once.
+    /// </summary>
+    async Task RefindKeptChatAsync()
+    {
+        if (!_chatKept || ManualRegion || (DateTime.UtcNow - _keptTryAt).TotalSeconds < KeptRetrySeconds) return;
+        _keptTryAt = DateTime.UtcNow;
+        try
+        {
+            if (GameWindow.Find(_settings.ProcessHints) is not { } g || Cover(ChatLocator.Corner(g)) != null) return;
+            var (found, note) = await ChatLocator.DetectAsync(g);
+            // only the input row is sure; a guess from the lines on screen is no better than the kept place
+            if (found is not { } r || !note.Contains("input box", StringComparison.OrdinalIgnoreCase)) return;
+            _chatKept = false;
+            LastChat.Save(g, r);
+            if (Region is { } was && was == r) { CrashLog.Note("chat found on screen where it was kept"); return; }
+            CrashLog.Note($"chat found on screen at {r.X}, {r.Y} ({r.Width} x {r.Height}); the kept area was {Region}: reading the found one now ({note})");
+            Region = r; _anchor = g; _reader = NewReader(r); DetectNote = note;
+            ReportLayout();
+        }
+        catch (System.ComponentModel.Win32Exception) { throw; }
+        catch (Exception ex) { CrashLog.Write("chat re-find", ex); }
+    }
+
     /// <summary>
     /// Where the chat was last found automatically, per game window size, in %LOCALAPPDATA%\KinahLedger\chat-last.json
     /// (relative to the game window), so a start while the chat is hidden still reads it once it shows.
@@ -640,7 +678,8 @@ public sealed class TrackerSession
                     var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : LootReadAsync();
                     if (listGate == Gate.Skip) _rows.Reset();
                     var chatGate = Verdict("chat");
-                    if (chatGate != Gate.Skip) await ReadOnce(chatGate);
+                    if (chatGate != Gate.Skip) await ReadOnce(chatGate, () => PeekList(list));
+                    await RefindKeptChatAsync();
                     _chatMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     if (!off.Off("target") && Runs("target")) await TargetDueAsync();
                     if (!off.Off("craft_panel")) await CraftPanelDue();
@@ -787,7 +826,7 @@ public sealed class TrackerSession
     /// One read of the chat (the game is in view there): count the new lines, re-find a lost chat, re-read the zone when
     /// due. <paramref name="gate"/> Hold (the scene is Unknown): the lines are read and held, not counted (ChatGated).
     /// </summary>
-    async Task ReadOnce(Gate gate = Gate.Run)
+    async Task ReadOnce(Gate gate = Gate.Run, Action? beforeCount = null)
     {
         // back in view: lines that arrived while it was covered weren't seen, so the first read is history and the clocks restart
         if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
@@ -816,6 +855,7 @@ public sealed class TrackerSession
             }
         }
         if (gate != Gate.Run) { ChatGated(lines, DateTime.UtcNow, gate); return; }
+        beforeCount?.Invoke();   // the loot list read beside it, when it is in already (PeekList)
         ProcessChat(lines, DateTime.UtcNow);
         // a rare drop in this read: the same picture read again, then counted (RareGate)
         if (_rare.Waiting > 0)
@@ -2247,7 +2287,7 @@ public sealed class TrackerSession
     /// <summary>Loot list reads that reached the counting path (the scene tests: none while the gate skips the list).</summary>
     internal int ListReadsCounted { get; private set; }
 
-    /// <summary>The loot list's rows as tracked objects (LootRows): a row is its slot, not its text.</summary>
+    /// <summary>The loot list's rows as tracked objects (LootRows): a row is its place in the stack, its icon and its name, not its y or its text.</summary>
     readonly LootRows _rows;
     public LootRows Rows => _rows;
     /// <summary>Loot list rows that went before their text settled: unsure, logged, never counted.</summary>
@@ -2271,6 +2311,73 @@ public sealed class TrackerSession
         if (Target.Unlisted.Count(char.IsLetter) >= 8 && (DateTime.UtcNow - Target.UnlistedAt).TotalSeconds <= LootNotRow.NameSeconds) nr.See(Target.Unlisted, now, LootNotRow.Plate);
         if (Zone is { } z && z != SessionEngine.UnknownZone) nr.See(z, now, LootNotRow.Zone);
         if (ZoneLocator.LastUnlisted is { } u && u.Count(char.IsLetter) >= 8) nr.See(u, now, LootNotRow.Zone);
+    }
+
+    // ---- a chat line the loot list already shows (2026-10-24) ----
+    /// <summary>
+    /// A new chat line waits for three reads or a second before it counts (ChatVoter), so a misread can be outvoted. When
+    /// the loot list beside the character shows a row with its icon that means exactly the same pickup (the same Kinah
+    /// amount, the same item and count; an "Obtained 2" line and two x1 rows of it in one read), the two reads agree and the
+    /// line counts on the read it came in. Off with the remote "chat_fast" switch, or <see cref="FastChat"/> (replays).
+    /// </summary>
+    internal bool FastChat = true;
+    bool FastChatOn => FastChat && !Update.RemoteConfig.Current.Off("chat_fast");
+    /// <summary>How long a list row's pickup stands for this: a row is up 2.5 s, and its chat line comes 0.1 to 0.2 s before it.</summary>
+    public const double ListKeySeconds = 4;
+    readonly List<(string Key, DateTime At, int Read)> _listKeys = new();
+    int _listKeyRead;
+
+    /// <summary>The pickup a list row means, as the chat's lines are keyed (ChatParser.Meaning): "k:463", "i:raw leather x1"; null for a soul, an unknown name or Kinah under 10.</summary>
+    string? ListKey(LootPopup.Row row)
+    {
+        if (row.IsKinah) return row.Amount >= LootCrossCheck.MinKinah ? "k:" + row.Amount : null;
+        if (LootCrossCheck.SoulOf(row.Name) != null) return null;
+        var name = Regex.Replace(row.Name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
+        bool was = Accuracy.Muted;
+        Accuracy.Muted = true;   // asking the item list isn't a misread
+        try { return name.Length >= 2 && _items.Knows(name) ? "i:" + _items.NameOf(_items.IdOf(name)).ToLowerInvariant() + "x" + row.Count : null; }
+        finally { Accuracy.Muted = was; }
+    }
+
+    /// <summary>The pickups this list read shows on rows with an icon beside them, kept <see cref="ListKeySeconds"/>.</summary>
+    void NoteListKeys(IEnumerable<LootLine> lines, DateTime now)
+    {
+        int read = ++_listKeyRead;
+        foreach (var l in lines)
+        {
+            if (l.Icon <= 1 || (l.Spread >= 0 && l.Spread < LootNotRow.VouchSpread)) continue;
+            if (LootPopup.Rows(new[] { (l.Top, l.Text) }).FirstOrDefault() is not { } row || ListKey(row) is not { } key) continue;
+            _listKeys.Add((key, now, read));
+        }
+        _listKeys.RemoveAll(x => Math.Abs((now - x.At).TotalSeconds) > ListKeySeconds);
+    }
+
+    /// <summary>Whether the list showed this pickup lately: the same key, or for "i:name x2" two "i:name x1" rows in one read.</summary>
+    bool ListShows(string key, DateTime now)
+    {
+        if (key.Length == 0 || _listKeys.Count == 0) return false;
+        var recent = _listKeys.Where(x => Math.Abs((now - x.At).TotalSeconds) <= ListKeySeconds).ToList();
+        if (recent.Any(x => x.Key == key)) return true;
+        int xi = key.LastIndexOf('x');
+        if (!key.StartsWith("i:") || xi < 0 || !int.TryParse(key[(xi + 1)..], out var n) || n < 2) return false;
+        var one = key[..xi] + "x1";
+        return recent.Where(x => x.Key == one).GroupBy(x => x.Read).Any(g => g.Count() == n);
+    }
+
+    /// <summary>
+    /// The loot list's picture of this pass, when its read is in before the chat's is counted: its rows with an icon are
+    /// noted, so a chat line in this very read that the list shows needn't wait for the vote (live passes only).
+    /// </summary>
+    void PeekList(Task<(List<OcrLineBox> Lines, System.Drawing.Bitmap Raw, System.Drawing.Point Origin)?> list)
+    {
+        if (!FastChatOn || !list.IsCompletedSuccessfully || list.Result is not { } r) return;
+        var lines = new List<LootLine>(r.Lines.Count);
+        foreach (var l in r.Lines)
+        {
+            try { var m = LootRows.MeasureAll(r.Raw, r.Origin, l.Box); lines.Add(new LootLine(l.Box.Top, l.Text, m.Contrast, m.Icon, m.Background, m.Spread)); }
+            catch (Exception ex) { CrashLog.Write("loot list peek", ex); }
+        }
+        NoteListKeys(lines, DateTime.UtcNow);
     }
 
     /// <summary>One read of the loot list as text only (a trace, a test): no contrast, no icons, every read counts.</summary>
@@ -2307,6 +2414,7 @@ public sealed class TrackerSession
             // keeps them, so a replay drops them the same way
             NoteScreenNames(now);
             lines = NotRow.Filter(lines, now);
+            NoteListKeys(lines, now);
             // the rows as read, for the trace (with each one's place and contrast, so a replay tracks them the same way).
             // The trace keeps the gathering panel's lines too, before the cut: a replay cuts them again, and can see which
             // item the panel named (2026-10-24: the panel's lines weren't kept, so a gathering miscount couldn't be replayed)
@@ -2322,11 +2430,12 @@ public sealed class TrackerSession
                 bool measuredAll = readAll.All(x => x.Line.Contrast >= 0);
                 ReadTrace.List(now, traced, readAll.Select(x => x.Line.Top).ToList(), measuredAll ? readAll.Select(x => Math.Round(x.Line.Contrast, 3)).ToList() : null,
                     measuredAll && readAll.Any(x => x.Line.Background >= 0) ? readAll.Select(x => Math.Round(x.Line.Background, 3)).ToList() : null,
-                    measuredAll && readAll.Any(x => x.Line.Spread >= 0) ? readAll.Select(x => Math.Round(x.Line.Spread, 3)).ToList() : null);
+                    measuredAll && readAll.Any(x => x.Line.Spread >= 0) ? readAll.Select(x => Math.Round(x.Line.Spread, 3)).ToList() : null,
+                    measuredAll && readAll.Any(x => x.Line.Icon != 0) ? readAll.Select(x => x.Line.Icon.ToString("x")).ToList() : null);
                 Report.Lines("list", traced, now);
             }
             Seen(now);
-            // each row tracked by its slot: shown once its text has settled, one row one pickup, a change in place one item
+            // each row tracked as an object in the list's stack: shown once its text has settled, one row one pickup, a change in place one item
             // with its final text (LootRows); a row that went before it settled is unsure and never shown
             var rows = _rows.Feed(lines, now);
             var add = _cross.Popup(rows, now);

@@ -1,0 +1,14 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "a Soul row whose name scrolls for its whole life (110231 at 11.8: \"l: Starturtle (Bound) x1\", \"Starturtle (Bound) x1\", \"rturtle (Bound) x1\", \"turtle (Bound) x1\", \"le (Bound) x1\" over five reads) beside its kill's Kina 273: one row, never \"the final text\", one Fera Soul Crystal and 273 Kina",
+  "source": "rebuilt from the 10 fps footage of 2026-10-24 (kinah-bench timing.md, kills.md, truth-110231.csv): rows placed as the footage shows the list (a new row at the bottom pushes the older ones up 73 px; 2.5 s up; nothing moves down), the Soul row's name scrolling (only the parseable slices), chat lines when they print; each pass reads the list, then the chat; icons, contrast, background and spread as LootRows measures real rows",
+  "expect": {
+    "items": {},
+    "kinah": 273,
+    "pets": 1,
+    "kills": 1,
+    "list_unsure": 0
+  }
+}

@@ -1,0 +1,32 @@
+{"t":"2026-10-24T16:00:09.600Z","k":"zone","l":["Kraka Footpath"]}
+{"t":"2026-10-24T16:00:09.700Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc","[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456"]}
+{"t":"2026-10-24T16:00:10.600Z","k":"list","l":[],"y":[],"c":[]}
+{"t":"2026-10-24T16:00:10.650Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc","[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456"]}
+{"t":"2026-10-24T16:00:10.950Z","k":"list","l":[],"y":[],"c":[]}
+{"t":"2026-10-24T16:00:11.000Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc","[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina."]}
+{"t":"2026-10-24T16:00:11.300Z","k":"list","l":["Kina x210"],"y":[1195],"c":[0.6],"b":[0.2],"s":[0.13],"h":["3c7effffff7e3c18"]}
+{"t":"2026-10-24T16:00:11.350Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc","[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina."]}
+{"t":"2026-10-24T16:00:11.650Z","k":"list","l":["Kina x210","Kina x509"],"y":[1122,1195],"c":[0.6,0.6],"b":[0.2,0.2],"s":[0.13,0.13],"h":["3c7effffff7e3c18","3c7effffff7e3c18"]}
+{"t":"2026-10-24T16:00:11.700Z","k":"chat","l":["[Player] chat 778899","[Player] chat aabbcc","[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina."]}
+{"t":"2026-10-24T16:00:12.000Z","k":"list","l":["Kina x210","Kina x509"],"y":[1049,1122],"c":[0.6,0.6],"b":[0.2,0.2],"s":[0.13,0.13],"h":["3c7effffff7e3c18","3c7effffff7e3c18"]}
+{"t":"2026-10-24T16:00:12.050Z","k":"chat","l":["[Player] chat 778899","[Player] chat aabbcc","[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina."]}
+{"t":"2026-10-24T16:00:12.350Z","k":"list","l":["Kina x210","Kina x509"],"y":[976,1049],"c":[0.6,0.6],"b":[0.2,0.2],"s":[0.13,0.13],"h":["3c7effffff7e3c18","3c7effffff7e3c18"]}
+{"t":"2026-10-24T16:00:12.400Z","k":"chat","l":["[Player] chat aabbcc","[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired."]}
+{"t":"2026-10-24T16:00:12.700Z","k":"list","l":["Kina x210","Kina x509","l: Starturtle (Bound) x1","Raw Leather x1"],"y":[903,976,1049,1195],"c":[0.6,0.6,0.6,0.6],"b":[0.2,0.2,0.2,0.2],"s":[0.13,0.13,0.13,0.13],"h":["3c7effffff7e3c18","3c7effffff7e3c18","0f1f3f7ffefcf8f0","aa55aa55aa55aa55"]}
+{"t":"2026-10-24T16:00:12.750Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}
+{"t":"2026-10-24T16:00:13.050Z","k":"list","l":["Kina x210","Kina x509","Starturtle (Bound) x1","l: Starturtle (Bound) x1","Raw Leather x1"],"y":[903,976,1049,1122,1195],"c":[0.6,0.6,0.6,0.6,0.6],"b":[0.2,0.2,0.2,0.2,0.2],"s":[0.13,0.13,0.13,0.13,0.13],"h":["3c7effffff7e3c18","3c7effffff7e3c18","0f1f3f7ffefcf8f0","0f1f3f7ffefcf8f0","aa55aa55aa55aa55"]}
+{"t":"2026-10-24T16:00:13.100Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}
+{"t":"2026-10-24T16:00:13.400Z","k":"list","l":["Kina x210","Kina x509","rturtle (Bound) x1","Starturtle (Bound) x1","Raw Leather x1"],"y":[903,976,1049,1122,1195],"c":[0.6,0.6,0.6,0.6,0.6],"b":[0.2,0.2,0.2,0.2,0.2],"s":[0.13,0.13,0.13,0.13,0.13],"h":["3c7effffff7e3c18","3c7effffff7e3c18","0f1f3f7ffefcf8f0","0f1f3f7ffefcf8f0","aa55aa55aa55aa55"]}
+{"t":"2026-10-24T16:00:13.450Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}
+{"t":"2026-10-24T16:00:13.750Z","k":"list","l":["Kina x509","turtle (Bound) x1","rturtle (Bound) x1","Raw Leather x1"],"y":[976,1049,1122,1195],"c":[0.6,0.6,0.6,0.6],"b":[0.2,0.2,0.2,0.2],"s":[0.13,0.13,0.13,0.13],"h":["3c7effffff7e3c18","0f1f3f7ffefcf8f0","0f1f3f7ffefcf8f0","aa55aa55aa55aa55"]}
+{"t":"2026-10-24T16:00:13.800Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}
+{"t":"2026-10-24T16:00:14.100Z","k":"list","l":["le (Bound) x1","turtle (Bound) x1","Raw Leather x1"],"y":[1049,1122,1195],"c":[0.6,0.6,0.6],"b":[0.2,0.2,0.2],"s":[0.13,0.13,0.13],"h":["0f1f3f7ffefcf8f0","0f1f3f7ffefcf8f0","aa55aa55aa55aa55"]}
+{"t":"2026-10-24T16:00:14.150Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}
+{"t":"2026-10-24T16:00:14.450Z","k":"list","l":["le (Bound) x1","le (Bound) x1","Raw Leather x1"],"y":[1049,1122,1195],"c":[0.6,0.6,0.6],"b":[0.2,0.2,0.2],"s":[0.13,0.13,0.13],"h":["0f1f3f7ffefcf8f0","0f1f3f7ffefcf8f0","aa55aa55aa55aa55"]}
+{"t":"2026-10-24T16:00:14.500Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}
+{"t":"2026-10-24T16:00:14.800Z","k":"list","l":["Raw Leather x1"],"y":[1195],"c":[0.6],"b":[0.2],"s":[0.13],"h":["aa55aa55aa55aa55"]}
+{"t":"2026-10-24T16:00:14.850Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}
+{"t":"2026-10-24T16:00:15.150Z","k":"list","l":[],"y":[],"c":[]}
+{"t":"2026-10-24T16:00:15.200Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}
+{"t":"2026-10-24T16:00:15.500Z","k":"list","l":[],"y":[],"c":[]}
+{"t":"2026-10-24T16:00:15.550Z","k":"chat","l":["[Player] chat ddeeff","[Player] chat 123123","[Player] chat 456456","Acquired 210 Kina.","Acquired 509 Kina.","Raw Leather acquired.","Obtained 2 Fera Soul Crystals."]}

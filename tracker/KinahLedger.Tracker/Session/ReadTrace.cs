@@ -22,9 +22,10 @@ public static class ReadTrace
     /// rows by their slots and settles their text the way the live read did (LootRows); old readers ignore both. Since
     /// 2026-10-24 also, when measured, each row's background ("b") and the spread where its icon sits ("s", -1 where that
     /// place was outside the picture), so a replay tells rows from nameplates and world text the same way (LootNotRow).
+    /// And each row's icon hash ("h", hex, "0" where it fell outside the picture), so a replay knows a row by its icon too.
     /// </summary>
     public static void List(DateTime at, IReadOnlyList<string> rows, IReadOnlyList<int> tops, IReadOnlyList<double>? contrast,
-        IReadOnlyList<double>? background = null, IReadOnlyList<double>? spread = null)
+        IReadOnlyList<double>? background = null, IReadOnlyList<double>? spread = null, IReadOnlyList<string>? icons = null)
     {
         try
         {
@@ -32,6 +33,7 @@ public static class ReadTrace
             if (contrast != null) o["c"] = contrast;
             if (background != null) o["b"] = background;
             if (spread != null) o["s"] = spread;
+            if (icons != null) o["h"] = icons;
             Append(JsonSerializer.Serialize(o));
         }
         catch (Exception) { /* the trace is for later analysis */ }

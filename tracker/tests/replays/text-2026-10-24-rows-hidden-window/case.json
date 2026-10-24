@@ -1,0 +1,14 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Kina x384 comes at 14.3 (110231), the Shugo Festival window covers the screen 17.0 to 20.3 and the same row is back at 20.5, its timer stopped behind the window: the same row, one pickup, not two. Added to the clip: a Spiritstone row in the same stretch, its chat line once, so a tracked item row is covered too. The list is taken as covered from 16.3, so the row has the 0.5 s left that it showed after the window (20.3 to about 20.8). 384 Kina, one Spiritstone",
+  "source": "rebuilt from the 10 fps footage of 2026-10-24 (kinah-bench timing.md, kills.md, truth-110231.csv): rows placed as the footage shows the list (a new row at the bottom pushes the older ones up 73 px; 2.5 s up; nothing moves down), the Soul row's name scrolling (only the parseable slices), chat lines when they print; each pass reads the list, then the chat; icons, contrast, background and spread as LootRows measures real rows",
+  "expect": {
+    "items": {
+      "Spiritstone": 1
+    },
+    "kinah": 384,
+    "kills": 1
+  }
+}

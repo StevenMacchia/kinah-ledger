@@ -1,0 +1,12 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "two Soul rows 0.4 s apart (110725 at 24.4 and 24.8, two kills' souls picked off the ground) and one chat line \"Obtained 2 Fera Soul Crystals\": one pickup of two, not two of one and not three. 162 Kina, two Fera Soul Crystals",
+  "source": "rebuilt from the 10 fps footage of 2026-10-24 (kinah-bench timing.md, kills.md, truth-110725.csv): rows placed as the footage shows the list (a new row at the bottom pushes the older ones up 73 px; 2.5 s up; nothing moves down), the Soul row's name scrolling (only the parseable slices), chat lines when they print; each pass reads the list, then the chat; icons, contrast, background and spread as LootRows measures real rows",
+  "expect": {
+    "items": {},
+    "kinah": 162,
+    "pets": 2
+  }
+}
