@@ -431,11 +431,13 @@ public static class RewardGrid
         return n == 0 ? 0 : sum / n;
     }
 
-    /// <summary>The first row's top: within 15 px of the estimate, the line where the eight boxes' top edges are sharpest.</summary>
+    /// <summary>The first row's top: from 15 px above the estimate to 3 px below it, the line where the eight boxes' top edges are sharpest.</summary>
     internal static int RefineTop(Bitmap f, int top, int x0, int s, int p)
     {
         int best = top; double bestScore = -1;
-        for (int y = top - 15; y <= top + 15; y++)
+        // the header puts the grid a few pixels low, never high (Urugugu 335 for 327, Vakron 337 for 331): searching below it
+        // found the bright tops of the art inside the slots instead (Vakron, y 345), so the search reaches up 15 and down 3
+        for (int y = top - 15; y <= top + 3; y++)
         {
             if (y - 5 < 0 || y + s >= f.Height) continue;
             double score = 0;
