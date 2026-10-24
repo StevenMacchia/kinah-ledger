@@ -95,8 +95,9 @@ public sealed class InstanceRun
 
     /// <summary>
     /// Set on load, never written back: a record from before the tracker kept its flags (no FromPicture, no Ended, no
-    /// witnesses: chat-counted, before 0.8.18), so what it says of its Kinah isn't known (the 17:48 Oct 23 Urugugu run
-    /// with Kinah 0 averaged in as a real run). Shown as "not read", left out of the averages.
+    /// witnesses: chat-counted, before 0.8.18) that recorded Kinah 0, so its Kinah isn't known (the 17:48 Oct 23 Urugugu
+    /// run averaged in as a real run). One with Kinah was read by the chat path and stays counted. Shown as "not read",
+    /// left out of the averages.
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool OldUnread { get; set; }
@@ -724,7 +725,8 @@ public sealed class InstanceLog
 
     /// <summary>
     /// Marks the records loaded from instances.jsonl that can't count as they stand, in memory only (the file is never
-    /// rewritten for it): <see cref="InstanceRun.OldUnread"/> for a record with no FromPicture, no Ended and no witnesses;
+    /// rewritten for it): <see cref="InstanceRun.OldUnread"/> for a record with no FromPicture, no Ended and no witnesses
+    /// that recorded Kinah 0 (one with Kinah was read by the chat path and counts as it is);
     /// "looks like several runs" for one over 3x its zone's median length, or over 3x its median Kinah while also over
     /// 1.5x its median length (the 18:26 Oct 23 record: five Urugugu runs, 37:04 and 3,000,000 Kinah); "not a run" for a
     /// record of a false run's shape (<see cref="FalseRun"/>). The median is taken over the zone's clean records, at
@@ -735,8 +737,8 @@ public sealed class InstanceLog
         var marked = new List<(InstanceRun, string)>();
         foreach (var r in runs)
         {
-            if (PictureOnly(r) && !r.FromPicture && r.Ended.Length == 0 && r.Witnesses.Length == 0 && !r.KinahUnknown)
-            { r.OldUnread = true; marked.Add((r, "a record from before the tracker kept its flags (chat-counted): Kinah not read")); }
+            if (PictureOnly(r) && !r.FromPicture && r.Ended.Length == 0 && r.Witnesses.Length == 0 && r.Kinah == 0 && !r.KinahUnknown)
+            { r.OldUnread = true; marked.Add((r, "a record from before the tracker kept its flags (chat-counted) with Kinah 0: Kinah not read")); }
             if (r.FromPicture && FalseRun(r)) { r.Suspect = "not a run"; marked.Add((r, "not a run: no Kinah, only the minimap saw it, its one table moments after entry")); }
         }
         foreach (var zone in runs.Where(r => r.Kind != WorldBoss).GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase))

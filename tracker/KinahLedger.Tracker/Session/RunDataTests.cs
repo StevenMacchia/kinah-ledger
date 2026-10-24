@@ -98,6 +98,7 @@ public static class RunDataTests
             {
                 Rec(0, 508, 0, pic: false, witnesses: "", ended: ""),     // the 17:48 Oct 23 chat-counted record, Kinah 0
                 Rec(20, 2224, 3_000_000, pic: false, witnesses: "", ended: ""),   // the 18:26 Oct 23 record: five runs
+                Rec(40, 476, 600_000, pic: false, witnesses: "", ended: ""), Rec(50, 416, 600_000, pic: false, witnesses: "", ended: ""),   // chat-era runs with their Kinah: counted
                 Rec(70, 433, 600_000), Rec(80, 485, 614_000), Rec(90, 353, 600_000), Rec(100, 373, 600_000),
                 Rec(200, 568, 600_000, zone: "Vakron Sky Island"), Rec(210, 517, 43_000, zone: "Vakron Sky Island"), Rec(220, 682, 10_000, zone: "Vakron Sky Island"), Rec(230, 606, 0, zone: "Vakron Sky Island"),
                 Shape(r => { r.Start = r.Start.AddDays(-1); r.LastLoot = r.LastLoot!.Value.AddDays(-1); r.TableAt = r.TableAt!.Value.AddDays(-1); }),
@@ -107,13 +108,14 @@ public static class RunDataTests
             var before = File.ReadAllText(file);
             var loaded = new InstanceLog();
             string Marks(InstanceLog l) => string.Join(" | ", l.Snapshot().Where(r => r.OutOfAverages).Select(r => $"{r.Start:HH:mm} {(r.OldUnread ? "old" : "")}{(r.Suspect.Length > 0 ? (r.OldUnread ? ", " : "") + r.Suspect : "")}"));
-            Check("old records marked: chat-counted, five in one, the false run", Marks(loaded), "12:00 old | 12:20 old, looks like several runs | 18:03 not a run");
+            Check("old records marked: chat-era Kinah 0, five in one, the false run", Marks(loaded), "12:00 old | 12:20 looks like several runs | 18:03 not a run");
             Check("...a Vakron run of 600,000 beside unread coins is not flagged", $"{loaded.Snapshot().Count(r => r.Zone == "Vakron Sky Island" && r.Suspect.Length > 0)}", "0");
             Check("...the file is not rewritten", File.ReadAllText(file) == before ? "same" : "changed", "same");
             int Lines() => File.ReadAllText(CrashLog.ReadsPath).Split('\n').Count(l => l.Contains("old run record:"));
-            Check("...one log line per mark", $"{Lines()}", "4");
+            Check("...chat-era records with Kinah stay counted", $"{loaded.Snapshot().Count(r => r.Kinah == 600_000 && r.Witnesses.Length == 0 && !r.OutOfAverages)}", "2");
+            Check("...one log line per mark", $"{Lines()}", "3");
             var again = new InstanceLog();
-            Check("...once ever: a second load says nothing more", $"{Lines()} {Marks(again).Split(" | ").Length}", "4 3");
+            Check("...once ever: a second load says nothing more", $"{Lines()} {Marks(again).Split(" | ").Length}", "3 3");
             Check("...and they stay out of the replay of unsent runs", $"{again.Unsent(DateTime.MinValue).Count}", "0");
 
             // e. synthetic ids keep their names across a restart
