@@ -495,6 +495,24 @@ from 8 pictures (13 not read: gear slots, which carry no name, and two only ever
 counter's rise in the footage). parse-test checks the log line, the tally, the parked list across a save and a load, and
 the bank's 13:06 pictures read into a parked run (45 slots, 2,080 Abyss Points, 5,487 items, as the bank counts them).
 
+## The live feed and tapped lines (branch tracker/ui-live, 0.8.30)
+
+Every tab opens on the last five things counted for it (`Session/LiveFeed.cs`, fed from `TrackerSession.Feed` and the
+crafting panel's race), newest first, with "Reading the chat · N reads" as the one place the read count shows. A line
+that looks wrong is tapped: Wrong item, Wrong amount, Didn't happen, or Missing a pickup. It files the same miscount report
+as the button (`WriteReport`, the last minute of reads, pickups and, when the player said yes, pictures) with what was
+flagged in `summary.txt` and a `line.json` beside it: the label (`wrong_item`, `wrong_amount`, `didnt_happen`, `missing`),
+the line as counted (time, tab, kind, item and id, amount, enemy, how it was read, where it landed) and the report's
+pictures within five seconds of it (`MiscountLine`). The loot list and crafting panel pictures go to the site only when
+Options › Sharing allows, with the label in `why`; a line older than the minute the report holds has no pictures.
+
+The Events tab's fix sheet splits a merged record at its reward screens. A stored run keeps only its table count and
+first table time, so from 0.8.30 each reward screen line counted into a run is also written to
+`instances.screens.jsonl` (`RunFixes.Record`, the feed's sink); Split groups a record's lines with `TableStarting`'s rule
+(a table a minute after the last is the next run's) and replaces the record (`InstanceLog.ReplaceRun`, the record kept in
+`instances.repaired.jsonl`). Records from before 0.8.30 have no screens kept and can only be kept as one or removed. Keep
+as one is remembered in `instances.kept.txt`. parse-test checks the feed, the rate line, `line.json` and the split.
+
 ## Gathering attempts: every race is one (branch tracker/gather-attempts, 2026-10-24)
 
 Steven, 2026-10-24: "you're not logging the mining attempts". An attempt was an item line that counted, or a failure

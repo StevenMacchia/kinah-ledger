@@ -16,22 +16,28 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     /// <summary>
-    /// Joins the Farming part's blocks into one card. Compact: the run card, the session line, the drops table and the
-    /// status as its footer, square where they meet. Full view: the run card and the session line on the left, the table
-    /// on its own on the right, the status a plain line under both. Any other part: the status a plain line.
+    /// Joins the Farming part's blocks into one card (direction C). Compact: the live card, Session, the drops and the chips
+    /// (with Where to farm now after them) and the status as its footer, square where they meet. Full view: the live card,
+    /// Session, Where to farm now and the footer as one card on the left; the drops and the chips as one card on the right.
+    /// Crafting: its own card, the status a plain line under it. Events: the status a plain line.
     /// </summary>
     void JoinCards()
     {
         bool farm = _part == "Farming" && !_welcome, full = farm && _prefs.FullView;
-        bool sum = SummaryCard.Visibility == Visibility.Visible;
-        SessionCard.CornerRadius = new CornerRadius(6, 6, full && !sum ? 6 : 0, full && !sum ? 6 : 0);
-        SessionCard.BorderThickness = new Thickness(1, 1, 1, full && !sum ? 1 : 0);
-        SummaryCard.CornerRadius = new CornerRadius(0, 0, full ? 6 : 0, full ? 6 : 0);
-        SummaryCard.BorderThickness = new Thickness(1, 0, 1, full ? 1 : 0);
-        TablesCard.CornerRadius = new CornerRadius(full ? 6 : 0, full ? 6 : 0, full ? 6 : 0, full ? 6 : 0);
+        bool foot = farm;
+        SessionCard.CornerRadius = new CornerRadius(6, 6, 0, 0);
+        SessionCard.BorderThickness = new Thickness(1, 1, 1, 0);
+        SummaryCard.CornerRadius = new CornerRadius(0);
+        SummaryCard.BorderThickness = new Thickness(1, 0, 1, 0);
+        TablesCard.CornerRadius = new CornerRadius(full ? 6 : 0);
         TablesCard.BorderThickness = new Thickness(1, full ? 1 : 0, 1, full ? 1 : 0);
         TablesCard.Margin = new Thickness(0, full ? 16 : 0, 0, 0);
-        bool foot = farm && !full;
+        TablesCard.Padding = new Thickness(0, full ? 4 : 0, 0, full ? 4 : 0);
+        // Where to farm now: its own sides on the left in Full view; inside the tables' card in Compact
+        WhereSection.BorderThickness = full ? new Thickness(1, 0, 1, 0) : new Thickness(0);
+        if (full) WhereSection.SetResourceReference(Border.BackgroundProperty, "Card"); else WhereSection.Background = null;
+        CraftCard.CornerRadius = new CornerRadius(6);
+        CraftCard.BorderThickness = new Thickness(1);
         StatusBar.Margin = new Thickness(0, foot ? 0 : 14, 0, 0);
         StatusBar.CornerRadius = new CornerRadius(0, 0, foot ? 6 : 0, foot ? 6 : 0);
         StatusBar.BorderThickness = foot ? new Thickness(1, 0, 1, 1) : new Thickness(0);
@@ -39,71 +45,6 @@ public partial class MainWindow
         StatusInner.Padding = foot ? new Thickness(20, 12, 20, 12) : new Thickness(0);
         if (foot) { StatusBar.SetResourceReference(Border.BackgroundProperty, "Card"); StatusBar.SetResourceReference(Border.BorderBrushProperty, "LineStrong"); }
         else { StatusBar.Background = null; StatusBar.BorderBrush = null; }
-    }
-
-    /// <summary>A folded box's arrow: pointing right while folded, down and gold once open.</summary>
-    void SetArrow(Path arrow, bool open)
-    {
-        arrow.RenderTransform = new RotateTransform(open ? 90 : 0);
-        arrow.SetResourceReference(Shape.StrokeProperty, open ? "Gold" : "Faint");
-    }
-
-    /// <summary>The gathering skills whose box is open, by name.</summary>
-    readonly HashSet<string> _skillOpen = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// One folded box per gathering skill under the drops ("Mining · ore and gemstones · 6 attempts · 8.5K"): opened, how
-    /// many attempts failed, how many came plentiful and the pace. Its items are listed under Gathered.
-    /// </summary>
-    void FillSkills(List<SkillBox> skills)
-    {
-        SkillHost.Children.Clear();
-        foreach (var sk in skills)
-        {
-            bool open = _skillOpen.Contains(sk.Name);
-            var box = new Border { Style = (Style)FindResource("GroupBox") };
-            box.SetResourceReference(Border.BorderBrushProperty, open ? "LineStrong" : "Line");
-            var sp = new StackPanel(); box.Child = sp;
-            var head = new Grid { Style = (Style)FindResource("GroupHead") };
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            head.ColumnDefinitions.Add(new ColumnDefinition());
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var arrow = new Path { Style = (Style)FindResource("GroupArrow") }; SetArrow(arrow, open);
-            head.Children.Add(arrow);
-            var name = new TextBlock { Text = sk.Name, Style = (Style)FindResource("GroupName") }; Grid.SetColumn(name, 1); head.Children.Add(name);
-            var sum = new TextBlock { Style = (Style)FindResource("GroupSum") };
-            sum.Inlines.Add(new Run($"{sk.Attempts:N0} attempt{(sk.Attempts == 1 ? "" : "s")}"));
-            if (sk.Value > 0)
-            {
-                var dot = new Run("  ·  "); dot.SetResourceReference(TextElement.ForegroundProperty, "Faint"); sum.Inlines.Add(dot);
-                var v = new Run(Short(sk.Value)) { FontFamily = (FontFamily)FindResource("MonoFont") }; v.SetResourceReference(TextElement.ForegroundProperty, "Gold"); sum.Inlines.Add(v);
-            }
-            Grid.SetColumn(sum, 2); head.Children.Add(sum);
-            var key = sk.Name;
-            head.MouseLeftButtonUp += (_, _) => { if (!_skillOpen.Remove(key)) _skillOpen.Add(key); Redraw(); };
-            sp.Children.Add(head);
-            if (open)
-            {
-                var body = new StackPanel { Margin = new Thickness(14, 0, 14, 10) };
-                var rule = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(-14, 0, -14, 6) }; rule.SetResourceReference(Border.BorderBrushProperty, "Line");
-                body.Children.Add(rule);
-                int ok = sk.Attempts - sk.Failed;
-                void Line(string left, string right)
-                {
-                    var g = new Grid { Margin = new Thickness(0, 3, 0, 3) };
-                    g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    var l = new TextBlock { Text = left, FontSize = 13 }; l.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); g.Children.Add(l);
-                    var r = new TextBlock { Text = right, FontSize = 13, FontFamily = (FontFamily)FindResource("MonoFont") }; r.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
-                    Grid.SetColumn(r, 1); g.Children.Add(r);
-                    body.Children.Add(g);
-                }
-                Line("Attempts an hour", Rate(sk.PerHour));
-                Line("Failed", sk.Attempts > 0 ? $"{sk.Failed:N0} of {sk.Attempts:N0}" : "—");
-                Line("Plentiful (extra yield)", ok > 0 ? $"{Math.Round(100.0 * sk.Plentiful / ok)}% of {ok:N0} that worked" : "—");
-                sp.Children.Add(body);
-            }
-            SkillHost.Children.Add(box);
-        }
     }
 
     /// <summary>The "…" menu beside the run's buttons: All zones, clearing the tables, and the shortcut that works in the game.</summary>

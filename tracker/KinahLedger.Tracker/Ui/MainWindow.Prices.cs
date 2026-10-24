@@ -21,7 +21,7 @@ public partial class MainWindow
     /// <summary>A table's Price cell: the figure, its tone (Mine, Unsure or none) and its hover.</summary>
     (string Text, string Tone, string Tip) PriceCell(string name)
     {
-        if (PriceBook.QuoteOf(name) is not { } q) return ("—", "", "");
+        if (PriceBook.QuoteOf(name) is not { } q) return ("", "", "");
         var text = (q.From == PriceBook.From.Region ? "≈" : "") + Short(q.Price);
         var tone = q.Mine ? "Mine" : !q.Sure ? "Unsure" : "";
         return (text, tone, PriceHover(name, q));

@@ -1065,6 +1065,39 @@ public sealed class InstanceLog
         }
     }
 
+    /// <summary>
+    /// Split by the player (0.8.30, the Events tab's fix sheet, RunFixes.Split): one finished record is replaced by the runs
+    /// cut from it at its reward screens, in the list and in instances.jsonl. The record as it was is kept aside as one line
+    /// in instances.repaired.jsonl. The parts are not sent to the site from here (the record's own sending already happened
+    /// or was let go). True when the record was found.
+    /// </summary>
+    public bool ReplaceRun(InstanceRun old, IReadOnlyList<InstanceRun> parts)
+    {
+        if (parts.Count == 0) return false;
+        lock (_lock)
+        {
+            int at = _done.IndexOf(old);
+            if (at < 0) return false;
+            _done.RemoveAt(at);
+            _done.InsertRange(at, parts);
+            _unshared.Remove(old);
+            try
+            {
+                File.AppendAllText(PathOf.Replace(".jsonl", ".repaired.jsonl"), JsonSerializer.Serialize(old) + "\n");
+                var lines = File.Exists(PathOf) ? File.ReadAllLines(PathOf).ToList() : new List<string>();
+                int i = lines.FindIndex(l => { try { return l.Length > 2 && JsonSerializer.Deserialize<InstanceRun>(l) is { } k && k.Start == old.Start && k.Kind == old.Kind && string.Equals(k.Zone, old.Zone, StringComparison.OrdinalIgnoreCase); } catch (Exception) { return false; } });
+                var fresh = parts.Select(p => JsonSerializer.Serialize(p)).ToList();
+                if (i >= 0) { lines.RemoveAt(i); lines.InsertRange(i, fresh); } else lines.AddRange(fresh);
+                var tmp = PathOf + ".tmp";
+                File.WriteAllLines(tmp, lines);
+                File.Move(tmp, PathOf, overwrite: true);
+            }
+            catch (Exception ex) { CrashLog.Write("split a run", ex); }
+            CrashLog.Note($"run split by the player: {old.Label} started {old.Start.ToLocalTime():MMM d HH:mm:ss} into {parts.Count} runs at its reward screens (the record kept aside in instances.repaired.jsonl)");
+            return true;
+        }
+    }
+
     // ---- runs whose rewards were not read (2026-10-24) ----
     // A run whose rewards (or its coin) weren't read is never sent (the site would average in the little the chat saw).
     // Before, it left the queue with the rest and was dropped without a line in the log (Hidden Lugi 10:02 and 13:06 that

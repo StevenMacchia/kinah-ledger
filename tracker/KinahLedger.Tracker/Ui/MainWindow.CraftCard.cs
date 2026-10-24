@@ -56,6 +56,29 @@ public partial class MainWindow
         var (card, body) = CkShell(460);
         body.Children.Add(CkBand(output, grade, recipe == null ? "Not in the recipe book yet" : string.Join(" · ", new[] { recipe.Skill, grade, $"makes ×{recipe.OutputQty}" }.Where(x => x.Length > 0))));
         if (recipe == null) { body.Children.Add(CkNote("Its materials and cost show once the recipe book has it.")); body.Children.Add(new Border { Height = 14 }); return card; }
+        // what is live for the recipe (direction C): where it ranks on the server today and its upgrade, when the site has it
+        var upgrade = recipe.GreatOutcomes.FirstOrDefault(g => !string.Equals(g.Item, recipe.Output, StringComparison.OrdinalIgnoreCase));
+        if (rank > 0 || (best != null && upgrade != null))
+        {
+            var lv = new StackPanel();
+            var cap = new Grid { Margin = new Thickness(12, 6, 12, 2) };
+            cap.ColumnDefinitions.Add(new ColumnDefinition()); cap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            cap.Children.Add(CkText($"TODAY ON {(Server?.Name ?? "YOUR SERVER").ToUpperInvariant()}", CkGoldRule, 11));
+            var age = CkText($"price read {PriceBook.Ago(PlayerBoards.CraftsBoardAt ?? PlayerBoards.CraftsAt ?? DateTime.UtcNow, DateTime.UtcNow)}", CkFaint, 11.5); Grid.SetColumn(age, 1); cap.Children.Add(age);
+            lv.Children.Add(cap);
+            void Live(string left, string mid, string right, bool first)
+            {
+                var g = new Grid { Height = 32, Margin = new Thickness(12, 0, 12, 0) };
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                g.Children.Add(CkText(left, first ? CkGold : CkFaint, 11.5, mono: true));
+                var m = CkText(mid, CkInk, 13); Grid.SetColumn(m, 1); g.Children.Add(m);
+                var r = CkText(right, CkGold, 12.5, mono: true); Grid.SetColumn(r, 2); g.Children.Add(r);
+                lv.Children.Add(new Border { Child = g, BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0), BorderBrush = Ck(CkSlotLine, 0x73) });
+            }
+            if (rank > 0) Live($"#{rank}", $"of every recipe on {Server?.Name ?? "your server"}, by profit a craft", best is { } b0 ? (b0.Profit >= 0 ? "+" : "−") + Fk(Math.Abs(b0.Profit)) : "", true);
+            if (upgrade != null && UpgradeChance(recipe, upgrade) is double uc) Live($"{uc:P0}", $"upgrade to {upgrade.Item}", "", rank <= 0);
+            body.Children.Add(new Border { Child = lv, Margin = new Thickness(16, 14, 16, 4), Padding = new Thickness(0, 2, 0, 4), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), BorderBrush = Ck(CkSlotLine), Background = Ck(CkSlot, 0xA6) });
+        }
         if (recipe.SuccessRate is double sr) body.Children.Add(CkOddsBar(sr));
 
         // the materials, as inventory slots: icon with the count, name, and what the craft's share costs
@@ -115,11 +138,10 @@ public partial class MainWindow
         var tv = CkText(total.ToString("N0") + (unpriced > 0 ? "+" : ""), CkGold, 19, FontWeights.SemiBold, mono: true); Grid.SetColumn(tv, 1); tot.Children.Add(tv);
         body.Children.Add(CkBox(tot, new Thickness(20, 4, 20, 0)));
 
-        // this session: tries and how many worked, what came out, and what one sells for
-        body.Children.Add(CkSection("THIS SESSION"));
-        if (mine == null || mine.Attempts == 0) body.Children.Add(CkNote("Not crafted since the tracker started."));
-        else
+        // this session: tries and how many worked, what came out (hidden until it has been crafted)
+        if (mine is { Attempts: > 0 })
         {
+            body.Children.Add(CkSection("THIS SESSION"));
             double rate = (double)mine.Ok / mine.Attempts;
             body.Children.Add(CkKv($"{mine.Attempts} craft{(mine.Attempts == 1 ? "" : "s")} · {mine.Ok} worked · {mine.Fail} failed", $"{rate:P0}", rate >= 0.5 ? CkGood : CkBad));
             // the upgrade rolls the crafting panel showed after a craft worked
@@ -151,9 +173,8 @@ public partial class MainWindow
             body.Children.Add(ups);
         }
 
-        // where it ranks on the server's best crafts today (kinahledger.com), and a price alert on what it makes
-        if (rank > 0) body.Children.Add(CkKv("Best crafts today", $"#{rank}", CkGold, $"by profit per craft, every recipe on {Server?.Name ?? "your server"}"));
-        body.Children.Add(CkAlertSection(recipe.Output));
+        // a price alert on what it makes, as one line (the rank on the server's best crafts is at the top)
+        body.Children.Add(CkAlertLine(recipe.Output, Redo));
 
         // the profit per craft at the listed success rate, with the chance a success turns into the upgrade (the same sum
         // as the site's best crafts: CraftMath), in the footer

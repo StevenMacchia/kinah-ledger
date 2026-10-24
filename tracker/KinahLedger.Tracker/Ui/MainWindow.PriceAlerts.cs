@@ -34,6 +34,36 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>Cards whose price alert is being set or changed: the full editor shows in place of the one line.</summary>
+    readonly HashSet<string> _alertEdit = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The price alert as one line (direction C): "Alert when below 30,000 · change", or "No price alert · set one"; the
+    /// link opens the editor (below or above, the price, Set alert) in its place.
+    /// </summary>
+    FrameworkElement CkAlertLine(string item, Action redo)
+    {
+        if (_alertEdit.Contains(item) || Server is not { } s) return CkAlertSection(item);
+        var cur = PriceAlerts.Find(s.Label, item);
+        var g = new Grid { Height = 32, Margin = new Thickness(12, 0, 12, 0) };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.Children.Add(new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M6,10 A6,6 0 0 1 18,10 V15 L20,18 H4 L6,15 Z M10,20.5 A2,2 0 0 0 14,20.5"), Stroke = Ck(CkFaint), StrokeThickness = 1.5, Width = 14, Height = 14, Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
+        });
+        var t = CkText(cur != null ? $"Alert when {(cur.Above ? "above" : "below")} {cur.Price:N0}" : "No price alert", cur != null ? CkMuted : CkFaint, 12.5); Grid.SetColumn(t, 1); g.Children.Add(t);
+        var link = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
+        var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(cur != null ? "change" : "set one")) { Foreground = Ck(CkGold), TextDecorations = null };
+        h.Click += (_, _) => { _alertEdit.Add(item); redo(); };
+        link.Inlines.Add(h); Grid.SetColumn(link, 2); g.Children.Add(link);
+        return new Border
+        {
+            Child = g, Margin = new Thickness(16, 12, 16, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = Ck(CkSlotLine),
+            ToolTip = cur != null ? $"A Windows notice when {s.Name}'s lowest ask crosses it. Kept on this PC." : null,
+        };
+    }
+
     /// <summary>The card's "Price alert" section: below or above, the price, Set alert; the alert set now, and Remove.</summary>
     FrameworkElement CkAlertSection(string item)
     {

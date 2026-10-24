@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -82,6 +83,8 @@ public partial class MainWindow : Window
         // the Market is read for this PC whatever the Share switch says; only sending follows it (MarketCapture.Sharing)
         _watcher.Market.Enabled = settings.Market.Enabled;
         Icon = Native.AppIconSource();
+        // the panel over the game shows the newest feed line and the rate since 0.8.30: the old default set moves to it once
+        if (_prefs.HudFields == HudFields.OldDefault) _prefs.HudFields = HudFields.Default;
 
         // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
         // every start: the drops table open; Gathered, each gathering skill, Kinah by enemy and Soul Crystals folded into one line
@@ -111,16 +114,12 @@ public partial class MainWindow : Window
         MiscountLink.Click += (_, _) => ReportMiscount();
         // Compact and Full view: the header button switches, and the summary's link opens Full view
         ViewBtn.Click += (_, _) => SetView(!_prefs.FullView);
-        FullLink.Click += (_, _) => SetView(true);
         // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
         OddsAsPct = _prefs.OddsAsPercent; ShowOddsHeader();
         PctHeader.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; OddsAsPct = _prefs.OddsAsPercent = !_prefs.OddsAsPercent; if (!_demo) _prefs.Save(); ShowOddsHeader(); Redraw(); };
-        GatherHead.MouseLeftButtonUp += (_, _) => { if (GatherRows.Items.Count == 0) return; _prefs.GatherOpen = !_prefs.GatherOpen; if (!_demo) _prefs.Save(); Redraw(); };
-        MobHead.MouseLeftButtonUp += (_, _) => { if (MobRows.Items.Count == 0) return; _prefs.MobsOpen = !_prefs.MobsOpen; if (!_demo) _prefs.Save(); Redraw(); };
-        PetHead.MouseLeftButtonUp += (_, _) => { if (PetRows.Items.Count == 0) return; _prefs.PetsOpen = !_prefs.PetsOpen; if (!_demo) _prefs.Save(); Redraw(); };
-        // "show all" / "show fewer" under each section
-        foreach (var (name, link) in new[] { ("Drops", DropsMoreLink), ("Gather", GatherMoreLink), ("Mob", MobMoreLink), ("Pet", PetMoreLink) })
-            link.Click += (_, _) => { if (!_allRows.Remove(name)) _allRows.Add(name); Redraw(); };
+        // "show all" / "show fewer" under the drops; the sections, the feed's hints and the chips' tables (Ui/MainWindow.Live.cs)
+        DropsMoreLink.Click += (_, _) => { if (!_allRows.Remove("Drops")) _allRows.Add("Drops"); Redraw(); };
+        InitLive();
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
@@ -165,7 +164,7 @@ public partial class MainWindow : Window
         // window is never taller than the screen, so past that, one scroll area below the summary holds the pickups and
         // every table (they no longer scroll on their own). A wheel over a table scrolls the whole area.
         MaxHeight = SystemParameters.WorkArea.Height;
-        foreach (var inner in new[] { DropsScroll, GatherScroll, MobScroll, PetScroll, CraftScroll })
+        foreach (var inner in new[] { DropsScroll, CraftScroll })
             inner.PreviewMouseWheel += (_, ev) =>
             {
                 ev.Handled = true;
@@ -311,9 +310,9 @@ public partial class MainWindow : Window
     void Redraw()
     {
         var e = Shown();
-        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillPickups(); return; }   // a layout render keeps its sample
+        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); return; }   // a layout render keeps its sample
         if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; SummaryCard.Visibility = Visibility.Collapsed; }
-        FillPickups();
+        FillLive();
     }
 
     /// <summary>One line of the recent pickups strip; Tip says, in plain words, how it was read (on hover).</summary>
@@ -335,20 +334,6 @@ public partial class MainWindow : Window
         return string.Join(" ", parts);
     }
 
-    /// <summary>The recent pickups strip: the last three, newest first, on the Farming part while something has been counted.</summary>
-    void FillPickups()
-    {
-        var list = _demo
-            ? new List<PickupRow>
-              {
-                  new("17:51:12", "Spiritstone ×1", ViaTip("chat · recovered")), new("17:51:11", "1,192 Kinah", ViaTip("chat · recovered")),
-                  new("17:51:09", "431 Kinah", ViaTip("chat")),
-              }
-            : (_watcher.Chat?.RecentPickups(3) ?? new()).Select(p => new PickupRow(p.At.ToLocalTime().ToString("HH:mm:ss"), p.What, ViaTip(p.Via))).ToList();
-        PickupRows.ItemsSource = list;
-        PickupStrip.Visibility = list.Count > 0 && _part == "Farming" && !_welcome && _prefs.FullView ? Visibility.Visible : Visibility.Collapsed;
-    }
-
     /// <summary>
     /// The count the window shows: this zone since you arrived (or since the run started), unless All zones is on; then the
     /// run, or the live count. A run just stopped shows for a few seconds either way.
@@ -363,7 +348,7 @@ public partial class MainWindow : Window
 
     string ViewTitle() => _watcher.Farm != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "counted while the game is open" : "this zone");
 
-    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "—" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = "—"; }
+    void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
     async Task Toggle() { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(); }
 
@@ -548,7 +533,7 @@ public partial class MainWindow : Window
             if (show != _lastRun) _tableWhat = ViewTitle();
             FillNumbers(show, show.Active);
         }
-        else if (chat == null) { TableTitle.Text = _watcher.GameRect == null ? "Reading starts once the game is open" : "Looking for the chat"; HeadRate.Text = "—"; HeadRateUnit.Visibility = Visibility.Collapsed; }
+        else if (chat == null) { TableTitle.Text = _watcher.GameRect == null ? "Reading starts once the game is open" : "Looking for the chat"; HeadRate.Text = " "; HeadRateUnit.Visibility = Visibility.Collapsed; }
         // the live dot: the game is being read right now
         LiveMark.Visibility = chat != null && chat.Paused.Length == 0 && chat.LastError.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (farm?.Paused == true && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
@@ -565,8 +550,7 @@ public partial class MainWindow : Window
             // one plain line; the reader's details (reads, Market, the Kinah counter, uploads) are on hover
             // the footer (the approved mock): "Tracking Western Cantas Valley · last: Spiritstone acquired"; read counts on hover
             Say(!chat.ChatFound ? "Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows."
-                : (chat.Zone is { Length: > 0 } tz ? "Tracking " + tz : "Reading the chat") + (chat.LastLine.Length > 0 ? " · last: " + chat.LastLine : ""), "Faint");
-            Status.ToolTip = $"{chat.Reads:N0} chat reads so far.\n{MarketShort()}.\n{BalanceShort()}." + (_watcher.Flushed > 0 ? $"\n{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "");
+                : chat.LastLine.Length > 0 ? "Last: " + chat.LastLine : chat.Zone is { Length: > 0 } tz ? "Tracking " + tz : "Reading the chat", "Faint");
         }
         if (chat != null && _options is { WantsPreview: true } && ++_ticks % 4 == 0 && !_framing)
         {
@@ -580,7 +564,7 @@ public partial class MainWindow : Window
         // the panel over the game can't stop the rest of the refresh (the Crafting table, the pickups) if it fails to open
         if (_prefs.Hud && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
         if (_part == "Crafting") FillCraft(chat?.CraftView);
-        FillPickups();
+        FillLive();
         AlertTick();
         PriceAlertTick();
         UpdateHud();
@@ -594,6 +578,7 @@ public partial class MainWindow : Window
     {
         if (_hud == null) return;
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
+        HudFeed();
         _hud.Update(_hudValues);
     }
 
@@ -619,7 +604,7 @@ public partial class MainWindow : Window
     /// <param name="Value">What the tradeable items would sell for on the Market, after its cut; bound items can't be sold.</param>
     /// <param name="Priced">Tradeable items with a price; <paramref name="Unpriced"/> those without, left out of the value.</param>
     /// <param name="Gross">What the priced tradeable items sell for before the Market's fee and tax.</param>
-    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs, long Gross = 0, List<DropRow>? Pets = null, List<SkillBox>? Skills = null);
+    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs, long Gross = 0, List<DropRow>? Pets = null, List<SkillBox>? Skills = null, int DropsUnpriced = 0);
 
     /// <summary>A gathering skill's own box under the drops: its attempts, how many failed or came plentiful, the pace and what its items are worth.</summary>
     sealed record SkillBox(string Name, int Attempts, int Failed, int Plentiful, double PerHour, long Value);
@@ -636,7 +621,7 @@ public partial class MainWindow : Window
     /// </summary>
     Tables Build(SessionEngine e, double hours, int kills)
     {
-        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0, gross = 0; int priced = 0, unpriced = 0;
+        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0, gross = 0; int priced = 0, unpriced = 0, dropsUnpriced = 0;
         // the enemies fought in this view and their loot tables: odds count only kills of enemies that can drop the item
         var ms = e.MobSnapshot();
         _lastMobKinah = ms.Sum(m => (long)m.Kinah);
@@ -649,12 +634,13 @@ public partial class MainWindow : Window
         foreach (var r in e.ItemRows())
         {
             int total = r.Count + r.Bound;
-            // a row's value is its tradeable copies at the lowest Market price, before the fee; bound copies can't be sold
-            string rowValue = r.Count > 0 ? "—" : "";
+            // a row's value is its tradeable copies at the lowest Market price, before the fee; bound copies can't be sold.
+            // A missing price is a blank cell, said once in the section line ("6 have no price yet")
+            string rowValue = "";
             if (r.Count > 0)
             {
                 var price = PriceBook.Price(r.Name);
-                if (price != null) { long g0 = price.Value * r.Count; gross += g0; value += (long)Math.Round(g0 * PriceBook.SellerKeeps); priced++; rowValue = Short(g0); worthN[r.Name] = g0; } else unpriced++;
+                if (price != null) { long g0 = price.Value * r.Count; gross += g0; value += (long)Math.Round(g0 * PriceBook.SellerKeeps); priced++; rowValue = Short(g0); worthN[r.Name] = g0; } else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
             }
             worth[r.Name] = rowValue;
             var g = GatheringCatalog.Find(r.Name);
@@ -684,7 +670,7 @@ public partial class MainWindow : Window
                     {
                         // every enemy fought has a table, none lists it, and some other enemy's does: a misread, or a drop
                         // credited to the wrong fight. An item on no table at all is one the tables don't cover: no warning
-                        odds = "—";
+                        odds = "";
                         tips.Add("None of the enemies you fought here lists this item. It may have been misread, or come from another fight. Press Looks wrong? to keep it off the site.");
                     }
                 }
@@ -695,7 +681,7 @@ public partial class MainWindow : Window
                 // no line under the name any more (the approved mock): bound copies and a report are said on hover
                 if (r.Bound > 0) tips.Insert(0, r.Count == 0 ? "Bound: can't be sold, so it has no value here." : $"{r.Bound} of these are bound and have no value here.");
                 if (flagged) tips.Insert(0, "Reported: not sent to the site.");
-                drops.Add(new DropRow(r.Name, total.ToString("N0"), odds, Rate(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceCell(r.Name).Text, PriceTone: PriceCell(r.Name).Tone, PriceTip: PriceCell(r.Name).Tip, Value: rowValue, Sub: sub, Tone: tone, Report: r.Name, Reported: flagged,
+                drops.Add(new DropRow(r.Name, total.ToString("N0"), odds, Whole(total / hours), Grade: grade, Icon: Slot(r.Id), Initial: InitialOf(r.Name), Price: PriceCell(r.Name).Text, PriceTone: PriceCell(r.Name).Tone, PriceTip: PriceCell(r.Name).Tip, Value: rowValue, Sub: sub, Tone: tone, Report: r.Name, Reported: flagged,
                     Tip: string.Join("\n\n", tips), Worth: worthN.GetValueOrDefault(r.Name), Mat: IsMaterial(cat)));
             }
         }
@@ -705,7 +691,7 @@ public partial class MainWindow : Window
         // Soul Crystals come from kills too: their own section at the bottom, never mixed into the item rows or the drop count
         var petRows = new List<DropRow>();
         foreach (var (name, n) in e.PetSnapshot().OrderByDescending(x => x.Value))
-            petRows.Add(new DropRow(name, n.ToString("N0"), "", Rate(n / hours), Initial: InitialOf(name), Sub: "Soul Crystal"));
+            petRows.Add(new DropRow(name, n.ToString("N0"), "", Whole(n / hours), Initial: InitialOf(name), Sub: "Soul Crystal"));
         var gathered = new List<DropRow>(); var skills = new List<SkillBox>();
         var stats = e.SkillSnapshot();
         foreach (var skill in GatherSkills.Order)
@@ -721,7 +707,7 @@ public partial class MainWindow : Window
                 bool rep = ReportedDrops.Has(name);
                 var gtips = new List<string>();
                 if (e.Unconfirmed(_items.IdOf(name)) is int gu && gu > 0) gtips.Add($"{gu} of these came from the loot list beside your character or a partly hidden name, not a clear chat line.");
-                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "—", Rate(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceCell(name).Text, PriceTone: PriceCell(name).Tone, PriceTip: PriceCell(name).Tip, Value: worth.GetValueOrDefault(name, ""),
+                gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "", Whole(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceCell(name).Text, PriceTone: PriceCell(name).Tone, PriceTip: PriceCell(name).Tip, Value: worth.GetValueOrDefault(name, ""),
                     Sub: rep ? "Reported · not sent to the site" : "Gathering material", Tone: rep ? "Warn" : "", Report: name, Reported: rep, Tip: string.Join("\n\n", gtips), Worth: worthN.GetValueOrDefault(name)));
             }
         }
@@ -734,8 +720,8 @@ public partial class MainWindow : Window
             bool open = _openMobs.Contains(key), known = book.Knows(m.Name);
             var where = zonesToo && m.Zone is { Length: > 0 } mz ? mz + " · " : "";
             // every enemy opens: its loot table when one is known, and always what it dropped for you
-            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "—", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: Short(m.Kinah),
-                Sub: where + (open ? "▾ Hide drops" : "▸ Show drops"), Key: key,
+            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: Short(m.Kinah),
+                Sub: where + (open ? "hide drops" : "show drops"), Key: key,
                 Tip: "A best guess: the Kinah that landed just after the target bar named this enemy. Click to " + (open ? "hide" : "show") + " its drops."));
             if (!open) continue;
             // what you got against the listed chance, what hasn't dropped yet last; then drops the table doesn't list
@@ -763,7 +749,7 @@ public partial class MainWindow : Window
             if (!known && m.Drops.Count == 0 && m.Crystals == 0)
                 mobs.Add(new DropRow("No item drops yet", "", "", "", Sub: "only Kinah so far · its loot table isn't in the list yet", Child: true));
         }
-        return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross, petRows, skills);
+        return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross, petRows, skills, dropsUnpriced);
     }
 
     /// <summary>Sections showing every row, by name ("Drops", "Gather", "Mob", "Pet"); the others show their top rows.</summary>
@@ -836,7 +822,7 @@ public partial class MainWindow : Window
             {
                 KinahHr.Text = Fk(t.Nodes / h);
                 KinahKill.Text = Fk(s.GatherCount / h);
-                KillsHr.Text = t.Nodes > 0 ? (s.GatherCount / (double)t.Nodes).ToString("0.00") : "—";
+                KillsHr.Text = t.Nodes > 0 ? (s.GatherCount / (double)t.Nodes).ToString("0.00") : "";
                 DropsHr.Text = Fk(t.Bonus / h);
                 int ok = t.Nodes - t.Failed;
                 string plent = ok > 0 ? $" · plentiful {Math.Round(100.0 * t.Plentiful / ok)}%" : "";
@@ -847,23 +833,23 @@ public partial class MainWindow : Window
             case Mode.Mixed:
                 // Kinah, the whole hour (Kinah plus the drops and the gathered items after the Market's cut), kills and attempts
                 KinahHr.Text = Fk(kinah / h);
-                KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
+                KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "";
                 KillsHr.Text = Fk(t.Kills / h);
                 DropsHr.Text = Fk(t.Nodes / h);
                 break;
             default:
                 KinahHr.Text = Fk(kinah / h);
-                KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "—";
+                KinahKill.Text = t.Kills > 0 ? Fk(kinah / (double)t.Kills) : "";
                 KillsHr.Text = Fk(t.Kills / h);
                 // drops a kill (the approved mock): 0.7, not 159 an hour
-                DropsHr.Text = t.Kills <= 0 ? "—" : s.DropCount / (double)t.Kills is var dk && dk >= 0.1 ? dk.ToString("0.0") : dk.ToString("0.00");
+                DropsHr.Text = t.Kills <= 0 ? "" : s.DropCount / (double)t.Kills is var dk && dk >= 0.1 ? dk.ToString("0.0") : dk.ToString("0.00");
                 _ = worth; _ = crystals;
                 break;
         }
         // the hour's worth if the tradeable items are sold at the lowest Market price, after the Market's cut; open world adds the Kinah
         _lastValue = s.Value; _lastPriced = s.Priced;
         long worthHr = (long)((s.Value + (_mode == Mode.Gather ? 0 : kinah)) / h);
-        ValueHr.Text = s.Priced > 0 || (_mode != Mode.Gather && kinah > 0) ? Fk(worthHr) : "—";
+        ValueHr.Text = s.Priced > 0 || (_mode != Mode.Gather && kinah > 0) ? Fk(worthHr) : "";
         ValueTile.ToolTip = (s.Priced + s.Unpriced == 0 ? "No tradeable items yet."
                 : s.Priced == 0 ? "No Market price yet for any of these items. Open the Market in the game once: the prices you see there value your drops, and the site's price board fills in the rest."
                 : $"{s.Priced} of {s.Priced + s.Unpriced} tradeable items priced, at the lowest Market price, keeping {PriceBook.SellerKeeps:P0} after the Market's fee and tax. Bound items can't be sold and aren't counted."
@@ -875,17 +861,12 @@ public partial class MainWindow : Window
         TableTitle.Text = $"{ZoneLocator.KindOf(e.Zone) ?? "Open world"} · {verb} {Clock(elapsed)}";
         TableTitle.ToolTip = _tableWhat.Length > 0 ? "Counting " + _tableWhat + "." : null;
         long totalNow = kinah + s.Value;
-        // the hour's worth, big, and how it splits (Kinah, loot after the Market's cut)
-        HeadRate.Text = totalNow > 0 ? Fk(totalNow / h) : "—";
-        HeadRateUnit.Visibility = totalNow > 0 ? Visibility.Visible : Visibility.Collapsed;
-        var kinahPart = _mode != Mode.Gather && kinah > 0 ? $"{Fk(kinah / h)} Kinah" : "";
-        HeadRateLbl.Text = totalNow <= 0 ? "Kinah and loot an hour, once something is counted"
-            : s.Priced > 0 ? string.Join(" + ", new[] { kinahPart, $"{Fk(s.Value / h)} loot" }.Where(x => x.Length > 0)) + ", after tax"
-            : kinahPart + ", loot not priced yet";
+        // the live card's right side: the hour's worth, its line since the start, kills and Kinah a kill, best here, the health line
+        FillRate(e, h, _mode == Mode.Gather ? 0 : kinah, s.Value, s.Priced, t.Kills, t.Nodes, t.Nodes > 0 ? s.GatherCount / (double)t.Nodes : 0);
         Summary.Text = string.Join(" · ", new[] { idle, skipped.TrimStart(' ', '·') }.Where(x => x.Length > 0));
         Summary.Visibility = Summary.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // the summary card: the session total, how it adds up in one line (the whole sum on hover), the three best drops
+        // Session, folded to one line: what was counted and the total; opened, how it splits and how it compares
         // only what happened: a gathering stretch doesn't say "0 kills · 0 drops"
         FootTotalNote.Text = string.Join(" · ", new[]
         {
@@ -896,33 +877,25 @@ public partial class MainWindow : Window
         SummaryCard.Visibility = _hasSummary && _part == "Farming" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
         ShareCardBtn.IsEnabled = totalNow > 0;
         FootTotal.Text = totalNow.ToString("N0");
-        SumBreakdown.Text = (kinah > 0 || _mode != Mode.Gather ? $"{Fk(kinah)} Kinah + " : "")
-            + (s.Priced > 0 ? $"{Fk(s.Value)} loot after {1 - PriceBook.SellerKeeps:P0} tax" : "loot not priced yet")
-            + (s.Unpriced > 0 ? $" · {s.Unpriced} item{(s.Unpriced == 1 ? "" : "s")} without a price" : "");
+        SumBreakdown.Text = s.Unpriced > 0 ? $"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add nothing." : "";
+        SumBreakdown.Visibility = SumBreakdown.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         SumBreakdown.ToolTip = $"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.\n"
             + (s.Priced > 0 ? $"Loot at the lowest Market price: {s.Gross:N0}.\nMarket fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}.\n" : "")
-            + (s.Unpriced > 0 ? $"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price anywhere yet and add nothing.\n" : "")
             + $"Session total: {totalNow:N0}.";
+        FillSessionRows(kinah, s.Value, s.Priced, _watcher.Chat?.ZoneView?.Zone ?? e.Zone);
         var top = s.Drops.Concat(s.Gathered).Where(r => !r.Header && r.Worth > 0).OrderByDescending(r => r.Worth).ToList();
         _topRows = top;
-        TopDrops.ItemsSource = top.Take(3).Select(r => r with { Value = Fk(r.Worth) }).ToList();
-        TopDropsBox.Visibility = top.Count > 0 && TopDropsShown ? Visibility.Visible : Visibility.Collapsed;
 
-        // the player's best hour in this zone; this stay's own rate is the zone view's, whatever the window shows
+        // the player's best hour in this zone (the panel's "best"); this stay's own rate is the zone view's, whatever the window shows
         ShowBest(e);
-
-        // beside "Drops from kills": what the balance did ("balance up 581K (824K/hr)"); sales and enchants on hover
-        var extra = Extras(e, h);
-        ExtraLine.Text = extra.Count > 0 ? extra[0] : "";
-        ExtraLine.ToolTip = extra.Count > 0 ? string.Join(" · ", extra) + "\n\nFrom the Kinah counter at the top-left of the game and your Market mail: what your balance actually changed by, spending included." : null;
-        ExtraLine.Visibility = extra.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        FillWhere(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone);
         ShowAccuracy();
 
         // the panel over the game shows these same figures
         _hudValues["time"] = Clock(elapsed);
-        _hudValues["rate"] = totalNow > 0 ? Fk(totalNow / h) : "—";
+        _hudValues["rate"] = totalNow > 0 ? Fk(totalNow / h) : "";
         _hudValues["kinah"] = Fk(kinah / h);
-        _hudValues["loot"] = s.Priced > 0 ? Fk(s.Value / h) : "—";
+        _hudValues["loot"] = s.Priced > 0 ? Fk(s.Value / h) : "";
         _hudValues["total"] = Fk(totalNow);
         _shareCard = new CardNumbers(e.Zone, ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : "Open world"), elapsed, totalNow, totalNow > 0 ? totalNow / h : 0,
             // the Discord card keeps its own three figures and labels, whatever the window's stats show
@@ -952,7 +925,7 @@ public partial class MainWindow : Window
         if (best == null)
         {
             BestLine.Visibility = Visibility.Collapsed;
-            _hudValues["best"] = counts && rate > 0 ? "first" : "—";
+            _hudValues["best"] = counts && rate > 0 ? "first" : "";
             JoinCompare();
             return;
         }
@@ -981,21 +954,6 @@ public partial class MainWindow : Window
         CompareSep.Visibility = best && farm ? Visibility.Visible : Visibility.Collapsed;
         if (farm && FarmLine.Text.Length > 0) FarmLine.Text = (best ? char.ToLowerInvariant(FarmLine.Text[0]) : char.ToUpperInvariant(FarmLine.Text[0])) + FarmLine.Text[1..];
         CompareLine.Visibility = best || farm ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    /// <summary>
-    /// What 0.7 adds beside the drops, each part only once there is something to say: net Kinah from the balance counter
-    /// first ("balance up 581K (824K/hr)"), then enchant results and the player's own Market sales.
-    /// </summary>
-    static List<string> Extras(SessionEngine e, double h)
-    {
-        var parts = new List<string>();
-        if (e.NetKinah is long net) parts.Add($"balance {(net >= 0 ? "up" : "down")} {Fk(Math.Abs(net))} ({(net >= 0 ? "" : "−")}{Fk(Math.Abs(net) / h)}/hr)");
-        var o = e.OddsTotals();   // crafts have their own part of the window now, never this line
-        if (o.Enchants > 0) parts.Add($"{o.EnchantsOk} of {o.Enchants} enchants worked");
-        if (e.Sold > 0) parts.Add($"sold {e.Sold} listing{(e.Sold == 1 ? "" : "s")} for {Fk(e.SoldKinah)}");
-        if (e.Expired > 0) parts.Add($"{e.Expired} listing{(e.Expired == 1 ? "" : "s")} expired");
-        return parts;
     }
 
     /* ---------------- crafting ---------------- */
@@ -1034,7 +992,7 @@ public partial class MainWindow : Window
     {
         bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, farm = !craft && !events && !_welcome, full = farm && _prefs.FullView;
         LeftCol.Visibility = craft || events ? Visibility.Collapsed : Visibility.Visible;
-        SessionCard.Visibility = Tiles.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
+        SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         SummaryCard.Visibility = farm && _hasSummary ? Visibility.Visible : Visibility.Collapsed;
         TablesCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
@@ -1048,22 +1006,31 @@ public partial class MainWindow : Window
         // fixed column widths: an Auto column would take half the header's width from the span and leave a gap
         LeftColDef.Width = new GridLength(662);
         RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
-        // the summary: slim in Compact (the total and how it adds up), with the top drops in Full
-        TopDropsShown = full;
-        TopDropsBox.Visibility = full && _topRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        FullLinkText.Visibility = Visibility.Collapsed;
-        HeadStack.Width = StatusBar.Width = full ? 662 * 2 + 16 : 662;
+        // Full view (the C mock): the feed and the rate top left with Session and Where to farm now under them and the footer
+        // closing that card; the drops and the chips on the right. Compact: one card, Where to farm now after the chips
+        MoveTo(WhereSection, full ? LeftCol : TableStack, full ? LeftCol.Children.IndexOf(SummaryCard) + 1 : TableStack.Children.Count);
+        MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
+        System.Windows.Controls.Grid.SetRow(StatusBar, 3); System.Windows.Controls.Grid.SetColumnSpan(StatusBar, 2);
+        HeadStack.Width = full ? 662 * 2 + 16 : 662;
+        StatusBar.Width = 662;
         ViewFill.Opacity = full ? 1 : 0.25;
-        ViewBtn.ToolTip = full ? "Compact view: one column, three rows per table" : "Full view: twice as wide, with recent pickups and more rows per table";
-        ViewBtn.Visibility = craft || _welcome ? Visibility.Collapsed : Visibility.Visible;
+        ViewBtn.ToolTip = full ? "Compact view: one column" : "Full view: twice as wide, with Session and Where to farm now open beside the tables";
+        ViewBtn.Visibility = craft || events || _welcome ? Visibility.Collapsed : Visibility.Visible;
+        // Session and Where to farm now open in Full view, folded in Compact, until the player opens or folds them
+        _secUser.Remove("Session"); _secUser.Remove("Where");
         ApplyPlayerView(craft, farm, full);
-        FillPickups();
+        FillLive();
         Redraw();
         JoinCards();
     }
 
-    /// <summary>True in Full view: the summary shows the top drops (Compact keeps it to the total).</summary>
-    bool TopDropsShown;
+    /// <summary>Puts an element into another panel (at <paramref name="index"/>, or the end), leaving it where it is when it is there already.</summary>
+    static void MoveTo(FrameworkElement el, System.Windows.Controls.Panel to, int index)
+    {
+        if (ReferenceEquals(el.Parent, to)) return;
+        (el.Parent as System.Windows.Controls.Panel)?.Children.Remove(el);
+        if (index < 0 || index > to.Children.Count) to.Children.Add(el); else to.Children.Insert(index, el);
+    }
 
     /// <summary>Rows per table before "Show all": three in Compact, six in Full view.</summary>
     int TableRows => _prefs.FullView ? 6 : 3;
@@ -1072,10 +1039,11 @@ public partial class MainWindow : Window
     SessionEngine? _demoEngine; TimeSpan _demoElapsed;
 
     /// <summary>
-    /// The crafting table: per recipe, the tries, how often it worked, what a try costs at Market prices (materials from
-    /// the recipe book; a failed try uses them too), what came out and what it sells for after the Market's cut, and the
-    /// profit or loss: the outcome's value minus every try's cost. A material with no price yet makes the cost "≥" the
-    /// priced part and the profit "≤"; materials ticked "I have these" cost nothing. A dash where the recipe isn't known.
+    /// The Crafting part (direction C): the last five crafts beside the session's profit, then This session, per recipe the
+    /// tries, how many worked, what every try cost at Market prices (materials from the recipe book; a failed try uses them
+    /// too), what came out at the lowest Market price after the Market's cut, and the profit. A material with no price yet
+    /// makes the cost "at least" the priced part and the profit "at most", said once in the section line; materials ticked
+    /// "I have these" cost nothing. A missing figure is a blank cell.
     /// </summary>
     void FillCraft(SessionEngine? e)
     {
@@ -1095,45 +1063,52 @@ public partial class MainWindow : Window
             }
             if (cost != null) spent += cost.Value * r.Attempts; else noBook++;
             if (madeKnown) worth += made; else noPrice++;
-            var book = RecipeBook.ForOutput(r.Name);
-            // a success whose recipe variant (×1 or ×10) the panel didn't show makes "?", never an assumed count
-            var madeParts = r.Made.OrderByDescending(m => m.Value).Select(m => (m.Key.Equals(r.Name, StringComparison.OrdinalIgnoreCase) ? "" : m.Key + " ") + "×" + m.Value).ToList();
-            if (r.MadeUnknown > 0) madeParts.Add("?" + (madeParts.Count > 0 ? $" from {r.MadeUnknown} more" : ""));
-            var outcome = madeParts.Count == 0 ? "nothing came out yet" : "made " + string.Join(", ", madeParts);
-            var listed = book?.SuccessRate is double sr ? $" · listed {sr:P0}" : "";
-            if (r.Upgraded + r.NotUpgraded > 0) listed += $" · combo upgraded {r.Upgraded} of {r.Upgraded + r.NotUpgraded}";
             long? profit = cost != null && madeKnown ? made - cost.Value * r.Attempts : null;
-            var costCell = cost is not long cv ? "—" : gaps == 0 ? Fk(cv) : cv == 0 && farmedMats == 0 ? "—" : "≥ " + Fk(cv);
-            var profitCell = profit is not long pv ? "—" : gaps == 0 ? Signed(pv) : "≤ " + (pv >= 0 ? Fk(pv) : "−" + Fk(-pv));
-            var sellsQ = PriceBook.QuoteOf(r.Name);
-            var sells = sellsQ != null ? (sellsQ.From == PriceBook.From.Region ? "≈" : "") + Fk(sellsQ.Price * PriceBook.SellerKeeps) : "—";
+            var spentCell = cost is not long cv ? "" : gaps == 0 ? Fk(cv * r.Attempts) : cv == 0 && farmedMats == 0 ? "" : "≥ " + Fk(cv * r.Attempts);
+            var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
-            rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Attempts > 0 ? $"{100.0 * r.Ok / r.Attempts:0}%" : "—", costCell,
-                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: "Click for the materials, what a try costs and what it makes.",
-                Price: sells, PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : "",
-                Sub: outcome + listed + (book == null ? " · not in the recipe book" : gaps > 0 ? $" · {gaps} material{(gaps == 1 ? "" : "s")} unpriced" : "") + (vendorMats > 0 ? $" · {vendorMats} vendor cost{(vendorMats == 1 ? "" : "s")} to set" : "")
-                    + (farmedMats > 0 ? $" · {farmedMats} farmed" : "")));
+            var book = RecipeBook.ForOutput(r.Name);
+            var tip = "Click for the materials, what a try costs and what it makes."
+                + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
+                + (r.Upgraded + r.NotUpgraded > 0 ? $"\nUpgrade rolls: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
+                + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "");
+            rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Ok.ToString("N0"), spentCell,
+                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
+                Price: madeKnown && made > 0 ? Fk(made) : "", PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : ""));
         }
         CraftRows.ItemsSource = rows;
         _crafted = e?.CraftSnapshot() ?? new();
         FillBestCrafts();
-        CraftEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        // with nothing crafted yet, only the sentence that says what shows here (and Best crafts under it): no empty
-        // columns, no rows of dashes, nothing to start over (Steven's UX pass, 2026-10-24)
+        // the feed: the last five crafts, worked or failed, with what each made or cost
+        DrawFeed(CraftFeedHost, CraftEmpty, FeedFor(FeedTab.Crafting), FeedTab.Crafting, CraftValue);
+        FillHealth(CraftHealthText, null);
+        // with nothing crafted yet, the feed's one sentence and Best crafts: no empty table, nothing to start over
         var some = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        CraftHead.Visibility = CraftFoot.Visibility = CraftCredit.Visibility = CraftResetText.Visibility = some;
-        CraftWhat.Text = tries > 0 ? $"{tries} tr{(tries == 1 ? "y" : "ies")} · {ok} worked ({100.0 * ok / tries:0}%)" : "";
-        CraftSpent.Text = spent > 0 ? "−" + Fk(spent) : "—";
-        // the known part of every cost: a material with no price yet is left out and named as a count
-        var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
-        var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? "" : "s")} unpriced" : "";
-        CraftSpentNote.Text = string.Join(" · ", new[] { gapNote, noBook > 0 ? noBookNote + ", left out" : "" }.Where(x => x.Length > 0));
-        CraftMade.Text = worth > 0 ? Fk(worth) : "—";
-        CraftMadeNote.Text = noPrice > 0 ? $"{noPrice} recipe{(noPrice == 1 ? "" : "s")} with no Market price yet, left out" : "after the Market's fee and tax";
+        CraftHead.Visibility = CraftResetText.Visibility = some;
         long net = worth - spent;
-        CraftProfit.Text = spent > 0 || worth > 0 ? Signed(net) : "—";
-        CraftProfit.Foreground = B(spent > 0 || worth > 0 ? (net >= 0 ? "Good" : "Bad") : "Ink");
-        CraftProfitNote.Text = missing.Count + noBook > 0 ? "up to, " + string.Join(" · ", new[] { gapNote, noBookNote }.Where(x => x.Length > 0)) : "";
+        CraftProfit.Text = spent > 0 || worth > 0 ? Signed(net) : " ";
+        _craftNet = spent > 0 || worth > 0 ? Signed(net) : "";
+        CraftProfit.Foreground = B(spent > 0 || worth > 0 ? (net >= 0 ? "Ink" : "Bad") : "Ink");
+        CraftProfitNote.Text = spent > 0 || worth > 0 ? (missing.Count + noBook > 0 ? "profit this session, at most" : "profit this session") : "profit shows with the first craft";
+        CraftWhat.Inlines.Clear();
+        void Fig(string text) { var run = new Run(text); run.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); run.SetResourceReference(TextElement.ForegroundProperty, "Ink"); CraftWhat.Inlines.Add(run); }
+        if (tries > 0)
+        {
+            Fig(tries.ToString("N0")); CraftWhat.Inlines.Add(new Run($" tr{(tries == 1 ? "y" : "ies")} · ")); Fig(ok.ToString("N0")); CraftWhat.Inlines.Add(new Run(" worked"));
+            if (spent > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(spent)); CraftWhat.Inlines.Add(new Run(" spent")); }
+            if (worth > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(worth)); CraftWhat.Inlines.Add(new Run(" sells for")); }
+        }
+        CraftWhat.Visibility = CraftWhat.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // This session's line: the recipes, the cut, and the gaps said once
+        var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? "" : "s")} have no price yet" : "";
+        var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
+        CraftSpentNote.Text = $"{rows.Count} recipe{(rows.Count == 1 ? "" : "s")} · after the Market's {1 - PriceBook.SellerKeeps:P0}";
+        CraftSpent.Text = spent > 0 || worth > 0 ? Signed(net) : "";
+        CraftSpent.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, net >= 0 ? "Gold" : "Faint");
+        CraftMadeNote.Text = string.Join(" · ", new[] { gapNote, noBookNote, noPrice > 0 ? $"{noPrice} with no Market price for what came out" : "" }.Where(x => x.Length > 0));
+        CraftMadeNote.Visibility = CraftMadeNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        CraftNote.Text = $"Lowest Market price on {Server?.Name ?? "your server"}";
+        ApplySections();
     }
 
     static string Signed(double v) => (v >= 0 ? "+" : "−") + Fk(Math.Abs(v));
@@ -1157,12 +1132,8 @@ public partial class MainWindow : Window
         int allPets = allE?.PetSnapshot().Values.Sum() ?? 0, allMobs = allE?.MobSnapshot().Count ?? 0;
         int allGather = allRows.Where(r => GatheringCatalog.Find(r.Name) != null).Sum(r => r.Count + r.Bound);
         int allDrops = allRows.Where(r => GatheringCatalog.Find(r.Name) == null).Sum(r => r.Count + r.Bound);
-        // a section with nothing in it is hidden; the boxes under the drops stay folded until a click opens them (the
-        // approved mock, 2026-10-24), the drops table is always open
+        // a section with nothing in it is hidden
         DropsSection.Visibility = drops.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        GatherSection.Visibility = gathered.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        MobSection.Visibility = mobs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        PetSection.Visibility = pets.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         // what came in other zones, for the sections empty here: one line instead of a header each (Steven, 0.7.6)
         var elsewhere = new List<string>();
         if (drops.Count == 0 && allDrops > 0) elsewhere.Add($"{allDrops:N0} drop{(allDrops == 1 ? "" : "s")}");
@@ -1174,12 +1145,9 @@ public partial class MainWindow : Window
         OtherZones.Visibility = elsewhere.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         bool none = nothingHere && elsewhere.Count == 0;
         TablesEmpty.Visibility = none && !(_watcher.Chat?.Instances.Snapshot().Count > 0) ? Visibility.Visible : Visibility.Collapsed;
-        // Gathered starts folded under the drops; with no drops at all (a gathering stretch) it is the table, so it starts open.
-        // A click flips it either way
-        bool gOpen = gathered.Count > 0 && (_prefs.GatherOpen != (drops.Count == 0)), mOpen = _prefs.MobsOpen && mobs.Count > 0, pOpen = _prefs.PetsOpen && pets.Count > 0;
 
-        // the drops: one table at both widths, the crafting materials under their own sub-line; the top rows of each
-        // (three in Compact, six in Full) until "Show all"
+        // Drops from kills: one aligned table, the crafting materials under their own sub-line; the top rows of each (three in
+        // Compact, six in Full) until "Show all". The section line says how many kinds, and how many have no price, once
         var plain = drops.Where(r => !r.Mat).ToList(); var mats = drops.Where(r => r.Mat).ToList();
         bool allDropsShown = _allRows.Contains("Drops");
         Rows.ItemsSource = allDropsShown ? plain : plain.Take(TableRows).ToList();
@@ -1188,55 +1156,22 @@ public partial class MainWindow : Window
         MatTitle.Text = $"CRAFTING MATERIALS · {mats.Count}";
         DropsMore.Visibility = plain.Count > TableRows || mats.Count > TableRows ? Visibility.Visible : Visibility.Collapsed;
         DropsMoreRun.Text = allDropsShown ? "Show fewer" : $"Show all {drops.Count}";
-        DropsTitle.Text = drops.Count > 0 ? $"DROPS FROM KILLS · {drops.Count}" : "DROPS FROM KILLS";
+        int noPriceRows = pre?.DropsUnpriced ?? drops.Count(r => r.Value.Length == 0 && r.Worth == 0);
+        DropsNote.Text = drops.Count == 0 ? "" : $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")}" + (noPriceRows > 0 ? $" · {noPriceRows} {(noPriceRows == 1 ? "has" : "have")} no price yet" : "");
         TableEmpty.Visibility = drops.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the odds and how many come an hour." : "No drops yet.";
 
-        // Gathered: every gathered item in the same table, folded to one line
-        GatherRows.ItemsSource = TopRows("Gather", gathered, TableRows, GatherMore, GatherMoreRun);
-        GatherTitle.Text = $"Gathered · {gathered.Count}";
-        GatherSum.Text = "";
-        GatherEmpty.Visibility = gathered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        SetArrow(GatherChev, gOpen);
-        GatherBody.Visibility = gOpen ? Visibility.Visible : Visibility.Collapsed;
-        if (!gOpen) GatherMore.Visibility = Visibility.Collapsed;
-        GatherSection.BorderBrush = B(gOpen ? "LineStrong" : "Line");
-
-        // each gathering skill: its own folded box ("Mining · ore and gemstones · 6 attempts · 8.5K")
-        FillSkills(skills);
-
-        // Kinah by enemy, a best guess, folded to one line with the Kinah it adds up to
-        MobRows.ItemsSource = TopRows("Mob", mobs, TableRows, MobMore, MobMoreRun);
-        int mc = mobs.Count(r => !r.Child);
-        MobTitle.Text = $"Kinah by enemy · {mc}";
+        // Also this session: a chip each for Gathered, the gathering skills, Soul Crystals and Kinah by enemy (Ui/MainWindow.Live.cs)
         var target = _watcher.Chat?.TargetNote ?? "";
-        MobEmpty.Visibility = mobs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        MobEmpty.Text = target.Length > 0 ? "Target bar: " + target + "." : "A best guess: the Kinah that lands just after the target bar names an enemy. With several enemies on you, the bar shows only one.";
-        MobSum.Text = _lastMobKinah > 0 ? Short(_lastMobKinah) + " Kinah" : "";
-        MobSum.Foreground = B("Gold");
-        SetArrow(MobChev, mOpen);
-        MobBody.Visibility = mOpen ? Visibility.Visible : Visibility.Collapsed;
-        if (!mOpen) MobMore.Visibility = Visibility.Collapsed;
-        MobCredit.Visibility = mobs.Count > 0 && mOpen ? Visibility.Visible : Visibility.Collapsed;
-        MobSection.BorderBrush = B(mOpen ? "LineStrong" : "Line");
-
-        // Soul Crystals from kills: their own folded box
-        PetRows.ItemsSource = TopRows("Pet", pets, TableRows, PetMore, PetMoreRun);
-        int pc = pets.Sum(r => int.TryParse(r.Drops, System.Globalization.NumberStyles.AllowThousands, null, out var n) ? n : 0);
-        PetTitle.Text = $"Soul Crystals · {pc}";
-        PetSum.Text = "";
-        PetEmpty.Visibility = pets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        SetArrow(PetChev, pOpen);
-        PetBody.Visibility = pOpen ? Visibility.Visible : Visibility.Collapsed;
-        if (!pOpen) PetMore.Visibility = Visibility.Collapsed;
-        PetSection.BorderBrush = B(pOpen ? "LineStrong" : "Line");
+        FillExtras(gathered, skills, pets, mobs, e?.Totals().Kinah ?? 0);
+        ApplySections();
         ShowInstances();
 
         var notes = new List<string>();
         if (drops.Count > 0 && kills == 0) notes.Add("Odds appear once kills are counted. Kills come from Kinah or Soul Point pickups, one per mob.");
-        if (gOpen && gathered.Count > 0 && nodes == 0) notes.Add("Per-try rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.");
-        bool noPrice = drops.Any(r => !r.Header && r.Value == "—") || (gOpen && gathered.Any(r => !r.Header && r.Value == "—"));
-        if (mOpen && mobs.Count > 0 && target.Length > 0) notes.Add("Target bar: " + target + ".");
+        if (_extraOpen == "Gather" && gathered.Count > 0 && nodes == 0) notes.Add("Per-try rates appear once a gather is counted: every ore, log, Odyle, herb or food line counts as one attempt, failed ones too.");
+        bool noPrice = drops.Any(r => !r.Header && r.Value.Length == 0);
+        if (_extraOpen == "Mob" && mobs.Count > 0 && target.Length > 0) notes.Add("Target bar: " + target + ".");
         if (_watcher.Chat?.Target is { Unlisted: { Length: > 0 } un } tg && (DateTime.UtcNow - tg.UnlistedAt).TotalSeconds < 30 && mobs.Count == 0) notes.Add($"The target bar shows \"{un}\", which isn't on the enemy list yet, so it isn't counted.");
         if (noPrice && !PriceBook.Any) notes.Add("No Market prices for this server yet. Open the Market in the game once with the tracker running, and the site's price board fills in the rest.");
         TableNote.Text = string.Join(" ", notes);
@@ -1259,7 +1194,7 @@ public partial class MainWindow : Window
     static string InitialOf(string name) { foreach (var c in name) if (char.IsLetter(c)) return char.ToUpperInvariant(c).ToString(); return "·"; }
 
     /// <summary>A drop's odds as the site's item page says them: "1 in 6 kills" (here "1 in 6", or "17%" with the column switched), or "2.3 a kill" for more than one per kill.</summary>
-    static string Odds(long drops, int kills) => drops <= 0 || kills <= 0 ? "—" : drops >= kills ? $"{drops / (double)kills:0.0} a kill" : OddsAsPct ? Pct(drops / (double)kills) : $"1 in {Math.Round(kills / (double)drops):0}";
+    static string Odds(long drops, int kills) => drops <= 0 || kills <= 0 ? "" : drops >= kills ? $"{drops / (double)kills:0.0} a kill" : OddsAsPct ? Pct(drops / (double)kills) : $"1 in {Math.Round(kills / (double)drops):0}";
 
     /// <summary>True when Events shows every run kept on this PC, not only this session's.</summary>
     bool _eventsAll;
@@ -1560,6 +1495,7 @@ public partial class MainWindow : Window
         ZoneLbl.Text = "Western Cantas Valley";
         ApplyServer("na_e", "Siel (Elyos)");
         LoadPlayerDemo(_items); _demoZone = "Western Cantas Valley";   // best crafts and where to farm, sample boards
+        LoadDemoFeed(kind);   // the live feed's sample lines and rate line (Ui/MainWindow.Live.cs)
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         if (kind == "Events")
         {
@@ -1572,6 +1508,7 @@ public partial class MainWindow : Window
         if (kind == "CraftingEmpty")
         {
             // the Crafting part before anything is crafted: the one sentence and Best crafts, for a layout render
+            _demoFeed.RemoveAll(l => l.Tab == Session.FeedTab.Crafting);
             ShowPart("Crafting", remember: false);
             FillCraft(new SessionEngine(_items));
             SetTrackingUi(false);
@@ -1580,19 +1517,22 @@ public partial class MainWindow : Window
         }
         if (kind == "Crafting")
         {
-            // the Crafting part with a morning's crafts, priced, for a layout render
+            // the Crafting part with a morning's crafts from the crafting panel, priced, for a layout render (example figures)
             var ce = new SessionEngine(_items); var t0 = DateTime.UtcNow.AddMinutes(-30);
-            PriceBook.SetBoard(new() { ["Expert's Splendent Orichalcum Longsword"] = 420_000, ["Artisan's Refining Stone"] = 21_000, ["Pure Orichalcum Ore"] = 5_200, ["Pure Odyle"] = 6_300,
-                ["Artisan's Orichalcum Longsword"] = 690_000, ["Artisan's Splendent Orichalcum Longsword"] = 1_450_000, ["Fresh Fruit"] = 900, ["Artisan's Fruit Salad"] = 5_100 });
+            PriceBook.SetBoard(new() { ["Sapphire Powder"] = 9_999, ["Sapphire Gemstone"] = 1_790, ["Diamond Powder"] = 4_150, ["Diamond Gemstone"] = 1_500,
+                ["Orichalcum Greaves"] = 200_000, ["Orichalcum Ingot"] = 2_000, ["Strong Leather"] = 9_929, ["Refining Stone"] = 899, ["Odyle"] = 3_480 });
             int s = 0;
-            void Craft(string recipe, bool ok, string? made = null) { ce.Apply(new CraftResult(t0.AddSeconds(s += 30), ok ? recipe : "", ok)); if (ok) ce.Apply(new ItemAcquired(t0.AddSeconds(s + 1), _items.IdOf(made ?? recipe), 1, false)); }
-            Craft("Artisan's Orichalcum Longsword", true); Craft("Artisan's Orichalcum Longsword", false); Craft("Artisan's Orichalcum Longsword", true, "Artisan's Splendent Orichalcum Longsword");
-            Craft("Artisan's Orichalcum Longsword", true); Craft("Artisan's Orichalcum Longsword", false);
-            for (int i = 0; i < 12; i++) Craft("Artisan's Fruit Salad", i % 4 != 3);
+            void Craft(string recipe, bool ok)
+            {
+                var at = t0.AddSeconds(s += 90);
+                ce.CraftPanelSeen(recipe, at);
+                ce.Apply(new CraftResult(at, recipe, ok) { Via = SessionEngine.CraftPanelVia, Makes = RecipeBook.ForOutput(recipe)?.OutputQty ?? 1 });
+            }
+            Craft("Sapphire Powder", true); Craft("Sapphire Powder", true); Craft("Orichalcum Greaves", true); Craft("Orichalcum Greaves", false); Craft("Diamond Powder", true);
             ShowPart("Crafting", remember: false);
             FillCraft(ce);
             SetTrackingUi(false);
-            Say("Reading the chat · last: Artisan's Fruit Salad acquired", "Faint");
+            Say("Last: Diamond Powder acquired", "Faint");
             return;
         }
         ShowPart("Farming", remember: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
@@ -1639,9 +1579,10 @@ public partial class MainWindow : Window
         }
         ApplyModeLabels();
         _tableWhat = "this run";
+        if (_mode == Mode.Open) _extraOpen = "Mob";   // the mock opens Kinah by enemy in place
         _demoEngine = e; _demoElapsed = TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17);
         FillNumbers(e, _demoElapsed);
-        FillPickups();
+        FillLive();
         _hudValues["last"] = "Spiritstone ×1";
         using (var b = new System.Drawing.Bitmap(480, 203))
         using (var g = System.Drawing.Graphics.FromImage(b))
@@ -1671,7 +1612,7 @@ public partial class MainWindow : Window
         }
         SetTrackingUi(true);
         LiveMark.Visibility = Visibility.Visible;
-        Say(_mode == Mode.Gather ? "Tracking Western Cantas Valley · last: Sapphire Gemstone acquired" : "Tracking Western Cantas Valley · last: Spiritstone acquired", "Faint");
+        Say(_mode == Mode.Gather ? "Last: Sapphire Gemstone acquired" : "Last: Spiritstone acquired", "Faint");
         if (market)
         {
             _demoMarket = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
