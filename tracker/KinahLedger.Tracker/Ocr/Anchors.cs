@@ -187,6 +187,24 @@ public sealed class AnchoredCrop
     /// <summary>Where the switch lines go (reads.log; tests catch them).</summary>
     public Action<string> Log { get; set; } = CrashLog.Note;
 
+    /// <summary>
+    /// Hysteresis for a region whose anchor is judged by a search that can miss while the region is still there (the chat:
+    /// on 2026-10-24 one failed look around the anchor dropped the lock at 13:07:23, 13:07:36 ... and the same unchanged box
+    /// re-took it a second later, while the chat was on screen throughout). With it: a miss drops the lock only after
+    /// <see cref="HoldRules.Misses"/> misses in a row spread over at least <see cref="HoldRules.MissSeconds"/> s (a sighting
+    /// in its place in between starts the count again); the anchor moving, a new window, a lower confidence or the switch
+    /// still drop it at once. Sightings count towards a lock only <see cref="HoldRules.GapSeconds"/> s apart, so three
+    /// stable observations take a few seconds, not three passes. Switches are logged at most once a minute.
+    /// </summary>
+    public sealed record HoldRules(int Misses = 3, double MissSeconds = 10, double GapSeconds = 1.5, double LogSeconds = 60);
+    /// <summary>Null: every miss drops the lock at once and every switch is logged (the Kinah strip).</summary>
+    public HoldRules? Hold { get; init; }
+    /// <summary>Misses in a row while locked (with <see cref="Hold"/>).</summary>
+    public int Misses { get { lock (_lock) return _misses; } }
+    int _misses; DateTime _firstMiss, _lastSight = DateTime.MinValue, _loggedAt = DateTime.MinValue;
+    /// <summary>Switches not logged because one was logged less than a minute before (the minute line shows them).</summary>
+    public int Unlogged { get; private set; }
+
     /// <param name="derive">The crop from (game window, anchor box).</param>
     public AnchoredCrop(string region, Func<Rectangle, Rectangle, Rectangle> derive, double minConf)
     {
@@ -197,14 +215,15 @@ public sealed class AnchoredCrop
     /// One sighting of the anchor (<paramref name="found"/>, screen pixels). <paramref name="enabled"/> is the region's
     /// layout.anchor switch: off, nothing locks and a held lock is dropped.
     /// </summary>
-    public void Observe(Rectangle game, Rectangle found, double conf, bool enabled)
+    public void Observe(Rectangle game, Rectangle found, double conf, bool enabled, DateTime? at = null)
     {
+        var now = at ?? DateTime.UtcNow;
         lock (_lock)
         {
-            if (!enabled) { Drop($"layout.anchor.{Region} is off"); _seen.Clear(); return; }
+            if (!enabled) { Drop($"layout.anchor.{Region} is off", now); _seen.Clear(); return; }
             if (found.Width <= 0 || found.Height <= 0 || conf < MinConf)
             {
-                Drop($"the anchor's confidence fell to {conf:0.00}");
+                Drop($"the anchor's confidence fell to {conf:0.00}", now);
                 _seen.Clear();
                 return;
             }
@@ -214,25 +233,44 @@ public sealed class AnchoredCrop
                     : conf < LockedConf ? $"the anchor's confidence fell from {LockedConf:0.00} to {conf:0.00}"
                     : Moved(a, found) > Tolerance ? $"the anchor moved {Moved(a, found)} px"
                     : null;
-                if (why == null) return;
-                Drop(why);
+                if (why == null) { _misses = 0; return; }   // seen in its place: the misses so far weren't in a row
+                Drop(why, now);
                 _seen.Clear();
             }
+            // with hysteresis, sightings closer together than the gap are the same sighting again
+            if (Hold is { } hold && _seen.Count > 0 && (now - _lastSight).TotalSeconds < hold.GapSeconds) return;
+            _lastSight = now;
             _seen.Add((found, game, conf));
             if (_seen.Count > Needed) _seen.RemoveAt(0);
             // three in a row, the same window, no two of them more than the tolerance apart
             if (_seen.Count < Needed || _seen.Any(s => s.Game != game) || _seen.Any(x => _seen.Any(y => Moved(x.Found, y.Found) > Tolerance))) return;
-            Anchor = found; _game = game; LockedConf = _seen.Min(s => s.Conf); On++;
+            Anchor = found; _game = game; LockedConf = _seen.Min(s => s.Conf); On++; _misses = 0;
             var c = _derive(game, found);
             var f = Anchors.FixedRegions(game)[Region];
-            Log($"anchor {Region}: reading around the anchor now, {c.Width}x{c.Height} at {c.X},{c.Y} instead of the fixed {f.Width}x{f.Height} (held still {Needed} times within {Tolerance} px, conf {LockedConf:0.00})");
+            Say($"anchor {Region}: reading around the anchor now, {c.Width}x{c.Height} at {c.X},{c.Y} instead of the fixed {f.Width}x{f.Height} (held still {Needed} times within {Tolerance} px, conf {LockedConf:0.00})", now);
         }
     }
 
-    /// <summary>The anchor wasn't there (no numbers on the strip, no chat lines lately): the fixed crop, now.</summary>
-    public void Missing(Rectangle game, string why)
+    /// <summary>
+    /// The anchor wasn't there (no numbers on the strip, the chat not found around its anchor, no chat lines lately).
+    /// Without <see cref="Hold"/>: the fixed crop, now. With it: one more miss in a row, and the fixed crop only once
+    /// there are enough of them over long enough. Returns whether the region is still read from its anchor.
+    /// </summary>
+    public bool Missing(Rectangle game, string why, DateTime? at = null)
     {
-        lock (_lock) { Drop(why); _seen.Clear(); }
+        var now = at ?? DateTime.UtcNow;
+        lock (_lock)
+        {
+            _seen.Clear();   // the sightings towards a lock are no longer in a row
+            if (Anchor == null) return false;
+            if (Hold is not { } hold) { Drop(why, now); return false; }
+            if (_misses == 0) _firstMiss = now;
+            _misses++;
+            double over = (now - _firstMiss).TotalSeconds;
+            if (_misses < hold.Misses || over < hold.MissSeconds) return true;
+            Drop($"{why}; {_misses} misses in a row over {over:0} s", now);
+            return false;
+        }
     }
 
     /// <summary>
@@ -244,18 +282,27 @@ public sealed class AnchoredCrop
         lock (_lock)
         {
             if (Anchor is not Rectangle a) return null;
-            if (!enabled) { Drop($"layout.anchor.{Region} is off"); _seen.Clear(); return null; }
-            if (game != _game) { Drop("the game window changed"); _seen.Clear(); return null; }
+            if (!enabled) { Drop($"layout.anchor.{Region} is off", DateTime.UtcNow); _seen.Clear(); return null; }
+            if (game != _game) { Drop("the game window changed", DateTime.UtcNow); _seen.Clear(); return null; }
             var c = _derive(game, a);
             return c.Width >= 20 && c.Height >= 10 ? c : null;
         }
     }
 
-    void Drop(string why)
+    void Drop(string why, DateTime now)
     {
         if (Anchor == null) return;
-        Anchor = null; LockedConf = 0; Off++;
-        Log($"anchor {Region}: back to the fixed crop ({why})");
+        Anchor = null; LockedConf = 0; Off++; _misses = 0;
+        Say($"anchor {Region}: back to the fixed crop ({why})", now);
+    }
+
+    /// <summary>A switch line: every one without <see cref="Hold"/>; with it, at most one a minute, the next saying how many weren't.</summary>
+    void Say(string line, DateTime now)
+    {
+        if (Hold is not { } hold) { Log(line); return; }
+        if (_loggedAt != DateTime.MinValue && (now - _loggedAt).TotalSeconds < hold.LogSeconds) { Unlogged++; return; }
+        Log(Unlogged > 0 ? $"{line} ({Unlogged} switch(es) since the last line not logged)" : line);
+        _loggedAt = now; Unlogged = 0;
     }
 
     /// <summary>How far apart two boxes are: the largest move of any of their four edges, px.</summary>
@@ -344,13 +391,13 @@ public sealed class Anchors
         u.Intersect(game);
         double conf = Math.Min(1, numbers.Count / 4.0);
         lock (_lock) _hits["kinah-strip"] = new Hit("kinah-strip", "balance", u, BalanceReader.Strip(game), conf, at);
-        BalanceCrop.Observe(game, u, conf, Update.RemoteConfig.Current.AnchorBalance);
+        BalanceCrop.Observe(game, u, conf, Update.RemoteConfig.Current.AnchorBalance, at);
     }
 
     /// <summary>Phase two for the Kinah counter strip: read around its numbers once they hold still (layout.anchor.balance).</summary>
     public AnchoredCrop BalanceCrop { get; } = new("balance", AnchoredCrop.BalanceFrom, 0.25);
     /// <summary>Phase two for the chat: looked for again around its box once it holds still (layout.anchor.chat).</summary>
-    public AnchoredCrop ChatCrop { get; } = new("chat", AnchoredCrop.ChatFrom, 0.4);
+    public AnchoredCrop ChatCrop { get; } = new("chat", AnchoredCrop.ChatFrom, 0.4) { Hold = new() };
 
     /// <summary>
     /// The chat box the tracker reads (found above the input row with its channel tab, or from its lines, or chosen or
@@ -362,7 +409,7 @@ public sealed class Anchors
             : how.Contains("from its lines", StringComparison.OrdinalIgnoreCase) ? 0.7 : 0.4;
         lock (_lock) _hits["chat-input"] = new Hit("chat-input", "chat", chat, ChatLocator.Corner(game), conf, at);
         // phase two: a chat chosen by hand is never looked for again, so it has nothing to anchor
-        if (!manual) ChatCrop.Observe(game, chat, conf, Update.RemoteConfig.Current.AnchorChat);
+        if (!manual) ChatCrop.Observe(game, chat, conf, Update.RemoteConfig.Current.AnchorChat, at);
     }
 
     /// <summary>
@@ -443,7 +490,7 @@ public sealed class Anchors
                 var (dx, dy) = Delta(region, f, ar);
                 CrashLog.Note($"anchor {region} dx={dx} dy={dy} conf={conf:0.00} (from {from}; size {ar.Width}x{ar.Height}, fixed {f.Width}x{f.Height})");
             }
-            CrashLog.Note($"anchor: {_ticks} checks, {(_ticks > 0 ? _costMs / _ticks : 0):0.0} ms each, {_templates.Count} template(s){(LayoutNotFound ? ", layout not found" : "")} · read from the anchor: chat {(ChatCrop.Active ? "yes" : "no")}, balance {(BalanceCrop.Active ? "yes" : "no")}");
+            CrashLog.Note($"anchor: {_ticks} checks, {(_ticks > 0 ? _costMs / _ticks : 0):0.0} ms each, {_templates.Count} template(s){(LayoutNotFound ? ", layout not found" : "")} · read from the anchor: chat {(ChatCrop.Active ? "yes" : "no")}{(ChatCrop.Unlogged > 0 ? $" ({ChatCrop.Unlogged} switch(es) not logged)" : "")}{(ChatCrop.Misses > 0 ? $" ({ChatCrop.Misses} miss(es) held)" : "")}, balance {(BalanceCrop.Active ? "yes" : "no")}");
             _costMs = 0; _ticks = 0;
         }
         return true;

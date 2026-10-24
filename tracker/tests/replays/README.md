@@ -45,3 +45,8 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   "Vqng(" and more, while Kina, a soul row, Sapphire Gemstone and Orichalcum gathers come and go below; it is static
   text after three reads over 6 s (one title read goes unsure before that; main had 38). A `list` read may carry `x`
   (each line's left in the window), as trace.log writes it since then (`LootNotRow` rule e).
+- `event-*`: an event's reward cards (`Ocr/EventCards.cs`), several pictures of one screen (`"k": "cards"`, the game
+  window, everything but the title and the cards blacked out), with the run open in the case's `zone`. `expect.cards`
+  lists the five cards: `received`, and for a received one `slots` in list order (`n`, `name` when the truth knows it,
+  `hidden` for a slot the screen only showed cut by the card's window, which must stay not read) and `more` (its list
+  may run past what the screen showed).

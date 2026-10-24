@@ -103,7 +103,7 @@ public sealed class RareGate
     internal static int Prune(string dir, DateTime now)
     {
         int gone = 0;
-        var files = new DirectoryInfo(dir).GetFiles("2*-*.png").Where(f => System.Text.RegularExpressions.Regex.IsMatch(f.Name, @"^\d{8}-\d{6}-\d{3}-(chat|list)-")).OrderBy(f => f.LastWriteTime).ToList();
+        var files = new DirectoryInfo(dir).GetFiles("2*-*.png").Where(f => System.Text.RegularExpressions.Regex.IsMatch(f.Name, @"^\d{8}-\d{6}-\d{3}-(chat|list|event)-")).OrderBy(f => f.LastWriteTime).ToList();
         foreach (var f in files.Where(f => (now - f.LastWriteTime).TotalDays > ProofKeepDays).ToList()) { try { f.Delete(); gone++; files.Remove(f); } catch { } }
         long total = files.Sum(f => f.Length);
         foreach (var f in files) { if (total <= ProofMaxMB * 1024 * 1024) break; total -= f.Length; try { f.Delete(); gone++; } catch { } }

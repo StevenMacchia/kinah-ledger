@@ -276,50 +276,58 @@ public static class RewardGrid
             int found = row < lastRow ? 8 : clearAt[row];
             for (int col = 0; col < found; col++)
             {
-                var box = new Rectangle(x0 + col * p, y, s, s);
-                var bg = Background(frame, box);
-                var grade = GradeOf(bg);
-                // the count, white in the lower right; a long one ("600.0K") reaches left past the middle
-                var corner = new Rectangle(box.Left + box.Width / 8, box.Top + box.Height * 3 / 5, box.Width * 7 / 8 - 2, box.Height * 2 / 5 - 2);
-                // no white figures there: the game shows no count for one of an item
-                string num = "";
-                bool figures = false, glyphFigure = false;
-                if (HasFigures(frame, corner))
-                {
-                    figures = true;
-                    // the reader skips a lone figure ("4", "6") but reads it after a word: "Qty 4" (2026-10-23 Urugugu: 4, 2, 6, 3
-                    // and 5 read as 1, 1, 7, 11 and 1 without it)
-                    using (var cq = WhiteText(frame, corner, prefix: true))
-                        foreach (var scale in new[] { 2, 3, 1 })
-                        {
-                            var q = string.Join(" ", (await ScreenReader.ReadBoxesAsync(cq, corner.Location, scale)).Select(l => l.Text.Trim())).Trim();
-                            var after = System.Text.RegularExpressions.Regex.Match(q, @"q\W?t\W?y\W*(?<n>[0-9OoIl|SB.,]+\s?[KkMm]?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                            if (after.Success && System.Text.RegularExpressions.Regex.IsMatch(after.Groups["n"].Value, @"\d")) { num = after.Groups["n"].Value; break; }
-                        }
-                    if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
-                        using (var cb = WhiteText(frame, corner))
-                            foreach (var scale in new[] { 2, 3, 4, 1 })
-                            {
-                                num = string.Join(" ", (await ScreenReader.ReadBoxesAsync(cb, corner.Location, scale)).Select(l => l.Text.Trim())).Trim();
-                                if (System.Text.RegularExpressions.Regex.IsMatch(num, @"\d")) break;
-                            }
-                }
-                // more digits than the corner has figures is a misread (2026-10-23 Vakron: a lone 5 read as 75), so the shape decides
-                // (a plain count of two or three digits only: in "600.0K" the dot and the figures can touch)
-                if (figures && System.Text.RegularExpressions.Regex.IsMatch(num.Trim(), @"^\d{2,3}$") && num.Trim().Length > FigureRuns(frame, corner)) num = "";
-                // the reader skips a lone digit: then its shape, in the tight lower-right corner where a count ends
-                if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
-                {
-                    var tight = new Rectangle(box.Left + box.Width * 11 / 20, box.Top + box.Height * 13 / 20, box.Width * 2 / 5, box.Height * 3 / 10);
-                    num = Glyphs.Read(frame, tight, out glyphFigure);
-                }
-                // figures the reader can't tell are a count not read (0), never one assumed (2026-10-23: four counts read as 1)
-                long count = figures && glyphFigure && !System.Text.RegularExpressions.Regex.IsMatch(num, @"\d") ? 0 : ParseCount(num);
-                slots.Add(new Slot(box, grade, num, count, Match(frame, box, bg)));
+                slots.Add(await ReadSlotAsync(frame, new Rectangle(x0 + col * p, y, s, s)));
             }
             if (found < 8) break;   // a short row is the last one, and a row with none ends the grid
         }
         return slots;
+    }
+
+    /// <summary>
+    /// One slot read where it is: its grade by its backing, its count (the reader, then the figures' shapes) and its closest
+    /// icons. The expedition table reads each of its slots this way, and so do the event reward cards (EventCards).
+    /// </summary>
+    internal static async Task<Slot> ReadSlotAsync(Bitmap frame, Rectangle box)
+    {
+        var bg = Background(frame, box);
+        var grade = GradeOf(bg);
+        // the count, white in the lower right; a long one ("600.0K") reaches left past the middle
+        var corner = new Rectangle(box.Left + box.Width / 8, box.Top + box.Height * 3 / 5, box.Width * 7 / 8 - 2, box.Height * 2 / 5 - 2);
+        // no white figures there: the game shows no count for one of an item
+        string num = "";
+        bool figures = false, glyphFigure = false;
+        if (HasFigures(frame, corner))
+        {
+            figures = true;
+            // the reader skips a lone figure ("4", "6") but reads it after a word: "Qty 4" (2026-10-23 Urugugu: 4, 2, 6, 3
+            // and 5 read as 1, 1, 7, 11 and 1 without it)
+            using (var cq = WhiteText(frame, corner, prefix: true))
+                foreach (var scale in new[] { 2, 3, 1 })
+                {
+                    var q = string.Join(" ", (await ScreenReader.ReadBoxesAsync(cq, corner.Location, scale)).Select(l => l.Text.Trim())).Trim();
+                    var after = System.Text.RegularExpressions.Regex.Match(q, @"q\W?t\W?y\W*(?<n>[0-9OoIl|SB.,]+\s?[KkMm]?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (after.Success && System.Text.RegularExpressions.Regex.IsMatch(after.Groups["n"].Value, @"\d")) { num = after.Groups["n"].Value; break; }
+                }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
+                using (var cb = WhiteText(frame, corner))
+                    foreach (var scale in new[] { 2, 3, 4, 1 })
+                    {
+                        num = string.Join(" ", (await ScreenReader.ReadBoxesAsync(cb, corner.Location, scale)).Select(l => l.Text.Trim())).Trim();
+                        if (System.Text.RegularExpressions.Regex.IsMatch(num, @"\d")) break;
+                    }
+        }
+        // more digits than the corner has figures is a misread (2026-10-23 Vakron: a lone 5 read as 75), so the shape decides
+        // (a plain count of two or three digits only: in "600.0K" the dot and the figures can touch)
+        if (figures && System.Text.RegularExpressions.Regex.IsMatch(num.Trim(), @"^\d{2,3}$") && num.Trim().Length > FigureRuns(frame, corner)) num = "";
+        // the reader skips a lone digit: then its shape, in the tight lower-right corner where a count ends
+        if (!System.Text.RegularExpressions.Regex.IsMatch(num, @"\d"))
+        {
+            var tight = new Rectangle(box.Left + box.Width * 11 / 20, box.Top + box.Height * 13 / 20, box.Width * 2 / 5, box.Height * 3 / 10);
+            num = Glyphs.Read(frame, tight, out glyphFigure);
+        }
+        // figures the reader can't tell are a count not read (0), never one assumed (2026-10-23: four counts read as 1)
+        long count = figures && glyphFigure && !System.Text.RegularExpressions.Regex.IsMatch(num, @"\d") ? 0 : ParseCount(num);
+        return new Slot(box, grade, num, count, Match(frame, box, bg));
     }
 
     /// <summary>

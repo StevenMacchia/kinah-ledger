@@ -297,6 +297,66 @@ a whole frame (text traces, and crops of the loot list, the panel or the table),
 synthetically in parse-test only, which is why the picture-only ones are log-only until the turn-on rule above is
 met. A wrong rule is fixed in `SceneState.Classify`; all gating can be switched off for everyone with `scene.gate`.
 
+## Event reward cards, read from the picture (branch tracker/event-cards, 2026-10-24)
+
+Steven's rule: event loot comes from the game's reward picture, never the chat. Until now the Shugo Festival's card
+screen was only kept as pictures and the run's rewards stayed "not read". `Ocr/EventCards.cs` reads it.
+
+- **The screen** (Hidden Lugi, 17 pictures at 5120x2160 and the 10 fps footage in kinah-bench): five tall cards side by
+  side, centred. Received: bright blue frame, a card icon and a cyan "1" top right. Not received: dim gold frame, neither.
+  Turned face up ("Rewards have been sent to your cube."), each card is a list of reward slots, three to a row, the
+  expedition table's kind of slot (icon on its grade's backing, count lower right, none for one piece of gear), in a
+  window 4.8 rows tall that the player can scroll. The cards print no item names. The pick before it ("Obtain rewards by
+  clicking the Selection Complete button.", cards face down) is never read.
+- **Geometry** at 2160 high, x from the screen's centre: card 0's left -1355.25, pitch 556.5, width 484, top 616; slots
+  133x135 at 32 px in, 144 apart across and 146 down; the window from y 782 to 1482, the first row's top at 787
+  unscrolled. Each frame's sides and top are found within 12 px of where they belong.
+- **Received or not**: the top edge's colour (near white, or gold with R-B of 30 or more) and the cyan "1" (about 270 px,
+  or none) must agree on every card, or the read is not recognised.
+- **Rows**: the first row's top is where the slots' top and bottom edges line up across their whole width (lower quartile
+  along each line; the mean found lines inside the icons). A slot is there when its sides stand out from the card (lower
+  quartile 12 or more; slots 20 to 108, empty places 0 to 3). A slot the window cuts is kept with no count and no icons,
+  never read from half a picture. The list's end shows when an empty place after the last slot is the card's own blue
+  backing; a grey place (a tooltip over the list) or a slot after a gap marks the read covered.
+- **Each slot** is read by `RewardGrid.ReadSlotAsync` (the expedition table's per-slot reader, moved out unchanged):
+  grade, count, closest icons, named by `GradedPick` with the sure distance (70). The second witness is the slot's
+  backing grade (the icon's items must hold that grade); the cards have no name text to read. Four plain figures or more
+  is a misread (the cards write 1,000 and up as "1.1K"): the Abyss Points coin's ring made "440" read "3440", so the
+  figures' own width on the count's lower half keeps the last three; otherwise the count isn't read. A sure icon that
+  holds only gear is one piece (figures read on gear art, "x11", are dropped).
+- **Votes**: read once a second while the screen shows (a cache keyed on each slot's exact pixels skips text recognition
+  for a slot already read). Each card's read is placed in its list: unscrolled at the top; scrolled, at the one whole-row
+  offset where at least two sure slots agree and none clashes, else it is left out. Each place is voted like the table
+  (sure reads only). Filed through `ApplyGrid` once the last two reads agree and every list was seen to its end, else
+  when the screen has been gone 2.5 s, the event is left, after 12 reads or after 20 s. Once per screen.
+- **Filing**: every received card's list in order, as the run's rewards (`Instances.RewardTable`, so they upload and
+  show on the profile: Abyss Points, tokens, consumables, bound items alike). A slot not named surely (a gear icon two
+  items share, a count not read, a slot only ever seen cut) is an unknown item ("Common x? · picture") and its crop goes
+  to `proof\` (`...-event-cardN-slotM-Grade.png`). A card whose list may run past what was seen (partly read) adds
+  `card N: partly read, M slot(s) seen, more below what the screen showed` and leaves the run's Kinah unknown. A card not received is logged, not
+  counted. The pictures are kept as before.
+- **Keyed on the frames too**: inside an event, every 2 s, a quick look (about 200 pixels) for the five frames, then
+  `Locate`; found, the screen counts as up even when its title isn't read (a Daeva Pass banner over the title held it
+  back 20 s on 2026-10-24), and face-up cards are read. reads.log: `event cards: found by their frames (the screen's
+  title wasn't read)`.
+- **Fallback**: no five cards where they belong, a frame neither blue nor gold, or a frame and its icon that disagree:
+  that read is left out; with no read at all, `event cards: layout not recognised, pictures kept (...)`, and the run's
+  rewards stay not read, exactly as before.
+- **reads.log**: `event cards read N: card 1 12 slots + 2 cut, end shows | ... | card 4 not received`, then per card
+  `event cards: card 1 received, 14 slot(s), 2 only ever seen cut ...: Common x440 Icon_abysspoint 63 -> Abyss Points |
+  ...`, `event cards: filed after 3 read(s) (...)`, and ApplyGrid's `event cards read: 45 slots, ...`.
+- **Measured** (replay bank `event-2026-10-24-hidden-lugi-1306` and `-1006`, seven pictures): every received card's slot
+  count right (14, 12, 19 = 45, the footage's count; 13, 20, 13), every count right, Abyss Points 440 + 480 + 800 + 360
+  = 2,080 (the counter's rise in the footage), consumables named (Soul Codex, Refining Stone, Odyle, Fine Odyle,
+  Resurrection Spiritstone, Centuryroot Token, Enhance Stone), gear left as unknown items (each gear icon names two items
+  at one grade), card 1's last row at 13:06 only ever seen cut (two unknown items). parse-test draws the screen for
+  received vs not, four cards, a missing "1", face down, the scroll merge and the unknown-item path.
+- **Event types seen: Hidden Lugi only.** The other Shugo Festival games (Jump Jump, Wraith Evasion, Mysterious Track,
+  Odyle Flight Frenzy, Goldrin's Treasure, Up! Up! Up!, Not This Tile?, Nyerk Shooter, Shugo's Dilemma) need one picture
+  each of their card screen before their layout is trusted; until then a different layout falls back as above. Only
+  5120x2160 has been seen; the geometry scales with the window's height and is centred, as the expedition table's does,
+  unchecked here.
+
 ## Commands
 
 ```

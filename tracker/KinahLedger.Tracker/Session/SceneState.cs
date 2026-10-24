@@ -69,6 +69,12 @@ public sealed class FrameStats
     public double TopBlack { get; private init; }
     public double BottomBlack { get; private init; }
     public double MiddleMean { get; private init; }
+    /// <summary>
+    /// The centre's brightness (0.3 to 0.7 both ways) and the outer tenth on each side's: a death screen's dark vignette
+    /// leaves the border much darker than the centre, where its prompt sits.
+    /// </summary>
+    public double CentreMean { get; private init; }
+    public double BorderMean { get; private init; }
     /// <summary>Edge density where the HUD sits: the Kinah counter strip (top-left), the minimap (top-right), the skill bar (bottom centre), the chat corner.</summary>
     public double StripEdges { get; private init; }
     public double MapEdges { get; private init; }
@@ -78,10 +84,30 @@ public sealed class FrameStats
     public double RightFlat { get; private init; }
     public double RightMedian { get; private init; }
     public double RightEdges { get; private init; }
+    /// <summary>
+    /// The right side's median colourfulness (max minus min of R, G, B, 0 to 1). A panel is a neutral dark grey; the
+    /// scenery the old Bag rule took for one (2026-10-24, Hidden Lugi: violet grass on the right, 4 of 4 Bag lines false)
+    /// is strongly coloured.
+    /// </summary>
+    public double RightChroma { get; private init; }
     /// <summary>The upper left (above the usual chat box, where an expanded chat reaches): flatness, median, rows of text.</summary>
     public double LeftFlat { get; private init; }
     public double LeftMedian { get; private init; }
     public int LeftTextRows { get; private init; }
+    /// <summary>
+    /// The three places an expanded chat must cover that nothing else covers together (2026-10-24: the rule fired 31 times
+    /// in 21 minutes on dark full-screen windows and dark scenes, with no chat expanded): the top of the left column
+    /// (0.15 to 0.35 of the height, where the normal chat never reaches), the normal chat's own area (0.60 to 0.92: the
+    /// expanded panel continues down to its input row, text in it), and beside the panel (0.40 to 0.62 across: a panel
+    /// ends, so the world beside it is brighter; a dark full-screen window is dark there too).
+    /// </summary>
+    public double UpperFlat { get; private init; }
+    public double UpperMedian { get; private init; }
+    public int UpperTextRows { get; private init; }
+    public double LowFlat { get; private init; }
+    public double LowMedian { get; private init; }
+    public int LowTextRows { get; private init; }
+    public double BesideMedian { get; private init; }
 
     public const float Dark = 0.08f, Black = 0.04f, EdgeStep = 0.10f, FlatStep = 0.06f;
     /// <summary>The HUD regions with at least this edge density count as drawn.</summary>
@@ -91,7 +117,9 @@ public sealed class FrameStats
     // where things sit, as fractions of the window (x0, y0, x1, y1)
     static readonly RectangleF StripBox = RectangleF.FromLTRB(0f, 0f, 0.28f, 0.06f), MapBox = RectangleF.FromLTRB(0.76f, 0f, 1f, 0.14f),
         BarBox = RectangleF.FromLTRB(0.30f, 0.86f, 0.70f, 1f), ChatBox = RectangleF.FromLTRB(0f, 0.55f, 0.35f, 0.98f),
-        RightBox = RectangleF.FromLTRB(0.62f, 0.12f, 0.96f, 0.85f), LeftBox = RectangleF.FromLTRB(0.02f, 0.15f, 0.36f, 0.55f);
+        RightBox = RectangleF.FromLTRB(0.62f, 0.12f, 0.96f, 0.85f), LeftBox = RectangleF.FromLTRB(0.02f, 0.15f, 0.36f, 0.55f),
+        UpperBox = RectangleF.FromLTRB(0.02f, 0.15f, 0.36f, 0.35f), LowBox = RectangleF.FromLTRB(0.02f, 0.60f, 0.36f, 0.92f),
+        BesideBox = RectangleF.FromLTRB(0.40f, 0.15f, 0.62f, 0.55f);
     const double Band = 0.11;
 
     /// <summary>The measures of one thumbnail.</summary>
@@ -179,24 +207,92 @@ public sealed class FrameStats
             return rows;
         }
 
+        // colourfulness: the median of max - min over R, G, B in a region (a 64-step histogram)
+        double Chroma(RectangleF f)
+        {
+            var (x0, y0, x1, y1) = Box(f);
+            x1 = Math.Min(x1, w); y1 = Math.Min(y1, h);
+            var hist = new int[64]; int all = 0;
+            for (int y = y0; y < y1; y++)
+                for (int x = x0; x < x1; x++)
+                {
+                    int i = (y * w + x) * 3;
+                    int mx = Math.Max(rgb[i], Math.Max(rgb[i + 1], rgb[i + 2])), mn = Math.Min(rgb[i], Math.Min(rgb[i + 1], rgb[i + 2]));
+                    hist[Math.Min(63, (mx - mn) / 4)]++; all++;
+                }
+            if (all == 0) return 0;
+            int acc = 0, b = 0;
+            for (; b < 63; b++) { acc += hist[b]; if (acc * 2 >= all) break; }
+            return (b + 0.5) / 64;
+        }
+
+        double BoxMean(RectangleF f)
+        {
+            var (x0, y0, x1, y1) = Box(f);
+            x1 = Math.Min(x1, w); y1 = Math.Min(y1, h);
+            int all = 0; double sm = 0;
+            for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) { all++; sm += luma[y * w + x]; }
+            return all == 0 ? 0 : sm / all;
+        }
+
         int band = Math.Max(1, (int)Math.Round(h * Band));
         var (rf, rm) = Flatness(RightBox);
         var (lf, lm) = Flatness(LeftBox);
+        var (uf, um) = Flatness(UpperBox);
+        var (wf, wm) = Flatness(LowBox);
+        var (_, bm) = Flatness(BesideBox);
         return new FrameStats
         {
             W = w, H = h, Rgb = rgb, Luma = luma,
             Mean = sum / n, DarkShare = dark / (double)n, RedShare = red / (double)n,
             TopBlack = BlackShare(0, band), BottomBlack = BlackShare(h - band, h), MiddleMean = MeanOf((int)(h * 0.2), (int)(h * 0.8)),
+            CentreMean = BoxMean(RectangleF.FromLTRB(0.3f, 0.3f, 0.7f, 0.7f)),
+            BorderMean = (BoxMean(RectangleF.FromLTRB(0f, 0f, 0.1f, 1f)) + BoxMean(RectangleF.FromLTRB(0.9f, 0f, 1f, 1f))) / 2,
             StripEdges = Edges(StripBox), MapEdges = Edges(MapBox), BarEdges = Edges(BarBox), ChatEdges = Edges(ChatBox),
-            RightFlat = rf, RightMedian = rm, RightEdges = Edges(RightBox),
+            RightFlat = rf, RightMedian = rm, RightEdges = Edges(RightBox), RightChroma = Chroma(RightBox),
             LeftFlat = lf, LeftMedian = lm, LeftTextRows = TextRows(LeftBox),
+            UpperFlat = uf, UpperMedian = um, UpperTextRows = TextRows(UpperBox),
+            LowFlat = wf, LowMedian = wm, LowTextRows = TextRows(LowBox), BesideMedian = bm,
         };
     }
 
     public override string ToString() =>
-        $"mean {Mean:0.00}, dark {DarkShare:P0}, red {RedShare:P0}, bands {TopBlack:P0}/{BottomBlack:P0} middle {MiddleMean:0.00}, " +
+        $"mean {Mean:0.00}, dark {DarkShare:P0}, red {RedShare:P0}, bands {TopBlack:P0}/{BottomBlack:P0} middle {MiddleMean:0.00} centre {CentreMean:0.00} border {BorderMean:0.00}, " +
         $"HUD edges strip {StripEdges:0.00} map {MapEdges:0.00} bar {BarEdges:0.00} chat {ChatEdges:0.00}, " +
-        $"right flat {RightFlat:P0} at {RightMedian:0.00}, left flat {LeftFlat:P0} at {LeftMedian:0.00} with {LeftTextRows} text rows";
+        $"right flat {RightFlat:P0} at {RightMedian:0.00} colour {RightChroma:0.00}, left flat {LeftFlat:P0} at {LeftMedian:0.00} with {LeftTextRows} text rows, " +
+        $"upper flat {UpperFlat:P0} at {UpperMedian:0.00} with {UpperTextRows} rows, low flat {LowFlat:P0} at {LowMedian:0.00} with {LowTextRows} rows, beside {BesideMedian:0.00}";
+
+    /// <summary>
+    /// An expanded chat: one flat dark panel, darker than the frame, with text, that reaches from the top of the left
+    /// column (where the normal chat never is) down through the normal chat's own area, with brighter world beside it.
+    /// The rule before 2026-10-24 asked only the left column (0.15 to 0.55 of the height) and fired on dark full-screen
+    /// windows (the event's card screen, the arena) and dark scenes; <see cref="ExpandedChatOld"/> keeps it for the tests.
+    /// </summary>
+    public bool ExpandedChat =>
+        ExpandedChatOld && !DarkBackdrop
+        && UpperFlat >= 0.5 && UpperMedian < 0.25 && UpperTextRows >= 2
+        && LowFlat >= 0.5 && Math.Abs(LowMedian - LeftMedian) <= FlatStep && LowTextRows >= 4
+        && BesideMedian >= LeftMedian + FlatStep;
+
+    /// <summary>
+    /// A full-screen window's near-black backdrop (the event's card screen, a reward window): much of the frame dark and
+    /// the frame dim overall. On 2026-10-24 four ChatExpanded and some Bag lines came from the Monster Cube's dark,
+    /// text-filled screen while its title sign wasn't read yet. A panel over the world never makes the frame this dark.
+    /// </summary>
+    public bool DarkBackdrop => DarkShare >= 0.4 && Mean < 0.2;
+
+    /// <summary>
+    /// The bag: a neutral, flat, dark panel on the right, darker than the frame, with some structure (its slots), over the
+    /// world rather than on a black backdrop. Before 2026-10-24 the colour and the backdrop weren't asked, and violet
+    /// grass on the right and the card screen's black backdrop were taken for it.
+    /// </summary>
+    public bool BagPanel => BagPanelOld && !DarkBackdrop && RightMedian >= 0.06 && RightChroma <= 0.12;
+
+    /// <summary>The bag rule as it was: kept so the tests show which frames it misfired on.</summary>
+    public bool BagPanelOld => RightFlat >= 0.6 && RightMedian < 0.25 && RightMedian <= 0.6 * Mean && RightEdges >= 0.01;
+
+    /// <summary>The rule as it was (the left column alone): kept so the tests show which frames it misfired on.</summary>
+    public bool ExpandedChatOld => LeftFlat >= 0.5 && LeftMedian < 0.25 && LeftMedian <= 0.6 * Mean && LeftTextRows >= 4;
 }
 
 /// <summary>
@@ -230,6 +326,17 @@ public sealed class SceneState
     public FrameStats? LastStats { get; private set; }
     string _why = "no frame yet", _rawWhy = "no frame yet";
     Scene? _pending;
+    DateTime _pendingSince;
+
+    /// <summary>
+    /// Leaving a settled Reward or EventCards screen for another screen a reader names (Reward, EventCards, Market,
+    /// Crafting) takes this long of the new verdict, not two passes: on 2026-10-24 a Daeva Pass level-up banner flashed
+    /// over the event's card screen for half a second and relabelled it. Going back to the world, a loading screen or
+    /// anything else still takes two passes.
+    /// </summary>
+    public const double LeaveSeconds = 3;
+    static bool HeldOnLeave(Scene from, Scene to) =>
+        from is Scene.Reward or Scene.EventCards && to is Scene.Reward or Scene.EventCards or Scene.Market or Scene.Crafting && to != from;
     bool _hudSeen;
 
     /// <summary>Gating on: remote config scene.gate (default on). Off: the state is still worked out and logged.</summary>
@@ -342,14 +449,17 @@ public sealed class SceneState
             return (Scene.Cutscene, $"black bands top and bottom ({f.TopBlack:P0}, {f.BottomBlack:P0} black), the middle lit ({f.MiddleMean:0.00})");
         if (f.DarkShare >= 0.85 && f.Mean < 0.08 && quietTop)
             return (Scene.Loading, $"near-black ({f.DarkShare:P0} dark, mean {f.Mean:0.00}) and no HUD where the counter and minimap sit");
-        if (f.RedShare >= 0.5 && f.Mean < 0.3)
-            return (Scene.Death, $"dark and red ({f.RedShare:P0} red, mean {f.Mean:0.00})");
+        // death: dark and red, the HUD gone, a dark vignette round a lit centre (its prompt). Before 2026-10-24 dark and red
+        // was enough, and the red autumn forest of Kraka Footpath read as death 8 times in 4 minutes, HUD up, player alive
+        if (f.RedShare >= 0.5 && f.Mean < 0.3 && f.HudRegions < 2 && !s.CounterStrip && !s.ChatBox && f.BorderMean <= 0.6 * f.CentreMean)
+            return (Scene.Death, $"dark and red ({f.RedShare:P0} red, mean {f.Mean:0.00}), no HUD, a dark vignette (border {f.BorderMean:0.00}, centre {f.CentreMean:0.00})");
         bool hud = s.CounterStrip || s.ChatBox || f.HudRegions >= 2;
         string hudWhy = s.CounterStrip ? "the Kinah counter read" : s.ChatBox ? "the chat box showing lines" : $"the HUD drawn in {f.HudRegions} of 3 places";
         // a panel is flat, dark, and darker than the rest of the picture (a dark scene is dark everywhere, not in one panel)
-        if (hud && f.LeftFlat >= 0.5 && f.LeftMedian < 0.25 && f.LeftMedian <= 0.6 * f.Mean && f.LeftTextRows >= 4)
-            return (Scene.ChatExpanded, $"{hudWhy}, and a flat dark panel with {f.LeftTextRows} text rows above the chat box ({f.LeftFlat:P0} flat at {f.LeftMedian:0.00}, the frame {f.Mean:0.00})");
-        if (hud && f.RightFlat >= 0.6 && f.RightMedian < 0.25 && f.RightMedian <= 0.6 * f.Mean && f.RightEdges >= 0.01)
+        // the expanded chat: the panel reaches the top of the left column and down through the chat's own area, world beside it
+        if (hud && f.ExpandedChat)
+            return (Scene.ChatExpanded, $"{hudWhy}, and a flat dark panel with {f.LeftTextRows} text rows from the top of the left column down to the chat box ({f.LeftFlat:P0} flat at {f.LeftMedian:0.00}, its top {f.UpperTextRows} rows, the chat's area {f.LowTextRows} rows at {f.LowMedian:0.00}, beside it {f.BesideMedian:0.00}, the frame {f.Mean:0.00})");
+        if (hud && f.BagPanel)
             return (Scene.Bag, $"{hudWhy}, and a flat dark panel on the right ({f.RightFlat:P0} flat at {f.RightMedian:0.00}, the frame {f.Mean:0.00})");
         if (hud) return (Scene.World, hudWhy);
         if (!_hudSeen) return (Scene.World, "no HUD seen yet this session, so taken as the world (as before the scene existed)");
@@ -392,12 +502,13 @@ public sealed class SceneState
         Raw = raw; _rawWhy = why;
         bool changed = false;
         if (raw == Current) { if (_pending != null) _flickers++; _pending = null; _why = why; }
+        else if (_pending == raw && HeldOnLeave(Current, raw) && (now - _pendingSince).TotalSeconds < LeaveSeconds) { }   // still waiting
         else if (_pending == raw)
         {
             if (raw == Scene.Unknown) _beforeUnknown = Current;
             Current = raw; Since = now; _why = why; _pending = null; changed = true;
         }
-        else { if (_pending != null) _flickers++; _pending = raw; }
+        else { if (_pending != null) _flickers++; _pending = raw; _pendingSince = now; }
         sw.Stop();
         LastClassifyMs = sw.Elapsed.TotalMilliseconds;
         _classifyMs += LastClassifyMs; _passes++;
