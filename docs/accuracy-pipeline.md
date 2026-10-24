@@ -40,7 +40,9 @@ written; `"rare": {"legend_materials": false}` in the site's config keeps Legend
   row's whole life. `LootRows` matches each read to the live rows in order from the bottom (a small cost alignment:
   shifts up to four slots, never down), by icon hash and name family, not by y. Slices of one name are one row and never
   "the final text"; with an icon, a slice that is part of exactly one item's name names it. A soul row passes as
-  `Soul: Kind (Bound)` on its slices too. Read once and gone, or up over 6 s: not a row (`was read 1 time(s) and went`,
+  `Soul: Kind (Bound)` on its slices too. Read once and gone, or up over 6 s: not a row (`was read 1 time(s) and went`
+  only when the read before it showed and the first read it was missing from are under 2.5 s apart and it had no icon,
+  since PR "static text in the loot band": a pass can take over a second, so a real row can be read once;
   `has been up 7.0 s ... ignored`, once per text per minute; the cross-check stops waiting for it). Covered by a window
   (`Reset`) and back within 12 s: the same row (`is the row the list showed before it was covered`). trace.log list
   reads now carry `h` (icon hash); the bank has a `cover` read.
@@ -100,15 +102,15 @@ gathering panel's cut and before `LootRows.Feed`; the trace keeps them, so a rep
   Campsite" in Kraka Footpath); or any zone on the list read whole.
 - **(b) no icon**: the whole place an icon could be (3.2 to 0.15 line heights left of the text, 2.4 tall; it covers
   every size and gap PopupIcons tries, since the icon's exact place isn't measured on real frames) is flat: spread
-  (standard deviation of a 12x8 grid of cell means) at most 0.012 and under a tenth of the text's contrast, so a row
+  (standard deviation of a 12x8 grid of cell means) at most 0.05 and under 0.15 of the text's contrast, so a row
   fading in, whose icon fades with it, keeps its icon. The 8x8 icon hash being 1 is the same verdict on a smaller square
   and isn't used on its own.
 - **(c) not on the dark strip**: background (the darker 30% of the line's box, what is behind the letters) at least
-  0.18 above the strip's and 1.8 times it. The strip's is what sure rows in the same read sit on (Kinah, "(Bound)", a
+  0.22 above the strip's and 1.8 times it. The strip's is what sure rows in the same read sit on (Kinah, "(Bound)", a
   count of 2+), else the same over the last 30 s, else only a background of 0.6 or more counts. Only for text at
   contrast 0.35 or more: a row fading in fades with its strip.
 - **Never dropped**: Kinah, soul and shop rows, "(Bound)" (or "(B" read badly), anything opening with "<", a count of
-  2+, an item's own name, and a line the picture vouches for (spread 0.03+ on a background within 0.08 of the strip's):
+  2+, an item's own name, and a line the picture vouches for (spread 0.08+ on a background within 0.08 of the strip's):
   an enemy's soul row cut at the left reads as the enemy's name.
 - **reads.log**: `loot list: "Vangi" is a nameplate|a zone|not on the list: ignored (<why>)`, once per text per
   minute; each such line adds one to `list_notrow` (Accuracy, on this PC; not in `Accuracy.Keys`, the payload is
@@ -124,6 +126,48 @@ gathering panel's cut and before `LootRows.Feed`; the trace keeps them, so a rep
   its cut. The nameplate (950 to 997) overlaps the top slot and the campsite's name (1096 to 1116) sits between slots
   two and three, so no crop separates them from rows; a fifth slot would be at about 906, above the band, and wasn't
   seen. Left and right can't be checked from the logs (no x). Geometry is the anchor work's, not changed here.
+
+### Static text and the title (branch tracker/title-drop, 2026-10-24)
+
+On main eee36b2 (13:10 to 13:15) the player's own title, "Vanguard of Atreia", the green line of the player's nameplate
+at screen centre (x about 2437 to 2667, y 955 to 991 at 5120x2160: the fourth slot's height, 520 px right of where
+rows' text starts), was read as "Vangi", "Vangt", "Vqng(", "Yang(": 31 one-read objects went unsure in 4.5 minutes.
+(a) needs its name seen; (b) and (c) need the measures, and over the world they vary. From trace.log 12:47 to 13:25
+(1,209 title reads, 131 real Kina, Sapphire Gemstone, Orichalcum Ore and soul rows):
+
+| | y | contrast c | background b | spread s | s/c |
+|---|---|---|---|---|---|
+| title | 950 to 1002, median 974 | 0.01 to 0.66, median 0.54 | 0.01 to 0.75, median 0.10 | 0.001 to 0.32, median 0.028, p90 0.105 | median 0.064 |
+| real item rows | 1093 to 1197 | 0.28 to 0.69 | 0.05 to 0.25 | 0.112 to 0.199 | 0.23 or more |
+| Kina rows | 1053 to 1209 | 0.03 to 0.70 | 0.03 to 0.28 | 0.197 to 0.294 | 0.38 or more |
+
+The icon hash `h` doesn't separate them (the title's hashes are as busy as icons; 45 of 1,209 are 0 or 1).
+
+- **(b) and (c) tuned**: (b) at spread 0.05 and 0.15 of the contrast takes half the title's reads and no real row
+  (margins 2.2x over the least real spread, 1.5x on the ratio); (c) at 0.22 above the strip (about 0.34) stays 0.05 over
+  the most background a real row showed with its text at 0.35 or more; the vouch moves to 0.08, above (b)'s bound.
+- **(d) static text**, no thresholds: text with no icon of its own (hash 0 or 1, or spread under 0.08) or whose name
+  the item list doesn't know, read at one y (within half a slot pitch) three times or more over more than 6 s,
+  whatever its text, makes that y a static band (held while such reads keep coming within 30 s, forgotten after 60 s).
+  Later lines there are dropped at once, after (a) to (c), which keep their own verdicts and log lines;
+  `loot list: static text at y 974: ignored (...)` once a minute per band, one `list_notrow` each. Guards: a line
+  that was a slot or more lower in the read before with the same text has moved up into the band (a row); where real
+  rows sat in the last 2 min (the list's slots), only a line with no icon of its own goes. The pitch is the smallest
+  gap between two real rows in one read (73 px here), never the title-to-row gap.
+- **(e) position**: text starting more than 5.5 slot pitches right of the rows' text column (the median of where sure
+  rows' text starts) is not a row: the title starts about 7 pitches right. trace.log list reads now carry `x` (each
+  line's left) so a replay applies it; older traces don't, and (e) waits for a column.
+- **Gathering panel**: its parse leaves out lines already known not to be rows (static text, a nameplate), and its
+  cut uses the panel's own spacing (`LootPopup.PanelCut`: the smallest gap from the line above its first label down,
+  walking up while lines stay within 1.6 of it) instead of the read's median gap, which with the title and a row
+  above it (223 to 424 px) reached up over the list's rows: "Vangt | Sapphire Gemstone | P rofes | Sapphire Gemstone
+  | Success" cut the real row at 1197 with the panel (12 real row reads cut that way in the trace, 0 with the new cut).
+- **A row's icon hash may move**: the same item read again in its own slot within 2.5 s is the same row even when its
+  hash is 20+ bits off (a fading read): "Sapphire Gemstone x1" then "•Sapphire Gemstohé x1" 1.3 s later (33 bits) had
+  been split into two one-read objects, one refused as read once, one as unsure.
+- **Measured** (the trace replayed, chat replaced by filler, no `x`): unsure 455 to 149, of them title reads 236 to 26
+  (each after a gap of over 30 s, until three reads over 6 s again), `read 1 time(s)` lines 88 to 0, and no
+  title line in a panel note. Bank case `text-2026-10-24-title-static-band`.
 
 ## Item-name decoder, shadow only (branch tracker/name-decoder, 2026-10-24)
 

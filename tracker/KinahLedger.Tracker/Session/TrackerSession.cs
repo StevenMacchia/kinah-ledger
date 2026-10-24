@@ -2435,7 +2435,7 @@ public sealed class TrackerSession
             {
                 (double c, ulong h, double bg, double sp) = (-1, 0, -1, -1);
                 try { (c, h, bg, sp) = LootRows.MeasureAll(r.Raw, r.Origin, r.Lines[i].Box); } catch (Exception ex) { CrashLog.Write("loot list contrast", ex); }
-                measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h, bg, sp));
+                measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h, bg, sp, r.Lines[i].Box.Left));
             }
             // the name decoder's shadow read of the rows (logs only, counts nothing), on the picture while it is here
             if (NameDecoder.Present) try { ShadowListNames(r.Raw, r.Origin, r.Lines, lines, now); } catch (Exception ex) { CrashLog.Write("name decoder", ex); }
@@ -2567,11 +2567,13 @@ public sealed class TrackerSession
             // the gathering panel ("Orichalcum · Proficiency · Orichalcum Ore x1 · Success") sits at the bottom of the band:
             // its lines are what is being gathered, never a pickup (Steven, 2026-10-23 11:28)
             var uncut = lines;
-            if (GatherPanelCut(lines.Select(l => (l.Top, l.Text)).ToList(), now) is int cut) lines = lines.Where(l => l.Top < cut).ToList();
-            // lines that aren't loot list rows at all (a nameplate or the zone's name standing in the band, text over the
-            // world with no icon and no dark strip behind it) go before they become rows (LootNotRow, 2026-10-24); the trace
-            // keeps them, so a replay drops them the same way
+            // a line already known not to be a row (the player's title standing in the band, a nameplate) is no panel line
+            // either: "Vangt | Sapphire Gemstone | Success" took the title for the panel's first line (2026-10-24 13:11)
             NoteScreenNames(now);
+            if (GatherPanelCut(lines.Where(l => !NotRow.Ignorable(l, now)).Select(l => (l.Top, l.Text)).ToList(), now) is int cut) lines = lines.Where(l => l.Top < cut).ToList();
+            // lines that aren't loot list rows at all (a nameplate or the zone's name standing in the band, text over the
+            // world with no icon and no dark strip behind it, static text) go before they become rows (LootNotRow,
+            // 2026-10-24); the trace keeps them, so a replay drops them the same way
             lines = NotRow.Filter(lines, now);
             NoteListKeys(lines, now);
             // the rows as read, for the trace (with each one's place and contrast, so a replay tracks them the same way).
@@ -2590,7 +2592,8 @@ public sealed class TrackerSession
                 ReadTrace.List(now, traced, readAll.Select(x => x.Line.Top).ToList(), measuredAll ? readAll.Select(x => Math.Round(x.Line.Contrast, 3)).ToList() : null,
                     measuredAll && readAll.Any(x => x.Line.Background >= 0) ? readAll.Select(x => Math.Round(x.Line.Background, 3)).ToList() : null,
                     measuredAll && readAll.Any(x => x.Line.Spread >= 0) ? readAll.Select(x => Math.Round(x.Line.Spread, 3)).ToList() : null,
-                    measuredAll && readAll.Any(x => x.Line.Icon != 0) ? readAll.Select(x => x.Line.Icon.ToString("x")).ToList() : null);
+                    measuredAll && readAll.Any(x => x.Line.Icon != 0) ? readAll.Select(x => x.Line.Icon.ToString("x")).ToList() : null,
+                    readAll.Any(x => x.Line.Left >= 0) ? readAll.Select(x => x.Line.Left).ToList() : null);
                 Report.Lines("list", traced, now);
             }
             Seen(now);
@@ -2858,13 +2861,11 @@ public sealed class TrackerSession
         if (lines.Count == 0) return null;
         // "Succe" and "P rofes" too: read cut short, the panel's title came through as a row ("Aria x1" over "Succe x1",
         // 2026-10-24 09:58:21 and :23, a gather counted that never happened)
-        var marks = lines.Where(l => System.Text.RegularExpressions.Regex.IsMatch(l.Text.Trim(), @"^\W*[il1|]?\s*(?:succ\w*|fail(?:ed|ure)?|profic\w*|profes\w*|p\s?r\w{0,3}fes\w*)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).ToList();
+        var marks = lines.Where(l => LootPopup.PanelMark(l.Text)).ToList();
         if (marks.Count == 0) return null;
-        var tops = lines.Select(l => l.Top).OrderBy(t => t).ToList();
-        var gaps = tops.Zip(tops.Skip(1), (a, b) => b - a).Where(d => d > 4).OrderBy(d => d).ToList();
-        int gap = gaps.Count > 0 ? gaps[gaps.Count / 2] : 30;
-        // the panel's block: from three lines above its first marker (the node's name, its proficiency) to the bottom
-        int cut = marks.Min(m => m.Top) - (int)(gap * 2.5);
+        // the panel's block: from the lines just above its first marker (the node's name, its proficiency) to the bottom,
+        // by the panel's own spacing (LootPopup.PanelCut)
+        int cut = LootPopup.PanelCut(lines.Select(l => l.Top).ToList(), marks.Min(m => m.Top));
         // which item the panel names: what the gathering bar's race is for (its Success and Fail are labels, not outcomes)
         var named = PanelItemOf(lines.Where(l => l.Top >= cut).Select(l => l.Text));
         if (named.Length > 0)

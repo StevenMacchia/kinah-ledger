@@ -39,6 +39,12 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   line, a soul picked 4.5 s after its kill, and a row behind a full-screen window back 6 s later. Each pass reads the list,
   then the chat. A `list` read may carry `h` (each row's icon hash, hex), as trace.log writes it since then; a `cover`
   read is a pass that skips the list (a window over it). `KL_BANK_KEEP=1` keeps each case's reads.log.
+- `text-2026-10-24-title-static-band`: Steven's trace.log, 13:10:28 to 13:13:40 local, as recorded (rows with `y`, `c`,
+  `b`, `s`, `h`; chat kept only for the game's own lines, players' lines replaced by filler; the four gathering bar
+  races from reads.log). The player's title stands in the band the whole time, read about 110 times as "Vangi", "Vangt",
+  "Vqng(" and more, while Kina, a soul row, Sapphire Gemstone and Orichalcum gathers come and go below; it is static
+  text after three reads over 6 s (one title read goes unsure before that; main had 38). A `list` read may carry `x`
+  (each line's left in the window), as trace.log writes it since then (`LootNotRow` rule e).
 - `event-*`: an event's reward cards (`Ocr/EventCards.cs`), several pictures of one screen (`"k": "cards"`, the game
   window, everything but the title and the cards blacked out), with the run open in the case's `zone`. `expect.cards`
   lists the five cards: `received`, and for a received one `slots` in list order (`n`, `name` when the truth knows it,

@@ -17,7 +17,7 @@ namespace KinahLedger.Session;
 ///     first seen, its icon's hash and its name's family.
 ///   - A real row is up 2.5 s at full contrast (about three reads), fades in within a frame, slides in from the right
 ///     (its end cut off meanwhile), fades out in one frame, and never goes sooner. An object read fewer than
-///     <see cref="MinRowReads"/> times over less than <see cref="MinRowSeconds"/> and gone is not a row; one on screen
+///     <see cref="MinRowReads"/> times, with no icon, between a read without it and the next read without it under <see cref="RowSeconds"/> apart, is not a row (by time, not reads: a pass can take over a second); one on screen
 ///     over <see cref="MaxRowSeconds"/> is not one either (the player's title "Vanguard of Atreia" sits in the band for
 ///     minutes, the "F Pick up" prompt for seconds). Both are logged once and never counted. Behind a full-screen window
 ///     a row's timer stops: rows the list showed before it was covered (<see cref="Reset"/>) are the same rows when they
@@ -54,7 +54,7 @@ public sealed class LootRows
     public const double BackSeconds = 4;
     /// <summary>A real row's life at full contrast (the footage: 2.4 s, then one faded frame).</summary>
     public const double RowSeconds = 2.5;
-    /// <summary>An object read fewer times than this, over less than <see cref="MinRowSeconds"/>, and gone: not a row.</summary>
+    /// <summary>An object read fewer times than this with no icon, up under <see cref="RowSeconds"/> by the reads around it: not a row. (MinRowSeconds: the old bound, kept for reference.)</summary>
     public const int MinRowReads = 2;
     public const double MinRowSeconds = 1.2;
     /// <summary>On screen longer than this (time behind a full-screen window aside): not a row.</summary>
@@ -78,6 +78,9 @@ public sealed class LootRows
         public int Id, Order, Top, Misses, Seen;
         public Kind Kind;
         public DateTime First, Last;
+        public DateTime Before = DateTime.MinValue;   // the read before it first showed (it wasn't there)
+        public DateTime? MissAt;                      // the first read it was missing from since it was last seen
+        public bool Iconed;                           // an icon beside it on some read
         public double Hidden;           // seconds it was covered (a full-screen window), which don't count to its time up
         public ulong Icon;
         public double Peak = -1;
@@ -103,6 +106,7 @@ public sealed class LootRows
     readonly Dictionary<string, bool> _knownCache = new(StringComparer.Ordinal);
     readonly Dictionary<string, DateTime> _noted = new(StringComparer.Ordinal);
     int _next = 1, _order = 1, _gap = 30, _near = 18;
+    DateTime _now, _lastFeed = DateTime.MinValue;
 
     /// <summary>Rows that went before their text settled: logged, never counted.</summary>
     public int Unsure { get; private set; }
@@ -159,6 +163,7 @@ public sealed class LootRows
     /// </summary>
     public List<LootPopup.Row> Feed(List<LootLine> lines, DateTime now)
     {
+        _now = now;
         // rows gone since the last read leave first, so nothing new is taken for one of them
         Expire(now);
         var outRows = new List<(int Top, LootPopup.Row Row)>();
@@ -193,7 +198,7 @@ public sealed class LootRows
             if (o == null)
             {
                 o = (c.Kind == Kind.Item ? Back(c) : null) ?? Unpark(c, cur.Count - 1 - i, now);
-                if (o == null) { o = new Obj { Id = _next++, Order = _order++, First = now, Kind = c.Kind }; _live.Add(o); }
+                if (o == null) { o = new Obj { Id = _next++, Order = _order++, First = now, Kind = c.Kind, Before = _lastFeed }; _live.Add(o); }
             }
             else if (c.Line.Contrast >= 0 && o.Top - c.Line.Top > _near) Shifted++;
             taken.Add(o);
@@ -201,8 +206,9 @@ public sealed class LootRows
             if (Emit(o, c, now) is { } shown) outRows.Add((c.Line.Top, shown));
         }
         // rows not in this read: gone after two reads and a second and a half; unsure if their text never settled
-        foreach (var o in _live.Where(x => !taken.Contains(x))) o.Misses++;
+        foreach (var o in _live.Where(x => !taken.Contains(x))) { if (o.Misses++ == 0) o.MissAt = now; }
         Expire(now);
+        _lastFeed = now;
         return outRows.OrderBy(r => r.Top).Select(r => r.Row).ToList();
     }
 
@@ -267,12 +273,19 @@ public sealed class LootRows
             if (slots > MaxShift || Math.Abs(d - slots * _gap) > _near) return null;
         }
         bool sameIcon = o.Icon > 1 && c.Line.Icon > 1 && Hamming(o.Icon, c.Line.Icon) <= 8;
-        if (o.Icon > 1 && c.Line.Icon > 1 && Hamming(o.Icon, c.Line.Icon) >= 20) return null;
+        // two icons that far apart are two rows, except the row's own item read again in its own slot within its life: a
+        // fading or half-covered read's hash moves ("Sapphire Gemstone x1" at y 1197, then "•Sapphire Gemstohé x1" at 1194
+        // 1.3 s later, hashes 33 bits apart: split into two one-read objects and both refused, 2026-10-24 13:11:33)
+        if (o.Icon > 1 && c.Line.Icon > 1 && Hamming(o.Icon, c.Line.Icon) >= 20 && !SameRowAgain(o, c, slots)) return null;
         // far fainter than the row was, in another slot: a new row fading in there, never the row moved
         if (slots >= 1 && Fresh(o, c.Line)) return null;
         if (Text(o, c, slots, sameIcon) is not double t) return null;
         return t + 0.4 * slots + (slots > below ? 0.8 : 0);
     }
+
+    /// <summary>The row's own item (an item's name, or a misread of it) read again in the same slot while the row is still up.</summary>
+    bool SameRowAgain(Obj o, Cur c, int slots) =>
+        slots == 0 && o.Kind == Kind.Item && c.Kind == Kind.Item && o.Visible(_now) < RowSeconds && Known(o.Key) && (o.Key == c.Canon || Family(o.Key, c.Canon));
 
     /// <summary>How well the line's text fits the row's (0 the same; null: another row).</summary>
     double? Text(Obj o, Cur c, int slots, bool sameIcon)
@@ -311,7 +324,8 @@ public sealed class LootRows
     /// <summary>One line taken as the row's read.</summary>
     void Take(Obj o, Cur c, DateTime now)
     {
-        o.Top = c.Line.Top; o.Last = now; o.Misses = 0; o.Seen++;
+        o.Top = c.Line.Top; o.Last = now; o.Misses = 0; o.Seen++; o.MissAt = null;
+        if (c.Line.Spread >= LootNotRow.VouchSpread) o.Iconed = true;
         if (c.Line.Icon != 0) o.Icon = c.Line.Icon;
         switch (c.Kind)
         {
@@ -366,7 +380,11 @@ public sealed class LootRows
             _live.Remove(o);
             if (o.Kind != Kind.Item || o.Dropped) continue;
             // read once and gone: a real row is up 2.5 s, about three reads (only said when the picture was measured)
-            bool brief = o.Measured && o.Seen < MinRowReads && (o.Last - o.First).TotalSeconds - o.Hidden < MinRowSeconds;
+            // by time, not by reads (a pass can take over a second, so a real row can be read once): only when the read before
+            // it showed and the first read it was missing from are closer than a real row's life can it not have been one;
+            // and never a row with an icon beside it
+            bool brief = o.Measured && o.Seen < MinRowReads && !o.Iconed && o.MissAt is DateTime miss && o.Before != DateTime.MinValue
+                && (miss - o.Before).TotalSeconds - o.Hidden < RowSeconds;
             if (!o.Settled)
             {
                 Unsure++;

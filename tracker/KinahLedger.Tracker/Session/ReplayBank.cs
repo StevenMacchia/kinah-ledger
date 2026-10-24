@@ -223,10 +223,12 @@ public static class ReplayBank
                         var hs = r.TryGetProperty("h", out var he) ? he.EnumerateArray().Select(v => Convert.ToUInt64(v.GetString() ?? "0", 16)).ToList() : null;
                         var bs = r.TryGetProperty("b", out var be) ? be.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var ss = r.TryGetProperty("s", out var se) ? se.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
+                        var xs = r.TryGetProperty("x", out var xe) ? xe.EnumerateArray().Select(v => v.GetInt32()).ToList() : null;
                         session.ListGated(ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
                             System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
                             cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0,
-                            bs != null && i < bs.Count ? bs[i] : -1, ss != null && i < ss.Count ? ss[i] : -1)).ToList(), t, session.Verdict("loot_list"));
+                            bs != null && i < bs.Count ? bs[i] : -1, ss != null && i < ss.Count ? ss[i] : -1,
+                            xs != null && i < xs.Count ? xs[i] : -1)).ToList(), t, session.Verdict("loot_list"));
                         break;
                     }
                     case "gather":
