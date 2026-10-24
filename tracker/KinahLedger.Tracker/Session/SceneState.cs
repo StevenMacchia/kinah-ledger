@@ -69,6 +69,12 @@ public sealed class FrameStats
     public double TopBlack { get; private init; }
     public double BottomBlack { get; private init; }
     public double MiddleMean { get; private init; }
+    /// <summary>
+    /// The centre's brightness (0.3 to 0.7 both ways) and the outer tenth on each side's: a death screen's dark vignette
+    /// leaves the border much darker than the centre, where its prompt sits.
+    /// </summary>
+    public double CentreMean { get; private init; }
+    public double BorderMean { get; private init; }
     /// <summary>Edge density where the HUD sits: the Kinah counter strip (top-left), the minimap (top-right), the skill bar (bottom centre), the chat corner.</summary>
     public double StripEdges { get; private init; }
     public double MapEdges { get; private init; }
@@ -220,6 +226,15 @@ public sealed class FrameStats
             return (b + 0.5) / 64;
         }
 
+        double BoxMean(RectangleF f)
+        {
+            var (x0, y0, x1, y1) = Box(f);
+            x1 = Math.Min(x1, w); y1 = Math.Min(y1, h);
+            int all = 0; double sm = 0;
+            for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) { all++; sm += luma[y * w + x]; }
+            return all == 0 ? 0 : sm / all;
+        }
+
         int band = Math.Max(1, (int)Math.Round(h * Band));
         var (rf, rm) = Flatness(RightBox);
         var (lf, lm) = Flatness(LeftBox);
@@ -231,6 +246,8 @@ public sealed class FrameStats
             W = w, H = h, Rgb = rgb, Luma = luma,
             Mean = sum / n, DarkShare = dark / (double)n, RedShare = red / (double)n,
             TopBlack = BlackShare(0, band), BottomBlack = BlackShare(h - band, h), MiddleMean = MeanOf((int)(h * 0.2), (int)(h * 0.8)),
+            CentreMean = BoxMean(RectangleF.FromLTRB(0.3f, 0.3f, 0.7f, 0.7f)),
+            BorderMean = (BoxMean(RectangleF.FromLTRB(0f, 0f, 0.1f, 1f)) + BoxMean(RectangleF.FromLTRB(0.9f, 0f, 1f, 1f))) / 2,
             StripEdges = Edges(StripBox), MapEdges = Edges(MapBox), BarEdges = Edges(BarBox), ChatEdges = Edges(ChatBox),
             RightFlat = rf, RightMedian = rm, RightEdges = Edges(RightBox), RightChroma = Chroma(RightBox),
             LeftFlat = lf, LeftMedian = lm, LeftTextRows = TextRows(LeftBox),
@@ -240,7 +257,7 @@ public sealed class FrameStats
     }
 
     public override string ToString() =>
-        $"mean {Mean:0.00}, dark {DarkShare:P0}, red {RedShare:P0}, bands {TopBlack:P0}/{BottomBlack:P0} middle {MiddleMean:0.00}, " +
+        $"mean {Mean:0.00}, dark {DarkShare:P0}, red {RedShare:P0}, bands {TopBlack:P0}/{BottomBlack:P0} middle {MiddleMean:0.00} centre {CentreMean:0.00} border {BorderMean:0.00}, " +
         $"HUD edges strip {StripEdges:0.00} map {MapEdges:0.00} bar {BarEdges:0.00} chat {ChatEdges:0.00}, " +
         $"right flat {RightFlat:P0} at {RightMedian:0.00} colour {RightChroma:0.00}, left flat {LeftFlat:P0} at {LeftMedian:0.00} with {LeftTextRows} text rows, " +
         $"upper flat {UpperFlat:P0} at {UpperMedian:0.00} with {UpperTextRows} rows, low flat {LowFlat:P0} at {LowMedian:0.00} with {LowTextRows} rows, beside {BesideMedian:0.00}";
@@ -432,8 +449,10 @@ public sealed class SceneState
             return (Scene.Cutscene, $"black bands top and bottom ({f.TopBlack:P0}, {f.BottomBlack:P0} black), the middle lit ({f.MiddleMean:0.00})");
         if (f.DarkShare >= 0.85 && f.Mean < 0.08 && quietTop)
             return (Scene.Loading, $"near-black ({f.DarkShare:P0} dark, mean {f.Mean:0.00}) and no HUD where the counter and minimap sit");
-        if (f.RedShare >= 0.5 && f.Mean < 0.3)
-            return (Scene.Death, $"dark and red ({f.RedShare:P0} red, mean {f.Mean:0.00})");
+        // death: dark and red, the HUD gone, a dark vignette round a lit centre (its prompt). Before 2026-10-24 dark and red
+        // was enough, and the red autumn forest of Kraka Footpath read as death 8 times in 4 minutes, HUD up, player alive
+        if (f.RedShare >= 0.5 && f.Mean < 0.3 && f.HudRegions < 2 && !s.CounterStrip && !s.ChatBox && f.BorderMean <= 0.6 * f.CentreMean)
+            return (Scene.Death, $"dark and red ({f.RedShare:P0} red, mean {f.Mean:0.00}), no HUD, a dark vignette (border {f.BorderMean:0.00}, centre {f.CentreMean:0.00})");
         bool hud = s.CounterStrip || s.ChatBox || f.HudRegions >= 2;
         string hudWhy = s.CounterStrip ? "the Kinah counter read" : s.ChatBox ? "the chat box showing lines" : $"the HUD drawn in {f.HudRegions} of 3 places";
         // a panel is flat, dark, and darker than the rest of the picture (a dark scene is dark everywhere, not in one panel)

@@ -1516,11 +1516,22 @@ options: --process aion[,other]");
             g.FillRectangle(System.Drawing.Brushes.DimGray, (int)(W * 0.3), H - 60, (int)(W * 0.4), 8);
             Text(g, (int)(W * 0.35), H - 140, (int)(W * 0.65), H - 90, 9);
         });
+        // death: a red-tinted frame, the HUD gone, a dark vignette, a prompt in the centre
         using var death = Frame(g =>
         {
             var rng = new Random(13);
             g.Clear(System.Drawing.Color.FromArgb(80, 14, 14));
             for (int i = 0; i < 2500; i++) { using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60 + rng.Next(60), 8 + rng.Next(18), 8 + rng.Next(18))); int sz = 8 + rng.Next(40); g.FillRectangle(b, rng.Next(W), rng.Next(H), sz, sz); }
+            using var shade = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(200, 10, 2, 2));
+            g.FillRectangle(shade, 0, 0, (int)(W * 0.2), H); g.FillRectangle(shade, (int)(W * 0.8), 0, (int)(W * 0.2), H);
+            Text(g, (int)(W * 0.40), (int)(H * 0.45), (int)(W * 0.60), (int)(H * 0.55), 51);
+        });
+        // a red world (the autumn forest of Kraka Footpath, compare-131029): red foliage everywhere, the HUD up, alive
+        using var redWorld = Frame(g =>
+        {
+            var rng = new Random(53);
+            g.Clear(System.Drawing.Color.FromArgb(90, 20, 16));
+            for (int i = 0; i < 3000; i++) { using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(70 + rng.Next(90), 10 + rng.Next(25), 8 + rng.Next(20))); int sz = 8 + rng.Next(40); g.FillRectangle(b, rng.Next(W), rng.Next(H), sz, sz); }
             Hud(g);
         });
         using var cutscene = Frame(g =>
@@ -1601,7 +1612,7 @@ options: --process aion[,other]");
         var sw0 = System.Diagnostics.Stopwatch.StartNew();
         var sWorld = Stats(world);
         double shrinkMs = sw0.Elapsed.TotalMilliseconds;
-        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("chattall", chatTall), ("cards", cards), ("lugi", lugi), ("blank", blank) }
+        var all = new (string Name, System.Drawing.Bitmap F)[] { ("world", world), ("crafting", crafting), ("loading", loading), ("death", death), ("cutscene", cutscene), ("bag", bag), ("chatx", chatx), ("chattall", chatTall), ("cards", cards), ("lugi", lugi), ("redworld", redWorld), ("blank", blank) }
             .ToDictionary(x => x.Name, x => (Frame: x.F, Stats: Stats(x.F), Signs: SceneSignals.FromFrame(x.F)));
 
         // each frame on its own (a scene that has seen the HUD, as a running tracker has)
@@ -1615,7 +1626,8 @@ options: --process aion[,other]");
         Check("the world: the HUD over a scene", Cls("world"), "World");
         Check("the crafting panel's labels where its locator looks", Cls("crafting"), "Crafting");
         Check("a near-black frame with no HUD: loading", Cls("loading"), "Loading");
-        Check("a dark red frame: death", Cls("death"), "Death");
+        Check("a dark red frame, HUD gone, vignette: death", Cls("death"), "Death");
+        Check("a red world with the HUD up: World (the old rule said death)", $"{Cls("redworld")} {Cls("redworld", new SceneSignals { CounterStrip = true })} (old rule {(all["redworld"].Stats.RedShare >= 0.5 && all["redworld"].Stats.Mean < 0.3 ? "Death" : "no")})", "World World (old rule Death)");
         Check("black bands top and bottom: a cutscene", Cls("cutscene"), "Cutscene");
         Check("a flat dark panel on the right: the bag", Cls("bag"), "Bag");
         Check("a flat dark panel with text rows top-left: chat expanded", Cls("chatx"), "ChatExpanded");
