@@ -2874,6 +2874,58 @@ options: --process aion[,other]");
         sl.ProcessList(new List<(int, string)>(), l0.AddSeconds(10));
         Check("...its chat line 7 s later: counted once, not swallowed", $"{sl.Engine.Totals().Kinah}", "480");
 
+        // ---- gathering attempts (Steven, 2026-10-24: "you're not logging the mining attempts") ----
+        // the target bar reads a node's name in pieces: matched to the catalog, never an enemy not on the list
+        string Nd(string text) => Data.GatheringCatalog.MatchNode(text)?.Name ?? "-";
+        Check("node fragments: Orichalcum | Ore | Orjchalcum | Orishalcum'", $"{Nd("Orichalcum")}|{Nd("Ore")}|{Nd("Orjchalcum")}|{Nd("Orishalcum'")}", "Orichalcum Ore|Orichalcum Ore|Orichalcum Ore|Orichalcum Ore");
+        Check("...Kukuru | Vege | Veq | Vegetable | Ftable: the vegetable node that gives Kukuru", $"{Nd("Kukuru")}|{Nd("Vege")}|{Nd("Veq")}|{Nd("Vegetable")}|{Nd("Ftable")}", "Kukuru|Kukuru|Kukuru|Kukuru|Kukuru");
+        Check("...Odyle | Qdyle | Odyle Energy Cube | Gem", $"{Nd("Odyle")}|{Nd("Qdyle")}|{Nd("Odyle Energy Cube")}|{Nd("Gem")}", "Odyle|Odyle|Odyle|Gemstone");
+        Check("...not nodes: Moe | Idk | Divine Auldor | Swoly | Cap", $"{Nd("Moe")}|{Nd("Idk")}|{Nd("Divine Auldor")}|{Nd("Swoly")}|{Nd("Commer")}", "-|-|-|-|-");
+        var gt = new TrackerSession(null, settings, items, "Test");
+        var n0 = new DateTime(2026, 10, 24, 19, 59, 0, DateTimeKind.Utc);
+        Check("...an enemy's name holding a node word is the enemy's (Red Cap Fungen, a misread Aullaeu Forest Odyle Spidr)", $"{gt.Target.SeeNode("Red Cap Fungen", n0)} {gt.Target.SeeNode("Aullaeu Forest Odyle Spidr", n0)}", "False False");
+        Check("...\"Vege\" on the bar: a node, credited to gathering", $"{gt.Target.SeeNode("Vege", n0)} {gt.Target.Node?.Name}", "True Kukuru");
+        // every race is an attempt; a result with no race around it is a race between passes; a fail line and the bar's Fail
+        // race 1 s apart are one failed attempt; an upgrade roll is the same gather's
+        var ga = new TrackerSession(null, settings, items, "Test");
+        ga.Engine.SetZone("Eastern Cantas Valley");
+        string Att(TrackerSession ss) => string.Join(" ", ss.Engine.NodeSnapshot().OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key}={kv.Value.Ok}/{kv.Value.Failed}"));
+        var chatG = new List<string> { "[Player1] hi" };
+        void ChatG(DateTime at, string? line)
+        {
+            if (line != null) chatG.Add(line);
+            for (int i = 0; i < 4; i++) ga.ChatGated(new List<string>(chatG), at.AddSeconds(i * 0.4), Gate.Run);
+            ga.FlushVotes(at.AddSeconds(1.6));
+        }
+        ChatG(n0, null);
+        ga.ProcessList(L("Orich x1", "Profes x1", "Orichalcum Ore x1", "Success x1"), n0.AddSeconds(2));
+        ga.GatherOutcome(n0.AddSeconds(5), true, false);
+        ChatG(n0.AddSeconds(5.5), "Orichalcum Ore acquired.");
+        Check("a bar race on Success with its chat line: one Orichalcum Ore attempt, named by the panel", Att(ga), "Orichalcum Ore=1/0");
+        ga.GatherOutcome(n0.AddSeconds(11), true, true);
+        Check("...its upgrade roll: the same attempt", Att(ga), "Orichalcum Ore=1/0");
+        ga.ProcessList(L("Orich x1", "Profes x1", "Orichalcum Ore x1", "Success x1"), n0.AddSeconds(16));
+        ChatG(n0.AddSeconds(20), "Orichalcum Ore acquired.");
+        ga.GatherTick(n0.AddSeconds(30));
+        Check("...a result 15 s on with no race seen: counted from the result", Att(ga), "Orichalcum Ore=2/0");
+        Check("...and logged", File.ReadLines(CrashLog.ReadsPath).Any(l => l.Contains("gather: race not seen, counted from the result")) ? "logged" : "not logged", "logged");
+        ga.GatherOutcome(n0.AddSeconds(40), false, false);
+        ChatG(n0.AddSeconds(40.8), "Essence Extraction failed");
+        Check("...the bar's Fail race and its \"Essence Extraction failed\" 0.8 s later: one failed attempt, mining's (not Odyle's)", Att(ga) + " " + string.Join(" ", ga.Engine.SkillSnapshot().OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value.Nodes}/{kv.Value.Failed}")), "Orichalcum Ore=2/1 Ore=3/1");
+        // a race nobody named: still an attempt, under "unknown node"
+        var gu = new TrackerSession(null, settings, items, "Test");
+        gu.Engine.SetZone("Eastern Cantas Valley");
+        gu.GatherOutcome(n0, true, false);
+        gu.GatherOutcome(n0.AddSeconds(8), false, false);
+        Check("races with no name anywhere: attempts all the same", Att(gu), "unknown node=1/1");
+        // ...the target bar's node names them, and its result renames one the bar named loosely
+        var gn = new TrackerSession(null, settings, items, "Test");
+        gn.Engine.SetZone("Eastern Cantas Valley");
+        gn.Target.SeeNode("Ore", n0);
+        gn.GatherOutcome(n0.AddSeconds(4), false, false);
+        gn.GatherOutcome(n0.AddSeconds(9), true, false);
+        Check("races on a node the target bar read as \"Ore\": Orichalcum Ore's", Att(gn), "Orichalcum Ore=1/1");
+
         // garbled reads over lines that were already on screen: nothing more
         var s2 = new TrackerSession(null, settings, items, "Test");
         var old = new List<string> { "Acquired Odyle x3.", "[Player1] hello" };

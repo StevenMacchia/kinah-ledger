@@ -106,6 +106,30 @@ public sealed partial class TargetReader
         return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(k.ToLowerInvariant());
     }
 
+    // ---- gathering nodes on the bar (2026-10-24) ----
+    // A targeted node shows its name where an enemy's would, read in pieces ("Orichalcum", then "Ore"; "Kukuru", then
+    // "Vege", "Vegetable", "Ftable"). Those were logged as enemies not on the list; they name the node being gathered.
+    static readonly HashSet<string> MobWords = Known.SelectMany(n => System.Text.RegularExpressions.Regex.Split(n.ToLowerInvariant(), "[^a-z]+")).Where(w => w.Length >= 4).ToHashSet();
+
+    /// <summary>The gathering node the bar last named, and when; null before any.</summary>
+    public KinahLedger.Data.GatheringCatalog.GatherNode? Node { get; private set; }
+    public DateTime NodeAt { get; private set; } = DateTime.MinValue;
+    DateTime _nodeNoted = DateTime.MinValue;
+
+    /// <summary>
+    /// Text on the bar that names no enemy on the list: a gathering node when it matches one (logged "node: …" when the node
+    /// changes or a minute on), true then. Also what replay feeds (ReplayBank's "target" reads).
+    /// </summary>
+    internal bool SeeNode(string text, DateTime now)
+    {
+        if (Match(text.Trim()) != null || KinahLedger.Data.GatheringCatalog.MatchNode(text, MobWords.Contains) is not { } node) return false;
+        if (Node?.Name != node.Name || (now - _nodeNoted).TotalSeconds > 60) { CrashLog.Note($"node: {node.Name} (target bar read \"{text.Trim()}\"), credited to gathering"); _nodeNoted = now; }
+        // a piece that names only the skill ("Log") keeps a fuller name of the same skill read just before
+        if (node.Material == null && Node is { Material: not null } prev && prev.Family == node.Family && (now - NodeAt).TotalSeconds <= 60) node = prev;
+        Node = node; NodeAt = now;
+        return true;
+    }
+
     static int Edit(string a, string b)
     {
         var prev = new int[b.Length + 1]; var cur = new int[b.Length + 1];
@@ -217,6 +241,8 @@ public sealed partial class TargetReader
         }
         else if (wasReward) KinahLedger.Session.ReadTrace.Signal(DateTime.UtcNow, "reward", "");
         var found = FindName(lines.Select(l => (l.Box.Top, l.Text)), out var unlisted);
+        // a gathering node on the bar ("Orichalcum", "Ore", "Vege…"): gathering's, never an unlisted enemy
+        if (found == null && unlisted.Length > 0 && SeeNode(unlisted, DateTime.UtcNow)) { _pending = null; return; }
         if (found == null && unlisted.Length > 0)
         {
             Unlisted = unlisted; UnlistedAt = DateTime.UtcNow;

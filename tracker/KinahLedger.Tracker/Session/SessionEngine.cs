@@ -545,7 +545,13 @@ public sealed class SessionEngine
                     if (g != null)
                     {
                         var sk = Skill(g.Skill); sk.Items += a.Count;
-                        if (g.IsNode) { Nodes++; sk.Nodes++; Z().Nodes++; MarkGather(a.Time); _lastSkill = g.Skill; _lastSkillAt = a.Time; if (a.Count >= 2) { Plentiful++; sk.Plentiful++; } }
+                        if (g.IsNode)
+                        {
+                            // the attempt itself comes from the gathering tally when there is one (GatherAttempt); a line is only its yield then
+                            if (!AttemptsFromTally) { Nodes++; sk.Nodes++; Z().Nodes++; MarkGather(a.Time); }
+                            _lastSkill = g.Skill; _lastSkillAt = a.Time;
+                            if (a.Count >= 2) { Plentiful++; sk.Plentiful++; }
+                        }
                         if (g.Bonus) { BonusFinds += a.Count; sk.Bonus += a.Count; }
                     }
                     else
@@ -559,6 +565,9 @@ public sealed class SessionEngine
                     PetCrystals += p.Count;
                     var zp = Z(); zp.Pets += p.Count; zp.PetsByName[p.Name] = zp.PetsByName.GetValueOrDefault(p.Name) + p.Count;
                     if (MobFor(p.Time) is { } mp) mp.Crystals += p.Count;
+                    break;
+                case GatherFailed when AttemptsFromTally:
+                    // counted as a failed attempt by the gathering tally, deduplicated against the bar's Fail race
                     break;
                 case GatherFailed f:
                     Nodes++; NodesFailed++; Z().Nodes++; MarkGather(f.Time);
@@ -692,6 +701,55 @@ public sealed class SessionEngine
     }
 
     public Dictionary<string, int> PetSnapshot() { lock (_lock) return new Dictionary<string, int>(Pets); }
+
+    // ---- gathering attempts from the tally (TrackerSession's GatherAttempts, 2026-10-24) ----
+    /// <summary>
+    /// True once the live session's gathering tally feeds this engine: an attempt is then a gathering bar race (or a gather
+    /// result whose race wasn't seen, or a failure line), never an item line, so <see cref="Apply"/> counts only yields.
+    /// The demo and older tests apply lines alone and keep counting an attempt per line.
+    /// </summary>
+    public bool AttemptsFromTally { get; set; }
+
+    /// <summary>Attempts per node ("Orichalcum Ore", "Kukuru", "unknown node"): the node's skill, how many worked and failed.</summary>
+    public sealed class NodeStats { public GatherFamily Family; public int Ok, Failed; public int Attempts => Ok + Failed; }
+    public Dictionary<string, NodeStats> GatherNodes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>One gathering attempt, under its node's skill: a race the bar finished, a gather whose race went between passes, a failure line.</summary>
+    public void GatherAttempt(DateTime at, GatherFamily family, string node, bool ok)
+    {
+        lock (_lock)
+        {
+            if (KinahLedger.Ocr.ZoneLocator.KindOf(_zone) == KinahLedger.Ocr.ZoneLocator.Ignored) return;
+            Farmed(DateTime.UtcNow);
+            Nodes++; Z().Nodes++; MarkGather(at);
+            var sk = Skill(family); sk.Nodes++;
+            if (!ok) { NodesFailed++; sk.Failed++; }
+            if (!GatherNodes.TryGetValue(node, out var ns)) GatherNodes[node] = ns = new NodeStats { Family = family };
+            if (ok) ns.Ok++; else ns.Failed++;
+        }
+    }
+
+    /// <summary>An attempt counted under one node moved to another, once a better witness named it (the gather's own result).</summary>
+    public void RefileAttempt(GatherFamily fromFamily, string fromNode, GatherFamily toFamily, string toNode, bool ok)
+    {
+        lock (_lock)
+        {
+            if (fromFamily == toFamily && string.Equals(fromNode, toNode, StringComparison.OrdinalIgnoreCase)) return;
+            if (!GatherNodes.TryGetValue(fromNode, out var from) || (ok ? from.Ok : from.Failed) == 0) return;
+            if (ok) from.Ok--; else from.Failed--;
+            if (from.Attempts == 0) GatherNodes.Remove(fromNode);
+            if (Skills.TryGetValue(fromFamily, out var fs)) { fs.Nodes--; if (!ok) fs.Failed--; if (fs.Nodes <= 0 && fs.Items == 0) Skills.Remove(fromFamily); }
+            var ts = Skill(toFamily); ts.Nodes++; if (!ok) ts.Failed++;
+            if (!GatherNodes.TryGetValue(toNode, out var to)) GatherNodes[toNode] = to = new NodeStats { Family = toFamily };
+            if (ok) to.Ok++; else to.Failed++;
+        }
+    }
+
+    /// <summary>A copy of the per-node attempts, safe to read from the UI thread.</summary>
+    public Dictionary<string, NodeStats> NodeSnapshot()
+    {
+        lock (_lock) return GatherNodes.ToDictionary(kv => kv.Key, kv => new NodeStats { Family = kv.Value.Family, Ok = kv.Value.Ok, Failed = kv.Value.Failed }, StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>A copy of the per-skill counters, safe to read from the UI thread.</summary>
     public Dictionary<GatherFamily, SkillStats> SkillSnapshot()

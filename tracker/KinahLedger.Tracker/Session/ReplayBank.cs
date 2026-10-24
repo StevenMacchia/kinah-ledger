@@ -164,6 +164,14 @@ public static class ReplayBank
             }
             if (right < total || d.Any(x => x.StartsWith("card"))) d.Insert(0, $"cards score: {right} of {total} slots right");
         }
+        // gathering attempts, "worked/failed" per skill and per node: every one named must match, and no other may be counted
+        foreach (var key in new[] { "attempts", "nodes" })
+            if (expect[key] is JsonObject ea)
+            {
+                var ga = got[key] as JsonObject ?? new JsonObject();
+                foreach (var (n, v) in ea) if ((ga[n]?.ToString() ?? "0/0") != v?.ToString()) d.Add($"{key} {n}: expected {v}, counted {ga[n]?.ToString() ?? "none"}");
+                foreach (var (n, v) in ga) if (ea[n] == null) d.Add($"{key} {n}: not expected, counted {v}");
+            }
         if (expect["items"] is JsonObject ei)
         {
             var gi = got["items"] as JsonObject ?? new JsonObject();
@@ -256,6 +264,9 @@ public static class ReplayBank
                     case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t); } break;
                     // a nameplate or the target bar's name on screen then (LootNotRow)
                     case "plate": foreach (var p in ls) session.NotRow.See(p, t, LootNotRow.Plate); break;
+                    // the target bar's text that names no enemy on the list (reads.log's "target bar:" lines): a gathering node
+                    // when it matches one (TargetReader.SeeNode), as live
+                    case "target": foreach (var p in ls) session.Target.SeeNode(p, t); break;
                     // the list covered (a full-screen window, a scene it isn't read in): this pass skips it, as the scene gate does
                     case "cover": session.ListGated(new List<LootLine>(), t, Gate.Skip); break;
                     // a pass, shop or reward window's title in the top band (reads.log's "reward screen open (...)")
@@ -272,6 +283,8 @@ public static class ReplayBank
                 last = t;
             }
             session.FlushVotes(last);
+            // chat gathers still waiting for a race are settled (GatherAttempts)
+            session.GatherTick(last.AddSeconds(10));
         }
         foreach (var f in node["frames"] as JsonArray ?? new JsonArray())
         {
@@ -384,6 +397,13 @@ public static class ReplayBank
         if (session.ListUnsure > 0) res["list_unsure"] = session.ListUnsure;
         // lines in the band that weren't rows (a nameplate, a zone's name, text over the world): dropped, logged once per text per minute (LootNotRow)
         if (session.ListNotRow > 0) res["list_notrow"] = session.ListNotRow;
+        // gathering attempts (GatherAttempts): per skill "ok/failed", and per node
+        var skills = new JsonObject();
+        foreach (var (f, st) in e.SkillSnapshot().Where(kv => kv.Value.Nodes > 0).OrderBy(kv => kv.Key)) skills[f.ToString()] = $"{st.Nodes - st.Failed}/{st.Failed}";
+        if (skills.Count > 0) res["attempts"] = skills;
+        var nodes = new JsonObject();
+        foreach (var (n, ns) in e.NodeSnapshot().OrderBy(kv => kv.Key, StringComparer.Ordinal)) nodes[n] = $"{ns.Ok}/{ns.Failed}";
+        if (nodes.Count > 0) res["nodes"] = nodes;
         // what went to expedition and event runs rather than farming: items per run
         var runs = new JsonObject();
         foreach (var run in session.Instances.Snapshot()) runs[run.Zone] = run.Items.Values.Sum() + run.BoundItems.Values.Sum();
