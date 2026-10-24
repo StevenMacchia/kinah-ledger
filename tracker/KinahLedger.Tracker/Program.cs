@@ -2455,15 +2455,15 @@ options: --process aion[,other]");
                 var pe = new SessionEngine(items); var pt = DateTime.UtcNow;
                 var serum = items.IdOf("Life Serum (Bound)"); var other = items.IdOf("Orichalcum Ore");
                 pe.CraftPanelSeen("Life Serum (Bound)", pt);
-                pe.Apply(new CraftResult(pt, "Life Serum (Bound)", true) { Via = SessionEngine.CraftPanelVia });
+                pe.Apply(new CraftResult(pt, "Life Serum (Bound)", true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
                 pe.Apply(new ItemAcquired(pt.AddSeconds(1), serum, 1, true) { Via = "loot list" });
-                pe.Apply(new CraftResult(pt.AddSeconds(7), "Life Serum (Bound)", true) { Via = SessionEngine.CraftPanelVia });
+                pe.Apply(new CraftResult(pt.AddSeconds(7), "Life Serum (Bound)", true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
                 pe.Apply(new CraftResult(pt.AddSeconds(14), "Life Serum (Bound)", true, Combo: true) { Via = SessionEngine.CraftPanelVia });
                 pe.Apply(new ItemAcquired(pt.AddSeconds(15), other, 2, false) { Via = "loot list" });
                 pe.Apply(new CraftResult(pt.AddSeconds(16), "Crafting failed.", false) { Via = "chat" });
                 var pr = pe.CraftSnapshot();
                 Check("crafting panel: tries, combo and output (the recipe's yield), the ore a drop", string.Join(" | ", pr.Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")) + $" · drops {pe.Items.Count + pe.ItemsBound.Count}",
-                    $"Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x{2 * CraftLedger.YieldOf("Life Serum (Bound)")} · drops 1");
+                    "Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x2 · drops 1");
                 // Steven's 2026-10-23 21:17 to 21:23 crafts, as 0.8.22 read them: the panel's races are the crafts; the loot list's
                 // rows (one of them the panel's own title read as a Cloak) and the chat's item lines never reach crafting
                 var gs2 = new TrackerSession(null, new Settings(), items, "Test"); var g0 = new DateTime(2026, 10, 24, 1, 17, 50, DateTimeKind.Utc);
@@ -2480,15 +2480,24 @@ options: --process aion[,other]");
                 // the Ingots: two races, four loot-list rows of x10 and a chat line (0.8.22 showed 2 tries, made x31)
                 var i0 = g0.AddMinutes(3).AddSeconds(43);
                 for (int k = 0; k <= 34; k += 4) gs2.PanelUp(ingotN, i0.AddSeconds(k));   // the panel on screen between the races
-                gs2.PanelRace(ingotN, true, false, i0);
+                gs2.PanelRace(ingotN, true, false, i0, level: 25);
                 gs2.ProcessList(new List<(int, string)> { (0, "Orichalcum Ingot x10") }, i0.AddSeconds(2));
-                gs2.PanelRace(ingotN, true, false, i0.AddSeconds(34));
+                gs2.PanelRace(ingotN, true, false, i0.AddSeconds(34), level: 25);
                 foreach (var dt in new[] { 27, 37, 46 }) gs2.ProcessList(new List<(int, string)> { (0, "Orichalcum Ingot x10") }, i0.AddSeconds(dt));
                 gs2.ProcessChat(new List<string> { "[x] a", "Expert's Orichalcum Longsword acquired.", "Orichalcum Ingot acquired." }, i0.AddSeconds(46.5));
                 var cv = gs2.CraftView;
                 Check("crafting from the panel only: one Longsword, two Ingots at the recipe's yield, no Cloak",
                     string.Join(" | ", cv.CraftSnapshot().OrderBy(r => r.Name).Select(r => $"{r.Name} {r.Ok}/{r.Attempts} made x{r.Made.Values.Sum()}")),
-                    $"{sword} 1/1 made x{CraftLedger.YieldOf(sword)} | {ingotN} 2/2 made x{2 * CraftLedger.YieldOf(ingotN)}");
+                    $"{sword} 1/1 made x1 | {ingotN} 2/2 made x20");
+                // the Ingot's two recipes (Steven, 2026-10-23: "theres a 1 craft one and a 10 craft recipe"): the panel's level
+                // says which; with no level read the output is "?", never an assumed x1
+                Check("recipe variants by the panel's level: Lv. 25 makes 10, Lv. 1 makes 1, no level unknown",
+                    $"{CraftPanel.LevelOf("Orichalcum Ingot (Novice Lv. 25)")} {RecipeBook.YieldFor(ingotN, 25)} {RecipeBook.YieldFor(ingotN, 1)} {RecipeBook.YieldFor(ingotN, 0)?.ToString() ?? "?"} {RecipeBook.YieldFor("Sapphire Powder", 0)?.ToString() ?? "?"}",
+                    "25 10 1 ? ?");
+                var vs2 = new TrackerSession(null, new Settings(), items, "Test"); var w0 = DateTime.UtcNow;
+                vs2.PanelRace(ingotN, true, false, w0, level: 1); vs2.PanelRace(ingotN, true, false, w0.AddSeconds(6));
+                var vr2 = vs2.CraftView.CraftSnapshot().Single();
+                Check("...one Lv. 1 success and one with no level: x1 made, one unknown", $"{vr2.Ok} x{vr2.Made.Values.Sum()} ? {vr2.MadeUnknown}", "2 x1 ? 1");
                 // the gate: no pickup ever lands in crafting, and the crafts' output and the misread Cloak are no drops either
                 string Held(SessionEngine en) => string.Join(",", en.Items.Concat(en.ItemsBound).Where(kv => kv.Value > 0).Select(kv => items.NameOf(kv.Key)).OrderBy(x => x));
                 Check("gate: crafting holds no pickup, and no craft output or Cloak is a drop", $"craft view [{Held(cv)}] · drops [{Held(gs2.Engine)}]", "craft view [] · drops []");

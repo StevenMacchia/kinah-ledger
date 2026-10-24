@@ -69,6 +69,21 @@ public static class RecipeBook
     public static Recipe? ForOutput(string item) => For(item, 0);
 
     /// <summary>
+    /// How many one success makes, told by the recipe's mastery level as the crafting panel's title shows it ("Orichalcum
+    /// Ingot (Novice Lv. 25)" is the ×10 recipe, Lv. 1 the ×1: Steven, 2026-10-23, "theres a 1 craft one and a 10 craft
+    /// recipe"). With no level read, an item whose recipes all make the same count is that count. Null when the book
+    /// doesn't know the item or its recipes make different counts and the level doesn't say which: never assumed.
+    /// </summary>
+    public static int? YieldFor(string item, int level)
+    {
+        if (!ByOutput.TryGetValue(item.Trim(), out var all) || all.Count == 0) return null;
+        var at = level > 0 ? all.Where(r => r.Mastery == level).ToList() : new List<Recipe>();
+        var pool = at.Count > 0 ? at : all;
+        var yields = pool.Select(r => r.OutputQty).Distinct().ToList();
+        return yields.Count == 1 ? yields[0] : null;
+    }
+
+    /// <summary>
     /// The recipe for an item in the player's faction; with <paramref name="makes"/> above 0, the one that makes that many
     /// (Sapphire Powder: ×3 at mastery 20, ×30 at 45). Falls back to any recipe for the item.
     /// </summary>

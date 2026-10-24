@@ -17,8 +17,10 @@ public sealed class CraftLedger
         /// <summary>Combo rolls after a craft, as the crafting panel shows them: upgraded, and not.</summary>
         public int Upgraded, NotUpgraded;
         public Dictionary<string, int> Made = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Successes whose output count isn't known: the recipe has variants (×1 and ×10) and the panel didn't say which.</summary>
+        public int MadeUnknown;
         public int Attempts => Ok + Fail;
-        public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase) };
+        public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, MadeUnknown = MadeUnknown, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase) };
     }
 
     // ---- the crafting panel: the one way in (Steven, 2026-10-23: "if u dont see the crafting bars why the fuck are u
@@ -41,9 +43,6 @@ public sealed class CraftLedger
 
     public bool PanelActive(DateTime t) => _panelAt != DateTime.MinValue && (t - _panelAt).TotalSeconds <= PanelSeconds;
 
-    /// <summary>How many a recipe makes per success: the recipe book's yield, 1 when the book doesn't know the item.</summary>
-    public static int YieldOf(string recipe) => RecipeBook.For(recipe, 0)?.OutputQty is int q && q > 0 ? q : 1;
-
     /// <summary>One race on the panel: a craft that worked or failed, or the combo roll after one. The only way into crafting.</summary>
     public void OnPanel(CraftResult cr)
     {
@@ -51,7 +50,13 @@ public sealed class CraftLedger
         var name = _panelRecipe.Length >= 2 ? _panelRecipe : "?";
         var r = Get(name);
         if (cr.Combo) { if (cr.Ok) r.Upgraded++; else r.NotUpgraded++; }
-        else if (cr.Ok) { r.Ok++; if (name != "?") r.Made[name] = r.Made.GetValueOrDefault(name) + YieldOf(name); }
+        else if (cr.Ok)
+        {
+            r.Ok++;
+            // what it made: the recipe's yield as the panel's level tells it, never assumed (made ? when it can't tell)
+            if (name != "?" && cr.Makes is int y && y > 0) r.Made[name] = r.Made.GetValueOrDefault(name) + y;
+            else r.MadeUnknown++;
+        }
         else r.Fail++;
     }
 

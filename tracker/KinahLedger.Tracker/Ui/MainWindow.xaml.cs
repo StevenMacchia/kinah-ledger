@@ -1077,7 +1077,7 @@ public partial class MainWindow : Window
             tries += r.Attempts; ok += r.Ok;
             long? cost = RecipeBook.CostPerTry(r.Name, out int unpricedMats, out int vendorMats);
             bool costKnown = cost != null && unpricedMats == 0;
-            long made = 0; bool madeKnown = true;
+            long made = 0; bool madeKnown = r.MadeUnknown == 0;
             foreach (var (item, n) in r.Made)
             {
                 if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
@@ -1085,7 +1085,10 @@ public partial class MainWindow : Window
             if (costKnown) spent += cost!.Value * r.Attempts; else noCost++;
             if (madeKnown) worth += made; else noPrice++;
             var book = RecipeBook.ForOutput(r.Name);
-            var outcome = r.Made.Count == 0 ? "nothing came out yet" : "made " + string.Join(", ", r.Made.OrderByDescending(m => m.Value).Select(m => (m.Key.Equals(r.Name, StringComparison.OrdinalIgnoreCase) ? "" : m.Key + " ") + "×" + m.Value));
+            // a success whose recipe variant (×1 or ×10) the panel didn't show makes "?", never an assumed count
+            var madeParts = r.Made.OrderByDescending(m => m.Value).Select(m => (m.Key.Equals(r.Name, StringComparison.OrdinalIgnoreCase) ? "" : m.Key + " ") + "×" + m.Value).ToList();
+            if (r.MadeUnknown > 0) madeParts.Add("?" + (madeParts.Count > 0 ? $" from {r.MadeUnknown} more" : ""));
+            var outcome = madeParts.Count == 0 ? "nothing came out yet" : "made " + string.Join(", ", madeParts);
             var listed = book?.SuccessRate is double sr ? $" · listed {sr:P0}" : "";
             if (r.Upgraded + r.NotUpgraded > 0) listed += $" · combo upgraded {r.Upgraded} of {r.Upgraded + r.NotUpgraded}";
             long? profit = costKnown && madeKnown ? made - cost!.Value * r.Attempts : null;

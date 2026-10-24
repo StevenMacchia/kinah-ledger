@@ -2195,6 +2195,7 @@ public sealed class TrackerSession
         }
         _prevRows = lines.Select(l => (l.Top, l.Text, now)).ToList();
     }
+    int _panelLevel;
     string _panelRecipe = ""; DateTime _panelTextAt = DateTime.MinValue; bool _panelUp, _panelIsCraft;
 
     async Task CraftPanelDue()
@@ -2224,6 +2225,8 @@ public sealed class TrackerSession
                 if (craft != _panelIsCraft || !_panelUp) CrashLog.Note(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
                 _panelIsCraft = craft;
                 var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
+                if (recipe.Length >= 2 && text is { } tl && CraftPanel.LevelOf(tl.Recipe) is int lv and > 0) _panelLevel = lv;
+                else if (recipe.Length >= 2 && recipe != _panelRecipe) _panelLevel = 0;
                 if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", CraftPanel.LastLines)})"); }
             }
             _panelUp = true;
@@ -2247,7 +2250,7 @@ public sealed class TrackerSession
             PanelUp(_panelRecipe, now);
             if (_panel.Feed(now, s) is not { } o) return;
             CrashLog.Note($"crafting panel: {(o.Combo ? "combo roll " : "")}{(o.Ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
-            PanelRace(_panelRecipe, o.Ok, o.Combo, now);
+            PanelRace(_panelRecipe, o.Ok, o.Combo, now, _panelLevel);
         }
         catch (System.ComponentModel.Win32Exception) { throw; }
         catch (Exception ex) { CrashLog.Write("crafting panel", ex); }
@@ -2263,10 +2266,10 @@ public sealed class TrackerSession
     /// One finished race of the panel's Success and Fail bars: the only way a craft is counted (Steven, 2026-10-23: "if u
     /// dont see the crafting bars why the fuck are u adding it to a craft window"). Also what replay and the tests feed.
     /// </summary>
-    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now)
+    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0)
     {
         PanelUp(recipe, now);
-        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia };
+        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia, Makes = recipe.Length >= 2 ? RecipeBook.YieldFor(recipe, level) : null };
         Count(ev);
         CraftView.Apply(ev);
         Accuracy.Add("craft_panel");
