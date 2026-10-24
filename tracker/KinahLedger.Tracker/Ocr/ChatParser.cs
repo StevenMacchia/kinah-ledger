@@ -555,7 +555,8 @@ public sealed partial class ChatParser
             bool soulish = cut || crystal || (head.Count > 0 && Dist(Letters(head[^1]), "soul") <= 2) || last.Contains("soul") || last.StartsWith("sou");
             if (points && !soulish) { yield return new CurrencyGained(time, string.Join(' ', words), Math.Clamp(n, 1, 999999)); yield break; }
             if (head.Count > 0 && !cut && Dist(Letters(head[^1]), "soul") <= 2) head.RemoveAt(head.Count - 1);
-            var pet = PetName(string.Join(' ', head));
+            // a Soul Points line names the enemy's kind ("Sparkie", "Unstable Spider"), not a pet: only a crystal's name is a pet's
+            var pet = crystal || KnownPets.Any(k => string.Join(' ', head).Contains(k, StringComparison.OrdinalIgnoreCase)) ? PetName(string.Join(' ', head)) : "";
             if (crystal) yield return new PetCrystal(time, (pet.Length > 0 ? pet + " " : "") + "Soul Crystal", Math.Clamp(n, 1, 9999));
             else yield return new CurrencyGained(time, (pet.Length > 0 ? pet + " " : "") + "Soul Points", Math.Clamp(n, 1, 999999), cut ? "" : string.Join(' ', head));
             yield break;

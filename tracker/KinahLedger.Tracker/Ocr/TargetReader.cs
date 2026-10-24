@@ -69,11 +69,18 @@ public sealed partial class TargetReader
     {
         var low = Norm(read.Trim());
         for (int i = 0; i < Known.Length; i++) if (KnownNorm[i] == low) return Known[i];
+        // the closest name within its misread allowance, not the first in the list: "Aullaeu Forest Giant Sparkie" sits before
+        // "Aullaeu Forest Sparkie" alphabetically, and a first hit would fold one into the other (2026-10-24). A tie goes to
+        // the longer name
+        int best = -1, bestD = int.MaxValue;
         for (int i = 0; i < Known.Length; i++)
         {
             int max = Math.Max(1, KnownNorm[i].Length / 7);
-            if (Math.Abs(KnownNorm[i].Length - low.Length) <= max && Edit(KnownNorm[i], low) <= max) return Known[i];
+            if (Math.Abs(KnownNorm[i].Length - low.Length) > max) continue;
+            int d = Edit(KnownNorm[i], low);
+            if (d <= max && (d < bestD || (d == bestD && Known[i].Length > Known[best].Length))) { best = i; bestD = d; }
         }
+        if (best >= 0) return Known[best];
         // the bar cut the name short ("Drana Processing Mainte"): the one enemy whose name starts with what was read
         if (low.Length >= 10)
         {
@@ -101,7 +108,18 @@ public sealed partial class TargetReader
         bool Fits(string n) => can.Contains(n) || string.Equals(n, k, StringComparison.OrdinalIgnoreCase) || n.EndsWith(" " + k, StringComparison.OrdinalIgnoreCase);
         // 1. the HP bar just showed one of them  2. one already killed here  3. the only one  4. the soul's own name, never a guess
         foreach (var t in recentTargets) if (Fits(t)) return t;
-        if (zoneEnemies != null) foreach (var z in zoneEnemies) if (Fits(z)) return z;
+        // an enemy already killed here, only when no other enemy of its area on the list has this soul too: "Sparkie" fits
+        // both Aullaeu Forest Sparkie and Aullaeu Forest Giant Sparkie, and the one killed first took every later Sparkie
+        // kill, giants included (Steven, 2026-10-24: "Giant Sparkie and Sparkie really fucked up"). Then the soul is named
+        // as read, never folded into a look-alike
+        if (zoneEnemies != null)
+            foreach (var z in zoneEnemies)
+            {
+                if (!Fits(z)) continue;
+                var area = z.Split(' ')[0];
+                if (can.Count(c => c.StartsWith(area + " ", StringComparison.OrdinalIgnoreCase)) <= 1) return z;
+                break;
+            }
         if (can.Count == 1) return can.First();
         return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(k.ToLowerInvariant());
     }
