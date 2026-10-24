@@ -1066,23 +1066,26 @@ public partial class MainWindow : Window
     /// <summary>
     /// The crafting table: per recipe, the tries, how often it worked, what a try costs at Market prices (materials from
     /// the recipe book; a failed try uses them too), what came out and what it sells for after the Market's cut, and the
-    /// profit or loss: the outcome's value minus every try's cost. A dash wherever a price or the recipe isn't known.
+    /// profit or loss: the outcome's value minus every try's cost. A material with no price yet makes the cost "≥" the
+    /// priced part and the profit "≤"; materials ticked "I have these" cost nothing. A dash where the recipe isn't known.
     /// </summary>
     void FillCraft(SessionEngine? e)
     {
         var rows = new List<DropRow>();
-        long spent = 0, worth = 0; int noCost = 0, noPrice = 0, tries = 0, ok = 0;
+        long spent = 0, worth = 0; int noBook = 0, noPrice = 0, tries = 0, ok = 0;
+        var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var r in e?.CraftSnapshot() ?? new())
         {
             tries += r.Attempts; ok += r.Ok;
-            long? cost = RecipeBook.CostPerTry(r.Name, out int unpricedMats, out int vendorMats);
-            bool costKnown = cost != null && unpricedMats == 0;
+            long? cost = RecipeBook.CostPerTry(r.Name, out int unpricedMats, out int vendorMats, out int farmedMats, missing);
+            // vendor materials with no NPC price are unpriced too: the cost is then the least a try costs
+            int gaps = unpricedMats + vendorMats;
             long made = 0; bool madeKnown = r.MadeUnknown == 0;
             foreach (var (item, n) in r.Made)
             {
                 if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
             }
-            if (costKnown) spent += cost!.Value * r.Attempts; else noCost++;
+            if (cost != null) spent += cost.Value * r.Attempts; else noBook++;
             if (madeKnown) worth += made; else noPrice++;
             var book = RecipeBook.ForOutput(r.Name);
             // a success whose recipe variant (×1 or ×10) the panel didn't show makes "?", never an assumed count
@@ -1091,14 +1094,17 @@ public partial class MainWindow : Window
             var outcome = madeParts.Count == 0 ? "nothing came out yet" : "made " + string.Join(", ", madeParts);
             var listed = book?.SuccessRate is double sr ? $" · listed {sr:P0}" : "";
             if (r.Upgraded + r.NotUpgraded > 0) listed += $" · combo upgraded {r.Upgraded} of {r.Upgraded + r.NotUpgraded}";
-            long? profit = costKnown && madeKnown ? made - cost!.Value * r.Attempts : null;
+            long? profit = cost != null && madeKnown ? made - cost.Value * r.Attempts : null;
+            var costCell = cost is not long cv ? "—" : gaps == 0 ? Fk(cv) : cv == 0 && farmedMats == 0 ? "—" : "≥ " + Fk(cv);
+            var profitCell = profit is not long pv ? "—" : gaps == 0 ? Signed(pv) : "≤ " + (pv >= 0 ? Fk(pv) : "−" + Fk(-pv));
             var sellsQ = PriceBook.QuoteOf(r.Name);
             var sells = sellsQ != null ? (sellsQ.From == PriceBook.From.Region ? "≈" : "") + Fk(sellsQ.Price * PriceBook.SellerKeeps) : "—";
             var sellsCell = PriceCell(r.Name);
-            rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Attempts > 0 ? $"{100.0 * r.Ok / r.Attempts:0}%" : "—", costKnown ? Fk(cost!.Value) : "—",
+            rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Attempts > 0 ? $"{100.0 * r.Ok / r.Attempts:0}%" : "—", costCell,
                 Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: "Click for the materials, what a try costs and what it makes.",
-                Price: sells, PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profit is long pf ? Signed(pf) : "—", Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : "",
-                Sub: outcome + listed + (book == null ? " · not in the recipe book" : unpricedMats > 0 ? $" · {unpricedMats} material{(unpricedMats == 1 ? "" : "s")} not priced" : "") + (vendorMats > 0 ? $" · {vendorMats} vendor cost{(vendorMats == 1 ? "" : "s")} to set" : "")));
+                Price: sells, PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : "",
+                Sub: outcome + listed + (book == null ? " · not in the recipe book" : gaps > 0 ? $" · {gaps} material{(gaps == 1 ? "" : "s")} unpriced" : "") + (vendorMats > 0 ? $" · {vendorMats} vendor cost{(vendorMats == 1 ? "" : "s")} to set" : "")
+                    + (farmedMats > 0 ? $" · {farmedMats} farmed" : "")));
         }
         CraftRows.ItemsSource = rows;
         _crafted = e?.CraftSnapshot() ?? new();
@@ -1106,13 +1112,16 @@ public partial class MainWindow : Window
         CraftEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftWhat.Text = tries > 0 ? $"{tries} tr{(tries == 1 ? "y" : "ies")} · {ok} worked ({100.0 * ok / tries:0}%)" : "since the tracker started";
         CraftSpent.Text = spent > 0 ? "−" + Fk(spent) : "—";
-        CraftSpentNote.Text = noCost > 0 ? $"{noCost} recipe{(noCost == 1 ? "" : "s")} with no cost yet, left out" : "";
+        // the known part of every cost: a material with no price yet is left out and named as a count
+        var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
+        var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? "" : "s")} unpriced" : "";
+        CraftSpentNote.Text = string.Join(" · ", new[] { gapNote, noBook > 0 ? noBookNote + ", left out" : "" }.Where(x => x.Length > 0));
         CraftMade.Text = worth > 0 ? Fk(worth) : "—";
         CraftMadeNote.Text = noPrice > 0 ? $"{noPrice} recipe{(noPrice == 1 ? "" : "s")} with no Market price yet, left out" : "after the Market's fee and tax";
         long net = worth - spent;
         CraftProfit.Text = spent > 0 || worth > 0 ? Signed(net) : "—";
         CraftProfit.Foreground = B(spent > 0 || worth > 0 ? (net >= 0 ? "Good" : "Bad") : "Ink");
-        CraftProfitNote.Text = noCost + noPrice > 0 ? "only recipes with every price known" : "";
+        CraftProfitNote.Text = missing.Count + noBook > 0 ? "up to, " + string.Join(" · ", new[] { gapNote, noBookNote }.Where(x => x.Length > 0)) : "";
     }
 
     static string Signed(double v) => (v >= 0 ? "+" : "−") + Fk(Math.Abs(v));

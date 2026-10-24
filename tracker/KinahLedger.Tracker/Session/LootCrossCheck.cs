@@ -181,10 +181,48 @@ public sealed class LootCrossCheck
             CrashLog.Note("a chat line for a pickup the loot list already added came late: counted once");
             return true;
         }
+        // the list showed it, but its row didn't count alone (no second witness then): this late chat line is the second,
+        // and it counts now, once. Before 2026-10-24 the row's memory swallowed it and the pickup counted zero times
+        // (Steven's Kukuru, 10:00:53 to 10:01:01: the row waited 4 s, the chat line came 8 s later)
+        int dec = _declined.FindIndex(x => Same(x.Key, key) && Math.Abs((now - x.At).TotalSeconds) <= MatchSeconds);
+        if (dec >= 0 && ev is not RewardReceived)
+        {
+            _declined.RemoveAt(dec);
+            CrashLog.Note($"a chat line for {Label(key)}, which the loot list showed but couldn't count alone, came late: counted now, the list and the chat are its two witnesses");
+            _chat.Add((now, key, true));   // this line is that row's: it matches no other
+            return false;
+        }
         _chat.Add((now, key, false));
         Settle(now);
         return false;
     }
+
+    // rows the caller didn't count (no second witness then), kept MatchSeconds: a late chat line for one counts, once
+    readonly List<(DateTime At, string Key)> _declined = new();
+
+    /// <summary>
+    /// The caller didn't count a row this check returned (no second witness, a reward, a base): it leaves the list of added
+    /// rows, so a late chat line for it is not taken for its duplicate and counts on its own.
+    /// </summary>
+    public void Declined(GameEvent ev, DateTime now)
+    {
+        string? key = ev switch { KinahChanged k when k.Delta > 0 => KinahKey(k.Delta), ItemAcquired a => ItemKey(a.ItemId, a.Count), _ => null };
+        if (key == null) return;
+        int i = _added.FindLastIndex(x => x.Key == key);
+        if (i < 0) return;
+        _added.RemoveAt(i);
+        _declined.Add((now, key));
+        _declined.RemoveAll(x => (now - x.At).TotalSeconds > MatchSeconds);
+    }
+
+    static string Label(string key) => key.StartsWith("k:") ? key[2..] + " Kina" : key[2..];
+
+    /// <summary>
+    /// Whether a gathering bar race that finished on Success stands behind this row (the item, the moment it is judged):
+    /// set by the session. While one does, a stack read once counts as shown and a row back a moment after it vanished
+    /// is a new gather, not the same drop (each gather is its own race).
+    /// </summary>
+    public Func<string, DateTime, bool>? Gathered { get; set; }
 
     /// <summary>One read of the loot list. Its new rows wait for a chat match; returns the rows that waited long enough unmatched, as pickups to add.</summary>
     public List<GameEvent> Popup(List<LootPopup.Row> raw, DateTime now)
@@ -284,6 +322,14 @@ public sealed class LootCrossCheck
     {
         if (_objKey.TryGetValue(r.Obj, out var was))
         {
+            // only the count changed, to a stack, in one read: "x1" read as "x7" (Steven's Aria at 09:58:17, x1 a moment
+            // before and gone a moment after, no x7 in the chat). The row stays what it was until a second read agrees
+            if (was.Key != key && r.Count >= 5 && !_twice.Contains(key) && was.Key.StartsWith("i:") && key.StartsWith("i:")
+                && was.Key[..was.Key.LastIndexOf('x')] == key[..key.LastIndexOf('x')])
+            {
+                CrashLog.Note($"loot list: the row read {was.Key[2..]} reads {r.Name} x{r.Count} once in its place: it stays {was.Key[2..]} until a second read agrees");
+                return;
+            }
             if (was.Key != key)
             {
                 int wi = _waiting.FindIndex(w => w.Obj == r.Obj);
@@ -334,14 +380,22 @@ public sealed class LootCrossCheck
             }
             if ((now - at).TotalSeconds < WaitSeconds) continue;
             // a big count from the list alone, read once, is as likely a misread ("x1" and an icon's edge): not counted
+            // ...unless a gathering bar race finished on Success for it: gathered, the stack counts as shown
+            bool gathered = !row.IsKinah && Gathered?.Invoke(row.Name, now) == true;
             if (!row.IsKinah && row.Count >= 5 && !_twice.Contains(key))
             {
-                CrashLog.Note($"the loot list showed {row.Name} x{row.Count} in one read only and the chat didn't: not counted");
-                _waiting.RemoveAt(i--);
-                continue;
+                if (gathered) CrashLog.Note($"gathering: {row.Name} x{row.Count} read once, kept as shown: a gathering bar race finished on Success for it");
+                else
+                {
+                    CrashLog.Note($"the loot list showed {row.Name} x{row.Count} in one read only and the chat didn't: not counted");
+                    _waiting.RemoveAt(i--);
+                    continue;
+                }
             }
-            // the row came back a moment after vanishing and the chat shows no second one: the same drop, already counted
-            if (back)
+            // the row came back a moment after vanishing and the chat shows no second one: the same drop, already counted.
+            // Not while gathering: each gather is its own race, so a row back after one is a new gather
+            if (back && gathered) CrashLog.Note($"gathering: {row.Name} x{row.Count} showed again after it vanished, with a gathering bar race behind it: a new gather, not the same drop");
+            else if (back)
             {
                 CrashLog.Note($"the loot list showed {(row.IsKinah ? row.Amount.ToString("N0") + " Kina" : row.Name + " x" + row.Count)} again a moment after it vanished, with no second chat line: the same drop, counted once");
                 _waiting.RemoveAt(i--);
@@ -364,6 +418,7 @@ public sealed class LootCrossCheck
         _chat.RemoveAll(x => (now - x.At).TotalSeconds > MatchSeconds * 2);
         foreach (var k in _gone.Where(kv => (now - kv.Value).TotalSeconds > ReturnSeconds * 2).Select(kv => kv.Key).ToList()) _gone.Remove(k);
         _added.RemoveAll(x => (now - x.At).TotalSeconds > MatchSeconds);
+        _declined.RemoveAll(x => (now - x.At).TotalSeconds > MatchSeconds);
         foreach (var o in _objKey.Where(kv => (now - kv.Value.At).TotalSeconds > 60).Select(kv => kv.Key).ToList()) _objKey.Remove(o);
         return add;
     }

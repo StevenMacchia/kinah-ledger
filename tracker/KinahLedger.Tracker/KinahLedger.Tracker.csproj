@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.8.25</Version>
+    <Version>0.8.26</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
@@ -80,6 +80,8 @@
     <EmbeddedResource Include="..\..\data\extra-items.json" LogicalName="extra-items.json" Condition="Exists('..\..\data\extra-items.json')" />
     <!-- crowd-learned misread fixes (kinahledger.com/v1/aliases.json via tools/data/aliases.js), updated daily like the lists above -->
     <EmbeddedResource Include="..\..\data\aliases.json" LogicalName="aliases.json" Condition="Exists('..\..\data\aliases.json')" />
+    <!-- what NPCs charge for the "(Bound)" vendor materials recipes use, so a recipe gets a full cost with nothing typed -->
+    <EmbeddedResource Include="..\..\data\vendor-prices.json" LogicalName="vendor-prices.json" Condition="Exists('..\..\data\vendor-prices.json')" />
     <!-- anchor templates for the layout (Ocr/Anchors.cs): NAME.png with NAME.json; the folder may be empty -->
     <EmbeddedResource Include="..\..\data\anchors\*.png;..\..\data\anchors\*.json" LogicalName="anchors/%(Filename)%(Extension)" />
   </ItemGroup>

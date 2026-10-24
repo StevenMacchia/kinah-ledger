@@ -164,7 +164,8 @@ public static class PriceBook
 
     /// <summary>
     /// What the player pays an NPC for a vendor material (a "(Bound)" one, never on the Market), typed in the crafting
-    /// breakdown and kept on this PC in vendor-prices.json, so recipes that need it get a full cost.
+    /// breakdown and kept on this PC in vendor-prices.json, so recipes that need it get a full cost. With nothing typed,
+    /// the NPC price shipped in data/vendor-prices.json is used; a null there is no price.
     /// </summary>
     static Dictionary<string, long>? _vendor;
     static Dictionary<string, long> Vendor()
@@ -180,7 +181,69 @@ public static class PriceBook
         return _vendor;
     }
 
-    public static long? VendorPrice(string name) { lock (Lock) return Vendor().TryGetValue(Norm(name), out var v) && v > 0 ? v : null; }
+    public static long? VendorPrice(string name) => TypedVendorPrice(name) ?? ShippedVendorPrice(name);
+
+    /// <summary>The NPC cost the player typed for a vendor material, or null.</summary>
+    public static long? TypedVendorPrice(string name) { lock (Lock) return Vendor().TryGetValue(Norm(name), out var v) && v > 0 ? v : null; }
+
+    /// <summary>The NPC price shipped in data/vendor-prices.json (updated like the other data files), or null when it is unknown.</summary>
+    public static long? ShippedVendorPrice(string name) { lock (Lock) return Shipped().TryGetValue(Norm(name), out var v) && v is > 0 ? v : null; }
+
+    static Dictionary<string, long?>? _shipped;
+    static Dictionary<string, long?> Shipped()
+    {
+        if (_shipped != null) return _shipped;
+        _shipped = new();
+        try
+        {
+            using var s = DataFiles.Open("vendor-prices.json");
+            if (s == null) return _shipped;
+            using var doc = JsonDocument.Parse(s);
+            if (!doc.RootElement.TryGetProperty("prices", out var p) || p.ValueKind != JsonValueKind.Object) return _shipped;
+            foreach (var kv in p.EnumerateObject())
+                _shipped[Norm(kv.Name)] = kv.Value.ValueKind == JsonValueKind.Number && kv.Value.TryGetInt64(out var v) && v > 0 ? (long?)v : null;
+        }
+        catch (Exception ex) { CrashLog.Write("shipped vendor prices", ex); }
+        return _shipped;
+    }
+
+    /// <summary>Tests: shipped NPC prices in place of the file's; null reads the file again.</summary>
+    public static void SetShippedVendor(Dictionary<string, long?>? prices)
+    {
+        lock (Lock) _shipped = prices?.ToDictionary(kv => Norm(kv.Key), kv => kv.Value);
+    }
+
+    /// <summary>
+    /// Materials the player ticked "I have these" for (farmed, gathered or already owned): they cost nothing in cash, so a
+    /// recipe's cost leaves them out. Kept on this PC in farmed-materials.json.
+    /// </summary>
+    static HashSet<string>? _farmed;
+    static HashSet<string> FarmedSet()
+    {
+        if (_farmed != null) return _farmed;
+        _farmed = new();
+        try
+        {
+            var path = Path.Combine(Dir, "farmed-materials.json");
+            if (File.Exists(path)) foreach (var n in JsonSerializer.Deserialize<List<string>>(File.ReadAllText(path)) ?? new()) _farmed.Add(Norm(n));
+        }
+        catch (Exception ex) { CrashLog.Write("farmed materials", ex); }
+        return _farmed;
+    }
+
+    public static bool Farmed(string name) { lock (Lock) return FarmedSet().Contains(Norm(name)); }
+
+    /// <summary>Ticks (or unticks) "I have these" for a material.</summary>
+    public static void SetFarmed(string name, bool on)
+    {
+        lock (Lock)
+        {
+            var d = FarmedSet();
+            if (on) d.Add(Norm(name)); else d.Remove(Norm(name));
+            try { File.WriteAllText(Path.Combine(Dir, "farmed-materials.json"), JsonSerializer.Serialize(d.OrderBy(x => x, StringComparer.Ordinal).ToList())); }
+            catch (Exception ex) { CrashLog.Write("farmed materials", ex); }
+        }
+    }
 
     /// <summary>Sets (or, with 0, clears) what the NPC charges for one.</summary>
     public static void SetVendorPrice(string name, long price)
@@ -296,7 +359,7 @@ public static class PriceBook
     }
 
     /// <summary>Forgets what was loaded from files, for tests that switch folders.</summary>
-    public static void Reset() { lock (Lock) { _local = null; _typed = null; _vendor = null; } }
+    public static void Reset() { lock (Lock) { _local = null; _typed = null; _vendor = null; _farmed = null; } }
 
     static string Norm(string s) => string.Join(' ', s.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
 }

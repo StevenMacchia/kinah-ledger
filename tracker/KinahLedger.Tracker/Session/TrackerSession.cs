@@ -345,7 +345,8 @@ public sealed class TrackerSession
         Engine = new SessionEngine(items);
         ZoneView = new SessionEngine(items);
         _cross = new LootCrossCheck(items) { Resolve = ResolveName };
-        _rows = new LootRows(items);
+        _cross.Gathered = GatherWitnessFor;
+        _rows = new LootRows(items) { NewGather = (canon, first) => IsGatherName(canon) && GatherRaceAfter(first) };
         CraftView = new SessionEngine(items);
         Kind = kind;
         Region = manualRegion;
@@ -1073,7 +1074,7 @@ public sealed class TrackerSession
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
-                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)))) : null;
+                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0)) : null;
                 // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
                 if (why == null && !made && parsed is ItemAcquired big && !InRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
                 if (why == null && parsed is PetCrystal bigc && !InRun) why = PickupCheck.TooManyCrystals(bigc.Count);
@@ -1363,12 +1364,14 @@ public sealed class TrackerSession
                 if (!_eventScreenUp) { _eventScreenUp = true; _eventShots = 0; CrashLog.Note("event reward screen up: its cards are the run's rewards (kept as pictures until they can be read)"); }
                 _eventScreenAt = now;
                 Instances.EventRewardScreen(now);
+                RewardScreenSeen(now);
                 if (_eventShots < 6 && (now - _eventShotAt).TotalSeconds >= 1.5) { _eventShotAt = now; _eventShots++; SaveShot(frame, "event-rewards"); }
                 return;
             }
             _eventScreenUp = false;
             if (rc == null) { if ((now - _gridSeenAt).TotalSeconds > 5) _gridDone = false; return; }
             _gridSeenAt = now;
+            RewardScreenSeen(now);
             if (_gridDone) return;
             _gridDone = true;
             int top = rc.Box.Bottom + (int)(frame.Height * 0.016);
@@ -1738,10 +1741,31 @@ public sealed class TrackerSession
         || (Instances.Current is { } cur && cur.Kind != InstanceLog.WorldBoss && (cur.Leaving || Zone == null || Zone == SessionEngine.UnknownZone));
 
     /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
-    string? RewardWhy(DateTime t, bool isBox = false) =>
+    string? RewardWhy(DateTime t, bool isBox = false, long itemId = 0) =>
         t <= _achieveUntil ? "an achievement's reward"
+        // an event's or expedition's reward screen was up: what lands for a minute after is its rewards, from the picture,
+        // never farming or gathering, even once its run is closed or removed (Steven, 2026-10-24 10:07: "2 odyle just randomly
+        // entered my gathering" from Hidden Lugi's rewards, read again 40 s later). A gather under way is still a gather
+        : !InRun && t <= _rewardScreenUntil && !(itemId != 0 && GatheringNow(itemId, t)) ? "an event's or expedition's reward (its reward screen was up)"
         : t <= _inventoryUntil ? "the inventory at work (storage, Quick Register, the wardrobe)"
         : !InRun && !isBox && t <= _boxUntil ? "a box's or a reward's contents" : null;
+    /// <summary>Until when what lands is an event's or expedition's reward: a minute after its reward screen was last seen.</summary>
+    DateTime _rewardScreenUntil = DateTime.MinValue;
+    public const double RewardScreenSeconds = 60;
+    /// <summary>For replay and tests: an event's or expedition's reward screen seen now.</summary>
+    internal void RewardScreenSeen(DateTime t) { var u = t.AddSeconds(RewardScreenSeconds); if (u > _rewardScreenUntil) _rewardScreenUntil = u; }
+
+    // what the gathering panel named lately (its node's item line), for telling a gather from a reward that lands meanwhile
+    DateTime _gatherPanelAt = DateTime.MinValue;
+    readonly HashSet<string> _gatherPanelItems = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The gathering panel named this item (or the item it upgrades: "Fine Odyle" from "Odyle") in the last 15 s.</summary>
+    bool GatheringNow(long itemId, DateTime t)
+    {
+        if ((t - _gatherPanelAt).TotalSeconds > 15 || (_gatherPanelAt - t).TotalSeconds > 5) return false;
+        var name = _items.NameOf(itemId);
+        return _gatherPanelItems.Any(p => name.Equals(p, StringComparison.OrdinalIgnoreCase) || name.EndsWith(" " + p, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Until when what lands is the player's own inventory at work (PickupCheck.IsInventoryLine, IsSkinUnlock).</summary>
     DateTime _inventoryUntil = DateTime.MinValue;
 
@@ -1814,19 +1838,36 @@ public sealed class TrackerSession
     }
 
     /// <summary>Claims the latest unclaimed successful gather of the last few seconds; false when there is none.</summary>
-    bool TakeGatherToken(DateTime now, string by)
+    /// With <paramref name="near"/> (a loot list row's first sight), the race nearest it: back-to-back gathers each keep
+    /// their own (Steven's Kukuru, 2026-10-24: a row judged at 10:01:07 would otherwise take the race of the gather after it).
+    bool TakeGatherToken(DateTime now, string by, DateTime? near = null)
     {
         lock (_gatherTokens)
         {
+            int best = -1;
             for (int i = _gatherTokens.Count - 1; i >= 0; i--)
             {
                 var t = _gatherTokens[i];
                 if (t.Used || (now - t.At).TotalSeconds > GatherTokenSeconds || (now - t.At).TotalSeconds < -2) continue;
-                _gatherTokens[i] = t with { Used = true };
-                return true;
+                if (near is not DateTime n) { best = i; break; }
+                if (best < 0 || Math.Abs((t.At - n).TotalSeconds) < Math.Abs((_gatherTokens[best].At - n).TotalSeconds)) best = i;
             }
-            return false;
+            if (best < 0) return false;
+            _gatherTokens[best] = _gatherTokens[best] with { Used = true };
+            return true;
         }
+    }
+
+    /// <summary>Whether an unclaimed successful gather of the last few seconds is there to claim (TakeGatherToken's rule), without claiming it.</summary>
+    bool HasGatherToken(DateTime now)
+    {
+        lock (_gatherTokens) return _gatherTokens.Any(t => !t.Used && (now - t.At).TotalSeconds <= GatherTokenSeconds && (now - t.At).TotalSeconds >= -2);
+    }
+
+    /// <summary>Whether a gathering bar race finished on Success more than a second after <paramref name="since"/> (the next gather's).</summary>
+    bool GatherRaceAfter(DateTime since)
+    {
+        lock (_gatherTokens) return _gatherTokens.Any(t => (t.At - since).TotalSeconds > 1);
     }
 
     bool IsGatherMaterial(long id)
@@ -1834,6 +1875,54 @@ public sealed class TrackerSession
         _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         return _gatherNames.Contains(_items.NameOf(id));
     }
+
+    bool IsGatherName(string name)
+    {
+        _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return _gatherNames.Contains(name.Trim());
+    }
+
+    // ---- the gathering panel's item line: which item is being gathered (2026-10-24) ----
+    // The bar race says a gather finished on Success; it doesn't say what. The panel's own lines name the node ("Aria |
+    // Profes | Success", "Orich | Proficiency | Orichalcum Ore | Success"), so a gathering material the panel didn't name
+    // isn't this gather's. Its "Success" and "Fail" are the bars' fixed labels, on every panel: never an outcome.
+    (string Item, DateTime At) _panelItem = ("", DateTime.MinValue);
+    public const double PanelItemSeconds = 15;
+
+    /// <summary>A gathering material's base name, its tier aside ("Fresh Aria" → "aria", "Fine Orichalcum Ore" → "orichalcum ore").</summary>
+    internal static string GatherBase(string name) =>
+        Regex.Replace(name.Trim(), @"^(?:fine|pure|radiant|fresh)\s+", "", RegexOptions.IgnoreCase).ToLowerInvariant();
+
+    /// <summary>The gathering material the panel's lines name, by its base name ("" when none is read).</summary>
+    internal static string PanelItemOf(IEnumerable<string> lines)
+    {
+        foreach (var l in lines)
+        {
+            var t = Regex.Replace(l.ToLowerInvariant(), @"x\d+\s*$", "");
+            t = Regex.Replace(t, "[^a-z]", "");
+            if (t.Length < 4) continue;
+            // nodes only: a gemstone rides along with ore and is never what the panel is gathering
+            foreach (var g in GatheringCatalog.All.Where(x => x.IsNode).Select(x => GatherBase(x.Name)).Distinct())
+            {
+                var whole = g.Replace(" ", ""); var first = g.Split(' ')[0];
+                // the line is the name, holds it, or is its start cut short ("Orich" for Orichalcum)
+                if (t == whole || t == first || (first.Length >= 4 && t.Contains(first)) || (t.Length >= 5 && first.StartsWith(t))) return g;
+            }
+        }
+        return "";
+    }
+
+    /// <summary>False when the panel named another gathering material in the last few seconds: then this row isn't that gather's.</summary>
+    bool PanelAgrees(string itemName, DateTime now)
+    {
+        if (_panelItem.Item.Length == 0 || (now - _panelItem.At).TotalSeconds > PanelItemSeconds) return true;
+        var b = GatherBase(itemName);
+        return b == _panelItem.Item || b.StartsWith(_panelItem.Item + " ") || _panelItem.Item.StartsWith(b + " ");
+    }
+
+    /// <summary>Whether a gathering bar race stands behind a loot list row of this item now (the cross-check's question).</summary>
+    bool GatherWitnessFor(string itemName, DateTime now) =>
+        IsGatherName(itemName) && PanelAgrees(itemName, now) && HasGatherToken(now);
 
     /// <summary>
     /// Counts one event where it belongs and says where that was, as the activity's label ("Event · Hidden Lugi (Shugo
@@ -2160,16 +2249,21 @@ public sealed class TrackerSession
             }
             // the gathering panel ("Orichalcum · Proficiency · Orichalcum Ore x1 · Success") sits at the bottom of the band:
             // its lines are what is being gathered, never a pickup (Steven, 2026-10-23 11:28)
+            var uncut = lines;
             if (GatherPanelCut(lines.Select(l => (l.Top, l.Text)).ToList(), now) is int cut) lines = lines.Where(l => l.Top < cut).ToList();
-            // the rows as read, for the trace (with each one's place and contrast, so a replay tracks them the same way)
+            // the rows as read, for the trace (with each one's place and contrast, so a replay tracks them the same way).
+            // The trace keeps the gathering panel's lines too, before the cut: a replay cuts them again, and can see which
+            // item the panel named (2026-10-24: the panel's lines weren't kept, so a gathering miscount couldn't be replayed)
             var read = new List<(LootPopup.Row Row, LootLine Line)>();
             foreach (var l in lines.OrderBy(l => l.Top)) if (LootPopup.Rows(new[] { (l.Top, l.Text) }).FirstOrDefault() is { } rr) read.Add((rr, l));
+            var readAll = new List<(LootPopup.Row Row, LootLine Line)>();
+            foreach (var l in uncut.OrderBy(l => l.Top)) if (LootPopup.Rows(new[] { (l.Top, l.Text) }).FirstOrDefault() is { } rr) readAll.Add((rr, l));
             if (read.Count > 0) _lastActivity = DateTime.UtcNow;
             if (read.Count > 0 && !_lootSeen) { _lootSeen = true; ReportLayout(); }
-            if (read.Count > 0)
+            if (readAll.Count > 0)
             {
-                var traced = read.Select(x => x.Row.IsKinah ? $"{x.Row.Amount} Kina" : $"{x.Row.Name} x{x.Row.Count}").ToList();
-                ReadTrace.List(now, traced, read.Select(x => x.Line.Top).ToList(), read.All(x => x.Line.Contrast >= 0) ? read.Select(x => Math.Round(x.Line.Contrast, 3)).ToList() : null);
+                var traced = readAll.Select(x => x.Row.IsKinah ? $"{x.Row.Amount} Kina" : $"{x.Row.Name} x{x.Row.Count}").ToList();
+                ReadTrace.List(now, traced, readAll.Select(x => x.Line.Top).ToList(), readAll.All(x => x.Line.Contrast >= 0) ? readAll.Select(x => Math.Round(x.Line.Contrast, 3)).ToList() : null);
                 Report.Lines("list", traced, now);
             }
             Seen(now);
@@ -2197,21 +2291,32 @@ public sealed class TrackerSession
                 // is a kill, not a pickup
                 // ...except a gather the chat missed: a gathering material, with a gathering bar that finished on Success in
                 // the last few seconds that no chat line has claimed (step 1 of Steven's plan, 2026-10-23): two witnesses
-                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && TakeGatherToken(now, "the loot list"))
-                    CrashLog.Note($"loot list: {_items.NameOf(gl.ItemId)} x{gl.Count} counted: the chat missed it, and the gathering bar finished on Success");
+                // While gathering the chat is only a cross-check (2026-10-24): its pickup lines come 6 to 11 s after the row,
+                // when they come at all (world chat buried them), so the row counts on the race and a late chat line for it
+                // adds nothing (LootCrossCheck.Chat). The panel's item line has to agree when it was read (PanelAgrees).
+                if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && PanelAgrees(_items.NameOf(gl.ItemId), now) && TakeGatherToken(now, "the loot list", gl.Time))
+                    CrashLog.Note(gl.Count >= 5
+                        ? $"gathering: {_items.NameOf(gl.ItemId)} x{gl.Count} counted as shown, the gathering bar's Success race is the second witness"
+                        : $"gathering: {_items.NameOf(gl.ItemId)} x{gl.Count} counted, the gathering bar's Success race is the second witness (no chat line yet)");
                 // a rare drop is the other exception: it goes to its second read, and counts when that read confirms it (CommitRare)
                 else if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired or KinahChanged && !(parsed is ItemAcquired rl && IsRare(rl.ItemId)))
                 {
-                    CrashLog.Note($"loot list: {(parsed is ItemAcquired na ? $"{_items.NameOf(na.ItemId)} x{na.Count}" : $"{((KinahChanged)parsed).Delta:N0} Kina")} not counted: no chat line confirmed it");
+                    var what = parsed is ItemAcquired na ? $"{_items.NameOf(na.ItemId)} x{na.Count}" : $"{((KinahChanged)parsed).Delta:N0} Kina";
+                    CrashLog.Note(parsed is ItemAcquired ng && IsGatherMaterial(ng.ItemId)
+                        ? (PanelAgrees(_items.NameOf(ng.ItemId), now)
+                            ? $"loot list: {what} not counted yet: no gathering bar race finished on Success for it and no chat line; a chat line for it within {LootCrossCheck.MatchSeconds:0} s counts it"
+                            : $"loot list: {what} not counted yet: the gathering panel names {_panelItem.Item}, not it; a chat line for it within {LootCrossCheck.MatchSeconds:0} s counts it")
+                        : $"loot list: {what} not counted yet: no chat line confirmed it; one within {LootCrossCheck.MatchSeconds:0} s counts it");
+                    _cross.Declined(parsed, now);
                     continue;
                 }
                 // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
-                if (!made && InBaseNotOdyle(parsed)) { CrashLog.Note($"in a base, so not counted from the loot list: {_items.NameOf(((ItemAcquired)parsed).ItemId)}"); continue; }
+                if (!made && InBaseNotOdyle(parsed)) { CrashLog.Note($"in a base, so not counted from the loot list: {_items.NameOf(((ItemAcquired)parsed).ItemId)}"); _cross.Declined(parsed, now); continue; }
                 // an achievement's reward or a box's contents shows in the list too; out in the world, a row with no kill or
                 // gather around it is one (a box opened in town). Never a drop (Steven, 2026-10-23)
                 if (!made && parsed is ItemAcquired lr)
                 {
-                    var why = RewardWhy(now);
+                    var why = RewardWhy(now, false, lr.ItemId);
                     // a gathering material is a gather itself (the chat may have missed its line), never a box's contents
                     _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                     bool gathered = _gatherNames.Contains(_items.NameOf(lr.ItemId));
@@ -2418,17 +2523,33 @@ public sealed class TrackerSession
     int? GatherPanelCut(List<(int Top, string Text)> lines, DateTime now)
     {
         if (lines.Count == 0) return null;
-        var marks = lines.Where(l => System.Text.RegularExpressions.Regex.IsMatch(l.Text.Trim(), @"^\W*[il1|]?\s*(?:success|fail(?:ed|ure)?|profic\w*|profes\w*|pr\w{0,3}fes\w*)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).ToList();
+        // "Succe" and "P rofes" too: read cut short, the panel's title came through as a row ("Aria x1" over "Succe x1",
+        // 2026-10-24 09:58:21 and :23, a gather counted that never happened)
+        var marks = lines.Where(l => System.Text.RegularExpressions.Regex.IsMatch(l.Text.Trim(), @"^\W*[il1|]?\s*(?:succ\w*|fail(?:ed|ure)?|profic\w*|profes\w*|p\s?r\w{0,3}fes\w*)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).ToList();
         if (marks.Count == 0) return null;
         var tops = lines.Select(l => l.Top).OrderBy(t => t).ToList();
         var gaps = tops.Zip(tops.Skip(1), (a, b) => b - a).Where(d => d > 4).OrderBy(d => d).ToList();
         int gap = gaps.Count > 0 ? gaps[gaps.Count / 2] : 30;
         // the panel's block: from three lines above its first marker (the node's name, its proficiency) to the bottom
         int cut = marks.Min(m => m.Top) - (int)(gap * 2.5);
+        // which item the panel names: what the gathering bar's race is for (its Success and Fail are labels, not outcomes)
+        var named = PanelItemOf(lines.Where(l => l.Top >= cut).Select(l => l.Text));
+        if (named.Length > 0)
+        {
+            if (named != _panelItem.Item) CrashLog.Note($"gathering panel: {named}");
+            _panelItem = (named, now);
+        }
         if ((now - _gatherPanelNoted).TotalSeconds > 20)
         {
             _gatherPanelNoted = now;
             CrashLog.Note($"the gathering panel shows at the bottom of the loot list's place: its lines aren't pickups ({string.Join(" | ", lines.Where(l => l.Top >= cut).Select(l => l.Text))})");
+        }
+        // the item the node gives, as the panel names it ("Aria", "Kukuru"): a gather under way, not a reward landing
+        _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var (_, text) in lines.Where(l => l.Top >= cut))
+        {
+            var name = System.Text.RegularExpressions.Regex.Replace(text, @"\s*x\d+\s*$", "").Trim();
+            if (_gatherNames.Contains(name)) { if ((now - _gatherPanelAt).TotalSeconds > 15) _gatherPanelItems.Clear(); _gatherPanelItems.Add(name); _gatherPanelAt = now; }
         }
         return cut;
     }
@@ -2474,7 +2595,8 @@ public sealed class TrackerSession
                 // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
                 // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
                 // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
-                bool craft = (_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(IsCraftTitle);
+                // the raised panel above the skill bar is the gathering panel, never crafting
+                bool craft = !s.Raised && ((_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(IsCraftTitle));
                 if (craft != _panelIsCraft || !_panelUp) CrashLog.Note(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
                 _panelIsCraft = craft;
                 var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";

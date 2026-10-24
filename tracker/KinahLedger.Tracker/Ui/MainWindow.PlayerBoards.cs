@@ -76,14 +76,18 @@ public partial class MainWindow
             host.Children.Add(Faint(HasServer && _prefs.Share ? "Loads with the price board, every 15 minutes." : "Shows once a server is picked and sharing is on (Options)."));
             return;
         }
-        // the site's profit, redone with this player's own prices (typed, or read on this PC) where they have them, and the
-        // vendor costs they typed taken off; a recipe still missing a vendor cost says so
-        var rows = PlayerBoards.Crafts.Select(c => (c, adj: CraftMath.WithVendor(c with { Profit = OwnProfit(c) }, id => PriceBook.VendorPrice(_items.NameOf(id)))))
-            .OrderByDescending(x => x.adj.Profit).ToList();
+        // the site's profit, with the materials ticked "I have these" taken out of the cost, redone with this player's own
+        // prices (typed, or read on this PC) where they have them, and the vendor costs (typed, else shipped) taken off; a
+        // recipe still missing a vendor cost says so
+        var rows = PlayerBoards.Crafts.Select(c =>
+        {
+            var f = CraftMath.WithFarmed(c, id => PriceBook.Farmed(_items.NameOf(id)));
+            return (c, f.Farmed, cost: f.Craft.Cost, adj: CraftMath.WithVendor(f.Craft with { Profit = OwnProfit(f.Craft) }, id => PriceBook.VendorPrice(_items.NameOf(id))));
+        }).OrderByDescending(x => x.adj.Profit).ToList();
         if (rows.Count == 0) { host.Children.Add(Faint($"No recipe makes a profit at today's lowest asks on {server}.")); return; }
         // the top three; all of them only after a click, and folded again whenever the Crafting part opens (Steven, 2026-10-24)
         int shown = _bestAll ? rows.Count : Math.Min(BestCraftsShown, rows.Count);
-        for (int i = 0; i < shown; i++) host.Children.Add(BestCraftRow(i + 1, rows[i].c, rows[i].adj.Profit, rows[i].adj.Unpriced, i > 0));
+        for (int i = 0; i < shown; i++) host.Children.Add(BestCraftRow(i + 1, rows[i].c, rows[i].adj.Profit, rows[i].adj.Unpriced, i > 0, rows[i].Farmed, rows[i].cost));
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         foot.ColumnDefinitions.Add(new ColumnDefinition()); foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         // one age for the whole list: how old the server's prices are (the board the site ranked from), not each listing's
@@ -105,7 +109,7 @@ public partial class MainWindow
     long OwnProfit(PlayerBoards.BestCraft c) =>
         CraftMath.OwnProfit(c, id => PriceBook.QuoteOf(_items.NameOf(id)) is { Mine: true } q ? q.Price : null, PriceBook.SellerKeeps);
 
-    FrameworkElement BestCraftRow(int rank, PlayerBoards.BestCraft c, long profit, int vendorUnpriced, bool rule)
+    FrameworkElement BestCraftRow(int rank, PlayerBoards.BestCraft c, long profit, int vendorUnpriced, bool rule, int farmed = 0, long? cost = null)
     {
         var name = _items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name;
         var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Margin = new Thickness(0), ToolTip = "Click for the recipe card: materials, what a try costs, what it makes, a price alert." };
@@ -119,9 +123,9 @@ public partial class MainWindow
         Grid.SetColumn(icon, 1); g.Children.Add(icon);
         var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var nt = new TextBlock { Text = name, FontSize = 14.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = new SolidColorBrush(GradeColor(GradeOf(name))) };
-        var bits = new List<string> { c.Profession + (c.Level is int lv && lv > 0 ? $" {lv}" : ""), $"{c.Success:P0} success", $"costs {Fk(c.Cost)}" };
+        var bits = new List<string> { c.Profession + (c.Level is int lv && lv > 0 ? $" {lv}" : ""), $"{c.Success:P0} success", $"costs {Fk(cost ?? c.Cost)}" };
         if (c.Makes > 1) bits.Insert(1, $"makes ×{c.Makes}");
-        var sub = new TextBlock { Text = string.Join(" · ", bits.Where(b => b.Trim().Length > 0)) + (vendorUnpriced > 0 ? $" + {vendorUnpriced} vendor item{(vendorUnpriced == 1 ? "" : "s")}" : ""), FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis };
+        var sub = new TextBlock { Text = string.Join(" · ", bits.Where(b => b.Trim().Length > 0)) + (vendorUnpriced > 0 ? $" + {vendorUnpriced} vendor item{(vendorUnpriced == 1 ? "" : "s")}" : "") + (farmed > 0 ? $" · {farmed} farmed" : ""), FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis };
         sub.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         mid.Children.Add(nt); mid.Children.Add(sub);
         // where the sell price is from: the player's own, or the board's with its readings and age

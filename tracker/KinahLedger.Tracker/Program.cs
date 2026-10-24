@@ -1986,6 +1986,19 @@ options: --process aion[,other]");
         so.FlushVotes(g0.AddSeconds(41));
         Check("one gather, upgraded in place, then a stopped one: one Fine ore", $"{n(so.Engine, "Fine Orichalcum Ore")} {n(so.Engine, "Orichalcum Ore")}", "1 0");
         Check("...the failed gather is an attempt, not an item", $"{so.Engine.Totals().Nodes}", "2");
+        // an event's rewards read again from the chat after its reward screen, its run removed: rewards, never gathering;
+        // a gather the panel names meanwhile is still a gather (Steven, 2026-10-24 10:07, Hidden Lugi's Odyle)
+        var ev2 = new TrackerSession(null, settings, items, "Test");
+        ev2.Engine.SetZone("Forest of Exiles"); ev2.ZoneView.SetZone("Forest of Exiles");
+        var e0 = new DateTime(2026, 10, 24, 14, 6, 38, DateTimeKind.Utc);
+        ev2.ProcessChat(new List<string> { "[Player1] hi" }, e0.AddSeconds(-5));
+        ev2.RewardScreenSeen(e0);
+        ev2.ProcessChat(new List<string> { "[Player1] hi", "Pure Odyle acquired.", "Fine Odyle acquired." }, e0.AddSeconds(13));
+        ev2.ProcessList(new List<(int, string)> { (0, "Kukuru"), (30, "Profes"), (60, "Success") }, e0.AddSeconds(50));
+        for (int i = 0; i < 3; i++) ev2.ProcessChat(new List<string> { "[Player1] hi", "Pure Odyle acquired.", "Fine Odyle acquired.", "Odyle acquired.", "Kukuru acquired." }, e0.AddSeconds(53 + i));
+        ev2.FlushVotes(e0.AddSeconds(56));
+        Check("after an event's reward screen: its Odyle are rewards, a gather the panel names still counts",
+            $"{n(ev2.Engine, "Pure Odyle")} {n(ev2.Engine, "Fine Odyle")} {n(ev2.Engine, "Odyle")} {n(ev2.Engine, "Kukuru")}", "0 0 0 1");
         // the gathering bar as the second witness for a gather the chat missed (step 1)
         var sg = new TrackerSession(null, settings, items, "Test");
         sg.Engine.SetZone("Ellun River Midstream");
@@ -2004,6 +2017,23 @@ options: --process aion[,other]");
         sg.FlushVotes(w0.AddSeconds(62.5));
         List(sg, w0.AddSeconds(61), "Orichalcum Ore x1");
         Check("...a gather the chat named: once, not twice", $"{n(sg.Engine, "Orichalcum Ore")}", "2");
+        // a stack gathered with its race behind it: counted as shown, the chat a cross-check only (2026-10-24)
+        sg.GatherOutcome(w0.AddSeconds(80), true, false);
+        List(sg, w0.AddSeconds(80.3), "Orichalcum Ore x3");
+        Check("...a stack row with a race behind it: counted as shown", $"{n(sg.Engine, "Orichalcum Ore")}", "5");
+        // a row refused for no second witness, then its chat line late: the line counts, once (Steven's Kukuru, 2026-10-24:
+        // the cross-check took the late line for the refused row's duplicate and the pickup counted zero times)
+        var sl = new TrackerSession(null, settings, items, "Test");
+        sl.Engine.SetZone("Ellun River Midstream");
+        var l0 = new DateTime(2026, 10, 24, 14, 0, 0, DateTimeKind.Utc);
+        sl.ProcessChat(new List<string> { "[Player1] hi" }, l0);
+        for (int i = 0; i < 4; i++) sl.ProcessList(new List<(int, string)> { (0, "Kina x480") }, l0.AddSeconds(i * 0.5));
+        sl.ProcessList(new List<(int, string)>(), l0.AddSeconds(5));
+        Check("a Kinah row the chat hadn't named yet: not counted", $"{sl.Engine.Totals().Kinah}", "0");
+        for (int i = 0; i < 4; i++) sl.ProcessChat(new List<string> { "[Player1] hi", "Acquired 480 Kina." }, l0.AddSeconds(7 + i * 0.4));
+        sl.FlushVotes(l0.AddSeconds(9));
+        sl.ProcessList(new List<(int, string)>(), l0.AddSeconds(10));
+        Check("...its chat line 7 s later: counted once, not swallowed", $"{sl.Engine.Totals().Kinah}", "480");
 
         // garbled reads over lines that were already on screen: nothing more
         var s2 = new TrackerSession(null, settings, items, "Test");
@@ -2151,17 +2181,46 @@ options: --process aion[,other]");
             if (pepper != null)
             {
                 PriceBook.SetBoard(new() { ["Fresh Fruit"] = 900 });
+                // the pepper's NPC price ships in data/vendor-prices.json (880): a full cost with nothing typed
                 var before = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int vendorBefore);
+                Check("a shipped NPC price joins the recipe's cost", $"{PriceBook.ShippedVendorPrice(pepper)} {before} vendor {vendorBefore}", "880 6260 vendor 0");
                 PriceBook.SetVendorPrice(pepper, 150);
                 var after = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int vendorAfter);
                 PriceBook.SetVendorPrice(pepper, 0);
-                Check("a typed NPC cost joins the recipe's cost", $"{before} vendor {vendorBefore} -> {after} vendor {vendorAfter}", "4500 vendor 1 -> 4800 vendor 0");
+                Check("a typed NPC cost wins over the shipped one", $"{after} vendor {vendorAfter} -> {RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out _)}", "4800 vendor 0 -> 6260");
+                // "I have these": a farmed material costs nothing and isn't unpriced; unticked, its price is back
+                PriceBook.SetFarmed("Fresh Fruit", true);
+                var free = RecipeBook.CostPerTry("Artisan's Fruit Salad", out int unpFree, out int venFree, out int farmedN);
+                PriceBook.Reset();
+                bool kept = PriceBook.Farmed("fresh  fruit");
+                PriceBook.SetFarmed("Fresh Fruit", false);
+                var back = RecipeBook.CostPerTry("Artisan's Fruit Salad", out int unpBack, out _, out int farmedBack);
+                Check("a farmed material counts zero, not as unpriced", $"{free} unpriced {unpFree} vendor {venFree} farmed {farmedN} kept {kept}", "1760 unpriced 0 vendor 0 farmed 1 kept True");
+                Check("unticked, the farmed material is priced again", $"{back} unpriced {unpBack} farmed {farmedBack}", "6260 unpriced 0 farmed 0");
+                // a material with no price: the cost is the priced part, at least, and the material is counted
+                PriceBook.SetBoard(new());
+                var missing = new List<string>();
+                var least = RecipeBook.CostPerTry("Artisan's Fruit Salad", out int unpLeast, out int venLeast, out _, missing);
+                Check("one unpriced material: the cost of the priced part", $"{least} unpriced {unpLeast} vendor {venLeast} missing {string.Join(",", missing)}", "1760 unpriced 1 vendor 0 missing Fresh Fruit");
+                // a null shipped price is no price: the vendor material is unpriced, typed or not
+                PriceBook.SetBoard(new() { ["Fresh Fruit"] = 900 });
+                PriceBook.SetShippedVendor(new() { [pepper] = null });
+                var noShip = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int venNoShip);
+                PriceBook.SetShippedVendor(null);
+                Check("a null shipped NPC price leaves the material unpriced", $"{noShip} vendor {venNoShip}", "4500 vendor 1");
             }
+            PriceBook.SetShippedVendor(new() { ["Made-up Spice (Bound)"] = null, ["Made-up Salt (Bound)"] = 300 });
+            var shippedSalt = PriceBook.VendorPrice("Made-up Salt (Bound)");
+            PriceBook.SetVendorPrice("Made-up Salt (Bound)", 450);
+            var typedSalt = PriceBook.VendorPrice("Made-up Salt (Bound)");
+            PriceBook.SetVendorPrice("Made-up Salt (Bound)", 0);
+            Check("shipped NPC price, typed wins, null is no price", $"{shippedSalt} {typedSalt} {PriceBook.VendorPrice("Made-up Salt (Bound)")} {PriceBook.VendorPrice("Made-up Spice (Bound)")?.ToString() ?? "none"}", "300 450 300 none");
+            PriceBook.SetShippedVendor(null);
         }
         finally
         {
             PriceBook.PathOverride = oldPrices; BestRuns.DirOverride = oldDir; BestRuns.Reset();
-            PriceBook.SetBoard(new()); PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>());
+            PriceBook.SetBoard(new()); PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>()); PriceBook.SetShippedVendor(null);
             try { Directory.Delete(tmp, true); } catch (Exception) { }
         }
         return ok;
