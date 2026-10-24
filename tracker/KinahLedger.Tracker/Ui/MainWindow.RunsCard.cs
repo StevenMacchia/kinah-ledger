@@ -455,9 +455,13 @@ public partial class MainWindow
             SaveCard(card, System.IO.Path.Combine(dir, file));
         }
         _runsOpen.Clear();
+        var fix = _fixOpen; _fixOpen = null;
         Save("ui-runs-card.png");
         _runsOpen.Add("Urugugu Canyon|Materials");
         Save("ui-runs-card-materials.png");
         _runsOpen.Clear();
+        // the merged record's fix sheet open (direction C): Split at the reward screens, Keep as one, Remove
+        _fixOpen = fix;
+        if (_fixOpen != null) Save("ui-runs-card-fix.png");
     }
 }

@@ -288,6 +288,8 @@ public static class WpfApp
         if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events")) w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
         if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
         if (demo) w.ShotPlayerCards(dir, kind);
+        // a tapped feed line's report sheet (direction C), for a farming render
+        if (demo && kind == "Open world") w.ShotLineReport(Path.Combine(dir, "ui-line-report.png"));
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         // the panel's three states (direction C): the newest feed line and the rate, farming and crafting, and a flagged run
         // (the farming and flagged states from a farming render, the crafting one from the Crafting render: each with its own sample prices)

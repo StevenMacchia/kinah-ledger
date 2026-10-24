@@ -674,6 +674,14 @@ public partial class MainWindow
 
     /* ---------------- layout renders ---------------- */
 
+    /// <summary>For layout review: the report sheet a tap on the second feed line opens, drawn to a PNG.</summary>
+    internal void ShotLineReport(string path)
+    {
+        var lines = FeedFor(FeedTab.Farming);
+        if (lines.Count < 2) return;
+        SaveCard(BuildLineReport(lines[1], FeedTab.Farming, "wrong_amount"), path);
+    }
+
     /// <summary>Sample feed lines for a layout render: the shipped screens' three newest lines and the mock's others. Never the player's.</summary>
     void LoadDemoFeed(string kind)
     {

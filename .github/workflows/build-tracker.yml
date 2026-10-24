@@ -93,6 +93,11 @@ jobs:
           dist/KinahLedger.exe ui-shot shots --demo --full --tall
           dist/KinahLedger.exe ui-shot shots --demo --events
           dist/KinahLedger.exe ui-shot shots --demo --crafting --empty
+          # the Live UI (0.8.30, direction C): the Farming feed at both widths comes from the renders above (with
+          # ui-line-report.png, a tapped line's report sheet, and the panel's farming and flagged states, ui-hud-farming.png
+          # and ui-hud-flag.png); the Events render opens the merged record's fix sheet (ui-main-events.png and
+          # ui-runs-card-fix.png); the Crafting render draws the crafting feed and ui-hud-crafting.png; a gathering stretch's feed
+          dist/KinahLedger.exe ui-shot shots --demo --gathering --compact --tall
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.publish.outcome == 'success'

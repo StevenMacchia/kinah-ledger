@@ -1506,6 +1506,7 @@ public partial class MainWindow : Window
         if (kind == "CraftingEmpty")
         {
             // the Crafting part before anything is crafted: the one sentence and Best crafts, for a layout render
+            _demoFeed.RemoveAll(l => l.Tab == Session.FeedTab.Crafting);
             ShowPart("Crafting", remember: false);
             FillCraft(new SessionEngine(_items));
             SetTrackingUi(false);
