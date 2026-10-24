@@ -18,6 +18,7 @@ public static class HudFields
 
     public static readonly Field[] All =
     {
+        new("feed", "Newest line and rate", "", "The last thing counted and the rate beside it, as the window's feed"),
         new("time", "Timer", "", "How long you've farmed here"),
         new("rate", "Total per hour", "/ hr", "Kinah plus loot after tax: the window's big number"),
         new("kinah", "Kinah per hour", "Kinah / hr", "Kinah picked up, per hour"),
@@ -27,8 +28,10 @@ public static class HudFields
         new("last", "Last pickup", "", "The last thing picked up"),
     };
 
-    /// <summary>The clock, the hour's total and the session total, the same figures the window shows.</summary>
-    public const string Default = "time,rate,total";
+    /// <summary>The newest feed line and the rate beside it (direction C, 0.8.30), the same the window's live card shows.</summary>
+    public const string Default = "feed";
+    /// <summary>The default before 0.8.30 (the clock, the hour's total, the session total); a panel still on it moves to the feed once.</summary>
+    public const string OldDefault = "time,rate,total";
 
     /// <summary>The saved list as keys in panel order; never empty (the clock at least).</summary>
     public static List<string> Parse(string? saved)
@@ -114,7 +117,8 @@ public sealed class HudWindow : Window
         {
             Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0A, 0x0C, 0x18)),
             BorderBrush = FrameBrush,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 10, 20, 10),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_fields.Count == 1 && _fields[0] == "feed" ? 8 : 12),
+            Padding = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(16, 10, 20, 10),
             Child = new StackPanel { Children = { _row, _acc, _alert } }
         };
         Content = _frame;
@@ -164,11 +168,11 @@ public sealed class HudWindow : Window
 
     void Build()
     {
-        _row.Children.Clear(); _cells.Clear();
+        _row.Children.Clear(); _cells.Clear(); _feedLine = null;
         for (int i = 0; i < _fields.Count; i++)
         {
             var key = _fields[i]; var f = HudFields.All.First(x => x.Key == key);
-            var number = new TextBlock { Text = "—", VerticalAlignment = VerticalAlignment.Bottom };
+            var number = new TextBlock { Text = "", VerticalAlignment = VerticalAlignment.Bottom };
             var cell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(i == 0 ? 0 : 20, 0, 0, 0) };
             switch (key)
             {
@@ -178,6 +182,11 @@ public sealed class HudWindow : Window
                     number.FontFamily = new FontFamily("Cascadia Mono, Consolas"); number.FontSize = 14; number.Foreground = new SolidColorBrush(Color.FromRgb(0xE9, 0xEF, 0xF7)); number.VerticalAlignment = VerticalAlignment.Center;
                     number.Text = "0:00";
                     break;
+                case "feed":
+                    // the newest line, then the rate: "● Spiritstone +7.5K | 1.27M an hour"; a flagged run says so instead
+                    BuildFeed(cell);
+                    _row.Children.Add(cell);
+                    continue;
                 case "last":
                     number.FontSize = 13.5; number.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCF, 0xE6)); number.MaxWidth = 240; number.TextTrimming = TextTrimming.CharacterEllipsis; number.VerticalAlignment = VerticalAlignment.Center;
                     number.Text = "";
@@ -199,10 +208,55 @@ public sealed class HudWindow : Window
         }
     }
 
-    /// <summary>The figures by key (HudFields), as the window worked them out; a missing one shows a dash.</summary>
+    TextBlock? _feedText, _feedValue, _feedRate, _feedUnit, _flagText;
+    FrameworkElement? _feedLine, _flagLine, _feedSep;
+
+    static readonly SolidColorBrush Gold = Frozen(Color.FromRgb(0xF8, 0xD5, 0x98)), Ink = Frozen(Color.FromRgb(0xEE, 0xEC, 0xF6));
+
+    /// <summary>The feed cell: a live dot, the newest line and its worth, a rule, the rate and its unit; and the flagged-run line it swaps to.</summary>
+    void BuildFeed(StackPanel cell)
+    {
+        var dot = new Ellipse { Width = 6, Height = 6, Fill = Gold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Color.FromRgb(0xF8, 0xD5, 0x98), BlurRadius = 8, ShadowDepth = 0, Opacity = 0.7 } };
+        cell.Children.Add(dot);
+        var mono = new FontFamily("Cascadia Mono, Consolas");
+        var line = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        _feedText = new TextBlock { FontSize = 12.5, Foreground = Ink, MaxWidth = 220, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        _feedValue = new TextBlock { FontSize = 12.5, FontFamily = mono, Foreground = Gold, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        line.Children.Add(_feedText); line.Children.Add(_feedValue);
+        _feedSep = new Border { Width = 1, Height = 16, Background = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(10, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        line.Children.Add(_feedSep);
+        _feedRate = new TextBlock { FontSize = 12.5, FontFamily = mono, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center };
+        _feedUnit = new TextBlock { FontSize = 12, Foreground = Muted, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        line.Children.Add(_feedRate); line.Children.Add(_feedUnit);
+        _feedLine = line; cell.Children.Add(line);
+        var flag = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        flag.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse("M3.5,14 V2.5 M3.5,3 H11.5 L9.9,5.8 L11.5,8.6 H3.5"), Stroke = Gold, StrokeThickness = 1.4, Width = 13, Height = 13, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        _flagText = new TextBlock { FontSize = 12.5, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextTrimming = TextTrimming.CharacterEllipsis };
+        flag.Children.Add(_flagText);
+        flag.Children.Add(new TextBlock { Text = "fix in tracker", FontSize = 12.5, Foreground = Gold, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        _flagLine = flag; cell.Children.Add(flag);
+        // the dot goes with the line, not with a flag
+        cell.Tag = dot;
+    }
+
+    /// <summary>The figures by key (HudFields), as the window worked them out; a missing one is left blank.</summary>
     public void Update(IReadOnlyDictionary<string, string> values)
     {
+        if (_feedLine != null)
+        {
+            string V(string k) => values.TryGetValue(k, out var v) ? v : "";
+            bool flagged = V("flag").Length > 0;
+            _feedLine.Visibility = flagged ? Visibility.Collapsed : Visibility.Visible;
+            _flagLine!.Visibility = flagged ? Visibility.Visible : Visibility.Collapsed;
+            if (((FrameworkElement)_feedLine.Parent).Tag is UIElement dot) dot.Visibility = flagged ? Visibility.Collapsed : Visibility.Visible;
+            _flagText!.Text = V("flag");
+            _feedText!.Text = V("feedText").Length > 0 ? V("feedText") : "Waiting for the first count";
+            _feedValue!.Text = V("feedValue");
+            _feedRate!.Text = V("feedRate"); _feedUnit!.Text = V("feedRate").Length > 0 ? V("feedUnit") : "";
+            _feedSep!.Visibility = V("feedRate").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
         foreach (var (key, cell) in _cells)
-            cell.Text = values.TryGetValue(key, out var v) && v.Length > 0 ? v : key == "last" ? "" : "—";
+            cell.Text = values.TryGetValue(key, out var v) && v.Length > 0 ? v : "";
     }
 }

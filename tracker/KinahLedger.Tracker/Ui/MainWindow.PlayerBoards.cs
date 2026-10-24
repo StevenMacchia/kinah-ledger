@@ -52,25 +52,28 @@ public partial class MainWindow
         if (!_demo) _prefs.Save();
     }
 
-    /// <summary>Which of the three show, for the part and the view (called from ApplyView).</summary>
+    /// <summary>Best crafts on the Crafting part, Where to farm now on the Farming part (called from ApplyView).</summary>
     void ApplyPlayerView(bool craft, bool farm, bool full)
     {
-        if (!craft) _bestAll = false;   // folded again the next time the Crafting part opens
+        if (!craft) { _bestAll = false; _bestOpen.Clear(); }   // folded again the next time the Crafting part opens
         BestCraftsCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
         if (craft) FillBestCrafts();
-        if (!(full && farm)) WhereFarmCard.Visibility = Visibility.Collapsed;
-        else FillWhereFarm(_watcher.Chat?.ZoneView?.Zone ?? _demoZone);
+        if (!farm) WhereSection.Visibility = Visibility.Collapsed;
+        else FillWhere(_watcher.Chat?.ZoneView?.Zone ?? _demoZone);
     }
 
     string? _demoZone;
 
     /* ---------------- best crafts today ---------------- */
 
+    /// <summary>Best crafts rows tapped open to show the skill, where the price is from and its readings, by recipe.</summary>
+    readonly HashSet<string> _bestOpen = new(StringComparer.OrdinalIgnoreCase);
+
     void FillBestCrafts()
     {
         var host = BestCraftsHost; host.Children.Clear();
         var server = Server?.Name ?? "your server";
-        host.Children.Add(Heading($"BEST CRAFTS TODAY · {server.ToUpperInvariant()}"));
+        BestNote.Text = $"{server} · profit a craft";
         if (PlayerBoards.CraftsAt == null)
         {
             host.Children.Add(Faint(HasServer && _prefs.Share ? "Loads with the price board, every 15 minutes." : "Shows once a server is picked and sharing is on (Options)."));
@@ -85,70 +88,93 @@ public partial class MainWindow
             return (c, f.Farmed, cost: f.Craft.Cost, adj: CraftMath.WithVendor(f.Craft with { Profit = OwnProfit(f.Craft) }, id => PriceBook.VendorPrice(_items.NameOf(id))));
         }).OrderByDescending(x => x.adj.Profit).ToList();
         if (rows.Count == 0) { host.Children.Add(Faint($"No recipe makes a profit at today's lowest asks on {server}.")); return; }
+        // the column labels, as the drops table's
+        var heads = new Grid { Height = 24 };
+        heads.ColumnDefinitions.Add(new ColumnDefinition()); heads.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) }); heads.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        foreach (var (text, col) in new[] { ("Success", 1), ("Profit", 2) })
+        {
+            var h = new TextBlock { Text = text, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
+            h.SetResourceReference(TextBlock.ForegroundProperty, "Faint"); Grid.SetColumn(h, col); heads.Children.Add(h);
+        }
+        host.Children.Add(heads);
         // the top three; all of them only after a click, and folded again whenever the Crafting part opens (Steven, 2026-10-24)
         int shown = _bestAll ? rows.Count : Math.Min(BestCraftsShown, rows.Count);
-        for (int i = 0; i < shown; i++) host.Children.Add(BestCraftRow(i + 1, rows[i].c, rows[i].adj.Profit, rows[i].adj.Unpriced, i > 0, rows[i].Farmed, rows[i].cost));
-        var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-        foot.ColumnDefinitions.Add(new ColumnDefinition()); foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        // one age for the whole list: how old the server's prices are (the board the site ranked from), not each listing's
-        var boardAt = PlayerBoards.CraftsBoardAt ?? PlayerBoards.CraftsAt.Value;
-        foot.Children.Add(Faint($"{server}'s prices from {PriceBook.Ago(boardAt, DateTime.UtcNow)} · profit after the Market's cut"));
+        for (int i = 0; i < shown; i++) host.Children.Add(BestCraftRow(i + 1, rows[i].c, rows[i].adj.Profit, rows[i].adj.Unpriced, rows[i].Farmed, rows[i].cost));
         if (rows.Count > BestCraftsShown)
         {
-            var more = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
+            var more = new TextBlock { FontSize = 12, Margin = new Thickness(0, 8, 0, 0) };
             var h = new Hyperlink(new Run(_bestAll ? "Show top 3" : $"Show all {rows.Count}"));
             h.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
             h.Click += (_, _) => { _bestAll = !_bestAll; FillBestCrafts(); };
             more.Inlines.Add(h);
-            Grid.SetColumn(more, 1); foot.Children.Add(more);
+            host.Children.Add(more);
         }
-        host.Children.Add(foot);
     }
 
     /// <summary>A best craft's profit with this player's own prices (typed or read on this PC) in place of the board's.</summary>
     long OwnProfit(PlayerBoards.BestCraft c) =>
         CraftMath.OwnProfit(c, id => PriceBook.QuoteOf(_items.NameOf(id)) is { Mine: true } q ? q.Price : null, PriceBook.SellerKeeps);
 
-    FrameworkElement BestCraftRow(int rank, PlayerBoards.BestCraft c, long profit, int vendorUnpriced, bool rule, int farmed = 0, long? cost = null)
+    /// <summary>
+    /// A best craft (direction C): its icon, name and one quiet line (makes, costs, sells each), the success and the profit a
+    /// craft in columns. A tap opens the detail (skill and level, where the sell price is from, its readings and age) with the
+    /// recipe card a link away.
+    /// </summary>
+    FrameworkElement BestCraftRow(int rank, PlayerBoards.BestCraft c, long profit, int vendorUnpriced, int farmed = 0, long? cost = null)
     {
         var name = _items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name;
-        var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Margin = new Thickness(0), ToolTip = "Click for the recipe card: materials, what a try costs, what it makes, a price alert." };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bool open = _bestOpen.Contains(name);
+        var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = open ? null : "Tap for the skill, where the price is from and its readings." };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
         g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var rk = new TextBlock { Text = rank.ToString(), FontSize = 12, VerticalAlignment = VerticalAlignment.Center }; rk.SetResourceReference(TextBlock.ForegroundProperty, "Faint"); rk.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-        g.Children.Add(rk);
-        var icon = CkIcon(name, 40, GradeColor(GradeOf(name))); icon.Margin = new Thickness(0, 0, 12, 0); icon.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(icon, 1); g.Children.Add(icon);
-        var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var nt = new TextBlock { Text = name, FontSize = 14.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = new SolidColorBrush(GradeColor(GradeOf(name))) };
-        var bits = new List<string> { c.Profession + (c.Level is int lv && lv > 0 ? $" {lv}" : ""), $"{c.Success:P0} success", $"costs {Fk(cost ?? c.Cost)}" };
-        if (c.Makes > 1) bits.Insert(1, $"makes ×{c.Makes}");
-        var sub = new TextBlock { Text = string.Join(" · ", bits.Where(b => b.Trim().Length > 0)) + (vendorUnpriced > 0 ? $" + {vendorUnpriced} vendor item{(vendorUnpriced == 1 ? "" : "s")}" : "") + (farmed > 0 ? $" · {farmed} farmed" : ""), FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        var icon = ItemTile(name, c.Id, 30, GradeOf(name)); icon.VerticalAlignment = VerticalAlignment.Top; icon.Margin = new Thickness(0, 2, 0, 0); icon.HorizontalAlignment = HorizontalAlignment.Left;
+        g.Children.Add(icon);
+        var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var nt = new TextBlock { Text = name, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = new SolidColorBrush(GradeColor(GradeOf(name))) };
+        var oq = PriceBook.QuoteOf(name);
+        var bits = new List<string>();
+        if (c.Makes > 1) bits.Add($"makes ×{c.Makes}");
+        bits.Add($"costs {Fk(cost ?? c.Cost)}" + (vendorUnpriced > 0 ? $" + {vendorUnpriced} vendor item{(vendorUnpriced == 1 ? "" : "s")}" : ""));
+        bits.Add($"sells {(oq?.Price ?? c.Price):N0}{(c.Makes > 1 ? " each" : "")}");
+        if (farmed > 0) bits.Add($"{farmed} farmed");
+        var sub = new TextBlock { Text = string.Join(" · ", bits), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
         sub.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         mid.Children.Add(nt); mid.Children.Add(sub);
-        // where the sell price is from: the player's own, or the board's with its readings and age
-        var oq = PriceBook.QuoteOf(name);
-        var src = new TextBlock { Text = $"sells {(oq?.Price ?? c.Price):N0} · " + (oq != null ? PriceBook.Describe(oq, withAge: false) : $"kinahledger.com · {c.NObs} readings"), FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis };
-        src.SetResourceReference(TextBlock.ForegroundProperty, oq is { Mine: true } ? "Mint" : "Faint");
-        mid.Children.Add(src);
-        Grid.SetColumn(mid, 2); g.Children.Add(mid);
-        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(10, 0, 0, 0) };
-        var pt = new TextBlock { Text = Signed(profit), FontSize = 17, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right };
-        pt.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont"); pt.SetResourceReference(TextBlock.ForegroundProperty, profit >= 0 ? "Good" : "Bad");
-        var per = new TextBlock { Text = vendorUnpriced > 0 ? "per craft, before vendor" : "per craft", FontSize = 11.5, HorizontalAlignment = HorizontalAlignment.Right };
-        per.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
-        right.Children.Add(pt); right.Children.Add(per);
-        Grid.SetColumn(right, 3); g.Children.Add(right);
-        var b = new Border { Child = g, Padding = new Thickness(0, 9, 0, 9), BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
-        b.SetResourceReference(Border.BorderBrushProperty, "Line");
-        b.MouseLeftButtonUp += (_, _) =>
+        if (open)
         {
-            if (_card != null) _card.IsOpen = false;
-            _card = new Popup { Child = BuildCraftCard(name, c, rank), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = b };
-            _card.IsOpen = true;
+            // behind the tap: the skill, the price's source and its readings, and the recipe card
+            var detail = new TextBlock { FontSize = 12, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
+            detail.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
+            var src = oq != null ? PriceBook.Describe(oq, withAge: false) : $"price from kinahledger.com · {c.NObs} readings";
+            var skill = c.Profession + (c.Level is int lv && lv > 0 ? $" {lv}" : "");
+            var age = PriceBook.Ago(PlayerBoards.CraftsBoardAt ?? PlayerBoards.CraftsAt ?? DateTime.UtcNow, DateTime.UtcNow);
+            detail.Inlines.Add(new Run(string.Join(" · ", new[] { skill, src, age }.Where(x => x.Trim().Length > 0)) + "   "));
+            var card = new Hyperlink(new Run("Recipe card")); card.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
+            card.Click += (_, _) =>
+            {
+                if (_card != null) _card.IsOpen = false;
+                _card = new Popup { Child = BuildCraftCard(name, c, rank), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = g };
+                _card.IsOpen = true;
+            };
+            detail.Inlines.Add(card);
+            mid.Children.Add(detail);
+        }
+        Grid.SetColumn(mid, 1); g.Children.Add(mid);
+        var sc = new TextBlock { Text = $"{c.Success:P0}", FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 9, 0, 0) };
+        sc.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); sc.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
+        Grid.SetColumn(sc, 2); g.Children.Add(sc);
+        var pt = new TextBlock
+        {
+            Text = Signed(profit), FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 9, 0, 0),
+            ToolTip = vendorUnpriced > 0 ? "A craft's profit before the vendor items without a cost" : "A craft's profit at today's lowest asks, after the Market's cut",
         };
+        pt.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); pt.SetResourceReference(TextBlock.ForegroundProperty, profit >= 0 ? "Gold" : "Faint");
+        Grid.SetColumn(pt, 3); g.Children.Add(pt);
+        var b = new Border { Child = g, Padding = new Thickness(0, 8, 0, 8), BorderThickness = new Thickness(0, 1, 0, 0) };
+        b.SetResourceReference(Border.BorderBrushProperty, "Line");
+        b.MouseLeftButtonUp += (_, ev) => { if (ev.OriginalSource is FrameworkContentElement) return; if (!_bestOpen.Remove(name)) _bestOpen.Add(name); FillBestCrafts(); };
         return b;
     }
 
@@ -163,62 +189,6 @@ public partial class MainWindow
         var who = $"{h.Row.Runs} runs from {h.Row.Players} players on {Server?.Label ?? "your server"} in the last 7 days";
         var gear = h.AtGear ? $", gear score {GearBracket}." : GearBracket != null ? $". Not enough players at gear score {GearBracket} yet, so this is everyone's." : ". Set your gear score in Options › Server to compare with players at your gear.";
         FarmLine.ToolTip = $"What players made an hour in {h.Row.Zone}: Kinah plus tradeable loot at today's prices, after the Market's cut.\n{who}{gear}";
-        if (_prefs.FullView && _part == "Farming") FillWhereFarm(zone);
-    }
-
-    /* ---------------- where to farm now, in Full view ---------------- */
-
-    void FillWhereFarm(string? zone)
-    {
-        var host = WhereFarmHost; host.Children.Clear();
-        if (PlayerBoards.FarmAt == null) { WhereFarmCard.Visibility = Visibility.Collapsed; return; }
-        WhereFarmCard.Visibility = Visibility.Visible;
-        var (zones, atGear) = PlayerBoards.Top(GearBracket, 5);
-        var server = (Server?.Name ?? "your server").ToUpperInvariant();
-        host.Children.Add(Heading(atGear ? $"WHERE TO FARM NOW · GEAR {GearBracket!.Replace("-", "–")} · {server}" : $"WHERE TO FARM NOW · ALL PLAYERS · {server}"));
-        if (zones.Count == 0)
-        {
-            host.Children.Add(Faint($"No zone on {Server?.Name ?? "your server"} has {PlayerBoards.MinRuns} runs from {PlayerBoards.MinPlayers} players in the last 7 days yet. Yours count."));
-            return;
-        }
-        long max = zones.Max(z => z.ValueHr ?? 0);
-        for (int i = 0; i < zones.Count; i++)
-        {
-            var z = zones[i];
-            var sp = new StackPanel();
-            var top = new Grid();
-            top.ColumnDefinitions.Add(new ColumnDefinition()); top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var nameRow = new StackPanel { Orientation = Orientation.Horizontal };
-            var zt = new TextBlock { Text = z.Zone, FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-            zt.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
-            nameRow.Children.Add(zt);
-            if (zone != null && string.Equals(zone, z.Zone, StringComparison.OrdinalIgnoreCase))
-            {
-                var chip = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(7, 1, 7, 2), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = new SolidColorBrush(Color.FromArgb(0x24, 0x5E, 0xD8, 0xCB)) };
-                var ct = new TextBlock { Text = "you are here", FontSize = 11 }; ct.SetResourceReference(TextBlock.ForegroundProperty, "Mint");
-                chip.Child = ct; nameRow.Children.Add(chip);
-            }
-            top.Children.Add(nameRow);
-            var vt = new TextBlock { Text = $"{Fk(z.ValueHr ?? 0)}/hr", FontSize = 13.5, FontWeight = FontWeights.SemiBold };
-            vt.SetResourceReference(TextBlock.ForegroundProperty, "Gold"); vt.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-            Grid.SetColumn(vt, 1); top.Children.Add(vt);
-            sp.Children.Add(top);
-            // the bar, as a share of the best zone's hour
-            var track = new Grid { Height = 6, Margin = new Thickness(0, 6, 0, 0) };
-            double share = max > 0 ? Math.Max(0.02, (double)(z.ValueHr ?? 0) / max) : 0;
-            track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share, GridUnitType.Star) });
-            track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.0001, 1 - share), GridUnitType.Star) });
-            var bg = new Border { CornerRadius = new CornerRadius(3) }; bg.SetResourceReference(Border.BackgroundProperty, "Inset"); Grid.SetColumnSpan(bg, 2); track.Children.Add(bg);
-            track.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = new LinearGradientBrush(Color.FromRgb(0xB9, 0x78, 0x1F), Color.FromRgb(0xF8, 0xD5, 0x98), 0) });
-            sp.Children.Add(track);
-            var sub = Faint($"{z.Runs} runs from {z.Players} players, last 7 days · Kinah plus loot after tax"); sub.Margin = new Thickness(0, 4, 0, 0); sub.FontSize = 11.5;
-            sp.Children.Add(sub);
-            var row = new Border { Child = sp, Padding = new Thickness(0, 8, 0, 8), BorderThickness = new Thickness(0, i > 0 ? 1 : 0, 0, 0) };
-            row.SetResourceReference(Border.BorderBrushProperty, "Line");
-            host.Children.Add(row);
-        }
-        host.Children.Add(Faint(atGear ? $"A zone shows once {PlayerBoards.MinRuns} runs from {PlayerBoards.MinPlayers} players at your gear are in. Change your gear score in Options."
-            : GearBracket != null ? $"Not enough players at gear score {GearBracket} yet, so this is every player's." : "Every player's runs. Set your gear score in Options › Server to see players at your gear."));
     }
 
     /* ---------------- small pieces in the window's own look ---------------- */

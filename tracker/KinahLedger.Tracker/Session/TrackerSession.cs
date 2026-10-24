@@ -11,7 +11,7 @@ namespace KinahLedger.Session;
 /// One farming run: find the chat (or use a chosen area), read, parse, count, track the zone, and at the end optionally share.
 /// The Market reader is not part of a run; it lives in <see cref="GameWatcher"/> and runs whenever the window is open.
 /// </summary>
-public sealed class TrackerSession
+public sealed partial class TrackerSession
 {
     readonly Settings _settings;
     readonly ItemDictionary _items;
@@ -1109,6 +1109,7 @@ public sealed class TrackerSession
     internal void ProcessChat(List<string> lines, DateTime now)
     {
         _ctxNow = now;
+        GatherTick(now);
         Seen(now);
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
         CommitHeld();
@@ -1266,6 +1267,8 @@ public sealed class TrackerSession
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
                 var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0)) : null;
+                // ...except a gather the panel or its bar just produced (GatherAttempts)
+                if (parsed is ItemAcquired gx) why = NotForGather(why, gx.ItemId, gx.Count, parsed.Time);
                 // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
                 if (why == null && !made && parsed is ItemAcquired big && !InRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
                 if (why == null && parsed is PetCrystal bigc && !InRun) why = PickupCheck.TooManyCrystals(bigc.Count);
@@ -2262,10 +2265,15 @@ public sealed class TrackerSession
     {
         lock (_gatherTokens)
         {
-            if (upgradeRoll) { if (_gatherTokens.Count > 0) _gatherTokens[^1] = _gatherTokens[^1] with { Upgraded = ok }; return; }
-            if (ok) _gatherTokens.Add((at, false, false));
-            _gatherTokens.RemoveAll(t => (at - t.At).TotalSeconds > 60);
+            if (upgradeRoll) { if (_gatherTokens.Count > 0) _gatherTokens[^1] = _gatherTokens[^1] with { Upgraded = ok }; }
+            else
+            {
+                if (ok) _gatherTokens.Add((at, false, false));
+                _gatherTokens.RemoveAll(t => (at - t.At).TotalSeconds > 60);
+            }
         }
+        // every race is one gathering attempt, whatever it was for (GatherAttempts)
+        GatherRace(at, ok, upgradeRoll);
     }
 
     /// <summary>Claims the latest unclaimed successful gather of the last few seconds; false when there is none.</summary>
@@ -2364,6 +2372,8 @@ public sealed class TrackerSession
     /// </summary>
     string Count(GameEvent ev)
     {
+        // a gathering result or failure line for the attempt tally (GatherAttempts)
+        bool gathered = GatherSeen(ev);
         // a chat line for a gathering material claims the gathering bar's success, so the loot list can't count it again
         if (ev is ItemAcquired cg0 && !ev.Via.Contains("loot list") && IsGatherMaterial(cg0.ItemId)) TakeGatherToken(ev.Time, "the chat");
         // what a kill or a gather looks like, for telling a box's contents in the loot list from a drop
@@ -2393,6 +2403,9 @@ public sealed class TrackerSession
             // just out of it: its rewards may still be landing
             else if (run.Leaving) inside = Instances.Route(ev, _batch, Target.RewardOpen(ev.Time)) == RunRoute.Run;
         }
+        // a gather the panel or its bar just produced is gathering, even in a zone the minimap calls an instance (Steven, 2026-10-24
+        // 15:21: Odyle gathered in Auldor's Sanctum); never the run's loot
+        if (inside && gathered) { inside = false; CrashLog.Note($"{_items.NameOf(((ItemAcquired)ev).ItemId)}: gathered here, counted with gathering, not the run's loot"); }
         if (inside)
         {
             // the reward table's coin slot, read first, then the same Kina in the chat: once
@@ -2556,7 +2569,14 @@ public sealed class TrackerSession
         Score.Counted(ev.Time, what, ev is KinahChanged, _cross.KeyOf(ev), _scoreWitness, ev is KinahChanged && KinaWitnessOn(ev.Time));
         Report.Counted(ev.Time, what, ev.Via, where);
         lock (_pickups) { _pickups.Add(new Pickup(ev.Time, what, ev.Via, ev.Unconfirmed, where)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
+        // the live feed at the top of each tab (0.8.30): the same pickup, on the tab its activity belongs to; Kinah with the enemy it was credited to
+        Live.Add(ev is ItemAcquired li
+            ? new FeedLine(ev.Time, LiveFeed.TabOf(where), "item", _items.NameOf(li.ItemId), li.Count, Via: ev.Via, Where: where, ItemId: li.ItemId, Bound: li.Bound)
+            : new FeedLine(ev.Time, LiveFeed.TabOf(where), "kinah", "", ((KinahChanged)ev).Delta, Engine.CreditedTo(ev.Time, ((KinahChanged)ev).Delta) ?? "", Via: ev.Via, Where: where));
     }
+
+    /// <summary>What was counted lately, by tab, for the live feed at the top of each tab (Session/LiveFeed.cs).</summary>
+    public LiveFeed Live { get; } = new();
 
     /// <summary>The chat and the loot list beside the character, checked against each other: see <see cref="LootCrossCheck"/>.</summary>
     readonly LootCrossCheck _cross;
@@ -2610,6 +2630,7 @@ public sealed class TrackerSession
     /// <summary>A loot list read as lines, under the gate: what the live pass and the replay bank's text cases both go through.</summary>
     internal void ListGated(List<LootLine> lines, DateTime now, Gate gate)
     {
+        GatherTick(now);
         if (gate == Gate.Run) { ProcessList(lines, now); return; }
         if (gate == Gate.Hold) { HoldRead("loot_list", now, null, lines); return; }
         _rows.Reset();   // not read in this scene: the rows start over, as the crafting panel's exclusion does
@@ -2618,6 +2639,7 @@ public sealed class TrackerSession
     /// <summary>A chat read under the gate: counted (Run), held (Hold), or dropped (Skip: the chat box keeps its lines, so they count from the next read that shows them).</summary>
     internal void ChatGated(List<string> lines, DateTime now, Gate gate)
     {
+        GatherTick(now);
         if (gate == Gate.Run) { ProcessChat(lines, now); return; }
         if (gate == Gate.Hold && lines.Count > 0) HoldRead("chat", now, lines, null);   // an empty read has nothing to hold
     }
@@ -2791,6 +2813,7 @@ public sealed class TrackerSession
     {
         ListReadsCounted++;
         _ctxNow = now;
+        GatherTick(now);
         try
         {
             CommitHeld();   // anything a step without a picture left waiting (a replay) counts as read first
@@ -2889,7 +2912,7 @@ public sealed class TrackerSession
                 // gather around it is one (a box opened in town). Never a drop (Steven, 2026-10-23)
                 if (!made && parsed is ItemAcquired lr)
                 {
-                    var why = RewardWhy(now, false, lr.ItemId);
+                    var why = NotForGather(RewardWhy(now, false, lr.ItemId), lr.ItemId, lr.Count, now);
                     // a gathering material is a gather itself (the chat may have missed its line), never a box's contents
                     _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                     bool gathered = _gatherNames.Contains(_items.NameOf(lr.ItemId));
@@ -3262,6 +3285,7 @@ public sealed class TrackerSession
         CraftView.Apply(ev);
         Accuracy.Add("craft_panel");
         Report.Counted(now, $"craft {(ok ? "success" : "fail")}{(combo ? " (combo)" : "")}: {(recipe.Length > 0 ? recipe : "?")}", ev.Via);
+        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, 1, Ok: ok, Via: ev.Via, Where: "Crafting"));
         try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
 

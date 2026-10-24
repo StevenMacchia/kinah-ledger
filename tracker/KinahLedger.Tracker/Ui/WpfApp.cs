@@ -288,11 +288,27 @@ public static class WpfApp
         if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events")) w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
         if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
         if (demo) w.ShotPlayerCards(dir, kind);
+        // a tapped feed line's report sheet (direction C), for a farming render
+        if (demo && kind == "Open world") w.ShotLineReport(Path.Combine(dir, "ui-line-report.png"));
         // the Accuracy card on its own, opened on its things to check
         if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events" or "Market")) w.ShotAccuracyCard(Path.Combine(dir, "ui-accuracy-card.png"));
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         var hudAcc = w.HudAccuracy;
+        // the panel's three states (direction C): the newest feed line and the rate, farming and crafting, and a flagged run
+        // (the farming and flagged states from a farming render, the crafting one from the Crafting render: each with its own sample prices)
+        var states = !demo ? new() : w.HudStates().Where(x => kind == "Crafting" ? x.File == "ui-hud-crafting.png" : kind == "Open world" && x.File != "ui-hud-crafting.png").ToList();
+        if (states.Count > 0) foreach (var (k, v) in states[0].Values) values[k] = v;
         w.Close();
+
+        foreach (var (file, state) in states)
+        {
+            var h = new HudWindow(new[] { "feed" }) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            h.Update(state);
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            h.Close();
+        }
 
         foreach (var (file, fields) in new[] { ("ui-hud.png", HudFields.Parse(null)), ("ui-hud-all.png", HudFields.All.Select(f => f.Key).ToList()), ("ui-hud-alert.png", HudFields.Parse(null)), ("ui-hud-accuracy.png", HudFields.Parse(null)) })
         {

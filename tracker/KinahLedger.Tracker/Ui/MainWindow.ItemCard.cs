@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Media;
 using KinahLedger.Data;
+using KinahLedger.Session;
 
 namespace KinahLedger.Ui;
 
@@ -36,22 +37,39 @@ public partial class MainWindow
         body.Children.Add(CkBand(name, r.Grade, string.Join(" · ", new[] { info?.Category is { Length: > 0 } c ? c : (gathered ? "Gathering material" : "Drop"), r.Grade }.Where(x => x.Length > 0))));
         if (r.Reported) body.Children.Add(CkNote("Reported: kept out of what's sent to the site."));
 
-        // this run: three slot boxes with the count, the odds and the hour
-        body.Children.Add(CkSection("THIS RUN"));
-        var tiles = new Grid { Margin = new Thickness(20, 0, 20, 0) };
-        for (int i = 0; i < 3; i++) tiles.ColumnDefinitions.Add(new ColumnDefinition());
-        void Stat(int col, string value, string label)
+        // what is live for the item (direction C): its last pickups, newest first, as the feed counted them
+        var mine = (_demo ? _demoFeed : _watcher.Chat?.Live.Recent(FeedTab.Farming, LiveFeed.Keep) ?? new()).Where(l => l.Kind == "item" && string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)).OrderByDescending(l => l.At).Take(3).ToList();
+        if (_demo && mine.Count > 0)
+            mine = new() { mine[0], mine[0] with { At = mine[0].At.AddSeconds(-81) }, mine[0] with { At = mine[0].At.AddSeconds(-195), Amount = 2 } };
+        if (mine.Count > 0)
         {
-            var sp = new StackPanel();
-            sp.Children.Add(CkText(value.Length > 0 ? value : "—", CkInk, 19, FontWeights.SemiBold, display: true));
-            sp.Children.Add(CkText(label, CkFaint, 11.5));
-            var b = CkBox(sp, new Thickness(col == 0 ? 0 : 8, 0, 0, 0), new Thickness(12, 8, 12, 8));
-            Grid.SetColumn(b, col); tiles.Children.Add(b);
+            var lv = new StackPanel();
+            var cap = new Grid { Margin = new Thickness(12, 6, 12, 2) };
+            cap.ColumnDefinitions.Add(new ColumnDefinition()); cap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            cap.Children.Add(CkText("YOUR LAST PICKUPS", CkGoldRule, 11));
+            var n = CkText($"{r.Drops} this session", CkFaint, 11.5); Grid.SetColumn(n, 1); cap.Children.Add(n);
+            lv.Children.Add(cap);
+            for (int i = 0; i < mine.Count; i++)
+            {
+                var l = mine[i];
+                var g = new Grid { Height = 32, Margin = new Thickness(12, 0, 12, 0) };
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                g.Children.Add(CkText(l.At.ToLocalTime().ToString("HH:mm:ss"), i == 0 ? CkGold : Color.FromRgb(0x5E, 0x65, 0x88), 11.5, mono: true));
+                var w = CkText($"{l.Name} ×{l.Amount:N0}", CkInk, 13, FontWeights.SemiBold); Grid.SetColumn(w, 1); g.Children.Add(w);
+                var v = CkText(PickupValue(l).Text, CkGold, 12.5, mono: true); Grid.SetColumn(v, 2); g.Children.Add(v);
+                var row = new Border { Child = g, BorderThickness = new Thickness(0, i > 0 ? 1 : 0, 0, 0), BorderBrush = Ck(CkSlotLine, 0x73) };
+                if (i == 0) row.Background = new LinearGradientBrush(Color.FromArgb(0x1F, CkGold.R, CkGold.G, CkGold.B), Color.FromArgb(0x05, CkGold.R, CkGold.G, CkGold.B), 0);
+                lv.Children.Add(row);
+            }
+            body.Children.Add(new Border { Child = lv, Margin = new Thickness(16, 14, 16, 0), Padding = new Thickness(0, 2, 0, 4), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), BorderBrush = Ck(CkSlotLine), Background = Ck(CkSlot, 0xA6) });
         }
-        Stat(0, r.Drops, "picked up");
-        Stat(1, r.DropPct is { Length: > 0 } dp && dp != "—" ? dp : "", gathered ? "per try" : "odds per kill");
-        Stat(2, r.PerHour, "an hour");
-        body.Children.Add(tiles);
+        // the odds and the hour, in one line of figures
+        var trio = new TextBlock { Margin = new Thickness(16, 12, 16, 0), FontSize = 12.5, Foreground = Ck(CkFaint) };
+        void Fig(string fig, string label) { if (trio.Inlines.Count > 0) trio.Inlines.Add(new System.Windows.Documents.Run("      ")); trio.Inlines.Add(new System.Windows.Documents.Run(fig) { FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 15, Foreground = Ck(CkInk) }); trio.Inlines.Add(new System.Windows.Documents.Run("  " + label)); }
+        if (mine.Count == 0) Fig(r.Drops, "picked up");
+        if (r.DropPct is { Length: > 0 } dp) Fig(dp, gathered ? "a try" : dp.EndsWith("a kill") ? "" : "kills");
+        if (r.PerHour.Length > 0) Fig(r.PerHour, "an hour");
+        body.Children.Add(trio);
         // the price: where it is from under it, a click to type what the game shows; the board's and the other servers' own lines
         var q = PriceBook.QuoteOf(name);
         bool priced = q != null;
@@ -69,24 +87,20 @@ public partial class MainWindow
         if (q is { Sure: true } && sell > 0) body.Children.Add(CkKv("Yours are worth", (q.Price * sell).ToString("N0"), CkGold, $"{sell} × {q.Price:N0}, before the Market's cut"));
         else if (q is { Sure: false }) body.Children.Add(CkNote("One listing isn't a price: it stays out of the session total and the value per hour until a second reading backs it. Click it to type what you see."));
 
-        // the site's figures for this zone, last seven days
-        body.Children.Add(CkSection(("KINAHLEDGER.COM · " + (zone ?? "THIS ZONE")).ToUpperInvariant()));
+        // the site's figures for this zone, last seven days: only when it has them (an empty section is hidden)
         var ze = SiteData.Zone(zone);
-        if (SiteData.ZonesAt == null) body.Children.Add(CkNote("Loads every 15 minutes while sharing is on and a server is picked."));
-        else if (zone == null) body.Children.Add(CkNote("Shows once the zone is read."));
-        else if (ze == null) body.Children.Add(CkNote($"No runs from {zone} on your server yet. Yours will be the first."));
-        else if (!ze.Published) body.Children.Add(CkNote($"{ze.Runs} of {SiteData.MinRuns} runs needed before it's shown. Yours count."));
-        else if ((ze.Drops.TryGetValue(id.ToString(), out var rate) || ze.Drops.TryGetValue(name, out rate)) && rate != null)
+        if (ze is { Published: true } && (ze.Drops.TryGetValue(id.ToString(), out var rate) || ze.Drops.TryGetValue(name, out rate)) && rate != null)
         {
+            body.Children.Add(CkSection(("KINAHLEDGER.COM · " + (zone ?? "THIS ZONE")).ToUpperInvariant()));
             if (rate.PerKill is double k && k > 0) body.Children.Add(CkKv("Odds per kill", OneIn(k), CkGold));
             if (rate.PerNode is double n && n > 0) body.Children.Add(CkKv("Per try", $"{n:0.##}", CkGold));
             body.Children.Add(CkKv("An hour", $"{rate.PerHour:0.#}", CkGold, $"seen in {rate.Runs} of {ze.Runs} runs, last 7 days"));
         }
-        else body.Children.Add(CkNote($"Not seen in {zone} yet, across {ze.Runs} runs."));
 
-        // the game's listed chances: enemies here first, else the best elsewhere
-        body.Children.Add(CkSection("LISTED DROP CHANCE"));
+        // the game's listed chances: enemies here first, else the best elsewhere; hidden when no enemy lists it
         var listed = SiteData.ListedFor(id, name);
+        var bookFrom = LootBook.Current.SourcesOf(name);
+        if ((listed?.Sources.Count ?? 0) > 0 || bookFrom.Count > 0) body.Children.Add(CkSection("LISTED DROP CHANCE"));
         bool Here(SiteData.Source s) => zone != null && (string.Equals(s.Zone, zone, StringComparison.OrdinalIgnoreCase) || string.Equals(s.Map, zone, StringComparison.OrdinalIgnoreCase));
         if (listed != null && listed.Sources.Count > 0)
         {
@@ -104,19 +118,18 @@ public partial class MainWindow
             // the tables built into the tracker, when the site's list doesn't have the item yet
             var book = LootBook.Current;
             var from = book.SourcesOf(name).Select(m => (m, book.Find(m, name, id)?.Chance)).OrderByDescending(x => x.Chance ?? 0).Take(4).ToList();
-            if (from.Count > 0) foreach (var (m, ch) in from) body.Children.Add(CkKv(m, ch is double c2 && c2 > 0 ? OneIn(c2) : "listed", CkGold));
-            else body.Children.Add(CkNote(gathered ? "Gathered, not dropped: no enemy lists it." : "No enemy table lists it yet."));
+            foreach (var (m, ch) in from) body.Children.Add(CkKv(m, ch is double c2 && c2 > 0 ? OneIn(c2) : "listed", CkGold));
         }
 
-        // a price alert on this item, on the player's server (Ui/MainWindow.PriceAlerts.cs)
-        if (!gathered || priced) body.Children.Add(CkAlertSection(name));
+        // a price alert on this item, on the player's server, as one line (Ui/MainWindow.PriceAlerts.cs)
+        if (!gathered || priced) body.Children.Add(CkAlertLine(name, Redo));
 
         var links = new List<(string, string)> { ("Drops on kinahledger.com", SiteUrl + "/#drops") };
         if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) links.Add(("MetaBot.GG page", mu));
         var linkLine = CkLinks(links.ToArray());
         // Watch: this item alerts like a rare drop (Ui/MainWindow.Alerts.cs)
-        var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop watching" : "Watch: alert me when it drops")) { Foreground = Ck(CkGold), TextDecorations = null };
-        watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop watching" : "Watch: alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
+        var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop the drop alert" : "Alert me when it drops")) { Foreground = Ck(CkGold), TextDecorations = null };
+        watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop the drop alert" : "Alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, watch);
         body.Children.Add(linkLine);
