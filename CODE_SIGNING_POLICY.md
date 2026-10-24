@@ -67,6 +67,8 @@ and never sends input to the game. It sends data to these places, and nowhere el
   skins, recipes. Only the app version goes with these requests. `update.check: false` in `settings.json` turns both
   off.
 
+**The website.** kinahledger.com counts page views with Cloudflare Web Analytics: no cookies, no fingerprinting and nothing stored on your device. It sees which page was opened, the site that linked to it, the country and the browser type, and reports them only as totals. The tracker sends nothing to it.
+
 Those sites have their own privacy policies:
 NCSOFT, [MetaBot.GG](https://metabot.gg/),
 [GitHub](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement),
