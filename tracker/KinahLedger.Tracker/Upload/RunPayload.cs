@@ -204,7 +204,8 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     {
         if (runs == null) return null;
         var list = runs
-            .Where(r => r.LastLoot != null && KindOf(r) != null && r.Seconds >= 1 && r.Seconds <= MaxSeconds)
+            // a run whose Kinah wasn't read isn't sent: the site would average it in as the little the chat saw (since 0.8.23)
+            .Where(r => r.LastLoot != null && KindOf(r) != null && r.Seconds >= 1 && r.Seconds <= MaxSeconds && !r.KinahUnknown)
             .OrderByDescending(r => r.Start).Take(MaxRuns)
             .Select(r =>
             {

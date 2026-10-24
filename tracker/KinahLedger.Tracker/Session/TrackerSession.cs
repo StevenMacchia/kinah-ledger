@@ -251,6 +251,30 @@ public sealed class TrackerSession
             return false;
         }
     }
+    /// <summary>
+    /// The Kinah counter's rise that agrees with a reward slot's <paramref name="amount"/> within 1%: from any reading of the
+    /// last minute to one taken within <paramref name="seconds"/> of <paramref name="t"/>, the closest to the amount. Null when
+    /// none agrees. A table shows "600.0K"; the counter says exactly what came.
+    /// </summary>
+    internal long? BalanceRoseNear(long amount, DateTime t, double seconds = 10, double tolerance = 0.01)
+    {
+        if (amount < 1000) return null;
+        lock (_balanceHist)
+        {
+            var near = _balanceHist.Where(b => (t - b.At).TotalSeconds <= 60 && (b.At - t).TotalSeconds <= seconds).OrderBy(b => b.At).ToList();
+            long? best = null;
+            for (int j = 1; j < near.Count; j++)
+            {
+                if (Math.Abs((near[j].At - t).TotalSeconds) > seconds) continue;
+                for (int i = 0; i < j; i++)
+                {
+                    long rise = near[j].Balance - near[i].Balance;
+                    if (rise > 0 && Math.Abs(rise - amount) <= amount * tolerance && (best == null || Math.Abs(rise - amount) < Math.Abs(best.Value - amount))) best = rise;
+                }
+            }
+            return best;
+        }
+    }
     /// <summary>For tests: a Kinah counter reading.</summary>
     internal void SeedBalance(DateTime at, long balance) { lock (_balanceHist) _balanceHist.Add((at, balance)); }
 
@@ -1195,7 +1219,10 @@ public sealed class TrackerSession
                     using var again = ScreenReader.Capture(g);
                     // the table slides in: its header is found again in each frame, never taken from the first (2026-10-23 20:53,
                     // Vakron: every read after the first was off the slots, every grade Common, the 600.0K coin not named)
-                    if (await TableTop(again) is int t2) top = t2;
+                    // no header: the table has closed (2026-10-23 21:11 Vakron, about a second after it opened). What was read
+                    // stands; the world where the table was is never read as slots, and no settle is waited for
+                    if (await TableTop(again) is not int t2) { CrashLog.Note("reward table: closed before it settled; counted from the cleanest read"); break; }
+                    top = t2;
                     reads.Add(await RewardGrid.ReadAsync(again, top));
                     if (RewardGrid.Settled(reads, GridSureDistance) || (DateTime.UtcNow - started).TotalSeconds >= 3) SaveShot(again, "reward-table-settled");
                 }
@@ -1320,8 +1347,16 @@ public sealed class TrackerSession
 
     internal void ApplyGrid(List<RewardGrid.Slot> slots, DateTime now)
     {
-        // a second table in a run that was paid already is the next run's (an empty read changes nothing)
-        if (slots.Count > 0) Instances.TableStarting(now);
+        // a read of one slot or none, with nothing on it surely matched, is no reward table (2026-10-23 21:12:30: a Daeva Pass
+        // screen read 11 times, 0 to 1 slot): it can't start, split or pay a run. A lone coin (a K or M count) still counts
+        if (slots.Count <= 1 && !slots.Any(s => (s.Icons.Count > 0 && s.Icons[0].Distance <= GridSureDistance)
+                                               || (s.Count >= 1000 && System.Text.RegularExpressions.Regex.IsMatch(s.CountText ?? "", "[KkMm]"))))
+        {
+            if (slots.Count > 0) CrashLog.Note("reward table: one slot, nothing on it surely matched; not a reward table, the run is left as it was");
+            return;
+        }
+        // a second table in a run that was paid already is the next run's
+        Instances.TableStarting(now);
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         int added = 0, known = 0, unnamed = 0;
         var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
@@ -1329,12 +1364,37 @@ public sealed class TrackerSession
         var history = Instances.Snapshot().Where(r => string.Equals(r.Zone, Instances.Open, StringComparison.OrdinalIgnoreCase)).SelectMany(r => r.Items.Keys.Concat(r.BoundItems.Keys)).Select(id => _items.NameOf(id)).ToList();
         var prefer = SetMates(slots, _byIcon!, history);
         var notRead = new List<string>();       // every slot it can't name, as "Rare x14 (picture)": shown as Unknown item, never dropped
-        void NotRead(RewardGrid.Slot s) => notRead.Add($"{s.Grade} x{(s.Count > 0 ? s.Count.ToString() : "?")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
+        // a slot not read that shows a K or M count, or whose closest icon is the coin, leaves the run's Kinah not known
+        bool kinahUnread = false, bigUnread = false;   // the second: a K or M slot not read, Kinah unknown unless the table's coin was read
+        void NotRead(RewardGrid.Slot s)
+        {
+            notRead.Add($"{s.Grade} x{(s.Count > 0 ? s.Count.ToString() : "?")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
+            bool coinLike = s.Icons.Count > 0 && s.Icons[0].Key is { } k && _byIcon!.TryGetValue(k, out var ci) && ci.Any(i => string.Equals(Unbound(i.Name), "Kina", StringComparison.OrdinalIgnoreCase));
+            if (coinLike) kinahUnread = true;
+            else if (System.Text.RegularExpressions.Regex.IsMatch(s.CountText ?? "", @"\d\s*[KkMm]")) bigUnread = true;
+        }
         foreach (var sl in slots)
         {
             // figures on the slot the reader couldn't tell: its count isn't known, so the slot is not read (never one assumed)
             if (sl.Count <= 0) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot's count couldn't be read (\"{sl.CountText}\"); not counted"); continue; }
             var best = sl.Icons.FirstOrDefault();
+            bool kCount = sl.Count >= 1000 && System.Text.RegularExpressions.Regex.IsMatch(sl.CountText ?? "", "[KkMm]");
+            bool coinIcon = best.Key != null && _byIcon.TryGetValue(best.Key, out var its0) && best.Distance <= 100
+                            && its0.Any(i => string.Equals(Unbound(i.Name), "Kina", StringComparison.OrdinalIgnoreCase));
+            // a K or M count the Kinah counter agrees with is the coin, whatever its picture matched (2026-10-23 21:11 Vakron:
+            // the 600.0K coin at 115, read as 605.0K, so the run lost its Kinah). The counter's rise is what counts, and only
+            // when the slot's count agrees with it within 1%: the counter alone never makes Kinah
+            if (kCount && !coinIcon && GradedPick(sl, _byIcon, prefer) == null && BalanceRoseNear(sl.Count, now) is long rose)
+            {
+                int kseen2 = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Name == "Kina" && p.Count == rose);
+                if (kseen2 >= 0) { _runPickups.RemoveAt(kseen2); known++; fromGrid.Add(new KinahChanged(now, rose, false) { Via = "reward table" }); continue; }
+                CrashLog.Note($"reward table: a slot x{sl.CountText} (closest {best.Distance:0}) is Kinah: the Kinah counter rose {rose:N0} with it");
+                Instances.Loot(new KinahChanged(now, rose, false) { Via = "reward table" }); _gridKina.Add((now, rose));
+                Feed(new KinahChanged(now, rose, false) { Via = "reward table" }, RunWhere());
+                fromGrid.Add(new KinahChanged(now, rose, false) { Via = "reward table" });
+                added++;
+                continue;
+            }
             if (best.Key == null || !_byIcon.TryGetValue(best.Key, out var its)) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} with no item to its icon; not counted"); continue; }
             // the gold coin: Kinah when the Kinah counter rose by exactly the slot's amount around then (2026-10-22, Urugugu:
             // 17,889 to 617,889 for the 600.0K slot). The coin's picture on the item list differs a little from the game's
@@ -1346,7 +1406,10 @@ public sealed class TrackerSession
                 if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; fromGrid.Add(new KinahChanged(now, amt, false) { Via = "reward table" }); continue; }
                 // a clear match to the coin as the game draws it is sure on its own; a closer call needs the counter to agree
                 bool clearCoin = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25);
-                if (!clearCoin && !BalanceRose(amt, now)) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
+                // the counter's rise within 1% of the slot is the amount (a 600.0K coin read as 605.0K, 2026-10-23)
+                long? rise = BalanceRoseNear(amt, now);
+                if (!clearCoin && rise == null && !BalanceRose(amt, now)) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
+                if (rise is long r1 && r1 != amt) { CrashLog.Note($"reward table: the coin slot read {amt:N0}, the Kinah counter rose {r1:N0}: the counter's amount counts"); amt = r1; }
                 Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" }); _gridKina.Add((now, amt));
                 Feed(new KinahChanged(now, amt, false) { Via = "reward table" }, RunWhere());
                 fromGrid.Add(new KinahChanged(now, amt, false) { Via = "reward table" });
@@ -1391,7 +1454,7 @@ public sealed class TrackerSession
         // the run is counted from the picture alone (Steven: expeditions, dungeons and events come from the reward pictures,
         // never the chat): what the chat put in the run gives way to the table's slots, and a slot it can't name is kept as
         // a slot not read, never filled in from the chat
-        if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead);
+        if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead, kinahUnread || (bigUnread && !fromGrid.OfType<KinahChanged>().Any()));
         CrashLog.Note($"reward table read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {unnamed} not named");
     }
 

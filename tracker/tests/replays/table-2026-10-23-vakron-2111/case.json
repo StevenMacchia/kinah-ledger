@@ -1,0 +1,16 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Vakron Sky Island reward table, 2026-10-23 21:11:35 (the first frame 0.8.22 kept): 29 slots (8, 8, 8, 5); 0.8.22 read 14 of them, then the table closed within a second, so the run saved no Kinah and no items",
+  "source": "reward-shots/20261023-211135-Vakron-Sky-Island-reward-table.jpg, everything but the title and the grid blacked out, the nameplates beside the last row pixelated",
+  "game": { "w": 5120, "h": 2160 },
+  "frames": [ { "f": "table.jpg", "k": "table", "t": "2026-10-24T01:11:35Z", "x": 0, "y": 0 } ],
+  "expect": {
+    "table": [
+      { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
+      { "n": 2, "unlisted": true }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 4000, "name": "Enhance Stone" }, { "n": 600000, "name": "Kina" }, { "n": 1 }, { "n": 1 },
+      { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
+      { "n": 1 }, { "n": 6, "unlisted": true }, { "n": 4, "name": "Refining Stone" }, { "n": 6, "name": "Soul Codex" }, { "n": 14, "name": "Silentium" }
+    ]
+  }
+}

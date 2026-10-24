@@ -46,6 +46,15 @@ public sealed class InstanceRun
     public Dictionary<long, int> ChatItems { get; set; } = new();
     /// <summary>No reward picture was read for the run, so its rewards are not known (since 0.8.18). Kinah and kills still count.</summary>
     public bool RewardsNotRead { get; set; }
+    /// <summary>The reward table's coin slot (a K or M count) was there but not named, so the run's Kinah is not known (since 0.8.23).</summary>
+    public bool KinahNotRead { get; set; }
+    /// <summary>
+    /// The run's Kinah isn't known: its reward picture wasn't read, or its coin slot wasn't. Such a run is left out of the
+    /// averages and totals, never counted as 0 (Steven, 2026-10-23: "should NEVER average 176k kinah a run when I'm getting
+    /// 600k"). Kinah 0 is only a run whose table showed no coin.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool KinahUnknown => KinahNotRead || RewardsNotRead;
     /// <summary>Entry to last loot, never under ten seconds.</summary>
     public double Seconds => LastLoot is { } l ? Math.Max(10, (l - Start).TotalSeconds) : 0;
 
@@ -522,7 +531,7 @@ public sealed class InstanceLog
     /// The reward table was read: the open run's items are its slots, and only those. What the chat had put in the run gives
     /// way, bound rewards count as the table shows them, and later chat items don't reach this run.
     /// </summary>
-    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread, IEnumerable<string>? unknown = null)
+    public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread, IEnumerable<string>? unknown = null, bool kinahUnread = false)
     {
         lock (_lock)
         {
@@ -539,6 +548,7 @@ public sealed class InstanceLog
                     _cur.LastLoot = t;
                 }
             _cur.FromPicture = true; _cur.SlotsUnread += unread;
+            if (kinahUnread) _cur.KinahNotRead = true;
             if (unknown != null) _cur.UnknownSlots.AddRange(unknown);
             CrashLog.Note($"{_cur.Label}: counted from the reward table: {_cur.Items.Values.Sum() + _cur.Bound} item(s) from its slots, {unread} slot(s) not read; the chat's {chatItems} set aside");
         }

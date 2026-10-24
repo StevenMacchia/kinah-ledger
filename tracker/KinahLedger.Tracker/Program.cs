@@ -1960,6 +1960,28 @@ options: --process aion[,other]");
                 cs2.Engine.SetZone("Urugugu Canyon"); cs2.Instances.Zone("Urugugu Canyon", cz);
                 cs2.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "600.0K", 600_000, new() { (IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon), 4.4), (coin, 84.4) }) }, cz.AddSeconds(1));
                 Check("a clear coin match is Kinah without the counter", $"{cs2.Instances.Snapshot().LastOrDefault(r => r.Start >= cz.AddSeconds(-1))?.Kinah ?? 0:N0}", "600,000");
+                // the counter as the coin's second witness (2026-10-23 21:11 Vakron: the coin at 115, read as 605.0K): a K count the
+                // counter's rise agrees with within 1% is Kinah, the counter's amount; the counter alone never makes Kinah
+                string CoinBy(string text, long count, double dist, bool counter)
+                {
+                    var vs = new TrackerSession(null, new Settings(), items, "Test"); var v0 = DateTime.UtcNow;
+                    vs.Engine.SetZone("Vakron Sky Island"); vs.Instances.Zone("Vakron Sky Island", v0);
+                    if (counter) { vs.SeedBalance(v0, 17_889); vs.SeedBalance(v0.AddSeconds(2), 617_889); }
+                    vs.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", text, count, new() { (IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon), dist), ("Other", 120) }) }, v0.AddSeconds(3));
+                    var vr = vs.Instances.Snapshot().LastOrDefault(r => r.Start >= v0.AddSeconds(-1));
+                    return $"{vr?.Kinah ?? 0:N0} {(vr?.KinahUnknown == true ? "not read" : "read")}";
+                }
+                Check("a 605.0K slot the counter saw rise 600,000 is 600,000 Kinah, its picture at 115",
+                    $"{CoinBy("605.0K", 605_000, 115, true)} · {CoinBy("605.0K", 605_000, 115, false)} · {CoinBy("4.0K", 4_000, 115, true)}",
+                    "600,000 read · 0 not read · 0 not read");
+                // a lone slot with nothing sure on it (a Daeva Pass screen, 21:12:30) is no reward table: the run stays as it was
+                var ds = new TrackerSession(null, new Settings(), items, "Test"); var d0 = DateTime.UtcNow;
+                ds.Engine.SetZone("Vakron Sky Island"); ds.Instances.Zone("Vakron Sky Island", d0);
+                ds.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "", 1, new() { ("Icon_GM_0044_T06_Gloves", 114) }) }, d0.AddSeconds(3));
+                Check("a lone unsure slot doesn't pay or split the run", $"{ds.Instances.Snapshot().LastOrDefault(r => r.Start >= d0.AddSeconds(-1))?.FromPicture} {ds.Instances.Snapshot().Count(r => r.Start >= d0.AddSeconds(-1))}", "False 1");
+                // the averages leave out a run whose Kinah wasn't read, never count it as 0
+                var unknownRun = new InstanceRun { Zone = "Vakron Sky Island", Kind = "Expedition", Start = DateTime.UtcNow, LastLoot = DateTime.UtcNow.AddMinutes(9), KinahNotRead = true };
+                Check("a run whose Kinah wasn't read isn't uploaded", $"{InstanceRunPayload.From(new[] { unknownRun }, id => id.ToString())?.Count ?? 0}", "0");
                 Check("the reward table into the run", string.Join(", ", (grun2?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}")), "Refining Stone x8");
                 // counted from the picture alone (Steven, 2026-10-23 Urugugu): what the chat put in the run gives way to the slots
                 var pt = new TrackerSession(null, new Settings(), items, "Test"); var pt0 = DateTime.UtcNow;
@@ -2003,6 +2025,12 @@ options: --process aion[,other]");
                 var sv = RewardGrid.Vote(fadeReads, TrackerSession.GridSureDistance);
                 Check("a table fading in: settled only once two clean reads agree", $"{early} {one} {two}", "False False True");
                 Check("...and the early reads don't outvote the clean ones", string.Join(" | ", sv.Select(s => $"{s.Icons[0].Key} {s.Grade} x{s.Count}")), "Greaves Legend x1 | Silentium Unique x14");
+                // a table that closes fast (2026-10-23 21:11 Vakron: 14, then six reads of 3 off the world, then 0): the clean read stands
+                var closing = new List<List<RewardGrid.Slot>> { clean };
+                for (int i = 0; i < 6; i++) closing.Add(new List<RewardGrid.Slot> { new(box, "Common", "", 1, new() { ("Icon_GM_0044_T06_Gloves", 114) }) });
+                closing.Add(new List<RewardGrid.Slot>()); closing.Add(new List<RewardGrid.Slot>());
+                Check("a table that closes fast: its one clean read stands against the later ones off the world",
+                    string.Join(" | ", RewardGrid.Vote(closing, TrackerSession.GridSureDistance).Select(s => $"{s.Icons[0].Key} x{s.Count}")), "Greaves x1 | Silentium x14");
                 Check("Transcendence from its own lines only, never an item's name",
                     $"{TrackerSession.IsTranscendenceLine("Set to Stage 1.")} {TrackerSession.IsTranscendenceLine("Shattered Arkanis [Stage 1] | Transcendence")} {TrackerSession.IsTranscendenceLine("Transcendence Stone acquired.")} {TrackerSession.IsTranscendenceLine("[Kael] transcendence stage 2 lfg")}",
                     "True True False False");

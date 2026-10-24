@@ -196,9 +196,13 @@ public static class RewardGrid
     {
         var seen = reads.Where(r => r.Count > 0).ToList();
         if (seen.Count == 0) return new List<Slot>();
-        // the slot count of the reads with the most sure slots
-        // slots appear as the table slides in (14, then 27): the most slots two reads agree on, else the last read's
-        int n = seen.GroupBy(r => r.Count).Where(g => g.Count() >= 2).Select(g => g.Key).DefaultIfEmpty(seen[^1].Count).Max();
+        // the slot count of the cleanest read: the most sure slots, then the count most reads agree on, then the larger. Slots
+        // appear as the table slides in (14, then 27) and vanish as it closes (2026-10-23 21:11 Vakron: 14, 3, 3, 3, 3, 3, 3,
+        // 0, 0, and the six reads of 3 outvoted the one clean read), so neither the last read nor a majority decides
+        int SureIn(List<Slot> r) => r.Count(s => s.Icons.Count > 0 && s.Icons[0].Distance <= sure);
+        int n = seen.GroupBy(r => r.Count)
+                    .OrderByDescending(g => g.Max(SureIn)).ThenByDescending(g => g.Count()).ThenByDescending(g => g.Key)
+                    .First().Key;
         var same = seen.Where(r => r.Count == n).ToList();
         var res = new List<Slot>();
         for (int i = 0; i < n; i++)
@@ -246,9 +250,11 @@ public static class RewardGrid
         // the first row's top edge, found where it is: the header's line gives it within a few pixels, and 7 px low put the
         // corners in the gap (2026-10-23 Urugugu: the gold slot read Common, its "4" cut off, the row ended at slot 7)
         top = RefineTop(frame, top, x0, s, p);
-        // and its left edge: two pixels off put the outline test on the slot's own backing (2026-10-23, the Urugugu picture
-        // is 5117 wide, so the centre gave 1972 for 1974 and the row ended at its seventh slot)
-        x0 = RefineLeft(frame, top, x0, s, p);
+        // the outline test is made where the slots' sides are sharpest, within 6 px of the centred estimate: two pixels off
+        // put it on the slot's own backing (2026-10-23, the Urugugu picture is 5117 wide, so the centre gave 1972 for 1974
+        // and the row ended at its seventh slot). The slots are still read at the estimate, where their icons and grades
+        // were measured (read at 1974, three Urugugu slots lost their names)
+        int xb = RefineLeft(frame, top, x0, s, p);
         var slots = new List<Slot>();
         for (int row = 0; row < 6; row++)
         {
@@ -259,7 +265,7 @@ public static class RewardGrid
             // the row stops after it (the boxes past the grid 16 to 30, real slots 46 and up)
             int found = 0;
             for (int col = 0; col < 8; col++)
-                if (Border(frame, new Rectangle(x0 + col * p, y, s, s)) >= BorderMin) found = col + 1;
+                if (Border(frame, new Rectangle(xb + col * p, y, s, s)) >= BorderMin) found = col + 1;
             for (int col = 0; col < found; col++)
             {
                 var box = new Rectangle(x0 + col * p, y, s, s);
@@ -353,15 +359,17 @@ public static class RewardGrid
     /// </summary>
     internal static int FigureRuns(Bitmap f, Rectangle area)
     {
-        int runs = 0; bool inRun = false;
-        for (int x = Math.Max(0, area.Left); x < Math.Min(f.Width, area.Right); x++)
+        // a run one column wide is a glint in the art, not a figure (2026-10-23 Vakron: the tome's corner gave the lone 5 a
+        // second run, so "75" passed)
+        int runs = 0, width = 0;
+        for (int x = Math.Max(0, area.Left); x <= Math.Min(f.Width, area.Right); x++)
         {
             int n = 0;
-            for (int y = Math.Max(0, area.Top); y < Math.Min(f.Height, area.Bottom); y++)
-            { var c = f.GetPixel(x, y); if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) n++; }
-            bool white = n >= 2;
-            if (white && !inRun) runs++;
-            inRun = white;
+            if (x < Math.Min(f.Width, area.Right))
+                for (int y = Math.Max(0, area.Top); y < Math.Min(f.Height, area.Bottom); y++)
+                { var c = f.GetPixel(x, y); if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) n++; }
+            if (n >= 2) width++;
+            else { if (width >= 2) runs++; width = 0; }
         }
         return runs;
     }
