@@ -40,9 +40,9 @@ public static class TemplateMatch
         var data = b.LockBits(r, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try
         {
-            int stride = data.Stride;
-            var buf = new byte[stride * r.Height];
-            System.Runtime.InteropServices.Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+            // row by row: Stride is the whole bitmap's, and Stride x Height from Scan0 overruns it (PixelRows)
+            int stride = r.Width * 4;
+            var buf = PixelRows.Copy(data, r.Width, r.Height);
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < w; x++)
                 {

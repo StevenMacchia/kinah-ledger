@@ -258,9 +258,11 @@ public sealed class LootRows
         var data = raw.LockBits(whole, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try
         {
-            int stride = data.Stride;
-            var buf = new byte[stride * whole.Height];
-            System.Runtime.InteropServices.Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+            // Scan0 points into the frame's own memory and Stride is the frame's, not the rectangle's: copy one row's
+            // width at a time (copying Stride x Height from Scan0 read past the end of the frame on a bottom row and
+            // crashed the tracker with an access violation on 2026-10-24)
+            int stride = whole.Width * 4;
+            var buf = PixelRows.Copy(data, whole.Width, whole.Height);
             int Luma(int x, int y) { int i = (y - whole.Top) * stride + (x - whole.Left) * 4; return (buf[i + 2] * 299 + buf[i + 1] * 587 + buf[i] * 114) / 1000; }
             var hist = new int[256]; int count = 0;
             int step = Math.Max(1, Math.Min(r.Width, r.Height) / 24);
