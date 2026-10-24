@@ -31,6 +31,10 @@ public partial class MainWindow
     {
         var log = _watcher.Chat?.Instances ?? _demoInst;
         var all = log?.Snapshot() ?? new List<InstanceRun>();
+        // the flags the player cleared with Keep as one stay off (RunFixes); a sheet reads the kept reward screens afresh
+        RunFixes.ApplyKept(all);
+        _screenLines = null;
+        if (_demoInst != null && _demoScreens == null) DemoScreens(all);
         // this session's runs; earlier ones kept on this PC only on request, so yesterday's trip doesn't sit there all day
         // (Steven, 2026-10-22: "it says last run 14 hr ago")
         var since = _watcher.ChatSince == default ? DateTime.UtcNow : _watcher.ChatSince;
@@ -45,6 +49,10 @@ public partial class MainWindow
         InstEarlierBtn.Style = (Style)FindResource(allShown ? "SegOn" : "SegOff");
         InstEarlierBtn.Content = $"Earlier ({(_demoInst != null ? all.Count : earlier)})";
         InstHost.Children.Clear();
+        FillEventsLive(runs, live);
+        // the panel over the game says so when a run of this session just closed flagged
+        var flagged = runs.Where(r => r.OutOfAverages && r.LastLoot is { } l && (DateTime.UtcNow - l).TotalMinutes < 2).OrderByDescending(r => r.LastLoot).FirstOrDefault();
+        _hudFlag = flagged == null ? "" : flagged.Suspect == "looks like several runs" ? $"{flagged.Zone} record looks like several runs" : $"{flagged.Zone} run: {FlagReason(flagged, 0).ToLowerInvariant()}";
         long made = 0; int counted = 0;
         foreach (var g in runs.GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Max(r => r.LastLoot ?? r.Start)))
         {
@@ -136,7 +144,12 @@ public partial class MainWindow
         bool showAll = _runsAll.Contains(zone);
         double med = Median(counted.Select(r => r.Seconds));
         var list = new StackPanel { Margin = new Thickness(20, 0, 20, 0) };
-        foreach (var r in showAll ? order : order.Take(RunsShown)) list.Children.Add(RunRow(r, med, redraw));
+        foreach (var r in showAll ? order : order.Take(RunsShown))
+        {
+            list.Children.Add(RunRow(r, med, redraw));
+            // a flagged run's fix sheet, open in place under it
+            if (_fixOpen == RunKey(r) && FlagReason(r, med).Length > 0) list.Children.Add(FixSheet(r, med, redraw));
+        }
         if (order.Count > RunsShown)
         {
             int more = order.Count - RunsShown;
@@ -230,7 +243,7 @@ public partial class MainWindow
         var local = r.Start.ToLocalTime();
         g.Children.Add(CkText(local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture), CkFaint, 12.5, mono: true));
         var len = CkText(Clock(TimeSpan.FromSeconds(r.Seconds)), flag ? CkFaint : CkInk, 13, mono: true); Grid.SetColumn(len, 1); g.Children.Add(len);
-        var kin = CkText(r.KinahUnknown || r.OldUnread ? "—" : Short(r.Kinah), flag ? CkFaint : CkInk, 13, mono: true); kin.HorizontalAlignment = HorizontalAlignment.Right;
+        var kin = CkText(r.KinahUnknown || r.OldUnread ? "" : Short(r.Kinah), flag ? CkFaint : CkInk, 13, mono: true); kin.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(kin, 2); g.Children.Add(kin);
         TextBlock? chev = null;
         if (flag)
@@ -254,12 +267,18 @@ public partial class MainWindow
         var row = new Border
         {
             Child = g, Height = 38, BorderThickness = new Thickness(0, 0, 0, 1), BorderBrush = Ck(CkSlotLine, 0x8C), Background = Brushes.Transparent, Cursor = Cursors.Hand,
-            ToolTip = flag ? FlagTip(r, medianSecs) + " Left out of the figures. Click to remove it if it's wrong." : "Wrong run? Click to remove it. It won't be sent to the site.",
+            ToolTip = flag ? FlagTip(r, medianSecs) + " Left out of the figures. Click to fix it." : "Wrong run? Click to remove it. It won't be sent to the site.",
         };
         ToolTipService.SetInitialShowDelay(row, 250);
         row.MouseEnter += (_, _) => { if (flag) row.Background = Ck(CkGold, 0x0D); if (chev != null) chev.Foreground = Ck(CkGold); };
         row.MouseLeave += (_, _) => { row.Background = Brushes.Transparent; if (chev != null) chev.Foreground = Ck(CkFaint); };
-        row.MouseLeftButtonUp += (_, _) => RemoveRun(r, redraw);
+        // a flagged run opens its fix sheet (split, keep as one, type its Kinah, remove); any other run, the remove question
+        row.MouseLeftButtonUp += (_, _) =>
+        {
+            if (!flag) { RemoveRun(r, redraw); return; }
+            _fixOpen = _fixOpen == RunKey(r) ? null : RunKey(r);
+            redraw();
+        };
         return row;
     }
 

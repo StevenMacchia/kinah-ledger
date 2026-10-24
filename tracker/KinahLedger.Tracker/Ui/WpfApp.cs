@@ -289,7 +289,21 @@ public static class WpfApp
         if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
         if (demo) w.ShotPlayerCards(dir, kind);
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
+        // the panel's three states (direction C): the newest feed line and the rate, farming and crafting, and a flagged run
+        // (the farming and flagged states from a farming render, the crafting one from the Crafting render: each with its own sample prices)
+        var states = !demo ? new() : w.HudStates().Where(x => kind == "Crafting" ? x.File == "ui-hud-crafting.png" : kind == "Open world" && x.File != "ui-hud-crafting.png").ToList();
+        if (states.Count > 0) foreach (var (k, v) in states[0].Values) values[k] = v;
         w.Close();
+
+        foreach (var (file, state) in states)
+        {
+            var h = new HudWindow(new[] { "feed" }) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            h.Update(state);
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            h.Close();
+        }
 
         foreach (var (file, fields) in new[] { ("ui-hud.png", HudFields.Parse(null)), ("ui-hud-all.png", HudFields.All.Select(f => f.Key).ToList()), ("ui-hud-alert.png", HudFields.Parse(null)) })
         {
