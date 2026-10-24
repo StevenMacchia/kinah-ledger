@@ -41,6 +41,45 @@ written; `"rare": {"legend_materials": false}` in the site's config keeps Legend
   pixels at conf 0.7 or more, and "layout not found" only while the game is genuinely hidden. Templates for the loot list,
   the crafting panel, the zone strip and the target bar still have to be cut from real frames into `data/anchors/`.
 
+## Item-name decoder, shadow only (branch tracker/name-decoder, 2026-10-24)
+
+Windows OCR returns a string with no per-letter confidence, so every name fix after it works on a guess.
+`Ocr/NameDecoder.cs` runs an open recogniser beside it on the same crops and decodes against the item list itself.
+
+- **Model**: PaddleOCR's en_PP-OCRv4 mobile recognition model (Apache-2.0, ONNX export by CnOCR, 7.7 MB) and its
+  95-character list, through ONNX Runtime on one CPU thread. Pinned by URL and SHA-256 in `data/models.json` (also listed
+  under `models` in `data/manifest.json`); never committed, never built into the exe, never downloaded by the tracker.
+  `node tools/data/models.js` fetches both files into the kept data folder (`%LOCALAPPDATA%\KinahLedger\data`);
+  `--out data/models` puts them in the repository folder (gitignored) for parse-test and CI. A file is used only when its
+  hash matches the pin.
+- **Search**: CTC prefix beam search (32 hypotheses) held to a trie of every item name (`ItemDictionary.Lexicon`,
+  normalised by `ItemDictionary.Norm`, plus Kina), followed by what the loot list and chat print after a name:
+  ` (Bound)`, ` x12` / `x12` / ` x1,240`, a closing `.`. Characters Norm drops (`[ ] * |` ...) may appear anywhere. The
+  answer is an item id, the count, and the log-probability of the in-list reading. **Other** when that reading falls more
+  than `CtcLexiconSearch.OtherMargin` (ln 1000, about 6.9 nats) below the model's own best reading: one letter the model
+  was sure of that no item has there, a cut-off name, or text that isn't an item name.
+- **Where it runs**: each loot list item row (the OCR line's box in the list picture, `TrackerSession.ShadowListNames`,
+  skipped where the list isn't read) and each chat pickup line's name words (`ScreenReader.NameSpans`,
+  `ShadowChatNames`). Crops go to a queue (16 at most, the same text from the same place once per 3 s) and are decoded on
+  the decoder's own below-normal thread; the model loads there on first use. Nothing is counted from it.
+- **reads.log**: `decoder off (no model)` once when the files are absent (the tracker then runs exactly as before);
+  `decoder on: cold start N ms (files checked, model, lexicon ...)` once; `decoder: N ms per line on average over 20
+  lines` once; then per decode `decode Raw Leather p=0.98 vs ocr Raw Leathe x3 agree (list)`, `... disagree (chat)`, or
+  `decode other p=0.00 vs ocr ... other (model read "...", nearest in the list ...)`. "vs ocr" compares with what OCR plus
+  NameMatch resolved for the same name (`ResolveName`).
+- **Tallies**: `decode_agree`, `decode_disagree`, `decode_other` in `Accuracy.Shadows()`: on this PC only, not in
+  `Accuracy.Keys`, never sent; the `/v1/accuracy` payload is unchanged.
+- **Measured** (parse-test, Ryzen 9 7950X3D with the game running): 30 of 30 drawn crops right (three text heights,
+  blur, suffixes), three non-item strings all other; cold start 200 to 280 ms (budget 300); **about 14 ms per line**, of
+  which the search is under 1 ms (budget 5 ms: missed; two threads give about 11). Fine for a shadow on its own thread;
+  before it counts, an int8 copy of the model or batching a read's rows should be measured.
+
+**Promotion rule** (a second PR switches loot list and chat item names to the decoder) when, on labeled rows (Prompt 2's
+table, the report crops), all of these hold: the decoder names the right item more often than OCR plus NameMatch does;
+it names a wrong item no more often than OCR plus NameMatch does; and its "other" class catches the garbled and cut-off
+rows (most labeled garbled rows come out other, and few clean rows do). Until then OCR plus NameMatch decides and the
+decoder only logs.
+
 ## Commands
 
 ```
@@ -49,4 +88,5 @@ KinahLedger.exe replay-bank tracker/tests/replays  # the bank (CI runs it before
 KinahLedger.exe replay-bank <dir> --seed           # write the generated cases
 KinahLedger.exe replay-bank <dir> --seed-full      # whole-window crafting pictures for craft-test --glob *.png
 KinahLedger.exe accuracy-sample <dir>              # the payloads as sent, for checking against the backend
+node tools/data/models.js [--out data/models]      # the name decoder's model files, checked by SHA-256 (--check: only check)
 ```
