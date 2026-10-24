@@ -512,12 +512,12 @@ public sealed class InstanceLog
     public const string Transcendence = "Transcendence";
 
     /// <summary>
-    /// Runs counted from the reward table's picture alone: expeditions and Transcendence. Events keep their chat lines until
-    /// the event reward screens can be read (no picture of one has been kept yet; their rewards print in the chat).
+    /// Runs counted from the reward picture alone: expeditions and Transcendence (the reward table) and events (their reward
+    /// cards, Ocr/EventCards.cs, since 2026-10-24). A run whose picture wasn't read keeps its rewards marked not read.
     /// </summary>
     static bool PictureOnly(InstanceRun r) => r.Kind is "Expedition" or Transcendence or "Event";
 
-    /// <summary>An event's reward screen is up: its rewards are in (their picture is kept until its cards can be read).</summary>
+    /// <summary>An event's reward screen is up: its rewards are in (read from its cards, Ocr/EventCards.cs).</summary>
     public void EventRewardScreen(DateTime t) { lock (_lock) { if (_cur?.Kind == "Event") Paid(t); } }
 
     /// <summary>An event's rewards came in the last <paramref name="seconds"/> s (for its reward pictures, every 2 s).</summary>
