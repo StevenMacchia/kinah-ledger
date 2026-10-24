@@ -12,8 +12,9 @@ namespace KinahLedger.Ui;
 /// A click on a recipe in the Crafting part opens its breakdown, in the game-tooltip look Steven picked (2026-10-22): the
 /// recipe in a band of its grade colour, the listed success against fail as a bar, the materials as inventory slots
 /// with count badges and their cost, the cost per craft, this session's crafts and what came out, what it sells for and
-/// its upgrades, and the profit per craft in the footer. Vendor materials (never on the Market) take a cost typed in
-/// their slot, kept on this PC, so the recipe gets a full cost.
+/// its upgrades, and the profit per craft in the footer. Vendor materials (never on the Market) take the NPC price
+/// shipped with the data, or a cost typed in their slot, kept on this PC, so the recipe gets a full cost. A material
+/// ticked "I have these" (farmed, gathered or owned) costs nothing in cash; the card then says what selling it would bring.
 /// </summary>
 public partial class MainWindow
 {
@@ -28,7 +29,7 @@ public partial class MainWindow
         _card.IsOpen = true;
     }
 
-    /// <summary>A typed vendor cost changed the totals: the open card and the Crafting table redraw.</summary>
+    /// <summary>A typed vendor cost or an "I have these" tick changed the totals: the open card and the Crafting table redraw.</summary>
     void RefreshCraftCard(string output, PlayerBoards.BestCraft? best = null, int rank = 0)
     {
         if (_card is { IsOpen: true }) _card.Child = BuildCraftCard(output, best, rank);
@@ -61,9 +62,12 @@ public partial class MainWindow
         body.Children.Add(CkSection("MATERIALS PER CRAFT"));
         var slots = new WrapPanel { Margin = new Thickness(20, 0, 6, 0) };
         long total = recipe.Kinah ?? 0; int unpriced = 0;
+        // the ticked materials, for what selling them instead would bring (vendor ones can't be sold on the Market)
+        var farmed = new List<(string Item, int Qty, long? Price)>();
         foreach (var m in recipe.Materials)
         {
             bool vendor = m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase);
+            bool have = PriceBook.Farmed(m.Item);
             long? each = vendor ? PriceBook.VendorPrice(m.Item) : Price(m.Item);
             var row = new Grid();
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -72,7 +76,16 @@ public partial class MainWindow
             row.Children.Add(icon);
             var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             info.Children.Add(CkText(m.Item.Replace(" (Bound)", ""), GradeColor(GradeOf(m.Item)), 13));
-            if (vendor) info.Children.Add(VendorCost(m.Item, each, output, best, rank));
+            if (have)
+            {
+                // free in cash: "farmed · 0", with what it would cost dimmed beside it
+                var fp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+                fp.Children.Add(CkText("farmed · 0", Color.FromRgb(0x5E, 0xD8, 0xCB), 12.5, mono: true));
+                if (each is long ref1) { var dim = CkText(vendor ? $"NPC {ref1:N0}" : $"Market {ref1:N0}", CkFaint, 11.5, mono: true); dim.Margin = new Thickness(8, 0, 0, 0); fp.Children.Add(dim); }
+                info.Children.Add(fp);
+                if (!vendor) farmed.Add((m.Item, m.Qty, each));
+            }
+            else if (vendor) info.Children.Add(VendorCost(m.Item, output, best, rank));
             else
             {
                 // the price each, clickable to type what the game shows, and where it is from under it (unsure ones dimmed, left out)
@@ -83,7 +96,9 @@ public partial class MainWindow
                 if (CardSourceOnLine && mq != null) info.Children.Add(CkText(PriceBook.Describe(mq), mq.Mine ? Color.FromRgb(0x5E, 0xD8, 0xCB) : mq.Sure ? CkFaint : CkWarn, 11));
                 else if (mq == null && each == null) info.Children.Add(CkText("no Market price yet", CkFaint, 11.5));
             }
-            if (each is long e2) total += e2 * m.Qty; else unpriced++;
+            info.Children.Add(HaveTick(m.Item, have, Redo));
+            // the cash cost: a ticked material adds nothing
+            if (!have) { if (each is long e2) total += e2 * m.Qty; else unpriced++; }
             Grid.SetColumn(info, 1); row.Children.Add(info);
             slots.Children.Add(Sized(CkBox(row, new Thickness(0, 0, 14, 10), new Thickness(8)), 196));
         }
@@ -150,34 +165,67 @@ public partial class MainWindow
             double normal = Price(recipe.Output) is long op ? op * recipe.OutputQty : 0;
             double per = CraftMath.ProfitPerTry(rate, combo, normal, upPrice, total, PriceBook.SellerKeeps);
             body.Children.Add(CkFooter("Profit per craft", $"at {rate:P0} success{(combo > 0 ? $" · {combo:P0} upgrade chance" : "")} · after tax", $"{(per >= 0 ? "+" : "−")}{Math.Abs(per):N0}", per >= 0));
+            SellTheMats(body, farmed, per);
         }
         else
         {
             body.Children.Add(CkNote(unpriced > 0 ? "Profit shows once every price is sure: click one to type what you see." : "Profit shows once it has a sure Market price."));
+            SellTheMats(body, farmed, null);
             body.Children.Add(new Border { Height = 6 });
         }
         body.Children.Add(CkLinks(("Recipe data: MetaBot.GG", "https://metabot.gg/en/aion-2/crafting")));
         return card;
     }
 
+    /// <summary>
+    /// With materials ticked "I have these": what selling them on the Market would bring per try instead, after its cut,
+    /// and which way wins against the cash profit per craft. Needs a sure price for every ticked material.
+    /// </summary>
+    static void SellTheMats(StackPanel body, List<(string Item, int Qty, long? Price)> farmed, double? per)
+    {
+        if (farmed.Count == 0) return;
+        if (farmed.FirstOrDefault(f => f.Price == null) is { Item: { } gap }) { body.Children.Add(CkNote($"Sell-the-mats line needs a price for {gap}.")); return; }
+        long sell = (long)Math.Round(farmed.Sum(f => f.Price!.Value * f.Qty * PriceBook.SellerKeeps));
+        body.Children.Add(CkKv("Or sell the mats instead", $"{sell:N0} per try", CkGold, $"after the Market's {1 - PriceBook.SellerKeeps:P0}"));
+        if (per is not double p) return;
+        double z = p - sell;
+        body.Children.Add(CkNote(z >= 0 ? $"Crafting beats selling the mats by {z:N0} per try." : $"Selling the mats beats crafting by {-z:N0} per try."));
+    }
+
+    /// <summary>"I have these": a material the player farmed, gathered or already owns costs nothing in cash.</summary>
+    FrameworkElement HaveTick(string item, bool on, Action redo)
+    {
+        var cb = new CheckBox
+        {
+            IsChecked = on, Content = CkText("I have these", CkMuted, 11.5), Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
+            ToolTip = "Counts as free: you farmed, gathered or already own these, so no kinah goes out. Untick to price them at the Market.",
+        };
+        cb.Click += (_, _) => { PriceBook.SetFarmed(item, cb.IsChecked == true); Dispatcher.BeginInvoke(redo); };
+        return cb;
+    }
+
     static Border Sized(Border b, double width) { b.Width = width; return b; }
 
-    /// <summary>A vendor material's cost, typed in its slot: "set NPC cost" until it has one, kept on this PC.</summary>
-    FrameworkElement VendorCost(string item, long? each, string output, PlayerBoards.BestCraft? best, int rank)
+    /// <summary>
+    /// A vendor material's cost, typed in its slot and kept on this PC: the NPC price shipped with the data ("NPC 880")
+    /// until the player types their own, "set NPC cost" when there is neither.
+    /// </summary>
+    FrameworkElement VendorCost(string item, string output, PlayerBoards.BestCraft? best, int rank)
     {
+        long? typed = PriceBook.TypedVendorPrice(item), shipped = PriceBook.ShippedVendorPrice(item);
         var box = new TextBox
         {
             Width = 120, FontSize = 12.5, Padding = new Thickness(0), BorderThickness = new Thickness(0, 0, 0, 1), Background = Brushes.Transparent,
-            BorderBrush = Ck(CkWarn, 0x88), Foreground = Ck(each != null ? CkGold : CkWarn), CaretBrush = Ck(CkGold), FontFamily = new FontFamily("Cascadia Mono, Consolas"),
-            Text = each is long v ? $"{v:N0} ea" : "", ToolTip = "What the NPC charges for one. Kept on this PC.", HorizontalAlignment = HorizontalAlignment.Left,
+            BorderBrush = Ck(CkWarn, 0x88), Foreground = Ck(typed != null ? CkGold : CkWarn), CaretBrush = Ck(CkGold), FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            Text = typed is long v ? $"{v:N0} ea" : "", ToolTip = "What the NPC charges for one. Type yours to change it; kept on this PC.", HorizontalAlignment = HorizontalAlignment.Left,
         };
-        var hint = CkText("set NPC cost", CkWarn, 12.5); hint.IsHitTestVisible = false;
+        var hint = shipped is long sp ? CkText($"NPC {sp:N0}", CkGold, 12.5, mono: true) : CkText("set NPC cost", CkWarn, 12.5); hint.IsHitTestVisible = false;
         hint.Visibility = box.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         box.GotKeyboardFocus += (_, _) => { hint.Visibility = Visibility.Collapsed; box.Text = new string(box.Text.Where(char.IsDigit).ToArray()); };
         void Commit()
         {
             long n = long.TryParse(new string(box.Text.Where(char.IsDigit).ToArray()), out var x) ? x : 0;
-            if (n == (PriceBook.VendorPrice(item) ?? 0)) { if (n > 0) box.Text = $"{n:N0} ea"; else hint.Visibility = Visibility.Visible; return; }
+            if (n == (PriceBook.TypedVendorPrice(item) ?? 0)) { if (n > 0) box.Text = $"{n:N0} ea"; else hint.Visibility = Visibility.Visible; return; }
             PriceBook.SetVendorPrice(item, n);
             Dispatcher.BeginInvoke(() => RefreshCraftCard(output, best, rank));
         }

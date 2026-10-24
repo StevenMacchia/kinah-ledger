@@ -159,15 +159,36 @@ public static class CraftMath
     }
 
     /// <summary>
-    /// A best craft with the vendor costs this player typed added: the site can't price vendor materials, so its profit
-    /// leaves them out. Unpriced counts the vendor materials still without a cost.
+    /// A best craft with the vendor costs this player typed added: where the site could not price a vendor material, its
+    /// profit leaves it out. A vendor material the site did price (rows since the site learned the NPC prices) is already
+    /// in the profit and is not charged again. Unpriced counts the vendor materials still without a cost.
     /// </summary>
     public static (long Profit, int Unpriced) WithVendor(PlayerBoards.BestCraft c, Func<long, long?> vendorPrice)
     {
         long extra = 0; int unpriced = 0;
-        foreach (var m in c.Materials.Where(m => m.Vendor))
+        foreach (var m in c.Materials.Where(m => m.Vendor && m.Price is not > 0))
             if (vendorPrice(m.Id) is long p && p > 0) extra += p * m.Qty; else unpriced++;
         return (c.Profit - extra, unpriced);
+    }
+
+    /// <summary>
+    /// A best craft with the materials this player ticked "I have these" for taken out of its cost: the site took a farmed
+    /// material's price off the profit, so it is added back; a farmed vendor material is dropped from the list, so it is
+    /// neither charged its NPC price nor counted as unpriced. Done before <see cref="OwnProfit"/> and <see cref="WithVendor"/>,
+    /// which then price only what is still bought. Farmed counts the ticked materials.
+    /// </summary>
+    public static (PlayerBoards.BestCraft Craft, int Farmed) WithFarmed(PlayerBoards.BestCraft c, Func<long, bool> isFarmed)
+    {
+        long back = 0; int farmed = 0;
+        var keep = new List<PlayerBoards.Material>();
+        foreach (var m in c.Materials)
+        {
+            if (!isFarmed(m.Id)) { keep.Add(m); continue; }
+            farmed++;
+            if (m.Price is long p) back += p * m.Qty;
+        }
+        if (farmed == 0) return (c, 0);
+        return (c with { Materials = keep, Cost = c.Cost - back, Profit = c.Profit + back }, farmed);
     }
 }
 

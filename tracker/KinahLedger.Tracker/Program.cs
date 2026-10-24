@@ -1895,17 +1895,46 @@ options: --process aion[,other]");
             if (pepper != null)
             {
                 PriceBook.SetBoard(new() { ["Fresh Fruit"] = 900 });
+                // the pepper's NPC price ships in data/vendor-prices.json (880): a full cost with nothing typed
                 var before = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int vendorBefore);
+                Check("a shipped NPC price joins the recipe's cost", $"{PriceBook.ShippedVendorPrice(pepper)} {before} vendor {vendorBefore}", "880 6260 vendor 0");
                 PriceBook.SetVendorPrice(pepper, 150);
                 var after = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int vendorAfter);
                 PriceBook.SetVendorPrice(pepper, 0);
-                Check("a typed NPC cost joins the recipe's cost", $"{before} vendor {vendorBefore} -> {after} vendor {vendorAfter}", "4500 vendor 1 -> 4800 vendor 0");
+                Check("a typed NPC cost wins over the shipped one", $"{after} vendor {vendorAfter} -> {RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out _)}", "4800 vendor 0 -> 6260");
+                // "I have these": a farmed material costs nothing and isn't unpriced; unticked, its price is back
+                PriceBook.SetFarmed("Fresh Fruit", true);
+                var free = RecipeBook.CostPerTry("Artisan's Fruit Salad", out int unpFree, out int venFree, out int farmedN);
+                PriceBook.Reset();
+                bool kept = PriceBook.Farmed("fresh  fruit");
+                PriceBook.SetFarmed("Fresh Fruit", false);
+                var back = RecipeBook.CostPerTry("Artisan's Fruit Salad", out int unpBack, out _, out int farmedBack);
+                Check("a farmed material counts zero, not as unpriced", $"{free} unpriced {unpFree} vendor {venFree} farmed {farmedN} kept {kept}", "1760 unpriced 0 vendor 0 farmed 1 kept True");
+                Check("unticked, the farmed material is priced again", $"{back} unpriced {unpBack} farmed {farmedBack}", "6260 unpriced 0 farmed 0");
+                // a material with no price: the cost is the priced part, at least, and the material is counted
+                PriceBook.SetBoard(new());
+                var missing = new List<string>();
+                var least = RecipeBook.CostPerTry("Artisan's Fruit Salad", out int unpLeast, out int venLeast, out _, missing);
+                Check("one unpriced material: the cost of the priced part", $"{least} unpriced {unpLeast} vendor {venLeast} missing {string.Join(",", missing)}", "1760 unpriced 1 vendor 0 missing Fresh Fruit");
+                // a null shipped price is no price: the vendor material is unpriced, typed or not
+                PriceBook.SetBoard(new() { ["Fresh Fruit"] = 900 });
+                PriceBook.SetShippedVendor(new() { [pepper] = null });
+                var noShip = RecipeBook.CostPerTry("Artisan's Fruit Salad", out _, out int venNoShip);
+                PriceBook.SetShippedVendor(null);
+                Check("a null shipped NPC price leaves the material unpriced", $"{noShip} vendor {venNoShip}", "4500 vendor 1");
             }
+            PriceBook.SetShippedVendor(new() { ["Made-up Spice (Bound)"] = null, ["Made-up Salt (Bound)"] = 300 });
+            var shippedSalt = PriceBook.VendorPrice("Made-up Salt (Bound)");
+            PriceBook.SetVendorPrice("Made-up Salt (Bound)", 450);
+            var typedSalt = PriceBook.VendorPrice("Made-up Salt (Bound)");
+            PriceBook.SetVendorPrice("Made-up Salt (Bound)", 0);
+            Check("shipped NPC price, typed wins, null is no price", $"{shippedSalt} {typedSalt} {PriceBook.VendorPrice("Made-up Salt (Bound)")} {PriceBook.VendorPrice("Made-up Spice (Bound)")?.ToString() ?? "none"}", "300 450 300 none");
+            PriceBook.SetShippedVendor(null);
         }
         finally
         {
             PriceBook.PathOverride = oldPrices; BestRuns.DirOverride = oldDir; BestRuns.Reset();
-            PriceBook.SetBoard(new()); PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>());
+            PriceBook.SetBoard(new()); PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>()); PriceBook.SetShippedVendor(null);
             try { Directory.Delete(tmp, true); } catch (Exception) { }
         }
         return ok;
