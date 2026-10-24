@@ -92,7 +92,7 @@ public static class PriceBook
     /// Where a price is from, its readings and age, in words: "your Market read · 2 min ago", "aion2.exchange · lowest of
     /// 42 listings · 40 min ago", "aion2.exchange · 1 listing · unsure", "other servers' middle · 7 servers".
     /// </summary>
-    public static string Describe(Quote q, DateTime? now = null)
+    public static string Describe(Quote q, DateTime? now = null, bool withAge = true)
     {
         var parts = new List<string>();
         switch (q.From)
@@ -104,7 +104,7 @@ public static class PriceBook
             case From.Feed: parts.Add(q.Readings == 1 ? "aion2.exchange · 1 listing" : $"aion2.exchange · lowest of {q.Readings} listings"); break;
             case From.Region: parts.Add(q.Readings == 1 ? "another server's price" : $"other servers' middle · {q.Readings} servers"); break;
         }
-        if (q.At is DateTime at) parts.Add(Ago(at, now ?? DateTime.UtcNow));
+        if (withAge && q.At is DateTime at) parts.Add(Ago(at, now ?? DateTime.UtcNow));
         if (!q.Sure) parts.Add("unsure");
         return string.Join(" · ", parts);
     }

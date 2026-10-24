@@ -31,6 +31,11 @@ static class PlayerTests
         Check("vendor cost not typed yet: profit as the site has it", $"{CraftMath.WithVendor(c, _ => null)}", "(92640, 1)");
         Check("a typed vendor cost comes off the profit", $"{CraftMath.WithVendor(c, id => id == 300 ? 2_640 : null)}", "(90000, 0)");
 
+        // one age for the list: when the site built it from the server's board, not each listing's capture
+        PlayerBoards.Load("{\"generated_at\":\"2026-10-24T00:20:59Z\",\"crafts\":[]}", null);
+        Check("best crafts: the list's age is the board's (generated_at)", PlayerBoards.CraftsBoardAt?.ToString("yyyy-MM-dd HH:mm") ?? "none", "2026-10-24 00:20");
+        Check("a row's source line has no age of its own", PriceBook.Describe(new PriceBook.Quote(200_000, PriceBook.From.Feed, 8, true, DateTime.UtcNow.AddHours(-1)), withAge: false), "aion2.exchange · lowest of 8 listings");
+
         // where to farm: the player's bracket when published there, else every player's
         PlayerBoards.Load(null, FarmJson);
         string Here(string? b, string z) => PlayerBoards.Here(b, z) is { } h ? $"{h.Row.ValueHr:N0} {(h.AtGear ? "at gear" : "all")}" : "none";

@@ -572,11 +572,6 @@
 
       <!-- Crafting: every recipe crafted since the tracker started, with what a try costs, how often it worked, what came
            out and what that sells for. Crafted items never count as drops, and crafting is never farming time. -->
-      <!-- the server's most profitable recipes today (kinahledger.com /crafts); a row opens its recipe card (Ui/MainWindow.PlayerBoards.cs) -->
-      <Border x:Name="BestCraftsCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,14,20,12" Visibility="Collapsed">
-        <StackPanel x:Name="BestCraftsHost"/>
-      </Border>
-
       <Border x:Name="CraftCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="0,8,0,0" Visibility="Collapsed">
         <StackPanel>
           <Grid Margin="16,12,16,12">
@@ -593,7 +588,7 @@
               <TextBlock Style="{StaticResource Th}" Text="RECIPE · WHAT CAME OUT" Margin="20,0,0,0" HorizontalAlignment="Left"/>
               <TextBlock Grid.Column="1" Style="{StaticResource Th}" Text="TRIES"/>
               <TextBlock Grid.Column="2" Style="{StaticResource Th}" Text="SUCCESS" ToolTip="Tries that worked, out of all tries. The recipe's listed rate at the required mastery is shown under the recipe."/>
-              <TextBlock Grid.Column="3" Style="{StaticResource Th}" Text="COST / TRY" ToolTip="What one try costs: the recipe's materials at the lowest Market prices on your server. A failed try uses them too."/>
+              <TextBlock Grid.Column="3" Style="{StaticResource Th}" ToolTip="What one try costs: the recipe's materials at the lowest Market prices on your server. A failed try uses them too." TextAlignment="Right" LineHeight="12"><Run Text="COST"/><LineBreak/><Run Text="PER TRY" FontSize="9.5"/></TextBlock>
               <TextBlock Grid.Column="4" Style="{StaticResource Th}" Text="SELLS FOR" ToolTip="What one of the item sells for at the lowest Market price, after the Market's fee and tax."/>
               <TextBlock Grid.Column="5" Style="{StaticResource Th}" Text="PROFIT" Margin="0,0,20,0" ToolTip="What came out, at Market prices after the Market's cut, minus the cost of every try."/>
             </Grid>
@@ -632,6 +627,12 @@
             <Run x:Name="CraftNote" Text="Prices are the lowest on the Market for your server. "/><Run Text="Recipes from "/><Hyperlink x:Name="CraftCreditLink" Style="{StaticResource LinkStyle}">MetaBot.GG</Hyperlink><Run Text="."/>
           </TextBlock>
         </StackPanel>
+      </Border>
+
+      <!-- the server's most profitable recipes today (kinahledger.com /crafts), under the player's own crafts and folded to the top
+           three (Steven, 2026-10-24); a row opens its recipe card (Ui/MainWindow.PlayerBoards.cs) -->
+      <Border x:Name="BestCraftsCard" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="20,14,20,12" Visibility="Collapsed">
+        <StackPanel x:Name="BestCraftsHost"/>
       </Border>
 
       </StackPanel>
