@@ -156,16 +156,18 @@ public static class ReplayBank
                 var ls = r.GetProperty("l").EnumerateArray().Select(x => x.GetString() ?? "").ToList();
                 switch (r.GetProperty("k").GetString())
                 {
-                    case "chat": session.QuestCounter(ls, t); session.ProcessChat(ls, t); break;
+                    // through the scene gate as a live pass is: a text case has no frame, so the scene never sees one
+                    // and every read runs, exactly as before the scene existed (SceneState.HasFrame)
+                    case "chat": session.QuestCounter(ls, t); session.ChatGated(ls, t, session.Verdict("chat")); break;
                     case "list":
                     {
                         // where each row sat, how settled its text was and its icon, when the trace kept them (LootRows)
                         var ys = r.TryGetProperty("y", out var ye) ? ye.EnumerateArray().Select(v => v.GetInt32()).ToList() : null;
                         var cs = r.TryGetProperty("c", out var ce) ? ce.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var hs = r.TryGetProperty("h", out var he) ? he.EnumerateArray().Select(v => Convert.ToUInt64(v.GetString() ?? "0", 16)).ToList() : null;
-                        session.ProcessList(ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
+                        session.ListGated(ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
                             System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
-                            cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0)).ToList(), t);
+                            cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0)).ToList(), t, session.Verdict("loot_list"));
                         break;
                     }
                     case "gather":
