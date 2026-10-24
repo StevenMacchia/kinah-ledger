@@ -320,7 +320,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
-  ui-shot [dir] [--demo] [--gathering|--market|--crafting] [--compact|--full] [--welcome] [--skin night|abyss|daylight]
+  ui-shot [dir] [--demo] [--gathering|--market|--crafting [--empty]|--events] [--compact|--full] [--tall] [--welcome] [--skin night|abyss|daylight]
                                 render the window to PNG files for layout review (--options: every Options page)
   market-shot [dir]             the window with the Market card in its tracking state
   replay-event-shots [--since 2026-10-24] [--send] [--dir folder] [--verbose]
@@ -952,7 +952,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? "Crafting" : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }

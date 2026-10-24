@@ -143,7 +143,9 @@ public partial class MainWindow
             {
                 bool more = string.Equals(g.Item, recipe.Output, StringComparison.OrdinalIgnoreCase);
                 var uq = more ? null : PriceBook.QuoteOf(g.Item);
-                ups.Children.Add(CkChip((more ? $"Quantity upgrade ×{g.Qty}" : $"Quality upgrade: {g.Item}") + (g.Chance is double c ? $" · {c:P0}" : "")
+                // the chance a craft that worked turns into the upgrade, the figure the profit uses (UpgradeChance); the recipe's
+                // own chance is a combo's, before the combo itself has to succeed (0.25 × 0.77 = 19% for the earrings, not 25%)
+                ups.Children.Add(CkChip((more ? $"Quantity upgrade ×{g.Qty}" : $"Quality upgrade: {g.Item}") + (UpgradeChance(recipe, g) is double c ? $" · {c:P0}" : "")
                     + (uq != null ? $" · {(uq.From == PriceBook.From.Region ? "≈" : "")}{uq.Price:N0}{(uq.Sure ? "" : ", unsure")}" : ""), more ? Color.FromRgb(0x5E, 0xD8, 0xCB) : GradeColor(GradeOf(g.Item))));
             }
             body.Children.Add(ups);
@@ -159,7 +161,7 @@ public partial class MainWindow
         {
             double rate = recipe.SuccessRate ?? (mine is { Attempts: > 0 } ? (double)mine.Ok / mine.Attempts : 1);
             var up = recipe.GreatOutcomes.FirstOrDefault(g => !string.Equals(g.Item, recipe.Output, StringComparison.OrdinalIgnoreCase));
-            double combo = up?.Chance is double gc ? gc * (recipe.ComboSuccess ?? 1) : 0;
+            double combo = up != null && UpgradeChance(recipe, up) is double gc ? gc : 0;
             double? upPrice = up != null && Price(up.Item) is long upp ? upp * up.Qty : null;
             if (upPrice == null) combo = 0;
             double normal = Price(recipe.Output) is long op ? op * recipe.OutputQty : 0;
@@ -237,6 +239,12 @@ public partial class MainWindow
     }
 
     /// <summary>For layout review: the breakdown for the first crafted recipe, drawn to a PNG.</summary>
+    /// <summary>
+    /// How often a craft that worked turns into this upgrade: the combo's chance times the chance the combo then succeeds
+    /// (the site's best crafts and the profit per craft use the same: CraftMath). Null when the recipe doesn't list one.
+    /// </summary>
+    static double? UpgradeChance(RecipeBook.Recipe recipe, RecipeBook.Great g) => g.Chance is double c ? c * (recipe.ComboSuccess ?? 1) : null;
+
     internal void ShotCraftCard(string path)
     {
         if (CraftRows.Items.Count == 0 || CraftRows.Items[0] is not DropRow r) return;

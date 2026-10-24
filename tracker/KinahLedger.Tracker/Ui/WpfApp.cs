@@ -242,7 +242,7 @@ public static class WpfApp
         w.Close();
     }
 
-    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false)
+    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false, bool tall = false)
     {
         Ensure();
         Directory.CreateDirectory(dir);
@@ -251,6 +251,8 @@ public static class WpfApp
         if (skin != null) Skins.Apply(skin);
         // KL_SCREEN_H=1040: render as a screen of that height would show it (the window never grows past the work area)
         if (double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_H"), out var screenH) && screenH > 300) w.MaxHeight = screenH;
+        // --tall: the whole window, however tall, so a render shows every block of a view (named "-tall")
+        if (tall) w.MaxHeight = 4000;
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
         if (full) w.ShowFull();
@@ -271,8 +273,10 @@ public static class WpfApp
             }
             Console.WriteLine($"window {w.ActualWidth:0}"); Dump(w, 0);
         }
-        var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", _ => "ui-main-tracking" };
-        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "Events" => "ui-main-events", _ => "ui-main-tracking" };
+        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        // the Events part's card on its own: folded, and with Materials open
+        if (demo && kind == "Events") w.ShotRunsCards(dir);
         // KL_CARD_ZONE=<zone>: also draw the card a click on the first drop opens, with the live site's data for that zone
         if (demo && Environment.GetEnvironmentVariable("KL_CARD_ZONE") is { Length: > 0 } cardZone)
         {
@@ -281,7 +285,7 @@ public static class WpfApp
             w.ShotItemCard(Path.Combine(dir, "ui-card.png"), cardZone);
         }
         // the Discord card for the same count, and the panel over the game with the window's own figures (every field, then the default set)
-        if (demo && kind != "Crafting") w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
+        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events")) w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
         if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
         if (demo) w.ShotPlayerCards(dir, kind);
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
