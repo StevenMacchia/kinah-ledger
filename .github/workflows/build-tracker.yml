@@ -50,6 +50,14 @@ jobs:
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
 
+      # the name decoder's model (Ocr/NameDecoder.cs), from the pinned URLs in data/models.json, checked by SHA-256 (about
+      # 7.7 MB, a second or two). parse-test then runs the model on its drawn crops; if the download fails the tests run the
+      # tracker's path without a model ("decoder off") and still pass, so this step never fails the run
+      - name: Fetch the name decoder's model
+        continue-on-error: true
+        timeout-minutes: 2
+        run: node tools/data/models.js --out data/models
+
       # the self-tests that need no game window (parse, market, accuracy) and the replay test bank the release workflow also runs
       - name: Accuracy self-test and replay tests
         id: tests

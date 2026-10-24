@@ -85,7 +85,34 @@ public sealed class TrackerSession
 
     /// <summary>A reader for the chat at <paramref name="r"/>: sized to its text, its captures handed to the miscount report.</summary>
     ScreenReader NewReader(System.Drawing.Rectangle r) =>
-        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow), Keep = b => KeepChatShot(b, r.Location) };
+        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow), Keep = b => KeepChatShot(b, r.Location), NameSpans = NameDecoder.Present ? ShadowChatNames : null };
+
+    /// <summary>
+    /// The name decoder's shadow on the chat (counts nothing): each pickup line's item name cropped from the capture it was
+    /// read from, with what OCR plus NameMatch made of the same name (<see cref="ResolveName"/>), for the decoder's thread.
+    /// </summary>
+    void ShadowChatNames(System.Drawing.Bitmap raw, IReadOnlyList<(string Line, string Name, System.Drawing.Rectangle Box)> spans)
+    {
+        foreach (var s in spans)
+            if (NameDecoder.PickupLine(s.Line))
+                NameDecoder.Shadow("chat", NameDecoder.Crop(raw, s.Box), s.Name, ResolveName(s.Name).Id);
+    }
+
+    /// <summary>
+    /// The name decoder's shadow on the loot list (counts nothing): each item row cropped from this read's picture, with
+    /// what OCR plus NameMatch made of it. Skipped where the list isn't read (a reward screen, the crafting panel or window).
+    /// </summary>
+    void ShadowListNames(System.Drawing.Bitmap raw, System.Drawing.Point origin, List<OcrLineBox> boxes, List<(int Top, string Text)> lines, DateTime now)
+    {
+        if (Target.RewardOpen(now) || CraftView.CraftPanelActive(now) || TargetReader.CraftOpen(Target.CraftAt, now)) return;
+        for (int i = 0; i < lines.Count && i < boxes.Count; i++)
+        {
+            if (LootPopup.Rows(new[] { lines[i] }).FirstOrDefault() is not { IsKinah: false } row) continue;
+            var box = boxes[i].Box;
+            box.Offset(-origin.X, -origin.Y);
+            NameDecoder.Shadow("list", NameDecoder.Crop(raw, box), lines[i].Text, ResolveName(row.Name).Id);
+        }
+    }
 
     // ---- rare drops: held for a second read of the picture they came from (RareGate) ----
     readonly RareGate _rare = new();
@@ -347,6 +374,8 @@ public sealed class TrackerSession
         _cross = new LootCrossCheck(items) { Resolve = ResolveName };
         _cross.Gathered = GatherWitnessFor;
         _rows = new LootRows(items) { NewGather = (canon, first) => IsGatherName(canon) && GatherRaceAfter(first) };
+        // the item-name decoder, shadow only: a look for its model files now, the model itself on first use (NameDecoder)
+        NameDecoder.Start(items);
         CraftView = new SessionEngine(items);
         Kind = kind;
         Region = manualRegion;
@@ -2054,6 +2083,7 @@ public sealed class TrackerSession
                 try { (c, h) = LootRows.Measure(r.Raw, r.Origin, r.Lines[i].Box); } catch (Exception ex) { CrashLog.Write("loot list contrast", ex); }
                 measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h));
             }
+            if (NameDecoder.Present) try { ShadowListNames(r.Raw, r.Origin, r.Lines, lines, now); } catch (Exception ex) { CrashLog.Write("name decoder", ex); }
             ProcessList(measured, now);
             // a rare drop only the list showed: this picture read again before it counts (RareGate)
             if (_rare.Waiting > 0) await ResolveRareAsync("list", r.Raw, r.Origin);

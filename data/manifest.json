@@ -41,5 +41,17 @@
       "sha256": "ac2be7c3073f909eca1d87add4e4c995cbc8a3992a1d82fa93f0b6d45b5124ce",
       "size": 1356
     }
+  },
+  "models": {
+    "name-rec.onnx": {
+      "url": "https://huggingface.co/breezedeus/cnocr-ppocr-en_PP-OCRv4/resolve/4af71ff013f195d04426f6dca62ec26656dfbbc4/en_PP-OCRv4_rec_infer.onnx",
+      "sha256": "5ca59a096cf493d5fd5044b9ccc1bdea9229fbcf656bd76040ff80a00201ee16",
+      "size": 7656802
+    },
+    "name-rec-dict.txt": {
+      "url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/ff853c78c97729a6497b0f93968fcfa039c26d8a/ppocr/utils/en_dict.txt",
+      "sha256": "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3",
+      "size": 190
+    }
   }
 }
