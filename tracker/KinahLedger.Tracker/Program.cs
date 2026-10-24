@@ -1538,6 +1538,22 @@ options: --process aion[,other]");
         }
         double faint = Draw(70), full = Draw(255), none = Draw(0);
         Check("contrast: faint < full, blank ~ 0", $"{faint < full * 0.6} {none < 0.05} {full > 0.3}", "True True True");
+        // a row on the picture's bottom edge, well right of its left edge: the old Stride x Height copy read past the
+        // bitmap's end here (the 2026-10-24 access violation); the row-by-row copy must measure it like any other row
+        {
+            using var edge = new System.Drawing.Bitmap(1600, 300);
+            using (var g = System.Drawing.Graphics.FromImage(edge))
+            {
+                g.Clear(System.Drawing.Color.FromArgb(40, 44, 52));
+                using var f = new System.Drawing.Font("Segoe UI", 18, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+                g.DrawString("Raw Leather x1", f, System.Drawing.Brushes.White, 1380, 272);
+            }
+            var bottomRight = Session.LootRows.Measure(edge, new System.Drawing.Point(0, 0), new System.Drawing.Rectangle(1380, 272, 220, 28));
+            var topLeft = Session.LootRows.Measure(edge, new System.Drawing.Point(0, 0), new System.Drawing.Rectangle(0, 0, 220, 28));
+            Check("bottom-right row measured, not an overrun", $"{bottomRight.Contrast > 0.3} {topLeft.Contrast < 0.05}", "True True");
+            var feats = Ocr.TemplateMatch.Gray(edge, new System.Drawing.Rectangle(1200, 200, 400, 100), 4, out int fw, out int fh);
+            Check("anchor features on a bottom-right rectangle", $"{feats.Length == fw * fh} {fw > 0}", "True True");
+        }
         var sw = System.Diagnostics.Stopwatch.StartNew();
         for (int i = 0; i < 50; i++) Draw(255);
         Console.WriteLine($"  (50 draws and measures in {sw.ElapsedMilliseconds} ms)");
