@@ -199,13 +199,25 @@ public sealed record MobRun(string name, string zone, int kills, long kinah, Dic
 /// The site shows these per run and per hour inside runs. An event is filed under its family ("Shugo Festival"), the
 /// same on every send; <c>event</c> names the game itself ("Hidden Lugi") when it was read and <c>family</c> repeats the
 /// family, both left out when empty (since 0.8.12; the site files by <c>zone</c> and ignores fields it doesn't know).
+/// Since 2026-10-24: <c>partly_read</c> (true on a run whose reward cards were read only in part: sent, but the site should
+/// show it as partly read and leave it out of its averages), <c>not_read</c> (how many slots weren't read), <c>unknown</c>
+/// (pieces the picture showed that couldn't be named: "Unknown item" and "Unknown gear", each a count of pieces) and
+/// <c>notes</c> (what each piece of unknown gear may be, "Legend gear, one of Elder Gloves / Relic Collector Gloves");
+/// each left out when empty.
 /// </summary>
 public sealed record InstanceRunPayload(string zone, string kind, int seconds, long kinah, int kills, Dictionary<string, int> items,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? @event = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? family = null,
     // 2026-10-24: only on a run sent again after the gear repair (InstanceLog.RepairGear); an ordinary run never has it
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RunCorrection? correction = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RunCorrection? correction = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? partly_read = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? not_read = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, int>? unknown = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? notes = null)
 {
+    /// <summary>Most notes per run, as sent.</summary>
+    public const int MaxNotes = 20;
+
     /// <summary>Most runs per payload, and the longest run, as the site accepts them.</summary>
     public const int MaxRuns = 50;
     public const int MaxSeconds = 4 * 3600;
@@ -214,7 +226,8 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     {
         if (runs == null) return null;
         var list = runs
-            // a run whose Kinah wasn't read isn't sent: the site would average it in as the little the chat saw (since 0.8.24)
+            // a run whose Kinah wasn't read isn't sent: the site would average it in as the little the chat saw (since 0.8.24).
+            // A partly read run is (2026-10-24): what its cards showed counts, flagged partly_read for the site
             .Where(r => r.LastLoot != null && KindOf(r) != null && r.Seconds >= 1 && r.Seconds <= MaxSeconds && !r.KinahUnknown)
             .OrderByDescending(r => r.Start).Take(MaxRuns)
             .Select(r =>
@@ -223,11 +236,16 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
                 // every reward of the run, bound ones too: the site tracks how often each comes, sellable or not (Steven, 2026-10-23)
                 foreach (var (id, n) in r.Items.Concat(r.BoundItems)) { if (off?.Invoke(id) == true) continue; var k = key(id); d[k] = d.GetValueOrDefault(k) + n; }
                 r.FileUnderFamily();
+                var unknown = new Dictionary<string, int>();
+                if (r.UnknownItems > 0) unknown["Unknown item"] = r.UnknownItems;
+                if (r.UnknownGear > 0) unknown["Unknown gear"] = r.UnknownGear;
                 // a correction is no new run: it goes with 0 seconds, which a site from before corrections refuses, so there
                 // it can never count twice; the run stays marked and is sent again later
                 var fix = RunCorrection.Of(r, key, off);
                 return new InstanceRunPayload(r.Zone, KindOf(r)!, fix != null ? 0 : (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
-                    r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null, fix);
+                    r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null, fix,
+                    r.PartlyRead ? true : null, r.SlotsUnread > 0 ? r.SlotsUnread : null, unknown.Count > 0 ? unknown : null,
+                    r.GearNotes.Count > 0 ? r.GearNotes.Take(MaxNotes).ToList() : null);
             }).ToList();
         return list.Count > 0 ? list : null;
     }

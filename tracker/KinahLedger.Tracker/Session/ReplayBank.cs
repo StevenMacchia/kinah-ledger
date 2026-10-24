@@ -94,7 +94,8 @@ public static class ReplayBank
     {
         var d = new List<string>();
         static long N(JsonNode? n) => n == null ? 0 : long.TryParse(n.ToJsonString(), out var v) ? v : 0;
-        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow", "runs_kept", "runs_from_picture", "run_kinah", "run_gear", "run_materials" })
+        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow", "runs_kept", "runs_from_picture", "run_kinah", "run_gear", "run_materials",
+                                    "runs_partly_read", "runs_sent", "run_not_read", "run_pieces", "run_unknown_gear", "run_unknown_items", "run_abyss_points" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         if (expect["run_start"] is { } rstart && rstart.ToString() != (got["run_start"]?.ToString() ?? "")) d.Add($"run_start: expected {rstart}, counted {got["run_start"]?.ToString() ?? "none"}");
         if (expect["runs"] is JsonObject er)
@@ -419,6 +420,16 @@ public static class ReplayBank
             res["run_gear"] = kept.Sum(r => r.Pieces(items.IsGear).Gear);
             res["run_materials"] = kept.Sum(r => r.Pieces(items.IsGear).Materials);
             res["run_start"] = kept[0].Start.ToUniversalTime().ToString("HH:mm:ss") + "Z";
+            // partly read runs (2026-10-24): flagged, sent all the same; pieces with unknown gear and without currencies, the
+            // currencies as amounts (Abyss Points), the slots not read
+            bool Cur(long id) => items.Get(id)?.Category == "Currency";
+            res["runs_partly_read"] = kept.Count(r => r.PartlyRead);
+            res["runs_sent"] = Upload.InstanceRunPayload.From(kept.Select(r => r.Clone()).ToList(), id => items.KeyOf(id))?.Count ?? 0;
+            res["run_not_read"] = kept.Sum(r => r.SlotsUnread);
+            res["run_pieces"] = kept.Sum(r => { var p = r.Pieces(items.IsGear, Cur, withUnknown: true); return p.Gear + p.Materials + r.UnknownItems; });
+            res["run_unknown_gear"] = kept.Sum(r => r.UnknownGear);
+            res["run_unknown_items"] = kept.Sum(r => r.UnknownItems);
+            res["run_abyss_points"] = kept.Sum(r => r.Currencies(Cur).Where(kv => items.NameOf(kv.Key).StartsWith("Abyss Points", StringComparison.OrdinalIgnoreCase)).Sum(kv => kv.Value));
         }
         return res;
     }

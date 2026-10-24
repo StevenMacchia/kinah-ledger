@@ -942,6 +942,33 @@ options: --process aion[,other]");
                 var again = new InstanceLog();
                 Check("sent: off the parked list, still kept, never offered again", $"{again.Parked.Count} {again.Snapshot().Count} {again.Unsent(t0.AddMinutes(-1)).Count}", "1 2 1");
             }
+
+            // a partly read event run (2026-10-24 16:02 Hidden Lugi: cards read, 5 slots not): sent with its flag and its unknown
+            // pieces, out of the averages, never parked; it waits once for its read again from its pictures, which replaces the
+            // live read only when it reads more
+            var ps = new TrackerSession(null, settings, items, "Test");
+            var pr = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Event = "Hidden Lugi", Family = "Shugo Festival", Start = t0.AddHours(2), LastLoot = t0.AddHours(2).AddMinutes(4),
+                FromPicture = true, PartlyRead = true, SlotsUnread = 5, UnknownGear = 9, UnknownItems = 4, PictureSlots = 46, GearNotes = { "Legend gear, one of Elder Gloves / Relic Collector Gloves" } };
+            pr.Items[items.IdOf("Abyss Points")] = 2120; pr.Items[items.IdOf("Enhance Stone")] = 3200; pr.Items[items.IdOf("Odyle")] = 7; pr.BoundItems[items.IdOf("Soul Codex (Bound)")] = 3;
+            Check("partly read: its own flag, not rewards or Kinah not read; out of the averages", $"{pr.PartlyRead} {pr.RewardsNotRead} {pr.KinahUnknown} {pr.OutOfAverages}", "True False False True");
+            var pp = InstanceRunPayload.From(new[] { pr }, id => items.KeyOf(id));
+            Check("...the payload keeps it and carries the flag, the slots not read, the unknown pieces and what the gear may be",
+                pp == null ? "dropped" : System.Text.Json.JsonSerializer.Serialize(new { pp[0].partly_read, pp[0].not_read, pp[0].unknown, pp[0].notes }),
+                "{\"partly_read\":true,\"not_read\":5,\"unknown\":{\"Unknown item\":4,\"Unknown gear\":9},\"notes\":[\"Legend gear, one of Elder Gloves / Relic Collector Gloves\"]}");
+            Check("...a run read in full carries none of it", System.Text.Json.JsonSerializer.Serialize(InstanceRunPayload.From(new[] { new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Start = t0, LastLoot = t0.AddMinutes(4), FromPicture = true, Items = { [items.IdOf("Odyle")] = 2 } } }, id => items.KeyOf(id))![0]).Contains("partly") ? "flagged" : "plain", "plain");
+            bool Cur(long id) => items.Get(id)?.Category == "Currency";
+            Check("pieces: currencies are amounts, never pieces; unknown gear counts as gear", $"{pr.Pieces(items.IsGear, Cur, withUnknown: true)} · currencies {string.Join(", ", pr.Currencies(Cur).OrderBy(kv => items.NameOf(kv.Key)).Select(kv => $"{items.NameOf(kv.Key)} {kv.Value}"))} · as before {pr.Pieces(items.IsGear)}",
+                "(9, 2) · currencies Abyss Points 2120, Enhance Stone 3200 · as before (0, 4)");
+            var w1 = ps.KeepUnread(new List<InstanceRun> { pr });
+            Check("...first pass: it waits for its read again from its pictures, not parked", $"{w1.Count} queued {ps.Instances.Queued(pr)} parked {pr.Unsent}", "0 queued True parked False");
+            pr.Retried = true;
+            var w2 = ps.KeepUnread(ps.Instances.TakeUnshared(t0));
+            Check("...after it: sent", $"{w2.Count(r => r == pr)} parked {pr.Unsent}", "1 parked False");
+            var fewer = pr.Clone(); fewer.PictureSlots = 40; fewer.SlotsUnread = 2;
+            var more = pr.Clone(); more.PictureSlots = 48; more.SlotsUnread = 1; more.PartlyRead = true; more.UnknownGear = 10;
+            var keep = pr.Clone();
+            Check("a read again from the pictures replaces a partly read run only when it reads more slots",
+                $"{TrackerSession.TakeReread(keep, fewer)} {keep.PictureSlots} · {TrackerSession.TakeReread(keep, more)} {keep.PictureSlots} {keep.SlotsUnread} {keep.UnknownGear}", "False 46 · True 48 1 10");
         }
         finally { CrashLog.DirOverride = keepDir; try { Directory.Delete(dir, true); } catch (Exception) { } }
         return ok;
@@ -3539,11 +3566,27 @@ options: --process aion[,other]");
                     // a scrolled read that agrees with nothing it holds is left out, never guessed into place
                     mg.Add(ScreenOf(CardOf(700, true, false, Enumerable.Range(0, 6).Select(n => (n / 3 + 1, n % 3, 100 + n, false)))), dummy);
                     Check("event cards: a scrolled read that fits nowhere is left out", $"{mg.Voted(0).Count} unplaced {mg.Unaligned}", "17 unplaced 1");
+                    // 2026-10-24 16:06: the scrolled read came first and the top one second: the first is placed once the second is in
+                    var mf = new EventCards.Merger(70);
+                    mf.Add(ScreenOf(CardOf(700, true, true, new[] { (0, 0, -1, true), (0, 1, -1, true), (0, 2, -1, true) }.Concat(Enumerable.Range(6, 11).Select(n => (n / 3 - 1, n % 3, n, false))))), dummy);
+                    string before = $"unplaced {mf.Unaligned}";
+                    mf.Add(ScreenOf(CardOf(787, false, false, Enumerable.Range(0, 12).Select(n => (n / 3, n % 3, n, false)).Concat(new[] { (4, 0, -1, true), (4, 1, -1, true), (4, 2, -1, true) }))), dummy);
+                    Check("event cards: a scrolled read first is placed by the top read after it",
+                        $"{before} then {mf.Voted(0).Count} complete {mf.Complete} unplaced {mf.Unaligned}", "unplaced 1 then 17 complete True unplaced 0");
+                    // scrolled in every read (card 3 at 16:06): nothing placed, so the card is its fullest read, counted once, never empty
+                    var ml = new EventCards.Merger(70);
+                    ml.Add(ScreenOf(CardOf(774, true, false, new[] { (0, 0, -1, true), (0, 1, -1, true), (0, 2, -1, true) }.Concat(Enumerable.Range(3, 12).Select(n => (n / 3, n % 3, n, false))))), dummy);
+                    ml.Add(ScreenOf(CardOf(774, true, false, new[] { (0, 0, -1, true), (0, 1, -1, true), (0, 2, -1, true) }.Concat(Enumerable.Range(3, 9).Select(n => (n / 3, n % 3, n, false))))), dummy);
+                    var lv = ml.Voted(0);
+                    Check("event cards: a card no read of which can be placed is its fullest read",
+                        $"{lv.Count} slots, {lv.Count(v => v.Icons.Count > 0)} read, loose {ml.Cards[0].FromLoose}, unplaced {ml.Unaligned}", "15 slots, 12 read, loose True, unplaced 2");
                 }
                 // the unknown-item path: received cards whose slots the item list can't name are filed as unknown items with the
                 // run's rewards, never dropped and never guessed; a list running past the window adds a place not read and leaves
                 // the run's Kinah unknown; a card not received isn't counted
                 {
+                    int Hints() => File.Exists(CrashLog.ReadsPath) ? File.ReadAllText(CrashLog.ReadsPath).Split('\n').Count(l => l.Contains(TrackerSession.CardsHint)) : 0;
+                    int hintsBefore = Hints();
                     var es = new TrackerSession(null, new Settings(), items, "Test"); var e0 = DateTime.UtcNow;
                     es.Engine.SetZone("Hidden Lugi"); es.Instances.Zone("Hidden Lugi", e0.AddMinutes(-5));
                     using var shot = DrawCards(new[] { true, true, false, false, false }, new[] { 4, 15, 6, 6, 6 });
@@ -3551,9 +3594,13 @@ options: --process aion[,other]");
                     es.EventCardsRead(shot, e0.AddSeconds(1)).GetAwaiter().GetResult();
                     es.FlushEventCards(e0.AddSeconds(5), "the screen closed", force: true);
                     var er2 = es.Instances.CurrentRun;
+                    // since 2026-10-24 such a run is partly read, not Kinah unknown: filed, sent, flagged, out of the averages; the
+                    // drawn gear whose icon two items share is unknown gear (11 pieces), no longer slots not read
                     Check("event cards: unknown slots filed as unknown items, the cut ones too, the open list marked",
-                        $"{string.Join(" ", (es.LastEventCards ?? new()).Select(c => c.Received ? $"R{c.Slots.Count}{(c.More ? "+" : "")}" : "N"))} | items {er2?.Items.Count} | unread {er2?.SlotsUnread} | unknown {er2?.UnknownSlots.Count} more {er2?.UnknownSlots.Count(u => u.Contains("more below"))} | from picture {er2?.FromPicture} | Kinah unknown {er2?.KinahUnknown}",
-                        "R4 R15+ N N N | items 0 | unread 20 | unknown 20 more 1 | from picture True | Kinah unknown True");
+                        $"{string.Join(" ", (es.LastEventCards ?? new()).Select(c => c.Received ? $"R{c.Slots.Count}{(c.More ? "+" : "")}" : "N"))} | items {er2?.Items.Count} | unread {er2?.SlotsUnread} | unknown {er2?.UnknownSlots.Count} more {er2?.UnknownSlots.Count(u => u.Contains("more below"))} | from picture {er2?.FromPicture} | Kinah unknown {er2?.KinahUnknown} | partly read {er2?.PartlyRead} | out of averages {er2?.OutOfAverages} | unknown gear {er2?.UnknownGear}",
+                        "R4 R15+ N N N | items 0 | unread 9 | unknown 9 more 1 | from picture True | Kinah unknown False | partly read True | out of averages True | unknown gear 11");
+                    Check("...the hint to hold the screen and scroll each card, said once",
+                        $"{Hints() - hintsBefore}", "1");
                 }
                 var ft = new TrackerSession(null, new Settings(), items, "Test"); var ft0 = DateTime.UtcNow;
                 ft.Engine.SetZone("Ellun River Midstream"); ft.ZoneView.SetZone("Ellun River Midstream");
