@@ -960,7 +960,7 @@ public sealed class TrackerSession
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
-                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)))) : null;
+                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0)) : null;
                 // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
                 if (why == null && !made && parsed is ItemAcquired big && !InRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
                 if (why == null && parsed is PetCrystal bigc && !InRun) why = PickupCheck.TooManyCrystals(bigc.Count);
@@ -1249,12 +1249,14 @@ public sealed class TrackerSession
             {
                 if (!_eventScreenUp) { _eventScreenUp = true; _eventShots = 0; CrashLog.Note("event reward screen up: its cards are the run's rewards (kept as pictures until they can be read)"); }
                 Instances.EventRewardScreen(now);
+                RewardScreenSeen(now);
                 if (_eventShots < 6 && (now - _eventShotAt).TotalSeconds >= 1.5) { _eventShotAt = now; _eventShots++; SaveShot(frame, "event-rewards"); }
                 return;
             }
             _eventScreenUp = false;
             if (rc == null) { if ((now - _gridSeenAt).TotalSeconds > 5) _gridDone = false; return; }
             _gridSeenAt = now;
+            RewardScreenSeen(now);
             if (_gridDone) return;
             _gridDone = true;
             int top = rc.Box.Bottom + (int)(frame.Height * 0.016);
@@ -1624,10 +1626,31 @@ public sealed class TrackerSession
         || (Instances.Current is { } cur && cur.Kind != InstanceLog.WorldBoss && (cur.Leaving || Zone == null || Zone == SessionEngine.UnknownZone));
 
     /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
-    string? RewardWhy(DateTime t, bool isBox = false) =>
+    string? RewardWhy(DateTime t, bool isBox = false, long itemId = 0) =>
         t <= _achieveUntil ? "an achievement's reward"
+        // an event's or expedition's reward screen was up: what lands for a minute after is its rewards, from the picture,
+        // never farming or gathering, even once its run is closed or removed (Steven, 2026-10-24 10:07: "2 odyle just randomly
+        // entered my gathering" from Hidden Lugi's rewards, read again 40 s later). A gather under way is still a gather
+        : !InRun && t <= _rewardScreenUntil && !(itemId != 0 && GatheringNow(itemId, t)) ? "an event's or expedition's reward (its reward screen was up)"
         : t <= _inventoryUntil ? "the inventory at work (storage, Quick Register, the wardrobe)"
         : !InRun && !isBox && t <= _boxUntil ? "a box's or a reward's contents" : null;
+    /// <summary>Until when what lands is an event's or expedition's reward: a minute after its reward screen was last seen.</summary>
+    DateTime _rewardScreenUntil = DateTime.MinValue;
+    public const double RewardScreenSeconds = 60;
+    /// <summary>For replay and tests: an event's or expedition's reward screen seen now.</summary>
+    internal void RewardScreenSeen(DateTime t) { var u = t.AddSeconds(RewardScreenSeconds); if (u > _rewardScreenUntil) _rewardScreenUntil = u; }
+
+    // what the gathering panel named lately (its node's item line), for telling a gather from a reward that lands meanwhile
+    DateTime _gatherPanelAt = DateTime.MinValue;
+    readonly HashSet<string> _gatherPanelItems = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The gathering panel named this item (or the item it upgrades: "Fine Odyle" from "Odyle") in the last 15 s.</summary>
+    bool GatheringNow(long itemId, DateTime t)
+    {
+        if ((t - _gatherPanelAt).TotalSeconds > 15 || (_gatherPanelAt - t).TotalSeconds > 5) return false;
+        var name = _items.NameOf(itemId);
+        return _gatherPanelItems.Any(p => name.Equals(p, StringComparison.OrdinalIgnoreCase) || name.EndsWith(" " + p, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Until when what lands is the player's own inventory at work (PickupCheck.IsInventoryLine, IsSkinUnlock).</summary>
     DateTime _inventoryUntil = DateTime.MinValue;
 
@@ -2136,7 +2159,7 @@ public sealed class TrackerSession
                 // gather around it is one (a box opened in town). Never a drop (Steven, 2026-10-23)
                 if (!made && parsed is ItemAcquired lr)
                 {
-                    var why = RewardWhy(now);
+                    var why = RewardWhy(now, false, lr.ItemId);
                     // a gathering material is a gather itself (the chat may have missed its line), never a box's contents
                     _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                     bool gathered = _gatherNames.Contains(_items.NameOf(lr.ItemId));
@@ -2363,6 +2386,13 @@ public sealed class TrackerSession
         {
             _gatherPanelNoted = now;
             CrashLog.Note($"the gathering panel shows at the bottom of the loot list's place: its lines aren't pickups ({string.Join(" | ", lines.Where(l => l.Top >= cut).Select(l => l.Text))})");
+        }
+        // the item the node gives, as the panel names it ("Aria", "Kukuru"): a gather under way, not a reward landing
+        _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var (_, text) in lines.Where(l => l.Top >= cut))
+        {
+            var name = System.Text.RegularExpressions.Regex.Replace(text, @"\s*x\d+\s*$", "").Trim();
+            if (_gatherNames.Contains(name)) { if ((now - _gatherPanelAt).TotalSeconds > 15) _gatherPanelItems.Clear(); _gatherPanelItems.Add(name); _gatherPanelAt = now; }
         }
         return cut;
     }

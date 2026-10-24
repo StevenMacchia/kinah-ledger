@@ -1730,6 +1730,19 @@ options: --process aion[,other]");
         so.FlushVotes(g0.AddSeconds(41));
         Check("one gather, upgraded in place, then a stopped one: one Fine ore", $"{n(so.Engine, "Fine Orichalcum Ore")} {n(so.Engine, "Orichalcum Ore")}", "1 0");
         Check("...the failed gather is an attempt, not an item", $"{so.Engine.Totals().Nodes}", "2");
+        // an event's rewards read again from the chat after its reward screen, its run removed: rewards, never gathering;
+        // a gather the panel names meanwhile is still a gather (Steven, 2026-10-24 10:07, Hidden Lugi's Odyle)
+        var ev2 = new TrackerSession(null, settings, items, "Test");
+        ev2.Engine.SetZone("Forest of Exiles"); ev2.ZoneView.SetZone("Forest of Exiles");
+        var e0 = new DateTime(2026, 10, 24, 14, 6, 38, DateTimeKind.Utc);
+        ev2.ProcessChat(new List<string> { "[Player1] hi" }, e0.AddSeconds(-5));
+        ev2.RewardScreenSeen(e0);
+        ev2.ProcessChat(new List<string> { "[Player1] hi", "Pure Odyle acquired.", "Fine Odyle acquired." }, e0.AddSeconds(13));
+        ev2.ProcessList(new List<(int, string)> { (0, "Kukuru"), (30, "Profes"), (60, "Success") }, e0.AddSeconds(50));
+        for (int i = 0; i < 3; i++) ev2.ProcessChat(new List<string> { "[Player1] hi", "Pure Odyle acquired.", "Fine Odyle acquired.", "Odyle acquired.", "Kukuru acquired." }, e0.AddSeconds(53 + i));
+        ev2.FlushVotes(e0.AddSeconds(56));
+        Check("after an event's reward screen: its Odyle are rewards, a gather the panel names still counts",
+            $"{n(ev2.Engine, "Pure Odyle")} {n(ev2.Engine, "Fine Odyle")} {n(ev2.Engine, "Odyle")} {n(ev2.Engine, "Kukuru")}", "0 0 0 1");
         // the gathering bar as the second witness for a gather the chat missed (step 1)
         var sg = new TrackerSession(null, settings, items, "Test");
         sg.Engine.SetZone("Ellun River Midstream");
