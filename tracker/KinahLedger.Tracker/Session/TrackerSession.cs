@@ -576,11 +576,15 @@ public sealed class TrackerSession
                     Paused = "";
                     var p0 = DateTime.UtcNow;
                     var off = Update.RemoteConfig.Current;
-                    var list = off.Off("loot_list") ? Task.FromResult<(List<OcrLineBox>, System.Drawing.Bitmap, System.Drawing.Point)?>(null) : LootReadAsync();
-                    if (!off.Off("target")) await TargetDueAsync();
+                    // what is on screen, first: every reader below asks it (SceneState, Prompt 9)
+                    await ScenePassAsync(p0);
+                    var listGate = Verdict("loot_list");
+                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : LootReadAsync();
+                    if (listGate == Gate.Skip) _rows.Reset();
+                    if (!off.Off("target") && Runs("target")) await TargetDueAsync();
                     if (!off.Off("craft_panel")) await CraftPanelDue();
-                    await LootProcess(await list);
-                    if (!off.Off("reward_grid")) await RewardGridDue();
+                    await LootGated(await list, listGate);
+                    if (!off.Off("reward_grid") && Runs("reward_grid")) await RewardGridDue();
                     AnchorsDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
@@ -600,16 +604,21 @@ public sealed class TrackerSession
                     // the loot list is read beside the chat, not after it: a pass takes the slower of the two
                     var p0 = DateTime.UtcNow;
                     var off = Update.RemoteConfig.Current;
-                    var list = off.Off("loot_list") ? Task.FromResult<(List<OcrLineBox>, System.Drawing.Bitmap, System.Drawing.Point)?>(null) : LootReadAsync();
-                    await ReadOnce();
+                    // what is on screen, first: every reader below asks it (SceneState, Prompt 9)
+                    await ScenePassAsync(p0);
+                    var listGate = Verdict("loot_list");
+                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : LootReadAsync();
+                    if (listGate == Gate.Skip) _rows.Reset();
+                    var chatGate = Verdict("chat");
+                    if (chatGate != Gate.Skip) await ReadOnce(chatGate);
                     _chatMs += (DateTime.UtcNow - p0).TotalMilliseconds;
-                    if (!off.Off("target")) await TargetDueAsync();
+                    if (!off.Off("target") && Runs("target")) await TargetDueAsync();
                     if (!off.Off("craft_panel")) await CraftPanelDue();
-                    await LootProcess(await list);
+                    await LootGated(await list, listGate);
                     RewardShot();
-                    if (!off.Off("reward_grid")) await RewardGridDue();
-                    if (!off.Off("nameplates")) await PlatesDue();
-                    await HeaderDue();
+                    if (!off.Off("reward_grid") && Runs("reward_grid")) await RewardGridDue();
+                    if (!off.Off("nameplates") && Runs("nameplates")) await PlatesDue();
+                    if (Runs("header")) await HeaderDue();
                     AnchorsDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     // the loot list's part in the health numbers: pickups only it saw, and rows that matched a chat line
@@ -639,12 +648,116 @@ public sealed class TrackerSession
             // reading time for the health numbers: the passes the game was read, wait included
             if (reading) Accuracy.AddReading((DateTime.UtcNow - t0).TotalSeconds);
         }
+        _probe?.Dispose(); _probe = null;
         SaveColours();
         Engine.Finish();
     }
 
-    /// <summary>One read of the chat (the game is in view there): count the new lines, re-find a lost chat, re-read the zone when due.</summary>
-    async Task ReadOnce()
+    // ---- what is on screen (SceneState, Prompt 9) ----
+    /// <summary>The scene classifier: one state per pass, which every reader in <see cref="Loop"/> asks before it runs.</summary>
+    public SceneState Scene { get; } = new();
+    /// <summary>What the gate says to <paramref name="reader"/> this pass (everything runs before the first frame: replays, the bank).</summary>
+    internal Gate Verdict(string reader) => Scene.GateFor(reader);
+    bool Runs(string reader) => Verdict(reader) == Gate.Run;
+    /// <summary>How long the Kinah counter's numbers and the chat box's lines stand for "the HUD is up".</summary>
+    public const double HudAnchorSeconds = 25, ChatAnchorSeconds = 30;
+
+    /// <summary>
+    /// The scene's part of a pass, before any reader: the crafting panel's locator, a thumbnail of the game window, the
+    /// readers' signs, the classifier, then the reads held while the scene was Unknown, released or dropped.
+    /// </summary>
+    async Task ScenePassAsync(DateTime now)
+    {
+        _probe?.Dispose(); _probe = null;
+        if (!Update.RemoteConfig.Current.Off("craft_panel")) _probe = await CraftProbeAsync();
+        System.Drawing.Bitmap? thumb = null;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try { if (GameRect is { } g) thumb = FrameThumb.Capture(g, _settings.ProcessHints); }
+        catch (Exception ex) { CrashLog.Write("scene picture", ex); }
+        if (thumb != null) Scene.AddPictureMs(sw.Elapsed.TotalMilliseconds);
+        using (thumb) ScenePass(thumb, SignalsNow(now), now);
+        await SettleHeldAsync(now);
+    }
+
+    /// <summary>One pass of the classifier (also what the tests feed their synthetic frames through).</summary>
+    internal bool ScenePass(System.Drawing.Bitmap? thumb, SceneSignals signals, DateTime now) => Scene.Observe(thumb, signals, now);
+    internal bool ScenePass(FrameStats? stats, SceneSignals signals, DateTime now) => Scene.Observe(stats, signals, now);
+
+    /// <summary>The readers' signs this pass, from what they last saw.</summary>
+    SceneSignals SignalsNow(DateTime now) => new()
+    {
+        CraftPanel = _probe is { Sample.Visible: true } && _panelIsCraft,
+        CraftWindow = Target.CraftAt != DateTime.MinValue && (now - Target.CraftAt).TotalSeconds is >= -1 and <= SceneSignals.WindowSeconds,
+        Market = MarketOpen?.Invoke(now) == true,
+        RewardTitle = Target.RewardOpen(now),
+        RewardTable = _gridSeenAt != DateTime.MinValue && (now - _gridSeenAt).TotalSeconds <= SceneSignals.WindowSeconds,
+        EventCards = _eventScreenUp && (now - _eventScreenAt).TotalSeconds <= SceneSignals.WindowSeconds,
+        CounterStrip = Anchors.SeenWithin("kinah-strip", now, HudAnchorSeconds),
+        ChatBox = Region != null && _chatLinesAt != DateTime.MinValue && (now - _chatLinesAt).TotalSeconds <= ChatAnchorSeconds,
+    };
+
+    // ---- reads held while the scene is Unknown ----
+    sealed record HeldRead(string Reader, DateTime At, List<string>? Chat, List<LootLine>? List);
+    readonly List<HeldRead> _held = new();
+    /// <summary>Held reads older than this, or past this many, are dropped while the scene stays Unknown.</summary>
+    public const double HoldSeconds = 20; public const int HoldMax = 60;
+    /// <summary>Reads held, released into a settled state that allows them, and dropped, since the start.</summary>
+    public int SceneHeld { get; private set; }
+    public int SceneReleased { get; private set; }
+    public int SceneDropped { get; private set; }
+    bool _holdOverflowNoted;
+
+    void HoldRead(string reader, DateTime at, List<string>? chat, List<LootLine>? list)
+    {
+        _held.Add(new HeldRead(reader, at, chat, list));
+        SceneHeld++;
+        int old = _held.RemoveAll(h => (at - h.At).TotalSeconds > HoldSeconds);
+        if (_held.Count > HoldMax) { old += _held.Count - HoldMax; _held.RemoveRange(0, _held.Count - HoldMax); }
+        if (old > 0)
+        {
+            SceneDropped += old;
+            if (!_holdOverflowNoted) { _holdOverflowNoted = true; CrashLog.Note($"scene still Unknown: held reads older than {HoldSeconds:0} s dropped ({Scene.Explain()})"); }
+        }
+    }
+
+    /// <summary>For tests: how many reads are held now.</summary>
+    internal int HeldNow => _held.Count;
+
+    /// <summary>
+    /// Once the scene settles (or the gate is off), each held read goes where the settled state says: counted, in the
+    /// order read, at the time it was read, when its reader is valid there; dropped otherwise. One log line either way.
+    /// </summary>
+    internal async Task SettleHeldAsync(DateTime now)
+    {
+        if (_held.Count == 0 || (Scene.Enabled && !Scene.Settled)) return;
+        var held = _held.ToList();
+        _held.Clear(); _holdOverflowNoted = false;
+        var go = held.Where(h => Verdict(h.Reader) == Gate.Run).ToList();
+        var drop = held.Except(go).ToList();
+        SceneReleased += go.Count; SceneDropped += drop.Count;
+        string Readers(List<HeldRead> l) => string.Join(",", l.Select(h => h.Reader).Distinct());
+        CrashLog.Note($"scene {Scene.Current}: {go.Count} read(s) held while Unknown released" + (go.Count > 0 ? $" ({Readers(go)})" : "") +
+            (drop.Count > 0 ? $"; {drop.Count} dropped ({Readers(drop)}): not valid in {Scene.Current}" : ""));
+        foreach (var h in go)
+        {
+            if (h.Chat != null)
+            {
+                ProcessChat(h.Chat, h.At);
+                if (_rare.Waiting > 0) await ResolveRareAsync("chat", null, default);   // its picture is gone: counted as read, unconfirmed
+            }
+            else if (h.List != null)
+            {
+                ProcessList(h.List, h.At);
+                if (_rare.Waiting > 0) await ResolveRareAsync("list", null, default);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One read of the chat (the game is in view there): count the new lines, re-find a lost chat, re-read the zone when
+    /// due. <paramref name="gate"/> Hold (the scene is Unknown): the lines are read and held, not counted (ChatGated).
+    /// </summary>
+    async Task ReadOnce(Gate gate = Gate.Run)
     {
         // back in view: lines that arrived while it was covered weren't seen, so the first read is history and the clocks restart
         if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
@@ -672,6 +785,7 @@ public sealed class TrackerSession
                 _chatLost = again == null;
             }
         }
+        if (gate != Gate.Run) { ChatGated(lines, DateTime.UtcNow, gate); return; }
         ProcessChat(lines, DateTime.UtcNow);
         // a rare drop in this read: the same picture read again, then counted (RareGate)
         if (_rare.Waiting > 0)
@@ -1247,6 +1361,7 @@ public sealed class TrackerSession
             if (rc == null && lines.Any(l => IsEventRewardTitle(l.Text)))
             {
                 if (!_eventScreenUp) { _eventScreenUp = true; _eventShots = 0; CrashLog.Note("event reward screen up: its cards are the run's rewards (kept as pictures until they can be read)"); }
+                _eventScreenAt = now;
                 Instances.EventRewardScreen(now);
                 if (_eventShots < 6 && (now - _eventShotAt).TotalSeconds >= 1.5) { _eventShotAt = now; _eventShots++; SaveShot(frame, "event-rewards"); }
                 return;
@@ -1661,7 +1776,7 @@ public sealed class TrackerSession
         && (Regex.IsMatch(line.Trim(), @"^\W*set\s*to\s*stage\s*\d{1,2}\W*$", RegexOptions.IgnoreCase)
             || Regex.IsMatch(line, @"\[\s*stage\s*\d{1,2}\s*\]\s*\W{0,3}\s*transcend", RegexOptions.IgnoreCase));
 
-    bool _eventScreenUp; int _eventShots; DateTime _eventShotAt = DateTime.MinValue;
+    bool _eventScreenUp; int _eventShots; DateTime _eventShotAt = DateTime.MinValue, _eventScreenAt = DateTime.MinValue;
 
     /// <summary>An event's reward screen by its words: "Rewards have been sent to your cube.", "Can select 0 time(s)".</summary>
     /// <summary>
@@ -1928,7 +2043,37 @@ public sealed class TrackerSession
     internal async Task ReplayListFrameAsync(System.Drawing.Bitmap raw, System.Drawing.Point origin, DateTime t)
     {
         var lines = await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
-        await LootProcess((lines, (System.Drawing.Bitmap)raw.Clone(), origin), t);   // LootProcess disposes its picture
+        // through the scene gate as a live pass is: a bank picture is a crop, never a whole frame, so nothing is gated
+        await LootGated((lines, (System.Drawing.Bitmap)raw.Clone(), origin), Verdict("loot_list"), t);   // disposes its picture
+    }
+
+    static Task<(List<OcrLineBox>, System.Drawing.Bitmap, System.Drawing.Point)?> NoListRead() => Task.FromResult<(List<OcrLineBox>, System.Drawing.Bitmap, System.Drawing.Point)?>(null);
+
+    /// <summary>
+    /// One loot list read under the scene gate: counted (Run), measured and held without its picture (Hold: the scene is
+    /// Unknown; a rare drop released from hold counts without its second read, tagged unconfirmed), or dropped (Skip).
+    /// </summary>
+    async Task LootGated((List<OcrLineBox> Lines, System.Drawing.Bitmap Raw, System.Drawing.Point Origin)? read, Gate gate, DateTime? at = null)
+    {
+        if (read is not { } r) return;
+        if (gate == Gate.Run) { await LootProcess(read, at); return; }
+        var now = at ?? DateTime.UtcNow;
+        using (r.Raw) ListGated(gate == Gate.Hold ? LootMeasure(r, now) : new List<LootLine>(), now, gate);
+    }
+
+    /// <summary>A loot list read as lines, under the gate: what the live pass and the replay bank's text cases both go through.</summary>
+    internal void ListGated(List<LootLine> lines, DateTime now, Gate gate)
+    {
+        if (gate == Gate.Run) { ProcessList(lines, now); return; }
+        if (gate == Gate.Hold) { HoldRead("loot_list", now, null, lines); return; }
+        _rows.Reset();   // not read in this scene: the rows start over, as the crafting panel's exclusion does
+    }
+
+    /// <summary>A chat read under the gate: counted (Run), held (Hold), or dropped (Skip: the chat box keeps its lines, so they count from the next read that shows them).</summary>
+    internal void ChatGated(List<string> lines, DateTime now, Gate gate)
+    {
+        if (gate == Gate.Run) { ProcessChat(lines, now); return; }
+        if (gate == Gate.Hold && lines.Count > 0) HoldRead("chat", now, lines, null);   // an empty read has nothing to hold
     }
 
     async Task LootProcess((List<OcrLineBox> Lines, System.Drawing.Bitmap Raw, System.Drawing.Point Origin)? read, DateTime? at = null)
@@ -1936,6 +2081,16 @@ public sealed class TrackerSession
         if (read is not { } r) return;
         var now = at ?? DateTime.UtcNow;
         using (r.Raw)
+        {
+            ProcessList(LootMeasure(r, now), now);
+            // a rare drop only the list showed: this picture read again before it counts (RareGate)
+            if (_rare.Waiting > 0) await ResolveRareAsync("list", r.Raw, r.Origin);
+        }
+    }
+
+    /// <summary>A loot list picture's lines, each named by its icon where the text isn't an item, with its contrast and icon hash (LootRows).</summary>
+    List<LootLine> LootMeasure((List<OcrLineBox> Lines, System.Drawing.Bitmap Raw, System.Drawing.Point Origin) r, DateTime now)
+    {
         {
             var lines = r.Lines.Select(l => (l.Box.Top, l.Text)).ToList();
             // the list's picture for the miscount report, when it shows rows (at most once a second: the world moves behind it)
@@ -1965,11 +2120,12 @@ public sealed class TrackerSession
                 try { (c, h) = LootRows.Measure(r.Raw, r.Origin, r.Lines[i].Box); } catch (Exception ex) { CrashLog.Write("loot list contrast", ex); }
                 measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h));
             }
-            ProcessList(measured, now);
-            // a rare drop only the list showed: this picture read again before it counts (RareGate)
-            if (_rare.Waiting > 0) await ResolveRareAsync("list", r.Raw, r.Origin);
+            return measured;
         }
     }
+
+    /// <summary>Loot list reads that reached the counting path (the scene tests: none while the gate skips the list).</summary>
+    internal int ListReadsCounted { get; private set; }
 
     /// <summary>The loot list's rows as tracked objects (LootRows): a row is its slot, not its text.</summary>
     readonly LootRows _rows;
@@ -1986,6 +2142,7 @@ public sealed class TrackerSession
     /// </summary>
     internal void ProcessList(List<LootLine> lines, DateTime now)
     {
+        ListReadsCounted++;
         _ctxNow = now;
         try
         {
@@ -2279,21 +2436,36 @@ public sealed class TrackerSession
     int _panelLevel;
     string _panelRecipe = ""; DateTime _panelTextAt = DateTime.MinValue; bool _panelUp, _panelIsCraft;
 
-    async Task CraftPanelDue()
+    /// <summary>The crafting panel's locator's look this pass: its strip's picture and sample, kept for the readers after the scene pass.</summary>
+    sealed record CraftProbe(System.Drawing.Bitmap Bmp, Rectangle Region, CraftPanel.Sample Sample, DateTime At) : IDisposable
     {
-        if (GameRect is not { } g) return;
+        public void Dispose() => Bmp.Dispose();
+    }
+    CraftProbe? _probe;
+
+    /// <summary>
+    /// The crafting panel's locator, every pass before the scene is worked out (it is one of the scene's signs): the
+    /// strip's labels measured (pixels only), and its title read when it opens and every few seconds after, which says
+    /// crafting or a gathering bar. Counts nothing: what the bars finish is counted by <see cref="CraftPanelDue"/>, behind
+    /// the gate. Null when the panel isn't up.
+    /// </summary>
+    async Task<CraftProbe?> CraftProbeAsync()
+    {
+        if (GameRect is not { } g) return null;
+        System.Drawing.Bitmap? bmp = null;
         try
         {
             var region = CraftPanel.Region(g);
-            if (Cover(region) is { } cover && !cover.StartsWith("Kinah Ledger")) return;
-            using var bmp = ScreenReader.Capture(region);
+            if (Cover(region) is { } cover && !cover.StartsWith("Kinah Ledger")) return null;
+            bmp = ScreenReader.Capture(region);
             var now = DateTime.UtcNow;
             var s = CraftPanel.Measure(bmp, region, g);
             if (!s.Visible)
             {
                 if (_panelUp && _panelIsCraft) { CrashLog.Note("crafting panel gone"); Accuracy.Add("craft_batches"); }
                 _panelUp = false; _panelIsCraft = false;
-                return;
+                bmp.Dispose();
+                return null;
             }
             if (!_panelUp || (now - _panelTextAt).TotalSeconds >= 5)
             {
@@ -2311,8 +2483,27 @@ public sealed class TrackerSession
                 if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", CraftPanel.LastLines)})"); }
             }
             _panelUp = true;
+            var probe = new CraftProbe(bmp, region, s, now);
+            bmp = null;
+            return probe;
+        }
+        catch (System.ComponentModel.Win32Exception) { bmp?.Dispose(); throw; }
+        catch (Exception ex) { bmp?.Dispose(); CrashLog.Write("crafting panel", ex); return null; }
+    }
+
+    /// <summary>
+    /// What the crafting panel's bars finish this pass, behind the scene gate: a crafting panel's race is a craft
+    /// (craft_panel: the Crafting scene only), any other panel's is a gathering bar (gather_bar: the world).
+    /// </summary>
+    Task CraftPanelDue()
+    {
+        if (_probe is not { } p) return Task.CompletedTask;
+        var (bmp, region, s, now) = (p.Bmp, p.Region, p.Sample, p.At);
+        try
+        {
             if (!_panelIsCraft)
             {
+                if (!Runs("gather_bar")) return Task.CompletedTask;
                 // a node being gathered: its bar's outcome, for the audit (a stopped gather's bar never fills: no outcome)
                 if (_gatherBar.Feed(now, s) is { } go)
                 {
@@ -2321,20 +2512,21 @@ public sealed class TrackerSession
                     CrashLog.Note($"gathering bar: {(go.Combo ? "upgrade roll " : "")}{(go.Ok ? "success" : "fail")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
                     GatherOutcome(now, go.Ok, go.Combo);
                 }
-                return;
+                return Task.CompletedTask;
             }
+            if (!Runs("craft_panel")) return Task.CompletedTask;
             if (!_craftSeen) { _craftSeen = true; ReportLayout(); }
             // the panel's picture for a miscount report (the panel's own strip only, at most once a second)
             if (ReportBuffer.Keeps("craft")) try { Report.Picture("craft", bmp, region.Location, now, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
             // the crafting window's hold and its pictures last as long as the queue runs, and the passes keep a fight's pace
             Target.MarkCraft(now); _lastActivity = now;
             PanelUp(_panelRecipe, now);
-            if (_panel.Feed(now, s) is not { } o) return;
+            if (_panel.Feed(now, s) is not { } o) return Task.CompletedTask;
             CrashLog.Note($"crafting panel: {(o.Combo ? "combo roll " : "")}{(o.Ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
             PanelRace(_panelRecipe, o.Ok, o.Combo, now, _panelLevel);
         }
-        catch (System.ComponentModel.Win32Exception) { throw; }
         catch (Exception ex) { CrashLog.Write("crafting panel", ex); }
+        return Task.CompletedTask;
     }
 
     /// <summary>The crafting panel is on screen, making this recipe (also what replay and the tests feed).</summary>
