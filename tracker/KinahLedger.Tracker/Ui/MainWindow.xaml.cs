@@ -1563,7 +1563,9 @@ public partial class MainWindow : Window
         {
             // sample runs (never the player's own, Ui/MainWindow.RunsCard.cs), for a layout render
             _demoInst = DemoRuns();
-            ShowPart("Events", remember: false); SetTrackingUi(false); return;
+            ShowPart("Events", remember: false); SetTrackingUi(false);
+            Say("Reading the chat", "Faint");
+            return;
         }
         if (kind == "CraftingEmpty")
         {
