@@ -40,6 +40,23 @@ written; `"rare": {"legend_materials": false}` in the site's config keeps Legend
   log must show, across several of Steven's sessions and at least two window sizes, that region's dx/dy steady to a few
   pixels at conf 0.7 or more, and "layout not found" only while the game is genuinely hidden. Templates for the loot list,
   the crafting panel, the zone strip and the target bar still have to be cut from real frames into `data/anchors/`.
+- **Anchors, phase two for the chat and the Kinah strip** (`AnchoredCrop` in `Ocr/Anchors.cs`, 2026-10-24): once the
+  anchor has been seen 3 checks running with every edge within 4 px, in the same game window, at or above the
+  confidence floor (strip 0.25, chat 0.4), the Kinah strip is read around its numbers (3 number heights either side,
+  half a height above and below, inside the fixed strip: 326x73 of 1296x97 on 5120x2160) and the chat's re-find looks
+  around its box (a line up, 2 left, 3 right, 3 down for the input row, inside the quarter: 1074x672 of 2560x1080). The
+  chat read itself was already the found box (864x504), not the quarter. Back to the fixed crop at once when a strip read
+  shows no numbers, the chat shows no lines for 30 s or isn't found around its anchor, the anchor moves more than 4 px,
+  its confidence falls below the lock's, the game window changes or the switch is off. One line each way:
+  `anchor balance: reading around the anchor now ...` / `anchor balance: back to the fixed crop (...)`; the minute's
+  `anchor:` line says which are anchored. Switches `layout.anchor.chat`, `layout.anchor.balance`, on in code
+  (`"layout": {"anchor": {"chat": false}}` turns one off). The shadow dx/dy lines are unchanged.
+- **Pass time per region** (`Session/PassTimes.cs`): the audit line's pass part reads `57 passes, 1016 ms each (per pass:
+  chat 310 · list 180 · target · balance · craft · grid · nameplates · header · anchors · scene · decoder ms)`, each the
+  region's time over the minute divided by the passes. The list runs beside the chat, so they add up to more than the
+  pass; balance (the watcher's 10 s timer) and decoder (its own thread) are off the pass. The chat read skips recognition
+  when its boosted pixels are exactly the last read's (`ocr.chat_skip_same`, on in code): the audit ends `chat read at
+  2x, N of M reads unchanged and not recognized again`.
 
 ## Item-name decoder, shadow only (branch tracker/name-decoder, 2026-10-24)
 

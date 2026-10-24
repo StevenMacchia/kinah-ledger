@@ -241,7 +241,20 @@ public sealed class ScreenReader
         var small = new Bitmap(raw, new Size(Math.Max(1, (int)(raw.Width * k)), Math.Max(1, (int)(raw.Height * k))));
         lock (_lock) { _thumb?.Dispose(); _thumb = small; }
         using var boosted = Boost(raw);
-        var (bmp, f) = Prepare(boosted, Factor);
+        CaptureReads++;
+        // the same pixels as the last read, at the same size: the recognizer would say the same again, so its answer stands
+        // (ocr.chat_skip_same): no enlarging, no recognition, no name colours measured again
+        bool skip = SkipSame?.Invoke() == true;
+        ulong hash = skip ? PixelHash(boosted) : 0;
+        double factor = Factor;
+        if (skip && _same is { } last && last.Hash == hash && last.Factor == factor && last.Size == raw.Size)
+        {
+            SameSkips++;
+            // the text size sees the same words again, as a read would have shown them
+            if (_auto != null && _auto.Observe(last.Heights)) CrashLog.Note($"the chat's text is {_auto.TextPx:0} px tall on this screen: now read at {_auto.Factor:0.##}x (was {factor:0.##}x)");
+            return new List<string>(last.Lines);
+        }
+        var (bmp, f) = Prepare(boosted, factor);
         using (bmp)
         {
             var result = await Recognize(bmp);
@@ -249,14 +262,43 @@ public sealed class ScreenReader
             catch (Exception ex) { LastAccents = Array.Empty<(string, Color)>(); CrashLog.Write("name colours", ex); }
             if (NameSpans != null)
                 try { NameSpans(raw, Spans(result, f)); } catch (Exception ex) { CrashLog.Write("name spans", ex); }
+            var heights = result.Lines.SelectMany(l => l.Words).Where(w => w.Text.Count(char.IsLetter) >= 3).Select(w => w.BoundingRect.Height / f).ToList();
             if (_auto != null)
             {
                 double was = _auto.Factor;
-                var heights = result.Lines.SelectMany(l => l.Words).Where(w => w.Text.Count(char.IsLetter) >= 3).Select(w => w.BoundingRect.Height / f);
                 if (_auto.Observe(heights)) CrashLog.Note($"the chat's text is {_auto.TextPx:0} px tall on this screen: now read at {_auto.Factor:0.##}x (was {was:0.##}x)");
             }
-            return result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
+            var lines = result.Lines.Select(l => l.Text.Trim()).Where(t => t.Length > 0).ToList();
+            _same = skip ? new SameRead(hash, factor, raw.Size, lines, heights) : null;
+            return lines;
         }
+    }
+
+    /// <summary>The last recognized read, by its boosted pixels' fingerprint, for ocr.chat_skip_same.</summary>
+    sealed record SameRead(ulong Hash, double Factor, Size Size, List<string> Lines, List<double> Heights);
+    SameRead? _same;
+
+    /// <summary>When set and true, a capture whose pixels match the last read's exactly isn't recognized again (ocr.chat_skip_same).</summary>
+    public Func<bool>? SkipSame { get; set; }
+    /// <summary>Captures read, and those of them skipped as unchanged, since this reader was made (the audit line).</summary>
+    public int CaptureReads { get; private set; }
+    public int SameSkips { get; private set; }
+
+    /// <summary>A fingerprint of every pixel of a 24-bit picture (FNV-1a over each pixel's three bytes): any change shows.</summary>
+    internal static unsafe ulong PixelHash(Bitmap bmp)
+    {
+        var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            ulong h = 14695981039346656037;
+            for (int y = 0; y < bmp.Height; y++)
+            {
+                byte* row = (byte*)data.Scan0 + y * data.Stride;
+                for (int x = 0; x < bmp.Width; x++, row += 3) { h ^= (uint)(row[0] | row[1] << 8 | row[2] << 16); h *= 1099511628211; }
+            }
+            return h ^ (ulong)(bmp.Width * 65537 + bmp.Height);
+        }
+        finally { bmp.UnlockBits(data); }
     }
 
     /// <summary>

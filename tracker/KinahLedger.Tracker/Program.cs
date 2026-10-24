@@ -1224,6 +1224,139 @@ options: --process aion[,other]");
         var sw2 = System.Diagnostics.Stopwatch.StartNew();
         for (int i = 0; i < 10; i++) at3.Tick(game, t0.AddSeconds(2 * (i + 1)), Crop);
         Console.WriteLine($"  (one template: first check {ms:0.0} ms, then {sw2.Elapsed.TotalMilliseconds / 10:0.0} ms each; none shipped yet, so 0 today)");
+        ok &= AnchoredCropTest();
+        return ok;
+    }
+
+    /// <summary>
+    /// Anchors phase two (2026-10-24): the chat's search area and the Kinah strip read from their anchors once those held
+    /// still; the crops from Steven's 5120x2160 evidence, the three-steady-checks gate, every way back to the fixed crop,
+    /// the built-in switches, the per-region pass times in the audit line, and the unchanged-chat fingerprint.
+    /// </summary>
+    static bool AnchoredCropTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nAnchors phase two: chat and Kinah strip read from their anchors (2026-10-24):");
+        var keepCfg = Update.RemoteConfig.Current;
+        Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+        try
+        {
+            // the switches: on in code, so a site that answers 404 still has them; the site can turn each off
+            var b = Update.RemoteConfig.BuiltIn;
+            var empty = Update.RemoteConfig.Parse("{}");
+            var offCfg = Update.RemoteConfig.Parse("""{"layout": {"anchor": {"chat": false, "balance": false}}, "ocr": {"chat_skip_same": false}}""");
+            Check("switches on by default (built in, empty config)", $"{b.AnchorChat} {b.AnchorBalance} {b.ChatSkipSame} / {empty.AnchorChat} {empty.AnchorBalance} {empty.ChatSkipSame}", "True True True / True True True");
+            Check("...the site can turn each off", $"{offCfg.Flag("layout.anchor.chat")} {offCfg.Flag("layout.anchor.balance")} {offCfg.Flag("ocr.chat_skip_same")}", "False False False");
+            Check("...a value that isn't false leaves it on", $"{Update.RemoteConfig.Parse("""{"layout": {"anchor": {"chat": 0}}}""").AnchorChat}", "True");
+
+            // the crops, from the anchors Steven's window logged three sessions running (5120x2160, 2026-10-24)
+            var game = new System.Drawing.Rectangle(0, 0, 5120, 2160);
+            var strip = new System.Drawing.Rectangle(94, 1, 124, 54);          // anchor balance dx=94 dy=1, size 124x54
+            var chatBox = new System.Drawing.Rectangle(105, 2160 - 258 - 504, 864, 504);   // anchor chat dx=105 dy=-258, size 864x504
+            Check("the strip's crop: its numbers, 3 heights each side", $"{AnchoredCrop.BalanceFrom(game, strip)} of {BalanceReader.Strip(game).Width}x{BalanceReader.Strip(game).Height}", "{X=0,Y=0,Width=326,Height=73} of 1296x97");
+            var cc = AnchoredCrop.ChatFrom(game, chatBox);
+            Check("the chat's area: the box, a line up, 3 down for the input", $"{cc}", "{X=21,Y=1356,Width=1074,Height=672}");
+            Check("...holds the box and the row below it", $"{cc.Contains(chatBox)} {cc.Bottom - chatBox.Bottom >= 2 * (chatBox.Height / 12)}", "True True");
+            var corner = ChatLocator.Corner(game);
+            Check("...a quarter of the corner's pixels or less", $"{(double)cc.Width * cc.Height / (corner.Width * corner.Height) <= 0.27}", "True");
+            // a small window: never outside the fixed crop
+            var small = new System.Drawing.Rectangle(0, 0, 1280, 720);
+            Check("never outside the fixed strip or corner", $"{BalanceReader.Strip(small).Contains(AnchoredCrop.BalanceFrom(small, new System.Drawing.Rectangle(2, 0, 60, 20)))} {ChatLocator.Corner(small).Contains(AnchoredCrop.ChatFrom(small, new System.Drawing.Rectangle(0, 500, 288, 168)))}", "True True");
+
+            // the gate: three sightings within 4 px lock it; one more than 4 px off, a lower confidence, a gap, the switch or a
+            // new window size each go back to the fixed crop at once, logged once each way
+            var log = new List<string>();
+            var crop = new AnchoredCrop("balance", AnchoredCrop.BalanceFrom, 0.25) { Log = log.Add };
+            System.Drawing.Rectangle At(int dx, int dy) => new(strip.X + dx, strip.Y + dy, strip.Width, strip.Height);
+            crop.Observe(game, At(0, 0), 0.5, true);
+            crop.Observe(game, At(3, -1), 0.5, true);
+            Check("two steady sightings: still the fixed crop", $"{crop.Crop(game, true)?.ToString() ?? "fixed"}", "fixed");
+            crop.Observe(game, At(1, 2), 0.5, true);
+            Check("the third within 4 px: read from the anchor", $"{crop.Active} {crop.Crop(game, true)?.Size}", "True {Width=327, Height=75}");
+            Check("...logged once", $"{log.Count} {(log.LastOrDefault() ?? "").StartsWith("anchor balance: reading around the anchor now, 327x75")}", "1 True");
+            crop.Observe(game, At(3, 2), 0.5, true);
+            Check("a sighting 2 px off keeps it, and logs nothing", $"{crop.Active} {log.Count}", "True 1");
+            crop.Observe(game, At(9, 2), 0.5, true);
+            Check("8 px off: back to the fixed crop, logged", $"{crop.Crop(game, true)?.ToString() ?? "fixed"} {log.Count} {log.Last()}", "fixed 2 anchor balance: back to the fixed crop (the anchor moved 8 px)");
+            var spread = new AnchoredCrop("balance", AnchoredCrop.BalanceFrom, 0.25) { Log = _ => { } };
+            spread.Observe(game, At(0, 0), 0.5, true); spread.Observe(game, At(4, 0), 0.5, true); spread.Observe(game, At(8, 0), 0.5, true);
+            Check("three sightings drifting 4 px each: no lock (8 apart)", $"{spread.Active}", "False");
+            crop.Observe(game, At(9, 2), 0.5, true); crop.Observe(game, At(9, 2), 0.5, true);
+            Check("steady again in its new place: anchored again", $"{crop.Active} {crop.On} {crop.Off}", "True 2 1");
+            crop.Observe(game, At(9, 2), 0.25, true);
+            Check("confidence below what it locked at: fixed", $"{crop.Active} {log.Last()}", "False anchor balance: back to the fixed crop (the anchor's confidence fell from 0.50 to 0.25)");
+            for (int i = 0; i < 3; i++) crop.Observe(game, At(9, 2), 0.5, true);
+            crop.Missing(game, "a read of the strip showed no numbers");
+            Check("the anchor missing: fixed at once", $"{crop.Crop(game, true)?.ToString() ?? "fixed"} {log.Last()}", "fixed anchor balance: back to the fixed crop (a read of the strip showed no numbers)");
+            crop.Missing(game, "again");
+            Check("...and logged once, not on every miss", $"{log.Count(l => l.Contains("back to the fixed"))}", "3");
+            for (int i = 0; i < 3; i++) crop.Observe(game, At(9, 2), 0.5, true);
+            Check("the switch off: fixed", $"{crop.Crop(game, false)?.ToString() ?? "fixed"} {crop.Active}", "fixed False");
+            for (int i = 0; i < 3; i++) crop.Observe(game, At(9, 2), 0.5, false);
+            Check("...and nothing locks while it is off", $"{crop.Active}", "False");
+            for (int i = 0; i < 3; i++) crop.Observe(game, At(9, 2), 0.5, true);
+            Check("a new window size: fixed", $"{crop.Crop(new System.Drawing.Rectangle(0, 0, 3840, 1620), true)?.ToString() ?? "fixed"} {crop.Active}", "fixed False");
+            var low = new AnchoredCrop("chat", AnchoredCrop.ChatFrom, 0.4) { Log = _ => { } };
+            for (int i = 0; i < 3; i++) low.Observe(game, chatBox, 0.3, true);
+            Check("sightings under the floor never lock", $"{low.Active}", "False");
+            for (int i = 0; i < 3; i++) low.Observe(game, chatBox, 0.4, true);
+            Check("the chat at Steven's conf 0.40 locks", $"{low.Crop(game, true)}", "{X=21,Y=1356,Width=1074,Height=672}");
+
+            // through the anchors themselves: the strip's numbers three reads running, then a read with none
+            var an = new Anchors(new List<AnchorTemplate>());
+            an.BalanceCrop.Log = _ => { }; an.ChatCrop.Log = _ => { };
+            var nums = new[] { new System.Drawing.Rectangle(103, 10, 50, 36), new System.Drawing.Rectangle(163, 10, 46, 36) };
+            var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+            for (int i = 0; i < 3; i++) an.ObserveBalance(game, nums, t0.AddSeconds(10 * i));
+            Check("Anchors: the strip's numbers, three reads: anchored", $"{an.BalanceCrop.Active} {an.BalanceCrop.Anchor}", "True {X=94,Y=1,Width=124,Height=54}");
+            an.ObserveBalance(game, Array.Empty<System.Drawing.Rectangle>(), t0.AddSeconds(30));
+            Check("...a read with no numbers: fixed", $"{an.BalanceCrop.Active}", "False");
+            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chosen", true, t0);
+            Check("Anchors: a chat chosen by hand never anchors", $"{an.ChatCrop.Active}", "False");
+            for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0);
+            Check("...a found one does", $"{an.ChatCrop.Active}", "True");
+            Update.RemoteConfig.Current = offCfg;
+            an.ObserveBalance(game, nums, t0.AddSeconds(40));
+            Check("layout.anchor.balance off from the site: nothing locks", $"{an.BalanceCrop.Active} {an.BalanceCrop.Crop(game, Update.RemoteConfig.Current.AnchorBalance)?.ToString() ?? "fixed"}", "False fixed");
+            Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
+
+            // the audit line's pass part: each region's ms per pass over the minute
+            var times = new KinahLedger.Session.PassTimes();
+            times.Add("chat", 57 * 310); times.Add("list", 57 * 180); times.Add("target", 57 * 95.4); times.Add("scene", 57 * 40); times.Add("nowhere", 999);
+            Check("the audit's pass part", KinahLedger.Session.PassTimes.AuditPart(57, 57 * 1016, times),
+                "57 passes, 1016 ms each (per pass: chat 310 · list 180 · target 95 · balance 0 · craft 0 · grid 0 · nameplates 0 · header 0 · anchors 0 · scene 40 · decoder 0 ms)");
+            times.Time("anchors", () => System.Threading.Thread.Sleep(2));
+            bool timed = times.Total("anchors") >= 1; times.Reset();
+            Check("...a timed region counts, a reset clears it", $"{timed} {times.Total("chat")} {times.Total("anchors")}", "True 0 0");
+            Check("...no passes: zeros, not a division by zero", KinahLedger.Session.PassTimes.AuditPart(0, 0, times), "0 passes, 0 ms each (per pass: chat 0 · list 0 · target 0 · balance 0 · craft 0 · grid 0 · nameplates 0 · header 0 · anchors 0 · scene 0 · decoder 0 ms)");
+
+            // the unchanged-chat fingerprint: the same pixels the same, one pixel different
+            using var pic = new System.Drawing.Bitmap(864, 504, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            using (var g = System.Drawing.Graphics.FromImage(pic)) { g.Clear(System.Drawing.Color.White); g.DrawString("[Steven] Acquired Raw Leather.", new System.Drawing.Font("Arial", 18), System.Drawing.Brushes.Black, 10, 400); }
+            ulong h1 = ScreenReader.PixelHash(pic), h2 = ScreenReader.PixelHash(pic);
+            pic.SetPixel(500, 10, System.Drawing.Color.FromArgb(254, 255, 255));
+            Check("chat fingerprint: same pixels same, one pixel off not", $"{h1 == h2} {ScreenReader.PixelHash(pic) != h1}", "True True");
+            if (ReplayBank.OcrAvailable())
+            {
+                // a reader skipping a capture it has just read: the same lines, no second recognition
+                using var raw = new System.Drawing.Bitmap(864, 504, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var g = System.Drawing.Graphics.FromImage(raw)) { g.Clear(System.Drawing.Color.FromArgb(20, 22, 28)); g.DrawString("Acquired Raw Leather x3.", new System.Drawing.Font("Arial", 22), System.Drawing.Brushes.White, 10, 440); }
+                var rd = new ScreenReader(new System.Drawing.Rectangle(0, 0, 864, 504), 2) { SkipSame = () => true };
+                var first = Task.Run(() => rd.ReadCaptureAsync(raw)).GetAwaiter().GetResult();
+                var second = Task.Run(() => rd.ReadCaptureAsync(raw)).GetAwaiter().GetResult();
+                Check("an unchanged chat capture isn't recognized again", $"{string.Join("|", first) == string.Join("|", second)} {rd.SameSkips} of {rd.CaptureReads}", "True 1 of 2");
+                var noSkip = new ScreenReader(new System.Drawing.Rectangle(0, 0, 864, 504), 2) { SkipSame = () => false };
+                Task.Run(() => noSkip.ReadCaptureAsync(raw)).GetAwaiter().GetResult(); Task.Run(() => noSkip.ReadCaptureAsync(raw)).GetAwaiter().GetResult();
+                Check("...ocr.chat_skip_same off: read every time", $"{noSkip.SameSkips} of {noSkip.CaptureReads}", "0 of 2");
+            }
+            else Console.WriteLine("  (no text recognition here: the unchanged-chat read is checked where Windows OCR is installed)");
+        }
+        finally { Update.RemoteConfig.Current = keepCfg; }
         return ok;
     }
 

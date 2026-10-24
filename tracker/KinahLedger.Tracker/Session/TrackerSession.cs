@@ -85,7 +85,7 @@ public sealed class TrackerSession
 
     /// <summary>A reader for the chat at <paramref name="r"/>: sized to its text, its captures handed to the miscount report.</summary>
     ScreenReader NewReader(System.Drawing.Rectangle r) =>
-        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow), Keep = b => KeepChatShot(b, r.Location), NameSpans = NameDecoder.Present ? ShadowChatNames : null };
+        new(r, _settings.Ocr.Scale, _textScale) { Tap = b => Report.Picture("chat", b, r.Location, DateTime.UtcNow), Keep = b => KeepChatShot(b, r.Location), NameSpans = NameDecoder.Present ? ShadowChatNames : null, SkipSame = () => Update.RemoteConfig.Current.ChatSkipSame };
 
     /// <summary>
     /// The name decoder's shadow on the chat (counts nothing): each pickup line's item name cropped from the capture it was
@@ -609,13 +609,14 @@ public sealed class TrackerSession
                     // what is on screen, first: every reader below asks it (SceneState, Prompt 9)
                     await ScenePassAsync(p0);
                     var listGate = Verdict("loot_list");
-                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : LootReadAsync();
+                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : Times.Time("list", () => LootReadAsync());
                     if (listGate == Gate.Skip) _rows.Reset();
-                    if (!off.Off("target") && Runs("target")) await TargetDueAsync();
-                    if (!off.Off("craft_panel")) await CraftPanelDue();
-                    await LootGated(await list, listGate);
-                    if (!off.Off("reward_grid") && Runs("reward_grid")) await RewardGridDue();
-                    AnchorsDue();
+                    if (!off.Off("target") && Runs("target")) await Times.Time("target", TargetDueAsync);
+                    if (!off.Off("craft_panel")) await Times.Time("craft", CraftPanelDue);
+                    var listRead = await list;
+                    await Times.Time("list", () => LootGated(listRead, listGate));
+                    if (!off.Off("reward_grid") && Runs("reward_grid")) await Times.Time("grid", RewardGridDue);
+                    Times.Time("anchors", AnchorsDue);
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
                     Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
@@ -637,19 +638,19 @@ public sealed class TrackerSession
                     // what is on screen, first: every reader below asks it (SceneState, Prompt 9)
                     await ScenePassAsync(p0);
                     var listGate = Verdict("loot_list");
-                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : LootReadAsync();
+                    var list = off.Off("loot_list") || listGate == Gate.Skip ? NoListRead() : Times.Time("list", () => LootReadAsync());
                     if (listGate == Gate.Skip) _rows.Reset();
                     var chatGate = Verdict("chat");
-                    if (chatGate != Gate.Skip) await ReadOnce(chatGate);
-                    _chatMs += (DateTime.UtcNow - p0).TotalMilliseconds;
-                    if (!off.Off("target") && Runs("target")) await TargetDueAsync();
-                    if (!off.Off("craft_panel")) await CraftPanelDue();
-                    await LootGated(await list, listGate);
-                    RewardShot();
-                    if (!off.Off("reward_grid") && Runs("reward_grid")) await RewardGridDue();
-                    if (!off.Off("nameplates") && Runs("nameplates")) await PlatesDue();
-                    if (Runs("header")) await HeaderDue();
-                    AnchorsDue();
+                    if (chatGate != Gate.Skip) await Times.Time("chat", () => ReadOnce(chatGate));
+                    if (!off.Off("target") && Runs("target")) await Times.Time("target", TargetDueAsync);
+                    if (!off.Off("craft_panel")) await Times.Time("craft", CraftPanelDue);
+                    var listRead = await list;
+                    await Times.Time("list", () => LootGated(listRead, listGate));
+                    Times.Time("grid", RewardShot);
+                    if (!off.Off("reward_grid") && Runs("reward_grid")) await Times.Time("grid", RewardGridDue);
+                    if (!off.Off("nameplates") && Runs("nameplates")) await Times.Time("nameplates", PlatesDue);
+                    if (Runs("header")) await Times.Time("header", HeaderDue);
+                    Times.Time("anchors", AnchorsDue);
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     // the loot list's part in the health numbers: pickups only it saw, and rows that matched a chat line
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
@@ -699,7 +700,9 @@ public sealed class TrackerSession
     async Task ScenePassAsync(DateTime now)
     {
         _probe?.Dispose(); _probe = null;
-        if (!Update.RemoteConfig.Current.Off("craft_panel")) _probe = await CraftProbeAsync();
+        // the crafting panel's locator is the craft reader's time; the thumbnail, the classifier and the held reads the scene's
+        if (!Update.RemoteConfig.Current.Off("craft_panel")) _probe = await Times.Time("craft", CraftProbeAsync);
+        var scene = System.Diagnostics.Stopwatch.StartNew();
         System.Drawing.Bitmap? thumb = null;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try { if (GameRect is { } g) thumb = FrameThumb.Capture(g, _settings.ProcessHints); }
@@ -707,6 +710,7 @@ public sealed class TrackerSession
         if (thumb != null) Scene.AddPictureMs(sw.Elapsed.TotalMilliseconds);
         using (thumb) ScenePass(thumb, SignalsNow(now), now);
         await SettleHeldAsync(now);
+        Times.Add("scene", scene.Elapsed.TotalMilliseconds);
     }
 
     /// <summary>One pass of the classifier (also what the tests feed their synthetic frames through).</summary>
@@ -810,7 +814,11 @@ public sealed class TrackerSession
             var g = GameWindow.Find(_settings.ProcessHints);
             if (g != null && Cover(ChatLocator.Corner(g.Value)) == null)
             {
-                var (again, note) = await ChatLocator.DetectAsync(g.Value);
+                // around the chat's anchor once it has held still (layout.anchor.chat), else the whole bottom-left quarter
+                var near = Anchors.ChatCrop.Crop(g.Value, Update.RemoteConfig.Current.AnchorChat);
+                var (again, note) = await ChatLocator.DetectAsync(g.Value, near);
+                // not there: the anchor is gone, and the next look takes the whole quarter again
+                if (again == null && near != null) Anchors.ChatCrop.Missing(g.Value, "the chat wasn't found around its anchor");
                 if (again != null && again != Region) { Region = again; _reader = NewReader(again.Value); _anchor = g; DetectNote = "re-found: " + note; ReportLayout(); }
                 _chatLost = again == null;
             }
@@ -2045,7 +2053,7 @@ public sealed class TrackerSession
     // ---- the audit: how the count holds up, once a minute in reads.log ----
     // The quest tracker's "Defeat … (n/20)" lines count kills of quest enemies exactly, so where every enemy fought is a
     // quest enemy, the kills counted should rise as fast as the counter. Pass times say how often the screen is read.
-    int _passes; double _passMs, _chatMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
+    int _passes; double _passMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
     readonly Dictionary<int, int> _questMax = new();
     /// <summary>A new quest number seen once, waiting for the next read to agree (and when it was first seen).</summary>
     readonly Dictionary<int, (int N, DateTime At)> _questPending = new();
@@ -2088,19 +2096,36 @@ public sealed class TrackerSession
             if (!known || n > was || n < was - 3) _questMax[of] = n;
         }
     }
+    /// <summary>Where each pass's time went, region by region, for the audit line (PassTimes).</summary>
+    public PassTimes Times { get; } = new();
+    double _decoderMsAt;
+    int _chatSameAt, _chatReadsAt; ScreenReader? _chatCounted;
+    /// <summary>The audit's note on chat reads whose pixels hadn't changed and so weren't recognized again (ocr.chat_skip_same).</summary>
+    string ChatSameNote()
+    {
+        if (_reader is not { } r) return "";
+        if (!ReferenceEquals(r, _chatCounted)) { _chatCounted = r; _chatSameAt = 0; _chatReadsAt = 0; }   // a new reader since the last line
+        int same = r.SameSkips - _chatSameAt, reads = r.CaptureReads - _chatReadsAt;
+        _chatSameAt = r.SameSkips; _chatReadsAt = r.CaptureReads;
+        return $", {same} of {reads} reads unchanged and not recognized again";
+    }
+
     void Audit()
     {
         var now = DateTime.UtcNow;
         if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
+        var sameNote = ChatSameNote();
+        // the decoder runs on its own thread: its time over the minute goes in at the same per-pass rate
+        double dec = NameDecoder.TotalMs; Times.Add("decoder", dec - _decoderMsAt); _decoderMsAt = dec;
         SaveColours();
         ReportLayout();   // the text size is known by now: the layout's key gets it
         int kills = Engine.Totals().Kills;
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
         if (_passes > 0 && (kills > _auditKills || _questSteps > 0))
-            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {_passes} passes, {_passMs / _passes:0} ms each (chat {_chatMs / _passes:0} ms) · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, by a candidate set {_parser.ContextPicks}, refused as on no nearby table {_parser.Refused + _cross.Refused}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x");
-        _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; _chatMs = 0; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
+            CrashLog.Note($"audit: last {(now - _auditAt).TotalSeconds:0} s · kills counted +{kills - _auditKills} · quest counter +{_questSteps} · from the loot list +{_cross.Added - _auditAdded} · chat repeats skipped {_cross.Duplicates - _auditDups} · Kinah counter agreed {_balanceCheck.Agreed}×, over {_balanceCheck.Over:N0}, under {_balanceCheck.Under:N0} so far · {PassTimes.AuditPart(_passes, _passMs, Times)} · names settled by colour {_parser.ColourPicks}, by loot table {_parser.TablePicks}, guesses no table backs {_parser.HeldUnlisted}, by a candidate set {_parser.ContextPicks}, refused as on no nearby table {_parser.Refused + _cross.Refused}, loot list rows named by icon {IconNamed} · chat read at {_reader?.Factor ?? 0:0.##}x{sameNote}");
+        _auditAt = now; _auditKills = kills; _questSteps = 0; _passes = 0; _passMs = 0; Times.Reset(); _auditAdded = _cross.Added; _auditDups = _cross.Duplicates;
     }
 
     /// <summary>One pickup as counted, for the recent pickups strip: when, what, and how it was read.</summary>
@@ -2400,6 +2425,7 @@ public sealed class TrackerSession
             if (GameRect is not { } g) return;
             var now = DateTime.UtcNow;
             if (Region is { } chat && (now - _chatLinesAt).TotalSeconds <= 30) Anchors.ObserveChat(g, chat, DetectNote, ManualRegion, _chatLinesAt);
+            else Anchors.ChatCrop.Missing(g, "no chat lines in 30 s");
             Anchors.Tick(g, now, r => ScreenReader.Capture(r));
         }
         catch (Exception ex) { CrashLog.Write("anchors", ex); }
