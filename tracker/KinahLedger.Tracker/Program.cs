@@ -1051,6 +1051,7 @@ options: --process aion[,other]");
         ok &= AccuracyTest(items);
         ok &= NameMatchTest();
         ok &= LootRowsTest(items);
+        ok &= AnchorsTest();
         ok &= RelogTest();
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
@@ -1153,6 +1154,73 @@ options: --process aion[,other]");
         Check("chat: a rare item is never refused", Got("Bxld Leathex acquired."), "Bold Leather");
         p.Rare = null; p.Context = null;
         Check("chat: without a context, the list's closest as before", Got("Bxld Leathex acquired."), "Bold Leather");
+        return ok;
+    }
+
+    /// <summary>Anchors, shadow only (brief item 4, 2026-10-24): the template matcher, the anchored crops, "layout not found", the cost.</summary>
+    static bool AnchorsTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nLayout anchors, shadow only (2026-10-24):");
+        // the matcher: a patch cut from noise is found where it was, also in a dimmer, flatter copy; a flat template finds nothing
+        var rng = new Random(7);
+        int iw = 200, ih = 100;
+        var img = new float[iw * ih]; for (int i = 0; i < img.Length; i++) img[i] = (float)rng.NextDouble();
+        int tw = 24, th = 16; var tpl = new float[tw * th];
+        for (int y = 0; y < th; y++) for (int x = 0; x < tw; x++) tpl[y * tw + x] = img[(21 + y) * iw + 37 + x];
+        var (at, score) = TemplateMatch.Find(img, iw, ih, tpl, tw, th);
+        Check("a patch is found where it was cut", $"{at.X},{at.Y} {score:0.00}", "37,21 1.00");
+        var dim = img.Select(v => v * 0.5f + 0.2f).ToArray();
+        var (at2, score2) = TemplateMatch.Find(dim, iw, ih, tpl, tw, th);
+        Check("...in a dimmer, flatter picture too", $"{at2.X},{at2.Y} {score2:0.00}", "37,21 1.00");
+        Check("a flat template scores nothing", $"{TemplateMatch.Find(img, iw, ih, new float[tw * th], tw, th).Score:0.00}", "0.00");
+
+        // the free anchors: the counter strip's numbers and the chat box, against their fixed crops
+        var game = new System.Drawing.Rectangle(100, 50, 2560, 1440);
+        var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+        var an = new Anchors(new List<AnchorTemplate>());
+        an.Tick(game, t0, _ => null);
+        Check("no anchor at first: not judged before a minute", $"{an.LayoutNotFound}", "False");
+        an.Tick(game, t0.AddSeconds(61), _ => null);
+        Check("a minute without any: layout not found", $"{an.LayoutNotFound}", "True");
+        an.ObserveBalance(game, new[] { new System.Drawing.Rectangle(160, 60, 80, 20), new System.Drawing.Rectangle(260, 60, 60, 20), new System.Drawing.Rectangle(340, 60, 70, 20) }, t0.AddSeconds(62));
+        an.ObserveChat(game, new System.Drawing.Rectangle(112, 1000, 1000, 400), "chat found above the input box: 9 line(s) visible", false, t0.AddSeconds(62));
+        an.Tick(game, t0.AddSeconds(64), _ => null);
+        Check("an anchor again: layout found", $"{an.LayoutNotFound}", "False");
+        var lay = an.Layout(game, t0.AddSeconds(64));
+        var bal = lay["balance"]; var (bdx, bdy) = Anchors.Delta("balance", bal.Fixed, bal.Anchored!.Value);
+        Check("the strip from its numbers", $"{bal.Anchored} dx={bdx} dy={bdy} conf={bal.Conf:0.00}", "{X=155,Y=55,Width=260,Height=30} dx=55 dy=5 conf=0.75");
+        var ch = lay["chat"]; var (cdx, cdy) = Anchors.Delta("chat", ch.Fixed, ch.Anchored!.Value);
+        Check("the chat by its bottom-left", $"dx={cdx} dy={cdy} conf={ch.Conf:0.00}", "dx=12 dy=-90 conf=1.00");
+        Check("a region with no anchor yet: none", $"{lay["loot"].Anchored?.ToString() ?? "none"}", "none");
+
+        // a template anchor: a patch drawn 12 px right and 8 px down of where its reference frame had it
+        using var frame = new System.Drawing.Bitmap(game.Width, game.Height);
+        using var patch = new System.Drawing.Bitmap(40, 32);
+        var prng = new Random(3);
+        for (int y = 0; y < 32; y++) for (int x = 0; x < 40; x++) { int v = prng.Next(256); patch.SetPixel(x, y, System.Drawing.Color.FromArgb(v, 255 - v, (v * 7) % 256)); }
+        using (var g = System.Drawing.Graphics.FromImage(frame))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(30, 34, 40));
+            g.DrawImageUnscaled(patch, (int)(0.40 * game.Width) + 12, (int)(0.55 * game.Height) + 8);
+        }
+        var tmpl = new AnchorTemplate { Name = "test", Region = "loot", Where = new System.Drawing.RectangleF(0.40f, 0.55f, 0, 0), RefHeight = game.Height, Search = 0.02, Picture = new System.Drawing.Bitmap(patch) };
+        var at3 = new Anchors(new List<AnchorTemplate> { tmpl });
+        System.Drawing.Bitmap Crop(System.Drawing.Rectangle r) => frame.Clone(new System.Drawing.Rectangle(r.X - game.X, r.Y - game.Y, r.Width, r.Height), frame.PixelFormat);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        at3.Tick(game, t0, Crop);
+        double ms = sw.Elapsed.TotalMilliseconds;
+        var loot = at3.Layout(game, t0)["loot"];
+        var (ldx, ldy) = loot.Anchored is { } la ? Anchors.Delta("loot", loot.Fixed, la) : (0, 0);
+        Check("a template anchor moves its region's crop", $"dx={ldx} dy={ldy} conf>0.9 {loot.Conf > 0.9}", "dx=12 dy=8 conf>0.9 True");
+        var sw2 = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 10; i++) at3.Tick(game, t0.AddSeconds(2 * (i + 1)), Crop);
+        Console.WriteLine($"  (one template: first check {ms:0.0} ms, then {sw2.Elapsed.TotalMilliseconds / 10:0.0} ms each; none shipped yet, so 0 today)");
         return ok;
     }
 

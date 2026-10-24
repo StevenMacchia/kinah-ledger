@@ -25,6 +25,22 @@ Boss gear and Legend, Unique and Epic drops always count and are logged right (`
 The item list grades about a fifth of the loot tables' drops as Legend materials. They count as rare under the rule as
 written; `"rare": {"legend_materials": false}` in the site's config keeps Legend for gear only.
 
+## Names, loot list rows and anchors (branch tracker/accuracy-v2, 2026-10-24)
+
+- **Candidate sets** (`Data/NameMatch.cs`, `ItemDictionary.Match`): a misread is settled among the enemies' loot tables
+  (target bar, recent targets, nameplates), the gathering materials while gathering, the open recipe and the run's items
+  before the whole list, with an OCR-aware distance. In the open world, fighting an enemy whose table is known, a misread
+  whose only close item is on none of them and over one edit off is refused. reads.log: `is X, not Y: target-table has
+  it`, `which no loot table, gathering or recipe nearby has: unsure, not counted`; the audit line counts both.
+- **Loot list rows** (`Session/LootRows.cs`): rows are tracked by slot; text is taken once its contrast settles and voted
+  over the last three reads. reads.log: `now reads ... one item, the final text`, `went before its text settled ...:
+  unsure, not counted`. trace.log list reads carry `y` and `c`.
+- **Anchors, shadow only** (`Ocr/Anchors.cs`): once a minute `anchor <region> dx=.. dy=.. conf=..` (or `none`) and the
+  check's cost; `anchor: layout not found` / `found again`. Before any region is switched to its anchored crop, the
+  log must show, across several of Steven's sessions and at least two window sizes, that region's dx/dy steady to a few
+  pixels at conf 0.7 or more, and "layout not found" only while the game is genuinely hidden. Templates for the loot list,
+  the crafting panel, the zone strip and the target bar still have to be cut from real frames into `data/anchors/`.
+
 ## Commands
 
 ```

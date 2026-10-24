@@ -581,6 +581,7 @@ public sealed class TrackerSession
                     if (!off.Off("craft_panel")) await CraftPanelDue();
                     await LootProcess(await list);
                     if (!off.Off("reward_grid")) await RewardGridDue();
+                    AnchorsDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
                     Accuracy.Add("list_matched", _cross.Matched - _accMatched); _accMatched = _cross.Matched;
@@ -609,6 +610,7 @@ public sealed class TrackerSession
                     if (!off.Off("reward_grid")) await RewardGridDue();
                     if (!off.Off("nameplates")) await PlatesDue();
                     await HeaderDue();
+                    AnchorsDue();
                     _passes++; _passMs += (DateTime.UtcNow - p0).TotalMilliseconds;
                     // the loot list's part in the health numbers: pickups only it saw, and rows that matched a chat line
                     Accuracy.Add("list_only", _cross.Added - _accAdded); _accAdded = _cross.Added;
@@ -944,7 +946,7 @@ public sealed class TrackerSession
         Reread.Remember(_recent, lines, now);
         // an empty read (the chat fading out) is not the last read: the settle needs the last read that showed lines
         // (Steven, 2026-10-23 11:07: all 21 event rewards lost when the chat faded right after the clean read)
-        if (lines.Count > 0) _lastLines = lines;
+        if (lines.Count > 0) { _lastLines = lines; _chatLinesAt = now; }
         bool batchAchievement = false;
         bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat")
         {
@@ -2088,6 +2090,27 @@ public sealed class TrackerSession
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
     List<string> _lastLines = new();
+    DateTime _chatLinesAt = DateTime.MinValue;
+
+    // ---- anchors, shadow only (brief item 4, 2026-10-24) ----
+    /// <summary>Where the interface really is, from anchors, logged beside the fixed-fraction crops; changes nothing read.</summary>
+    public Anchors Anchors { get; } = new();
+
+    /// <summary>
+    /// On its own 2 s timer (Anchors.Tick): the chat box counts as an anchor while reads of it show lines; template anchors
+    /// are looked for when there are any; a minute line per region goes to reads.log.
+    /// </summary>
+    void AnchorsDue()
+    {
+        try
+        {
+            if (GameRect is not { } g) return;
+            var now = DateTime.UtcNow;
+            if (Region is { } chat && (now - _chatLinesAt).TotalSeconds <= 30) Anchors.ObserveChat(g, chat, DetectNote, ManualRegion, _chatLinesAt);
+            Anchors.Tick(g, now, r => ScreenReader.Capture(r));
+        }
+        catch (Exception ex) { CrashLog.Write("anchors", ex); }
+    }
 
     /// <summary>
     /// The target bar every 2 seconds while the chat is read. Unlike the minimap, the panel isn't hidden for it: a read every
