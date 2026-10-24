@@ -755,7 +755,7 @@ public sealed class TrackerSession
     {
         // counted where it belongs, and stamped with where that was (the activity: a run, farming, a reward screen)
         Feed(ev, Count(ev));
-        if (ev is CraftResult or ItemAcquired) CraftView.Apply(ev);
+        // crafting is fed by the crafting panel's races alone (CraftPanelDue), never by a pickup or a chat line
         if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
         else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb) Interlocked.Add(ref _kinahBound, kb.Delta);
         if (ev.Via.Contains("guessed")) Accuracy.Add("guessed");
@@ -1745,7 +1745,9 @@ public sealed class TrackerSession
     string FarmWhere(GameEvent ev)
     {
         var a = Doing.Current;
-        if (ev is CraftResult || a.Kind == ActivityKind.Crafting) return "Crafting";
+        // only a craft from the panel is Crafting; a pickup while crafting is what it is (a drop, a town pickup), never a craft
+        if (ev is CraftResult) return "Crafting";
+        if (a.Kind == ActivityKind.Crafting) return ZoneLocator.IsBase(Zone) ? $"Town · {Zone}" : $"Farming · {Zone ?? "no zone"}";
         if (ev is RewardReceived or KinahChanged { Bound: true }) return a.Kind == ActivityKind.RewardScreen ? a.Label : $"Reward · {Zone ?? "no zone"}";
         if (a.Kind is ActivityKind.RewardScreen or ActivityKind.Market or ActivityKind.Town) return a.Label;
         return $"Farming · {Zone ?? "no zone"}";
@@ -1916,6 +1918,14 @@ public sealed class TrackerSession
             CommitHeld();   // anything a step without a picture left waiting (a replay) counts as read first
             // a shop or reward screen covers the place the loot list shows: nothing there is loot
             if (Target.RewardOpen(now)) return;
+            // the crafting panel or window covers the place the loot list shows (its title read as a row, "Expert's Orichalcum
+            // Cloak", 2026-10-23 21:17:53), and a craft's output is the panel's alone: the list isn't read while either is up,
+            // nor for the panel's tail after it goes
+            if (CraftView.CraftPanelActive(now) || TargetReader.CraftOpen(Target.CraftAt, now))
+            {
+                if (LootPopup.Rows(lines).Count > 0 && (now - _craftListNoteAt).TotalSeconds > 30) { _craftListNoteAt = now; CrashLog.Note("loot list not read: the crafting panel or window is up"); }
+                return;
+            }
             // the gathering panel ("Orichalcum · Proficiency · Orichalcum Ore x1 · Success") sits at the bottom of the band:
             // its lines are what is being gathered, never a pickup (Steven, 2026-10-23 11:28)
             lines = WithoutGatherPanel(lines, now);
@@ -1932,9 +1942,6 @@ public sealed class TrackerSession
             bool reward = Target.RewardOpen(now);
             foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
             Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt);
-            bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
-            // with the crafting panel up or just gone, every item the list shows is what the crafts made
-            bool panel = CraftView.CraftPanelActive(now);
             foreach (var p0 in add)
             {
                 var parsed = p0 with { Via = "loot list" };
@@ -1945,9 +1952,9 @@ public sealed class TrackerSession
                     CrashLog.Note($"a Force is handing out loot: {_items.NameOf(dist.ItemId)} x{dist.Count} beside the character set aside, the chat never said it was yours");
                     continue;
                 }
-                bool made = (panel && parsed is ItemAcquired) || (crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null);
-                // loot list rows count only with a chat line (Steven, 2026-10-23: "chat-confirmed only"); what a craft made
-                // still counts from the list, as the crafting panel's flow did; an enemy's soul row is a kill, not a pickup
+                bool made = false;   // a craft's output never comes from the list (0.8.23)
+                // loot list rows count only with a chat line (Steven, 2026-10-23: "chat-confirmed only"); an enemy's soul row
+                // is a kill, not a pickup
                 // ...except a gather the chat missed: a gathering material, with a gathering bar that finished on Success in
                 // the last few seconds that no chat line has claimed (step 1 of Steven's plan, 2026-10-23): two witnesses
                 if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired gl && IsGatherMaterial(gl.ItemId) && TakeGatherToken(now, "the loot list"))
@@ -1956,13 +1963,6 @@ public sealed class TrackerSession
                 else if (!made && !_settings.Ocr.LootListAdds && parsed is ItemAcquired or KinahChanged && !(parsed is ItemAcquired rl && IsRare(rl.ItemId)))
                 {
                     CrashLog.Note($"loot list: {(parsed is ItemAcquired na ? $"{_items.NameOf(na.ItemId)} x{na.Count}" : $"{((KinahChanged)parsed).Delta:N0} Kina")} not counted: no chat line confirmed it");
-                    continue;
-                }
-                // with the crafting window open, the loot list shows what the crafts gave: a recipe's item is a craft (the
-                // engines take it as one), anything else is set aside until the window itself can be read, never a drop
-                if (crafting && !made && parsed is ItemAcquired other)
-                {
-                    CrashLog.Note($"crafting window open: {_items.NameOf(other.ItemId)} x{other.Count} from the loot list set aside, not a drop");
                     continue;
                 }
                 // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
@@ -1991,6 +1991,7 @@ public sealed class TrackerSession
     }
     /// <summary>The previous read as it came, for the log when a read can't be lined up with it.</summary>
     List<string> _prevRead = new();
+    DateTime _craftListNoteAt = DateTime.MinValue;
     readonly Reread _reread = new();
     // when each line was first on screen: an achievement line that stays up is read a little differently each time, and
     // only a new one makes the items with it its reward
@@ -2243,18 +2244,34 @@ public sealed class TrackerSession
             if (ReportBuffer.Keeps("craft")) try { Report.Picture("craft", bmp, region.Location, now, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
             // the crafting window's hold and its pictures last as long as the queue runs, and the passes keep a fight's pace
             Target.MarkCraft(now); _lastActivity = now;
-            foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.CraftPanelSeen(_panelRecipe, now);
+            PanelUp(_panelRecipe, now);
             if (_panel.Feed(now, s) is not { } o) return;
-            var ev = new CraftResult(now, _panelRecipe, o.Ok, o.Combo) { Via = SessionEngine.CraftPanelVia };
             CrashLog.Note($"crafting panel: {(o.Combo ? "combo roll " : "")}{(o.Ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
-            Count(ev);
-            CraftView.Apply(ev);
-            Accuracy.Add("craft_panel");
-            Report.Counted(now, $"craft {(o.Ok ? "success" : "fail")}{(o.Combo ? " (combo)" : "")}: {(_panelRecipe.Length > 0 ? _panelRecipe : "?")}", ev.Via);
-            try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+            PanelRace(_panelRecipe, o.Ok, o.Combo, now);
         }
         catch (System.ComponentModel.Win32Exception) { throw; }
         catch (Exception ex) { CrashLog.Write("crafting panel", ex); }
+    }
+
+    /// <summary>The crafting panel is on screen, making this recipe (also what replay and the tests feed).</summary>
+    internal void PanelUp(string recipe, DateTime now)
+    {
+        foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.CraftPanelSeen(recipe, now);
+    }
+
+    /// <summary>
+    /// One finished race of the panel's Success and Fail bars: the only way a craft is counted (Steven, 2026-10-23: "if u
+    /// dont see the crafting bars why the fuck are u adding it to a craft window"). Also what replay and the tests feed.
+    /// </summary>
+    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now)
+    {
+        PanelUp(recipe, now);
+        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia };
+        Count(ev);
+        CraftView.Apply(ev);
+        Accuracy.Add("craft_panel");
+        Report.Counted(now, $"craft {(ok ? "success" : "fail")}{(combo ? " (combo)" : "")}: {(recipe.Length > 0 ? recipe : "?")}", ev.Via);
+        try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
 
     async Task TargetDueAsync()
@@ -2341,7 +2358,7 @@ public sealed class TrackerSession
     const double WitnessWaitSeconds = 8;
 
     bool NeedsWitness(ItemAcquired a, bool made, bool crafting) =>
-        WitnessSeconds > 0 && !InRun && _boss == null && !made && !crafting && !IsGatherMaterial(a.ItemId) && !IsRare(a.ItemId) && !RunTakes(a);
+        WitnessSeconds > 0 && !InRun && _boss == null && !made && !IsGatherMaterial(a.ItemId) && !IsRare(a.ItemId) && !RunTakes(a);
 
     /// <summary>
     /// The open run takes this pickup on its own rules, with no kill or gather to witness it: inside it while the minimap

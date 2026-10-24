@@ -599,6 +599,9 @@ public sealed class InstanceLog
     }
 
     /// <summary>Every kept run plus the open one when it has loot, oldest first.</summary>
+    /// <summary>For tests: the open run, loot or not.</summary>
+    internal InstanceRun? CurrentRun { get { lock (_lock) return _cur; } }
+
     public List<InstanceRun> Snapshot()
     {
         lock (_lock)

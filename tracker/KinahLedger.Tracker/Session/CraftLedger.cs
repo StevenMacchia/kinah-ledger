@@ -3,10 +3,8 @@ using KinahLedger.Data;
 namespace KinahLedger.Session;
 
 /// <summary>
-/// Crafting, kept apart from farming: what was crafted, how often it worked, and what came out. Nothing here is a
-/// drop, a kill, farming time or a zone's numbers. The chat prints "Successfully crafted X" and then "X acquired.";
-/// that item line is the craft's output. A long name wraps in the chat ("Successfully crafted Artisan's Orichalcum" /
-/// "Longsword."), so the output is matched by how its name continues the crafted name, not by an exact match.
+/// Crafting, kept apart from farming: what was crafted, how often it worked, and what came out, all from the crafting
+/// panel's Success and Fail bars. Nothing here is a drop, a kill, farming time or a zone's numbers.
 /// Not thread-safe on its own: <see cref="SessionEngine"/> calls it under its lock.
 /// </summary>
 public sealed class CraftLedger
@@ -23,12 +21,14 @@ public sealed class CraftLedger
         public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase) };
     }
 
-    // ---- the crafting panel (Steven, 2026-10-22: crafts are read from what the game shows for them, never the chat) ----
+    // ---- the crafting panel: the one way in (Steven, 2026-10-23: "if u dont see the crafting bars why the fuck are u
+    // adding it to a craft window") ----
     // While crafts run, the panel at the bottom of the screen races a Success bar against a Fail bar; each race is one
-    // craft, and a race on the blue combo panel is the upgrade roll for the craft before it. The panel is the count: while
-    // it was seen in the last PanelSeconds, every item the loot list shows is what the crafts made, under the panel's recipe.
+    // craft, and a race on the blue combo panel is the upgrade roll for the craft before it. A recipe here exists only
+    // because a race finished; what it made is the recipe's yield per success. Nothing the loot list or the chat shows
+    // is ever a craft, a try or an output (0.8.22 counted 31 Orichalcum Ingots from 2 crafts, and a Cloak never made).
 
-    /// <summary>How long after the panel was last seen the loot list's rows are still the crafts' output (a queue's last item lands after the panel closes).</summary>
+    /// <summary>How long after the panel was last seen a pickup of its recipe's item is still the crafts' output (a queue's last item lands after the panel closes).</summary>
     public const double PanelSeconds = 15;
     string _panelRecipe = ""; DateTime _panelAt = DateTime.MinValue;
 
@@ -41,93 +41,31 @@ public sealed class CraftLedger
 
     public bool PanelActive(DateTime t) => _panelAt != DateTime.MinValue && (t - _panelAt).TotalSeconds <= PanelSeconds;
 
-    /// <summary>One race on the panel: a craft that worked or failed, or the combo roll after one.</summary>
+    /// <summary>How many a recipe makes per success: the recipe book's yield, 1 when the book doesn't know the item.</summary>
+    public static int YieldOf(string recipe) => RecipeBook.For(recipe, 0)?.OutputQty is int q && q > 0 ? q : 1;
+
+    /// <summary>One race on the panel: a craft that worked or failed, or the combo roll after one. The only way into crafting.</summary>
     public void OnPanel(CraftResult cr)
     {
         PanelSeen(cr.Item, cr.Time);
-        var r = Get(_panelRecipe.Length >= 2 ? _panelRecipe : "?");
+        var name = _panelRecipe.Length >= 2 ? _panelRecipe : "?";
+        var r = Get(name);
         if (cr.Combo) { if (cr.Ok) r.Upgraded++; else r.NotUpgraded++; }
-        else if (cr.Ok) r.Ok++;
+        else if (cr.Ok) { r.Ok++; if (name != "?") r.Made[name] = r.Made.GetValueOrDefault(name) + YieldOf(name); }
         else r.Fail++;
-        _last = r.Name; _lastAt = cr.Time;
     }
 
     /// <summary>
-    /// An item picked up while the panel is up or just gone: what the crafts made, recorded under the panel's recipe
-    /// (the try itself was counted from the panel). Returns false when the panel hasn't been seen lately.
+    /// A pickup of the item the panel is crafting, while the panel is up or just gone: the craft's own output, already
+    /// counted from the panel's race, so it is neither a drop nor a second craft. Anything else is what it is.
     /// </summary>
-    public bool TakePanelOutput(string item, int count, DateTime t)
-    {
-        if (!PanelActive(t)) return false;
-        var r = Get(_panelRecipe.Length >= 2 ? _panelRecipe : "?");
-        r.Made[item] = r.Made.GetValueOrDefault(item) + count;
-        return true;
-    }
-
-    /// <summary>How long after "Successfully crafted" its item line can come.</summary>
-    public const double OutputSeconds = 10;
+    public bool IsPanelOutput(string item, DateTime t) =>
+        PanelActive(t) && _panelRecipe.Length >= 2 && item.Length >= 2
+        && (item.StartsWith(_panelRecipe, StringComparison.OrdinalIgnoreCase) || _panelRecipe.StartsWith(item, StringComparison.OrdinalIgnoreCase));
 
     readonly Dictionary<string, Recipe> _recipes = new(StringComparer.OrdinalIgnoreCase);
-    string? _pending; DateTime _pendingAt;        // a craft that worked and whose item line hasn't come yet
-    string _last = ""; DateTime _lastAt;          // the last recipe, for "Crafting failed." lines that don't name it
 
     Recipe Get(string name) { if (!_recipes.TryGetValue(name, out var r)) _recipes[name] = r = new Recipe { Name = name }; return r; }
-
-    /// <summary>The full recipe name for a name the chat may have cut short: a recipe already seen, else the recipe book, else as read.</summary>
-    string Resolve(string read)
-    {
-        if (read.Length < 2) return "?";
-        if (_recipes.ContainsKey(read)) return _recipes[read].Name;
-        var seen = _recipes.Keys.Where(k => k.StartsWith(read, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (seen.Count == 1) return seen[0];
-        return RecipeBook.Complete(read) ?? read;
-    }
-
-    public void OnResult(CraftResult cr)
-    {
-        Settle(cr.Time);
-        var name = cr.Item.Length >= 2 ? cr.Item : (cr.Time - _lastAt).TotalMinutes <= 2 ? _last : "";
-        if (cr.Ok) { _pending = name.Length >= 2 ? name : "?"; _pendingAt = cr.Time; }
-        else Get(Resolve(name)).Fail++;
-        if (name.Length >= 2) { _last = Resolve(name); _lastAt = cr.Time; }
-    }
-
-    /// <summary>True when this item line is the output of the craft just made; it is then recorded here and nowhere else.</summary>
-    public bool TakeOutput(string item, int count, DateTime t)
-    {
-        if (_pending == null) return false;
-        if ((t - _pendingAt).TotalSeconds > OutputSeconds) { Settle(t); return false; }
-        if (_pending != "?" && !Continues(_pending, item)) return false;
-        // the recipe is the item when the item line finishes the crafted name; a better outcome (a great success) keeps the recipe read
-        var recipe = _pending == "?" || item.StartsWith(_pending, StringComparison.OrdinalIgnoreCase) ? item : Resolve(_pending);
-        var r = Get(recipe);
-        r.Ok++;
-        r.Made[item] = r.Made.GetValueOrDefault(item) + count;
-        _last = recipe; _lastAt = t; _pending = null;
-        return true;
-    }
-
-    /// <summary>
-    /// An item a recipe makes, picked up while the crafting window was open, with no "Successfully crafted" line read
-    /// (the window hides most of the chat): it is a craft that worked. Returns false when no recipe makes the item.
-    /// </summary>
-    public bool TakeUnannounced(string item, int count)
-    {
-        if (RecipeBook.ForOutput(item) == null) return false;
-        var r = Get(item);
-        r.Ok++;
-        r.Made[item] = r.Made.GetValueOrDefault(item) + count;
-        _last = item; _lastAt = DateTime.UtcNow;
-        return true;
-    }
-
-    /// <summary>A craft whose item line never came in time still worked: it counts under the name read.</summary>
-    void Settle(DateTime t)
-    {
-        if (_pending == null || (t - _pendingAt).TotalSeconds <= OutputSeconds) return;
-        Get(Resolve(_pending)).Ok++;
-        _pending = null;
-    }
 
     /// <summary>
     /// Whether an item name is the crafted one: it continues the name read ("Artisan's Orichalcum" → "Artisan's
@@ -141,16 +79,6 @@ public sealed class CraftLedger
         return a.Count >= 2 && a.Intersect(b).Count() >= 2;
     }
 
-    /// <summary>Copies of every recipe, a craft still waiting for its item line counted as a success, most tries first.</summary>
-    public List<Recipe> Snapshot()
-    {
-        var copy = _recipes.Values.Select(r => r.Copy()).ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
-        if (_pending != null)
-        {
-            var n = Resolve(_pending);
-            if (!copy.TryGetValue(n, out var r)) copy[n] = r = new Recipe { Name = n };
-            r.Ok++;
-        }
-        return copy.Values.OrderByDescending(r => r.Attempts).ThenBy(r => r.Name).ToList();
-    }
+    /// <summary>Copies of every recipe, most tries first.</summary>
+    public List<Recipe> Snapshot() => _recipes.Values.Select(r => r.Copy()).OrderByDescending(r => r.Attempts).ThenBy(r => r.Name).ToList();
 }

@@ -1751,10 +1751,11 @@ options: --process aion[,other]");
         Console.WriteLine("\nEngine (0.7):");
         var e = new SessionEngine(items); var t0 = DateTime.UtcNow;
         long ingot = items.IdOf("Orichalcum Ingot");
-        e.Apply(new CraftResult(t0, "Orichalcum Ingot", true));
+        e.CraftPanelSeen("Orichalcum Ingot", t0);
+        e.Apply(new CraftResult(t0, "Orichalcum Ingot", true) { Via = SessionEngine.CraftPanelVia });
         e.Apply(new ItemAcquired(t0.AddSeconds(1), ingot, 1, false));                // the craft's own item line
-        e.Apply(new CraftResult(t0.AddSeconds(20), "", false));                       // "Crafting failed." right after: same recipe
-        e.Apply(new ItemAcquired(t0.AddSeconds(30), ingot, 1, false));               // later, unrelated to a craft: a drop
+        e.Apply(new CraftResult(t0.AddSeconds(20), "", false) { Via = SessionEngine.CraftPanelVia });   // the next race failed: same recipe
+        e.Apply(new ItemAcquired(t0.AddSeconds(40), ingot, 1, false));               // later, the panel long gone: a drop
         e.Apply(new EnchantResult(t0, "Tahabata's Sword", 10, 11, false));
         e.Apply(new EnchantResult(t0, "Tahabata's Sword", 10, 11, true));
         e.Apply(new EnchantResult(t0, "", -1, -1, false));
@@ -1968,7 +1969,7 @@ options: --process aion[,other]");
                     vs.Engine.SetZone("Vakron Sky Island"); vs.Instances.Zone("Vakron Sky Island", v0);
                     if (counter) { vs.SeedBalance(v0, 17_889); vs.SeedBalance(v0.AddSeconds(2), 617_889); }
                     vs.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", text, count, new() { (IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon), dist), ("Other", 120) }) }, v0.AddSeconds(3));
-                    var vr = vs.Instances.Snapshot().LastOrDefault(r => r.Start >= v0.AddSeconds(-1));
+                    var vr = vs.Instances.CurrentRun;
                     return $"{vr?.Kinah ?? 0:N0} {(vr?.KinahUnknown == true ? "not read" : "read")}";
                 }
                 Check("a 605.0K slot the counter saw rise 600,000 is 600,000 Kinah, its picture at 115",
@@ -1978,7 +1979,7 @@ options: --process aion[,other]");
                 var ds = new TrackerSession(null, new Settings(), items, "Test"); var d0 = DateTime.UtcNow;
                 ds.Engine.SetZone("Vakron Sky Island"); ds.Instances.Zone("Vakron Sky Island", d0);
                 ds.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "", 1, new() { ("Icon_GM_0044_T06_Gloves", 114) }) }, d0.AddSeconds(3));
-                Check("a lone unsure slot doesn't pay or split the run", $"{ds.Instances.Snapshot().LastOrDefault(r => r.Start >= d0.AddSeconds(-1))?.FromPicture} {ds.Instances.Snapshot().Count(r => r.Start >= d0.AddSeconds(-1))}", "False 1");
+                Check("a lone unsure slot doesn't pay or split the run", $"{ds.Instances.CurrentRun?.FromPicture} {ds.Instances.CurrentRun?.PaidAt == null}", "False True");
                 // the averages leave out a run whose Kinah wasn't read, never count it as 0
                 var unknownRun = new InstanceRun { Zone = "Vakron Sky Island", Kind = "Expedition", Start = DateTime.UtcNow, LastLoot = DateTime.UtcNow.AddMinutes(9), KinahNotRead = true };
                 Check("a run whose Kinah wasn't read isn't uploaded", $"{InstanceRunPayload.From(new[] { unknownRun }, id => id.ToString())?.Count ?? 0}", "0");
@@ -2187,23 +2188,20 @@ options: --process aion[,other]");
         {
             var cp = new ChatParser(items); var ce = new SessionEngine(items); ce.SetZone("Eastern Altamia Highland");
             void Feed(params string[] ls) { foreach (var (_, evs) in cp.ParseBatch(ls, DateTime.UtcNow)) foreach (var ev in evs) ce.Apply(ev); }
-            Feed("Successfully crafted Artisan's Orichalcum", "Longsword.", "Artisan's Orichalcum Longsword acquired.");
-            var made = ce.CraftSnapshot();
-            Check("a wrapped craft line: its item is the craft's output", string.Join(" | ", made.Select(r => $"{r.Name}: {r.Ok} ok, made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")), "Artisan's Orichalcum Longsword: 1 ok, made Artisan's Orichalcum Longsword x1");
-            var zs = ce.ZoneSnapshot();
-            Check("and never a drop or a zone item", $"drops {ce.Items.Count + ce.ItemsBound.Count}, zone items {zs.Values.Sum(z => z.Items.Count + z.ItemsBound.Count)}, farming {ce.Active.TotalSeconds:0}s", "drops 0, zone items 0, farming 0s");
+            Feed("Successfully crafted Artisan's Orichalcum", "Longsword.");
+            Check("a chat craft line makes no craft: no bars, no craft", $"{ce.CraftSnapshot().Count}", "0");
             // the crafting window hides the chat: only the item line is read (2026-10-21 16:37). With the window seen
             // open, an item a recipe makes is a craft; with it closed, the same line is a pickup as before
             var cw2 = new SessionEngine(items); var cwt = DateTime.UtcNow;
             cw2.SetCraftWindow(cwt);
             cw2.Apply(new ItemAcquired(cwt.AddSeconds(2), items.IdOf("Artisan's Orichalcum Longsword"), 1, false));
-            Check("crafting window open, no crafted line: still a craft", $"{string.Join(",", cw2.CraftSnapshot().Select(r => r.Name + " " + r.Ok + " ok"))} · drops {cw2.Items.Count}", "Artisan's Orichalcum Longsword 1 ok · drops 0");
+            Check("crafting window open, no bars: a recipe's item is no craft and no drop", $"crafts {cw2.CraftSnapshot().Count} · drops {cw2.Items.Count}", "crafts 0 · drops 0");
             var cw3 = new SessionEngine(items);
             cw3.Apply(new ItemAcquired(cwt, items.IdOf("Artisan's Orichalcum Longsword"), 1, false));
             Check("crafting window not seen: a pickup as before", $"crafts {cw3.CraftSnapshot().Count} · drops {cw3.Items.Count}", "crafts 0 · drops 1");
             Check("the crafting window's skill tabs", $"{TargetReader.IsCraftTab("Armorsmithing")} {TargetReader.IsCraftTab("Cookinq")} {TargetReader.IsCraftTab("Highland Karnif")}", "True True False");
             Feed("Crafting failed.");
-            Check("an unnamed failure goes to the last recipe", string.Join(" | ", ce.CraftSnapshot().Select(r => $"{r.Name} {r.Ok}/{r.Attempts}")), "Artisan's Orichalcum Longsword 1/2");
+            Check("a chat failure line makes no craft either", $"{ce.CraftSnapshot().Count}", "0");
             Feed("Acquired 44,998 Kina.", "A total payment of 61,765 Kina has been", "completed.", "Acquired 16,767 Kina.");
             Check("a settlement paid out before and after its total line", $"farmed {ce.Kinah:N0}, skipped {ce.KinahSkipped:N0}", "farmed 0, skipped 61,765");
             Feed("Acquired 512 Kina.");
@@ -2462,8 +2460,36 @@ options: --process aion[,other]");
                 pe.Apply(new ItemAcquired(pt.AddSeconds(15), other, 2, false) { Via = "loot list" });
                 pe.Apply(new CraftResult(pt.AddSeconds(16), "Crafting failed.", false) { Via = "chat" });
                 var pr = pe.CraftSnapshot();
-                Check("crafting panel: tries, combo and output", string.Join(" | ", pr.Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")) + $" · drops {pe.Items.Count + pe.ItemsBound.Count}",
-                    "Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x1,Orichalcum Ore x2 · drops 0");
+                Check("crafting panel: tries, combo and output (the recipe's yield), the ore a drop", string.Join(" | ", pr.Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")) + $" · drops {pe.Items.Count + pe.ItemsBound.Count}",
+                    $"Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x{2 * CraftLedger.YieldOf("Life Serum (Bound)")} · drops 1");
+                // Steven's 2026-10-23 21:17 to 21:23 crafts, as 0.8.22 read them: the panel's races are the crafts; the loot list's
+                // rows (one of them the panel's own title read as a Cloak) and the chat's item lines never reach crafting
+                var gs2 = new TrackerSession(null, new Settings(), items, "Test"); var g0 = new DateTime(2026, 10, 24, 1, 17, 50, DateTimeKind.Utc);
+                gs2.Engine.SetZone("Dawn Legion Base"); gs2.ZoneView.SetZone("Dawn Legion Base");
+                gs2.ProcessChat(new List<string> { "[x] a" }, g0);
+                const string sword = "Expert's Orichalcum Longsword", ingotN = "Orichalcum Ingot";
+                gs2.PanelUp(sword, g0.AddSeconds(1));
+                gs2.ProcessList(new List<(int, string)> { (0, "Expert's Orichalcum Cloak x1") }, g0.AddSeconds(3.3));
+                gs2.ProcessList(new List<(int, string)> { (0, "Expert's Orichalcum Cloak x1") }, g0.AddSeconds(7.6));
+                gs2.PanelRace(sword, true, false, g0.AddSeconds(12));
+                gs2.ProcessList(new List<(int, string)> { (0, "Expert's Orichalcum Longsword x1") }, g0.AddSeconds(17.6));
+                gs2.ProcessList(new List<(int, string)> { (0, "Expert's Orichalcum Longsword x1") }, g0.AddSeconds(21.8));
+                gs2.ProcessChat(new List<string> { "[x] a", "Expert's Orichalcum Longsword acquired." }, g0.AddSeconds(24.9));
+                // the Ingots: two races, four loot-list rows of x10 and a chat line (0.8.22 showed 2 tries, made x31)
+                var i0 = g0.AddMinutes(3).AddSeconds(43);
+                for (int k = 0; k <= 34; k += 4) gs2.PanelUp(ingotN, i0.AddSeconds(k));   // the panel on screen between the races
+                gs2.PanelRace(ingotN, true, false, i0);
+                gs2.ProcessList(new List<(int, string)> { (0, "Orichalcum Ingot x10") }, i0.AddSeconds(2));
+                gs2.PanelRace(ingotN, true, false, i0.AddSeconds(34));
+                foreach (var dt in new[] { 27, 37, 46 }) gs2.ProcessList(new List<(int, string)> { (0, "Orichalcum Ingot x10") }, i0.AddSeconds(dt));
+                gs2.ProcessChat(new List<string> { "[x] a", "Expert's Orichalcum Longsword acquired.", "Orichalcum Ingot acquired." }, i0.AddSeconds(46.5));
+                var cv = gs2.CraftView;
+                Check("crafting from the panel only: one Longsword, two Ingots at the recipe's yield, no Cloak",
+                    string.Join(" | ", cv.CraftSnapshot().OrderBy(r => r.Name).Select(r => $"{r.Name} {r.Ok}/{r.Attempts} made x{r.Made.Values.Sum()}")),
+                    $"{sword} 1/1 made x{CraftLedger.YieldOf(sword)} | {ingotN} 2/2 made x{2 * CraftLedger.YieldOf(ingotN)}");
+                // the gate: no pickup ever lands in crafting, and the crafts' output and the misread Cloak are no drops either
+                string Held(SessionEngine en) => string.Join(",", en.Items.Concat(en.ItemsBound).Where(kv => kv.Value > 0).Select(kv => items.NameOf(kv.Key)).OrderBy(x => x));
+                Check("gate: crafting holds no pickup, and no craft output or Cloak is a drop", $"craft view [{Held(cv)}] · drops [{Held(gs2.Engine)}]", "craft view [] · drops []");
                 Check("crafting panel: gone a while, a pickup is a drop again", $"{pe.CraftPanelActive(pt.AddSeconds(31))}", "False");
             }
             {

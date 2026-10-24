@@ -518,12 +518,13 @@ public sealed class SessionEngine
                 CrashLog.Note($"Kinah line far above what the mobs pay, taken for a reward and not counted as farming: {big.Delta:N0}");
                 ev = new KinahChanged(big.Time, big.Delta, true);
             }
-            // a craft's own item line belongs to crafting alone: not a drop, not a zone's item, not farming time. With the
-            // crafting window open, an item a recipe makes is a craft even when "Successfully crafted" wasn't read
-            // With the crafting panel up (or just gone), every pickup is what the crafts made: the panel counted the tries
-            if (ev is ItemAcquired made && (_craft.TakePanelOutput(_items.NameOf(made.ItemId), made.Count, made.Time)
-                || _craft.TakeOutput(_items.NameOf(made.ItemId), made.Count, made.Time)
-                || (CraftWindowOpen(made.Time) && _craft.TakeUnannounced(_items.NameOf(made.ItemId), made.Count))))
+            // the item the crafting panel is making, picked up while it is up or just gone: the craft's own output, already
+            // counted from the panel's race, so neither a drop nor a second craft. Every other pickup is what it is: crafting
+            // never takes a pickup (Steven, 2026-10-23: "it needs to not be drops for crafting")
+            // With the crafting window open, an item a recipe makes is set aside the same way: likely a craft whose bars weren't
+            // seen, so it is no craft (no bars, no craft) and no drop either
+            if (ev is ItemAcquired made && (_craft.IsPanelOutput(_items.NameOf(made.ItemId), made.Time)
+                || (CraftWindowOpen(made.Time) && RecipeBook.ForOutput(_items.NameOf(made.ItemId)) != null)))
             {
                 CraftedSkipped++;
                 return;
@@ -611,10 +612,9 @@ public sealed class SessionEngine
                     CreditSoul(es.Kind, es.Time, KillEvidence(es.Time, 'l'));
                     break;
                 case CraftResult cr:
-                    // the crafting panel's races are the count. The chat's craft lines never are (Steven, 2026-10-22: a queue
-                    // of crafts runs with the chat hidden), so live they are left out; only replays and tests feed them in
+                    // the crafting panel's races are the count, and the only one: a craft line from the chat or anywhere else
+                    // makes no craft (Steven, 2026-10-23: "no bars, no craft entry")
                     if (cr.Via == CraftPanelVia) _craft.OnPanel(cr);
-                    else if (!cr.Via.StartsWith("chat")) _craft.OnResult(cr);
                     break;
                 case EnchantResult en:
                 {

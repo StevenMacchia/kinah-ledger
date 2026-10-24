@@ -266,7 +266,7 @@ public sealed class LootCrossCheck
                 continue;
             }
             add.Add(row.IsKinah ? new KinahChanged(at, row.Amount, false) : new ItemAcquired(at, _items.IdOf(row.Name), row.Count, false));
-            CrashLog.Note($"the loot list showed {(row.IsKinah ? row.Amount.ToString("N0") + " Kina" : row.Name + " x" + row.Count)} and the chat read missed it: counted from the list");
+            CrashLog.Note($"the loot list showed {(row.IsKinah ? row.Amount.ToString("N0") + " Kina" : row.Name + " x" + row.Count)} and the chat read missed it: one witness, the caller decides (it counts only with a second)");
             Added++;
             _added.Add((now, key));
             _waiting.RemoveAt(i--);
