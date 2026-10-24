@@ -1,0 +1,17 @@
+{
+  "about": "The name decoder's recogniser (tracker Ocr/NameDecoder.cs). Not committed and not built into the exe: `node tools/data/models.js` downloads each file from its pinned URL, checks its SHA-256 and writes it to the tracker's kept data folder, %LOCALAPPDATA%/KinahLedger/data (or --out). The tracker loads a file only when its SHA-256 matches this list.",
+  "files": {
+    "name-rec.onnx": {
+      "url": "https://huggingface.co/breezedeus/cnocr-ppocr-en_PP-OCRv4/resolve/4af71ff013f195d04426f6dca62ec26656dfbbc4/en_PP-OCRv4_rec_infer.onnx",
+      "sha256": "5ca59a096cf493d5fd5044b9ccc1bdea9229fbcf656bd76040ff80a00201ee16",
+      "size": 7656802,
+      "source": "PaddleOCR en_PP-OCRv4 mobile text recognition (Apache-2.0), ONNX export by CnOCR"
+    },
+    "name-rec-dict.txt": {
+      "url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/ff853c78c97729a6497b0f93968fcfa039c26d8a/ppocr/utils/en_dict.txt",
+      "sha256": "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3",
+      "size": 190,
+      "source": "PaddleOCR ppocr/utils/en_dict.txt (Apache-2.0): the model's 95 characters, one per line"
+    }
+  }
+}
