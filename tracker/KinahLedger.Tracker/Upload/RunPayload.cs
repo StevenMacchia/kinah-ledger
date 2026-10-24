@@ -66,7 +66,7 @@ public sealed record RunPayload(
     // since 0.8.12: max(K, G) / (K + G) over the distinct minutes with a kill (K) and with a gather (G), rounded to 0.05;
     // the site leaves runs under 0.8 out of its per-hour figures (farming and gathering at once). Absent with neither
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? focus = null,
-    // since 0.8.23: true on a send that carries only finished expedition, Transcendence and event runs, sent the moment
+    // since 0.8.24: true on a send that carries only finished expedition, Transcendence and event runs, sent the moment
     // each ends; it holds no farming (no minutes, zones, kills or Kinah), so the site files only the runs
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? runs_only = null)
 {
@@ -212,7 +212,7 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     {
         if (runs == null) return null;
         var list = runs
-            // a run whose Kinah wasn't read isn't sent: the site would average it in as the little the chat saw (since 0.8.23)
+            // a run whose Kinah wasn't read isn't sent: the site would average it in as the little the chat saw (since 0.8.24)
             .Where(r => r.LastLoot != null && KindOf(r) != null && r.Seconds >= 1 && r.Seconds <= MaxSeconds && !r.KinahUnknown)
             .OrderByDescending(r => r.Start).Take(MaxRuns)
             .Select(r =>

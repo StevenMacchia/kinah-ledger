@@ -46,7 +46,7 @@ public sealed class InstanceRun
     public Dictionary<long, int> ChatItems { get; set; } = new();
     /// <summary>No reward picture was read for the run, so its rewards are not known (since 0.8.18). Kinah and kills still count.</summary>
     public bool RewardsNotRead { get; set; }
-    /// <summary>The reward table's coin slot (a K or M count) was there but not named, so the run's Kinah is not known (since 0.8.23).</summary>
+    /// <summary>The reward table's coin slot (a K or M count) was there but not named, so the run's Kinah is not known (since 0.8.24).</summary>
     public bool KinahNotRead { get; set; }
     /// <summary>
     /// The run's Kinah isn't known: its reward picture wasn't read, or its coin slot wasn't. Such a run is left out of the

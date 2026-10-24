@@ -1952,7 +1952,7 @@ public sealed class TrackerSession
                     CrashLog.Note($"a Force is handing out loot: {_items.NameOf(dist.ItemId)} x{dist.Count} beside the character set aside, the chat never said it was yours");
                     continue;
                 }
-                bool made = false;   // a craft's output never comes from the list (0.8.23)
+                bool made = false;   // a craft's output never comes from the list (0.8.24)
                 // loot list rows count only with a chat line (Steven, 2026-10-23: "chat-confirmed only"); an enemy's soul row
                 // is a kill, not a pickup
                 // ...except a gather the chat missed: a gathering material, with a gathering bar that finished on Success in
