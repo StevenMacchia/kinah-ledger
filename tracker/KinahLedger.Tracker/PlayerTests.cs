@@ -30,6 +30,12 @@ static class PlayerTests
         Check("no upgrade price: a combo is worth the normal result", $"{CraftMath.ProfitPerTry(0.95, 0.25, 30_000, null, 18_000, 0.88):N0}", $"{0.95 * 0.88 * 30_000 - 18_000:N0}");
         Check("vendor cost not typed yet: profit as the site has it", $"{CraftMath.WithVendor(c, _ => null)}", "(92640, 1)");
         Check("a typed vendor cost comes off the profit", $"{CraftMath.WithVendor(c, id => id == 300 ? 2_640 : null)}", "(90000, 0)");
+        // "I have these": the site took the farmed material's 2 × 10,000 off, so it comes back; a farmed vendor item isn't charged
+        var fm = CraftMath.WithFarmed(c, id => id == 200);
+        Check("a farmed material's cost goes back on the profit", $"{fm.Craft.Profit} cost {fm.Craft.Cost} farmed {fm.Farmed} mats {fm.Craft.Materials.Count}", "112640 cost 0 farmed 1 mats 1");
+        var fv = CraftMath.WithFarmed(c, id => id == 300);
+        Check("a farmed vendor item: not charged, not unpriced", $"{CraftMath.WithVendor(fv.Craft, _ => 2_640)} farmed {fv.Farmed}", "(92640, 0) farmed 1");
+        Check("nothing farmed: the craft as it was", $"{CraftMath.WithFarmed(c, _ => false).Craft.Profit} {CraftMath.WithFarmed(c, _ => false).Farmed}", "92640 0");
 
         // one age for the list: when the site built it from the server's board, not each listing's capture
         PlayerBoards.Load("{\"generated_at\":\"2026-10-24T00:20:59Z\",\"crafts\":[]}", null);
@@ -96,7 +102,7 @@ static class PlayerTests
     {
         var dir = Path.Combine(Path.GetTempPath(), "KinahLedger-price-test");
         Directory.CreateDirectory(dir);
-        foreach (var f in new[] { "prices.json", "typed-prices.json", "vendor-prices.json" }) if (File.Exists(Path.Combine(dir, f))) File.Delete(Path.Combine(dir, f));
+        foreach (var f in new[] { "prices.json", "typed-prices.json", "vendor-prices.json", "farmed-materials.json" }) if (File.Exists(Path.Combine(dir, f))) File.Delete(Path.Combine(dir, f));
         var oldPath = PriceBook.PathOverride;
         PriceBook.PathOverride = Path.Combine(dir, "prices.json"); PriceBook.Reset();
         try

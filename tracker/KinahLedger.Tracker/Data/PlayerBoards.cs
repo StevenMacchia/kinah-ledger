@@ -169,6 +169,26 @@ public static class CraftMath
             if (vendorPrice(m.Id) is long p && p > 0) extra += p * m.Qty; else unpriced++;
         return (c.Profit - extra, unpriced);
     }
+
+    /// <summary>
+    /// A best craft with the materials this player ticked "I have these" for taken out of its cost: the site took a farmed
+    /// material's price off the profit, so it is added back; a farmed vendor material is dropped from the list, so it is
+    /// neither charged its NPC price nor counted as unpriced. Done before <see cref="OwnProfit"/> and <see cref="WithVendor"/>,
+    /// which then price only what is still bought. Farmed counts the ticked materials.
+    /// </summary>
+    public static (PlayerBoards.BestCraft Craft, int Farmed) WithFarmed(PlayerBoards.BestCraft c, Func<long, bool> isFarmed)
+    {
+        long back = 0; int farmed = 0;
+        var keep = new List<PlayerBoards.Material>();
+        foreach (var m in c.Materials)
+        {
+            if (!isFarmed(m.Id)) { keep.Add(m); continue; }
+            farmed++;
+            if (!m.Vendor && m.Price is long p) back += p * m.Qty;
+        }
+        if (farmed == 0) return (c, 0);
+        return (c with { Materials = keep, Cost = c.Cost - back, Profit = c.Profit + back }, farmed);
+    }
 }
 
 /// <summary>

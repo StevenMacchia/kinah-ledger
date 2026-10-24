@@ -114,22 +114,27 @@ public static class RecipeBook
 
     /// <summary>
     /// What one try costs at the lowest Market prices: the materials plus the Kinah fee. Null when the book doesn't
-    /// have the recipe; <paramref name="unpriced"/> counts materials with no price yet. Bound materials ("Salt (Bound)")
-    /// are bought from a vendor and can't be on the Market: they are counted in <paramref name="vendor"/> and left out.
+    /// have the recipe; <paramref name="unpriced"/> counts materials with no price yet, left out, so the cost is then the
+    /// least a try costs. Bound materials ("Salt (Bound)") are bought from a vendor and can't be on the Market: they take
+    /// the NPC price (typed, else shipped), and those with none are counted in <paramref name="vendor"/> and left out.
+    /// Materials the player ticked "I have these" for cost nothing in cash and are counted in <paramref name="farmed"/>.
     /// </summary>
-    public static long? CostPerTry(string recipeOutput, out int unpriced) => CostPerTry(recipeOutput, out unpriced, out _);
+    public static long? CostPerTry(string recipeOutput, out int unpriced) => CostPerTry(recipeOutput, out unpriced, out _, out _);
 
-    public static long? CostPerTry(string recipeOutput, out int unpriced, out int vendor)
+    public static long? CostPerTry(string recipeOutput, out int unpriced, out int vendor) => CostPerTry(recipeOutput, out unpriced, out vendor, out _);
+
+    public static long? CostPerTry(string recipeOutput, out int unpriced, out int vendor, out int farmed, ICollection<string>? missing = null)
     {
-        unpriced = 0; vendor = 0;
+        unpriced = 0; vendor = 0; farmed = 0;
         var r = ForOutput(recipeOutput);
         if (r == null) return null;
         long cost = r.Kinah ?? 0;
         foreach (var m in r.Materials)
         {
-            if (m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)) { if (PriceBook.VendorPrice(m.Item) is long vp) cost += vp * m.Qty; else vendor++; }
+            if (PriceBook.Farmed(m.Item)) farmed++;
+            else if (m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)) { if (PriceBook.VendorPrice(m.Item) is long vp) cost += vp * m.Qty; else { vendor++; missing?.Add(m.Item); } }
             else if (PriceBook.Price(m.Item) is long p) cost += p * m.Qty;
-            else unpriced++;
+            else { unpriced++; missing?.Add(m.Item); }
         }
         return cost;
     }

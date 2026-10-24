@@ -36,6 +36,10 @@
     "aliases.json": {
       "sha256": "0f5a7d1a22dc58d279d0bf2f5d991f3b8f972c56daf6f48573b36c0f5422b77c",
       "size": 175
+    },
+    "vendor-prices.json": {
+      "sha256": "ac2be7c3073f909eca1d87add4e4c995cbc8a3992a1d82fa93f0b6d45b5124ce",
+      "size": 1356
     }
   }
 }
