@@ -180,6 +180,14 @@ public static class CtcLexiconSearch
     const int MaxDigits = 7;
     static bool Accepting(int s) => s is SA or SB or SC or SD or SN or SE;
 
+    /// <summary>
+    /// A count's characters: digits, and the letters the recognizers read for them (o 0; l and i 1; s 5; b 6; t 7), so a
+    /// count the model was torn on ("x7" as "xT") still decodes as a count after the name (2026-10-24: Odyle x7 lost).
+    /// </summary>
+    static bool CountChar(char c) => char.IsAsciiDigit(c) || c is 'o' or 'l' or 'i' or 's' or 'b' or 't';
+    /// <summary>The digit a count character stands for.</summary>
+    internal static char CountDigit(char c) => c switch { 'o' => '0', 'l' or 'i' => '1', 's' => '5', 'b' => '6', 't' => '7', _ => c };
+
     static int Suffix(int s, char c, int digits) => s switch
     {
         SA => c == ' ' ? SB : c == 'x' ? SX : c == '(' ? SP1 : c == '.' ? SE : -1,
@@ -192,14 +200,14 @@ public static class CtcLexiconSearch
         SP6 => c == ')' ? SC : -1,
         SC => c == ' ' ? SD : c == 'x' ? SX : c == '.' ? SE : -1,
         SD => c == 'x' ? SX : -1,
-        SX => c == ' ' ? SX2 : char.IsAsciiDigit(c) ? SN : -1,
-        SX2 => char.IsAsciiDigit(c) ? SN : -1,
-        SN => (char.IsAsciiDigit(c) || c == ',') && digits < MaxDigits ? SN : c == '.' ? SE : -1,
+        SX => c == ' ' ? SX2 : CountChar(c) ? SN : -1,
+        SX2 => CountChar(c) ? SN : -1,
+        SN => (CountChar(c) || c == ',') && digits < MaxDigits ? SN : c == '.' ? SE : -1,
         _ => -1,
     };
 
     // the characters any suffix state can take, tried in this order
-    static readonly char[] SuffixChars = " x(bound).,0123456789".Distinct().ToArray();
+    static readonly char[] SuffixChars = " x(bound).,0123456789list".Distinct().ToArray();
 
     /// <summary>A hypothesis: a trie node (Suf &lt; 0) or a suffix state with the item it closed and the suffix so far; Last is the prefix's last class (CTC needs it to tell a repeat from a new letter).</summary>
     readonly record struct Key(int Node, int Suf, long Item, string Tail, int Last);
@@ -303,7 +311,7 @@ public static class CtcLexiconSearch
         var (bid, btail) = best.Key;
         int count = 1;
         int xi = btail.LastIndexOf('x');
-        if (xi >= 0 && int.TryParse(new string(btail[(xi + 1)..].Where(char.IsAsciiDigit).ToArray()), out var n) && n > 0) count = n;
+        if (xi >= 0 && int.TryParse(new string(btail[(xi + 1)..].Select(CountDigit).Where(char.IsAsciiDigit).ToArray()), out var n) && n > 0) count = n;
         bool bound = btail.Contains("(bound)");
         var kind = lexP < free - margin ? DecodeKind.Other : DecodeKind.Item;
         return new NameDecode(kind, kind == DecodeKind.Item ? bid : null, lex.NameOf(bid), lexP, free, freeText, count, bound);
@@ -597,7 +605,7 @@ public static class NameDecoder
     // ---- shadow: a queue the readers drop crops into, one thread that decodes and logs ----
 
     /// <param name="LogDir">Where the log went when the crop was handed over: a test that has moved on (replay-bank, parse-test) never gets a late line in another folder.</param>
-    sealed record Job(string Source, Bitmap Crop, string Ocr, long? OcrId, string? LogDir);
+    sealed record Job(string Source, Bitmap Crop, string Ocr, long? OcrId, string? LogDir, int? OcrCount);
     static Channel<Job>? _queue;
     static readonly Dictionary<string, DateTime> Recent = new();
 
@@ -605,7 +613,8 @@ public static class NameDecoder
     /// Hands one crop to the decoder's thread (it owns and disposes the crop), with what OCR plus NameMatch made of the
     /// same name (<paramref name="ocrId"/>; null when it named no item). Returns at once; nothing waits on the decode.
     /// </summary>
-    public static void Shadow(string source, Bitmap? crop, string ocr, long? ocrId)
+    /// <param name="ocrCount">For a chat line: the count OCR read after the name (1 when it read none), compared with the decoder's; null: not compared.</param>
+    public static void Shadow(string source, Bitmap? crop, string ocr, long? ocrId, int? ocrCount = null)
     {
         if (crop == null) return;
         if (!Present) { crop.Dispose(); return; }
@@ -624,7 +633,7 @@ public static class NameDecoder
                 th.Start();
             }
         }
-        if (!_queue.Writer.TryWrite(new Job(source, crop, ocr, ocrId, CrashLog.DirOverride))) crop.Dispose();
+        if (!_queue.Writer.TryWrite(new Job(source, crop, ocr, ocrId, CrashLog.DirOverride, ocrCount))) crop.Dispose();
     }
 
     static void Work(Channel<Job> q)
@@ -645,9 +654,10 @@ public static class NameDecoder
                     if (CrashLog.DirOverride != job.LogDir) continue;
                     var r = Decode(job.Crop);
                     if (r == null || CrashLog.DirOverride != job.LogDir) continue;
-                    var line = Outcome(r, job.Ocr, job.OcrId, out var tally);
+                    var line = Outcome(r, job.Ocr, job.OcrId, out var tally, job.OcrCount, out var qtyTally);
                     if (tally == null) continue;
                     Accuracy.Shadow(tally);
+                    if (qtyTally != null) Accuracy.Shadow(qtyTally);
                     CrashLog.Note(line + $" ({job.Source})");
                 }
                 catch (Exception ex) { CrashLog.Write("name decoder", ex); }
@@ -660,7 +670,27 @@ public static class NameDecoder
     /// disagree when the decoder names an item and OCR another or none, other when the decoder's best in-list reading was
     /// too far below its own free reading (<see cref="CtcLexiconSearch.OtherMargin"/>). Nothing to read: no tally.
     /// </summary>
-    public static string Outcome(NameDecode r, string ocr, long? ocrId, out string? tally)
+    public static string Outcome(NameDecode r, string ocr, long? ocrId, out string? tally) => Outcome(r, ocr, ocrId, out tally, null, out _);
+
+    /// <summary>
+    /// The same, with the count: for a chat line, the decoder's count after the name (" x7", read through the digit slips)
+    /// against OCR's (<paramref name="ocrCount"/>, 1 when OCR read none), appended as "qty x7 vs ocr x1 disagree" and tallied
+    /// decode_qty_agree / decode_qty_disagree when both name the same item. Nothing is counted from it.
+    /// </summary>
+    public static string Outcome(NameDecode r, string ocr, long? ocrId, out string? tally, int? ocrCount, out string? qtyTally)
+    {
+        qtyTally = null;
+        var line = OutcomeName(r, ocr, ocrId, out tally);
+        if (r.Kind == DecodeKind.Item && ocrCount is int oc && ocrId is long o2 && o2 == r.ItemId)
+        {
+            bool sameQty = oc == r.Count;
+            qtyTally = sameQty ? "decode_qty_agree" : "decode_qty_disagree";
+            line += $", qty x{r.Count} vs ocr x{oc} {(sameQty ? "agree" : "disagree")}";
+        }
+        return line;
+    }
+
+    static string OutcomeName(NameDecode r, string ocr, long? ocrId, out string? tally)
     {
         switch (r.Kind)
         {

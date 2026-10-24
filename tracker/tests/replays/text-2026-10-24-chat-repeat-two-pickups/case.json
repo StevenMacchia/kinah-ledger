@@ -1,0 +1,12 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "two Riverside Pauldrons pickups 3 s apart: the second line lands under the first while the chat lines above both read garbled, so the read lines up only on the Pauldrons line itself. Two lines, two pickups (0.8.27 lined the second up on the first and counted one)",
+  "source": "written from the 13:07 Monster Cube rewards of 2026-10-24 (kinah-bench compare-130149.md, R3 and R4), out in the world with a kill's Soul Points line as the drop's witness: the lines above the Pauldrons read garbled differently in each read",
+  "expect": {
+    "items": {
+      "Riverside Pauldrons": 2
+    }
+  }
+}

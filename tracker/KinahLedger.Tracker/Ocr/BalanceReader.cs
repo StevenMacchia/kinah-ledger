@@ -140,7 +140,12 @@ public sealed class BalanceTracker
                     if (i < 0) _candidates.Add((c.Left, 1)); else _candidates[i] = (c.Left, _candidates[i].Votes + 1);
                 }
             var best = _candidates.OrderByDescending(x => x.Votes).FirstOrDefault();
-            if (best.Votes >= VotesToLock && _candidates.Count(x => x.Votes >= VotesToLock) == 1)
+            // two counters that rise with every pickup alike (the strip's 2nd and 3rd figures, 2026-10-24: both +15,660 over a
+            // farming run, so neither ever won and the counter check never compared once): the rightmost of the tied is taken,
+            // the one that doesn't move when Kinah is spent (kinah-bench kinah-counter.md: only the 2nd fell 38,000 on a spend)
+            var tied = _candidates.Where(x => x.Votes == best.Votes && x.Votes >= VotesToLock).ToList();
+            if (tied.Count > 1 && best.Votes >= VotesToLock + 1) best = tied.OrderByDescending(x => x.Left).First();
+            if (best.Votes >= VotesToLock && (_candidates.Count(x => x.Votes >= VotesToLock) == 1 || tied.Count > 1 && best.Votes >= VotesToLock + 1))
             {
                 KinahLeft = best.Left;
                 _lastRaw = _prev == null ? null : Near(_prev, best.Left)?.Value;   // this read just matched the pickups, so it counts
@@ -152,7 +157,9 @@ public sealed class BalanceTracker
         {
             KinahLeft = k.Left;   // follow the left edge as the number grows a digit
             // the same pixels, or a move of exactly the Kina picked up since the last read (none: the same value twice)
-            bool trusted = samePixels || (_lastRaw is long r && _prev != null && picked >= 0 && k.Value - r == picked);
+            // ...or the same value read twice running: the Kina witness (Session/KinaWitness.cs) needs readings while the count
+            // lags the counter (a Kina line waits for it), and a misread digit is seldom read the same way twice
+            bool trusted = samePixels || (_lastRaw is long r && _prev != null && picked >= 0 && k.Value - r == picked) || (_lastRaw is long r2 && k.Value == r2);
             if (trusted) { Balance = k.Value; BalanceAt = t; Note = "Kinah balance read"; }
             _lastRaw = k.Value;
         }

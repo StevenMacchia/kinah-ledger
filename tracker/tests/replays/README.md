@@ -39,3 +39,7 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   line, a soul picked 4.5 s after its kill, and a row behind a full-screen window back 6 s later. Each pass reads the list,
   then the chat. A `list` read may carry `h` (each row's icon hash, hex), as trace.log writes it since then; a `cover`
   read is a pass that skips the list (a window over it). `KL_BANK_KEEP=1` keeps each case's reads.log.
+- `text-2026-10-24-farm-kina-counter`: the 131029 farming trace (player names shifted) with `balance` reads, a trusted
+  reading of the Kinah counter (`{"t", "k": "balance", "l": ["29281753"]}`, written from the footage every 2.5 s). The
+  counter decides Kina (`Session/KinaWitness.cs`): 15,660 Kina, where main counts 17,120. `text-2026-10-24-chat-repeat-*`:
+  two identical Riverside Pauldrons lines are two pickups, the same screen read again is one (repeats by place).
