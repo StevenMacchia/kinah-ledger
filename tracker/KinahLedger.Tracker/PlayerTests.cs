@@ -30,6 +30,10 @@ static class PlayerTests
         Check("no upgrade price: a combo is worth the normal result", $"{CraftMath.ProfitPerTry(0.95, 0.25, 30_000, null, 18_000, 0.88):N0}", $"{0.95 * 0.88 * 30_000 - 18_000:N0}");
         Check("vendor cost not typed yet: profit as the site has it", $"{CraftMath.WithVendor(c, _ => null)}", "(92640, 1)");
         Check("a typed vendor cost comes off the profit", $"{CraftMath.WithVendor(c, id => id == 300 ? 2_640 : null)}", "(90000, 0)");
+        // a row the site already priced the vendor material in (the API knows the NPC prices now): not charged twice
+        var priced = c with { Materials = c.Materials.Select(m => m.Vendor ? m with { Price = 2_640 } : m).ToList(), Profit = 90_000 };
+        Check("a vendor material the site priced is not charged again", $"{CraftMath.WithVendor(priced, _ => 2_640)}", "(90000, 0)");
+        Check("a farmed vendor item the site priced comes back on the profit", $"{CraftMath.WithFarmed(priced, id => id == 300).Craft.Profit}", "92640");
         // "I have these": the site took the farmed material's 2 × 10,000 off, so it comes back; a farmed vendor item isn't charged
         var fm = CraftMath.WithFarmed(c, id => id == 200);
         Check("a farmed material's cost goes back on the profit", $"{fm.Craft.Profit} cost {fm.Craft.Cost} farmed {fm.Farmed} mats {fm.Craft.Materials.Count}", "112640 cost 0 farmed 1 mats 1");
