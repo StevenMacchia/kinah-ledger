@@ -522,6 +522,7 @@ public partial class MainWindow : Window
     {
         if (_demo) return;
         WatchGame();
+        AskWhenFree();   // an update found during a run asks once the run has stopped
         var chat = _watcher.Chat; var farm = _watcher.Farm;
         var show = Shown();
         if (show != null && (farm != null || show != _lastRun))
@@ -1264,7 +1265,7 @@ public partial class MainWindow : Window
         "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
         "Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.\n\n" +
         "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
-        "Updates: at start and every six hours the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.\n\n" +
+        "Updates: at start and every hour the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.\n\n" +
         "Reading checks: with each shared run, counts of how reading went (reads that didn't line up, names guessed or not found, pickups only the loot list saw, crafting panel counts), the item names the tracker couldn't read exactly (names only, never chat), and where the chat sits as fractions of the game window with the window's size go to kinahledger.com (https://kinahledger.com/v1/accuracy) with the app version and the install ID. At start and every six hours the tracker also reads small reading settings and the staged rollout of new versions from kinahledger.com/v1/config; only the app version goes with that request.\n\n" +
         "Help improve counting (on unless you turn it off in Options › Sharing, and only while sharing is on): when two of the tracker's own checks agree on a pickup (a chat line and the loot list, a Kina line and the Kinah counter, a gather and the gathering bar, an event card's icon and its grade), what it read and what it settled on go to kinahledger.com (https://kinahledger.com/v1/labels) with the app version, the install ID, the window size and the text height, plus small pictures of that item's name words, icon or reward slot (at most 60 an hour, https://kinahledger.com/v1/label-crops). Never the chat box, never a chat line that isn't your own pickup, never anyone's name, never a whole screenshot. The pictures are deleted after 90 days. Turned off, nothing is written or sent for it and what was waiting on this PC is deleted.\n\n" +
         "Report pictures stay on this PC unless you turn on Send report pictures.",

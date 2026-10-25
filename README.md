@@ -141,7 +141,7 @@ signing certificate removes that. There are no drivers or other prerequisites.
 
 ### Updates
 
-The tracker keeps itself current. Twenty seconds after it opens, and every six hours while it stays open, it asks
+The tracker keeps itself current. Twenty seconds after it opens, and every hour while it stays open, it asks
 GitHub for the latest release of this repository (`api.github.com/repos/StevenMacchia/kinah-ledger/releases/latest`;
 only the app version goes up, in the User-Agent). A release counts when it is not a draft or prerelease, carries a
 `KinahLedger.exe` file, and its notes have a `KinahLedger.exe sha256: <64 hex>` line. When it is newer:
@@ -150,6 +150,10 @@ only the app version goes up, in the User-Agent). A release counts when it is no
   against the release's size and SHA-256, and replaces the exe when the window closes. A banner offers **Restart now** to
   install it at once; during a farming run that asks first, and the run is stopped and saved before the restart.
 - Off: the banner says a new version is out and **Update** downloads it on request. Options › Updates › **Check now** looks again.
+- Either way (0.8.31), a new version found by these checks asks once in a dialog: **Yes** installs it now and the tracker
+  opens again on it, **No** leaves the banner (and, with automatic installs on, it installs when the tracker closes). It
+  never asks during a farming run: it waits until the run stops. No is the default button, so a key meant for the game
+  can't restart the tracker. It asks once per version each time the tracker starts. Game data is still checked every six hours.
 - `"update": { "check": false }` in `settings.json` turns the check off entirely. `"update": { "manifest": "<url>" }` points it
   at a `latest.json` manifest instead (as `tools/release-manifest.js` writes), for a test server or a mirror.
 
@@ -174,7 +178,7 @@ full and delta update packages) on GitHub, signs them with Artifact Signing once
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) and [docs/signing-setup.md](docs/signing-setup.md)), writes
 `latest.json` and publishes the release with each file's checksum on its own line, `KinahLedger.exe sha256: <hex>`
 first. It refuses to publish a release without the installer and its packages, which installed trackers update from. Running trackers install a release only when the download
-matches it, and pick it up within six hours or at their next start. The run stops if the tag and the csproj disagree or
+matches it, and pick it up within an hour or at their next start. The run stops if the tag and the csproj disagree or
 the notes file is missing.
 
 ### Commands

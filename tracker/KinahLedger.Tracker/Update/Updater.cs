@@ -20,7 +20,7 @@ public sealed class UpdateException(string message, bool needsSite = false) : Ex
 
 /// <summary>
 /// Keeps the tracker current. The site publishes a small manifest (version, download address, size, SHA-256); the
-/// tracker reads it at start and every few hours, downloads a newer exe next to the running one, checks its size and
+/// tracker reads it at start and every hour, downloads a newer exe next to the running one, checks its size and
 /// checksum, and swaps it in when the window closes (or at once, on Restart now). Windows lets a running exe be renamed
 /// but not overwritten, so the swap is: running exe → .old, verified download → the exe's own name. The .old copy is
 /// deleted on the next start. Only the app version goes up with these requests, in the User-Agent.

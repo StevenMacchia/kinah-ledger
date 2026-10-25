@@ -60,9 +60,9 @@ and never sends input to the game. It sends data to these places, and nowhere el
 - **Item and enemy pictures.** Item icons come from NCSOFT's image server (`assets.playnccdn.com`) and enemy
   pictures from MetaBot.GG (`metabot.gg`), by file name, the way a browser loads them, and are cached on the PC.
   Nothing about you goes with them. `ui.icons: false` in `settings.json` turns them off.
-- **GitHub, for updates.** At start and every six hours the tracker asks
+- **GitHub, for updates.** At start and every hour the tracker asks
   `api.github.com/repos/StevenMacchia/kinah-ledger/releases/latest` for the newest release and downloads it from
-  GitHub when there is one (the installed tracker downloads only what changed). At the same times it checks
+  GitHub when there is one (the installed tracker downloads only what changed). At start and every six hours it checks
   `raw.githubusercontent.com/StevenMacchia/kinah-ledger/main/data/` for newer game data: zones, enemies, loot tables,
   skins, recipes. Only the app version goes with these requests. `update.check: false` in `settings.json` turns both
   off.
