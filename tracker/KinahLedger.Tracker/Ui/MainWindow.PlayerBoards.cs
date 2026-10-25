@@ -71,12 +71,15 @@ public partial class MainWindow
 
     void FillBestCrafts()
     {
-        var host = BestCraftsHost; host.Children.Clear();
+        var host = BestCraftsHost;
         var server = Server?.Name ?? "your server";
         BestNote.Text = $"{server} · profit a craft";
         if (PlayerBoards.CraftsAt == null)
         {
-            host.Children.Add(Faint(HasServer && _prefs.Share ? "Loads with the price board, every 15 minutes." : "Shows once a server is picked and sharing is on (Options)."));
+            var note = HasServer && _prefs.Share ? "Loads with the price board, every 15 minutes." : "Shows once a server is picked and sharing is on (Options).";
+            if (!Changed("best", note)) return;
+            host.Children.Clear();
+            host.Children.Add(Faint(note));
             return;
         }
         // the site's profit, with the materials ticked "I have these" taken out of the cost, redone with this player's own
@@ -87,6 +90,9 @@ public partial class MainWindow
             var f = CraftMath.WithFarmed(c, id => PriceBook.Farmed(_items.NameOf(id)));
             return (c, f.Farmed, cost: f.Craft.Cost, adj: CraftMath.WithVendor(f.Craft with { Profit = OwnProfit(f.Craft) }, id => PriceBook.VendorPrice(_items.NameOf(id))));
         }).OrderByDescending(x => x.adj.Profit).ToList();
+        // drawn only when the rows' words change (a price board load, a tick on "I have these", Show all)
+        if (!Changed("best", $"{server}|{_bestAll}|" + string.Join(";", rows.Select(x => $"{x.c.Id}|{x.adj.Profit}|{x.adj.Unpriced}|{x.Farmed}|{x.cost}")))) return;
+        host.Children.Clear();
         if (rows.Count == 0) { host.Children.Add(Faint($"No recipe makes a profit at today's lowest asks on {server}.")); return; }
         // the column labels, as the drops table's
         var heads = new Grid { Height = 24 };

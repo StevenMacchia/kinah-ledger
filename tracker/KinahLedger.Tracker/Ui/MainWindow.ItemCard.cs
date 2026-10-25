@@ -153,6 +153,6 @@ public partial class MainWindow
     void ItemRowClick(object sender, System.Windows.Input.MouseButtonEventArgs ev)
     {
         if (ev.OriginalSource is not FrameworkElement fe) return;     // a link inside the row (Looks wrong?) handles its own click
-        if (fe.DataContext is DropRow { Report.Length: > 0, Header: false } r) ShowItemCard(r, fe);
+        if (RowOf(fe.DataContext) is { Report.Length: > 0, Header: false } r) ShowItemCard(r, fe);
     }
 }

@@ -54,11 +54,22 @@ public partial class MainWindow
         InstSessionBtn.Style = (Style)FindResource(allShown ? "SegOff" : "SegOn");
         InstEarlierBtn.Style = (Style)FindResource(allShown ? "SegOn" : "SegOff");
         InstEarlierBtn.Content = $"Earlier ({(_demoInst != null ? all.Count : earlier)})";
-        InstHost.Children.Clear();
-        _eventsRate = "";
         // the panel over the game says so when a run of this session just closed flagged
         var flagged = runs.Where(r => r.OutOfAverages && r.LastLoot is { } l && (DateTime.UtcNow - l).TotalMinutes < 2).OrderByDescending(r => r.LastLoot).FirstOrDefault();
         _hudFlag = flagged == null ? "" : flagged.Suspect == "looks like several runs" ? $"{flagged.Zone} record looks like several runs" : $"{flagged.Zone} run: {FlagReason(flagged, 0).ToLowerInvariant()}";
+        // the cards are built again only when what they show has changed: the runs themselves, which is live, what is
+        // folded open, the Events feed lines (each card draws its place's), or the view. Between changes a tick only moves
+        // the open run's clock (2026-10-25: rebuilding every card, shadows and all, twice a second was most of the UI thread)
+        var feed = FeedFor(FeedTab.Events);
+        var sig = $"{live}|{allShown}|{since:O}|{PlaceCardWidth}|{string.Join(",", _runsOpen)}|{_fixOpen}|{JsonSerializer.Serialize(runs)}|{string.Join(";", feed.Select(l => $"{l.At.Ticks}:{l.Text}"))}";
+        if (!Changed("runs", sig))
+        {
+            if (_livePill != null && _liveOpen is { LastLoot: null } o) _livePill.Text = $"{RunSteps[Math.Max(0, StepOf(o))]} · {Clock(DateTime.UtcNow - o.Start)} in";
+            return;
+        }
+        InstHost.Children.Clear();
+        _eventsRate = "";
+        _livePill = null; _liveOpen = null;
         long made = 0; int counted = 0;
         bool first = true;
         // the place being run first, then the others by their last run
@@ -224,10 +235,10 @@ public partial class MainWindow
         if (open != null)
         {
             int at = StepOf(open);
-            var steps = new[] { "Entered", "In the run", "Reward screen", "Paid" };
-            var pill = PPill($"{steps[Math.Max(0, at)]} · {Clock((open.LastLoot ?? DateTime.UtcNow) - open.Start)} in", true);
+            var pill = PPill($"{RunSteps[Math.Max(0, at)]} · {Clock((open.LastLoot ?? DateTime.UtcNow) - open.Start)} in", true);
             pill.ToolTip = "A run is open here now.";
             Grid.SetColumn(pill, 2); band.Children.Add(pill);
+            if (live && pill.Child is StackPanel ps && ps.Children.Count > 1 && ps.Children[1] is TextBlock pt) { _livePill = pt; _liveOpen = open; }
         }
         else if (newest != null)
         {
@@ -308,6 +319,11 @@ public partial class MainWindow
     }
 
     /// <summary>Where an open run stands: 0 entered, 1 in the run (loot came), 2 its reward screen, 3 paid.</summary>
+    static readonly string[] RunSteps = { "Entered", "In the run", "Reward screen", "Paid" };
+
+    /// <summary>The open run's clock pill and the run it times, from the last card build; a tick moves the clock in place.</summary>
+    TextBlock? _livePill; InstanceRun? _liveOpen;
+
     static int StepOf(InstanceRun r) => r.PaidAt != null ? 3 : r.Tables > 0 ? 2 : r.LastLoot != null ? 1 : 0;
 
     /// <summary>

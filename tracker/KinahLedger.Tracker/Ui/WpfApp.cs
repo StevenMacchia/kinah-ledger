@@ -205,6 +205,29 @@ public static class WpfApp
             "Session rows: your best here only under the hour");
         Check(w.AccuracyChip.Visibility == Visibility.Visible && w.AccuracyChip.Child is System.Windows.Controls.TextBlock { Text: "1 to look at" }, "Accuracy: one chip, the sample's refused line to look at");
         Check(w.HudValues.GetValueOrDefault("loot", "").Length > 0, "panel: loot an hour beside a rate with Kinah in it");
+        // rows update in place (2026-10-25): a redraw keeps the row controls and only hands them new words, so a tick with a
+        // farming session on screen no longer rebuilds the tables (which is what made clicks and drags wait)
+        var rowItems = w.Rows.ItemsSource as System.Collections.ObjectModel.ObservableCollection<RowItem>;
+        var box0 = w.Rows.ItemContainerGenerator.ContainerFromIndex(0);
+        var item0 = rowItems is { Count: > 1 } ? rowItems[0] : null;
+        Check(rowItems != null && box0 != null && item0 != null, $"the drops table holds row items with controls ({rowItems?.Count} rows)");
+        w.ShowFull(); DoEvents();
+        Check(ReferenceEquals(w.Rows.ItemContainerGenerator.ContainerFromIndex(0), box0) && rowItems != null && ReferenceEquals(rowItems[0], item0) && w.Rows.Items.Count > 3,
+            "Full view adds rows under the ones already there, keeping their controls");
+        var was = item0!.Row;
+        MainWindow.SyncRows(w.Rows, new[] { was with { Drops = "999" }, rowItems![1].Row });
+        DoEvents();
+        Check(ReferenceEquals(w.Rows.ItemContainerGenerator.ContainerFromIndex(0), box0) && item0.Drops == "999" && w.Rows.Items.Count == 2,
+            "new words land on the same row control; extra rows come off the end");
+        Check(!item0.Set(was with { Drops = "999" }), "the same words again change nothing");
+        w.ShowCompact(); DoEvents();
+        Check(ReferenceEquals(w.Rows.ItemContainerGenerator.ContainerFromIndex(0), box0) && item0.Drops == was.Drops && w.Rows.Items.Count <= 3,
+            "a redraw puts the count's words back on the same control");
+        // a drag pins the window's size until the drop, so the tick's layout can't stall the drag
+        var sizing = w.SizeToContent;
+        Check(w.OnSizeMove(MainWindow.WM_ENTERSIZEMOVE) && w.SizeToContent == SizeToContent.Manual, "a drag starting pins the size");
+        Check(w.OnSizeMove(MainWindow.WM_EXITSIZEMOVE) && w.SizeToContent == sizing && sizing == SizeToContent.WidthAndHeight, "the drop sizes to content again");
+
         w.ShowDemo("Gathering"); DoEvents();
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,
             $"panel, gathering: the hour once ({w.HudValues.GetValueOrDefault("rate", "")}, the window's {w.HeadRate.Text}), no second loot figure");

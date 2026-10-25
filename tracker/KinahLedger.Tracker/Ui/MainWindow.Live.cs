@@ -382,8 +382,13 @@ public partial class MainWindow
     /// </summary>
     void FillSessionRows(long kinah, long loot, int priced, string? zone)
     {
+        var rows = new List<(string Left, string Right, bool Strong)>();
+        if (kinah > 0 || _mode != Mode.Gather) rows.Add(("Kinah picked up", Fk(kinah), true));
+        if (priced > 0) rows.Add(($"Loot, after the Market's {1 - PriceBook.SellerKeeps:P0}", Fk(loot), true));
+        if (PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v) rows.Add((h.AtGear ? "Players at your gear, an hour" : "Players here, an hour", Fk(v), false));
+        if (!Changed("session", string.Join("\n", rows))) return;
         SessionRows.Children.Clear();
-        void Row(string left, string right, bool strong = false)
+        foreach (var (left, right, strong) in rows)
         {
             var g = new Grid { Height = 36 };
             g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -394,15 +399,11 @@ public partial class MainWindow
             var b = new Border { Child = g, BorderThickness = new Thickness(0, 1, 0, 0) }; b.SetResourceReference(Border.BorderBrushProperty, "Line");
             SessionRows.Children.Add(b);
         }
-        if (kinah > 0 || _mode != Mode.Gather) Row("Kinah picked up", Fk(kinah), true);
-        if (priced > 0) Row($"Loot, after the Market's {1 - PriceBook.SellerKeeps:P0}", Fk(loot), true);
-        if (PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v) Row(h.AtGear ? "Players at your gear, an hour" : "Players here, an hour", Fk(v));
     }
 
     /// <summary>Where to farm now: folded, the best zone and its hour; opened, the best zones for the player's gear on the server.</summary>
     void FillWhere(string? zone)
     {
-        WhereBody.Children.Clear();
         if (PlayerBoards.FarmAt == null) { WhereSection.Visibility = Visibility.Collapsed; return; }
         WhereSection.Visibility = _part == "Farming" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
         var (zones, atGear) = PlayerBoards.Top(GearBracket, 5);
@@ -410,6 +411,8 @@ public partial class MainWindow
         if (zones.Count == 0)
         {
             WhereNote.Text = "not enough runs on your server yet"; WhereSum.Text = "";
+            if (!Changed("where", "none")) return;
+            WhereBody.Children.Clear();
             var f = Faint($"A zone shows once {PlayerBoards.MinRuns} runs from {PlayerBoards.MinPlayers} players are in. Yours count."); f.Margin = new Thickness(0, 4, 0, 0);
             WhereBody.Children.Add(f);
             return;
@@ -417,6 +420,8 @@ public partial class MainWindow
         var server = Server?.Name ?? "your server";
         WhereNote.Text = open ? (atGear ? $"gear {GearBracket!.Replace("-", "–")} · {server}" : $"all players · {server}") : $"best: {zones[0].Zone}";
         WhereSum.Text = open ? "" : Fk(zones[0].ValueHr ?? 0);
+        if (!Changed("where", $"{zone}|" + string.Join(";", zones.Select(z => $"{z.Zone}|{z.Runs}|{z.Players}|{z.ValueHr}")))) return;
+        WhereBody.Children.Clear();
         foreach (var z in zones)
         {
             var g = new Grid { Height = 36 };
@@ -449,15 +454,18 @@ public partial class MainWindow
     /// </summary>
     void FillExtras(List<DropRow> gathered, List<SkillBox> skills, List<DropRow> pets, List<DropRow> mobs, long kinah)
     {
-        ExtraChips.Children.Clear();
         var keys = new List<string>();
-        void Chip(string key, FrameworkElement icon, string label, string figure)
+        var words = new System.Text.StringBuilder(_extraOpen).Append('|').Append(_lastMobKinah).Append('|');
+        bool build = false;   // set once the chips' words are known to differ from the last draw
+        void Chip(string key, Func<FrameworkElement> icon, string label, string figure, string iconOf)
         {
             keys.Add(key);
+            words.Append(key).Append('|').Append(label).Append('|').Append(figure).Append('|').Append(iconOf).Append(';');
+            if (!build) return;
             bool on = _extraOpen == key;
             var sp = new StackPanel { Orientation = Orientation.Horizontal };
-            icon.Margin = new Thickness(0, 0, 7, 0); icon.VerticalAlignment = VerticalAlignment.Center;
-            sp.Children.Add(icon);
+            var ic = icon(); ic.Margin = new Thickness(0, 0, 7, 0); ic.VerticalAlignment = VerticalAlignment.Center;
+            sp.Children.Add(ic);
             var t = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }; t.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
             t.Inlines.Add(new Run(label));
             if (figure.Length > 0) { var f = new Run("  " + figure); f.SetResourceReference(TextElement.ForegroundProperty, on ? "Gold" : "Muted"); t.Inlines.Add(f); }
@@ -472,24 +480,34 @@ public partial class MainWindow
             b.MouseLeftButtonUp += (_, _) => { _extraOpen = _extraOpen == key ? null : key; Redraw(); };
             ExtraChips.Children.Add(b);
         }
-        if (gathered.Count > 0) Chip("Gather", ItemTile(gathered[0].Name, _items.IdOf(gathered[0].Name), 24, gathered[0].Grade, round: true), "Gathered", $"{gathered.Count} kind{(gathered.Count == 1 ? "" : "s")}");
-        foreach (var sk in skills)
+        // two passes over the same chips: the first collects their words, and the second builds them only if the words
+        // changed since the last draw (the icons, tiles with an image each, are the cost)
+        void Chips()
         {
-            var first = gathered.FirstOrDefault(g => SkillOf(g.Name) == sk.Name);
-            Chip("skill:" + sk.Name, first != null ? ItemTile(first.Name, _items.IdOf(first.Name), 24, first.Grade, round: true) : GlyphTile(24, "M4,20 L14,10 M12,4 L20,12 L17,15 L9,7 Z", round: true), sk.Name.Split(" · ")[0], sk.Value > 0 ? Fk(sk.Value) : $"{sk.Attempts:N0} tries");
+            if (gathered.Count > 0) Chip("Gather", () => ItemTile(gathered[0].Name, _items.IdOf(gathered[0].Name), 24, gathered[0].Grade, round: true), "Gathered", $"{gathered.Count} kind{(gathered.Count == 1 ? "" : "s")}", gathered[0].Name + gathered[0].Grade);
+            foreach (var sk in skills)
+            {
+                var first = gathered.FirstOrDefault(g => SkillOf(g.Name) == sk.Name);
+                Chip("skill:" + sk.Name, () => first != null ? ItemTile(first.Name, _items.IdOf(first.Name), 24, first.Grade, round: true) : GlyphTile(24, "M4,20 L14,10 M12,4 L20,12 L17,15 L9,7 Z", round: true), sk.Name.Split(" · ")[0], sk.Value > 0 ? Fk(sk.Value) : $"{sk.Attempts:N0} tries", first?.Name + first?.Grade);
+            }
+            int crystals = pets.Sum(r => int.TryParse(r.Drops, System.Globalization.NumberStyles.AllowThousands, null, out var n) ? n : 0);
+            if (pets.Count > 0) Chip("Pet", () => GlyphTile(24, "M12,2 L18,9 L12,22 L6,9 Z M6,9 H18", round: true, tint: Color.FromRgb(0x3E, 0x9E, 0x62)), "Soul Crystals", crystals.ToString("N0"), "");
+            if (mobs.Count > 0) Chip("Mob", () => CoinTile(24, round: true), "Kinah by enemy", _lastMobKinah > 0 ? Fk(_lastMobKinah) : "", "");
         }
-        int crystals = pets.Sum(r => int.TryParse(r.Drops, System.Globalization.NumberStyles.AllowThousands, null, out var n) ? n : 0);
-        if (pets.Count > 0) Chip("Pet", GlyphTile(24, "M12,2 L18,9 L12,22 L6,9 Z M6,9 H18", round: true, tint: Color.FromRgb(0x3E, 0x9E, 0x62)), "Soul Crystals", crystals.ToString("N0"));
-        if (mobs.Count > 0) Chip("Mob", CoinTile(24, round: true), "Kinah by enemy", _lastMobKinah > 0 ? Fk(_lastMobKinah) : "");
+        Chips();
+        if (Changed("chips", words.ToString()))
+        {
+            build = true; keys.Clear(); ExtraChips.Children.Clear();
+            Chips();
+        }
         if (_extraOpen != null && !keys.Contains(_extraOpen)) _extraOpen = null;
         ExtrasSection.Visibility = keys.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // the open chip's table
-        GatherRows.ItemsSource = null; MobRows.ItemsSource = null; PetRows.ItemsSource = null; SkillLines.Children.Clear();
-        GatherRows.Visibility = MobRows.Visibility = PetRows.Visibility = Visibility.Collapsed;
+        // the open chip's table; the tables keep their row controls, so the shut ones are emptied rather than replaced
+        SkillLines.Children.Clear();
+        IReadOnlyList<DropRow> gatherRows = NoRows, mobRows = NoRows, petRows = NoRows;
         InPlaceLead.Visibility = InPlaceNote.Visibility = InPlaceMore.Visibility = MobCredit.Visibility = Visibility.Collapsed;
         InPlace.Visibility = _extraOpen != null ? Visibility.Visible : Visibility.Collapsed;
-        if (_extraOpen == null) return;
         var more = "x:" + _extraOpen;
         List<DropRow> Top(List<DropRow> rows) => TopRows(more, rows, TableRows, InPlaceMore, InPlaceMoreRun);
         void Heads(string a, string b, string c) { InPlaceH1.Text = a; InPlaceH2.Text = b; InPlaceH3.Text = c; }
@@ -497,7 +515,7 @@ public partial class MainWindow
         {
             case "Gather":
                 Heads("Qty", "Per try", "Value");
-                GatherRows.ItemsSource = Top(gathered.Select(r => r with { Sub = r.Reported ? "reported" : "" }).ToList()); GatherRows.Visibility = Visibility.Visible;
+                gatherRows = Top(gathered.Select(r => r with { Sub = r.Reported ? "reported" : "" }).ToList());
                 if (gathered.Any(r => r.Value.Length == 0)) { InPlaceNote.Text = $"{gathered.Count(r => r.Value.Length == 0)} have no price yet."; InPlaceNote.Visibility = Visibility.Visible; }
                 break;
             case var s when s.StartsWith("skill:"):
@@ -507,23 +525,27 @@ public partial class MainWindow
                 Heads("Qty", "Per try", "Value");
                 InPlaceLead.Text = $"{sk.Attempts:N0} tr{(sk.Attempts == 1 ? "y" : "ies")}, {ok:N0} worked · {Whole(sk.PerHour)} an hour" + (ok > 0 && sk.Plentiful > 0 ? $" · {Math.Round(100.0 * sk.Plentiful / ok)}% plentiful" : "");
                 InPlaceLead.Visibility = Visibility.Visible;
-                GatherRows.ItemsSource = Top(gathered.Where(g => SkillOf(g.Name) == sk.Name).Select(r => r with { Sub = "" }).ToList()); GatherRows.Visibility = Visibility.Visible;
+                gatherRows = Top(gathered.Where(g => SkillOf(g.Name) == sk.Name).Select(r => r with { Sub = "" }).ToList());
                 break;
             }
             case "Pet":
                 Heads("Qty", "An hour", "");
-                PetRows.ItemsSource = Top(pets.Select(r => r with { DropPct = r.PerHour, Sub = "" }).ToList()); PetRows.Visibility = Visibility.Visible;
+                petRows = Top(pets.Select(r => r with { DropPct = r.PerHour, Sub = "" }).ToList());
                 break;
             case "Mob":
             {
                 Heads("Kills", "A kill", "Kinah");
-                MobRows.ItemsSource = Top(mobs.Select(r => r.Child ? r with { Sub = r.Sub } : r with { Sub = "" }).ToList()); MobRows.Visibility = Visibility.Visible;
+                mobRows = Top(mobs.Select(r => r.Child ? r with { Sub = r.Sub } : r with { Sub = "" }).ToList());
                 long none = kinah - _lastMobKinah;
                 if (none > 0) { InPlaceNote.Text = $"{Fk(none)} of the session's Kinah came with no enemy named."; InPlaceNote.Visibility = Visibility.Visible; }
                 MobCredit.Visibility = Visibility.Visible;
                 break;
             }
         }
+        SyncRows(GatherRows, gatherRows); SyncRows(MobRows, mobRows); SyncRows(PetRows, petRows);
+        GatherRows.Visibility = gatherRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        MobRows.Visibility = mobRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        PetRows.Visibility = petRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     string SkillOf(string item) => GatheringCatalog.Find(item) is { } g ? GatherSkills.Label(g.Skill) : "";
