@@ -14,6 +14,12 @@ namespace KinahLedger.Session;
 /// witness one pickup used never makes its repeat a second one; a genuine second pickup always brings its own. A read that
 /// shows more copies of the line than were counted shows a second line, no witness needed. A line still without a witness
 /// waits <see cref="HoldSeconds"/> after it came in (a row is read a moment after the chat line), then is left out.</para>
+/// <para>A line whose count was lost ("Acquired Kukuru", no count readable) is a copy of the item at any count, and so is
+/// a copy counted from one: its count is unknown, so "Acquired Kukuru x3." read again cut is still that line (2026-10-25
+/// 11:34:31, Steven's Kukuru: the chat showed two "Acquired Kukuru x3." lines, both counted, and a read that lined up
+/// one line off took the second one, read cut as "Acquired Kukuru", for a third pickup; matched on its count, 1, it had
+/// no counted copy, so it counted as "quantity unsure, 1 assumed", and its gather attempt was named by that line alone).
+/// Its count once read twice (CountWatch) is the copy's count (<see cref="Settle"/>).</para>
 /// </summary>
 public sealed class ItemRepeatGuard
 {
@@ -31,7 +37,8 @@ public sealed class ItemRepeatGuard
     /// </summary>
     public readonly record struct Screen(int Shown, DateTime Since);
 
-    sealed record Copy(string Item, int Count, DateTime LineAt, DateTime CountedAt, Place? Place);
+    // Unsure: counted from a line whose count was lost, so any count of the item may be it
+    sealed record Copy(string Item, int Count, DateTime LineAt, DateTime CountedAt, Place? Place, bool Unsure);
     readonly List<Copy> _copies = new();
     // "row" (an item's name), "race" (a node, "" when unnamed, and its skill), "kill"
     readonly List<(string Kind, string Item, GatherFamily Family, DateTime At, int Obj)> _witness = new();
@@ -69,25 +76,36 @@ public sealed class ItemRepeatGuard
         _witness.RemoveAll(x => (at - x.At).TotalSeconds > 180);
     }
 
-    /// <summary>A chat item line counted: a copy the next identical lines are judged against.</summary>
-    public void Counted(string item, int count, DateTime lineAt, DateTime now, Place? place)
+    /// <summary>A chat item line counted: a copy the next identical lines are judged against (<paramref name="unsure"/>: its count was lost).</summary>
+    public void Counted(string item, int count, DateTime lineAt, DateTime now, Place? place, bool unsure = false)
     {
         lock (_lock)
         {
-            _copies.Add(new Copy(item, count, lineAt, now, place));
+            _copies.Add(new Copy(item, count, lineAt, now, place, unsure));
             _copies.RemoveAll(c => (now - c.CountedAt).TotalSeconds > RepeatSeconds + BeforeSeconds);
+        }
+    }
+
+    /// <summary>The count of the item's last copy counted from a line whose count was lost, once read twice: that copy's count from now on.</summary>
+    public void Settle(string item, int count)
+    {
+        lock (_lock)
+        {
+            int i = _copies.FindLastIndex(c => c.Unsure && Eq(c.Item, item));
+            if (i >= 0) _copies[i] = _copies[i] with { Count = count, Unsure = false };
         }
     }
 
     /// <summary>
     /// One chat item line before it counts. <paramref name="screen"/>: what the read shows of it;
-    /// <paramref name="final"/>: no more waiting (a stop, the end of a replay). The reason says what decided.
+    /// <paramref name="final"/>: no more waiting (a stop, the end of a replay); <paramref name="unsure"/>: the line's count
+    /// was lost, so a copy of the item at any count may be it. The reason says what decided.
     /// </summary>
-    public (Verdict V, string Why) Judge(string item, int count, DateTime lineAt, DateTime now, Place? place, Screen screen, bool final)
+    public (Verdict V, string Why) Judge(string item, int count, DateTime lineAt, DateTime now, Place? place, Screen screen, bool final, bool unsure = false)
     {
         lock (_lock)
         {
-            var prior = _copies.Where(c => Eq(c.Item, item) && c.Count == count && (now - c.CountedAt).TotalSeconds <= RepeatSeconds).ToList();
+            var prior = _copies.Where(c => Eq(c.Item, item) && (c.Count == count || unsure || c.Unsure) && (now - c.CountedAt).TotalSeconds <= RepeatSeconds).ToList();
             if (prior.Count == 0) return (Verdict.Count, "");
             // the read shows more copies than the counted ones still on screen: a line of its own
             int onScreen = prior.Count(c => screen.Since == DateTime.MinValue || c.LineAt >= screen.Since.AddSeconds(-1));
@@ -206,39 +224,54 @@ public sealed partial class TrackerSession
 {
     readonly ItemRepeatGuard _repeats = new();
     public ItemRepeatGuard Repeats => _repeats;
-    // item lines waiting a moment for a witness of a second pickup (ItemRepeatGuard.HoldSeconds)
-    readonly List<(GameEvent Ev, string Raw, DateTime LineAt, ItemRepeatGuard.Place? Place, ItemRepeatGuard.Screen Screen, bool NeedsWitness)> _repeatHeld = new();
+    /// <summary>
+    /// An item line waiting a moment for a witness of a second pickup (ItemRepeatGuard.HoldSeconds): the event as it would
+    /// count, the parsed event it came from (what CountWatch watches it by), and whether its count was lost.
+    /// </summary>
+    sealed record HeldLine(GameEvent Ev, GameEvent Src, string Raw, DateTime LineAt, ItemRepeatGuard.Place? Place, ItemRepeatGuard.Screen Screen, bool NeedsWitness, bool Unsure);
+    readonly List<HeldLine> _repeatHeld = new();
     // the vote's lines as they came in (ChatVoter.LastOut), for where each new line stood
     readonly List<ChatVoter.Out> _voteMeta = new();
     // the last Apply left its line out as a repeat (the log then says "--", not "ok")
     bool _lastRepeatOnly;
+    // what the last Apply decided for each parsed item event (by reference): counted, held, or left out as a repeat. A
+    // line whose count was lost is watched for it only when it counted (WatchCount; 2026-10-25 11:34:32, a line the guard
+    // would leave out was "1 assumed" at once)
+    readonly List<(GameEvent Src, ItemRepeatGuard.Verdict V)> _applied = new();
 
-    /// <summary>How many copies of this item line a read shows: lines that mean it, or read it a letter or two off.</summary>
-    int ShownIn(string key, string raw, IReadOnlyList<string> read) => key.Length == 0 ? 0 : read.Count(l => _parser.Meaning(l).Key == key || ItemRepeatGuard.SameLine(l, raw));
+    /// <summary>
+    /// How many copies of this item line a read shows: lines that mean it, or read it a letter or two off. For a line whose
+    /// count was lost (<paramref name="anyCount"/>), every line of the item, whatever its count.
+    /// </summary>
+    int ShownIn(string key, string raw, IReadOnlyList<string> read, bool anyCount = false) => key.Length == 0 ? 0 : read.Count(l => IsCopy(l, key, raw, anyCount));
+
+    bool IsCopy(string l, string key, string raw, bool anyCount) =>
+        _parser.Meaning(l).Key is var k && (k == key || (anyCount && k.Length > 0 && CountWatch.ItemOf(k) == CountWatch.ItemOf(key)) || ItemRepeatGuard.SameLine(l, raw));
 
     /// <summary>
     /// What a read shows of an item line (ItemRepeatGuard.Screen): its copies, and the first sight of the read's oldest
     /// other line, when three of its other lines were seen before (one garbled read can't make the screen look new).
     /// </summary>
-    ItemRepeatGuard.Screen ScreenOf(string key, string raw, IReadOnlyList<string> read, DateTime now)
+    ItemRepeatGuard.Screen ScreenOf(string key, string raw, IReadOnlyList<string> read, DateTime now, bool anyCount = false)
     {
-        var seen = read.Where(l => _parser.Meaning(l).Key != key && !ItemRepeatGuard.SameLine(l, raw)).Select(l => Reread.FirstSeen(l, _firstSeen)).OfType<DateTime>().Where(f => (now - f).TotalSeconds > 2).ToList();
-        return new ItemRepeatGuard.Screen(ShownIn(key, raw, read), seen.Count >= 3 ? seen.Min() : DateTime.MinValue);
+        var seen = read.Where(l => !IsCopy(l, key, raw, anyCount)).Select(l => Reread.FirstSeen(l, _firstSeen)).OfType<DateTime>().Where(f => (now - f).TotalSeconds > 2).ToList();
+        return new ItemRepeatGuard.Screen(ShownIn(key, raw, read, anyCount), seen.Count >= 3 ? seen.Min() : DateTime.MinValue);
     }
 
     static string ItemLineKey(string name, int count) => "i:" + name.ToLowerInvariant() + "x" + count;
 
     /// <summary>
     /// A chat item line before it counts (ItemRepeatGuard): counted, held for a witness, or left out as a repeat.
+    /// <paramref name="unsure"/>: the line's count was lost, so it is judged against the item's copies at any count.
     /// </summary>
-    ItemRepeatGuard.Verdict RepeatCheck(ItemAcquired a, GameEvent ev, string raw, DateTime lineAt, ItemRepeatGuard.Place? place, ItemRepeatGuard.Screen screen, bool needsWitness, DateTime now)
+    ItemRepeatGuard.Verdict RepeatCheck(ItemAcquired a, GameEvent ev, GameEvent src, string raw, DateTime lineAt, ItemRepeatGuard.Place? place, ItemRepeatGuard.Screen screen, bool needsWitness, bool unsure, DateTime now)
     {
         var name = _items.NameOf(a.ItemId);
-        var (v, why) = _repeats.Judge(name, a.Count, lineAt, now, place, screen, final: false);
-        if (v == ItemRepeatGuard.Verdict.Wait) { lock (_repeatHeld) _repeatHeld.Add((ev, raw, lineAt, place, screen, needsWitness)); return v; }
+        var (v, why) = _repeats.Judge(name, a.Count, lineAt, now, place, screen, final: false, unsure);
+        if (v == ItemRepeatGuard.Verdict.Wait) { lock (_repeatHeld) _repeatHeld.Add(new HeldLine(ev, src, raw, lineAt, place, screen, needsWitness, unsure)); return v; }
         if (v == ItemRepeatGuard.Verdict.Repeat) { SkipRepeat(raw, why, lineAt); return v; }
         if (why.Length > 0) CrashLog.Note($"chat: '{raw.Trim()}' again: counted, {why}");
-        _repeats.Counted(name, a.Count, lineAt, now, place);
+        _repeats.Counted(name, a.Count, lineAt, now, place, unsure);
         return v;
     }
 
@@ -252,17 +285,19 @@ public sealed partial class TrackerSession
     /// <summary>Item lines held for a witness: counted once one comes, left out once the wait is over (or at a stop).</summary>
     internal void ReleaseRepeats(DateTime now, bool final = false)
     {
-        List<(GameEvent Ev, string Raw, DateTime LineAt, ItemRepeatGuard.Place? Place, ItemRepeatGuard.Screen Screen, bool NeedsWitness)> held;
+        List<HeldLine> held;
         lock (_repeatHeld) { if (_repeatHeld.Count == 0) return; held = _repeatHeld.ToList(); _repeatHeld.Clear(); }
         foreach (var h in held)
         {
             if (h.Ev is not ItemAcquired a) continue;
             var name = _items.NameOf(a.ItemId);
-            var (v, why) = _repeats.Judge(name, a.Count, h.LineAt, now, h.Place, h.Screen, final);
+            var (v, why) = _repeats.Judge(name, a.Count, h.LineAt, now, h.Place, h.Screen, final, h.Unsure);
             if (v == ItemRepeatGuard.Verdict.Wait) { lock (_repeatHeld) _repeatHeld.Add(h); continue; }
-            if (v == ItemRepeatGuard.Verdict.Repeat) { SkipRepeat(h.Raw, why, h.LineAt); continue; }
+            // left out: no pickup, so a count watch kept for it has nothing to settle
+            if (v == ItemRepeatGuard.Verdict.Repeat) { SkipRepeat(h.Raw, why, h.LineAt); _counts.Drop(h.Src); continue; }
             CrashLog.Note($"chat: '{h.Raw.Trim()}' again: counted, {why}");
-            _repeats.Counted(name, a.Count, h.LineAt, now, h.Place);
+            _repeats.Counted(name, a.Count, h.LineAt, now, h.Place, h.Unsure);
+            _counts.Release(h.Src);
             FinishChatItem(h.Ev, h.Raw, h.NeedsWitness, now);
         }
     }
