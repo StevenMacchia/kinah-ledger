@@ -126,7 +126,7 @@ public partial class MainWindow
         {
             var local = l.At.ToLocalTime();
             t.Text = local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : local.ToString("MMM d");
-            t.FontSize = 11.5; t.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); t.Foreground = new SolidColorBrush(Color.FromRgb(0x5E, 0x65, 0x88));
+            t.FontSize = 11.5; t.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); t.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         }
         g.Children.Add(t);
         icon.VerticalAlignment = VerticalAlignment.Center; icon.HorizontalAlignment = HorizontalAlignment.Left;
@@ -142,7 +142,8 @@ public partial class MainWindow
         v.SetResourceReference(TextBlock.FontFamilyProperty, l.Kind == "flag" ? "BodyFont" : "MonoFont");
         v.SetResourceReference(TextBlock.ForegroundProperty, value.Muted ? "Faint" : "Gold");
         Grid.SetColumn(v, 3); g.Children.Add(v);
-        var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0), BorderBrush = new SolidColorBrush(Color.FromArgb(0x73, 0x2A, 0x31, 0x54)) };
+        var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
+        b.SetResourceReference(Border.BorderBrushProperty, "Line");
         b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Tap if it's wrong." : "Tap if it's wrong.";
         ToolTipService.SetInitialShowDelay(b, 400);
         if (newest)
@@ -155,7 +156,7 @@ public partial class MainWindow
         }
         if (oldest) b.Opacity = 0.62;
         var keep = b.Background;
-        b.MouseEnter += (_, _) => b.Background = newest ? keep : new SolidColorBrush(Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF));
+        b.MouseEnter += (_, _) => { if (newest) b.Background = keep; else b.SetResourceReference(Border.BackgroundProperty, "HoverTint"); };
         b.MouseLeave += (_, _) => b.Background = keep;
         return b;
     }
@@ -456,9 +457,10 @@ public partial class MainWindow
             var b = new Border
             {
                 Child = sp, Height = 34, CornerRadius = new CornerRadius(17), Padding = new Thickness(5, 0, 12, 0), Margin = new Thickness(0, 0, 8, 8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
-                Background = on ? new SolidColorBrush(Color.FromArgb(0x14, 0xF8, 0xD5, 0x98)) : new SolidColorBrush(Color.FromArgb(0xB3, 0x0B, 0x0E, 0x1E)),
-                BorderBrush = on ? new SolidColorBrush(Color.FromArgb(0x99, 0xF8, 0xD5, 0x98)) : new SolidColorBrush(Color.FromRgb(0x2A, 0x31, 0x54)),
             };
+            // each look's own chip colours (Daylight had dark chips with dark text)
+            b.SetResourceReference(Border.BackgroundProperty, on ? "GoldTint" : "ChipOff");
+            b.SetResourceReference(Border.BorderBrushProperty, on ? "GoldLine" : "ChipOffLine");
             b.MouseLeftButtonUp += (_, _) => { _extraOpen = _extraOpen == key ? null : key; Redraw(); };
             ExtraChips.Children.Add(b);
         }

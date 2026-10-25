@@ -44,7 +44,7 @@ public partial class MainWindow
 
     void FinishWelcome()
     {
-        if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.Foreground = B("Warn"); return; }
+        if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Warn"); return; }
         ApplyServer(_wRegion, _wServer.Label);
         bool share = WelcomeShareChk.IsChecked == true;
         if (int.TryParse(new string(WelcomeGear.Text.Where(char.IsDigit).ToArray()), out var gear) && gear > 0) SetGearScore(gear);
@@ -104,7 +104,7 @@ public partial class MainWindow
             ServerChips.Children.Add(Chip(s.Name, _wServer?.Label == s.Label, () => { _wServer = srv; BuildServerChips(); WelcomeHint.Text = $"{srv.Label} · {srv.Region.Name}"; WelcomeHint.Foreground = B("Good"); }));
         }
         WelcomeGo.IsEnabled = _wServer != null;
-        if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.Foreground = B("Muted"); }
+        if (_wServer == null) { WelcomeHint.Text = "Pick your server to continue."; WelcomeHint.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); }
     }
 
     /* ---------------- skins ---------------- */

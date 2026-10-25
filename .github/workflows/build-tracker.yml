@@ -100,12 +100,19 @@ jobs:
           # and ui-hud-flag.png); the Events render opens the merged record's fix sheet (ui-main-events.png and
           # ui-runs-card-fix.png); the Crafting render draws the crafting feed and ui-hud-crafting.png; a gathering stretch's feed
           dist/KinahLedger.exe ui-shot shots --demo --gathering --compact --tall
+          # Daylight (0.8.31): the main views again in the light look, in their own folder so the card renders don't
+          # overwrite the Night ones (Steven, 2026-10-24: the Events page "awful, especially in light mode")
+          mkdir -p shots/daylight
+          dist/KinahLedger.exe ui-shot shots/daylight --demo --compact --tall --skin daylight
+          dist/KinahLedger.exe ui-shot shots/daylight --demo --events --skin daylight
+          dist/KinahLedger.exe ui-shot shots/daylight --demo --crafting --skin daylight
+          dist/KinahLedger.exe ui-shot shots/daylight --options --skin daylight
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.publish.outcome == 'success'
         with:
           name: layout-renders
-          path: shots/*.png
+          path: shots/**/*.png
           if-no-files-found: ignore
 
       - name: Write latest.json
