@@ -37,7 +37,11 @@ public partial class MainWindow
     {
         if (_countingCard != null || HeadStack == null) return;
         var text = new TextBlock { Style = (Style)FindResource("BodyStyle"), FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-        text.Inlines.Add(new System.Windows.Documents.Run("Help improve counting is on. ") { FontWeight = FontWeights.SemiBold, Foreground = B("Ink") });
+        // a resource reference, not B("Ink"): B() hands back the brush of the look at that moment, and the look is often picked
+        // after this notice is up (first run: Welcome's look chips), which left Night's pale ink on Daylight's white card
+        var head = new System.Windows.Documents.Run("Help improve counting is on. ") { FontWeight = FontWeights.SemiBold };
+        head.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Ink");
+        text.Inlines.Add(head);
         text.Inlines.Add(new System.Windows.Documents.Run(CountingSentence));
         var keep = new Button { Content = "Keep on", Style = (Style)FindResource("PrimaryButton"), Height = 34, Padding = new Thickness(16, 0, 16, 0), FontSize = 13, Margin = new Thickness(0, 0, 8, 0) };
         var off = new Button { Content = "Turn off", Height = 34, Padding = new Thickness(14, 0, 14, 0), FontSize = 13 };

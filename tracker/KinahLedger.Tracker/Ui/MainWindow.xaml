@@ -35,7 +35,7 @@
     </Style>
     <Style x:Key="SecTitle" TargetType="TextBlock">
       <Setter Property="FontSize" Value="11"/>
-      <Setter Property="Foreground" Value="#E9B45A"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecGold}"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
       <Setter Property="Margin" Value="0,0,10,0"/>
     </Style>
@@ -61,7 +61,7 @@
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="56"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/><ColumnDefinition Width="76"/><ColumnDefinition Width="64"/><ColumnDefinition Width="84"/></Grid.ColumnDefinitions>
           <Grid x:Name="IconCell" Width="46" Height="46" HorizontalAlignment="Left" VerticalAlignment="Center">
-            <Border x:Name="IconTile" Width="40" Height="40" CornerRadius="7" BorderThickness="1" BorderBrush="#47CDD3E2" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <Border x:Name="IconTile" Width="40" Height="40" CornerRadius="7" BorderThickness="1" BorderBrush="{DynamicResource SlotFrame}" HorizontalAlignment="Left" VerticalAlignment="Top">
               <Border.Background>
                 <RadialGradientBrush Center="0.5,0.38" GradientOrigin="0.5,0.38" RadiusX="0.75" RadiusY="0.75"><GradientStop Color="#1ACDD3E2" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush>
               </Border.Background>
@@ -71,8 +71,8 @@
               </Grid>
             </Border>
             <!-- the stack count, as the game's inventory slot shows it -->
-            <Border x:Name="Badge" HorizontalAlignment="Right" VerticalAlignment="Bottom" MinWidth="18" Height="16" CornerRadius="8" Padding="4,0" Background="{DynamicResource Slot}" BorderBrush="#4A5277" BorderThickness="1">
-              <TextBlock Text="{Binding Drops}" FontFamily="{DynamicResource MonoFont}" FontSize="10.5" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Border x:Name="Badge" HorizontalAlignment="Right" VerticalAlignment="Bottom" MinWidth="18" Height="16" CornerRadius="8" Padding="4,0" Background="{DynamicResource Slot}" BorderBrush="{DynamicResource SlotBadgeLine}" BorderThickness="1">
+              <TextBlock Text="{Binding Drops}" FontFamily="{DynamicResource MonoFont}" FontSize="10.5" Foreground="{DynamicResource OnSlot}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
           </Grid>
           <Grid x:Name="NameCell" Grid.Column="1" Margin="0,0,10,0">
@@ -138,7 +138,7 @@
       <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Height="40" Background="Transparent" ToolTip="{Binding Tip}" ToolTipService.InitialShowDelay="250">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/><ColumnDefinition Width="80"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
-          <Border x:Name="IconTile" Width="28" Height="28" CornerRadius="5" BorderThickness="1" BorderBrush="#47CDD3E2" Background="{DynamicResource Slot}" HorizontalAlignment="Left" VerticalAlignment="Center">
+          <Border x:Name="IconTile" Width="28" Height="28" CornerRadius="5" BorderThickness="1" BorderBrush="{DynamicResource SlotFrame}" Background="{DynamicResource Slot}" HorizontalAlignment="Left" VerticalAlignment="Center">
             <Grid>
               <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
               <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -189,7 +189,7 @@
       <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Height="44" Background="Transparent" Cursor="Hand" ToolTip="{Binding Tip}" ToolTipService.InitialShowDelay="250">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/><ColumnDefinition Width="58"/><ColumnDefinition Width="64"/><ColumnDefinition Width="72"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
-          <Border x:Name="IconTile" Width="30" Height="30" CornerRadius="5" BorderThickness="1" BorderBrush="#47CDD3E2" Background="{DynamicResource Slot}" HorizontalAlignment="Left" VerticalAlignment="Center">
+          <Border x:Name="IconTile" Width="30" Height="30" CornerRadius="5" BorderThickness="1" BorderBrush="{DynamicResource SlotFrame}" Background="{DynamicResource Slot}" HorizontalAlignment="Left" VerticalAlignment="Center">
             <Grid>
               <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
               <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -247,7 +247,7 @@
           </StackPanel>
         </StackPanel>
         <!-- two parts that never mix: Farming (the run, the stats, the loot) and Crafting (recipes, cost, success, profit) -->
-        <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,10,0" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="#08FFFFFF" VerticalAlignment="Center">
+        <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,10,0" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal">
             <Button x:Name="FarmTab" Style="{StaticResource SegOn}" Content="Farming" Padding="10,0"/>
             <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Content="Crafting" Margin="2,0,0,0" Padding="10,0"/>
@@ -561,7 +561,7 @@
               <StackPanel x:Name="ExtrasBody" Margin="20,0,20,16">
                 <WrapPanel x:Name="ExtraChips"/>
                 <!-- the open chip's table, in place, under a gold rule on its left -->
-                <Border x:Name="InPlace" BorderBrush="#80F8D598" BorderThickness="2,0,0,0" Padding="12,0,0,0" Margin="0,4,0,0" Visibility="Collapsed">
+                <Border x:Name="InPlace" BorderBrush="{DynamicResource GoldLine}" BorderThickness="2,0,0,0" Padding="12,0,0,0" Margin="0,4,0,0" Visibility="Collapsed">
                   <StackPanel>
                     <Grid x:Name="InPlaceHead" Height="24">
                       <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/><ColumnDefinition Width="80"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
@@ -593,24 +593,25 @@
            place (Ui/MainWindow.RunsCard.cs, the approved mock of 2026-10-24): its runs and what they paid; the runs stay until cleared. -->
       <Border x:Name="EventsCard" Margin="0,16,0,0" Visibility="Collapsed">
         <StackPanel>
-          <Grid Margin="2,0,0,10">
+          <Grid Margin="2,0,0,14">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Text="Expeditions and events"/>
-            <TextBlock x:Name="InstWhat" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" TextTrimming="CharacterEllipsis"/>
+            <!-- the title with what the runs shown made under it: "20 runs · 14 counted · 7.46M made" (0.8.31, the mock) -->
+            <StackPanel VerticalAlignment="Bottom">
+              <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Text="Expeditions and events"/>
+              <TextBlock x:Name="InstWhat" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
               <!-- this session's runs by default, or with the ones kept on this PC from earlier (Steven, 2026-10-22); a switch
                    and a button, not small links (Steven, 2026-10-23: "more prevalent") -->
-              <Border x:Name="InstScope" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="#08FFFFFF" VerticalAlignment="Center" Visibility="Collapsed">
+              <Border x:Name="InstScope" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Visibility="Collapsed">
                 <StackPanel Orientation="Horizontal">
                   <Button x:Name="InstSessionBtn" Style="{StaticResource SegOn}" Content="This session" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Only the runs since the tracker started"/>
                   <Button x:Name="InstEarlierBtn" Style="{StaticResource SegOff}" Content="Earlier" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Every run kept on this PC, earlier ones too"/>
                 </StackPanel>
               </Border>
-              <Button x:Name="InstClearBtn" Content="Clear" Height="32" FontSize="12.5" Padding="14,0" Margin="10,0,0,0" VerticalAlignment="Center" ToolTip="Clear the runs shown here"/>
+              <Button x:Name="InstClearBtn" Content="Clear" Height="30" FontSize="12.5" Padding="10,0" Margin="6,0,0,0" VerticalAlignment="Center" Background="Transparent" BorderBrush="Transparent" Foreground="{DynamicResource Faint}" FontWeight="Normal" ToolTip="Clear the runs shown here"/>
             </StackPanel>
           </Grid>
-          <!-- the live card: the last run steps and reward lines beside the rate across runs (Ui/MainWindow.Live.cs) -->
-          <StackPanel x:Name="EventsLiveHost"/>
           <StackPanel x:Name="InstHost"/>
           <Border x:Name="InstEmpty" Style="{StaticResource CardStyle}" Padding="20,22,20,22">
             <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440"

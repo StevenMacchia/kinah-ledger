@@ -548,14 +548,14 @@ public partial class MainWindow : Window
         // with no zone on the list, what the minimap corner said, so a zone the list doesn't have yet can be named and added
         ZoneLbl.ToolTip = chat?.Zone == null && chat?.ZoneNote is { Length: > 0 } zn ? zn + "\n\nA zone has to be on the tracker's zone list to count. Send the name shown here to have it added." : null;
         if (DateTime.UtcNow < _statusHoldUntil) { /* a stopped run's result is still showing */ }
-        else if (chat == null) Say(_watcher.GameRect == null ? "Waiting for the game. Reading starts on its own once the game is open." : "Looking for the chat… " + _watcher.ChatNote, "Faint");
-        else if (chat.LastError.Length > 0) Say("Read problem: " + chat.LastError, "Bad");
-        else if (chat.Paused.Length > 0) Say($"Paused: {chat.Paused}. Only the game is read, so reading picks up when the chat is in view again · " + MarketShort(), "Warn");
+        else if (chat == null) Tell(_watcher.GameRect == null ? "Waiting for the game. Reading starts on its own once the game is open." : "Looking for the chat… " + _watcher.ChatNote, "Faint");
+        else if (chat.LastError.Length > 0) Tell("Read problem: " + chat.LastError, "Bad");
+        else if (chat.Paused.Length > 0) Tell($"Paused: {chat.Paused}. Only the game is read, so reading picks up when the chat is in view again · " + MarketShort(), "Warn");
         else
         {
             // one plain line; the reader's details (reads, Market, the Kinah counter, uploads) are on hover
             // the footer (the approved mock): "Tracking Western Cantas Valley · last: Spiritstone acquired"; read counts on hover
-            Say(!chat.ChatFound ? "Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows."
+            Tell(!chat.ChatFound ? "Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows."
                 : chat.LastLine.Length > 0 ? "Last: " + chat.LastLine : chat.Zone is { Length: > 0 } tz ? "Tracking " + tz : "Reading the chat", "Faint");
         }
         if (chat != null && _options is { WantsPreview: true } && ++_ticks % 4 == 0 && !_framing)
@@ -942,13 +942,13 @@ public partial class MainWindow : Window
         if (counts && rate > best.PerHr)
         {
             BestLine.Text = $"Best here yet · beats {Fk(best.PerHr)}";
-            BestLine.Foreground = B("Good");
+            BestLine.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Good");
             _hudValues["best"] = "new best";
         }
         else
         {
             BestLine.Text = $"Your best here {Fk(best.PerHr)}";
-            BestLine.Foreground = B("Faint");
+            BestLine.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Faint");
             _hudValues["best"] = Fk(best.PerHr);
         }
         JoinCompare();
@@ -1221,7 +1221,8 @@ public partial class MainWindow : Window
 
     static string Pct(double p) => p >= 1 ? p.ToString("0.0") + "×" : p >= .1 ? (p * 100).ToString("0") + "%" : p >= .01 ? (p * 100).ToString("0.0") + "%" : (p * 100).ToString("0.00") + "%";
     static string Rate(double v) => v >= 100 ? v.ToString("0") : v >= 10 ? v.ToString("0.0") : v.ToString("0.00");
-    static string Fk(double v) => Math.Abs(v) >= 1e6 ? $"{v / 1e6:0.00}M" : Math.Abs(v) >= 1e4 ? $"{v / 1e3:0}K" : Math.Abs(v) >= 1e3 ? $"{v / 1e3:0.0}K" : v >= 100 ? $"{v:0}" : v >= 10 ? $"{v:0.0}" : $"{v:0.00}";
+    /// <summary>A figure: "4.26M", "641K", "7.5K", "474", "7.5"; exactly nothing is "0" (the HUD said "0.00 Kinah / hr", the Events feed "paid 0.00").</summary>
+    static string Fk(double v) => v == 0 ? "0" : Math.Abs(v) >= 1e6 ? $"{v / 1e6:0.00}M" : Math.Abs(v) >= 1e4 ? $"{v / 1e3:0}K" : Math.Abs(v) >= 1e3 ? $"{v / 1e3:0.0}K" : v >= 100 ? $"{v:0}" : v >= 10 ? $"{v:0.0}" : $"{v:0.00}";
 
     /// <summary>A new frame for the Options window's preview; null clears it (the chat area changed).</summary>
     void SetPreview(System.Drawing.Bitmap? bmp)
@@ -1254,7 +1255,11 @@ public partial class MainWindow : Window
         // Full view doubles the width: near the right edge the window moves left to stay on the screen
         if (Left + ActualWidth > wa.Right) Left = Math.Max(wa.Left, wa.Right - ActualWidth);
     }
-    void Say(string text, string tone) { Status.Text = text; Status.Foreground = B(tone); Status.ToolTip = null; }
+    /// <summary>A message to read (saved, set, fixed, split): it stays about 6 s before the live status takes the line back, the whole text on hover (it used to last one 500 ms tick).</summary>
+    void Say(string text, string tone) { Tell(text, tone); Status.ToolTip = text; if (DateTime.UtcNow.AddSeconds(SayHoldSeconds) > _statusHoldUntil) _statusHoldUntil = DateTime.UtcNow.AddSeconds(SayHoldSeconds); }
+    const double SayHoldSeconds = 6;
+    /// <summary>The live status line, rewritten each tick: in the look's own colour, so a change of look repaints it.</summary>
+    void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
     public static void Open(string url) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { } }
 

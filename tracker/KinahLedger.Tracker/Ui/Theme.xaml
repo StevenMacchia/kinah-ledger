@@ -39,6 +39,33 @@
   <LinearGradientBrush x:Key="BtnPrimaryHover" StartPoint="0,0" EndPoint="0,1">
     <GradientStop Color="#FBE0AE" Offset="0"/><GradientStop Color="#F0BA5E" Offset="0.55"/><GradientStop Color="#E0A03C" Offset="1"/>
   </LinearGradientBrush>
+  <!-- control states, section headings, slot frames and chips: written into the templates before 0.8.31, so Daylight got
+       navy button hovers, invisible dropdown rows, pale headings and white badges on a light slot. Each look sets them -->
+  <SolidColorBrush x:Key="BtnHover" Color="#1D2346"/>
+  <SolidColorBrush x:Key="BtnHoverLine" Color="#4A548F"/>
+  <SolidColorBrush x:Key="ItemHover" Color="#1E2D45"/>
+  <SolidColorBrush x:Key="ItemSel" Color="#24375A"/>
+  <SolidColorBrush x:Key="SegGroup" Color="#08FFFFFF"/>
+  <SolidColorBrush x:Key="SegOnBg" Color="#24EBAE4C"/>
+  <SolidColorBrush x:Key="SecGold" Color="#E9B45A"/>
+  <SolidColorBrush x:Key="ChipBg" Color="#1A5ED8CB"/>
+  <SolidColorBrush x:Key="ChipLine" Color="#735ED8CB"/>
+  <SolidColorBrush x:Key="ChipOff" Color="#B30B0E1E"/>
+  <SolidColorBrush x:Key="ChipOffLine" Color="#2A3154"/>
+  <SolidColorBrush x:Key="OnSlot" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="SlotFrame" Color="#47CDD3E2"/>
+  <SolidColorBrush x:Key="SlotBadgeLine" Color="#4A5277"/>
+  <SolidColorBrush x:Key="HoverTint" Color="#08FFFFFF"/>
+  <SolidColorBrush x:Key="GoldTint" Color="#14F8D598"/>
+  <SolidColorBrush x:Key="GoldLine" Color="#80F8D598"/>
+  <!-- the Events cards (0.8.31): a place's band, its flags -->
+  <LinearGradientBrush x:Key="PlaceBand" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#29F8D598" Offset="0"/><GradientStop Color="#0DF8D598" Offset="0.6"/><GradientStop Color="#00F8D598" Offset="1"/>
+  </LinearGradientBrush>
+  <SolidColorBrush x:Key="PlaceBandLine" Color="#47E9B45A"/>
+  <SolidColorBrush x:Key="FlagBg" Color="#14F8D598"/>
+  <SolidColorBrush x:Key="FlagInk" Color="#F8D598"/>
+  <SolidColorBrush x:Key="FlagLine" Color="#4DF8D598"/>
   <!-- rows and marks that used to be hard-coded; a skin overrides these too -->
   <SolidColorBrush x:Key="RowHead" Color="#0E1124"/>
   <SolidColorBrush x:Key="RowHover" Color="#171C38"/>
@@ -127,8 +154,8 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="b" Property="Background" Value="#1D2346"/>
-              <Setter TargetName="b" Property="BorderBrush" Value="#4A548F"/>
+              <Setter TargetName="b" Property="Background" Value="{DynamicResource BtnHover}"/>
+              <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource BtnHoverLine}"/>
             </Trigger>
             <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.85"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
@@ -170,7 +197,7 @@
     <Setter Property="FontSize" Value="13.5"/>
   </Style>
   <Style x:Key="SegOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
-    <Setter Property="Background" Value="#24EBAE4C"/>
+    <Setter Property="Background" Value="{DynamicResource SegOnBg}"/>
     <Setter Property="Foreground" Value="{DynamicResource Gold}"/>
     <Setter Property="FontWeight" Value="Bold"/>
   </Style>
@@ -179,8 +206,8 @@
     <Setter Property="CornerRadius" Value="12"/>
     <Setter Property="Padding" Value="10,3"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="Background" Value="#1A5ED8CB"/>
-    <Setter Property="BorderBrush" Value="#735ED8CB"/>
+    <Setter Property="Background" Value="{DynamicResource ChipBg}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource ChipLine}"/>
   </Style>
 
   <!-- check boxes -->
@@ -253,8 +280,8 @@
             <ContentPresenter/>
           </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="b" Property="Background" Value="#1E2D45"/></Trigger>
-            <Trigger Property="IsSelected" Value="True"><Setter TargetName="b" Property="Background" Value="#24375A"/></Trigger>
+            <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource ItemHover}"/></Trigger>
+            <Trigger Property="IsSelected" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource ItemSel}"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -276,7 +303,7 @@
                     <Path Data="M0,0 L4.5,4.5 L9,0" Stroke="{DynamicResource Muted}" StrokeThickness="1.6" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,13,0"/>
                   </Border>
                   <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="#4C6690"/></Trigger>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource BtnHoverLine}"/></Trigger>
                     <Trigger Property="IsChecked" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
                   </ControlTemplate.Triggers>
                 </ControlTemplate>
