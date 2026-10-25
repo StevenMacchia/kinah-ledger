@@ -2631,7 +2631,12 @@ options: --process aion[,other]");
         sayU(leftU.AddSeconds(38), Array.Empty<string>());
         su.ApplyZone("Urugugu Village", leftU.AddSeconds(43));
         var runsU = su.Instances.Snapshot().Where(r => r.Start >= u0.AddSeconds(-1)).ToList();
-        Check("the late payout is the run's, not farming", $"{ri(runsU.FirstOrDefault(), "Enhance Stone")} {runsU.FirstOrDefault()?.Kinah} {n(su.Engine, "Enhance Stone")}", "470 20000 0");
+        // the payout after leaving goes with the run, never farming; since 2026-10-25 its Kina is set aside, not the run's Kinah
+        // (a run's Kinah is its table's coin). That day's trace prints it 89 s after "Urugugu Canyon Conquest Clear IV achieved."
+        // (19:19:04) and 34 s after "Left Urugugu Canyon Dungeon room." (19:19:59); on 10-23 bound payouts came after leaving
+        // the room the same way (19:05:16, 29,000; 19:43:44, 13,000), each after that run's Conquest Clear achievement (V at
+        // 18:56:05, VI at 19:41:35). Was "470 20000 0"
+        Check("the late payout goes with the run (set aside), not farming", $"{ri(runsU.FirstOrDefault(), "Enhance Stone")} {runsU.FirstOrDefault()?.Kinah} {runsU.FirstOrDefault()?.ChatKinahSetAside} {n(su.Engine, "Enhance Stone")}", "470 0 20000 0");
         if (ri(runsU.FirstOrDefault(), "Enhance Stone") != 470)
             foreach (var nl in File.ReadLines(CrashLog.ReadsPath).TakeLast(30)) Console.WriteLine("      note: " + nl);
         Check("in again 43 s after leaving: a new run", $"{runsU.Count} closed: {runsU.FirstOrDefault()?.Ended} / open: {su.Instances.Open}", "1 closed: left, then a new entry / open: Urugugu Canyon");
@@ -3384,7 +3389,9 @@ options: --process aion[,other]");
                 ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(1));
                 ts.ProcessChat(new List<string> { "[Theo] gg", "Refining Stone acquired.", "Acquired 600 Kina." }, u0.AddSeconds(2.2));   // the vote's next read
                 var run = ts.Instances.Snapshot().LastOrDefault(r => r.Zone == "Urugugu Canyon" && r.Start >= u0.AddSeconds(-1));
-                Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {(run?.Items.Values.Sum() ?? 0) + (run?.ChatItems.Values.Sum() ?? 0)} items {run?.Kinah ?? 0} Kinah", "farming: 0 items 0 Kinah · run: 1 items 600 Kinah");
+                // since 2026-10-25 the chat's Kina is set aside with its items: the run's Kinah is its table's coin (no enemy in an
+                // Urugugu run dropped Kina on 2026-10-23 or 24; every chat Kina there was an achievement's or a claim). Was "600 Kinah"
+                Check("inside an expedition, loot is the run's alone", $"farming: {ts.Engine.Items.Count} items {ts.Engine.Kinah} Kinah · run: {(run?.Items.Values.Sum() ?? 0) + (run?.ChatItems.Values.Sum() ?? 0)} items {run?.Kinah ?? 0} Kinah, {run?.ChatKinahSetAside ?? 0} set aside", "farming: 0 items 0 Kinah · run: 1 items 0 Kinah, 600 set aside");
             }
             {
                 // the reward table at the end of an expedition: a slot the chat already counted is skipped, a sure one is added
@@ -3455,7 +3462,9 @@ options: --process aion[,other]");
                 Check("the reward table is the run's count: the chat's items give way, a later chat line adds nothing",
                     $"{string.Join(", ", (prun?.Items ?? new()).Select(kv => $"{items.NameOf(kv.Key)} x{kv.Value}"))} · picture {prun?.FromPicture} · unread {prun?.SlotsUnread}",
                     "Refining Stone x4 · picture True · unread 1");
-                // no reward table read: the run keeps its Kinah, its items are marked not read, never filled in from the chat
+                // no reward table read: its items are marked not read, never filled in from the chat, and its Kinah too since
+                // 2026-10-25 (the 15:12 Oct 24 run parked as not read showed 6,000 Kina, "I Have Exceptional Skill II achieved."'s
+                // reward): the chat's Kina is set aside. Was "0 True 600 1", the chat's Kina kept as the run's
                 var nt = new TrackerSession(null, new Settings(), items, "Test"); var nt0 = DateTime.UtcNow;
                 nt.Engine.SetZone("Urugugu Canyon"); nt.Instances.Zone("Urugugu Canyon", nt0);
                 nt.ProcessChat(new List<string> { "[x] a" }, nt0);
@@ -3463,8 +3472,8 @@ options: --process aion[,other]");
                 nt.FlushVotes(nt0.AddSeconds(4));
                 nt.Instances.Close();
                 var nrun = nt.Instances.Snapshot().LastOrDefault();
-                Check("no reward picture read: items not read, Kinah kept, the chat's items set aside",
-                    $"{nrun?.Items.Count} {nrun?.RewardsNotRead} {nrun?.Kinah} {nrun?.ChatItemsSetAside}", "0 True 600 1");
+                Check("no reward picture read: items not read, the chat's items and Kina set aside",
+                    $"{nrun?.Items.Count} {nrun?.RewardsNotRead} {nrun?.Kinah} {nrun?.ChatItemsSetAside} {nrun?.ChatKinahSetAside}", "0 True 0 1 600");
                 // a Transcendence: its stage set in town ("Set to Stage 1."), then the dungeon: its own kind
                 var tt = new TrackerSession(null, new Settings(), items, "Test"); var tt0 = DateTime.UtcNow;
                 tt.ProcessChat(new List<string> { "[x] a" }, tt0);
@@ -3630,13 +3639,15 @@ options: --process aion[,other]");
                 var voted = RewardGrid.Vote(new() { v1, v2, v3 });
                 Check("reward table reads voted slot by slot", string.Join(" | ", voted.Select(s => $"{s.Icons[0].Key} {s.Icons[0].Distance:0} x{s.Count}")), "A 38 x2 | B 33 x6");
                 // five Urugugu runs back to back (Steven, 2026-10-23 18:26 to 19:04): village, valley, temple, sanctum, the table, and
-                // back to the village. Five runs, each with its own table, never one of 37:04
+                // back to the village. Five runs, each with its own table, never one of 37:04. Each run's countdown ("Starting in
+                // 10s.", in the village: 18:27:01, 18:34:51, 18:42:04, 18:50:10, 18:57:21 in that day's trace) is the second
+                // witness the move back to the village needs since 2026-10-25
                 var fv = new TrackerSession(null, new Settings(), items, "Test"); var fv0 = DateTime.UtcNow.AddHours(-1);
                 string[] areas = { "Urugugu Village", "Windy Valley", "Urugugu Temple", "Auldor's Sanctum" };
                 for (int r = 0; r < 5; r++)
                 {
                     var rt = fv0.AddMinutes(r * 8);
-                    for (int a = 0; a < areas.Length; a++) { fv.Engine.SetZone(areas[a]); fv.Instances.Zone(areas[a], rt.AddSeconds(a * 90)); }
+                    for (int a = 0; a < areas.Length; a++) { fv.Engine.SetZone(areas[a]); fv.Instances.Zone(areas[a], rt.AddSeconds(a * 90)); if (a == 0) fv.Instances.StartLine(rt.AddSeconds(8)); }
                     fv.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "5", 5, new() { (key, 30.0), ("Other", 98.7) }) }, rt.AddSeconds(400));
                     fv.Instances.Zone("Auldor's Sanctum", rt.AddSeconds(410));
                     if (r == 3) fv.ApplyGrid(new List<RewardGrid.Slot>(), rt.AddSeconds(450));   // an empty read (18:57:25): nothing opens or closes
@@ -3656,7 +3667,15 @@ options: --process aion[,other]");
                 }
                 // today's exact times: tables at 18:33:57, 18:41:01, 18:48:56, 18:56:35, 19:04:02 (each with the 600.0K coin), an empty
                 // read at 18:57:25; a flicker of "Urugugu Canyon" for one read after the second table; a late bound payout 25 s
-                // after the first table, once he was back in the village, and the next run's first Kinah after it
+                // after the first table, once he was back in the village, and the next run's first Kinah after it. Each run's
+                // countdown as that day's trace read it (18:27:01, then 54, 63, 74 and 46 s after each table), the second witness
+                // of each run back to back since 2026-10-25; the valley 90 s after each table, after the countdown, as on
+                // 2026-10-24 (17:48:57 the village, 17:49:42 the countdown, 17:52:00 Windy Valley).
+                // Since 2026-10-25 the payout and the kill's Kina are set aside: a run's Kinah is its table's coin. That day's
+                // trace has neither (no Kina line in any of the five runs; the record holds 3,000,000, five coins), and every bound
+                // payout around an Urugugu run on 2026-10-22 to 24 was an achievement's or a claim's (10-22 19:20:33, 20,000 after
+                // "Urugugu Canyon Conquest Clear IV achieved."; 10-23 19:48:58, 3,000 after "Totem Destroyer achieved."; 10-24
+                // 14:15:57, 9,000 after "Soulful Unique Gear I achieved."). Was "620000 600300", first ending at the payout
                 var kinaKey = IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon);
                 RewardGrid.Slot Coin() => new(box, "Common", "600.0K", 600_000, new() { (kinaKey, 4.4), ("Other", 84.4) });
                 var ex = new TrackerSession(null, new Settings(), items, "Test");
@@ -3664,27 +3683,32 @@ options: --process aion[,other]");
                 DateTime At(string hms) => day + TimeSpan.Parse(hms);
                 void Area(string a, DateTime t) { ex.Engine.SetZone(a); ex.Instances.Zone(a, t); }
                 var tables = new[] { "18:33:57", "18:41:01", "18:48:56", "18:56:35", "19:04:02" }.Select(At).ToArray();
+                var countdowns = new[] { "18:27:01", "18:34:51", "18:42:04", "18:50:10", "18:57:21" }.Select(At).ToArray();
                 var entry = At("18:26:57");
                 for (int r = 0; r < 5; r++)
                 {
                     var tb = tables[r];
-                    if (r == 0) { Area("Urugugu Village", entry); Area("Windy Valley", entry.AddSeconds(90)); }
+                    if (r == 0) { Area("Urugugu Village", entry); ex.Instances.StartLine(countdowns[0]); Area("Windy Valley", entry.AddSeconds(90)); }
                     Area("Urugugu Temple", tb.AddSeconds(-180)); Area("Auldor's Sanctum", tb.AddSeconds(-90));
                     if (r == 1) { Area("Urugugu Canyon", tb.AddSeconds(3)); Area("Auldor's Sanctum", tb.AddSeconds(5)); }   // a flicker
                     ex.ApplyGrid(new List<RewardGrid.Slot> { Coin() }, tb);
                     Area("Auldor's Sanctum", tb.AddSeconds(4));
                     if (r == 3) ex.ApplyGrid(new List<RewardGrid.Slot>(), At("18:57:25"));   // the empty read
                     Area("Urugugu Village", tb.AddSeconds(20)); Area("Urugugu Village", tb.AddSeconds(22));
-                    if (r == 0) ex.Instances.Loot(new KinahChanged(tb.AddSeconds(25), 20_000, true));   // a late payout: the first run's
-                    if (r == 0) ex.Instances.Loot(new KinahChanged(tb.AddSeconds(60), 300, false));    // a kill in the next run
-                    Area("Windy Valley", tb.AddSeconds(60));
+                    if (r == 0) ex.Instances.Loot(new KinahChanged(tb.AddSeconds(25), 20_000, true));   // a late payout: set aside
+                    if (r < 4) ex.Instances.StartLine(countdowns[r + 1]);                                 // the next run's countdown
+                    if (r == 0) ex.Instances.Loot(new KinahChanged(tb.AddSeconds(60), 300, false));    // a kill in the next run: set aside
+                    Area("Windy Valley", tb.AddSeconds(90));
                 }
                 Area("Pilgrim's Ridge", At("19:05:00")); Area("Pilgrim's Ridge", At("19:06:00"));
                 ex.Instances.Close();
                 var today = ex.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= entry.AddMinutes(-1) && r.Start <= At("19:10:00")).OrderBy(r => r.Start).ToList();
-                Check("today's five runs, exact times: five runs, each its own 600K, the late payout the first run's, the flicker nothing",
+                Check("today's five runs, exact times: five runs, each its own 600K, the late payout and the next run's Kina set aside, the flicker nothing",
                     $"{today.Count} · {string.Join(" ", today.Select(r => r.Kinah.ToString()))} · first ends {(today.Count > 0 ? today[0].LastLoot?.ToString("HH:mm:ss") : "-")}",
-                    $"5 · 620000 600300 600000 600000 600000 · first ends {tables[0].AddSeconds(25):HH:mm:ss}");
+                    $"5 · 600000 600000 600000 600000 600000 · first ends {tables[0]:HH:mm:ss}");
+                Check("...the payout set aside in the first run, the 300 in the second, each next run from the move into the village",
+                    $"{string.Join(" ", today.Select(r => r.ChatKinahSetAside))} · {string.Join(" ", today.Select(r => r.Start.ToString("HH:mm:ss")))}",
+                    $"20000 300 0 0 0 · 18:26:57 {string.Join(" ", tables.Take(4).Select(t => t.AddSeconds(20).ToString("HH:mm:ss")))}");
                 // a second table with no change of area between: the next run's, never added onto the first
                 var sv2 = new TrackerSession(null, new Settings(), items, "Test"); var sv0 = DateTime.UtcNow.AddHours(-5);
                 sv2.Engine.SetZone("Auldor's Sanctum"); sv2.Instances.Zone("Auldor's Sanctum", sv0);
