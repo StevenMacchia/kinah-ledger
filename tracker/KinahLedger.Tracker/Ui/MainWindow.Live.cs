@@ -518,7 +518,7 @@ public partial class MainWindow
                 gatherRows = Top(gathered.Select(r => r with { Sub = r.Reported ? "reported" : "" }).ToList());
                 if (gathered.Any(r => r.Value.Length == 0)) { InPlaceNote.Text = $"{gathered.Count(r => r.Value.Length == 0)} have no price yet."; InPlaceNote.Visibility = Visibility.Visible; }
                 break;
-            case var s when s.StartsWith("skill:"):
+            case { } s when s.StartsWith("skill:"):
             {
                 var sk = skills.First(x => "skill:" + x.Name == s);
                 int ok = sk.Attempts - sk.Failed;
