@@ -2,11 +2,13 @@
   "pending": false,
   "needs_ocr": false,
   "trace": "trace.jsonl",
-  "name": "Illusion Gloves, 2026-10-25 16:44:18 to 16:45:06 local (Steven: he got Illusion Gloves and Order Gloves, the tracker showed Illusion Gloves twice): one \"Illusion Gloves acquired.\" line at 16:44:43 in a Krall farm fight at Verteron Fortress Ruins, a kill every second or two, its loot list row at 16:44:44, the chat scrolling it up seven places in five seconds. Every read to 16:44:55 shows exactly one such line. 0.8.36 counted 2: a garbled read at 16:44:47.8 (the soul lines out of order, a \"-721\" fragment) made the clean read at 16:44:48.6 line up on nothing, so its lines came in as new, and the guard took one of the fight's kills for the witness of a second pair (\"again: counted, a second witness\"). Right: 1. The line stands under the same two lines it was counted under (\"Acquired 521 Kina.\", \"Points.\"), one of them once in the read: it is that copy, wherever the scroll put it (ItemRepeatGuard). The Order Gloves were the 16:35 Incursion of the Spirits reward cards, named right from their picture",
+  "name": "Illusion Gloves, 2026-10-25 16:44:18 to 16:45:06 local (Steven: he got Illusion Gloves and Order Gloves, the tracker showed Illusion Gloves twice): one \"Illusion Gloves acquired.\" line at 16:44:43 in a Krall farm fight at Verteron Fortress Ruins, a kill every second or two, its loot list row at 16:44:44, the chat scrolling it up seven places in five seconds. Every read to 16:44:55 shows exactly one such line. 0.8.36 counted 2: a garbled read at 16:44:47.8 (the soul lines out of order, a \"-721\" fragment) made the clean read at 16:44:48.6 line up on nothing, so its lines came in as new, and the guard took one of the fight's kills for the witness of a second pair (\"again: counted, a second witness\"). Right: 1 (with the Refining Stone of 16:44:21 and the Expert's Refining Stone of 16:45:01, one each). The line stands under the same two lines it was counted under (\"Acquired 521 Kina.\", \"Points.\"), one of them once in the read: it is that copy, wherever the scroll put it (ItemRepeatGuard). The Order Gloves were the 16:35 Incursion of the Spirits reward cards, named right from their picture",
   "source": "Steven's trace.log 2026-10-25 20:44:18 to 20:45:06 UTC (16:44:18 to 16:45:06 local, tracker 0.8.36): chat kept only for the game's own lines (pickups, Kina, souls, Points., fragments), every player's line and its wrapped words replaced by a filler keyed by its text's hash; list and zone reads as recorded (rows, y, c, b, s, h, x); the nameplates from reads.log's \"fighting:\" lines. The proof crops 20261025-164444-580 and 20261025-164448-584-chat-Illusion-Gloves.png show the same line twice",
   "expect": {
     "items": {
-      "Illusion Gloves": 1
+      "Expert's Refining Stone": 1,
+      "Illusion Gloves": 1,
+      "Refining Stone": 1
     }
   }
 }
