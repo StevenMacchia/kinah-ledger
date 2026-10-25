@@ -1,0 +1,14 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Urugugu Canyon runs 36 and 37 back to back, 2026-10-24 17:39 to 17:57 local: the table at 17:48:18, the minimap on Urugugu Village at 17:48:57, the countdown at 17:49:42, the next table at 17:56:49 and \"Left Urugugu Canyon Dungeon room.\" at 17:57:06. The move and the countdown open the second run from 17:48:57; each run is its table's 600,000",
+  "source": "Steven's trace.log 2026-10-24 21:39:30 to 21:57:30 UTC: chat kept only for the game's own lines (pickups, Kina, achievements, the countdown, the dungeon room lines, party lines without names), every other line replaced by a filler keyed by its text's hash; loot list reads left out (other players' names); zone and reward-title reads as recorded. Both tables rebuilt from the runs' records in instances.jsonl (coin, Enhance Stone x4,000, Refining Stone, Soul Codex x6, Silentium x14, read as the 14:12:48 table read the same slots; gear left out), since reads.log of that time was wiped",
+  "expect": {
+    "runs_kept": 2,
+    "runs_from_picture": 2,
+    "run_kinah": 1200000,
+    "run_start": "21:40:02Z",
+    "run_starts": "21:40:02Z 21:48:57Z"
+  }
+}

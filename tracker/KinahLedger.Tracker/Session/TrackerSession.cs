@@ -1131,6 +1131,13 @@ public sealed partial class TrackerSession
         // lines not seen in the last ten minutes
         var witnessed = _tracker.Unaligned > unaligned ? Reread.Unseen(_recent, lines, now) : fresh;
         foreach (var (src, name) in EventWitness.Read(witnessed)) Instances.Witness(src, name, now, Zone);
+        // the chat's own word on an expedition's room (RoomWitness, 2026-10-25): "Left Urugugu Canyon Dungeon room." ends the
+        // run there at once, "Starting in 10s." is a run beginning. A line first on screen 20 s ago or more is one read again
+        foreach (var l in witnessed)
+        {
+            if (RoomWitness.LeftRoom(l) is { } place) { if (NewLine(l, now)) Instances.RoomLeft(place, now); }
+            else if (RoomWitness.StartLine(l) && NewLine(l, now)) Instances.StartLine(now);
+        }
         bool afterFade = _tracker.LastAfterFade;
         // a read that couldn't be lined up with the last one counts nothing; the log says so, so a missed line can be traced
         if (_tracker.LastFromAnchor) CrashLog.Note($"the last read was a stray line, so this one was lined up with the last full read of the chat ({fresh.Count} new)");
@@ -2438,7 +2445,18 @@ public sealed partial class TrackerSession
             if (_gatherNames.Contains(_items.NameOf(ga.ItemId))) { _lastGatherAt = ev.Time; Witness(ev.Time); }
         }
         if (ev is not CraftResult && BossTakes(ev)) return _boss is { } b ? $"World boss · {b}" : "World boss";
+        // dated inside a run that "Left … Dungeon room." closed already (a line the vote or the rare gate let through after it:
+        // 2026-10-24, the cube's Divine Canyon Cloak of 14:12:48 after the 14:12:53 line): that run's, which counts nothing from
+        // the chat; never farming
+        if (ev is not CraftResult && Instances.LeftRunOf(ev.Time) is { } leftRun)
+        {
+            CrashLog.Note($"{Describe(ev)}: dated {ev.Time.ToLocalTime():HH:mm:ss}, inside the {leftRun.Zone} run before its room was left: that run's, not counted, not farming");
+            return new Activity(leftRun.Kind == "Event" ? ActivityKind.Event : ActivityKind.Expedition, leftRun.Zone).Label;
+        }
         var kind = ZoneLocator.KindOf(Zone);
+        // after "Left … Dungeon room." the minimap may name the expedition for minutes with no run open (InstanceLog.HeldHere):
+        // what lands then is inside with no run, counted nowhere, as ever (2026-10-24 14:13:12, 10,000 Kina (Bound) 19 s after
+        // the line; 14:15:57, an achievement's 9,000; none of it farming)
         bool inside = kind != null && kind != ZoneLocator.Ignored;
         // out of an event already (its rewards came, then the open world's Kina or a kill), the minimap a read behind
         if (inside && kind == "Event" && Instances.OutAfterRewards(ev))
