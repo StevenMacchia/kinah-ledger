@@ -3732,6 +3732,17 @@ options: --process aion[,other]");
                 sv2.Instances.Close();
                 var twoRuns = sv2.Instances.Snapshot().Where(r => r.Zone == "Urugugu Canyon" && r.Start >= sv0.AddMinutes(-1) && r.Start <= sv0.AddMinutes(30)).ToList();
                 Check("a second reward table in one run: two runs", $"{twoRuns.Count} · {string.Join(" ", twoRuns.Select(r => r.Items.Values.Sum()))}", "2 · 5 3");
+                // Odyle gathered inside the expedition: the run's reward on top of its table, never Gathering (Steven, 2026-10-25)
+                var og = new TrackerSession(null, new Settings(), items, "Test"); var o0 = DateTime.UtcNow.AddHours(-3);
+                og.Engine.SetZone("Auldor's Sanctum"); og.ZoneView.SetZone("Auldor's Sanctum"); og.Instances.Zone("Auldor's Sanctum", o0);
+                og.ProcessChat(new List<string> { "[x] a" }, o0);
+                og.GatherOutcome(o0.AddSeconds(59), true, false);
+                for (int i = 0; i < 3; i++) og.ProcessChat(new List<string> { "[x] a", "Odyle acquired." }, o0.AddSeconds(60 + i * 0.6));
+                og.FlushVotes(o0.AddSeconds(64));
+                og.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "5", 5, new() { (key, 30.0), ("Other", 98.7) }) }, o0.AddSeconds(300));
+                var orun = og.Instances.CurrentRun; long odyle = items.IdOf("Odyle");
+                Check("Odyle gathered inside an expedition: the run's, on top of its table, not Gathering",
+                    $"{orun?.Gathered.GetValueOrDefault(odyle)} {orun?.Items.GetValueOrDefault(odyle)} {orun?.Items.Values.Sum()} {og.Engine.Items.GetValueOrDefault(odyle)}", "1 1 6 0");
             }
             {
                 // Nightmare is known but left alone: its rewards never change, so nothing there is counted

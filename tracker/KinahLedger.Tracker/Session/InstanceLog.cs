@@ -55,6 +55,11 @@ public sealed class InstanceRun
     public long ChatKinahSetAside { get; set; }
     /// <summary>No reward picture was read for the run, so its rewards are not known (since 0.8.18). Kills still count; the chat's Kina is set aside like its items (since 2026-10-25).</summary>
     public bool RewardsNotRead { get; set; }
+    /// <summary>
+    /// Gathering materials picked up inside an expedition or Transcendence before its reward table (Odyle in the dungeon):
+    /// the run's own rewards on top of the table (Steven, 2026-10-25), kept in <see cref="Items"/> when the table is filed. Since 0.8.36.
+    /// </summary>
+    public Dictionary<long, int> Gathered { get; set; } = new();
     /// <summary>The reward table's coin slot (a K or M count) was there but not named, so the run's Kinah is not known (since 0.8.24).</summary>
     public bool KinahNotRead { get; set; }
     /// <summary>
@@ -556,6 +561,9 @@ public sealed class InstanceLog
 
     /// <summary>An event as it was counted (rewards already turned into rewards): loot and kills go to the open run.</summary>
     /// <param name="batch">How many loot lines landed with it at once: three or more items are the run's rewards coming in.</param>
+    /// <summary>Whether an item is a gathering material (set by the session from the gathering list).</summary>
+    public Func<long, bool>? IsGatherMaterial { get; set; }
+
     public void Loot(GameEvent ev, int batch = 1)
     {
         lock (_lock)
@@ -572,6 +580,17 @@ public sealed class InstanceLog
             // Transcendence and events). A chat item or chat Kina is set aside, counted for the log. Until the picture is read
             // it dates the run and its rewards' arrival; after it, nothing from the chat moves the run's end (2026-10-24: the
             // 14:12:48 table's run "ended" at 14:15:52 on an achievement's 9,000 Kina, after the room was left)
+            // a gathering material picked up inside an expedition or Transcendence (Odyle in the dungeon), before its reward
+            // table and not in a burst of reward lines, is gathered there: the run's reward on top of the table (Steven,
+            // 2026-10-25). Never an event's: events never count gathering materials
+            if (PictureOnly(_cur) && _cur.Kind != "Event" && _cur.Tables == 0 && batch < 3 && ev is ItemAcquired { Bound: false } g
+                && !ev.Via.Contains("reward table") && IsGatherMaterial?.Invoke(g.ItemId) == true)
+            {
+                _cur.Gathered[g.ItemId] = _cur.Gathered.GetValueOrDefault(g.ItemId) + g.Count;
+                _cur.Items[g.ItemId] = _cur.Items.GetValueOrDefault(g.ItemId) + g.Count;
+                _cur.LastLoot = ev.Time;
+                return;
+            }
             if (PictureOnly(_cur) && ev is ItemAcquired or KinahChanged { Delta: > 0 } && !ev.Via.Contains("reward table"))
             {
                 if (ev is ItemAcquired ci) { _cur.ChatItemsSetAside += ci.Count; _cur.ChatItems[ci.ItemId] = _cur.ChatItems.GetValueOrDefault(ci.ItemId) + ci.Count; }
@@ -922,8 +941,10 @@ public sealed class InstanceLog
             if (_cur == null || _cur.Kind == WorldBoss) return;
             MarkPaidAreaLocked(t);   // the run ends when the player moves on from here (0.8.20)
             _cur.Tables++; _cur.TableAt ??= t;
-            int chatItems = _cur.Items.Values.Sum() + _cur.Bound;
+            int chatItems = _cur.Items.Values.Sum() + _cur.Bound - _cur.Gathered.Values.Sum();
             _cur.Items.Clear(); _cur.BoundItems.Clear(); _cur.Bound = 0;
+            // what was gathered inside stays the run's, on top of the table
+            foreach (var (gid, gc) in _cur.Gathered) _cur.Items[gid] = _cur.Items.GetValueOrDefault(gid) + gc;
             foreach (var ev in slots)
                 if (ev is ItemAcquired a)
                 {

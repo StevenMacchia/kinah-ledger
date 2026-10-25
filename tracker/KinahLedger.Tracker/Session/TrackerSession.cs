@@ -435,6 +435,7 @@ public sealed partial class TrackerSession
         _parser.Likely = () => Engine.ItemRows().Select(r => r.Name)
             .Concat(new[] { Target.Name }.Concat(Engaged).Where(e => e != null).Distinct().SelectMany(e => LootBook.Current.TableOf(e!).Select(x => x.Item))).ToList();
         _parser.Fighting = Fighting;
+        Instances.IsGatherMaterial = IsGatherMaterial;
         _parser.Rare = IsRare;
         // a misread settled by the candidate sets of the moment, and refused when it fits none of them (brief item 1)
         _parser.Context = NameContextNow;
@@ -2537,9 +2538,12 @@ public sealed partial class TrackerSession
             // just out of it: its rewards may still be landing
             else if (run.Leaving) inside = Instances.Route(ev, _batch, Target.RewardOpen(ev.Time)) == RunRoute.Run;
         }
-        // a gather the panel or its bar just produced is gathering, even in a zone the minimap calls an instance (Steven, 2026-10-24
-        // 15:21: Odyle gathered in Auldor's Sanctum); never the run's loot
-        if (inside && gathered) { inside = false; CrashLog.Note($"{_items.NameOf(((ItemAcquired)ev).ItemId)}: gathered here, counted with gathering, not the run's loot"); }
+        // a gather inside an expedition or Transcendence is that run's reward, on top of its reward table, never Gathering
+        // (Steven, 2026-10-25, picked in a prompt: "odyle within the expedition itself ... should be considered a reward from
+        // the dungeon"; this replaces the 2026-10-24 rule that sent Auldor's Sanctum's Odyle to Gathering). In an event a
+        // gather stays Gathering: events never count gathering materials
+        if (inside && gathered && Instances.CurrentKind is "Event") { inside = false; CrashLog.Note($"{_items.NameOf(((ItemAcquired)ev).ItemId)}: gathered during an event, counted with gathering, not the event's"); }
+        else if (inside && gathered) CrashLog.Note($"{_items.NameOf(((ItemAcquired)ev).ItemId)}: gathered inside the run, counted as its reward");
         if (inside)
         {
             // the reward table's coin slot, read first, then the same Kina in the chat: once
