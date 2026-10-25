@@ -219,6 +219,8 @@ public partial class OptionsWindow : Window
 
         AboutSupportBtn.Click += (_, _) => MainWindow.Open(MainWindow.SupportUrl);
         AboutSiteBtn.Click += (_, _) => MainWindow.Open(MainWindow.SiteUrl);
+        AboutDiscordBtn.Click += (_, _) => MainWindow.Open(MainWindow.DiscordUrl);
+        ReleasesDiscordLink.Click += (_, _) => MainWindow.Open(MainWindow.DiscordUrl);
         AboutSourceBtn.Click += (_, _) => MainWindow.Open(MainWindow.RepoUrl);
         AboutSentBtn.Click += (_, _) => _host.WhatsSent(this);
         AboutLogsBtn.Click += (_, _) => MainWindow.Open(CrashLog.Dir);

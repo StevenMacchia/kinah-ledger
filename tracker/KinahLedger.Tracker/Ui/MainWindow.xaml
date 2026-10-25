@@ -497,13 +497,16 @@
       <Border x:Name="StatusBar" Grid.Row="3" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left" Margin="0,14,0,0">
       <Border x:Name="StatusInner" BorderBrush="{DynamicResource Line}">
       <Grid x:Name="StatusRow">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250" VerticalAlignment="Center"/>
         <!-- shown with a reading problem: straight to the page that fixes it -->
         <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
         <!-- the last minute of what was read and counted, saved on this PC for a bug report (2026-10-23) -->
         <TextBlock x:Name="MiscountText" Grid.Column="2" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
                    ToolTip="Saves what the tracker read and counted in the last minute to a folder on this PC, for a bug report. Nothing is sent."><Hyperlink x:Name="MiscountLink" Style="{StaticResource LinkStyle}">Report a miscount</Hyperlink></TextBlock>
+        <!-- the Kinah Ledger Discord: where a miscount report goes (#bugs-and-feedback), help and release news (2026-10-25) -->
+        <TextBlock x:Name="DiscordText" Grid.Column="3" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+                   ToolTip="Opens the Kinah Ledger Discord in your browser. Post a miscount in #bugs-and-feedback with a screenshot, your server and the tracker version."><Hyperlink x:Name="DiscordLink" Style="{StaticResource LinkStyle}">Discord</Hyperlink></TextBlock>
       </Grid>
       </Border>
       </Border>
