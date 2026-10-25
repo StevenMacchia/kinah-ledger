@@ -24,6 +24,24 @@ public sealed record AccuracyCardView(
 
     public bool HasRows => Rows.Count > 0;
 
+    /// <summary>
+    /// What a player sees (0.8.34, Steven 2026-10-25: a low "accuracy %" "makes the tool look useless and obsolete"): nothing
+    /// while nothing needs a look; only "2 to look at" when the game's own numbers disagreed with a count, opening the list
+    /// to Report or mark Fine. No percentage, no counts, nothing on the panel's tick or the Discord card. With
+    /// <paramref name="details"/> (Options › Reading › Show accuracy details, for checking the tracker) the full card: the
+    /// line, the four counts, the tick on the panel and the Discord line. The measuring underneath runs either way.
+    /// </summary>
+    public static AccuracyCardView From(AccuracyScore.Summary s, bool details)
+    {
+        var full = From(s);
+        if (details) return full;
+        int n = full.Rows.Count;
+        return n == 0
+            ? new AccuracyCardView("", "good", "", null, null, "", Array.Empty<(string, int, string)>(), full.Rows)
+            : new AccuracyCardView(full.Chip, full.Tone, n == 1 ? "The game's own numbers disagreed with this one." : "The game's own numbers disagreed with these.",
+                full.Chip, null, "", Array.Empty<(string, int, string)>(), full.Rows);
+    }
+
     public static AccuracyCardView From(AccuracyScore.Summary s)
     {
         var rows = s.ToCheck.OrderByDescending(c => c.At)

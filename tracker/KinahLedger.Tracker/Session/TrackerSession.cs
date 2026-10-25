@@ -1280,6 +1280,7 @@ public sealed partial class TrackerSession
             bool any = false;
             int kept = 0, skipped = 0;
             _lastRepeatOnly = false;
+            _applied.Clear();
             foreach (var p0 in events)
             {
                 var parsed = p0 with { Via = p0.Via.Length > 0 ? via + " · " + p0.Via : via };
@@ -1310,10 +1311,13 @@ public sealed partial class TrackerSession
                 if (ev is ItemAcquired rq && !via.Contains("count read again"))
                 {
                     bool nw = NeedsWitness(rq, made, crafting);
+                    // a line whose count was lost ("Acquired Kukuru") may be any of the item's lines read cut (2026-10-25 11:34:31)
+                    bool unsure = _parser.CountUnsure(raw);
                     var rkey = ItemLineKey(_items.NameOf(rq.ItemId), rq.Count);
-                    var screen = ScreenOf(rkey, raw, meta is { } mr ? mr.Read : lines, meta?.At ?? now);
+                    var screen = ScreenOf(rkey, raw, meta is { } mr ? mr.Read : lines, meta?.At ?? now, unsure);
                     var place = meta is { } mp ? new ItemRepeatGuard.Place(mp.FromBottom, mp.Read.Count, mp.Above1, mp.Above2) : null;
-                    var verdict = RepeatCheck(rq, ev, raw, meta?.At ?? parsed.Time, place, screen, nw, now);
+                    var verdict = RepeatCheck(rq, ev, p0, raw, meta?.At ?? parsed.Time, place, screen, nw, unsure, now);
+                    _applied.Add((p0, verdict));
                     if (verdict == ItemRepeatGuard.Verdict.Repeat) { skipped++; continue; }
                     kept++;
                     if (verdict == ItemRepeatGuard.Verdict.Count) FinishChatItem(ev, raw, nw, now);
@@ -1339,15 +1343,22 @@ public sealed partial class TrackerSession
         if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
         var thisRead = new List<string>();   // lines the vote and the read-again count in this read, for the settle below
         // ---- counts lost on a line's first read (2026-10-24 13:07: "Acquired Odyle" for x7) ----
-        // a pickup counted as one from a line with no readable count: the line's place in this read, if it shows the count now
-        foreach (var (wp, wn, wline) in _counts.Look(lines, fresh.Count, now, _parser.Meaning, ChatParser.HasCount))
+        // a pickup counted as one from a line with no readable count: provisional until its place in the reads after it
+        // shows one count twice (CountWatch), then amended to that count; never a second pickup
+        foreach (var (wp, wn, wline, when) in _counts.Look(lines, fresh.Count, now, _parser.Meaning, ChatParser.HasCount))
         {
             if (wn == 0) { CountAssumed(wp.Raw); continue; }
-            if (wn == 1) { CrashLog.Note($"\"{wp.Raw}\": its count read in a later read as x1"); continue; }
-            GameEvent? delta = wp.Event switch { ItemAcquired a => a with { Count = wn - 1, Time = now }, RewardReceived r => r with { Count = wn - 1, Time = now }, _ => null };
+            var wname = wp.Event switch { ItemAcquired a => _items.NameOf(a.ItemId), RewardReceived r => r.Name, _ => wp.Item };
+            var twice = string.Join(" and ", when.Select(w => w.ToLocalTime().ToString("HH:mm:ss.f")));
+            _repeats.Settle(wname, wn);
+            if (wn == 1) { CrashLog.Note($"\"{wp.Raw}\": its count read twice in later reads as x1 ({twice})"); continue; }
+            // the pickup's own time: it is the same pickup, amended, so the kill or gather that stood behind it still does
+            // (a settle can come up to 15 s later, past a kill's witness window)
+            GameEvent? delta = wp.Event switch { ItemAcquired a => a with { Count = wn - 1 }, RewardReceived r => r with { Count = wn - 1 }, _ => null };
             if (delta == null) continue;
             bool dany = Apply(new[] { delta }, wline, "chat · count read again");
             CrashLog.Read($"{wline}    (the count the first read of \"{wp.Raw}\" lost: x{wn}, {wn - 1} more counted)", dany);
+            CrashLog.Note($"{wname}: quantity settled x{wn} (was 1 assumed), read twice at {twice}");
             Accuracy.Add("qty_recovered");
         }
         void WatchCount(string l, List<GameEvent> events)
@@ -1355,11 +1366,30 @@ public sealed partial class TrackerSession
             if (!_parser.CountUnsure(l)) return;
             var ev = events.FirstOrDefault(e => e is ItemAcquired or RewardReceived);
             if (ev == null) return;
+            // what the repeat guard did with it: a line it left out counted nothing, so there is nothing to watch or assume;
+            // one it holds is watched, and settles or is assumed only once it counts (2026-10-25 11:34:32: "Acquired
+            // Kukuru", the second Kukuru line read cut, was "1 assumed" the moment it came)
+            var ap = _applied.FirstOrDefault(x => ReferenceEquals(x.Src, ev));
+            var verdict = ap.Src != null ? ap.V : ItemRepeatGuard.Verdict.Count;
+            if (verdict == ItemRepeatGuard.Verdict.Repeat) return;
+            bool held = verdict == ItemRepeatGuard.Verdict.Wait;
             var item = CountWatch.ItemOf(_parser.Meaning(l).Key);
             int at = lines.Count - 1;
             while (at >= 0 && lines[at].Trim() != l.Trim()) at--;
-            if (item.Length == 0 || at < 0) { CountAssumed(l); return; }
-            _counts.Watch(l, item, ev, lines.Count - 1 - at, now);
+            // the vote's chosen reading can come from an earlier read than this one, which shows the line read another way:
+            // then its place is the lowest line of the item this read shows without a count
+            if (at < 0 && item.Length > 0)
+            {
+                at = lines.Count - 1;
+                while (at >= 0 && !(CountWatch.ItemOf(_parser.Meaning(lines[at]).Key) == item && !ChatParser.HasCount(lines[at]))) at--;
+            }
+            if (item.Length == 0 || at < 0)
+            {
+                // nowhere to look: one, now, or once the guard counts it
+                if (held) _counts.Watch(l, item, ev, -1, now, held: true); else CountAssumed(l);
+                return;
+            }
+            _counts.Watch(l, item, ev, lines.Count - 1 - at, now, held);
         }
         // a line the settle just counted shows up again as new once the reads line up: the same pickup, counted once
         // (Steven, 2026-10-23 16:22: 200 Natura Soul Crystals and 50,000 Kina counted twice)
@@ -3481,10 +3511,12 @@ public sealed partial class TrackerSession
     {
         var t = (at ?? DateTime.UtcNow).AddSeconds(ChatVoter.MaxSeconds + 0.1);
         if (_voter.Waiting > 0 && _prevRead.Count > 0) ProcessChat(new List<string>(_prevRead), t);
-        foreach (var w in _counts.Flush()) CountAssumed(w.Raw);
         if (_kina.Readings > 0) SettleKina(_kina.Flush(t), t);
         CommitHeld();
         ReleaseRepeats(t.AddSeconds(ItemRepeatGuard.HoldSeconds), final: true);   // item lines still waiting for a second pickup's witness
+        // pickups whose count no read showed twice: one each, logged. After the repeat guard's last word, so a line it left
+        // out (its watch dropped) is never "1 assumed"
+        foreach (var w in _counts.Flush()) CountAssumed(w.Raw);
         ReleaseAwaiting(t.AddSeconds(WitnessWaitSeconds), final: true);   // a stop or the end of a replay: decided now
         foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(t, final: true);
     }
@@ -3705,6 +3737,8 @@ public sealed class UserPrefs
     public bool SendReportFrames { get; set; }
     /// <summary>Help improve counting (Options › Sharing): confirmed reads and small item crops become training pairs (Session/LabelWriter.cs). On by default, said once on first run.</summary>
     public bool HelpImproveCounting { get; set; } = true;
+    /// <summary>Options › Reading › Show accuracy details (0.8.34): the Accuracy chip, its counts and the panel and Discord lines. Off, a player sees only things to look at.</summary>
+    public bool ShowAccuracy { get; set; }
     /// <summary>True once the one-time "Help improve counting" notice was answered.</summary>
     public bool CountingNoticeSeen { get; set; }
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>

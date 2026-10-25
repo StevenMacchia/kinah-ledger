@@ -72,3 +72,9 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   when it closes), with the chat judged against the picture as live. Frames may name a picture in another case's folder
   (`../event-2026-10-24-hidden-lugi-1602/160642.jpg`). Run keys: `run_items` (the runs' items by name, bound and
   tradeable together; only the names expect lists are checked) and `run_gear_notes`.
+- `text-2026-10-25-kukuru-cut-count` (Steven: "kukuru x3 was read as kukuru x1"): two Kukuru gathers just after a visit to
+  storage, and the chat showing exactly two "Acquired Kukuru x3." lines to the end. 0.8.33 counted 4: the first gather
+  filed as the inventory's, and the second line, read cut as "Acquired Kukuru" by a read that lined up one line off, as a
+  third pickup "1 assumed". Right: 6. A line whose count was lost is a copy of the item at any count (`ItemRepeatGuard`),
+  its count read twice at its place amends the pickup (`CountWatch`), and the gathering panel's gather is never the
+  inventory's (`NotForGather`). The same rules on small hand-made reads: `Session/QtySettleTests.cs` in parse-test.
