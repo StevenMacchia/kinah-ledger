@@ -45,7 +45,15 @@ public sealed class InstanceRun
     public int ChatItemsSetAside { get; set; }
     /// <summary>Those chat items by id, for the log and the tests: where they went, never what the run counts.</summary>
     public Dictionary<long, int> ChatItems { get; set; } = new();
-    /// <summary>No reward picture was read for the run, so its rewards are not known (since 0.8.18). Kinah and kills still count.</summary>
+    /// <summary>
+    /// Kina the chat printed in a run counted from its reward picture, never the run's Kinah (since 2026-10-25): its Kinah is
+    /// the table's coin or the event cards'. On 2026-10-23 and 24 every such line in an Urugugu Canyon, Vakron Sky Island or
+    /// Hidden Lugi run was an achievement's reward or a claim (14:15:57, 9,000 after "Soulful Unique Gear I achieved."; 20:43:46
+    /// Oct 23, 43,000 after "Foodie I achieved.") or the open world's (18:07:35, 474); no enemy in them dropped Kina.
+    /// Kept for the log and the tests.
+    /// </summary>
+    public long ChatKinahSetAside { get; set; }
+    /// <summary>No reward picture was read for the run, so its rewards are not known (since 0.8.18). Kills still count; the chat's Kina is set aside like its items (since 2026-10-25).</summary>
     public bool RewardsNotRead { get; set; }
     /// <summary>The reward table's coin slot (a K or M count) was there but not named, so the run's Kinah is not known (since 0.8.24).</summary>
     public bool KinahNotRead { get; set; }
@@ -69,6 +77,11 @@ public sealed class InstanceRun
     public int UnknownItems { get; set; }
     /// <summary>What the unknown gear could be, one line a piece ("Legend gear, one of Elder Gloves / Relic Collector Gloves").</summary>
     public List<string> GearNotes { get; set; } = new();
+    /// <summary>
+    /// The chat's item lines in the seconds around its reward picture, as they were judged against it (Session/TableWitness.cs,
+    /// since 2026-10-25): what a read again of its saved pictures judges again. Kept on this PC, never sent.
+    /// </summary>
+    public List<TableWitness.Line> TableChat { get; set; } = new();
     /// <summary>Slots on the reward picture it was filed from (a read again from the pictures replaces it only when it reads more).</summary>
     public int PictureSlots { get; set; }
     /// <summary>
@@ -198,7 +211,9 @@ public enum RunRoute { Run, NotRun }
 /// <para>A run opens at its first witness: the minimap naming an instance, or for an event the chat's "joined event" (up
 /// to two minutes before the minimap confirms it), an event NPC's line or the event's header under the minimap. Unknown
 /// zone (an inner area the list lacks) keeps it open. It closes when the minimap names another instance, or after it was
-/// left (an open-world zone) once its rewards are in; see <see cref="Route"/>. A run with no loot is not kept.</para>
+/// left (an open-world zone) once its rewards are in; see <see cref="Route"/>. An expedition's run closes at once when the
+/// chat says its room was left (<see cref="RoomLeft"/>), and the next one opens only on a real entry (see there). A run with
+/// no loot is not kept.</para>
 /// </summary>
 public sealed class InstanceLog
 {
@@ -259,26 +274,52 @@ public sealed class InstanceLog
             // an area left alone (Nightmare: the same rewards every time): no run, and the one before ends here
             if (kind == ZoneLocator.Ignored) { CloseLocked("an area that isn't counted"); return; }
             // the area the minimap names now, and when it changed (an expedition's areas all file under the expedition)
-            if (!string.Equals(zone, _area, StringComparison.OrdinalIgnoreCase)) { _area = zone; _areaSince = now; }
+            if (!string.Equals(zone, _area, StringComparison.OrdinalIgnoreCase)) { _prevArea = _area; _area = zone; _areaSince = now; }
             if (kind != null)
             {
                 // an area of an expedition is that expedition: walking from one area to the next is the same run
                 var name = ZoneLocator.RunName(zone);
+                // the chat said the expedition's room was left (RoomLeft): the minimap may name its areas for minutes after
+                // (2026-10-24: "Left Urugugu Canyon Dungeon room." at 14:12:53, Auldor's Sanctum until 14:18:06), and such a read
+                // opens no run. The next one needs a real entry: the open world on the minimap first, or the chat's countdown
+                if (_held is { } held && _cur == null)
+                {
+                    // ten seconds out in the open world, as for a re-entry (one read of an open-world name is a flicker)
+                    if (_heldOut is DateTime o && (now - o).TotalSeconds >= 10)
+                    {
+                        CrashLog.Note($"in {zone} again after the open world ({o.ToLocalTime():HH:mm:ss}), since the {held.Run} room was left: a new entry");
+                        _held = null;
+                    }
+                    else if (string.Equals(name, held.Run, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _heldOut = null;
+                        if (_heldMoveAt == null && !_heldAreas.Contains(zone, StringComparer.OrdinalIgnoreCase)) _heldMoveAt = now;
+                        if (!_heldSaid) { _heldSaid = true; CrashLog.Note($"the minimap names {zone} after the {held.Run} room was left ({held.At.ToLocalTime():HH:mm:ss}): no new run until the open world shows or the chat's countdown begins"); }
+                        return;
+                    }
+                    else
+                    {
+                        CrashLog.Note($"the minimap names {zone}, not the {held.Run} room that was left: a place of its own");
+                        _held = null;
+                    }
+                }
                 // ...until its reward table was read: moving on from there (back to the village, into the canyon) is the end of
                 // that run, and the way into the next one (Steven, 2026-10-23: five Urugugu runs from 18:26 to 19:04 were one).
                 // A move holds for two reads or 3 s (one read of another name is a flicker of the minimap), and the run takes
-                // its late reward lines for 30 s after its table before the next one begins
-                if (_cur != null && _cur.Kind != WorldBoss && _paidArea != null)
+                // its late reward lines for 30 s after its table before the next one begins. For an expedition the move alone
+                // is not enough since 2026-10-25: the chat's countdown must say the next run began (TrySplitLocked). Once the
+                // run was left for the open world, the instance named again is a new entry, never a split (below)
+                if (_cur != null && _cur.Kind != WorldBoss && _paidArea != null && _leftAt == null)
                 {
-                    if (!string.Equals(zone, _paidArea, StringComparison.OrdinalIgnoreCase))
+                    if (!PaidAreaLocked(zone))
                     {
                         if (_moveAt == null) { _moveAt = now; _moveReads = 0; }
                         _moveReads++;
                         if (_moveReads >= 2 || (now - _moveAt.Value).TotalSeconds >= MoveHoldSeconds) _moveConfirmed = true;
                     }
                     else if (!_moveConfirmed) { _moveAt = null; _moveReads = 0; }
-                    if (_moveConfirmed && _tableAt is DateTime tableT && (now - tableT).TotalSeconds >= RewardLateSeconds) SplitLocked($"its reward table was read, then {zone}");
-                    if (_cur != null && _moveConfirmed) return;   // still the paid run's time for late reward lines
+                    TrySplitLocked(now);
+                    if (_cur != null && _moveConfirmed) return;   // still the paid run's: late reward lines, or waiting for the next run's countdown
                 }
                 var ev = kind == "Event" && !string.Equals(name, zone, StringComparison.OrdinalIgnoreCase) ? zone : kind == "Event" && ZoneLocator.FamilyOf(zone) == "" ? zone : "";
                 // the event just closed by the open world's Kina or a kill, still on the minimap for a read: not a new run
@@ -315,10 +356,15 @@ public sealed class InstanceLog
                 }
                 ClearPending();
                 Witness(_cur, "minimap", now);
+                // the chat's countdown just before ("Starting in 10s." at 14:19:20, the minimap at 14:19:30, 2026-10-24)
+                if (_startAt is DateTime sa && (now - sa).TotalSeconds is >= 0 and <= StartWitnessSeconds && NeedsCountdown(_cur)) Witness(_cur, "chat: starting", sa);
                 CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run started: {_cur.Label}" + (name != zone && zone != _cur.Event ? $" (in {zone})" : "") + (_cur.Start < now ? $", first seen {(now - _cur.Start).TotalSeconds:0} s earlier ({_cur.Witnesses.Split(" · ")[0]})" : ""));
             }
             else if (zone != SessionEngine.UnknownZone)
             {
+                // out in the open world after the chat said a room was left: the next read of that expedition, ten seconds on, is
+                // a real entry (InstanceLog.Zone above)
+                if (_held is { } h0 && _heldOut == null) { _heldOut = now; CrashLog.Note($"out in the open world ({zone}) after the {h0.Run} room was left: its next entry is a run"); }
                 // out in the open world: an event or expedition run takes its rewards for a little longer before it closes
                 if (_cur != null && _cur.Kind != WorldBoss)
                 {
@@ -515,17 +561,27 @@ public sealed class InstanceLog
         lock (_lock)
         {
             if (_cur == null) return;
-            // moved on after the run's reward table: a late reward line is still that run's, anything else begins the next
-            if (_moveConfirmed && _tableAt is DateTime tab && !(RewardLike(ev, batch) && (ev.Time - tab).TotalSeconds <= RewardLateSeconds))
+            // moved on after the run's reward table: a late reward line is still that run's, anything else begins the next (an
+            // expedition's next run only once the chat's countdown said so, TrySplitLocked)
+            if (_moveConfirmed && _tableAt is DateTime tab && _leftAt == null && (!NeedsCountdown(_cur) || _startAt is DateTime st0 && st0 > tab)
+                && !(RewardLike(ev, batch) && (ev.Time - tab).TotalSeconds <= RewardLateSeconds))
                 SplitLocked("its reward table was read, and the next run's loot came");
             // the run was left and its time for rewards is over: it closes, and this pickup is farming's
             if (_leftAt is { } left && (ev.Time - left).TotalSeconds > RewardGraceSeconds) { CloseLocked("time for rewards over"); return; }
-            // a run's items come from its reward picture, never the chat (Steven, 2026-10-23: expeditions, Transcendence and
-            // events). A chat item is set aside, counted for the log; it still dates the run and its rewards' arrival
-            if (PictureOnly(_cur) && ev is ItemAcquired ci && !ev.Via.Contains("reward table"))
+            // a run's items and Kinah come from its reward picture, never the chat (Steven, 2026-10-23: expeditions,
+            // Transcendence and events). A chat item or chat Kina is set aside, counted for the log. Until the picture is read
+            // it dates the run and its rewards' arrival; after it, nothing from the chat moves the run's end (2026-10-24: the
+            // 14:12:48 table's run "ended" at 14:15:52 on an achievement's 9,000 Kina, after the room was left)
+            if (PictureOnly(_cur) && ev is ItemAcquired or KinahChanged { Delta: > 0 } && !ev.Via.Contains("reward table"))
             {
-                _cur.ChatItemsSetAside += ci.Count; _cur.ChatItems[ci.ItemId] = _cur.ChatItems.GetValueOrDefault(ci.ItemId) + ci.Count; _cur.LastLoot = ci.Time;
-                if (batch >= 3) Paid(ci.Time);
+                if (ev is ItemAcquired ci) { _cur.ChatItemsSetAside += ci.Count; _cur.ChatItems[ci.ItemId] = _cur.ChatItems.GetValueOrDefault(ci.ItemId) + ci.Count; }
+                else if (ev is KinahChanged ck)
+                {
+                    _cur.ChatKinahSetAside += ck.Delta;
+                    CrashLog.Note($"{_cur.Label}: {ck.Delta:N0} Kina{(ck.Bound ? " (bound)" : "")} in the chat set aside, not the run's: its Kinah comes from its reward {(_cur.Kind == "Event" ? "cards" : "table")}");
+                }
+                if (_cur.Tables == 0) _cur.LastLoot = ev.Time;
+                if (batch >= 3) Paid(ev.Time);
                 return;
             }
             switch (ev)
@@ -539,8 +595,9 @@ public sealed class InstanceLog
                 case RewardReceived r when batch >= 3:
                     Paid(r.Time);
                     break;
-                // bound Kina too: an expedition's or a Transcendence's end reward ("Acquired 20,000 Kina (Bound).") is money to
-                // spend all the same (Steven, 2026-10-22: "its straight cash")
+                // bound Kina too: money to spend all the same (Steven, 2026-10-22: "its straight cash"). In a run counted from its
+                // picture that is the table's coin alone (above); the 2026-10-22 19:20:33 "Acquired 20,000 Kina (Bound)." after
+                // leaving Urugugu Canyon was "Urugugu Canyon Conquest Clear IV achieved."'s (19:19:04), not the run's
                 case KinahChanged k when k.Delta > 0:
                     _cur.Kinah += k.Delta; _cur.LastLoot = k.Time;
                     if (batch >= 3 || k.Via.Contains("reward table")) Paid(k.Time);
@@ -568,41 +625,250 @@ public sealed class InstanceLog
         {
             Paid(t);
             if (_cur == null || _cur.Kind == WorldBoss) return;
-            _tableAt = t; _paidArea = _area;
+            MarkPaidAreaLocked(t);
         }
     }
 
     /// <summary>
-    /// A reward table is about to be read into the open run. When this run's table was read already (a minute or more ago),
-    /// this one is the next run's, never added onto the first: the first closes and the next starts, from the last change
-    /// of area since that table (2026-10-23: five tables, one run of 37:04 with 3,000,000 Kinah).
+    /// Where the table was read: the area the minimap names, and the one it named just before when that changed moments
+    /// earlier. As each Urugugu table shows the title reads "Urugugu Canyon" for a few seconds, then Auldor's Sanctum again
+    /// (2026-10-24: 4 to 11 s before every table, 14:12:43 for 14:12:48, 18:28:26 for 18:28:31, Auldor's Sanctum at 18:28:52):
+    /// both are where the table was, and going back to the second is no move.
     /// </summary>
-    public void TableStarting(DateTime t)
+    void MarkPaidAreaLocked(DateTime t)
+    {
+        _tableAt = t; _paidArea = _area;
+        _paidBefore = _areaSince is DateTime since && (t - since).TotalSeconds <= PaidFlickerSeconds ? _prevArea : null;
+    }
+
+    bool PaidAreaLocked(string zone) =>
+        string.Equals(zone, _paidArea, StringComparison.OrdinalIgnoreCase) || (_paidBefore != null && string.Equals(zone, _paidBefore, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>How soon before a table the minimap's change of area may be its title's flicker (<see cref="MarkPaidAreaLocked"/>).</summary>
+    public const double PaidFlickerSeconds = 30;
+
+    /// <summary>
+    /// A reward table is about to be read into the open run. When this run's table was read already (a minute or more ago),
+    /// this one is the next run's, never added onto the first: the first closes and the next starts, from the minimap's move
+    /// out of where that table was when it saw one, else the last change of area since that table (2026-10-23: five tables,
+    /// one run of 37:04 with 3,000,000 Kinah). A second table sooner than
+    /// another run could end (<see cref="TooSoonForNextRun"/>) is no run's: false, and the caller reads nothing from it
+    /// (2026-10-24 19:03:54: the open bag after leaving the dungeon, 85 s after the 19:02:29 table, became "run 23" with no
+    /// Kinah and nothing named). True: the table may be read into the open run.
+    /// </summary>
+    public bool TableStarting(DateTime t)
     {
         lock (_lock)
         {
-            if (_cur == null || _cur.Kind == WorldBoss || _tableAt is not DateTime prev || (t - prev).TotalSeconds < 60) return;
+            // no run open because the chat said the expedition's room was left (RoomLeft): a table soon after is another
+            // window, no run's (2026-10-24 19:03:54, the open bag 53 s after "Left Urugugu Canyon Dungeon room."). One later
+            // than a run could end means a run came that no entry witness saw (the minimap and the countdown both missed):
+            // it opens here, from the minimap's first move since (else its last change of area), and the table is its own, never lost
+            if (_cur == null && _held is { } h && _area != null && string.Equals(ZoneLocator.RunName(_area), h.Run, StringComparison.OrdinalIgnoreCase))
+            {
+                double after = (t - h.At).TotalSeconds, soonestHeld = TooSoonForNextRun(UsualSecondsLocked(h.Run));
+                if (after < soonestHeld)
+                {
+                    CrashLog.Note($"a reward table {after:0} s after the {h.Run} room was left, sooner than another run could end ({soonestHeld:0} s): no run's, nothing read from it");
+                    return false;
+                }
+                var from = _heldMoveAt ?? (_areaSince is DateTime a0 && a0 > h.At ? a0 : t);
+                _held = null; _heldOut = null;
+                _cur = new InstanceRun { Zone = h.Run, Kind = h.Kind, Start = from };
+                _byMinimap = true;
+                CrashLog.Note($"{h.Kind.ToLowerInvariant()} run started: {h.Run}, a reward table {after / 60:0.0} min after its room was left with no entry seen (from {from.ToLocalTime():HH:mm:ss}, when the minimap first moved since)");
+                return true;
+            }
+            if (_cur == null || _cur.Kind == WorldBoss || _tableAt is not DateTime prev || (t - prev).TotalSeconds < 60) return true;
+            double soonest = TooSoonForNextRun(UsualSecondsLocked(_cur.Zone));
+            if ((t - prev).TotalSeconds < soonest)
+            {
+                CrashLog.Note($"a second reward table {(t - prev).TotalSeconds:0} s after {_cur.Label}'s, sooner than another run could end ({soonest:0} s): not the next run's, nothing read from it");
+                return false;
+            }
             var zone = _cur.Zone; var kind = _cur.Kind; var ev = _cur.Event; var fam = _cur.Family;
-            var start = _areaSince is DateTime a && a > prev ? a : t;
+            // from the move out of where the first table was, when the minimap saw one (an expedition's run back to back whose
+            // countdown the chat didn't show: the move waited for it, TrySplitLocked); else the last change of area since
+            var start = _moveConfirmed && _moveAt is DateTime m0 && m0 > prev ? m0 : _areaSince is DateTime a && a > prev ? a : t;
             CloseLocked("a second reward table: the next run's");
             _cur = new InstanceRun { Zone = zone, Kind = kind, Event = ev, Family = fam, Start = start };
             _byMinimap = true;
             CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (a second reward table at {t.ToLocalTime():HH:mm:ss})");
+            return true;
         }
     }
-    string? _area, _paidArea; DateTime? _areaSince, _tableAt, _moveAt; int _moveReads; bool _moveConfirmed;
+
+    /// <summary>The soonest a place's next table can come after one: 90 s, or 40% of its usual run when that is longer.</summary>
+    public static double TooSoonForNextRun(double usualSeconds) => Math.Max(SecondTableSeconds, 0.4 * usualSeconds);
+    public const double SecondTableSeconds = 90;
+
+    /// <summary>A place's usual run: the median length of its counted records (at least three), or 0.</summary>
+    double UsualSecondsLocked(string zone)
+    {
+        var xs = _done.Where(r => string.Equals(r.Zone, zone, StringComparison.OrdinalIgnoreCase) && !r.OutOfAverages && r.Seconds > 0).Select(r => r.Seconds).ToList();
+        return xs.Count < 3 ? 0 : Median(xs);
+    }
+    string? _area, _prevArea, _paidArea, _paidBefore; DateTime? _areaSince, _tableAt, _moveAt; int _moveReads; bool _moveConfirmed;
     public const double MoveHoldSeconds = 3, RewardLateSeconds = 30;
 
     /// <summary>The paid run closes and the next opens, from when the move out of the paid area was first seen.</summary>
     void SplitLocked(string why)
     {
         if (_cur == null) return;
-        var zone = _cur.Zone; var kind = _cur.Kind; var ev = _cur.Event; var fam = _cur.Family; var start = _moveAt ?? DateTime.UtcNow;
+        var zone = _cur.Zone; var kind = _cur.Kind; var ev = _cur.Event; var fam = _cur.Family; var start = _moveAt ?? DateTime.UtcNow; var st = _startAt;
         CloseLocked(why);
         _cur = new InstanceRun { Zone = zone, Kind = kind, Event = ev, Family = fam, Start = start };
         _byMinimap = true;
-        CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (moved on after the last one's reward table)");
+        // an expedition's: the minimap's move and the chat's countdown that made it a run (an event's split keeps none, as before)
+        if (NeedsCountdown(_cur)) { Witness(_cur, "minimap", start); if (st is DateTime s && s >= start.AddSeconds(-StartWitnessSeconds)) Witness(_cur, "chat: starting", s); }
+        CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (moved on after the last one's reward table, {start.ToLocalTime():HH:mm:ss}{(NeedsCountdown(_cur) && st is DateTime s2 ? $"; the chat's countdown {s2.ToLocalTime():HH:mm:ss}" : "")})");
     }
+
+    // ---- the chat's dungeon room lines as a run's edges (2026-10-25) ----
+    // "Left Urugugu Canyon Dungeon room." prints as the player leaves the expedition's room: every Urugugu run of 2026-10-24
+    // that he left ended with it, after its table (14:12:48 table, 14:12:53 the line; 19:02:29, 19:03:01) or partway (17:11:46
+    // in, 17:12:21 out). It closes the open run at once: nothing after it is that run's. The minimap may name the expedition's
+    // areas for minutes after it (Auldor's Sanctum, 14:12:55 to 14:18:06, which opened "run 27" at 14:12:55 and made it 16:09
+    // long), so those reads open no run until a real entry: the minimap naming the open world first, or the chat's countdown
+    // ("Starting in 10s.", printed inside the instance as each run begins: 14:19:20 for the 14:19:30 entry, and 54 to 74 s
+    // after each table of the five runs back to back on 2026-10-23, with no room line between them). The countdown is also
+    // the second witness an expedition's run back to back needs besides the minimap's move (TrySplitLocked).
+
+    /// <summary>The expedition whose room the chat said was left, its kind, and when; null once an entry was seen.</summary>
+    (string Run, string Kind, DateTime At)? _held;
+    bool _heldSaid;
+    /// <summary>When the minimap first named the open world after the room was left (an entry needs ten seconds of it).</summary>
+    DateTime? _heldOut;
+    /// <summary>The areas the minimap named as the room was left (and as its table showed), and the first read of another of the expedition's since.</summary>
+    List<string> _heldAreas = new(); DateTime? _heldMoveAt;
+    /// <summary>The chat's last countdown line ("Starting in 9s.").</summary>
+    DateTime? _startAt;
+    /// <summary>The last run a room line closed: its zone, its kind, from its start to the line.</summary>
+    (string Zone, string Kind, DateTime From, DateTime To)? _roomClosed;
+    /// <summary>The last room line taken for each expedition, for telling it read again from a new one.</summary>
+    readonly Dictionary<string, DateTime> _exits = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// A run left this soon after entry with no table and no kills never began (2026-10-24 17:11:46 in, 17:12:21 "Left Urugugu
+    /// Canyon Dungeon room.", no table, no kills): not kept, never parked as rewards not read.
+    /// </summary>
+    public const double LeftEarlySeconds = 120;
+    /// <summary>The same room line read again this long after the first is that line (19:03:01, again at 19:05:24).</summary>
+    public const double ExitEchoSeconds = 180;
+    /// <summary>A countdown this long before the minimap's entry (or a move) is that run's.</summary>
+    public const double StartWitnessSeconds = 30;
+
+    /// <summary>Expeditions and Transcendence begin each run with the chat's countdown; events, arenas and legions don't.</summary>
+    static bool NeedsCountdown(InstanceRun r) => r.Kind is "Expedition" or Transcendence;
+
+    /// <summary>
+    /// The paid run closes and the next opens when both witnesses say so (expeditions and Transcendence): the minimap moved
+    /// on from where its table was read, and the chat's countdown began after that table (2026-10-24: 17:48:18 table, 17:48:57
+    /// Urugugu Village, 17:49:42 "Starting in 1s."). A move alone is an area flicker, no run (18:28:52: Auldor's Sanctum again
+    /// after the 18:28:31 table, then the room left at 18:29:04). Events, arenas and legions still split on the move.
+    /// </summary>
+    void TrySplitLocked(DateTime now)
+    {
+        if (_cur == null || _cur.Kind == WorldBoss || _tableAt is not DateTime tab || _leftAt != null || (now - tab).TotalSeconds < RewardLateSeconds) return;
+        // the move holds: two reads, or no read back in the paid area for 3 s
+        bool moved = _moveConfirmed || (_moveAt is DateTime m && (now - m).TotalSeconds >= MoveHoldSeconds);
+        if (!moved) return;
+        if (NeedsCountdown(_cur) && (_startAt is not DateTime st || st <= tab)) return;
+        SplitLocked(NeedsCountdown(_cur) ? $"its reward table was read, then {_area}, and the chat's countdown began" : $"its reward table was read, then {_area}");
+    }
+
+    /// <summary>
+    /// The chat's "Left &lt;place&gt; Dungeon room." (RoomWitness.LeftRoom): the open expedition run there closes at once,
+    /// and until a real entry (the open world on the minimap, or the chat's countdown) the minimap naming that expedition
+    /// opens no run (<see cref="HeldHere"/>). A run left within <see cref="LeftEarlySeconds"/> of entry with no table and
+    /// no kills is not kept ("left before it began").
+    /// </summary>
+    public void RoomLeft(string place, DateTime t)
+    {
+        lock (_lock)
+        {
+            string? run = _cur is { } c && NeedsCountdown(c) && RoomWitness.SameName(place, c.Zone) ? c.Zone : RoomWitness.Expedition(place);
+            if (run == null) { CrashLog.Note($"the chat says the {place} room was left: no expedition on the list by that name, nothing closed"); return; }
+            // the same line read again a minute or two later, garbled another way: a run opened since stays open
+            if (_exits.TryGetValue(run, out var le) && (t - le).TotalSeconds is >= 0 and <= ExitEchoSeconds && (_cur == null || _cur.Start > le))
+            {
+                if (_cur != null) CrashLog.Note($"\"Left {run} Dungeon room.\" read again {(t - le).TotalSeconds:0} s after the first: the same line, the run since {_cur.Start.ToLocalTime():HH:mm:ss} stays open");
+                return;
+            }
+            _exits[run] = t;
+            var kind = ZoneLocator.KindOf(run) ?? "Expedition";
+            // where the minimap was as the room was left: those names read again are no move (a stale minimap)
+            var areasNow = new[] { _area, _paidArea, _paidBefore, _areaSince is DateTime s1 && (t - s1).TotalSeconds <= PaidFlickerSeconds ? _prevArea : null }.OfType<string>().ToList();
+            bool closes = _cur != null && NeedsCountdown(_cur) && string.Equals(_cur.Zone, run, StringComparison.OrdinalIgnoreCase);
+            if (closes && _cur != null)
+            {
+                kind = _cur.Kind;
+                _roomClosed = (_cur.Zone, _cur.Kind, _cur.Start, t);
+                double secs = (t - _cur.Start).TotalSeconds;
+                if (_cur.Tables == 0 && _cur.Kills == 0 && secs < LeftEarlySeconds)
+                {
+                    CrashLog.Note($"left before it began: {_cur.Label} {_cur.Start.ToLocalTime():HH:mm:ss}, its room left {secs:0} s after entry with no reward table and no kills ({_cur.ChatItemsSetAside} chat item(s), {_cur.ChatKinahSetAside:N0} Kina set aside); not kept");
+                    _cur = null; _byMinimap = false; ResetEdgesLocked();
+                }
+                else CloseLocked($"its room was left ({t.ToLocalTime():HH:mm:ss}, the chat)");
+            }
+            // a room of another expedition left meanwhile (2026-10-24 14:16:35, "Left Draupnir Dungeon room.", 11 s after creating
+            // it, the minimap still on Auldor's Sanctum): the first hold stands, since the minimap's stale name is that one's
+            if (!closes && _held is { } other && !string.Equals(other.Run, run, StringComparison.OrdinalIgnoreCase))
+            {
+                CrashLog.Note($"the chat says the {run} room was left ({t.ToLocalTime():HH:mm:ss}), no run of it open: the {other.Run} room left at {other.At.ToLocalTime():HH:mm:ss} still holds");
+                return;
+            }
+            _held = (run, kind, t); _heldSaid = false; _heldOut = null; _heldAreas = areasNow; _heldMoveAt = null;
+            CrashLog.Note($"the chat says the {run} room was left ({t.ToLocalTime():HH:mm:ss}): the minimap naming it opens no run until the open world shows or the chat's countdown begins");
+        }
+    }
+
+    /// <summary>
+    /// The chat's countdown ("Starting in 10s.", RoomWitness.StartLine): a run beginning. After a room was left it is the
+    /// entry (the next read of the expedition opens the run); after a table it is the second witness of a run back to back;
+    /// in an open run before its table it is a witness of that run.
+    /// </summary>
+    public void StartLine(DateTime t)
+    {
+        lock (_lock)
+        {
+            bool first = _startAt is not DateTime s0 || (t - s0).TotalSeconds > 15;
+            _startAt = t;
+            if (_cur == null && _held is { } h)
+            {
+                _held = null; _heldOut = null;
+                CrashLog.Note($"the chat's countdown ({t.ToLocalTime():HH:mm:ss}) after the {h.Run} room was left: an entry, the next read of it opens the run");
+                return;
+            }
+            if (_cur == null || !NeedsCountdown(_cur)) return;
+            if (_tableAt is DateTime tab && t > tab) { if (first) CrashLog.Note($"{_cur.Label}: the chat's countdown {(t - tab).TotalSeconds:0} s after its reward table: the next run begins once the minimap has moved on"); TrySplitLocked(t); return; }
+            if (_cur.Tables == 0) Witness(_cur, "chat: starting", t);
+        }
+    }
+
+    /// <summary>
+    /// The run a pickup dated <paramref name="t"/> happened in when its room line has closed it already (a chat line the vote
+    /// or the rare gate let through after "Left … Dungeon room.": 2026-10-24, the cube's "Divine Canyon Cloak acquired." of
+    /// 14:12:48, through after the 14:12:53 line): its zone and kind, or null. Such a pickup is that run's, which counts
+    /// nothing from the chat, never farming.
+    /// </summary>
+    public (string Zone, string Kind)? LeftRunOf(DateTime t)
+    {
+        lock (_lock) return _roomClosed is { } c && t >= c.From && t <= c.To && (_cur == null || t < _cur.Start) ? (c.Zone, c.Kind) : null;
+    }
+
+    /// <summary>
+    /// True while the room of the expedition <paramref name="zone"/> is in was left and no entry was seen since: the minimap's
+    /// name for it opens no run, so what lands meanwhile is inside with no run, counted nowhere (2026-10-24 14:13:12: 10,000
+    /// Kina (Bound), 19 s after the room was left, with the minimap still on Auldor's Sanctum). For the log and the tests.
+    /// </summary>
+    public bool HeldHere(string? zone)
+    {
+        lock (_lock) return _cur == null && _held is { } h && zone != null && ZoneLocator.KindOf(zone) is { } k && k != ZoneLocator.Ignored
+            && string.Equals(ZoneLocator.RunName(zone), h.Run, StringComparison.OrdinalIgnoreCase);
+    }
+
+    void ResetEdgesLocked() { _leftAt = null; _paidArea = null; _paidBefore = null; _tableAt = null; _moveAt = null; _moveReads = 0; _moveConfirmed = false; }
 
     /// <summary>A reward's kind of pickup: bound, Kinah by the thousand, a burst of three or more, or a reward table's slot.</summary>
     static bool RewardLike(GameEvent ev, int batch) =>
@@ -654,7 +920,7 @@ public sealed class InstanceLog
         {
             Paid(t);
             if (_cur == null || _cur.Kind == WorldBoss) return;
-            _tableAt = t; _paidArea = _area;   // the run ends when the player moves on from here (0.8.20)
+            MarkPaidAreaLocked(t);   // the run ends when the player moves on from here (0.8.20)
             _cur.Tables++; _cur.TableAt ??= t;
             int chatItems = _cur.Items.Values.Sum() + _cur.Bound;
             _cur.Items.Clear(); _cur.BoundItems.Clear(); _cur.Bound = 0;
@@ -672,6 +938,61 @@ public sealed class InstanceLog
             if (unknownGear != null) { _cur.UnknownGear += unknownGear.Count; _cur.GearNotes.AddRange(unknownGear); }
             if (partly) _cur.PartlyRead = true;
             CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, out of the averages)" : "")}; the chat's {chatItems} set aside");
+        }
+    }
+
+    /// <summary>
+    /// What the chat decided about a reward picture's slots a few seconds after it was filed (TableWitness.Judge), onto the
+    /// run it was filed into: the open run, or that run just closed while it still waits to be sent (written again in
+    /// instances.jsonl). A run already sent is left as it was, so the site and this PC keep the same copy. The lines judged
+    /// are kept on the run. False when no such run was found.
+    /// </summary>
+    public bool AmendTable(DateTime runStart, string what, IReadOnlyList<TableWitness.Decision> decisions, IReadOnlyList<TableWitness.Line> chat)
+    {
+        lock (_lock)
+        {
+            var r = _cur is { } c && c.Start == runStart ? c : _done.LastOrDefault(x => x.Start == runStart);
+            if (r == null) return false;
+            bool closed = !ReferenceEquals(r, _cur);
+            if (closed && !_unshared.Contains(r) && !_parked.Contains(r))
+            {
+                if (decisions.Count > 0) CrashLog.Note($"{r.Label}: the chat's {decisions.Count} decision(s) on its reward picture came after the run was sent; left as it was");
+                return false;
+            }
+            r.TableChat = chat.ToList();
+            foreach (var d in decisions)
+            {
+                var into = d.Bound ? r.BoundItems : r.Items;
+                switch (d.Kind)
+                {
+                    case TableWitness.Settle:
+                        int gi = r.GearNotes.FindIndex(n => n == d.Slot.Note);
+                        if (gi < 0 || r.UnknownGear <= 0) continue;
+                        r.GearNotes.RemoveAt(gi); r.UnknownGear--;
+                        into[d.ItemId] = into.GetValueOrDefault(d.ItemId) + 1;
+                        if (d.Bound) r.Bound++;
+                        break;
+                    case TableWitness.Unsettle:
+                        if (into.GetValueOrDefault(d.ItemId) < 1) continue;
+                        if ((into[d.ItemId] -= 1) == 0) into.Remove(d.ItemId);
+                        if (d.Bound) r.Bound--;
+                        r.UnknownGear++;
+                        r.GearNotes.Add($"{d.Slot.Grade} gear, one of {string.Join(" / ", d.Slot.Twins.Take(3))}{(d.Slot.Twins.Count > 3 ? " …" : "")}");
+                        break;
+                    case TableWitness.Unread:
+                        if (into.GetValueOrDefault(d.ItemId) < d.Slot.Count) continue;
+                        if ((into[d.ItemId] -= d.Slot.Count) == 0) into.Remove(d.ItemId);
+                        if (d.Bound) r.Bound -= d.Slot.Count;
+                        r.SlotsUnread++; r.UnknownItems++;
+                        r.UnknownSlots.Add($"{d.Slot.Note} · {d.Name}, the chat said otherwise");
+                        // an event's cards with a place not read are a partly read run, as ApplyGrid files them
+                        if (what == "event cards") r.PartlyRead = true;
+                        break;
+                }
+            }
+            if (decisions.Count > 0) CrashLog.Note($"{r.Label}: the chat's lines beside its reward picture: {decisions.Count(d => d.Kind == TableWitness.Settle)} piece(s) of gear named, {decisions.Count(d => d.Kind == TableWitness.Unsettle)} back to unknown gear, {decisions.Count(d => d.Kind == TableWitness.Unread)} slot(s) not read; now {PiecesNote(r)}");
+            if (closed) RewriteLocked(r);
+            return true;
         }
     }
 
@@ -701,19 +1022,27 @@ public sealed class InstanceLog
 
     void CloseLocked(string why)
     {
-        _leftAt = null; _paidArea = null; _tableAt = null; _moveAt = null; _moveReads = 0; _moveConfirmed = false;
+        ResetEdgesLocked();
         if (_cur != null) _cur.Ended = why;
         if (_cur != null && PictureOnly(_cur) && !_cur.FromPicture)
         {
             _cur.RewardsNotRead = true;
-            if (_cur.LastLoot != null) CrashLog.Note($"{_cur.Label}: no reward picture was read, so its rewards are marked not read ({_cur.ChatItemsSetAside} chat item(s) not counted)");
+            if (_cur.LastLoot != null) CrashLog.Note($"{_cur.Label}: no reward picture was read, so its rewards are marked not read ({_cur.ChatItemsSetAside} chat item(s) and {_cur.ChatKinahSetAside:N0} Kina from the chat not counted)");
+        }
+        if (_cur?.LastLoot != null && NothingNamed(_cur))
+        {
+            // a "reward table" that named nothing and showed no coin: another window read as one, never a run's table
+            // (2026-10-24 19:03:54, the open bag after leaving the dungeon: 13 slots, none named, no Kinah)
+            CrashLog.Note($"not a run: {_cur.Label} {_cur.Start.ToLocalTime():HH:mm:ss}, its reward picture named nothing and showed no Kinah ({_cur.SlotsUnread} slot(s) not named; {why}); not kept");
+            _cur = null; _byMinimap = false;
+            return;
         }
         if (_cur?.LastLoot != null && FalseRun(_cur))
         {
             // a reward screen read as the run's table moments after the minimap named the instance (2026-10-24 14:03:25:
             // "Urugugu Village" during the "Starting in 9s" countdown, a Daeva Pass Level Reward read as a 5-slot table at
             // 14:03:29, kept as a 10 s run with 1,008 items and no Kinah): never kept, never sent
-            CrashLog.Note($"not a run: {_cur.Label} {_cur.Start.ToLocalTime():HH:mm:ss}, {(_cur.LastLoot.Value - _cur.Start).TotalSeconds:0} s, no Kinah, only the minimap saw it, its one table {(_cur.TableAt!.Value - _cur.Start).TotalSeconds:0} s after entry ({why}); not kept");
+            CrashLog.Note($"not a run: {_cur.Label} {_cur.Start.ToLocalTime():HH:mm:ss}, {(_cur.LastLoot.Value - _cur.Start).TotalSeconds:0} s, no Kinah, only the minimap saw it, its one table {((TableTime(_cur) ?? _cur.Start) - _cur.Start).TotalSeconds:0} s after entry ({why}); not kept");
             _cur = null; _byMinimap = false;
             return;
         }
@@ -735,15 +1064,35 @@ public sealed class InstanceLog
     public const double FalseRunSeconds = 60, FalseRunTableSeconds = 15;
 
     /// <summary>
-    /// A false run: no Kinah, opened by the minimap and seen by nothing else (a run a split or a second table opened has
-    /// no witness and starts at its table, so it never counts as one), under <see cref="FalseRunSeconds"/> from entry to last loot,
+    /// A false run: no Kinah, opened by the minimap and seen by nothing else (a run a second table opened has no witness and
+    /// starts at its table, so it never counts as one), under <see cref="FalseRunSeconds"/> from entry to last loot,
     /// and its only reward table read within <see cref="FalseRunTableSeconds"/> of entry. No expedition pays that soon:
-    /// it was another reward screen read as a table while the minimap already named the instance.
+    /// it was another reward screen read as a table while the minimap already named the instance. The chat's countdown
+    /// ("chat: starting", since 2026-10-25) says a run began, not that a table that soon is its own, so it doesn't count
+    /// as another witness here (the 14:03:25 Oct 24 phantom came during the countdown).
     /// </summary>
     public static bool FalseRun(InstanceRun r) =>
-        r.Kind != WorldBoss && r.Kinah == 0 && r.Tables == 1 && r.TableAt is DateTime ta && r.LastLoot is DateTime l
+        r.Kind != WorldBoss && r.Kinah == 0 && TableTime(r) is DateTime ta && r.LastLoot is DateTime l
         && (l - r.Start).TotalSeconds < FalseRunSeconds && (ta - r.Start).TotalSeconds <= FalseRunTableSeconds
-        && r.Witnesses.Length > 0 && r.Witnesses.Split(" · ", StringSplitOptions.RemoveEmptyEntries).All(w => w.StartsWith("minimap ", StringComparison.Ordinal));
+        && r.Witnesses.Length > 0 && r.Witnesses.Split(" · ", StringSplitOptions.RemoveEmptyEntries).All(w => w.StartsWith("minimap ", StringComparison.Ordinal) || w.StartsWith("chat: starting ", StringComparison.Ordinal));
+
+    /// <summary>
+    /// When its one reward table was read: <see cref="InstanceRun.TableAt"/>, or for a record from before tables were kept
+    /// (before 0.8.27: no Tables, no TableAt) a picture-read run's PaidAt (the 14:03:25 Oct 24 record, paid 4 s after entry).
+    /// Null with more than one table, or none.
+    /// </summary>
+    static DateTime? TableTime(InstanceRun r) =>
+        r.Tables == 1 ? r.TableAt : r.Tables == 0 && r.TableAt == null && r.FromPicture && r.Kind != "Event" ? r.PaidAt : null;
+
+    /// <summary>
+    /// A reward table that named nothing: an expedition or Transcendence run read from its picture, no Kinah (and its coin
+    /// not merely unread), no item named on it. A run's table always shows its coin or names something, so this was another
+    /// window read as one (2026-10-24 19:03:54: the open bag after leaving the dungeon, whose item tooltip's "Special Reward
+    /// Chest" passed for "Reward collected."; 13 slots, none named). Events are left alone: their cards can pay no Kinah.
+    /// </summary>
+    public static bool NothingNamed(InstanceRun r) =>
+        r.Kind is "Expedition" or Transcendence && r.FromPicture && r.Kinah == 0 && !r.KinahUnknown
+        && r.Items.Values.Sum() == 0 && r.BoundItems.Values.Sum() == 0;
 
     Func<long, string?>? _nameOf;
     ItemDictionary? _dict;
@@ -934,6 +1283,7 @@ public sealed class InstanceLog
             if (PictureOnly(r) && !r.FromPicture && r.Ended.Length == 0 && r.Witnesses.Length == 0 && r.Kinah == 0 && !r.KinahUnknown)
             { r.OldUnread = true; marked.Add((r, "a record from before the tracker kept its flags (chat-counted) with Kinah 0: Kinah not read")); }
             if (r.FromPicture && FalseRun(r)) { r.Suspect = "not a run"; marked.Add((r, "not a run: no Kinah, only the minimap saw it, its one table moments after entry")); }
+            else if (NothingNamed(r)) { r.Suspect = "not a run"; marked.Add((r, "not a run: its reward picture named nothing and showed no Kinah (another window read as a table)")); }
         }
         foreach (var zone in runs.Where(r => r.Kind != WorldBoss).GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase))
         {
@@ -1203,7 +1553,7 @@ public sealed class InstanceLog
         lock (_lock)
         {
             if (_cur != null) throw new InvalidOperationException("a run is open");
-            _leftAt = null; _paidArea = null; _tableAt = null; _moveAt = null; _moveReads = 0; _moveConfirmed = false;
+            ResetEdgesLocked();
             _cur = r; _byMinimap = true;
         }
     }
@@ -1214,7 +1564,7 @@ public sealed class InstanceLog
         lock (_lock)
         {
             var r = _cur; _cur = null; _byMinimap = false;
-            _leftAt = null; _paidArea = null; _tableAt = null; _moveAt = null; _moveReads = 0; _moveConfirmed = false;
+            ResetEdgesLocked();
             return r;
         }
     }

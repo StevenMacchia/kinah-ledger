@@ -1,0 +1,44 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "The pictures of event-2026-10-24-hidden-lugi-1602 read with the server Siel (Elyos): its 9 pieces of gear whose icon the other faction shares are the Elyos ones (Data/GearFactions.cs), the rest as there (5 slots not read, partly read). The chat after the screen named two of them, both the Elyos one: Riverside Gloves, Elder Gloves (trace.log 20:06:47 UTC)",
+  "source": "the pictures of event-2026-10-24-hidden-lugi-1602 (the same files, not copied)",
+  "game": {
+    "w": 5120,
+    "h": 2160
+  },
+  "server": "Siel (Elyos)",
+  "zone": "Hidden Lugi",
+  "frames": [
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1602/160642.jpg",
+      "k": "cards",
+      "t": "2026-10-24T20:06:42Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1602/160645.jpg",
+      "k": "cards",
+      "t": "2026-10-24T20:06:45Z",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "expect": {
+    "runs": {
+      "Shugo Festival": 5597
+    },
+    "runs_kept": 1,
+    "runs_partly_read": 1,
+    "run_gear": 9,
+    "run_unknown_gear": 0,
+    "run_not_read": 5,
+    "run_pieces": 17,
+    "run_items": {
+      "Elder Gloves": 1,
+      "Riverside Gloves": 1,
+      "Forgotten Boots": 2
+    }
+  }
+}

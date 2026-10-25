@@ -36,6 +36,36 @@ public sealed class ReportBuffer
     readonly object _lock = new();
     long _bytes;
 
+    // ---- whether a report's pictures reached the site ----
+    // Sending is once, right after the report is saved (MainWindow.SendReportPictures), and only when the player turned it on;
+    // a failed send is not retried. A folder whose send failed gets unsent.txt, so the hourly clean-up (Housekeeping.PruneReports)
+    // leaves it alone for two weeks and out of the size limit: the player can still zip and attach it.
+    public const string UnsentMarker = "unsent.txt";
+
+    /// <summary>Whether the report holds pictures that could go to the site (loot list or crafting panel, never the chat).</summary>
+    public static bool HasSendablePictures(string reportDir)
+    {
+        try
+        {
+            var index = Path.Combine(reportDir, "frames.jsonl");
+            return File.Exists(index) && File.ReadLines(index).Any(l => l.Contains("\"k\":\"loot\"") || l.Contains("\"k\":\"craft\""));
+        }
+        catch (Exception) { return false; }
+    }
+
+    /// <summary>The report's pictures didn't reach the site: say so in the folder, with the reason.</summary>
+    public static void MarkUnsent(string reportDir, string why)
+    {
+        try { File.WriteAllText(Path.Combine(reportDir, UnsentMarker), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} pictures not sent: {why}\r\n"); }
+        catch (Exception) { /* the folder is gone or read-only: nothing to protect */ }
+    }
+
+    /// <summary>The report's pictures went (or there is nothing to send): the marker, if any, comes off.</summary>
+    public static void ClearUnsent(string reportDir)
+    {
+        try { File.Delete(Path.Combine(reportDir, UnsentMarker)); } catch (Exception) { }
+    }
+
     /// <summary>
     /// One capture as it was read: kept as a PNG when pictures are on and it changed since the last of its kind (and,
     /// with <paramref name="minGapSeconds"/>, no sooner than that after it). <paramref name="origin"/> is where its top-left sat on screen.

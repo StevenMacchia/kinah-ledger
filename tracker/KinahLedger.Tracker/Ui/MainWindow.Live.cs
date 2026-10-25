@@ -126,7 +126,7 @@ public partial class MainWindow
         {
             var local = l.At.ToLocalTime();
             t.Text = local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : local.ToString("MMM d");
-            t.FontSize = 11.5; t.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); t.Foreground = new SolidColorBrush(Color.FromRgb(0x5E, 0x65, 0x88));
+            t.FontSize = 11.5; t.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); t.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         }
         g.Children.Add(t);
         icon.VerticalAlignment = VerticalAlignment.Center; icon.HorizontalAlignment = HorizontalAlignment.Left;
@@ -142,7 +142,8 @@ public partial class MainWindow
         v.SetResourceReference(TextBlock.FontFamilyProperty, l.Kind == "flag" ? "BodyFont" : "MonoFont");
         v.SetResourceReference(TextBlock.ForegroundProperty, value.Muted ? "Faint" : "Gold");
         Grid.SetColumn(v, 3); g.Children.Add(v);
-        var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0), BorderBrush = new SolidColorBrush(Color.FromArgb(0x73, 0x2A, 0x31, 0x54)) };
+        var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
+        b.SetResourceReference(Border.BorderBrushProperty, "Line");
         b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Tap if it's wrong." : "Tap if it's wrong.";
         ToolTipService.SetInitialShowDelay(b, 400);
         if (newest)
@@ -155,7 +156,7 @@ public partial class MainWindow
         }
         if (oldest) b.Opacity = 0.62;
         var keep = b.Background;
-        b.MouseEnter += (_, _) => b.Background = newest ? keep : new SolidColorBrush(Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF));
+        b.MouseEnter += (_, _) => { if (newest) b.Background = keep; else b.SetResourceReference(Border.BackgroundProperty, "HoverTint"); };
         b.MouseLeave += (_, _) => b.Background = keep;
         return b;
     }
@@ -255,11 +256,11 @@ public partial class MainWindow
         };
     }
 
-    /// <summary>A feed figure: "+431", "+7.5K", "+17.6K", "+604K", "+1.27M".</summary>
+    /// <summary>A feed figure in the window's one format (Fk): "+431", "+7.5K", "+18K", "+604K", "+1.27M". It said "+17.6K" where the tables said "18K".</summary>
     static string FeedK(double v)
     {
         double a = Math.Abs(v);
-        var s = a < 1000 ? $"{a:N0}" : a < 100_000 ? $"{a / 1e3:0.0}K" : a < 1_000_000 ? $"{a / 1e3:0}K" : $"{a / 1e6:0.00}M";
+        var s = a < 1000 ? $"{a:N0}" : Fk(a);
         return (v < 0 ? "−" : "+") + s;
     }
 
@@ -375,7 +376,10 @@ public partial class MainWindow
 
     /* ---------------- Session and Where to farm now ---------------- */
 
-    /// <summary>Session, opened: Kinah, loot after the Market's cut, your best hour here, and what players at your gear make here.</summary>
+    /// <summary>
+    /// Session, opened: Kinah, loot after the Market's cut, and what players at your gear make here. Your best hour here is
+    /// said once, under the hour on the live card (2026-10-25: it was here too, "1.40M" twice on one screen).
+    /// </summary>
     void FillSessionRows(long kinah, long loot, int priced, string? zone)
     {
         SessionRows.Children.Clear();
@@ -392,8 +396,6 @@ public partial class MainWindow
         }
         if (kinah > 0 || _mode != Mode.Gather) Row("Kinah picked up", Fk(kinah), true);
         if (priced > 0) Row($"Loot, after the Market's {1 - PriceBook.SellerKeeps:P0}", Fk(loot), true);
-        var best = _demo ? new BestRuns.Best(1_400_000, 48, "2026-10-19") : BestRuns.For(Server?.Label ?? "", zone);
-        if (best != null) Row("Your best here, an hour", Fk(best.PerHr));
         if (PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v) Row(h.AtGear ? "Players at your gear, an hour" : "Players here, an hour", Fk(v));
     }
 
@@ -463,9 +465,10 @@ public partial class MainWindow
             var b = new Border
             {
                 Child = sp, Height = 34, CornerRadius = new CornerRadius(17), Padding = new Thickness(5, 0, 12, 0), Margin = new Thickness(0, 0, 8, 8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
-                Background = on ? new SolidColorBrush(Color.FromArgb(0x14, 0xF8, 0xD5, 0x98)) : new SolidColorBrush(Color.FromArgb(0xB3, 0x0B, 0x0E, 0x1E)),
-                BorderBrush = on ? new SolidColorBrush(Color.FromArgb(0x99, 0xF8, 0xD5, 0x98)) : new SolidColorBrush(Color.FromRgb(0x2A, 0x31, 0x54)),
             };
+            // each look's own chip colours (Daylight had dark chips with dark text)
+            b.SetResourceReference(Border.BackgroundProperty, on ? "GoldTint" : "ChipOff");
+            b.SetResourceReference(Border.BorderBrushProperty, on ? "GoldLine" : "ChipOffLine");
             b.MouseLeftButtonUp += (_, _) => { _extraOpen = _extraOpen == key ? null : key; Redraw(); };
             ExtraChips.Children.Add(b);
         }

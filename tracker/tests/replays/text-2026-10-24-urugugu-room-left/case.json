@@ -1,0 +1,15 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Urugugu Canyon runs 26 and 27, 2026-10-24 14:03 to 14:40 local: the table at 14:12:48, \"Left Urugugu Canyon Dungeon room.\" at 14:12:53, the minimap on Auldor's Sanctum until the open world at 14:18:06, \"Starting in 10s.\" at 14:19:20 and the village at 14:19:30. 0.8.30 opened run 27 from the stale 14:12:55 read (16:09 long) and filed 609,000 and 605,000 with two achievements' Kina. Now the room line closes run 26, nothing opens until the countdown, run 27 runs from 14:19:30, and each run's Kinah is its table's 600,000; \"Riding the Winds III achieved.\"'s 5,000 (14:23:38) is set aside; the cube's \"Divine Canyon Cloak acquired.\" of 14:12:48, through the vote after the room line, is no farming drop",
+  "source": "Steven's trace.log 2026-10-24 18:03:15 to 18:40:30 UTC: chat kept only for the game's own lines (pickups, Kina, achievements, the countdown, the dungeon room lines, party lines without names), every other line replaced by a filler keyed by its text's hash; loot list reads left out (other players' names); zone and reward-title reads as recorded. The 14:12:48 table as reads.log voted it (from text-2026-10-24-urugugu-pass-reward). The 14:29:04 table rebuilt from run 27's record in instances.jsonl (its coin, Enhance Stone x4,000, Refining Stone x5, Soul Codex x7 and Silentium x14, read as the 14:12:48 table read the same slots; its gear left out), since reads.log of that time was wiped",
+  "expect": {
+    "items": {},
+    "runs_kept": 2,
+    "runs_from_picture": 2,
+    "run_kinah": 1200000,
+    "run_start": "18:03:25Z",
+    "run_starts": "18:03:25Z 18:19:30Z"
+  }
+}

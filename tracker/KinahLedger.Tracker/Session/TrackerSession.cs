@@ -168,7 +168,8 @@ public sealed partial class TrackerSession
         sb.AppendLine($"Rare drops: {RareCounted} counted, {RareConfirmed} read exactly or confirmed by a second read; {_rare.Waiting} waiting · aliases loaded {_items.AliasCount} · remote config {Update.RemoteConfig.Current.Id}");
         sb.AppendLine($"Settings: autoScale {_settings.Ocr.AutoScale} (target {_settings.Ocr.TargetTextPx} px, scale {_settings.Ocr.Scale}) · nameColours {_settings.Ocr.NameColours} · lootIcons {_settings.Ocr.LootIcons} · window capture {WindowCapture.Active} · pictures kept {ReportBuffer.KeepFrames}");
         IEnumerable<string> tail = Array.Empty<string>();
-        try { if (File.Exists(CrashLog.ReadsPath)) tail = File.ReadLines(CrashLog.ReadsPath).TakeLast(600).ToList(); } catch (Exception) { /* the log is being written: the report goes without it */ }
+        // reads.log may have just been turned over: the end of reads.old.log fills up to 600 lines (CrashLog.ReadsTail)
+        tail = CrashLog.ReadsTail(600);
         var dir = Report.Write(CrashLog.Dir, sb.ToString(), tail, now, focus);
         // where the game window sat, so the pictures' places can be made relative to it (AccuracyClient.BuildFrames)
         if (GameRect is { } gr) try { File.WriteAllText(Path.Combine(dir, "game.json"), JsonSerializer.Serialize(new { x = gr.X, y = gr.Y, w = gr.Width, h = gr.Height })); } catch (Exception) { }
@@ -706,6 +707,7 @@ public sealed partial class TrackerSession
         {
             var t0 = DateTime.UtcNow;
             bool reading = false;
+            Housekeeping.PassStarted();   // the folder's cleaning waits until the pass is over
             try
             {
                 await FollowGameAsync();
@@ -773,6 +775,8 @@ public sealed partial class TrackerSession
                 }
                 if (!Update.RemoteConfig.Current.Off("zone")) await ZoneDueAsync();
                 UpdateDoing(DateTime.UtcNow);
+                // a reward picture filed a few seconds ago, judged once its chat lines are in
+                TableWitnessDue(DateTime.UtcNow);
             }
             catch (System.ComponentModel.Win32Exception)
             {
@@ -782,6 +786,8 @@ public sealed partial class TrackerSession
                 LastError = "";
             }
             catch (Exception ex) { LastError = ex.Message; CrashLog.Write("read loop", ex); }
+            Housekeeping.PassEnded();
+            Housekeeping.RunIfDue(DateTime.Now);   // at most hourly, on its own thread
             Updated?.Invoke();
 
             int spent = (int)(DateTime.UtcNow - t0).TotalMilliseconds;
@@ -795,6 +801,7 @@ public sealed partial class TrackerSession
         _probe?.Dispose(); _probe = null;
         SaveColours();
         Engine.Finish();
+        CrashLog.FlushHeld();   // the counts of lines repeated in the last minute
     }
 
     // ---- what is on screen (SceneState, Prompt 9) ----
@@ -1079,6 +1086,8 @@ public sealed partial class TrackerSession
     {
         // counted where it belongs, and stamped with where that was (the activity: a run, farming, a reward screen)
         Feed(ev, Count(ev));
+        // a line in the seconds around a reward picture is its second witness (TrackerSession.Witness.cs)
+        WitnessChat(ev);
         // crafting is fed by the crafting panel's races alone (CraftPanelDue), never by a pickup or a chat line
         if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
         else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb)
@@ -1131,6 +1140,13 @@ public sealed partial class TrackerSession
         // lines not seen in the last ten minutes
         var witnessed = _tracker.Unaligned > unaligned ? Reread.Unseen(_recent, lines, now) : fresh;
         foreach (var (src, name) in EventWitness.Read(witnessed)) Instances.Witness(src, name, now, Zone);
+        // the chat's own word on an expedition's room (RoomWitness, 2026-10-25): "Left Urugugu Canyon Dungeon room." ends the
+        // run there at once, "Starting in 10s." is a run beginning. A line first on screen 20 s ago or more is one read again
+        foreach (var l in witnessed)
+        {
+            if (RoomWitness.LeftRoom(l) is { } place) { if (NewLine(l, now)) Instances.RoomLeft(place, now); }
+            else if (RoomWitness.StartLine(l) && NewLine(l, now)) Instances.StartLine(now);
+        }
         bool afterFade = _tracker.LastAfterFade;
         // a read that couldn't be lined up with the last one counts nothing; the log says so, so a missed line can be traced
         if (_tracker.LastFromAnchor) CrashLog.Note($"the last read was a stray line, so this one was lined up with the last full read of the chat ({fresh.Count} new)");
@@ -1153,7 +1169,8 @@ public sealed partial class TrackerSession
         // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
         if (lines.Any(l => Update.RemoteConfig.HasAny(l, Update.RemoteConfig.Current.CraftWindowWords)))
         {
-            if ((now - Target.CraftAt).TotalSeconds > 5) CrashLog.Note("crafting window seen (its \"Show acquired designs only\" over the chat)");
+            // (a burst: 98 of these in 36 minutes on 2026-10-24; written once a minute, then counted)
+            if ((now - Target.CraftAt).TotalSeconds > 5) CrashLog.NoteBurst("crafting window seen (its \"Show acquired designs only\" over the chat)");
             Target.MarkCraft(now);
         }
         foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
@@ -1606,7 +1623,7 @@ public sealed partial class TrackerSession
     // checked for "Reward collected."; when it is there the grid is read once (RewardGrid, the other session's reader).
     // A slot the chat already counted (same item, same count, last 20 s) is skipped; a slot named as exactly one item is
     // added to the run alone; a slot that names only a family of items, or nothing, is written to reads.log, never guessed.
-    DateTime _gridAt = DateTime.MinValue, _gridSeenAt = DateTime.MinValue; bool _gridDone;
+    DateTime _gridAt = DateTime.MinValue, _gridSeenAt = DateTime.MinValue, _asideNoteAt = DateTime.MinValue; bool _gridDone;
     public const double GridSureDistance = 70;
     static string Unbound(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
     Dictionary<string, List<ItemInfo>>? _byIcon;
@@ -1627,7 +1644,9 @@ public sealed partial class TrackerSession
             var band = new Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
             using var bandBmp = frame.Clone(band, frame.PixelFormat);
             var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
-            var rc = lines.FirstOrDefault(l => IsRewardCollected(l.Text));
+            var rc = CollectedLine(lines, frame.Width);
+            if (rc == null && lines.FirstOrDefault(l => IsRewardCollected(l.Text)) is { } aside && (now - _asideNoteAt).TotalSeconds > 30)
+            { _asideNoteAt = now; CrashLog.Note($"reward table: \"{aside.Text}\" is off to one side ({(aside.Box.X + aside.Box.Width / 2.0) / frame.Width:0.00} of the width), a tooltip or another window, not the table's line"); }
             // an event's reward screen (Shugo Festival "Jump Jump": "Rewards have been sent to your cube.", "Can select 0 time(s)",
             // five cards, the received ones bright with a card icon): its rewards are the run's and come from this picture,
             // never the chat (Steven, 2026-10-23). The picture is kept (a few, a second or two apart), and once the cards are
@@ -1701,7 +1720,7 @@ public sealed partial class TrackerSession
         var band = new System.Drawing.Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
         using var bandBmp = frame.Clone(band, frame.PixelFormat);
         var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
-        var rc = lines.FirstOrDefault(l => IsRewardCollected(l.Text));
+        var rc = CollectedLine(lines, frame.Width);
         return rc == null ? null : rc.Box.Bottom + (int)(frame.Height * 0.016);
     }
 
@@ -1854,9 +1873,22 @@ public sealed partial class TrackerSession
             if (slots.Count > 0) CrashLog.Note($"{what}: one slot, nothing on it surely matched; not a reward table, the run is left as it was");
             return;
         }
-        // a second table in a run that was paid already is the next run's
-        Instances.TableStarting(now);
+        // a table of several slots where nothing is surely named and no coin shows is no run's table (2026-10-24 19:03:54: the
+        // open bag after leaving the dungeon, 13 slots, none named, filed as a run with no Kinah); a run's table always shows
+        // its coin or names something
+        if (what == "reward table" && !slots.Any(s => (s.Icons.Count > 0 && s.Icons[0].Distance <= GridSureDistance)
+                                                      || (s.Count >= 1000 && System.Text.RegularExpressions.Regex.IsMatch(s.CountText ?? "", "[KkMm]"))))
+        {
+            CrashLog.Note($"{what}: {slots.Count} slot(s), none surely matched and no coin: not a reward table, the run is left as it was");
+            return;
+        }
+        // a second table in a run that was paid already is the next run's; one sooner than another run could end is no run's
+        if (!Instances.TableStarting(now)) return;
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        // the chat's lines of the last seconds, before any is matched to a slot below, and each slot as filed: the chat is
+        // judged against them once its lines are in (TrackerSession.Witness.cs)
+        var chatBefore = WitnessChatBefore(now);
+        var witness = new List<TableWitness.Slot>();
         int added = 0, known = 0, unnamed = 0;
         var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
         // a close call is settled by the table's own sets, or by what this expedition gave in runs before (GradedPick)
@@ -1928,6 +1960,18 @@ public sealed partial class TrackerSession
             if (!sure) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
             // the bound and tradeable copies of an item are the same item
             var names = graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            // gear whose icon the other faction's twin shares (Forgotten Helm / Shade Helm, one picture): the player's faction
+            // says which, when the list knows the faction of every name (Data/GearFactions.cs; 2026-10-24: 31 of the 35
+            // pieces of unknown gear, and the chat named the Elyos one every time). The chat's lines are judged against it after
+            var twins = names;
+            if (names.Count > 1 && graded.All(i => _items.IsGear(i.Id)) && FactionTwin(names) is { } mine)
+            {
+                CrashLog.Note($"{what}: a {sl.Grade} slot is one of {string.Join(" / ", names)}: {mine}, the {Faction} one (server {Server})");
+                graded = graded.Where(i => string.Equals(Unbound(i.Name), mine, StringComparison.OrdinalIgnoreCase)).ToList();
+                names = new List<string> { mine };
+            }
+            bool slotGear = graded.Count > 0 && graded.All(i => _items.IsGear(i.Id));
+            string slotNote = $"{sl.Grade} x{(sl.Count > 0 ? sl.Count.ToString() : "?")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}";
             // the gold coin is Kinah, not an item (600.0K on the Urugugu table): the run's Kinah, bound when the list says so
             if (names.Count == 1 && string.Equals(names[0], "Kina", StringComparison.OrdinalIgnoreCase))
             {
@@ -1945,14 +1989,21 @@ public sealed partial class TrackerSession
             int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
             bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
             var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
-            // every slot ends counted or not read: a chat line can't decide between the names a picture leaves open
-            if (seen >= 0 && names.Count == 1) { _runPickups.RemoveAt(seen); known++; fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" }); continue; }
+            // every slot ends counted or not read: here a chat line doesn't decide between the names a picture leaves open;
+            // the chat's lines of those seconds are judged together once they are all in (TableWitness), one line one piece
+            if (seen >= 0 && names.Count == 1)
+            {
+                _runPickups.RemoveAt(seen); known++; fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" });
+                witness.Add(new TableWitness.Slot(witness.Count, sl.Grade, names[0], count, gridItem.Id, boundSlot, slotGear, twins, slotNote));
+                continue;
+            }
             // gear whose icon two items share (Elder Gloves / Relic Collector Gloves): a piece of gear all the same, counted as
             // one piece of unknown gear with what it may be, never dropped (Steven, 2026-10-24)
             if (names.Count != 1 && graded.All(i => _items.IsGear(i.Id)))
             {
                 var maybe = $"{sl.Grade} gear, one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}";
                 gearNotes.Add(maybe);
+                witness.Add(new TableWitness.Slot(witness.Count, sl.Grade, "", 1, 0, false, true, names, maybe, TwinIds(graded)));
                 CrashLog.Note($"{what}: a {sl.Grade} slot is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}: counted as one piece of unknown gear");
                 continue;
             }
@@ -1961,6 +2012,7 @@ public sealed partial class TrackerSession
             Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
             Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" }, RunWhere());
             fromGrid.Add(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" });
+            witness.Add(new TableWitness.Slot(witness.Count, sl.Grade, names[0], count, item.Id, boundSlot, slotGear, twins, slotNote));
             added++;
         }
         // the run is counted from the picture alone (Steven: expeditions, dungeons and events come from the reward pictures,
@@ -1974,6 +2026,7 @@ public sealed partial class TrackerSession
         bool cards = what == "event cards", partly = cards && unnamed > 0;
         bool kinahFlag = !cards && (kinahHidden || kinahUnread || (bigUnread && !fromGrid.OfType<KinahChanged>().Any()));
         if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead, kinahFlag, unknownItems, gearNotes, partly, cards ? slots.Count : 0);
+        if (slots.Count > 0) WitnessFiled(now, what, witness, chatBefore);
         CrashLog.Note($"{what} read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {gearNotes.Count} unknown gear, {unnamed} not named{(partly ? $": partly read, {unnamed} slot(s) not read" : "")}");
     }
 
@@ -2261,9 +2314,23 @@ public sealed partial class TrackerSession
     /// The expedition table's "Reward collected." line as the recognizer reads it: "Reward cooectedo" too (the CI reader on
     /// the 2026-10-23 Urugugu table). The word alone was missed, and with it the whole table.
     /// </summary>
+    /// An item's "Reward Chest" is never the line (2026-10-24 19:03:54: the bag's tooltip "Special Reward Chest" matched the
+    /// pattern, so the open bag was read as a 13-slot table).
     public static bool IsRewardCollected(string line) =>
-        Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.RewardCollectedWords)
-        || Regex.IsMatch(line, @"rew[a-z]{0,2}r?d\W{0,2}c[a-z]{1,6}t", RegexOptions.IgnoreCase);
+        !Regex.IsMatch(line, @"rew[a-z]{0,2}r?d\W{0,2}ch[e3]st", RegexOptions.IgnoreCase)
+        && (Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.RewardCollectedWords)
+            || Regex.IsMatch(line, @"rew[a-z]{0,2}r?d\W{0,2}c[a-z]{1,6}t", RegexOptions.IgnoreCase));
+
+    /// <summary>How far from the frame's middle the "Reward collected." line may sit, as a share of its width.</summary>
+    public const double CollectedOffCentre = 0.10;
+
+    /// <summary>
+    /// The table's "Reward collected." line among the top band's lines: its words, centred in the frame as the game draws it
+    /// under "Obtained Items" (at 0.50 of the width on the 5120x2160 Urugugu tables). A line far to one side is a tooltip or
+    /// another window (the bag's item tooltip sat at 0.69). Null when there is none.
+    /// </summary>
+    public static OcrLineBox? CollectedLine(IEnumerable<OcrLineBox> lines, int frameWidth) =>
+        lines.FirstOrDefault(l => IsRewardCollected(l.Text) && Math.Abs(l.Box.X + l.Box.Width / 2.0 - frameWidth / 2.0) <= frameWidth * CollectedOffCentre);
 
     public static bool IsEventRewardTitle(string line) =>
         Regex.IsMatch(line, @"sent\s*to\s*your\s*cube|can\s*select\s*\d+\s*time", RegexOptions.IgnoreCase);
@@ -2413,7 +2480,18 @@ public sealed partial class TrackerSession
             if (_gatherNames.Contains(_items.NameOf(ga.ItemId))) { _lastGatherAt = ev.Time; Witness(ev.Time); }
         }
         if (ev is not CraftResult && BossTakes(ev)) return _boss is { } b ? $"World boss · {b}" : "World boss";
+        // dated inside a run that "Left … Dungeon room." closed already (a line the vote or the rare gate let through after it:
+        // 2026-10-24, the cube's Divine Canyon Cloak of 14:12:48 after the 14:12:53 line): that run's, which counts nothing from
+        // the chat; never farming
+        if (ev is not CraftResult && Instances.LeftRunOf(ev.Time) is { } leftRun)
+        {
+            CrashLog.Note($"{Describe(ev)}: dated {ev.Time.ToLocalTime():HH:mm:ss}, inside the {leftRun.Zone} run before its room was left: that run's, not counted, not farming");
+            return new Activity(leftRun.Kind == "Event" ? ActivityKind.Event : ActivityKind.Expedition, leftRun.Zone).Label;
+        }
         var kind = ZoneLocator.KindOf(Zone);
+        // after "Left … Dungeon room." the minimap may name the expedition for minutes with no run open (InstanceLog.HeldHere):
+        // what lands then is inside with no run, counted nowhere, as ever (2026-10-24 14:13:12, 10,000 Kina (Bound) 19 s after
+        // the line; 14:15:57, an achievement's 9,000; none of it farming)
         bool inside = kind != null && kind != ZoneLocator.Ignored;
         // out of an event already (its rewards came, then the open world's Kina or a kill), the minimap a read behind
         if (inside && kind == "Event" && Instances.OutAfterRewards(ev))
@@ -3032,19 +3110,23 @@ public sealed partial class TrackerSession
     // Events and expeditions pay out on their own screens (cards picked at the end of an event, the big reward table at
     // the end of an expedition), not in the chat (Steven, 2026-10-22). To learn to read them, a picture of the game window
     // is kept each time one opens: a few seconds apart while it stays open, on this PC only, in reward-shots beside the
-    // logs, at most RewardShotsPerDay a day. Inside an event or expedition a picture every 30 s too, since a card pick may
-    // show no title to recognise. Nothing else on screen is captured, nothing is sent anywhere, and it only happens when the
-    // reward-shots folder exists (made by hand on a PC that helps build the reader; never by the app).
-    // The folder cleans itself (Steven, 2026-10-22: 212 pictures, 472 MB in a day): in-run pictures go after a day, reward
-    // screens after a week, and past RewardShotsMaxMB the oldest go first, in-run ones before reward screens. Fight
-    // pictures stopped once the nameplate reader was built from them. While the crafting window is open (or within its
-    // hold), a picture every 2 s, "-crafting.jpg", for a reader of the window's recipe, queue and result; kept a day.
-    public const int RewardShotsPerDay = 300;
+    // logs. Inside an event or expedition a picture every 30 s too, since a card pick may show no title to recognise.
+    // Nothing else on screen is captured, nothing is sent anywhere, and it only happens when the reward-shots folder
+    // exists (made by hand on a PC that helps build the reader; never by the app).
+    // Each kind has its own budget a day (ShotBudget): on 2026-10-24 crafting frames, one every 2 s, filled the one shared
+    // limit of 300 in nine minutes (19:13 to 19:22, 203 pictures, 267 MB) and no reward table or event card could be kept
+    // after that. Crafting frames are now 20 a day, 40 s apart (they only feed `craft-test`, a by-hand tuning of the panel
+    // reader; the reader itself works on live frames and a miscount report carries its own strip pictures); a run's end has
+    // 200 of its own.
+    // The folder cleans itself (Housekeeping: at the start of the app and then hourly, on its own thread, never during a read
+    // pass; Steven, 2026-10-22: 212 pictures, 472 MB in a day): in-run pictures go after a day, shop screens after two, other
+    // reward screens after a week, a run's end after two weeks, and past RewardShotsMaxMB the oldest go first, in-run ones
+    // before reward screens. Fight pictures stopped once the nameplate reader was built from them.
     bool _craftShotNoted;
-    public const long RewardShotsMaxMB = 300;
-    DateTime _rewardShotAt = DateTime.MinValue, _rewardPrunedAt = DateTime.MinValue; int _rewardShotsOpen;
+    public const long RewardShotsMaxMB = 400;
+    DateTime _rewardShotAt = DateTime.MinValue, _craftShotAt = DateTime.MinValue; int _rewardShotsOpen;
 
-    /// <summary>A picture of the game kept in reward-shots (only where that folder exists, within the day's limit), named for the zone and what it shows.</summary>
+    /// <summary>A picture of the game kept in reward-shots (only where that folder exists, within its kind's budget for the day), named for the zone and what it shows.</summary>
     string _gridShot = "";
     void SaveShot(System.Drawing.Bitmap bmp, string title)
     {
@@ -3053,13 +3135,15 @@ public sealed partial class TrackerSession
         {
             var dir = Path.Combine(CrashLog.Dir, "reward-shots");
             if (!Directory.Exists(dir)) return;
-            if (Directory.GetFiles(dir, DateTime.Now.ToString("yyyyMMdd") + "-*.jpg").Length >= RewardShotsPerDay) return;
+            if (!ShotBudget.Room(dir, DateTime.Now, title)) return;
             var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
             using var ps = new System.Drawing.Imaging.EncoderParameters(1);
+            // a run's end is what recovery and replay read again: full size, quality 90, as always
             ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L);
             var file = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{zoneName}-{title}.jpg");
             bmp.Save(file, jpg, ps);
+            ShotBudget.Took(dir, DateTime.Now, title);
             _gridShot = Path.GetFileName(file);
             CrashLog.Note($"{title.Replace('-', ' ')} kept as a picture: {Path.GetFileName(file)}");
         }
@@ -3082,22 +3166,31 @@ public sealed partial class TrackerSession
 
     /// <summary>
     /// Keeps reward-shots small without losing what runs are counted from (Steven, 2026-10-23: the Urugugu and Shugo ends
-    /// were deleted within minutes, 452 pictures at a time, while a week of shop screens stayed). A run's end stays 7 days
-    /// and is never trimmed for size; shop screens 2 days, then the first to go; pictures taken every few seconds a day.
+    /// were deleted within minutes, 452 pictures at a time, while a week of shop screens stayed). A run's end stays 14 days
+    /// (2026-10-25; it was 7) and its last 7 days are never trimmed for size; shop screens 2 days, then the first to go;
+    /// pictures taken every few seconds a day. Past <paramref name="maxBytes"/> (400 MB) the oldest non-run pictures go
+    /// first, and only then run ends older than a week, oldest first.
     /// </summary>
-    internal static int PruneRewardShots(string dir, DateTime now, long? maxBytes = null)
+    /// <param name="idle">Called before each delete: Housekeeping waits there while a read pass runs.</param>
+    internal static int PruneRewardShots(string dir, DateTime now, long? maxBytes = null, Action? idle = null)
     {
         int gone = 0;
         var files = new DirectoryInfo(dir).GetFiles("2*-*.jpg")
             .Where(f => Regex.IsMatch(f.Name, @"^\d{8}-\d{6}-"))
             .Select(f => (F: f, K: KindOfShot(f.Name)))
             .ToList();
-        void Drop((FileInfo F, ShotKind K) x) { try { x.F.Delete(); gone++; } catch { } }
-        double Days(ShotKind k) => k switch { ShotKind.RunEnd => 7, ShotKind.Shop => 2, ShotKind.Frequent => 1, _ => 7 };
+        void Drop((FileInfo F, ShotKind K) x) { idle?.Invoke(); try { x.F.Delete(); gone++; } catch (IOException) { } catch (UnauthorizedAccessException) { } }
+        double Days(ShotKind k) => k switch { ShotKind.RunEnd => 14, ShotKind.Shop => 2, ShotKind.Frequent => 1, _ => 7 };
         foreach (var x in files.Where(x => (now - x.F.LastWriteTime).TotalDays > Days(x.K)).ToList()) { Drop(x); files.Remove(x); }
         long total = files.Sum(x => x.F.Length), max = maxBytes ?? RewardShotsMaxMB * 1024 * 1024;
         int Order(ShotKind k) => k switch { ShotKind.Shop => 0, ShotKind.Frequent => 1, _ => 2 };
         foreach (var x in files.Where(x => x.K != ShotKind.RunEnd).OrderBy(x => Order(x.K)).ThenBy(x => x.F.LastWriteTime).ToList())
+        {
+            if (total <= max) break;
+            total -= x.F.Length; Drop(x);
+        }
+        // still too big: a run's end from before the last week, oldest first (the last week's stay whatever the size)
+        foreach (var x in files.Where(x => x.K == ShotKind.RunEnd && (now - x.F.LastWriteTime).TotalDays > 7).OrderBy(x => x.F.LastWriteTime).ToList())
         {
             if (total <= max) break;
             total -= x.F.Length; Drop(x);
@@ -3111,35 +3204,32 @@ public sealed partial class TrackerSession
             var now = DateTime.UtcNow;
             var dir = Path.Combine(CrashLog.Dir, "reward-shots");
             if (GameRect is not { } g || !Directory.Exists(dir)) return;
-            if ((now - _rewardPrunedAt).TotalMinutes >= 30)
-            {
-                _rewardPrunedAt = now;
-                int gone = PruneRewardShots(dir, DateTime.Now);
-                if (gone > 0) CrashLog.Note($"reward-shots: {gone} old pictures deleted");
-            }
+            // (the folder's cleaning is Housekeeping's, on its own thread: it is not done here, in the middle of a pass)
             bool reward = Target.RewardOpen(now), inside = ZoneLocator.KindOf(Zone) is "Event" or "Expedition" || Zone == SessionEngine.UnknownZone;
-            // the crafting window, to learn to read it: recipe, queue, result, item made (a picture every 2 s while open)
+            // the crafting window, only to tune the panel's reader by hand: one picture every ShotBudget.CraftingGapSeconds, 20 a day
             bool crafting = !reward && TargetReader.CraftOpen(Target.CraftAt, now) && now >= Target.CraftAt;
             if (!reward) _rewardShotsOpen = 0;
             bool due = reward ? _rewardShotsOpen < 6 && (now - _rewardShotAt).TotalSeconds >= 2
-                     : crafting ? (now - _rewardShotAt).TotalSeconds >= 2
+                     : crafting ? (now - _craftShotAt).TotalSeconds >= ShotBudget.CraftingGapSeconds
                      : inside && (now - _rewardShotAt).TotalSeconds >= (Instances.EventPaidWithin(now, 20) ? 2 : 30);
             if (!due) return;
-            var today = DateTime.Now.ToString("yyyyMMdd");
-            if (Directory.GetFiles(dir, today + "-*.jpg").Length >= RewardShotsPerDay) return;
+            var title = crafting ? "crafting" : !reward ? (Instances.EventPaidWithin(now, 20) ? "event-rewards" : "in-run") : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            if (!ShotBudget.Room(dir, DateTime.Now, title)) return;   // this kind's budget for the day is used; the other kinds' are not
             if (Cover(g) is { } cover && !cover.StartsWith("Kinah Ledger")) return;   // only the game, never a window over it
             // and only while the game is the active window: Alt+Tab's switcher, the Start menu or a notification sit over it
             // without counting as a window over it, and Alt+Tab shows thumbnails of everything open (2026-10-22 15:07)
             if (!GameWindow.InFront(_settings.ProcessHints)) return;
-            _rewardShotAt = now; if (reward) _rewardShotsOpen++;
-            var title = crafting ? "crafting" : !reward ? (Instances.EventPaidWithin(now, 20) ? "event-rewards" : "in-run") : new string(Target.RewardTitle.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
+            if (crafting) _craftShotAt = now; else _rewardShotAt = now;
+            if (reward) _rewardShotsOpen++;
             var zoneName = new string((Zone ?? "").Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray()).Trim().Replace(' ', '-');
             using var bmp = ScreenReader.Capture(g);
             var jpg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
             using var ps = new System.Drawing.Imaging.EncoderParameters(1);
+            // full size and quality 85 as always: a run's end (the event reward screens) is read again from these
             ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 85L);
             var file = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}-{zoneName}-{title}.jpg");
             bmp.Save(file, jpg, ps);
+            ShotBudget.Took(dir, DateTime.Now, title);
             if (_rewardShotsOpen == 1 || (crafting && !_craftShotNoted)) CrashLog.Note($"{(crafting ? "crafting window" : "reward screen")} kept as a picture: {Path.GetFileName(file)}");
             _craftShotNoted = crafting;
         }
@@ -3231,7 +3321,7 @@ public sealed partial class TrackerSession
             var s = CraftPanel.Measure(bmp, region, g);
             if (!s.Visible)
             {
-                if (_panelUp && _panelIsCraft) { CrashLog.Note("crafting panel gone"); Accuracy.Add("craft_batches"); }
+                if (_panelUp && _panelIsCraft) { CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); }
                 _panelUp = false; _panelIsCraft = false;
                 bmp.Dispose();
                 return null;
@@ -3245,7 +3335,8 @@ public sealed partial class TrackerSession
                 // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
                 // the raised panel above the skill bar is the gathering panel, never crafting
                 bool craft = !s.Raised && ((_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(IsCraftTitle));
-                if (craft != _panelIsCraft || !_panelUp) CrashLog.Note(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
+                // up and gone alternated 250 times in 36 minutes on 2026-10-24: written once a minute each, then counted
+                if (craft != _panelIsCraft || !_panelUp) CrashLog.NoteBurst(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
                 _panelIsCraft = craft;
                 var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
                 if (recipe.Length >= 2 && text is { } tl && CraftPanel.LevelOf(tl.Recipe) is int lv and > 0) _panelLevel = lv;
@@ -3376,6 +3467,7 @@ public sealed partial class TrackerSession
         if (_loop != null) { try { await _loop; } catch (Exception) { /* loop ended */ } }
         FlushVotes();   // lines still waiting for their vote count as read, before the run closes
         CommitHeld();   // and a rare pickup still waiting for its second read
+        TableWitnessDue(DateTime.UtcNow, force: true);   // and a reward picture waiting for its chat, on what came
         lock (_chatShotLock) { _chatShot?.Dispose(); _chatShot = null; }
         Instances.Close();
         Engine.Finish();
@@ -3530,7 +3622,7 @@ public sealed partial class TrackerSession
                 {
                     // no pictures: a partly read run goes up as it was read; one not read is parked below
                     if (pics.Count == 0) { if (!r.KinahUnknown) Instances.Requeue(r); continue; }
-                    var res = await EventShotRecovery.ReadKeptAsync(r, s, _items);
+                    var res = await EventShotRecovery.ReadKeptAsync(r, s, _items, server: Server);
                     if (!res.Read) { CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s), still not read"); if (!r.KinahUnknown) Instances.Requeue(r); continue; }
                     // a partly read run: the pictures' read replaces the live one only when it reads more slots (or the same with fewer not read)
                     if (TakeReread(r, res.Run))

@@ -1,0 +1,10 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Urugugu Canyon, 2026-10-24 17:11 to 17:16 local: in at 17:11:46 during the countdown, \"Left Urugugu Canyon Dungeon room.\" at 17:12:21, no table, no kills, then Orichalcum gathered outside. 0.8.30 kept it as a run whose rewards were not read (the gathers set aside in it) and parked it. Now it was left before it began: not kept; the next entry at 17:15:26 opens a run with nothing in it yet",
+  "source": "Steven's trace.log 2026-10-24 21:11:00 to 21:16:30 UTC: chat kept only for the game's own lines (pickups, Kina, achievements, the countdown, the dungeon room lines, party lines without names), every other line replaced by a filler keyed by its text's hash; loot list reads left out (other players' names); zone and reward-title reads as recorded.",
+  "expect": {
+    "runs_kept": 0
+  }
+}

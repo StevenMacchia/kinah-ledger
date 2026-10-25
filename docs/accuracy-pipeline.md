@@ -601,16 +601,26 @@ new from the screen, only what the session already decides (`TrackerSession.Scor
   from that rise), the loot list showed what the chat counted (or the chat showed the row the list counted), a gathering
   bar finished on Success for the row, a rare drop's second read confirmed it, or it is a reward slot read and named. A
   pickup whose count was assumed 1 is never verified.
-- **Verified share** = verified / judged, rounded down to a whole percent (only every single one is 100%). Under 10
-  judged events the card says "Not enough counted yet".
-- **Things to check**: every Kina line the counter refused, every loot list row no chat line confirmed, every pickup whose
+- **What the player sees** (since 2026-10-25, branch tracker/farming-calm; Steven: "VERIFIED % BEING LOW COULD CHURN
+  USERS FAST"): of the pickups a second source could check, how many matched. **Checked** = matched + contradicted;
+  **matched** = the verified pickups above (reward slots aside: a slot read off its picture has no second source);
+  **contradicted** = a Kina line the counter refused, a loot list row no chat line confirmed. A pickup one source saw
+  (the counter quiet, a crafted item, a reward slot, a count assumed 1) is **not checked**, never against the player.
+  A percentage (matched / checked, rounded down) shows only when something was contradicted and at least 10 were
+  checked; otherwise "Checked by the game: all 412 matched", or "Nothing looked wrong" when nothing could be checked.
+  On 2026-10-24 (audit lines 19:08:38 and 19:34:43) the old share read 20% and 28% while Steven crafted in town with
+  nothing contradicted.
+- **The old verified share** = verified / judged (every judged event, reward slots and one-source pickups too), rounded
+  down. Kept on the audit line only, for comparing logs.
+- **Things to look at**: every Kina line the counter refused, every loot list row no chat line confirmed, every pickup whose
   count was assumed 1, every run whose reward picture was read in part or not at all. Each has its time, its text, why
   (`refused by the counter`, `no chat line`, `count assumed 1`, `partly read card`, `rewards not read`) and a handle: the
   moment in frames.jsonl's form (UTC, "O"), or `run:` and the run's start. When a thing to check is found, the miscount
   report's buffer keeps its pictures, reads and pickups from 8 s before to 4 s after that moment for the session
   (`ReportBuffer.Pin`, 40 MB of pictures at most), so its Report finds them minutes later. "Fine" takes it off the list
   for the session; the share doesn't change.
-- **Status**: Verified at 95% or more with nothing left to check; Mostly verified at 80% or more; Check these under 80%.
+- **Status** (Verified / Mostly verified / Check these) is gone from the session card since 2026-10-25; runs keep theirs
+  (the table below).
 - **Informational, never in the share**: loot list rows too faint to settle (unsure), lines that weren't rows, Kina lines
   the counter couldn't judge (it fell or went quiet), the name decoder's agree / disagree / other, the median counting
   delay (the chat vote's first read to counted), and the **counter reconciliation**: between trusted readings, the
@@ -618,13 +628,16 @@ new from the screen, only what the session already decides (`TrackerSession.Scor
   sale, mail, a claim) is left out. Exact, or the count is under / over by N. A line still waiting for the counter isn't
   counted yet, so a spend while lines wait can leave their amounts on the other side of the stretch.
 
-**Where it shows.** The card under the session line in the Farming view (`Ui/MainWindow.AccuracyCard.cs`, words from
-`Ui/AccuracyCardView.cs`, the game-tooltip look): title "Accuracy", the share line, one secondary line ("1 pickup unsure
-· tap to see", "Nothing to check", "Nothing to check · N seen only once"), the status as a chip, the figures on hover.
-Tapped, the things to check open inline with Report (the miscount report headed by "HH:mm:ss text: why", with the
-pinned moment; its loot list and panel pictures are sent only with Options › Sharing › Send report pictures and sharing
-on) and Fine. The panel over the game shows one line, "✓ 98% verified" or "? 2 to check", while it is up. The audit line
-ends `· verified 98%` (`, N to check`). Copy for Discord's card carries "✓ 98% verified by the game's own numbers".
+**Where it shows** (since 2026-10-25). One chip under the session line in the Farming view, in the look's chip colours
+(`Ui/MainWindow.AccuracyCard.cs`, words from `Ui/AccuracyCardView.cs`): "✓ Nothing looked wrong", "2 to look at", or
+"✓ All looked at" once every contradiction was marked Fine. A click opens the Accuracy card over the window, a dark game
+tooltip like the item card: title "Accuracy", the line ("Checked by the game: all 412 matched", "… 410 of 412 matched
+(99%)"), the four counts (checked, matched, to look at, not checked; the figures behind them on hover), then the things
+to look at with Report (the miscount report headed by "HH:mm:ss text: why", with the pinned moment; its loot list and
+panel pictures are sent only with Options › Sharing › Send report pictures and sharing on) and Fine. The panel over the
+game shows the chip's words once 10 were checked, or as soon as there is something to look at. The audit line ends
+`· checked 412, matched 410 (99%), 2 to look at, 37 not checked · old verified share 20%`. Copy for Discord's card
+carries "✓ Checked by the game: all 412 matched" (or "… 410 of 412 matched (99%)") once 10 were checked.
 
 **Per run, for the site** (`InstanceRunPayload.acc`, from `AccuracyScore.ForRun` as a run is handed to a send, kept on the
 run as `Acc`; absent when nothing in the run was judged, and on older trackers), over the run's start to its last loot
@@ -640,7 +653,15 @@ plus 30 s:
 | `partly_read` | the run's PartlyRead flag (PR 22) |
 | `delay_ms` | median counting delay in the run, null when not measured |
 | `ver` | the tracker version |
+| `checked` | since 2026-10-25: pickups in the run a second source could check (matched plus refused lines and rows no chat line confirmed) |
+| `matched` | since 2026-10-25: those a second source agreed with |
+| `not_checked` | since 2026-10-25: pickups and reward slots only one source saw; never counted against |
 | `note` | only with a reason ("fewer than 5 counted") |
+
+The three counts don't change `status` or `kina_confirmed`. `kina_confirmed` counts Kina picked up while the counter was
+quiet against the run (a run with the counter quiet half the time reads 0.5, "unconfirmed"); a site that wants the
+player's measure shows `matched / checked` and leaves `not_checked` out. The site's `accBlock` keeps only the eight names
+it knows, so older sites take these payloads unchanged.
 
 parse-test ("Accuracy card") checks all of it on synthetic tallies and through a session's own Kina witness.
 
@@ -672,6 +693,41 @@ The offline test modes (parse-test, market-test, accuracy-test, replay-bank) now
 `%TEMP%KinahLedger-tests<mode>-<pid>-<time>` (`TestTemp.cs`), removed when the run passes and printed ("test files
 kept in ...") when it fails or `KL_BANK_KEEP` is set; two runs at once no longer share `KinahLedger-test-logs` or
 `KinahLedger-parse-test`.
+## Disk, logs and the accuracy upload (branch tracker/reliability, 2026-10-25)
+
+Measured on Steven's PC on 2026-10-24: the data folder was 919 MB (reward-shots 554 MB, reports 277 MB, trace logs 49 MB),
+reads.log had been emptied at 2 MB, and the accuracy upload got a 404.
+
+- **Pictures have a budget each** (`ShotBudget`, Session/Housekeeping.cs). One shared limit of 300 a day was filled by crafting
+  frames (one every 2 s, 1.6 MB each; 203 of them between 19:13 and 19:22), and after that no reward table or event card could
+  be kept, which `replay-event-shots` and `EventShotRecovery` read again. Now: a run's end (`reward-table`,
+  `reward-table-settled`, `event-rewards`) 200 a day of its own; crafting 20 a day, 40 s apart; in-run (every 30 s inside an
+  event or expedition) 60; other reward and shop screens 60. The crafting frames only feed `craft-test --glob *crafting.jpg`,
+  a by-hand tuning of the crafting panel's reader: the reader itself works on live frames, and a miscount report keeps its own
+  strip pictures in memory. Size and quality of every picture are unchanged (run ends at 90 and 85, as before).
+- **Pruning** (`Housekeeping`): at the start of the app and then at most hourly, on a low-priority thread that waits for a gap
+  between read passes before each delete (`PassStarted`/`PassEnded` bracket every pass of the read loop) and gives up for five
+  minutes when none comes. reward-shots: a run's end 14 days (was 7) and never trimmed for size inside the last 7; shop
+  screens 2 days; in-run and crafting 1 day; other screens 7; past 400 MB (was 300) the oldest non-run pictures first, then run
+  ends older than a week. reports/: 7 days or 200 MB, whichever deletes more; never a report under an hour old (its pictures
+  may be on their way to the site) and never one with `unsent.txt` (its pictures were meant for the site and the send failed;
+  sending is once, right after the report is saved, so nothing retries it) until it is 14 days old. Only folders named
+  `yyyyMMdd-HHmmss[-n]` and `.jpg` files named `yyyyMMdd-HHmmss-...` are touched. One line in reads.log says what went.
+- **reads.log** is turned over at 5 MB to `reads.old.log` (as `trace.log` becomes `trace.old.log`), never emptied; the new file's
+  first line says so. A note that flaps is written once and counted: `CrashLog.NoteBurst` (crafting panel up/gone, "crafting
+  window seen", "not in the item list, not counted: X") writes the first and, a minute later, one line "(×6 more, last at
+  07:20:08)"; any other `Note` is written five times a minute and then counted the same way. Never held back: `audit:`,
+  `zone:`, `reward screen`, `event header:`, `activity:`, `anchor` lines (a replay reads them), chat lines (`Read`), and
+  anything while a replay's clock is set. A miscount report's reads-log.txt takes its 600 lines across the turn-over
+  (`CrashLog.ReadsTail`), and `replay` reads `reads.old.log` beside `reads.log` for zones and reward screens.
+- **The 404** was not a wrong address: the tracker posts to `<upload.endpoint minus runs>/accuracy` = `/v1/accuracy`, and the
+  live site had no such route (`GET /v1/accuracy`, `/v1/layout` and `/v1/frames` answer 404; `/v1/runs` 405, `/v1/config`
+  200). The routes are on the site repo's `backend/accuracy` branch, which was never merged into `main`, the branch every deploy
+  was built from; `site/accuracy-route` there is that branch merged with `main`, awaiting a deploy and migration 0013. A
+  report the site answers 404 is now kept in `accuracy-queue.json` (50 at most, 7 days) and offered again, oldest first, with
+  the next send (one request while the site stays without the route); refused for its shape (400, 413, 415) it is dropped;
+  any other failure goes back into the counters as before; sharing off clears the queue.
+
 ## Commands
 
 ```

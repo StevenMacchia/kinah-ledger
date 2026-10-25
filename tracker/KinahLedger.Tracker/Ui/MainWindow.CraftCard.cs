@@ -135,7 +135,9 @@ public partial class MainWindow
         tl.Children.Add(CkText("Cost per craft", CkMuted, 13.5));
         if (unpriced > 0) tl.Children.Add(CkText(unpriced == 1 ? "one price unsure or missing, left out: click it to type yours" : $"{unpriced} prices unsure or missing, left out", CkWarn, 11.5));
         tot.Children.Add(tl);
-        var tv = CkText(total.ToString("N0") + (unpriced > 0 ? "+" : ""), CkGold, 19, FontWeights.SemiBold, mono: true); Grid.SetColumn(tv, 1); tot.Children.Add(tv);
+        // a floor says so: "at least 246,619"; with nothing priced it is "no price yet", never "0+" (the CI render of 2026-10-24)
+        var tv = total <= 0 && unpriced > 0 ? CkText("no price yet", CkFaint, 15) : CkText((unpriced > 0 ? "at least " : "") + total.ToString("N0"), CkGold, 19, FontWeights.SemiBold, mono: true);
+        Grid.SetColumn(tv, 1); tot.Children.Add(tv);
         body.Children.Add(CkBox(tot, new Thickness(20, 4, 20, 0)));
 
         // this session: tries and how many worked, what came out (hidden until it has been crafted)
