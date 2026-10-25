@@ -77,6 +77,27 @@ public static class RunDataTests
             Check("a false run closing: not kept", $"{fl.Snapshot().Count} {File.Exists(Path.Combine(dir, "instances.jsonl"))}", "0 False");
             Check("...logged as not a run", File.ReadAllText(CrashLog.ReadsPath).Contains("not a run: Urugugu Canyon") ? "logged" : "no line", "logged");
 
+            // g. 2026-10-24 19:03:54: after leaving the dungeon the open bag was read as a reward table (its item tooltip
+            // "Special Reward Chest" passed for "Reward collected.") and filed as run 23: no Kinah, 13 slots, none named
+            Check("\"Reward Chest\" is not the table's line; the real one, garbled too, is",
+                $"{TrackerSession.IsRewardCollected("Special Reward Chest")} {TrackerSession.IsRewardCollected("Reward collected.")} {TrackerSession.IsRewardCollected("Reward cooectedo ///////;")}", "False True True");
+            var midLine = new OcrLineBox("Reward collected.", new Rectangle(2400, 280, 320, 40));   // the middle of a 5120 frame
+            var offSide = new OcrLineBox("Reward collected.", new Rectangle(3380, 180, 400, 40));     // 0.70 of the width: a tooltip
+            Check("...and the line sits in the middle of the frame", $"{TrackerSession.CollectedLine(new[] { offSide }, 5120) == null} {TrackerSession.CollectedLine(new[] { offSide, midLine }, 5120)?.Box.X}", "True 2400");
+            var bag = new TrackerSession(null, settings, items, "Test");
+            bag.Engine.SetZone("Urugugu Canyon"); bag.Instances.Zone("Urugugu Canyon", t0);
+            bag.ApplyGrid(Enumerable.Range(0, 13).Select(_ => Slot("Common", "1", "Other", 104)).ToList(), t0.AddMinutes(2));
+            var bagRun0 = bag.Instances.CurrentRun;
+            Check("13 slots, none surely named, no coin: not a reward table", $"{bagRun0?.FromPicture ?? false} {bagRun0?.Tables ?? 0} {bagRun0?.SlotsUnread ?? 0}", "False 0 0");
+            Check("...and logged", File.ReadAllText(CrashLog.ReadsPath).Contains("13 slot(s), none surely matched and no coin: not a reward table") ? "logged" : "no line", "logged");
+            var ts = new InstanceLog();
+            ts.Zone("Urugugu Canyon", t0);
+            ts.RewardTable(t0.AddMinutes(8), new GameEvent[] { new KinahChanged(t0.AddMinutes(8), 600_000, false) { Via = "reward table" } }, 0);
+            bool soon = ts.TableStarting(t0.AddMinutes(8).AddSeconds(85)), later = ts.TableStarting(t0.AddMinutes(16));
+            Check("a second table 85 s after the first is no run's; 8 min after, the next run's", $"{soon} {later}", "False True");
+            Check("...the soonest: 90 s, or 40% of the place's usual run", $"{InstanceLog.TooSoonForNextRun(0)} {InstanceLog.TooSoonForNextRun(510)}", "90 204");
+            ts.Close();
+
             // d. in progress: an open run with loot or a table; a run just opened, or split open, with nothing in it is not
             var ip = new InstanceLog();
             ip.Zone("Urugugu Canyon", t0);
@@ -173,6 +194,23 @@ public static class RunDataTests
             Check("...an ordinary run's payload has no correction", $"{plain.correction == null} {plain.seconds} {JsonSerializer.Serialize(plain).Contains("correction")} {fixJson.Contains("\"correction\":{\"ended\"")}", "True 400 False True");
             rl2.Resent(rl2.Resends[0]);
             Check("...sent: cleared in the file, nothing left to send", $"{new InstanceLog().Resends.Count} {File.ReadAllLines(file).Count(l => l.Contains("\"Resend\":true"))}", "0 0");
+
+            // h. records filed before these rules, marked on load: the 14:03:25 Oct 24 shape from before tables were kept (no
+            // Tables, no TableAt, paid 4 s after entry) and the 19:02:48 bag "run" that named nothing; a paid run and an event
+            // whose cards weren't all read are left as they are
+            File.Delete(file);
+            var hs = new DateTime(2026, 10, 24, 18, 3, 25, DateTimeKind.Utc);
+            var oldShape = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = hs, LastLoot = hs.AddSeconds(4.6), PaidAt = hs.AddSeconds(4.2), Witnesses = "minimap 14:03:25", FromPicture = true, Ended = "its reward table was read, then Windy Valley" };
+            oldShape.Items[1] = 1000;
+            var eventRun = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Start = hs.AddHours(1), LastLoot = hs.AddHours(1).AddSeconds(240), PaidAt = hs.AddHours(1).AddSeconds(230), FromPicture = true, PartlyRead = true, SlotsUnread = 5, Witnesses = "minimap 15:03:25", Ended = "time for rewards over" };
+            var paidRun = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = hs.AddHours(2), LastLoot = hs.AddHours(2).AddSeconds(510), PaidAt = hs.AddHours(2).AddSeconds(500), Kinah = 600_000, FromPicture = true, Tables = 1, TableAt = hs.AddHours(2).AddSeconds(500), Witnesses = "minimap 16:03:25", Ended = "time for rewards over" };
+            paidRun.Items[1] = 3;
+            var bagRec = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = hs.AddHours(5), LastLoot = hs.AddHours(5).AddSeconds(155), PaidAt = hs.AddHours(5).AddSeconds(66), FromPicture = true, Tables = 1, TableAt = hs.AddHours(5).AddSeconds(66), SlotsUnread = 13, UnknownItems = 13, UnknownGear = 1, Ended = "time for rewards over" };
+            File.WriteAllLines(file, new[] { oldShape, eventRun, paidRun, bagRec }.Select(r => JsonSerializer.Serialize(r)));
+            var hl = new InstanceLog();
+            Check("before-the-rules records: the 14:03 shape and the bag run are not runs", string.Join(" ", hl.Snapshot().OrderBy(r => r.Start).Select(r => r.Suspect == "not a run" ? "not" : r.Suspect.Length > 0 ? r.Suspect : "ok")), "not ok ok not");
+            Check("...out of the averages with the partly read event; the paid run counts", $"{hl.Snapshot().Count(r => r.OutOfAverages)} {hl.Snapshot().Single(r => r.Kinah == 600_000).OutOfAverages}", "3 False");
+            Check("...the bag run's line in reads.log", File.ReadAllText(CrashLog.ReadsPath).Contains("its reward picture named nothing and showed no Kinah") ? "logged" : "no line", "logged");
         }
         finally { CrashLog.DirOverride = keepDir; try { Directory.Delete(dir, true); } catch (Exception) { } }
         return ok;

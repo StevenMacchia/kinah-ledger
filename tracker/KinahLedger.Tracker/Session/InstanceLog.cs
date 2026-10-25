@@ -575,20 +575,41 @@ public sealed class InstanceLog
     /// <summary>
     /// A reward table is about to be read into the open run. When this run's table was read already (a minute or more ago),
     /// this one is the next run's, never added onto the first: the first closes and the next starts, from the last change
-    /// of area since that table (2026-10-23: five tables, one run of 37:04 with 3,000,000 Kinah).
+    /// of area since that table (2026-10-23: five tables, one run of 37:04 with 3,000,000 Kinah). A second table sooner than
+    /// another run could end (<see cref="TooSoonForNextRun"/>) is no run's: false, and the caller reads nothing from it
+    /// (2026-10-24 19:03:54: the open bag after leaving the dungeon, 85 s after the 19:02:29 table, became "run 23" with no
+    /// Kinah and nothing named). True: the table may be read into the open run.
     /// </summary>
-    public void TableStarting(DateTime t)
+    public bool TableStarting(DateTime t)
     {
         lock (_lock)
         {
-            if (_cur == null || _cur.Kind == WorldBoss || _tableAt is not DateTime prev || (t - prev).TotalSeconds < 60) return;
+            if (_cur == null || _cur.Kind == WorldBoss || _tableAt is not DateTime prev || (t - prev).TotalSeconds < 60) return true;
+            double soonest = TooSoonForNextRun(UsualSecondsLocked(_cur.Zone));
+            if ((t - prev).TotalSeconds < soonest)
+            {
+                CrashLog.Note($"a second reward table {(t - prev).TotalSeconds:0} s after {_cur.Label}'s, sooner than another run could end ({soonest:0} s): not the next run's, nothing read from it");
+                return false;
+            }
             var zone = _cur.Zone; var kind = _cur.Kind; var ev = _cur.Event; var fam = _cur.Family;
             var start = _areaSince is DateTime a && a > prev ? a : t;
             CloseLocked("a second reward table: the next run's");
             _cur = new InstanceRun { Zone = zone, Kind = kind, Event = ev, Family = fam, Start = start };
             _byMinimap = true;
             CrashLog.Note($"{kind.ToLowerInvariant()} run started: {_cur.Label} (a second reward table at {t.ToLocalTime():HH:mm:ss})");
+            return true;
         }
+    }
+
+    /// <summary>The soonest a place's next table can come after one: 90 s, or 40% of its usual run when that is longer.</summary>
+    public static double TooSoonForNextRun(double usualSeconds) => Math.Max(SecondTableSeconds, 0.4 * usualSeconds);
+    public const double SecondTableSeconds = 90;
+
+    /// <summary>A place's usual run: the median length of its counted records (at least three), or 0.</summary>
+    double UsualSecondsLocked(string zone)
+    {
+        var xs = _done.Where(r => string.Equals(r.Zone, zone, StringComparison.OrdinalIgnoreCase) && !r.OutOfAverages && r.Seconds > 0).Select(r => r.Seconds).ToList();
+        return xs.Count < 3 ? 0 : Median(xs);
     }
     string? _area, _paidArea; DateTime? _areaSince, _tableAt, _moveAt; int _moveReads; bool _moveConfirmed;
     public const double MoveHoldSeconds = 3, RewardLateSeconds = 30;
@@ -708,12 +729,20 @@ public sealed class InstanceLog
             _cur.RewardsNotRead = true;
             if (_cur.LastLoot != null) CrashLog.Note($"{_cur.Label}: no reward picture was read, so its rewards are marked not read ({_cur.ChatItemsSetAside} chat item(s) not counted)");
         }
+        if (_cur?.LastLoot != null && NothingNamed(_cur))
+        {
+            // a "reward table" that named nothing and showed no coin: another window read as one, never a run's table
+            // (2026-10-24 19:03:54, the open bag after leaving the dungeon: 13 slots, none named, no Kinah)
+            CrashLog.Note($"not a run: {_cur.Label} {_cur.Start.ToLocalTime():HH:mm:ss}, its reward picture named nothing and showed no Kinah ({_cur.SlotsUnread} slot(s) not named; {why}); not kept");
+            _cur = null; _byMinimap = false;
+            return;
+        }
         if (_cur?.LastLoot != null && FalseRun(_cur))
         {
             // a reward screen read as the run's table moments after the minimap named the instance (2026-10-24 14:03:25:
             // "Urugugu Village" during the "Starting in 9s" countdown, a Daeva Pass Level Reward read as a 5-slot table at
             // 14:03:29, kept as a 10 s run with 1,008 items and no Kinah): never kept, never sent
-            CrashLog.Note($"not a run: {_cur.Label} {_cur.Start.ToLocalTime():HH:mm:ss}, {(_cur.LastLoot.Value - _cur.Start).TotalSeconds:0} s, no Kinah, only the minimap saw it, its one table {(_cur.TableAt!.Value - _cur.Start).TotalSeconds:0} s after entry ({why}); not kept");
+            CrashLog.Note($"not a run: {_cur.Label} {_cur.Start.ToLocalTime():HH:mm:ss}, {(_cur.LastLoot.Value - _cur.Start).TotalSeconds:0} s, no Kinah, only the minimap saw it, its one table {((TableTime(_cur) ?? _cur.Start) - _cur.Start).TotalSeconds:0} s after entry ({why}); not kept");
             _cur = null; _byMinimap = false;
             return;
         }
@@ -741,9 +770,27 @@ public sealed class InstanceLog
     /// it was another reward screen read as a table while the minimap already named the instance.
     /// </summary>
     public static bool FalseRun(InstanceRun r) =>
-        r.Kind != WorldBoss && r.Kinah == 0 && r.Tables == 1 && r.TableAt is DateTime ta && r.LastLoot is DateTime l
+        r.Kind != WorldBoss && r.Kinah == 0 && TableTime(r) is DateTime ta && r.LastLoot is DateTime l
         && (l - r.Start).TotalSeconds < FalseRunSeconds && (ta - r.Start).TotalSeconds <= FalseRunTableSeconds
         && r.Witnesses.Length > 0 && r.Witnesses.Split(" · ", StringSplitOptions.RemoveEmptyEntries).All(w => w.StartsWith("minimap ", StringComparison.Ordinal));
+
+    /// <summary>
+    /// When its one reward table was read: <see cref="InstanceRun.TableAt"/>, or for a record from before tables were kept
+    /// (before 0.8.27: no Tables, no TableAt) a picture-read run's PaidAt (the 14:03:25 Oct 24 record, paid 4 s after entry).
+    /// Null with more than one table, or none.
+    /// </summary>
+    static DateTime? TableTime(InstanceRun r) =>
+        r.Tables == 1 ? r.TableAt : r.Tables == 0 && r.TableAt == null && r.FromPicture && r.Kind != "Event" ? r.PaidAt : null;
+
+    /// <summary>
+    /// A reward table that named nothing: an expedition or Transcendence run read from its picture, no Kinah (and its coin
+    /// not merely unread), no item named on it. A run's table always shows its coin or names something, so this was another
+    /// window read as one (2026-10-24 19:03:54: the open bag after leaving the dungeon, whose item tooltip's "Special Reward
+    /// Chest" passed for "Reward collected."; 13 slots, none named). Events are left alone: their cards can pay no Kinah.
+    /// </summary>
+    public static bool NothingNamed(InstanceRun r) =>
+        r.Kind is "Expedition" or Transcendence && r.FromPicture && r.Kinah == 0 && !r.KinahUnknown
+        && r.Items.Values.Sum() == 0 && r.BoundItems.Values.Sum() == 0;
 
     Func<long, string?>? _nameOf;
     ItemDictionary? _dict;
@@ -934,6 +981,7 @@ public sealed class InstanceLog
             if (PictureOnly(r) && !r.FromPicture && r.Ended.Length == 0 && r.Witnesses.Length == 0 && r.Kinah == 0 && !r.KinahUnknown)
             { r.OldUnread = true; marked.Add((r, "a record from before the tracker kept its flags (chat-counted) with Kinah 0: Kinah not read")); }
             if (r.FromPicture && FalseRun(r)) { r.Suspect = "not a run"; marked.Add((r, "not a run: no Kinah, only the minimap saw it, its one table moments after entry")); }
+            else if (NothingNamed(r)) { r.Suspect = "not a run"; marked.Add((r, "not a run: its reward picture named nothing and showed no Kinah (another window read as a table)")); }
         }
         foreach (var zone in runs.Where(r => r.Kind != WorldBoss).GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase))
         {

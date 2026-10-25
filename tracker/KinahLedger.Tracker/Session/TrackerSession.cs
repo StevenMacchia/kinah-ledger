@@ -1606,7 +1606,7 @@ public sealed partial class TrackerSession
     // checked for "Reward collected."; when it is there the grid is read once (RewardGrid, the other session's reader).
     // A slot the chat already counted (same item, same count, last 20 s) is skipped; a slot named as exactly one item is
     // added to the run alone; a slot that names only a family of items, or nothing, is written to reads.log, never guessed.
-    DateTime _gridAt = DateTime.MinValue, _gridSeenAt = DateTime.MinValue; bool _gridDone;
+    DateTime _gridAt = DateTime.MinValue, _gridSeenAt = DateTime.MinValue, _asideNoteAt = DateTime.MinValue; bool _gridDone;
     public const double GridSureDistance = 70;
     static string Unbound(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
     Dictionary<string, List<ItemInfo>>? _byIcon;
@@ -1627,7 +1627,9 @@ public sealed partial class TrackerSession
             var band = new Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
             using var bandBmp = frame.Clone(band, frame.PixelFormat);
             var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
-            var rc = lines.FirstOrDefault(l => IsRewardCollected(l.Text));
+            var rc = CollectedLine(lines, frame.Width);
+            if (rc == null && lines.FirstOrDefault(l => IsRewardCollected(l.Text)) is { } aside && (now - _asideNoteAt).TotalSeconds > 30)
+            { _asideNoteAt = now; CrashLog.Note($"reward table: \"{aside.Text}\" is off to one side ({(aside.Box.X + aside.Box.Width / 2.0) / frame.Width:0.00} of the width), a tooltip or another window, not the table's line"); }
             // an event's reward screen (Shugo Festival "Jump Jump": "Rewards have been sent to your cube.", "Can select 0 time(s)",
             // five cards, the received ones bright with a card icon): its rewards are the run's and come from this picture,
             // never the chat (Steven, 2026-10-23). The picture is kept (a few, a second or two apart), and once the cards are
@@ -1701,7 +1703,7 @@ public sealed partial class TrackerSession
         var band = new System.Drawing.Rectangle(frame.Width / 4, 0, frame.Width / 2, frame.Height / 3);
         using var bandBmp = frame.Clone(band, frame.PixelFormat);
         var lines = await ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1);
-        var rc = lines.FirstOrDefault(l => IsRewardCollected(l.Text));
+        var rc = CollectedLine(lines, frame.Width);
         return rc == null ? null : rc.Box.Bottom + (int)(frame.Height * 0.016);
     }
 
@@ -1854,8 +1856,17 @@ public sealed partial class TrackerSession
             if (slots.Count > 0) CrashLog.Note($"{what}: one slot, nothing on it surely matched; not a reward table, the run is left as it was");
             return;
         }
-        // a second table in a run that was paid already is the next run's
-        Instances.TableStarting(now);
+        // a table of several slots where nothing is surely named and no coin shows is no run's table (2026-10-24 19:03:54: the
+        // open bag after leaving the dungeon, 13 slots, none named, filed as a run with no Kinah); a run's table always shows
+        // its coin or names something
+        if (what == "reward table" && !slots.Any(s => (s.Icons.Count > 0 && s.Icons[0].Distance <= GridSureDistance)
+                                                      || (s.Count >= 1000 && System.Text.RegularExpressions.Regex.IsMatch(s.CountText ?? "", "[KkMm]"))))
+        {
+            CrashLog.Note($"{what}: {slots.Count} slot(s), none surely matched and no coin: not a reward table, the run is left as it was");
+            return;
+        }
+        // a second table in a run that was paid already is the next run's; one sooner than another run could end is no run's
+        if (!Instances.TableStarting(now)) return;
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
         int added = 0, known = 0, unnamed = 0;
         var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
@@ -2261,9 +2272,23 @@ public sealed partial class TrackerSession
     /// The expedition table's "Reward collected." line as the recognizer reads it: "Reward cooectedo" too (the CI reader on
     /// the 2026-10-23 Urugugu table). The word alone was missed, and with it the whole table.
     /// </summary>
+    /// An item's "Reward Chest" is never the line (2026-10-24 19:03:54: the bag's tooltip "Special Reward Chest" matched the
+    /// pattern, so the open bag was read as a 13-slot table).
     public static bool IsRewardCollected(string line) =>
-        Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.RewardCollectedWords)
-        || Regex.IsMatch(line, @"rew[a-z]{0,2}r?d\W{0,2}c[a-z]{1,6}t", RegexOptions.IgnoreCase);
+        !Regex.IsMatch(line, @"rew[a-z]{0,2}r?d\W{0,2}ch[e3]st", RegexOptions.IgnoreCase)
+        && (Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.RewardCollectedWords)
+            || Regex.IsMatch(line, @"rew[a-z]{0,2}r?d\W{0,2}c[a-z]{1,6}t", RegexOptions.IgnoreCase));
+
+    /// <summary>How far from the frame's middle the "Reward collected." line may sit, as a share of its width.</summary>
+    public const double CollectedOffCentre = 0.10;
+
+    /// <summary>
+    /// The table's "Reward collected." line among the top band's lines: its words, centred in the frame as the game draws it
+    /// under "Obtained Items" (at 0.50 of the width on the 5120x2160 Urugugu tables). A line far to one side is a tooltip or
+    /// another window (the bag's item tooltip sat at 0.69). Null when there is none.
+    /// </summary>
+    public static OcrLineBox? CollectedLine(IEnumerable<OcrLineBox> lines, int frameWidth) =>
+        lines.FirstOrDefault(l => IsRewardCollected(l.Text) && Math.Abs(l.Box.X + l.Box.Width / 2.0 - frameWidth / 2.0) <= frameWidth * CollectedOffCentre);
 
     public static bool IsEventRewardTitle(string line) =>
         Regex.IsMatch(line, @"sent\s*to\s*your\s*cube|can\s*select\s*\d+\s*time", RegexOptions.IgnoreCase);
