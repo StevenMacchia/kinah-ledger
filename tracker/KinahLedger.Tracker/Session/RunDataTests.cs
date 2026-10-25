@@ -273,6 +273,8 @@ public static class RunDataTests
                 string.Join(" | ", two.Select(r => $"{Loc(r.Start)} {Len(r)} {r.Kinah:N0}")), "14:03:25 9:23 600,000 | 14:19:30 9:34 600,000");
             Check("...the first ended by its room; the Kina after it no run's, the 5,000 inside the second set aside",
                 $"{two.FirstOrDefault()?.Ended.StartsWith("its room was left")} {two.FirstOrDefault()?.ChatKinahSetAside} {two.LastOrDefault()?.ChatKinahSetAside}", "True 0 5000");
+            Check("...a line dated inside the first, let through after its room line, is its run's; one after is no run's",
+                $"{j.LeftRunOf(L("14:12:48"))?.Zone ?? "none"} / {j.LeftRunOf(L("14:13:12"))?.Zone ?? "none"} / {j.LeftRunOf(L("14:25:00"))?.Zone ?? "none"}", "Urugugu Canyon / none / none");
             Check("...the second witnessed by the minimap and the countdown", two.LastOrDefault()?.Witnesses ?? "", $"{Wit("minimap", "14:19:30")} · {Wit("chat: starting", "14:19:20")}");
 
             // k. 17:11:46 in, "Left Urugugu Canyon Dungeon room." at 17:12:21: no table, no kills, 35 s. It was parked as rewards

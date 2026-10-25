@@ -738,6 +738,8 @@ public sealed class InstanceLog
     List<string> _heldAreas = new(); DateTime? _heldMoveAt;
     /// <summary>The chat's last countdown line ("Starting in 9s.").</summary>
     DateTime? _startAt;
+    /// <summary>The last run a room line closed: its zone, its kind, from its start to the line.</summary>
+    (string Zone, string Kind, DateTime From, DateTime To)? _roomClosed;
     /// <summary>The last room line taken for each expedition, for telling it read again from a new one.</summary>
     readonly Dictionary<string, DateTime> _exits = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
@@ -795,6 +797,7 @@ public sealed class InstanceLog
             if (closes && _cur != null)
             {
                 kind = _cur.Kind;
+                _roomClosed = (_cur.Zone, _cur.Kind, _cur.Start, t);
                 double secs = (t - _cur.Start).TotalSeconds;
                 if (_cur.Tables == 0 && _cur.Kills == 0 && secs < LeftEarlySeconds)
                 {
@@ -839,9 +842,20 @@ public sealed class InstanceLog
     }
 
     /// <summary>
+    /// The run a pickup dated <paramref name="t"/> happened in when its room line has closed it already (a chat line the vote
+    /// or the rare gate let through after "Left … Dungeon room.": 2026-10-24, the cube's "Divine Canyon Cloak acquired." of
+    /// 14:12:48, through after the 14:12:53 line): its zone and kind, or null. Such a pickup is that run's, which counts
+    /// nothing from the chat, never farming.
+    /// </summary>
+    public (string Zone, string Kind)? LeftRunOf(DateTime t)
+    {
+        lock (_lock) return _roomClosed is { } c && t >= c.From && t <= c.To && (_cur == null || t < _cur.Start) ? (c.Zone, c.Kind) : null;
+    }
+
+    /// <summary>
     /// True while the room of the expedition <paramref name="zone"/> is in was left and no entry was seen since: the minimap's
-    /// name for it says nothing of a run, and what lands meanwhile is no run's (2026-10-24 14:13:12: 10,000 Kina (Bound), 19 s
-    /// after the room was left, with the minimap still on Auldor's Sanctum).
+    /// name for it opens no run, so what lands meanwhile is inside with no run, counted nowhere (2026-10-24 14:13:12: 10,000
+    /// Kina (Bound), 19 s after the room was left, with the minimap still on Auldor's Sanctum). For the log and the tests.
     /// </summary>
     public bool HeldHere(string? zone)
     {

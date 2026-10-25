@@ -1156,8 +1156,7 @@ public sealed partial class TrackerSession
         // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
         // a reward screen open turns what lands into rewards, except inside an event or expedition: there everything is the
         // run's, and a level-up popup mid-event must not set the event's loot aside (Accursed Sword, 2026-10-22 14:35)
-        // (once the expedition's room was left, the minimap's stale name for it is no run: InstanceLog.HeldHere)
-        bool reward = Target.RewardOpen(now) && !(ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored && !Instances.HeldHere(Zone));
+        bool reward = Target.RewardOpen(now) && !(ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored);
         // the crafting window: its skill tabs in the band, or its own "Show acquired designs" box over the chat
         if (lines.Any(l => Update.RemoteConfig.HasAny(l, Update.RemoteConfig.Current.CraftWindowWords)))
         {
@@ -2102,10 +2101,9 @@ public sealed partial class TrackerSession
     /// Inside an expedition or event: the minimap names one, or a run is open while the minimap names no listed zone, or
     /// the run was just left and its rewards may still land (InstanceLog.Route decides those). The open world's checks
     /// (box contents, oversized stacks, a kill to witness a drop) don't apply there: Urugugu Canyon's payout, Enhance
-    /// Stone x470 37 s after leaving, is the run's, not a claim (2026-10-22). Once the chat said the expedition's room was
-    /// left, the minimap still naming one of its areas is not inside (InstanceLog.HeldHere, 2026-10-25).
+    /// Stone x470 37 s after leaving, is the run's, not a claim (2026-10-22).
     /// </summary>
-    bool InRun => (ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored && !Instances.HeldHere(Zone))
+    bool InRun => (ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored)
         || (Instances.Current is { } cur && cur.Kind != InstanceLog.WorldBoss && (cur.Leaving || Zone == null || Zone == SessionEngine.UnknownZone));
 
     /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
@@ -2447,11 +2445,18 @@ public sealed partial class TrackerSession
             if (_gatherNames.Contains(_items.NameOf(ga.ItemId))) { _lastGatherAt = ev.Time; Witness(ev.Time); }
         }
         if (ev is not CraftResult && BossTakes(ev)) return _boss is { } b ? $"World boss · {b}" : "World boss";
+        // dated inside a run that "Left … Dungeon room." closed already (a line the vote or the rare gate let through after it:
+        // 2026-10-24, the cube's Divine Canyon Cloak of 14:12:48 after the 14:12:53 line): that run's, which counts nothing from
+        // the chat; never farming
+        if (ev is not CraftResult && Instances.LeftRunOf(ev.Time) is { } leftRun)
+        {
+            CrashLog.Note($"{Describe(ev)}: dated {ev.Time.ToLocalTime():HH:mm:ss}, inside the {leftRun.Zone} run before its room was left: that run's, not counted, not farming");
+            return new Activity(leftRun.Kind == "Event" ? ActivityKind.Event : ActivityKind.Expedition, leftRun.Zone).Label;
+        }
         var kind = ZoneLocator.KindOf(Zone);
-        // the expedition's room was left (the chat's "Left … Dungeon room."): the minimap's name for it is stale until an entry,
-        // and what lands meanwhile is no run's (2026-10-24 14:13:12, 10,000 Kina (Bound) 19 s after it; 14:15:57, an
-        // achievement's 9,000 with the minimap still on Auldor's Sanctum): counted as anywhere outside
-        if (kind != null && Instances.HeldHere(Zone)) kind = null;
+        // after "Left … Dungeon room." the minimap may name the expedition for minutes with no run open (InstanceLog.HeldHere):
+        // what lands then is inside with no run, counted nowhere, as ever (2026-10-24 14:13:12, 10,000 Kina (Bound) 19 s after
+        // the line; 14:15:57, an achievement's 9,000; none of it farming)
         bool inside = kind != null && kind != ZoneLocator.Ignored;
         // out of an event already (its rewards came, then the open world's Kina or a kill), the minimap a read behind
         if (inside && kind == "Event" && Instances.OutAfterRewards(ev))
