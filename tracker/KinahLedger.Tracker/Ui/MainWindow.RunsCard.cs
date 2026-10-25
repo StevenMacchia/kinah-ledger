@@ -811,5 +811,19 @@ public partial class MainWindow
         // the merged record's fix sheet open: Split at the reward screens, Keep as one, Remove
         _fixOpen = fix;
         if (_fixOpen != null) Save("ui-runs-card-fix.png");
+        // a place not being run: no Now, its loot folded to one line (ui-runs-card-event.png, the Shugo Festival sample)
+        var ev = all.Where(r => r.Zone == "Shugo Festival").ToList();
+        if (ev.Count > 0)
+        {
+            var keepFix = _fixOpen; _fixOpen = null;
+            var card = BuildRunsCard("Shugo Festival", ev, false, PlaceCardWidth, () => { }, withNow: false, allRuns: all);
+            card.Margin = new Thickness(10);
+            var frame = new Border { Child = card, Padding = new Thickness(12) };
+            frame.SetResourceReference(Border.BackgroundProperty, "Bg");
+            IconCache.Drain(TimeSpan.FromSeconds(8));
+            Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+            SaveCard(frame, System.IO.Path.Combine(dir, "ui-runs-card-event.png"));
+            _fixOpen = keepFix;
+        }
     }
 }
