@@ -4089,6 +4089,24 @@ options: --process aion[,other]");
                 var pr = pe.CraftSnapshot();
                 Check("crafting panel: tries, combo and output (the recipe's yield), the ore a drop", string.Join(" | ", pr.Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")) + $" · drops {pe.Items.Count + pe.ItemsBound.Count}",
                     "Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x2 · drops 1");
+                // 2026-10-25: a won upgrade roll (the blue combo race after a craft) makes the recipe's upgrade, not its base item;
+                // the loot list naming the upgrade right after a craft says the same when the blue race was missed. Neither is a drop.
+                var ue = new SessionEngine(items); var ut = DateTime.UtcNow;
+                const string bow = "Artisan's Asvata Bow", bowUp = "Artisan's Splendent Asvata Bow";
+                ue.CraftPanelSeen(bow, ut);
+                ue.Apply(new CraftResult(ut, bow, true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                ue.Apply(new CraftResult(ut.AddSeconds(5), bow, true, Combo: true) { Via = SessionEngine.CraftPanelVia });
+                ue.Apply(new ItemAcquired(ut.AddSeconds(6), items.IdOf(bowUp), 1, true) { Via = "loot list" });
+                ue.Apply(new CraftResult(ut.AddSeconds(20), bow, true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                ue.Apply(new CraftResult(ut.AddSeconds(25), bow, false, Combo: true) { Via = SessionEngine.CraftPanelVia });
+                ue.Apply(new ItemAcquired(ut.AddSeconds(26), items.IdOf(bow), 1, true) { Via = "loot list" });
+                ue.Apply(new CraftResult(ut.AddSeconds(40), bow, true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                ue.Apply(new ItemAcquired(ut.AddSeconds(41), items.IdOf(bowUp), 1, true) { Via = "loot list" });
+                ue.Apply(new ItemAcquired(ut.AddSeconds(42), items.IdOf(bowUp), 1, true) { Via = "loot list" });   // a second read of the same row renames nothing twice
+                var ur = ue.CraftSnapshot().First(x => x.Name == bow);
+                Check("crafting panel: a won upgrade roll makes the upgrade, a lost one the base item, the loot list naming the upgrade too; none a drop",
+                    $"{ur.Ok}/{ur.Attempts} up {ur.Upgraded}/{ur.Upgraded + ur.NotUpgraded} made " + string.Join(", ", ur.Made.OrderByDescending(m => m.Value).ThenBy(m => m.Key).Select(m => $"{m.Key} x{m.Value}")) + $" · drops {ue.ItemRows().Count}",
+                    $"3/3 up 1/2 made {bowUp} x2, {bow} x1 · drops 0");
                 // Steven's 2026-10-23 21:17 to 21:23 crafts, as 0.8.22 read them: the panel's races are the crafts; the loot list's
                 // rows (one of them the panel's own title read as a Cloak) and the chat's item lines never reach crafting
                 var gs2 = new TrackerSession(null, new Settings(), items, "Test"); var g0 = new DateTime(2026, 10, 24, 1, 17, 50, DateTimeKind.Utc);

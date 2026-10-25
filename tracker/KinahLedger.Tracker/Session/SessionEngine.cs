@@ -535,6 +535,7 @@ public sealed class SessionEngine
             // never takes a pickup (Steven, 2026-10-23: "it needs to not be drops for crafting")
             // With the crafting window open, an item a recipe makes is set aside the same way: likely a craft whose bars weren't
             // seen, so it is no craft (no bars, no craft) and no drop either
+            if (ev is ItemAcquired named) _craft.PickupNamesUpgrade(_items.NameOf(named.ItemId), named.Time);   // the loot list naming a craft's upgrade (CraftLedger)
             if (ev is ItemAcquired made && (_craft.IsPanelOutput(_items.NameOf(made.ItemId), made.Time)
                 || (CraftWindowOpen(made.Time) && RecipeBook.ForOutput(_items.NameOf(made.ItemId)) != null)))
             {
