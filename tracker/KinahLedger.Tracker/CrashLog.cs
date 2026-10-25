@@ -124,7 +124,7 @@ public static class CrashLog
     /// <summary>Whether this line is written: the first <paramref name="free"/> of a window are; the rest are counted.</summary>
     static bool Admit(string text, int free, DateTime now)
     {
-        if (!Bursts.TryGetValue(text, out var b) || (now - b.FirstAt).TotalSeconds >= BurstSeconds)
+        if (!Bursts.TryGetValue(text, out var b) || (now - b.FirstAt).TotalSeconds >= BurstSeconds || now < b.FirstAt)
         {
             // a window that ended with lines held was written out by FlushHeld just before this
             if (Bursts.Count > 500) foreach (var k in Bursts.Where(kv => kv.Value.Held == 0 && (now - kv.Value.FirstAt).TotalSeconds >= BurstSeconds).Select(kv => kv.Key).ToList()) Bursts.Remove(k);
@@ -139,12 +139,13 @@ public static class CrashLog
     /// <summary>Writes a line for each burst whose window is over and which held lines back (<paramref name="force"/>: all of them), and forgets the finished ones.</summary>
     static void FlushHeld(DateTime now, bool force)
     {
-        if (!force && (now - _scannedAt).TotalSeconds < 1) return;
+        // a clock that went back (a correction, a test's fake clock after a real one) is due at once, never held until it catches up
+        if (!force && now >= _scannedAt && (now - _scannedAt).TotalSeconds < 1) return;
         _scannedAt = now;
         List<(string Text, Burst B)>? due = null;
         foreach (var kv in Bursts)
         {
-            bool over = (now - kv.Value.FirstAt).TotalSeconds >= BurstSeconds;
+            bool over = (now - kv.Value.FirstAt).TotalSeconds >= BurstSeconds || now < kv.Value.FirstAt;
             if (kv.Value.Held > 0 && (over || force)) (due ??= new()).Add((kv.Key, kv.Value));
         }
         if (due == null) return;
