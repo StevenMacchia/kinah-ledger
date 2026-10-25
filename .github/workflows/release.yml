@@ -1,4 +1,5 @@
-# Releases the tracker: push a tag vX.Y.Z and this builds, on a GitHub-hosted runner,
+# Releases the tracker: push a tag vX.Y.Z, or press Run workflow on main (Actions › Release tracker, which works from
+# the GitHub phone app too), and this builds, on a GitHub-hosted runner,
 #  - the installer (0.8+): Velopack packs the app as normal files into KinahLedger-Setup.exe plus the full and delta
 #    update packages and releases.win.json, which installed trackers update from (Platform/Installer.cs);
 #  - KinahLedger.exe, the single-file exe every 0.7 copy updates from, which offers to install itself;
@@ -6,7 +7,9 @@
 # writes latest.json and publishes the GitHub release. Nothing else builds or signs a release (CODE_SIGNING_POLICY.md).
 #
 # Before tagging: bump <Version> in the csproj to X.Y.Z and add release-notes/vX.Y.Z.md. The run stops if either is
-# missing, so a stray tag never reaches players. It also stops when the installer or its update packages are missing:
+# missing, so a stray tag never reaches players. Run workflow takes the version from main's csproj, stops if that
+# version is already released or the run isn't on main, and creates the tag vX.Y.Z on the commit it built when it
+# publishes (a tag made by the workflow itself starts no second run). It also stops when the installer or its update packages are missing:
 # installed trackers update only from releases that carry them (docs/signing-setup.md, Platform/Installer.cs).
 #
 # Signing turns on when the "release" environment has these variables (Settings > Environments > release):
@@ -20,6 +23,7 @@ name: Release tracker
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -41,11 +45,22 @@ jobs:
       - name: Check the tag, the version and the notes agree
         shell: bash
         run: |
-          tag="${GITHUB_REF_NAME}"; ver="${tag#v}"
           csproj=$(grep -oP '(?<=<Version>)[^<]+' tracker/KinahLedger.Tracker/KinahLedger.Tracker.csproj)
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            # Run workflow: main only, and the csproj's version must not be released yet
+            [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::Run workflow releases main only (this run is on $GITHUB_REF_NAME)"; exit 1; }
+            tag="v$csproj"
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+              echo "::error::$tag is already released: bump <Version> in the csproj and add its release notes first"; exit 1
+            fi
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          ver="${tag#v}"
           [ "$csproj" = "$ver" ] || { echo "::error::tag $tag but the csproj says $csproj"; exit 1; }
           [ -s "release-notes/$tag.md" ] || { echo "::error::release-notes/$tag.md is missing"; exit 1; }
           echo "VERSION=$ver" >> "$GITHUB_ENV"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
 
       - name: Publish the single-file exe
         working-directory: tracker/KinahLedger.Tracker
@@ -123,7 +138,7 @@ jobs:
           sha=$(node -e "console.log(require('./dist/latest.json').sha256)")
           setup=$(sha256sum dist/KinahLedger-Setup.exe | cut -c1-64)
           # KinahLedger.exe's line comes first: 0.7 trackers take the first sha256 in the notes
-          { cat "release-notes/${GITHUB_REF_NAME}.md"; printf '\n\nKinahLedger.exe sha256: %s\nKinahLedger-Setup.exe sha256: %s\n' "$sha" "$setup"; } > dist/notes.md
+          { cat "release-notes/${TAG}.md"; printf '\n\nKinahLedger.exe sha256: %s\nKinahLedger-Setup.exe sha256: %s\n' "$sha" "$setup"; } > dist/notes.md
 
       - name: Publish the release
         shell: bash
@@ -132,4 +147,5 @@ jobs:
         run: |
           shopt -s nullglob
           pkgs=(build-vpk/releases/*-"$VERSION"-*.nupkg build-vpk/releases/releases.win.json build-vpk/releases/assets.win.json build-vpk/releases/RELEASES)
-          gh release create "$GITHUB_REF_NAME" dist/KinahLedger.exe dist/KinahLedger-Setup.exe dist/latest.json "${pkgs[@]}" --title "Kinah Ledger tracker $VERSION" --notes-file dist/notes.md
+          # --target makes the tag on the commit built here when Run workflow started it (a pushed tag already exists)
+          gh release create "$TAG" --target "$GITHUB_SHA" dist/KinahLedger.exe dist/KinahLedger-Setup.exe dist/latest.json "${pkgs[@]}" --title "Kinah Ledger tracker $VERSION" --notes-file dist/notes.md

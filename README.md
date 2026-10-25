@@ -173,6 +173,10 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
+Or, once that commit is on main, release without a tag from anywhere, the GitHub phone app included: Actions ›
+**Release tracker** › **Run workflow** on `main`. It takes the version from main's csproj, stops if that version is
+already released, and creates the tag `vX.Y.Z` on the commit it built when it publishes.
+
 `.github/workflows/release.yml` builds the single exe and the installer (Velopack: `KinahLedger-Setup.exe` plus the
 full and delta update packages) on GitHub, signs them with Artifact Signing once it is set up (see
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) and [docs/signing-setup.md](docs/signing-setup.md)), writes
