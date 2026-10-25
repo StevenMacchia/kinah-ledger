@@ -205,17 +205,35 @@ public static class CraftPanel
         using var bmp = f.Clone(text, f.PixelFormat);
         var lines = await ScreenReader.ReadBoxesAsync(bmp, text.Location, 2);
         LastLines = lines.OrderBy(l => l.Box.Top).Select(l => l.Text).ToList();
+        return Parse(LastLines);
+    }
+
+    /// <summary>
+    /// The panel's title line, read clean ("Crafting in Progress 1 / 2") or garbled: "Crafting in Br.egress*40",
+    /// "Crafting in Rr.egteß+a•", "C åfting in", "Cråfting in Progresö1:'/..4" (Steven's crafting feed, 2026-10-25 17:08,
+    /// where each of those was filed as a recipe of its own). A title is never the recipe; a recipe line carries the
+    /// mastery level, which the title never does.
+    /// </summary>
+    public static bool IsTitleLine(string line) =>
+        LevelOf(line) == 0
+        && (line.Contains("Progress", StringComparison.OrdinalIgnoreCase)
+            || Session.TrackerSession.IsCraftTitle(line)
+            || Regex.IsMatch(line, @"(?:^|\W)[cg]?\s?r?[aåäà4]ft(?:ing|in|ng)\s+[il1]n\b", RegexOptions.IgnoreCase));
+
+    /// <summary>The panel's lines top down, split into the queue ("1 / 2", read from the title) and the recipe (the first line that is neither the title nor the proficiency line).</summary>
+    public static (int Done, int Of, string Recipe)? Parse(IEnumerable<string> topDown)
+    {
         int done = 0, of = 0; string recipe = "";
-        foreach (var l in lines.OrderBy(l => l.Box.Top))
+        foreach (var text in topDown)
         {
-            if (l.Text.Contains("Progress", StringComparison.OrdinalIgnoreCase))
+            if (IsTitleLine(text))
             {
-                // "Crafting in Progress 1 / 2"; the reader sometimes drops the spaces or reads the 1 as I or l
-                var m = Regex.Match(l.Text.Replace('I', '1').Replace('l', '1').Replace('|', '/'), @"(\d+)\s*/\s*(\d+)\s*$");
+                // "Crafting in Progress 1 / 2"; the reader sometimes drops the spaces, reads the 1 as I or l, or litters the slash
+                var m = Regex.Match(text.Replace('I', '1').Replace('l', '1').Replace('|', '/'), @"(\d+)\D{0,4}/\D{0,4}(\d+)\D{0,2}$");
                 if (m.Success) { done = int.Parse(m.Groups[1].Value); of = int.Parse(m.Groups[2].Value); }
                 continue;
             }
-            if (recipe.Length == 0 && l.Text.Trim().Length >= 3 && !l.Text.Contains("Proficiency", StringComparison.OrdinalIgnoreCase)) recipe = l.Text.Trim();
+            if (recipe.Length == 0 && text.Trim().Length >= 3 && !text.Contains("Proficiency", StringComparison.OrdinalIgnoreCase)) recipe = text.Trim();
         }
         return of > 0 || recipe.Length > 0 ? (done, of, recipe) : null;
     }

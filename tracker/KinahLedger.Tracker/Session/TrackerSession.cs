@@ -3364,7 +3364,7 @@ public sealed partial class TrackerSession
                 // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
                 // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
                 // the raised panel above the skill bar is the gathering panel, never crafting
-                bool craft = !s.Raised && ((_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(IsCraftTitle));
+                bool craft = !s.Raised && ((_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(CraftPanel.IsTitleLine));
                 // up and gone alternated 250 times in 36 minutes on 2026-10-24: written once a minute each, then counted
                 if (craft != _panelIsCraft || !_panelUp) CrashLog.NoteBurst(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
                 _panelIsCraft = craft;
