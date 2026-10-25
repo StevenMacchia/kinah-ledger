@@ -1981,6 +1981,8 @@ options: --process aion[,other]");
             finally { Console.SetOut(keepOut); Update.RemoteConfig.Current = keepCfg; CrashLog.DirOverride = keepDir; }
             int same = on.Zip(gateOff).Count(p => p.First.Case == p.Second.Case && p.First.Status == p.Second.Status && p.First.Detail == p.Second.Detail);
             Check("replay bank: every case passes through the gate", $"{on.Count(r => r.Status is "pass" or "skipped")}/{on.Count}", $"{on.Count}/{on.Count}");
+            // which ones, and how they counted: the bank's own step never runs when this check fails the parse-test
+            foreach (var r in on.Where(r => r.Status is not ("pass" or "skipped"))) Console.WriteLine($"    {r.Case}: {r.Status}: {r.Detail}");
             Check("...and counts the same JSON with scene.gate off", $"{same}/{on.Count} identical", $"{on.Count}/{on.Count} identical");
         }
         return ok;
