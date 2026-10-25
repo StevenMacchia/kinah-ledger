@@ -455,10 +455,19 @@ public static class AccuracyTests
                         end = head.IndexOf("\r\n\r\n", StringComparison.Ordinal);
                         if (end >= 0) { var m = System.Text.RegularExpressions.Regex.Match(head[..end], @"content-length:\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase); length = m.Success ? int.Parse(m.Groups[1].Value) : 0; }
                     }
-                    int have = end < 0 ? 0 : got.Count - end - 4;
-                    while (have < length) { int n = await ns.ReadAsync(buf, _cts.Token); if (n <= 0) break; have += n; got.AddRange(buf.Take(n)); }
+                    // the body: Content-Length bytes, or (PostAsJsonAsync sends it chunked) chunks up to the empty one
+                    bool chunked = end >= 0 && System.Text.RegularExpressions.Regex.IsMatch(Encoding.ASCII.GetString(got.ToArray(), 0, end), @"transfer-encoding:\s*chunked", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    string text = "";
+                    if (chunked)
+                        while (!TryDecodeChunked(got, end + 4, out text)) { int n = await ns.ReadAsync(buf, _cts.Token); if (n <= 0) break; got.AddRange(buf.Take(n)); }
+                    else
+                    {
+                        int have = end < 0 ? 0 : got.Count - end - 4;
+                        while (have < length) { int n = await ns.ReadAsync(buf, _cts.Token); if (n <= 0) break; have += n; got.AddRange(buf.Take(n)); }
+                        if (end >= 0) text = Encoding.UTF8.GetString(got.Skip(end + 4).Take(length).ToArray());
+                    }
                     Interlocked.Increment(ref _requests);
-                    if (end >= 0) Bodies.Enqueue(Encoding.UTF8.GetString(got.Skip(end + 4).Take(length).ToArray()));
+                    if (end >= 0) Bodies.Enqueue(text);
                     int status = Answer;
                     var body = status == 200 ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"not found\"}";
                     var reason = status switch { 200 => "OK", 400 => "Bad Request", 404 => "Not Found", 500 => "Internal Server Error", _ => "Other" };
@@ -467,6 +476,23 @@ public static class AccuracyTests
                 }
                 catch (Exception) when (!_cts.IsCancellationRequested) { }
                 catch (Exception) { return; }
+            }
+        }
+        /// <summary>The chunks of a request body from <paramref name="start"/>, joined; false while the empty chunk that ends it hasn't arrived.</summary>
+        static bool TryDecodeChunked(List<byte> got, int start, out string text)
+        {
+            var raw = got.ToArray(); var data = new List<byte>(); int i = start; text = "";
+            while (true)
+            {
+                int nl = Array.IndexOf(raw, (byte)'\n', i);
+                if (nl < 0) return false;
+                var line = Encoding.ASCII.GetString(raw, i, nl - i).Trim();
+                int semi = line.IndexOf(';'); if (semi >= 0) line = line[..semi];
+                if (!int.TryParse(line, System.Globalization.NumberStyles.HexNumber, null, out var size)) return false;
+                i = nl + 1;
+                if (size == 0) { text = Encoding.UTF8.GetString(data.ToArray()); return true; }
+                if (raw.Length < i + size + 2) return false;
+                data.AddRange(raw.Skip(i).Take(size)); i += size + 2;
             }
         }
         public void Dispose() { _cts.Cancel(); _l.Stop(); }
