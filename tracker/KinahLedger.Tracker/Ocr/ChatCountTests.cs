@@ -237,6 +237,27 @@ static class ChatCountTests
             g.Kill(r0.AddSeconds(59.9));
             Check("repeat: a drop's second copy with a kill of its own: counted", g.Judge("Spiritstone", 1, r0.AddSeconds(66), r0.AddSeconds(67), null, none, true).V.ToString(), "Count");
             Check("repeat: an item counted over 30 s ago: no repeat check", g.Judge("Orichalcum Ore", 1, r0.AddSeconds(95), r0.AddSeconds(95), null, none, true).V.ToString(), "Count");
+
+            // 2026-10-25 16:44, Steven's Illusion Gloves (replay case text-2026-10-25-illusion-gloves-scrolled): the chat scrolled
+            // the line seven places up in five seconds, a garbled read between made the next clean read line up on nothing, and a
+            // Krall farm fight's kills, one every second or two, stood for a second pair. Under the same two lines it was counted
+            // under, one of them once in the read, it is that copy wherever it sits
+            var fight = new List<string> { "IIIC", "Obtained 1 Enhanced Krall Combatant Soul", "Points.", "Acquired 521 Kina.", "Illusion Gloves acquired.", "Acquired 253 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points.", "Acquired 441 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points." };
+            var sg = new ItemRepeatGuard();
+            sg.Kill(r0.AddSeconds(100.5));
+            sg.Counted("Illusion Gloves", 1, r0.AddSeconds(100), r0.AddSeconds(101.2), new ItemRepeatGuard.Place(0, 10, "Acquired 521 Kina.", "Points."));
+            sg.Kill(r0.AddSeconds(103.3)); sg.Kill(r0.AddSeconds(104)); sg.Kill(r0.AddSeconds(105.2));
+            var up = new ItemRepeatGuard.Place(6, 11, "Acquired 521 Kina.", "Points.");
+            Check("repeat: the line scrolled up under the lines it was counted under, kills all round: that copy", sg.Judge("Illusion Gloves", 1, r0.AddSeconds(105.3), r0.AddSeconds(105.3), up, new(1, DateTime.MinValue, fight), false).V.ToString(), "Repeat");
+            Check("...a read showing a second such line: a line of its own", sg.Judge("Illusion Gloves", 1, r0.AddSeconds(105.3), r0.AddSeconds(105.3), up, new(2, DateTime.MinValue, fight), false).V.ToString(), "Count");
+            Check("...with no read to look at: the kills decide, as before", sg.Judge("Illusion Gloves", 1, r0.AddSeconds(105.3), r0.AddSeconds(105.3), up, none, false).V.ToString(), "Count");
+            // under two lines the read shows three times each (the soul line, "Points."): nothing tells one pair from another, the kills decide
+            var gg = new ItemRepeatGuard();
+            gg.Kill(r0.AddSeconds(100.5));
+            gg.Counted("Spiritstone", 1, r0.AddSeconds(100), r0.AddSeconds(101.2), new ItemRepeatGuard.Place(0, 10, "Points.", "Obtained 1 Enhanced Krall Combatant Soul"));
+            gg.Kill(r0.AddSeconds(104));
+            var fight2 = new List<string> { "Acquired 521 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points.", "Spiritstone acquired.", "Acquired 253 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points.", "Acquired 441 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points." };
+            Check("...under lines the read shows three times each: the kills decide", gg.Judge("Spiritstone", 1, r0.AddSeconds(105.3), r0.AddSeconds(105.3), new ItemRepeatGuard.Place(6, 10, "Points.", "Obtained 1 Enhanced Krall Combatant Soul"), new(1, DateTime.MinValue, fight2), false).V.ToString(), "Count");
         }
         return ok;
     }

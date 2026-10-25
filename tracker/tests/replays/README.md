@@ -78,3 +78,10 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   third pickup "1 assumed". Right: 6. A line whose count was lost is a copy of the item at any count (`ItemRepeatGuard`),
   its count read twice at its place amends the pickup (`CountWatch`), and the gathering panel's gather is never the
   inventory's (`NotForGather`). The same rules on small hand-made reads: `Session/QtySettleTests.cs` in parse-test.
+- `text-2026-10-25-illusion-gloves-scrolled` (Steven: Illusion Gloves and Order Gloves, the tracker showing Illusion Gloves
+  twice): one "Illusion Gloves acquired." line in a Krall farm fight at 16:44:43, a kill every second or two, the chat
+  scrolling it up seven places in five seconds, every read to 16:44:55 showing exactly one such line. 0.8.36 counted 2: a
+  garbled read at 16:44:47.8 made the clean read at 16:44:48.6 line up on nothing, its lines came in as new, and the guard
+  took one of the fight's kills for the witness of a second pair. Right: 1. A line under the same two lines a copy was
+  counted under, one of them once in the read, is that copy wherever the scroll put it (`ItemRepeatGuard`; the guard's
+  own checks in `Ocr/ChatCountTests.cs`). The Order Gloves were the 16:35 event cards, named right from their picture.

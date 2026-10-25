@@ -8,7 +8,10 @@ namespace KinahLedger.Session;
 /// 2 and Orichalcum Ore 4 for 1 and 3). A Kina line has the Kinah counter to decide a repeat (KinaWitness); an item line
 /// had nothing, so one that came back after the chat scrolled, or after a read that couldn't be lined up, counted again.
 /// <para>An item line is a repeat when it stands where a counted copy stood (the same place from the bottom of a read as
-/// long, under the same two lines), or when an identical line counted in the last <see cref="RepeatSeconds"/> and nothing
+/// long, under the same two lines), or under the same two lines wherever the scroll put it when one of them stands only
+/// once in the read (2026-10-25 16:44, Steven's Illusion Gloves counted twice in a farm fight: the line seven places up
+/// five seconds later, a garbled read between, and a kill every second or two for the witness), or when an identical line
+/// counted in the last <see cref="RepeatSeconds"/> and nothing
 /// stands behind a second pickup: a loot list row of the item first seen around it, a gathering bar race that worked on
 /// its node, or a kill (for an item that isn't a gathering material). Each counted copy takes one such witness, so a
 /// witness one pickup used never makes its repeat a second one; a genuine second pickup always brings its own. A read that
@@ -33,9 +36,10 @@ public sealed class ItemRepeatGuard
 
     /// <summary>
     /// What the read shows of the line: how many copies, and since when the read's oldest other line has been on screen
-    /// (a copy counted before that has scrolled off; DateTime.MinValue when the read can't tell).
+    /// (a copy counted before that has scrolled off; DateTime.MinValue when the read can't tell). <paramref name="Read"/>
+    /// is the read itself, when there is one to look at (which of the lines above a copy stand only once in it).
     /// </summary>
-    public readonly record struct Screen(int Shown, DateTime Since);
+    public readonly record struct Screen(int Shown, DateTime Since, IReadOnlyList<string>? Read = null);
 
     // Unsure: counted from a line whose count was lost, so any count of the item may be it
     sealed record Copy(string Item, int Count, DateTime LineAt, DateTime CountedAt, Place? Place, bool Unsure);
@@ -112,6 +116,14 @@ public sealed class ItemRepeatGuard
             if (screen.Shown >= onScreen + 1) return (Verdict.Count, $"the read shows {screen.Shown} such lines" + (onScreen < prior.Count ? $" and {prior.Count - onScreen} counted copy had scrolled off" : ""));
             if (place != null && prior.FirstOrDefault(c => SamePlace(c.Place, place)) is { } at)
                 return (Verdict.Repeat, $"it stands where the copy counted at {at.LineAt.ToLocalTime():HH:mm:ss} stood");
+            // the chat scrolled the line up, and a garbled read in between made the next clean read line up on nothing, so
+            // the line came in as new at another place (2026-10-25 16:44, Steven's Illusion Gloves: seven places up in five
+            // seconds, and a Krall farm fight's kills, one every second or two, stood for a second pair). The lines above a
+            // chat line never change: under the same two lines a copy was counted under, it is that copy wherever the
+            // scroll put it, when one of those two lines stands only once in the read ("Acquired 521 Kina." with its
+            // amount; "Points." and the soul line stand three times each in such a fight and tell one pair from another not at all)
+            if (place != null && screen.Read is { Count: > 0 } read && prior.FirstOrDefault(c => SameLines(c.Place, place) && Distinct(read, place)) is { } under)
+                return (Verdict.Repeat, $"it stands under the lines the copy counted at {under.LineAt.ToLocalTime():HH:mm:ss} stood under");
             if (Supported(item, lineAt, prior)) return (Verdict.Count, "a second witness");
             if (!final && (now - lineAt).TotalSeconds < HoldSeconds) return (Verdict.Wait, "");
             var last = prior.MaxBy(c => c.CountedAt)!;
@@ -179,6 +191,13 @@ public sealed class ItemRepeatGuard
 
     static bool SamePlace(Place? a, Place b) =>
         a != null && a.FromBottom == b.FromBottom && a.ReadLength == b.ReadLength && a.Above1.Length > 0 && Close(a.Above1, b.Above1) && Close(a.Above2, b.Above2);
+
+    /// <summary>Under the same two lines, wherever the read put it.</summary>
+    static bool SameLines(Place? a, Place b) => a != null && a.Above1.Length > 0 && Close(a.Above1, b.Above1) && Close(a.Above2, b.Above2);
+
+    /// <summary>One of the two lines above the line stands only once in the read (and says enough to be told apart).</summary>
+    static bool Distinct(IReadOnlyList<string> read, Place p) =>
+        new[] { p.Above1, p.Above2 }.Any(a => Key(a) is { Length: >= 6 } k && read.Count(l => Key(l) == k) == 1);
 
     static string Key(string s) => new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
@@ -255,7 +274,7 @@ public sealed partial class TrackerSession
     ItemRepeatGuard.Screen ScreenOf(string key, string raw, IReadOnlyList<string> read, DateTime now, bool anyCount = false)
     {
         var seen = read.Where(l => !IsCopy(l, key, raw, anyCount)).Select(l => Reread.FirstSeen(l, _firstSeen)).OfType<DateTime>().Where(f => (now - f).TotalSeconds > 2).ToList();
-        return new ItemRepeatGuard.Screen(ShownIn(key, raw, read, anyCount), seen.Count >= 3 ? seen.Min() : DateTime.MinValue);
+        return new ItemRepeatGuard.Screen(ShownIn(key, raw, read, anyCount), seen.Count >= 3 ? seen.Min() : DateTime.MinValue, read);
     }
 
     static string ItemLineKey(string name, int count) => "i:" + name.ToLowerInvariant() + "x" + count;
