@@ -937,13 +937,13 @@ public partial class MainWindow : Window
         if (counts && rate > best.PerHr)
         {
             BestLine.Text = $"Best here yet · beats {Fk(best.PerHr)}";
-            BestLine.SetResourceReference(TextBlock.ForegroundProperty, "Good");
+            BestLine.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Good");
             _hudValues["best"] = "new best";
         }
         else
         {
             BestLine.Text = $"Your best here {Fk(best.PerHr)}";
-            BestLine.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
+            BestLine.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Faint");
             _hudValues["best"] = Fk(best.PerHr);
         }
         JoinCompare();
@@ -1254,7 +1254,7 @@ public partial class MainWindow : Window
     void Say(string text, string tone) { Tell(text, tone); Status.ToolTip = text; if (DateTime.UtcNow.AddSeconds(SayHoldSeconds) > _statusHoldUntil) _statusHoldUntil = DateTime.UtcNow.AddSeconds(SayHoldSeconds); }
     const double SayHoldSeconds = 6;
     /// <summary>The live status line, rewritten each tick: in the look's own colour, so a change of look repaints it.</summary>
-    void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }
+    void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
     public static void Open(string url) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { } }
 
