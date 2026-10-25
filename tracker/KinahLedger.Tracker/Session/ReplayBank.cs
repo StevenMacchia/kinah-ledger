@@ -98,6 +98,7 @@ public static class ReplayBank
                                     "runs_partly_read", "runs_sent", "run_not_read", "run_pieces", "run_unknown_gear", "run_unknown_items", "run_abyss_points" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         if (expect["run_start"] is { } rstart && rstart.ToString() != (got["run_start"]?.ToString() ?? "")) d.Add($"run_start: expected {rstart}, counted {got["run_start"]?.ToString() ?? "none"}");
+        if (expect["run_starts"] is { } rstarts && rstarts.ToString() != (got["run_starts"]?.ToString() ?? "")) d.Add($"run_starts: expected {rstarts}, counted {got["run_starts"]?.ToString() ?? "none"}");
         if (expect["runs"] is JsonObject er)
         {
             var gr = got["runs"] as JsonObject ?? new JsonObject();
@@ -420,6 +421,8 @@ public static class ReplayBank
             res["run_gear"] = kept.Sum(r => r.Pieces(items.IsGear).Gear);
             res["run_materials"] = kept.Sum(r => r.Pieces(items.IsGear).Materials);
             res["run_start"] = kept[0].Start.ToUniversalTime().ToString("HH:mm:ss") + "Z";
+            // every kept run's start (2026-10-25: run edges from the chat's room lines)
+            res["run_starts"] = string.Join(" ", kept.Select(r => r.Start.ToUniversalTime().ToString("HH:mm:ss") + "Z"));
             // partly read runs (2026-10-24): flagged, sent all the same; pieces with unknown gear and without currencies, the
             // currencies as amounts (Abyss Points), the slots not read
             bool Cur(long id) => items.Get(id)?.Category == "Currency";
