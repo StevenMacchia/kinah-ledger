@@ -224,7 +224,10 @@ public static class CraftPanel
     /// <summary>The recipe's mastery level in the panel's title ("Orichalcum Ingot (Novice Lv. 25)" → 25), 0 when it isn't read.</summary>
     public static int LevelOf(string recipe) => Regex.Match(recipe, @"\bLv\.?\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
-    public static string ItemOf(string recipe) => Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)\s*$", "", RegexOptions.IgnoreCase).Trim();
+    /// The panel's close button can come with the title as a lone "X" after the level (2026-10-25 07:22:39, a great success:
+    /// "Fine Durable Balaur Horn (Professional Lv. 30) X"), which kept the level on and filed three crafts under a recipe
+    /// that doesn't exist; that X, or a short run of symbols, after the level goes with it.
+    public static string ItemOf(string recipe) => Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
 }
 
 /// <summary>

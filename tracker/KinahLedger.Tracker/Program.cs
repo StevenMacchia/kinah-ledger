@@ -4022,6 +4022,9 @@ options: --process aion[,other]");
                 var outs = races.Select((r, i) => cpt.Feed(cp0.AddSeconds(i), new CraftPanel.Sample(r.Up, r.S, r.F, r.C))).Where(o => o != null).Select(o => (o!.Ok ? "ok" : "fail") + (o.Combo ? "+combo" : ""));
                 Check("crafting panel: one outcome per race, the full bar decides", string.Join(" ", outs), "ok ok ok+combo fail");
                 Check("crafting panel: the recipe's item", CraftPanel.ItemOf("Life Serum (Bound) (Novice Lv. 1)"), "Life Serum (Bound)");
+                // 2026-10-25 07:22:39: the close button read with the title on a great success
+                Check("...with the close button's X after the level", $"{CraftPanel.ItemOf("Fine Durable Balaur Horn (Professional Lv. 30) X")} | {CraftPanel.ItemOf("Fine Durable Balaur Horn (Professional Lv. 30) ×")} | {CraftPanel.ItemOf("Orichalcum Ingot (Novice Lv. 25) ~")}", "Fine Durable Balaur Horn | Fine Durable Balaur Horn | Orichalcum Ingot");
+                Check("...an X inside the name stays", CraftPanel.ItemOf("Skill Book X (Expert Lv. 12)"), "Skill Book X");
                 // the panel counts the tries; what the loot list shows meanwhile is their output, never a drop; chat craft lines are left out
                 var pe = new SessionEngine(items); var pt = DateTime.UtcNow;
                 var serum = items.IdOf("Life Serum (Bound)"); var other = items.IdOf("Orichalcum Ore");

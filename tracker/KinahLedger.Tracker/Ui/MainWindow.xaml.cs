@@ -1104,7 +1104,7 @@ public partial class MainWindow : Window
         }
         CraftWhat.Visibility = CraftWhat.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         // This session's line: the recipes, the cut, and the gaps said once
-        var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? "" : "s")} have no price yet" : "";
+        var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? " has" : "s have")} no price yet" : "";
         var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
         CraftSpentNote.Text = $"{rows.Count} recipe{(rows.Count == 1 ? "" : "s")} · after the Market's {1 - PriceBook.SellerKeeps:P0}";
         CraftSpent.Text = spent > 0 || worth > 0 ? Signed(net) : "";
