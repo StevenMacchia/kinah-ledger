@@ -105,6 +105,8 @@ jobs:
           mkdir -p shots/daylight
           dist/KinahLedger.exe ui-shot shots/daylight --demo --compact --tall --skin daylight
           dist/KinahLedger.exe ui-shot shots/daylight --demo --events --skin daylight
+          dist/KinahLedger.exe ui-shot shots/daylight --demo --events --tall --skin daylight
+          dist/KinahLedger.exe ui-shot shots --demo --events --tall
           dist/KinahLedger.exe ui-shot shots/daylight --demo --crafting --skin daylight
           dist/KinahLedger.exe ui-shot shots/daylight --options --skin daylight
 

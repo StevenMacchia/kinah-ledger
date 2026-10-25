@@ -53,9 +53,11 @@ public partial class MainWindow
     /// The Events feed: the reward lines counted into runs (the live feed), with each run's steps drawn from the run log
     /// (entered, paid) and a flagged record's line ("An older record looks like 5 runs · fix below"); the newest five.
     /// </summary>
-    List<FeedLine> EventsFeed(List<InstanceRun> runs)
+    List<FeedLine> EventsFeed(List<InstanceRun> runs, string? zone = null)
     {
-        var lines = new List<FeedLine>(_demo ? _demoFeed.Where(l => l.Tab == FeedTab.Events) : _watcher.Chat?.Live.Recent(FeedTab.Events, 10) ?? new());
+        var live = _demo ? _demoFeed.Where(l => l.Tab == FeedTab.Events) : _watcher.Chat?.Live.Recent(FeedTab.Events, 10) ?? new();
+        // with a place, its own reward lines only (a line that names no place is kept: it is the open run's)
+        var lines = new List<FeedLine>(zone == null ? live : live.Where(l => l.Where.Length == 0 || l.Where.EndsWith(zone, StringComparison.OrdinalIgnoreCase)));
         foreach (var g in runs.GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase))
         {
             var list = g.OrderBy(r => r.Start).ToList();

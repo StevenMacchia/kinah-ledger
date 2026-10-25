@@ -255,7 +255,9 @@ public partial class MainWindow
             var g0 = new Grid(); g0.Children.Add(host); g0.Children.Add(empty); box.Child = g0;
             now.Children.Add(box);
             _feedDrawn.Remove(host);
-            DrawFeed(host, empty, EventsFeed(allRuns ?? runs), FeedTab.Events, PickupValue);
+            // this place's lines only: another place's steps inside this card read as this place's (the first render had
+            // "Entered Shugo Festival" in the Urugugu card)
+            DrawFeed(host, empty, EventsFeed(runs, zone), FeedTab.Events, PickupValue);
             now.Children.Add(StepTrack(open));
             body.Children.Add(now);
         }
