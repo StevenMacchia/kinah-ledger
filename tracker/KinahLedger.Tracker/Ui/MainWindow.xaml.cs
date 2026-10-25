@@ -132,7 +132,7 @@ public partial class MainWindow : Window
         // a click on an enemy opens or closes its loot table
         MobRows.MouseLeftButtonUp += (_, ev) =>
         {
-            if ((ev.OriginalSource as FrameworkElement)?.DataContext is DropRow { Key.Length: > 0 } r)
+            if (RowOf((ev.OriginalSource as FrameworkElement)?.DataContext) is { Key.Length: > 0 } r)
             {
                 if (!_openMobs.Remove(r.Key)) _openMobs.Add(r.Key);
                 Redraw();
@@ -236,7 +236,7 @@ public partial class MainWindow : Window
     /// <summary>"Looks wrong?" on a drop or gathered row: flags the item so nothing about it is sent to the site; "Undo" takes the flag off.</summary>
     void ReportClick(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkContentElement)?.DataContext is not DropRow r || r.Report.Length == 0) return;
+        if (RowOf((sender as FrameworkContentElement)?.DataContext) is not { } r || r.Report.Length == 0) return;
         bool on = ReportedDrops.Toggle(r.Report);
         CrashLog.Note(on ? $"reported: {r.Report} (not sent to the site)" : $"report undone: {r.Report}");
         // a flagged drop also keeps the last minute of what was read, so the misread can be found and fixed
@@ -509,7 +509,7 @@ public partial class MainWindow : Window
 
     void Tick()
     {
-        if (_demo) return;
+        if (_demo || _moving) return;
         WatchGame();
         AskWhenFree();   // an update found during a run asks once the run has stopped
         var chat = _watcher.Chat; var farm = _watcher.Farm;
@@ -1080,7 +1080,7 @@ public partial class MainWindow : Window
                 Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
                 Price: madeKnown && made > 0 ? Fk(made) : "", PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : ""));
         }
-        CraftRows.ItemsSource = rows;
+        SyncRows(CraftRows, rows);
         _crafted = e?.CraftSnapshot() ?? new();
         FillBestCrafts();
         // the feed: the last five crafts, worked or failed, with what each made or cost
@@ -1154,8 +1154,8 @@ public partial class MainWindow : Window
         // Compact, six in Full) until "Show all". The section line says how many kinds, and how many have no price, once
         var plain = drops.Where(r => !r.Mat).ToList(); var mats = drops.Where(r => r.Mat).ToList();
         bool allDropsShown = _allRows.Contains("Drops");
-        Rows.ItemsSource = allDropsShown ? plain : plain.Take(TableRows).ToList();
-        MatRows.ItemsSource = allDropsShown ? mats : mats.Take(TableRows).ToList();
+        SyncRows(Rows, allDropsShown ? plain : plain.Take(TableRows).ToList());
+        SyncRows(MatRows, allDropsShown ? mats : mats.Take(TableRows).ToList());
         MatHead.Visibility = mats.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         MatTitle.Text = $"CRAFTING MATERIALS · {mats.Count}";
         DropsMore.Visibility = plain.Count > TableRows || mats.Count > TableRows ? Visibility.Visible : Visibility.Collapsed;
@@ -1430,6 +1430,7 @@ public partial class MainWindow : Window
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId) { _ = Toggle(); handled = true; }
+        else OnSizeMove(msg);
         return IntPtr.Zero;
     }
 

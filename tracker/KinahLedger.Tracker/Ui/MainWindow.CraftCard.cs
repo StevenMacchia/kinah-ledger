@@ -23,7 +23,7 @@ public partial class MainWindow
 
     void CraftRowClick(object sender, MouseButtonEventArgs ev)
     {
-        if (ev.OriginalSource is not FrameworkElement fe || fe.DataContext is not DropRow { Header: false } r) return;
+        if (ev.OriginalSource is not FrameworkElement fe || RowOf(fe.DataContext) is not { Header: false } r) return;
         if (_card != null) _card.IsOpen = false;
         _card = new Popup { Child = BuildCraftCard(r.Name), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = fe };
         _card.IsOpen = true;
