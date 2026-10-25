@@ -456,7 +456,7 @@ public static class AccuracyTests
                         if (end >= 0) { var m = System.Text.RegularExpressions.Regex.Match(head[..end], @"content-length:\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase); length = m.Success ? int.Parse(m.Groups[1].Value) : 0; }
                     }
                     int have = end < 0 ? 0 : got.Count - end - 4;
-                    while (have < length) { int n = await ns.ReadAsync(buf, _cts.Token); if (n <= 0) break; have += n; }
+                    while (have < length) { int n = await ns.ReadAsync(buf, _cts.Token); if (n <= 0) break; have += n; got.AddRange(buf.Take(n)); }
                     Interlocked.Increment(ref _requests);
                     if (end >= 0) Bodies.Enqueue(Encoding.UTF8.GetString(got.Skip(end + 4).Take(length).ToArray()));
                     int status = Answer;
