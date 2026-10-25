@@ -344,9 +344,12 @@ public partial class MainWindow
             return b0;
         }
         bool paysKinah = counted.Any(r => r.Kinah > 0);
-        Cell(0, Big(secs > 10 ? Fk(value / secs * 3600) : "0", 30), PT("an hour", "Muted", 12));
+        // nothing priced and no Kinah is not "0 an hour": what it's worth isn't known yet (a misread is "not read", never 0)
+        bool known = value > 0 || paysKinah;
+        TextBlock Worth(string text, double size) => known ? Big(text, size) : PT("no prices yet", "Muted", 15);
+        Cell(0, Worth(secs > 10 ? Fk(value / secs * 3600) : "0", 30), PT("an hour", "Muted", 12));
         var runL = new TextBlock { FontSize = 12 }; runL.Inlines.Add(PR("a run", "Muted")); runL.Inlines.Add(PR(paysKinah ? " · Kinah + loot" : " · loot", "Faint"));
-        Cell(1, Big(Fk(value / (double)n), 26), runL);
+        Cell(1, Worth(Fk(value / (double)n), 26), runL);
         Cell(2, Big(Clock(TimeSpan.FromSeconds(secs / n)), 26), PT("a run", "Muted", 12));
         var cv = new TextBlock { TextTrimming = TextTrimming.None, VerticalAlignment = VerticalAlignment.Center };
         cv.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
