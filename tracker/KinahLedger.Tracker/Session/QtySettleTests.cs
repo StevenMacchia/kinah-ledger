@@ -165,6 +165,69 @@ public static class QtySettleTests
             Check("...the same line with no panel or race: the inventory's", N(s2, "Kukuru").ToString(), "0");
         }
 
+        // ---- 7. the rules alone: ItemRepeatGuard at any count, CountWatch read twice ----
+        {
+            var r0 = t0.AddMinutes(10);
+            var none = new ItemRepeatGuard.Screen(1, DateTime.MinValue);
+            // 11:34 as the guard saw it: two x3 lines, each with its loot list row, then "Acquired Kukuru" at 11:34:31
+            var g = new ItemRepeatGuard();
+            g.Row("Kukuru", r0.AddSeconds(9.3), 1);
+            g.Counted("Kukuru", 3, r0.AddSeconds(9.1), r0.AddSeconds(9.1), null);
+            g.Row("Kukuru", r0.AddSeconds(24.3), 2);
+            g.Counted("Kukuru", 3, r0.AddSeconds(22.6), r0.AddSeconds(24.1), null);
+            Check("guard: the cut line, judged at any count, no witness", $"{g.Judge("Kukuru", 1, r0.AddSeconds(31.3), r0.AddSeconds(32.9), null, none, false, unsure: true).V} {g.Judge("Kukuru", 1, r0.AddSeconds(31.3), r0.AddSeconds(36.4), null, none, false, unsure: true).V}", "Wait Repeat");
+            Check("...judged on its count 1 alone (0.8.33): a pickup", g.Judge("Kukuru", 1, r0.AddSeconds(31.3), r0.AddSeconds(32.9), null, none, false).V.ToString(), "Count");
+            Check("...a read showing three Kukuru lines: a line of its own", g.Judge("Kukuru", 1, r0.AddSeconds(31.3), r0.AddSeconds(32.9), null, new(3, DateTime.MinValue), false, unsure: true).V.ToString(), "Count");
+            g.Race(r0.AddSeconds(30.8), "", GatherFamily.Unknown);
+            Check("...with a gathering race of its own: a pickup", g.Judge("Kukuru", 1, r0.AddSeconds(31.3), r0.AddSeconds(32.9), null, none, false, unsure: true).V.ToString(), "Count");
+            g.Counted("Kukuru", 1, r0.AddSeconds(31.3), r0.AddSeconds(32.9), null, unsure: true);
+            Check("a whole x3 line after the cut copy, no new witness: that copy", g.Judge("Kukuru", 3, r0.AddSeconds(35.4), r0.AddSeconds(41), null, none, false).V.ToString(), "Repeat");
+            g.Settle("Kukuru", 3);
+            Check("...settled at x3: a whole x3 still that copy, a name-first x1 not", $"{g.Judge("Kukuru", 3, r0.AddSeconds(35.4), r0.AddSeconds(41), null, none, false).V} {g.Judge("Kukuru", 1, r0.AddSeconds(42), r0.AddSeconds(42), null, none, false).V}", "Repeat Count");
+            // farming: a drop with its kill, then its line read cut
+            var f = new ItemRepeatGuard();
+            f.Kill(r0.AddSeconds(59.9), "KinahChanged");
+            f.Counted("Spiritstone", 4, r0.AddSeconds(60), r0.AddSeconds(60.5), null);
+            Check("guard, farming: a cut re-read of a drop, no new kill", f.Judge("Spiritstone", 1, r0.AddSeconds(70), r0.AddSeconds(76), null, none, false, unsure: true).V.ToString(), "Repeat");
+            f.Kill(r0.AddSeconds(69.8), "KinahChanged");
+            Check("...with a kill of its own: a second drop", f.Judge("Spiritstone", 1, r0.AddSeconds(70), r0.AddSeconds(76), null, none, false, unsure: true).V.ToString(), "Count");
+
+            var w = new CountWatch();
+            var p = new ChatParser(items);
+            List<CountWatch.Done> Look(IReadOnlyList<string> read, double at) => w.Look(read, 0, r0.AddSeconds(at), p.Meaning, ChatParser.HasCount);
+            var cut = new List<string> { "[P1] a", "Acquired Kukuru x3.", "Acquired Kukuru" };
+            var whole = new List<string> { "[P1] a", "Acquired Kukuru x3.", "Acquired Kukuru x3." };
+            var e1 = new object();
+            w.Watch("Acquired Kukuru", "i:kukuru", e1, 0, r0);
+            int d12 = Look(cut, 1).Count + Look(cut, 2).Count;
+            // (0.8.33 looked one line either side whenever its own place had no count, and took the x3 above it)
+            Check("watch: its own place still cut, x3 beside it: nothing read", $"{d12} {w.Waiting}", "0 1");
+            var d3 = Look(whole, 3); var d4 = Look(whole, 4);
+            Check("watch: x3 at its place once, then twice: settled on the second", $"{d3.Count} {d4.Count} {(d4.Count > 0 ? d4[0].Count : 0)} {(d4.Count > 0 ? d4[0].When.Length : 0)}", "0 1 3 2");
+            var e2 = new object();
+            w.Watch("Acquired Kukuru", "i:kukuru", e2, 0, r0.AddSeconds(10), held: true);
+            int h12 = Look(whole, 11).Count + Look(whole, 12).Count;
+            Check("watch, held by the repeat guard: read twice, not settled", $"{h12} {w.Waiting}", "0 1");
+            w.Drop(e2);
+            Check("...left out by the guard: dropped, never settled or assumed", $"{w.Waiting} {Look(whole, 30).Count}", "0 0");
+            var e3 = new object();
+            w.Watch("Acquired Kukuru", "i:kukuru", e3, 0, r0.AddSeconds(40), held: true);
+            Look(whole, 41); Look(whole, 42);
+            w.Release(e3);
+            var h3 = Look(whole, 43);
+            Check("...counted by the guard: settles on the reads it kept", $"{h3.Count} {(h3.Count > 0 ? h3[0].Count : 0)}", "1 3");
+            var e4 = new object();
+            w.Watch("Acquired Kukuru", "i:kukuru", e4, 0, r0.AddSeconds(50));
+            int over = 0;
+            for (int i = 1; i <= 16; i++) over += Look(cut, 50 + i).Count(x => x.Count == 0);
+            Check("watch: no count read twice in 15 s: time over (1 assumed)", $"{over} {w.Waiting}", "1 0");
+            // its own place shows another line (a read that didn't line up): the line beside it
+            var e5 = new object();
+            w.Watch("Acquired Kukuru", "i:kukuru", e5, 0, r0.AddSeconds(80));
+            var shifted = new List<string> { "[P1] a", "Acquired Kukuru x3.", "Acquired 485 Kina." };
+            var s1 = Look(shifted, 81); var s2 = Look(shifted, 82);
+            Check("watch: its own place another line: the line beside it", $"{s1.Count} {s2.Count} {(s2.Count > 0 ? s2[0].Count : 0)}", "0 1 3");
+        }
         return ok;
     }
 }

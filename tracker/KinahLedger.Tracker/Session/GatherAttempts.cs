@@ -214,10 +214,16 @@ public sealed partial class TrackerSession
         return panelNamed || GatheringNow(itemId, t) || HasGatherToken(t);
     }
 
-    /// <summary>The achievement's or box's window doesn't take a gather the panel or its bar just produced: null then, with a note; else <paramref name="why"/>.</summary>
+    /// <summary>
+    /// The achievement's, box's or inventory's window doesn't take a gather the panel or its bar just produced: null then,
+    /// with a note; else <paramref name="why"/>. The inventory's window runs 10 s past every read that shows one of its
+    /// lines first seen 20 s ago or less, so it outlasts the visit: on 2026-10-25 Steven unlocked skins and stored items at
+    /// 11:33:41 to :51, walked to a Kukuru node, and his first gather's "Acquired Kukuru x3." at 11:34:09, with the gathering
+    /// panel naming Kukuru 2 s before, was filed as "the inventory at work" and never counted.
+    /// </summary>
     string? NotForGather(string? why, long itemId, int count, DateTime t)
     {
-        if (why == null || !(why == "an achievement's reward" || why.StartsWith("a box's", StringComparison.Ordinal)) || !GatherJustProduced(itemId, t)) return why;
+        if (why == null || !(why == "an achievement's reward" || why.StartsWith("a box's", StringComparison.Ordinal) || why.StartsWith("the inventory at work", StringComparison.Ordinal)) || !GatherJustProduced(itemId, t)) return why;
         CrashLog.Note($"{_items.NameOf(itemId)} x{count}: the gathering panel or its bar just produced it, so a gather, not {why}");
         return null;
     }

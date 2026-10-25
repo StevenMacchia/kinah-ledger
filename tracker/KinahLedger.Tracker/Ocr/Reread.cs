@@ -293,28 +293,61 @@ public sealed class Reread
 
 /// <summary>
 /// A pickup counted from a chat line whose count was lost or unreadable ("Acquired Odyle" for "Acquired Odyle x7.",
-/// 2026-10-24 13:07; the loot list showed no row for it), counted as one for now. The line stays on screen for seconds
-/// and the next reads often show its count whole, so its place (counted from the bottom, moved up by the lines that
-/// arrive under it) is looked at in the next reads: when the line there, or one either side, is the same item with a
-/// count, that count is the pickup's and the session adds the difference. When no read shows one within
-/// <see cref="Reads"/> reads or <see cref="Seconds"/>, the session logs "quantity unsure, 1 assumed" and tallies it.
+/// 2026-10-24 13:07; the loot list showed no row for it), counted as one for now: a provisional count. The line stays
+/// on screen for seconds and the next reads often show its count whole, so its place (counted from the bottom, moved up
+/// by the lines that arrive under it) is looked at in the next reads. Its own place first: while the line there is the
+/// same item still without a count, it is the line, still cut. Only when its own place shows another line (a read that
+/// didn't line up moved it by one) is a line either side looked at. A count read there twice is the pickup's, and the
+/// session amends the pickup to it (adds the difference; never a second pickup). One read is not enough: on 2026-10-25
+/// 11:34 the recognizer read the same Kukuru line as "x3" and as no count, read after read. When no count is read twice
+/// within <see cref="Seconds"/>, the session logs "quantity unsure, 1 assumed" and tallies it.
+/// <para>A pickup the repeat guard holds (ItemRepeatGuard: it may be a counted line read again) is watched as held: its
+/// reads are kept, but it settles or is assumed only once the guard counts it (<see cref="Release"/>), and a line the
+/// guard leaves out is no pickup, so its watch is dropped (<see cref="Drop"/>).</para>
 /// </summary>
 public sealed class CountWatch
 {
-    public const int Reads = 3;
-    public const double Seconds = 5;
+    public const int Reads = 20;
+    public const double Seconds = 15;
 
-    /// <summary>One watched pickup: the line as read, its item (ChatParser.Meaning's key without the count), the event counted, its place.</summary>
-    public sealed record Pending(string Raw, string Item, object Event, int FromBottom, DateTime At, int Looks);
+    /// <summary>
+    /// One watched pickup: the line as read, its item (ChatParser.Meaning's key without the count), the event counted,
+    /// its place from the bottom (-1 when no read showed it), when it was watched, the reads looked at, whether the repeat
+    /// guard still holds it, and the counts read at its place.
+    /// </summary>
+    public sealed class Pending
+    {
+        public string Raw = "", Item = "";
+        public object Event = new();
+        public int FromBottom, Looks;
+        public DateTime At;
+        public bool Held;
+        public readonly List<(int Count, DateTime At, string Line)> Readings = new();
+    }
+
+    /// <summary>A watch over: the count read twice (Count above 0, with the line and the two reads' times), or its time over (Count 0).</summary>
+    public sealed record Done(Pending P, int Count, string Line, DateTime[] When);
+
     readonly List<Pending> _pending = new();
 
-    public int Waiting => _pending.Count;
+    public int Waiting { get { lock (_pending) return _pending.Count; } }
 
     /// <summary>A pickup counted as one from a line with no readable count, at its place from the bottom (0 = the last line).</summary>
-    public void Watch(string raw, string item, object ev, int fromBottom, DateTime at)
+    public void Watch(string raw, string item, object ev, int fromBottom, DateTime at, bool held = false)
     {
-        if (_pending.Count < 16) _pending.Add(new Pending(raw, item, ev, fromBottom, at, 0));
+        lock (_pending) if (_pending.Count < 16) _pending.Add(new Pending { Raw = raw, Item = item, Event = ev, FromBottom = fromBottom, At = at, Held = held });
     }
+
+    /// <summary>The repeat guard counted the held pickup of <paramref name="ev"/>: it settles or is assumed from now on.</summary>
+    public void Release(object ev) { lock (_pending) foreach (var p in _pending) if (ReferenceEquals(p.Event, ev)) p.Held = false; }
+
+    /// <summary>The repeat guard left the held line of <paramref name="ev"/> out: nothing was counted, nothing to settle.</summary>
+    public void Drop(object ev) { lock (_pending) _pending.RemoveAll(p => ReferenceEquals(p.Event, ev)); }
+
+    /// <summary>The count read at a pickup's place in two reads, or null; with those two reads.</summary>
+    public static (int Count, string Line, DateTime[] When)? Agreed(Pending p) =>
+        p.Readings.GroupBy(r => r.Count).FirstOrDefault(g => g.Count() >= 2) is { } g
+            ? (g.Key, g.Last().Line, g.Take(2).Select(r => r.At).ToArray()) : null;
 
     /// <summary>The item part of a ChatParser.Meaning key ("i:odyle" of "i:odylex7"), or "" for no item.</summary>
     public static string ItemOf(string key)
@@ -333,39 +366,46 @@ public sealed class CountWatch
 
     /// <summary>
     /// One read: <paramref name="freshCount"/> new lines arrived under the old ones. Returns the watched pickups whose count
-    /// this read shows (with that count and the line it was read from), and those whose time to look is over (Count 0).
+    /// is now read twice at their place (with that count, the line it was read from and the two reads' times), and those
+    /// whose time to look is over (Count 0). Held pickups keep their reads and are returned only once released.
     /// <paramref name="meaning"/> is ChatParser.Meaning; <paramref name="hasCount"/> says whether a line names its count.
     /// Call once per read, before this read's own unsure lines are watched.
     /// </summary>
-    public List<(Pending P, int Count, string Line)> Look(IReadOnlyList<string> lines, int freshCount, DateTime now, Func<string, (string Key, bool Exact)> meaning, Func<string, bool> hasCount)
+    public List<Done> Look(IReadOnlyList<string> lines, int freshCount, DateTime now, Func<string, (string Key, bool Exact)> meaning, Func<string, bool> hasCount)
     {
-        var done = new List<(Pending, int, string)>();
+        lock (_pending) return LookLocked(lines, freshCount, now, meaning, hasCount);
+    }
+
+    List<Done> LookLocked(IReadOnlyList<string> lines, int freshCount, DateTime now, Func<string, (string Key, bool Exact)> meaning, Func<string, bool> hasCount)
+    {
+        var done = new List<Done>();
         if (_pending.Count == 0) return done;
         var keep = new List<Pending>();
         var claimed = new HashSet<int>();
+        bool Is(int i, Pending p) => i >= 0 && i < lines.Count && !claimed.Contains(i) && meaning(lines[i]).Key is { Length: > 0 } k && ItemOf(k) == p.Item;
         foreach (var p in _pending)
         {
-            int pos = p.FromBottom + freshCount;
-            string? found = null; int at = -1;
-            if (lines.Count > 0)
-                // its own place first, then a line either side (a read that didn't line up moves it by one)
-                foreach (int d in new[] { 0, 1, -1 })
-                {
-                    int i = lines.Count - 1 - (pos + d);
-                    if (i < 0 || i >= lines.Count || claimed.Contains(i)) continue;
-                    var m = meaning(lines[i]);
-                    if (m.Key.Length == 0 || ItemOf(m.Key) != p.Item || !hasCount(lines[i])) continue;
-                    found = lines[i]; at = i; break;
-                }
-            if (found != null)
+            if (lines.Count > 0 && p.FromBottom >= 0)
             {
-                claimed.Add(at);
-                done.Add((p, Math.Max(1, CountOf(meaning(found).Key)), found));
-                continue;
+                int pos = p.FromBottom + freshCount;
+                int own = lines.Count - 1 - pos, at = -1;
+                // its own place first: the same item there, with or without its count, is the line
+                if (Is(own, p)) at = own;
+                // a line either side only when its own place shows another line (a read that didn't line up moves it by one)
+                else foreach (int d in new[] { 1, -1 }) if (Is(own - d, p)) { at = own - d; break; }
+                if (at >= 0)
+                {
+                    claimed.Add(at);
+                    p.FromBottom = lines.Count - 1 - at;
+                    if (hasCount(lines[at])) p.Readings.Add((Math.Max(1, CountOf(meaning(lines[at]).Key)), now, lines[at]));
+                }
+                else p.FromBottom = pos;
+                p.Looks++;
             }
-            var next = p with { FromBottom = lines.Count > 0 ? pos : p.FromBottom, Looks = p.Looks + (lines.Count > 0 ? 1 : 0) };
-            if (next.Looks >= Reads || (now - p.At).TotalSeconds > Seconds) done.Add((p, 0, ""));
-            else keep.Add(next);
+            if (p.Held) { keep.Add(p); continue; }
+            if (Agreed(p) is { } a) { done.Add(new Done(p, a.Count, a.Line, a.When)); continue; }
+            if (p.Looks >= Reads || (now - p.At).TotalSeconds > Seconds) done.Add(new Done(p, 0, "", Array.Empty<DateTime>()));
+            else keep.Add(p);
         }
         _pending.Clear();
         _pending.AddRange(keep);
@@ -373,5 +413,5 @@ public sealed class CountWatch
     }
 
     /// <summary>Everything still watched, its time over (a stop, the end of a replay).</summary>
-    public List<Pending> Flush() { var all = _pending.ToList(); _pending.Clear(); return all; }
+    public List<Pending> Flush() { lock (_pending) { var all = _pending.ToList(); _pending.Clear(); return all; } }
 }
