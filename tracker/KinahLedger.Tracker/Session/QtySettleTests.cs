@@ -37,6 +37,28 @@ public static class QtySettleTests
             foreach (var nl in Since().Split('\n').Where(x => x.Contains(about)).TakeLast(30)) Console.WriteLine("      note: " + nl.TrimEnd());
         }
 
+        // ---- 0. Steven's reads themselves: the replay case, its count printed here too (parse-test stops a CI run before the
+        // replay-bank step prints a failing case's count) ----
+        const string Case = "text-2026-10-25-kukuru-cut-count";
+        string? caseDir = null;
+        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+            for (var d = new DirectoryInfo(start); d != null && caseDir == null; d = d.Parent)
+                if (Directory.Exists(Path.Combine(d.FullName, "tracker", "tests", "replays", Case))) caseDir = Path.Combine(d.FullName, "tracker", "tests", "replays", Case);
+        if (caseDir == null) Console.WriteLine($"  ({Case} not found from here: the replay-bank step runs it)");
+        else
+        {
+            var only = TestTemp.Path("kl-qty-case-" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(Path.Combine(only, Case));
+            foreach (var f in Directory.GetFiles(caseDir)) File.Copy(f, Path.Combine(only, Case, Path.GetFileName(f)));
+            var keepDir = CrashLog.DirOverride;
+            List<ReplayBank.Result> res;
+            try { res = ReplayBank.Run(only, settings); }
+            finally { CrashLog.DirOverride = keepDir; try { Directory.Delete(only, true); } catch (Exception) { } }
+            var r = res.Single();
+            Check("11:33 to 11:35 as read (replay case): Kukuru 6, Orichalcum Ore 1", r.Status == "pass" ? "pass" : r.Detail, "pass");
+            if (r.Status != "pass") Console.WriteLine("      " + r.Detail);
+        }
+
         var t0 = new DateTime(2026, 10, 25, 15, 34, 0, DateTimeKind.Utc);
         var top = new List<string> { "[P1] so the boss", "[P2] spawns at ten", "[P3] ok thanks" };
         List<string> R(params string[] more) => top.Concat(more).ToList();
@@ -142,6 +164,7 @@ public static class QtySettleTests
             s2.FlushVotes(t0.AddSeconds(7));
             Check("...the same line with no panel or race: the inventory's", N(s2, "Kukuru").ToString(), "0");
         }
+
         return ok;
     }
 }
