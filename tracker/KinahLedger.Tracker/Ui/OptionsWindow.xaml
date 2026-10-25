@@ -301,6 +301,19 @@
               </WrapPanel>
             </StackPanel>
           </Border>
+
+          <!-- for checking the tracker (0.8.34, Steven 2026-10-25): accuracy figures are off for players; this shows them -->
+          <TextBlock Style="{StaticResource GroupLabel}" Text="FOR CHECKING THE TRACKER"/>
+          <Border Style="{StaticResource Group}">
+            <Grid Style="{StaticResource Row}">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Show accuracy details"/>
+                <TextBlock Style="{StaticResource RowHint}" Text="What a second source confirmed, and the counts behind it. Off, you only see things to look at."/>
+              </StackPanel>
+              <CheckBox x:Name="ShowAccuracyChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Show accuracy details"/>
+            </Grid>
+          </Border>
         </StackPanel>
 
         <!-- In game: the shortcut and the panel over the game -->

@@ -40,9 +40,10 @@ public partial class MainWindow
             if (_accPopup is { IsOpen: true }) _accPopup.IsOpen = false;
             return;
         }
-        var v = AccuracyCardView.From(s);
+        var v = AccuracyCardView.From(s, _prefs.ShowAccuracy);
         _accView = v;
-        AccuracyChip.Visibility = Visibility.Visible;
+        // nothing to say while nothing needs a look (the chip shows with Show accuracy details on, or things to look at)
+        AccuracyChip.Visibility = v.Chip.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         var chipSig = $"{v.Chip}|{v.Tone}";
         if (chipSig != _accChipSig)
         {
@@ -74,7 +75,7 @@ public partial class MainWindow
         var title = CkText(AccuracyCardView.Title, CkGold, 16, FontWeights.SemiBold, display: true); title.Margin = new Thickness(20, 14, 20, 0);
         body.Children.Add(title);
         var line = CkText(v.Line, CkInk, 14); line.Margin = new Thickness(20, 6, 20, 0); line.TextWrapping = TextWrapping.Wrap; line.TextTrimming = TextTrimming.None;
-        body.Children.Add(line);
+        if (v.Line.Length > 0) body.Children.Add(line);
         // the four counts as the game's tooltips list stats: the name on the left, the figure on the right
         var counts = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Background = Brushes.Transparent };
         foreach (var (label, count, sub) in v.Counts)
@@ -83,8 +84,8 @@ public partial class MainWindow
         // which this card replaces (2026-10-25: two things called Accuracy on one page)
         var detail = v.Detail;
         if (!_demo && _watcher.Chat is { QuestKillsGame: > 0 } qc) detail += (detail.Length > 0 ? "\n" : "") + $"Quest kills: the game's counter {qc.QuestKillsGame:N0}, counted {qc.QuestKillsCounted:N0}.";
-        if (detail.Length > 0) { counts.ToolTip = detail; ToolTipService.SetInitialShowDelay(counts, 250); }
-        body.Children.Add(counts);
+        if (detail.Length > 0 && v.Counts.Count > 0) { counts.ToolTip = detail; ToolTipService.SetInitialShowDelay(counts, 250); }
+        if (v.Counts.Count > 0) body.Children.Add(counts);
         if (!v.HasRows) { body.Children.Add(new Border { Height = 14 }); return card; }
 
         // the things to look at, newest first: the time, what, why in one sentence, then Report and Fine

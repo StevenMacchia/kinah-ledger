@@ -3705,6 +3705,8 @@ public sealed class UserPrefs
     public bool SendReportFrames { get; set; }
     /// <summary>Help improve counting (Options › Sharing): confirmed reads and small item crops become training pairs (Session/LabelWriter.cs). On by default, said once on first run.</summary>
     public bool HelpImproveCounting { get; set; } = true;
+    /// <summary>Options › Reading › Show accuracy details (0.8.34): the Accuracy chip, its counts and the panel and Discord lines. Off, a player sees only things to look at.</summary>
+    public bool ShowAccuracy { get; set; }
     /// <summary>True once the one-time "Help improve counting" notice was answered.</summary>
     public bool CountingNoticeSeen { get; set; }
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>

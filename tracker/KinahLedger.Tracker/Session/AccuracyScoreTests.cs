@@ -71,6 +71,16 @@ public static class AccuracyScoreTests
             Check("...the row in plain words", $"{rv.Rows[0].Text} | {rv.Rows[0].Why}", "2,367 Kinah | The Kinah counter didn't rise for it, so it wasn't counted.");
             r.Dismiss(rs.ToCheck[0].Id); var dm = r.Snapshot(); var dv = AccuracyCardView.From(dm);
             Check("...Fine takes it off the list; the share stays", $"{dm.ToCheck.Count} {dm.MatchPercent}% | {dv.Chip} {dv.Tone}", "0 92% | ✓ All looked at good");
+            // 0.8.34 (Steven, 2026-10-25: a low accuracy % "makes the tool look useless"): what a player sees with Show
+            // accuracy details off. Nothing while nothing needs a look; with something to look at, only that, never a figure
+            var pAll = AccuracyCardView.From(all, details: false); var pTown = AccuracyCardView.From(ts, details: false);
+            Check("player view, all fine: no chip, no line, no counts, no panel or Discord line",
+                $"'{pAll.Chip}' '{pAll.Line}' {pAll.Counts.Count} {pAll.Hud ?? "none"} {pAll.Discord ?? "none"} | '{pTown.Chip}' {pTown.Hud ?? "none"}", "'' '' 0 none none | '' none");
+            var rsFresh = Kina(12); rsFresh.Refused(t0.AddSeconds(70), "Acquired 2367 Kina.", 2367); var pr0 = AccuracyCardView.From(rsFresh.Snapshot(), details: false);
+            Check("player view, one refused: only \"1 to look at\", no % anywhere",
+                $"{pr0.Chip} {pr0.Tone} | {pr0.Line} | {pr0.Counts.Count} | {pr0.Hud} | {pr0.Discord ?? "none"} | {pr0.Rows.Count}",
+                "1 to look at warn | The game's own numbers disagreed with this one. | 0 | 1 to look at | none | 1");
+            Check("...details on: the full card as before", AccuracyCardView.From(rsFresh.Snapshot(), details: true).Line, "Checked by the game: 12 of 13 matched (92%)");
             var small = Kina(5); small.Refused(t0.AddSeconds(70), "Acquired 999 Kina.", 999);
             var smv = AccuracyCardView.From(small.Snapshot());
             Check("under 10 checked: the counts, no %, no Discord line", $"{smv.Line} | {smv.Hud} | {smv.Discord ?? "none"}", "Checked by the game: 5 of 6 matched | 1 to look at | none");
