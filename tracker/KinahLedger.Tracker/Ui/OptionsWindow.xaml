@@ -402,7 +402,7 @@
                 <StackPanel>
                   <TextBlock x:Name="VersionTitle" Style="{StaticResource RowTitle}"/>
                   <TextBlock x:Name="UpdateLine" Style="{StaticResource RowHint}"/>
-                  <TextBlock FontSize="12.5" Margin="0,6,0,0"><Hyperlink x:Name="ReleasesLink" Style="{StaticResource LinkStyle}">All releases and their notes</Hyperlink></TextBlock>
+                  <TextBlock FontSize="12.5" Margin="0,6,0,0"><Hyperlink x:Name="ReleasesLink" Style="{StaticResource LinkStyle}">All releases and their notes</Hyperlink><Run Text="   "/><Hyperlink x:Name="ReleasesDiscordLink" Style="{StaticResource LinkStyle}">New releases on Discord</Hyperlink></TextBlock>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                   <!-- shown once an update has downloaded: installs it now, as the banner's Restart now does -->
@@ -434,6 +434,7 @@
           <WrapPanel Margin="0,18,0,0">
             <Button x:Name="AboutSupportBtn" Content="♥  Support on Ko-fi" Margin="0,0,8,8" ToolTip="ko-fi.com/swoly: help keep Kinah Ledger free and updated"/>
             <Button x:Name="AboutSiteBtn" Content="kinahledger.com" Margin="0,0,8,8"/>
+            <Button x:Name="AboutDiscordBtn" Content="Discord" Margin="0,0,8,8" ToolTip="Help in #tracker-help, bugs in #bugs-and-feedback, every new release in #announcements"/>
             <Button x:Name="AboutSourceBtn" Content="Source code" Margin="0,0,8,8"/>
             <Button x:Name="AboutSentBtn" Content="What's shared" Margin="0,0,8,8"/>
             <Button x:Name="AboutLogsBtn" Content="Open logs" Margin="0,0,8,8"/>

@@ -37,6 +37,8 @@ public partial class MainWindow : Window
     public const string RepoUrl = "https://github.com/StevenMacchia/kinah-ledger";
     public const string SiteUrl = "https://kinahledger.com";
     public const string SupportUrl = "https://ko-fi.com/swoly";
+    /// <summary>The Kinah Ledger Discord (never expires): #tracker-help, #bugs-and-feedback, #announcements (every release posts there).</summary>
+    public const string DiscordUrl = "https://discord.gg/fjHMYAABca";
     const int HotkeyId = 1;
 
     readonly Settings _settings;
@@ -112,6 +114,7 @@ public partial class MainWindow : Window
         ReportBuffer.KeepFrames = _prefs.ReportFrames;
         ReportBuffer.KeepUiFrames = _prefs.SendReportFrames;
         MiscountLink.Click += (_, _) => ReportMiscount();
+        DiscordLink.Click += (_, _) => Open(DiscordUrl);
         // Compact and Full view: the header button switches, and the summary's link opens Full view
         ViewBtn.Click += (_, _) => SetView(!_prefs.FullView);
         // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
@@ -287,7 +290,7 @@ public partial class MainWindow : Window
             var dir = c.WriteReport("");
             Open(dir);
             _ = SendReportPictures(dir, "Report a miscount");
-            Say("Saved the last minute to a folder on this PC" + (asked ? "; pictures are kept from now on" : "") + ". Zip it to attach to a bug report.", "Good");
+            Say("Saved the last minute to a folder on this PC" + (asked ? "; pictures are kept from now on" : "") + ". Zip it and post it in #bugs-and-feedback on Discord.", "Good");
             Status.ToolTip = dir;
         }
         catch (Exception ex) { CrashLog.Write("miscount report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); }
