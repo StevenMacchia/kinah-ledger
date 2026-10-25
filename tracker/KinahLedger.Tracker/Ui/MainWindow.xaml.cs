@@ -178,6 +178,8 @@ public partial class MainWindow : Window
         InitCounting(watch);   // Help improve counting: the choice applied, the one-time notice
         if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
         else Say("Reading the chat whenever the game is open. Start run times a stretch on top.", "Faint");
+        // the data folder's clean-up: pictures and miscount reports past their time, on its own thread, then hourly (Housekeeping)
+        if (watch) Housekeeping.RunIfDue(DateTime.Now);
         if (watch) _watcher.Start();
     }
 
@@ -254,6 +256,8 @@ public partial class MainWindow : Window
         {
             var (ok, note) = await Upload.AccuracyClient.SendFramesAsync(_settings.Upload, dir, why);
             CrashLog.Note($"miscount pictures: {(ok ? "sent" : "not sent")} ({note})");
+            // a failed send is final, so the folder is marked: the clean-up keeps it for the player to attach by hand
+            if (!ok && ReportBuffer.HasSendablePictures(dir)) ReportBuffer.MarkUnsent(dir, note); else ReportBuffer.ClearUnsent(dir);
             Say(ok ? $"Report saved and its pictures sent ({note}). Thanks: they become tests the tracker must pass." : $"Report saved on this PC; its pictures weren't sent ({note}).", ok ? "Good" : "Faint");
         }
         catch (Exception ex) { CrashLog.Write("miscount pictures", ex); }

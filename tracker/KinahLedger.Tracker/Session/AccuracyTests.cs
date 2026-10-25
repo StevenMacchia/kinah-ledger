@@ -206,12 +206,53 @@ public static class AccuracyTests
             Check("...and updates install as before (nothing held back)", $"{RemoteConfig.Current.AutoInstall(new Version(0, 8, 13), "x").Auto}", "True");
             Accuracy.Reset(); Accuracy.Add("chat_reads", 5);
             var sent = AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
-            Check("health report: not sent, and dropped (not retried every run)", $"{sent} {Accuracy.Get("chat_reads")}", "False 0");
+            // (2026-10-25: not put back in the counters, which would add it to every later report; it is kept apart, below)
+            Check("health report: not sent, and not put back in the counters", $"{sent} {Accuracy.Get("chat_reads")}", "False 0");
             var noHints = AccuracyClient.LayoutAsync(u, 1234, 777).GetAwaiter().GetResult();
             Check("layout hints: none", $"{noHints == null}", "True");
             var (fok, fnote) = AccuracyClient.SendFramesAsync(u, rd, "test").GetAwaiter().GetResult();
             Check("report pictures: not sent, said plainly", $"{fok} {fnote}", "False the site answered 404");
             Check("the site was asked each time", $"{site.Requests >= 4}", "True");
+
+            // ---- the report the site had no route for is kept, not dropped (2026-10-25) ----
+            Console.WriteLine("...and the report it could not take is kept for the next send:");
+            Check("the 404'd report waits in accuracy-queue.json", $"{AccuracyClient.QueuedCount()} {File.Exists(Path.Combine(CrashLog.Dir, "accuracy-queue.json"))}", "1 True");
+            int req0 = site.Requests;
+            Accuracy.Add("chat_reads", 7);
+            var sent2 = AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            Check("a second report, the site still without the route: kept too", $"{sent2} {AccuracyClient.QueuedCount()} {Accuracy.Get("chat_reads")}", "False 2 0");
+            Check("...and only the oldest kept report was tried (one request)", $"{site.Requests - req0}", "1");
+            // the site gets the route: the kept reports go first, oldest first, then this one
+            site.Answer = 200;
+            while (site.Bodies.TryDequeue(out _)) { }
+            Accuracy.Add("chat_reads", 3);
+            var sent3 = AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            var order = string.Join(",", site.Bodies.Select(b => JsonNode.Parse(b)!["health"]!["chat_reads"]!.ToString()));
+            Check("the site answers: kept reports first (5, 7), then the new one (3)", $"{sent3} {AccuracyClient.QueuedCount()} {order}", "True 0 5,7,3");
+            Check("...each under the version that read it", string.Join(",", site.Bodies.Select(b => JsonNode.Parse(b)!["app"]!.ToString()).Distinct()), RunPayload.AppVersion);
+            // the queue is bounded: the oldest of 50 go first
+            site.Answer = 404;
+            for (int i = 1; i <= 55; i++) { Accuracy.Add("chat_reads", i); AccuracyClient.SendAsync(u).GetAwaiter().GetResult(); }
+            var qfile = JsonNode.Parse(File.ReadAllText(Path.Combine(CrashLog.Dir, "accuracy-queue.json")))!.AsArray();
+            Check("55 reports kept at most 50, the newest", $"{AccuracyClient.QueuedCount()} first {qfile[0]!["Report"]!["Health"]!["chat_reads"]} last {qfile[^1]!["Report"]!["Health"]!["chat_reads"]}", "50 first 6 last 55");
+            // a shape the site refuses would be refused again: dropped, the kept ones with it
+            site.Answer = 400;
+            Accuracy.Add("chat_reads", 1);
+            var sent4 = AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            Check("refused for its shape (400): dropped, kept ones too", $"{sent4} {AccuracyClient.QueuedCount()} {Accuracy.Get("chat_reads")}", "False 0 0");
+            // a server error may pass: the counters take it back, as before
+            site.Answer = 500;
+            Accuracy.Add("chat_reads", 4);
+            AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            Check("a server error: back into the counters (not kept apart)", $"{Accuracy.Get("chat_reads")} {AccuracyClient.QueuedCount()}", "4 0");
+            // sharing off: nothing is kept to send later
+            site.Answer = 404; Accuracy.Reset(); Accuracy.Add("chat_reads", 2);
+            AccuracyClient.SendAsync(u).GetAwaiter().GetResult();
+            var off = new UploadSettings { Endpoint = u.Endpoint, Enabled = false };
+            Accuracy.Add("chat_reads", 2);
+            AccuracyClient.SendAsync(off).GetAwaiter().GetResult();
+            Check("sharing off: the kept reports are let go", $"{AccuracyClient.QueuedCount()} {File.Exists(Path.Combine(CrashLog.Dir, "accuracy-queue.json"))}", "0 False");
+            Accuracy.Reset();
         }
 
         // ---- the pickup check (PickupCheck; Steven, 2026-10-23: "you need some type of quality assurance check") ----
@@ -386,6 +427,9 @@ public static class AccuracyTests
         public int Port { get; }
         int _requests;
         public int Requests => Volatile.Read(ref _requests);
+        /// <summary>What it answers (404 until a test says the route exists), and the body of each request it got.</summary>
+        public volatile int Answer = 404;
+        public readonly System.Collections.Concurrent.ConcurrentQueue<string> Bodies = new();
         public NotFoundSite()
         {
             _l.Start();
@@ -414,8 +458,11 @@ public static class AccuracyTests
                     int have = end < 0 ? 0 : got.Count - end - 4;
                     while (have < length) { int n = await ns.ReadAsync(buf, _cts.Token); if (n <= 0) break; have += n; }
                     Interlocked.Increment(ref _requests);
-                    var body = "{\"ok\":false,\"error\":\"not found\"}";
-                    var resp = $"HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
+                    if (end >= 0) Bodies.Enqueue(Encoding.UTF8.GetString(got.Skip(end + 4).Take(length).ToArray()));
+                    int status = Answer;
+                    var body = status == 200 ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"not found\"}";
+                    var reason = status switch { 200 => "OK", 400 => "Bad Request", 404 => "Not Found", 500 => "Internal Server Error", _ => "Other" };
+                    var resp = $"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
                     await ns.WriteAsync(Encoding.ASCII.GetBytes(resp), _cts.Token);
                 }
                 catch (Exception) when (!_cts.IsCancellationRequested) { }

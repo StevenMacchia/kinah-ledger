@@ -765,7 +765,7 @@ public sealed partial class ChatParser
                     yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 99999), bound) { Via = "unlisted" };
                     yield break;
                 }
-                CrashLog.Note($"not in the item list, not counted: {name}");
+                CrashLog.NoteBurst($"not in the item list, not counted: {name}");   // 46 of one name in 36 minutes (2026-10-24): once a minute, then counted
                 Session.Accuracy.Add("unknown");
                 // reported only when it reads like a garbled item name (some item is near it), never other text
                 if (_items.Near(name, Math.Max(2, name.Length / 3)).Count > 0 || _items.Fragment(name, 3).Count > 0) Session.Accuracy.Name(name, null, "unknown");

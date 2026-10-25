@@ -27,30 +27,128 @@ public static class AccuracyClient
         return http;
     }
 
+    // ---- reports the site could not take yet ----
+    // The live site answered 404 to every report on 2026-10-24 (19:10 and 19:25): /v1/accuracy is on the backend/accuracy
+    // branch of the site's repo and the deploys came from main, which lacks it. Those reports were dropped. A report the
+    // site doesn't know a route for is now kept, up to MaxQueued of them (the oldest go first), in accuracy-queue.json
+    // beside the logs, and offered again, oldest first, with the next send; one that the site refuses for its shape
+    // (400, 413, 415) is still dropped, as it would be refused again.
+
+    /// <summary>Most reports kept for a later send, and the longest they are kept.</summary>
+    public const int MaxQueued = 50;
+    public const int QueuedDays = 7;
+
+    /// <summary>One report waiting for the site: when it was taken, the version that took it, the report.</summary>
+    public sealed record Queued(DateTime At, string App, AccuracyReport Report);
+
+    static readonly object QueueLock = new();
+    static string QueuePath => Path.Combine(CrashLog.Dir, "accuracy-queue.json");
+
+    static List<Queued> LoadQueue()
+    {
+        lock (QueueLock)
+        {
+            try
+            {
+                if (!File.Exists(QueuePath)) return new();
+                var q = JsonSerializer.Deserialize<List<Queued>>(File.ReadAllText(QueuePath)) ?? new();
+                return q.Where(x => x.Report != null && (DateTime.UtcNow - x.At).TotalDays < QueuedDays).ToList();
+            }
+            catch (Exception) { return new(); }
+        }
+    }
+
+    static void SaveQueue(List<Queued> q)
+    {
+        lock (QueueLock)
+        {
+            try
+            {
+                if (q.Count == 0) { if (File.Exists(QueuePath)) File.Delete(QueuePath); return; }
+                File.WriteAllText(QueuePath, JsonSerializer.Serialize(q.TakeLast(MaxQueued).ToList()));
+            }
+            catch (Exception) { /* kept in memory for this send only */ }
+        }
+    }
+
+    /// <summary>How many reports wait for the site (the tests, the log line).</summary>
+    internal static int QueuedCount() => LoadQueue().Count;
+
+    /// <summary>How the site answered one report.</summary>
+    enum Answer { Delivered, Refused, Missing, Failed }
+
+    static async Task<(Answer A, int Status)> PostAsync(HttpClient http, string url, AccuracyPayload body)
+    {
+        try
+        {
+            using var r = await http.PostAsJsonAsync(url, body);
+            int s = (int)r.StatusCode;
+            if (r.IsSuccessStatusCode) return (Answer.Delivered, s);
+            return (s is 400 or 413 or 415 ? Answer.Refused : s == 404 ? Answer.Missing : Answer.Failed, s);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { return (Answer.Failed, 0); }
+    }
+
+    /// <summary>One send at a time: the kept reports are read, changed and written back as a whole.</summary>
+    static readonly SemaphoreSlim SendGate = new(1, 1);
+
     /// <summary>
-    /// Sends what added up since the last accepted send (Accuracy.Take); a failed send puts it back. Sharing off, the
-    /// accuracy_upload kill switch, or no site address: nothing is sent and the counters start over.
+    /// Sends what added up since the last accepted send (Accuracy.Take), after the reports kept for the site (oldest first,
+    /// stopping at the first it can't take). A report the site has no route for (404) is kept for the next send; one that
+    /// failed otherwise goes back into the counters, as before; one the site refuses for its shape is dropped. Sharing off
+    /// or no site address: nothing is sent, the counters start over and nothing is kept. The accuracy_upload kill switch
+    /// drops this report and leaves the kept ones. Returns whether this send's report was accepted.
     /// </summary>
     public static async Task<bool> SendAsync(UploadSettings u)
     {
+        await SendGate.WaitAsync();
+        try { return await SendCoreAsync(u); }
+        finally { SendGate.Release(); }
+    }
+
+    static async Task<bool> SendCoreAsync(UploadSettings u)
+    {
         var url = Url(u, "accuracy");
         var report = Accuracy.Take();
-        if (!u.Enabled || url.Length == 0 || Update.RemoteConfig.Current.Off("accuracy_upload") || report.Empty) return false;
-        try
+        if (!u.Enabled || url.Length == 0) { SaveQueue(new()); return false; }
+        if (Update.RemoteConfig.Current.Off("accuracy_upload")) return false;
+        var queue = LoadQueue();
+        if (report.Empty && queue.Count == 0) return false;
+        using var http = Client(TimeSpan.FromSeconds(15));
+        var install = InstallId.Get();
+        Answer? down = null;   // how the site answered the first kept report it couldn't take
+        foreach (var q in queue.ToList())
         {
-            using var http = Client(TimeSpan.FromSeconds(15));
-            using var r = await http.PostAsJsonAsync(url, AccuracyPayload.From(report, InstallId.Get()));
-            if (r.IsSuccessStatusCode) return true;
-            // a shape the site refuses would be refused again: dropped, not retried. Anything else is tried with the next run
-            if ((int)r.StatusCode is not (400 or 404 or 413 or 415)) Accuracy.Restore(report);
-            CrashLog.Note($"accuracy report: the site answered {(int)r.StatusCode}");
-            return false;
+            var (a, s) = await PostAsync(http, url, AccuracyPayload.From(q.Report, install, q.App));
+            if (a is Answer.Delivered or Answer.Refused)
+            {
+                queue.Remove(q);
+                if (a == Answer.Refused) CrashLog.NoteBurst($"accuracy report from {q.At.ToLocalTime():MMM d HH:mm}: the site answered {s}; dropped");
+                continue;
+            }
+            down = a;
+            CrashLog.NoteBurst($"accuracy report: the site answered {s}; {queue.Count} kept report(s) waiting");
+            break;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        bool sent = false;
+        if (!report.Empty)
         {
-            Accuracy.Restore(report);
-            return false;
+            Answer a = Answer.Failed; int s = 0;
+            if (down == null) (a, s) = await PostAsync(http, url, AccuracyPayload.From(report, install));
+            else a = down.Value;
+            switch (a)
+            {
+                case Answer.Delivered: sent = true; break;
+                case Answer.Refused: CrashLog.NoteBurst($"accuracy report: the site answered {s}; dropped"); break;
+                case Answer.Missing:
+                    queue.Add(new Queued(DateTime.UtcNow, RunPayload.AppVersion, report));
+                    if (down == null) CrashLog.NoteBurst($"accuracy report: the site answered 404; kept to send again ({Math.Min(queue.Count, MaxQueued)} waiting)");
+                    break;
+                default: Accuracy.Restore(report); break;   // a failure that may pass: back into the counters for the next report
+            }
         }
+        SaveQueue(queue);
+        return sent;
     }
 
     // ---- layout hints ----
