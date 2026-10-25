@@ -1980,7 +1980,8 @@ options: --process aion[,other]");
             }
             finally { Console.SetOut(keepOut); Update.RemoteConfig.Current = keepCfg; CrashLog.DirOverride = keepDir; }
             int same = on.Zip(gateOff).Count(p => p.First.Case == p.Second.Case && p.First.Status == p.Second.Status && p.First.Detail == p.Second.Detail);
-            Check("replay bank: every case passes through the gate", $"{on.Count(r => r.Status is "pass" or "skipped")}/{on.Count}", $"{on.Count}/{on.Count}");
+            var gateFails = on.Where(r => r.Status is not ("pass" or "skipped")).Select(r => $"{r.Case}: {r.Detail}").ToList();
+            Check("replay bank: every case passes through the gate", $"{on.Count(r => r.Status is "pass" or "skipped")}/{on.Count}" + (gateFails.Count > 0 ? " · " + string.Join(" | ", gateFails) : ""), $"{on.Count}/{on.Count}");
             Check("...and counts the same JSON with scene.gate off", $"{same}/{on.Count} identical", $"{on.Count}/{on.Count} identical");
         }
         return ok;
