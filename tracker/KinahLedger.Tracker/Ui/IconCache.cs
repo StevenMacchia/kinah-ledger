@@ -17,6 +17,10 @@ public sealed class IconSlot : INotifyPropertyChanged
         internal set { if (ReferenceEquals(_image, value)) return; _image = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Image))); }
     }
     public event PropertyChangedEventHandler? PropertyChanged;
+    /// <summary>A fetch is in flight for this slot.</summary>
+    internal bool Busy;
+    /// <summary>When the last fetch failed (default: never), so a lettered tile is tried again after a while rather than left for the next start.</summary>
+    internal DateTime FailedAt;
 }
 
 /// <summary>
@@ -27,8 +31,11 @@ public sealed class IconSlot : INotifyPropertyChanged
 public static class IconCache
 {
     static readonly Dictionary<string, IconSlot> Slots = new();
-    static readonly HashSet<string> Failed = new();
     static readonly List<Task> Pending = new();
+    /// <summary>How long a failed fetch (offline, a timeout while a table of new rows all asked at once) waits before the tile asks again.</summary>
+    public const double RetrySeconds = 60;
+    /// <summary>Fetches started, for the self-test.</summary>
+    internal static int Fetches;
     static readonly SemaphoreSlim Gate = new(2, 2);          // two downloads at a time; icons are decoration, not the job
     static readonly object Lock = new();
     static HttpClient? _http;
@@ -61,15 +68,19 @@ public static class IconCache
     {
         if (!Enabled || string.IsNullOrEmpty(url)) return None;
         _ui ??= Dispatcher.CurrentDispatcher;
-        IconSlot slot;
+        IconSlot slot; bool fetch;
         lock (Lock)
         {
-            if (Slots.TryGetValue(url, out var known)) return known;
-            Slots[url] = slot = new IconSlot();
-            if (Failed.Contains(url)) return slot;
+            if (!Slots.TryGetValue(url, out slot!)) Slots[url] = slot = new IconSlot();
+            // a tile still lettered asks again: at once when nothing is in flight and nothing failed, or RetrySeconds after
+            // a failure (2026-10-25: Expert's gear rows kept their letter all session after one failed download)
+            fetch = slot.Image == null && !slot.Busy && (slot.FailedAt == default || (DateTime.UtcNow - slot.FailedAt).TotalSeconds >= RetrySeconds);
+            if (fetch) { slot.Busy = true; Fetches++; }
         }
+        if (!fetch) return slot;
         var file = PathFor(url);
-        if (File.Exists(file)) { slot.Image = Load(file); return slot; }
+        // a cached file that won't load is deleted by Load and fetched afresh
+        if (File.Exists(file) && Load(file) is { } img) { slot.Image = img; slot.Busy = false; return slot; }
         var t = Task.Run(() => FetchAsync(url, file, slot));   // off the UI thread from the first await, so a render can wait on it
         lock (Lock) Pending.Add(t);
         return slot;
@@ -86,11 +97,12 @@ public static class IconCache
             var part = file + ".part";
             await File.WriteAllBytesAsync(part, bytes).ConfigureAwait(false);
             File.Move(part, file, overwrite: true);
-            var img = Load(file);
+            var img = Load(file) ?? throw new IOException("the icon won't load");
             // not awaited: a layout render waits for the fetch on the UI thread and applies the image when it next pumps
-            if (img != null && _ui != null) _ = _ui.InvokeAsync(() => slot.Image = img);
+            if (_ui != null) _ = _ui.InvokeAsync(() => { slot.Image = img; slot.FailedAt = default; slot.Busy = false; });
+            else { slot.FailedAt = default; slot.Busy = false; }
         }
-        catch (Exception) { lock (Lock) Failed.Add(url); }   // 404, offline, a bad file: the tile stays lettered, and it is tried again next start
+        catch (Exception) { slot.FailedAt = DateTime.UtcNow; slot.Busy = false; }   // 404, offline, a bad file: the tile stays lettered and asks again after RetrySeconds
         finally { Gate.Release(); }
     }
 

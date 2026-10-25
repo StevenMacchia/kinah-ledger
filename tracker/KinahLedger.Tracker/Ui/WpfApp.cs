@@ -223,6 +223,17 @@ public static class WpfApp
         w.ShowCompact(); DoEvents();
         Check(ReferenceEquals(w.Rows.ItemContainerGenerator.ContainerFromIndex(0), box0) && item0.Drops == was.Drops && w.Rows.Items.Count <= 3,
             "a redraw puts the count's words back on the same control");
+        // an icon whose download failed asks again after RetrySeconds, not at the next start (2026-10-25: Expert's gear rows lettered all session)
+        var badUrl = "http://127.0.0.1:9/no-such-icon-" + Guid.NewGuid().ToString("N") + ".png";
+        int fetchesBefore = IconCache.Fetches;
+        var slot = IconCache.Get(badUrl);
+        IconCache.Drain(TimeSpan.FromSeconds(15)); DoEvents();
+        Check(ReferenceEquals(IconCache.Get(badUrl), slot) && IconCache.Fetches == fetchesBefore + 1 && slot.Image == null && slot.FailedAt != default && !slot.Busy,
+            "a failed icon download is remembered and not asked again at once");
+        slot.FailedAt = DateTime.UtcNow.AddSeconds(-IconCache.RetrySeconds - 1);
+        IconCache.Get(badUrl); IconCache.Drain(TimeSpan.FromSeconds(15)); DoEvents();
+        Check(IconCache.Fetches == fetchesBefore + 2 && slot.Image == null, "...and asked again once the retry time has passed");
+
         // a drag pins the window's size until the drop, so the tick's layout can't stall the drag
         var sizing = w.SizeToContent;
         Check(w.OnSizeMove(MainWindow.WM_ENTERSIZEMOVE) && w.SizeToContent == SizeToContent.Manual, "a drag starting pins the size");
