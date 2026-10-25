@@ -82,6 +82,8 @@
     <EmbeddedResource Include="..\..\data\aliases.json" LogicalName="aliases.json" Condition="Exists('..\..\data\aliases.json')" />
     <!-- what NPCs charge for the "(Bound)" vendor materials recipes use, so a recipe gets a full cost with nothing typed -->
     <EmbeddedResource Include="..\..\data\vendor-prices.json" LogicalName="vendor-prices.json" Condition="Exists('..\..\data\vendor-prices.json')" />
+    <!-- the faction of gear that shares its icon with the other faction's twin (tools/data/gear-factions.js): built in only -->
+    <EmbeddedResource Include="..\..\data\gear-factions.json" LogicalName="gear-factions.json" />
     <!-- the name decoder's model files by URL and SHA-256 (Ocr/NameDecoder.cs); the files are fetched by tools/data/models.js, never built in -->
     <EmbeddedResource Include="..\..\data\models.json" LogicalName="models.json" />
     <!-- anchor templates for the layout (Ocr/Anchors.cs): NAME.png with NAME.json; the folder may be empty -->

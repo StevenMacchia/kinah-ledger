@@ -55,9 +55,10 @@ public static class EventShotRecovery
     /// Reads <paramref name="pictures"/> (full paths with the time each was taken) into a copy of <paramref name="run"/>.
     /// <paramref name="say"/> gets the title band of each picture, as the bank prints it.
     /// </summary>
-    public static async Task<Result> ReadAsync(InstanceRun run, IEnumerable<(string Path, DateTime T)> pictures, Settings settings, ItemDictionary items, Action<string>? say = null)
+    /// <paramref name="server"/> is the player's server label, so gear twins are settled by the faction as live (Data/GearFactions.cs).
+    public static async Task<Result> ReadAsync(InstanceRun run, IEnumerable<(string Path, DateTime T)> pictures, Settings settings, ItemDictionary items, Action<string>? say = null, string server = "")
     {
-        var session = new TrackerSession(null, settings, items, "Recovery");
+        var session = new TrackerSession(null, settings, items, "Recovery") { Server = server };
         var copy = run.Clone();
         // the copy starts as the run closed: no reward picture read, nothing from one
         copy.Items.Clear(); copy.BoundItems.Clear(); copy.Bound = 0; copy.FromPicture = false; copy.SlotsUnread = 0; copy.UnknownSlots.Clear(); copy.KinahNotRead = false;
@@ -72,6 +73,8 @@ public static class EventShotRecovery
             n++; last = t;
         }
         session.FlushEventCards(last.AddSeconds(5), "read again from its pictures", force: true);
+        // the chat's lines kept on the run, judged against this read as they were live (TableWitness)
+        session.TableWitnessDue(last.AddSeconds(5), force: true, kept: run.TableChat);
         var read = session.Instances.Release() ?? copy;
         var cards = session.LastEventCards ?? new();
         var slots = cards.Where(c => c.Received).SelectMany(c => c.Slots).ToList();
@@ -84,11 +87,11 @@ public static class EventShotRecovery
     }
 
     /// <summary>The same for a run's kept pictures in <paramref name="dir"/> (reward-shots by default), by their names' times.</summary>
-    public static Task<Result> ReadKeptAsync(InstanceRun run, Settings settings, ItemDictionary items, string? dir = null, Action<string>? say = null)
+    public static Task<Result> ReadKeptAsync(InstanceRun run, Settings settings, ItemDictionary items, string? dir = null, Action<string>? say = null, string server = "")
     {
         dir ??= ShotsDir;
         var names = run.Pictures.Count > 0 ? run.Pictures : PicturesFor(run, dir);
         var pics = names.Select(nm => (Path: Path.Combine(dir, nm), T: ShotTime(nm))).Where(p => p.T != null && File.Exists(p.Path)).Select(p => (p.Path, p.T!.Value));
-        return ReadAsync(run, pics, settings, items, say);
+        return ReadAsync(run, pics, settings, items, say, server);
     }
 }

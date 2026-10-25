@@ -850,6 +850,8 @@ options: --process aion[,other]");
             if (!settings.Upload.Enabled || string.IsNullOrWhiteSpace(settings.Upload.Endpoint)) { Console.Error.WriteLine("sharing is off in settings.json: nothing can be sent"); return 1; }
             if (!Update.RemoteConfig.Current.RunSync) Console.WriteLine("note: the site's config doesn't take runs on their own (run sync off); sending anyway");
         }
+        // the server the window keeps, for gear twins settled by the faction (Data/GearFactions.cs), whether or not this sends
+        var looked = server.Length > 0 ? server : UserPrefs.Load().Server;
         int read = 0, sent = 0;
         foreach (var run in runs)
         {
@@ -857,7 +859,7 @@ options: --process aion[,other]");
             Console.WriteLine($"\n{run.Label} {run.Start.ToLocalTime():yyyy-MM-dd HH:mm:ss}, {TimeSpan.FromSeconds(run.Seconds):m\\:ss}, ended \"{run.Ended}\"{(run.Unsent ? ", parked" : "")}: {names.Count} event-rewards picture(s) kept");
             if (run.Kind != "Event" || names.Count == 0) { Console.WriteLine("  no event-card pictures to read: left as it is"); continue; }
             Console.WriteLine("  " + string.Join(", ", names));
-            var res = EventShotRecovery.ReadKeptAsync(run, settings, items, shots, verbose ? Console.WriteLine : null).GetAwaiter().GetResult();
+            var res = EventShotRecovery.ReadKeptAsync(run, settings, items, shots, verbose ? Console.WriteLine : null, looked).GetAwaiter().GetResult();
             foreach (var (ci, rec, sl, more) in res.Cards)
                 Console.WriteLine($"  card {ci + 1}: " + (!rec ? "not received" : $"{sl.Count} slot(s){(more ? ", its list may run on" : "")}: " + string.Join(" | ", sl.Select(x => $"{TrackerSession.SlotName(items, x) ?? "?"} x{(x.Count > 0 ? x.Count.ToString() : "?")}"))));
             if (!res.Read) { Console.WriteLine($"  not read from {res.Pictures} picture(s): {(res.Cards.Count == 0 ? "no face-up card screen recognised" : "nothing filed")}"); continue; }
@@ -1264,6 +1266,7 @@ options: --process aion[,other]");
         ok &= Session.LiveFeedTests.Run(items, s);
         ok &= Session.AccuracyScoreTests.Run(items, s);
         ok &= Session.LabelWriterTests.Run(items, s);
+        ok &= Session.TableWitnessTests.Run(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }
