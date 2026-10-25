@@ -3338,6 +3338,14 @@ options: --process aion[,other]");
             var rows = se.MobSnapshot().OrderBy(m => m.Name).Select(m => $"{m.Name}: {m.Kills} kills {m.Kinah}");
             Check("Soul Points name the enemy killed", string.Join(" | ", rows), "Dracuni Herbalist: 2 kills 700 | Drakan Probe: 1 kills 486 | Eternal Kerubian: 1 kills 352");
             // the soul names a kind, not always the enemy (2026-10-22 15:00: "Fossa Soul Points" fighting Astin Mercenaries)
+            // Giant Sparkie and Sparkie (Steven, 2026-10-24 10:37 Aullaeu Forest): the closest name wins, never the first in the
+            // list, and a soul both could have goes to the bar's enemy, else is named as read, never folded into the one killed first
+            Check("target bar: the closest name, Giant kept apart",
+                $"{TargetReader.Match("Aullaeu Forest Giant Sparkle")} | {TargetReader.Match("Aullaeu Forest Sparkle")} | {TargetReader.Match("Aullaeu Forest Giant Sparkie")}",
+                "Aullaeu Forest Giant Sparkie | Aullaeu Forest Sparkie | Aullaeu Forest Giant Sparkie");
+            Check("a Sparkie soul: the bar's enemy, else as read, never the Sparkie killed first",
+                $"{TargetReader.EnemyForSoul("Sparkie", new[] { "Aullaeu Forest Giant Sparkie" }, new[] { "Aullaeu Forest Sparkie" })} | {TargetReader.EnemyForSoul("Sparkie", Array.Empty<string>(), new[] { "Aullaeu Forest Sparkie" })}",
+                "Aullaeu Forest Giant Sparkie | Sparkie");
             Check("a soul kind and who has it", $"{TargetReader.EnemyForSoul("Fossa", new[] { "Astin Mercenaries Fossa" })} | {TargetReader.EnemyForSoul("Fossa", Array.Empty<string>())} | {TargetReader.EnemyForSoul("Fossa", Array.Empty<string>(), new[] { "Patrolling Fossa" })}", "Astin Mercenaries Fossa | Fossa | Patrolling Fossa");
             {
                 // the nameplates: the enemy whose red bar goes as its loot lands is the one that died, whatever soul it gives
