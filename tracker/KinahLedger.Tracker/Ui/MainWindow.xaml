@@ -593,10 +593,13 @@
            place (Ui/MainWindow.RunsCard.cs, the approved mock of 2026-10-24): its runs and what they paid; the runs stay until cleared. -->
       <Border x:Name="EventsCard" Margin="0,16,0,0" Visibility="Collapsed">
         <StackPanel>
-          <Grid Margin="2,0,0,10">
+          <Grid Margin="2,0,0,14">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Text="Expeditions and events"/>
-            <TextBlock x:Name="InstWhat" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" TextTrimming="CharacterEllipsis"/>
+            <!-- the title with what the runs shown made under it: "20 runs · 14 counted · 7.46M made" (0.8.31, the mock) -->
+            <StackPanel VerticalAlignment="Bottom">
+              <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Text="Expeditions and events"/>
+              <TextBlock x:Name="InstWhat" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
               <!-- this session's runs by default, or with the ones kept on this PC from earlier (Steven, 2026-10-22); a switch
                    and a button, not small links (Steven, 2026-10-23: "more prevalent") -->
@@ -606,11 +609,9 @@
                   <Button x:Name="InstEarlierBtn" Style="{StaticResource SegOff}" Content="Earlier" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Every run kept on this PC, earlier ones too"/>
                 </StackPanel>
               </Border>
-              <Button x:Name="InstClearBtn" Content="Clear" Height="32" FontSize="12.5" Padding="14,0" Margin="10,0,0,0" VerticalAlignment="Center" ToolTip="Clear the runs shown here"/>
+              <Button x:Name="InstClearBtn" Content="Clear" Height="30" FontSize="12.5" Padding="10,0" Margin="6,0,0,0" VerticalAlignment="Center" Background="Transparent" BorderBrush="Transparent" Foreground="{DynamicResource Faint}" FontWeight="Normal" ToolTip="Clear the runs shown here"/>
             </StackPanel>
           </Grid>
-          <!-- the live card: the last run steps and reward lines beside the rate across runs (Ui/MainWindow.Live.cs) -->
-          <StackPanel x:Name="EventsLiveHost"/>
           <StackPanel x:Name="InstHost"/>
           <Border x:Name="InstEmpty" Style="{StaticResource CardStyle}" Padding="20,22,20,22">
             <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440"
