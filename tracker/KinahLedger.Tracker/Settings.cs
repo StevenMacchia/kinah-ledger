@@ -75,7 +75,7 @@ public sealed class UiSettings
     public bool Icons { get; set; } = true;
 }
 
-/// <summary>Updates: the tracker asks the site for the newest version at start and every few hours.</summary>
+/// <summary>Updates: the tracker asks for the newest version at start and every hour.</summary>
 public sealed class UpdateSettings
 {
     /// <summary>Off: the tracker never asks. On, the window's switch chooses between installing a new version on its own and asking first.</summary>

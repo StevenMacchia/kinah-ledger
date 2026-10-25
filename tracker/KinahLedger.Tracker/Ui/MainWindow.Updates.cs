@@ -5,13 +5,15 @@ using KinahLedger.Update;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Updates: a check 20 seconds after start and every six hours. With automatic updates on, a newer version downloads in
-/// the background and is installed when the window closes; Restart now installs it at once. Off, the banner asks first.
-/// A run is never cut short by an update: Restart now during a run stops and saves it first, after asking.
+/// Updates: a check 20 seconds after start and every hour (0.8.31; it was six hours). With automatic updates on, a newer
+/// version downloads in the background and is installed when the window closes; Restart now installs it at once. Off,
+/// the banner asks first. Either way a version found by the timed check also asks once, in a dialog, whether to install
+/// it now (AskToInstall). A run is never cut short by an update: the dialog waits for the run to stop, and Restart now
+/// during a run stops and saves it first, after asking.
 /// </summary>
 public partial class MainWindow
 {
-    static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(20), CheckEvery = TimeSpan.FromHours(6);
+    static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(20), CheckEvery = TimeSpan.FromHours(1), DataEvery = TimeSpan.FromHours(6);
     const string SiteDownloadPage = "https://kinahledger.com/#tracker";
     /// <summary>Always the newest installer: GitHub serves the latest release's asset at this one address.</summary>
     public const string LatestSetupUrl = "https://github.com/StevenMacchia/kinah-ledger/releases/latest/download/KinahLedger-Setup.exe";
@@ -29,7 +31,11 @@ public partial class MainWindow
     // installed (0.8+): Velopack finds, downloads (small deltas) and applies the update; a loose exe uses the swap above
     Velopack.UpdateInfo? _vInfo;
     bool _offeringInstall;
-    string _updateStatus = "Checks GitHub for a newer release at start and every few hours. Only the app version goes with the request.";
+    /// <summary>The version the install dialog has asked about this start: it asks once per version, so Later means later.</summary>
+    Version? _askedAbout;
+    /// <summary>The dialog is open, or a found version waits for the run to stop before it asks.</summary>
+    bool _asking, _askWhenFree;
+    string _updateStatus = "Checks GitHub for a newer release at start and every hour. Only the app version goes with the request.";
 
     /// <summary>The update line for Options › Updates.</summary>
     public string UpdateStatusText => _updateStatus;
@@ -114,21 +120,76 @@ public partial class MainWindow
         // what the last update left behind goes first, so it can't race a new download
         if (_exe != null) await Updater.CleanupAsync(_exe);
         await Task.Delay(FirstCheck);
+        var dataDue = DateTime.MinValue;
         while (true)
         {
-            try { await CheckForUpdate(manual: false); }
-            catch (Exception ex) { CrashLog.Write("update", ex); }
-            // the game data (zones, events, enemies, loot tables, skins…) between releases: see Data/DataFiles.cs
             try
             {
-                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-                http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
-                var got = await KinahLedger.Data.DataFiles.UpdateAsync(http);
-                if (got.Count > 0) SetUpdateStatus($"Game data updated ({string.Join(", ", got)}); in use from the next start.");
+                await CheckForUpdate(manual: false);
+                await AskToInstall();
             }
-            catch (Exception ex) { CrashLog.Note("data update: " + ex.Message); }
+            catch (Exception ex) { CrashLog.Write("update", ex); }
+            // the game data (zones, events, enemies, loot tables, skins…) between releases: see Data/DataFiles.cs. It
+            // keeps its six hours; only the version check went hourly
+            if (DateTime.UtcNow >= dataDue)
+            {
+                dataDue = DateTime.UtcNow + DataEvery;
+                try
+                {
+                    using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
+                    var got = await KinahLedger.Data.DataFiles.UpdateAsync(http);
+                    if (got.Count > 0) SetUpdateStatus($"Game data updated ({string.Join(", ", got)}); in use from the next start.");
+                }
+                catch (Exception ex) { CrashLog.Note("data update: " + ex.Message); }
+            }
             await Task.Delay(CheckEvery);
         }
+    }
+
+    /// <summary>
+    /// The install dialog (Steven, 2026-10-25: check every hour and ask whether to install). A version the timed check
+    /// found, and that the staged rollout lets install here, asks once per start: Yes downloads it if it isn't yet and
+    /// restarts into it, No leaves the banner (with automatic updates on it still installs when the tracker closes).
+    /// It never asks during a run: it waits for the run to stop (AskWhenFree, from the window's tick). No is the default
+    /// button, so Enter or Space meant for the game can't restart the tracker. Check now in Options never asks: its own
+    /// Restart now is right there.
+    /// </summary>
+    async Task AskToInstall()
+    {
+        var r = _release;
+        if (r == null || _asking || _askedAbout == r.Version || _downloading || _updateNeedsSite || _updateError != null || _offeringInstall) return;
+        if (_quitting || _restartForUpdate) return;
+        if (Farming || _welcome) { _askWhenFree = true; return; }
+        _askWhenFree = false; _askedAbout = r.Version; _asking = true;
+        try
+        {
+            var v = Updater.Show(r.Version);
+            bool ready = _staged != null;
+            var text = $"Kinah Ledger {v} is available (you have {Updater.Show(Updater.Current)}).\n\n" +
+                       "Install it now? The tracker closes and opens again on the new version. Your settings and history are kept.\n\n" +
+                       (ready ? "No leaves it for later: it installs by itself the next time the tracker closes."
+                              : "No leaves it for later: Update on the banner installs it whenever you like.");
+            const string title = "Kinah Ledger update";
+            // in the tray or minimized there is no window to sit on (a dialog owned by a minimized window stays hidden with
+            // it): the dialog stands on its own then, with its own taskbar button
+            var answer = IsVisible && WindowState != WindowState.Minimized
+                ? MessageBox.Show(this, text, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)
+                : MessageBox.Show(text, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+            CrashLog.Note($"update {v}: install dialog answered {(answer == MessageBoxResult.Yes ? "yes" : "later")}");
+            if (answer != MessageBoxResult.Yes || !ReferenceEquals(_release, r)) return;
+            if (_staged == null) await FetchUpdate(r);
+            if (_staged != null && ReferenceEquals(_release, r)) await RestartForUpdate();
+        }
+        finally { _asking = false; }
+    }
+
+    /// <summary>From the window's tick: a found version that waited for a run asks once the run has stopped.</summary>
+    void AskWhenFree()
+    {
+        if (!_askWhenFree || _asking || Farming || _welcome || _quitting) return;
+        _askWhenFree = false;
+        _ = AskToInstall();
     }
 
     /// <summary>The automatic-install choice changed in Options: a found version starts downloading at once when it was turned on.</summary>
@@ -173,7 +234,7 @@ public partial class MainWindow
         }
         var r = await Updater.CheckAsync(_settings.Update.Manifest);
         var at = DateTime.Now.ToString("t");
-        if (!r.Ok) { if (_release == null) SetUpdateStatus($"Couldn't check for updates at {at}: {r.Note}. It tries again in a few hours."); return; }
+        if (!r.Ok) { if (_release == null) SetUpdateStatus($"Couldn't check for updates at {at}: {r.Note}. It tries again in an hour."); return; }
         if (r.Newer == null) { if (_release == null) SetUpdateStatus($"{r.Note} Checked at {at}."); return; }
         if (_release == null && !RolloutAllows(r.Newer.Version, manual)) return;
         if (_release != null && r.Newer.Version == _release.Version && _updateError == null) { ShowUpdate(); return; }
@@ -255,6 +316,7 @@ public partial class MainWindow
     /// <summary>Restart now: a run in progress is stopped and saved first (after asking), then the window closes and the new version starts.</summary>
     async Task RestartForUpdate()
     {
+        _askedAbout = _release?.Version;   // the banner's Restart now answers the dialog's question: it never asks on top of it
         if (Farming)
         {
             var answer = MessageBox.Show(this, "Restart now to install the update?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual.",
