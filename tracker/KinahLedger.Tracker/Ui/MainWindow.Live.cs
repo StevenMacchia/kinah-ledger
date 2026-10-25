@@ -369,7 +369,10 @@ public partial class MainWindow
 
     /* ---------------- Session and Where to farm now ---------------- */
 
-    /// <summary>Session, opened: Kinah, loot after the Market's cut, your best hour here, and what players at your gear make here.</summary>
+    /// <summary>
+    /// Session, opened: Kinah, loot after the Market's cut, and what players at your gear make here. Your best hour here is
+    /// said once, under the hour on the live card (2026-10-25: it was here too, "1.40M" twice on one screen).
+    /// </summary>
     void FillSessionRows(long kinah, long loot, int priced, string? zone)
     {
         SessionRows.Children.Clear();
@@ -386,8 +389,6 @@ public partial class MainWindow
         }
         if (kinah > 0 || _mode != Mode.Gather) Row("Kinah picked up", Fk(kinah), true);
         if (priced > 0) Row($"Loot, after the Market's {1 - PriceBook.SellerKeeps:P0}", Fk(loot), true);
-        var best = _demo ? new BestRuns.Best(1_400_000, 48, "2026-10-19") : BestRuns.For(Server?.Label ?? "", zone);
-        if (best != null) Row("Your best here, an hour", Fk(best.PerHr));
         if (PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v) Row(h.AtGear ? "Players at your gear, an hour" : "Players here, an hour", Fk(v));
     }
 

@@ -22,7 +22,7 @@ public static class HudFields
         new("time", "Timer", "", "How long you've farmed here"),
         new("rate", "Total per hour", "/ hr", "Kinah plus loot after tax: the window's big number"),
         new("kinah", "Kinah per hour", "Kinah / hr", "Kinah picked up, per hour"),
-        new("loot", "Loot per hour", "loot / hr", "What the hour's loot sells for, after tax"),
+        new("loot", "Loot per hour", "loot / hr", "What the hour's loot sells for, after tax; hidden when it is the whole hour, as in gathering"),
         new("total", "Session total", "total", "Kinah plus loot after tax, so far"),
         new("best", "Your best here", "best here", "Your best hour in this zone"),
         new("last", "Last pickup", "", "The last thing picked up"),
@@ -132,8 +132,8 @@ public sealed class HudWindow : Window
     static readonly Brush AccGood = Frozen(Color.FromRgb(0x62, 0xD9, 0x8B)), AccCheck = Frozen(Color.FromRgb(0xF2, 0xA3, 0x5E));
 
     /// <summary>
-    /// The accuracy line under the figures ("✓ 98% verified", "? 2 to check"), as the window's Accuracy card works it
-    /// out; null hides it (not enough counted yet).
+    /// The accuracy line under the figures ("✓ Nothing looked wrong", "2 to look at"), as the window's Accuracy chip
+    /// works it out; null hides it (nothing to look at and not enough checked yet). Orange with things to look at.
     /// </summary>
     public void SetAccuracy(string? text, bool toCheck)
     {
@@ -240,7 +240,10 @@ public sealed class HudWindow : Window
         cell.Tag = dot;
     }
 
-    /// <summary>The figures by key (HudFields), as the window worked them out; a missing one is left blank.</summary>
+    /// <summary>
+    /// The figures by key (HudFields), as the window worked them out. A missing one hides with its label (2026-10-25: a
+    /// blank loot left "loot / hr" standing alone), and the first one showing sits at the panel's edge.
+    /// </summary>
     public void Update(IReadOnlyDictionary<string, string> values)
     {
         if (_feedLine != null)
@@ -257,6 +260,15 @@ public sealed class HudWindow : Window
             _feedSep!.Visibility = V("feedRate").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         foreach (var (key, cell) in _cells)
+        {
             cell.Text = values.TryGetValue(key, out var v) && v.Length > 0 ? v : "";
+            if (cell.Parent is FrameworkElement box) box.Visibility = cell.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        bool first = true;
+        foreach (FrameworkElement c in _row.Children)
+        {
+            if (c.Visibility != Visibility.Visible) continue;
+            c.Margin = new Thickness(first ? 0 : 20, 0, 0, 0); first = false;
+        }
     }
 }

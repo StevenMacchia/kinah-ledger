@@ -19,12 +19,20 @@ namespace KinahLedger.Session;
 ///    showed the row the list counted), a gathering bar finished on Success for the row, a rare drop's second read
 ///    confirmed it, or it is a slot read off a reward picture and named. A pickup whose count no read showed (count
 ///    assumed 1) is never verified, whatever else saw it.
-/// 3. The <b>verified share</b> is verified over judged, rounded down to a whole percent (98.6% shows 98%, so 100% means
-///    every single one). Under <see cref="MinEvents"/> judged events it is "not enough counted yet".
-/// 4. <b>Things to check</b>: every Kina line the counter refused, every loot list row no chat line confirmed, every
+/// 3. <b>What the player sees</b> (2026-10-25, Steven: "VERIFIED % BEING LOW COULD CHURN USERS FAST"): of the pickups a
+///    second source could check, how many matched. <b>Checked</b> = matched + contradicted; <b>matched</b> = the verified
+///    events of rule 2 but the reward slots (a slot read off its picture has no second source); <b>contradicted</b> = a
+///    Kina line the counter refused, a loot list row no chat line confirmed.
+///    A pickup only one source saw (the chat with the counter quiet, a crafted item, a reward slot read off its picture,
+///    a count assumed 1) is <b>not checked</b>, never counted against. The share (matched over checked, rounded down, so
+///    100% means every single one) shows only when something was contradicted; otherwise the card says "Nothing looked
+///    wrong" or "Checked by the game: all 412 matched". On 2026-10-24 at 19:08 and 19:34 the old share below read 20% and
+///    28% while Steven crafted in town with nothing contradicted: every one-source pickup counted against it.
+/// 4. <b>Things to look at</b>: every Kina line the counter refused, every loot list row no chat line confirmed, every
 ///    pickup whose count was assumed 1, and every run whose reward picture was read only in part or not at all. "Fine"
 ///    takes one off the list for this session; the share doesn't change (it is what the game's numbers say).
-/// 5. <b>Status</b>: Verified at 95% or more with nothing left to check; Mostly verified at 80% or more; Check these under 80%.
+/// 5. <b>The old verified share</b>, verified over judged with every judged event in it (one-source pickups and reward
+///    slots too), is kept for the audit line only, so logs before and after compare; the window never shows it.
 /// 6. Informational, never in the share: loot list rows that went before their text settled (unsure rows), lines that
 ///    were not rows (a nameplate, a title), Kina lines counted while the counter couldn't judge them (it fell or went
 ///    quiet), the name decoder's agree / disagree / other, the counter reconciliation and the median counting delay.
@@ -39,10 +47,11 @@ namespace KinahLedger.Session;
 /// </summary>
 public sealed class AccuracyScore
 {
-    /// <summary>Judged events before the session's share is shown.</summary>
+    /// <summary>Checked pickups before a share is shown, and before the panel over the game says anything but things to look at.</summary>
     public const int MinEvents = 10;
     /// <summary>Judged events before a run's status can be anything but "unconfirmed".</summary>
     public const int MinRunEvents = 5;
+    /// <summary>The run status's thresholds (<see cref="ForRun"/>, the site's own rule too); the session's card no longer has a status.</summary>
     public const double VerifiedAt = 0.95, MostlyAt = 0.80;
     /// <summary>A counter rise larger than this in one stretch is a sale, mail or a claim, not loot: left out of the reconciliation.</summary>
     public const long SaleRise = 20_000;
@@ -53,7 +62,6 @@ public sealed class AccuracyScore
     const int MaxEntries = 20_000, MaxChecks = 500;
 
     public enum Why { Refused, NoChatLine, CountAssumed, PartlyRead, NotRead }
-    public enum State { NotEnough, Verified, MostlyVerified, CheckThese }
 
     /// <summary>The short reason, as the model and the logs name it.</summary>
     public static string Short(Why w) => w switch
@@ -73,14 +81,6 @@ public sealed class AccuracyScore
         Why.CountAssumed => "Its count never showed, so 1 was counted.",
         Why.PartlyRead => "Some reward slots weren't read.",
         _ => "Its rewards weren't read. The pictures are kept.",
-    };
-
-    public static string Word(State s) => s switch
-    {
-        State.Verified => "Verified",
-        State.MostlyVerified => "Mostly verified",
-        State.CheckThese => "Check these",
-        _ => "",
     };
 
     /// <summary>
@@ -270,8 +270,12 @@ public sealed class AccuracyScore
     }
 
     /// <summary>Everything the card and the payload show, at one moment.</summary>
+    /// <param name="Matched">Pickups a second source agreed with (rule 3).</param>
+    /// <param name="Contradicted">Pickups a second source said no to: Kina lines the counter refused, loot list rows no chat line confirmed.</param>
+    /// <param name="NotChecked">Counted pickups and reward slots only one source saw: never counted against.</param>
     public sealed record Summary(
         int Judged, int Verified,
+        int Matched, int Contradicted, int NotChecked,
         int KinaCounted, int KinaConfirmed, int KinaRefused, int KinaUnjudged, int KinaNoCounter, bool CounterRead,
         int RowsConfirmed, int RowsNoChat, int RowsUnsure, int NotRows,
         int RunsFull, int RunsPartly, int RunsNotRead, int SlotsRead, int SlotsUnread,
@@ -281,15 +285,22 @@ public sealed class AccuracyScore
         long DecodeAgree, long DecodeDisagree, long DecodeOther,
         Reconciliation? Counter, double? MedianDelaySeconds, IReadOnlyList<Check> ToCheck)
     {
-        /// <summary>Verified over judged, 0 to 1; null with nothing judged.</summary>
-        public double? Share => Judged > 0 ? (double)Verified / Judged : null;
+        /// <summary>Pickups a second source could check: matched plus contradicted.</summary>
+        public int Checked => Matched + Contradicted;
+        /// <summary>Matched over checked, 0 to 1; null with nothing checked.</summary>
+        public double? MatchShare => Checked > 0 ? (double)Matched / Checked : null;
         /// <summary>The share as shown: a whole percent, rounded down (only every single one is 100%).</summary>
+        public int MatchPercent => MatchShare is double s ? (int)Math.Floor(s * 100 + 1e-9) : 0;
+        /// <summary>A percentage is shown only when something was contradicted, and only once enough was checked to mean something.</summary>
+        public bool ShowsPercent => Contradicted > 0 && Checked >= MinEvents;
+        /// <summary>Enough checked for the panel over the game and the Discord card to say so.</summary>
+        public bool EnoughChecked => Checked >= MinEvents;
+
+        /// <summary>The old verified share (rule 5): verified over judged, 0 to 1; null with nothing judged. For the audit line only.</summary>
+        public double? Share => Judged > 0 ? (double)Verified / Judged : null;
+        /// <summary>The old share as a whole percent, rounded down. For the audit line only.</summary>
         public int Percent => Share is double s ? (int)Math.Floor(s * 100 + 1e-9) : 0;
         public bool Enough => Judged >= MinEvents;
-        public State State => !Enough ? State.NotEnough
-            : Share >= VerifiedAt && ToCheck.Count == 0 ? State.Verified
-            : Share >= MostlyAt ? State.MostlyVerified : State.CheckThese;
-        public string Word => AccuracyScore.Word(State);
     }
 
     /// <summary>
@@ -305,11 +316,14 @@ public sealed class AccuracyScore
             var rl = (runs ?? Enumerable.Empty<InstanceRun>()).ToList();
             var (slotsRead, slotsUnread) = Slots(rl);
             int judged = _counted.Count + _setAside.Count + slotsRead + slotsUnread;
-            int verified = _counted.Count(e => e.Verified) + slotsRead;
+            int matched = _counted.Count(e => e.Verified);
+            int verified = matched + slotsRead;
             var kina = _counted.Where(e => e.Kina).ToList();
             var open = _checks.Where(c => !_fine.Contains(c.Id)).ToList();
             var sh = shadows ?? new();
-            return new Summary(judged, verified,
+            // not checked: counted with no second source's word on it, and reward slots read off their picture (a slot
+            // not read isn't counted, so it isn't here: its run is on the list)
+            return new Summary(judged, verified, matched, _setAside.Count, _counted.Count - matched + slotsRead,
                 kina.Count, kina.Count(e => e.ByCounter), _setAside.Count(s => s.Why == Why.Refused), kina.Count(e => e.Unjudged), kina.Count(e => !e.CounterLive),
                 kina.Any(e => e.CounterLive) || _setAside.Any(s => s.Why == Why.Refused),
                 _counted.Count(e => e.RowJudged), _setAside.Count(s => s.Row), rowsUnsure, notRows,
@@ -402,21 +416,32 @@ public sealed class AccuracyScore
             else if (test >= VerifiedAt && !r.PartlyRead && unsure == 0) status = "verified";
             else if ((r.PartlyRead || unsure > 0) && test >= MostlyAt) status = "partly";
             else status = "unconfirmed";
+            // the player's measure (rule 3), added beside the fields above, whose meaning stays: the site can show matched
+            // over checked and leave not_checked out of any share
+            int matched = c.Count(e => e.Verified);
             return new RunAccuracy(status, kinaShare, rowShare, unsure, r.SlotsUnread, r.PartlyRead, med is double m ? (int)Math.Round(m * 1000) : null,
-                Upload.RunPayload.AppVersion, note.Length > 0 ? note : null);
+                Upload.RunPayload.AppVersion, @checked: matched + aside.Count, matched: matched, not_checked: c.Count - matched + slotsRead, note: note.Length > 0 ? note : null);
         }
     }
 
     static double Round(double v) => Math.Round(v, 3);
 
-    /// <summary>The audit line's clause: "verified 98%" (or "verified: not enough counted yet").</summary>
+    /// <summary>
+    /// The audit line's clause: what the player sees ("checked 412, matched 410 (99%), 2 to look at, 37 not checked"),
+    /// then the old share for comparison with older logs ("old verified share 20%", or "not enough counted yet").
+    /// </summary>
     public static string AuditClause(Summary s) =>
-        !s.Enough ? $"verified: not enough counted yet ({s.Judged})" : $"verified {s.Percent}%" + (s.ToCheck.Count > 0 ? $", {s.ToCheck.Count} to check" : "");
+        $"checked {s.Checked}, matched {s.Matched}" + (s.Contradicted > 0 && s.Checked > 0 ? $" ({s.MatchPercent}%)" : "")
+        + $", {s.ToCheck.Count} to look at, {s.NotChecked} not checked · old verified share "
+        + (s.Enough ? $"{s.Percent}%" : $"not enough counted yet ({s.Judged})");
 }
 
 /// <summary>
 /// One run's accuracy as the site gets it (InstanceRunPayload.acc, since 2026-10-24; absent on older trackers and on runs
-/// with nothing judged). See <see cref="AccuracyScore.ForRun"/> for each field's rule.
+/// with nothing judged). See <see cref="AccuracyScore.ForRun"/> for each field's rule. Since 2026-10-25 also
+/// <c>checked</c>, <c>matched</c> and <c>not_checked</c>, the player's measure (AccuracyScore rule 3): pickups a second
+/// source could check, those that matched, and those only one source saw. The fields before them keep their meaning;
+/// the site's accBlock drops fields it doesn't know, so older sites are unaffected.
 /// </summary>
 public sealed record RunAccuracy(
     string status,
@@ -427,4 +452,7 @@ public sealed record RunAccuracy(
     bool partly_read,
     int? delay_ms,
     string ver,
+    int @checked = 0,
+    int matched = 0,
+    int not_checked = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? note = null);

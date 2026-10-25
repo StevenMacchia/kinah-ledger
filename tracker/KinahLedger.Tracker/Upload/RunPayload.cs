@@ -205,7 +205,8 @@ public sealed record MobRun(string name, string zone, int kills, long kinah, Dic
 /// <c>notes</c> (what each piece of unknown gear may be, "Legend gear, one of Elder Gloves / Relic Collector Gloves");
 /// each left out when empty. Since the accuracy card (2026-10-24): <c>acc</c>, the run's accuracy from the game's own
 /// numbers (<see cref="RunAccuracy"/>: status, kina_confirmed, rows_confirmed, unsure, not_read, partly_read, delay_ms,
-/// ver, and note when it applies), left out when nothing in the run was judged.
+/// ver, since 2026-10-25 checked, matched and not_checked, and note when it applies), left out when nothing in the run
+/// was judged.
 /// </summary>
 public sealed record InstanceRunPayload(string zone, string kind, int seconds, long kinah, int kills, Dictionary<string, int> items,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? @event = null,
