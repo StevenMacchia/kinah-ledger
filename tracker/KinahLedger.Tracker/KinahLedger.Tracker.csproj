@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.8.38</Version>
+    <Version>0.8.39</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
