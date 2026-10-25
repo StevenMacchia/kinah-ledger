@@ -1,0 +1,63 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Hidden Lugi (Shugo Festival) reward cards, 2026-10-24 18:06:41 to 18:06:48 local, with the chat behind the screen read once it closed (18:06:54 to 18:07:40) and the server Siel (Elyos). Live, the run was filed with 13 pieces of unknown gear, all Elyos/Asmodian twins on one icon, and Soul Codex (Bound) 43 (every other run 3; the chat said x3). These saved pictures read 11 of the pieces (the live reader read more frames than it kept): each settles as the Elyos one, and the chat names two of them, Forgotten Helm and Ethereal Boots, as those. They read the three Soul Codex books as x1 each, so the chat's x3 agrees and nothing is set not read (the 43 itself is in TableWitnessTests, from the run's record). Everything but the title and the cards blacked out",
+  "source": "%LocalAppData%/KinahLedger/reward-shots/20261024-180641 to -180648-Hidden-Lugi-event-rewards.jpg (5120x2160; the face-down shots 180637 and 180639 and the closed-screen 180651 left out), trace.log 22:05:50 to 22:07:45 UTC for the chat (the game's own lines kept, players' lines replaced by a filler keyed by their text's hash, players' names in the \"found\" lines replaced by stand-ins), the zone as recorded, and instances.jsonl's record of the run (22:02:12 UTC)",
+  "game": {
+    "w": 5120,
+    "h": 2160
+  },
+  "server": "Siel (Elyos)",
+  "trace": "before.jsonl",
+  "after": "after.jsonl",
+  "frames": [
+    {
+      "f": "180641.jpg",
+      "k": "cards",
+      "t": "2026-10-24T22:06:41Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "180642.jpg",
+      "k": "cards",
+      "t": "2026-10-24T22:06:42Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "180645.jpg",
+      "k": "cards",
+      "t": "2026-10-24T22:06:45Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "180647.jpg",
+      "k": "cards",
+      "t": "2026-10-24T22:06:47Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "180648.jpg",
+      "k": "cards",
+      "t": "2026-10-24T22:06:48Z",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "expect": {
+    "runs_kept": 1,
+    "runs_partly_read": 1,
+    "run_gear": 11,
+    "run_unknown_gear": 0,
+    "run_not_read": 5,
+    "run_items": {
+      "Soul Codex (Bound)": 3,
+      "Forgotten Helm": 2,
+      "Ethereal Boots": 1,
+      "Rainy Forest Orb": 2
+    }
+  }
+}

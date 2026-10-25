@@ -1,0 +1,57 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "The pictures of event-2026-10-24-hidden-lugi-1306 read with the server Siel (Elyos): its 11 pieces of gear whose icon the other faction shares are the Elyos ones (Data/GearFactions.cs), the rest as there. The chat after the screen named two of them, both the Elyos one: Elder Greaves, Forgotten Gloves (trace.log 17:06 UTC)",
+  "source": "the pictures of event-2026-10-24-hidden-lugi-1306 (the same files, not copied)",
+  "game": {
+    "w": 5120,
+    "h": 2160
+  },
+  "server": "Siel (Elyos)",
+  "zone": "Hidden Lugi",
+  "frames": [
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1306/130655.jpg",
+      "k": "cards",
+      "t": "2026-10-24T17:06:55Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1306/130657.jpg",
+      "k": "cards",
+      "t": "2026-10-24T17:06:57Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1306/130659.jpg",
+      "k": "cards",
+      "t": "2026-10-24T17:06:59Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1306/130700.jpg",
+      "k": "cards",
+      "t": "2026-10-24T17:07:00Z",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "expect": {
+    "runs": {
+      "Shugo Festival": 5498
+    },
+    "runs_kept": 1,
+    "run_gear": 11,
+    "run_unknown_gear": 0,
+    "run_not_read": 2,
+    "run_pieces": 18,
+    "run_items": {
+      "Elder Greaves": 1,
+      "Forgotten Gloves": 1,
+      "Riverside Pauldrons": 2
+    }
+  }
+}

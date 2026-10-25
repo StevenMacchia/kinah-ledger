@@ -77,6 +77,11 @@ public sealed class InstanceRun
     public int UnknownItems { get; set; }
     /// <summary>What the unknown gear could be, one line a piece ("Legend gear, one of Elder Gloves / Relic Collector Gloves").</summary>
     public List<string> GearNotes { get; set; } = new();
+    /// <summary>
+    /// The chat's item lines in the seconds around its reward picture, as they were judged against it (Session/TableWitness.cs,
+    /// since 2026-10-25): what a read again of its saved pictures judges again. Kept on this PC, never sent.
+    /// </summary>
+    public List<TableWitness.Line> TableChat { get; set; } = new();
     /// <summary>Slots on the reward picture it was filed from (a read again from the pictures replaces it only when it reads more).</summary>
     public int PictureSlots { get; set; }
     /// <summary>
@@ -933,6 +938,61 @@ public sealed class InstanceLog
             if (unknownGear != null) { _cur.UnknownGear += unknownGear.Count; _cur.GearNotes.AddRange(unknownGear); }
             if (partly) _cur.PartlyRead = true;
             CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, out of the averages)" : "")}; the chat's {chatItems} set aside");
+        }
+    }
+
+    /// <summary>
+    /// What the chat decided about a reward picture's slots a few seconds after it was filed (TableWitness.Judge), onto the
+    /// run it was filed into: the open run, or that run just closed while it still waits to be sent (written again in
+    /// instances.jsonl). A run already sent is left as it was, so the site and this PC keep the same copy. The lines judged
+    /// are kept on the run. False when no such run was found.
+    /// </summary>
+    public bool AmendTable(DateTime runStart, string what, IReadOnlyList<TableWitness.Decision> decisions, IReadOnlyList<TableWitness.Line> chat)
+    {
+        lock (_lock)
+        {
+            var r = _cur is { } c && c.Start == runStart ? c : _done.LastOrDefault(x => x.Start == runStart);
+            if (r == null) return false;
+            bool closed = !ReferenceEquals(r, _cur);
+            if (closed && !_unshared.Contains(r) && !_parked.Contains(r))
+            {
+                if (decisions.Count > 0) CrashLog.Note($"{r.Label}: the chat's {decisions.Count} decision(s) on its reward picture came after the run was sent; left as it was");
+                return false;
+            }
+            r.TableChat = chat.ToList();
+            foreach (var d in decisions)
+            {
+                var into = d.Bound ? r.BoundItems : r.Items;
+                switch (d.Kind)
+                {
+                    case TableWitness.Settle:
+                        int gi = r.GearNotes.FindIndex(n => n == d.Slot.Note);
+                        if (gi < 0 || r.UnknownGear <= 0) continue;
+                        r.GearNotes.RemoveAt(gi); r.UnknownGear--;
+                        into[d.ItemId] = into.GetValueOrDefault(d.ItemId) + 1;
+                        if (d.Bound) r.Bound++;
+                        break;
+                    case TableWitness.Unsettle:
+                        if (into.GetValueOrDefault(d.ItemId) < 1) continue;
+                        if ((into[d.ItemId] -= 1) == 0) into.Remove(d.ItemId);
+                        if (d.Bound) r.Bound--;
+                        r.UnknownGear++;
+                        r.GearNotes.Add($"{d.Slot.Grade} gear, one of {string.Join(" / ", d.Slot.Twins.Take(3))}{(d.Slot.Twins.Count > 3 ? " …" : "")}");
+                        break;
+                    case TableWitness.Unread:
+                        if (into.GetValueOrDefault(d.ItemId) < d.Slot.Count) continue;
+                        if ((into[d.ItemId] -= d.Slot.Count) == 0) into.Remove(d.ItemId);
+                        if (d.Bound) r.Bound -= d.Slot.Count;
+                        r.SlotsUnread++; r.UnknownItems++;
+                        r.UnknownSlots.Add($"{d.Slot.Note} · {d.Name}, the chat said otherwise");
+                        // an event's cards with a place not read are a partly read run, as ApplyGrid files them
+                        if (what == "event cards") r.PartlyRead = true;
+                        break;
+                }
+            }
+            if (decisions.Count > 0) CrashLog.Note($"{r.Label}: the chat's lines beside its reward picture: {decisions.Count(d => d.Kind == TableWitness.Settle)} piece(s) of gear named, {decisions.Count(d => d.Kind == TableWitness.Unsettle)} back to unknown gear, {decisions.Count(d => d.Kind == TableWitness.Unread)} slot(s) not read; now {PiecesNote(r)}");
+            if (closed) RewriteLocked(r);
+            return true;
         }
     }
 

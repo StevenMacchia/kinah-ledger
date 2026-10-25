@@ -1,0 +1,51 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "The pictures of event-2026-10-24-hidden-lugi-1006 read with the server Siel (Elyos): its 12 pieces of gear whose icon the other faction shares (Order Longsword / Discipline Longsword, Rainy Forest Cloak / Tempest Cloak, ...) are the Elyos ones (Data/GearFactions.cs), the rest as there. The chat after the screen named five of them, each the Elyos one: Rainy Forest Cloak, Riverside Boots, Forgotten Pauldrons, Ethereal Pauldrons, Elder Cloak (trace.old.log 14:06 UTC)",
+  "source": "the pictures of event-2026-10-24-hidden-lugi-1006 (the same files, not copied)",
+  "game": {
+    "w": 5120,
+    "h": 2160
+  },
+  "server": "Siel (Elyos)",
+  "zone": "Hidden Lugi",
+  "frames": [
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1006/100643.jpg",
+      "k": "cards",
+      "t": "2026-10-24T14:06:43Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1006/100645.jpg",
+      "k": "cards",
+      "t": "2026-10-24T14:06:45Z",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "f": "../event-2026-10-24-hidden-lugi-1006/100647.jpg",
+      "k": "cards",
+      "t": "2026-10-24T14:06:47Z",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "expect": {
+    "runs": {
+      "Shugo Festival": 5681
+    },
+    "runs_kept": 1,
+    "run_gear": 12,
+    "run_unknown_gear": 0,
+    "run_pieces": 17,
+    "run_items": {
+      "Rainy Forest Cloak": 1,
+      "Riverside Boots": 1,
+      "Forgotten Pauldrons": 1,
+      "Ethereal Pauldrons": 1,
+      "Elder Cloak": 1
+    }
+  }
+}

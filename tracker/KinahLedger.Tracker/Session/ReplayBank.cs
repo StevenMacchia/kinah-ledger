@@ -97,6 +97,12 @@ public static class ReplayBank
         foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow", "runs_kept", "runs_from_picture", "run_kinah", "run_gear", "run_materials",
                                     "runs_partly_read", "runs_sent", "run_not_read", "run_pieces", "run_unknown_gear", "run_unknown_items", "run_abyss_points", "run_kinah_set_aside" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
+        // a run's items by name: each one expect names must match (the others aren't checked)
+        if (expect["run_items"] is JsonObject eri)
+        {
+            var gri = got["run_items"] as JsonObject ?? new JsonObject();
+            foreach (var (n, v) in eri) if (N(gri[n]) != N(v)) d.Add($"run item {n}: expected {v}, counted {gri[n]?.ToString() ?? "0"}");
+        }
         if (expect["run_start"] is { } rstart && rstart.ToString() != (got["run_start"]?.ToString() ?? "")) d.Add($"run_start: expected {rstart}, counted {got["run_start"]?.ToString() ?? "none"}");
         if (expect["run_starts"] is { } rstarts && rstarts.ToString() != (got["run_starts"]?.ToString() ?? "")) d.Add($"run_starts: expected {rstarts}, counted {got["run_starts"]?.ToString() ?? "none"}");
         if (expect["runs"] is JsonObject er)
@@ -222,16 +228,18 @@ public static class ReplayBank
 
     static JsonObject RunCaseIn(string caseDir, JsonObject node, Settings settings, ItemDictionary items, Rectangle game)
     {
-        var session = new TrackerSession(null, settings, items, "Replay") { FastChat = _fastChat };
+        // "server": the player's server label, for gear twins settled by the faction (Data/GearFactions.cs)
+        var session = new TrackerSession(null, settings, items, "Replay") { FastChat = _fastChat, Server = node["server"]?.GetValue<string>() ?? "" };
         var panel = new CraftPanelTracker();
         int ok = 0, fail = 0;
         JsonArray? table = null;
         bool cards = false; JsonArray? res0Cards = null;
         DateTime last = DateTime.UtcNow;
-        // a text case: the reads as trace.log keeps them (chat lines, loot list rows), and the zone as the minimap read it
-        if (node["trace"]?.GetValue<string>() is { } traceFile)
+        // a text case: the reads as trace.log keeps them (chat lines, loot list rows), and the zone as the minimap read it;
+        // "after" holds the reads that come once an event's pictures are filed (the chat behind its reward screen)
+        void FeedTrace(string file)
         {
-            foreach (var raw in File.ReadLines(Path.Combine(caseDir, traceFile)))
+            foreach (var raw in File.ReadLines(Path.Combine(caseDir, file)))
             {
                 if (raw.Trim().Length == 0) continue;
                 using var d = JsonDocument.Parse(raw);
@@ -282,8 +290,14 @@ public static class ReplayBank
                     // a trusted reading of the Kinah counter (the watcher's BalanceTracker, as live): the Kina witness's evidence
                     case "balance": if (ls.FirstOrDefault() is { } bv && long.TryParse(bv, out var bal)) session.CheckBalance(bal, t); break;
                 }
+                // a reward picture filed a few seconds before is judged against the chat once its lines are in, as every live pass does
+                session.TableWitnessDue(t);
                 last = t;
             }
+        }
+        if (node["trace"]?.GetValue<string>() is { } traceFile)
+        {
+            FeedTrace(traceFile);
             session.FlushVotes(last);
             // chat gathers still waiting for a race are settled (GatherAttempts)
             session.GatherTick(last.AddSeconds(10));
@@ -380,6 +394,9 @@ public static class ReplayBank
             }
             res0Cards = outCards;
         }
+        if (node["after"]?.GetValue<string>() is { } afterFile) { FeedTrace(afterFile); session.FlushVotes(last); }
+        // a picture still waiting for its chat is judged on what came
+        session.TableWitnessDue(last.AddSeconds(TableWitness.MaxSeconds), force: true);
         // rows still waiting for a chat line that never comes are settled the way a live run settles them: later reads
         foreach (var dt in new[] { 2.0, 5.0, 9.0 }) session.ProcessList(new List<(int, string)>(), last.AddSeconds(dt));
         ChatLatencies.AddRange(session.Voter.Latencies); ChatFast += session.Voter.Fast;
@@ -434,6 +451,12 @@ public static class ReplayBank
             res["run_unknown_gear"] = kept.Sum(r => r.UnknownGear);
             res["run_unknown_items"] = kept.Sum(r => r.UnknownItems);
             res["run_abyss_points"] = kept.Sum(r => r.Currencies(Cur).Where(kv => items.NameOf(kv.Key).StartsWith("Abyss Points", StringComparison.OrdinalIgnoreCase)).Sum(kv => kv.Value));
+            // the runs' items by name, bound and tradeable together (expect names only the ones it checks), and the gear notes
+            var runItems = new JsonObject();
+            foreach (var g in kept.SelectMany(r => r.Items.Concat(r.BoundItems)).GroupBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal))
+                runItems[g.Key] = g.Sum(kv => kv.Value);
+            res["run_items"] = runItems;
+            res["run_gear_notes"] = string.Join(" | ", kept.SelectMany(r => r.GearNotes));
         }
         return res;
     }

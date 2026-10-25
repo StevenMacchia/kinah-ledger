@@ -66,3 +66,9 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   as recorded (game lines only), tables rebuilt from the runs' records where reads.log was wiped. Run keys `run_starts`
   (every kept run's start, UTC) and `run_kinah_set_aside` (chat Kina set aside from picture runs). The first and second
   fail without these rules (runs from 14:12:55, 609,000 and 605,000; the 17:11 run kept and parked).
+- `event-*-elyos` and `event-2026-10-24-hidden-lugi-1806` (2026-10-25, `Session/TableWitness.cs`): a case may name the
+  player's `server` ("Siel (Elyos)"), so gear twins on one icon are settled by the faction (`Data/GearFactions.cs`), and an
+  `after` trace: reads fed once the pictures are filed (an event's chat is hidden behind its reward screen and is read
+  when it closes), with the chat judged against the picture as live. Frames may name a picture in another case's folder
+  (`../event-2026-10-24-hidden-lugi-1602/160642.jpg`). Run keys: `run_items` (the runs' items by name, bound and
+  tradeable together; only the names expect lists are checked) and `run_gear_notes`.

@@ -773,6 +773,8 @@ public sealed partial class TrackerSession
                 }
                 if (!Update.RemoteConfig.Current.Off("zone")) await ZoneDueAsync();
                 UpdateDoing(DateTime.UtcNow);
+                // a reward picture filed a few seconds ago, judged once its chat lines are in
+                TableWitnessDue(DateTime.UtcNow);
             }
             catch (System.ComponentModel.Win32Exception)
             {
@@ -1079,6 +1081,8 @@ public sealed partial class TrackerSession
     {
         // counted where it belongs, and stamped with where that was (the activity: a run, farming, a reward screen)
         Feed(ev, Count(ev));
+        // a line in the seconds around a reward picture is its second witness (TrackerSession.Witness.cs)
+        WitnessChat(ev);
         // crafting is fed by the crafting panel's races alone (CraftPanelDue), never by a pickup or a chat line
         if (ev is KinahChanged { Bound: false } kc) Interlocked.Add(ref _kinahPicked, kc.Delta);
         else if (ev is KinahChanged { Bound: true, Delta: > 0 } kb)
@@ -1875,6 +1879,10 @@ public sealed partial class TrackerSession
         // a second table in a run that was paid already is the next run's; one sooner than another run could end is no run's
         if (!Instances.TableStarting(now)) return;
         _byIcon ??= _items.AllWithIcons().Where(i => i.Icon.Length > 0).GroupBy(i => IconIndex.KeyOf(i.Icon)).ToDictionary(x => x.Key, x => x.ToList());
+        // the chat's lines of the last seconds, before any is matched to a slot below, and each slot as filed: the chat is
+        // judged against them once its lines are in (TrackerSession.Witness.cs)
+        var chatBefore = WitnessChatBefore(now);
+        var witness = new List<TableWitness.Slot>();
         int added = 0, known = 0, unnamed = 0;
         var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
         // a close call is settled by the table's own sets, or by what this expedition gave in runs before (GradedPick)
@@ -1946,6 +1954,18 @@ public sealed partial class TrackerSession
             if (!sure) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a {sl.Grade} slot x{sl.CountText} matches no item surely (closest {best.Key}, {best.Distance:0}); not counted"); continue; }
             // the bound and tradeable copies of an item are the same item
             var names = graded.Select(i => Unbound(i.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            // gear whose icon the other faction's twin shares (Forgotten Helm / Shade Helm, one picture): the player's faction
+            // says which, when the list knows the faction of every name (Data/GearFactions.cs; 2026-10-24: 31 of the 35
+            // pieces of unknown gear, and the chat named the Elyos one every time). The chat's lines are judged against it after
+            var twins = names;
+            if (names.Count > 1 && graded.All(i => _items.IsGear(i.Id)) && FactionTwin(names) is { } mine)
+            {
+                CrashLog.Note($"{what}: a {sl.Grade} slot is one of {string.Join(" / ", names)}: {mine}, the {Faction} one (server {Server})");
+                graded = graded.Where(i => string.Equals(Unbound(i.Name), mine, StringComparison.OrdinalIgnoreCase)).ToList();
+                names = new List<string> { mine };
+            }
+            bool slotGear = graded.Count > 0 && graded.All(i => _items.IsGear(i.Id));
+            string slotNote = $"{sl.Grade} x{(sl.Count > 0 ? sl.Count.ToString() : "?")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}";
             // the gold coin is Kinah, not an item (600.0K on the Urugugu table): the run's Kinah, bound when the list says so
             if (names.Count == 1 && string.Equals(names[0], "Kina", StringComparison.OrdinalIgnoreCase))
             {
@@ -1963,14 +1983,21 @@ public sealed partial class TrackerSession
             int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
             bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
             var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
-            // every slot ends counted or not read: a chat line can't decide between the names a picture leaves open
-            if (seen >= 0 && names.Count == 1) { _runPickups.RemoveAt(seen); known++; fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" }); continue; }
+            // every slot ends counted or not read: here a chat line doesn't decide between the names a picture leaves open;
+            // the chat's lines of those seconds are judged together once they are all in (TableWitness), one line one piece
+            if (seen >= 0 && names.Count == 1)
+            {
+                _runPickups.RemoveAt(seen); known++; fromGrid.Add(new ItemAcquired(now, gridItem.Id, count, boundSlot) { Via = "reward table" });
+                witness.Add(new TableWitness.Slot(witness.Count, sl.Grade, names[0], count, gridItem.Id, boundSlot, slotGear, twins, slotNote));
+                continue;
+            }
             // gear whose icon two items share (Elder Gloves / Relic Collector Gloves): a piece of gear all the same, counted as
             // one piece of unknown gear with what it may be, never dropped (Steven, 2026-10-24)
             if (names.Count != 1 && graded.All(i => _items.IsGear(i.Id)))
             {
                 var maybe = $"{sl.Grade} gear, one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}";
                 gearNotes.Add(maybe);
+                witness.Add(new TableWitness.Slot(witness.Count, sl.Grade, "", 1, 0, false, true, names, maybe, TwinIds(graded)));
                 CrashLog.Note($"{what}: a {sl.Grade} slot is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}: counted as one piece of unknown gear");
                 continue;
             }
@@ -1979,6 +2006,7 @@ public sealed partial class TrackerSession
             Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
             Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" }, RunWhere());
             fromGrid.Add(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" });
+            witness.Add(new TableWitness.Slot(witness.Count, sl.Grade, names[0], count, item.Id, boundSlot, slotGear, twins, slotNote));
             added++;
         }
         // the run is counted from the picture alone (Steven: expeditions, dungeons and events come from the reward pictures,
@@ -1992,6 +2020,7 @@ public sealed partial class TrackerSession
         bool cards = what == "event cards", partly = cards && unnamed > 0;
         bool kinahFlag = !cards && (kinahHidden || kinahUnread || (bigUnread && !fromGrid.OfType<KinahChanged>().Any()));
         if (slots.Count > 0) Instances.RewardTable(now, fromGrid, unnamed, notRead, kinahFlag, unknownItems, gearNotes, partly, cards ? slots.Count : 0);
+        if (slots.Count > 0) WitnessFiled(now, what, witness, chatBefore);
         CrashLog.Note($"{what} read: {slots.Count} slots, {known} already counted from the chat, {added} added to the run, {gearNotes.Count} unknown gear, {unnamed} not named{(partly ? $": partly read, {unnamed} slot(s) not read" : "")}");
     }
 
@@ -3419,6 +3448,7 @@ public sealed partial class TrackerSession
         if (_loop != null) { try { await _loop; } catch (Exception) { /* loop ended */ } }
         FlushVotes();   // lines still waiting for their vote count as read, before the run closes
         CommitHeld();   // and a rare pickup still waiting for its second read
+        TableWitnessDue(DateTime.UtcNow, force: true);   // and a reward picture waiting for its chat, on what came
         lock (_chatShotLock) { _chatShot?.Dispose(); _chatShot = null; }
         Instances.Close();
         Engine.Finish();
@@ -3573,7 +3603,7 @@ public sealed partial class TrackerSession
                 {
                     // no pictures: a partly read run goes up as it was read; one not read is parked below
                     if (pics.Count == 0) { if (!r.KinahUnknown) Instances.Requeue(r); continue; }
-                    var res = await EventShotRecovery.ReadKeptAsync(r, s, _items);
+                    var res = await EventShotRecovery.ReadKeptAsync(r, s, _items, server: Server);
                     if (!res.Read) { CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: read again from {pics.Count} kept picture(s), still not read"); if (!r.KinahUnknown) Instances.Requeue(r); continue; }
                     // a partly read run: the pictures' read replaces the live one only when it reads more slots (or the same with fewer not read)
                     if (TakeReread(r, res.Run))
