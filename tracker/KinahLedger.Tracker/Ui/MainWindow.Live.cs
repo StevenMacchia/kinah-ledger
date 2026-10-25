@@ -273,16 +273,23 @@ public partial class MainWindow
         return PriceBook.Price(l.Name) is long p ? (FeedK(p * l.Amount), false) : ("", true);
     }
 
-    /// <summary>A craft's worth for the feed: what it made at the lowest Market price after the Market's cut, less what the try cost; a failed one, minus the try (grey). Blank when a price is missing.</summary>
+    /// <summary>
+    /// A craft's worth for the feed: what it made at the lowest Market price after the Market's cut, less what the try cost;
+    /// a failed one, minus the try (grey). With a material that has no price yet the cost is only a floor, so the worth is a
+    /// ceiling, "≤ +38K" in grey, as the This session table says it (Steven, 2026-10-25: the newest Fine Hard Balaur Horn
+    /// line was blank while the table showed "≤ +269K"). Blank only when what came out, or every material, has no price.
+    /// </summary>
     (string Text, bool Muted) CraftValue(FeedLine l)
     {
         if (l.Name.Length < 2) return ("", true);
         var cost = RecipeBook.CostPerTry(l.Name, out int unpriced, out int vendor, out _, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-        if (cost == null || unpriced + vendor > 0) return ("", true);
-        if (!l.Ok) return (FeedK(-cost.Value), true);
+        if (cost == null) return ("", true);
+        bool floor = unpriced + vendor > 0;
+        if (!l.Ok) return ((floor ? "≤ " : "") + FeedK(-cost.Value), true);
         int makes = CraftMakes(l.Name) ?? 1;
         if (PriceBook.Price(l.Name) is not long p) return ("", true);
-        return (FeedK(p * makes * PriceBook.SellerKeeps - cost.Value), false);
+        var worth = FeedK(p * makes * PriceBook.SellerKeeps - cost.Value);
+        return floor ? ("≤ " + worth, true) : (worth, false);
     }
 
     /* ---------------- the Farming live card ---------------- */
