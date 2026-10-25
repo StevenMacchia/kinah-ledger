@@ -1215,7 +1215,17 @@ public partial class MainWindow : Window
     static string Pct(double p) => p >= 1 ? p.ToString("0.0") + "×" : p >= .1 ? (p * 100).ToString("0") + "%" : p >= .01 ? (p * 100).ToString("0.0") + "%" : (p * 100).ToString("0.00") + "%";
     static string Rate(double v) => v >= 100 ? v.ToString("0") : v >= 10 ? v.ToString("0.0") : v.ToString("0.00");
     /// <summary>A figure: "4.26M", "641K", "7.5K", "474", "7.5"; exactly nothing is "0" (the HUD said "0.00 Kinah / hr", the Events feed "paid 0.00").</summary>
-    static string Fk(double v) => v == 0 ? "0" : Math.Abs(v) >= 1e6 ? $"{v / 1e6:0.00}M" : Math.Abs(v) >= 1e4 ? $"{v / 1e3:0}K" : Math.Abs(v) >= 1e3 ? $"{v / 1e3:0.0}K" : v >= 100 ? $"{v:0}" : v >= 10 ? $"{v:0.0}" : $"{v:0.00}";
+    /// A whole number under 1,000 has no decimals ("47", "-500"; they read "47.0" and "-500.00"); a rate like 7.5 an hour keeps them.
+    static string Fk(double v)
+    {
+        double a = Math.Abs(v);
+        if (v == 0) return "0";
+        if (a >= 1e6) return $"{v / 1e6:0.00}M";
+        if (a >= 1e4) return $"{v / 1e3:0}K";
+        if (a >= 1e3) return $"{v / 1e3:0.0}K";
+        if (a >= 100 || v == Math.Round(v)) return $"{v:0}";
+        return a >= 10 ? $"{v:0.0}" : $"{v:0.00}";
+    }
 
     /// <summary>A new frame for the Options window's preview; null clears it (the chat area changed).</summary>
     void SetPreview(System.Drawing.Bitmap? bmp)

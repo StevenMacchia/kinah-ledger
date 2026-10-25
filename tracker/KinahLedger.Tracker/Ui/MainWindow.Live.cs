@@ -256,11 +256,11 @@ public partial class MainWindow
         };
     }
 
-    /// <summary>A feed figure: "+431", "+7.5K", "+17.6K", "+604K", "+1.27M".</summary>
+    /// <summary>A feed figure in the window's one format (Fk): "+431", "+7.5K", "+18K", "+604K", "+1.27M". It said "+17.6K" where the tables said "18K".</summary>
     static string FeedK(double v)
     {
         double a = Math.Abs(v);
-        var s = a < 1000 ? $"{a:N0}" : a < 100_000 ? $"{a / 1e3:0.0}K" : a < 1_000_000 ? $"{a / 1e3:0}K" : $"{a / 1e6:0.00}M";
+        var s = a < 1000 ? $"{a:N0}" : Fk(a);
         return (v < 0 ? "−" : "+") + s;
     }
 

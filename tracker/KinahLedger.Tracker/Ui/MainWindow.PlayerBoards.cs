@@ -137,7 +137,7 @@ public partial class MainWindow
         var bits = new List<string>();
         if (c.Makes > 1) bits.Add($"makes ×{c.Makes}");
         bits.Add($"costs {Fk(cost ?? c.Cost)}" + (vendorUnpriced > 0 ? $" + {vendorUnpriced} vendor item{(vendorUnpriced == 1 ? "" : "s")}" : ""));
-        bits.Add($"sells {(oq?.Price ?? c.Price):N0}{(c.Makes > 1 ? " each" : "")}");
+        bits.Add($"sells {Fk(oq?.Price ?? c.Price)}{(c.Makes > 1 ? " each" : "")}");   // one format on the line (it read "costs 18K · sells 9,999")
         if (farmed > 0) bits.Add($"{farmed} farmed");
         var sub = new TextBlock { Text = string.Join(" · ", bits), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
         sub.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
