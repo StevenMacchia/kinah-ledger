@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Kukuru, 2026-10-25 11:33:20 to 11:35:39 local (Steven: \"kukuru x3 was read as kukuru x1\"): skins unlocked and items stored at 11:33:41 to :51, then two Kukuru gathers, \"Acquired Kukuru x3.\" at 11:34:09 and 11:34:22, each with its loot list row, then two kills and an Orichalcum gather with its bar race. The chat shows exactly two Kukuru lines in every read to the end. Main 4aeb6ce (0.8.33) counted 4: the first gather was filed as \"the inventory at work\" (the storage lines were still under 20 s old) and never counted, and at 11:34:31 a read that lined up one line off took the second Kukuru line, read cut as \"Acquired Kukuru\", for a third pickup, matched no counted copy at count 1 and counted it as \"quantity unsure, 1 assumed\" (its gather attempt named by that line alone). Right: 6 Kukuru from two gathers, 1 Orichalcum Ore. The cut line is the second line read again: a line whose count was lost is a copy of the item at any count (ItemRepeatGuard), and the gathering panel's own gather is never the inventory's (NotForGather)",
+  "source": "Steven's trace.log 2026-10-25 15:33:20 to 15:35:39.3 UTC (11:33:20 to 11:35:39 local, tracker 0.8.33): chat kept only for the game's own lines (pickups, Kina, soul crystals, skins, storage and Quick Register, extraction, the monster names over the chat, numbers and fragments), every player's line and its wrapped words replaced by a filler keyed by its text's hash; list reads as recorded (rows, y, c, b, s, h, x). From reads.log: the nameplates (\"fighting:\"), the target bar's node reads (Kukuru at 11:33:54.4, Ore at 11:35:29.8, Oftchadcum at 11:35:31.5) and the gathering bar's Success race for the Orichalcum gather (attempt at 11:35:34.7); the Kukuru gathers' races were not seen live and are not added",
+  "expect": {
+    "items": {
+      "Kukuru": 6,
+      "Orichalcum Ore": 1
+    }
+  }
+}
