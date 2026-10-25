@@ -17,6 +17,15 @@ public sealed class LootBook
     readonly Dictionary<string, List<Entry>> _tables = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, List<string>> _sourcesByItem = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Items that are never a kill drop, whatever a table says (2026-10-25). Enhance Stone comes from expedition reward
+    /// screens; MetaBot.GG lists it at 18% on 14 open-world enemies (Cemetery Mutated Sura, Hungry Dead, Rafflesia and the
+    /// like). Left in, it would let a chat drop be credited to a nearby enemy and keep "check this" quiet on a stone no enemy
+    /// dropped. Dropped at load time so data/loot-tables.json stays as fetched and the next fetch can't bring them back.
+    /// </summary>
+    static readonly HashSet<string> NeverKillDrop = new(StringComparer.OrdinalIgnoreCase) { "Enhance Stone" };
+    // declared before Current: static initializers run in order, and LoadEmbedded reads this set
+
     /// <summary>The tables built into the exe; empty when the file wasn't there at build time.</summary>
     public static LootBook Current { get; set; } = LoadEmbedded();
 
@@ -56,7 +65,7 @@ public sealed class LootBook
             foreach (var d in drops.EnumerateArray())
             {
                 var item = d.TryGetProperty("item", out var i) && i.ValueKind == JsonValueKind.String ? i.GetString() ?? "" : "";
-                if (item.Length < 2) continue;
+                if (item.Length < 2 || NeverKillDrop.Contains(item.Trim())) continue;
                 long? id = d.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number && idEl.TryGetInt64(out var v) && v > 0 ? v : null;
                 double? chance = d.TryGetProperty("chance", out var c) && c.ValueKind == JsonValueKind.Number ? Math.Clamp(c.GetDouble(), 0, 1) : null;
                 list.Add(new Entry(item.Trim(), id, chance));

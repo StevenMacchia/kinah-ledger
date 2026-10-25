@@ -3876,6 +3876,10 @@ options: --process aion[,other]");
             le.Apply(new ItemAcquired(l0.AddSeconds(30), items.IdOf("Raw Leather"), 1, false));   // only the rock is near: nobody can have dropped it
             Check("a drop no enemy near can drop is a drop, credited to nobody", $"{le.UnplacedDrops} unplaced, Kalgolem [{Got("Hard Kalgolem")}], {le.Items.Values.Sum()} drops", "1 unplaced, Kalgolem [Lesser Abyssal Manastone], 4 drops");
             LootBook.Current = keep;
+            // Enhance Stone is never a kill drop (it comes from expedition reward screens), though MetaBot lists it at 18% on 14 open-world tables
+            Check("Enhance Stone is never a kill drop: not in the built-in table, CanDrop is not true",
+                $"{keep.CanDrop("Cemetery Mutated Sura", "Enhance Stone", 0)?.ToString() ?? "unknown"}, in table {keep.TableOf("Cemetery Mutated Sura").Any(x => x.Item == "Enhance Stone")}, sources {keep.SourcesOf("Enhance Stone").Count}",
+                "False, in table False, sources 0");
             // the tables built into the exe (data/loot-tables.json, every enemy on mobs.txt tried, 2026-10-21)
             Check("loot tables built in", keep.Knows("Highland Karnif") ? $"Highland Karnif: Raw Leather {keep.CanDrop("Highland Karnif", "Raw Leather")}, listed {keep.Find("Highland Karnif", "Raw Leather")?.Chance:0.####}" : "no (data/loot-tables.json missing)", "Highland Karnif: Raw Leather True, listed 0.0389");
         }
