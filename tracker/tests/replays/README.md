@@ -59,3 +59,9 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   two identical Riverside Pauldrons lines are two pickups, the same screen read again is one (repeats by place).
 - `text-2026-10-24-chat-repeat-gather-1559`: the reads of `text-2026-10-24-gather-kukuru-orichalcum-1559` with its items
   checked too: Kukuru 1 and Orichalcum Ore 3, where the chat counted 2 and 4 before the repeat guard (`ItemRepeatGuard`).
+- `event-*-elyos` and `event-2026-10-24-hidden-lugi-1806` (2026-10-25, `Session/TableWitness.cs`): a case may name the
+  player's `server` ("Siel (Elyos)"), so gear twins on one icon are settled by the faction (`Data/GearFactions.cs`), and an
+  `after` trace: reads fed once the pictures are filed (an event's chat is hidden behind its reward screen and is read
+  when it closes), with the chat judged against the picture as live. Frames may name a picture in another case's folder
+  (`../event-2026-10-24-hidden-lugi-1602/160642.jpg`). Run keys: `run_items` (the runs' items by name, bound and
+  tradeable together; only the names expect lists are checked) and `run_gear_notes`.
