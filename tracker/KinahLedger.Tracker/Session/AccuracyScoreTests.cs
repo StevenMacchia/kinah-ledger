@@ -156,7 +156,7 @@ public static class AccuracyScoreTests
                 "status,kina_confirmed,rows_confirmed,unsure,not_read,partly_read,delay_ms,ver,checked,matched,not_checked");
             Check("...values: 20 of 21 Kina, one unsure, partly", $"{exp.Acc!.status} {exp.Acc.kina_confirmed} {exp.Acc.rows_confirmed?.ToString() ?? "null"} {exp.Acc.unsure} {exp.Acc.not_read} {exp.Acc.partly_read} {exp.Acc.delay_ms} {exp.Acc.ver == RunPayload.AppVersion}",
                 "partly 0.952 null 1 0 False 1200 True");
-            Check("...the player's measure beside them: 21 checked, 20 matched", $"{exp.Acc.@checked} {exp.Acc.matched} {exp.Acc.not_checked}", "21 20 0");
+            Check("...the player's measure beside them: 21 checked, 20 matched, its reward slot not checked", $"{exp.Acc.@checked} {exp.Acc.matched} {exp.Acc.not_checked}", "21 20 1");
             var halfQuiet = Kina(10, t0.AddMinutes(40));
             for (int i = 0; i < 10; i++) halfQuiet.Counted(t0.AddMinutes(40).AddSeconds(60 + i * 5), $"{700 + i:N0} Kinah", true, "k:" + (700 + i), "unjudged", true);
             var hq = halfQuiet.ForRun(new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = t0.AddMinutes(40), LastLoot = t0.AddMinutes(42) })!;
