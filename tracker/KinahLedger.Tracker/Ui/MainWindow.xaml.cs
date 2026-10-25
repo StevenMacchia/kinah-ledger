@@ -293,24 +293,6 @@ public partial class MainWindow : Window
         catch (Exception ex) { CrashLog.Write("miscount report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); }
     }
 
-    /// <summary>
-    /// The accuracy meter: the count against the game's own numbers, for the whole time the tracker has been reading.
-    /// Shown once there is something to compare; orange when a check is more than a tenth off.
-    /// </summary>
-    void ShowAccuracy()
-    {
-        var c = _watcher.Chat;
-        if (c == null || _demo) { AccuracyLine.Visibility = Visibility.Collapsed; return; }
-        var parts = new List<string>(); bool off = false;
-        var bc = c.BalanceCheck; int checks = bc.Agreed + bc.PickupMisses;
-        if (checks > 0) { parts.Add($"Kinah counter agrees {bc.Agreed} of {checks}"); off |= bc.Agreed < checks * 0.9; }
-        if (c.QuestKillsGame > 0) { parts.Add($"quest kills {c.QuestKillsGame}, counted {c.QuestKillsCounted}"); off |= Math.Abs(c.QuestKillsCounted - c.QuestKillsGame) > Math.Max(1, c.QuestKillsGame * 0.1); }
-        if (c.CrossCheck.Added > 0) parts.Add($"loot list caught {c.CrossCheck.Added} the chat missed");
-        AccuracyLine.Text = parts.Count > 0 ? "Accuracy · " + string.Join(" · ", parts) : "";
-        AccuracyLine.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, off ? "Warn" : "Faint");
-        AccuracyLine.Visibility = parts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
     void Redraw()
     {
         var e = Shown();
@@ -639,16 +621,20 @@ public partial class MainWindow : Window
         var bySkillGrade = new Dictionary<string, string>();
         var worth = new Dictionary<string, string>();
         var worthN = new Dictionary<string, long>();
+        var keptN = new Dictionary<string, long>();
         foreach (var r in e.ItemRows())
         {
             int total = r.Count + r.Bound;
-            // a row's value is its tradeable copies at the lowest Market price, before the fee; bound copies can't be sold.
-            // A missing price is a blank cell, said once in the section line ("6 have no price yet")
+            // a row's value is its tradeable copies at the lowest Market price, after the Market's cut, so the rows add up to
+            // the Session's "Loot, after the Market's 12%" (2026-10-25: they were before it; the CI render's Thick hide read
+            // 45,100, which is 39,688 after the cut). Worth stays before the cut: Top drops and the Discord card rank by it,
+            // and the card says "at the lowest Market ask". Bound copies can't be sold. A missing price is a blank cell,
+            // said once in the section line ("6 have no price yet")
             string rowValue = "";
             if (r.Count > 0)
             {
                 var price = PriceBook.Price(r.Name);
-                if (price != null) { long g0 = price.Value * r.Count; gross += g0; value += (long)Math.Round(g0 * PriceBook.SellerKeeps); priced++; rowValue = Short(g0); worthN[r.Name] = g0; } else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
+                if (price != null) { long g0 = price.Value * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; rowValue = Short(kept); worthN[r.Name] = g0; keptN[r.Name] = kept; } else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
             }
             worth[r.Name] = rowValue;
             var g = GatheringCatalog.Find(r.Name);
@@ -709,7 +695,8 @@ public partial class MainWindow : Window
             int ok = st.Nodes - st.Failed;
             // the skill, its attempts and the hour's pace; failed and plentiful gathers on hover
             // the skill gets its own box (attempts, failed, plentiful, the pace); its items list under Gathered with the rest
-            skills.Add(new SkillBox(GatherSkills.Label(skill), st.Nodes, st.Failed, ok > 0 ? st.Plentiful : 0, st.Nodes / hours, (items ?? new()).Sum(x => worthN.GetValueOrDefault(x.name))));
+            // the skill's worth after the Market's cut, like the rows under it
+            skills.Add(new SkillBox(GatherSkills.Label(skill), st.Nodes, st.Failed, ok > 0 ? st.Plentiful : 0, st.Nodes / hours, (items ?? new()).Sum(x => keptN.GetValueOrDefault(x.name))));
             foreach (var (name, total) in (items ?? new()).OrderByDescending(x => x.total))
             {
                 bool rep = ReportedDrops.Has(name);
@@ -874,18 +861,21 @@ public partial class MainWindow : Window
         Summary.Text = string.Join(" · ", new[] { idle, skipped.TrimStart(' ', '·') }.Where(x => x.Length > 0));
         Summary.Visibility = Summary.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // Session, folded to one line: what was counted and the total; opened, how it splits and how it compares
-        // only what happened: a gathering stretch doesn't say "0 kills · 0 drops"
-        FootTotalNote.Text = string.Join(" · ", new[]
+        // Session, folded to one line: the total and what it is, "SESSION so far, after the Market's cut 894K" (2026-10-25:
+        // the line was "161 kills · 112 drops · 7 gathered" beside an unlabelled 894,009, the page's only N0 figure);
+        // opened, how it splits, and what was counted under it. Only what happened: gathering doesn't say "0 kills"
+        var counted = string.Join(" · ", new[]
         {
             t.Kills > 0 ? $"{t.Kills} kill{(t.Kills == 1 ? "" : "s")}" : "", s.DropCount > 0 ? $"{s.DropCount} drop{(s.DropCount == 1 ? "" : "s")}" : "",
             s.GatherCount > 0 ? $"{s.GatherCount} gathered" : "",
         }.Where(x => x.Length > 0));
+        FootTotalNote.Text = "so far, after the Market's cut";
         _hasSummary = e.Events > 0;
         SummaryCard.Visibility = _hasSummary && _part == "Farming" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
         ShareCardBtn.IsEnabled = totalNow > 0;
-        FootTotal.Text = totalNow.ToString("N0");
-        SumBreakdown.Text = s.Unpriced > 0 ? $"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add nothing." : "";
+        FootTotal.Text = Fk(totalNow);
+        FootTotal.ToolTip = $"Kinah picked up plus loot at the lowest Market price, after the Market's {1 - PriceBook.SellerKeeps:P0}: {totalNow:N0}.";
+        SumBreakdown.Text = string.Join("\n", new[] { counted, s.Unpriced > 0 ? $"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add nothing." : "" }.Where(x => x.Length > 0));
         SumBreakdown.Visibility = SumBreakdown.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         SumBreakdown.ToolTip = $"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.\n"
             + (s.Priced > 0 ? $"Loot at the lowest Market price: {s.Gross:N0}.\nMarket fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}.\n" : "")
@@ -897,13 +887,16 @@ public partial class MainWindow : Window
         // the player's best hour in this zone (the panel's "best"); this stay's own rate is the zone view's, whatever the window shows
         ShowBest(e);
         FillWhere(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone);
-        ShowAccuracy();
 
-        // the panel over the game shows these same figures
+        // the panel over the game shows these same figures: its rate is the window's big number (gathering leaves Kinah out
+        // of it, as FillRate does), and loot an hour shows only when the rate has Kinah in it too. 2026-10-25: gathering
+        // showed "779K / hr" and "779K loot / hr" side by side, the same figure twice
+        long rateTotal = (_mode == Mode.Gather ? 0 : kinah) + s.Value;
+        bool rateHasKinah = _mode != Mode.Gather && kinah > 0;
         _hudValues["time"] = Clock(elapsed);
-        _hudValues["rate"] = totalNow > 0 ? Fk(totalNow / h) : "";
+        _hudValues["rate"] = rateTotal > 0 ? Fk(rateTotal / h) : "";
         _hudValues["kinah"] = Fk(kinah / h);
-        _hudValues["loot"] = s.Priced > 0 ? Fk(s.Value / h) : "";
+        _hudValues["loot"] = s.Priced > 0 && rateHasKinah ? Fk(s.Value / h) : "";
         _hudValues["total"] = Fk(totalNow);
         _shareCard = new CardNumbers(e.Zone, ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : "Open world"), elapsed, totalNow, totalNow > 0 ? totalNow / h : 0,
             // the Discord card keeps its own three figures and labels, whatever the window's stats show

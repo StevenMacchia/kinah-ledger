@@ -3,16 +3,23 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// What the Accuracy card, the panel's line and the Discord card say, from the session's <see cref="AccuracyScore.Summary"/>.
-/// No WPF here, so parse-test checks the words. Steven's copy rules: plain words, the title is the name, one secondary
-/// line of 14 words or fewer, nothing that reads like a log.
+/// What the Accuracy chip, the Accuracy card, the panel's line and the Discord card say, from the session's
+/// <see cref="AccuracyScore.Summary"/>. No WPF here, so parse-test checks the words. Steven's copy rules: plain words, the
+/// title is the name, one secondary line of 14 words or fewer, nothing that reads like a log. Since 2026-10-25 the measure
+/// is "of what a second source could check, how much matched" (AccuracyScore rule 3): a pickup one source saw is "not
+/// checked", never bad, and a percentage shows only when something was contradicted (Steven: "VERIFIED % BEING LOW COULD
+/// CHURN USERS FAST").
 /// </summary>
+/// <param name="Chip">The Farming page's one chip: "✓ Nothing looked wrong", "2 to look at", "✓ All looked at".</param>
+/// <param name="Line">The card's first line: "Checked by the game: all 412 matched", "… 410 of 412 matched (99%)".</param>
+/// <param name="Counts">The card's four counts, in order: checked, matched, to look at, not checked.</param>
 public sealed record AccuracyCardView(
-    string Line, string Secondary, string Status, string Tone, string? Hud, string? Discord, string Detail, IReadOnlyList<AccuracyCardView.Row> Rows)
+    string Chip, string Tone, string Line, string? Hud, string? Discord, string Detail,
+    IReadOnlyList<(string Label, int Count, string Sub)> Counts, IReadOnlyList<AccuracyCardView.Row> Rows)
 {
     public const string Title = "Accuracy";
 
-    /// <summary>One thing to check as the list shows it: the time, what, and why in one plain sentence.</summary>
+    /// <summary>One thing to look at as the list shows it: the time, what, and why in one plain sentence.</summary>
     public sealed record Row(int Id, string Time, string Text, string Why, AccuracyScore.Check Check);
 
     public bool HasRows => Rows.Count > 0;
@@ -22,27 +29,31 @@ public sealed record AccuracyCardView(
         var rows = s.ToCheck.OrderByDescending(c => c.At)
             .Select(c => new Row(c.Id, c.At.ToLocalTime().ToString("HH:mm:ss"), c.Text, AccuracyScore.Plain(c.Why), c)).ToList();
         int n = rows.Count;
-        string line = s.Enough ? $"Verified by the game's own numbers: {s.Percent}%" : "Not enough counted yet";
-        string secondary = n > 0
-            ? (rows.All(r => r.Check.Pickup) ? $"{n} pickup{(n == 1 ? "" : "s")} unsure · tap to see" : $"{n} to check · tap to see")
-            : s.Enough && s.SeenOnce > 0 && s.State != AccuracyScore.State.Verified ? $"Nothing to check · {s.SeenOnce} seen only once" : "Nothing to check";
-        string tone = s.State switch
+        string chip = n > 0 ? $"{n} to look at" : s.Contradicted > 0 ? "✓ All looked at" : "✓ Nothing looked wrong";
+        // nothing a second source could check yet: calm when the list is empty too, plain when it isn't (a count assumed 1)
+        string line = s.Checked == 0 ? (n > 0 ? "Nothing a second source could check yet" : s.NotChecked > 0 ? "Nothing looked wrong" : "Nothing counted yet")
+            : s.Contradicted == 0 ? (s.Checked == 1 ? "Checked by the game: 1 matched" : $"Checked by the game: all {s.Checked:N0} matched")
+            : $"Checked by the game: {s.Matched:N0} of {s.Checked:N0} matched" + (s.ShowsPercent ? $" ({s.MatchPercent}%)" : "");
+        var counts = new List<(string, int, string)>
         {
-            AccuracyScore.State.Verified => "good",
-            AccuracyScore.State.MostlyVerified => "gold",
-            AccuracyScore.State.CheckThese => "warn",
-            _ => "faint",
+            ("Checked", s.Checked, "a second source could check it"),
+            ("Matched", s.Matched, ""),
+            ("To look at", n, ""),
+            ("Not checked", s.NotChecked, "one source saw it, nothing said it was wrong"),
         };
-        string? hud = n > 0 ? $"? {n} to check" : s.Enough ? $"✓ {s.Percent}% verified" : null;
-        string? discord = s.Enough ? $"✓ {s.Percent}% verified by the game's own numbers" : null;
-        return new AccuracyCardView(line, secondary, s.Word, tone, hud, discord, Details(s), rows);
+        // the panel over the game: things to look at, or a calm tick once enough was checked; nothing before that
+        string? hud = n > 0 || s.EnoughChecked ? chip : null;
+        string? discord = !s.EnoughChecked ? null
+            : s.Contradicted == 0 ? $"✓ Checked by the game: all {s.Checked:N0} matched"
+            : $"Checked by the game: {s.Matched:N0} of {s.Checked:N0} matched ({s.MatchPercent}%)";
+        return new AccuracyCardView(chip, n > 0 ? "warn" : "good", line, hud, discord, Details(s), counts, rows);
     }
 
-    /// <summary>The figures behind the share, for the card's hover: a few short lines, each a number and what it counts.</summary>
+    /// <summary>The figures behind the counts, for the card's hover: a few short lines, each a number and what it counts.</summary>
     static string Details(AccuracyScore.Summary s)
     {
         var l = new List<string>();
-        if (s.Judged > 0) l.Add($"{s.Verified:N0} of {s.Judged:N0} pickups and reward slots backed by a second source in the game.");
+        if (s.Checked + s.NotChecked > 0) l.Add($"{s.Matched:N0} of {s.Checked:N0} pickups a second source could check matched. {s.NotChecked:N0} only one source saw.");
         if (s.KinaCounted + s.KinaRefused > 0)
             l.Add(s.CounterRead ? $"Kinah counter: confirmed {s.KinaConfirmed:N0} Kinah pickups, refused {s.KinaRefused:N0}." : "Kinah counter: not read yet, so Kinah lines count as read.");
         if (s.Counter is { } r) l.Add($"Kinah counter against the count: {r.Words}.");

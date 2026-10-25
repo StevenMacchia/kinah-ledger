@@ -197,6 +197,18 @@ public static class WpfApp
         w.ShowCompact(); DoEvents();
         Check(Math.Abs(w.HeadStack.Width - compactLayout) < 1, "back to Compact: the width it had");
 
+        // the Farming page, calmer (2026-10-25): the session total labelled and in K/M, best here said once (under the
+        // hour), accuracy as one chip, and the panel's loot an hour only beside a rate with Kinah in it
+        Check(w.FootTotalNote.Text == "so far, after the Market's cut" && !w.FootTotal.Text.Contains(',') && w.FootTotal.Text.Length > 0 && "KMB".Contains(w.FootTotal.Text[^1]),
+            $"Session total labelled, in K/M: {w.FootTotalNote.Text} {w.FootTotal.Text}");
+        Check(!w.SessionRows.Children.OfType<System.Windows.Controls.Border>().Any(b => b.Child is System.Windows.Controls.Grid g && g.Children.OfType<System.Windows.Controls.TextBlock>().Any(t => t.Text.Contains("best here"))),
+            "Session rows: your best here only under the hour");
+        Check(w.AccuracyChip.Visibility == Visibility.Visible && w.AccuracyChip.Child is System.Windows.Controls.TextBlock { Text: "1 to look at" }, "Accuracy: one chip, the sample's refused line to look at");
+        Check(w.HudValues.GetValueOrDefault("loot", "").Length > 0, "panel: loot an hour beside a rate with Kinah in it");
+        w.ShowDemo("Gathering"); DoEvents();
+        Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,
+            $"panel, gathering: the hour once ({w.HudValues.GetValueOrDefault("rate", "")}, the window's {w.HeadRate.Text}), no second loot figure");
+
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;
@@ -290,10 +302,10 @@ public static class WpfApp
         if (demo) w.ShotPlayerCards(dir, kind);
         // a tapped feed line's report sheet (direction C), for a farming render
         if (demo && kind == "Open world") w.ShotLineReport(Path.Combine(dir, "ui-line-report.png"));
-        // the Accuracy card on its own, opened on its things to check
+        // the Accuracy card on its own (the card the Farming page's chip opens), with its things to look at
         if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events" or "Market")) w.ShotAccuracyCard(Path.Combine(dir, "ui-accuracy-card.png"));
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
-        var hudAcc = w.HudAccuracy;
+        var hudAcc = w.HudAccuracy; bool hudToLook = w.HudAccuracyToLook;
         // the panel's three states (direction C): the newest feed line and the rate, farming and crafting, and a flagged run
         // (the farming and flagged states from a farming render, the crafting one from the Crafting render: each with its own sample prices)
         var states = !demo ? new() : w.HudStates().Where(x => kind == "Crafting" ? x.File == "ui-hud-crafting.png" : kind == "Open world" && x.File != "ui-hud-crafting.png").ToList();
@@ -315,7 +327,7 @@ public static class WpfApp
             var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Show();
             h.Update(values);
-            if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ 98% verified", hudAcc?.StartsWith("?") == true);
+            if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ Nothing looked wrong", hudAcc != null && hudToLook);
             if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);

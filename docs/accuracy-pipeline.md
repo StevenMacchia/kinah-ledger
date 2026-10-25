@@ -601,16 +601,26 @@ new from the screen, only what the session already decides (`TrackerSession.Scor
   from that rise), the loot list showed what the chat counted (or the chat showed the row the list counted), a gathering
   bar finished on Success for the row, a rare drop's second read confirmed it, or it is a reward slot read and named. A
   pickup whose count was assumed 1 is never verified.
-- **Verified share** = verified / judged, rounded down to a whole percent (only every single one is 100%). Under 10
-  judged events the card says "Not enough counted yet".
-- **Things to check**: every Kina line the counter refused, every loot list row no chat line confirmed, every pickup whose
+- **What the player sees** (since 2026-10-25, branch tracker/farming-calm; Steven: "VERIFIED % BEING LOW COULD CHURN
+  USERS FAST"): of the pickups a second source could check, how many matched. **Checked** = matched + contradicted;
+  **matched** = the verified pickups above (reward slots aside: a slot read off its picture has no second source);
+  **contradicted** = a Kina line the counter refused, a loot list row no chat line confirmed. A pickup one source saw
+  (the counter quiet, a crafted item, a reward slot, a count assumed 1) is **not checked**, never against the player.
+  A percentage (matched / checked, rounded down) shows only when something was contradicted and at least 10 were
+  checked; otherwise "Checked by the game: all 412 matched", or "Nothing looked wrong" when nothing could be checked.
+  On 2026-10-24 (audit lines 19:08:38 and 19:34:43) the old share read 20% and 28% while Steven crafted in town with
+  nothing contradicted.
+- **The old verified share** = verified / judged (every judged event, reward slots and one-source pickups too), rounded
+  down. Kept on the audit line only, for comparing logs.
+- **Things to look at**: every Kina line the counter refused, every loot list row no chat line confirmed, every pickup whose
   count was assumed 1, every run whose reward picture was read in part or not at all. Each has its time, its text, why
   (`refused by the counter`, `no chat line`, `count assumed 1`, `partly read card`, `rewards not read`) and a handle: the
   moment in frames.jsonl's form (UTC, "O"), or `run:` and the run's start. When a thing to check is found, the miscount
   report's buffer keeps its pictures, reads and pickups from 8 s before to 4 s after that moment for the session
   (`ReportBuffer.Pin`, 40 MB of pictures at most), so its Report finds them minutes later. "Fine" takes it off the list
   for the session; the share doesn't change.
-- **Status**: Verified at 95% or more with nothing left to check; Mostly verified at 80% or more; Check these under 80%.
+- **Status** (Verified / Mostly verified / Check these) is gone from the session card since 2026-10-25; runs keep theirs
+  (the table below).
 - **Informational, never in the share**: loot list rows too faint to settle (unsure), lines that weren't rows, Kina lines
   the counter couldn't judge (it fell or went quiet), the name decoder's agree / disagree / other, the median counting
   delay (the chat vote's first read to counted), and the **counter reconciliation**: between trusted readings, the
@@ -618,13 +628,16 @@ new from the screen, only what the session already decides (`TrackerSession.Scor
   sale, mail, a claim) is left out. Exact, or the count is under / over by N. A line still waiting for the counter isn't
   counted yet, so a spend while lines wait can leave their amounts on the other side of the stretch.
 
-**Where it shows.** The card under the session line in the Farming view (`Ui/MainWindow.AccuracyCard.cs`, words from
-`Ui/AccuracyCardView.cs`, the game-tooltip look): title "Accuracy", the share line, one secondary line ("1 pickup unsure
-· tap to see", "Nothing to check", "Nothing to check · N seen only once"), the status as a chip, the figures on hover.
-Tapped, the things to check open inline with Report (the miscount report headed by "HH:mm:ss text: why", with the
-pinned moment; its loot list and panel pictures are sent only with Options › Sharing › Send report pictures and sharing
-on) and Fine. The panel over the game shows one line, "✓ 98% verified" or "? 2 to check", while it is up. The audit line
-ends `· verified 98%` (`, N to check`). Copy for Discord's card carries "✓ 98% verified by the game's own numbers".
+**Where it shows** (since 2026-10-25). One chip under the session line in the Farming view, in the look's chip colours
+(`Ui/MainWindow.AccuracyCard.cs`, words from `Ui/AccuracyCardView.cs`): "✓ Nothing looked wrong", "2 to look at", or
+"✓ All looked at" once every contradiction was marked Fine. A click opens the Accuracy card over the window, a dark game
+tooltip like the item card: title "Accuracy", the line ("Checked by the game: all 412 matched", "… 410 of 412 matched
+(99%)"), the four counts (checked, matched, to look at, not checked; the figures behind them on hover), then the things
+to look at with Report (the miscount report headed by "HH:mm:ss text: why", with the pinned moment; its loot list and
+panel pictures are sent only with Options › Sharing › Send report pictures and sharing on) and Fine. The panel over the
+game shows the chip's words once 10 were checked, or as soon as there is something to look at. The audit line ends
+`· checked 412, matched 410 (99%), 2 to look at, 37 not checked · old verified share 20%`. Copy for Discord's card
+carries "✓ Checked by the game: all 412 matched" (or "… 410 of 412 matched (99%)") once 10 were checked.
 
 **Per run, for the site** (`InstanceRunPayload.acc`, from `AccuracyScore.ForRun` as a run is handed to a send, kept on the
 run as `Acc`; absent when nothing in the run was judged, and on older trackers), over the run's start to its last loot
@@ -640,7 +653,15 @@ plus 30 s:
 | `partly_read` | the run's PartlyRead flag (PR 22) |
 | `delay_ms` | median counting delay in the run, null when not measured |
 | `ver` | the tracker version |
+| `checked` | since 2026-10-25: pickups in the run a second source could check (matched plus refused lines and rows no chat line confirmed) |
+| `matched` | since 2026-10-25: those a second source agreed with |
+| `not_checked` | since 2026-10-25: pickups and reward slots only one source saw; never counted against |
 | `note` | only with a reason ("fewer than 5 counted") |
+
+The three counts don't change `status` or `kina_confirmed`. `kina_confirmed` counts Kina picked up while the counter was
+quiet against the run (a run with the counter quiet half the time reads 0.5, "unconfirmed"); a site that wants the
+player's measure shows `matched / checked` and leaves `not_checked` out. The site's `accBlock` keeps only the eight names
+it knows, so older sites take these payloads unchanged.
 
 parse-test ("Accuracy card") checks all of it on synthetic tallies and through a session's own Kina witness.
 

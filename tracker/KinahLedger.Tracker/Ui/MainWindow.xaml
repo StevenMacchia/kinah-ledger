@@ -458,8 +458,21 @@
             <!-- how the total adds up, the whole sum on hover -->
             <TextBlock x:Name="SumBreakdown" Foreground="{DynamicResource Faint}" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
           </StackPanel>
-          <!-- how much of the session the game's own numbers back up, in the game-tooltip look (Ui/MainWindow.AccuracyCard.cs) -->
-          <Border x:Name="AccuracyCard" Margin="20,0,20,16" Visibility="Collapsed"/>
+          <!-- how the count held up against the game's own numbers, as one chip in the look's colours ("✓ Nothing looked
+               wrong", "2 to look at"); a click opens the Accuracy card over the window (Ui/MainWindow.AccuracyCard.cs) -->
+          <Border x:Name="AccuracyChip" Margin="20,0,20,16" HorizontalAlignment="Left" Height="30" CornerRadius="15" BorderThickness="1" Padding="12,0,13,1"
+                  Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
+                  ToolTip="How the count held up against the game's own numbers. Tap to see." ToolTipService.InitialShowDelay="400">
+            <Border.Style>
+              <Style TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource ChipOff}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource ChipOffLine}"/>
+                <Style.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource GoldLine}"/></Trigger>
+                </Style.Triggers>
+              </Style>
+            </Border.Style>
+          </Border>
         </StackPanel>
       </Border>
 
@@ -504,9 +517,6 @@
         <StackPanel x:Name="TableStack">
           <!-- idle time and skipped reward lines; each shown only once there is something to say -->
           <TextBlock x:Name="Summary" Foreground="{DynamicResource Faint}" FontSize="12" Margin="20,12,20,0" TextWrapping="Wrap" Visibility="Collapsed"/>
-          <!-- how the count holds up against what the game itself counts (Steven, 2026-10-22: an accuracy meter) -->
-          <TextBlock x:Name="AccuracyLine" Foreground="{DynamicResource Faint}" FontSize="12" Margin="20,8,20,0" TextWrapping="Wrap" Visibility="Collapsed"
-                     ToolTip="Checks against the game's own numbers. Kinah counter: how often the Kinah counter at the top-left rose by exactly what was counted. Quest kills: in the minutes a quest's kill counter moved, its count beside the tracker's. Loot list: pickups the chat read missed and the list beside your character caught."/>
           <!-- with nothing counted yet, one line instead of empty sections; each section appears with its first row -->
           <TextBlock x:Name="TablesEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="20,16,20,14" TextWrapping="Wrap"
                      Text="Loot shows here as it comes in: drops from kills, gathering, Kinah by enemy and Soul Crystals."/>
@@ -529,7 +539,7 @@
                   <TextBlock Grid.Column="2" Style="{StaticResource FTh}" Text="Qty"/>
                   <TextBlock x:Name="PctHeader" Grid.Column="3" Style="{StaticResource FTh}" Text="Odds" Background="Transparent" Cursor="Hand"/>
                   <TextBlock Grid.Column="4" Style="{StaticResource FTh}" Text="An hour"/>
-                  <TextBlock Grid.Column="5" Style="{StaticResource FTh}" Text="Value" ToolTip="Quantity times the lowest Market price on your server, before the Market's fee and tax. Bound copies can't be sold and have no value here."/>
+                  <TextBlock Grid.Column="5" Style="{StaticResource FTh}" Text="Value" ToolTip="Quantity times the lowest Market price on your server, after the Market's fee and tax, like the Session total. Bound copies can't be sold and have no value here."/>
                 </Grid>
                 <Grid MinHeight="40">
                   <ScrollViewer x:Name="DropsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
