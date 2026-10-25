@@ -7,10 +7,12 @@
 # writes latest.json and publishes the GitHub release. Nothing else builds or signs a release (CODE_SIGNING_POLICY.md).
 #
 # Before tagging: bump <Version> in the csproj to X.Y.Z and add release-notes/vX.Y.Z.md. The run stops if either is
-# missing, so a stray tag never reaches players. Run workflow takes the version from main's csproj, stops if that
-# version is already released or the run isn't on main, and creates the tag vX.Y.Z on the commit it built when it
-# publishes (a tag made by the workflow itself starts no second run). It also stops when the installer or its update packages are missing:
+# missing, so a stray tag never reaches players. It also stops when the installer or its update packages are missing:
 # installed trackers update only from releases that carry them (docs/signing-setup.md, Platform/Installer.cs).
+#
+# Run workflow on main (the "tag" job) makes the tag instead: it takes the version from main's csproj, stops if that
+# version is already released or its notes are missing, tags main's commit vX.Y.Z and starts this workflow again on
+# that tag. The release job itself only ever runs on a version tag, the only ref the "release" environment accepts.
 #
 # Signing turns on when the "release" environment has these variables (Settings > Environments > release):
 #   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID   the app registration GitHub signs in as (OpenID Connect,
@@ -26,13 +28,43 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  actions: read
-  id-token: write   # Azure sign-in for Artifact Signing (OpenID Connect)
+  contents: read
 
 jobs:
+  # Run workflow on main: tag main's version, then start this workflow on the tag (a workflow_dispatch made with the
+  # workflow's own token is the one event that token can start). Pushing the tag itself would start nothing.
+  tag:
+    if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # the tag
+      actions: write    # starting the release run on it
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag main's version and start the release on it
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::Run workflow releases main only (this run is on $GITHUB_REF_NAME)"; exit 1; }
+          ver=$(grep -oP '(?<=<Version>)[^<]+' tracker/KinahLedger.Tracker/KinahLedger.Tracker.csproj); tag="v$ver"
+          [ -s "release-notes/$tag.md" ] || { echo "::error::release-notes/$tag.md is missing"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "::error::$tag is already released: bump <Version> in the csproj and add its release notes first"; exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$tag"
+          echo "Tagged $tag on $GITHUB_SHA and started the release run on it (Actions › Release tracker)." | tee -a "$GITHUB_STEP_SUMMARY"
+
   release:
+    # a pushed version tag, or the run the tag job started on one
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
+    permissions:
+      contents: write
+      actions: read
+      id-token: write   # Azure sign-in for Artifact Signing (OpenID Connect)
     # the "release" environment holds the Azure variables, and is what Azure trusts for signing (docs/signing-setup.md)
     environment: release
     steps:
@@ -45,18 +77,8 @@ jobs:
       - name: Check the tag, the version and the notes agree
         shell: bash
         run: |
+          tag="${GITHUB_REF_NAME}"; ver="${tag#v}"
           csproj=$(grep -oP '(?<=<Version>)[^<]+' tracker/KinahLedger.Tracker/KinahLedger.Tracker.csproj)
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            # Run workflow: main only, and the csproj's version must not be released yet
-            [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::Run workflow releases main only (this run is on $GITHUB_REF_NAME)"; exit 1; }
-            tag="v$csproj"
-            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
-              echo "::error::$tag is already released: bump <Version> in the csproj and add its release notes first"; exit 1
-            fi
-          else
-            tag="${GITHUB_REF_NAME}"
-          fi
-          ver="${tag#v}"
           [ "$csproj" = "$ver" ] || { echo "::error::tag $tag but the csproj says $csproj"; exit 1; }
           [ -s "release-notes/$tag.md" ] || { echo "::error::release-notes/$tag.md is missing"; exit 1; }
           echo "VERSION=$ver" >> "$GITHUB_ENV"
@@ -147,5 +169,4 @@ jobs:
         run: |
           shopt -s nullglob
           pkgs=(build-vpk/releases/*-"$VERSION"-*.nupkg build-vpk/releases/releases.win.json build-vpk/releases/assets.win.json build-vpk/releases/RELEASES)
-          # --target makes the tag on the commit built here when Run workflow started it (a pushed tag already exists)
-          gh release create "$TAG" --target "$GITHUB_SHA" dist/KinahLedger.exe dist/KinahLedger-Setup.exe dist/latest.json "${pkgs[@]}" --title "Kinah Ledger tracker $VERSION" --notes-file dist/notes.md
+          gh release create "$TAG" dist/KinahLedger.exe dist/KinahLedger-Setup.exe dist/latest.json "${pkgs[@]}" --title "Kinah Ledger tracker $VERSION" --notes-file dist/notes.md
