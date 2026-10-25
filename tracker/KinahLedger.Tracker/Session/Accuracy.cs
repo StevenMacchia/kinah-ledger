@@ -175,8 +175,9 @@ public sealed record AccuracyPayload(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<NameReport>? names,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LayoutPayload? layout)
 {
-    public static AccuracyPayload From(AccuracyReport r, string install) => new(
-        Upload.RunPayload.AppVersion, install, r.Health, r.Names.Count > 0 ? r.Names : null,
+    /// <param name="app">The version that took the report (a kept report goes out under the version that read it); this one by default.</param>
+    public static AccuracyPayload From(AccuracyReport r, string install, string? app = null) => new(
+        app ?? Upload.RunPayload.AppVersion, install, r.Health, r.Names.Count > 0 ? r.Names : null,
         r.Layout is { } l ? new LayoutPayload(l.W, l.H, l.Ui, l.Chat?.Select(v => Math.Round(v, 4)).ToArray(), l.ChatHow, l.LootOk, l.CraftOk, l.Fracs) : null);
 }
 

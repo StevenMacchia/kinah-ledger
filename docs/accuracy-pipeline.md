@@ -672,6 +672,41 @@ The offline test modes (parse-test, market-test, accuracy-test, replay-bank) now
 `%TEMP%KinahLedger-tests<mode>-<pid>-<time>` (`TestTemp.cs`), removed when the run passes and printed ("test files
 kept in ...") when it fails or `KL_BANK_KEEP` is set; two runs at once no longer share `KinahLedger-test-logs` or
 `KinahLedger-parse-test`.
+## Disk, logs and the accuracy upload (branch tracker/reliability, 2026-10-25)
+
+Measured on Steven's PC on 2026-10-24: the data folder was 919 MB (reward-shots 554 MB, reports 277 MB, trace logs 49 MB),
+reads.log had been emptied at 2 MB, and the accuracy upload got a 404.
+
+- **Pictures have a budget each** (`ShotBudget`, Session/Housekeeping.cs). One shared limit of 300 a day was filled by crafting
+  frames (one every 2 s, 1.6 MB each; 203 of them between 19:13 and 19:22), and after that no reward table or event card could
+  be kept, which `replay-event-shots` and `EventShotRecovery` read again. Now: a run's end (`reward-table`,
+  `reward-table-settled`, `event-rewards`) 200 a day of its own; crafting 20 a day, 40 s apart; in-run (every 30 s inside an
+  event or expedition) 60; other reward and shop screens 60. The crafting frames only feed `craft-test --glob *crafting.jpg`,
+  a by-hand tuning of the crafting panel's reader: the reader itself works on live frames, and a miscount report keeps its own
+  strip pictures in memory. Size and quality of every picture are unchanged (run ends at 90 and 85, as before).
+- **Pruning** (`Housekeeping`): at the start of the app and then at most hourly, on a low-priority thread that waits for a gap
+  between read passes before each delete (`PassStarted`/`PassEnded` bracket every pass of the read loop) and gives up for five
+  minutes when none comes. reward-shots: a run's end 14 days (was 7) and never trimmed for size inside the last 7; shop
+  screens 2 days; in-run and crafting 1 day; other screens 7; past 400 MB (was 300) the oldest non-run pictures first, then run
+  ends older than a week. reports/: 7 days or 200 MB, whichever deletes more; never a report under an hour old (its pictures
+  may be on their way to the site) and never one with `unsent.txt` (its pictures were meant for the site and the send failed;
+  sending is once, right after the report is saved, so nothing retries it) until it is 14 days old. Only folders named
+  `yyyyMMdd-HHmmss[-n]` and `.jpg` files named `yyyyMMdd-HHmmss-...` are touched. One line in reads.log says what went.
+- **reads.log** is turned over at 5 MB to `reads.old.log` (as `trace.log` becomes `trace.old.log`), never emptied; the new file's
+  first line says so. A note that flaps is written once and counted: `CrashLog.NoteBurst` (crafting panel up/gone, "crafting
+  window seen", "not in the item list, not counted: X") writes the first and, a minute later, one line "(×6 more, last at
+  07:20:08)"; any other `Note` is written five times a minute and then counted the same way. Never held back: `audit:`,
+  `zone:`, `reward screen`, `event header:`, `activity:`, `anchor` lines (a replay reads them), chat lines (`Read`), and
+  anything while a replay's clock is set. A miscount report's reads-log.txt takes its 600 lines across the turn-over
+  (`CrashLog.ReadsTail`), and `replay` reads `reads.old.log` beside `reads.log` for zones and reward screens.
+- **The 404** was not a wrong address: the tracker posts to `<upload.endpoint minus runs>/accuracy` = `/v1/accuracy`, and the
+  live site had no such route (`GET /v1/accuracy`, `/v1/layout` and `/v1/frames` answer 404; `/v1/runs` 405, `/v1/config`
+  200). The routes are on the site repo's `backend/accuracy` branch, which was never merged into `main`, the branch every deploy
+  was built from; `site/accuracy-route` there is that branch merged with `main`, awaiting a deploy and migration 0013. A
+  report the site answers 404 is now kept in `accuracy-queue.json` (50 at most, 7 days) and offered again, oldest first, with
+  the next send (one request while the site stays without the route); refused for its shape (400, 413, 415) it is dropped;
+  any other failure goes back into the counters as before; sharing off clears the queue.
+
 ## Commands
 
 ```

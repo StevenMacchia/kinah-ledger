@@ -661,7 +661,9 @@ options: --process aion[,other]");
         {
             // reads.log fills in what the trace didn't record yet (traces before 2026-10-23 have no zone lines)
             var firstTraced = signals.Count > 0 ? signals.Min(x => x.At) : DateTime.MaxValue;
-            var fromLog = ReplaySignals.FromReadsLog(readsPath, ReplaySignals.Date(opts.GetValueOrDefault("reads-date"))).Where(x => x.At < firstTraced).ToList();
+            // beside it, reads.old.log when reads.log has been turned over (not with an explicit --reads: that file stands alone)
+            var olderReads = opts.ContainsKey("reads") ? null : Path.Combine(Path.GetDirectoryName(readsPath)!, "reads.old.log");
+            var fromLog = ReplaySignals.FromReadsLog(readsPath, ReplaySignals.Date(opts.GetValueOrDefault("reads-date")), olderReads).Where(x => x.At < firstTraced).ToList();
             signals.AddRange(fromLog.Select(x => x.Kind == "reward" ? x with { Kind = "reward-once" } : x));
             Console.WriteLine($"Zone and reward screen reads: {signals.Count(x => x.Kind == "zone")} zone changes, {signals.Count(x => x.Kind.StartsWith("reward"))} reward screens ({fromLog.Count} from {Path.GetFileName(readsPath)}).");
         }
@@ -1267,6 +1269,7 @@ options: --process aion[,other]");
         ok &= Session.AccuracyScoreTests.Run(items, s);
         ok &= Session.LabelWriterTests.Run(items, s);
         ok &= Session.TableWitnessTests.Run(items, s);
+        ok &= Session.ReliabilityTests.Run(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }

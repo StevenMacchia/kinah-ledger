@@ -21,13 +21,17 @@ public static class ReplaySignals
     static readonly Regex Reward = new(@"^reward screen open \((.+?)\):", RegexOptions.Compiled);
     static readonly Regex Header = new(@"^event header: (.+?)(?: \(|$)", RegexOptions.Compiled);
 
-    /// <summary>The signals in reads.log, in order, with local times turned into UTC.</summary>
-    public static List<ReplaySignal> FromReadsLog(string path, DateTime? lastDay = null)
+    /// <summary>
+    /// The signals in reads.log, in order, with local times turned into UTC. <paramref name="olderPath"/> is reads.old.log, the
+    /// file reads.log was turned over from (2026-10-25): read first, so a trace from before the turn-over still finds its zones.
+    /// </summary>
+    public static List<ReplaySignal> FromReadsLog(string path, DateTime? lastDay = null, string? olderPath = null)
     {
         var raw = new List<(TimeSpan T, string Kind, string Value)>();
         var days = new List<int>();
         int day = 0; TimeSpan prev = TimeSpan.Zero; bool any = false;
-        foreach (var l in File.ReadLines(path))
+        var lines = olderPath != null && File.Exists(olderPath) ? File.ReadLines(olderPath).Concat(File.ReadLines(path)) : File.ReadLines(path);
+        foreach (var l in lines)
         {
             var m = Line.Match(l);
             if (!m.Success) continue;
