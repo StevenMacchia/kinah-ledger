@@ -1251,6 +1251,7 @@ public sealed partial class TrackerSession
         DateTime settledAt = now; bool settledAny = false, settledAchievement = false;
         if (_tracker.Unaligned > unaligned)
         {
+            _garbledLast = now;
             if (_garbledSince == null)
             {
                 _garbledSince = now;
@@ -1443,6 +1444,8 @@ public sealed partial class TrackerSession
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) { bool a1 = Apply(events, l, "chat · recovered"); any |= a1; if (a1) WatchCount(l, events); }
             CrashLog.Read(l + "    (counted once the chat settled)", any && !_lastRepeatOnly);
             if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; lock (_settledCounted) _settledCounted.Add((l.Trim(), now)); NoteCounted(l, now); }
+            // a line first on screen after the reads lined up again was the vote's, not the settle's (the replay bank's chat_settled_late)
+            if (any && SettleLate(l)) SettledLate++;
         }
         if (settledAny)
         {
@@ -3101,6 +3104,27 @@ public sealed partial class TrackerSession
     void NoteCounted(string l, DateTime now) { lock (_countedLines) { _countedLines.Add((l, now)); _countedLines.RemoveAll(x => (now - x.At).TotalSeconds > 60); } }
     /// <summary>Garbled reads longer than this before the chat settles aren't one burst; nothing is taken from the settled read.</summary>
     public const double SettleSeconds = 45;
+    // ---- the settle's bound (2026-10-25: "the chat settled after 39 s"; 157 Kina at 16:38:31 taken from the vote and dated
+    // 13 s back, before the zone changed) ----
+    /// <summary>When the last read that couldn't be lined up came.</summary>
+    DateTime _garbledLast;
+    /// <summary>A line the settle may take was on screen by the last read that didn't line up, or this soon after it (one read).</summary>
+    public const double SettleSlackSeconds = 1.5;
+    /// <summary>The settle looks at this much chat after the last read that didn't line up, then closes; lines count as they come.</summary>
+    public const double SettleBoundSeconds = 6;
+    /// <summary>Lines the settle counted that were first on screen after the reads lined up again (the replay bank's chat_settled_late).</summary>
+    public int SettledLate { get; private set; }
+    /// <summary>
+    /// True when <paramref name="line"/> was first on screen (the same digits, a letter or two apart) more than
+    /// <see cref="SettleSlackSeconds"/> after the last read that didn't line up: it came after the garbling, not during it.
+    /// </summary>
+    bool SettleLate(string line)
+    {
+        var k = ChatKey(line);
+        DateTime? first = null;
+        foreach (var (key, v) in _firstSeen) if ((key == k || Reread.Same(key, k)) && (first == null || v.First < first)) first = v.First;
+        return first is DateTime f && f > _garbledLast.AddSeconds(SettleSlackSeconds);
+    }
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
     List<string> _lastLines = new();
