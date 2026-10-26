@@ -238,25 +238,17 @@ public static class ReplayBank
     /// </summary>
     static void ReadStrip(Bitmap bmp, Point at, Rectangle game, DateTime t, List<string> fixedOut, List<string> anchoredOut, List<string> wordsOut)
     {
-        List<OcrLineBox> Read(Bitmap b, Point o) => Task.Run(() => BalanceReader.ReadNumbersAsync(b, o)).GetAwaiter().GetResult();
+        // the strip has four numbers: what the watcher expects once it has read them all (BalanceReader.TickAsync)
+        List<OcrLineBox> Read(Bitmap b, Point o) => Task.Run(() => BalanceReader.ReadStripAsync(b, o, 4)).GetAwaiter().GetResult();
         static string Words(List<OcrLineBox> ls) => string.Join(" | ", ls.SelectMany(l => l.Words ?? new[] { new OcrWordBox(l.Text, l.Box) }).Select(w => $"{w.Text}@{w.Box.Left}"));
         var lines = Read(bmp, at);
         var counters = BalanceReader.Counters(lines);
         Console.WriteLine($"  strip {bmp.Width}x{bmp.Height}, words: {Words(lines)} -> numbers: {string.Join(" ", counters.Select(c => $"{c.Value}@{c.Left}"))}");
         fixedOut.Add(string.Join(" ", counters.Select(c => c.Value)));
         wordsOut.Add(Words(lines));
-        // DIAGNOSTIC (temporary): the same picture read other ways
-        {
-            var lv = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, at, 3, true)).GetAwaiter().GetResult();
-            wordsOut.Add($"whole, boosted (0.8.39): {Words(lv)} -> {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
-        }
-        foreach (var (lo, hi) in new[] { (90, 230), (150, 230), (160, 161), (200, 201) })
-            foreach (var sc in new[] { 1.5, 2.0, 3.0, 4.0 })
-                foreach (var st in new[] { true, false })
-                {
-                    var lv = Task.Run(() => BalanceReader.ReadNumbersAsync(bmp, at, lo, hi, sc, st)).GetAwaiter().GetResult();
-                    wordsOut.Add($"{lo}-{hi} x{sc}{(st ? " stacked" : " each")}: {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
-                }
+        // the same picture as 0.8.39 read it (the whole strip, boosted), for the before and after
+        var old = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, at, 3, boost: true)).GetAwaiter().GetResult();
+        wordsOut.Add($"0.8.39: {Words(old)} -> {string.Join(" ", BalanceReader.Counters(old).Select(c => c.Value))}");
         var an = new Anchors(new List<AnchorTemplate>());
         an.BalanceCrop.Log = l => Console.WriteLine("  " + l);
         var boxes = BalanceReader.NumberBoxes(lines);

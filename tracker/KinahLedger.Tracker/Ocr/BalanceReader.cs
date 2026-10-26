@@ -24,6 +24,21 @@ public sealed partial class BalanceReader
     ulong _hash;
     List<CounterRead> _last = new();
     DateTime _wordsAt = DateTime.MinValue;
+    // how many numbers the last reads found: a read with fewer is read a second way (ReadStripAsync)
+    readonly Queue<int> _counts = new();
+
+    /// <summary>
+    /// The strip's numbers (<see cref="ReadNumbersAsync"/>), and when that found fewer than <paramref name="expected"/>
+    /// (the most of the last 20 reads), a second read at 1.5x filling the counters the first skipped (<see cref="Fill"/>):
+    /// on the 131029 pictures the two reads together found what either found, and a Kinah figure is never read wrong
+    /// by one of them, only skipped.
+    /// </summary>
+    public static async Task<List<OcrLineBox>> ReadStripAsync(Bitmap raw, Point origin, int expected)
+    {
+        var lines = await ReadNumbersAsync(raw, origin);
+        if (Counters(lines).Count >= expected) return lines;
+        return Fill(lines, await ReadNumbersAsync(raw, origin, 160, 1.5));
+    }
 
     public long Reads { get; private set; }
     /// <summary>Where the numbers were on screen in the last read (an anchor for the strip, Ocr.Anchors), and when.</summary>
@@ -41,9 +56,10 @@ public sealed partial class BalanceReader
         var h = Hash(raw);
         if (h == _hash && Reads > 0) { Skipped++; LastBoxesAt = DateTime.UtcNow; Tracker.Observe(_last, pickupsTotal, samePixels: true); return; }
         _hash = h;
-        var lines = await ReadNumbersAsync(raw, strip.Location);
+        var lines = await ReadStripAsync(raw, strip.Location, _counts.Count == 0 ? 0 : _counts.Max());
         Reads++;
         _last = Counters(lines);
+        _counts.Enqueue(_last.Count); if (_counts.Count > 20) _counts.Dequeue();
         LastBoxes = NumberBoxes(lines); LastBoxesAt = DateTime.UtcNow;
         // once a minute, what the recognizer saw on the strip and which numbers came of it: reads.log kept no strip reads
         // before 2026-10-26, so why the counter went unread all of 2026-10-25 could only be inferred
@@ -129,54 +145,42 @@ public sealed partial class BalanceReader
     }
 
     /// <summary>
-    /// The strip read one number at a time (2026-10-26). Read whole, the recognizer skipped the two Kinah figures on most
-    /// reads (the 131029 pictures: "0 7,811 011.8254", the gold and blue icons glued to the digits or the long figures
-    /// dropped), which is why the counter was never found on 2026-10-25. Here the icons are taken out
-    /// (<see cref="WhiteText"/>), the white digits are cut into runs of columns with ink, a gap wider than a seventh of
-    /// the strip's height ending a run, and each run is read on its own. A run that reads as nothing is left out; when no
-    /// run gives a number, the whole strip is read as before.
+    /// The strip read one number at a time (2026-10-26). Read whole and boosted, the recognizer skipped both Kinah figures
+    /// on most reads: in the three 131029 pictures (tests/replays/strip-2026-10-24-131029) it gave "0 7,811 011.8254",
+    /// "0 7,811 11" and "0 7,811", the bag icon as a 0, the blue icon glued to 11,825 and the 29-million figures not at
+    /// all, which is the 124 px strip anchor of 2026-10-25 and why the counter was never found that day. Here the icons go
+    /// (<see cref="WhiteText"/>, the white digits alone, cut at <paramref name="lo"/>), the strip is cut into runs of
+    /// columns with ink (a gap wider than a seventh of its height ends one), and each run is read on its own at
+    /// <paramref name="scale"/>. Of 32 ways tried on those pictures, cut at 160 and read at 2x read the most Kinah figures
+    /// (5 of 6, never a wrong one) and 7,811 and 11,825 right every time. When no run gives a number, the strip is read
+    /// whole as before.
     /// </summary>
-    public static async Task<List<OcrLineBox>> ReadNumbersAsync(Bitmap raw, Point origin, int lo = 150, int hi = 230, double scale = 3, bool stack = true)
+    public static async Task<List<OcrLineBox>> ReadNumbersAsync(Bitmap raw, Point origin, int lo = 160, double scale = 2)
     {
-        using var wt = WhiteText(raw, 60, lo, hi);
+        using var wt = WhiteText(raw, 60, lo, lo + 1);
         // each run cut to its ink rows; one narrower than 0.4 of the strip's height is what's left of an icon's white
         // letter, not a counter (a counter under 100 isn't Kinah worth checking)
         var parts = InkRuns(wt).Where(r => r.Width >= wt.Height * 0.4).Select(r => Rows(wt, r)).Where(r => r.Height > 0).ToList();
-        if (parts.Count == 0) return await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
-        if (!stack)
-        {
-            var each = new List<OcrLineBox>();
-            foreach (var p in parts)
-            {
-                using var one = wt.Clone(p, wt.PixelFormat);
-                each.AddRange(await ScreenReader.ReadBoxesAsync(one, new Point(origin.X + p.X, origin.Y + p.Y), scale));
-            }
-            return each;
-        }
-        // the runs stacked on a white sheet, one per line with a line's gap between, as a column of numbers: read alone,
-        // a single number with nothing around it was skipped as often as it was read
-        int band = parts.Max(p => p.Height), m = Math.Max(8, band), slot = band * 2;
-        using var sheet = new Bitmap(parts.Max(p => p.Width) + 2 * m, 2 * m + slot * parts.Count, PixelFormat.Format24bppRgb);
-        using (var g = Graphics.FromImage(sheet))
-        {
-            g.Clear(Color.White);
-            for (int i = 0; i < parts.Count; i++) g.DrawImage(wt, new Rectangle(m, m + i * slot, parts[i].Width, parts[i].Height), parts[i], GraphicsUnit.Pixel);
-        }
         var found = new List<OcrLineBox>();
-        foreach (var line in await ScreenReader.ReadBoxesAsync(sheet, Point.Empty, scale))
+        foreach (var p in parts)
         {
-            // each word back to the strip, by the line of the sheet it sits on
-            var words = new List<OcrWordBox>();
-            foreach (var w in line.Words ?? new[] { new OcrWordBox(line.Text, line.Box) })
-            {
-                int i = Math.Clamp((w.Box.Top + w.Box.Height / 2 - m) / slot, 0, parts.Count - 1);
-                int dx = origin.X + parts[i].X - m, dy = origin.Y + parts[i].Y - (m + i * slot);
-                words.Add(new OcrWordBox(w.Text, new Rectangle(w.Box.X + dx, w.Box.Y + dy, w.Box.Width, w.Box.Height)));
-            }
-            if (words.Count > 0) found.Add(new OcrLineBox(string.Join(" ", words.Select(x => x.Text)), words.Select(x => x.Box).Aggregate(Rectangle.Union), words));
+            using var one = wt.Clone(p, wt.PixelFormat);
+            found.AddRange(await ScreenReader.ReadBoxesAsync(one, new Point(origin.X + p.X, origin.Y + p.Y), scale));
         }
         if (Counters(found).Count > 0) return found;
         return await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
+    }
+
+    /// <summary>
+    /// <paramref name="lines"/> with the numbers of <paramref name="more"/> (another read of the same strip) added where
+    /// <paramref name="lines"/> has none within <paramref name="tolerance"/> px: a second read fills a counter the first
+    /// skipped, and never replaces one it read.
+    /// </summary>
+    public static List<OcrLineBox> Fill(List<OcrLineBox> lines, List<OcrLineBox> more, int tolerance = 40)
+    {
+        var have = NumberBoxes(lines);
+        var gaps = Merged(more).Where(m => !have.Any(b => Math.Abs(b.Left - m.Box.Left) <= tolerance)).ToList();
+        return gaps.Count == 0 ? lines : lines.Concat(gaps.Select(g => new OcrLineBox(g.Text, g.Box, new[] { new OcrWordBox(g.Text, g.Box) }))).ToList();
     }
 
     /// <summary>The rows of <paramref name="run"/> with ink, padded a little: the run cut to its text.</summary>
