@@ -460,6 +460,7 @@ public partial class MainWindow : Window
             SetTrackingUi(true);
             ShowFix(false);
             Say($"Run started · {chat.Zone ?? "zone not read yet"}. Minimize this window; the panel and {(HotkeyText.Length > 0 ? HotkeyText : "the tray")} keep working.", "Faint");
+            FlashHud("Run started");   // the shortcut pressed in the game shows it took
         }
         catch (Exception ex)
         {
@@ -479,6 +480,8 @@ public partial class MainWindow : Window
         // shared and saved under what the run turned out to be, not the label picked before it started
         var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
+        long worth = BestRuns.Value(e);
+        FlashHud(worth > 0 ? $"Run stopped · {Fk(worth)} this run" : "Run stopped");
         if (fromWindow)
         {
             if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
@@ -582,6 +585,7 @@ public partial class MainWindow : Window
         if (_hud == null) return;
         _hudValues["show"] = HudPresence();
         _hudValues["unlocked"] = HudMoving ? "move" : _hudPrefs.Locked ? "" : "1";
+        HudRunValues();
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
         _hud.Update(_hudValues);

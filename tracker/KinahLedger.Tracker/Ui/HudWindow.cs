@@ -235,7 +235,7 @@ public sealed class HudWindow : Window
 
     void Build()
     {
-        _row.Children.Clear(); _cells.Clear(); _feedLine = null;
+        _row.Children.Clear(); _cells.Clear(); _feedLine = null; _timeDot = null;
         for (int i = 0; i < _fields.Count; i++)
         {
             var key = _fields[i]; var f = HudFields.All.First(x => x.Key == key);
@@ -244,8 +244,9 @@ public sealed class HudWindow : Window
             switch (key)
             {
                 case "time":
-                    // the recording dot and the clock
-                    cell.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x5E)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) });
+                    // the recording dot (red only during a run, the "run" value) and the clock
+                    _timeDot = new Ellipse { Width = 8, Height = 8, Fill = Muted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
+                    cell.Children.Add(_timeDot);
                     number.FontFamily = new FontFamily("Cascadia Mono, Consolas"); number.FontSize = 14; number.Foreground = new SolidColorBrush(Color.FromRgb(0xE9, 0xEF, 0xF7)); number.VerticalAlignment = VerticalAlignment.Center;
                     number.Text = "0:00";
                     break;
@@ -275,6 +276,9 @@ public sealed class HudWindow : Window
         }
     }
 
+    /// <summary>The timer cell's dot: red during a run, grey otherwise.</summary>
+    Ellipse? _timeDot;
+    static readonly SolidColorBrush RunRed = Frozen(Color.FromRgb(0xFF, 0x6B, 0x5E));
     TextBlock? _feedText, _feedValue, _feedRate, _feedUnit, _flagText;
     FrameworkElement? _feedLine, _flagLine, _feedSep;
 
@@ -316,8 +320,12 @@ public sealed class HudWindow : Window
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
         ShowAs(V("show"));
         ApplyLock(V("unlocked"));
-        _note.Text = V("notice");
+        // a start or stop's flash ("Run started") over a waiting notice, for its few seconds
+        bool flash = V("flash").Length > 0;
+        _note.Text = flash ? V("flash") : V("notice");
+        _note.Foreground = flash ? Ink : Gold;
         _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (_timeDot != null) _timeDot.Fill = V("run") == "1" ? RunRed : Muted;
         if (_feedLine != null)
         {
             bool flagged = V("flag").Length > 0;

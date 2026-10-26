@@ -386,6 +386,9 @@ public static class WpfApp
             ("ui-hud-notice.png", HudFields.Parse(null), new() { ["notice"] = "Update ready · installs when you leave the game" }),
             // being moved from the tray: the dashed outline and the "drag me" hint
             ("ui-hud-unlocked.png", HudFields.Parse(null), new() { ["unlocked"] = "move" }),
+            // a run on: the red dot, the run's clock, and the shortcut's confirmation; then the stop's line on the default panel
+            ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = "Run started" }),
+            ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["flash"] = "Run stopped · 1.27M this run" }),
         })
         {
             var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };

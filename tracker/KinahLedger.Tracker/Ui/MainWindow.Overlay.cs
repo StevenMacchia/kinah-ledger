@@ -51,6 +51,30 @@ public partial class MainWindow
         Say($"Drag the panel where you want it. It locks again in {HudMoveSeconds} seconds.", "Faint");
     }
 
+    /// <summary>A short line on the panel ("Run started"), shown for <see cref="HudFlashSeconds"/> through its "flash" value.</summary>
+    string _hudFlash = "";
+    DateTime _hudFlashUntil = DateTime.MinValue;
+    const int HudFlashSeconds = 3;
+
+    /// <summary>Confirms a start or stop on the panel, so the shortcut pressed in the game shows it took.</summary>
+    void FlashHud(string text)
+    {
+        _hudFlash = text; _hudFlashUntil = DateTime.UtcNow.AddSeconds(HudFlashSeconds);
+        UpdateHud();
+    }
+
+    /// <summary>
+    /// The panel's run state: "run" (its dot red only during a run), the timer as "RUN 12:31" during a run and the
+    /// session clock otherwise (FillNumbers), and the flash while it lasts (the window's tick takes it off).
+    /// </summary>
+    void HudRunValues()
+    {
+        _hudValues["run"] = Farming ? "1" : "";
+        if (_watcher.Farm is { } run) _hudValues["time"] = "RUN " + Clock(run.Active);
+        else if (_hudValues.GetValueOrDefault("time", "").StartsWith("RUN ")) _hudValues["time"] = "";   // the next count puts the clock back
+        _hudValues["flash"] = DateTime.UtcNow < _hudFlashUntil ? _hudFlash : "";
+    }
+
     /// <summary>From the foreground hook: only the panel's presence, without working the figures out again.</summary>
     void HudFollowGame()
     {
