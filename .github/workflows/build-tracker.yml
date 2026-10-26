@@ -95,6 +95,9 @@ jobs:
           KL_SHOT_UNDO=1 dist/KinahLedger.exe ui-shot shots/undo --demo --compact --skin daylight
           dist/KinahLedger.exe ui-shot shots --demo --crafting
           dist/KinahLedger.exe ui-shot shots --options
+          # the first-run server picker with Europe, the region with the most servers (23 a faction since 2026-10-26)
+          mkdir -p shots/welcome-eu
+          KL_WELCOME_REGION=eu dist/KinahLedger.exe ui-shot shots/welcome-eu --welcome
           # the whole Farming view at both widths (however tall), the Events part with its Runs card alone (folded and
           # with Materials open), and the Crafting part before anything is crafted
           # (each --demo farming render also writes ui-accuracy-card.png, the Accuracy card open on its things to check,

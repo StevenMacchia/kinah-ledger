@@ -9,14 +9,15 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The crafting line's shared parts (the mock's feature 2, kinah-bench/mock-hud-next/f2-crafting.png): the crafts as the
-/// looks get them ("craft0" newest to "craft3", from MainWindow.HudCraft.cs), the success and fail bar in the window's
-/// craft card colours (CkOddsBar: blue for worked, orange for failed), and a craft's tile, the recipe's icon framed in blue
-/// with a ✓ when it worked, in orange with a ✕ when it failed. Every brush is frozen, as the rest of the panel's.
+/// looks get them ("craft0" newest to "craft3", from MainWindow.HudCraft.cs), the success and fail bar, and a craft's
+/// tile, the recipe's icon in a plain slot with a small white ✓ when it worked, faded with a red ✕ when it failed.
+/// No grade colour anywhere (green, blue, yellow, violet): Steven, 2026-10-26, blue and gold edges on crafts "look like
+/// rare and unique". Worked is plain, failed is red. Every brush is frozen, as the rest of the panel's.
 /// </summary>
 static class CraftKit
 {
-    public const uint OkC = 0x3D8BFF, Ok2C = 0x69A8FF, FailC = 0xE8892F, LabelC = 0x8DB8FF;
-    public static readonly SolidColorBrush Ok2 = B(Ok2C), Fail = B(FailC), Label = B(LabelC), FailBar = B(FailC, .85);
+    public const uint OkC = 0x8C93A8, Ok2C = 0xCDD3E2, FailC = 0xE5534B, MarkC = 0x3A4060;
+    public static readonly SolidColorBrush Ok2 = B(Ok2C, .8), Fail = B(FailC), Label = Faint, FailBar = B(FailC, .85), OkEdge = B(CommonC, .55);
     public static readonly Brush OkBar = MakeOkBar();
     static Brush MakeOkBar()
     {
@@ -59,21 +60,19 @@ static class CraftKit
         bar.ColumnDefinitions[1].Width = new GridLength(Math.Max(fail, 0), GridUnitType.Star);
     }
 
-    /// <summary>A craft's tile: the recipe's icon (the item's tile, as the pickups'), framed and glowing in blue or orange, with the ✓ or ✕ on its corner.</summary>
+    /// <summary>A craft's tile: the recipe's icon in a plain slot (the item's tile, as the pickups'), faded when the craft failed, with a ✓ or a red ✕ on its corner.</summary>
     public static FrameworkElement Tile(Pick p, double size)
     {
         bool ok = Worked(p);
-        var c = Rgb(ok ? Ok2C : FailC);
         var tile = HudKit.Tile(p, size);
         if (tile is not Grid g) return tile;
-        g.Children.Insert(0, Glow(Rgb(ok ? OkC : FailC), 5, 7, .55));
-        g.Children.Add(new Border { CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1), BorderBrush = Frozen(c), IsHitTestVisible = false });
+        if (!ok) foreach (var child in g.Children.OfType<UIElement>()) child.Opacity = .55;
         var mark = new Grid
         {
             Width = 12, Height = 12,
             Children =
             {
-                new Ellipse { Fill = ok ? B(OkC) : Fail, Stroke = Slot, StrokeThickness = 1 },
+                new Ellipse { Fill = ok ? B(MarkC) : Fail, Stroke = Slot, StrokeThickness = 1 },
                 new TextBlock
                 {
                     Text = ok ? "✓" : "✕", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = White, FontFamily = new FontFamily("Segoe UI Symbol, Segoe UI"),
@@ -89,7 +88,7 @@ static class CraftKit
 
 /// <summary>
 /// The Card while crafting: "CRAFT 18:05 Orichalcum Greaves" in the head with the newest craft on the right ("worked
-/// +137K" in blue, "failed −39K" in orange), then "12 crafts · 3 failed · +1.12M" over the success bar and "sells for
+/// +137K" plain, "failed −39K" in red), then "12 crafts · 3 failed · +1.12M" over the success bar and "sells for
 /// 176K each", and the last three crafts as tiles. The farming head and figures come back when crafting ends.
 /// </summary>
 public sealed partial class HudCard
@@ -290,7 +289,7 @@ public sealed partial class HudTicker
         return true;
     }
 
-    /// <summary>One craft: the recipe's tile with ✓ or ✕, "Orichalcum Greaves · worked", and what it made in gold or cost in orange.</summary>
+    /// <summary>One craft: the recipe's tile with ✓ or ✕, "Orichalcum Greaves · worked", and what it made in gold or cost in red; a failed one on a red edge.</summary>
     Border CraftToast(Pick p)
     {
         bool ok = CraftKit.Worked(p);
@@ -308,7 +307,7 @@ public sealed partial class HudTicker
         return new Border
         {
             Width = 270, Height = 34, Padding = new Thickness(6, 0, 10, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2, 0, 0, 0),
-            BorderBrush = ok ? CraftKit.Ok2 : CraftKit.Fail, Background = Wash("pick", false), Child = g,
+            BorderBrush = ok ? CraftKit.OkEdge : CraftKit.Fail, Background = Wash("pick", false), Child = g,
         };
     }
 }
