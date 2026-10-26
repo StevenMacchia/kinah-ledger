@@ -250,16 +250,13 @@ public static class ReplayBank
             var lv = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, at, 3, true)).GetAwaiter().GetResult();
             wordsOut.Add($"whole, boosted (0.8.39): {Words(lv)} -> {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
         }
-        foreach (var lo in new[] { 90, 120 })
-        {
-            var lv = Task.Run(() => BalanceReader.ReadNumbersAsync(bmp, at, lo)).GetAwaiter().GetResult();
-            using var wt = BalanceReader.WhiteText(bmp, 60, lo);
-            wordsOut.Add($"by number, lo {lo} (runs {string.Join(",", BalanceReader.InkRuns(wt).Select(r => $"{r.X}+{r.Width}"))}): {Words(lv)} -> {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
-        }
-        {
-            using var wt = BalanceReader.WhiteText(bmp, 60, 150);
-            wordsOut.Add($"runs at lo 150: {string.Join(",", BalanceReader.InkRuns(wt).Select(r => $"{r.X}+{r.Width}"))}");
-        }
+        foreach (var (lo, hi) in new[] { (90, 230), (150, 230), (160, 161), (200, 201) })
+            foreach (var sc in new[] { 1.5, 2.0, 3.0, 4.0 })
+                foreach (var st in new[] { true, false })
+                {
+                    var lv = Task.Run(() => BalanceReader.ReadNumbersAsync(bmp, at, lo, hi, sc, st)).GetAwaiter().GetResult();
+                    wordsOut.Add($"{lo}-{hi} x{sc}{(st ? " stacked" : " each")}: {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
+                }
         var an = new Anchors(new List<AnchorTemplate>());
         an.BalanceCrop.Log = l => Console.WriteLine("  " + l);
         var boxes = BalanceReader.NumberBoxes(lines);

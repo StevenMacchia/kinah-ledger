@@ -136,13 +136,23 @@ public sealed partial class BalanceReader
     /// the strip's height ending a run, and each run is read on its own. A run that reads as nothing is left out; when no
     /// run gives a number, the whole strip is read as before.
     /// </summary>
-    public static async Task<List<OcrLineBox>> ReadNumbersAsync(Bitmap raw, Point origin, int lo = 150)
+    public static async Task<List<OcrLineBox>> ReadNumbersAsync(Bitmap raw, Point origin, int lo = 150, int hi = 230, double scale = 3, bool stack = true)
     {
-        using var wt = WhiteText(raw, 60, lo);
+        using var wt = WhiteText(raw, 60, lo, hi);
         // each run cut to its ink rows; one narrower than 0.4 of the strip's height is what's left of an icon's white
         // letter, not a counter (a counter under 100 isn't Kinah worth checking)
         var parts = InkRuns(wt).Where(r => r.Width >= wt.Height * 0.4).Select(r => Rows(wt, r)).Where(r => r.Height > 0).ToList();
         if (parts.Count == 0) return await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
+        if (!stack)
+        {
+            var each = new List<OcrLineBox>();
+            foreach (var p in parts)
+            {
+                using var one = wt.Clone(p, wt.PixelFormat);
+                each.AddRange(await ScreenReader.ReadBoxesAsync(one, new Point(origin.X + p.X, origin.Y + p.Y), scale));
+            }
+            return each;
+        }
         // the runs stacked on a white sheet, one per line with a line's gap between, as a column of numbers: read alone,
         // a single number with nothing around it was skipped as often as it was read
         int band = parts.Max(p => p.Height), m = Math.Max(8, band), slot = band * 2;
@@ -153,7 +163,7 @@ public sealed partial class BalanceReader
             for (int i = 0; i < parts.Count; i++) g.DrawImage(wt, new Rectangle(m, m + i * slot, parts[i].Width, parts[i].Height), parts[i], GraphicsUnit.Pixel);
         }
         var found = new List<OcrLineBox>();
-        foreach (var line in await ScreenReader.ReadBoxesAsync(sheet, Point.Empty, 3))
+        foreach (var line in await ScreenReader.ReadBoxesAsync(sheet, Point.Empty, scale))
         {
             // each word back to the strip, by the line of the sheet it sits on
             var words = new List<OcrWordBox>();
