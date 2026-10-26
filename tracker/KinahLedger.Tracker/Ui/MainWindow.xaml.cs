@@ -599,7 +599,7 @@ public partial class MainWindow : Window
         HudRunValues();
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
-        _hudValues["notice"] = HudNotice();   // the shortcut's problem or a waiting update (Ui/MainWindow.Notices.cs)
+        _hudValues["notice"] = HudNotice();   // a price alert, the shortcut's problem or a waiting update (Ui/MainWindow.Notices.cs)
         _hud.Update(_hudValues);
         _hud.SetAccuracy(_accView?.Hud, _accView?.HasRows == true);
     }

@@ -4,8 +4,8 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The panel's one line under its figures (its "notice" value), shared by everything that has to reach a player who is
-/// in the game and not looking at the window: the start/stop shortcut not working, and an update waiting for the player
-/// to leave the game. The first that applies shows.
+/// in the game and not looking at the window: a price alert, the start/stop shortcut not working, and an update waiting
+/// for the player to leave the game. The first that applies shows.
 /// </summary>
 public partial class MainWindow
 {
@@ -32,9 +32,28 @@ public partial class MainWindow
         try { _tray.ShowBalloonTip(8000, "The start/stop shortcut is off", problem, WF.ToolTipIcon.Warning); } catch (Exception ex) { CrashLog.Write("shortcut notice", ex); }
     }
 
-    /// <summary>The panel's notice now: the shortcut's problem (its first minute in view), else the update's line.</summary>
+    /// <summary>How long a price alert stays on the panel and in the window's status line.</summary>
+    const int PriceAlertSeconds = 8;
+    string _priceNotice = "";
+    DateTime _priceNoticeUntil = DateTime.MinValue;
+
+    /// <summary>
+    /// A price alert that fired (Ui/MainWindow.PriceAlerts.cs): on the panel for <see cref="PriceAlertSeconds"/> seconds,
+    /// beside the tray notice that Focus Assist and Game Mode hold back while the game is in front, and in the window's
+    /// status line for as long, the whole line on hover.
+    /// </summary>
+    void ShowPriceAlert(string line)
+    {
+        _priceNotice = line; _priceNoticeUntil = DateTime.UtcNow.AddSeconds(PriceAlertSeconds);
+        Tell(line, "Good"); Status.ToolTip = line;
+        if (_priceNoticeUntil > _statusHoldUntil) _statusHoldUntil = _priceNoticeUntil;
+        UpdateHud();
+    }
+
+    /// <summary>The panel's notice now: a price alert (its 8 s), the shortcut's problem (its first minute in view), else the update's line.</summary>
     string HudNotice()
     {
+        if (DateTime.UtcNow < _priceNoticeUntil) return _priceNotice;
         if (_hotkeyProblem is { } hk && !_hotkeySuspended)
         {
             // the minute starts the first time the panel is in view (it is hidden while the game isn't in front)
