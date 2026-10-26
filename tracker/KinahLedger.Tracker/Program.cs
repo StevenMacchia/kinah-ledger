@@ -2915,6 +2915,26 @@ options: --process aion[,other]");
         sg.GatherOutcome(w0.AddSeconds(80), true, false);
         List(sg, w0.AddSeconds(80.3), "Orichalcum Ore x3");
         Check("...a stack row with a race behind it: counted as shown", $"{n(sg.Engine, "Orichalcum Ore")}", "5");
+        // the crafting panel's decision (2026-10-25 20:25, a Wind Serum queue taken for gathering): the recipe line is a
+        // witness under a garbled title, crafting lasts through a pass or two without the panel and ends after 3 passes and
+        // 4 s away, a race just after it with no node named is no gather, and the raised gathering panel is never crafting
+        var cps = new TrackerSession(null, settings, items, "Test");
+        cps.Engine.SetZone("Ellun River Midstream");
+        var c0 = new DateTime(2026, 10, 26, 0, 25, 15, DateTimeKind.Utc);
+        cps.PanelLook(c0, true, false, new[] { "4 /z:iT,", "Wind Serum (Novice Lv. 10)" });
+        bool cpa = cps.PanelCrafting;
+        cps.PanelLook(c0.AddSeconds(0.4), false, false, null); cps.PanelLook(c0.AddSeconds(0.8), false, false, null);
+        bool cpb = cps.PanelCrafting;
+        for (int i = 0; i < 12; i++) cps.PanelLook(c0.AddSeconds(1.2 + i * 0.4), false, false, null);
+        bool cpc = cps.PanelCrafting;
+        cps.GatherOutcome(c0.AddSeconds(7), true, false);
+        int cpn = cps.Engine.SkillSnapshot().Values.Sum(st => st.Nodes);
+        cps.PanelLook(c0.AddSeconds(20), true, true, new[] { "Wind Serum (Novice Lv. 10)" });
+        bool cpd = cps.PanelCrafting;
+        cps.GatherOutcome(c0.AddSeconds(25), true, false);
+        int cpm = cps.Engine.SkillSnapshot().Values.Sum(st => st.Nodes);
+        Check("crafting panel: recipe line a witness, a pass away kept, 4 s away ended, no gather just after, raised never crafting, a gather after it counts",
+            $"{cpa} {cpb} {cpc} {cpn} {cpd} {cpm}", "True True False 0 False 1");
         // a row refused for no second witness, then its chat line late: the line counts, once (Steven's Kukuru, 2026-10-24:
         // the cross-check took the late line for the refused row's duplicate and the pickup counted zero times)
         var sl = new TrackerSession(null, settings, items, "Test");
@@ -4076,6 +4096,14 @@ options: --process aion[,other]");
                 Check("...a recipe line is never the title", $"{CraftPanel.IsTitleLine("Crafting Kit (Novice Lv. 3)")} {CraftPanel.IsTitleLine("Orichalcum Ingot (Novice Lv. 25)")} {CraftPanel.IsTitleLine("Life Serum (Bound)")}", "False False False");
                 Check("...the recipe under a garbled title is read, with the queue", CraftPanel.Parse(new[] { "Cråfting in Progresö1:'/..4", "Life Serum (Bound) (Novice Lv. 1)" }) is { } cpp ? $"{cpp.Done}/{cpp.Of} {cpp.Recipe}" : "null", "1/4 Life Serum (Bound) (Novice Lv. 1)");
                 Check("...a title alone names no recipe", CraftPanel.Parse(new[] { "C åfting in" })?.Recipe ?? "none", "none");
+                // 2026-10-25 20:25: the title garbled past every title rule, the recipe line under it read every time
+                Check("crafting panel: the line with the level is the recipe, under a title no rule knows",
+                    $"{CraftPanel.Parse(new[] { "qaf€ihgfiwprcgté$s 1 m/:ål", "Wind Serum (Novice Lv- 10)" })?.Recipe} | {CraftPanel.Parse(new[] { "4 /z:iT,", "Wind Serum (Novice Lv. 10)" })?.Recipe} | {CraftPanel.Parse(new[] { "13 / Tl" })?.Recipe ?? "none"}",
+                    "Wind Serum (Novice Lv- 10) | Wind Serum (Novice Lv. 10) | none");
+                Check("...a recipe line read wrong is still one; the bars' labels aren't",
+                    string.Join(" ", new[] { "Wind Serum (Novice Lv- 10)", "Wind Serum (Novice Lv. IO)", "Wihd Serum (Novite Lv. 10)", "(Novice Lv. 3)", "Orichalcum LonUFword (iNovice Lv. 3)", "Fail", "Success", "4 /z:iT,", "Aria" }.Select(CraftPanel.IsRecipeLine)),
+                    "True True True True True False False False False");
+                Check("...its item and level as read", $"{CraftPanel.ItemOf("Wind Serum (Novice Lv- 10)")} {CraftPanel.LevelOf("Wind Serum (Novice Lv- 10)")} | {CraftPanel.ItemOf("Wihd Serum (Novite Lv. 10)")}", "Wind Serum 10 | Wihd Serum");
                 // the panel counts the tries; what the loot list shows meanwhile is their output, never a drop; chat craft lines are left out
                 var pe = new SessionEngine(items); var pt = DateTime.UtcNow;
                 var serum = items.IdOf("Life Serum (Bound)"); var other = items.IdOf("Orichalcum Ore");

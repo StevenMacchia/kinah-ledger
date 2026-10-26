@@ -2386,6 +2386,9 @@ public sealed partial class TrackerSession
     /// <summary>One finished race of the gathering bar (also what tests feed).</summary>
     internal void GatherOutcome(DateTime at, bool ok, bool upgradeRoll)
     {
+        // the crafting panel showed crafting a moment ago and nothing names a node: a craft's bars, never a gather, and no
+        // token a loot list row could count on (2026-10-25 20:25: 19 "unknown node" attempts from a Wind Serum queue)
+        if (CraftBarsNear(at)) { CrashLog.NoteBurst("a Success/Fail race just after the crafting panel, with no gathering panel or node named: not a gather attempt"); return; }
         lock (_gatherTokens)
         {
             if (upgradeRoll) { if (_gatherTokens.Count > 0) _gatherTokens[^1] = _gatherTokens[^1] with { Upgraded = ok }; }
@@ -3351,12 +3354,15 @@ public sealed partial class TrackerSession
             var s = CraftPanel.Measure(bmp, region, g);
             if (!s.Visible)
             {
-                PanelLook(now, false, false, null);
+                // a loading screen, a reward, shop or event window, death or a cutscene ends a queue at once
+                PanelLook(now, false, false, null, sceneLeft: Scene.Current is KinahLedger.Session.Scene.Loading or KinahLedger.Session.Scene.Reward or KinahLedger.Session.Scene.Market
+                    or KinahLedger.Session.Scene.EventCards or KinahLedger.Session.Scene.Death or KinahLedger.Session.Scene.Cutscene);
                 bmp.Dispose();
                 return null;
             }
             List<string>? read = null;
-            if (!_panelUp || (now - _panelTextAt).TotalSeconds >= 5)
+            // read when it opens, when it comes back from a pass or two away (crafting held over the gap), and every 5 s
+            if (!_panelUp || _panelGonePasses > 0 || (now - _panelTextAt).TotalSeconds >= 5)
             {
                 _panelTextAt = now;
                 read = await CraftPanel.ReadTextAsync(bmp, region, g) is null ? new List<string>() : CraftPanel.LastLines.ToList();
@@ -3374,32 +3380,94 @@ public sealed partial class TrackerSession
     /// One look of the crafting panel's locator, which says crafting or a gathering bar: <paramref name="visible"/> when
     /// the strip's labels are in place, <paramref name="raised"/> for the gathering panel above the skill bar, and the
     /// lines its text read gave this pass (null when the text wasn't read). Also what replay's "panel" reads feed.
+    /// <para>
+    /// 2026-10-25 20:24 to 20:39, Steven crafting 21 Wind Serums: the panel went for a pass after each craft (it does
+    /// between two crafts of a queue), "not crafting" came with it, and the title read when it came back was garbled ("4
+    /// /z:iT,", "C+afting ProgYéSs"), so the bars went to the gathering reader: 19 "unknown node" gather attempts in four
+    /// minutes, the serums on the loot list left waiting for a chat line. Now the recipe line under the title ("Wind Serum
+    /// (Novice Lv. 10)", <see cref="CraftPanel.IsRecipeLine"/>) is a second witness of crafting; crafting lasts through
+    /// passes without the panel until it has been away <see cref="PanelGonePasses"/> passes and <see cref="PanelGoneSeconds"/>
+    /// s (or the scene left: a loading screen, a reward window); and a panel seen within <see cref="PanelCraftGraceSeconds"/>
+    /// s of crafting is still crafting. The raised gathering panel is never crafting, whatever came before.
+    /// </para>
     /// </summary>
-    internal void PanelLook(DateTime now, bool visible, bool raised, IReadOnlyList<string>? lines)
+    internal void PanelLook(DateTime now, bool visible, bool raised, IReadOnlyList<string>? lines, bool sceneLeft = false)
     {
         if (!visible)
         {
-            if (_panelUp && _panelIsCraft) { CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); }
-            _panelUp = false; _panelIsCraft = false;
+            if (!_panelUp) return;
+            _panelGonePasses++;
+            // a pass or two without the panel between two crafts is the same queue
+            if (_panelIsCraft && !sceneLeft && (_panelGonePasses < PanelGonePasses || (now - _panelSeenAt).TotalSeconds < PanelGoneSeconds)) return;
+            if (_panelIsCraft) { CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); }
+            _panelUp = false; _panelIsCraft = false; _panelGonePasses = 0;
             return;
         }
+        _panelGonePasses = 0; _panelSeenAt = now;
+        // the raised panel above the skill bar is the gathering panel, never crafting, and ends any grace of a craft before
+        if (raised)
+        {
+            if (_panelIsCraft) CrashLog.NoteBurst("crafting panel gone: the gathering panel is up");
+            _panelIsCraft = false; _panelCraftAt = DateTime.MinValue;
+        }
+        bool graced = _panelCraftAt != DateTime.MinValue && (now - _panelCraftAt).TotalSeconds is >= 0 and <= PanelCraftGraceSeconds;
         if (lines != null)
         {
             // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
-            // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
-            // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
-            // the raised panel above the skill bar is the gathering panel, never crafting
-            bool craft = !raised && ((_panelUp && _panelIsCraft) || lines.Any(CraftPanel.IsTitleLine));
+            // panel headed "Crafting in Progress", or showing a recipe line with its mastery level, is crafting; any other
+            // is left alone, and its loot stays loot. Once seen as crafting it stays so until the panel has gone (a later
+            // read can come back garbled)
+            bool title = lines.Any(CraftPanel.IsTitleLine), recipeLine = lines.Any(CraftPanel.IsRecipeLine);
+            bool craft = !raised && (title || recipeLine || (_panelUp && _panelIsCraft) || graced);
             // up and gone alternated 250 times in 36 minutes on 2026-10-24: written once a minute each, then counted
-            if (craft != _panelIsCraft || !_panelUp) CrashLog.NoteBurst(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", lines)}): not counted");
+            if (craft != _panelIsCraft || !_panelUp)
+                CrashLog.NoteBurst(!craft ? $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", lines)}): not counted"
+                    : title ? "crafting panel up"
+                    : recipeLine ? "crafting panel up: its recipe line shows, the title read garbled"
+                    : "crafting panel up: crafting a moment ago, the title read garbled");
             _panelIsCraft = craft;
             var text = CraftPanel.Parse(lines);
             var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
+            // a known recipe read once with a letter wrong ("Wihd Serum", 20:26:22) is the same recipe, not a new one
+            if (recipe.Length >= 2 && recipe != _panelRecipe && _panelRecipe.Length >= 2 && RecipeBook.ForOutput(_panelRecipe) != null && RecipeBook.ForOutput(recipe) == null
+                && NameMatch.Distance(recipe.ToLowerInvariant(), _panelRecipe.ToLowerInvariant(), 20) <= 20)
+            {
+                CrashLog.NoteBurst($"crafting panel: \"{recipe}\" read for {_panelRecipe}, kept");
+                recipe = "";
+            }
             if (recipe.Length >= 2 && text is { } tl && CraftPanel.LevelOf(tl.Recipe) is int lv and > 0) _panelLevel = lv;
             else if (recipe.Length >= 2 && recipe != _panelRecipe) _panelLevel = 0;
             if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", lines)})"); }
         }
+        else if (!raised && !_panelIsCraft && graced)
+        {
+            CrashLog.NoteBurst("crafting panel up: crafting a moment ago");
+            _panelIsCraft = true;
+        }
+        if (_panelIsCraft) _panelCraftAt = now;
         _panelUp = true;
+    }
+
+    /// <summary>Passes and seconds the crafting panel must be away before its queue is over (between two crafts it goes for about a second).</summary>
+    public const int PanelGonePasses = 3;
+    public const double PanelGoneSeconds = 4;
+    /// <summary>How long after the panel last showed crafting its bars are still a craft's, never a gathering bar's.</summary>
+    public const double PanelCraftGraceSeconds = 8;
+    int _panelGonePasses;
+    DateTime _panelSeenAt = DateTime.MinValue, _panelCraftAt = DateTime.MinValue;
+
+    /// <summary>
+    /// A race at <paramref name="at"/> that the crafting panel's bars likely ran: the panel showed crafting within the
+    /// grace, and nothing names a node being gathered (the gathering panel's item line or its lines in the loot list's band,
+    /// a node on the target bar). Such a race is logged, never a gather attempt (2026-10-25 20:25).
+    /// </summary>
+    bool CraftBarsNear(DateTime at)
+    {
+        if (_panelCraftAt == DateTime.MinValue || (at - _panelCraftAt).TotalSeconds is < -1 or > PanelCraftGraceSeconds) return false;
+        if (_panelItem.Item.Length > 0 && (at - _panelItem.At).TotalSeconds is >= -1 and <= PanelRaceSeconds) return false;
+        if ((at - _gatherPanelAt).TotalSeconds is >= -2 and <= PanelItemSeconds) return false;
+        if (Target.Node != null && (at - Target.NodeAt).TotalSeconds is >= -1 and <= TargetNodeSeconds) return false;
+        return true;
     }
 
     /// <summary>

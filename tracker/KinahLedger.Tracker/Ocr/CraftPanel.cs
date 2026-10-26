@@ -220,10 +220,25 @@ public static class CraftPanel
             || Session.TrackerSession.IsCraftTitle(line)
             || Regex.IsMatch(line, @"(?:^|\W)[cg]?\s?r?[aåäà4]ft(?:ing|in|ng)\s+[il1]n\b", RegexOptions.IgnoreCase));
 
-    /// <summary>The panel's lines top down, split into the queue ("1 / 2", read from the title) and the recipe (the first line that is neither the title nor the proficiency line).</summary>
+    /// <summary>
+    /// The panel's recipe line, read clean or not: the item, then its mastery tier and level in brackets ("Wind Serum
+    /// (Novice Lv. 10)", read on 2026-10-25 as "Wind Serum (Novice Lv- 10)", "(Novice Lv. IO)", "Wihd Serum (Novite Lv. 10)").
+    /// No other panel with the Success and Fail bars (a node's gathering bar, an Odyle cube) shows one, so it is a witness of
+    /// the crafting window at work when the title above it comes out garbled.
+    /// </summary>
+    public static bool IsRecipeLine(string line) =>
+        Regex.IsMatch(line, @"\([^()]{0,24}\bL[vy][\.\-,:;']?\s*[0-9IlOo|]{1,3}\b", RegexOptions.IgnoreCase)
+        || Regex.IsMatch(line, @"\b(?:novice|apprentice|journeyman|expert|master|professional|artisan)\s+L[vy]\b", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// The panel's lines top down, split into the queue ("1 / 2", read from the title) and the recipe: the line with the
+    /// mastery level (<see cref="IsRecipeLine"/>), else the first line that is neither the title, the proficiency line nor
+    /// a queue count. A title garbled past <see cref="IsTitleLine"/> ("qaf€ihgfiwprcgté$s 1 m/:ål" above "Wind Serum (Novice
+    /// Lv- 10)", 2026-10-25 20:25:14) was the first such line and filed crafts under a recipe that doesn't exist.
+    /// </summary>
     public static (int Done, int Of, string Recipe)? Parse(IEnumerable<string> topDown)
     {
-        int done = 0, of = 0; string recipe = "";
+        int done = 0, of = 0; string recipe = "", leveled = "";
         foreach (var text in topDown)
         {
             if (IsTitleLine(text))
@@ -233,19 +248,27 @@ public static class CraftPanel
                 if (m.Success) { done = int.Parse(m.Groups[1].Value); of = int.Parse(m.Groups[2].Value); }
                 continue;
             }
-            if (recipe.Length == 0 && text.Trim().Length >= 3 && !text.Contains("Proficiency", StringComparison.OrdinalIgnoreCase)) recipe = text.Trim();
+            if (leveled.Length == 0 && IsRecipeLine(text)) leveled = text.Trim();
+            // a recipe's name has no slash; the title's queue count ("4 /z:iT,", "13 / Tl") has one
+            if (recipe.Length == 0 && text.Trim().Length >= 3 && !text.Contains('/') && !text.Contains("Proficiency", StringComparison.OrdinalIgnoreCase)) recipe = text.Trim();
         }
+        if (leveled.Length > 0) recipe = leveled;
         return of > 0 || recipe.Length > 0 ? (done, of, recipe) : null;
     }
 
-    /// <summary>The recipe's item name without the level the panel adds: "Life Serum (Bound) (Novice Lv. 1)" → "Life Serum (Bound)".</summary>
-    /// <summary>The recipe's mastery level in the panel's title ("Orichalcum Ingot (Novice Lv. 25)" → 25), 0 when it isn't read.</summary>
-    public static int LevelOf(string recipe) => Regex.Match(recipe, @"\bLv\.?\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
+    /// <summary>The recipe's mastery level in the panel's title ("Orichalcum Ingot (Novice Lv. 25)" → 25, "Lv- 10" as read too), 0 when it isn't read.</summary>
+    public static int LevelOf(string recipe) => Regex.Match(recipe, @"\bLv[\.\-,:;']?\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
+    /// <summary>The recipe's item name without the level the panel adds: "Life Serum (Bound) (Novice Lv. 1)" → "Life Serum (Bound)".</summary>
     /// The panel's close button can come with the title as a lone "X" after the level (2026-10-25 07:22:39, a great success:
     /// "Fine Durable Balaur Horn (Professional Lv. 30) X"), which kept the level on and filed three crafts under a recipe
-    /// that doesn't exist; that X, or a short run of symbols, after the level goes with it.
-    public static string ItemOf(string recipe) => Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+    /// that doesn't exist; that X, or a short run of symbols, after the level goes with it. A tier read wrong ("Wihd Serum
+    /// (Novite Lv. 10)", 2026-10-25 20:26:22) goes too: any bracket holding a level at the end.
+    public static string ItemOf(string recipe)
+    {
+        var s = Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+        return Regex.Replace(s, @"\s*\([^()]{0,24}\bL[vy][\.\-,:;']?\s*[0-9IlOo|]{1,3}\s*\)?(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+    }
 }
 
 /// <summary>
