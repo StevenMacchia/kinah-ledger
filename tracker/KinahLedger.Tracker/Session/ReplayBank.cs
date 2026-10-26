@@ -206,7 +206,15 @@ public static class ReplayBank
         var keptDir = CrashLog.DirOverride;
         CrashLog.DirOverride = TestTemp.Path("kl-bank-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(CrashLog.DirOverride);
-        try { return RunCaseIn(caseDir, node, settings, items, game); }
+        try
+        {
+            var res = RunCaseIn(caseDir, node, settings, items, game);
+            // "print_log": a pattern; the lines of the case's reads.log that match it are printed (reading a case on the build server)
+            if (node["print_log"]?.GetValue<string>() is { Length: > 0 } pat && File.Exists(CrashLog.ReadsPath))
+                foreach (var line in File.ReadLines(CrashLog.ReadsPath).Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, pat)))
+                    Console.WriteLine($"  ({Path.GetFileName(caseDir)}) {line}");
+            return res;
+        }
         // KL_BANK_KEEP set: each case's reads.log is kept and its folder printed, for reading what a case did
         finally { var made = CrashLog.DirOverride; CrashLog.DirOverride = keptDir; if (Environment.GetEnvironmentVariable("KL_BANK_KEEP") is { Length: > 0 }) Console.WriteLine($"  ({Path.GetFileName(caseDir)}: log kept in {made})"); else try { Directory.Delete(made, true); } catch (Exception) { } }
     }
