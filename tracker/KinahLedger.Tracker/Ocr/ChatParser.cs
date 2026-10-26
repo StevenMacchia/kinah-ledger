@@ -919,17 +919,40 @@ public sealed class LineTracker
     /// <summary>After a stretch the chat couldn't be seen, the next read is history again, like the first one: lines that arrived unseen aren't counted.</summary>
     public void Rebase() { _prev = new(); _anchor = new(); _since.Clear(); _faded = false; }
 
-    void Anchor(List<string> keys) { if (keys.Count >= 3) { _anchor = keys; _since.Clear(); } }
+    // only a read that holds a line the chat prints (a pickup, a player's line) can be the anchor: a game window over the
+    // chat read twice the same ("Can craft | Orichalcum Mace", "MAX | 3 | MAX | 3") became it, and the next real read lined
+    // up with nothing (2026-10-25: 484 reads unaligned)
+    List<string> _cur = new();
+    bool Anchor(List<string> keys)
+    {
+        if (keys.Count < 3 || !_cur.Any(l => l.TrimStart().StartsWith('[') || LootKey(Key(l)))) return false;
+        _anchor = keys; _since.Clear();
+        return true;
+    }
+
+    /// <summary>Reads that were a game window over the chat, not the chat (<see cref="Panel"/>): skipped, never the baseline.</summary>
+    public int Panels { get; private set; }
+    /// <summary>True when the last read was such a panel (the session doesn't keep it as the last read either).</summary>
+    public bool LastPanel { get; private set; }
+
+    /// <summary>
+    /// A game window over the chat: three lines or more, none the chat would print, numbers among them ("MAX | 3 | MAX | 3",
+    /// a storage window's "16 | 21 | 89 | 70 | 105 | 10", "U Lv. 15 | U Lv. 20 | Lv. 25"; 69 reads on 2026-10-25, and 35 more
+    /// that couldn't line up after one).
+    /// </summary>
+    static bool Panel(List<string> cur) => cur.Count >= 3 && !cur.Any(ChatLike) && cur.Any(l => Key(l).Any(char.IsDigit));
 
     List<string> Returned(List<string> keys, List<string> fresh)
     {
-        if (keys.Count >= 3) Anchor(keys); else _since.AddRange(fresh.Select(Key));
+        if (!Anchor(keys)) _since.AddRange(fresh.Select(Key));
         return fresh;
     }
 
     public List<string> NewLines(List<string> cur)
     {
-        LastAfterFade = false; LastFromAnchor = false;
+        LastAfterFade = false; LastFromAnchor = false; LastPanel = false;
+        _cur = cur;
+        if (Panel(cur)) { Panels++; LastPanel = true; return new List<string>(); }
         // the frameless chat fades out when idle; when a loot line brings it back, the read before it is this empty one.
         // A read of a line or two with nothing chat-like in it (a stray "99" from the world behind the chat) counts as
         // empty too: as the new baseline it left the next real read nothing to line up with, and that read's lines were lost.

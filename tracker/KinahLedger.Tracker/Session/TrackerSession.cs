@@ -272,6 +272,8 @@ public sealed partial class TrackerSession
         fresh.SetZone(old.Zone);
         Engine = fresh;
         old.Finish();
+        // the audit counts kills across chunks: the finished engine's go with it (KillsSoFar)
+        Interlocked.Add(ref _killsRotated, old.Totals().Kills);
         return old;
     }
 
@@ -1262,11 +1264,23 @@ public sealed partial class TrackerSession
                 lock (_countedLines) _countedGarbled.AddRange(_countedLines.Where(x => (now - x.At).TotalSeconds <= 30).Select(x => x.Line));
             }
         }
-        else if (_garbledSince is { } gs && lines.Count > 0)
+        else if (_garbledSince is { } gs && lines.Count > 0 && !_tracker.LastPanel)
         {
-            // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up
-            if ((now - gs).TotalSeconds > SettleSeconds) _garbledSince = null;
-            else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs; }
+            // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up:
+            // SettleBoundSeconds of chat read after the last read that didn't line up (2026-10-25: it stayed open up to 42 s
+            // and took new lines from the vote, dated when the garbling began)
+            if ((now - gs).TotalSeconds > SettleSeconds || (_chatLinesAt - _garbledLast).TotalSeconds > SettleBoundSeconds)
+            {
+                _garbledSince = null;
+                CrashLog.NoteBurst($"the chat lined up again {(now - _garbledLast).TotalSeconds:0} s after the last read that didn't: the settle closed, lines count as they come");
+            }
+            else
+            {
+                settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs;
+                // only what was on screen by the last read that didn't line up: a line that came after is the vote's, and counts
+                // at its own time (16:38:31: 157 Kina taken from the vote and dated 13 s back, before the zone changed)
+                foreach (var l in settled.Where(SettleLate).ToList()) { settled.Remove(l); CrashLog.NoteBurst($"{l.Trim()}: first on screen after the reads lined up again, left to the vote"); }
+            }
         }
         Reread.NoteFirstSeen(_firstSeen, lines, now);
         // every Kina amount this read shows, counted or not: a rise of the counter no line claims is named after them
@@ -1274,7 +1288,9 @@ public sealed partial class TrackerSession
         Reread.Remember(_recent, lines, now);
         // an empty read (the chat fading out) is not the last read: the settle needs the last read that showed lines
         // (Steven, 2026-10-23 11:07: all 21 event rewards lost when the chat faded right after the clean read)
-        if (lines.Count > 0) { _lastLines = lines; _chatLinesAt = now; }
+        // ...nor is a game window over the chat (LineTracker.Panel): the burst, the overlap and the settle look at the last real read
+        if (_tracker.LastPanel) CrashLog.NoteBurst("a game window over the chat (numbers, no line the chat prints): not a read of the chat, skipped");
+        else if (lines.Count > 0) { _lastLines = lines; _chatLinesAt = now; }
         bool batchAchievement = false;
         bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat", ChatVoter.Out? meta = null)
         {
@@ -2598,6 +2614,10 @@ public sealed partial class TrackerSession
     // The quest tracker's "Defeat … (n/20)" lines count kills of quest enemies exactly, so where every enemy fought is a
     // quest enemy, the kills counted should rise as fast as the counter. Pass times say how often the screen is read.
     int _passes; double _passMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
+    /// <summary>Kills counted in the engines Rotate handed back (the finished chunks).</summary>
+    int _killsRotated;
+    /// <summary>Kills counted since this session began: the finished chunks' and the current engine's.</summary>
+    internal int KillsSoFar => Volatile.Read(ref _killsRotated) + Engine.Totals().Kills;
     readonly Dictionary<int, int> _questMax = new();
     /// <summary>A new quest number seen once, waiting for the next read to agree (and when it was first seen).</summary>
     readonly Dictionary<int, (int N, DateTime At)> _questPending = new();
@@ -2665,14 +2685,18 @@ public sealed partial class TrackerSession
     internal void Audit(DateTime? at = null)
     {
         var now = at ?? DateTime.UtcNow;
-        if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
+        if (_auditKills < 0) { _auditKills = KillsSoFar; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
         var sameNote = ChatSameNote();
         // the decoder runs on its own thread: its time over the minute goes in at the same per-pass rate
         double dec = NameDecoder.TotalMs; Times.Add("decoder", dec - _decoderMsAt); _decoderMsAt = dec;
         SaveColours();
         ReportLayout();   // the text size is known by now: the layout's key gets it
-        int kills = Engine.Totals().Kills;
+        // kills since the session began, across the 15-minute chunks (Rotate): the engine's own total starts over at each
+        // chunk, and the audit subtracting it read "kills counted +-234" at 14:56 on 2026-10-25 (an audit artefact; the
+        // kills went with their chunk). An unexplained drop counts from zero, never below
+        int kills = KillsSoFar;
+        if (kills < _auditKills) _auditKills = 0;
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
         if (_passes > 0)
