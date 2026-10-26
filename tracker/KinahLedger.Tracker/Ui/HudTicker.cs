@@ -13,7 +13,7 @@ namespace KinahLedger.Ui;
 /// out over 6 s; a notice (the reader paused, an update waiting) is an orange toast at the top; a rare drop a taller toast
 /// framed in its grade's colour while the window holds it. It sits left of the target bar by default (HudLooks.TickerLeftOfCentre).
 /// </summary>
-public sealed class HudTicker : IHudLook
+public sealed partial class HudTicker : IHudLook
 {
     /// <summary>For layout renders and the Options preview: every toast at its place's strength, nothing animates or leaves.</summary>
     public bool Still { get; init; }
@@ -67,6 +67,7 @@ public sealed class HudTicker : IHudLook
             HorizontalAlignment = HorizontalAlignment.Left,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _dot, _run, _time, Rule(14, 9), _rate, _unit, _sep2, _total } },
         };
+        BuildCraft();   // the crafting pill (Ui/HudCraftLooks.cs)
         Paint();
         Root = new StackPanel { Margin = Inset, Width = 270, Children = { _pill, _stack } };
     }
@@ -104,6 +105,7 @@ public sealed class HudTicker : IHudLook
             _total.Text = V("total");
             _sep2.Visibility = _total.Visibility = V("total").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
+        bool crafting = CraftPill(values);   // while the crafting window is open: the crafts instead of the pickups
 
         // what the stack shows, top down: one notice, the accuracy line, the rare drop, then pickups under 6 s old; four at most
         var want = new List<(string Key, string Kind, Func<Border> Make)>();
@@ -119,16 +121,18 @@ public sealed class HudTicker : IHudLook
         if (rare != null) want.Add((rare.Id, "rare", () => RareToast(rare)));
         bool skipped = false;
         var now = DateTime.UtcNow;
-        foreach (var p in Picks(values))
+        foreach (var p in crafting ? CraftKit.Crafts(values) : Picks(values))
         {
             if (rare != null && !skipped && string.Equals(p.Name, rare.Name, StringComparison.OrdinalIgnoreCase)) { skipped = true; continue; }
             double age = p.At == DateTime.MinValue ? 0 : (now - p.At).TotalSeconds;
             if (!Still && age >= Life) continue;
             if (_toasts.TryGetValue(p.Id, out var had) && had.Gone) continue;
             var pick = p;
-            want.Add((p.Id, "pick", () => PickToast(pick, age)));
+            want.Add((p.Id, "pick", () => crafting ? CraftToast(pick) : PickToast(pick, age)));
         }
-        want = want.Take(4).ToList();
+        // two feed lines read in the same instant with the same name and amount share a key (2026-10-26 10:05, "Specified
+        // Visual is already a child of another Visual"): one toast per key, the first one
+        want = want.GroupBy(w => w.Key).Select(g => g.First()).Take(4).ToList();
         if (!Changed("stack", string.Join("\n", want.Select(w => w.Key)))) return;
 
         // toasts no longer wanted leave; new ones are made once; the rest keep their animations and move to their place
@@ -148,13 +152,14 @@ public sealed class HudTicker : IHudLook
             t.Place.Margin = new Thickness(0, i == 0 ? 6 : 4, 0, 0);
             t.Place.Opacity = kind == "pick" ? PlaceOpacity[i] : 1;
             if (kind == "pick") t.Body.Background = Wash("pick", i == 0);
+            if (t.Place.Parent is Panel owner) owner.Children.Remove(t.Place);
             _stack.Children.Add(t.Place);
         }
     }
 
     static double Age(IReadOnlyDictionary<string, string> values, string id)
     {
-        var p = Picks(values).FirstOrDefault(x => x.Id == id);
+        var p = Picks(values).Concat(CraftKit.Crafts(values)).FirstOrDefault(x => x.Id == id);
         return p == null || p.At == DateTime.MinValue ? 0 : (DateTime.UtcNow - p.At).TotalSeconds;
     }
 

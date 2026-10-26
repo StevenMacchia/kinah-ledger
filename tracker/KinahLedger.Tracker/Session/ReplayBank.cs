@@ -120,6 +120,14 @@ public static class ReplayBank
             var gcm = got["craft_made"] as JsonObject ?? new JsonObject();
             foreach (var (n, v) in ecm) if (N(gcm[n]) != N(v)) d.Add($"craft made {n}: expected {v}, counted {gcm[n]?.ToString() ?? "0"}");
         }
+        // the recipes the crafts were filed under, "worked/failed up won/rolled" each (2026-10-26): every one named must match,
+        // and no other may be counted (a recipe the panel cut short is the recipe being crafted, never a new one)
+        if (expect["craft_recipes"] is JsonObject ecr)
+        {
+            var gcr = got["craft_recipes"] as JsonObject ?? new JsonObject();
+            foreach (var (n, v) in ecr) if ((gcr[n]?.ToString() ?? "none") != v?.ToString()) d.Add($"craft recipe {n}: expected {v}, counted {gcr[n]?.ToString() ?? "none"}");
+            foreach (var (n, v) in gcr) if (ecr[n] == null) d.Add($"craft recipe {n}: not expected, counted {v}");
+        }
         // ...and the chat's items a run set aside (its rewards are a picture's to count), the same way
         if (expect["run_chat_items"] is JsonObject erci)
         {
@@ -537,14 +545,16 @@ public static class ReplayBank
         foreach (var (id, n) in e.Items.OrderBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal)) outItems[items.NameOf(id)] = n;
         // a text case's crafts: the races its "bar" reads gave the panel, as the Crafting part of the window counts them,
         // and what they made by item (the panel is the output's witness, never the loot list)
-        var made = new JsonObject();
+        var made = new JsonObject(); var recipes = new JsonObject();
         foreach (var rc in session.CraftView.CraftSnapshot())
         {
             ok += rc.Ok; fail += rc.Fail;
             foreach (var (mi, mn) in rc.Made) made[mi] = (made[mi]?.GetValue<int>() ?? 0) + mn;
+            recipes[rc.Name] = $"{rc.Ok}/{rc.Fail} up {rc.Upgraded}/{rc.Upgraded + rc.NotUpgraded}";
         }
         var res = new JsonObject { ["craft_ok"] = ok, ["craft_fail"] = fail, ["items"] = outItems };
         if (made.Count > 0) res["craft_made"] = made;
+        if (recipes.Count > 0) res["craft_recipes"] = recipes;
         if (table != null) res["table"] = table;
         if (res0Cards != null) res["cards"] = res0Cards;
         if (e.Totals().Kinah > 0) res["kinah"] = e.Totals().Kinah;

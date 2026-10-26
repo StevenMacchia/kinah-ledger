@@ -59,6 +59,17 @@ public sealed class SessionEngine
     /// <summary>Copies of the crafting ledger, safe to read from the UI thread.</summary>
     public List<CraftLedger.Recipe> CraftSnapshot() { lock (_lock) return _craft.Snapshot(); }
 
+    readonly List<(string Name, DateTime At)> _outputsSeen = new();
+
+    /// <summary>
+    /// Items a recipe makes that the loot list or the chat showed picked up in the last <paramref name="seconds"/>: which of
+    /// several recipes a name the crafting panel cut short is (CraftPanel.Settle).
+    /// </summary>
+    public List<string> RecentOutputs(DateTime now, double seconds = 120)
+    {
+        lock (_lock) return _outputsSeen.Where(o => (now - o.At).TotalSeconds is >= -2 && (now - o.At).TotalSeconds <= seconds).Select(o => o.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     /// <summary>The player's own Market activity seen in chat during this count: what sold, for how much, and what expired.</summary>
     public int Sold { get; private set; }
     public long SoldKinah { get; private set; }
@@ -535,7 +546,13 @@ public sealed class SessionEngine
             // never takes a pickup (Steven, 2026-10-23: "it needs to not be drops for crafting")
             // With the crafting window open, an item a recipe makes is set aside the same way: likely a craft whose bars weren't
             // seen, so it is no craft (no bars, no craft) and no drop either
-            if (ev is ItemAcquired named) _craft.PickupNamesUpgrade(_items.NameOf(named.ItemId), named.Time);   // the loot list naming a craft's upgrade (CraftLedger)
+            if (ev is ItemAcquired named)
+            {
+                var nn = _items.NameOf(named.ItemId);
+                _craft.PickupNamesUpgrade(nn, named.Time);   // the loot list naming a craft's upgrade (CraftLedger)
+                // an item a recipe makes, picked up: the witness that settles a recipe name the panel cut short (RecentOutputs)
+                if (RecipeBook.ForOutput(nn) != null) { _outputsSeen.Add((nn, named.Time)); if (_outputsSeen.Count > 30) _outputsSeen.RemoveAt(0); }
+            }
             if (ev is ItemAcquired made && (_craft.IsPanelOutput(_items.NameOf(made.ItemId), made.Time)
                 || (CraftWindowOpen(made.Time) && RecipeBook.ForOutput(_items.NameOf(made.ItemId)) != null)))
             {
