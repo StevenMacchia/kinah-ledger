@@ -271,6 +271,7 @@ public sealed class PlacementGuide : Window
         _veil.Children.Clear();
         _veil.Children.Add(new Rectangle { Width = w, Height = h, Fill = VeilBrush });
         var taken = new List<Rect>();
+        var here = Visible(new DRect(_pos, _size));
 
         // the bar along the bottom: what to do, and the two keys
         var help = HelpBar();
@@ -285,12 +286,11 @@ public sealed class PlacementGuide : Window
         };
         foreach (var (name, box) in parts)
         {
-            if (box.IntersectsWith(_view)) PartBox(name, box, name == "target bar");
+            if (box.IntersectsWith(_view)) PartBox(name, box, name == "target bar", here);
             else EdgeMarker(name, box, taken, w, h);
         }
 
         // the other snap spots on this screen, as dotted ghosts the panel's size
-        var here = Visible(new DRect(_pos, _size));
         foreach (var s in HudSpots.All)
         {
             if (s.Key == _chosen) continue;
@@ -300,8 +300,8 @@ public sealed class PlacementGuide : Window
             if (Math.Abs(g.X - here.X) < 4 && Math.Abs(g.Y - here.Y) < 4) continue;
             Ghost(s.Name, g);
         }
+        PaintChooser();   // first: the lit spot's bold name is wider, and the chooser is centred on its measured width
         PlaceTop();
-        PaintChooser();
     }
 
     /// <summary>The panel, the gold outline round it, and its tag and chooser under it (over it when it sits low).</summary>
@@ -367,8 +367,11 @@ public sealed class PlacementGuide : Window
         Child = Label(name, 12, fg ?? LabelInk, FontWeights.SemiBold),
     };
 
-    /// <summary>One of the game's parts in place: a faint dashed outline and its label above it (under it at the top of the screen).</summary>
-    void PartBox(string name, DRect box, bool labelRight)
+    /// <summary>
+    /// One of the game's parts in place: a faint dashed outline and its label above it (under it at the top of the screen,
+    /// and beside it when the panel sits over that spot).
+    /// </summary>
+    void PartBox(string name, DRect box, bool labelRight, Rect panel)
     {
         var r = Dip(box);
         var outline = Boxed(null, PartLine, 1.5, Dashes, 8, PartFill, new Thickness(0));
@@ -379,6 +382,15 @@ public sealed class PlacementGuide : Window
         double lw = label.DesiredSize.Width, lh = label.DesiredSize.Height;
         double lx = labelRight ? r.Right - lw : r.X, ly = r.Y - lh - 6;
         if (labelRight || ly < 8) ly = r.Bottom + 6;
+        var round = new Rect(panel.X - OutlineGap - 6, panel.Y - OutlineGap - 6, panel.Width + 2 * OutlineGap + 12, panel.Height + 2 * OutlineGap + 50);   // with its tag
+        if (round.IntersectsWith(new Rect(lx, ly, lw, lh)))
+        {
+            // beside the box, on the side away from the panel
+            bool right = panel.X + panel.Width / 2 < r.X + r.Width / 2;
+            lx = right ? r.Right + 8 : r.X - lw - 8;
+            ly = r.Y + (r.Height - lh) / 2;
+            if (round.IntersectsWith(new Rect(lx, ly, lw, lh))) { lx = right ? Math.Max(r.Right, round.Right) + 8 : Math.Min(r.X, round.X) - lw - 8; }
+        }
         Put(_veil, label, Math.Clamp(lx, 8, Math.Max(8, _veil.Width - lw - 8)), Math.Clamp(ly, 8, Math.Max(8, _veil.Height - lh - 8)));
     }
 

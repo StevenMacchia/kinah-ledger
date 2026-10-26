@@ -64,14 +64,16 @@ public static class HudSpots
     public static readonly Spot[] All = { new(Top, "Top centre"), new(Minimap, "Under minimap"), new(Target, "Left of target") };
 
     /// <summary>
-    /// The game's target bar: the centre of the band the target reader reads (TargetReader.Strip), as wide as the bar
-    /// itself. The game draws its interface to the window's height, so the bar is about 0.35 of the height across on any width.
+    /// The game's target bar (its name and health bar), inside the band the target reader reads (TargetReader.Strip). The
+    /// game draws its interface to the window's height, so the bar is measured in heights: 0.36 across, from 0.03 to
+    /// 0.088 down (Steven's 5120×2160 frame of 2026-10-23, where the mock outlines it).
     /// </summary>
     public static System.Drawing.Rectangle TargetBar(System.Drawing.Rectangle game)
     {
         var strip = KinahLedger.Ocr.TargetReader.Strip(game);
-        int w = Math.Min(strip.Width, (int)(game.Height * 0.35));
-        return new(game.Left + (game.Width - w) / 2, strip.Top, w, strip.Height);
+        int h = game.Height, w = Math.Min(strip.Width, (int)(h * 0.36));
+        int top = Math.Min(strip.Bottom - 1, strip.Top + (int)(h * 0.03)), bottom = Math.Min(strip.Bottom, strip.Top + (int)(h * 0.088));
+        return new(game.Left + (game.Width - w) / 2, top, w, Math.Max(1, bottom - top));
     }
 
     /// <summary>The minimap and its title: the right edge above the event header, which the game draws just under the map (EventHeader.Region).</summary>

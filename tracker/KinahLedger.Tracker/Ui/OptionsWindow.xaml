@@ -404,7 +404,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Panel position"/>
-                  <TextBlock x:Name="HudPositionHint" Style="{StaticResource RowHint}" Text="Back to the top centre of the game's screen, clear of the minimap and the chat."/>
+                  <TextBlock x:Name="HudPositionHint" Style="{StaticResource RowHint}" Text="Drag it over the game, or snap it to a spot. Reset puts it back at the top centre."/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                   <Button x:Name="HudPlaceBtn" Content="Place the panel…" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Drag it over the game, or snap it to the top centre, under the minimap or left of the target bar"/>
