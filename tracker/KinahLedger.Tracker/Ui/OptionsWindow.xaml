@@ -344,9 +344,19 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel over the game"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top strip with the figures you pick below. Drag it anywhere; it remembers where."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top strip with the figures you pick below, shown while the game is in front."/>
                 </StackPanel>
                 <CheckBox x:Name="HudChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- locked: click-through and never focused, like a game overlay; Move the panel in the tray unlocks it for 20 s -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Lock the panel in place"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Clicks go through it to the game. To move it, use Move the panel in the tray menu, or turn this off and drag it."/>
+                </StackPanel>
+                <CheckBox x:Name="HudLockChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Lock the panel in place"/>
               </Grid>
               <Border Style="{StaticResource Divider}"/>
               <!-- which figures the panel shows: any mix, in a fixed order; the window works them all out the same way -->

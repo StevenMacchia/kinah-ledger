@@ -51,6 +51,8 @@ public partial class MainWindow : Window
     bool Farming => _watcher.Farming;
     static Mode ModeOf(SessionEngine e) => GameWatcher.DominantKind(e) == "Gathering" ? Mode.Gather : Mode.Open;
     HudWindow? _hud;
+    /// <summary>The panel's lock and size (hud.json).</summary>
+    readonly HudPrefs _hudPrefs;
     DRect? _region = RegionStore.Load();
     DRect? _marketRegion = RegionStore.Load(RegionStore.MarketFile);
     bool _quitting, _balloonShown, _trayHintShown, _demo, _watcherStopped;
@@ -87,6 +89,8 @@ public partial class MainWindow : Window
         Icon = Native.AppIconSource();
         // the panel over the game shows the newest feed line and the rate since 0.8.30: the old default set moves to it once
         if (_prefs.HudFields == HudFields.OldDefault) _prefs.HudFields = HudFields.Default;
+        // the panel's lock and size: locked for a new install, left draggable for one that used the tracker before
+        _hudPrefs = HudPrefs.Load(existingInstall: _prefs.Welcomed || _prefs.LastVersion.Length > 0, remember: watch);
 
         // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
         // every start: the drops table open; Gathered, each gathering skill, Kinah by enemy and Soul Crystals folded into one line
@@ -577,6 +581,7 @@ public partial class MainWindow : Window
     {
         if (_hud == null) return;
         _hudValues["show"] = HudPresence();
+        _hudValues["unlocked"] = HudMoving ? "move" : _hudPrefs.Locked ? "" : "1";
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
         _hud.Update(_hudValues);
@@ -1420,11 +1425,12 @@ public partial class MainWindow : Window
         open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
         var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
+        var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
         var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
         var quit = new WF.ToolStripMenuItem("Quit Kinah Ledger"); quit.Click += (_, _) => { _quitting = true; Close(); };
-        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
+        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, movePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
         _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => Restore();
         _tray.BalloonTipClicked += (_, _) => Restore();
@@ -1491,6 +1497,7 @@ public partial class MainWindow : Window
         if (_prefs.ManualMarket && _marketRegion is DRect mm) RegionStore.Save(mm, RegionStore.MarketFile);
         if (WindowState == WindowState.Normal && !double.IsNaN(Left)) { _prefs.WinX = (int)Left; _prefs.WinY = (int)Top; }
         _prefs.Save();
+        _hudPrefs.Save();
     }
 
     /// <summary>Where the chat is read from, for Options › Game reading.</summary>

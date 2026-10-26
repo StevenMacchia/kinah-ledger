@@ -39,6 +39,23 @@ internal static class Native
         return w.Hooked ? w : null;
     }
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
+    const int GWL_EXSTYLE = -20;
+    const long WS_EX_TRANSPARENT = 0x20, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000;
+
+    /// <summary>
+    /// A locked panel: clicks pass through it to the game and it never takes focus (WS_EX_TRANSPARENT, WS_EX_NOACTIVATE).
+    /// Off, it can be clicked and dragged again. Either way it stays out of Alt+Tab (WS_EX_TOOLWINDOW). The readers let
+    /// our own click-through window through (GameWindow.Covered).
+    /// </summary>
+    public static void SetClickThrough(IntPtr hwnd, bool on)
+    {
+        long ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64() | WS_EX_TOOLWINDOW;
+        ex = on ? ex | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE : ex & ~(WS_EX_TRANSPARENT | WS_EX_NOACTIVATE);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
+    }
+
     sealed class ForegroundWatch : IDisposable
     {
         readonly WinEventProc _proc;   // kept here: Windows holds only a pointer to it

@@ -108,6 +108,7 @@ public partial class OptionsWindow : Window
         HelpCountingChk.IsChecked = c.HelpCounting;
         ShowAccuracyChk.IsChecked = c.ShowAccuracy;
         HudChk.IsChecked = c.Hud;
+        HudLockChk.IsChecked = c.HudLocked;
         AutoUpdateChk.IsChecked = c.AutoUpdate;
         AutoUpdateChk.IsEnabled = _host.AppSettings.Update.Check;
         BuildSkins(c.Skin);
@@ -175,6 +176,7 @@ public partial class OptionsWindow : Window
         HelpCountingChk.Click += (_, _) => Edit(_edit with { HelpCounting = HelpCountingChk.IsChecked == true });
         ShowAccuracyChk.Click += (_, _) => Edit(_edit with { ShowAccuracy = ShowAccuracyChk.IsChecked == true });
         HudChk.Click += (_, _) => Edit(_edit with { Hud = HudChk.IsChecked == true });
+        HudLockChk.Click += (_, _) => Edit(_edit with { HudLocked = HudLockChk.IsChecked == true });
         HudOpacity.Value = Math.Clamp(_host.Prefs.HudOpacity, 0.3, 1);
         HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
         HudOpacity.ValueChanged += (_, _) => { HudOpacityLbl.Text = $"{HudOpacity.Value:P0}"; _host.SetHudOpacity(HudOpacity.Value); };

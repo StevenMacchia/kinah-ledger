@@ -46,7 +46,9 @@ public static class HudFields
 
 /// <summary>
 /// One line over the game, like the site's compact mode: the figures the player picked (HudFields), worked out by the
-/// window itself so the panel and the window always agree. Drag it anywhere; its opacity is a slider in Options.
+/// window itself so the panel and the window always agree. Like a game overlay it shows only while the game is in front
+/// ("show"), and locked it lets clicks through to the game ("unlocked"); unlocked, drag it anywhere. Its opacity is a
+/// slider in Options. Everything it shows comes in through Update's values, worked out by the window.
 /// </summary>
 public sealed class HudWindow : Window
 {
@@ -147,11 +149,36 @@ public sealed class HudWindow : Window
             BorderBrush = FrameBrush,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_fields.Count == 1 && _fields[0] == "feed" ? 8 : 12),
             Padding = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(16, 10, 20, 10),
-            Child = new StackPanel { Children = { _row, _note, _acc, _alert } }
+            Child = new StackPanel { Children = { _row, _note, _acc, _alert, _dragHint } }
         };
-        Content = _frame;
+        // unlocked: a faint dashed outline on the frame's edge says it can be moved
+        _outline = new Rectangle { Stroke = OutlineBrush, StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 4, 3 }, RadiusX = _frame.CornerRadius.TopLeft, RadiusY = _frame.CornerRadius.TopLeft,
+            IsHitTestVisible = false, Visibility = Visibility.Collapsed };
+        Content = new Grid { Children = { _frame, _outline } };
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
+        MouseEnter += (_, _) => ShowDragHint(); MouseLeave += (_, _) => ShowDragHint();
+        SourceInitialized += (_, _) => Native.SetClickThrough(new WindowInteropHelper(this).Handle, _unlock.Length == 0);
     }
+
+    static readonly SolidColorBrush OutlineBrush = Frozen(Color.FromArgb(0x8C, 0xC9, 0xCF, 0xE6));
+    readonly Rectangle _outline;
+    readonly TextBlock _dragHint = new() { Text = "drag me", FontSize = 11.5, Foreground = Muted, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
+    /// <summary>The "unlocked" value: "" locked (clicks go through to the game), "1" unlocked, "move" unlocked for a while from the tray.</summary>
+    string _unlock = "";
+
+    /// <summary>Locks or unlocks the panel ("unlocked" value): click-through and never focused, or draggable with its outline.</summary>
+    void ApplyLock(string how)
+    {
+        if (how == _unlock) return;
+        _unlock = how;
+        var h = new WindowInteropHelper(this).Handle;
+        if (h != IntPtr.Zero) Native.SetClickThrough(h, how.Length == 0);
+        _outline.Visibility = how.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ShowDragHint();
+    }
+
+    /// <summary>"drag me" while it is being moved from the tray, and under the pointer while it is unlocked.</summary>
+    void ShowDragHint() => _dragHint.Visibility = _unlock == "move" || (_unlock.Length > 0 && IsMouseOver) ? Visibility.Visible : Visibility.Collapsed;
 
     static readonly SolidColorBrush FrameBrush = Frozen(Color.FromRgb(0x32, 0x3A, 0x66));   // frozen, like Muted
     readonly Border _frame;
@@ -288,6 +315,7 @@ public sealed class HudWindow : Window
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
         ShowAs(V("show"));
+        ApplyLock(V("unlocked"));
         _note.Text = V("notice");
         _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_feedLine != null)

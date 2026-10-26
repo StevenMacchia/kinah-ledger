@@ -179,6 +179,17 @@ public static class WpfApp
         DoEvents();
         Check(HudFields.Parse(p.HudFields).Contains(add) && HudFields.Parse(p.HudFields).Count == before.Count + 1, "panel figure saved: " + p.HudFields);
 
+        // the panel's lock (click-through over the game) follows Save like the other switches
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        bool lockedBefore = w.HudLocked;
+        Check(o.HudLockChk.IsChecked == lockedBefore, "Lock the panel in place opens as saved: " + lockedBefore);
+        Flip(o.HudLockChk);
+        Check(o.SaveBtn.IsEnabled && w.HudLocked == lockedBefore, "the panel lock waits for Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.HudLocked == !lockedBefore, "panel lock saved");
+
         o = Open();
         Click(o.HotkeyResetBtn);
         Click(o.SaveBtn);
@@ -373,6 +384,8 @@ public static class WpfApp
         foreach (var (file, fields, extra) in new (string, List<string>, Dictionary<string, string>)[]
         {
             ("ui-hud-notice.png", HudFields.Parse(null), new() { ["notice"] = "Update ready · installs when you leave the game" }),
+            // being moved from the tray: the dashed outline and the "drag me" hint
+            ("ui-hud-unlocked.png", HudFields.Parse(null), new() { ["unlocked"] = "move" }),
         })
         {
             var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
