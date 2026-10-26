@@ -604,7 +604,7 @@ public partial class MainWindow : Window
         _hudValues["notice"] = HudNotice();   // a price alert, the shortcut's problem or a waiting update (Ui/MainWindow.Notices.cs)
         _hudValues["noticeClock"] = HudNoticeClock();   // the That was wrong notice's gold line, while it counts down
         _hud.Update(_hudValues);
-        _hud.SetAccuracy(_accView?.Hud, _accView?.HasRows == true);
+        _hud.SetAccuracy(HudAccuracy, HudAccuracyToLook);   // only with Show accuracy details on (MainWindow.AccuracyCard.cs)
     }
 
     /// <summary>The panel's figures, for layout renders of the panel.</summary>

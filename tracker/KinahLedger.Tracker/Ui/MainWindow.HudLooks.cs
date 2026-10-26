@@ -19,6 +19,7 @@ public partial class MainWindow
     const string KinahIcon = ItemDictionary.IconBase + "Icon_gold.png";
     static readonly string[] PickKeys = { "", "Id", "At", "Count", "Worth", "Grade", "Icon", "Note", "Kind" };
     static readonly string[] RareKeys = { "rare", "rareId", "rareCount", "rareGrade", "rareIcon", "rareColor", "rareItem", "rarePrice", "rareWhere", "rareWatched", "rareChime" };
+    static readonly string[] TopKeys = { "top", "topCount", "topWorth", "topGrade", "topIcon" };
 
     /// <summary>
     /// The looks' values, from the window's tick (UpdateHud, through HudFeed): the last four pickups farming and in
@@ -32,6 +33,25 @@ public partial class MainWindow
         _hudValues["paused"] = paused.Length > 0 ? "Paused: " + paused : "";
         bool held = DateTime.UtcNow < _hudRareUntil;
         foreach (var k in RareKeys) _hudValues[k] = held ? _hudRare.GetValueOrDefault(k, "") : "";
+        foreach (var (k, v) in HudTopValues(_topRows)) _hudValues[k] = v;
+    }
+
+    /// <summary>
+    /// The Ticker's pinned fourth slot (Steven, 2026-10-26: "the 3 most recent and the Top Drop"): the session's most valuable
+    /// item, from the same drop and gathering rows as the window's tables and the Discord card's TOP DROPS, so it starts over
+    /// with them. Ranked by what one is worth, so a single Legend beats a stack of cheap drops; shown with the session's count
+    /// and their worth together, as the card shows it. Blank with no priced item yet.
+    /// </summary>
+    internal Dictionary<string, string> HudTopValues(IReadOnlyList<DropRow> rows)
+    {
+        var d = TopKeys.ToDictionary(k => k, _ => "");
+        static long Count(DropRow r) => long.TryParse(r.Drops, System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 ? n : 1;
+        var top = rows.Where(r => !r.Header && !r.Child && r.Worth > 0 && r.Name.Length > 0)
+            .OrderByDescending(r => r.Worth / Count(r)).ThenByDescending(r => r.Worth).FirstOrDefault();
+        if (top == null) return d;
+        d["top"] = top.Name; d["topCount"] = $"×{Count(top):N0}"; d["topWorth"] = FeedK(top.Worth);
+        d["topGrade"] = top.Grade.Length > 0 ? top.Grade : GradeOf(top.Name); d["topIcon"] = _items.IconUrl(_items.IdOf(top.Name));
+        return d;
     }
 
     /// <summary>The last four things picked up, farming or in an event (Kinah and items, not crafts or run steps), as the looks' values.</summary>
@@ -111,6 +131,8 @@ public partial class MainWindow
             d[p + "Icon"] = icon.Length > 0 ? icon : _items.IconUrl(_items.IdOf(name));
         }
         foreach (var k in RareKeys) d[k] = "";
+        // the session's top drop under the three newest pickups on the Ticker (a Legend, as the mock's rare drop)
+        d["top"] = "Shade Gloves"; d["topCount"] = "×1"; d["topWorth"] = "+28K"; d["topGrade"] = "Legend"; d["topIcon"] = _items.IconUrl(_items.IdOf("Shade Gloves"));
         return d;
     }
 
@@ -124,9 +146,11 @@ public partial class MainWindow
             ["rare"] = "Shade Gloves", ["rareId"] = "sample", ["rareCount"] = "×1", ["rareGrade"] = "Legend",
             ["rareIcon"] = _items.IconUrl(_items.IdOf("Shade Gloves")), ["rareColor"] = "#5AA6FF",
         };
+        var idle = new Dictionary<string, string>(normal) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["kinah"] = "", ["loot"] = "", ["total"] = "0", ["zone"] = "", ["last"] = "", ["feedText"] = "", ["feedValue"] = "" };
+        foreach (var k in normal.Keys.Where(k => k.StartsWith("pick") || k.StartsWith("top"))) idle[k] = "";
         var list = new List<(string, string, Dictionary<string, string>)>();
         foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker })
-            foreach (var (state, v) in new[] { ("normal", normal), ("notice", notice), ("rare", rare) })
+            foreach (var (state, v) in new[] { ("normal", normal), ("notice", notice), ("rare", rare), ("idle", idle) })
                 list.Add(($"ui-hud-{look}-{state}.png", look, v));
         list.AddRange(HudRareStates());   // the watched drop with its price (Ui/MainWindow.RareWatch.cs)
         return list;

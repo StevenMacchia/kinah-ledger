@@ -357,6 +357,22 @@ public static class WpfApp
             Check(!cv.Keys.Any(k => k.Contains("ccura", StringComparison.OrdinalIgnoreCase)) && !cv.Values.Any(x => x.Contains('%')), "panel crafting: no accuracy figure");
         }
 
+        // the Ticker's top drop (2026-10-26): the most valuable one of an item wins over a stack of cheap ones; blank with nothing priced
+        {
+            var rows = new List<DropRow>
+            {
+                new("Spiritstone", "40", "", "", Worth: 300_000),
+                new("Shade Gloves", "1", "", "", Grade: "Legend", Worth: 28_000),
+                new("Thick hide", "3", "", "", Worth: 0),
+            };
+            var tv = w.HudTopValues(rows);
+            Check(tv["top"] == "Shade Gloves" && tv["topCount"] == "×1" && tv["topWorth"] == "+28K" && tv["topGrade"] == "Legend",
+                $"top drop: {tv["top"]} {tv["topCount"]} {tv["topWorth"]} ({tv["topGrade"]})");
+            Check(w.HudTopValues(new List<DropRow> { new("Thick hide", "3", "", "") })["top"] == "", "top drop: none before anything priced");
+            // the panel's accuracy line ("23 to look at" read as an error): none with Show accuracy details off, the default
+            Check(!p.ShowAccuracy && w.HudAccuracy == null, "the panel shows no accuracy line with Show accuracy details off");
+        }
+
         // That was wrong (2026-10-26): a second shortcut, off by default, recorded like the first, kept only on Save
         {
             const System.Windows.Input.ModifierKeys C = System.Windows.Input.ModifierKeys.Control, S = System.Windows.Input.ModifierKeys.Shift;
