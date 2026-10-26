@@ -157,3 +157,10 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   windows between steady readings find it, the check agrees 3 times, 8,443 (a first try counted 12,519: the counter
   went unread through a fight and the lines' 4,076 was counted again from it, `KinaWitness.Observe`). A case may name
   `print_log`, a pattern: the lines of its reads.log that match are printed, for reading a case on the build server.
+- `text-2026-10-26-longsword-upgrade-cut` (Steven crafting ten Orichalcum Longswords, 10:11 to 10:14): on each blue combo
+  roll the panel names the recipe's upgrade, cut short, "Splendent Orichalcum Longsword (Novice Lv...". 0.8.40 kept the cut
+  bracket in the name and filed each roll under that "recipe" (no tries, nothing credited), so the three won rolls made no
+  Splendent. Right: one recipe, 8 worked, 2 failed, rolls 3 of 4 won, made 5 Longswords and 3 Splendents. A cut title loses
+  its cut level bracket and ellipsis (`CraftPanel.ItemOf`), and a cut name is settled against the recipe book
+  (`CraftPanel.Settle`). Run key `craft_recipes`: per recipe "worked/failed up won/rolled"; every one named must match and no
+  other may be counted.

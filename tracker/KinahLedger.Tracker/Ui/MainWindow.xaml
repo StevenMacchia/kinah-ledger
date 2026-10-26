@@ -185,18 +185,20 @@
     </DataTemplate>
 
     <!-- a recipe of this session (Crafting, direction C): icon, name, tries, worked, spent, sells for, profit. A failed-only
-         recipe shows its loss in grey, not red; a row opens its recipe card -->
+         recipe shows its loss in grey, not red; a row opens its recipe card. Under a recipe, its upgrades (Child, 2026-10-26):
+         indented on a tree line, the count after the name, "—" for tries and worked, what they sell for and what they added -->
     <DataTemplate x:Key="CraftRowTemplate">
       <Border x:Name="RowBorder" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Height="44" Background="Transparent" Cursor="Hand" ToolTip="{Binding Tip}" ToolTipService.InitialShowDelay="250">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/><ColumnDefinition Width="58"/><ColumnDefinition Width="64"/><ColumnDefinition Width="72"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+          <Border x:Name="TreeLine" Width="8" Height="18" Margin="5,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" BorderThickness="1,0,0,1" BorderBrush="{DynamicResource LineStrong}" Visibility="Collapsed"/>
           <Border x:Name="IconTile" Width="30" Height="30" CornerRadius="5" BorderThickness="1" BorderBrush="{DynamicResource SlotFrame}" Background="{DynamicResource Slot}" HorizontalAlignment="Left" VerticalAlignment="Center">
             <Grid>
               <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
               <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Grid>
           </Border>
-          <TextBlock x:Name="NameText" Grid.Column="1" Text="{Binding Name}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0"/>
+          <TextBlock x:Name="NameText" Grid.Column="1" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0"><Run Text="{Binding Name, Mode=OneWay}"/><Run Text="{Binding Sub, Mode=OneWay}" FontFamily="{DynamicResource MonoFont}" FontWeight="Normal" FontSize="12" Foreground="{DynamicResource Faint}"/></TextBlock>
           <TextBlock Grid.Column="2" Style="{StaticResource FTd}" Text="{Binding Drops}" Foreground="{DynamicResource Faint}"/>
           <TextBlock Grid.Column="3" Style="{StaticResource FTd}" Text="{Binding DropPct}" Foreground="{DynamicResource Faint}"/>
           <TextBlock Grid.Column="4" Style="{StaticResource FTd}" Text="{Binding PerHour}" Foreground="{DynamicResource Faint}"/>
@@ -205,6 +207,15 @@
         </Grid>
       </Border>
       <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding Child}" Value="True">
+          <Setter TargetName="RowBorder" Property="Height" Value="36"/>
+          <Setter TargetName="RowBorder" Property="BorderThickness" Value="0"/>
+          <Setter TargetName="TreeLine" Property="Visibility" Value="Visible"/>
+          <Setter TargetName="IconTile" Property="Margin" Value="14,0,0,0"/>
+          <Setter TargetName="IconTile" Property="Width" Value="24"/><Setter TargetName="IconTile" Property="Height" Value="24"/>
+          <Setter TargetName="NameText" Property="FontWeight" Value="Normal"/>
+          <Setter TargetName="NameText" Property="Margin" Value="6,0,8,0"/>
+        </DataTrigger>
         <DataTrigger Binding="{Binding Icon.Image}" Value="{x:Null}"><Setter TargetName="IconInitial" Property="Visibility" Value="Visible"/></DataTrigger>
         <DataTrigger Binding="{Binding Tip}" Value=""><Setter TargetName="RowBorder" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <DataTrigger Binding="{Binding PriceTip}" Value=""><Setter TargetName="SellsText" Property="ToolTip" Value="{x:Null}"/></DataTrigger>

@@ -1,0 +1,19 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Orichalcum Longsword x10, 2026-10-26 10:11:53 to 10:14:17 local: the panel names the recipe \"Orichalcum Longsword (Novice Lv. 3)\" for each craft and, on the blue combo roll after one, its upgrade cut short, \"Splendent Orichalcum Longsword (Novice Lv...\". 0.8.40 kept the cut bracket in the name, so each combo roll was filed under a recipe that doesn't exist (no tries, no upgrade credited) and the three won rolls never made a Splendent. Right: one recipe, 8 worked and 2 failed, the three won upgrade rolls each turning one Longsword into a Splendent Orichalcum Longsword",
+  "source": "reads.log of 2026-10-26 lines 33238 to 33287 (0.8.40): the text reads and races as logged; a panel pass with no text read every few seconds between, and the panel gone at the end",
+  "expect": {
+    "craft_ok": 8,
+    "craft_fail": 2,
+    "craft_made": {
+      "Orichalcum Longsword": 5,
+      "Splendent Orichalcum Longsword": 3
+    },
+    "craft_recipes": {
+      "Orichalcum Longsword": "8/2 up 3/4"
+    },
+    "attempts": {}
+  }
+}

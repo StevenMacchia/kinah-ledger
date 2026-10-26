@@ -1101,7 +1101,7 @@ public partial class MainWindow : Window
     void FillCraft(SessionEngine? e)
     {
         var rows = new List<DropRow>();
-        long spent = 0, worth = 0; int noBook = 0, noPrice = 0, tries = 0, ok = 0;
+        long spent = 0, worth = 0; int noBook = 0, noPrice = 0, tries = 0, ok = 0, recipes = 0;
         var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var r in e?.CraftSnapshot() ?? new())
         {
@@ -1122,12 +1122,15 @@ public partial class MainWindow : Window
             var sellsCell = PriceCell(r.Name);
             var book = RecipeBook.ForOutput(r.Name);
             var tip = "Click for the materials, what a try costs and what it makes."
+                + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
                 + (r.Upgraded + r.NotUpgraded > 0 ? $"\nUpgrade rolls: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
                 + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "");
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Ok.ToString("N0"), spentCell,
                 Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
                 Price: madeKnown && made > 0 ? Fk(made) : "", PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : ""));
+            recipes++;
+            rows.AddRange(UpgradeRows(r, book));
         }
         SyncRows(CraftRows, rows);
         _crafted = e?.CraftSnapshot() ?? new();
@@ -1155,13 +1158,43 @@ public partial class MainWindow : Window
         // This session's line: the recipes, the cut, and the gaps said once
         var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? " has" : "s have")} no price yet" : "";
         var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
-        CraftSpentNote.Text = $"{rows.Count} recipe{(rows.Count == 1 ? "" : "s")} · after the Market's {1 - PriceBook.SellerKeeps:P0}";
+        CraftSpentNote.Text = $"{recipes} recipe{(recipes == 1 ? "" : "s")} · after the Market's {1 - PriceBook.SellerKeeps:P0}";
         CraftSpent.Text = spent > 0 || worth > 0 ? Signed(net) : "";
         CraftSpent.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, net >= 0 ? "Gold" : "Faint");
         CraftMadeNote.Text = string.Join(" · ", new[] { gapNote, noBookNote, noPrice > 0 ? $"{noPrice} with no Market price for what came out" : "" }.Where(x => x.Length > 0));
         CraftMadeNote.Visibility = CraftMadeNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftNote.Text = $"Lowest Market price on {Server?.Name ?? "your server"}";
         ApplySections();
+    }
+
+    /// <summary>
+    /// A recipe's upgrades, as rows under it (Steven, 2026-10-26): each item a won upgrade roll made instead of the base
+    /// ("Splendent Orichalcum Longsword" under Orichalcum Longsword), with how many, its icon, what they sell for and what
+    /// they added over the base items they replaced. An upgrade has no tries of its own: those cells show "—". The recipe's
+    /// row keeps every try, its cost, everything that came out and the profit; these rows only show where the value came from.
+    /// </summary>
+    List<DropRow> UpgradeRows(Session.CraftLedger.Recipe r, RecipeBook.Recipe? book)
+    {
+        var rows = new List<DropRow>();
+        int baseYield = Math.Max(1, book?.OutputQty ?? 1);
+        foreach (var (item, n) in r.Made.Where(m => m.Value > 0 && !string.Equals(m.Key, r.Name, StringComparison.OrdinalIgnoreCase))
+                     .OrderByDescending(m => m.Value).ThenBy(m => m.Key, StringComparer.Ordinal))
+        {
+            var great = book?.GreatOutcomes.FirstOrDefault(g => string.Equals(g.Item, item, StringComparison.OrdinalIgnoreCase));
+            int rolls = great is { Qty: > 0 } ? Math.Max(1, n / great.Qty) : n;
+            long? sells = PriceBook.Price(item) is long up ? (long)Math.Round(up * n * PriceBook.SellerKeeps) : null;
+            // what the same crafts would have sold for as the base item, after the Market's cut
+            long? extra = sells is long sv && PriceBook.Price(r.Name) is long bp ? sv - (long)Math.Round(bp * (double)rolls * baseYield * PriceBook.SellerKeeps) : null;
+            var cell = PriceCell(item);
+            var tip = $"An upgrade of {r.Name}: {n:N0} made by {rolls:N0} won upgrade roll{(rolls == 1 ? "" : "s")}, counted in the recipe's row above."
+                + (sells is long s1 ? $"\nSells for {Fk(s1)} after the Market's cut." : "\nNo Market price for it yet.")
+                + (extra is long e1 ? $"\n{Signed(e1)} against {rolls * baseYield:N0} {r.Name} at its price." : "");
+            rows.Add(new DropRow(item, "—", "—", "", Child: true, Sub: "  ×" + n.ToString("N0"),
+                Initial: InitialOf(item), Icon: Slot(_items.IdOf(item)), Grade: _items.Get(_items.IdOf(item))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
+                Price: sells is long s2 && s2 > 0 ? Fk(s2) : "", PriceTone: cell.Tone, PriceTip: cell.Tip,
+                Value: extra is long e2 ? Signed(e2) : "", Tone: extra is long e3 ? (e3 >= 0 ? "Good" : "Bad") : ""));
+        }
+        return rows;
     }
 
     static string Signed(double v) => (v >= 0 ? "+" : "−") + Fk(Math.Abs(v));
@@ -1604,6 +1637,35 @@ public partial class MainWindow : Window
             FillCraft(new SessionEngine(_items));
             SetTrackingUi(false);
             Say("Reading the chat", "Faint");
+            return;
+        }
+        if (kind == "CraftingUpgrades")
+        {
+            // a recipe's upgrades as rows under it (Steven, 2026-10-26), for a layout render (example figures): 13 tries of
+            // Orichalcum Longsword with two upgrade rolls won, and Expert's Orichalcum Longsword with one. The combo rolls
+            // come named by the upgrade, as the blue panel names them, and still land on the recipe being crafted
+            var ue = new SessionEngine(_items); var u0 = DateTime.UtcNow.AddMinutes(-20);
+            PriceBook.SetBoard(new() { ["Orichalcum Longsword"] = 30_000, ["Splendent Orichalcum Longsword"] = 139_998, ["Orichalcum Ingot"] = 2_000, ["Refining Stone"] = 899, ["Odyle"] = 3_480,
+                ["Expert's Orichalcum Longsword"] = 260_000, ["Expert's Splendent Orichalcum Longsword"] = 400_000, ["Expert's Refining Stone"] = 20_000, ["Fine Orichalcum Ore"] = 9_800, ["Fine Odyle"] = 3_098 });
+            int us = 0;
+            void Race(string recipe, bool ok, bool combo = false)
+            {
+                var at = u0.AddSeconds(us += 12);
+                ue.CraftPanelSeen(recipe, at);
+                ue.Apply(new CraftResult(at, recipe, ok, Combo: combo) { Via = SessionEngine.CraftPanelVia, Makes = combo ? null : RecipeBook.ForOutput(recipe)?.OutputQty ?? 1 });
+            }
+            const string sword = "Orichalcum Longsword", expert = "Expert's Orichalcum Longsword";
+            foreach (var (ok, roll) in new (bool, string)[] { (true, ""), (true, ""), (false, ""), (true, "won"), (true, ""), (true, "lost"), (false, ""), (true, ""), (true, "won"),
+                         (true, ""), (false, ""), (true, "lost"), (true, "") })
+            {
+                Race(sword, ok);
+                if (roll.Length > 0) Race("Splendent Orichalcum Longsword", roll == "won", combo: true);
+            }
+            Race(expert, true); Race("Expert's Splendent Orichalcum Longsword", true, combo: true); Race(expert, false); Race(expert, true);
+            ShowPart("Crafting", remember: false);
+            FillCraft(ue);
+            SetTrackingUi(false);
+            Say("Last: Expert's Orichalcum Longsword acquired", "Faint");
             return;
         }
         if (kind == "Crafting")

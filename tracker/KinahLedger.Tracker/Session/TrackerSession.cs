@@ -3648,7 +3648,15 @@ public sealed partial class TrackerSession
                     : "crafting panel up: crafting a moment ago, the title read garbled");
             _panelIsCraft = craft;
             var text = CraftPanel.Parse(lines);
-            var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
+            // a title the panel cut short ("Splendent Orichalcum Longsword (Novice Lv...", 2026-10-26) settled against the
+            // recipe book, the recipe being crafted and what the loot list or chat showed made (CraftPanel.Settle)
+            string recipe = ""; int readLevel = 0;
+            if (craft && text is { } t)
+            {
+                var st = CraftPanel.Settle(t.Recipe, _panelRecipe, Engine.RecentOutputs(now));
+                recipe = st.Recipe; readLevel = st.Level;
+                if (st.Note.Length > 0) CrashLog.NoteBurst($"crafting panel: \"{t.Recipe}\" {st.Note}");
+            }
             // a known recipe read once with a letter wrong ("Wihd Serum", 20:26:22) is the same recipe, not a new one
             if (recipe.Length >= 2 && recipe != _panelRecipe && _panelRecipe.Length >= 2 && RecipeBook.ForOutput(_panelRecipe) != null && RecipeBook.ForOutput(recipe) == null
                 && NameMatch.Distance(recipe.ToLowerInvariant(), _panelRecipe.ToLowerInvariant(), 20) <= 20)
@@ -3656,7 +3664,7 @@ public sealed partial class TrackerSession
                 CrashLog.NoteBurst($"crafting panel: \"{recipe}\" read for {_panelRecipe}, kept");
                 recipe = "";
             }
-            if (recipe.Length >= 2 && text is { } tl && CraftPanel.LevelOf(tl.Recipe) is int lv and > 0) _panelLevel = lv;
+            if (recipe.Length >= 2 && readLevel > 0) _panelLevel = readLevel;
             else if (recipe.Length >= 2 && recipe != _panelRecipe) _panelLevel = 0;
             if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", lines)})"); }
         }

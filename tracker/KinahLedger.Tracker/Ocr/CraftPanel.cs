@@ -328,10 +328,95 @@ public static class CraftPanel
     /// "Fine Durable Balaur Horn (Professional Lv. 30) X"), which kept the level on and filed three crafts under a recipe
     /// that doesn't exist; that X, or a short run of symbols, after the level goes with it. A tier read wrong ("Wihd Serum
     /// (Novite Lv. 10)", 2026-10-25 20:26:22) goes too: any bracket holding a level at the end.
-    public static string ItemOf(string recipe)
+    public static string ItemOf(string recipe) => ItemOf(recipe, out _);
+
+    /// <summary>
+    /// The same, with <paramref name="cut"/> set when the panel cut the title short. A long title ends in an ellipsis, inside
+    /// the level's bracket or before it, and the reader often drops what follows (2026-10-26, 0.8.40: "Splendent Orichalcum
+    /// Longsword (Novice Lv...", "Expert's Orichalcum Longsword (Novice Lv. 1", "(Novice Lv. 1..", "Superior Wind Serum
+    /// (Professional Lv."), each filed as a recipe of its own, with no price, no profit and no icon. The ellipsis goes, and so
+    /// does a bracket that never closes when it is the level's ("(Novice Lv. 1", "(Novice L", "(Nov", a lone "("), leaving
+    /// the longest clean part of the name. A name's own bracket cut short ("Life Serum (Bou…") is not the level's and stays
+    /// as read, for <see cref="Settle"/> to finish against the recipe book. What is left may itself be cut ("Splendent
+    /// Orichalcum Long…"): <see cref="Settle"/> settles it.
+    /// </summary>
+    public static string ItemOf(string recipe, out bool cut)
     {
+        cut = false;
         var s = Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
-        return Regex.Replace(s, @"\s*\([^()]{0,24}\bL[vy][\.\-,:;']?\s*[0-9IlOo|]{1,3}\s*\)?(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+        // a whole bracket holding a level (its tier read wrong); one that never closes is the cut form below
+        s = Regex.Replace(s, @"\s*\([^()]{0,24}\bL[vy][\.\-,:;']?\s*[0-9IlOo|]{1,3}\s*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+        // the ellipsis ("…", read as "..." or ".."), with the close button's X after it
+        var t = Regex.Replace(s, @"\s*(?:…|‥|\.{2,})(?:\s*[XxＸ×✕✖])?\s*$", "").Trim();
+        if (t != s) cut = true;
+        // a bracket that never closes
+        if (Regex.Match(t, @"\s*\(([^()]*)$") is { Success: true } open)
+        {
+            cut = true;
+            if (IsLevelStart(open.Groups[1].Value)) t = t[..open.Index].Trim();
+        }
+        return t;
+    }
+
+    static readonly string[] Tiers = { "novice", "apprentice", "journeyman", "expert", "master", "professional", "artisan", "grandmaster", "grand master" };
+
+    /// <summary>
+    /// What a level bracket can be up to where the panel cut it: nothing yet, part of a tier's name ("Nov", "Novice"), the
+    /// tier and part of "Lv" ("Novice L"), or anything holding "Lv" ("Novice Lv. 1", "Novite Lv"). "(Bound" is a name's.
+    /// </summary>
+    static bool IsLevelStart(string inside)
+    {
+        var x = Regex.Replace(inside, @"\s+", " ").Trim();
+        if (x.Length == 0 || Regex.IsMatch(x, @"\bL[vy](?:\b|[\.\-,:;'])", RegexOptions.IgnoreCase)) return true;
+        foreach (var tier in Tiers)
+        {
+            if (tier.StartsWith(x, StringComparison.OrdinalIgnoreCase)) return true;
+            if (x.StartsWith(tier + " ", StringComparison.OrdinalIgnoreCase) && "lv".StartsWith(x[(tier.Length + 1)..].Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The recipe a panel title names, with its level and a note for the reads log. A title the panel cut short
+    /// (<see cref="ItemOf(string, out bool)"/>) is settled against the recipe book: the recipe it names whole, else the one
+    /// recipe whose output starts with what was read. On the blue combo roll the panel names the upgrade the recipe being
+    /// crafted rolls for ("Splendent Orichalcum Longsword (Novice Lv..." while crafting Orichalcum Longsword, 2026-10-26
+    /// 10:12): that is still the recipe being crafted. Between several recipes, the one being crafted (<paramref
+    /// name="crafting"/>, the panel's recipe so far) wins, else the one the loot list or the chat showed made lately
+    /// (<paramref name="madeLately"/>). Otherwise the name stays as read: a craft is counted whatever its name, never dropped.
+    /// A level read up to the cut ("Lv. 1" of what may be "Lv. 15") is the recipe's level that begins with those digits.
+    /// </summary>
+    public static (string Recipe, int Level, string Note) Settle(string read, string crafting, IEnumerable<string>? madeLately = null)
+    {
+        var item = ItemOf(read, out bool cut);
+        int level = LevelOf(read);
+        if (!cut || item.Length < 2) return (item, level, "");
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        string settled = item, note;
+        var named = KinahLedger.Data.RecipeBook.StartingWith(item);
+        if (crafting.Length >= 2 && !cmp.Equals(item, crafting) && KinahLedger.Data.RecipeBook.ForOutput(crafting) is { } cur
+            && cur.GreatOutcomes.Any(g => !cmp.Equals(g.Item, crafting) && g.Item.StartsWith(item, StringComparison.OrdinalIgnoreCase)))
+        {
+            settled = crafting; note = $"cut by the panel, the upgrade {crafting} rolls for: {crafting}";
+        }
+        else if (named.Count == 1) { settled = named[0]; note = $"recipe cut by the panel, settled as {settled}"; }
+        else if (named.Count > 1 && crafting.Length >= 2 && named.Contains(crafting, cmp)) { settled = crafting; note = $"recipe cut by the panel, {named.Count} candidates: the one being crafted, {crafting}"; }
+        else if (named.Count > 1 && (madeLately ?? Enumerable.Empty<string>()).Where(m => named.Contains(m, cmp)).Distinct(cmp).ToList() is { Count: 1 } seen)
+        {
+            settled = named.First(n => cmp.Equals(n, seen[0])); note = $"recipe cut by the panel, {named.Count} candidates: {settled}, which the loot list or the chat showed made";
+        }
+        else note = $"recipe cut by the panel, {named.Count} candidates: kept as read";
+        return (settled, LevelAtCut(settled, level), note);
+    }
+
+    /// <summary>A level read up to a cut: kept when the item's recipes have it and no longer level begins with it, else the one level that does, else none.</summary>
+    static int LevelAtCut(string item, int level)
+    {
+        if (level <= 0) return 0;
+        var ms = KinahLedger.Data.RecipeBook.MasteriesOf(item);
+        if (ms.Count == 0) return level;
+        var longer = ms.Where(m => m.ToString().StartsWith(level.ToString(), StringComparison.Ordinal)).ToList();
+        return longer.Count == 1 ? longer[0] : 0;
     }
 }
 

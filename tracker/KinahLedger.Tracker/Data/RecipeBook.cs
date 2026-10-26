@@ -113,6 +113,22 @@ public static class RecipeBook
     }
 
     /// <summary>
+    /// The recipe outputs a name the crafting panel cut short could be (CraftPanel.Settle): the one it names whole, else
+    /// every output that starts with it, in order. None for fewer than three letters.
+    /// </summary>
+    public static List<string> StartingWith(string cut)
+    {
+        var c = cut.Trim();
+        if (c.Length < 3) return new List<string>();
+        if (ByOutput.TryGetValue(c, out var exact)) return new List<string> { exact[0].Output };
+        return ByOutput.Keys.Where(k => k.StartsWith(c, StringComparison.OrdinalIgnoreCase)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>The mastery levels the item's recipes are at (the level the crafting panel shows), none when the book doesn't know it.</summary>
+    public static List<int> MasteriesOf(string item) =>
+        ByOutput.TryGetValue(item.Trim(), out var all) ? all.Select(r => r.Mastery).Where(m => m > 0).Distinct().OrderBy(m => m).ToList() : new List<int>();
+
+    /// <summary>
     /// What one try costs at the lowest Market prices: the materials plus the Kinah fee. Null when the book doesn't
     /// have the recipe; <paramref name="unpriced"/> counts materials with no price yet, left out, so the cost is then the
     /// least a try costs. Bound materials ("Salt (Bound)") are bought from a vendor and can't be on the Market: they take
