@@ -51,6 +51,8 @@ public partial class MainWindow : Window
     bool Farming => _watcher.Farming;
     static Mode ModeOf(SessionEngine e) => GameWatcher.DominantKind(e) == "Gathering" ? Mode.Gather : Mode.Open;
     HudWindow? _hud;
+    /// <summary>The panel's lock and size (hud.json).</summary>
+    readonly HudPrefs _hudPrefs;
     DRect? _region = RegionStore.Load();
     DRect? _marketRegion = RegionStore.Load(RegionStore.MarketFile);
     bool _quitting, _balloonShown, _trayHintShown, _demo, _watcherStopped;
@@ -87,6 +89,8 @@ public partial class MainWindow : Window
         Icon = Native.AppIconSource();
         // the panel over the game shows the newest feed line and the rate since 0.8.30: the old default set moves to it once
         if (_prefs.HudFields == HudFields.OldDefault) _prefs.HudFields = HudFields.Default;
+        // the panel's lock and size: locked for a new install, left draggable for one that used the tracker before
+        _hudPrefs = HudPrefs.Load(existingInstall: _prefs.Welcomed || _prefs.LastVersion.Length > 0, remember: watch);
 
         // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
         // every start: the drops table open; Gathered, each gathering skill, Kinah by enemy and Soul Crystals folded into one line
@@ -99,7 +103,7 @@ public partial class MainWindow : Window
         { WindowStartupLocation = WindowStartupLocation.Manual; Left = x; Top = y; }
 
         if (!_prefs.ManualChat) _region = null;   // auto mode: the chat is found at start, not remembered
-        StartBtn.Click += async (_, _) => await Toggle();
+        StartBtn.Click += async (_, _) => await Toggle(fromWindow: true);
         // everything that can be set is in the Options window, so the ledger never moves or grows for it
         OptionsBtn.Click += (_, _) => OpenOptions();
         SiteBtn.Click += (_, _) => Open(SiteUrl);
@@ -340,7 +344,8 @@ public partial class MainWindow : Window
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
-    async Task Toggle() { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(); }
+    /// <param name="fromWindow">True for the window's Start/Stop button; the shortcut and the tray pass false.</param>
+    async Task Toggle(bool fromWindow = false) { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(fromWindow); }
 
     /// <summary>Says something in the status line and on the Options window's reading page when it is open.</summary>
     void Report(string text, string tone)
@@ -455,6 +460,7 @@ public partial class MainWindow : Window
             SetTrackingUi(true);
             ShowFix(false);
             Say($"Run started · {chat.Zone ?? "zone not read yet"}. Minimize this window; the panel and {(HotkeyText.Length > 0 ? HotkeyText : "the tray")} keep working.", "Faint");
+            FlashHud("Run started");   // the shortcut pressed in the game shows it took
         }
         catch (Exception ex)
         {
@@ -464,15 +470,23 @@ public partial class MainWindow : Window
         }
     }
 
-    async Task StopTracking()
+    /// <param name="fromWindow">
+    /// True for the window's own Stop button: the window comes forward to show the result. The shortcut, the tray, the game
+    /// closing and a character change leave the windows where they are, so a stop mid-fight never pops the tracker over the game.
+    /// </param>
+    async Task StopTracking(bool fromWindow = false)
     {
         var e = _watcher.StopFarm(); if (e == null) return;
         // shared and saved under what the run turned out to be, not the label picked before it started
         var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
-        // closing the panel hands focus to whatever is behind it, usually the game, which then covers this window
-        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
-        Show(); Activate(); Topmost = true; Topmost = false;
+        long worth = BestRuns.Value(e);
+        FlashHud(worth > 0 ? $"Run stopped · {Fk(worth)} this run" : "Run stopped");
+        if (fromWindow)
+        {
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Show(); Activate();
+        }
         // the window goes straight back to the live count (the player's call: Stop must not look like counting stopped);
         // the run's result stays on the status line for a few seconds and in the history
         _lastRun = null; _lastRunUntil = DateTime.MinValue;
@@ -569,6 +583,9 @@ public partial class MainWindow : Window
     void UpdateHud()
     {
         if (_hud == null) return;
+        _hudValues["show"] = HudPresence();
+        _hudValues["unlocked"] = HudMoving ? "move" : _hudPrefs.Locked ? "" : "1";
+        HudRunValues();
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
         _hud.Update(_hudValues);
@@ -803,9 +820,19 @@ public partial class MainWindow : Window
         : Math.Abs(v) < 1_000_000 ? $"{v / 1e3:0.#}K"
         : Math.Abs(v) < 1_000_000_000 ? $"{v / 1e6:0.##}M" : $"{v / 1e9:0.##}B";
 
+    /// <summary>The count on screen is too young for an hour's rate to mean much (FillNumbers); BestRuns.MinMinutes is separate.</summary>
+    bool _rateWarming;
+    static readonly TimeSpan RateWarmup = TimeSpan.FromMinutes(2);
+    const int RateWarmupCounts = 3;
+    /// <summary>The panel's rate while it warms up.</summary>
+    const string WarmingUp = "warming up";
+
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
     {
         double h = Math.Max(elapsed.TotalHours, 1.0 / 3600);
+        // the first minute's hour swings wildly (one pickup 20 s in reads as millions an hour): until 2 minutes and 3
+        // counts, whichever comes later, the window dims its figure and the panel says it is warming up
+        _rateWarming = elapsed < RateWarmup || e.Events < RateWarmupCounts;
         var t = e.Totals(); long kinah = t.Kinah;   // farming Kinah only; bound Kinah is reward money
         var s = Build(e, h, t.Kills);
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
@@ -897,9 +924,10 @@ public partial class MainWindow : Window
         long rateTotal = (_mode == Mode.Gather ? 0 : kinah) + s.Value;
         bool rateHasKinah = _mode != Mode.Gather && kinah > 0;
         _hudValues["time"] = Clock(elapsed);
-        _hudValues["rate"] = rateTotal > 0 ? Fk(rateTotal / h) : "";
-        _hudValues["kinah"] = Fk(kinah / h);
-        _hudValues["loot"] = s.Priced > 0 && rateHasKinah ? Fk(s.Value / h) : "";
+        _hudValues["warm"] = _rateWarming ? "1" : "";
+        _hudValues["rate"] = rateTotal <= 0 ? "" : _rateWarming ? WarmingUp : Fk(rateTotal / h);
+        _hudValues["kinah"] = _rateWarming ? "" : Fk(kinah / h);
+        _hudValues["loot"] = s.Priced > 0 && rateHasKinah && !_rateWarming ? Fk(s.Value / h) : "";
         _hudValues["total"] = Fk(totalNow);
         _shareCard = new CardNumbers(e.Zone, ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : "Open world"), elapsed, totalNow, totalNow > 0 ? totalNow / h : 0,
             // the Discord card keeps its own three figures and labels, whatever the window's stats show
@@ -1246,10 +1274,15 @@ public partial class MainWindow : Window
     void EnsureHud()
     {
         if (_hud != null || !_prefs.Hud) return;
-        _hud = new HudWindow(HudFields.Parse(_prefs.HudFields)) { Owner = this, Opacity = Math.Clamp(_prefs.HudOpacity, 0.3, 1) };
-        if (_prefs.HudX is double hx && _prefs.HudY is double hy && hx > SystemParameters.VirtualScreenLeft - 50 && hy > SystemParameters.VirtualScreenTop - 50) { _hud.Left = hx; _hud.Top = hy; }
-        _hud.LocationChanged += (_, _) => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
-        _hud.Show();
+        _hud = new HudWindow(HudFields.Parse(_prefs.HudFields)) { Owner = this };
+        _hud.SetOpacity(_prefs.HudOpacity);
+        _hud.SetScale(_hudPrefs.Scale);
+        // where the player left it, kept on a screen that is still there; else the top centre of the game's monitor
+        if (SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault();
+        _hud.Dragged += () => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
+        // it follows the game from the start: created while the game is behind another window, it waits out of sight
+        UpdateHud();
+        if (_hudValues.GetValueOrDefault("show", "") != "hidden") _hud.Show();
     }
 
     /// <summary>When the window grows past the bottom of the screen it's on, it moves up instead (main screen only; elsewhere it's left where the player put it).</summary>
@@ -1409,11 +1442,12 @@ public partial class MainWindow : Window
         open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
         var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
+        var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
         var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
         var quit = new WF.ToolStripMenuItem("Quit Kinah Ledger"); quit.Click += (_, _) => { _quitting = true; Close(); };
-        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
+        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, movePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
         _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => Restore();
         _tray.BalloonTipClicked += (_, _) => Restore();
@@ -1425,6 +1459,7 @@ public partial class MainWindow : Window
         Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
         if (ApplyHotkey() is { } err) Say(err, "Warn");
+        _foregroundWatch ??= Native.WatchForeground(HudFollowGame);   // the panel fades with an alt-tab, not a tick later
     }
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -1465,6 +1500,7 @@ public partial class MainWindow : Window
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.UnregisterHotKey(h, HotkeyId);
         _options?.Discard();
+        _foregroundWatch?.Dispose(); _foregroundWatch = null;
         CloseHud();
         _tray.Visible = false; _tray.Dispose();
         InstallUpdateOnClose();   // last: a downloaded update takes the exe's place now that nothing else needs it
@@ -1478,6 +1514,7 @@ public partial class MainWindow : Window
         if (_prefs.ManualMarket && _marketRegion is DRect mm) RegionStore.Save(mm, RegionStore.MarketFile);
         if (WindowState == WindowState.Normal && !double.IsNaN(Left)) { _prefs.WinX = (int)Left; _prefs.WinY = (int)Top; }
         _prefs.Save();
+        _hudPrefs.Save();
     }
 
     /// <summary>Where the chat is read from, for Options › Game reading.</summary>

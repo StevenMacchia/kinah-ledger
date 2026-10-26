@@ -108,6 +108,9 @@ public partial class OptionsWindow : Window
         HelpCountingChk.IsChecked = c.HelpCounting;
         ShowAccuracyChk.IsChecked = c.ShowAccuracy;
         HudChk.IsChecked = c.Hud;
+        HudLockChk.IsChecked = c.HudLocked;
+        HudOpacity.Value = c.HudOpacity; HudOpacityLbl.Text = $"{c.HudOpacity:P0}";
+        HudScale.Value = c.HudScale; HudScaleLbl.Text = $"{c.HudScale:P0}";
         AutoUpdateChk.IsChecked = c.AutoUpdate;
         AutoUpdateChk.IsEnabled = _host.AppSettings.Update.Check;
         BuildSkins(c.Skin);
@@ -175,9 +178,22 @@ public partial class OptionsWindow : Window
         HelpCountingChk.Click += (_, _) => Edit(_edit with { HelpCounting = HelpCountingChk.IsChecked == true });
         ShowAccuracyChk.Click += (_, _) => Edit(_edit with { ShowAccuracy = ShowAccuracyChk.IsChecked == true });
         HudChk.Click += (_, _) => Edit(_edit with { Hud = HudChk.IsChecked == true });
-        HudOpacity.Value = Math.Clamp(_host.Prefs.HudOpacity, 0.3, 1);
-        HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
-        HudOpacity.ValueChanged += (_, _) => { HudOpacityLbl.Text = $"{HudOpacity.Value:P0}"; _host.SetHudOpacity(HudOpacity.Value); };
+        HudLockChk.Click += (_, _) => Edit(_edit with { HudLocked = HudLockChk.IsChecked == true });
+        // opacity and size show on the panel as the sliders move; Save keeps them, Cancel puts the saved ones back
+        HudOpacity.ValueChanged += (_, _) =>
+        {
+            HudOpacityLbl.Text = $"{HudOpacity.Value:P0}";
+            if (_loading) return;
+            Edit(_edit with { HudOpacity = Math.Round(HudOpacity.Value, 2) });
+            _host.PreviewHud(_edit.HudOpacity, _edit.HudScale);
+        };
+        HudScale.ValueChanged += (_, _) =>
+        {
+            HudScaleLbl.Text = $"{HudScale.Value:P0}";
+            if (_loading) return;
+            Edit(_edit with { HudScale = Math.Round(HudScale.Value, 2) });
+            _host.PreviewHud(_edit.HudOpacity, _edit.HudScale);
+        };
         AutoUpdateChk.Click += (_, _) => Edit(_edit with { AutoUpdate = AutoUpdateChk.IsChecked == true });
 
         WhatsSentLink.Click += (_, _) => _host.WhatsSent(this);
@@ -211,7 +227,7 @@ public partial class OptionsWindow : Window
         HotkeyBox.LostKeyboardFocus += (_, _) => EndCapture();
         HotkeyOffBtn.Click += (_, _) => Edit(_edit with { Hotkey = "" });
         HotkeyResetBtn.Click += (_, _) => Edit(_edit with { Hotkey = Hotkey.Default });
-        HudResetBtn.Click += (_, _) => { _host.ResetHudPosition(); ShowNote("The panel goes back to the top centre of the screen.", "Good"); };
+        HudResetBtn.Click += (_, _) => { _host.ResetHudPosition(); ShowNote("The panel goes back to the top centre of the game's screen.", "Good"); };
 
         CheckNowBtn.Click += async (_, _) => await Act(CheckNowBtn, () => _host.CheckForUpdate(manual: true));
         RestartUpdateBtn.Click += async (_, _) => await _host.RestartToUpdate();
@@ -291,6 +307,7 @@ public partial class OptionsWindow : Window
             }
         }
         if (_edit.Skin != _saved.Skin || Skins.Current != _saved.Skin) _host.ApplySkin(_saved.Skin);   // a theme being tried goes back
+        _host.PreviewHud(_saved.HudOpacity, _saved.HudScale);   // and the panel's look being tried
     }
 
     /* ---------------- live state from the main window ---------------- */

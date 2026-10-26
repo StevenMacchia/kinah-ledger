@@ -11,7 +11,8 @@ namespace KinahLedger.Ui;
 public sealed record OptionsChoice(
     string Region, string Server, bool Share, bool Hud, string Hotkey, string Skin, bool AutoUpdate,
     bool StartWithWindows, string OnGameStart, bool HideWhenGameCloses, bool CloseToTray, bool MinimizeToTray, string HudFields,
-    bool ReportFrames = false, bool SendFrames = false, int GearScore = 0, bool HelpCounting = true, bool ShowAccuracy = false);
+    bool ReportFrames = false, bool SendFrames = false, int GearScore = 0, bool HelpCounting = true, bool ShowAccuracy = false,
+    bool HudLocked = true, double HudOpacity = 0.9, double HudScale = 1);
 
 /// <summary>
 /// The app around the live count: the tray, starting with Windows, reacting to the game starting and closing, the
@@ -152,12 +153,14 @@ public partial class MainWindow
 
     public UserPrefs Prefs => _prefs;
 
-    /// <summary>The panel's opacity from Options: applied and remembered at once.</summary>
-    public void SetHudOpacity(double v)
+    /// <summary>
+    /// The panel's opacity and size while Options is open: shown on the panel at once, remembered only on Save (Cancel
+    /// shows the saved ones again), like every other setting there.
+    /// </summary>
+    public void PreviewHud(double opacity, double scale)
     {
-        _prefs.HudOpacity = Math.Clamp(v, 0.3, 1);
-        if (_hud != null) _hud.Opacity = _prefs.HudOpacity;
-        if (!_demo) _prefs.Save();
+        _hud?.SetOpacity(opacity);
+        _hud?.SetScale(scale);
     }
     public Settings AppSettings => _settings;
     public bool CanStartWithWindows => _exe != null;
@@ -166,7 +169,8 @@ public partial class MainWindow
     public OptionsChoice CurrentOptions() => new(
         RegionKey, Server?.Label ?? "", _prefs.Share, _prefs.Hud, HotkeyText, Skins.Get(_prefs.Skin).Key, _prefs.AutoUpdate,
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
-        _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy);
+        _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
+        _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2));
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -191,6 +195,9 @@ public partial class MainWindow
             _hud?.SetFields(Ui.HudFields.Parse(c.HudFields));
             UpdateHud();
         }
+        if (c.HudLocked != was.HudLocked) { _hudPrefs.Locked = c.HudLocked; UpdateHud(); }
+        _prefs.HudOpacity = c.HudOpacity; _hudPrefs.Scale = c.HudScale;
+        PreviewHud(c.HudOpacity, c.HudScale);
         if (c.Skin != Skins.Get(_prefs.Skin).Key) { _prefs.Skin = c.Skin; }
         ApplySkin(_prefs.Skin);
         if (c.AutoUpdate != was.AutoUpdate) AutoUpdateChanged(c.AutoUpdate);
@@ -241,11 +248,12 @@ public partial class MainWindow
         Report("Install ID replaced. Runs from now on can't be tied to earlier ones; link the new code to keep them on your profile.", "Good");
     }
 
+    /// <summary>Options › In game › Reset position: back where a first start puts it (PlaceHudDefault).</summary>
     public void ResetHudPosition()
     {
         _prefs.HudX = null; _prefs.HudY = null;
         if (!_demo) _prefs.Save();
-        if (_hud != null) { _hud.Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 170; _hud.Top = SystemParameters.WorkArea.Top + 16; }
+        PlaceHudDefault();
     }
 
     public static string DataFolder => CrashLog.Dir;

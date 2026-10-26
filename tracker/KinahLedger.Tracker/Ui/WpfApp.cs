@@ -179,6 +179,34 @@ public static class WpfApp
         DoEvents();
         Check(HudFields.Parse(p.HudFields).Contains(add) && HudFields.Parse(p.HudFields).Count == before.Count + 1, "panel figure saved: " + p.HudFields);
 
+        // the panel's lock (click-through over the game) follows Save like the other switches
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        bool lockedBefore = w.HudLocked;
+        Check(o.HudLockChk.IsChecked == lockedBefore, "Lock the panel in place opens as saved: " + lockedBefore);
+        Flip(o.HudLockChk);
+        Check(o.SaveBtn.IsEnabled && w.HudLocked == lockedBefore, "the panel lock waits for Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.HudLocked == !lockedBefore, "panel lock saved");
+
+        // the panel's opacity and size: shown on the panel as the sliders move, kept on Save, put back by Cancel
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        double opacityBefore = p.HudOpacity, scaleBefore = w.HudScale;
+        o.HudOpacity.Value = 0.5; o.HudScale.Value = 1.5;
+        Check(o.SaveBtn.IsEnabled && p.HudOpacity == opacityBefore && w.HudScale == scaleBefore, "panel opacity and size wait for Save");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(p.HudOpacity == opacityBefore && w.HudScale == scaleBefore, "Cancel keeps the panel's opacity and size");
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        Check(Math.Abs(o.HudOpacity.Value - opacityBefore) < 0.01 && Math.Abs(o.HudScale.Value - scaleBefore) < 0.01, "Options opens with the saved opacity and size");
+        o.HudOpacity.Value = 0.5; o.HudScale.Value = 1.5;
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(Math.Abs(p.HudOpacity - 0.5) < 0.001 && Math.Abs(w.HudScale - 1.5) < 0.001, $"panel opacity and size saved: {p.HudOpacity:P0}, {w.HudScale:P0}");
+
         o = Open();
         Click(o.HotkeyResetBtn);
         Click(o.SaveBtn);
@@ -242,6 +270,7 @@ public static class WpfApp
         w.ShowDemo("Gathering"); DoEvents();
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,
             $"panel, gathering: the hour once ({w.HudValues.GetValueOrDefault("rate", "")}, the window's {w.HeadRate.Text}), no second loot figure");
+        Check(w.HudValues.GetValueOrDefault("warm", "") == "" && w.HeadRate.Opacity == 1, "a 42-minute count shows its rate, not warming up");
 
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
@@ -283,6 +312,16 @@ public static class WpfApp
             o.Show();
             DoEvents();
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-{page.ToString().ToLowerInvariant()}{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Close();
+        }
+        // In game once more, scrolled to the end: the panel's rows below the fold (opacity, size and position)
+        {
+            var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            o.Show();
+            DoEvents();
+            o.Scroller.ScrollToEnd();
+            DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-lower{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
         w.Close();
@@ -363,6 +402,34 @@ public static class WpfApp
             h.Update(values);
             if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ Nothing looked wrong", hudAcc != null && hudToLook);
             if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            h.Close();
+        }
+
+        // the overlay's own states (tracker/overlay-behaviour), each from the same figures with the keys MainWindow sets
+        if (!demo || kind != "Open world") return;
+        foreach (var (file, fields, extra) in new (string, List<string>, Dictionary<string, string>)[]
+        {
+            ("ui-hud-notice.png", HudFields.Parse(null), new() { ["notice"] = "Update ready · installs when you leave the game" }),
+            // being moved from the tray: the dashed outline and the "drag me" hint
+            ("ui-hud-unlocked.png", HudFields.Parse(null), new() { ["unlocked"] = "move" }),
+            // a run on: the red dot, the run's clock, and the shortcut's confirmation; then the stop's line on the default panel
+            ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = "Run started" }),
+            ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["flash"] = "Run stopped · 1.27M this run" }),
+            // Options at its far ends: 30% background (the figures stay solid) at 150%
+            ("ui-hud-scaled.png", HudFields.Parse("time,rate,total"), new()),
+            // the first two minutes: the hour says it is warming up instead of a wild figure, on the feed and on the classic set
+            ("ui-hud-warming.png", HudFields.Parse(null), new() { ["warm"] = "1", ["rate"] = "warming up", ["feedRate"] = "warming up", ["feedUnit"] = "" }),
+            ("ui-hud-warming-classic.png", HudFields.Parse("time,rate,total"), new() { ["warm"] = "1", ["rate"] = "warming up", ["time"] = "0:48", ["total"] = "21.4K" }),
+        })
+        {
+            var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            var v = new Dictionary<string, string>(values);
+            foreach (var (k, x) in extra) v[k] = x;
+            h.Update(v);
+            if (file == "ui-hud-scaled.png") { h.SetOpacity(0.3); h.SetScale(1.5); }
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
