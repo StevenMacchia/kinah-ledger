@@ -85,3 +85,16 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   took one of the fight's kills for the witness of a second pair. Right: 1. A line under the same two lines a copy was
   counted under, one of them once in the read, is that copy wherever the scroll put it (`ItemRepeatGuard`; the guard's
   own checks in `Ocr/ChatCountTests.cs`). The Order Gloves were the 16:35 event cards, named right from their picture.
+- `panel` and `bar` reads (2026-10-25): the crafting panel's locator as the session decides it. A `panel` read is one pass
+  with the panel's strip up, `l` the lines its text read gave (`[]` when the text wasn't read that pass), `"up": false` for
+  a pass without it, `"raised": true` for the gathering panel above the skill bar. A `bar` read is its bars finishing a race
+  (`ok`, `fail`, `combo ok`, `combo fail`), routed as live: a craft while the panel is crafting, else the gathering bar's
+  race. A text case's `craft_ok` and `craft_fail` count those crafts, and `craft_made` (expect names only what it checks)
+  what they made by item.
+- `text-2026-10-25-wind-serum-craft-not-gather` (Steven crafting 21 Wind Serums, 20:25 to 20:28): the title read garbled
+  after the first craft ("4 /z:iT,", "C+afting ProgYéSs") and the panel gone for a pass between crafts, so 0.8.39 took the
+  bars for a gathering bar: 1 craft and 19 "unknown node" gather attempts, the serums on the loot list waiting for a chat
+  line. Right: 15 crafts that worked, 4 that failed, no gather attempt; the recipe line ("Wind Serum (Novice Lv. 10)") is a
+  witness of crafting, crafting lasts through a pass or two without the panel, and the list is set aside while it crafts.
+  `text-2026-10-25-craft-title-as-recipe`: the garbled title "qaf€ihgfiwprcgté$s 1 m/:ål" above the recipe line was taken
+  for the recipe; the line with the mastery level is the recipe.

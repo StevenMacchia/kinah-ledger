@@ -3351,35 +3351,92 @@ public sealed partial class TrackerSession
             var s = CraftPanel.Measure(bmp, region, g);
             if (!s.Visible)
             {
-                if (_panelUp && _panelIsCraft) { CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); }
-                _panelUp = false; _panelIsCraft = false;
+                PanelLook(now, false, false, null);
                 bmp.Dispose();
                 return null;
             }
+            List<string>? read = null;
             if (!_panelUp || (now - _panelTextAt).TotalSeconds >= 5)
             {
                 _panelTextAt = now;
-                var text = await CraftPanel.ReadTextAsync(bmp, region, g);
-                // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
-                // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
-                // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
-                // the raised panel above the skill bar is the gathering panel, never crafting
-                bool craft = !s.Raised && ((_panelUp && _panelIsCraft) || CraftPanel.LastLines.Any(CraftPanel.IsTitleLine));
-                // up and gone alternated 250 times in 36 minutes on 2026-10-24: written once a minute each, then counted
-                if (craft != _panelIsCraft || !_panelUp) CrashLog.NoteBurst(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", CraftPanel.LastLines)}): not counted");
-                _panelIsCraft = craft;
-                var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
-                if (recipe.Length >= 2 && text is { } tl && CraftPanel.LevelOf(tl.Recipe) is int lv and > 0) _panelLevel = lv;
-                else if (recipe.Length >= 2 && recipe != _panelRecipe) _panelLevel = 0;
-                if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", CraftPanel.LastLines)})"); }
+                read = await CraftPanel.ReadTextAsync(bmp, region, g) is null ? new List<string>() : CraftPanel.LastLines.ToList();
             }
-            _panelUp = true;
+            PanelLook(now, true, s.Raised, read);
             var probe = new CraftProbe(bmp, region, s, now);
             bmp = null;
             return probe;
         }
         catch (System.ComponentModel.Win32Exception) { bmp?.Dispose(); throw; }
         catch (Exception ex) { bmp?.Dispose(); CrashLog.Write("crafting panel", ex); return null; }
+    }
+
+    /// <summary>
+    /// One look of the crafting panel's locator, which says crafting or a gathering bar: <paramref name="visible"/> when
+    /// the strip's labels are in place, <paramref name="raised"/> for the gathering panel above the skill bar, and the
+    /// lines its text read gave this pass (null when the text wasn't read). Also what replay's "panel" reads feed.
+    /// </summary>
+    internal void PanelLook(DateTime now, bool visible, bool raised, IReadOnlyList<string>? lines)
+    {
+        if (!visible)
+        {
+            if (_panelUp && _panelIsCraft) { CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); }
+            _panelUp = false; _panelIsCraft = false;
+            return;
+        }
+        if (lines != null)
+        {
+            // the same Success/Fail bars run when an Odyle cube is opened or a node gathered (2026-10-22 19:26): only a
+            // panel headed "Crafting in Progress" is crafting; any other is left alone, and its loot stays loot
+            // once seen as crafting it stays so until the panel goes (a later read can come back garbled)
+            // the raised panel above the skill bar is the gathering panel, never crafting
+            bool craft = !raised && ((_panelUp && _panelIsCraft) || lines.Any(CraftPanel.IsTitleLine));
+            // up and gone alternated 250 times in 36 minutes on 2026-10-24: written once a minute each, then counted
+            if (craft != _panelIsCraft || !_panelUp) CrashLog.NoteBurst(craft ? "crafting panel up" : $"Success/Fail bars that aren't crafting (read: {string.Join(" | ", lines)}): not counted");
+            _panelIsCraft = craft;
+            var text = CraftPanel.Parse(lines);
+            var recipe = craft && text is { } t ? CraftPanel.ItemOf(t.Recipe) : "";
+            if (recipe.Length >= 2 && text is { } tl && CraftPanel.LevelOf(tl.Recipe) is int lv and > 0) _panelLevel = lv;
+            else if (recipe.Length >= 2 && recipe != _panelRecipe) _panelLevel = 0;
+            if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", lines)})"); }
+        }
+        _panelUp = true;
+    }
+
+    /// <summary>
+    /// A race the panel's bars finished, routed as <see cref="CraftPanelDue"/> routes it: a craft while the panel is
+    /// crafting (craft_panel), else the gathering bar's race (gather_bar). What replay's "bar" reads feed.
+    /// </summary>
+    internal void PanelBars(DateTime now, bool ok, bool combo)
+    {
+        if (!_panelIsCraft) { if (Runs("gather_bar")) GatherBarRace(now, ok, combo, "as traced"); return; }
+        if (!Runs("craft_panel")) return;
+        CraftingPass(now);
+        CraftBarRace(now, ok, combo, "as traced");
+    }
+
+    /// <summary>A pass with the panel up while crafting, behind the gate (also what replay's "panel" reads feed while crafting).</summary>
+    internal void CraftingPass(DateTime now)
+    {
+        // the crafting window's hold and its pictures last as long as the queue runs, and the passes keep a fight's pace
+        Target.MarkCraft(now); _lastActivity = now;
+        PanelUp(_panelRecipe, now);
+    }
+
+    /// <summary>Whether the panel is crafting now (replay asks, to do a crafting pass's part for a "panel" read).</summary>
+    internal bool PanelCrafting => _panelUp && _panelIsCraft;
+
+    void GatherBarRace(DateTime now, bool ok, bool combo, string bars)
+    {
+        _gatherRaces.Add((now, ok)); if (_gatherRaces.Count > 50) _gatherRaces.RemoveAt(0);
+        if (ok) GatherBarOk++; else GatherBarFailed++;
+        CrashLog.Note($"gathering bar: {(combo ? "upgrade roll " : "")}{(ok ? "success" : "fail")} ({bars})");
+        GatherOutcome(now, ok, combo);
+    }
+
+    void CraftBarRace(DateTime now, bool ok, bool combo, string bars)
+    {
+        CrashLog.Note($"crafting panel: {(combo ? "combo roll " : "")}{(ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} ({bars})");
+        PanelRace(_panelRecipe, ok, combo, now, _panelLevel);
     }
 
     /// <summary>
@@ -3396,25 +3453,16 @@ public sealed partial class TrackerSession
             {
                 if (!Runs("gather_bar")) return Task.CompletedTask;
                 // a node being gathered: its bar's outcome, for the audit (a stopped gather's bar never fills: no outcome)
-                if (_gatherBar.Feed(now, s) is { } go)
-                {
-                    _gatherRaces.Add((now, go.Ok)); if (_gatherRaces.Count > 50) _gatherRaces.RemoveAt(0);
-                    if (go.Ok) GatherBarOk++; else GatherBarFailed++;
-                    CrashLog.Note($"gathering bar: {(go.Combo ? "upgrade roll " : "")}{(go.Ok ? "success" : "fail")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
-                    GatherOutcome(now, go.Ok, go.Combo);
-                }
+                if (_gatherBar.Feed(now, s) is { } go) GatherBarRace(now, go.Ok, go.Combo, $"success bar {s.Success:P0}, fail bar {s.Fail:P0}");
                 return Task.CompletedTask;
             }
             if (!Runs("craft_panel")) return Task.CompletedTask;
             if (!_craftSeen) { _craftSeen = true; ReportLayout(); }
             // the panel's picture for a miscount report (the panel's own strip only, at most once a second)
             if (ReportBuffer.Keeps("craft")) try { Report.Picture("craft", bmp, region.Location, now, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
-            // the crafting window's hold and its pictures last as long as the queue runs, and the passes keep a fight's pace
-            Target.MarkCraft(now); _lastActivity = now;
-            PanelUp(_panelRecipe, now);
+            CraftingPass(now);
             if (_panel.Feed(now, s) is not { } o) return Task.CompletedTask;
-            CrashLog.Note($"crafting panel: {(o.Combo ? "combo roll " : "")}{(o.Ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
-            PanelRace(_panelRecipe, o.Ok, o.Combo, now, _panelLevel);
+            CraftBarRace(now, o.Ok, o.Combo, $"success bar {s.Success:P0}, fail bar {s.Fail:P0}");
         }
         catch (Exception ex) { CrashLog.Write("crafting panel", ex); }
         return Task.CompletedTask;

@@ -26,6 +26,9 @@ namespace KinahLedger.Session;
 /// name on screen then (from reads.log's "fighting:" and "target bar:" lines; trace.log doesn't keep them).
 /// A "gather" read is the gathering bar finishing a race: "ok", "fail", "upgrade ok" or "upgrade fail". A "cover" read
 /// is a pass that skips the list (a full-screen window over it): the rows up are set aside, as live (LootRows.Reset).
+/// A "panel" read is one pass of the crafting panel's locator ("l" its text read's lines, [] when not read; "up": false
+/// without the panel; "raised": true for the gathering panel), and a "bar" read its bars finishing a race ("ok", "fail",
+/// "combo ok", "combo fail"), routed by the session as live: a craft while crafting, else the gathering bar's race.
 /// Only what "expect" names is checked. A pending case (a fresh report nobody has checked yet) runs and prints, never
 /// fails. `replay-bank <dir> --record <case>` writes what this version counts into that case's "expect" and clears
 /// pending: run it only once the count it prints is known to be right.
@@ -102,6 +105,12 @@ public static class ReplayBank
         {
             var gri = got["run_items"] as JsonObject ?? new JsonObject();
             foreach (var (n, v) in eri) if (N(gri[n]) != N(v)) d.Add($"run item {n}: expected {v}, counted {gri[n]?.ToString() ?? "0"}");
+        }
+        // what the crafts made, by item (a text case's "bar" reads): each one expect names must match
+        if (expect["craft_made"] is JsonObject ecm)
+        {
+            var gcm = got["craft_made"] as JsonObject ?? new JsonObject();
+            foreach (var (n, v) in ecm) if (N(gcm[n]) != N(v)) d.Add($"craft made {n}: expected {v}, counted {gcm[n]?.ToString() ?? "0"}");
         }
         if (expect["run_start"] is { } rstart && rstart.ToString() != (got["run_start"]?.ToString() ?? "")) d.Add($"run_start: expected {rstart}, counted {got["run_start"]?.ToString() ?? "none"}");
         if (expect["run_starts"] is { } rstarts && rstarts.ToString() != (got["run_starts"]?.ToString() ?? "")) d.Add($"run_starts: expected {rstarts}, counted {got["run_starts"]?.ToString() ?? "none"}");
@@ -271,6 +280,22 @@ public static class ReplayBank
                         // the gathering bar finishing a race (what CraftPanelDue feeds GatherOutcome live)
                         foreach (var g in ls) session.GatherOutcome(t, g.EndsWith("ok", StringComparison.OrdinalIgnoreCase), g.StartsWith("upgrade", StringComparison.OrdinalIgnoreCase));
                         break;
+                    // one pass of the crafting panel's locator (2026-10-25): "l" the lines its text read gave, empty when the
+                    // text wasn't read that pass; "up": false for a pass without the panel; "raised": true for the gathering
+                    // panel above the skill bar. The session decides crafting or a gathering bar as CraftProbeAsync does
+                    case "panel":
+                    {
+                        bool up = !r.TryGetProperty("up", out var ue) || ue.GetBoolean();
+                        bool raised = r.TryGetProperty("raised", out var re) && re.GetBoolean();
+                        session.PanelLook(t, up, raised, ls.Count > 0 ? ls : null);
+                        if (up && session.PanelCrafting) session.CraftingPass(t);
+                        break;
+                    }
+                    // the panel's bars finishing a race ("ok", "fail", "combo ok", "combo fail"), routed by the session's own
+                    // decision: a craft while it is crafting, else the gathering bar's race (CraftPanelDue)
+                    case "bar":
+                        foreach (var b in ls) session.PanelBars(t, b.EndsWith("ok", StringComparison.OrdinalIgnoreCase), b.StartsWith("combo", StringComparison.OrdinalIgnoreCase) || b.StartsWith("upgrade", StringComparison.OrdinalIgnoreCase));
+                        break;
                     case "zone": if (ls.FirstOrDefault() is { Length: > 0 } z) { session.Engine.SetZone(z); session.Instances.Zone(z, t); } break;
                     // a nameplate or the target bar's name on screen then (LootNotRow)
                     case "plate": foreach (var p in ls) session.NotRow.See(p, t, LootNotRow.Plate); break;
@@ -405,7 +430,16 @@ public static class ReplayBank
         var e = session.Engine;
         var outItems = new JsonObject();
         foreach (var (id, n) in e.Items.OrderBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal)) outItems[items.NameOf(id)] = n;
+        // a text case's crafts: the races its "bar" reads gave the panel, as the Crafting part of the window counts them,
+        // and what they made by item (the panel is the output's witness, never the loot list)
+        var made = new JsonObject();
+        foreach (var rc in session.CraftView.CraftSnapshot())
+        {
+            ok += rc.Ok; fail += rc.Fail;
+            foreach (var (mi, mn) in rc.Made) made[mi] = (made[mi]?.GetValue<int>() ?? 0) + mn;
+        }
         var res = new JsonObject { ["craft_ok"] = ok, ["craft_fail"] = fail, ["items"] = outItems };
+        if (made.Count > 0) res["craft_made"] = made;
         if (table != null) res["table"] = table;
         if (res0Cards != null) res["cards"] = res0Cards;
         if (e.Totals().Kinah > 0) res["kinah"] = e.Totals().Kinah;
