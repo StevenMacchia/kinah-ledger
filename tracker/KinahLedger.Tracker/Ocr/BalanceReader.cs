@@ -270,7 +270,10 @@ public sealed partial class BalanceReader
 /// consecutive reads seldom differ by exactly the Kina counted between them. A counter read the same twice has held
 /// still for a read's interval, long enough for the chat to have counted what raised it; two such readings bound a
 /// window whose rise is compared with the Kina counted in it. A fall is Kinah spent (the Market's cut, a repair, a
-/// teleport): never a match, never forced. Each window judged is one line in reads.log.
+/// teleport): never a match, never forced. Each window judged is one line in reads.log. (The day's 0x itself had a
+/// plainer cause: the strip's Kinah figures weren't read at all, <see cref="BalanceReader.ReadNumbersAsync"/>. Rebuilt
+/// from the chat, the old rule would have matched in about a third of the reads that moved, but not in a busy fight:
+/// tests/replays/text-2026-10-25-kinah-counter-lag.)
 /// </summary>
 public sealed class BalanceTracker
 {

@@ -100,5 +100,7 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   `GameWatcher.TickBalanceAsync` does; keys `counter_found` (0 or 1) and `counter_agreed` (BalanceCheck.Agreed).
   `text-2026-10-25-kinah-counter-lag`: 15:22 to 15:26 local, 49 Kina lines; the strip reads are rebuilt from the
   chat (reads.log keeps none): each counted Kina line raises both Kinah figures 0.3 s before the first chat read that
-  shows it. Two consecutive reads never differed by exactly the Kina counted between them (0.8.39: not found);
-  windows between steady readings find it.
+  shows it. Two consecutive reads never differed by exactly the Kina counted between them (0.8.39: not found, 8,443);
+  windows between steady readings find it, the check agrees 3 times, 8,443 (a first try counted 12,519: the counter
+  went unread through a fight and the lines' 4,076 was counted again from it, `KinaWitness.Observe`). A case may name
+  `print_log`, a pattern: the lines of its reads.log that match are printed, for reading a case on the build server.
