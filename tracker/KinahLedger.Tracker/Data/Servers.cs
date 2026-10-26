@@ -60,14 +60,15 @@ public static class Servers
 
     public static GameRegion? Region(string? key) => Regions.FirstOrDefault(r => r.Key == key);
 
-    /// <summary>The servers of one region: each pair's Elyos world, then its Asmodian one.</summary>
+    /// <summary>The servers of one region as the pickers show them: Elyos A to Z, then Asmodian A to Z (Steven, 2026-10-26:
+    /// the pair order "looks messy"). Pairs above stay in the game's order; keys don't depend on either.</summary>
     public static IReadOnlyList<GameServer> In(string regionKey)
     {
         var region = Region(regionKey);
         if (region == null || !Pairs.TryGetValue(regionKey, out var pairs)) return Array.Empty<GameServer>();
         var list = new List<GameServer>(pairs.Length * 2);
         foreach (var (elyos, asmodian) in pairs) { list.Add(new GameServer(region, elyos, "Elyos")); list.Add(new GameServer(region, asmodian, "Asmodian")); }
-        return list;
+        return list.OrderBy(s => s.Faction == "Elyos" ? 0 : 1).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     public static IEnumerable<GameServer> All => Regions.SelectMany(r => In(r.Key));
