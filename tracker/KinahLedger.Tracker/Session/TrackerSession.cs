@@ -299,6 +299,8 @@ public sealed partial class TrackerSession
     /// </summary>
     public void CheckBalance(long balance, DateTime at)
     {
+        // the counter moved: the next loot list capture is recognized whatever its pixels (ocr.list_skip_same)
+        if (Interlocked.Exchange(ref _balanceSeen, balance) != balance) ScreenChanged(at);
         if (Update.RemoteConfig.Current.Off("balance")) return;
         lock (_balanceHist) { if (_balanceHist.Count == 0 || _balanceHist[^1].Balance != balance) _balanceHist.Add((at, balance)); _balanceHist.RemoveAll(b => (at - b.At).TotalMinutes > 3); }
         // each new trusted reading goes to the Kina witness (the same reading handed again adds nothing)
@@ -821,7 +823,11 @@ public sealed partial class TrackerSession
     {
         _probe?.Dispose(); _probe = null;
         // the crafting panel's locator is the craft reader's time; the thumbnail, the classifier and the held reads the scene's
-        if (!Update.RemoteConfig.Current.Off("craft_panel")) _probe = await Times.Time("craft", CraftProbeAsync);
+        if (!Update.RemoteConfig.Current.Off("craft_panel") && CraftProbeDue(now))
+        {
+            _probe = await Times.Time("craft", CraftProbeAsync);
+            if (_probe is { Sample.Visible: true }) _probeCadence.Seen(now);
+        }
         var scene = System.Diagnostics.Stopwatch.StartNew();
         System.Drawing.Bitmap? thumb = null;
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -1121,6 +1127,7 @@ public sealed partial class TrackerSession
     internal void ProcessChat(List<string> lines, DateTime now)
     {
         _ctxNow = now;
+        ChatSeen(lines, now);   // new chat lines: the next loot list capture is recognized (ocr.list_skip_same)
         GatherTick(now);
         Seen(now);
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
@@ -2664,7 +2671,7 @@ public sealed partial class TrackerSession
         var now = at ?? DateTime.UtcNow;
         if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
-        var sameNote = ChatSameNote();
+        var sameNote = ChatSameNote() + ListSameNote();
         // the decoder runs on its own thread: its time over the minute goes in at the same per-pass rate
         double dec = NameDecoder.TotalMs; Times.Add("decoder", dec - _decoderMsAt); _decoderMsAt = dec;
         SaveColours();
@@ -2731,6 +2738,11 @@ public sealed partial class TrackerSession
             if (Cover(region) != null) return null;   // something over it: nothing read, nothing added
             // the picture is kept for the read's rows' icons (PopupIcons); the caller disposes it
             raw = ScreenReader.Capture(region);
+            // the same boosted pixels as the last recognized read: its lines stand, and every row is still measured on this
+            // picture (ocr.list_skip_same; recognized again every 2 s and after the chat, target or Kinah counter changed)
+            if (Update.RemoteConfig.Current.ListSkipSame)
+                return (await ScreenReader.ReadBoxesAsync(raw, region.Location, 3, _listSame, DateTime.UtcNow, ScreenChangedAt), raw, region.Location);
+            _listSame.Forget();
             return (await ScreenReader.ReadBoxesAsync(raw, region.Location, 3, boost: true), raw, region.Location);
         }
         catch (Exception ex) { raw?.Dispose(); CrashLog.Write("loot list", ex); return null; }
@@ -2739,10 +2751,78 @@ public sealed partial class TrackerSession
     /// <summary>Loot list rows named by their icon (PopupIcons), for the audit line.</summary>
     public int IconNamed { get; private set; }
 
+    // ---- the loot list's unchanged check (ocr.list_skip_same, 2026-10-26) ----
+    /// <summary>The last recognized loot list read and its fingerprint (live captures).</summary>
+    readonly SameBand<OcrLineBox> _listSame = new();
+    /// <summary>The same check over a replay's list reads that carry a fingerprint ("p"), standing on their LootLines.</summary>
+    readonly SameBand<LootLine> _traceSame = new();
+    long _screenChangedTicks = DateTime.MinValue.Ticks;
+    List<string> _chatSeen = new();
+    string? _targetSeen; long _balanceSeen = -1;
+
+    /// <summary>When a reader last saw the screen change (new chat lines, another target, the Kinah counter moved).</summary>
+    internal DateTime ScreenChangedAt => new(Interlocked.Read(ref _screenChangedTicks), DateTimeKind.Utc);
+
+    /// <summary>A reader saw the screen change at <paramref name="at"/>: the next loot list capture is recognized whatever its pixels.</summary>
+    internal void ScreenChanged(DateTime at)
+    {
+        long t = at.ToUniversalTime().Ticks, was;
+        do { was = Interlocked.Read(ref _screenChangedTicks); if (t <= was) return; }
+        while (Interlocked.CompareExchange(ref _screenChangedTicks, t, was) != was);
+    }
+
+    /// <summary>A chat read's lines: a change from the last read's is a change on screen.</summary>
+    void ChatSeen(List<string> lines, DateTime at)
+    {
+        if (lines.SequenceEqual(_chatSeen)) return;
+        _chatSeen = new List<string>(lines);
+        ScreenChanged(at);
+    }
+
+    /// <summary>
+    /// A replay's loot list read with its band's fingerprint (<paramref name="print"/>): what the live read does with
+    /// ocr.list_skip_same, on the trace's lines. The same fingerprint as the last recognized read, under 2 s after it and
+    /// with no change on screen since, stands on that read's lines; any other is "recognized" (its own lines kept).
+    /// </summary>
+    internal List<LootLine> TraceListRead(string print, List<LootLine> lines, DateTime at)
+    {
+        if (!Update.RemoteConfig.Current.ListSkipSame) { _traceSame.Forget(); return lines; }
+        ulong h = 14695981039346656037;
+        foreach (char ch in print) { h ^= ch; h *= 1099511628211; }
+        if (_traceSame.Same(h, default, default, 0, at, ScreenChangedAt) is { } kept) return kept;
+        _traceSame.Recognized(h, default, default, 0, at, lines);
+        return lines;
+    }
+
+    /// <summary>A replay's target bar text: another one than the last is a change on screen, as live (TargetDueAsync).</summary>
+    internal void TraceTarget(string text, DateTime at)
+    {
+        if (text == _targetSeen) return;
+        _targetSeen = text; ScreenChanged(at);
+    }
+
+    /// <summary>Loot list captures, and those of them not recognized again as unchanged, since the start (live and replay).</summary>
+    internal int ListSameReads => _listSame.Reads + _traceSame.Reads;
+    internal int ListSameSkips => _listSame.Skips + _traceSame.Skips;
+    int _listSameAt, _listReadsAt, _craftPassesAt, _craftLooksAt;
+
+    /// <summary>The audit's note on loot list reads not recognized again (ocr.list_skip_same) and the crafting panel's looks (ocr.craft_probe_slow).</summary>
+    string ListSameNote()
+    {
+        int same = ListSameSkips - _listSameAt, reads = ListSameReads - _listReadsAt;
+        int passes = _probeCadence.Passes - _craftPassesAt, looks = _probeCadence.Looks - _craftLooksAt;
+        _listSameAt = ListSameSkips; _listReadsAt = ListSameReads; _craftPassesAt = _probeCadence.Passes; _craftLooksAt = _probeCadence.Looks;
+        return (reads > 0 ? $" · loot list {same} of {reads} reads unchanged and not recognized again" : "")
+            + (looks < passes ? $" · crafting panel looked for on {looks} of {passes} passes" : "");
+    }
+
     /// <summary>One loot list picture read and counted the way a live pass does it (text, icons, the rare drops' second read): replays and the replay bank.</summary>
     internal async Task ReplayListFrameAsync(System.Drawing.Bitmap raw, System.Drawing.Point origin, DateTime t)
     {
-        var lines = await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
+        // with the live read's unchanged check (ocr.list_skip_same): a picture the same as the last recognized one stands on its lines
+        var lines = Update.RemoteConfig.Current.ListSkipSame
+            ? await ScreenReader.ReadBoxesAsync(raw, origin, 3, _listSame, t, ScreenChangedAt)
+            : await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
         // through the scene gate as a live pass is: a bank picture is a crop, never a whole frame, so nothing is gated
         await LootGated((lines, (System.Drawing.Bitmap)raw.Clone(), origin), Verdict("loot_list"), t);   // disposes its picture
     }
@@ -2773,6 +2853,7 @@ public sealed partial class TrackerSession
     /// <summary>A chat read under the gate: counted (Run), held (Hold), or dropped (Skip: the chat box keeps its lines, so they count from the next read that shows them).</summary>
     internal void ChatGated(List<string> lines, DateTime now, Gate gate)
     {
+        if (gate != Gate.Run) ChatSeen(lines, now);   // ProcessChat notes a counted read's lines itself
         GatherTick(now);
         if (gate == Gate.Run) { ProcessChat(lines, now); return; }
         if (gate == Gate.Hold && lines.Count > 0) HoldRead("chat", now, lines, null);   // an empty read has nothing to hold
@@ -3332,6 +3413,36 @@ public sealed partial class TrackerSession
     }
     CraftProbe? _probe;
 
+    /// <summary>How often the locator below looks (ocr.craft_probe_slow; every pass while the switch is off).</summary>
+    readonly ProbeCadence _probeCadence = new();
+    /// <summary>A gathering sign this recent keeps the locator looking every pass with ocr.craft_probe_slow on.</summary>
+    public const double GatherSignSeconds = 60;
+
+    /// <summary>
+    /// Whether the crafting panel's locator looks this pass (<see cref="ProbeCadence"/>): every pass while the panel is up or
+    /// was seen within its hold, the scene is Crafting or not settled, the crafting window was seen lately, or anything about
+    /// gathering was (a node on the target bar, the gathering panel's lines in the loot list's place, a gathering bar race),
+    /// since a race's outcome is read only when a look saw both bars low at its start (CraftPanelTracker).
+    /// </summary>
+    bool CraftProbeDue(DateTime now)
+    {
+        bool slowOn = Update.RemoteConfig.Current.CraftProbeSlow;
+        string? why = null;
+        if (slowOn)
+        {
+            DateTime gather = new[] { Target.NodeAt, _gatherPanelAt, _panelItem.At, _gatherRaces.Count > 0 ? _gatherRaces[^1].At : DateTime.MinValue }.Max();
+            why = _panelUp ? "the panel is up"
+                : Scene.Current == global::KinahLedger.Session.Scene.Crafting ? "the scene is Crafting"
+                : Scene.Enabled && !Scene.Settled ? "the scene isn't settled"
+                : Target.CraftAt != DateTime.MinValue && (now - Target.CraftAt).TotalSeconds is >= -1 and <= GatherSignSeconds ? "the crafting window was seen"
+                : gather != DateTime.MinValue && (now - gather).TotalSeconds is >= -1 and <= GatherSignSeconds ? "a gathering sign was seen"
+                : null;
+        }
+        bool look = _probeCadence.Due(now, slowOn, why, out var note);
+        if (note != null) CrashLog.Note(note);
+        return look;
+    }
+
     /// <summary>
     /// The crafting panel's locator, every pass before the scene is worked out (it is one of the scene's signs): the
     /// strip's labels measured (pixels only), and its title read when it opens and every few seconds after, which says
@@ -3456,6 +3567,8 @@ public sealed partial class TrackerSession
             if (cover == null || own)
             {
                 await Target.TickAsync(g);
+                // another target: the next loot list capture is recognized whatever its pixels (ocr.list_skip_same)
+                if (Target.Name != _targetSeen) { _targetSeen = Target.Name; ScreenChanged(DateTime.UtcNow); }
                 BossTick(DateTime.UtcNow);
                 TargetNote = own && (Target.Name == null || (DateTime.UtcNow - Target.NameAt).TotalSeconds > 60) ? "the panel sits over the target bar; drag it aside if enemies don't show" : "";
             }

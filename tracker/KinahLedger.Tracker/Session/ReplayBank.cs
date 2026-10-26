@@ -26,6 +26,8 @@ namespace KinahLedger.Session;
 /// name on screen then (from reads.log's "fighting:" and "target bar:" lines; trace.log doesn't keep them).
 /// A "gather" read is the gathering bar finishing a race: "ok", "fail", "upgrade ok" or "upgrade fail". A "cover" read
 /// is a pass that skips the list (a full-screen window over it): the rows up are set aside, as live (LootRows.Reset).
+/// A "list" read may carry "p", its band's pixel fingerprint: the same as the last recognized read's, under 2 s after it
+/// and with no change on screen since, it stands on that read's lines, as the live read does (ocr.list_skip_same).
 /// Only what "expect" names is checked. A pending case (a fresh report nobody has checked yet) runs and prints, never
 /// fails. `replay-bank <dir> --record <case>` writes what this version counts into that case's "expect" and clears
 /// pending: run it only once the count it prints is known to be right.
@@ -94,7 +96,7 @@ public static class ReplayBank
     {
         var d = new List<string>();
         static long N(JsonNode? n) => n == null ? 0 : long.TryParse(n.ToJsonString(), out var v) ? v : 0;
-        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow", "runs_kept", "runs_from_picture", "run_kinah", "run_gear", "run_materials",
+        foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow", "list_same", "runs_kept", "runs_from_picture", "run_kinah", "run_gear", "run_materials",
                                     "runs_partly_read", "runs_sent", "run_not_read", "run_pieces", "run_unknown_gear", "run_unknown_items", "run_abyss_points", "run_kinah_set_aside" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         // a run's items by name: each one expect names must match (the others aren't checked)
@@ -260,11 +262,15 @@ public static class ReplayBank
                         var bs = r.TryGetProperty("b", out var be) ? be.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var ss = r.TryGetProperty("s", out var se) ? se.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var xs = r.TryGetProperty("x", out var xe) ? xe.EnumerateArray().Select(v => v.GetInt32()).ToList() : null;
-                        session.ListGated(ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
+                        var lootLines = ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
                             System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
                             cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0,
                             bs != null && i < bs.Count ? bs[i] : -1, ss != null && i < ss.Count ? ss[i] : -1,
-                            xs != null && i < xs.Count ? xs[i] : -1)).ToList(), t, session.Verdict("loot_list"));
+                            xs != null && i < xs.Count ? xs[i] : -1)).ToList();
+                        // "p": the band's pixel fingerprint, as the live read takes it (ocr.list_skip_same): a read with the last
+                        // recognized read's fingerprint, under 2 s after it and with no change on screen since, stands on its lines
+                        if (r.TryGetProperty("p", out var pe) && pe.GetString() is { Length: > 0 } print) lootLines = session.TraceListRead(print, lootLines, t);
+                        session.ListGated(lootLines, t, session.Verdict("loot_list"));
                         break;
                     }
                     case "gather":
@@ -276,7 +282,7 @@ public static class ReplayBank
                     case "plate": foreach (var p in ls) session.NotRow.See(p, t, LootNotRow.Plate); break;
                     // the target bar's text that names no enemy on the list (reads.log's "target bar:" lines): a gathering node
                     // when it matches one (TargetReader.SeeNode), as live
-                    case "target": foreach (var p in ls) session.Target.SeeNode(p, t); break;
+                    case "target": foreach (var p in ls) { session.Target.SeeNode(p, t); session.TraceTarget(p, t); } break;
                     // the list covered (a full-screen window, a scene it isn't read in): this pass skips it, as the scene gate does
                     case "cover": session.ListGated(new List<LootLine>(), t, Gate.Skip); break;
                     // a pass, shop or reward window's title in the top band (reads.log's "reward screen open (...)")
@@ -416,6 +422,8 @@ public static class ReplayBank
         if (session.ListUnsure > 0) res["list_unsure"] = session.ListUnsure;
         // lines in the band that weren't rows (a nameplate, a zone's name, text over the world): dropped, logged once per text per minute (LootNotRow)
         if (session.ListNotRow > 0) res["list_notrow"] = session.ListNotRow;
+        // loot list reads that stood on the last recognized read's lines, their pixels unchanged (ocr.list_skip_same)
+        if (session.ListSameSkips > 0) res["list_same"] = session.ListSameSkips;
         // gathering attempts (GatherAttempts): per skill "ok/failed", and per node
         var skills = new JsonObject();
         foreach (var (f, st) in e.SkillSnapshot().Where(kv => kv.Value.Nodes > 0).OrderBy(kv => kv.Key)) skills[f.ToString()] = $"{st.Nodes - st.Failed}/{st.Failed}";

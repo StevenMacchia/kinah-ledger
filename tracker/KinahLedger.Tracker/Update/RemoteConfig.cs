@@ -126,7 +126,30 @@ public sealed class RemoteConfig
     /// 32-bit pixels, and each one found is measured again at full size (Nameplates); off, the old full 24-bit scan. On in code.
     /// </summary>
     public bool PlatesHalf { get; init; } = true;
-    /// <summary>A built-in switch by its config name (layout.anchor.chat, layout.anchor.balance, ocr.chat_skip_same, ocr.chat_scale_to_target, ocr.target_sized, ocr.plates_half).</summary>
+
+    // ---- the cost of a pass (2026-10-26, branch tracker/pass-cost) ----
+    /// <summary>
+    /// ocr.craft_pixels: the crafting panel's locator reads its strip's pixels from the capture's own memory, locked once per
+    /// look, instead of one GetPixel call per pixel (CraftPanel). Same pixels, same answers; the look for the raised gathering
+    /// panel tries 81 places on a 2160-high screen, about 780,000 pixels, which cost 100 to 160 ms a pass that way. On in code.
+    /// </summary>
+    public bool CraftPixels { get; init; } = true;
+    /// <summary>
+    /// ocr.list_skip_same: a loot list capture whose boosted pixels are exactly those of the last recognized read isn't
+    /// recognized again, the way the chat's isn't (ocr.chat_skip_same); every row is still measured on the new capture, and
+    /// the list is recognized again at least every 2 s and after the chat, the target or the Kinah counter changed. On in code.
+    /// </summary>
+    public bool ListSkipSame { get; init; } = true;
+    /// <summary>
+    /// ocr.craft_probe_slow: while no crafting or gathering panel has been seen for a while and nothing says one is coming,
+    /// the panel's locator looks about once a second instead of every pass (TrackerSession.CraftProbeDue). OFF in code: a
+    /// gathering bar's race is armed only by a look while both bars are under 15 % (CraftPanelTracker), the first 0.7 s or so
+    /// of a 5 s race, so a look a second apart can miss the first race of a gather that nothing announced (2026-10-25: 40 of
+    /// the day's gathers came over a minute after the one before). With ocr.craft_pixels a look costs a capture and about
+    /// 3 ms, so this would save little; "ocr": {"craft_probe_slow": true} turns it on.
+    /// </summary>
+    public bool CraftProbeSlow { get; init; }
+    /// <summary>A built-in switch by its config name (layout.anchor.chat, layout.anchor.balance, ocr.chat_skip_same, ocr.chat_scale_to_target, ocr.target_sized, ocr.plates_half, ocr.craft_pixels, ocr.list_skip_same, ocr.craft_probe_slow).</summary>
     public bool Flag(string name) => name switch
     {
         "layout.anchor.chat" => AnchorChat,
@@ -135,6 +158,9 @@ public sealed class RemoteConfig
         "ocr.chat_scale_to_target" => ChatScaleToTarget,
         "ocr.target_sized" => TargetSized,
         "ocr.plates_half" => PlatesHalf,
+        "ocr.craft_pixels" => CraftPixels,
+        "ocr.list_skip_same" => ListSkipSame,
+        "ocr.craft_probe_slow" => CraftProbeSlow,
         _ => false,
     };
 
@@ -235,6 +261,9 @@ public sealed class RemoteConfig
             ChatScaleToTarget = ocr is { } cst && cst.TryGetProperty("chat_scale_to_target", out var cstv) && cstv.ValueKind == JsonValueKind.True,
             TargetSized = !Off2(ocr, "target_sized"),
             PlatesHalf = !Off2(ocr, "plates_half"),
+            CraftPixels = !Off2(ocr, "craft_pixels"),
+            ListSkipSame = !Off2(ocr, "list_skip_same"),
+            CraftProbeSlow = ocr is { } cps && cps.TryGetProperty("craft_probe_slow", out var cpsv) && cpsv.ValueKind == JsonValueKind.True,
             RolloutVersion = Str(roll, "version", ""),
             RolloutPercent = (int)Num(roll, "percent", 100, 0, 100),
             RolloutHold = roll is { } ro && ro.TryGetProperty("hold", out var h) && h.ValueKind == JsonValueKind.True,
