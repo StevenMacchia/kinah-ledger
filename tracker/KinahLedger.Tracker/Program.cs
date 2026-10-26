@@ -1271,6 +1271,7 @@ options: --process aion[,other]");
         ok &= Session.TableWitnessTests.Run(items, s);
         ok &= Session.ReliabilityTests.Run(items, s);
         ok &= Session.QtySettleTests.Run(items, s);
+        ok &= Session.PassCostTests.Run(items, s);
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
     }

@@ -1,0 +1,14 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "the loot list's unchanged check (ocr.list_skip_same) over a gather: the band stands still and most passes stand on the last read, a row appears during that stretch, fades in, settles and turns into Fine Orichalcum Ore in its place (first read \"Fine Orichalcum 0re\"); each new look of the band is recognized on the pass it shows, the passes that repeat it stand on it, and the read 2 s on and the one after the chat moved are recognized whatever the pixels. The chat misses the gather, the gathering bar finished on Success: one Fine Orichalcum Ore, the final text, as when every pass is recognized. 11 of the 20 list reads stand on the last read. A check that skipped by time alone would have stood on the empty band when the row came and on the first text when it changed, and counted Orichalcum Ore",
+  "source": "hand-written on the shapes of text-2026-10-24-row-change-in-place (Steven's trace.log, the 2026-10-23 Orichalcum gather), passes 0.4 s apart, each list read carrying \"p\", its band's pixel fingerprint as the live read takes it (2026-10-26, branch tracker/pass-cost)",
+  "expect": {
+    "items": {
+      "Fine Orichalcum Ore": 1,
+      "Orichalcum Ore": 0
+    },
+    "list_same": 11
+  }
+}

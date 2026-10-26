@@ -69,7 +69,7 @@ public static class CraftPanel
     /// A picture of part of the game: <paramref name="bmp"/> shows <paramref name="area"/>, both in screen pixels, of the
     /// game window <paramref name="game"/>. Positions are worked out on the game and looked up in the picture.
     /// </summary>
-    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game, int Dy = 0, int Dx = 0)
+    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game, int Dy = 0, int Dx = 0, Pixels? Px = null)
     {
         public int H => Game.Height;
         public int Cx => Game.Width / 2;
@@ -77,8 +77,70 @@ public static class CraftPanel
         public Color? At(int gx, int gy)
         {
             int x = Game.X + gx + Dx - Area.X, y = Game.Y + gy + Dy - Area.Y;
+            if (Px is { } p) return x < 0 || y < 0 || x >= p.W || y >= p.H ? null : p.At(x, y);
             return x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height ? null : Bmp.GetPixel(x, y);
         }
+
+        /// <summary>The pixel's darkest channel (what the labels' white test reads), or -1 outside the picture.</summary>
+        public int Min3(int gx, int gy)
+        {
+            int x = Game.X + gx + Dx - Area.X, y = Game.Y + gy + Dy - Area.Y;
+            if (Px is { } p) return x < 0 || y < 0 || x >= p.W || y >= p.H ? -1 : p.Min3(x, y);
+            if (x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height) return -1;
+            var c = Bmp.GetPixel(x, y);
+            return Math.Min(c.R, Math.Min(c.G, c.B));
+        }
+    }
+
+    /// <summary>
+    /// A picture's own pixels, locked once for a whole look (ocr.craft_pixels, 2026-10-26): what GetPixel would give for
+    /// each pixel, without a GDI+ call per pixel. The look for the raised gathering panel tries 81 places on a 2160-high
+    /// screen, about 780,000 pixels, which cost 100 to 160 ms a pass one GetPixel at a time. Only the formats whose bytes
+    /// are the colour as GetPixel gives it; any other picture (or one locked elsewhere) is read with GetPixel, as before.
+    /// </summary>
+    sealed unsafe class Pixels : IDisposable
+    {
+        readonly Bitmap _bmp;
+        readonly System.Drawing.Imaging.BitmapData _data;
+        readonly byte* _scan;
+        readonly int _stride, _bpp;
+        readonly bool _alpha;
+        /// <summary>The picture's size, kept: Bitmap.Width and Height are a GDI+ call each.</summary>
+        public readonly int W, H;
+
+        Pixels(Bitmap bmp, System.Drawing.Imaging.BitmapData data, int bpp, bool alpha)
+        {
+            _bmp = bmp; _data = data; _bpp = bpp; _alpha = alpha;
+            _scan = (byte*)data.Scan0; _stride = data.Stride; W = data.Width; H = data.Height;
+        }
+
+        public static Pixels? Lock(Bitmap bmp)
+        {
+            if (!KinahLedger.Update.RemoteConfig.Current.CraftPixels) return null;
+            var f = bmp.PixelFormat;
+            int bpp = f is System.Drawing.Imaging.PixelFormat.Format32bppArgb or System.Drawing.Imaging.PixelFormat.Format32bppRgb ? 4
+                : f == System.Drawing.Imaging.PixelFormat.Format24bppRgb ? 3 : 0;
+            if (bpp == 0) return null;
+            try { return new Pixels(bmp, bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly, f), bpp, f == System.Drawing.Imaging.PixelFormat.Format32bppArgb); }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>The pixel at (x, y), inside the picture (the caller checks).</summary>
+        public Color At(int x, int y)
+        {
+            byte* p = _scan + (long)y * _stride + x * _bpp;
+            return Color.FromArgb(_alpha ? p[3] : 255, p[2], p[1], p[0]);
+        }
+
+        /// <summary>The darkest of the pixel's three channels at (x, y), inside the picture (the caller checks).</summary>
+        public int Min3(int x, int y)
+        {
+            byte* p = _scan + (long)y * _stride + x * _bpp;
+            int m = p[0] < p[1] ? p[0] : p[1];
+            return m < p[2] ? m : p[2];
+        }
+
+        public void Dispose() => _bmp.UnlockBits(_data);
     }
 
     /// <summary>The part of the game window the panel's text, labels and bars sit in, in screen pixels: all a read needs.</summary>
@@ -102,8 +164,9 @@ public static class CraftPanel
             {
                 int x = v.Cx + (int)Math.Round((l.X0 - 2560 + (l.X1 - l.X0) * (i + 0.5) / GridW) * k);
                 int y = (int)Math.Round((l.Y0 + (l.Y1 - l.Y0) * (j + 0.5) / GridH) * k);
-                if (v.At(x, y) is not { } c) return 0;
-                bool white = Math.Min(c.R, Math.Min(c.G, c.B)) > 185, want = l.Mask[j * GridW + i] == '1';
+                int m = v.Min3(x, y);
+                if (m < 0) return 0;
+                bool white = m > 185, want = l.Mask[j * GridW + i] == '1';
                 if (white || want) any++;
                 if (white && want) both++;
             }
@@ -128,8 +191,9 @@ public static class CraftPanel
                 for (int y = ya; y < yb && !white; y++)
                     for (int x = xa; x < xb; x++)
                     {
-                        if (v.At(x, y) is not { } c) return 0;
-                        if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) { white = true; break; }
+                        int m = v.Min3(x, y);
+                        if (m < 0) return 0;
+                        if (m > 185) { white = true; break; }
                     }
                 bool want = l.Mask[j * GridW + i] == '1';
                 if (white || want) any++;
@@ -142,15 +206,15 @@ public static class CraftPanel
     const double RaisedMatch = 0.4;
 
     /// <summary>Whether the crafting panel is on screen in a picture of the whole game window: both bar labels in place.</summary>
-    public static bool IsUp(Bitmap f) { var v = Whole(f); return Labels.All(l => LabelScore(v, l) >= LabelMatch); }
+    public static bool IsUp(Bitmap f) { using var px = Pixels.Lock(f); var v = Whole(f, px); return Labels.All(l => LabelScore(v, l) >= LabelMatch); }
 
-    static View Whole(Bitmap f) => new(f, new Rectangle(0, 0, f.Width, f.Height), new Rectangle(0, 0, f.Width, f.Height));
+    static View Whole(Bitmap f, Pixels? px) => new(f, new Rectangle(0, 0, f.Width, f.Height), new Rectangle(0, 0, f.Width, f.Height), Px: px);
 
     /// <summary>The panel in a picture of the whole game window.</summary>
-    public static Sample Measure(Bitmap f) => Measure(Whole(f));
+    public static Sample Measure(Bitmap f) { using var px = Pixels.Lock(f); return Measure(Whole(f, px)); }
 
     /// <summary>The panel in a picture of <see cref="Region"/> (or any area holding it) of the game window <paramref name="game"/>.</summary>
-    public static Sample Measure(Bitmap bmp, Rectangle area, Rectangle game) => Measure(new View(bmp, area, game));
+    public static Sample Measure(Bitmap bmp, Rectangle area, Rectangle game) { using var px = Pixels.Lock(bmp); return Measure(new View(bmp, area, game, Px: px)); }
 
     static Sample Measure(View v)
     {

@@ -399,6 +399,27 @@ public sealed class ScreenReader
     public static async Task<List<OcrLineBox>> ReadBoxesAsync(Bitmap raw, Point origin, double scale, bool boost = false)
     {
         using var src = boost ? Boost(raw) : (Bitmap)raw.Clone();
+        return await BoxesOf(src, origin, scale);
+    }
+
+    /// <summary>
+    /// A boosted read (as <c>ReadBoxesAsync(raw, origin, scale, boost: true)</c>) that stands on the last recognized read's
+    /// lines when the boosted pixels, place and size are exactly that read's and <paramref name="same"/> allows it (the loot
+    /// list, ocr.list_skip_same). <paramref name="changedAt"/>: when another reader last saw the screen change.
+    /// </summary>
+    public static async Task<List<OcrLineBox>> ReadBoxesAsync(Bitmap raw, Point origin, double scale, SameBand<OcrLineBox> same, DateTime now, DateTime changedAt)
+    {
+        using var src = Boost(raw);
+        ulong hash = PixelHash(src);
+        if (same.Same(hash, origin, raw.Size, scale, now, changedAt) is { } kept) return kept;
+        var lines = await BoxesOf(src, origin, scale);
+        same.Recognized(hash, origin, raw.Size, scale, now, lines);
+        return lines;
+    }
+
+    /// <summary>The picture as the recognizer reads it (enlarged by <paramref name="scale"/>), each line with its box on screen.</summary>
+    static async Task<List<OcrLineBox>> BoxesOf(Bitmap src, Point origin, double scale)
+    {
         var (bmp, f) = Prepare(src, scale);
         using (bmp)
         {

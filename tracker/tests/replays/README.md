@@ -85,3 +85,10 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   took one of the fight's kills for the witness of a second pair. Right: 1. A line under the same two lines a copy was
   counted under, one of them once in the read, is that copy wherever the scroll put it (`ItemRepeatGuard`; the guard's
   own checks in `Ocr/ChatCountTests.cs`). The Order Gloves were the 16:35 event cards, named right from their picture.
+- `text-2026-10-25-list-skip-same` (2026-10-26, branch tracker/pass-cost): the loot list's unchanged check
+  (`ocr.list_skip_same`, `Ocr/SameBand.cs`). A `list` read may carry `p`, its band's pixel fingerprint (any string; the
+  same string is the same pixels): a read with the last recognized read's fingerprint, under 2 s after it and with no
+  change on screen since (the chat's lines, a `target` read, a `balance` read that moved), stands on that read's lines, as
+  the live read stands on its last recognition. Every read still goes through the rows as before. Run key `list_same`: the
+  reads that stood on the last one. A row that appears, fades in and changes in place while the band otherwise stands
+  still is read on the pass each new look shows and counts with its final text; a check that skipped by time alone fails it.
