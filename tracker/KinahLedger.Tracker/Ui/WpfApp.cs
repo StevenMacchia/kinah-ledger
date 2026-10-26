@@ -314,12 +314,14 @@ public static class WpfApp
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-{page.ToString().ToLowerInvariant()}{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
-        // In game once more, tall enough for the panel's rows below the fold (the lock, opacity, size and position)
+        // In game once more, scrolled to the end: the panel's rows below the fold (opacity, size and position)
         {
-            var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false, MaxHeight = 1300, Height = 1300 };
+            var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
             o.Show();
             DoEvents();
-            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-tall{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Scroller.ScrollToEnd();
+            DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-lower{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
         w.Close();
