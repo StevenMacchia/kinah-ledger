@@ -334,6 +334,18 @@
                   <Button x:Name="HotkeyResetBtn" Content="Default"/>
                 </WrapPanel>
               </StackPanel>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- That was wrong (Ui/MainWindow.MarkWrong.cs): off until a key is picked, recorded the same way -->
+              <StackPanel Margin="18,13,18,15">
+                <TextBlock Style="{StaticResource RowTitle}" Text="That was wrong"/>
+                <TextBlock x:Name="MarkKeyHint" Style="{StaticResource RowHint}" Text="Marks the newest counted line as wrong and saves the last minute for a report. Off until you pick a key."/>
+                <WrapPanel Margin="0,12,0,0">
+                  <TextBox x:Name="MarkKeyBox" Width="190" IsReadOnly="True" HorizontalContentAlignment="Center" FontFamily="Consolas" FontSize="14" Cursor="Arrow" Margin="0,0,8,0"
+                           AutomationProperties.Name="That was wrong shortcut"/>
+                  <Button x:Name="MarkKeyChangeBtn" Content="Change" Margin="0,0,8,0"/>
+                  <Button x:Name="MarkKeyOffBtn" Content="Turn off"/>
+                </WrapPanel>
+              </StackPanel>
             </StackPanel>
           </Border>
 
@@ -404,9 +416,12 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Panel position"/>
-                  <TextBlock x:Name="HudPositionHint" Style="{StaticResource RowHint}" Text="Back to the top centre of the game's screen, clear of the minimap and the chat."/>
+                  <TextBlock x:Name="HudPositionHint" Style="{StaticResource RowHint}" Text="Drag it over the game, or snap it to a spot. Reset puts it back at the top centre."/>
                 </StackPanel>
-                <Button x:Name="HudResetBtn" Grid.Column="1" Content="Reset position" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button x:Name="HudPlaceBtn" Content="Place the panel…" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Drag it over the game, or snap it to the top centre, under the minimap or left of the target bar"/>
+                  <Button x:Name="HudResetBtn" Content="Reset position" VerticalAlignment="Center"/>
+                </StackPanel>
               </Grid>
             </StackPanel>
           </Border>

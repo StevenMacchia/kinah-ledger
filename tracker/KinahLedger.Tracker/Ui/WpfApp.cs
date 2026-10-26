@@ -214,6 +214,9 @@ public static class WpfApp
               && long.Parse(Pk(0, "At")) >= long.Parse(Pk(1, "At")),
             $"panel looks: the feed's pickups, newest first ({Pk(0)}, {Pk(1)}, {Pk(2)}, {Pk(3)})");
 
+        // Options › In game › Rare drops (2026-10-26): the watch list and the chime wait for Save, and a watched Common item alerts
+        OptionsWindow.SelfTestRareDrops(w, Open, Check);
+
         // the panel's opacity and size: shown on the panel as the sliders move, kept on Save, put back by Cancel
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
@@ -354,6 +357,97 @@ public static class WpfApp
             Check(!cv.Keys.Any(k => k.Contains("ccura", StringComparison.OrdinalIgnoreCase)) && !cv.Values.Any(x => x.Contains('%')), "panel crafting: no accuracy figure");
         }
 
+        // That was wrong (2026-10-26): a second shortcut, off by default, recorded like the first, kept only on Save
+        {
+            const System.Windows.Input.ModifierKeys C = System.Windows.Input.ModifierKeys.Control, S = System.Windows.Input.ModifierKeys.Shift;
+            o = Open();
+            o.Go(OptionsWindow.Page.InGame);
+            Check(w.MarkWrongText == "" && o.MarkKeyBox.Text == "Off" && !o.MarkKeyOffBtn.IsEnabled, "That was wrong: off until a key is picked");
+            Check(o.RecordForTest(true, C | S, System.Windows.Input.Key.K) is { } same && same.Contains("start/stop") && !o.SaveBtn.IsEnabled, "That was wrong can't take the start/stop shortcut's keys");
+            Check(o.RecordForTest(true, C, System.Windows.Input.Key.J) is { } rule && rule.Contains("Shift") && !o.SaveBtn.IsEnabled, "...and keeps the shortcut rules (Ctrl+J refused)");
+            Check(o.RecordForTest(true, C | S, System.Windows.Input.Key.J) == null && o.MarkKeyBox.Text == "Ctrl+Shift+J" && o.SaveBtn.IsEnabled && w.MarkWrongText == "", "a recorded key waits for Save");
+            Click(o.CancelBtn);
+            DoEvents();
+            Check(!o.IsVisible && w.MarkWrongText == "", "Cancel leaves That was wrong off");
+            o = Open();
+            o.Go(OptionsWindow.Page.InGame);
+            o.RecordForTest(true, C | S, System.Windows.Input.Key.J);
+            Click(o.SaveBtn);
+            DoEvents();
+            Check(w.MarkWrongText == "Ctrl+Shift+J", "That was wrong saved: " + w.MarkWrongText);
+            if (o.IsVisible) { Console.WriteLine("      (Options stayed open: " + o.FooterNote.Text + ")"); Click(o.CancelBtn); DoEvents(); }
+            o = Open();
+            o.Go(OptionsWindow.Page.InGame);
+            Check(o.MarkKeyBox.Text == "Ctrl+Shift+J" && o.RecordForTest(false, C | S, System.Windows.Input.Key.J) is { } back && back.Contains("That was wrong"), "Options opens with it; start/stop can't take its keys");
+            Click(o.MarkKeyOffBtn);
+            Click(o.SaveBtn);
+            DoEvents();
+            Check(w.MarkWrongText == "" && p.Hotkey == Platform.Hotkey.Default, "That was wrong turned off again, start/stop untouched");
+
+            // the key pressed over the sample feed: the newest line marked with its report, the panel's 3 s notice, Undo
+            w.ShowDemo(); DoEvents();
+            Check(w.PressMarkWrongForTest(false) == "Saved the last minute · Report in tracker" && w.MarkStateForTest is (1, _, "mark"), "the key: the newest line marked, the panel says the minute is saved");
+            Check(w.PressMarkWrongForTest(false) == "Already marked · Report in tracker" && w.MarkStateForTest.Marked == 1, "pressed again: the same line isn't filed twice");
+            w.PressUndo(); DoEvents();
+            Check(w.MarkStateForTest is (0, false, null), "Undo takes the mark back");
+            w.ShowMarkedSample(); DoEvents();
+            Check(w.MarkStateForTest is (1, true, "mark") && w.UndoShowing == null && w.FeedHint.Visibility != Visibility.Visible, "a Farming line: marked, with Undo under the feed in place of the hint");
+            w.PressUndo(); DoEvents();
+            Check(w.MarkStateForTest is (0, false, null) && w.FeedHint.Visibility == Visibility.Visible, "...and Undo there takes it back, the hint returns");
+            Check(w.PressMarkWrongForTest(true) == "Nothing counted in the last 2 minutes" && w.MarkStateForTest is (0, false, null), "nothing counted in the last 2 minutes: the panel says so and nothing is filed");
+        }
+
+        // Place the panel… (Ui/PlacementGuide.cs): every snap spot inside the game on a 1080p and a 5120×2160 screen, in each
+        // look at its saved size; Enter keeps the spot for its look (the Ticker's apart from the Card's), Esc keeps nothing
+        foreach (var game in new[] { new DRect(0, 0, 1920, 1080), new DRect(0, 0, 5120, 2160) })
+        {
+            var outside = new List<string>();
+            foreach (var look in new[] { HudLooks.Strip, HudLooks.Card, HudLooks.Ticker })
+            {
+                var g = w.MakePlacementGuide(game, game, look);
+                var spots = new HashSet<System.Drawing.Point>();
+                foreach (var s in HudSpots.All.Select(x => x.Key))
+                {
+                    g.Snap(s);
+                    var r = g.PanelPx;
+                    spots.Add(r.Location);
+                    if (!game.Contains(r) || g.Chosen != s || r.Width < 60 || r.Height < 20) outside.Add($"{look} {s} {r}");
+                }
+                if (spots.Count != HudSpots.All.Length) outside.Add($"{look}: {spots.Count} different spots");
+                g.Close();
+            }
+            Check(outside.Count == 0, $"snap spots inside the {game.Width}×{game.Height} game in every look" + (outside.Count > 0 ? ": " + string.Join("; ", outside) : ""));
+        }
+        {
+            var game = new DRect(0, 0, 1920, 1080);
+            double k = w.HudSpotScaleForTest;
+            bool At(double? v, int px) => v is { } d && Math.Abs(d * k - px) < 1;
+            var card = (p.HudX, p.HudY);
+            var g = w.MakePlacementGuide(game, game, HudLooks.Ticker);
+            g.Snap(HudSpots.Minimap);
+            var want = g.PanelPx.Location;
+            g.Press(System.Windows.Input.Key.Enter);
+            var ticker = w.TickerSpotForTest;
+            Check(At(ticker.X, want.X) && At(ticker.Y, want.Y) && p.HudX == card.HudX && p.HudY == card.HudY,
+                $"placement guide: Enter keeps the Ticker under the minimap in its own spot ({ticker.X:0}, {ticker.Y:0}); the Card's is left alone");
+            g = w.MakePlacementGuide(game, game, HudLooks.Card);
+            g.Snap(HudSpots.Target);
+            want = g.PanelPx.Location;
+            g.Press(System.Windows.Input.Key.Enter);
+            Check(At(p.HudX, want.X) && At(p.HudY, want.Y) && w.TickerSpotForTest == ticker,
+                $"placement guide: Enter keeps the Card left of the target bar in the Card's spot ({p.HudX:0}, {p.HudY:0}); the Ticker's is left alone");
+            var kept = (p.HudX, p.HudY, w.TickerSpotForTest);
+            g = w.MakePlacementGuide(game, game, HudLooks.Card);
+            g.Snap(HudSpots.Top);
+            g.Press(System.Windows.Input.Key.Escape);
+            Check((p.HudX, p.HudY, w.TickerSpotForTest) == kept, "placement guide: Esc keeps nothing");
+            o = Open();
+            o.Go(OptionsWindow.Page.InGame);
+            Click(o.HudPlaceBtn);
+            Check(!w.PlacementGuideOpen && o.IsVisible, "Options › In game › Place the panel… with no game: a note, no guide");
+            o.Close();
+        }
+
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;
@@ -418,7 +512,50 @@ public static class WpfApp
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-lower{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
+        // In game at Rare drops (2026-10-26): a sample watch list, the chime and its volume
+        OptionsWindow.ShotRareDrops(w, Path.Combine(dir, $"options-ingame-rare{(skin != null ? "-" + skin : "")}.png"), (e, file) => Save(e, file, 0));
+        // Place the panel… (In game): the guide over a dark stand-in for the game, as the approved mock draws it
+        if (skin == null) ShotPlacementGuide(w, dir);
         w.Close();
+    }
+
+    /// <summary>
+    /// The placement guide as the approved mock draws it (f4-placement.png): a 1600×900 part of a 5120×2160 game, so the
+    /// minimap, loot list and chat box are markers on its edges, with the Card at the top centre and the Ticker left of the
+    /// target bar; and the Card's guide over a whole 1920×1080 game, every part outlined in place. No game runs in CI, so a
+    /// dark stand-in sits under the veil.
+    /// </summary>
+    static void ShotPlacementGuide(MainWindow w, string dir)
+    {
+        var wide = new DRect(0, 0, 5120, 2160);
+        var crop = new DRect(1760, 0, 1600, 900);
+        var hd = new DRect(0, 0, 1920, 1080);
+        foreach (var url in w.HudSample().Where(kv => kv.Key.EndsWith("Icon")).Select(kv => kv.Value).Distinct()) IconCache.Get(url);
+        IconCache.Drain(TimeSpan.FromSeconds(10));
+        DoEvents();
+        foreach (var (file, look, game, view) in new[]
+        {
+            ("ui-placement-guide-card.png", HudLooks.Card, wide, crop),
+            ("ui-placement-guide-ticker.png", HudLooks.Ticker, wide, crop),
+            ("ui-placement-guide-whole.png", HudLooks.Card, hd, hd),
+        })
+        {
+            var g = w.MakePlacementGuide(game, view, look);
+            var stand = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0.35, 1) };
+            stand.GradientStops.Add(new GradientStop(Color.FromRgb(0x3A, 0x26, 0x28), 0));
+            stand.GradientStops.Add(new GradientStop(Color.FromRgb(0x22, 0x1C, 0x24), 0.45));
+            stand.GradientStops.Add(new GradientStop(Color.FromRgb(0x12, 0x14, 0x1C), 1));
+            stand.Freeze();
+            var scene = new System.Windows.Controls.Grid { Width = view.Width, Height = view.Height, Background = stand };
+            scene.Children.Add(g.ShotFace());
+            scene.Measure(new Size(view.Width, view.Height));
+            scene.Arrange(new Rect(0, 0, view.Width, view.Height));
+            scene.UpdateLayout();
+            DoEvents();
+            Save(scene, Path.Combine(dir, file), view.Width);
+            scene.Children.Clear();
+            g.Close();
+        }
     }
 
     public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false, bool tall = false)
@@ -478,7 +615,16 @@ public static class WpfApp
         var states = !demo ? new() : w.HudStates().Where(x => kind == "Crafting" ? x.File == "ui-hud-crafting.png" : kind == "Open world" && x.File != "ui-hud-crafting.png").ToList();
         // the Card and the Ticker in the mock's three states, from the window's sample figures
         var lookStates = demo && kind == "Open world" ? w.HudLookStates() : demo && kind == "Crafting" ? w.HudCraftLookStates() : new();
+        if (demo && kind == "Open world") lookStates.AddRange(w.MarkedLookStates());   // That was wrong's notice: ui-hud-card-marked.png, ui-hud-ticker-marked.png
         if (states.Count > 0) foreach (var (k, v) in states[0].Values) values[k] = v;
+        // That was wrong (2026-10-26): the window just after the key, the newest Farming line marked and Undo under the feed
+        // (last, once the panel's figures are taken; not over the Undo bar's render, which the mark would make final)
+        if (demo && kind == "Open world" && Environment.GetEnvironmentVariable("KL_SHOT_UNDO") != "1")
+        {
+            w.ShowMarkedSample();
+            DoEvents();
+            Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-main-marked" + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        }
         w.Close();
 
         foreach (var (file, state) in states)
@@ -497,7 +643,7 @@ public static class WpfApp
             h.Show();
             h.Update(values);
             if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ Nothing looked wrong", hudAcc != null && hudToLook);
-            if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
+            if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1 · sells for 28K on Siel", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();

@@ -41,34 +41,42 @@ public partial class MainWindow
         var fresh = chat.RecentPickups(12).Where(p => p.At > _alertSeen).OrderBy(p => p.At).ToList();
         if (fresh.Count == 0) return;
         _alertSeen = fresh[^1].At;
-        foreach (var p in fresh)
-        {
-            int x = p.What.LastIndexOf(" ×", StringComparison.Ordinal);
-            if (x <= 0) continue;                                   // Kinah, not an item
-            var name = p.What[..x];
-            var grade = _items.Get(_items.IdOf(name))?.Grade ?? "";
-            bool rare = grade is "Legend" or "Unique" or "Epic";
-            if (!rare && !IsWatched(name)) continue;
-            var color = grade switch
-            {
-                "Legend" => Color.FromRgb(0x5A, 0xA6, 0xFF), "Unique" => Color.FromRgb(0xF3, 0xD3, 0x5E), "Epic" => Color.FromRgb(0xB4, 0x8B, 0xFF),
-                _ => Color.FromRgb(0x5E, 0xD8, 0xCB),
-            };
-            Chime();
-            _hud?.Alert((rare ? "Rare drop: " : "Watched drop: ") + p.What, color);
-            HoldRareOnHud(name, p.What[(x + 1)..], rare ? grade : "", color, p.At);   // the Card's and the Ticker's rare drop
-            Say((rare ? $"Rare drop ({grade}): " : "Watched drop: ") + p.What, "Good");
-        }
+        foreach (var p in fresh) AlertFor(p.What, p.At);
     }
 
-    static void Chime()
+    /// <summary>
+    /// One pickup ("Shade Gloves ×1"): a Legend, Unique or Epic item, or any item on the watch list whatever its grade,
+    /// chimes (when Options › In game › Rare drops says so), lights the panel and says so in the status line. The Card
+    /// and the Ticker get the item, its grade, count, price and whether it is watched (MainWindow.RareWatch.cs); the
+    /// strip its one line with the price. Returns whether it alerted (the options self-test).
+    /// </summary>
+    internal bool AlertFor(string what, DateTime at)
     {
-        try
+        int x = what.LastIndexOf(" ×", StringComparison.Ordinal);
+        if (x <= 0) return false;                                   // Kinah, not an item
+        var name = what[..x];
+        var count = what[(x + 1)..];
+        var id = _items.IdOf(name);
+        var grade = _items.Get(id)?.Grade ?? "";
+        bool rare = grade is "Legend" or "Unique" or "Epic";
+        bool watched = IsWatched(name);
+        if (!rare && !watched) return false;
+        var color = grade switch
         {
-            var wav = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Media", "Windows Notify System Generic.wav");
-            if (System.IO.File.Exists(wav)) new System.Media.SoundPlayer(wav).Play();
-            else System.Media.SystemSounds.Asterisk.Play();
-        }
-        catch (Exception) { }
+            "Legend" => Color.FromRgb(0x5A, 0xA6, 0xFF), "Unique" => Color.FromRgb(0xF3, 0xD3, 0x5E), "Epic" => Color.FromRgb(0xB4, 0x8B, 0xFF),
+            "Rare" => Color.FromRgb(0x62, 0xD9, 0x8B), _ => Color.FromRgb(0x5E, 0xD8, 0xCB),
+        };
+        bool chime = _hudPrefs.Chime;
+        if (chime && !_demo) Chime();
+        var (price, where) = RarePrice(name, count);
+        var priceText = price.Length > 0 ? ("sells for " + price + " " + where).TrimEnd() : "no price yet";
+        _hud?.Alert((rare ? "Rare drop: " : "Watched drop: ") + what + " · " + priceText, color);
+        HoldRareOnHud(name, count, grade, color, at);   // the Card's and the Ticker's rare drop
+        HoldRareExtras(id, price, where, watched, chime);
+        Say((rare ? $"Rare drop ({grade}): " : "Watched drop: ") + what + " · " + priceText, "Good");
+        return true;
     }
+
+    /// <summary>A price alert, or a drop with the chime on: at the volume chosen in Options › In game › Rare drops.</summary>
+    void Chime() => PlayChime(_hudPrefs.ChimeVolume);
 }

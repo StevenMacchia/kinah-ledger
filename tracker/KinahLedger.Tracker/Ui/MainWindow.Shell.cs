@@ -12,7 +12,15 @@ public sealed record OptionsChoice(
     string Region, string Server, bool Share, bool Hud, string Hotkey, string Skin, bool AutoUpdate,
     bool StartWithWindows, string OnGameStart, bool HideWhenGameCloses, bool CloseToTray, bool MinimizeToTray, string HudFields,
     bool ReportFrames = false, bool SendFrames = false, int GearScore = 0, bool HelpCounting = true, bool ShowAccuracy = false,
-    bool HudLocked = true, double HudOpacity = 0.9, double HudScale = 1, string HudLook = HudLooks.Strip);
+    bool HudLocked = true, double HudOpacity = 0.9, double HudScale = 1, string HudLook = HudLooks.Strip)
+{
+    /// <summary>Options › In game › Rare drops (MainWindow.RareWatch.cs): the watch list, one name a line, and the chime.</summary>
+    public string RareWatch { get; init; } = "";
+    public bool RareChime { get; init; } = true;
+    public double RareVolume { get; init; } = 0.6;
+    /// <summary>The That was wrong shortcut ("Ctrl+Shift+J"), "" when off (Ui/MainWindow.MarkWrong.cs).</summary>
+    public string MarkWrongKey { get; init; } = "";
+}
 
 /// <summary>
 /// The app around the live count: the tray, starting with Windows, reacting to the game starting and closing, the
@@ -147,6 +155,7 @@ public partial class MainWindow
     {
         _hotkeySuspended = suspend;
         ApplyHotkey();
+        ApplyMarkWrongKey();   // the That was wrong key too: neither fires while a key is being recorded
     }
 
     /* ---------------- Options ---------------- */
@@ -227,7 +236,8 @@ public partial class MainWindow
         RegionKey, Server?.Label ?? "", _prefs.Share, _prefs.Hud, HotkeyText, Skins.Get(_prefs.Skin).Key, _prefs.AutoUpdate,
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
-        _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook);
+        _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
+        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -262,7 +272,13 @@ public partial class MainWindow
         if (c.Hotkey != was.Hotkey)
         {
             _prefs.Hotkey = c.Hotkey;
+            ReleaseMarkWrongKey();   // two keys swapped: the start/stop one first, then That was wrong again below
             if (ApplyHotkey() is { } err) problems.Add(err);
+        }
+        if (c.MarkWrongKey != was.MarkWrongKey || c.Hotkey != was.Hotkey)
+        {
+            _hudPrefs.MarkWrongKey = c.MarkWrongKey;
+            if (ApplyMarkWrongKey() is { } err) problems.Add(err);
         }
         _prefs.OnGameStart = c.OnGameStart;
         _prefs.HideWhenGameCloses = c.HideWhenGameCloses;
@@ -272,6 +288,7 @@ public partial class MainWindow
         if (c.GearScore != was.GearScore) SetGearScore(c.GearScore);
         _prefs.SendReportFrames = ReportBuffer.KeepUiFrames = c.SendFrames;
         _prefs.HelpImproveCounting = c.HelpCounting; ApplyCounting();   // with sharing too: off with either
+        ApplyRareDrops(c, was);   // the watch list and the chime (Ui/MainWindow.RareWatch.cs)
         if (c.ShowAccuracy != was.ShowAccuracy) { _prefs.ShowAccuracy = c.ShowAccuracy; _accChipSig = _accSig = ""; FillAccuracyCard(); UpdateHud(); }
         if (c.StartWithWindows != was.StartWithWindows)
         {

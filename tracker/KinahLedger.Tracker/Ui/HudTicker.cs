@@ -109,16 +109,16 @@ public sealed partial class HudTicker : IHudLook
 
         // what the stack shows, top down: one notice, the accuracy line, the rare drop, then pickups under 6 s old; four at most
         var want = new List<(string Key, string Kind, Func<Border> Make)>();
-        string note; Brush tone; bool sign = false;
+        string note, clockV = ""; Brush tone; bool sign = false;
         if (paused.Length > 0) { note = paused; tone = Warn; sign = true; }
         else if (V("flash").Length > 0) { note = V("flash"); tone = Ink; }
-        else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; }
+        else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; clockV = V("noticeClock"); }
         else if (V("flag").Length > 0) { note = V("flag") + " · fix in tracker"; tone = Gold; }
         else { note = ""; tone = Warn; }
-        if (note.Length > 0) { var (n, t, s) = (note, tone, sign); want.Add(("notice|" + n, "notice", () => NoticeToast(n, t, s))); }
+        if (note.Length > 0) { var (n, t, s, cv) = (note, tone, sign, clockV); want.Add(("notice|" + n + cv, "notice", () => NoticeToast(n, t, s, HudClockNotice.Parse(cv)))); }
         if (_acc is { } acc) { var check = _accCheck; want.Add(("acc|" + acc + check, "notice", () => NoticeToast(acc, check ? Warn : B(0x62D98B), check))); }
         var rare = Rare(values);
-        if (rare != null) want.Add((rare.Id, "rare", () => RareToast(rare)));
+        if (HudRare.Of(values) is { } drop) want.Add((drop.Pick.Id, "rare", () => HudRare.TickerToast(drop, _alpha)));   // 66 px since 2026-10-26
         bool skipped = false;
         var now = DateTime.UtcNow;
         foreach (var p in crafting ? CraftKit.Crafts(values) : Picks(values))
@@ -233,43 +233,36 @@ public sealed partial class HudTicker : IHudLook
     }
 
     /// <summary>A notice: the reader paused (orange, with the sign), a flash, an update waiting; or the accuracy line.</summary>
-    Border NoticeToast(string text, Brush tone, bool sign)
+    Border NoticeToast(string text, Brush tone, bool sign, (double Left, double Seconds)? clock = null)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         if (sign) { var i = WarnIcon(); i.Margin = new Thickness(0, 0, 8, 0); row.Children.Add(i); }
         var t = T(text, 13, tone, weight: FontWeights.SemiBold); t.MaxWidth = sign ? 230 : 250;
+        if (clock is { } c)
+        {
+            // the That was wrong key's answer: a gold clock, the words in two tones, a gold wash and the line running down its 3 s
+            // 11.75 px so the whole line fits the toast's 270 px (at 12.5 "Report in tracker" lost its end)
+            var i = HudClockNotice.ClockIcon(); i.Margin = new Thickness(0, 0, 6, 0); row.Children.Add(i);
+            HudClockNotice.Words(t, text, 11.75); t.MaxWidth = 235;
+            row.Children.Add(t);
+            var drain = HudClockNotice.Drain(); drain.Margin = new Thickness(-8, 0, -4, 0);
+            HudClockNotice.Run(drain, c, Still);
+            var wash = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            wash.GradientStops.Add(new GradientStop(Rgb(0x302816, .96 * _alpha), 0));
+            wash.GradientStops.Add(new GradientStop(Rgb(0x18161E, .92 * _alpha), .65));
+            wash.GradientStops.Add(new GradientStop(Rgb(0x12121E, .80 * _alpha), 1));
+            wash.Freeze();
+            return new Border
+            {
+                Width = 270, Height = 34, Padding = new Thickness(8, 0, 4, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2, 0, 0, 0),
+                BorderBrush = Gold, Background = wash, Child = new Grid { Children = { row, drain } },
+            };
+        }
         row.Children.Add(t);
         return new Border
         {
             Width = 270, Height = 34, Padding = new Thickness(9, 0, 10, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2, 0, 0, 0),
             BorderBrush = sign ? Warn : tone, Background = Wash("notice", false), Child = row,
         };
-    }
-
-    /// <summary>A rare drop: 52 px tall, framed in the grade's colour with a glow, "RARE DROP · LEGEND" over the name in that colour.</summary>
-    Border RareToast(Pick p)
-    {
-        var c = ColorOf(p.Color, p.Grade);
-        var tile = Tile(p, 36);
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-        var label = HudKit.Glows(p.Grade) ? "RARE DROP · " + p.Grade.ToUpperInvariant() : "WATCHED DROP";
-        text.Children.Add(new TextBlock { Text = label, FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = Frozen(Color.FromArgb(0xD9, c.R, c.G, c.B)), Margin = new Thickness(0, 0, 0, 2) });
-        var name = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 200 };
-        name.Inlines.Add(R(p.Name, 15, Frozen(c), weight: FontWeights.SemiBold));
-        if (p.Count.Length > 0) name.Inlines.Add(R(" " + p.Count, 12, Muted, mono: true));
-        text.Children.Add(name);
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { tile, text } };
-        var wash = new RadialGradientBrush { Center = new Point(0, .5), GradientOrigin = new Point(0, .5), RadiusX = .9, RadiusY = 1.6 };
-        wash.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(.28 * 255), c.R, c.G, c.B), 0));
-        wash.GradientStops.Add(new GradientStop(Rgb(0x0C1228, .95 * Math.Min(1, _alpha)), .7));
-        wash.Freeze();
-        var body = new Border
-        {
-            Width = 270, Height = 52, Padding = new Thickness(8, 0, 12, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(3, 1, 1, 1),
-            BorderBrush = Frozen(c), Background = wash, Child = row,
-        };
-        // the glow sits under the toast in its own ring, so the words stay sharp
-        var glow = Glow(c, 6, 16, .5);
-        return new Border { Child = new Grid { Children = { glow, body } } };
     }
 }

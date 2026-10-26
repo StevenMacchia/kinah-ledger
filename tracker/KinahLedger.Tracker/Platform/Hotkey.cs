@@ -9,6 +9,11 @@ namespace KinahLedger.Platform;
 public readonly record struct Hotkey(ModifierKeys Modifiers, Key Key)
 {
     public const string Default = "Ctrl+Shift+K";
+    /// <summary>
+    /// The ids the window registers its shortcuts under (RegisterHotKey): start/stop, and "That was wrong" (2026-10-26,
+    /// off until the player picks a key), which marks the newest counted line wrong and saves the last minute for a report.
+    /// </summary>
+    public const int StartStopId = 1, MarkWrongId = 2;
     const uint MOD_NOREPEAT = 0x4000;
 
     public uint NativeModifiers => (uint)Modifiers | MOD_NOREPEAT;
@@ -49,6 +54,9 @@ public readonly record struct Hotkey(ModifierKeys Modifiers, Key Key)
         if (s.Length == 1 && char.IsDigit(s[0])) return Key.D0 + (s[0] - '0');
         return Enum.TryParse<Key>(s, ignoreCase: true, out var k) ? k : null;
     }
+
+    /// <summary>True when two saved shortcuts are the same keys ("ctrl+shift+k" and "Ctrl+Shift+K"); false when either is off.</summary>
+    public static bool Same(string? a, string? b) => Read(a) is { } x && Read(b) is { } y && x == y;
 
     /// <summary>A combination the shortcut may be: see <see cref="Refusal"/>.</summary>
     public static bool IsUsable(ModifierKeys mods, Key key) => Refusal(mods, key) == null;
