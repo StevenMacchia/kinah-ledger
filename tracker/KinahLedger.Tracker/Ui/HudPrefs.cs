@@ -20,6 +20,10 @@ public sealed class HudPrefs
     /// </summary>
     public double? TickerX { get; set; }
     public double? TickerY { get; set; }
+    /// <summary>Options › In game › Rare drops: the chime on a rare drop or a watched item (price alerts chime either way).</summary>
+    public bool Chime { get; set; } = true;
+    /// <summary>The chime's volume, 0 to 1.</summary>
+    public double ChimeVolume { get; set; } = 0.6;
 
     public const double MinScale = 0.7, MaxScale = 2;
 

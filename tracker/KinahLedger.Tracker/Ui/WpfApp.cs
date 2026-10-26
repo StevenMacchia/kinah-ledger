@@ -214,6 +214,9 @@ public static class WpfApp
               && long.Parse(Pk(0, "At")) >= long.Parse(Pk(1, "At")),
             $"panel looks: the feed's pickups, newest first ({Pk(0)}, {Pk(1)}, {Pk(2)}, {Pk(3)})");
 
+        // Options › In game › Rare drops (2026-10-26): the watch list and the chime wait for Save, and a watched Common item alerts
+        OptionsWindow.SelfTestRareDrops(w, Open, Check);
+
         // the panel's opacity and size: shown on the panel as the sliders move, kept on Save, put back by Cancel
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
@@ -397,6 +400,8 @@ public static class WpfApp
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-lower{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
+        // In game at Rare drops (2026-10-26): a sample watch list, the chime and its volume
+        OptionsWindow.ShotRareDrops(w, Path.Combine(dir, $"options-ingame-rare{(skin != null ? "-" + skin : "")}.png"), (e, file) => Save(e, file, 0));
         w.Close();
     }
 
@@ -476,7 +481,7 @@ public static class WpfApp
             h.Show();
             h.Update(values);
             if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ Nothing looked wrong", hudAcc != null && hudToLook);
-            if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
+            if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1 · sells for 28K on Siel", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();

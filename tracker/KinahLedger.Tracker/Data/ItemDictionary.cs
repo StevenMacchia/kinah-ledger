@@ -76,6 +76,23 @@ public sealed class ItemDictionary
     public string NameOf(long id) { lock (_lock) return _byId.TryGetValue(id, out var i) ? i.Name : $"item {id}"; }
 
     /// <summary>
+    /// Listed items whose name holds the text, for a name box's completion (Options › In game › Rare drops): names that
+    /// start with it first, then shorter ones, a bound copy after its tradeable twin; one per name, at most <paramref name="max"/>.
+    /// </summary>
+    public List<ItemInfo> Like(string text, int max)
+    {
+        text = text.Trim();
+        if (text.Length == 0 || max <= 0) return new();
+        lock (_lock)
+            return _byId.Values.Where(i => i.Id > 0 && i.Name.Contains(text, StringComparison.OrdinalIgnoreCase))
+                .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+                .OrderBy(i => i.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenBy(i => i.Name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+                .ThenBy(i => i.Name.Length).ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(max).ToList();
+    }
+
+    /// <summary>
     /// How an item is named in what's shared: its dictionary ID when it has one, else its name. A synthetic ID only means
     /// something on this PC, so it never leaves it; the site matches names against the same dictionary.
     /// </summary>

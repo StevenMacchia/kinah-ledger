@@ -18,7 +18,7 @@ public partial class MainWindow
     /// <summary>The coin the game draws for Kinah (data/extra-items.json, "Kina"): the Kinah pickups' tile.</summary>
     const string KinahIcon = ItemDictionary.IconBase + "Icon_gold.png";
     static readonly string[] PickKeys = { "", "Id", "At", "Count", "Worth", "Grade", "Icon", "Note", "Kind" };
-    static readonly string[] RareKeys = { "rare", "rareId", "rareCount", "rareGrade", "rareIcon", "rareColor" };
+    static readonly string[] RareKeys = { "rare", "rareId", "rareCount", "rareGrade", "rareIcon", "rareColor", "rareItem", "rarePrice", "rareWhere", "rareWatched", "rareChime" };
 
     /// <summary>
     /// The looks' values, from the window's tick (UpdateHud, through HudFeed): the last four pickups farming and in
@@ -128,6 +128,7 @@ public partial class MainWindow
         foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker })
             foreach (var (state, v) in new[] { ("normal", normal), ("notice", notice), ("rare", rare) })
                 list.Add(($"ui-hud-{look}-{state}.png", look, v));
+        list.AddRange(HudRareStates());   // the watched drop with its price (Ui/MainWindow.RareWatch.cs)
         return list;
     }
 
