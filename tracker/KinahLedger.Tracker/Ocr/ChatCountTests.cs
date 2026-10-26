@@ -40,6 +40,9 @@ static class ChatCountTests
         Check("count tail: glued to Kina (\"Kinæx382\")", T("Kinæx382"), "Kinæ x382");
         Check("count tail: a word after a space is no count (\"Treasure Box II\")", T("Treasure Box II"), "none");
         Check("count tail: an x with nothing after it (\"Odyle x\")", T("Odyle x"), "none");
+        // 2026-10-25 13:48: "Acquired Daeva Pass Shop Coin x2,OOO." came in as "not in the item list" 15 times
+        Check("count tail: thousands marks and O for 0 (\"Daeva Pass Shop Coin x2,OOO\")", T("Daeva Pass Shop Coin x2,OOO") + " · " + T("Enhance Stone x5,OOO.") + " · " + T("Odyle x1.2OO"), "Daeva Pass Shop Coin x2000 · Enhance Stone x5000 · Odyle x1200");
+        Check("count tail: a mark with no digit before it is no count (\"Odyle xO,OOO\")", T("Odyle xO,OOO"), "none");
 
         var p = new ChatParser(items);
         Check("parsed: \"Acquired Refining StonevxT.\"", P(p, "Acquired Refining StonevxT."), "Refining Stone x7");
@@ -47,6 +50,7 @@ static class ChatCountTests
         Check("parsed: \"Acquired Fine Odyle xS.\"", P(p, "Acquired Fine Odyle xS."), "Fine Odyle x5");
         Check("parsed: \"Acquired Odyle x1O.\"", P(p, "Acquired Odyle x1O."), "Odyle x10");
         Check("parsed: \"Acquired Refining Stonevx6.\" (as before)", P(p, "Acquired Refining Stonevx6."), "Refining Stone x6");
+        Check("parsed: \"Acquired Daeva Pass Shop Coin x2,OOO.\" (13:48)", P(p, "Acquired Daeva Pass Shop Coin x2,OOO."), "Daeva Pass Shop Coin x2000");
         Check("parsed: the glued verb and a t for an r (13:07 Pauldrons)", P(p, "Riverside Pauldröns:acquired.") + " · " + P(p, "Riverside Pauldronsacquited,"), "Riverside Pauldrons x1 · Riverside Pauldrons x1");
         // a verb-first line with no count left is unsure; a name-first line is one
         P(p, "Acquired Odyle"); P(p, "Odyle acquired."); P(p, "Acquired Odyle x7.");

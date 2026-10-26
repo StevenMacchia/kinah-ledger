@@ -85,3 +85,17 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   took one of the fight's kills for the witness of a second pair. Right: 1. A line under the same two lines a copy was
   counted under, one of them once in the read, is that copy wherever the scroll put it (`ItemRepeatGuard`; the guard's
   own checks in `Ocr/ChatCountTests.cs`). The Order Gloves were the 16:35 event cards, named right from their picture.
+- `text-2026-10-25-accursed-orb-icon` (2026-10-25 13:43, the icon against the text): one loot list row read "Accursed or"
+  and "Accursed on", the icon beside it nearest Accursed Bow's at 64 to 69 (sure is 70) and Accursed Orb's at 88 to 97.
+  0.8.39 renamed it Accursed Bow on every read. The text is one letter from Accursed Orb and two edits from the Bow, so the
+  text wins (`PopupIcons.Settle`). A `list` read may carry `r` (the text as read before the icon looked) and `i` (the
+  icon's scores, `id:distance,…`; "" for rows it had no verdict on), as trace.log writes them since then; the bank settles
+  those rows again with this version's rules. Expect key `list_rows`: the loot list's item rows shown to the cross-check,
+  by the name each one ended on (only the names expect lists are checked; 0 means never shown).
+- `text-2026-10-25-daeva-coin-thousands` and `text-2026-10-25-potion-x3-x10` (2026-10-25 13:48, a Daeva Pass Level
+  Reward): "Acquired Daeva Pass Shop Coin x2,OOO." is 2,000 coins (0.8.39 kept "x2,OOO" in the name and left it not in
+  the item list); "Acquired Superior Life Potion (Bound) x3." and "... x10." are two lines in the same read, two pickups,
+  13 (the reward table's slot read x13), and the x3 line read again cut or garbled at its place adds nothing. The reads
+  are in an expedition's area, so the chat's items are set aside with the run (its reward picture decides): expect key
+  `run_chat_items`, the chat items runs set aside, by name (only the names expect lists are checked). A case may say
+  `"dump": true` to add its reads.log to a failed result, for reading on the build server what it did.

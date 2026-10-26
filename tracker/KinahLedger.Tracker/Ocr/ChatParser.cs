@@ -277,15 +277,20 @@ public sealed partial class ChatParser
 
     // ---- quantities (2026-10-24, 13:07: "Acquired Odyle x7." read as "Acquired Odyle" and filed as one) ----
 
-    /// <summary>A count at the end of a name: "x", "×", "X" or "*", then up to four digits or letters the recognizer reads for digits.</summary>
-    static readonly Regex CountTailRx = new(@"^(?<head>.*?[^\s×xX\*])(?<gap>\s*)[×xX\*](?<sp>\s*)(?<n>[0-9OoIl|SsbTt]{1,4})\s*[.,:;!]?\s*$", RegexOptions.Compiled);
+    /// <summary>
+    /// A count at the end of a name: "x", "×", "X" or "*", then up to four digits or letters the recognizer reads for digits,
+    /// or a big count with its thousands marks ("x2,000", read "x2,OOO": 2026-10-25 13:48, a Daeva Pass Shop Coin line that
+    /// came in as "not in the item list" with the count in its name, 15 times that day).
+    /// </summary>
+    static readonly Regex CountTailRx = new(@"^(?<head>.*?[^\s×xX\*])(?<gap>\s*)[×xX\*](?<sp>\s*)(?<n>[0-9OoIl|SsbTt]{1,3}(?:[,.][0-9OoIl|]{3})+|[0-9OoIl|SsbTt]{1,4})\s*[.,:;!]?\s*$", RegexOptions.Compiled);
 
     /// <summary>
     /// The count at the end of a chat line's name, read through the recognizer's usual digit slips (O and o for 0; l, I and
     /// | for 1; S and s for 5; b for 6; T and t for 7): "Refining StonevxT" is Refining Stonev x7, "Odyle xb" x6,
-    /// "Kinæx382" Kinæ x382. A count of letters only must follow the x straight away and be one or two long, so a word
-    /// after a space ("Treasure Box II") is never a count. Null when the text ends in no count. The caller keeps the whole
-    /// name when it is an item's own name.
+    /// "Kinæx382" Kinæ x382, "Daeva Pass Shop Coin x2,OOO" Daeva Pass Shop Coin x2000 (thousands marks drop out). A count
+    /// of letters only must follow the x straight away and be one or two long, so a word after a space ("Treasure Box II")
+    /// is never a count; one with thousands marks must start with a digit. Null when the text ends in no count. The caller
+    /// keeps the whole name when it is an item's own name.
     /// </summary>
     public static (string Head, int Count)? QuantityTail(string text)
     {
@@ -293,9 +298,11 @@ public sealed partial class ChatParser
         if (!m.Success) return null;
         var tok = m.Groups["n"].Value;
         if (!tok.Any(char.IsDigit) && (tok.Length > 2 || m.Groups["sp"].Length > 0 || (m.Groups["gap"].Length > 0 && tok.All(c => c is 'I' or 'l' or '|')))) return null;
+        if (tok.IndexOfAny(new[] { ',', '.' }) >= 0 && !char.IsDigit(tok[0])) return null;
         var sb = new StringBuilder();
         foreach (var c in tok)
-            sb.Append(c switch { 'O' or 'o' => '0', 'I' or 'l' or '|' => '1', 'S' or 's' => '5', 'b' => '6', 'T' or 't' => '7', _ => c });
+            if (c is not (',' or '.'))
+                sb.Append(c switch { 'O' or 'o' => '0', 'I' or 'l' or '|' => '1', 'S' or 's' => '5', 'b' => '6', 'T' or 't' => '7', _ => c });
         if (!int.TryParse(sb.ToString(), out var n) || n < 1) return null;
         var head = m.Groups["head"].Value.TrimEnd();
         return head.Length >= 2 ? (head, n) : null;
@@ -788,8 +795,8 @@ public sealed partial class ChatParser
                 }
                 if (m.Id is long cid && Data.NameMatch.IsContext(m.Source) && (GradeFilter(accent)?.Invoke(cid) ?? true))
                 {
-                    Session.Accuracy.Name(name, cid, "snapped", m.Source);
-                    Session.Accuracy.Add("snapped");
+                    // once per line, not per parse: the same line comes in again on later passes
+                    Session.Accuracy.Snapped(name, cid, m.Source);
                     if (m.FullId is long fid && fid != cid)
                     {
                         ContextPicks++;

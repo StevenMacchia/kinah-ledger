@@ -1006,9 +1006,11 @@ public sealed partial class TrackerSession
                 if (row != null && !row.IsKinah && _items.IsExact(row.Name)) id = _items.IdOf(row.Name);
                 else if (_settings.Ocr.LootIcons)
                 {
+                    // only the icon naming it (alone where the text left it open, or with the text) is a reading of its own;
+                    // the text's snap over a disagreeing icon is the same text again, no second witness (2026-10-25)
                     var look = PopupIcons.Name(_items, shot, origin, line);
                     var named = LootPopup.Rows(new[] { (line.Box.Top, look.Text) }).FirstOrDefault();
-                    if (look.Text != line.Text && named != null && _items.IsExact(named.Name)) id = _items.IdOf(named.Name);
+                    if (look.By is "icon" or "agree" && look.Text != line.Text && named != null && _items.IsExact(named.Name)) id = _items.IdOf(named.Name);
                 }
             }
             else
@@ -2798,18 +2800,22 @@ public sealed partial class TrackerSession
             // the list's picture for the miscount report, when it shows rows (at most once a second: the world moves behind it)
             if (ReportBuffer.Keeps("loot") && LootPopup.Rows(lines).Count > 0)
                 try { Report.Picture("loot", r.Raw, r.Origin, now, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
+            var looks = new PopupIcons.Look?[r.Lines.Count];
             if (_settings.Ocr.LootIcons && !Update.RemoteConfig.Current.Off("loot_icons") && r.Lines.Count > 0)
             {
-                // a row whose text is cut off or garbled is named by the icon beside it, when one icon is clearly it
+                // a row whose text is cut off or garbled is named by the icon beside it, when one icon is clearly it and the
+                // text doesn't clearly name another item (PopupIcons.Settle): one line per decision, with both candidates
                 for (int i = 0; i < r.Lines.Count; i++)
                 {
                     try
                     {
                         var look = PopupIcons.Name(_items, r.Raw, r.Origin, r.Lines[i]);
+                        if (look.Verdict != null) looks[i] = look;
+                        if (look.Unsure) { CrashLog.Note($"loot list: \"{r.Lines[i].Text}\": {look.Note}"); continue; }
                         if (look.Text == r.Lines[i].Text) continue;
                         lines[i] = (lines[i].Top, look.Text);
-                        IconNamed++;
-                        CrashLog.Note($"loot list: \"{r.Lines[i].Text}\" read as \"{look.Text}\": {look.Note} (icon {look.Verdict?.Distance:0}, next {(look.Verdict?.Next < 1e6 ? look.Verdict.Next.ToString("0") : "none")})");
+                        if (look.By != "text") IconNamed++;
+                        CrashLog.Note($"loot list: \"{r.Lines[i].Text}\" read as \"{look.Text}\": {look.Note}");
                     }
                     catch (Exception ex) { CrashLog.Write("loot list icon", ex); }
                 }
@@ -2820,7 +2826,10 @@ public sealed partial class TrackerSession
             {
                 (double c, ulong h, double bg, double sp) = (-1, 0, -1, -1);
                 try { (c, h, bg, sp) = LootRows.MeasureAll(r.Raw, r.Origin, r.Lines[i].Box); } catch (Exception ex) { CrashLog.Write("loot list contrast", ex); }
-                measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h, bg, sp, r.Lines[i].Box.Left));
+                // what the icon made of it, for the trace (so a replay settles it again) and for the row's vote (an unsure read doesn't vote)
+                var lk = looks[i];
+                measured.Add(new LootLine(lines[i].Top, lines[i].Text, c, h, bg, sp, r.Lines[i].Box.Left,
+                    lk != null ? r.Lines[i].Text : "", lk?.Trace ?? "", lk?.Unsure == true));
             }
             // the name decoder's shadow read of the rows (logs only, counts nothing), on the picture while it is here
             if (NameDecoder.Present) try { ShadowListNames(r.Raw, r.Origin, r.Lines, lines, now); } catch (Exception ex) { CrashLog.Write("name decoder", ex); }
@@ -2994,7 +3003,9 @@ public sealed partial class TrackerSession
                     measuredAll && readAll.Any(x => x.Line.Background >= 0) ? readAll.Select(x => Math.Round(x.Line.Background, 3)).ToList() : null,
                     measuredAll && readAll.Any(x => x.Line.Spread >= 0) ? readAll.Select(x => Math.Round(x.Line.Spread, 3)).ToList() : null,
                     measuredAll && readAll.Any(x => x.Line.Icon != 0) ? readAll.Select(x => x.Line.Icon.ToString("x")).ToList() : null,
-                    readAll.Any(x => x.Line.Left >= 0) ? readAll.Select(x => x.Line.Left).ToList() : null);
+                    readAll.Any(x => x.Line.Left >= 0) ? readAll.Select(x => x.Line.Left).ToList() : null,
+                    readAll.Any(x => x.Line.IconScores.Length > 0) ? readAll.Select(x => x.Line.Before).ToList() : null,
+                    readAll.Any(x => x.Line.IconScores.Length > 0) ? readAll.Select(x => x.Line.IconScores).ToList() : null);
                 Report.Lines("list", traced, now);
             }
             Seen(now);

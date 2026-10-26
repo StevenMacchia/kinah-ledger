@@ -24,6 +24,8 @@ namespace KinahLedger.Session;
 /// may also carry "b" (each row's background) and "s" (the spread where its icon sits), as trace.log writes them since
 /// 2026-10-24, for telling rows from nameplates and world text (LootNotRow); a "plate" read names a nameplate or target
 /// name on screen then (from reads.log's "fighting:" and "target bar:" lines; trace.log doesn't keep them).
+/// Since 2026-10-25 a "list" read may also carry "r" (a row's text as read before its icon looked) and "i" (the icon's
+/// scores, "id:distance,…"), for the rows the icon had a verdict on: those rows are settled again (PopupIcons.Replay).
 /// A "gather" read is the gathering bar finishing a race: "ok", "fail", "upgrade ok" or "upgrade fail". A "cover" read
 /// is a pass that skips the list (a full-screen window over it): the rows up are set aside, as live (LootRows.Reset).
 /// Only what "expect" names is checked. A pending case (a fresh report nobody has checked yet) runs and prints, never
@@ -277,11 +279,23 @@ public static class ReplayBank
                         var bs = r.TryGetProperty("b", out var be) ? be.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var ss = r.TryGetProperty("s", out var se) ? se.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var xs = r.TryGetProperty("x", out var xe) ? xe.EnumerateArray().Select(v => v.GetInt32()).ToList() : null;
-                        session.ListGated(ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
-                            System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
-                            cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0,
-                            bs != null && i < bs.Count ? bs[i] : -1, ss != null && i < ss.Count ? ss[i] : -1,
-                            xs != null && i < xs.Count ? xs[i] : -1)).ToList(), t, session.Verdict("loot_list"));
+                        // a row the icon had a verdict on (since 2026-10-25): its text as read and the icon's scores, settled again
+                        // with this version's rules (PopupIcons.Replay) instead of taking what the live read made of it
+                        var rs = r.TryGetProperty("r", out var re) ? re.EnumerateArray().Select(v => v.GetString() ?? "").ToList() : null;
+                        var ics = r.TryGetProperty("i", out var ie) ? ie.EnumerateArray().Select(v => v.GetString() ?? "").ToList() : null;
+                        session.ListGated(ls.Select((x, i) =>
+                        {
+                            var line = new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
+                                System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
+                                cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0,
+                                bs != null && i < bs.Count ? bs[i] : -1, ss != null && i < ss.Count ? ss[i] : -1,
+                                xs != null && i < xs.Count ? xs[i] : -1);
+                            if (rs == null || ics == null || i >= rs.Count || i >= ics.Count || rs[i].Length == 0 || ics[i].Length == 0) return line;
+                            var look = PopupIcons.Replay(items, rs[i], ics[i]);
+                            if (look.Unsure) CrashLog.Note($"loot list: \"{rs[i]}\": {look.Note}");
+                            else if (look.Text != rs[i]) CrashLog.Note($"loot list: \"{rs[i]}\" read as \"{look.Text}\": {look.Note}");
+                            return line with { Text = look.Text, Before = rs[i], IconScores = ics[i], Unsure = look.Unsure };
+                        }).ToList(), t, session.Verdict("loot_list"));
                         break;
                     }
                     case "gather":
