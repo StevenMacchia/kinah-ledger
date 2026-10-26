@@ -4146,6 +4146,24 @@ options: --process aion[,other]");
                     string.Join(" ", new[] { "Wind Serum (Novice Lv- 10)", "Wind Serum (Novice Lv. IO)", "Wihd Serum (Novite Lv. 10)", "(Novice Lv. 3)", "Orichalcum LonUFword (iNovice Lv. 3)", "Fail", "Success", "4 /z:iT,", "Aria" }.Select(CraftPanel.IsRecipeLine)),
                     "True True True True True False False False False");
                 Check("...its item and level as read", $"{CraftPanel.ItemOf("Wind Serum (Novice Lv- 10)")} {CraftPanel.LevelOf("Wind Serum (Novice Lv- 10)")} | {CraftPanel.ItemOf("Wihd Serum (Novite Lv. 10)")}", "Wind Serum 10 | Wihd Serum");
+                // 2026-10-26 (0.8.40): the panel cuts a long title with an ellipsis, inside the level's bracket or before it, and
+                // the reader drops the rest; every form below was filed as a recipe of its own ("Splendent Orichalcum Longsword
+                // (Novice Lv...", "Expert's Orichalcum Longsword (Novice Lv. 1"), with no price, no profit and no icon
+                Check("crafting panel: a title cut short loses its cut level bracket and its ellipsis",
+                    string.Join(" | ", new[] { "Splendent Orichalcum Longsword (Novice Lv...", "Expert's Orichalcum Longsword (Novice Lv. 1", "Expert's Orichalcum Longsword (Novice Lv. 1..",
+                        "Artisan's Orichalcum Longsword (Novice Lv....", "Artisan's Orichalcum Longsword (Novice Lv", "Superior Wind Serum (Professional Lv.", "Superior Wind Serum (Professional Lv-",
+                        "Orichalcum Longsword (Novice L", "Orichalcum Longsword (Nov…", "Orichalcum Longsword (", "Orichalcum Longsword (Novice Lv. 3 X", "Splendent Orichalcum Long…", "Orichalcum Longsword..." }.Select(x => CraftPanel.ItemOf(x))),
+                    "Splendent Orichalcum Longsword | Expert's Orichalcum Longsword | Expert's Orichalcum Longsword | Artisan's Orichalcum Longsword | Artisan's Orichalcum Longsword | Superior Wind Serum | Superior Wind Serum | "
+                    + "Orichalcum Longsword | Orichalcum Longsword | Orichalcum Longsword | Orichalcum Longsword | Splendent Orichalcum Long | Orichalcum Longsword");
+                Check("...a recipe named with a bracket keeps it; one cut inside its own bracket keeps what was read",
+                    string.Join(" | ", new[] { "Life Serum (Bound) (Novice Lv...", "Life Serum (Bound) (Novice Lv. 1", "Life Serum (Bound) (Nov…", "Life Serum (Bou…", "Life Serum (Bound)" }.Select(x => CraftPanel.ItemOf(x))),
+                    "Life Serum (Bound) | Life Serum (Bound) | Life Serum (Bound) | Life Serum (Bou | Life Serum (Bound)");
+                Check("...the level from a cut bracket when its digits survived, else none",
+                    string.Join(" ", new[] { "Expert's Orichalcum Longsword (Novice Lv. 1", "Expert's Orichalcum Longsword (Novice Lv. 1..", "Splendent Orichalcum Longsword (Novice Lv...", "Superior Wind Serum (Professional Lv.", "Orichalcum Ingot (Novice Lv- 25" }.Select(CraftPanel.LevelOf)),
+                    "1 1 0 0 25");
+                Check("...a cut recipe line is still the recipe line, never the title",
+                    $"{CraftPanel.IsRecipeLine("Splendent Orichalcum Longsword (Novice Lv...")} {CraftPanel.IsTitleLine("Splendent Orichalcum Longsword (Novice Lv...")} {CraftPanel.Parse(new[] { "Crafting in Progress 4 / 10", "Splendent Orichalcum Longsword (Novice Lv..." })?.Recipe}",
+                    "True False Splendent Orichalcum Longsword (Novice Lv...");
                 // the panel counts the tries; what the loot list shows meanwhile is their output, never a drop; chat craft lines are left out
                 var pe = new SessionEngine(items); var pt = DateTime.UtcNow;
                 var serum = items.IdOf("Life Serum (Bound)"); var other = items.IdOf("Orichalcum Ore");
