@@ -136,9 +136,11 @@ public static class PassCostTests
                 var band = new SameBand<OcrLineBox>();
                 string Read(Bitmap bmp, double s) => string.Join("|", Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, region.Location, 3, band, t0.AddSeconds(s), DateTime.MinValue)).GetAwaiter().GetResult().Select(l => $"{l.Text}@{l.Box.Top}"));
                 var plain = string.Join("|", Task.Run(() => ScreenReader.ReadBoxesAsync(one, region.Location, 3, boost: true)).GetAwaiter().GetResult().Select(l => $"{l.Text}@{l.Box.Top}"));
-                var a = Read(one, 0); var a2 = Read(one, 0.5); var c = Read(two, 1.0);
-                Check("live read: the same lines as the plain read", $"{a == plain}", "True");
+                var a = Read(one, 0);
+                Check("live read: the same lines as the plain read", $"{a == plain} {band.Skips} of {band.Reads}", "True 0 of 1");
+                var a2 = Read(one, 0.5);
                 Check("...the same picture again: not recognized, the same lines", $"{a2 == a} {band.Skips} of {band.Reads}", "True 1 of 2");
+                var c = Read(two, 1.0);
                 Check("...a row more: recognized at once", $"{c != a} {c.Contains("Fine")} {band.Skips} of {band.Reads}", "True True 1 of 3");
             }
             else Console.WriteLine("  (no text recognition here: the live list read is checked where Windows OCR is installed)");
@@ -164,7 +166,8 @@ public static class PassCostTests
                 Check("...the switch logged once", string.Join(", ", notes), "2.0: slow");
                 // a look sees a panel at 5.1: every pass for 10 s of time, however far apart the passes, then slow again
                 notes.Clear();
-                Check("a look 1.1 s after the last one", $"{pc.Due(t0.AddSeconds(5.1), true, null, out var n51)} {n51 == null}", "True True");
+                bool look51 = pc.Due(t0.AddSeconds(5.1), true, null, out var n51);
+                Check("a look 1.1 s after the last one", $"{look51} {n51 == null}", "True True");
                 pc.Seen(t0.AddSeconds(5.1));
                 Check("a panel seen at 5.1: every pass to 15.1 (time, not passes)", Run(new[] { 5.5, 6.5, 9.0, 12.0, 15.0, 15.2, 15.4, 16.3, 16.9, 17.4 }, true), "5.5 6.5 9.0 12.0 15.0 16.3 17.4");
                 Check("...each switch logged once", string.Join(", ", notes), "5.5: full, 15.2: slow");

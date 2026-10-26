@@ -77,7 +77,18 @@ public static class CraftPanel
         public Color? At(int gx, int gy)
         {
             int x = Game.X + gx + Dx - Area.X, y = Game.Y + gy + Dy - Area.Y;
-            return x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height ? null : Px is { } p ? p.At(x, y) : Bmp.GetPixel(x, y);
+            if (Px is { } p) return x < 0 || y < 0 || x >= p.W || y >= p.H ? null : p.At(x, y);
+            return x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height ? null : Bmp.GetPixel(x, y);
+        }
+
+        /// <summary>The pixel's darkest channel (what the labels' white test reads), or -1 outside the picture.</summary>
+        public int Min3(int gx, int gy)
+        {
+            int x = Game.X + gx + Dx - Area.X, y = Game.Y + gy + Dy - Area.Y;
+            if (Px is { } p) return x < 0 || y < 0 || x >= p.W || y >= p.H ? -1 : p.Min3(x, y);
+            if (x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height) return -1;
+            var c = Bmp.GetPixel(x, y);
+            return Math.Min(c.R, Math.Min(c.G, c.B));
         }
     }
 
@@ -91,10 +102,17 @@ public static class CraftPanel
     {
         readonly Bitmap _bmp;
         readonly System.Drawing.Imaging.BitmapData _data;
-        readonly int _bpp;
+        readonly byte* _scan;
+        readonly int _stride, _bpp;
         readonly bool _alpha;
+        /// <summary>The picture's size, kept: Bitmap.Width and Height are a GDI+ call each.</summary>
+        public readonly int W, H;
 
-        Pixels(Bitmap bmp, System.Drawing.Imaging.BitmapData data, int bpp, bool alpha) { _bmp = bmp; _data = data; _bpp = bpp; _alpha = alpha; }
+        Pixels(Bitmap bmp, System.Drawing.Imaging.BitmapData data, int bpp, bool alpha)
+        {
+            _bmp = bmp; _data = data; _bpp = bpp; _alpha = alpha;
+            _scan = (byte*)data.Scan0; _stride = data.Stride; W = data.Width; H = data.Height;
+        }
 
         public static Pixels? Lock(Bitmap bmp)
         {
@@ -110,8 +128,16 @@ public static class CraftPanel
         /// <summary>The pixel at (x, y), inside the picture (the caller checks).</summary>
         public Color At(int x, int y)
         {
-            byte* p = (byte*)_data.Scan0 + (long)y * _data.Stride + x * _bpp;
+            byte* p = _scan + (long)y * _stride + x * _bpp;
             return Color.FromArgb(_alpha ? p[3] : 255, p[2], p[1], p[0]);
+        }
+
+        /// <summary>The darkest of the pixel's three channels at (x, y), inside the picture (the caller checks).</summary>
+        public int Min3(int x, int y)
+        {
+            byte* p = _scan + (long)y * _stride + x * _bpp;
+            int m = p[0] < p[1] ? p[0] : p[1];
+            return m < p[2] ? m : p[2];
         }
 
         public void Dispose() => _bmp.UnlockBits(_data);
@@ -138,8 +164,9 @@ public static class CraftPanel
             {
                 int x = v.Cx + (int)Math.Round((l.X0 - 2560 + (l.X1 - l.X0) * (i + 0.5) / GridW) * k);
                 int y = (int)Math.Round((l.Y0 + (l.Y1 - l.Y0) * (j + 0.5) / GridH) * k);
-                if (v.At(x, y) is not { } c) return 0;
-                bool white = Math.Min(c.R, Math.Min(c.G, c.B)) > 185, want = l.Mask[j * GridW + i] == '1';
+                int m = v.Min3(x, y);
+                if (m < 0) return 0;
+                bool white = m > 185, want = l.Mask[j * GridW + i] == '1';
                 if (white || want) any++;
                 if (white && want) both++;
             }
@@ -164,8 +191,9 @@ public static class CraftPanel
                 for (int y = ya; y < yb && !white; y++)
                     for (int x = xa; x < xb; x++)
                     {
-                        if (v.At(x, y) is not { } c) return 0;
-                        if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) { white = true; break; }
+                        int m = v.Min3(x, y);
+                        if (m < 0) return 0;
+                        if (m > 185) { white = true; break; }
                     }
                 bool want = l.Mask[j * GridW + i] == '1';
                 if (white || want) any++;
