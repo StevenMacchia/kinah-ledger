@@ -385,8 +385,8 @@ public sealed class PlacementGuide : Window
         var round = new Rect(panel.X - OutlineGap - 6, panel.Y - OutlineGap - 6, panel.Width + 2 * OutlineGap + 12, panel.Height + 2 * OutlineGap + 50);   // with its tag
         if (round.IntersectsWith(new Rect(lx, ly, lw, lh)))
         {
-            // beside the box, on the side away from the panel
-            bool right = panel.X + panel.Width / 2 < r.X + r.Width / 2;
+            // beside the box, on the side away from the panel (the right when it is centred: the left holds Left of target)
+            bool right = panel.X + panel.Width / 2 <= r.X + r.Width / 2 + 1;
             lx = right ? r.Right + 8 : r.X - lw - 8;
             ly = r.Y + (r.Height - lh) / 2;
             if (round.IntersectsWith(new Rect(lx, ly, lw, lh))) { lx = right ? Math.Max(r.Right, round.Right) + 8 : Math.Min(r.X, round.X) - lw - 8; }
