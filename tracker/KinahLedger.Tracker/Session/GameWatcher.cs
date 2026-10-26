@@ -72,9 +72,10 @@ public sealed class GameWatcher
         if ((WindowCapture.Active ? null : GameWindow.Covered(BalanceReader.Strip(game), _settings.ProcessHints)) != null) return;
         // read around the numbers once they have held still (anchors phase two, layout.anchor.balance), else the fixed strip
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        await Balance.TickAsync(game, c.KinahPicked, c.Anchors.BalanceCrop.Crop(game, Update.RemoteConfig.Current.AnchorBalance));
+        // held against the Kina the chat has read (counted, or waiting for the counter): BalanceTracker
+        await Balance.TickAsync(game, c.KinahRead, c.Anchors.BalanceCrop.Crop(game, Update.RemoteConfig.Current.AnchorBalance));
         c.Times.Add("balance", sw.Elapsed.TotalMilliseconds);
-        // the numbers' place: the Kinah counter strip's anchor (a read with none drops the anchored crop at once)
+        // the numbers' place: the Kinah counter strip's anchor, its first number (three reads without it over 10 s drop the anchored crop)
         c.Anchors.ObserveBalance(game, Balance.LastBoxes, Balance.LastBoxesAt);
         // another character in the world: the run closes and counting starts fresh (RelogDetector, MainWindow.StartFresh)
         if (_relog.Observe(DateTime.UtcNow, Balance.Tracker.CounterSeen, Balance.Tracker.Balance, Balance.Tracker.BalanceAt, c.ZoneSeenAt) is { } switched)

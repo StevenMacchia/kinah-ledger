@@ -196,6 +196,15 @@ static class ChatCountTests
             Take(w.Offer(C(150, 35, "Acquired 150 Kina."), k0.AddSeconds(35)));
             Take(w.Tick(k0.AddSeconds(60)));
             Check("witness: the counter gone quiet: what waits counts as read", string.Join(" ", log) + " live " + w.Live(k0.AddSeconds(60)), "?150 live False");
+            // 2026-10-26 (text-2026-10-25-kinah-counter-lag): through a fight the counter wasn't trusted for 15 s, its lines
+            // counted without it, and the next reading's rise of 4,076 was counted again from the counter. A reading after
+            // the counter went quiet starts the pool again: the rise meanwhile belongs to the lines already counted
+            log.Clear();
+            Take(w.Observe(29_004_076, k0.AddSeconds(80)));
+            Take(w.Observe(29_004_076, k0.AddSeconds(83)));
+            Take(w.Tick(k0.AddSeconds(95)));
+            Take(w.Flush(k0.AddSeconds(96)));
+            Check("witness: read again after going quiet: the rise meanwhile isn't counted again", $"[{string.Join(" ", log)}] live {w.Live(k0.AddSeconds(83))}", "[] live True");
         }
 
         // an item line the chat shows again after a scroll (ItemRepeatGuard; 2026-10-24 15:59, Kukuru 2 and Orichalcum Ore 4

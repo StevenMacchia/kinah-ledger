@@ -138,3 +138,22 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   is an anchor), the settle takes only lines on screen by the last unaligned read and closes 6 s of chat after it, and
   528 and 157 Kina count once each. Keys `chat_unaligned` (reads that couldn't be lined up) and `chat_settled_late`
   (lines the settle counted that came after them); the same rules on small reads in `Session/ChatAlignTests.cs`.
+- The Kinah counter's own path (2026-10-26; on 2026-10-25 it agreed 0x in 858 of 905 audit minutes). A `strip` frame
+  (`strip-*`) is a picture of the currency strip, the fixed 1296x97 crop at the window's top-left: it is read as the
+  watcher reads it, then again through the crop its anchor gives after three reads (`Anchors.ObserveBalance`), and the
+  anchored read is handed back to the anchor. Keys `strip` and `strip_anchored`: each picture's numbers left to right,
+  pictures joined by " | " (" (dropped)" when the anchored read dropped the anchor); `strip_words` shows what the
+  recognizer saw. `strip-2026-10-24-131029`: three pictures from the 131029 footage, scaled 4/3 to the window's size;
+  0.8.39 read `0 7811 118254`, `0 7811 11`, `0 7811` (the two Kinah figures never, an icon as 0) and its anchored crop
+  cut the first Kinah figure to `29`, the 124 px anchor and the 115 px flap reads.log shows all day. Read one number at
+  a time with the icons taken out (`BalanceReader.ReadStripAsync`), the anchored crop gives all twelve numbers and the
+  fixed crop all but one Kinah figure (not read, never wrong).
+  A `strip` read in a trace (`{"t", "k": "strip", "l": ["7811@235", "29285750@383", ...]}`, "value@left" per number)
+  goes through a `BalanceTracker` with the Kina the chat has read and on to the session's `CheckBalance`, as
+  `GameWatcher.TickBalanceAsync` does; keys `counter_found` (0 or 1) and `counter_agreed` (BalanceCheck.Agreed).
+  `text-2026-10-25-kinah-counter-lag`: 15:22 to 15:26 local, 49 Kina lines; the strip reads are rebuilt from the
+  chat (reads.log keeps none): each counted Kina line raises both Kinah figures 0.3 s before the first chat read that
+  shows it. Two consecutive reads never differed by exactly the Kina counted between them (0.8.39: not found, 8,443);
+  windows between steady readings find it, the check agrees 3 times, 8,443 (a first try counted 12,519: the counter
+  went unread through a fight and the lines' 4,076 was counted again from it, `KinaWitness.Observe`). A case may name
+  `print_log`, a pattern: the lines of its reads.log that match are printed, for reading a case on the build server.

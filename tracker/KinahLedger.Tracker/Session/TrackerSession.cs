@@ -292,8 +292,14 @@ public sealed partial class TrackerSession
     DateTime _lastActivity = DateTime.MinValue;
 
     // ---- the balance counter as a check on the count ----
-    readonly BalanceCheck _balanceCheck = new();
+    readonly BalanceCheck _balanceCheck = new() { Log = CrashLog.Note };
     public BalanceCheck BalanceCheck => _balanceCheck;
+    /// <summary>
+    /// The Kina the chat has read: counted, and the lines waiting for the Kinah counter to rise for them (KinaWitness).
+    /// What the counter is held against (BalanceTracker): while the witness is live a line waits for the counter, so the
+    /// count alone lags the counter by the very rise being checked.
+    /// </summary>
+    public long KinahRead => KinahPicked + _kina.PendingSum;
     /// <summary>
     /// The game's Kinah counter, read every few seconds, against the Kinah counted. A rise the count lacks, of exactly an
     /// amount the loot list showed in one read only, is that pickup: two sources agree, and it is counted. Any other gap
@@ -311,7 +317,8 @@ public sealed partial class TrackerSession
         if (!fresh) return;
         // what is counted by now (the witness has just settled this reading): a line still waiting isn't counted yet
         Score.Reading(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);
-        long gap = _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound) + _kina.PendingSum, at);
+        // bound Kina apart: the counter the tracker finds doesn't hold it (BalanceCheck)
+        long gap = _balanceCheck.Observe(balance, KinahRead, Interlocked.Read(ref _kinahBound), at);
         if (gap == 0) return;
         // the witness counts what the counter shows and no line claims; the old rule (a row the list showed once) is its fallback
         if (KinaWitnessOn(at)) return;
@@ -320,7 +327,7 @@ public sealed partial class TrackerSession
             var ev = new KinahChanged(at, gap, false) { Via = "loot list · balance" };
             Feed(ev, Count(ev));
             Interlocked.Add(ref _kinahPicked, gap);
-            _balanceCheck.Observe(balance, KinahPicked + Interlocked.Read(ref _kinahBound), at);   // the count matches the counter again
+            _balanceCheck.Observe(balance, KinahRead, Interlocked.Read(ref _kinahBound), at);   // the count matches the counter again
             CrashLog.Note($"the Kinah counter rose {gap:N0} more than counted, and the loot list showed {gap:N0} Kina once: counted from the two");
             BalanceAdded++;
             try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
