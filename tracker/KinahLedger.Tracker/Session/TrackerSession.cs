@@ -1267,13 +1267,14 @@ public sealed partial class TrackerSession
         else if (_garbledSince is { } gs && lines.Count > 0 && !_tracker.LastPanel)
         {
             // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up:
-            // SettleBoundSeconds of chat read after the last read that didn't line up (2026-10-25: it stayed open up to 42 s
-            // and took new lines from the vote, dated when the garbling began)
-            if (_garbledNext == default) _garbledNext = now;
-            if ((now - gs).TotalSeconds > SettleSeconds || (_chatLinesAt - _garbledLast).TotalSeconds > SettleBoundSeconds)
+            // SettleBoundSeconds of chat read after the first clean read (2026-10-25: it stayed open up to 42 s and took new
+            // lines from the vote, dated when the garbling began). Clean: no loot line still garbled (2026-10-23: "Acquire d
+            // Fine OJy1e" two reads running, lined up with each other, before the clean read 5 s later)
+            if (_garbledNext == default && !lines.Any(GarbledLoot)) _garbledNext = now;
+            if ((now - gs).TotalSeconds > SettleSeconds || (_garbledNext != default && (_chatLinesAt - _garbledNext).TotalSeconds > SettleBoundSeconds))
             {
                 _garbledSince = null;
-                CrashLog.NoteBurst($"the chat lined up again {(now - _garbledLast).TotalSeconds:0} s after the last read that didn't: the settle closed, lines count as they come");
+                CrashLog.NoteBurst("the chat has read clean for a while since the reads that didn't line up: the settle closed, lines count as they come");
             }
             else
             {
@@ -3131,15 +3132,19 @@ public sealed partial class TrackerSession
     public const double SettleSeconds = 45;
     // ---- the settle's bound (2026-10-25: "the chat settled after 39 s"; 157 Kina at 16:38:31 taken from the vote and dated
     // 13 s back, before the zone changed) ----
-    /// <summary>When the last read that couldn't be lined up came, and the first read of the chat after it (default: none yet).</summary>
+    /// <summary>When the last read that couldn't be lined up came, and the first clean read of the chat after it (default: none yet).</summary>
     DateTime _garbledLast, _garbledNext;
     /// <summary>
-    /// A line the settle may take was on screen by the first read of the chat after the last one that didn't line up (a
-    /// chat fading in can show its lines whole only seconds later: the 2026-10-23 event rewards, 5 s), or this soon after it.
+    /// A line the settle may take was on screen by the first clean read of the chat after the last one that didn't line up
+    /// (a chat fading in can show its lines whole only seconds later: the 2026-10-23 event rewards, 5 s), or this soon
+    /// after the last one that didn't.
     /// </summary>
     public const double SettleSlackSeconds = 1.5;
-    /// <summary>The settle looks at this much chat after the last read that didn't line up, then closes; lines count as they come.</summary>
+    /// <summary>The settle looks at this much chat after the first clean read, then closes; lines count as they come.</summary>
     public const double SettleBoundSeconds = 6;
+    /// <summary>A loot line whose verb didn't read whole ("Acquire d Fine OJy1e"): the chat is still fading in.</summary>
+    static bool GarbledLoot(string l) => Reread.LooksLikeLoot(l) && !l.TrimStart().StartsWith('[')
+        && !Regex.IsMatch(ChatParser.CleanSystemLine(l), @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", RegexOptions.IgnoreCase);
     /// <summary>Lines the settle counted that were first on screen after the reads lined up again (the replay bank's chat_settled_late).</summary>
     public int SettledLate { get; private set; }
     /// <summary>
