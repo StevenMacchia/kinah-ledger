@@ -372,11 +372,11 @@ public static class WpfApp
             g.Press(System.Windows.Input.Key.Enter);
             Check(At(p.HudX, want.X) && At(p.HudY, want.Y) && w.TickerSpotForTest == ticker,
                 $"placement guide: Enter keeps the Card left of the target bar in the Card's spot ({p.HudX:0}, {p.HudY:0}); the Ticker's is left alone");
-            var before = (p.HudX, p.HudY, w.TickerSpotForTest);
+            var kept = (p.HudX, p.HudY, w.TickerSpotForTest);
             g = w.MakePlacementGuide(game, game, HudLooks.Card);
             g.Snap(HudSpots.Top);
             g.Press(System.Windows.Input.Key.Escape);
-            Check((p.HudX, p.HudY, w.TickerSpotForTest) == before, "placement guide: Esc keeps nothing");
+            Check((p.HudX, p.HudY, w.TickerSpotForTest) == kept, "placement guide: Esc keeps nothing");
             o = Open();
             o.Go(OptionsWindow.Page.InGame);
             Click(o.HudPlaceBtn);
