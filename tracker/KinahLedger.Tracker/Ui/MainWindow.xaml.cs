@@ -99,7 +99,7 @@ public partial class MainWindow : Window
         { WindowStartupLocation = WindowStartupLocation.Manual; Left = x; Top = y; }
 
         if (!_prefs.ManualChat) _region = null;   // auto mode: the chat is found at start, not remembered
-        StartBtn.Click += async (_, _) => await Toggle();
+        StartBtn.Click += async (_, _) => await Toggle(fromWindow: true);
         // everything that can be set is in the Options window, so the ledger never moves or grows for it
         OptionsBtn.Click += (_, _) => OpenOptions();
         SiteBtn.Click += (_, _) => Open(SiteUrl);
@@ -340,7 +340,8 @@ public partial class MainWindow : Window
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
-    async Task Toggle() { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(); }
+    /// <param name="fromWindow">True for the window's Start/Stop button; the shortcut and the tray pass false.</param>
+    async Task Toggle(bool fromWindow = false) { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(fromWindow); }
 
     /// <summary>Says something in the status line and on the Options window's reading page when it is open.</summary>
     void Report(string text, string tone)
@@ -464,15 +465,21 @@ public partial class MainWindow : Window
         }
     }
 
-    async Task StopTracking()
+    /// <param name="fromWindow">
+    /// True for the window's own Stop button: the window comes forward to show the result. The shortcut, the tray, the game
+    /// closing and a character change leave the windows where they are, so a stop mid-fight never pops the tracker over the game.
+    /// </param>
+    async Task StopTracking(bool fromWindow = false)
     {
         var e = _watcher.StopFarm(); if (e == null) return;
         // shared and saved under what the run turned out to be, not the label picked before it started
         var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
-        // closing the panel hands focus to whatever is behind it, usually the game, which then covers this window
-        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
-        Show(); Activate(); Topmost = true; Topmost = false;
+        if (fromWindow)
+        {
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Show(); Activate();
+        }
         // the window goes straight back to the live count (the player's call: Stop must not look like counting stopped);
         // the run's result stays on the status line for a few seconds and in the history
         _lastRun = null; _lastRunUntil = DateTime.MinValue;
