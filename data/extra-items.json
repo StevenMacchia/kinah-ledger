@@ -314,6 +314,32 @@
    "metabotCategory": "Coin Event7",
    "bound": true,
    "url": "https://metabot.gg/en/aion-2/items/grace-of-odyle-bound"
+  },
+  {
+   "id": null,
+   "name": "Candy Key Fragment (Event)",
+   "grade": null,
+   "tradable": false,
+   "category": "Event",
+   "icon": "",
+   "iconSource": null,
+   "metabotCategory": null,
+   "bound": false,
+   "url": null,
+   "sourceNote": "Steven's reads.log 2026-10-25: \"Acquired Candy Key Fragment (Event) x6.\" in Vakron Sky Island reward lines (13:45, 13:53, 18:33, 19:27, 19:51, 20:06), counted for the run by its name only. No MetaBot page (404) and no icon in the tracker's cache: grade and icon not known yet, tradable taken as no (an event item, the chat never shows it as (Bound))."
+  },
+  {
+   "id": null,
+   "name": "Balaur's Essence",
+   "grade": "Epic",
+   "tradable": true,
+   "category": "Crafting Material",
+   "icon": "https://assets.playnccdn.com/static-aion2-gamedata/resources/Icon_Item_Craft_Drop_Draconic_Soul_All_A_u_001a.png",
+   "iconSource": "NC CDN",
+   "metabotCategory": "Crafting Material",
+   "bound": false,
+   "url": "https://metabot.gg/en/aion-2/items/balaurs-essence",
+   "sourceNote": "In data/loot-tables.json (dropped by Balaur enemies) but not in the item list. Steven's reads.log 2026-10-25: \"Acquired Balaurls Essence x70.\" (the apostrophe read as l) not counted at 07:18 and 07:34 (\"not in the item list\"); in runs from 13:53 on it was counted for the run by its misread name. Grade, tradable and category from MetaBot; icon on the NC CDN (MetaBot's icon_item_craft_drop_draconic_soul_all_a_u_001a)."
   }
  ]
 }

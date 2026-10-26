@@ -24,10 +24,12 @@ public static class ReadTrace
     /// place was outside the picture), so a replay tells rows from nameplates and world text the same way (LootNotRow).
     /// And each row's icon hash ("h", hex, "0" where it fell outside the picture), so a replay knows a row by its icon too.
     /// And where each row's text starts ("x", in the window), so a replay sees text far right of the rows' column (LootNotRow).
+    /// And since 2026-10-25, for the rows the icon had a verdict on, the text as read before it ("r") and the icon's scores
+    /// ("i", "id:distance,…"; "" for the other rows), so a replay settles text against icon again (PopupIcons.Replay).
     /// </summary>
     public static void List(DateTime at, IReadOnlyList<string> rows, IReadOnlyList<int> tops, IReadOnlyList<double>? contrast,
         IReadOnlyList<double>? background = null, IReadOnlyList<double>? spread = null, IReadOnlyList<string>? icons = null,
-        IReadOnlyList<int>? lefts = null)
+        IReadOnlyList<int>? lefts = null, IReadOnlyList<string>? before = null, IReadOnlyList<string>? iconScores = null)
     {
         try
         {
@@ -37,6 +39,7 @@ public static class ReadTrace
             if (spread != null) o["s"] = spread;
             if (icons != null) o["h"] = icons;
             if (lefts != null) o["x"] = lefts;
+            if (before != null && iconScores != null) { o["r"] = before; o["i"] = iconScores; }
             Append(JsonSerializer.Serialize(o));
         }
         catch (Exception) { /* the trace is for later analysis */ }

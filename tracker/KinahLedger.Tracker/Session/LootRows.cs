@@ -89,6 +89,8 @@ public sealed class LootRows
         public string Soul = "";        // a soul row's enemy kind
         public long Amount;             // a Kinah row's amount
         public readonly List<Read> Reads = new();
+        public string LastText = "";    // the last line taken for it, voting or not
+        public int UnsureReads;         // reads whose text and icon named different items, neither sure (PopupIcons.Settle): they don't vote
         public string LastCanon => Reads.Count > 0 ? Reads[^1].Canon : "";
         public string Key => Canon ?? LastCanon;
         public double Visible(DateTime now) => (now - First).TotalSeconds - Hidden;
@@ -339,6 +341,9 @@ public sealed class LootRows
             default:
                 if (o.Kind != Kind.Item) break;   // a soul row's slice: the soul it is stands
                 if (o.Dropped) break;   // not a row: its reads are taken so they make no new row, and nothing more
+                o.LastText = c.Line.Text;
+                // the text and the icon named different items and neither was sure: the read keeps the row in its slot, never votes
+                if (c.Line.Unsure) { o.UnsureReads++; break; }
                 o.Reads.Add(new Read(c.Line.Text, c.Canon, c.Line.Contrast, c.Slice, c.Unique, c.Name));
                 if (o.Reads.Count > 12) o.Reads.RemoveAt(0);
                 Judge(o);
@@ -390,7 +395,7 @@ public sealed class LootRows
                 Unsure++;
                 Accuracy.Add("list_unsure");
                 var typical = Typical;
-                CrashLog.Note($"loot list: \"{o.Reads[^1].Text}\" at y {o.Top} went before its text settled ({o.Reads.Count} read(s), contrast {o.Peak:0.00}{(typical is double t ? $" of a usual {t:0.00}" : "")}): unsure, not counted");
+                CrashLog.Note($"loot list: \"{(o.Reads.Count > 0 ? o.Reads[^1].Text : o.LastText)}\" at y {o.Top} went before its text settled ({o.Reads.Count} read(s){(o.UnsureReads > 0 ? $", {o.UnsureReads} more where the text and the icon named different items" : "")}, contrast {o.Peak:0.00}{(typical is double t ? $" of a usual {t:0.00}" : "")}): unsure, not counted");
             }
             else if (brief)
             {

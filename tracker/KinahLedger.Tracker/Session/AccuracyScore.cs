@@ -327,7 +327,7 @@ public sealed class AccuracyScore
                 kina.Count, kina.Count(e => e.ByCounter), _setAside.Count(s => s.Why == Why.Refused), kina.Count(e => e.Unjudged), kina.Count(e => !e.CounterLive),
                 kina.Any(e => e.CounterLive) || _setAside.Any(s => s.Why == Why.Refused),
                 _counted.Count(e => e.RowJudged), _setAside.Count(s => s.Row), rowsUnsure, notRows,
-                rl.Count(r => r.FromPicture && !r.PartlyRead && r.SlotsUnread == 0 && r.UnknownGear == 0), rl.Count(r => r.FromPicture && (r.PartlyRead || r.SlotsUnread > 0 || r.UnknownGear > 0)),
+                rl.Count(r => r.FromPicture && !r.ToLookAt), rl.Count(r => r.ToLookAt),
                 rl.Count(r => r.RewardsNotRead), slotsRead, slotsUnread,
                 _counted.Count(e => e.CountAssumed), _counted.Count(e => !e.Verified && !e.CountAssumed), sh.GetValueOrDefault("decode_agree"), sh.GetValueOrDefault("decode_disagree"), sh.GetValueOrDefault("decode_other"),
                 _stretches > 0 ? new Reconciliation(_rise, _countedRise) : null, Median(_delays.Select(d => d.Seconds)), open);
@@ -351,14 +351,16 @@ public sealed class AccuracyScore
     /// <summary>A run read only in part, or not at all, is one thing to check (once).</summary>
     void NoteRun(InstanceRun r)
     {
-        bool partly = r.FromPicture && (r.PartlyRead || r.SlotsUnread > 0 || r.UnknownGear > 0);
+        bool partly = r.ToLookAt;
         if (!partly && !r.RewardsNotRead) return;
         var handle = "run:" + Stamp(r.Start);
         lock (_lock) if (!_runChecks.Add(handle)) return;
         var label = r.Event.Length > 0 ? r.Event : r.Zone;
         var parts = new List<string>();
-        if (r.SlotsUnread > 0 || r.UnknownGear == 0) parts.Add($"{r.SlotsUnread} reward slot{(r.SlotsUnread == 1 ? "" : "s")} not read");
+        if (r.SlotsUnread > 0 || (r.UnknownGear == 0 && r.SlotDoubts.Count == 0)) parts.Add($"{r.SlotsUnread} reward slot{(r.SlotsUnread == 1 ? "" : "s")} not read");
         if (r.UnknownGear > 0) parts.Add($"{r.UnknownGear} gear not named");
+        // a count the picture read that the chat or a second read of the screen disagreed with (2026-10-25)
+        if (r.SlotDoubts.Count > 0) parts.Add($"{r.SlotDoubts.Count} reward count{(r.SlotDoubts.Count == 1 ? "" : "s")} in doubt");
         var text = r.RewardsNotRead ? $"{label}: rewards not read" : $"{label}: {string.Join(", ", parts)}";
         AddCheck(r.LastLoot ?? r.Start, text, r.RewardsNotRead ? Why.NotRead : Why.PartlyRead, handle, r.Pictures.ToList());
     }
@@ -406,7 +408,7 @@ public sealed class AccuracyScore
             double? kinaShare = counter && kina.Count + refused > 0 ? Round((double)kina.Count(e => e.ByCounter) / (kina.Count + refused)) : null;
             int rowsOk = c.Count(e => e.RowJudged), rowsMiss = aside.Count(s => s.Row);
             double? rowShare = rowsOk + rowsMiss > 0 ? Round((double)rowsOk / (rowsOk + rowsMiss)) : null;
-            int unsure = aside.Count + c.Count(e => e.CountAssumed) + (r.FromPicture && (r.PartlyRead || r.SlotsUnread > 0 || r.UnknownGear > 0) ? 1 : 0);
+            int unsure = aside.Count + c.Count(e => e.CountAssumed) + (r.ToLookAt ? 1 : 0);
             var delays = _delays.Where(d => In(d.At)).Select(d => d.Seconds).ToList();
             double? med = Median(delays);
             double share = judged > 0 ? (double)verified / judged : 0;

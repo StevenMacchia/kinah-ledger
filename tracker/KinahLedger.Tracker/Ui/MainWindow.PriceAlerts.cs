@@ -12,7 +12,8 @@ namespace KinahLedger.Ui;
 /// Price alerts on the cards (0.8.12): a "Price alert" section on every drop and recipe card sets one alert per item on
 /// the player's server, below or above a price. Every ten seconds the window checks the prices it already has (the
 /// server's board, refreshed every 15 minutes, and asks read on the Market on this PC) and a crossing shows a Windows
-/// notice from the tray icon, with the chime the rare-drop alert uses. The list is in Options › Server.
+/// notice from the tray icon, with the chime the rare-drop alert uses, and (since Focus Assist and Game Mode hold tray
+/// notices back during a game) the panel's notice line and the window's status line for 8 s. The list is in Options › Server.
 /// </summary>
 public partial class MainWindow
 {
@@ -24,14 +25,21 @@ public partial class MainWindow
         RecipeBook.PreferFaction = Server?.Faction switch { "Elyos" => 'E', "Asmodian" => 'A', _ => '\0' };
         if (_demo || Server is not { } s || (DateTime.UtcNow - _alertCheck).TotalSeconds < 10) return;
         _alertCheck = DateTime.UtcNow;
+        var fired = new List<string>();
         foreach (var (a, price) in PriceAlerts.Check(s.Label, PriceBook.Price, DateTime.UtcNow))
         {
             var title = $"{a.Item} is {price:N0} on {s.Name}";
             var text = $"{(a.Above ? "Above" : "Below")} your {a.Price:N0} alert. Lowest ask{(PriceBook.SourceOf(a.Item) == PriceBook.From.Market ? ", read on this PC" : " on the server's board")}.";
             try { _tray.ShowBalloonTip(8000, title, text, WF.ToolTipIcon.Info); } catch (Exception ex) { CrashLog.Write("price alert", ex); }
-            Chime();
-            Say($"Price alert: {title}. {text}", "Good");
+            if (fired.Count == 0) Chime();
+            fired.Add(title);
+            CrashLog.Note($"price alert: {title} ({text})");
         }
+        if (fired.Count == 0) return;
+        // Focus Assist and Game Mode hold back the tray notice while a game is in front, so the alert also goes on the
+        // panel for 8 s ("Price alert: Thick hide is 28,000 on Siel") and stays in the window's status line as long
+        var line = fired.Count == 1 ? $"Price alert: {fired[0]}" : $"Price alerts: {string.Join(" · ", fired)}";
+        ShowPriceAlert(line);
     }
 
     /// <summary>Cards whose price alert is being set or changed: the full editor shows in place of the one line.</summary>
@@ -60,7 +68,7 @@ public partial class MainWindow
         return new Border
         {
             Child = g, Margin = new Thickness(16, 12, 16, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = Ck(CkSlotLine),
-            ToolTip = cur != null ? $"A Windows notice when {s.Name}'s lowest ask crosses it. Kept on this PC." : null,
+            ToolTip = cur != null ? $"A notice on the panel and from the tray when {s.Name}'s lowest ask crosses it. Kept on this PC." : null,
         };
     }
 
@@ -104,7 +112,7 @@ public partial class MainWindow
         row.Children.Add(set);
         sp.Children.Add(row);
 
-        var note = CkNote(cur != null ? $"Set: {cur.Rule}{(cur.Armed ? "" : " · told you, waits for the price to cross back")}." : $"A Windows notice when {s.Name}'s lowest ask crosses it. Kept on this PC.");
+        var note = CkNote(cur != null ? $"Set: {cur.Rule}{(cur.Armed ? "" : " · told you, waits for the price to cross back")}." : $"A notice on the panel and from the tray when {s.Name}'s lowest ask crosses it. Kept on this PC.");
         note.Margin = new Thickness(20, 6, 20, 0);
         sp.Children.Add(note);
         void Commit()
@@ -112,7 +120,7 @@ public partial class MainWindow
             long n = long.TryParse(new string(box.Text.Where(char.IsDigit).ToArray()), out var x) ? x : 0;
             if (n <= 0) { ((TextBlock)note).Text = "Type a price in Kinah first."; return; }
             PriceAlerts.Set(s.Label, item, above, n);
-            ((TextBlock)note).Text = $"Set: {(above ? "above" : "below")} {n:N0}. A Windows notice when it crosses; Options › Server has the list.";
+            ((TextBlock)note).Text = $"Set: {(above ? "above" : "below")} {n:N0}. A notice on the panel and from the tray when it crosses; Options › Server has the list.";
             set.Content = "Update";
             Say($"Price alert set: {item} {(above ? "above" : "below")} {n:N0} on {s.Name}.", "Good");
         }

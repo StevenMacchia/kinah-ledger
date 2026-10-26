@@ -11,7 +11,8 @@ namespace KinahLedger.Ui;
 public sealed record OptionsChoice(
     string Region, string Server, bool Share, bool Hud, string Hotkey, string Skin, bool AutoUpdate,
     bool StartWithWindows, string OnGameStart, bool HideWhenGameCloses, bool CloseToTray, bool MinimizeToTray, string HudFields,
-    bool ReportFrames = false, bool SendFrames = false, int GearScore = 0, bool HelpCounting = true, bool ShowAccuracy = false);
+    bool ReportFrames = false, bool SendFrames = false, int GearScore = 0, bool HelpCounting = true, bool ShowAccuracy = false,
+    bool HudLocked = true, double HudOpacity = 0.9, double HudScale = 1, string HudLook = HudLooks.Strip);
 
 /// <summary>
 /// The app around the live count: the tray, starting with Windows, reacting to the game starting and closing, the
@@ -125,11 +126,21 @@ public partial class MainWindow
         var h = new WindowInteropHelper(this).Handle;
         if (h == IntPtr.Zero) return null;
         Native.UnregisterHotKey(h, HotkeyId);
-        if (_hotkeySuspended || Hotkey.Parse(_prefs.Hotkey) is not { } key) return null;
-        return Native.RegisterHotKey(h, HotkeyId, key.NativeModifiers, key.VirtualKey)
-            ? null
-            : $"{key} is already used by another app, so the shortcut is off. Pick another in Options › In game.";
+        if (_hotkeySuspended) return null;
+        // one saved before the shortcut rules (Ctrl+K, say) is off, and says why (Platform/Hotkey.cs Refusal)
+        if (Hotkey.Explain(_prefs.Hotkey) is { } why)
+        {
+            _hotkeyProblem = ($"The shortcut {_prefs.Hotkey.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › In game.", $"Shortcut {_prefs.Hotkey.Trim()} is off · pick another in Options");
+            return _hotkeyProblem.Value.Long;
+        }
+        if (Hotkey.Parse(_prefs.Hotkey) is not { } key) { _hotkeyProblem = null; return null; }
+        _hotkeyProblem = Native.RegisterHotKey(h, HotkeyId, key.NativeModifiers, key.VirtualKey) ? null
+            : ($"{key} is already used by another app, so the shortcut is off. Pick another in Options › In game.", $"{key} is taken by another app · pick another in Options");
+        return _hotkeyProblem?.Long;
     }
+
+    /// <summary>The shortcut couldn't be set: the status line's sentence and the panel's short line; null when it works or is off.</summary>
+    (string Long, string Short)? _hotkeyProblem;
 
     /// <summary>While Options records a new shortcut, the current one must not fire (it would start a run).</summary>
     public void SuspendHotkey(bool suspend)
@@ -152,13 +163,62 @@ public partial class MainWindow
 
     public UserPrefs Prefs => _prefs;
 
-    /// <summary>The panel's opacity from Options: applied and remembered at once.</summary>
-    public void SetHudOpacity(double v)
+    /// <summary>
+    /// The panel's opacity and size while Options is open: shown on the panel at once, remembered only on Save (Cancel
+    /// shows the saved ones again), like every other setting there.
+    /// </summary>
+    public void PreviewHud(double opacity, double scale)
     {
-        _prefs.HudOpacity = Math.Clamp(v, 0.3, 1);
-        if (_hud != null) _hud.Opacity = _prefs.HudOpacity;
-        if (!_demo) _prefs.Save();
+        _hud?.SetOpacity(opacity);
+        _hud?.SetScale(scale);
     }
+
+    /// <summary>
+    /// The rest of Options › In game the same way (2026-10-25 audit: the panel switch, its figures and its lock waited for
+    /// Save with nothing to see): the edited choices shown on the panel at once, remembered only on Save; Cancel puts the
+    /// saved ones back (<see cref="EndHudPreview"/>). Null while Options isn't previewing anything.
+    /// </summary>
+    OptionsChoice? _hudPreview;
+    /// <summary>Reset position being tried: the panel sits at the default spot until Save keeps it or Cancel moves it back.</summary>
+    bool _hudSpotPreview;
+    /// <summary>The panel's switch as it shows now: the one being tried in Options, else the saved one.</summary>
+    bool HudWanted => _hudPreview?.Hud ?? _prefs.Hud;
+
+    /// <summary>Options › In game changed: the panel shows the edited switch, figures, lock, opacity and size now.</summary>
+    public void PreviewHudLook(OptionsChoice c)
+    {
+        _hudPreview = c;
+        if (!c.Hud) CloseHud();
+        else if (_hud == null && !_demo && _watcher.Chat != null) EnsureHud();   // on: it shows over the game as it would after Save
+        _hud?.SetFields(Ui.HudFields.Parse(c.HudFields));
+        PreviewHud(c.HudOpacity, c.HudScale);
+        UpdateHud();
+    }
+
+    /// <summary>Options › In game › Reset position, being tried: the panel moves to the default spot now; Save keeps it there.</summary>
+    public void PreviewHudSpot()
+    {
+        _hudSpotPreview = true;
+        PlaceHudDefault();
+    }
+
+    /// <summary>Options closed (after Save or Cancel): the panel back to the saved choices, which Save has just made the edited ones.</summary>
+    public void EndHudPreview()
+    {
+        bool moved = _hudSpotPreview;
+        _hudPreview = null; _hudSpotPreview = false;
+        if (!_prefs.Hud) { CloseHud(); return; }
+        if (_hud == null) return;   // the next tick opens it, run or no run
+        _hud.SetFields(Ui.HudFields.Parse(_prefs.HudFields));
+        PreviewHud(_prefs.HudOpacity, _hudPrefs.Scale);
+        if (moved) { if (SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault(); }
+        UpdateHud();
+    }
+
+    /// <summary>For the options self-test: the panel's switch as it shows now (the one being tried, or the saved one).</summary>
+    internal bool HudShownForTest => HudWanted;
+    /// <summary>For the options self-test: the panel's figures as it shows them now.</summary>
+    internal string HudFieldsShownForTest => _hudPreview?.HudFields ?? _prefs.HudFields;
     public Settings AppSettings => _settings;
     public bool CanStartWithWindows => _exe != null;
 
@@ -166,7 +226,8 @@ public partial class MainWindow
     public OptionsChoice CurrentOptions() => new(
         RegionKey, Server?.Label ?? "", _prefs.Share, _prefs.Hud, HotkeyText, Skins.Get(_prefs.Skin).Key, _prefs.AutoUpdate,
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
-        _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy);
+        _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
+        _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook);
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -191,6 +252,10 @@ public partial class MainWindow
             _hud?.SetFields(Ui.HudFields.Parse(c.HudFields));
             UpdateHud();
         }
+        if (c.HudLocked != was.HudLocked) { _hudPrefs.Locked = c.HudLocked; UpdateHud(); }
+        if (c.HudLook != was.HudLook) ApplyHudLook(c.HudLook);   // the panel is made again in the new look
+        _prefs.HudOpacity = c.HudOpacity; _hudPrefs.Scale = c.HudScale;
+        PreviewHud(c.HudOpacity, c.HudScale);
         if (c.Skin != Skins.Get(_prefs.Skin).Key) { _prefs.Skin = c.Skin; }
         ApplySkin(_prefs.Skin);
         if (c.AutoUpdate != was.AutoUpdate) AutoUpdateChanged(c.AutoUpdate);
@@ -241,11 +306,14 @@ public partial class MainWindow
         Report("Install ID replaced. Runs from now on can't be tied to earlier ones; link the new code to keep them on your profile.", "Good");
     }
 
+    /// <summary>Options › In game › Reset position: back where a first start puts it (PlaceHudDefault).</summary>
     public void ResetHudPosition()
     {
-        _prefs.HudX = null; _prefs.HudY = null;
-        if (!_demo) _prefs.Save();
-        if (_hud != null) { _hud.Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 170; _hud.Top = SystemParameters.WorkArea.Top + 16; }
+        // the look's own spot: the Ticker's is kept apart from the strip's and the Card's
+        if (HudLook == HudLooks.Ticker) { _hudPrefs.TickerX = null; _hudPrefs.TickerY = null; if (!_demo) _hudPrefs.Save(); }
+        else { _prefs.HudX = null; _prefs.HudY = null; if (!_demo) _prefs.Save(); }
+        _hudSpotPreview = false;
+        PlaceHudDefault();
     }
 
     public static string DataFolder => CrashLog.Dir;

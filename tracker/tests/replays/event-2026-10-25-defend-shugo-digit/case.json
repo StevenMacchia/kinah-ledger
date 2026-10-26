@@ -1,0 +1,17 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Defend Shugo Merchants (Shugo Festival) reward cards, 2026-10-25 18:06:08, read twice with card 2's Abyss Points disagreeing in one digit: live, two reads of this screen filed card 2's Abyss Points as x340, and the read again of its kept pictures at 18:07:41 read x320 (the picture shows 320). The first frame here is the kept picture with card 2's middle figure replaced by the 4 of card 1's \"440\" (the same icon, the same place, so the slot reads x340); the second is the picture as kept. 0.8.39 voted the slot's two counts as a tie and took the first read's x340. Now two reads of one screen that disagree on a count with no majority leave the slot not read (one more slot to look at, out of the averages), never one of them: Abyss Points 440 + 480 from cards 1 and 3, card 2's not counted",
+  "source": "%LocalAppData%/KinahLedger/reward-shots/20261025-180608-Defend-Shugo-Merchants-event-rewards.jpg (5120x2160), everything but the title and the cards blacked out; 180608-340.jpg is the same picture with the patch at 1332,1032 (16x30) copied to 1887,1032",
+  "game": { "w": 5120, "h": 2160 },
+  "zone": "Defend Shugo Merchants",
+  "frames": [
+    { "f": "180608-340.jpg", "k": "cards", "t": "2026-10-25T22:06:08Z", "x": 0, "y": 0 },
+    { "f": "180608.jpg", "k": "cards", "t": "2026-10-25T22:06:10Z", "x": 0, "y": 0 }
+  ],
+  "expect": {
+    "runs_kept": 1,
+    "runs_partly_read": 1,
+    "run_abyss_points": 920
+  }
+}

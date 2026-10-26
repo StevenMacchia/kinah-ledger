@@ -179,11 +179,93 @@ public static class WpfApp
         DoEvents();
         Check(HudFields.Parse(p.HudFields).Contains(add) && HudFields.Parse(p.HudFields).Count == before.Count + 1, "panel figure saved: " + p.HudFields);
 
+        // the panel's lock (click-through over the game) follows Save like the other switches
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        bool lockedBefore = w.HudLocked;
+        Check(o.HudLockChk.IsChecked == lockedBefore, "Lock the panel in place opens as saved: " + lockedBefore);
+        Flip(o.HudLockChk);
+        Check(o.SaveBtn.IsEnabled && w.HudLocked == lockedBefore, "the panel lock waits for Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.HudLocked == !lockedBefore, "panel lock saved");
+
+        // the panel's look (2026-10-25): the Strip until another is picked; the three drawn in Options; the Strip's figures grey out for the others
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        Check(w.HudLook == HudLooks.Strip && o.HudFieldHost.IsEnabled, "panel look: the Strip, with its figures to pick");
+        Check(o.HudLookHost.Children.Count == 3 && o.HudLookPreview.Children.Count == 3, $"the three looks drawn in Options ({o.HudLookPreview.Children.Count})");
+        Click((System.Windows.Controls.Button)o.HudLookHost.Children[Array.FindIndex(HudLooks.All, l => l.Key == HudLooks.Ticker)]);
+        Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Strip && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.HudLook == HudLooks.Ticker, "panel look saved: " + w.HudLook);
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        Click((System.Windows.Controls.Button)o.HudLookHost.Children[0]);
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.HudLook == HudLooks.Strip, "back to the Strip");
+        // the looks' pickups come from the feed: newest first, with the count, worth, grade and icon
+        var picks = w.HudPickValuesNow();
+        string Pk(int i, string k = "") => picks.GetValueOrDefault("pick" + i + k, "");
+        Check(Enumerable.Range(0, HudLooks.Picks).Any(i => Pk(i) == "Spiritstone" && Pk(i, "Count") == "×1" && Pk(i, "Worth").StartsWith("+"))
+              && Enumerable.Range(0, HudLooks.Picks).Any(i => Pk(i, "Kind") == "kinah" && Pk(i).EndsWith(" Kinah") && Pk(i, "Icon").EndsWith("Icon_gold.png"))
+              && long.Parse(Pk(0, "At")) >= long.Parse(Pk(1, "At")),
+            $"panel looks: the feed's pickups, newest first ({Pk(0)}, {Pk(1)}, {Pk(2)}, {Pk(3)})");
+
+        // the panel's opacity and size: shown on the panel as the sliders move, kept on Save, put back by Cancel
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        double opacityBefore = p.HudOpacity, scaleBefore = w.HudScale;
+        o.HudOpacity.Value = 0.5; o.HudScale.Value = 1.5;
+        Check(o.SaveBtn.IsEnabled && p.HudOpacity == opacityBefore && w.HudScale == scaleBefore, "panel opacity and size wait for Save");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(p.HudOpacity == opacityBefore && w.HudScale == scaleBefore, "Cancel keeps the panel's opacity and size");
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        Check(Math.Abs(o.HudOpacity.Value - opacityBefore) < 0.01 && Math.Abs(o.HudScale.Value - scaleBefore) < 0.01, "Options opens with the saved opacity and size");
+        o.HudOpacity.Value = 0.5; o.HudScale.Value = 1.5;
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(Math.Abs(p.HudOpacity - 0.5) < 0.001 && Math.Abs(w.HudScale - 1.5) < 0.001, $"panel opacity and size saved: {p.HudOpacity:P0}, {w.HudScale:P0}");
+
+        // the panel's switch and figures are tried on the panel at once too (2026-10-25), and Cancel puts them back
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        bool hudSaved = p.Hud; var fieldsSaved = p.HudFields;
+        Flip(o.HudChk);
+        var onNow = HudFields.Parse(fieldsSaved);
+        int chip = Array.FindIndex(HudFields.All, f => !onNow.Contains(f.Key));
+        if (chip < 0) chip = Array.FindIndex(HudFields.All, f => onNow.Contains(f.Key));
+        Click((System.Windows.Controls.Button)o.HudFieldHost.Children[chip]);
+        Check(w.HudShownForTest == !hudSaved && w.HudFieldsShownForTest != fieldsSaved && p.Hud == hudSaved && p.HudFields == fieldsSaved,
+            "the panel switch and a figure show at once, and wait for Save to be kept");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(w.HudShownForTest == hudSaved && w.HudFieldsShownForTest == fieldsSaved, "Cancel puts the panel's switch and figures back");
+
         o = Open();
         Click(o.HotkeyResetBtn);
         Click(o.SaveBtn);
         DoEvents();
         Check(p.Hotkey == Platform.Hotkey.Default, "Default puts Ctrl+Shift+K back");
+        // shortcut rules (2026-10-25): nothing Windows or typing needs is taken from every app on the PC
+        {
+            static bool Ok(System.Windows.Input.ModifierKeys m, System.Windows.Input.Key k) => Platform.Hotkey.IsUsable(m, k);
+            const System.Windows.Input.ModifierKeys C = System.Windows.Input.ModifierKeys.Control, A = System.Windows.Input.ModifierKeys.Alt, S = System.Windows.Input.ModifierKeys.Shift, W = System.Windows.Input.ModifierKeys.Windows;
+            Check(!Ok(C, System.Windows.Input.Key.C) && !Ok(C, System.Windows.Input.Key.V) && !Ok(C, System.Windows.Input.Key.Z) && !Ok(C, System.Windows.Input.Key.A) && !Ok(A, System.Windows.Input.Key.F)
+                && !Ok(C | A, System.Windows.Input.Key.K) && !Ok(S, System.Windows.Input.Key.K) && !Ok(C, System.Windows.Input.Key.D1),
+                "a letter or number needs Shift with Ctrl or Alt: Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+A, Alt+F, Ctrl+Alt+K, Shift+K, Ctrl+1 refused");
+            Check(!Ok(A, System.Windows.Input.Key.Tab) && !Ok(A, System.Windows.Input.Key.Escape) && !Ok(C, System.Windows.Input.Key.Escape) && !Ok(A, System.Windows.Input.Key.Space)
+                && !Ok(A, System.Windows.Input.Key.F4) && !Ok(W | S, System.Windows.Input.Key.S) && !Ok(S, System.Windows.Input.Key.Insert) && !Ok(C, System.Windows.Input.Key.Left),
+                "system keys refused: Alt+Tab, Alt+Esc, Ctrl+Esc, Alt+Space, Alt+F4, Win+Shift+S, Shift+Insert, Ctrl+Left");
+            Check(Ok(C | S, System.Windows.Input.Key.K) && Ok(A | S, System.Windows.Input.Key.R) && Ok(A, System.Windows.Input.Key.F9) && Ok(S, System.Windows.Input.Key.F8) && Ok(C | A, System.Windows.Input.Key.F2),
+                "allowed: Ctrl+Shift+K, Alt+Shift+R, Alt+F9, Shift+F8, Ctrl+Alt+F2");
+            Check(Platform.Hotkey.Parse("Ctrl+K") == null && Platform.Hotkey.Explain("Ctrl+K") is { Length: > 0 } && Platform.Hotkey.Explain("Ctrl+Shift+K") == null && Platform.Hotkey.Parse("Ctrl+Shift+K") != null,
+                "a saved Ctrl+K is off with a reason; Ctrl+Shift+K still parses");
+        }
 
         // Compact and Full view (0.7.6): the tables and pickups only in Full, which doubles the width; Crafting is one column either way
         w.ShowCompact(); DoEvents();
@@ -242,6 +324,14 @@ public static class WpfApp
         w.ShowDemo("Gathering"); DoEvents();
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,
             $"panel, gathering: the hour once ({w.HudValues.GetValueOrDefault("rate", "")}, the window's {w.HeadRate.Text}), no second loot figure");
+        Check(w.HudValues.GetValueOrDefault("warm", "") == "" && w.HeadRate.Opacity == 1, "a 42-minute count shows its rate, not warming up");
+
+        // Undo instead of "Are you sure?" (2026-10-25): Clear the tables happens at once with a bar, and Undo puts them back
+        w.ShowDemo(); DoEvents();
+        _ = w.ClearTablesForTest(); DoEvents();
+        Check(w.UndoShowing == "Farming tables cleared" && w.TablesClearedForUndo, "Clear the tables: cleared at once, with an Undo bar");
+        w.PressUndo(); DoEvents();
+        Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
 
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
@@ -283,6 +373,28 @@ public static class WpfApp
             o.Show();
             DoEvents();
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-{page.ToString().ToLowerInvariant()}{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Close();
+        }
+        // In game at the panel's look: the three looks drawn at their real size, the chosen one ringed
+        {
+            var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            o.Show();
+            IconCache.Drain(TimeSpan.FromSeconds(8));
+            DoEvents();
+            var at = o.HudLookHost.TransformToAncestor(o.Scroller).Transform(new Point(0, 0));
+            o.Scroller.ScrollToVerticalOffset(Math.Max(0, o.Scroller.VerticalOffset + at.Y - 70));
+            DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-look{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Close();
+        }
+        // In game once more, scrolled to the end: the panel's rows below the fold (opacity, size and position)
+        {
+            var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            o.Show();
+            DoEvents();
+            o.Scroller.ScrollToEnd();
+            DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-lower{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
         w.Close();
@@ -343,6 +455,8 @@ public static class WpfApp
         // the panel's three states (direction C): the newest feed line and the rate, farming and crafting, and a flagged run
         // (the farming and flagged states from a farming render, the crafting one from the Crafting render: each with its own sample prices)
         var states = !demo ? new() : w.HudStates().Where(x => kind == "Crafting" ? x.File == "ui-hud-crafting.png" : kind == "Open world" && x.File != "ui-hud-crafting.png").ToList();
+        // the Card and the Ticker in the mock's three states, from the window's sample figures
+        var lookStates = demo && kind == "Open world" ? w.HudLookStates() : new();
         if (states.Count > 0) foreach (var (k, v) in states[0].Values) values[k] = v;
         w.Close();
 
@@ -367,6 +481,48 @@ public static class WpfApp
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }
+
+        // the panel's looks (2026-10-25): ui-hud-card-normal/notice/rare.png and ui-hud-ticker-*.png, with their icons
+        foreach (var url in lookStates.SelectMany(st => st.Values.Where(kv => kv.Key.EndsWith("Icon")).Select(kv => kv.Value)).Distinct()) IconCache.Get(url);
+        if (lookStates.Count > 0) { IconCache.Drain(TimeSpan.FromSeconds(10)); DoEvents(); }
+        foreach (var (file, look, v) in lookStates)
+        {
+            var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            h.Update(v);
+            DoEvents();
+            // over the mock's dark page (#090B15), so the toasts' see-through washes read as they do over the game
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, Color.FromRgb(0x09, 0x0B, 0x15));
+            h.Close();
+        }
+
+        // the overlay's own states (tracker/overlay-behaviour), each from the same figures with the keys MainWindow sets
+        if (!demo || kind != "Open world") return;
+        foreach (var (file, fields, extra) in new (string, List<string>, Dictionary<string, string>)[]
+        {
+            ("ui-hud-notice.png", HudFields.Parse(null), new() { ["notice"] = "Update ready · installs when you leave the game" }),
+            // being moved from the tray: the dashed outline and the "drag me" hint
+            ("ui-hud-unlocked.png", HudFields.Parse(null), new() { ["unlocked"] = "move" }),
+            // a run on: the red dot, the run's clock, and the shortcut's confirmation; then the stop's line on the default panel
+            ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = "Run started" }),
+            ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["flash"] = "Run stopped · 1.27M this run" }),
+            // Options at its far ends: 30% background (the figures stay solid) at 150%
+            ("ui-hud-scaled.png", HudFields.Parse("time,rate,total"), new()),
+            // the first two minutes: the hour says it is warming up instead of a wild figure, on the feed and on the classic set
+            ("ui-hud-warming.png", HudFields.Parse(null), new() { ["warm"] = "1", ["rate"] = "warming up", ["feedRate"] = "warming up", ["feedUnit"] = "" }),
+            ("ui-hud-warming-classic.png", HudFields.Parse("time,rate,total"), new() { ["warm"] = "1", ["rate"] = "warming up", ["time"] = "0:48", ["total"] = "21.4K" }),
+        })
+        {
+            var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            var v = new Dictionary<string, string>(values);
+            foreach (var (k, x) in extra) v[k] = x;
+            h.Update(v);
+            if (file == "ui-hud-scaled.png") { h.SetOpacity(0.3); h.SetScale(1.5); }
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            h.Close();
+        }
     }
 
     /// <summary>Lets pending layout and render work run, since no message loop is running in this mode.</summary>
@@ -377,7 +533,8 @@ public static class WpfApp
         System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
 
-    static void Save(FrameworkElement root, string path, double fallbackWidth)
+    /// <param name="backdrop">Painted under the drawing (the panel looks' renders); transparent when null.</param>
+    static void Save(FrameworkElement root, string path, double fallbackWidth, Color? backdrop = null)
     {
         if (root.ActualWidth < 1 || root.ActualHeight < 1)
         {
@@ -388,6 +545,12 @@ public static class WpfApp
         int wpx = (int)Math.Ceiling(root.ActualWidth), hpx = (int)Math.Ceiling(root.ActualHeight);
         if (wpx < 1 || hpx < 1) throw new InvalidOperationException("the window did not lay out");
         var rtb = new RenderTargetBitmap(wpx, hpx, 96, 96, PixelFormats.Pbgra32);
+        if (backdrop is { } bg)
+        {
+            var under = new DrawingVisual();
+            using (var dc = under.RenderOpen()) dc.DrawRectangle(new SolidColorBrush(bg), null, new Rect(0, 0, wpx, hpx));
+            rtb.Render(under);
+        }
         rtb.Render(root);
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(rtb));

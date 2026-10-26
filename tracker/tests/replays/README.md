@@ -85,3 +85,75 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   took one of the fight's kills for the witness of a second pair. Right: 1. A line under the same two lines a copy was
   counted under, one of them once in the read, is that copy wherever the scroll put it (`ItemRepeatGuard`; the guard's
   own checks in `Ocr/ChatCountTests.cs`). The Order Gloves were the 16:35 event cards, named right from their picture.
+- `text-2026-10-25-list-skip-same` (2026-10-26, branch tracker/pass-cost): the loot list's unchanged check
+  (`ocr.list_skip_same`, `Ocr/SameBand.cs`). A `list` read may carry `p`, its band's pixel fingerprint (any string; the
+  same string is the same pixels): a read with the last recognized read's fingerprint, under 2 s after it and with no
+  change on screen since (the chat's lines, a `target` read, a `balance` read that moved), stands on that read's lines, as
+  the live read stands on its last recognition. Every read still goes through the rows as before. Run key `list_same`: the
+  reads that stood on the last one. A row that appears, fades in and changes in place while the band otherwise stands
+  still is read on the pass each new look shows and counts with its final text; a check that skipped by time alone fails it.
+- `panel` and `bar` reads (2026-10-25): the crafting panel's locator as the session decides it. A `panel` read is one pass
+  with the panel's strip up, `l` the lines its text read gave (`[]` when the text wasn't read that pass), `"up": false` for
+  a pass without it, `"raised": true` for the gathering panel above the skill bar. A `bar` read is its bars finishing a race
+  (`ok`, `fail`, `combo ok`, `combo fail`), routed as live: a craft while the panel is crafting, else the gathering bar's
+  race. A text case's `craft_ok` and `craft_fail` count those crafts, and `craft_made` (expect names only what it checks)
+  what they made by item.
+- `text-2026-10-25-wind-serum-craft-not-gather` (Steven crafting 21 Wind Serums, 20:25 to 20:28): the title read garbled
+  after the first craft ("4 /z:iT,", "C+afting ProgYéSs") and the panel gone for a pass between crafts, so 0.8.39 took the
+  bars for a gathering bar: 1 craft and 19 "unknown node" gather attempts, the serums on the loot list waiting for a chat
+  line. Right: 15 crafts that worked, 4 that failed, no gather attempt; the recipe line ("Wind Serum (Novice Lv. 10)") is a
+  witness of crafting, crafting lasts through a pass or two without the panel, and the list is set aside while it crafts.
+  `text-2026-10-25-craft-title-as-recipe`: the garbled title "qaf€ihgfiwprcgté$s 1 m/:ål" above the recipe line was taken
+  for the recipe; the line with the mastery level is the recipe.
+- `text-2026-10-25-vakron-bound-x9`: a Vakron burst read that didn't line up, "Acquired Amplify Stone Fragment (Unique)"
+  with its "(Bound) x9." on the next line, then the reward table as reads.log voted it (x9). 0.8.39 counted the first half
+  as one, "1 assumed", and the table's witness took that 1 for the chat's own count and set the x9 not read. A wrapped tail
+  is joined in a burst and in the settle too (`ChatParser.JoinWrappedTails`), and a count no read showed is no witness
+  (`TableWitness.Line.Assumed`). Right: Amplify Stone Fragment (Unique) 9, 5 slots not read.
+- `table-2026-10-25-vakron-1353`: the 13:53 table's kept frame with the two rows of world under the grid left in (names
+  blurred). 0.8.39 read 44 slots for 29: nameplates and health bars below stood out like slots, so the short last row read
+  as full. The grid now ends at a row short by three boxes or more (`RewardGrid.ReadAsync`).
+- `event-2026-10-25-defend-shugo-digit`: two reads of one Defend Shugo Merchants screen, the first with card 2's Abyss Points
+  edited from 320 to 340 (the case says how). 0.8.39 took the first read's x340; reads that disagree on a count with no
+  majority now leave the slot not read (`EventCards.Merger.Voted`). Run key `run_abyss_points`: 920.
+- `text-2026-10-25-accursed-orb-icon` (2026-10-25 13:43, the icon against the text): one loot list row read "Accursed or"
+  and "Accursed on", the icon beside it nearest Accursed Bow's at 64 to 69 (sure is 70) and Accursed Orb's at 88 to 97.
+  0.8.39 renamed it Accursed Bow on every read. The text is one letter from Accursed Orb and two edits from the Bow, so the
+  text wins (`PopupIcons.Settle`). A `list` read may carry `r` (the text as read before the icon looked) and `i` (the
+  icon's scores, `id:distance,…`; "" for rows it had no verdict on), as trace.log writes them since then; the bank settles
+  those rows again with this version's rules. Expect key `list_rows`: the loot list's item rows shown to the cross-check,
+  by the name each one ended on (only the names expect lists are checked; 0 means never shown).
+- `text-2026-10-25-daeva-coin-thousands` and `text-2026-10-25-potion-x3-x10` (2026-10-25 13:48, a Daeva Pass Level
+  Reward): "Acquired Daeva Pass Shop Coin x2,OOO." is 2,000 coins (0.8.39 kept "x2,OOO" in the name and left it not in
+  the item list); "Acquired Superior Life Potion (Bound) x3." and "... x10." are two lines in the same read, two pickups,
+  13 (the reward table's slot read x13), and the x3 line read again cut or garbled at its place adds nothing. The reads
+  are in an expedition's area, so the chat's items are set aside with the run (its reward picture decides): expect key
+  `run_chat_items`, the chat items runs set aside, by name (only the names expect lists are checked). A case may say
+  `"dump": true` to add its reads.log to a failed result, for reading on the build server what it did.
+- `text-2026-10-25-chat-panel-settle-1638` (484 "couldn't line this read up" lines that day, the settle open up to 42 s):
+  a pet window over the chat read as "MAX | 3 | MAX | 3" three times, a nameplate scrap, a read cut at its left, then 157
+  Kina. 0.8.39 took the window for the chat (the last read, then the anchor once read twice the same), so the next real
+  read lined up with nothing, and the settle took 157 Kina from the vote 3.6 s after the reads lined up again, dated 13 s
+  back. Right: the window is not a read of the chat (`LineTracker.Panel`; only a read holding a pickup or a player's line
+  is an anchor), the settle takes only lines on screen by the last unaligned read and closes 6 s of chat after it, and
+  528 and 157 Kina count once each. Keys `chat_unaligned` (reads that couldn't be lined up) and `chat_settled_late`
+  (lines the settle counted that came after them); the same rules on small reads in `Session/ChatAlignTests.cs`.
+- The Kinah counter's own path (2026-10-26; on 2026-10-25 it agreed 0x in 858 of 905 audit minutes). A `strip` frame
+  (`strip-*`) is a picture of the currency strip, the fixed 1296x97 crop at the window's top-left: it is read as the
+  watcher reads it, then again through the crop its anchor gives after three reads (`Anchors.ObserveBalance`), and the
+  anchored read is handed back to the anchor. Keys `strip` and `strip_anchored`: each picture's numbers left to right,
+  pictures joined by " | " (" (dropped)" when the anchored read dropped the anchor); `strip_words` shows what the
+  recognizer saw. `strip-2026-10-24-131029`: three pictures from the 131029 footage, scaled 4/3 to the window's size;
+  0.8.39 read `0 7811 118254`, `0 7811 11`, `0 7811` (the two Kinah figures never, an icon as 0) and its anchored crop
+  cut the first Kinah figure to `29`, the 124 px anchor and the 115 px flap reads.log shows all day. Read one number at
+  a time with the icons taken out (`BalanceReader.ReadStripAsync`), the anchored crop gives all twelve numbers and the
+  fixed crop all but one Kinah figure (not read, never wrong).
+  A `strip` read in a trace (`{"t", "k": "strip", "l": ["7811@235", "29285750@383", ...]}`, "value@left" per number)
+  goes through a `BalanceTracker` with the Kina the chat has read and on to the session's `CheckBalance`, as
+  `GameWatcher.TickBalanceAsync` does; keys `counter_found` (0 or 1) and `counter_agreed` (BalanceCheck.Agreed).
+  `text-2026-10-25-kinah-counter-lag`: 15:22 to 15:26 local, 49 Kina lines; the strip reads are rebuilt from the
+  chat (reads.log keeps none): each counted Kina line raises both Kinah figures 0.3 s before the first chat read that
+  shows it. Two consecutive reads never differed by exactly the Kina counted between them (0.8.39: not found, 8,443);
+  windows between steady readings find it, the check agrees 3 times, 8,443 (a first try counted 12,519: the counter
+  went unread through a fight and the lines' 4,076 was counted again from it, `KinaWitness.Observe`). A case may name
+  `print_log`, a pattern: the lines of its reads.log that match are printed, for reading a case on the build server.

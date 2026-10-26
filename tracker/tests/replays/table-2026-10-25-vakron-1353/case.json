@@ -1,0 +1,16 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Vakron Sky Island reward table, 2026-10-25 13:53:41 (the frame 0.8.39 kept as -reward-table, its first read): 29 slots (8, 8, 8, 5). 0.8.39 read this frame as 44 slots: something in the open world two rows under the grid (nameplates, health bars, the Odyle cube) stood out like a slot's outline, so the grid ran on past its short last row, the last row read as full and 15 boxes of grass and nameplates were filed as slots, 11 of them not read, and the vote kept the 44 over the second read's 29. The grid now ends at a short row: three boxes or more missing at a row's end is the table's last row, whatever stands out below it",
+  "source": "%LocalAppData%/KinahLedger/reward-shots/20261025-135341-Vakron-Sky-Island-reward-table.jpg (5120x2160): everything but the title, the grid and the two rows of world under it blacked out; the players' names and titles in those rows blurred to 8 px blocks (their health bars left as they were)",
+  "game": { "w": 5120, "h": 2160 },
+  "frames": [ { "f": "table.jpg", "k": "table", "t": "2026-10-25T17:53:41Z", "x": 0, "y": 0 } ],
+  "expect": {
+    "table": [
+      { "n": 3, "name": "Amplify Stone Fragment" }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
+      { "n": 1 }, { "n": 1 }, { "n": 4000, "name": "Enhance Stone" }, { "n": 600000, "name": "Kina" }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
+      { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
+      { "n": 1 }, { "n": 6, "unlisted": true }, { "n": 5, "name": "Refining Stone" }, { "n": 6, "name": "Soul Codex" }, { "n": 14, "name": "Silentium" }
+    ]
+  }
+}

@@ -45,7 +45,7 @@ that time under "Unknown zone", so the site's spot tables hold only zones the tr
 **Screen reading.** The game prints every pickup in chat ("Acquired 2,790 Kina.",
 "Acquired Drakan hide ×2."). The tracker reads those lines off the screen with the text recognition
 built into Windows, counts what's new whenever the game is open, and times farming runs on top of that
-count with Kinah and loot per hour in a small always-on-top panel. Setup is picking your server once.
+count with Kinah and loot per hour in the panel, a small always-on-top strip over the game. Setup is picking your server once.
 
 1. Play in borderless or windowed mode with the chat open at the bottom-left. A chat tab showing only System Notifications reads best; the normal tab works too, and so does the frameless chat with no input box.
 2. Double-click `KinahLedger.exe`. On first run pick your region, faction and server, and a look (Night, Abyss or Daylight); everything shared is filed per server. From then on the tracker finds the game window, the chat (above the "Enter your message" box, or from its own lines) and the zone on the minimap by itself, and **counts everything the chat shows while the game is open**: drops, gathers, Soul Crystals, and Market prices whenever the Market is open. That count is shared anonymously in 15-minute chunks and never kept here.
@@ -53,9 +53,17 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
 
    **Zones.** The tables start over when you change zone, so they show the zone you are in. Tick **All zones** under the activity picker to keep them counting across zones. Either way, what goes to the site is split by zone: each zone sends its own time, Kinah, kills and items, so one zone's drops are never filed under another.
 
+   **Compact and Full view.** The button beside Options switches between one column and Full view, every table beside
+   the run card. On a screen narrower than Full view (a 1080p screen at 150% scaling, say) both columns are drawn smaller
+   to fit, down to 75%; on a narrower one still the window shows Compact and says so.
+
+   **Undo.** Clear the tables (the … menu), Clear on Events, Start over on Crafting, Remove on a run and Stop run in the
+   window happen at once, with an Undo bar at the bottom of the window for eight seconds (Ctrl+Z works too). They become
+   final when the bar goes: only then is what was counted shared and started over, a run removed or a stopped run saved.
+
    **Quest rewards** are left out of every farming number. Kinah marked (Bound), the Kinah after a "total payment … completed" line, a Kinah line that names a quest or reward, and any single Kinah line far above what the mobs pay (more than 25 times the median of your last pickups) are counted as skipped rewards, shown in the summary line, never as income or kills.
 
-   **Kinah by enemy (a best guess).** The tracker reads the target bar at the top-centre of the game every 2 seconds. Kinah, drops and Soul Crystals that land within 8 seconds of it naming an enemy are credited to that enemy, in the zone you fought it in. With several enemies on you the bar shows only one of them, so these figures are a guess, and the window and the site say so. Only enemy names on the tracker's enemy list (`data/mobs.txt`) count. If the panel over the game sits on the target bar, the window asks you to drag it aside.
+   **Kinah by enemy (a best guess).** The tracker reads the target bar at the top-centre of the game every 2 seconds. Kinah, drops and Soul Crystals that land within 8 seconds of it naming an enemy are credited to that enemy, in the zone you fought it in. With several enemies on you the bar shows only one of them, so these figures are a guess, and the window and the site say so. Only enemy names on the tracker's enemy list (`data/mobs.txt`) count. If the panel sits on the target bar, the window asks you to drag it aside.
 
    **Reading names right.** A name read with a letter or two wrong is settled by more than its letters. The tracker learns
    the colour each item grade is printed in from names it reads exactly (kept in `grade-colours.json` beside the logs), so a
@@ -69,7 +77,8 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
    of them changed what was counted.
 
    **Report a miscount.** The tracker keeps the last minute of what it read (chat and loot list, as text) and what it
-   counted. **Report a miscount** at the bottom of the window, or **Looks wrong?** on a drop, saves that minute to a folder
+   counted. **Report a miscount** at the bottom of the window, **Report** on a drop (hover its row: "Looks wrong? Report"), or a
+   wrong line in the feed (click it) saves that minute to a folder
    under `reports` beside the logs, with the tracker's state and the end of `reads.log`, and opens it for attaching to a bug
    report. Pictures of the chat and the loot list are kept too only when you say yes (asked the first time, and in
    Options › Sharing), since they can show other players' names and messages. Nothing is sent anywhere.
@@ -87,8 +96,28 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
      install ID, and the data folder.
    - **Game reading**: **Detect now**, **Choose the chat**, **Test read**, the Market area, and a live preview of what
      is read. These act right away.
-   - **In game**: the start/stop shortcut (Ctrl+Shift+K by default; any Ctrl/Alt/Shift combination, or off) and the
-     panel over the game.
+   - **In game**: the start/stop shortcut (Ctrl+Shift+K by default, or off; a letter or number needs Shift with Ctrl or
+     Alt, and keys Windows or typing needs, such as Ctrl+C, Alt+Tab or Win combinations, are refused; a shortcut another
+     app holds is said in the status line, in a tray notice and on the panel) and the panel, the small strip over the
+     game that shows whenever the chat is being read, run or no run. The panel shows only while the game (or the tracker's own
+     window) is in front, fades out on alt-tab and comes back with the game, hides when the game is minimized or
+     closed, and dims while reading is paused because something covers the chat. It needs borderless or windowed
+     mode; Windows can't draw over exclusive fullscreen. **Lock the panel in place** (on for new installs) lets clicks
+     go through it to the game and keeps it from ever taking focus; **Move the panel** in the tray menu unlocks it for
+     20 seconds, or turn the lock off to drag it with a dashed outline. Its opacity (the background only, so the
+     figures stay readable) and size (70 to 200%) apply as you slide them and are kept on Save. It starts at the top
+     centre of the game's screen, and a remembered spot is kept on a screen that is still there. The dot beside the
+     timer is red only during a run, when the timer reads "RUN 12:31"; the shortcut flashes "Run started" or "Run
+     stopped · 1.2M this run" for three seconds. For the first two minutes (and three things counted) the hour's
+     figure says it is warming up rather than showing a wild number. An update never asks while the game is in
+     front: the panel says it is ready and the question waits until you leave the game. **Panel look** picks how it
+     looks, and Options draws all three at their real size with sample figures: the **Strip** (one line with the
+     figures you pick, as before, and still the default), the **Card** (a game-tooltip card: the run, the zone, the hour
+     in gold, the session, and your last three pickups as item tiles, the newest lit for a few seconds) or the
+     **Ticker** (a small pill with the run, the hour and the session, and each pickup sliding in under it as a toast that
+     fades after 6 seconds, four at most). The Card and the Ticker say why reading is paused in an orange line instead of
+     dimming, and a rare drop lights them in its grade's colour for five seconds. The Ticker starts left of the target
+     bar, so its toasts never cover the target's name, and keeps a spot of its own.
    - **Updates** and **About**.
 
    Only one Kinah Ledger runs at a time: starting it again brings up the running one's window.

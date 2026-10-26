@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Chat alignment, 2026-10-25 16:38:10 to 16:38:36 local (\"couldn't line this read up\" 484 times that day, the settle taking up to 42 s): a pet panel over the chat read as \"MAX | 3 | MAX | 3\" at 16:38:18.7 and held for two more reads, a nameplate scrap (\"mandu\") at 16:38:22.7, a read cut at its left at 16:38:27.3 (the zone changing to Pilgrim's Ridge a second later), then 157 Kina at 16:38:30.9. 0.8.39 took the panel for the chat: it became the last read and, read again the same, the anchor, so the next real read at 16:38:23.2 lined up with nothing (3 reads unaligned), and the settle opened at 16:38:18.7 stayed open and took 157 Kina from the vote at 16:38:31.5, dated 13 s back, before the zone change. Right: the panel is not a read of the chat (only the cut read is unaligned), the settle takes only lines that were on screen by the last read that didn't line up (157 Kina came 3.6 s after it), and every pickup counts once: 528 and 157 Kina",
+  "source": "Steven's reads.log 2026-10-25 16:38:10 to 16:38:36 local (tracker 0.8.39): the reads the log prints in full (the \"before:\" and \"now:\" lines of the three unaligned reads) and the chat lines it counted or passed, as reads of about ten lines. The game's lines as read (\"Acquired 528 Kinaes€\" in the cut read); every player's line and its wrapped words replaced by a filler (\"[Player] chat line kilo eleven\"), a letter changed where the read garbled it lightly and scrambled where it garbled it beyond recognition, so the reads line up, or don't, as the real ones did",
+  "expect": {
+    "items": {},
+    "kinah": 685,
+    "chat_unaligned": 1,
+    "chat_settled_late": 0
+  }
+}

@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// Direction C, "Live" (Steven, 2026-10-24, mock-next-C.html, with mock-next-B.html's icon tiles and chips): every tab opens
 /// on the last five things counted for it, newest first, beside the rate and a small line of the rate since the start, and
-/// "Reading the chat · N reads", the one place the read count shows. A line that looks wrong is tapped and filed as a
+/// "Reading the chat" with a green tick (the read count on hover). A line that looks wrong is clicked and filed as a
 /// miscount report with that line marked (line.json), a labelled case for the replay bank. Under the live card the sections
 /// fold: Session, Drops from kills (open), Also this session (chips that open a small table in place), Where to farm now.
 /// </summary>
@@ -27,12 +27,12 @@ public partial class MainWindow
     /// <summary>Sections the player opened or folded, by name; the rest follow the view (Session and Where to farm open in Full view only).</summary>
     readonly Dictionary<string, bool> _secUser = new();
 
-    bool SecOpen(string key) => _secUser.TryGetValue(key, out var v) ? v : key is "Session" or "Where" ? _prefs.FullView : true;
+    bool SecOpen(string key) => _secUser.TryGetValue(key, out var v) ? v : key is "Session" or "Where" ? FullShown : true;
 
     void ToggleSec(string key)
     {
         _secUser[key] = !SecOpen(key);
-        if (key is "CraftSession" or "Best") { if (!_demo) FillCraft(_watcher.Chat?.CraftView); else ApplySections(); return; }
+        if (key is "CraftSession" or "Best") { if (!_demo) FillCraft(CraftShown); else ApplySections(); return; }
         Redraw();
     }
 
@@ -144,7 +144,7 @@ public partial class MainWindow
         Grid.SetColumn(v, 3); g.Children.Add(v);
         var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
         b.SetResourceReference(Border.BorderBrushProperty, "Line");
-        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Tap if it's wrong." : "Tap if it's wrong.";
+        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Click if it's wrong." : "Click if it's wrong.";
         ToolTipService.SetInitialShowDelay(b, 400);
         if (newest)
         {
@@ -310,13 +310,20 @@ public partial class MainWindow
         HeadRateLbl.Text = total <= 0 ? "Kinah and loot an hour, once something is counted"
             : priced > 0 || loot > 0 ? (_mode == Mode.Gather && kinah == 0 ? "an hour, loot after tax" : "an hour, Kinah and loot after tax")
             : "an hour, Kinah; loot not priced yet";
-        // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line)
-        if (!_demo)
+        // warming up (FillNumbers): the figure dimmed, and said so, until the count is old enough for an hour to mean something
+        bool warm = _rateWarming && total > 0;
+        HeadRate.Opacity = warm ? 0.4 : 1;
+        if (warm) HeadRateLbl.Text += " · warming up";
+        HeadRate.ToolTip = warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted." : null;
+        // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
+        // none while warming up, so the line doesn't open on a spike
+        // a clear that can still be undone draws no line and keeps the real one's samples for Undo
+        if (!_demo && !ReferenceEquals(e, _clearedView))
         {
             if (!ReferenceEquals(_rateOf, e)) { _rateOf = e; _rateLine.Clear(); }
-            if (total > 0) _rateLine.Add(DateTime.UtcNow, total / h);
+            if (total > 0 && !_rateWarming) _rateLine.Add(DateTime.UtcNow, total / h);
         }
-        DrawRateLine(_rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now");
+        DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine,_demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now");
         KvLine.Inlines.Clear();
         void Fig(string text) { var r = new Run(text); r.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); r.SetResourceReference(TextElement.ForegroundProperty, "Ink"); KvLine.Inlines.Add(r); }
         if (_mode == Mode.Gather) { Fig($"{nodes:N0}"); KvLine.Inlines.Add(new Run(" attempts · ")); Fig(itemsPerTry > 0 ? itemsPerTry.ToString("0.0") : "0"); KvLine.Inlines.Add(new Run(" a try")); }
@@ -347,23 +354,31 @@ public partial class MainWindow
         RateFrom.Text = from; RateTo.Text = to;
     }
 
-    /// <summary>"Reading the chat · 3,620 reads", the one place the read count belongs; paused or a read problem says so instead.</summary>
+    /// <summary>
+    /// "Reading the chat" with a steady green tick while all is well; paused or a read problem says so instead, with a
+    /// warning mark. How many reads, the Market and the Kinah counter are on hover (2026-10-25 audit: "Reading the chat ·
+    /// 3,620 reads" read like a parse log, and the count ticking up twice a second drew the eye for nothing).
+    /// </summary>
     void FillHealth(TextBlock text, Path? mark)
     {
         var c = _watcher.Chat;
         string t; bool ok = true;
-        if (_demo) t = "Reading the chat · 3,620 reads";
+        if (_demo) t = "Reading the chat";
         else if (c == null) { t = _watcher.GameRect == null ? "Waiting for the game" : "Looking for the chat"; ok = false; }
         else if (c.LastError.Length > 0) { t = "Read problem: " + c.LastError; ok = false; }
         else if (c.Paused.Length > 0) { t = "Paused: the chat is out of view"; ok = false; }
         else if (!c.ChatFound) { t = "Reading the game · the chat not seen yet"; ok = false; }
-        else t = $"Reading the chat · {c.Reads:N0} reads";
-        text.Text = t;
-        text.ToolTip = _demo || c == null ? null : $"{MarketShort()}.\n{BalanceShort()}." + (_watcher.Flushed > 0 ? $"\n{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "");
+        else t = "Reading the chat";
+        if (text.Text != t) text.Text = t;
+        var reads = _demo ? "3,620 reads so far." : c != null && c.ChatFound ? $"{c.Reads:N0} reads so far." : "";
+        text.ToolTip = _demo ? reads : c == null ? null : string.Join("\n", new[] { reads, $"{MarketShort()}.", $"{BalanceShort()}.",
+            _watcher.Flushed > 0 ? $"{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "" }.Where(x => x.Length > 0));
+        // the hover covers the whole line, the tick too
+        if (text.Parent is Panel line) { line.ToolTip = text.ToolTip; line.Background ??= Brushes.Transparent; }
         if (mark != null)
         {
             mark.Data = Geometry.Parse(ok ? "M3.5,8.5 L6.5,11.5 L12.5,4.5" : "M8,3 V9.5 M8,12.5 V13");
-            mark.SetResourceReference(Shape.StrokeProperty, ok ? "Gold" : "Warn");
+            mark.SetResourceReference(Shape.StrokeProperty, ok ? "Good" : "Warn");
         }
     }
 
@@ -553,10 +568,10 @@ public partial class MainWindow
     /// <summary>A rate as a whole number ("58", "10"; under one, "under 1").</summary>
     static string Whole(double v) => v <= 0 ? "0" : v < 0.5 ? "under 1" : Math.Round(v).ToString("N0");
 
-    /* ---------------- tap a line: the miscount report ---------------- */
+    /* ---------------- click a line: the miscount report ---------------- */
 
     /// <summary>
-    /// A tapped feed line (or the hint, for a pickup that never showed): the line as it was, three choices (Wrong item, Wrong
+    /// A clicked feed line (or the hint, for a pickup that never showed): the line as it was, three choices (Wrong item, Wrong
     /// amount, Didn't happen) and "Missing a pickup" at the bottom, filed through the miscount report with the line marked.
     /// </summary>
     void ShowLineReport(FeedLine? line, FeedTab tab, FrameworkElement at)
@@ -611,7 +626,8 @@ public partial class MainWindow
             + (sends ? "Pictures of the loot list and crafting panel go to the site too (Options › Sharing)." : ReportBuffer.KeepFrames ? "Nothing is sent." : "Pictures aren't kept (Options › Sharing), so it holds the text read."));
         how2.Margin = new Thickness(20, 4, 20, 0); body.Children.Add(how2);
         var acts = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 12, 20, 0) };
-        var save = new Button { Content = "Save report", Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
+        // one name for it everywhere: Report on the action, Looks wrong? as the hint, Fine to leave the line as it is
+        var save = new Button { Content = "Report", Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
         save.SetResourceReference(StyleProperty, "PrimaryButton");
         save.Click += (_, _) =>
         {
@@ -619,7 +635,7 @@ public partial class MainWindow
             FileLineReport(new MiscountLine(chosen, chosen == "missing" ? null : line), missing?.Text.Trim() ?? "");
         };
         acts.Children.Add(save);
-        var cancel = new Button { Content = "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = line != null && label != "missing" ? "Fine" : "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
         cancel.Click += (_, _) => { if (_card != null) _card.IsOpen = false; };
         acts.Children.Add(cancel);
         body.Children.Add(acts);
@@ -674,12 +690,16 @@ public partial class MainWindow
     {
         var newest = new[] { FeedTab.Farming, FeedTab.Crafting, FeedTab.Events }.Select(t => FeedFor(t).FirstOrDefault()).Where(l => l != null).OrderByDescending(l => l!.At).FirstOrDefault();
         foreach (var (k, v) in HudFeedValues(newest, _hudFlag)) _hudValues[k] = v;
+        HudLookValues();   // the Card's and the Ticker's pickups, zone, pause and rare drop (MainWindow.HudLooks.cs)
     }
 
     Dictionary<string, string> HudFeedValues(FeedLine? l, string flag)
     {
         var d = new Dictionary<string, string> { ["flag"] = flag, ["feedText"] = "", ["feedValue"] = "", ["feedRate"] = "", ["feedUnit"] = "" };
-        if (l == null) { d["feedRate"] = _hudValues.GetValueOrDefault("rate", ""); d["feedUnit"] = "an hour"; return d; }
+        // the farming hour beside the line: "warming up" alone while the count is young (FillNumbers), else "1.27M an hour"
+        var hour = _hudValues.GetValueOrDefault("rate", "");
+        var hourUnit = hour == WarmingUp ? "" : "an hour";
+        if (l == null) { d["feedRate"] = hour; d["feedUnit"] = hourUnit; return d; }
         var (bold, plain, small) = FeedWords(l);
         d["feedText"] = l.Kind == "craft" ? $"{bold}{plain} {small}" : l.Kind == "kinah" ? bold : $"{bold}{(l.Amount > 1 ? plain : "")}";
         d["feedValue"] = (l.Tab == FeedTab.Crafting ? CraftValue(l) : PickupValue(l)).Text;
@@ -687,7 +707,7 @@ public partial class MainWindow
         {
             FeedTab.Crafting => (_craftNet, "today"),
             FeedTab.Events => (_eventsRate, "an hour"),
-            _ => (_hudValues.GetValueOrDefault("rate", ""), "an hour"),
+            _ => (hour, hourUnit),
         };
         return d;
     }

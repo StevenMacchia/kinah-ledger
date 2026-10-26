@@ -130,7 +130,7 @@ public partial class MainWindow
     {
         var name = _items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name;
         bool open = _bestOpen.Contains(name);
-        var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = open ? null : "Tap for the skill, where the price is from and its readings." };
+        var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = open ? null : "Click for the skill, where the price is from and its readings." };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });

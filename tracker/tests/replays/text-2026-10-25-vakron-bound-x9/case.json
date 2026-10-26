@@ -1,0 +1,15 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Vakron Sky Island, 2026-10-25 20:02:49 to 20:07:43 local: the reward table at 20:06:55 shows Amplify Stone Fragment (Unique) x9, and the chat printed it wrapped on two lines, \"Acquired Amplify Stone Fragment (Unique)\" then \"(Bound) x9.\", in a burst read that didn't line up. 0.8.39 parsed the burst one line at a time, so the tail was never joined: the first half counted as one with its count unsure (\"quantity unsure, 1 assumed\" at 20:07:06), and at 20:07:03 the table's witness took that assumed 1 for the chat's own line and set the slot's x9 not read. Right: the run holds Amplify Stone Fragment (Unique) x9 from the picture; a count the chat never showed is not read and can't contradict the picture, and a wrapped \"(Bound) x9.\" tail is joined to its line in a burst too",
+  "source": "Steven's trace.log 2026-10-26 00:02:49 to 00:07:43 UTC (20:02:49 to 20:07:43 local, tracker 0.8.39): chat kept only for the game's own lines, every player's line and its wrapped words replaced by a filler keyed by its text's hash, players' names in the room and party lines replaced by stand-ins; zone reads as recorded; loot list reads left out (other players' names). The reward table as reads.log voted it at 20:06:55.6 (\"voted slot by slot\", grade|count as read|closest icon|distance)",
+  "expect": {
+    "runs_kept": 1,
+    "runs_from_picture": 1,
+    "run_not_read": 5,
+    "run_items": {
+      "Amplify Stone Fragment (Unique)": 9
+    }
+  }
+}

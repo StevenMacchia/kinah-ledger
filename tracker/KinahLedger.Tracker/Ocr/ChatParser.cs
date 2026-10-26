@@ -247,6 +247,49 @@ public sealed partial class ChatParser
         return res;
     }
 
+    /// <summary>
+    /// The same tail rule for lines that are parsed one at a time (a burst read that didn't line up, the lines counted once
+    /// the chat settled): "Acquired Amplify Stone Fragment (Unique)" then "(Bound) x9." in the read is one line, x9
+    /// (2026-10-25 20:06:51: the burst's first half counted as one, "quantity unsure, 1 assumed", and the table's witness took
+    /// that 1 for the chat's own count and set the slot's x9 not read). Two lines are joined only when they stand one under
+    /// the other in <paramref name="read"/> (the read they came from), the first an item line without "(Bound)" and the
+    /// second a tail alone, and the joined line parses to one item. The tail may be missing from <paramref name="lines"/>
+    /// (the settle takes only lines with a verb): it is the read's line under the item line. Each result keeps the lines it
+    /// was made of.
+    /// </summary>
+    public List<(string Text, IReadOnlyList<string> Parts)> JoinWrappedTails(IReadOnlyList<string> lines, IReadOnlyList<string> read, DateTime time)
+    {
+        var res = new List<(string, IReadOnlyList<string>)>();
+        for (int i = 0; i < lines.Count; i++)
+        {
+            if (TailUnder(read, lines[i]) is { } tail && !Regex.IsMatch(lines[i], @"\(\s*b[o0]und\s*\)", RegexOptions.IgnoreCase))
+            {
+                var first = Parse(lines[i], time).ToList();
+                if (first.Count == 1 && first[0] is ItemAcquired or RewardReceived)
+                {
+                    var joined = lines[i].Trim() + " " + tail.Trim();
+                    var j = Parse(joined, time).ToList();
+                    if (j.Count == 1 && j[0] is ItemAcquired or RewardReceived)
+                    {
+                        res.Add((joined, new[] { lines[i], tail }));
+                        if (i + 1 < lines.Count && lines[i + 1].Trim() == tail.Trim()) i++;
+                        continue;
+                    }
+                }
+            }
+            res.Add((lines[i], new[] { lines[i] }));
+        }
+        return res;
+    }
+
+    /// <summary>The wrapped tail ("(Bound) x9.") right under <paramref name="a"/> in the read, or null.</summary>
+    static string? TailUnder(IReadOnlyList<string> read, string a)
+    {
+        for (int k = 0; k + 1 < read.Count; k++)
+            if (read[k].Trim() == a.Trim() && WrappedTail.IsMatch(read[k + 1])) return read[k + 1];
+        return null;
+    }
+
     /// <summary>The text returned in place of the first half of a line joined to the one after it.</summary>
     public const string JoinedMark = "(wrapped: joined to the next line)";
     /// <summary>The end of a wrapped item line on its own: "(Bound) x2.", "(Bound).", "x12.".</summary>
@@ -277,15 +320,20 @@ public sealed partial class ChatParser
 
     // ---- quantities (2026-10-24, 13:07: "Acquired Odyle x7." read as "Acquired Odyle" and filed as one) ----
 
-    /// <summary>A count at the end of a name: "x", "×", "X" or "*", then up to four digits or letters the recognizer reads for digits.</summary>
-    static readonly Regex CountTailRx = new(@"^(?<head>.*?[^\s×xX\*])(?<gap>\s*)[×xX\*](?<sp>\s*)(?<n>[0-9OoIl|SsbTt]{1,4})\s*[.,:;!]?\s*$", RegexOptions.Compiled);
+    /// <summary>
+    /// A count at the end of a name: "x", "×", "X" or "*", then up to four digits or letters the recognizer reads for digits,
+    /// or a big count with its thousands marks ("x2,000", read "x2,OOO": 2026-10-25 13:48, a Daeva Pass Shop Coin line that
+    /// came in as "not in the item list" with the count in its name, 15 times that day).
+    /// </summary>
+    static readonly Regex CountTailRx = new(@"^(?<head>.*?[^\s×xX\*])(?<gap>\s*)[×xX\*](?<sp>\s*)(?<n>[0-9OoIl|SsbTt]{1,3}(?:[,.][0-9OoIl|]{3})+|[0-9OoIl|SsbTt]{1,4})\s*[.,:;!]?\s*$", RegexOptions.Compiled);
 
     /// <summary>
     /// The count at the end of a chat line's name, read through the recognizer's usual digit slips (O and o for 0; l, I and
     /// | for 1; S and s for 5; b for 6; T and t for 7): "Refining StonevxT" is Refining Stonev x7, "Odyle xb" x6,
-    /// "Kinæx382" Kinæ x382. A count of letters only must follow the x straight away and be one or two long, so a word
-    /// after a space ("Treasure Box II") is never a count. Null when the text ends in no count. The caller keeps the whole
-    /// name when it is an item's own name.
+    /// "Kinæx382" Kinæ x382, "Daeva Pass Shop Coin x2,OOO" Daeva Pass Shop Coin x2000 (thousands marks drop out). A count
+    /// of letters only must follow the x straight away and be one or two long, so a word after a space ("Treasure Box II")
+    /// is never a count; one with thousands marks must start with a digit. Null when the text ends in no count. The caller
+    /// keeps the whole name when it is an item's own name.
     /// </summary>
     public static (string Head, int Count)? QuantityTail(string text)
     {
@@ -293,9 +341,11 @@ public sealed partial class ChatParser
         if (!m.Success) return null;
         var tok = m.Groups["n"].Value;
         if (!tok.Any(char.IsDigit) && (tok.Length > 2 || m.Groups["sp"].Length > 0 || (m.Groups["gap"].Length > 0 && tok.All(c => c is 'I' or 'l' or '|')))) return null;
+        if (tok.IndexOfAny(new[] { ',', '.' }) >= 0 && !char.IsDigit(tok[0])) return null;
         var sb = new StringBuilder();
         foreach (var c in tok)
-            sb.Append(c switch { 'O' or 'o' => '0', 'I' or 'l' or '|' => '1', 'S' or 's' => '5', 'b' => '6', 'T' or 't' => '7', _ => c });
+            if (c is not (',' or '.'))
+                sb.Append(c switch { 'O' or 'o' => '0', 'I' or 'l' or '|' => '1', 'S' or 's' => '5', 'b' => '6', 'T' or 't' => '7', _ => c });
         if (!int.TryParse(sb.ToString(), out var n) || n < 1) return null;
         var head = m.Groups["head"].Value.TrimEnd();
         return head.Length >= 2 ? (head, n) : null;
@@ -788,8 +838,8 @@ public sealed partial class ChatParser
                 }
                 if (m.Id is long cid && Data.NameMatch.IsContext(m.Source) && (GradeFilter(accent)?.Invoke(cid) ?? true))
                 {
-                    Session.Accuracy.Name(name, cid, "snapped", m.Source);
-                    Session.Accuracy.Add("snapped");
+                    // once per line, not per parse: the same line comes in again on later passes
+                    Session.Accuracy.Snapped(name, cid, m.Source);
                     if (m.FullId is long fid && fid != cid)
                     {
                         ContextPicks++;
@@ -919,17 +969,40 @@ public sealed class LineTracker
     /// <summary>After a stretch the chat couldn't be seen, the next read is history again, like the first one: lines that arrived unseen aren't counted.</summary>
     public void Rebase() { _prev = new(); _anchor = new(); _since.Clear(); _faded = false; }
 
-    void Anchor(List<string> keys) { if (keys.Count >= 3) { _anchor = keys; _since.Clear(); } }
+    // only a read that holds a line the chat prints (a pickup, a player's line) can be the anchor: a game window over the
+    // chat read twice the same ("Can craft | Orichalcum Mace", "MAX | 3 | MAX | 3") became it, and the next real read lined
+    // up with nothing (2026-10-25: 484 reads unaligned)
+    List<string> _cur = new();
+    bool Anchor(List<string> keys)
+    {
+        if (keys.Count < 3 || !_cur.Any(l => l.TrimStart().StartsWith('[') || LootKey(Key(l)))) return false;
+        _anchor = keys; _since.Clear();
+        return true;
+    }
+
+    /// <summary>Reads that were a game window over the chat, not the chat (<see cref="Panel"/>): skipped, never the baseline.</summary>
+    public int Panels { get; private set; }
+    /// <summary>True when the last read was such a panel (the session doesn't keep it as the last read either).</summary>
+    public bool LastPanel { get; private set; }
+
+    /// <summary>
+    /// A game window over the chat: three lines or more, none the chat would print, numbers among them ("MAX | 3 | MAX | 3",
+    /// a storage window's "16 | 21 | 89 | 70 | 105 | 10", "U Lv. 15 | U Lv. 20 | Lv. 25"; 69 reads on 2026-10-25, and 35 more
+    /// that couldn't line up after one).
+    /// </summary>
+    static bool Panel(List<string> cur) => cur.Count >= 3 && !cur.Any(ChatLike) && cur.Any(l => Key(l).Any(char.IsDigit));
 
     List<string> Returned(List<string> keys, List<string> fresh)
     {
-        if (keys.Count >= 3) Anchor(keys); else _since.AddRange(fresh.Select(Key));
+        if (!Anchor(keys)) _since.AddRange(fresh.Select(Key));
         return fresh;
     }
 
     public List<string> NewLines(List<string> cur)
     {
-        LastAfterFade = false; LastFromAnchor = false;
+        LastAfterFade = false; LastFromAnchor = false; LastPanel = false;
+        _cur = cur;
+        if (Panel(cur)) { Panels++; LastPanel = true; return new List<string>(); }
         // the frameless chat fades out when idle; when a loot line brings it back, the read before it is this empty one.
         // A read of a line or two with nothing chat-like in it (a stray "99" from the world behind the chat) counts as
         // empty too: as the new baseline it left the next real read nothing to line up with, and that read's lines were lost.

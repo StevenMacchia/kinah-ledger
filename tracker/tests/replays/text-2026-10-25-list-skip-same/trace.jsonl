@@ -1,0 +1,43 @@
+{"t":"2026-10-25T10:00:00.000Z","k":"zone","l":["Altamia Canyon"]}
+{"t":"2026-10-25T10:00:00.000Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:00.050Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:00.400Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:00.450Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:00.800Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:00.850Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:01.200Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:01.250Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:01.600Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:01.650Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:01.700Z","k":"gather","l":["ok"]}
+{"t":"2026-10-25T10:00:02.000Z","k":"list","l":["Orichalcum Ore x1"],"y":[400],"c":[0.3],"p":"ore-fading-in"}
+{"t":"2026-10-25T10:00:02.050Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:02.400Z","k":"list","l":["Orichalcum Ore x1"],"y":[400],"c":[0.85],"p":"ore"}
+{"t":"2026-10-25T10:00:02.450Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:02.800Z","k":"list","l":["Orichalcum Ore x1"],"y":[400],"c":[0.85],"p":"ore"}
+{"t":"2026-10-25T10:00:02.850Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:02.900Z","k":"gather","l":["upgrade ok"]}
+{"t":"2026-10-25T10:00:03.200Z","k":"list","l":["Fine Orichalcum 0re x1"],"y":[400],"c":[0.84],"p":"fine-ore-misread"}
+{"t":"2026-10-25T10:00:03.250Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:03.600Z","k":"list","l":["Fine Orichalcum 0re x1"],"y":[400],"c":[0.84],"p":"fine-ore-misread"}
+{"t":"2026-10-25T10:00:03.650Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:04.000Z","k":"list","l":["Fine Orichalcum Ore x1"],"y":[400],"c":[0.83],"p":"fine-ore"}
+{"t":"2026-10-25T10:00:04.050Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:04.400Z","k":"list","l":["Fine Orichalcum Ore x1"],"y":[400],"c":[0.83],"p":"fine-ore"}
+{"t":"2026-10-25T10:00:04.450Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:04.800Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:04.850Z","k":"chat","l":["[Player] chat 1a2b3c","[Player] chat 4d5e6f","[Player] chat 778899"]}
+{"t":"2026-10-25T10:00:05.200Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:05.250Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc"]}
+{"t":"2026-10-25T10:00:05.600Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:05.650Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc"]}
+{"t":"2026-10-25T10:00:06.000Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:06.050Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc"]}
+{"t":"2026-10-25T10:00:06.400Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:06.450Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc"]}
+{"t":"2026-10-25T10:00:06.800Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:06.850Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc"]}
+{"t":"2026-10-25T10:00:07.200Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:07.250Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc"]}
+{"t":"2026-10-25T10:00:07.600Z","k":"list","l":[],"y":[],"c":[],"p":"band-empty"}
+{"t":"2026-10-25T10:00:07.650Z","k":"chat","l":["[Player] chat 4d5e6f","[Player] chat 778899","[Player] chat aabbcc"]}

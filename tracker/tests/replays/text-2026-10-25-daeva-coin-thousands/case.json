@@ -1,0 +1,14 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Daeva Pass Level Reward, 2026-10-25 13:48:06 to 13:48:39 local, Islands Windstream: five loot lines arrive at once (\"Acquired Superior Life Potion (Bound) x3.\", \"Acquired Daeva Pass Shop Coin x2,OOO.\", \"Acquired Superior Life Potion (Bound) x10.\", Battle Enhance Scroll, Odyle Energy) and stay in the chat for 20 s, read about forty times with the usual slips (\"x 10\", \"(BoundYx3Ä\", \"P9eva Pass\", \"Shep Coin\"). 0.8.39 took \"x2,OOO\" for part of the coin's name and left it \"not in the item list, not counted\" (15 times that day). Right: Daeva Pass Shop Coin 2,000, set aside with the run like every chat item in an expedition (its reward picture decides what counts), nothing counted as farming, (the reward table read \"x2.0K\" beside icon_battlepass), and 13 Superior Life Potions from two lines (the table's potion slot read x13)",
+  "source": "Steven's trace.log 2026-10-25 17:48:06 to 17:48:39 UTC (tracker 0.8.39): chat kept only for the game's own lines, every player's line replaced by a filler keyed by its text's hash; list reads, zone and reward signals as recorded, other players' names in the band shifted one letter",
+  "expect": {
+    "items": {},
+    "run_chat_items": {
+      "Daeva Pass Shop Coin": 2000,
+      "Superior Life Potion": 13
+    }
+  }
+}

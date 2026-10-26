@@ -8,7 +8,7 @@ namespace KinahLedger.Ui;
 /// Updates: a check 20 seconds after start and every hour (0.8.31; it was six hours). With automatic updates on, a newer
 /// version downloads in the background and is installed when the window closes; Restart now installs it at once. Off,
 /// the banner asks first. Either way a version found by the timed check also asks once, in a dialog, whether to install
-/// it now (AskToInstall). A run is never cut short by an update: the dialog waits for the run to stop, and Restart now
+/// it now (AskToInstall). A run is never cut short by an update: the dialog waits for the run to stop and the game to leave the front, and Restart now
 /// during a run stops and saves it first, after asking.
 /// </summary>
 public partial class MainWindow
@@ -151,7 +151,7 @@ public partial class MainWindow
     /// The install dialog (Steven, 2026-10-25: check every hour and ask whether to install). A version the timed check
     /// found, and that the staged rollout lets install here, asks once per start: Yes downloads it if it isn't yet and
     /// restarts into it, No leaves the banner (with automatic updates on it still installs when the tracker closes).
-    /// It never asks during a run: it waits for the run to stop (AskWhenFree, from the window's tick). No is the default
+    /// It never asks during a run or with the game in front: it waits for both (AskWhenFree, from the window's tick). No is the default
     /// button, so Enter or Space meant for the game can't restart the tracker. Check now in Options never asks: its own
     /// Restart now is right there.
     /// </summary>
@@ -160,8 +160,11 @@ public partial class MainWindow
         var r = _release;
         if (r == null || _asking || _askedAbout == r.Version || _downloading || _updateNeedsSite || _updateError != null || _offeringInstall) return;
         if (_quitting || _restartForUpdate) return;
-        if (Farming || _welcome) { _askWhenFree = true; return; }
+        // never in the middle of play: a run, or the game in front (always-on counting, gathering and crafting are play too,
+        // and an ownerless dialog there takes the game's focus). The panel says so once; the banner stays on the window
+        if (Farming || _welcome || GameInFront()) { _askWhenFree = true; _updateNotice = UpdateWaitingNotice; UpdateHud(); return; }
         _askWhenFree = false; _askedAbout = r.Version; _asking = true;
+        _updateNotice = ""; UpdateHud();
         try
         {
             var v = Updater.Show(r.Version);
@@ -184,11 +187,18 @@ public partial class MainWindow
         finally { _asking = false; }
     }
 
-    /// <summary>From the window's tick: a found version that waited for a run asks once the run has stopped.</summary>
+    /// <summary>The panel's line while a found version waits for the player to leave the game.</summary>
+    const string UpdateWaitingNotice = "Update ready · installs when you leave the game";
+
+    /// <summary>
+    /// From the window's tick: a found version that waited asks once no run is on and the game is no longer in front
+    /// (alt-tab, the game closed or minimized); a tracker closed before that asks on its next start.
+    /// </summary>
     void AskWhenFree()
     {
-        if (!_askWhenFree || _asking || Farming || _welcome || _quitting) return;
+        if (!_askWhenFree || _asking || Farming || _welcome || _quitting || GameInFront()) return;
         _askWhenFree = false;
+        _updateNotice = "";   // AskToInstall puts it back if it has to wait again
         _ = AskToInstall();
     }
 

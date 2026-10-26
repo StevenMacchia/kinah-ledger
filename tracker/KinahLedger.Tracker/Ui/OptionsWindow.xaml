@@ -319,7 +319,7 @@
         <!-- In game: the shortcut and the panel over the game -->
         <StackPanel x:Name="PageInGame" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="In game"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="The keyboard shortcut and the small panel shown over the game while you farm."/>
+          <TextBlock Style="{StaticResource PageLead}" Text="The keyboard shortcut, and the panel: a small strip over the game that shows whenever the chat is being read, run or no run. It shows while the game is in front, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="SHORTCUT"/>
           <Border Style="{StaticResource Group}">
@@ -337,16 +337,34 @@
             </StackPanel>
           </Border>
 
-          <TextBlock Style="{StaticResource GroupLabel}" Text="PANEL OVER THE GAME"/>
+          <TextBlock Style="{StaticResource GroupLabel}" Text="THE PANEL"/>
           <Border Style="{StaticResource Group}">
             <StackPanel>
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel over the game"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top strip with the figures you pick below. Drag it anywhere; it remembers where."/>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top panel with your run and pickups, shown while the game is in front."/>
                 </StackPanel>
                 <CheckBox x:Name="HudChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- the panel's look: the Strip, the Card or the Ticker, each drawn below at its real size from sample figures -->
+              <StackPanel Margin="18,13,18,15">
+                <TextBlock Style="{StaticResource RowTitle}" Text="Panel look"/>
+                <TextBlock Style="{StaticResource RowHint}" Text="Each one is drawn below at its real size, with sample figures."/>
+                <WrapPanel x:Name="HudLookHost" Margin="0,10,0,0"/>
+                <StackPanel x:Name="HudLookPreview" Margin="0,6,0,0"/>
+              </StackPanel>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- locked: click-through and never focused, like a game overlay; Move the panel in the tray unlocks it for 20 s -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Lock the panel in place"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Clicks go through it to the game. To move it, use Move the panel in the tray menu, or turn this off and drag it."/>
+                </StackPanel>
+                <CheckBox x:Name="HudLockChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Lock the panel in place"/>
               </Grid>
               <Border Style="{StaticResource Divider}"/>
               <!-- which figures the panel shows: any mix, in a fixed order; the window works them all out the same way -->
@@ -354,18 +372,31 @@
                 <TextBlock Style="{StaticResource RowTitle}" Text="What the panel shows"/>
                 <TextBlock Style="{StaticResource RowHint}" Text="Pick any. The figures match the window's."/>
                 <WrapPanel x:Name="HudFieldHost" Margin="0,10,0,0"/>
+                <TextBlock x:Name="HudFieldsNote" Style="{StaticResource RowHint}" Margin="0,8,0,0" Visibility="Collapsed" Text="For the Strip. The Card and the Ticker show a set of their own."/>
               </StackPanel>
               <Border Style="{StaticResource Divider}"/>
-              <!-- how solid the panel is: takes effect as the slider moves, like the buttons on the reading page -->
+              <!-- how solid the panel's background is, and its size: shown on the panel as the sliders move, kept on Save -->
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Panel opacity"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="How solid the panel over the game is. Changes at once."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="How solid the panel's background is. The figures stay sharp."/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Slider x:Name="HudOpacity" Width="140" Minimum="0.3" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                  <TextBlock x:Name="HudOpacityLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="36"/>
+                  <Slider x:Name="HudOpacity" Width="140" Minimum="0.3" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Panel opacity"/>
+                  <TextBlock x:Name="HudOpacityLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
+                </StackPanel>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Panel size"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Bigger for a large or high-resolution screen."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Slider x:Name="HudScale" Width="140" Minimum="0.7" Maximum="2" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Panel size"/>
+                  <TextBlock x:Name="HudScaleLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
                 </StackPanel>
               </Grid>
               <Border Style="{StaticResource Divider}"/>
@@ -373,7 +404,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Panel position"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Back to the top centre of the screen, clear of the minimap and the chat."/>
+                  <TextBlock x:Name="HudPositionHint" Style="{StaticResource RowHint}" Text="Back to the top centre of the game's screen, clear of the minimap and the chat."/>
                 </StackPanel>
                 <Button x:Name="HudResetBtn" Grid.Column="1" Content="Reset position" VerticalAlignment="Center"/>
               </Grid>

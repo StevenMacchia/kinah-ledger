@@ -144,6 +144,10 @@ public sealed class LootPopupTracker
 /// from text that isn't one (Session.LootNotRow, 2026-10-24): what is behind the letters (<see cref="Background"/>, the
 /// darker 30% of the line's box, 0 to 1; -1 unknown) and how much the place left of it, where the icon sits, varies
 /// (<see cref="Spread"/>, 0 to 1, about 0 for flat background; -1 unknown). And where its text starts (<see cref="Left"/>,
-/// in the window; -1 unknown): rows' text starts at one column, the player's title far right of it.
+/// in the window; -1 unknown): rows' text starts at one column, the player's title far right of it. And what the icon
+/// made of the row (PopupIcons.Settle, 2026-10-25): the text as read before it (<see cref="Before"/>, "" when the icon
+/// had no verdict on it), its scores as trace.log keeps them (<see cref="IconScores"/>), and whether the text and the icon
+/// named different items with neither sure (<see cref="Unsure"/>: this read doesn't vote for the row's text).
 /// </summary>
-public readonly record struct LootLine(int Top, string Text, double Contrast = -1, ulong Icon = 0, double Background = -1, double Spread = -1, int Left = -1);
+public readonly record struct LootLine(int Top, string Text, double Contrast = -1, ulong Icon = 0, double Background = -1, double Spread = -1, int Left = -1,
+    string Before = "", string IconScores = "", bool Unsure = false);

@@ -56,6 +56,7 @@ public partial class MainWindow
             };
             Chime();
             _hud?.Alert((rare ? "Rare drop: " : "Watched drop: ") + p.What, color);
+            HoldRareOnHud(name, p.What[(x + 1)..], rare ? grade : "", color, p.At);   // the Card's and the Ticker's rare drop
             Say((rare ? $"Rare drop ({grade}): " : "Watched drop: ") + p.What, "Good");
         }
     }

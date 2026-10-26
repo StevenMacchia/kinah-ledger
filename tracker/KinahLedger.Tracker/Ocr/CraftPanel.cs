@@ -69,7 +69,7 @@ public static class CraftPanel
     /// A picture of part of the game: <paramref name="bmp"/> shows <paramref name="area"/>, both in screen pixels, of the
     /// game window <paramref name="game"/>. Positions are worked out on the game and looked up in the picture.
     /// </summary>
-    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game, int Dy = 0, int Dx = 0)
+    readonly record struct View(Bitmap Bmp, Rectangle Area, Rectangle Game, int Dy = 0, int Dx = 0, Pixels? Px = null)
     {
         public int H => Game.Height;
         public int Cx => Game.Width / 2;
@@ -77,8 +77,70 @@ public static class CraftPanel
         public Color? At(int gx, int gy)
         {
             int x = Game.X + gx + Dx - Area.X, y = Game.Y + gy + Dy - Area.Y;
+            if (Px is { } p) return x < 0 || y < 0 || x >= p.W || y >= p.H ? null : p.At(x, y);
             return x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height ? null : Bmp.GetPixel(x, y);
         }
+
+        /// <summary>The pixel's darkest channel (what the labels' white test reads), or -1 outside the picture.</summary>
+        public int Min3(int gx, int gy)
+        {
+            int x = Game.X + gx + Dx - Area.X, y = Game.Y + gy + Dy - Area.Y;
+            if (Px is { } p) return x < 0 || y < 0 || x >= p.W || y >= p.H ? -1 : p.Min3(x, y);
+            if (x < 0 || y < 0 || x >= Bmp.Width || y >= Bmp.Height) return -1;
+            var c = Bmp.GetPixel(x, y);
+            return Math.Min(c.R, Math.Min(c.G, c.B));
+        }
+    }
+
+    /// <summary>
+    /// A picture's own pixels, locked once for a whole look (ocr.craft_pixels, 2026-10-26): what GetPixel would give for
+    /// each pixel, without a GDI+ call per pixel. The look for the raised gathering panel tries 81 places on a 2160-high
+    /// screen, about 780,000 pixels, which cost 100 to 160 ms a pass one GetPixel at a time. Only the formats whose bytes
+    /// are the colour as GetPixel gives it; any other picture (or one locked elsewhere) is read with GetPixel, as before.
+    /// </summary>
+    sealed unsafe class Pixels : IDisposable
+    {
+        readonly Bitmap _bmp;
+        readonly System.Drawing.Imaging.BitmapData _data;
+        readonly byte* _scan;
+        readonly int _stride, _bpp;
+        readonly bool _alpha;
+        /// <summary>The picture's size, kept: Bitmap.Width and Height are a GDI+ call each.</summary>
+        public readonly int W, H;
+
+        Pixels(Bitmap bmp, System.Drawing.Imaging.BitmapData data, int bpp, bool alpha)
+        {
+            _bmp = bmp; _data = data; _bpp = bpp; _alpha = alpha;
+            _scan = (byte*)data.Scan0; _stride = data.Stride; W = data.Width; H = data.Height;
+        }
+
+        public static Pixels? Lock(Bitmap bmp)
+        {
+            if (!KinahLedger.Update.RemoteConfig.Current.CraftPixels) return null;
+            var f = bmp.PixelFormat;
+            int bpp = f is System.Drawing.Imaging.PixelFormat.Format32bppArgb or System.Drawing.Imaging.PixelFormat.Format32bppRgb ? 4
+                : f == System.Drawing.Imaging.PixelFormat.Format24bppRgb ? 3 : 0;
+            if (bpp == 0) return null;
+            try { return new Pixels(bmp, bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly, f), bpp, f == System.Drawing.Imaging.PixelFormat.Format32bppArgb); }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>The pixel at (x, y), inside the picture (the caller checks).</summary>
+        public Color At(int x, int y)
+        {
+            byte* p = _scan + (long)y * _stride + x * _bpp;
+            return Color.FromArgb(_alpha ? p[3] : 255, p[2], p[1], p[0]);
+        }
+
+        /// <summary>The darkest of the pixel's three channels at (x, y), inside the picture (the caller checks).</summary>
+        public int Min3(int x, int y)
+        {
+            byte* p = _scan + (long)y * _stride + x * _bpp;
+            int m = p[0] < p[1] ? p[0] : p[1];
+            return m < p[2] ? m : p[2];
+        }
+
+        public void Dispose() => _bmp.UnlockBits(_data);
     }
 
     /// <summary>The part of the game window the panel's text, labels and bars sit in, in screen pixels: all a read needs.</summary>
@@ -102,8 +164,9 @@ public static class CraftPanel
             {
                 int x = v.Cx + (int)Math.Round((l.X0 - 2560 + (l.X1 - l.X0) * (i + 0.5) / GridW) * k);
                 int y = (int)Math.Round((l.Y0 + (l.Y1 - l.Y0) * (j + 0.5) / GridH) * k);
-                if (v.At(x, y) is not { } c) return 0;
-                bool white = Math.Min(c.R, Math.Min(c.G, c.B)) > 185, want = l.Mask[j * GridW + i] == '1';
+                int m = v.Min3(x, y);
+                if (m < 0) return 0;
+                bool white = m > 185, want = l.Mask[j * GridW + i] == '1';
                 if (white || want) any++;
                 if (white && want) both++;
             }
@@ -128,8 +191,9 @@ public static class CraftPanel
                 for (int y = ya; y < yb && !white; y++)
                     for (int x = xa; x < xb; x++)
                     {
-                        if (v.At(x, y) is not { } c) return 0;
-                        if (Math.Min(c.R, Math.Min(c.G, c.B)) > 185) { white = true; break; }
+                        int m = v.Min3(x, y);
+                        if (m < 0) return 0;
+                        if (m > 185) { white = true; break; }
                     }
                 bool want = l.Mask[j * GridW + i] == '1';
                 if (white || want) any++;
@@ -142,15 +206,15 @@ public static class CraftPanel
     const double RaisedMatch = 0.4;
 
     /// <summary>Whether the crafting panel is on screen in a picture of the whole game window: both bar labels in place.</summary>
-    public static bool IsUp(Bitmap f) { var v = Whole(f); return Labels.All(l => LabelScore(v, l) >= LabelMatch); }
+    public static bool IsUp(Bitmap f) { using var px = Pixels.Lock(f); var v = Whole(f, px); return Labels.All(l => LabelScore(v, l) >= LabelMatch); }
 
-    static View Whole(Bitmap f) => new(f, new Rectangle(0, 0, f.Width, f.Height), new Rectangle(0, 0, f.Width, f.Height));
+    static View Whole(Bitmap f, Pixels? px) => new(f, new Rectangle(0, 0, f.Width, f.Height), new Rectangle(0, 0, f.Width, f.Height), Px: px);
 
     /// <summary>The panel in a picture of the whole game window.</summary>
-    public static Sample Measure(Bitmap f) => Measure(Whole(f));
+    public static Sample Measure(Bitmap f) { using var px = Pixels.Lock(f); return Measure(Whole(f, px)); }
 
     /// <summary>The panel in a picture of <see cref="Region"/> (or any area holding it) of the game window <paramref name="game"/>.</summary>
-    public static Sample Measure(Bitmap bmp, Rectangle area, Rectangle game) => Measure(new View(bmp, area, game));
+    public static Sample Measure(Bitmap bmp, Rectangle area, Rectangle game) { using var px = Pixels.Lock(bmp); return Measure(new View(bmp, area, game, Px: px)); }
 
     static Sample Measure(View v)
     {
@@ -220,10 +284,25 @@ public static class CraftPanel
             || Session.TrackerSession.IsCraftTitle(line)
             || Regex.IsMatch(line, @"(?:^|\W)[cg]?\s?r?[aåäà4]ft(?:ing|in|ng)\s+[il1]n\b", RegexOptions.IgnoreCase));
 
-    /// <summary>The panel's lines top down, split into the queue ("1 / 2", read from the title) and the recipe (the first line that is neither the title nor the proficiency line).</summary>
+    /// <summary>
+    /// The panel's recipe line, read clean or not: the item, then its mastery tier and level in brackets ("Wind Serum
+    /// (Novice Lv. 10)", read on 2026-10-25 as "Wind Serum (Novice Lv- 10)", "(Novice Lv. IO)", "Wihd Serum (Novite Lv. 10)").
+    /// No other panel with the Success and Fail bars (a node's gathering bar, an Odyle cube) shows one, so it is a witness of
+    /// the crafting window at work when the title above it comes out garbled.
+    /// </summary>
+    public static bool IsRecipeLine(string line) =>
+        Regex.IsMatch(line, @"\([^()]{0,24}\bL[vy][\.\-,:;']?\s*[0-9IlOo|]{1,3}\b", RegexOptions.IgnoreCase)
+        || Regex.IsMatch(line, @"\b(?:novice|apprentice|journeyman|expert|master|professional|artisan)\s+L[vy]\b", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// The panel's lines top down, split into the queue ("1 / 2", read from the title) and the recipe: the line with the
+    /// mastery level (<see cref="IsRecipeLine"/>), else the first line that is neither the title, the proficiency line nor
+    /// a queue count. A title garbled past <see cref="IsTitleLine"/> ("qaf€ihgfiwprcgté$s 1 m/:ål" above "Wind Serum (Novice
+    /// Lv- 10)", 2026-10-25 20:25:14) was the first such line and filed crafts under a recipe that doesn't exist.
+    /// </summary>
     public static (int Done, int Of, string Recipe)? Parse(IEnumerable<string> topDown)
     {
-        int done = 0, of = 0; string recipe = "";
+        int done = 0, of = 0; string recipe = "", leveled = "";
         foreach (var text in topDown)
         {
             if (IsTitleLine(text))
@@ -233,19 +312,27 @@ public static class CraftPanel
                 if (m.Success) { done = int.Parse(m.Groups[1].Value); of = int.Parse(m.Groups[2].Value); }
                 continue;
             }
-            if (recipe.Length == 0 && text.Trim().Length >= 3 && !text.Contains("Proficiency", StringComparison.OrdinalIgnoreCase)) recipe = text.Trim();
+            if (leveled.Length == 0 && IsRecipeLine(text)) leveled = text.Trim();
+            // a recipe's name has no slash; the title's queue count ("4 /z:iT,", "13 / Tl") has one
+            if (recipe.Length == 0 && text.Trim().Length >= 3 && !text.Contains('/') && !text.Contains("Proficiency", StringComparison.OrdinalIgnoreCase)) recipe = text.Trim();
         }
+        if (leveled.Length > 0) recipe = leveled;
         return of > 0 || recipe.Length > 0 ? (done, of, recipe) : null;
     }
 
-    /// <summary>The recipe's item name without the level the panel adds: "Life Serum (Bound) (Novice Lv. 1)" → "Life Serum (Bound)".</summary>
-    /// <summary>The recipe's mastery level in the panel's title ("Orichalcum Ingot (Novice Lv. 25)" → 25), 0 when it isn't read.</summary>
-    public static int LevelOf(string recipe) => Regex.Match(recipe, @"\bLv\.?\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
+    /// <summary>The recipe's mastery level in the panel's title ("Orichalcum Ingot (Novice Lv. 25)" → 25, "Lv- 10" as read too), 0 when it isn't read.</summary>
+    public static int LevelOf(string recipe) => Regex.Match(recipe, @"\bLv[\.\-,:;']?\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
+    /// <summary>The recipe's item name without the level the panel adds: "Life Serum (Bound) (Novice Lv. 1)" → "Life Serum (Bound)".</summary>
     /// The panel's close button can come with the title as a lone "X" after the level (2026-10-25 07:22:39, a great success:
     /// "Fine Durable Balaur Horn (Professional Lv. 30) X"), which kept the level on and filed three crafts under a recipe
-    /// that doesn't exist; that X, or a short run of symbols, after the level goes with it.
-    public static string ItemOf(string recipe) => Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+    /// that doesn't exist; that X, or a short run of symbols, after the level goes with it. A tier read wrong ("Wihd Serum
+    /// (Novite Lv. 10)", 2026-10-25 20:26:22) goes too: any bracket holding a level at the end.
+    public static string ItemOf(string recipe)
+    {
+        var s = Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+        return Regex.Replace(s, @"\s*\([^()]{0,24}\bL[vy][\.\-,:;']?\s*[0-9IlOo|]{1,3}\s*\)?(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+    }
 }
 
 /// <summary>

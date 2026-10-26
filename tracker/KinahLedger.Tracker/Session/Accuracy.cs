@@ -150,7 +150,36 @@ public static class Accuracy
     }
 
     /// <summary>For tests: everything back to zero.</summary>
-    internal static void Reset() { lock (Lock) { Counts.Clear(); Names.Clear(); SourceCounts.Clear(); ShadowCounts.Clear(); _readingS = 0; _chatLostS = 0; _layout = null; _layoutSent = false; } }
+    internal static void Reset() { lock (Lock) { Counts.Clear(); Names.Clear(); SourceCounts.Clear(); ShadowCounts.Clear(); SnapSeen.Clear(); _readingS = 0; _chatLostS = 0; _layout = null; _layoutSent = false; } }
+
+    /// <summary>A misread looked up again within this long of its last look-up is the same line on screen, not a new one.</summary>
+    public const double SameLineSeconds = 10;
+    static readonly Dictionary<string, DateTime> SnapSeen = new(StringComparer.Ordinal);
+    /// <summary>The time a look-up happens at (the tests set it).</summary>
+    internal static Func<DateTime> Clock = () => DateTime.UtcNow;
+
+    /// <summary>
+    /// A misread that snapped to an item (ItemDictionary.IdOf, ChatParser's context match), counted once per line, not per
+    /// look-up (2026-10-25: one report said "snapped 3586", all of them "expertls splendent orichalcum longsword x", the
+    /// crafting panel's recipe read once and then looked up by the window on every refresh for 15 minutes; the same chat
+    /// line parsed again on every pass did the same). The same misread looked up again within <see cref="SameLineSeconds"/>
+    /// of its last look-up is the line still on screen; one looked up after a pause that long is a new line.
+    /// </summary>
+    public static void Snapped(string read, long item, string source)
+    {
+        if (Muted) return;
+        var key = Regex.Replace((read ?? "").ToLowerInvariant(), @"\s+", " ").Trim();
+        var now = Clock();
+        lock (Lock)
+        {
+            bool again = SnapSeen.TryGetValue(key, out var last) && (now - last).TotalSeconds < SameLineSeconds && (last - now).TotalSeconds < 5;
+            SnapSeen[key] = now;
+            if (SnapSeen.Count > 2000) foreach (var old in SnapSeen.Where(kv => (now - kv.Value).TotalSeconds >= SameLineSeconds).Select(kv => kv.Key).ToList()) SnapSeen.Remove(old);
+            if (again) return;
+        }
+        Name(read ?? "", item, "snapped", source);
+        Add("snapped");
+    }
 }
 
 /// <summary>One name read as an item: snapped, guessed or unknown (no item), and how often.</summary>
