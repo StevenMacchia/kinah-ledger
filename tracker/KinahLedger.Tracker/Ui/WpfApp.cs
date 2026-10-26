@@ -207,6 +207,21 @@ public static class WpfApp
         DoEvents();
         Check(Math.Abs(p.HudOpacity - 0.5) < 0.001 && Math.Abs(w.HudScale - 1.5) < 0.001, $"panel opacity and size saved: {p.HudOpacity:P0}, {w.HudScale:P0}");
 
+        // the panel's switch and figures are tried on the panel at once too (2026-10-25), and Cancel puts them back
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        bool hudSaved = p.Hud; var fieldsSaved = p.HudFields;
+        Flip(o.HudChk);
+        var onNow = HudFields.Parse(fieldsSaved);
+        int chip = Array.FindIndex(HudFields.All, f => !onNow.Contains(f.Key));
+        if (chip < 0) chip = Array.FindIndex(HudFields.All, f => onNow.Contains(f.Key));
+        Click((System.Windows.Controls.Button)o.HudFieldHost.Children[chip]);
+        Check(w.HudShownForTest == !hudSaved && w.HudFieldsShownForTest != fieldsSaved && p.Hud == hudSaved && p.HudFields == fieldsSaved,
+            "the panel switch and a figure show at once, and wait for Save to be kept");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(w.HudShownForTest == hudSaved && w.HudFieldsShownForTest == fieldsSaved, "Cancel puts the panel's switch and figures back");
+
         o = Open();
         Click(o.HotkeyResetBtn);
         Click(o.SaveBtn);

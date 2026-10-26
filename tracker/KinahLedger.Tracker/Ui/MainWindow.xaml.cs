@@ -578,7 +578,7 @@ public partial class MainWindow : Window
         // the panel over the game shows whenever its switch is on and the chat is being read: the run while one is on, the
         // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
         // the panel over the game can't stop the rest of the refresh (the Crafting table, the pickups) if it fails to open
-        if (_prefs.Hud && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
+        if (HudWanted && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
         if (_part == "Crafting") FillCraft(CraftShown);
         FillLive();
         FillAccuracyCard();
@@ -595,7 +595,7 @@ public partial class MainWindow : Window
     {
         if (_hud == null) return;
         _hudValues["show"] = HudPresence();
-        _hudValues["unlocked"] = HudMoving ? "move" : _hudPrefs.Locked ? "" : "1";
+        _hudValues["unlocked"] = HudMoving ? "move" : (_hudPreview?.HudLocked ?? _hudPrefs.Locked) ? "" : "1";   // a lock being tried in Options shows at once
         HudRunValues();
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
@@ -1292,12 +1292,13 @@ public partial class MainWindow : Window
     /// <summary>The draggable panel over the game, where it was last left; created once and kept until its switch goes off.</summary>
     void EnsureHud()
     {
-        if (_hud != null || !_prefs.Hud) return;
-        _hud = new HudWindow(HudFields.Parse(_prefs.HudFields)) { Owner = this };
-        _hud.SetOpacity(_prefs.HudOpacity);
-        _hud.SetScale(_hudPrefs.Scale);
+        if (_hud != null || !HudWanted) return;
+        // what Options is trying, while it is open (Ui/MainWindow.Shell.cs PreviewHudLook), else the saved choices
+        _hud = new HudWindow(HudFields.Parse(_hudPreview?.HudFields ?? _prefs.HudFields)) { Owner = this };
+        _hud.SetOpacity(_hudPreview?.HudOpacity ?? _prefs.HudOpacity);
+        _hud.SetScale(_hudPreview?.HudScale ?? _hudPrefs.Scale);
         // where the player left it, kept on a screen that is still there; else the top centre of the game's monitor
-        if (SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault();
+        if (!_hudSpotPreview && SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault();
         _hud.Dragged += () => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
         // it follows the game from the start: created while the game is behind another window, it waits out of sight
         UpdateHud();

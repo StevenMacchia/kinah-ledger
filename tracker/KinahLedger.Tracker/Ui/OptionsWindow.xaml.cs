@@ -31,6 +31,8 @@ public partial class OptionsWindow : Window
     OptionsChoice _saved, _edit;
     Page _page;
     bool _loading, _capturing, _closeConfirmed;
+    /// <summary>In game › Reset position pressed and not yet saved (it is an action, not one of the choices).</summary>
+    bool _resetSpot;
 
     public OptionsWindow(MainWindow host, Page page)
     {
@@ -227,7 +229,8 @@ public partial class OptionsWindow : Window
         HotkeyBox.LostKeyboardFocus += (_, _) => EndCapture();
         HotkeyOffBtn.Click += (_, _) => Edit(_edit with { Hotkey = "" });
         HotkeyResetBtn.Click += (_, _) => Edit(_edit with { Hotkey = Hotkey.Default });
-        HudResetBtn.Click += (_, _) => { _host.ResetHudPosition(); ShowNote("The panel goes back to the top centre of the game's screen.", "Good"); };
+        // tried on the panel at once, kept on Save, moved back on Cancel, like the rest of the page
+        HudResetBtn.Click += (_, _) => { _resetSpot = true; _host.PreviewHudSpot(); Refresh(); ShowNote("The panel moves to the top centre of the game's screen. Save keeps it there.", "Good"); };
 
         CheckNowBtn.Click += async (_, _) => await Act(CheckNowBtn, () => _host.CheckForUpdate(manual: true));
         RestartUpdateBtn.Click += async (_, _) => await _host.RestartToUpdate();
@@ -250,8 +253,11 @@ public partial class OptionsWindow : Window
     {
         if (_loading) return;
         bool skin = next.Skin != _edit.Skin;
+        // the panel's switch, figures, lock, opacity and size: shown on the panel now; Save keeps them, Cancel puts them back
+        bool panel = next.Hud != _edit.Hud || next.HudFields != _edit.HudFields || next.HudLocked != _edit.HudLocked || next.HudOpacity != _edit.HudOpacity || next.HudScale != _edit.HudScale;
         _edit = next;
         if (skin && previewSkin) _host.ApplySkin(next.Skin);   // try the look on now; Cancel puts the saved one back
+        if (panel) _host.PreviewHudLook(next);
         Refresh();
     }
 
@@ -263,7 +269,7 @@ public partial class OptionsWindow : Window
         HotkeyResetBtn.IsEnabled = _edit.Hotkey != Hotkey.Default;
         StartupTip.Visibility = _edit.StartWithWindows && !_edit.CloseToTray ? Visibility.Visible : Visibility.Collapsed;
         ServerWarn.Visibility = _edit.Server.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        bool dirty = _edit != _saved;
+        bool dirty = _edit != _saved || _resetSpot;
         SaveBtn.IsEnabled = dirty;
         if (dirty) Footer("Unsaved changes. Save puts them into effect.", "Muted");
         else if (FooterNote.Text.StartsWith("Unsaved")) Footer("", "Muted");
@@ -278,6 +284,7 @@ public partial class OptionsWindow : Window
             return;
         }
         var problem = _host.ApplyOptions(_edit);
+        if (_resetSpot) { _host.ResetHudPosition(); _resetSpot = false; }   // Reset position, tried until now
         _saved = _edit = _host.CurrentOptions();
         Load(_edit);
         if (problem != null) { Footer("Saved, but: " + problem, "Warn"); return; }   // stays open so the note can be read
@@ -295,7 +302,7 @@ public partial class OptionsWindow : Window
     void OnClosingOptions(object? sender, CancelEventArgs e)
     {
         EndCapture();
-        if (!_closeConfirmed && _edit != _saved)
+        if (!_closeConfirmed && (_edit != _saved || _resetSpot))
         {
             var r = MessageBox.Show(this, "Save your changes to Kinah Ledger's options?", "Kinah Ledger", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (r == MessageBoxResult.Cancel) { e.Cancel = true; return; }
@@ -307,7 +314,7 @@ public partial class OptionsWindow : Window
             }
         }
         if (_edit.Skin != _saved.Skin || Skins.Current != _saved.Skin) _host.ApplySkin(_saved.Skin);   // a theme being tried goes back
-        _host.PreviewHud(_saved.HudOpacity, _saved.HudScale);   // and the panel's look being tried
+        _host.EndHudPreview();   // and the panel as it was saved: switch, figures, lock, opacity, size and spot
     }
 
     /* ---------------- live state from the main window ---------------- */
