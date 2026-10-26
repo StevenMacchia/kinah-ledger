@@ -406,9 +406,9 @@
               </Grid>
               <!-- "161 kills · 3.9K a kill" and "best here 1.40M" -->
               <TextBlock x:Name="KvLine" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" LineHeight="21" TextWrapping="Wrap"/>
-              <!-- the one place the read count shows: "Reading the chat · 3,620 reads" -->
+              <!-- "Reading the chat" with a steady green tick; the read count, the Market and the Kinah counter on hover -->
               <StackPanel x:Name="HealthLine" Orientation="Horizontal" Margin="0,12,0,0">
-                <Path x:Name="HealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Gold}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                <Path x:Name="HealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="HealthText" FontSize="12" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
               </StackPanel>
             </StackPanel>
@@ -678,7 +678,7 @@
               <TextBlock x:Name="CraftProfitNote" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" Text="profit this session"/>
               <TextBlock x:Name="CraftWhat" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" LineHeight="21" TextWrapping="Wrap"/>
               <StackPanel x:Name="CraftHealth" Orientation="Horizontal" Margin="0,12,0,0">
-                <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Gold}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                <Path x:Name="CraftHealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="CraftHealthText" FontSize="12" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
               </StackPanel>
             </StackPanel>

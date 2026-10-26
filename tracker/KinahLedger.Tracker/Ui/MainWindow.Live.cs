@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// Direction C, "Live" (Steven, 2026-10-24, mock-next-C.html, with mock-next-B.html's icon tiles and chips): every tab opens
 /// on the last five things counted for it, newest first, beside the rate and a small line of the rate since the start, and
-/// "Reading the chat · N reads", the one place the read count shows. A line that looks wrong is tapped and filed as a
+/// "Reading the chat" with a green tick (the read count on hover). A line that looks wrong is clicked and filed as a
 /// miscount report with that line marked (line.json), a labelled case for the replay bank. Under the live card the sections
 /// fold: Session, Drops from kills (open), Also this session (chips that open a small table in place), Where to farm now.
 /// </summary>
@@ -354,23 +354,31 @@ public partial class MainWindow
         RateFrom.Text = from; RateTo.Text = to;
     }
 
-    /// <summary>"Reading the chat · 3,620 reads", the one place the read count belongs; paused or a read problem says so instead.</summary>
+    /// <summary>
+    /// "Reading the chat" with a steady green tick while all is well; paused or a read problem says so instead, with a
+    /// warning mark. How many reads, the Market and the Kinah counter are on hover (2026-10-25 audit: "Reading the chat ·
+    /// 3,620 reads" read like a parse log, and the count ticking up twice a second drew the eye for nothing).
+    /// </summary>
     void FillHealth(TextBlock text, Path? mark)
     {
         var c = _watcher.Chat;
         string t; bool ok = true;
-        if (_demo) t = "Reading the chat · 3,620 reads";
+        if (_demo) t = "Reading the chat";
         else if (c == null) { t = _watcher.GameRect == null ? "Waiting for the game" : "Looking for the chat"; ok = false; }
         else if (c.LastError.Length > 0) { t = "Read problem: " + c.LastError; ok = false; }
         else if (c.Paused.Length > 0) { t = "Paused: the chat is out of view"; ok = false; }
         else if (!c.ChatFound) { t = "Reading the game · the chat not seen yet"; ok = false; }
-        else t = $"Reading the chat · {c.Reads:N0} reads";
-        text.Text = t;
-        text.ToolTip = _demo || c == null ? null : $"{MarketShort()}.\n{BalanceShort()}." + (_watcher.Flushed > 0 ? $"\n{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "");
+        else t = "Reading the chat";
+        if (text.Text != t) text.Text = t;
+        var reads = _demo ? "3,620 reads so far." : c != null && c.ChatFound ? $"{c.Reads:N0} reads so far." : "";
+        text.ToolTip = _demo ? reads : c == null ? null : string.Join("\n", new[] { reads, $"{MarketShort()}.", $"{BalanceShort()}.",
+            _watcher.Flushed > 0 ? $"{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "" }.Where(x => x.Length > 0));
+        // the hover covers the whole line, the tick too
+        if (text.Parent is Panel line) { line.ToolTip = text.ToolTip; line.Background ??= Brushes.Transparent; }
         if (mark != null)
         {
             mark.Data = Geometry.Parse(ok ? "M3.5,8.5 L6.5,11.5 L12.5,4.5" : "M8,3 V9.5 M8,12.5 V13");
-            mark.SetResourceReference(Shape.StrokeProperty, ok ? "Gold" : "Warn");
+            mark.SetResourceReference(Shape.StrokeProperty, ok ? "Good" : "Warn");
         }
     }
 

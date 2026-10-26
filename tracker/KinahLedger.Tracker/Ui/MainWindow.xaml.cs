@@ -1130,7 +1130,7 @@ public partial class MainWindow : Window
         FillBestCrafts();
         // the feed: the last five crafts, worked or failed, with what each made or cost
         DrawFeed(CraftFeedHost, CraftEmpty, FeedFor(FeedTab.Crafting), FeedTab.Crafting, CraftValue);
-        FillHealth(CraftHealthText, null);
+        FillHealth(CraftHealthText, CraftHealthMark);
         // with nothing crafted yet, the feed's one sentence and Best crafts: no empty table, nothing to start over
         var some = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftHead.Visibility = CraftResetText.Visibility = some;
