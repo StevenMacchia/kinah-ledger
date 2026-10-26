@@ -162,9 +162,9 @@ public partial class MainWindow
         if (_quitting || _restartForUpdate) return;
         // never in the middle of play: a run, or the game in front (always-on counting, gathering and crafting are play too,
         // and an ownerless dialog there takes the game's focus). The panel says so once; the banner stays on the window
-        if (Farming || _welcome || GameInFront()) { _askWhenFree = true; _hudValues["notice"] = UpdateWaitingNotice; UpdateHud(); return; }
+        if (Farming || _welcome || GameInFront()) { _askWhenFree = true; _updateNotice = UpdateWaitingNotice; UpdateHud(); return; }
         _askWhenFree = false; _askedAbout = r.Version; _asking = true;
-        _hudValues["notice"] = ""; UpdateHud();
+        _updateNotice = ""; UpdateHud();
         try
         {
             var v = Updater.Show(r.Version);
@@ -198,7 +198,7 @@ public partial class MainWindow
     {
         if (!_askWhenFree || _asking || Farming || _welcome || _quitting || GameInFront()) return;
         _askWhenFree = false;
-        _hudValues["notice"] = "";   // AskToInstall puts it back if it has to wait again
+        _updateNotice = "";   // AskToInstall puts it back if it has to wait again
         _ = AskToInstall();
     }
 

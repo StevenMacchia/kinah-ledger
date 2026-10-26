@@ -380,7 +380,7 @@ public partial class OptionsWindow : Window
     {
         _capturing = true;
         _host.SuspendHotkey(true);   // the current shortcut would otherwise start a run instead of being recorded
-        HotkeyHint.Text = "Hold Ctrl, Alt or Shift (or several) and press a key. Esc cancels.";
+        HotkeyHint.Text = "Hold Ctrl and Shift (or Alt and Shift) and press a letter, or Ctrl, Alt or Shift with an F key. Esc cancels.";
         HotkeyHint.Foreground = (Brush)FindResource("Accent");
         HotkeyBox.Focus();
         Refresh();
@@ -404,9 +404,9 @@ public partial class OptionsWindow : Window
         if (key == Key.Escape) { EndCapture(); Keyboard.ClearFocus(); return; }
         if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
         var mods = Keyboard.Modifiers;
-        if (!Hotkey.IsUsable(mods, key))
+        if (Hotkey.Refusal(mods, key) is { } why)
         {
-            HotkeyHint.Text = "Use Ctrl, Alt or Shift together with a key, so typing in the game can't trigger it.";
+            HotkeyHint.Text = why;   // Ctrl+C, Alt+Tab and the like would be taken from every app on the PC
             HotkeyHint.Foreground = (Brush)FindResource("Warn");
             return;
         }

@@ -212,6 +212,21 @@ public static class WpfApp
         Click(o.SaveBtn);
         DoEvents();
         Check(p.Hotkey == Platform.Hotkey.Default, "Default puts Ctrl+Shift+K back");
+        // shortcut rules (2026-10-25): nothing Windows or typing needs is taken from every app on the PC
+        {
+            static bool Ok(System.Windows.Input.ModifierKeys m, System.Windows.Input.Key k) => Platform.Hotkey.IsUsable(m, k);
+            const System.Windows.Input.ModifierKeys C = System.Windows.Input.ModifierKeys.Control, A = System.Windows.Input.ModifierKeys.Alt, S = System.Windows.Input.ModifierKeys.Shift, W = System.Windows.Input.ModifierKeys.Windows;
+            Check(!Ok(C, System.Windows.Input.Key.C) && !Ok(C, System.Windows.Input.Key.V) && !Ok(C, System.Windows.Input.Key.Z) && !Ok(C, System.Windows.Input.Key.A) && !Ok(A, System.Windows.Input.Key.F)
+                && !Ok(C | A, System.Windows.Input.Key.K) && !Ok(S, System.Windows.Input.Key.K) && !Ok(C, System.Windows.Input.Key.D1),
+                "a letter or number needs Shift with Ctrl or Alt: Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+A, Alt+F, Ctrl+Alt+K, Shift+K, Ctrl+1 refused");
+            Check(!Ok(A, System.Windows.Input.Key.Tab) && !Ok(A, System.Windows.Input.Key.Escape) && !Ok(C, System.Windows.Input.Key.Escape) && !Ok(A, System.Windows.Input.Key.Space)
+                && !Ok(A, System.Windows.Input.Key.F4) && !Ok(W | S, System.Windows.Input.Key.S) && !Ok(S, System.Windows.Input.Key.Insert) && !Ok(C, System.Windows.Input.Key.Left),
+                "system keys refused: Alt+Tab, Alt+Esc, Ctrl+Esc, Alt+Space, Alt+F4, Win+Shift+S, Shift+Insert, Ctrl+Left");
+            Check(Ok(C | S, System.Windows.Input.Key.K) && Ok(A | S, System.Windows.Input.Key.R) && Ok(A, System.Windows.Input.Key.F9) && Ok(S, System.Windows.Input.Key.F8) && Ok(C | A, System.Windows.Input.Key.F2),
+                "allowed: Ctrl+Shift+K, Alt+Shift+R, Alt+F9, Shift+F8, Ctrl+Alt+F2");
+            Check(Platform.Hotkey.Parse("Ctrl+K") == null && Platform.Hotkey.Explain("Ctrl+K") is { Length: > 0 } && Platform.Hotkey.Explain("Ctrl+Shift+K") == null && Platform.Hotkey.Parse("Ctrl+Shift+K") != null,
+                "a saved Ctrl+K is off with a reason; Ctrl+Shift+K still parses");
+        }
 
         // Compact and Full view (0.7.6): the tables and pickups only in Full, which doubles the width; Crafting is one column either way
         w.ShowCompact(); DoEvents();

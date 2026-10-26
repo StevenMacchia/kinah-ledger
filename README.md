@@ -96,7 +96,9 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
      install ID, and the data folder.
    - **Game reading**: **Detect now**, **Choose the chat**, **Test read**, the Market area, and a live preview of what
      is read. These act right away.
-   - **In game**: the start/stop shortcut (Ctrl+Shift+K by default, or off) and the panel, the small strip over the
+   - **In game**: the start/stop shortcut (Ctrl+Shift+K by default, or off; a letter or number needs Shift with Ctrl or
+     Alt, and keys Windows or typing needs, such as Ctrl+C, Alt+Tab or Win combinations, are refused; a shortcut another
+     app holds is said in the status line, in a tray notice and on the panel) and the panel, the small strip over the
      game that shows whenever the chat is being read, run or no run. The panel shows only while the game (or the tracker's own
      window) is in front, fades out on alt-tab and comes back with the game, hides when the game is minimized or
      closed, and dims while reading is paused because something covers the chat. It needs borderless or windowed

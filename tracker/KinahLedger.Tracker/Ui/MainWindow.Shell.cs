@@ -126,11 +126,21 @@ public partial class MainWindow
         var h = new WindowInteropHelper(this).Handle;
         if (h == IntPtr.Zero) return null;
         Native.UnregisterHotKey(h, HotkeyId);
-        if (_hotkeySuspended || Hotkey.Parse(_prefs.Hotkey) is not { } key) return null;
-        return Native.RegisterHotKey(h, HotkeyId, key.NativeModifiers, key.VirtualKey)
-            ? null
-            : $"{key} is already used by another app, so the shortcut is off. Pick another in Options › In game.";
+        if (_hotkeySuspended) return null;
+        // one saved before the shortcut rules (Ctrl+K, say) is off, and says why (Platform/Hotkey.cs Refusal)
+        if (Hotkey.Explain(_prefs.Hotkey) is { } why)
+        {
+            _hotkeyProblem = ($"The shortcut {_prefs.Hotkey.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › In game.", $"Shortcut {_prefs.Hotkey.Trim()} is off · pick another in Options");
+            return _hotkeyProblem.Value.Long;
+        }
+        if (Hotkey.Parse(_prefs.Hotkey) is not { } key) { _hotkeyProblem = null; return null; }
+        _hotkeyProblem = Native.RegisterHotKey(h, HotkeyId, key.NativeModifiers, key.VirtualKey) ? null
+            : ($"{key} is already used by another app, so the shortcut is off. Pick another in Options › In game.", $"{key} is taken by another app · pick another in Options");
+        return _hotkeyProblem?.Long;
     }
+
+    /// <summary>The shortcut couldn't be set: the status line's sentence and the panel's short line; null when it works or is off.</summary>
+    (string Long, string Short)? _hotkeyProblem;
 
     /// <summary>While Options records a new shortcut, the current one must not fire (it would start a run).</summary>
     public void SuspendHotkey(bool suspend)
