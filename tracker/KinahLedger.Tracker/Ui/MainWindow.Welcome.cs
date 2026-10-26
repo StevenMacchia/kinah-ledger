@@ -143,7 +143,10 @@ public partial class MainWindow
     {
         _demo = true;
         Skins.Apply(skin);
-        _wRegion = "na_e"; _wFaction = "Elyos"; _wServer = Servers.Find("na_e", "Siel (Elyos)");
+        // KL_WELCOME_REGION=eu: the region with the most servers, to check the chips still fit the card (2026-10-26)
+        var region = Servers.Region(Environment.GetEnvironmentVariable("KL_WELCOME_REGION"))?.Key ?? "na_e";
+        _wRegion = region; _wFaction = "Elyos";
+        _wServer = region == "eu" ? Servers.Find("eu", "Tiamat (Elyos)") : Servers.Find(region, "Siel (Elyos)");
         BuildRegionChips(); BuildFactionChips(); BuildServerChips(); BuildSkinChips(SkinChips);
         SetWelcome(true);
     }

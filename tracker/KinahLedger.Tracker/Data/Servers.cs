@@ -19,8 +19,10 @@ public sealed record GameServer(GameRegion Region, string Name, string Faction)
 }
 
 /// <summary>
-/// The global service's home servers as of the 5 October 2026 launch: 43 Elyos/Asmodian pairs in five regions, each pair
-/// one world with a name per faction. Every shared number is per server (prices outright, drops once the site splits them),
+/// The global service's home servers: 53 Elyos/Asmodian pairs in five regions, each pair one world with a name per
+/// faction. Checked 26 October 2026 against NCSOFT's "New Server and Matchmaking Information" notice (kept current;
+/// Steam mirror of the plaync notice board) and the aion2.exchange server feed. The 5 October launch had 43 pairs; ten
+/// opened later (Europe 5, NA East 1, Asia 4). Every shared number is per server (prices outright, drops once the site splits them),
 /// so the window asks for this before anything else. Kept as data: a new server is one entry here.
 /// </summary>
 public static class Servers
@@ -30,7 +32,8 @@ public static class Servers
         new("na_e", "NA East"), new("na_w", "NA West"), new("eu", "Europe"), new("latam", "Latin America"), new("asia", "Asia")
     };
 
-    // (Elyos name, Asmodian name) per region, Advanced Access servers first, then the ones added at launch
+    // (Elyos name, Asmodian name) per region, Advanced Access servers first, then the ones added at launch, then later
+    // openings. Append new pairs at the end: a key, once data is filed under it, never changes.
     static readonly Dictionary<string, (string elyos, string asmodian)[]> Pairs = new()
     {
         ["eu"] = new[]
@@ -38,16 +41,21 @@ public static class Servers
             ("Siel", "Israphel"), ("Nezekan", "Zikel"), ("Vaizel", "Triniel"), ("Kaisinel", "Lumiel"), ("Yustiel", "Marchutan"),
             ("Ariel", "Azphel"), ("Fregion", "Ereshkigal"), ("Meslamtaeda", "Beritra"), ("Hithanya", "Nemon"),
             ("Nania", "Hadala"), ("Tahavatha", "Ludra"), ("Luteros", "Ulgorn"), ("Phernos", "Munin"), ("Daminu", "Odar"),
-            ("Kasaka", "Zemurru"), ("Bakarma", "Kromede"), ("Tsenka", "Quai"), ("Kochi", "Baba")
+            ("Kasaka", "Zemurru"), ("Bakarma", "Kromede"), ("Tsenka", "Quai"), ("Kochi", "Baba"),
+            ("Ishtar", "Fafnir"), ("Tiamat", "Indnath"), ("Gauss", "Agnita"), ("Lamuatan", "Atiel"), ("Nathara", "Tassin")
         },
         ["na_e"] = new[]
         {
             ("Siel", "Israphel"), ("Nezekan", "Zikel"), ("Vaizel", "Triniel"), ("Kaisinel", "Lumiel"), ("Yustiel", "Marchutan"),
-            ("Ariel", "Azphel"), ("Fregion", "Ereshkigal"), ("Meslamtaeda", "Beritra")
+            ("Ariel", "Azphel"), ("Fregion", "Ereshkigal"), ("Meslamtaeda", "Beritra"), ("Hithanya", "Nemon")
         },
         ["na_w"] = new[] { ("Siel", "Israphel"), ("Nezekan", "Zikel"), ("Vaizel", "Triniel"), ("Kaisinel", "Lumiel"), ("Yustiel", "Marchutan") },
         ["latam"] = new[] { ("Siel", "Israphel"), ("Nezekan", "Zikel"), ("Vaizel", "Triniel"), ("Kaisinel", "Lumiel"), ("Yustiel", "Marchutan"), ("Ariel", "Azphel") },
-        ["asia"] = new[] { ("Siel", "Israphel"), ("Nezekan", "Zikel"), ("Vaizel", "Triniel"), ("Kaisinel", "Lumiel"), ("Yustiel", "Marchutan"), ("Ariel", "Azphel") },
+        ["asia"] = new[]
+        {
+            ("Siel", "Israphel"), ("Nezekan", "Zikel"), ("Vaizel", "Triniel"), ("Kaisinel", "Lumiel"), ("Yustiel", "Marchutan"),
+            ("Ariel", "Azphel"), ("Fregion", "Ereshkigal"), ("Meslamtaeda", "Beritra"), ("Hithanya", "Nemon"), ("Nania", "Hadala")
+        },
     };
 
     public static GameRegion? Region(string? key) => Regions.FirstOrDefault(r => r.Key == key);

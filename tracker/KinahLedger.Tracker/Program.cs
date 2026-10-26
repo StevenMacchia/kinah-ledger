@@ -4443,11 +4443,12 @@ options: --process aion[,other]");
         Console.WriteLine("\nServer roster:");
         var roster = Servers.All.ToList();
         var rosterKeys = roster.Select(x => x.Key).ToList();
-        bool rosterOk = roster.Count == 86 && rosterKeys.Distinct().Count() == rosterKeys.Count
+        bool rosterOk = roster.Count == 106 && rosterKeys.Distinct().Count() == rosterKeys.Count
                      && rosterKeys.All(k => System.Text.RegularExpressions.Regex.IsMatch(k, @"^[a-z_]+-[a-z]+-(elyos|asmodian)$"))
-                     && Servers.Find("na_e", "Siel (Elyos)")?.Key == "na_e-siel-elyos";
+                     && Servers.Find("na_e", "Siel (Elyos)")?.Key == "na_e-siel-elyos"
+                     && Servers.Find("eu", "Tiamat (Elyos)")?.Key == "eu-tiamat-elyos" && Servers.Find("eu", "Indnath (Asmodian)")?.Key == "eu-indnath-asmodian";
         ok &= rosterOk;
-        Console.WriteLine($"  {roster.Count} servers in {Servers.Regions.Length} regions, keys {rosterKeys[0]} .. {rosterKeys[^1]}  {(rosterOk ? "ok" : "MISMATCH: expected 86 distinct well-formed keys")}");
+        Console.WriteLine($"  {roster.Count} servers in {Servers.Regions.Length} regions, keys {rosterKeys[0]} .. {rosterKeys[^1]}  {(rosterOk ? "ok" : "MISMATCH: expected 106 distinct well-formed keys")}");
         Console.WriteLine("\nPlayer features (best crafts, where to farm, gear score, price alerts):");
         ok &= PlayerTests.Run();
         Console.WriteLine(ok ? "\nAll market cases passed." : "\nMarket mismatch, see above.");
