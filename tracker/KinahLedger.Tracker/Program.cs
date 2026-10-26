@@ -1259,6 +1259,7 @@ options: --process aion[,other]");
         ok &= SceneTest(items, s);
         ok &= AuditLineTest(items, s);
         ok &= RelogTest();
+        ok &= Session.ChatAlignTests.Run(items, s);
         ok &= MixedTest(items, s);
         ok &= EventRewardsTest(items, s);
         ok &= EventActivityTest(items, s);

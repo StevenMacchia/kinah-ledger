@@ -104,6 +104,9 @@ public static class ReplayBank
         foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow", "list_same", "runs_kept", "runs_from_picture", "run_kinah", "run_gear", "run_materials",
                                     "runs_partly_read", "runs_sent", "run_not_read", "run_pieces", "run_unknown_gear", "run_unknown_items", "run_abyss_points", "run_kinah_set_aside" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
+        // the chat's alignment (2026-10-25): reads that couldn't be lined up, and lines the settle took that came after them
+        foreach (var k in new[] { "chat_unaligned", "chat_settled_late" })
+            if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         // a run's items by name: each one expect names must match (the others aren't checked)
         if (expect["run_items"] is JsonObject eri)
         {
@@ -497,6 +500,9 @@ public static class ReplayBank
             foreach (var g in lr.Values.GroupBy(n => n, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal)) named[g.Key] = g.Count();
             res["list_rows"] = named;
         }
+        // chat reads that couldn't be lined up, and lines the settle counted that were first on screen after them (2026-10-25)
+        if (session.Unaligned > 0) res["chat_unaligned"] = session.Unaligned;
+        if (session.SettledLate > 0) res["chat_settled_late"] = session.SettledLate;
         // gathering attempts (GatherAttempts): per skill "ok/failed", and per node
         var skills = new JsonObject();
         foreach (var (f, st) in e.SkillSnapshot().Where(kv => kv.Value.Nodes > 0).OrderBy(kv => kv.Key)) skills[f.ToString()] = $"{st.Nodes - st.Failed}/{st.Failed}";

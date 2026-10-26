@@ -130,3 +130,11 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   are in an expedition's area, so the chat's items are set aside with the run (its reward picture decides): expect key
   `run_chat_items`, the chat items runs set aside, by name (only the names expect lists are checked). A case may say
   `"dump": true` to add its reads.log to a failed result, for reading on the build server what it did.
+- `text-2026-10-25-chat-panel-settle-1638` (484 "couldn't line this read up" lines that day, the settle open up to 42 s):
+  a pet window over the chat read as "MAX | 3 | MAX | 3" three times, a nameplate scrap, a read cut at its left, then 157
+  Kina. 0.8.39 took the window for the chat (the last read, then the anchor once read twice the same), so the next real
+  read lined up with nothing, and the settle took 157 Kina from the vote 3.6 s after the reads lined up again, dated 13 s
+  back. Right: the window is not a read of the chat (`LineTracker.Panel`; only a read holding a pickup or a player's line
+  is an anchor), the settle takes only lines on screen by the last unaligned read and closes 6 s of chat after it, and
+  528 and 157 Kina count once each. Keys `chat_unaligned` (reads that couldn't be lined up) and `chat_settled_late`
+  (lines the settle counted that came after them); the same rules on small reads in `Session/ChatAlignTests.cs`.

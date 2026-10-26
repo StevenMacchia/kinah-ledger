@@ -272,6 +272,8 @@ public sealed partial class TrackerSession
         fresh.SetZone(old.Zone);
         Engine = fresh;
         old.Finish();
+        // the audit counts kills across chunks: the finished engine's go with it (KillsSoFar)
+        Interlocked.Add(ref _killsRotated, old.Totals().Kills);
         return old;
     }
 
@@ -1261,6 +1263,7 @@ public sealed partial class TrackerSession
         DateTime settledAt = now; bool settledAny = false, settledAchievement = false;
         if (_tracker.Unaligned > unaligned)
         {
+            _garbledLast = now; _garbledNext = default;
             if (_garbledSince == null)
             {
                 _garbledSince = now;
@@ -1271,11 +1274,25 @@ public sealed partial class TrackerSession
                 lock (_countedLines) _countedGarbled.AddRange(_countedLines.Where(x => (now - x.At).TotalSeconds <= 30).Select(x => x.Line));
             }
         }
-        else if (_garbledSince is { } gs && lines.Count > 0)
+        else if (_garbledSince is { } gs && lines.Count > 0 && !_tracker.LastPanel)
         {
-            // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up
-            if ((now - gs).TotalSeconds > SettleSeconds) _garbledSince = null;
-            else { settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs; settledRead = _lastLines; }
+            // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up:
+            // SettleBoundSeconds of chat read after the first clean read (2026-10-25: it stayed open up to 42 s and took new
+            // lines from the vote, dated when the garbling began). Clean: no loot line still garbled (2026-10-23: "Acquire d
+            // Fine OJy1e" two reads running, lined up with each other, before the clean read 5 s later)
+            if (_garbledNext == default && !lines.Any(GarbledLoot)) _garbledNext = now;
+            if ((now - gs).TotalSeconds > SettleSeconds || (_garbledNext != default && (_chatLinesAt - _garbledNext).TotalSeconds > SettleBoundSeconds))
+            {
+                _garbledSince = null;
+                CrashLog.NoteBurst("the chat has read clean for a while since the reads that didn't line up: the settle closed, lines count as they come");
+            }
+            else
+            {
+                settled = Reread.Settled(_lastLines, lines, _beforeGarbled, _countedGarbled, out settledAchievement); settledAt = gs; settledRead = _lastLines;
+                // only what was on screen by the last read that didn't line up: a line that came after is the vote's, and counts
+                // at its own time (16:38:31: 157 Kina taken from the vote and dated 13 s back, before the zone changed)
+                foreach (var l in settled.Where(SettleLate).ToList()) { settled.Remove(l); CrashLog.NoteBurst($"{l.Trim()}: first on screen after the reads lined up again, left to the vote"); }
+            }
         }
         Reread.NoteFirstSeen(_firstSeen, lines, now);
         // every Kina amount this read shows, counted or not: a rise of the counter no line claims is named after them
@@ -1283,7 +1300,9 @@ public sealed partial class TrackerSession
         Reread.Remember(_recent, lines, now);
         // an empty read (the chat fading out) is not the last read: the settle needs the last read that showed lines
         // (Steven, 2026-10-23 11:07: all 21 event rewards lost when the chat faded right after the clean read)
-        if (lines.Count > 0) { _lastLines = lines; _chatLinesAt = now; }
+        // ...nor is a game window over the chat (LineTracker.Panel): the burst, the overlap and the settle look at the last real read
+        if (_tracker.LastPanel) CrashLog.NoteBurst("a game window over the chat (numbers, no line the chat prints): not a read of the chat, skipped");
+        else if (lines.Count > 0) { _lastLines = lines; _chatLinesAt = now; }
         bool batchAchievement = false;
         bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat", ChatVoter.Out? meta = null)
         {
@@ -1459,6 +1478,8 @@ public sealed partial class TrackerSession
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, settledAt, wrap: false)) { bool a1 = Apply(events, l, "chat · recovered"); any |= a1; if (a1) WatchCount(l, events); }
             CrashLog.Read(l + "    (counted once the chat settled)", any && !_lastRepeatOnly);
             if (any) { LastLine = l; LootLine?.Invoke(l); settledAny = true; foreach (var x in parts.Count > 1 ? parts.Prepend(l) : parts) { lock (_settledCounted) _settledCounted.Add((x.Trim(), now)); NoteCounted(x, now); } }
+            // a line first on screen after the reads lined up again was the vote's, not the settle's (the replay bank's chat_settled_late)
+            if (any && SettleLate(parts[0])) SettledLate++;
         }
         if (settledAny)
         {
@@ -2637,6 +2658,10 @@ public sealed partial class TrackerSession
     // The quest tracker's "Defeat … (n/20)" lines count kills of quest enemies exactly, so where every enemy fought is a
     // quest enemy, the kills counted should rise as fast as the counter. Pass times say how often the screen is read.
     int _passes; double _passMs; DateTime _auditAt = DateTime.UtcNow; int _auditKills = -1, _questSteps, _auditAdded, _auditDups;
+    /// <summary>Kills counted in the engines Rotate handed back (the finished chunks).</summary>
+    int _killsRotated;
+    /// <summary>Kills counted since this session began: the finished chunks' and the current engine's.</summary>
+    internal int KillsSoFar => Volatile.Read(ref _killsRotated) + Engine.Totals().Kills;
     readonly Dictionary<int, int> _questMax = new();
     /// <summary>A new quest number seen once, waiting for the next read to agree (and when it was first seen).</summary>
     readonly Dictionary<int, (int N, DateTime At)> _questPending = new();
@@ -2704,14 +2729,18 @@ public sealed partial class TrackerSession
     internal void Audit(DateTime? at = null)
     {
         var now = at ?? DateTime.UtcNow;
-        if (_auditKills < 0) { _auditKills = Engine.Totals().Kills; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
+        if (_auditKills < 0) { _auditKills = KillsSoFar; _auditAdded = _cross.Added; _auditDups = _cross.Duplicates; }
         if ((now - _auditAt).TotalSeconds < 60) return;
         var sameNote = ChatSameNote() + ListSameNote();
         // the decoder runs on its own thread: its time over the minute goes in at the same per-pass rate
         double dec = NameDecoder.TotalMs; Times.Add("decoder", dec - _decoderMsAt); _decoderMsAt = dec;
         SaveColours();
         ReportLayout();   // the text size is known by now: the layout's key gets it
-        int kills = Engine.Totals().Kills;
+        // kills since the session began, across the 15-minute chunks (Rotate): the engine's own total starts over at each
+        // chunk, and the audit subtracting it read "kills counted +-234" at 14:56 on 2026-10-25 (an audit artefact; the
+        // kills went with their chunk). An unexplained drop counts from zero, never below
+        int kills = KillsSoFar;
+        if (kills < _auditKills) _auditKills = 0;
         // the minutes when the quest counter moved: what the game counted against what the tracker counted, for the meter
         if (_questSteps > 0 && kills >= _auditKills) { QuestKillsGame += _questSteps; QuestKillsCounted += kills - _auditKills; }
         if (_passes > 0)
@@ -3229,6 +3258,36 @@ public sealed partial class TrackerSession
     void NoteCounted(string l, DateTime now) { lock (_countedLines) { _countedLines.Add((l, now)); _countedLines.RemoveAll(x => (now - x.At).TotalSeconds > 60); } }
     /// <summary>Garbled reads longer than this before the chat settles aren't one burst; nothing is taken from the settled read.</summary>
     public const double SettleSeconds = 45;
+    // ---- the settle's bound (2026-10-25: "the chat settled after 39 s"; 157 Kina at 16:38:31 taken from the vote and dated
+    // 13 s back, before the zone changed) ----
+    /// <summary>When the last read that couldn't be lined up came, and the first clean read of the chat after it (default: none yet).</summary>
+    DateTime _garbledLast, _garbledNext;
+    /// <summary>
+    /// A line the settle may take was on screen by the first clean read of the chat after the last one that didn't line up
+    /// (a chat fading in can show its lines whole only seconds later: the 2026-10-23 event rewards, 5 s), or this soon
+    /// after the last one that didn't.
+    /// </summary>
+    public const double SettleSlackSeconds = 1.5;
+    /// <summary>The settle looks at this much chat after the first clean read, then closes; lines count as they come.</summary>
+    public const double SettleBoundSeconds = 6;
+    /// <summary>A loot line whose verb didn't read whole ("Acquire d Fine OJy1e"): the chat is still fading in.</summary>
+    static bool GarbledLoot(string l) => Reread.LooksLikeLoot(l) && !l.TrimStart().StartsWith('[')
+        && !Regex.IsMatch(ChatParser.CleanSystemLine(l), @"(?:^|[\s(])(?:acquired|obtained)(?:[\s.!,]|$)", RegexOptions.IgnoreCase);
+    /// <summary>Lines the settle counted that were first on screen after the reads lined up again (the replay bank's chat_settled_late).</summary>
+    public int SettledLate { get; private set; }
+    /// <summary>
+    /// True when <paramref name="line"/> was first on screen (the same digits, a letter or two apart) more than
+    /// <see cref="SettleSlackSeconds"/> after the last read that didn't line up: it came after the garbling, not during it.
+    /// </summary>
+    bool SettleLate(string line)
+    {
+        var k = ChatKey(line);
+        DateTime? first = null;
+        foreach (var (key, v) in _firstSeen) if ((key == k || Reread.Same(key, k)) && (first == null || v.First < first)) first = v.First;
+        var by = _garbledLast.AddSeconds(SettleSlackSeconds);
+        if (_garbledNext > by) by = _garbledNext;
+        return first is DateTime f && f > by;
+    }
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
     List<string> _lastLines = new();
