@@ -128,7 +128,9 @@ public sealed class HudTicker : IHudLook
             var pick = p;
             want.Add((p.Id, "pick", () => PickToast(pick, age)));
         }
-        want = want.Take(4).ToList();
+        // two feed lines read in the same instant with the same name and amount share a key (2026-10-26 10:05, "Specified
+        // Visual is already a child of another Visual"): one toast per key, the first one
+        want = want.GroupBy(w => w.Key).Select(g => g.First()).Take(4).ToList();
         if (!Changed("stack", string.Join("\n", want.Select(w => w.Key)))) return;
 
         // toasts no longer wanted leave; new ones are made once; the rest keep their animations and move to their place
@@ -148,6 +150,7 @@ public sealed class HudTicker : IHudLook
             t.Place.Margin = new Thickness(0, i == 0 ? 6 : 4, 0, 0);
             t.Place.Opacity = kind == "pick" ? PlaceOpacity[i] : 1;
             if (kind == "pick") t.Body.Background = Wash("pick", i == 0);
+            if (t.Place.Parent is Panel owner) owner.Children.Remove(t.Place);
             _stack.Children.Add(t.Place);
         }
     }
