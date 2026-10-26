@@ -88,7 +88,18 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
    - **Game reading**: **Detect now**, **Choose the chat**, **Test read**, the Market area, and a live preview of what
      is read. These act right away.
    - **In game**: the start/stop shortcut (Ctrl+Shift+K by default; any Ctrl/Alt/Shift combination, or off) and the
-     panel over the game.
+     panel over the game. The panel behaves like a game overlay: it shows only while the game (or the tracker's own
+     window) is in front, fades out on alt-tab and comes back with the game, hides when the game is minimized or
+     closed, and dims while reading is paused because something covers the chat. It needs borderless or windowed
+     mode; Windows can't draw over exclusive fullscreen. **Lock the panel in place** (on for new installs) lets clicks
+     go through it to the game and keeps it from ever taking focus; **Move the panel** in the tray menu unlocks it for
+     20 seconds, or turn the lock off to drag it with a dashed outline. Its opacity (the background only, so the
+     figures stay readable) and size (70 to 200%) apply as you slide them and are kept on Save. It starts at the top
+     centre of the game's screen, and a remembered spot is kept on a screen that is still there. The dot beside the
+     timer is red only during a run, when the timer reads "RUN 12:31"; the shortcut flashes "Run started" or "Run
+     stopped · 1.2M this run" for three seconds. For the first two minutes (and three things counted) the hour's
+     figure says it is warming up rather than showing a wild number. An update never asks while the game is in
+     front: the panel says it is ready and the question waits until you leave the game.
    - **Updates** and **About**.
 
    Only one Kinah Ledger runs at a time: starting it again brings up the running one's window.
