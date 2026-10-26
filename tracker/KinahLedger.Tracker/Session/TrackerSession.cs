@@ -2837,6 +2837,8 @@ public sealed partial class TrackerSession
     public LootRows Rows => _rows;
     /// <summary>Loot list rows that went before their text settled: unsure, logged, never counted.</summary>
     public int ListUnsure => _rows.Unsure;
+    /// <summary>The replay bank's view of the loot list (set by it; null live): each tracked item row shown to the cross-check, by its last name.</summary>
+    internal Dictionary<int, string>? ListRows { get; set; }
 
     /// <summary>Lines in the loot list's band that aren't rows (a nameplate, a zone's name, text over the world): dropped before LootRows.</summary>
     internal LootNotRow NotRow => _notRow ??= new LootNotRow(_items);
@@ -2999,6 +3001,7 @@ public sealed partial class TrackerSession
             // each row tracked as an object in the list's stack: shown once its text has settled, one row one pickup, a change in place one item
             // with its final text (LootRows); a row that went before it settled is unsure and never shown
             var rows = _rows.Feed(lines, now);
+            if (ListRows != null) foreach (var rw in rows) if (!rw.IsKinah && rw.Obj > 0) ListRows[rw.Obj] = rw.Name.Trim();
             // each row a witness of a pickup of its item, from when it first showed (ItemRepeatGuard)
             RepeatRows(rows, now);
             LabelListRead(lines, now);   // Help improve counting: the rows a chat line or a race may confirm

@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "two Superior Life Potion lines 1.8 s apart, x3 then x10 (2026-10-25 13:48:12, the Daeva Pass Level Reward): the x10 line lands under the x3 line, so they are two lines and two pickups, 13, set aside with the expedition run as the live read did (the reward table's potion slot read x13). Then the x3 line is read again at its own place with its count lost (\"Acquired Superior Life Potion (Bound)\") and garbled (\"(BoundYx3Ä\"), and the x10 line as \"x 10\": the same lines again, nothing added",
+  "source": "written from Steven's trace.log 17:48:12.97 to 17:48:25 UTC (tracker 0.8.39), where every read that shows the x10 line shows the x3 line above it: the reads as the chat grew, with the slips those reads had; players' lines are fillers",
+  "expect": {
+    "items": {},
+    "run_chat_items": {
+      "Superior Life Potion": 13
+    }
+  }
+}

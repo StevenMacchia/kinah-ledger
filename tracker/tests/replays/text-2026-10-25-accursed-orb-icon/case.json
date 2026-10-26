@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Accursed Orb, 2026-10-25 13:43:20 to 13:43:42 local, Vakron Sky Island: one loot list row read \"Accursed or\" and \"Accursed on\" (its end not slid in yet, no count) over seven seconds, the icon beside it closest to Accursed Bow's at 64 to 69 (the sure distance is 70) and Accursed Orb's at 88 to 97. 0.8.39 renamed the row Accursed Bow on every read (about 105 times that day; three were counted as rare drops confirmed by a second read). The text is one letter from Accursed Orb, or one slip from its start, and two edits from Accursed Bow: the text wins, and the row is Accursed Orb. No chat line showed the pickup, so nothing counts (a rare drop the list alone shows needs its second read, which a text case has no picture for)",
+  "source": "Steven's trace.log 2026-10-25 17:43:20 to 17:43:42 UTC (tracker 0.8.39): chat kept only for the game's own lines, every player's line replaced by a filler keyed by its text's hash; list reads as recorded (rows, y, c, b, s, h, x), the player's and other players' names in the band shifted one letter. The rows the icon renamed carry \"r\" (the text as read, from reads.log's \"read as\" lines) and \"i\" (Accursed Bow 110430124 at the icon distance reads.log logged, Accursed Orb 110630124 at its \"next\"), as trace.log writes them since this case",
+  "expect": {
+    "list_rows": {
+      "Accursed Orb": 3,
+      "Accursed Bow": 0
+    }
+  }
+}
