@@ -85,3 +85,14 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   took one of the fight's kills for the witness of a second pair. Right: 1. A line under the same two lines a copy was
   counted under, one of them once in the read, is that copy wherever the scroll put it (`ItemRepeatGuard`; the guard's
   own checks in `Ocr/ChatCountTests.cs`). The Order Gloves were the 16:35 event cards, named right from their picture.
+- `text-2026-10-25-vakron-bound-x9`: a Vakron burst read that didn't line up, "Acquired Amplify Stone Fragment (Unique)"
+  with its "(Bound) x9." on the next line, then the reward table as reads.log voted it (x9). 0.8.39 counted the first half
+  as one, "1 assumed", and the table's witness took that 1 for the chat's own count and set the x9 not read. A wrapped tail
+  is joined in a burst and in the settle too (`ChatParser.JoinWrappedTails`), and a count no read showed is no witness
+  (`TableWitness.Line.Assumed`). Right: Amplify Stone Fragment (Unique) 9, 5 slots not read.
+- `table-2026-10-25-vakron-1353`: the 13:53 table's kept frame with the two rows of world under the grid left in (names
+  blurred). 0.8.39 read 44 slots for 29: nameplates and health bars below stood out like slots, so the short last row read
+  as full. The grid now ends at a row short by three boxes or more (`RewardGrid.ReadAsync`).
+- `event-2026-10-25-defend-shugo-digit`: two reads of one Defend Shugo Merchants screen, the first with card 2's Abyss Points
+  edited from 320 to 340 (the case says how). 0.8.39 took the first read's x340; reads that disagree on a count with no
+  majority now leave the slot not read (`EventCards.Merger.Voted`). Run key `run_abyss_points`: 920.
