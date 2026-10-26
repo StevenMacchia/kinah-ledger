@@ -99,7 +99,14 @@ count with Kinah and loot per hour in a small always-on-top panel. Setup is pick
      timer is red only during a run, when the timer reads "RUN 12:31"; the shortcut flashes "Run started" or "Run
      stopped · 1.2M this run" for three seconds. For the first two minutes (and three things counted) the hour's
      figure says it is warming up rather than showing a wild number. An update never asks while the game is in
-     front: the panel says it is ready and the question waits until you leave the game.
+     front: the panel says it is ready and the question waits until you leave the game. **Panel look** picks how it
+     looks, and Options draws all three at their real size with sample figures: the **Strip** (one line with the
+     figures you pick, as before, and still the default), the **Card** (a game-tooltip card: the run, the zone, the hour
+     in gold, the session, and your last three pickups as item tiles, the newest lit for a few seconds) or the
+     **Ticker** (a small pill with the run, the hour and the session, and each pickup sliding in under it as a toast that
+     fades after 6 seconds, four at most). The Card and the Ticker say why reading is paused in an orange line instead of
+     dimming, and a rare drop lights them in its grade's colour for five seconds. The Ticker starts left of the target
+     bar, so its toasts never cover the target's name, and keeps a spot of its own.
    - **Updates** and **About**.
 
    Only one Kinah Ledger runs at a time: starting it again brings up the running one's window.

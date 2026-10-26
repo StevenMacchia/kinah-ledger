@@ -680,6 +680,7 @@ public partial class MainWindow
     {
         var newest = new[] { FeedTab.Farming, FeedTab.Crafting, FeedTab.Events }.Select(t => FeedFor(t).FirstOrDefault()).Where(l => l != null).OrderByDescending(l => l!.At).FirstOrDefault();
         foreach (var (k, v) in HudFeedValues(newest, _hudFlag)) _hudValues[k] = v;
+        HudLookValues();   // the Card's and the Ticker's pickups, zone, pause and rare drop (MainWindow.HudLooks.cs)
     }
 
     Dictionary<string, string> HudFeedValues(FeedLine? l, string flag)

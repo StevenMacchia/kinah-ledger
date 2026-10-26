@@ -344,10 +344,18 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel over the game"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top strip with the figures you pick below, shown while the game is in front."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top panel with your run and pickups, shown while the game is in front."/>
                 </StackPanel>
                 <CheckBox x:Name="HudChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- the panel's look: the Strip, the Card or the Ticker, each drawn below at its real size from sample figures -->
+              <StackPanel Margin="18,13,18,15">
+                <TextBlock Style="{StaticResource RowTitle}" Text="Panel look"/>
+                <TextBlock Style="{StaticResource RowHint}" Text="Each one is drawn below at its real size, with sample figures."/>
+                <WrapPanel x:Name="HudLookHost" Margin="0,10,0,0"/>
+                <StackPanel x:Name="HudLookPreview" Margin="0,6,0,0"/>
+              </StackPanel>
               <Border Style="{StaticResource Divider}"/>
               <!-- locked: click-through and never focused, like a game overlay; Move the panel in the tray unlocks it for 20 s -->
               <Grid Style="{StaticResource Row}">
@@ -364,6 +372,7 @@
                 <TextBlock Style="{StaticResource RowTitle}" Text="What the panel shows"/>
                 <TextBlock Style="{StaticResource RowHint}" Text="Pick any. The figures match the window's."/>
                 <WrapPanel x:Name="HudFieldHost" Margin="0,10,0,0"/>
+                <TextBlock x:Name="HudFieldsNote" Style="{StaticResource RowHint}" Margin="0,8,0,0" Visibility="Collapsed" Text="For the Strip. The Card and the Ticker show a set of their own."/>
               </StackPanel>
               <Border Style="{StaticResource Divider}"/>
               <!-- how solid the panel's background is, and its size: shown on the panel as the sliders move, kept on Save -->
@@ -395,7 +404,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Panel position"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Back to the top centre of the game's screen, clear of the minimap and the chat."/>
+                  <TextBlock x:Name="HudPositionHint" Style="{StaticResource RowHint}" Text="Back to the top centre of the game's screen, clear of the minimap and the chat."/>
                 </StackPanel>
                 <Button x:Name="HudResetBtn" Grid.Column="1" Content="Reset position" VerticalAlignment="Center"/>
               </Grid>
