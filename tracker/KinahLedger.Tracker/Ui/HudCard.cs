@@ -130,10 +130,14 @@ public sealed partial class HudCard : IHudLook
         var (run, clock) = Time(V("time"));
         var paused = V("paused");
         bool live = V("run") == "1" && paused.Length == 0 && V("show") != "dim";
-        if (Changed("head", $"{live}|{run}|{clock}|{V("zone")}|{paused.Length > 0}"))
+        // nothing counted yet (no run, no pickup, a total of 0): no "0:00" in the head and no "0 session" line, only
+        // "Waiting for the first count", as on the Ticker (Steven, 2026-10-26)
+        bool counted = run || Picks(values).Count > 0 || V("total") is not ("" or "0");
+        if (Changed("head", $"{live}|{run}|{clock}|{V("zone")}|{paused.Length > 0}|{counted}"))
         {
             SetDot(_dot, live);
             _run.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
+            _time.Visibility = counted ? Visibility.Visible : Visibility.Collapsed;
             _time.Text = clock; _time.Foreground = live || (!run && paused.Length == 0) ? Ink : Faint;
             _time.Margin = new Thickness(run ? 6 : 8, 0, 0, 0);
             _zone.Text = V("zone");
@@ -141,15 +145,16 @@ public sealed partial class HudCard : IHudLook
 
         // the hour and the session: "1.27M an hour", "894K session, after the Market's cut"; warming up says so, dimmed
         bool warm = V("warm") == "1";
-        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}"))
+        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}"))
         {
             _rate.Inlines.Clear();
-            if (V("rate").Length == 0) _rate.Inlines.Add(R("Waiting for the first count", 13, Faint));
+            if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R("Waiting for the first count", 13, Faint));
             else if (warm) _rate.Inlines.Add(R(V("rate"), 16, Gold, mono: true));
             else { _rate.Inlines.Add(R(V("rate"), 20, Gold, mono: true)); _rate.Inlines.Add(R(" an hour", 12, Faint)); }
             _rate.Opacity = warm ? .55 : 1;
             _total.Inlines.Clear();
-            if (V("total").Length > 0) { _total.Inlines.Add(R(V("total"), 13, Muted, mono: true)); _total.Inlines.Add(R(" session, after the Market's cut", 12, Faint)); }
+            if (V("total").Length > 0 && counted) { _total.Inlines.Add(R(V("total"), 13, Muted, mono: true)); _total.Inlines.Add(R(" session, after the Market's cut", 12, Faint)); }
+            _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
         }
 
         // the notice row: the reader paused (orange, with the sign), else a start or stop's flash, an update waiting, a flagged run
