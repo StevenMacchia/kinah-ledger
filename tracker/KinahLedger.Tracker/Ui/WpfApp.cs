@@ -333,6 +333,27 @@ public static class WpfApp
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
 
+        // the panel's crafting line (2026-10-26): the Card's and the Ticker's craft values from a sample ledger that adds up,
+        // summed as the Crafting part sums it, at the Crafting render's prices
+        w.ShowDemo("Crafting"); DoEvents();
+        {
+            var (cv, sums, windowNet) = w.HudCraftCheck();
+            string C(string k) => cv.GetValueOrDefault(k, "");
+            long cost = Data.RecipeBook.CostPerTry("Orichalcum Greaves", out _) ?? -1;
+            long sells = Data.PriceBook.Price("Orichalcum Greaves") is long gp ? (long)Math.Round(gp * Data.PriceBook.SellerKeeps) : -1;
+            Check(C("craft") == "1" && C("craftTime") == "18:05" && C("craftRecipe") == "Orichalcum Greaves" && C("craftIcon").Length > 0
+                  && C("craftTries") == "12" && C("craftOk") == "9" && C("craftFail") == "3",
+                $"panel crafting: on, {C("craftTime")}, {C("craftRecipe")}, {C("craftTries")} crafts, {C("craftOk")} worked, {C("craftFail")} failed");
+            Check(cost > 0 && sells > 0 && Math.Abs(sums.Net - (9 * sells - 12 * cost)) <= 9,
+                $"panel crafting adds up: 9 × {sells:N0} − 12 × {cost:N0} = {sums.Net:N0}");
+            Check(windowNet.Length > 0 && C("craftProfit").Replace("≤ ", "") == windowNet && C("craftSells") == MainWindow.FkForTest(sells),
+                $"panel crafting: profit {C("craftProfit")} as the Crafting part's {windowNet}, sells for {C("craftSells")} each");
+            Check(C("craft0Ok") == "1" && C("craft0Worth") == MainWindow.FeedKForTest(sells - cost) && C("craft1Ok") == "" && C("craft1Worth") == MainWindow.FeedKForTest(-cost)
+                  && C("craft3").Length > 0 && long.Parse(C("craft0At")) > long.Parse(C("craft1At")),
+                $"panel crafting: the last crafts newest first, {C("craft0Worth")} worked, {C("craft1Worth")} failed");
+            Check(!cv.Keys.Any(k => k.Contains("ccura", StringComparison.OrdinalIgnoreCase)) && !cv.Values.Any(x => x.Contains('%')), "panel crafting: no accuracy figure");
+        }
+
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;
@@ -456,7 +477,7 @@ public static class WpfApp
         // (the farming and flagged states from a farming render, the crafting one from the Crafting render: each with its own sample prices)
         var states = !demo ? new() : w.HudStates().Where(x => kind == "Crafting" ? x.File == "ui-hud-crafting.png" : kind == "Open world" && x.File != "ui-hud-crafting.png").ToList();
         // the Card and the Ticker in the mock's three states, from the window's sample figures
-        var lookStates = demo && kind == "Open world" ? w.HudLookStates() : new();
+        var lookStates = demo && kind == "Open world" ? w.HudLookStates() : demo && kind == "Crafting" ? w.HudCraftLookStates() : new();
         if (states.Count > 0) foreach (var (k, v) in states[0].Values) values[k] = v;
         w.Close();
 

@@ -14,7 +14,7 @@ namespace KinahLedger.Ui;
 /// tiles, the newest lit for a few seconds. A notice (the reader paused, an update waiting) adds a slim row; a rare drop
 /// lights the card in its grade's colour while the window holds it (the "rare" values, about 5 s).
 /// </summary>
-public sealed class HudCard : IHudLook
+public sealed partial class HudCard : IHudLook
 {
     /// <summary>For layout renders and the Options preview: everything at full, nothing animates.</summary>
     public bool Still { get; init; }
@@ -84,6 +84,7 @@ public sealed class HudCard : IHudLook
             Width = 360, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), BorderBrush = FrameLine, Padding = new Thickness(12, 8, 12, 9),
             Child = new StackPanel { Children = { head, new Border { Height = 1, Margin = new Thickness(0, 6, 0, 7), Background = rule }, body, _notice, _acc } },
         };
+        BuildCraft(head, body);   // the crafting line over the head and figures (Ui/HudCraftLooks.cs)
         Paint();
         _ring = new Border { Visibility = Visibility.Collapsed, IsHitTestVisible = false };
         Root = new Grid { Margin = Inset, Children = { _ring, _card } };
@@ -117,6 +118,7 @@ public sealed class HudCard : IHudLook
     public void Update(IReadOnlyDictionary<string, string> values)
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
+        CraftState(values);   // while the crafting window is open (Ui/HudCraftLooks.cs)
         var (run, clock) = Time(V("time"));
         var paused = V("paused");
         bool live = V("run") == "1" && paused.Length == 0 && V("show") != "dim";
