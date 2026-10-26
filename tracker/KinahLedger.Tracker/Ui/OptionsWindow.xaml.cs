@@ -298,6 +298,7 @@ public partial class OptionsWindow : Window
         MarkKeyBox.LostKeyboardFocus += (_, _) => { if (_capMark) EndCapture(); };
         MarkKeyOffBtn.Click += (_, _) => Edit(_edit with { MarkWrongKey = "" });
         // tried on the panel at once, kept on Save, moved back on Cancel, like the rest of the page
+        HudPlaceBtn.Click += (_, _) => { if (_host.OpenPlacementGuide() is { } why) ShowNote(why, "Warn"); };
         HudResetBtn.Click += (_, _) => { _resetSpot = true; _host.PreviewHudSpot(); Refresh(); ShowNote("The panel moves to the top centre of the game's screen. Save keeps it there.", "Good"); };
 
         CheckNowBtn.Click += async (_, _) => await Act(CheckNowBtn, () => _host.CheckForUpdate(manual: true));
