@@ -61,7 +61,7 @@ public sealed class HudCard : IHudLook
 
         // the figures: the hour big in gold, the session under it
         _rate = new TextBlock { LineHeight = 26, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
-        _total = new TextBlock { LineHeight = 20, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
+        _total = new TextBlock { LineHeight = 18, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
         var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _rate, _total } };
         var body = new Grid();
         body.ColumnDefinitions.Add(new ColumnDefinition());
@@ -194,7 +194,7 @@ public sealed class HudCard : IHudLook
             else if (first != null)
             {
                 _newest.Inlines.Add(R(first.Name, 13, Ink));
-                if (first.Worth.Length > 0) _newest.Inlines.Add(R("  " + first.Worth, 13, Gold, mono: true));
+                if (first.Worth.Length > 0) { _newest.Inlines.Add(R("  ", 13, Ink)); _newest.Inlines.Add(R(first.Worth, 13, Gold, mono: true)); }
             }
             // a long name gives way to the zone, never the other way: the zone trims first
             _newest.MaxWidth = 200;

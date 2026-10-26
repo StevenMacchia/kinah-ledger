@@ -454,7 +454,8 @@ public static class WpfApp
             h.Show();
             h.Update(v);
             DoEvents();
-            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            // over the mock's dark page (#090B15), so the toasts' see-through washes read as they do over the game
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, Color.FromRgb(0x09, 0x0B, 0x15));
             h.Close();
         }
 
@@ -495,7 +496,8 @@ public static class WpfApp
         System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
 
-    static void Save(FrameworkElement root, string path, double fallbackWidth)
+    /// <param name="backdrop">Painted under the drawing (the panel looks' renders); transparent when null.</param>
+    static void Save(FrameworkElement root, string path, double fallbackWidth, Color? backdrop = null)
     {
         if (root.ActualWidth < 1 || root.ActualHeight < 1)
         {
@@ -506,6 +508,12 @@ public static class WpfApp
         int wpx = (int)Math.Ceiling(root.ActualWidth), hpx = (int)Math.Ceiling(root.ActualHeight);
         if (wpx < 1 || hpx < 1) throw new InvalidOperationException("the window did not lay out");
         var rtb = new RenderTargetBitmap(wpx, hpx, 96, 96, PixelFormats.Pbgra32);
+        if (backdrop is { } bg)
+        {
+            var under = new DrawingVisual();
+            using (var dc = under.RenderOpen()) dc.DrawRectangle(new SolidColorBrush(bg), null, new Rect(0, 0, wpx, hpx));
+            rtb.Render(under);
+        }
         rtb.Render(root);
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(rtb));

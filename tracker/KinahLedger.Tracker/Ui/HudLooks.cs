@@ -203,12 +203,16 @@ static class HudKit
         box.Child = face;
         g.Children.Add(box);
         if (p.Count.Length > 0)
-            g.Children.Add(new Border
+        {
+            // on a canvas, so a badge wider than a small tile ("1192" on 24 px) hangs past its left edge instead of being cut
+            var badge = new Border
             {
-                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -4, -4),
                 Padding = new Thickness(3, 0, 3, 0), CornerRadius = new CornerRadius(4), Background = Slot, BorderBrush = BadgeLine, BorderThickness = new Thickness(1),
                 Child = new TextBlock { Text = p.Count, FontFamily = Mono, FontSize = 9.5, Foreground = White, LineHeight = 11, LineStackingStrategy = LineStackingStrategy.BlockLineHeight },
-            });
+            };
+            Canvas.SetRight(badge, -4); Canvas.SetBottom(badge, -4);
+            g.Children.Add(new Canvas { Width = size, Height = size, IsHitTestVisible = false, Children = { badge } });
+        }
         return g;
     }
 
