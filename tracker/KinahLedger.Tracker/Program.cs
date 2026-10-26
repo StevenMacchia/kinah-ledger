@@ -3793,6 +3793,23 @@ options: --process aion[,other]");
                 ne.Apply(new KinahChanged(DateTime.UtcNow, 5000, false)); ne.Apply(new ItemAcquired(DateTime.UtcNow, items.IdOf("Raw Leather"), 1, false));
                 Check("Nightmare: known, never counted", $"{ZoneLocator.KindOf("Nightmare")} · {ne.Kinah} Kinah · {ne.Items.Count} items · {ne.Events} events", "Ignored · 0 Kinah · 0 items · 0 events");
             }
+            {
+                // Sealed Dungeons and Forts are open-world quest areas, never expeditions (Steven, 2026-10-26): no run, nothing counted
+                var sealedNames = new[] { "Mysterious Mushroom Cave", "Poacher's Den", "Marsh Library", "Fortress Jail", "Fissure Cave" };
+                Check("Sealed Dungeons: known, never counted", string.Join(",", sealedNames.Select(z => ZoneLocator.KindOf(z) ?? "none")), "Ignored,Ignored,Ignored,Ignored,Ignored");
+                var se = new SessionEngine(items); se.SetZone("Cave of the Desperate");
+                se.Apply(new KinahChanged(DateTime.UtcNow, 5000, false)); se.Apply(new ItemAcquired(DateTime.UtcNow, items.IdOf("Raw Leather"), 1, false));
+                Check("...nothing in one counts as farming", $"{se.Kinah} Kinah · {se.Items.Count} items · {se.Events} events", "0 Kinah · 0 items · 0 events");
+                var sl = new InstanceLog(); var s0 = DateTime.UtcNow.AddHours(-7);
+                sl.Zone("Spirit Flower Cave", s0);
+                sl.Loot(new KinahChanged(s0.AddMinutes(2), 5_000, false));
+                sl.Zone("Eastern Cantas Valley", s0.AddMinutes(4));
+                sl.Zone("Eastern Cantas Valley", s0.AddMinutes(4).AddSeconds(InstanceLog.RewardGraceSeconds + 1));
+                Check("...and no run", $"{sl.TakeUnshared(s0.AddMinutes(-1)).Count(r => r.Start >= s0.AddMinutes(-1))}", "0");
+                var oldSealed = new InstanceRun { Zone = "Marsh Library", Kind = "Expedition", Start = s0, LastLoot = s0.AddMinutes(3) };
+                Check("...an old saved run in one is left out on load, an expedition's is not",
+                    $"{InstanceLog.LeftAlone(oldSealed)} {InstanceLog.LeftAlone(new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition" })}", "True False");
+            }
             Check("instances: an open-world zone has none", ZoneLocator.KindOf("Eastern Cantas Valley") ?? "none", "none");
             Check("instances: they are on the zone list", ZoneLocator.Known.Contains("Urugugu Canyon") ? "yes" : "no", "yes");
             Check("timed events: Shugo Festival games and invasions", string.Join(",", new[] { "Odyle Flight Frenzy", "Jump Jump", "Up! Up! Up!", "Not This Tile?", "Incursion of the Spirits", "Beritra Air Raid" }.Select(z => ZoneLocator.KindOf(z) ?? "none")), "Event,Event,Event,Event,Event,Event");
