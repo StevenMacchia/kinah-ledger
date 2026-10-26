@@ -1,0 +1,10 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "farming, 2026-10-25 15:22:00 to 15:26:00 local: 49 Kina lines (7,635 Kina) in two fights with a gathering stop between, read through the watcher's own counter path (strip reads every 3 s, BalanceTracker, then the Kinah counter check). The counter rises in the frame its chat line appears and the chat count follows 0.8 to 1.9 s later (median 1.1 s, the day's 1,395 lines after 12:25), so in a fight nearly every 3 s strip read has a line in flight: the rule that needs two consecutive reads to differ by exactly the Kina counted in between matched 0 times here (live, the whole day: 0x). Comparing between two settled readings (the counter read the same twice) against the Kina counted between them finds the counter and agrees",
+  "source": "Steven's trace.log 19:21:55Z to 19:26:05Z (chat, list as read; players' lines replaced by filler). The strip reads are rebuilt, not read: reads.log doesn't keep them. Each Kina line the tracker counted (reads.log ok lines) raises both Kinah figures 0.3 s before the first chat read that shows it (the counter changes in the line's own frame, kinah-bench timing.md); figures and layout from the 2026-10-24 footage (7,811 / 29,285,750 / 29,073,749 / 11,825)",
+  "expect": {
+    "counter_found": 1
+  }
+}

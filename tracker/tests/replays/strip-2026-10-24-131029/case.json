@@ -1,0 +1,16 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "the currency strip, 2026-10-24 farming (131029): three pictures of the fixed strip (1296x97 at the top-left of Steven's 5120x2160 window), cut from the 3840x1620 recording at 17.4, 120 and 230 s and scaled by 4/3 to the window's own size. Four numbers each: 7,811, the two Kinah figures (29,281,753 and 29,069,752 at 17.4 s) and 11,825; nothing else on the strip. All four must be read from the fixed crop and again from the crop its anchor gives, and the anchor must hold on its own read (2026-10-25: reads.log's strip anchor was 124 px wide for most of the day, two numbers, and the anchored crop around it cut the first Kinah figure, 1,818 switches)",
+  "source": "kinah-bench run-20261024-131029.mkv (ffmpeg crop=972:73:0:0, scale=1296:97 lanczos); values as the frames show them",
+  "game": { "w": 5120, "h": 2160 },
+  "frames": [
+    { "t": "2026-10-24T17:10:48.000Z", "k": "strip", "f": "131047.png", "x": 0, "y": 0 },
+    { "t": "2026-10-24T17:12:30.600Z", "k": "strip", "f": "131230.png", "x": 0, "y": 0 },
+    { "t": "2026-10-24T17:14:20.600Z", "k": "strip", "f": "131420.png", "x": 0, "y": 0 }
+  ],
+  "expect": {
+    "strip": "7811 29281753 29069752 11825 | 7811 29285750 29073749 11825 | 7811 29292521 29080520 11825",
+    "strip_anchored": "7811 29281753 29069752 11825 | 7811 29285750 29073749 11825 | 7811 29292521 29080520 11825"
+  }
+}
