@@ -1,0 +1,17 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Wind Serum, 2026-10-25 20:25:08 to 20:28:30 (Steven crafting a queue of 21): the panel's title read garbled after the first craft, the panel gone for a pass between crafts, the recipe line \"Wind Serum (Novice Lv. 10)\" read every time. 0.8.35 to 0.8.39 counted 1 craft and 19 unknown-node gather attempts with two upgrade rolls; the loot list's serums waited for a chat line. Right: every race is a craft (15 worked, 4 failed, 2 combo rolls), no gather attempt, the list set aside while the panel crafts",
+  "source": "reads.log of 2026-10-25 (kinah-bench logs-2026-10-25/reads-all.log, lines 62088 to 62233), hand-built: the panel's text reads where reads.log logged them, a panel pass every 0.4 s between, the panel gone for two passes after each race and before each logged read that followed a gone panel (0.8.39 logs \"aren't crafting\" only on the first read after one), the bars' races at the passes that saw them end, the loot list rows over 3 s each",
+  "expect": {
+    "craft_ok": 15,
+    "craft_fail": 4,
+    "craft_made": {
+      "Wind Serum": 15
+    },
+    "attempts": {},
+    "nodes": {},
+    "items": {}
+  }
+}

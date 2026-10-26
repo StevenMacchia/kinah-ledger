@@ -1,0 +1,15 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "Wind Serum, 2026-10-25 20:25:08 to :21: the title read clean, then as \"qaf€ihgfiwprcgté$s 1 m/:ål\" above \"Wind Serum (Novice Lv- 10)\". 0.8.39 took the garbled title for the recipe (the first line that isn't a title) and filed the next craft under it. Right: the line with the mastery level is the recipe, both crafts are Wind Serum",
+  "source": "reads.log of 2026-10-25 lines 62088 to 62112: the two text reads and two races as logged, a panel pass every 0.4 s between; the pass the panel went at 20:25:14.7 is left out (the Wind Serum case has it)",
+  "expect": {
+    "craft_ok": 2,
+    "craft_fail": 0,
+    "craft_made": {
+      "Wind Serum": 2
+    },
+    "attempts": {}
+  }
+}
