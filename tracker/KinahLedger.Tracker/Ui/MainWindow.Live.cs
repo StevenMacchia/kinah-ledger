@@ -27,7 +27,7 @@ public partial class MainWindow
     /// <summary>Sections the player opened or folded, by name; the rest follow the view (Session and Where to farm open in Full view only).</summary>
     readonly Dictionary<string, bool> _secUser = new();
 
-    bool SecOpen(string key) => _secUser.TryGetValue(key, out var v) ? v : key is "Session" or "Where" ? _prefs.FullView : true;
+    bool SecOpen(string key) => _secUser.TryGetValue(key, out var v) ? v : key is "Session" or "Where" ? FullShown : true;
 
     void ToggleSec(string key)
     {

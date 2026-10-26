@@ -120,7 +120,8 @@ public partial class MainWindow : Window
         MiscountLink.Click += (_, _) => ReportMiscount();
         DiscordLink.Click += (_, _) => Open(DiscordUrl);
         // Compact and Full view: the header button switches, and the summary's link opens Full view
-        ViewBtn.Click += (_, _) => SetView(!_prefs.FullView);
+        // the view as it shows: on a screen too narrow for Full view, a click asks for it again and says why it can't
+        ViewBtn.Click += (_, _) => SetView(!FullShown);
         // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
         OddsAsPct = _prefs.OddsAsPercent; ShowOddsHeader();
         PctHeader.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; OddsAsPct = _prefs.OddsAsPercent = !_prefs.OddsAsPercent; if (!_demo) _prefs.Save(); ShowOddsHeader(); Redraw(); };
@@ -179,6 +180,7 @@ public partial class MainWindow : Window
             };
         ShowPart(_prefs.Part, remember: false);
         SizeChanged += (_, _) => KeepOnScreen();
+        DpiChanged += (_, _) => Dispatcher.BeginInvoke(RefitIfNeeded);   // the screen's scaling changed, or a screen with another one
         ShowTable(null);
         ServerRowState();
         InitWelcome();
@@ -1011,8 +1013,11 @@ public partial class MainWindow : Window
     {
         _prefs.FullView = full;
         if (!_demo) _prefs.Save();
+        _fullAsked = full;   // a screen too narrow for it says so now, not only the first time
         ApplyView();
+        _fullAsked = false;
     }
+    bool _fullAsked;
 
     /// <summary>
     /// What shows where, for the part (Farming or Crafting), the view (Compact or Full) and the first-run screen.
@@ -1022,7 +1027,10 @@ public partial class MainWindow : Window
     /// </summary>
     void ApplyView()
     {
-        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, farm = !craft && !events && !_welcome, full = farm && _prefs.FullView;
+        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, farm = !craft && !events && !_welcome;
+        // Full view scaled to the screen it is on, or Compact when even scaled it can't fit (Ui/MainWindow.Fit.cs)
+        FitFull(farm && _prefs.FullView, _fullAsked);
+        bool full = farm && FullShown;
         LeftCol.Visibility = craft || events ? Visibility.Collapsed : Visibility.Visible;
         SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         SummaryCard.Visibility = farm && _hasSummary ? Visibility.Visible : Visibility.Collapsed;
@@ -1046,7 +1054,7 @@ public partial class MainWindow : Window
         HeadStack.Width = full ? 662 * 2 + 16 : 662;
         StatusBar.Width = 662;
         ViewFill.Opacity = full ? 1 : 0.25;
-        ViewBtn.ToolTip = full ? "Compact view: one column" : "Full view: twice as wide, with Session and Where to farm now open beside the tables";
+        ViewBtn.ToolTip = full ? "Compact view: one column" : _fullTooWide ? "Full view needs a wider screen than this one" : "Full view: twice as wide, with Session and Where to farm now open beside the tables";
         ViewBtn.Visibility = craft || events || _welcome ? Visibility.Collapsed : Visibility.Visible;
         // Session and Where to farm now open in Full view, folded in Compact, until the player opens or folds them
         _secUser.Remove("Session"); _secUser.Remove("Where");
@@ -1065,7 +1073,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Rows per table before "Show all": three in Compact, six in Full view.</summary>
-    int TableRows => _prefs.FullView ? 6 : 3;
+    int TableRows => FullShown ? 6 : 3;
 
     /// <summary>A layout render's sample count and clock, so switching views in a render redraws the same sample.</summary>
     SessionEngine? _demoEngine; TimeSpan _demoElapsed;
@@ -1458,6 +1466,7 @@ public partial class MainWindow : Window
         var h = new WindowInteropHelper(this).Handle;
         Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
+        RefitIfNeeded();   // Full view against the screen the window opened on, now that it has one
         if (ApplyHotkey() is { } err) Say(err, "Warn");
         _foregroundWatch ??= Native.WatchForeground(HudFollowGame);   // the panel fades with an alt-tab, not a tick later
     }
@@ -1465,7 +1474,7 @@ public partial class MainWindow : Window
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId) { _ = Toggle(); handled = true; }
-        else OnSizeMove(msg);
+        else if (OnSizeMove(msg) && msg == WM_EXITSIZEMOVE) Dispatcher.BeginInvoke(RefitIfNeeded);   // dropped on another screen: Full view fitted to it
         return IntPtr.Zero;
     }
 

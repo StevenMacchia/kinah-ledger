@@ -220,7 +220,8 @@
   </Window.Resources>
 
   <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="22,16,22,14">
-    <Grid>
+    <!-- FitHost: scaled down as one piece when Full view is wider than the screen (Ui/MainWindow.Fit.cs) -->
+    <Grid x:Name="FitHost">
     <!-- the ledger: always the same width, wherever the settings are -->
     <!-- never taller than the screen (Steven, 0.7.6): the header, the run card and the summary stay put; the pickups and
          the tables scroll below them once the window would run past the screen (Window.MaxHeight is the work area) -->

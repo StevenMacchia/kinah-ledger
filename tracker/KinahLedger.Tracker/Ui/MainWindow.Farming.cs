@@ -23,7 +23,7 @@ public partial class MainWindow
     /// </summary>
     void JoinCards()
     {
-        bool farm = _part == "Farming" && !_welcome, full = farm && _prefs.FullView;
+        bool farm = _part == "Farming" && !_welcome, full = farm && FullShown;
         bool foot = farm;
         SessionCard.CornerRadius = new CornerRadius(6, 6, 0, 0);
         SessionCard.BorderThickness = new Thickness(1, 1, 1, 0);
