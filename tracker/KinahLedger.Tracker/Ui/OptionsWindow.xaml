@@ -309,7 +309,7 @@
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <StackPanel>
                 <TextBlock Style="{StaticResource RowTitle}" Text="Show accuracy details"/>
-                <TextBlock Style="{StaticResource RowHint}" Text="What a second source confirmed, and the counts behind it. Off, you only see things to look at."/>
+                <TextBlock Style="{StaticResource RowHint}" Text="What a second source confirmed, and the counts behind it, also on the panel over the game. Off, you see only things to look at, in the tracker."/>
               </StackPanel>
               <CheckBox x:Name="ShowAccuracyChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Show accuracy details"/>
             </Grid>

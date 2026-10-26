@@ -167,6 +167,14 @@ static class HudKit
         return new Pick("rare|" + V("rareId") + "|" + V("rare"), V("rare"), V("rareCount"), "", V("rareGrade"), V("rareIcon"), "", false, DateTime.UtcNow, Rare: true, Color: V("rareColor"));
     }
 
+    /// <summary>The session's top drop ("top" values, MainWindow.HudTopValues), or null before anything priced was picked up.</summary>
+    public static Pick? Top(IReadOnlyDictionary<string, string> v)
+    {
+        string V(string k) => v.TryGetValue(k, out var s) ? s : "";
+        if (V("top").Length == 0) return null;
+        return new Pick("top|" + V("top") + "|" + V("topCount") + "|" + V("topWorth"), V("top"), V("topCount"), V("topWorth"), V("topGrade"), V("topIcon"), "", false, DateTime.MinValue);
+    }
+
     /// <summary>
     /// An item's tile as the window draws it (ItemTile): the icon from the tracker's icon cache in a slot framed in its
     /// grade's colour, the item's initial while the icon loads or when there is none, and the count badge on its corner.
