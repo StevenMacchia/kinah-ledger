@@ -576,6 +576,7 @@ public partial class MainWindow : Window
     void UpdateHud()
     {
         if (_hud == null) return;
+        _hudValues["show"] = HudPresence();
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
         _hud.Update(_hudValues);
@@ -1253,10 +1254,13 @@ public partial class MainWindow : Window
     void EnsureHud()
     {
         if (_hud != null || !_prefs.Hud) return;
-        _hud = new HudWindow(HudFields.Parse(_prefs.HudFields)) { Owner = this, Opacity = Math.Clamp(_prefs.HudOpacity, 0.3, 1) };
+        _hud = new HudWindow(HudFields.Parse(_prefs.HudFields)) { Owner = this };
+        _hud.SetOpacity(_prefs.HudOpacity);
         if (_prefs.HudX is double hx && _prefs.HudY is double hy && hx > SystemParameters.VirtualScreenLeft - 50 && hy > SystemParameters.VirtualScreenTop - 50) { _hud.Left = hx; _hud.Top = hy; }
         _hud.LocationChanged += (_, _) => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
-        _hud.Show();
+        // it follows the game from the start: created while the game is behind another window, it waits out of sight
+        UpdateHud();
+        if (_hudValues.GetValueOrDefault("show", "") != "hidden") _hud.Show();
     }
 
     /// <summary>When the window grows past the bottom of the screen it's on, it moves up instead (main screen only; elsewhere it's left where the player put it).</summary>
@@ -1432,6 +1436,7 @@ public partial class MainWindow : Window
         Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
         if (ApplyHotkey() is { } err) Say(err, "Warn");
+        _foregroundWatch ??= Native.WatchForeground(HudFollowGame);   // the panel fades with an alt-tab, not a tick later
     }
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -1472,6 +1477,7 @@ public partial class MainWindow : Window
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.UnregisterHotKey(h, HotkeyId);
         _options?.Discard();
+        _foregroundWatch?.Dispose(); _foregroundWatch = null;
         CloseHud();
         _tray.Visible = false; _tray.Dispose();
         InstallUpdateOnClose();   // last: a downloaded update takes the exe's place now that nothing else needs it

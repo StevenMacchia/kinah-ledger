@@ -156,7 +156,7 @@ public partial class MainWindow
     public void SetHudOpacity(double v)
     {
         _prefs.HudOpacity = Math.Clamp(v, 0.3, 1);
-        if (_hud != null) _hud.Opacity = _prefs.HudOpacity;
+        _hud?.SetOpacity(_prefs.HudOpacity);
         if (!_demo) _prefs.Save();
     }
     public Settings AppSettings => _settings;

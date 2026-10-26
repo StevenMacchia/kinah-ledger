@@ -79,9 +79,36 @@ public sealed class HudWindow : Window
         bool hide = false;
         if (h != null) { try { hide = await h.Dispatcher.InvokeAsync(() => h.PixelBounds().IntersectsWith(area)); } catch (Exception) { hide = false; } }
         // a hidden window can still be on screen for a frame or two: give the compositor a moment before the capture
-        if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Hide); await Task.Delay(120); } catch (Exception) { hide = false; } }
+        if (hide) { try { await h!.Dispatcher.InvokeAsync(() => { h._readHidden = true; h.Hide(); }); await Task.Delay(120); } catch (Exception) { hide = false; } }
         try { await read(); }
-        finally { if (hide) { try { await h!.Dispatcher.InvokeAsync(h.Show); } catch (Exception) { /* closing */ } } }
+        finally
+        {
+            // back as it was, unless the game left the front meanwhile (ShowAs): then it stays out of the way
+            if (hide) { try { await h!.Dispatcher.InvokeAsync(() => { h._readHidden = false; if (h._shownAs != "hidden") h.Show(); }); } catch (Exception) { /* closing */ } }
+        }
+    }
+
+    /// <summary>True while HiddenIfOver has the panel hidden for a read: ShowAs leaves showing it to the read's end.</summary>
+    bool _readHidden;
+    /// <summary>How the panel shows now ("show" value): "" full, "dim" paused, "hidden" out of the way.</summary>
+    string _shownAs = "";
+    /// <summary>The paused look: the panel stays where it is, faded, while the chat can't be read.</summary>
+    const double DimOpacity = 0.45;
+
+    /// <summary>
+    /// Follows the game (the "show" value): "" shows the panel, "dim" fades it to the paused look, "hidden" fades it out in
+    /// a blink and then hides it for real, so it never sits over another program. Only a change of state animates.
+    /// </summary>
+    void ShowAs(string how)
+    {
+        if (how == _shownAs) return;
+        bool wasHidden = _shownAs == "hidden";
+        _shownAs = how;
+        double to = how == "hidden" ? 0 : how == "dim" ? DimOpacity : 1;
+        var fade = new System.Windows.Media.Animation.DoubleAnimation(to, TimeSpan.FromMilliseconds(how == "hidden" ? 120 : 180));
+        if (how == "hidden") fade.Completed += (_, _) => { if (_shownAs == "hidden") Hide(); };
+        else if (wasHidden && !IsVisible && !_readHidden) { Opacity = 0; Show(); }
+        BeginAnimation(OpacityProperty, fade);
     }
 
     // frozen: the readers touch this class from their own threads (HiddenIfOver) before the panel exists, and an unfrozen
@@ -158,6 +185,16 @@ public sealed class HudWindow : Window
         _alertTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
         _alertTimer.Tick += (_, _) => { _alertTimer?.Stop(); _alert.Visibility = Visibility.Collapsed; _frame.BorderBrush = FrameBrush; _frame.BorderThickness = new Thickness(1); };
         _alertTimer.Start();
+    }
+
+    /// <summary>
+    /// How solid the panel's background is, 0.3 to 1 (Options › In game). Only the background: the figures stay fully
+    /// readable at 30%, and the window's own opacity is left to follow the game (ShowAs).
+    /// </summary>
+    public void SetOpacity(double opacity)
+    {
+        var a = (byte)Math.Round(255 * Math.Clamp(opacity, 0.3, 1));
+        _frame.Background = Frozen(Color.FromArgb(a, 0x0A, 0x0C, 0x18));
     }
 
     /// <summary>Shows these figures, in panel order; the next Update fills them.</summary>
@@ -250,6 +287,7 @@ public sealed class HudWindow : Window
     public void Update(IReadOnlyDictionary<string, string> values)
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
+        ShowAs(V("show"));
         _note.Text = V("notice");
         _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_feedLine != null)

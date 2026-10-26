@@ -319,7 +319,7 @@
         <!-- In game: the shortcut and the panel over the game -->
         <StackPanel x:Name="PageInGame" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="In game"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="The keyboard shortcut and the small panel shown over the game while you farm."/>
+          <TextBlock Style="{StaticResource PageLead}" Text="The keyboard shortcut and the small panel shown over the game while you farm. The panel shows while the game is in front, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="SHORTCUT"/>
           <Border Style="{StaticResource Group}">

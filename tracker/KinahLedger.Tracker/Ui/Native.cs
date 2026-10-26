@@ -17,6 +17,41 @@ internal static class Native
 
     public const int WM_HOTKEY = 0x0312, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4;
 
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+
+    /// <summary>The process that owns the window the player is using now (0 when none, as during a switch).</summary>
+    public static uint ForegroundPid() { GetWindowThreadProcessId(GetForegroundWindow(), out var pid); return pid; }
+
+    delegate void WinEventProc(IntPtr hook, uint evt, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+    [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+    [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hook);
+    const uint EVENT_SYSTEM_FOREGROUND = 0x3, WINEVENT_OUTOFCONTEXT = 0x0;
+
+    /// <summary>
+    /// Calls <paramref name="changed"/> on this thread whenever another window comes to the front (alt-tab, a click, the
+    /// game closing), so the panel over the game can follow at once instead of on the next half-second tick. Needs this
+    /// thread's message loop (the window's). Dispose to stop; null when Windows refused the hook.
+    /// </summary>
+    public static IDisposable? WatchForeground(Action changed)
+    {
+        var w = new ForegroundWatch(changed);
+        return w.Hooked ? w : null;
+    }
+
+    sealed class ForegroundWatch : IDisposable
+    {
+        readonly WinEventProc _proc;   // kept here: Windows holds only a pointer to it
+        IntPtr _hook;
+        public bool Hooked => _hook != IntPtr.Zero;
+        public ForegroundWatch(Action changed)
+        {
+            _proc = (_, _, _, _, _, _, _) => { try { changed(); } catch (Exception) { /* the window is closing */ } };
+            _hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _proc, 0, 0, WINEVENT_OUTOFCONTEXT);
+        }
+        public void Dispose() { if (_hook != IntPtr.Zero) { UnhookWinEvent(_hook); _hook = IntPtr.Zero; } }
+    }
+
     /// <summary>Asks Windows 10/11 to draw this window's title bar dark, to match the content.</summary>
     public static void DarkTitleBar(IntPtr hwnd) => DarkTitleBar(hwnd, true);
 
