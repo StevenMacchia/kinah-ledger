@@ -367,6 +367,23 @@ public static class WpfApp
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }
+
+        // the overlay's own states (tracker/overlay-behaviour), each from the same figures with the keys MainWindow sets
+        if (!demo || kind != "Open world") return;
+        foreach (var (file, fields, extra) in new (string, List<string>, Dictionary<string, string>)[]
+        {
+            ("ui-hud-notice.png", HudFields.Parse(null), new() { ["notice"] = "Update ready · installs when you leave the game" }),
+        })
+        {
+            var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            var v = new Dictionary<string, string>(values);
+            foreach (var (k, x) in extra) v[k] = x;
+            h.Update(v);
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            h.Close();
+        }
     }
 
     /// <summary>Lets pending layout and render work run, since no message loop is running in this mode.</summary>

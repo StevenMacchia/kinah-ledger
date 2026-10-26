@@ -112,6 +112,7 @@ public sealed class HudWindow : Window
         Build();
 
         _acc = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
+        _note = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Gold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
         _alert = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
         _frame = new Border
         {
@@ -119,7 +120,7 @@ public sealed class HudWindow : Window
             BorderBrush = FrameBrush,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_fields.Count == 1 && _fields[0] == "feed" ? 8 : 12),
             Padding = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(16, 10, 20, 10),
-            Child = new StackPanel { Children = { _row, _acc, _alert } }
+            Child = new StackPanel { Children = { _row, _note, _acc, _alert } }
         };
         Content = _frame;
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
@@ -129,6 +130,8 @@ public sealed class HudWindow : Window
     readonly Border _frame;
     readonly TextBlock _alert;
     readonly TextBlock _acc;
+    /// <summary>One line under the figures from the "notice" value ("Update ready · installs when you leave the game").</summary>
+    readonly TextBlock _note;
     static readonly Brush AccGood = Frozen(Color.FromRgb(0x62, 0xD9, 0x8B)), AccCheck = Frozen(Color.FromRgb(0xF2, 0xA3, 0x5E));
 
     /// <summary>
@@ -246,9 +249,11 @@ public sealed class HudWindow : Window
     /// </summary>
     public void Update(IReadOnlyDictionary<string, string> values)
     {
+        string V(string k) => values.TryGetValue(k, out var v) ? v : "";
+        _note.Text = V("notice");
+        _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_feedLine != null)
         {
-            string V(string k) => values.TryGetValue(k, out var v) ? v : "";
             bool flagged = V("flag").Length > 0;
             _feedLine.Visibility = flagged ? Visibility.Collapsed : Visibility.Visible;
             _flagLine!.Visibility = flagged ? Visibility.Visible : Visibility.Collapsed;
