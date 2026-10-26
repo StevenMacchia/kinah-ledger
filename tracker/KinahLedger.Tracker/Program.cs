@@ -2520,6 +2520,20 @@ options: --process aion[,other]");
         Check("a tradable and a bound copy share the art: the row's own kind", $"{V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 30.0), (2L, "Spiritstone (Bound)", "IconA", 30.0) }))} | {V(PopupIcons.Decide(new[] { (1L, "Spiritstone", "IconA", 30.0), (2L, "Spiritstone (Bound)", "IconA", 30.0) }, bound: true))}", "Spiritstone 30 | Spiritstone (Bound) 30");
         Check("a scrolled name's letters find their item first", items.Fragment("itstone", PopupIcons.MaxCandidates).FirstOrDefault()?.Name ?? "none", "Spiritstone");
 
+        // ---- the text against the icon (2026-10-25: "Accursed or" renamed Accursed Bow by its icon about 105 times) ----
+        // scores as trace.log keeps them ("id:distance"), each item's own icon file; what the live read logged that day
+        string Sc(params (string Name, double D)[] s) => string.Join(",", s.Select(x => $"{items.Find(x.Name)}:{x.D.ToString(System.Globalization.CultureInfo.InvariantCulture)}"));
+        string L(PopupIcons.Look l) => $"{l.Text} [{(l.By.Length > 0 ? l.By : "as read")}]";
+        Check("Accursed Orb and Accursed Bow have icons of their own", $"{IconIndex.KeyOf(items.IconUrl(items.Find("Accursed Orb") ?? 0))} {IconIndex.KeyOf(items.IconUrl(items.Find("Accursed Bow") ?? 0))}", "Icon_WP_OR_0004_T02 Icon_WP_BW_0004_T02");
+        Check("a cut name one letter from its item: the text wins over the icon", L(PopupIcons.Replay(items, "Accursed or", Sc(("Accursed Bow", 66), ("Accursed Orb", 95)))), "Accursed Orb x1 [text]");
+        Check("...and one slip from its start, two edits from the icon's", L(PopupIcons.Replay(items, "Accursed on", Sc(("Accursed Bow", 68), ("Accursed Orb", 93)))), "Accursed Orb x1 [text]");
+        Check("...and the icon agreeing changes nothing", L(PopupIcons.Replay(items, "Accursed or", Sc(("Accursed Orb", 50), ("Accursed Bow", 90)))), "Accursed or [as read]");
+        Check("a slice inside one name, the icon on a shorter one: the text wins", L(PopupIcons.Replay(items, "ne Hard Balaur Horn x1", Sc(("Hard Balaur Horn", 69), ("Fine Hard Balaur Horn", 85)))), "Fine Hard Balaur Horn x1 [text]");
+        Check("a slice of many names: the icon settles it, as before", L(PopupIcons.Replay(items, "Unbou", Sc(("Unbound Midnight Sun's Rimebow", 56)))), "Unbound Midnight Sun's Rimebow x1 [icon]");
+        Check("letters as near two items: the icon settles it", L(PopupIcons.Replay(items, "Accursed on x1", Sc(("Accursed Bow", 60), ("Accursed Orb", 90)))), "Accursed Bow x1 [icon]");
+        Check("the icon on an item the text is far from, the text not sure: unsure", L(PopupIcons.Replay(items, "Orichalcum Ore SY", Sc(("Fine Orichalcum Ore", 30), ("Orichalcum Ore", 80)))), "Orichalcum Ore SY [unsure]");
+        Check("no sure icon: the text as read", L(PopupIcons.Replay(items, "Accursed or", Sc(("Accursed Bow", 66), ("Accursed Orb", 70)))), "Accursed or [as read]");
+
         // ---- the miscount report: the last minute only, in trace.log's own form ----
         var rb = new ReportBuffer();
         var r0 = new DateTime(2026, 10, 23, 12, 0, 0, DateTimeKind.Utc);

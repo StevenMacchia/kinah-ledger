@@ -68,6 +68,20 @@ public static class AccuracyTests
         var r2 = Accuracy.Take();
         Check("a misread that snaps: reported with its item", string.Join(",", r2.Names.Select(n => $"{n.read}|{n.item}|{n.how}")), "orichalcurn ore|610620013|snapped");
         Check("...and counted", $"{r2.Health.GetValueOrDefault("snapped")}", "1");
+        // 2026-10-25: "snapped 3586" in one report, one recipe name looked up by the window on every refresh
+        var clock = new DateTime(2026, 10, 25, 20, 0, 0, DateTimeKind.Utc);
+        Accuracy.Clock = () => clock;
+        try
+        {
+            Accuracy.Reset();
+            for (int i = 0; i < 40; i++) { _ = items.IdOf("Orichalcurn Ore"); _ = p.Parse("Orichalcurn Ore acquired.", clock).ToList(); clock = clock.AddSeconds(0.25); }
+            var r3 = Accuracy.Take();
+            Check("the same misread looked up 80 times in 10 s (a line still on screen): one line", $"{r3.Health.GetValueOrDefault("snapped")} {string.Join(",", r3.Names.Select(n => n.n))}", "1 1");
+            clock = clock.AddSeconds(Accuracy.SameLineSeconds + 1);
+            _ = items.IdOf("Orichalcurn Ore");
+            Check("...and again after a pause: a new line", $"{Accuracy.Take().Health.GetValueOrDefault("snapped")}", "1");
+        }
+        finally { Accuracy.Clock = () => DateTime.UtcNow; }
 
         Console.WriteLine("Rare drops (Steven, 2026-10-23):");
         Check("an Epic item is rare", $"{RareGate.IsRare(items, 514310110, false)}", "True");

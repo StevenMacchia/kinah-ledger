@@ -24,6 +24,8 @@ namespace KinahLedger.Session;
 /// may also carry "b" (each row's background) and "s" (the spread where its icon sits), as trace.log writes them since
 /// 2026-10-24, for telling rows from nameplates and world text (LootNotRow); a "plate" read names a nameplate or target
 /// name on screen then (from reads.log's "fighting:" and "target bar:" lines; trace.log doesn't keep them).
+/// Since 2026-10-25 a "list" read may also carry "r" (a row's text as read before its icon looked) and "i" (the icon's
+/// scores, "id:distance,…"), for the rows the icon had a verdict on: those rows are settled again (PopupIcons.Replay).
 /// A "gather" read is the gathering bar finishing a race: "ok", "fail", "upgrade ok" or "upgrade fail". A "cover" read
 /// is a pass that skips the list (a full-screen window over it): the rows up are set aside, as live (LootRows.Reset).
 /// A "list" read may carry "p", its band's pixel fingerprint: the same as the last recognized read's, under 2 s after it
@@ -87,7 +89,7 @@ public static class ReplayBank
                 var diffs = Compare(expect, got);
                 bool pending = node["pending"]?.GetValue<bool>() ?? false;
                 results.Add(diffs.Count == 0 ? new Result(name, "pass", got.ToJsonString())
-                          : new Result(name, pending ? "pending" : "FAIL", string.Join("; ", diffs) + " | counted " + got.ToJsonString()));
+                          : new Result(name, pending ? "pending" : "FAIL", string.Join("; ", diffs) + " | counted " + got.ToJsonString() + _dump));
             }
             catch (Exception ex) { results.Add(new Result(name, "FAIL", "the case didn't run: " + ex.Message)); }
         }
@@ -113,6 +115,12 @@ public static class ReplayBank
         {
             var gcm = got["craft_made"] as JsonObject ?? new JsonObject();
             foreach (var (n, v) in ecm) if (N(gcm[n]) != N(v)) d.Add($"craft made {n}: expected {v}, counted {gcm[n]?.ToString() ?? "0"}");
+        }
+        // ...and the chat's items a run set aside (its rewards are a picture's to count), the same way
+        if (expect["run_chat_items"] is JsonObject erci)
+        {
+            var grci = got["run_chat_items"] as JsonObject ?? new JsonObject();
+            foreach (var (n, v) in erci) if (N(grci[n]) != N(v)) d.Add($"run chat item {n}: expected {v}, set aside {grci[n]?.ToString() ?? "0"}");
         }
         if (expect["run_start"] is { } rstart && rstart.ToString() != (got["run_start"]?.ToString() ?? "")) d.Add($"run_start: expected {rstart}, counted {got["run_start"]?.ToString() ?? "none"}");
         if (expect["run_starts"] is { } rstarts && rstarts.ToString() != (got["run_starts"]?.ToString() ?? "")) d.Add($"run_starts: expected {rstarts}, counted {got["run_starts"]?.ToString() ?? "none"}");
@@ -191,6 +199,12 @@ public static class ReplayBank
                 foreach (var (n, v) in ea) if ((ga[n]?.ToString() ?? "0/0") != v?.ToString()) d.Add($"{key} {n}: expected {v}, counted {ga[n]?.ToString() ?? "none"}");
                 foreach (var (n, v) in ga) if (ea[n] == null) d.Add($"{key} {n}: not expected, counted {v}");
             }
+        // the loot list's rows by name: each one expect names must match (0: never shown); the others aren't checked
+        if (expect["list_rows"] is JsonObject elr)
+        {
+            var glr = got["list_rows"] as JsonObject ?? new JsonObject();
+            foreach (var (n, v) in elr) if (N(glr[n]) != N(v)) d.Add($"list row {n}: expected {v}, shown {glr[n]?.ToString() ?? "0"}");
+        }
         if (expect["items"] is JsonObject ei)
         {
             var gi = got["items"] as JsonObject ?? new JsonObject();
@@ -213,12 +227,17 @@ public static class ReplayBank
         var keptDir = CrashLog.DirOverride;
         CrashLog.DirOverride = TestTemp.Path("kl-bank-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(CrashLog.DirOverride);
+        _dump = "";
         try { return RunCaseIn(caseDir, node, settings, items, game); }
         // KL_BANK_KEEP set: each case's reads.log is kept and its folder printed, for reading what a case did
-        finally { var made = CrashLog.DirOverride; CrashLog.DirOverride = keptDir; if (Environment.GetEnvironmentVariable("KL_BANK_KEEP") is { Length: > 0 }) Console.WriteLine($"  ({Path.GetFileName(caseDir)}: log kept in {made})"); else try { Directory.Delete(made, true); } catch (Exception) { } }
+        finally { var made = CrashLog.DirOverride; CrashLog.DirOverride = keptDir;
+            // "dump": true in a case adds its reads.log to a failed result (for reading on a build server what a case did)
+            if (node["dump"]?.GetValue<bool>() == true && made != null) try { _dump = "\n  | " + string.Join("\n  | ", File.ReadLines(Path.Combine(made, "reads.log"))); } catch (Exception) { }
+            if (Environment.GetEnvironmentVariable("KL_BANK_KEEP") is { Length: > 0 }) Console.WriteLine($"  ({Path.GetFileName(caseDir)}: log kept in {made})"); else try { Directory.Delete(made, true); } catch (Exception) { } }
     }
 
     static bool _fastChat = true;
+    static string _dump = "";
 
     /// <summary>
     /// One picture of an event's reward screen into a session, as RewardGridDue reads it live: the title band read, the
@@ -240,7 +259,7 @@ public static class ReplayBank
     static JsonObject RunCaseIn(string caseDir, JsonObject node, Settings settings, ItemDictionary items, Rectangle game)
     {
         // "server": the player's server label, for gear twins settled by the faction (Data/GearFactions.cs)
-        var session = new TrackerSession(null, settings, items, "Replay") { FastChat = _fastChat, Server = node["server"]?.GetValue<string>() ?? "" };
+        var session = new TrackerSession(null, settings, items, "Replay") { FastChat = _fastChat, Server = node["server"]?.GetValue<string>() ?? "", ListRows = new() };
         var panel = new CraftPanelTracker();
         int ok = 0, fail = 0;
         JsonArray? table = null;
@@ -271,11 +290,23 @@ public static class ReplayBank
                         var bs = r.TryGetProperty("b", out var be) ? be.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var ss = r.TryGetProperty("s", out var se) ? se.EnumerateArray().Select(v => v.GetDouble()).ToList() : null;
                         var xs = r.TryGetProperty("x", out var xe) ? xe.EnumerateArray().Select(v => v.GetInt32()).ToList() : null;
-                        var lootLines = ls.Select((x, i) => new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
-                            System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
-                            cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0,
-                            bs != null && i < bs.Count ? bs[i] : -1, ss != null && i < ss.Count ? ss[i] : -1,
-                            xs != null && i < xs.Count ? xs[i] : -1)).ToList();
+                        // a row the icon had a verdict on (since 2026-10-25): its text as read and the icon's scores, settled again
+                        // with this version's rules (PopupIcons.Replay) instead of taking what the live read made of it
+                        var rs = r.TryGetProperty("r", out var re) ? re.EnumerateArray().Select(v => v.GetString() ?? "").ToList() : null;
+                        var ics = r.TryGetProperty("i", out var ie) ? ie.EnumerateArray().Select(v => v.GetString() ?? "").ToList() : null;
+                        var lootLines = ls.Select((x, i) =>
+                        {
+                            var line = new LootLine(ys != null && i < ys.Count ? ys[i] : 100 + i * 30,
+                                System.Text.RegularExpressions.Regex.Replace(x, @"^(\d+) Kina$", "Kina x$1"),
+                                cs != null && i < cs.Count ? cs[i] : -1, hs != null && i < hs.Count ? hs[i] : 0,
+                                bs != null && i < bs.Count ? bs[i] : -1, ss != null && i < ss.Count ? ss[i] : -1,
+                                xs != null && i < xs.Count ? xs[i] : -1);
+                            if (rs == null || ics == null || i >= rs.Count || i >= ics.Count || rs[i].Length == 0 || ics[i].Length == 0) return line;
+                            var look = PopupIcons.Replay(items, rs[i], ics[i]);
+                            if (look.Unsure) CrashLog.Note($"loot list: \"{rs[i]}\": {look.Note}");
+                            else if (look.Text != rs[i]) CrashLog.Note($"loot list: \"{rs[i]}\" read as \"{look.Text}\": {look.Note}");
+                            return line with { Text = look.Text, Before = rs[i], IconScores = ics[i], Unsure = look.Unsure };
+                        }).ToList();
                         // "p": the band's pixel fingerprint, as the live read takes it (ocr.list_skip_same): a read with the last
                         // recognized read's fingerprint, under 2 s after it and with no change on screen since, stands on its lines
                         if (r.TryGetProperty("p", out var pe) && pe.GetString() is { Length: > 0 } print) lootLines = session.TraceListRead(print, lootLines, t);
@@ -458,6 +489,14 @@ public static class ReplayBank
         if (session.ListNotRow > 0) res["list_notrow"] = session.ListNotRow;
         // loot list reads that stood on the last recognized read's lines, their pixels unchanged (ocr.list_skip_same)
         if (session.ListSameSkips > 0) res["list_same"] = session.ListSameSkips;
+        // the loot list's item rows shown to the cross-check, by the name each one ended on (one per row): what the list
+        // said the pickups were, whether or not a chat line made them count (2026-10-25, the icon against the text)
+        if (session.ListRows is { Count: > 0 } lr)
+        {
+            var named = new JsonObject();
+            foreach (var g in lr.Values.GroupBy(n => n, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal)) named[g.Key] = g.Count();
+            res["list_rows"] = named;
+        }
         // gathering attempts (GatherAttempts): per skill "ok/failed", and per node
         var skills = new JsonObject();
         foreach (var (f, st) in e.SkillSnapshot().Where(kv => kv.Value.Nodes > 0).OrderBy(kv => kv.Key)) skills[f.ToString()] = $"{st.Nodes - st.Failed}/{st.Failed}";
@@ -498,6 +537,11 @@ public static class ReplayBank
             foreach (var g in kept.SelectMany(r => r.Items.Concat(r.BoundItems)).GroupBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal))
                 runItems[g.Key] = g.Sum(kv => kv.Value);
             res["run_items"] = runItems;
+            // the chat's items set aside by runs whose rewards a picture decides (by name; expect names only the ones it checks)
+            var chatItems = new JsonObject();
+            foreach (var g in kept.SelectMany(r => r.ChatItems).GroupBy(kv => items.NameOf(kv.Key), StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal))
+                chatItems[g.Key] = g.Sum(kv => kv.Value);
+            res["run_chat_items"] = chatItems;
             res["run_gear_notes"] = string.Join(" | ", kept.SelectMany(r => r.GearNotes));
         }
         return res;

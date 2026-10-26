@@ -93,7 +93,8 @@ public sealed class ItemDictionary
             if (_byName.TryGetValue(key, out var id))
             {
                 // the same misread again: reported each time it is read, so the site sees how common it is
-                if (_snapped.Contains(key) && !_aliased.Contains(key) && Real(id)) { KinahLedger.Session.Accuracy.Name(name, id, "snapped", NameMatch.Full); KinahLedger.Session.Accuracy.Add("snapped"); }
+                // (once per line on screen, not per look-up: the window looks names up on every refresh)
+                if (_snapped.Contains(key) && !_aliased.Contains(key) && Real(id)) KinahLedger.Session.Accuracy.Snapped(name, id, NameMatch.Full);
                 return id;
             }
 
@@ -102,7 +103,7 @@ public sealed class ItemDictionary
             if (close != null)
             {
                 _byName[key] = close.Value; _snapped.Add(key);
-                if (Real(close.Value)) { KinahLedger.Session.Accuracy.Name(name, close.Value, "snapped", NameMatch.Full); KinahLedger.Session.Accuracy.Add("snapped"); }
+                if (Real(close.Value)) KinahLedger.Session.Accuracy.Snapped(name, close.Value, NameMatch.Full);
                 return close.Value;
             }
 
