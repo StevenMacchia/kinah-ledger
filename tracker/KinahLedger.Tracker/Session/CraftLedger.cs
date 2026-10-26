@@ -33,6 +33,8 @@ public sealed class CraftLedger
     /// <summary>How long after the panel was last seen a pickup of its recipe's item is still the crafts' output (a queue's last item lands after the panel closes).</summary>
     public const double PanelSeconds = 15;
     string _panelRecipe = ""; DateTime _panelAt = DateTime.MinValue;
+    /// <summary>The recipe of the last craft race (not a combo roll): what a combo roll after it belongs to.</summary>
+    string _lastCraft = "";
 
     /// <summary>The panel is on screen, crafting this recipe (the item it makes, "" when its text wasn't read).</summary>
     public void PanelSeen(string recipe, DateTime t)
@@ -48,6 +50,13 @@ public sealed class CraftLedger
     {
         PanelSeen(cr.Item, cr.Time);
         var name = _panelRecipe.Length >= 2 ? _panelRecipe : "?";
+        // a combo roll is the roll for the craft before it: the blue panel names that recipe's upgrade ("Splendent Orichalcum
+        // Longsword" while crafting Orichalcum Longsword, 2026-10-26), which is no recipe of its own (it showed in the
+        // Crafting tab as a row with no tries and the upgrade never credited)
+        if (cr.Combo && _lastCraft.Length >= 2 && !string.Equals(name, _lastCraft, StringComparison.OrdinalIgnoreCase) && UpgradeOf(_lastCraft) is { } lu
+            && (string.Equals(lu.Item, name, StringComparison.OrdinalIgnoreCase) || (name.Length >= 3 && lu.Item.StartsWith(name, StringComparison.OrdinalIgnoreCase))))
+            _panelRecipe = name = _lastCraft;
+        if (!cr.Combo) _lastCraft = name;
         var r = Get(name);
         if (cr.Combo)
         {

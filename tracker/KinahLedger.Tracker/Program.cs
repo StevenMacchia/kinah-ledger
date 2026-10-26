@@ -331,7 +331,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
-  ui-shot [dir] [--demo] [--gathering|--market|--crafting [--empty]|--events] [--compact|--full] [--tall] [--welcome] [--skin night|abyss|daylight]
+  ui-shot [dir] [--demo] [--gathering|--market|--crafting [--empty|--upgrades]|--events] [--compact|--full] [--tall] [--welcome] [--skin night|abyss|daylight]
                                 render the window to PNG files for layout review (--options: every Options page)
   market-shot [dir]             the window with the Market card in its tracking state
   replay-event-shots [--since 2026-10-24] [--send] [--dir folder] [--verbose]
@@ -994,7 +994,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -4164,6 +4164,31 @@ options: --process aion[,other]");
                 Check("...a cut recipe line is still the recipe line, never the title",
                     $"{CraftPanel.IsRecipeLine("Splendent Orichalcum Longsword (Novice Lv...")} {CraftPanel.IsTitleLine("Splendent Orichalcum Longsword (Novice Lv...")} {CraftPanel.Parse(new[] { "Crafting in Progress 4 / 10", "Splendent Orichalcum Longsword (Novice Lv..." })?.Recipe}",
                     "True False Splendent Orichalcum Longsword (Novice Lv...");
+                // ...and settled against the recipe book: the recipe named whole before the cut; the upgrade the recipe being
+                // crafted rolls for (the blue combo panel names it) is that recipe; one recipe starting with what was read;
+                // between several, the one being crafted, else the one the loot list or chat showed made, else kept as read
+                string Settled(string read, string crafting = "", params string[] made) { var st = CraftPanel.Settle(read, crafting, made); return $"{st.Recipe} {st.Level}"; }
+                Check("crafting panel: a cut title settled against the recipe book",
+                    string.Join(" | ", Settled("Splendent Orichalcum Longsword (Novice Lv...", "Orichalcum Longsword"), Settled("Expert's Orichalcum Longsword (Novice Lv. 1"), Settled("Expert's Orichalcum Longsword (Novice Lv. 1..", "Orichalcum Longsword"),
+                        Settled("Artisan's Orichalcum Long…"), Settled("Life Serum (Bou…"), Settled("Life Serum (Bound) (Novice Lv..."), Settled("Orichalcum Ingot (Novice Lv. 2"), Settled("Orichalcum Ingot (Novice Lv. 1"), Settled("Wind Serum (Novice Lv- 10)", "Orichalcum Longsword")),
+                    "Orichalcum Longsword 0 | Expert's Orichalcum Longsword 15 | Expert's Orichalcum Longsword 15 | Artisan's Orichalcum Longsword 0 | Life Serum (Bound) 0 | Life Serum (Bound) 0 | Orichalcum Ingot 25 | Orichalcum Ingot 1 | Wind Serum 10");
+                Check("...several recipes start with it: the one being crafted, the one shown made, else kept as read with the count",
+                    $"{Settled("Splendent White Dragon Lord G…", "Splendent White Dragon Lord Greaves")} | {Settled("Splendent White Dragon Lord G…", "", "Orichalcum Ore", "Splendent White Dragon Lord Guard")} | {Settled("Splendent White Dragon Lord G…")} | {CraftPanel.Settle("Splendent White Dragon Lord G…", "").Note}",
+                    "Splendent White Dragon Lord Greaves 0 | Splendent White Dragon Lord Guard 0 | Splendent White Dragon Lord G 0 | recipe cut by the panel, 4 candidates: kept as read");
+                Check("...no recipe starts with it and it is no upgrade of the one being crafted: kept as read, never dropped",
+                    $"{Settled("Splendent Orichalcum Longsword (Novice Lv...")} | {Settled("Qwzx Blade (Novice Lv...", "Orichalcum Longsword")}", "Splendent Orichalcum Longsword 0 | Qwzx Blade 0");
+                {
+                    // the combo roll after a craft, filed under the name the blue panel shows (the upgrade's), is that craft's roll
+                    var ce2 = new SessionEngine(items); var cu0 = DateTime.UtcNow;
+                    ce2.CraftPanelSeen("Orichalcum Longsword", cu0);
+                    ce2.Apply(new CraftResult(cu0, "Orichalcum Longsword", true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                    ce2.CraftPanelSeen("Splendent Orichalcum Longsword", cu0.AddSeconds(4));
+                    ce2.Apply(new CraftResult(cu0.AddSeconds(5), "Splendent Orichalcum Longsword", true, Combo: true) { Via = SessionEngine.CraftPanelVia });
+                    ce2.Apply(new CraftResult(cu0.AddSeconds(12), "Orichalcum Longsword", false) { Via = SessionEngine.CraftPanelVia });
+                    Check("crafting: a combo roll named by the recipe's upgrade is the roll for the craft before it",
+                        string.Join(" | ", ce2.CraftSnapshot().Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.OrderBy(m => m.Key, StringComparer.Ordinal).Select(m => m.Key + " x" + m.Value))}")),
+                        "Orichalcum Longsword 1/2 up 1/1 made Splendent Orichalcum Longsword x1");
+                }
                 // the panel counts the tries; what the loot list shows meanwhile is their output, never a drop; chat craft lines are left out
                 var pe = new SessionEngine(items); var pt = DateTime.UtcNow;
                 var serum = items.IdOf("Life Serum (Bound)"); var other = items.IdOf("Orichalcum Ore");

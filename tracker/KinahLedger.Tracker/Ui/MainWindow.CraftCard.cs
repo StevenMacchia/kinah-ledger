@@ -25,7 +25,9 @@ public partial class MainWindow
     {
         if (ev.OriginalSource is not FrameworkElement fe || RowOf(fe.DataContext) is not { Header: false } r) return;
         if (_card != null) _card.IsOpen = false;
-        _card = new Popup { Child = BuildCraftCard(r.Name), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = fe };
+        // an upgrade's row (under its recipe) opens its recipe's card
+        var recipe = r.Child && r.Key.StartsWith("craft:", StringComparison.Ordinal) ? r.Key["craft:".Length..] : r.Name;
+        _card = new Popup { Child = BuildCraftCard(recipe), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = fe };
         _card.IsOpen = true;
     }
 

@@ -431,7 +431,7 @@ public static class WpfApp
             }
             Console.WriteLine($"window {w.ActualWidth:0}"); Dump(w, 0);
         }
-        var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "Events" => "ui-main-events", _ => "ui-main-tracking" };
+        var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         // the Events part's card on its own: folded, and with Materials open
         if (demo && kind == "Events") w.ShotRunsCards(dir);
@@ -443,13 +443,13 @@ public static class WpfApp
             w.ShotItemCard(Path.Combine(dir, "ui-card.png"), cardZone);
         }
         // the Discord card for the same count, and the panel over the game with the window's own figures (every field, then the default set)
-        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events")) w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
+        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "CraftingUpgrades" or "Events")) w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
         if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
         if (demo) w.ShotPlayerCards(dir, kind);
         // a tapped feed line's report sheet (direction C), for a farming render
         if (demo && kind == "Open world") w.ShotLineReport(Path.Combine(dir, "ui-line-report.png"));
         // the Accuracy card on its own (the card the Farming page's chip opens), with its things to look at
-        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "Events" or "Market")) w.ShotAccuracyCard(Path.Combine(dir, "ui-accuracy-card.png"));
+        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "CraftingUpgrades" or "Events" or "Market")) w.ShotAccuracyCard(Path.Combine(dir, "ui-accuracy-card.png"));
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         var hudAcc = w.HudAccuracy; bool hudToLook = w.HudAccuracyToLook;
         // the panel's three states (direction C): the newest feed line and the rate, farming and crafting, and a flagged run
