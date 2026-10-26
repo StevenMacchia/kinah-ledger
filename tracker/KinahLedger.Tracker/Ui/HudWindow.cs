@@ -155,9 +155,48 @@ public sealed class HudWindow : Window
         _outline = new Rectangle { Stroke = OutlineBrush, StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 4, 3 }, RadiusX = _frame.CornerRadius.TopLeft, RadiusY = _frame.CornerRadius.TopLeft,
             IsHitTestVisible = false, Visibility = Visibility.Collapsed };
         Content = new Grid { Children = { _frame, _outline } };
-        MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch (InvalidOperationException) { } };
+        // a drag the player made is the one place remembered (Dragged); placing it by code is not
+        MouseLeftButtonDown += (_, _) => { try { DragMove(); Dragged?.Invoke(); } catch (InvalidOperationException) { } };
         MouseEnter += (_, _) => ShowDragHint(); MouseLeave += (_, _) => ShowDragHint();
         SourceInitialized += (_, _) => Native.SetClickThrough(new WindowInteropHelper(this).Handle, _unlock.Length == 0);
+        SizeChanged += (_, _) => PlacePending();
+    }
+
+    /// <summary>The player dropped the panel somewhere (unlocked): the window remembers Left and Top.</summary>
+    public event Action? Dragged;
+
+    /// <summary>A screen area (pixels) whose top centre the panel goes to once it has laid out; null when placed.</summary>
+    System.Drawing.Rectangle? _placeOn;
+
+    /// <summary>
+    /// Puts the panel at the top centre of this screen area, in pixels (the game's monitor, or the main one): clear of
+    /// the minimap at the top-right and the chat at the bottom-left. Before the panel's first layout it waits for it, so
+    /// the centre is worked out from the panel's real width.
+    /// </summary>
+    public void PlaceTopCentre(System.Drawing.Rectangle area)
+    {
+        _placeOn = area;
+        PlacePending();
+    }
+
+    void PlacePending()
+    {
+        if (_placeOn is not { } a || ActualWidth < 1) return;
+        var h = new WindowInteropHelper(this).Handle;
+        if (h == IntPtr.Zero) return;
+        _placeOn = null;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        int w = (int)Math.Round(ActualWidth * dpi.DpiScaleX);
+        Native.MoveTo(h, a.Left + Math.Max(0, (a.Width - w) / 2), a.Top + (int)Math.Round(12 * dpi.DpiScaleY));
+    }
+
+    /// <summary>The panel's size, 0.7 to 2 (Options › In game): everything in it grows or shrinks together.</summary>
+    public void SetScale(double scale)
+    {
+        var s = Math.Clamp(scale, HudPrefs.MinScale, HudPrefs.MaxScale);
+        if (Math.Abs(s - 1) < 0.001) _frame.LayoutTransform = Transform.Identity;
+        else { var t = new ScaleTransform(s, s); t.Freeze(); _frame.LayoutTransform = t; }
+        _outline.RadiusX = _outline.RadiusY = _frame.CornerRadius.TopLeft * s;
     }
 
     static readonly SolidColorBrush OutlineBrush = Frozen(Color.FromArgb(0x8C, 0xC9, 0xCF, 0xE6));

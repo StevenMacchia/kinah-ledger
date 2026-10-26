@@ -366,16 +366,28 @@
                 <WrapPanel x:Name="HudFieldHost" Margin="0,10,0,0"/>
               </StackPanel>
               <Border Style="{StaticResource Divider}"/>
-              <!-- how solid the panel is: takes effect as the slider moves, like the buttons on the reading page -->
+              <!-- how solid the panel's background is, and its size: shown on the panel as the sliders move, kept on Save -->
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Panel opacity"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="How solid the panel over the game is. Changes at once."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="How solid the panel's background is. The figures stay sharp."/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Slider x:Name="HudOpacity" Width="140" Minimum="0.3" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                  <TextBlock x:Name="HudOpacityLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="36"/>
+                  <Slider x:Name="HudOpacity" Width="140" Minimum="0.3" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Panel opacity"/>
+                  <TextBlock x:Name="HudOpacityLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
+                </StackPanel>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Panel size"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Bigger for a large or high-resolution screen."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Slider x:Name="HudScale" Width="140" Minimum="0.7" Maximum="2" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Panel size"/>
+                  <TextBlock x:Name="HudScaleLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
                 </StackPanel>
               </Grid>
               <Border Style="{StaticResource Divider}"/>
@@ -383,7 +395,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Panel position"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Back to the top centre of the screen, clear of the minimap and the chat."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Back to the top centre of the game's screen, clear of the minimap and the chat."/>
                 </StackPanel>
                 <Button x:Name="HudResetBtn" Grid.Column="1" Content="Reset position" VerticalAlignment="Center"/>
               </Grid>

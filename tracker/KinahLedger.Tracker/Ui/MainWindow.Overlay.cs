@@ -1,3 +1,4 @@
+using System.Windows;
 using KinahLedger.Ocr;
 
 namespace KinahLedger.Ui;
@@ -37,6 +38,8 @@ public partial class MainWindow
     bool HudMoving => DateTime.UtcNow < _hudMoveUntil;
     /// <summary>The saved lock, for the options self-test.</summary>
     public bool HudLocked => _hudPrefs.Locked;
+    /// <summary>The saved panel size, for the options self-test.</summary>
+    public double HudScale => _hudPrefs.Scale;
 
     /// <summary>
     /// The tray's Move the panel: unlocked and in view for 20 seconds, whether the game is in front or not, then locked again
@@ -73,6 +76,35 @@ public partial class MainWindow
         if (_watcher.Farm is { } run) _hudValues["time"] = "RUN " + Clock(run.Active);
         else if (_hudValues.GetValueOrDefault("time", "").StartsWith("RUN ")) _hudValues["time"] = "";   // the next count puts the clock back
         _hudValues["flash"] = DateTime.UtcNow < _hudFlashUntil ? _hudFlash : "";
+    }
+
+    /// <summary>
+    /// The panel's first place, and Reset position's: the top centre of the monitor the game is on (the watcher's
+    /// GameRect), or of the main monitor while the game hasn't been seen.
+    /// </summary>
+    void PlaceHudDefault()
+    {
+        if (_hud == null) return;
+        var area = _watcher.GameRect is { } g ? System.Windows.Forms.Screen.FromRectangle(g).WorkingArea
+            : System.Windows.Forms.Screen.PrimaryScreen?.WorkingArea ?? new System.Drawing.Rectangle(0, 0, 1920, 1040);
+        _hud.PlaceTopCentre(area);
+    }
+
+    /// <summary>
+    /// Where the player last dropped the panel, clamped into the screens on all four sides so some of it is always in
+    /// view; null when it was never moved or the monitor it was on is gone (unplugged), so it goes back to the default.
+    /// </summary>
+    System.Windows.Point? SavedHudSpot()
+    {
+        if (_prefs.HudX is not double hx || _prefs.HudY is not double hy || double.IsNaN(hx) || double.IsNaN(hy)) return null;
+        const double keepW = 160, keepH = 40;   // the panel's size isn't known before it lays out: this much stays on screen
+        double l = SystemParameters.VirtualScreenLeft, t = SystemParameters.VirtualScreenTop;
+        double x = Math.Clamp(hx, l, Math.Max(l, l + SystemParameters.VirtualScreenWidth - keepW));
+        double y = Math.Clamp(hy, t, Math.Max(t, t + SystemParameters.VirtualScreenHeight - keepH));
+        // the screens' bounding box has gaps where monitors differ in size: the spot has to be on a monitor that is there
+        double scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1;
+        var px = new System.Drawing.Point((int)Math.Round((x + keepW / 2) * scale), (int)Math.Round((y + keepH / 2) * scale));
+        return System.Windows.Forms.Screen.AllScreens.Any(s => s.Bounds.Contains(px)) ? new System.Windows.Point(x, y) : null;
     }
 
     /// <summary>From the foreground hook: only the panel's presence, without working the figures out again.</summary>

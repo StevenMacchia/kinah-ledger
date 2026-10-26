@@ -190,6 +190,23 @@ public static class WpfApp
         DoEvents();
         Check(w.HudLocked == !lockedBefore, "panel lock saved");
 
+        // the panel's opacity and size: shown on the panel as the sliders move, kept on Save, put back by Cancel
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        double opacityBefore = p.HudOpacity, scaleBefore = w.HudScale;
+        o.HudOpacity.Value = 0.5; o.HudScale.Value = 1.5;
+        Check(o.SaveBtn.IsEnabled && p.HudOpacity == opacityBefore && w.HudScale == scaleBefore, "panel opacity and size wait for Save");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(p.HudOpacity == opacityBefore && w.HudScale == scaleBefore, "Cancel keeps the panel's opacity and size");
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        Check(Math.Abs(o.HudOpacity.Value - opacityBefore) < 0.01 && Math.Abs(o.HudScale.Value - scaleBefore) < 0.01, "Options opens with the saved opacity and size");
+        o.HudOpacity.Value = 0.5; o.HudScale.Value = 1.5;
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(Math.Abs(p.HudOpacity - 0.5) < 0.001 && Math.Abs(w.HudScale - 1.5) < 0.001, $"panel opacity and size saved: {p.HudOpacity:P0}, {w.HudScale:P0}");
+
         o = Open();
         Click(o.HotkeyResetBtn);
         Click(o.SaveBtn);
@@ -389,6 +406,8 @@ public static class WpfApp
             // a run on: the red dot, the run's clock, and the shortcut's confirmation; then the stop's line on the default panel
             ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = "Run started" }),
             ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["flash"] = "Run stopped · 1.27M this run" }),
+            // Options at its far ends: 30% background (the figures stay solid) at 150%
+            ("ui-hud-scaled.png", HudFields.Parse("time,rate,total"), new()),
         })
         {
             var h = new HudWindow(fields) { Left = -12000, Top = -12000, ShowActivated = false };
@@ -396,6 +415,7 @@ public static class WpfApp
             var v = new Dictionary<string, string>(values);
             foreach (var (k, x) in extra) v[k] = x;
             h.Update(v);
+            if (file == "ui-hud-scaled.png") { h.SetOpacity(0.3); h.SetScale(1.5); }
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();

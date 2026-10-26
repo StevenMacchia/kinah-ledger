@@ -56,6 +56,12 @@ internal static class Native
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
     }
 
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    const uint SWP_NOSIZE = 0x1, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10;
+
+    /// <summary>Moves a window to a spot in screen pixels, keeping its size, place in the stack and focus (right across monitors of different scaling).</summary>
+    public static void MoveTo(IntPtr hwnd, int x, int y) => SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
     sealed class ForegroundWatch : IDisposable
     {
         readonly WinEventProc _proc;   // kept here: Windows holds only a pointer to it
