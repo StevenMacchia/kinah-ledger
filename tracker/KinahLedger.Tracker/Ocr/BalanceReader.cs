@@ -41,7 +41,7 @@ public sealed partial class BalanceReader
         var h = Hash(raw);
         if (h == _hash && Reads > 0) { Skipped++; LastBoxesAt = DateTime.UtcNow; Tracker.Observe(_last, pickupsTotal, samePixels: true); return; }
         _hash = h;
-        var lines = await ScreenReader.ReadBoxesAsync(raw, strip.Location, 3, boost: true);
+        var lines = await ReadNumbersAsync(raw, strip.Location);
         Reads++;
         _last = Counters(lines);
         LastBoxes = NumberBoxes(lines); LastBoxesAt = DateTime.UtcNow;
@@ -125,6 +125,62 @@ public sealed partial class BalanceReader
         }
         finally { src.UnlockBits(rs); dst.UnlockBits(ds); }
         return dst;
+    }
+
+    /// <summary>
+    /// The strip read one number at a time (2026-10-26). Read whole, the recognizer skipped the two Kinah figures on most
+    /// reads (the 131029 pictures: "0 7,811 011.8254", the gold and blue icons glued to the digits or the long figures
+    /// dropped), which is why the counter was never found on 2026-10-25. Here the icons are taken out
+    /// (<see cref="WhiteText"/>), the white digits are cut into runs of columns with ink, a gap wider than a seventh of
+    /// the strip's height ending a run, and each run is read on its own. A run that reads as nothing is left out; when no
+    /// run gives a number, the whole strip is read as before.
+    /// </summary>
+    public static async Task<List<OcrLineBox>> ReadNumbersAsync(Bitmap raw, Point origin, int lo = 150)
+    {
+        using var wt = WhiteText(raw, 60, lo);
+        var found = new List<OcrLineBox>();
+        foreach (var run in InkRuns(wt))
+        {
+            using var part = wt.Clone(run, wt.PixelFormat);
+            found.AddRange(await ScreenReader.ReadBoxesAsync(part, new Point(origin.X + run.X, origin.Y + run.Y), 3));
+        }
+        if (Counters(found).Count > 0) return found;
+        return await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
+    }
+
+    /// <summary>The strip's runs of columns with dark (text) pixels in a <see cref="WhiteText"/> picture, padded, left to right, full height.</summary>
+    public static unsafe List<Rectangle> InkRuns(Bitmap wt)
+    {
+        int w = wt.Width, h = wt.Height, gap = Math.Max(4, h / 7), pad = Math.Max(3, h / 12);
+        var ink = new bool[w];
+        var data = wt.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int n = 0;
+                for (int y = 0; y < h && n < 2; y++) if (((byte*)data.Scan0 + y * data.Stride)[x * 3] < 100) n++;
+                ink[x] = n >= 2;
+            }
+        }
+        finally { wt.UnlockBits(data); }
+        var runs = new List<Rectangle>();
+        int start = -1, last = -1;
+        for (int x = 0; x <= w; x++)
+        {
+            bool on = x < w && ink[x];
+            if (on) { if (start < 0) start = x; last = x; continue; }
+            if (start >= 0 && (x == w || x - last > gap))
+            {
+                if (last - start + 1 >= Math.Max(4, h / 12))
+                {
+                    int l = Math.Max(0, start - pad), r = Math.Min(w, last + 1 + pad);
+                    runs.Add(new Rectangle(l, 0, r - l, h));
+                }
+                start = -1;
+            }
+        }
+        return runs;
     }
 
     /// <summary>A cheap fingerprint of the strip (every fourth pixel), so an unchanged strip isn't recognized again.</summary>

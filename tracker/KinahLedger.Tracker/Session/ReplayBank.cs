@@ -238,7 +238,7 @@ public static class ReplayBank
     /// </summary>
     static void ReadStrip(Bitmap bmp, Point at, Rectangle game, DateTime t, List<string> fixedOut, List<string> anchoredOut, List<string> wordsOut)
     {
-        List<OcrLineBox> Read(Bitmap b, Point o) => Task.Run(() => ScreenReader.ReadBoxesAsync(b, o, 3, boost: true)).GetAwaiter().GetResult();
+        List<OcrLineBox> Read(Bitmap b, Point o) => Task.Run(() => BalanceReader.ReadNumbersAsync(b, o)).GetAwaiter().GetResult();
         static string Words(List<OcrLineBox> ls) => string.Join(" | ", ls.SelectMany(l => l.Words ?? new[] { new OcrWordBox(l.Text, l.Box) }).Select(w => $"{w.Text}@{w.Box.Left}"));
         var lines = Read(bmp, at);
         var counters = BalanceReader.Counters(lines);
@@ -246,11 +246,19 @@ public static class ReplayBank
         fixedOut.Add(string.Join(" ", counters.Select(c => c.Value)));
         wordsOut.Add(Words(lines));
         // DIAGNOSTIC (temporary): the same picture read other ways
-        foreach (var (sat, lo, sc) in new[] { (60, 90, 3.0), (60, 90, 2.0), (40, 120, 3.0), (90, 90, 3.0), (60, 150, 3.0), (60, 150, 2.0) })
         {
-            using var wt = BalanceReader.WhiteText(bmp, sat, lo);
-            var lv = Task.Run(() => ScreenReader.ReadBoxesAsync(wt, at, sc, false)).GetAwaiter().GetResult();
-            wordsOut.Add($"white sat {sat} lo {lo} x{sc}: {Words(lv)} -> {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
+            var lv = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, at, 3, true)).GetAwaiter().GetResult();
+            wordsOut.Add($"whole, boosted (0.8.39): {Words(lv)} -> {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
+        }
+        foreach (var lo in new[] { 90, 120 })
+        {
+            var lv = Task.Run(() => BalanceReader.ReadNumbersAsync(bmp, at, lo)).GetAwaiter().GetResult();
+            using var wt = BalanceReader.WhiteText(bmp, 60, lo);
+            wordsOut.Add($"by number, lo {lo} (runs {string.Join(",", BalanceReader.InkRuns(wt).Select(r => $"{r.X}+{r.Width}"))}): {Words(lv)} -> {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
+        }
+        {
+            using var wt = BalanceReader.WhiteText(bmp, 60, 150);
+            wordsOut.Add($"runs at lo 150: {string.Join(",", BalanceReader.InkRuns(wt).Select(r => $"{r.X}+{r.Width}"))}");
         }
         var an = new Anchors(new List<AnchorTemplate>());
         an.BalanceCrop.Log = l => Console.WriteLine("  " + l);
