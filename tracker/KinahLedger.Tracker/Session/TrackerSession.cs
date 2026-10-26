@@ -1253,7 +1253,7 @@ public sealed partial class TrackerSession
         DateTime settledAt = now; bool settledAny = false, settledAchievement = false;
         if (_tracker.Unaligned > unaligned)
         {
-            _garbledLast = now;
+            _garbledLast = now; _garbledNext = default;
             if (_garbledSince == null)
             {
                 _garbledSince = now;
@@ -1269,6 +1269,7 @@ public sealed partial class TrackerSession
             // garbled reads can line up with each other: the watch stays open until a clean read gives something, or time is up:
             // SettleBoundSeconds of chat read after the last read that didn't line up (2026-10-25: it stayed open up to 42 s
             // and took new lines from the vote, dated when the garbling began)
+            if (_garbledNext == default) _garbledNext = now;
             if ((now - gs).TotalSeconds > SettleSeconds || (_chatLinesAt - _garbledLast).TotalSeconds > SettleBoundSeconds)
             {
                 _garbledSince = null;
@@ -3130,9 +3131,12 @@ public sealed partial class TrackerSession
     public const double SettleSeconds = 45;
     // ---- the settle's bound (2026-10-25: "the chat settled after 39 s"; 157 Kina at 16:38:31 taken from the vote and dated
     // 13 s back, before the zone changed) ----
-    /// <summary>When the last read that couldn't be lined up came.</summary>
-    DateTime _garbledLast;
-    /// <summary>A line the settle may take was on screen by the last read that didn't line up, or this soon after it (one read).</summary>
+    /// <summary>When the last read that couldn't be lined up came, and the first read of the chat after it (default: none yet).</summary>
+    DateTime _garbledLast, _garbledNext;
+    /// <summary>
+    /// A line the settle may take was on screen by the first read of the chat after the last one that didn't line up (a
+    /// chat fading in can show its lines whole only seconds later: the 2026-10-23 event rewards, 5 s), or this soon after it.
+    /// </summary>
     public const double SettleSlackSeconds = 1.5;
     /// <summary>The settle looks at this much chat after the last read that didn't line up, then closes; lines count as they come.</summary>
     public const double SettleBoundSeconds = 6;
@@ -3147,7 +3151,9 @@ public sealed partial class TrackerSession
         var k = ChatKey(line);
         DateTime? first = null;
         foreach (var (key, v) in _firstSeen) if ((key == k || Reread.Same(key, k)) && (first == null || v.First < first)) first = v.First;
-        return first is DateTime f && f > _garbledLast.AddSeconds(SettleSlackSeconds);
+        var by = _garbledLast.AddSeconds(SettleSlackSeconds);
+        if (_garbledNext > by) by = _garbledNext;
+        return first is DateTime f && f > by;
     }
     // every line of the last ten minutes of reads, for telling a burst's new lines from history
     readonly Dictionary<string, DateTime> _recent = new();
