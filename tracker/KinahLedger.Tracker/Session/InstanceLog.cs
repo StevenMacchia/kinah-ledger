@@ -1597,15 +1597,29 @@ public sealed class InstanceLog
         lock (_lock) _unshared.InsertRange(0, runs.Where(r => !_unshared.Contains(r)));
     }
 
+    /// <summary>
+    /// A saved run in an area the list now leaves alone (Steven, 2026-10-26: Sealed Dungeons and Forts are open-world quest
+    /// areas, never expeditions, and count as nothing): not loaded, so it is never shown, averaged or sent. Its line stays
+    /// in instances.jsonl as it is.
+    /// </summary>
+    internal static bool LeftAlone(InstanceRun r) => r.Kind != WorldBoss && ZoneLocator.KindOf(r.Zone) == ZoneLocator.Ignored;
+
     void Load()
     {
+        var leftAlone = new List<InstanceRun>();
         try
         {
             if (!File.Exists(PathOf)) return;
             foreach (var line in File.ReadLines(PathOf).TakeLast(2000))
-                if (line.Length > 2 && JsonSerializer.Deserialize<InstanceRun>(line) is { } r && r.LastLoot != null) { r.FileUnderFamily(); _done.Add(r); if (r.Unsent) _parked.Add(r); }
+                if (line.Length > 2 && JsonSerializer.Deserialize<InstanceRun>(line) is { } r && r.LastLoot != null)
+                {
+                    if (LeftAlone(r)) { leftAlone.Add(r); continue; }
+                    r.FileUnderFamily(); _done.Add(r); if (r.Unsent) _parked.Add(r);
+                }
         }
         catch (Exception) { /* a damaged history starts over; the file is kept for a look */ }
+        if (leftAlone.Count > 0)
+            CrashLog.Note($"saved runs left out, in areas that aren't counted (Sealed Dungeons): {string.Join(", ", leftAlone.Select(r => $"{r.Zone} {r.Start.ToLocalTime():MMM d HH:mm}"))}");
         // old records that can't count as they stand: marked in memory, said once ever in reads.log, never rewritten
         try
         {
