@@ -197,8 +197,14 @@ public sealed class AnchoredCrop
     /// stable observations take a few seconds, not three passes. Switches are logged at most once a minute.
     /// </summary>
     public sealed record HoldRules(int Misses = 3, double MissSeconds = 10, double GapSeconds = 1.5, double LogSeconds = 60);
-    /// <summary>Null: every miss drops the lock at once and every switch is logged (the Kinah strip).</summary>
+    /// <summary>Null: every miss drops the lock at once and every switch is logged.</summary>
     public HoldRules? Hold { get; init; }
+    /// <summary>
+    /// How far apart two sightings are, px; null: <see cref="Moved"/> (all four edges). The Kinah strip uses
+    /// <see cref="LeftEdge"/>: its anchor is its first number, which grows to the right when it gains a digit.
+    /// </summary>
+    public Func<Rectangle, Rectangle, int>? Distance { get; init; }
+    int Dist(Rectangle a, Rectangle b) => Distance?.Invoke(a, b) ?? Moved(a, b);
     /// <summary>Misses in a row while locked (with <see cref="Hold"/>).</summary>
     public int Misses { get { lock (_lock) return _misses; } }
     int _misses; DateTime _firstMiss, _lastSight = DateTime.MinValue, _loggedAt = DateTime.MinValue;
@@ -231,7 +237,7 @@ public sealed class AnchoredCrop
             {
                 string? why = game != _game ? "the game window changed"
                     : conf < LockedConf ? $"the anchor's confidence fell from {LockedConf:0.00} to {conf:0.00}"
-                    : Moved(a, found) > Tolerance ? $"the anchor moved {Moved(a, found)} px"
+                    : Dist(a, found) > Tolerance ? $"the anchor moved {Dist(a, found)} px"
                     : null;
                 if (why == null) { _misses = 0; return; }   // seen in its place: the misses so far weren't in a row
                 Drop(why, now);
@@ -243,7 +249,7 @@ public sealed class AnchoredCrop
             _seen.Add((found, game, conf));
             if (_seen.Count > Needed) _seen.RemoveAt(0);
             // three in a row, the same window, no two of them more than the tolerance apart
-            if (_seen.Count < Needed || _seen.Any(s => s.Game != game) || _seen.Any(x => _seen.Any(y => Moved(x.Found, y.Found) > Tolerance))) return;
+            if (_seen.Count < Needed || _seen.Any(s => s.Game != game) || _seen.Any(x => _seen.Any(y => Dist(x.Found, y.Found) > Tolerance))) return;
             Anchor = found; _game = game; LockedConf = _seen.Min(s => s.Conf); On++; _misses = 0;
             var c = _derive(game, found);
             var f = Anchors.FixedRegions(game)[Region];
@@ -309,16 +315,24 @@ public sealed class AnchoredCrop
     public static int Moved(Rectangle a, Rectangle b) =>
         Math.Max(Math.Max(Math.Abs(a.Left - b.Left), Math.Abs(a.Right - b.Right)), Math.Max(Math.Abs(a.Top - b.Top), Math.Abs(a.Bottom - b.Bottom)));
 
+    /// <summary>How far apart two sightings are by their left, top and bottom edges only, px (a number gaining a digit moves its right edge).</summary>
+    public static int LeftEdge(Rectangle a, Rectangle b) =>
+        Math.Max(Math.Abs(a.Left - b.Left), Math.Max(Math.Abs(a.Top - b.Top), Math.Abs(a.Bottom - b.Bottom)));
+
     /// <summary>
-    /// The Kinah counter strip's crop from its anchor (the numbers' union, padded a quarter of their height): three number
-    /// heights either side, room for an icon on the left and a counter gaining digits on the right (a change of width
-    /// beyond 4 px drops the lock anyway), half a height above and below, never outside the fixed strip.
+    /// The Kinah counter strip's crop from its anchor (the strip's first number, padded a quarter of its height): from
+    /// three number heights left of it to the fixed strip's right end, half a height above and below, never outside the
+    /// fixed strip. Every number right of the first is inside it, so the anchored read sees what the fixed one sees, only
+    /// shorter. (Until 2026-10-26 it was three heights either side of the numbers' union: on 2026-10-25 that union was
+    /// the first number alone for most of the day, the crop's right edge cut the first Kinah figure, the cut read moved
+    /// the union 115 px and dropped the lock, 1,818 times.)
     /// </summary>
     public static Rectangle BalanceFrom(Rectangle game, Rectangle anchor)
     {
         int h = Math.Max(8, anchor.Height * 2 / 3);
-        var r = Rectangle.FromLTRB(anchor.Left - 3 * h, anchor.Top - h / 2, anchor.Right + 3 * h, anchor.Bottom + h / 2);
-        r.Intersect(BalanceReader.Strip(game));
+        var strip = BalanceReader.Strip(game);
+        var r = Rectangle.FromLTRB(anchor.Left - 3 * h, anchor.Top - h / 2, strip.Right, anchor.Bottom + h / 2);
+        r.Intersect(strip);
         return r;
     }
 
@@ -383,19 +397,39 @@ public sealed class Anchors
     /// </summary>
     public void ObserveBalance(Rectangle game, IReadOnlyList<Rectangle> numbers, DateTime at)
     {
-        // phase two: a read with no numbers on it is the anchor gone, and the strip goes back to its fixed crop at once
-        if (numbers.Count == 0) { BalanceCrop.Missing(game, "a read of the strip showed no numbers"); return; }
-        var u = numbers.Aggregate(Rectangle.Union);
+        // phase two: a read with no numbers on it is a miss (held, like the chat's, until three over 10 s)
+        if (numbers.Count == 0) { BalanceCrop.Missing(game, "a read of the strip showed no numbers", at); return; }
         int pad = Math.Max(2, numbers.Max(n => n.Height) / 4);
-        u.Inflate(pad, pad);
-        u.Intersect(game);
+        Rectangle Padded(Rectangle r) { r.Inflate(pad, pad); r.Intersect(game); return r; }
+        var u = Padded(numbers.Aggregate(Rectangle.Union));
         double conf = Math.Min(1, numbers.Count / 4.0);
         lock (_lock) _hits["kinah-strip"] = new Hit("kinah-strip", "balance", u, BalanceReader.Strip(game), conf, at);
-        BalanceCrop.Observe(game, u, conf, Update.RemoteConfig.Current.AnchorBalance, at);
+        // phase two anchors on the strip's first number alone: the union grew and shrank by 115 px as the recognizer read
+        // or skipped the numbers right of it (2026-10-25). Once locked, the locked number read again anywhere in the read
+        // is the anchor in its place; numbers read only right of it, on its row, are a miss (the recognizer skipped it this
+        // time); a number left of it, or the row moved, is the anchor moving
+        var boxes = numbers.Select(Padded).OrderBy(b => b.Left).ToList();
+        var first = boxes[0];
+        if (BalanceCrop.Anchor is Rectangle a)
+        {
+            var same = boxes.Where(b => AnchoredCrop.LeftEdge(a, b) <= AnchoredCrop.Tolerance).Select(b => (Rectangle?)b).FirstOrDefault();
+            if (same is Rectangle s) first = s;
+            else if (first.Left > a.Left + AnchoredCrop.Tolerance && Math.Abs(first.Top - a.Top) <= AnchoredCrop.Tolerance && Math.Abs(first.Bottom - a.Bottom) <= AnchoredCrop.Tolerance)
+            {
+                BalanceCrop.Missing(game, "the strip's first number wasn't read", at);
+                return;
+            }
+        }
+        // sure as soon as a number is read: how many of the four were read is the recognizer's day, not where the strip is
+        BalanceCrop.Observe(game, first, 1.0, Update.RemoteConfig.Current.AnchorBalance, at);
     }
 
-    /// <summary>Phase two for the Kinah counter strip: read around its numbers once they hold still (layout.anchor.balance).</summary>
-    public AnchoredCrop BalanceCrop { get; } = new("balance", AnchoredCrop.BalanceFrom, 0.25);
+    /// <summary>
+    /// Phase two for the Kinah counter strip: read from its first number to the strip's end once it holds still
+    /// (layout.anchor.balance), with the chat's hysteresis (2026-10-26: three misses over 10 s drop it, sightings count
+    /// 1.5 s apart, a switch is logged at most once a minute) and judged by its left edge.
+    /// </summary>
+    public AnchoredCrop BalanceCrop { get; } = new("balance", AnchoredCrop.BalanceFrom, 0.25) { Hold = new(), Distance = AnchoredCrop.LeftEdge };
     /// <summary>Phase two for the chat: looked for again around its box once it holds still (layout.anchor.chat).</summary>
     public AnchoredCrop ChatCrop { get; } = new("chat", AnchoredCrop.ChatFrom, 0.4) { Hold = new() };
 

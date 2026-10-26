@@ -236,7 +236,7 @@ public static class ReplayBank
     /// (Anchors.ObserveBalance, AnchoredCrop.BalanceFrom). Each read's numbers go to <paramref name="fixedOut"/> and
     /// <paramref name="anchoredOut"/>, left to right; the words the recognizer saw are printed, numbers or not.
     /// </summary>
-    static void ReadStrip(Bitmap bmp, Point at, Rectangle game, DateTime t, List<string> fixedOut, List<string> anchoredOut)
+    static void ReadStrip(Bitmap bmp, Point at, Rectangle game, DateTime t, List<string> fixedOut, List<string> anchoredOut, List<string> wordsOut)
     {
         List<OcrLineBox> Read(Bitmap b, Point o) => Task.Run(() => ScreenReader.ReadBoxesAsync(b, o, 3, boost: true)).GetAwaiter().GetResult();
         static string Words(List<OcrLineBox> ls) => string.Join(" | ", ls.SelectMany(l => l.Words ?? new[] { new OcrWordBox(l.Text, l.Box) }).Select(w => $"{w.Text}@{w.Box.Left}"));
@@ -244,6 +244,7 @@ public static class ReplayBank
         var counters = BalanceReader.Counters(lines);
         Console.WriteLine($"  strip {bmp.Width}x{bmp.Height}, words: {Words(lines)} -> numbers: {string.Join(" ", counters.Select(c => $"{c.Value}@{c.Left}"))}");
         fixedOut.Add(string.Join(" ", counters.Select(c => c.Value)));
+        wordsOut.Add(Words(lines));
         var an = new Anchors(new List<AnchorTemplate>());
         an.BalanceCrop.Log = l => Console.WriteLine("  " + l);
         var boxes = BalanceReader.NumberBoxes(lines);
@@ -259,6 +260,7 @@ public static class ReplayBank
         an.ObserveBalance(game, BalanceReader.NumberBoxes(lines2), t.AddSeconds(9));
         Console.WriteLine($"  strip anchored {local.Width}x{local.Height} at {local.X},{local.Y}, words: {Words(lines2)} -> numbers: {string.Join(" ", counters2.Select(x => $"{x.Value}@{x.Left}"))}; the anchor {(an.BalanceCrop.Active ? "held" : "dropped")}");
         anchoredOut.Add(string.Join(" ", counters2.Select(x => x.Value)) + (an.BalanceCrop.Active ? "" : " (dropped)"));
+        wordsOut.Add("anchored: " + Words(lines2));
     }
 
     static JsonObject RunCaseIn(string caseDir, JsonObject node, Settings settings, ItemDictionary items, Rectangle game)
@@ -273,7 +275,7 @@ public static class ReplayBank
         // the currency strip as the watcher reads it: its numbers handed to a BalanceTracker with the Kina counted so far
         // ("strip" reads in a trace), and pictures of it read through the fixed crop and the anchored one ("strip" frames)
         BalanceTracker? strip = null;
-        var stripFixed = new List<string>(); var stripAnchored = new List<string>();
+        var stripFixed = new List<string>(); var stripAnchored = new List<string>(); var stripWords = new List<string>();
         // a text case: the reads as trace.log keeps them (chat lines, loot list rows), and the zone as the minimap read it;
         // "after" holds the reads that come once an event's pictures are filed (the chat behind its reward screen)
         void FeedTrace(string file)
@@ -335,7 +337,7 @@ public static class ReplayBank
                         var counters = ls.Select(x => x.Split('@')).Where(p => p.Length == 2 && int.TryParse(p[1], out _))
                             .Select(p => new CounterRead(ChatParser.Digits(p[0]), int.Parse(p[1]))).ToList();
                         strip ??= new BalanceTracker();
-                        strip.Observe(counters, session.KinahPicked, samePixels: false, t);
+                        strip.Observe(counters, session.KinahRead, samePixels: false, t);
                         if (strip.Balance is long sb && strip.BalanceAt is DateTime sat && (t - sat).TotalSeconds <= 60) session.CheckBalance(sb, sat);
                         break;
                     }
@@ -409,7 +411,7 @@ public static class ReplayBank
                         });
                 }
             }
-            else if (f["k"]!.GetValue<string>() == "strip") ReadStrip(bmp, at, game, t, stripFixed, stripAnchored);
+            else if (f["k"]!.GetValue<string>() == "strip") ReadStrip(bmp, at, game, t, stripFixed, stripAnchored, stripWords);
             else Task.Run(() => session.ReplayListFrameAsync(bmp, at, t)).GetAwaiter().GetResult();
             if (table != null)
             {
@@ -463,7 +465,7 @@ public static class ReplayBank
         // the Kinah counter: found on the strip (strip reads), and how often it agreed with the count (BalanceCheck)
         if (strip != null) res["counter_found"] = strip.KinahLeft != null ? 1 : 0;
         if (strip != null || session.Kina.Readings > 0) res["counter_agreed"] = session.BalanceCheck.Agreed;
-        if (stripFixed.Count > 0) { res["strip"] = string.Join(" | ", stripFixed); res["strip_anchored"] = string.Join(" | ", stripAnchored); }
+        if (stripFixed.Count > 0) { res["strip"] = string.Join(" | ", stripFixed); res["strip_anchored"] = string.Join(" | ", stripAnchored); res["strip_words"] = string.Join(" || ", stripWords); }
         // Soul Crystals from kills and the kills counted, for the cases about them (2026-10-23)
         if (e.PetCrystals > 0) res["pets"] = e.PetCrystals;
         if (e.Totals().Kills > 0) res["kills"] = e.Totals().Kills;

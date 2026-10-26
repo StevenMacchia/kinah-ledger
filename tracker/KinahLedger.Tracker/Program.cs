@@ -1471,7 +1471,7 @@ options: --process aion[,other]");
             var game = new System.Drawing.Rectangle(0, 0, 5120, 2160);
             var strip = new System.Drawing.Rectangle(94, 1, 124, 54);          // anchor balance dx=94 dy=1, size 124x54
             var chatBox = new System.Drawing.Rectangle(105, 2160 - 258 - 504, 864, 504);   // anchor chat dx=105 dy=-258, size 864x504
-            Check("the strip's crop: its numbers, 3 heights each side", $"{AnchoredCrop.BalanceFrom(game, strip)} of {BalanceReader.Strip(game).Width}x{BalanceReader.Strip(game).Height}", "{X=0,Y=0,Width=326,Height=73} of 1296x97");
+            Check("the strip's crop: 3 heights left of its first number to the strip's end", $"{AnchoredCrop.BalanceFrom(game, strip)} of {BalanceReader.Strip(game).Width}x{BalanceReader.Strip(game).Height}", "{X=0,Y=0,Width=1296,Height=73} of 1296x97");
             var cc = AnchoredCrop.ChatFrom(game, chatBox);
             Check("the chat's area: the box, a line up, 3 down for the input", $"{cc}", "{X=21,Y=1356,Width=1074,Height=672}");
             Check("...holds the box and the row below it", $"{cc.Contains(chatBox)} {cc.Bottom - chatBox.Bottom >= 2 * (chatBox.Height / 12)}", "True True");
@@ -1490,8 +1490,8 @@ options: --process aion[,other]");
             crop.Observe(game, At(3, -1), 0.5, true);
             Check("two steady sightings: still the fixed crop", $"{crop.Crop(game, true)?.ToString() ?? "fixed"}", "fixed");
             crop.Observe(game, At(1, 2), 0.5, true);
-            Check("the third within 4 px: read from the anchor", $"{crop.Active} {crop.Crop(game, true)?.Size}", "True {Width=327, Height=75}");
-            Check("...logged once", $"{log.Count} {(log.LastOrDefault() ?? "").StartsWith("anchor balance: reading around the anchor now, 327x75")}", "1 True");
+            Check("the third within 4 px: read from the anchor", $"{crop.Active} {crop.Crop(game, true)?.Size}", "True {Width=1296, Height=75}");
+            Check("...logged once", $"{log.Count} {(log.LastOrDefault() ?? "").StartsWith("anchor balance: reading around the anchor now, 1296x75")}", "1 True");
             crop.Observe(game, At(3, 2), 0.5, true);
             Check("a sighting 2 px off keeps it, and logs nothing", $"{crop.Active} {log.Count}", "True 1");
             crop.Observe(game, At(9, 2), 0.5, true);
@@ -1526,9 +1526,25 @@ options: --process aion[,other]");
             var nums = new[] { new System.Drawing.Rectangle(103, 10, 50, 36), new System.Drawing.Rectangle(163, 10, 46, 36) };
             var t0 = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
             for (int i = 0; i < 3; i++) an.ObserveBalance(game, nums, t0.AddSeconds(10 * i));
-            Check("Anchors: the strip's numbers, three reads: anchored", $"{an.BalanceCrop.Active} {an.BalanceCrop.Anchor}", "True {X=94,Y=1,Width=124,Height=54}");
+            Check("Anchors: the strip's numbers, three reads: anchored on the first", $"{an.BalanceCrop.Active} {an.BalanceCrop.Anchor}", "True {X=94,Y=1,Width=68,Height=54}");
+            // 2026-10-25: the reads alternated between the first number alone and more of the strip, and the union's 115 px
+            // jumps dropped the lock 1,818 times; the first number is the anchor, whatever else is read beside it
+            an.ObserveBalance(game, new[] { nums[0], nums[1], new System.Drawing.Rectangle(400, 10, 150, 36), new System.Drawing.Rectangle(620, 10, 150, 36) }, t0.AddSeconds(23));
+            Check("...all four numbers read: still in place", $"{an.BalanceCrop.Active} {an.BalanceCrop.Misses}", "True 0");
+            an.ObserveBalance(game, new[] { nums[1] }, t0.AddSeconds(26));
+            Check("...a read without the first number: one miss, held", $"{an.BalanceCrop.Active} {an.BalanceCrop.Misses}", "True 1");
+            an.ObserveBalance(game, new[] { new System.Drawing.Rectangle(103, 10, 66, 36) }, t0.AddSeconds(29));
+            Check("...the first number a digit wider: in place, the misses start again", $"{an.BalanceCrop.Active} {an.BalanceCrop.Misses}", "True 0");
             an.ObserveBalance(game, Array.Empty<System.Drawing.Rectangle>(), t0.AddSeconds(30));
-            Check("...a read with no numbers: fixed", $"{an.BalanceCrop.Active}", "False");
+            Check("...a read with no numbers: held", $"{an.BalanceCrop.Active}", "True");
+            an.ObserveBalance(game, Array.Empty<System.Drawing.Rectangle>(), t0.AddSeconds(35));
+            an.ObserveBalance(game, Array.Empty<System.Drawing.Rectangle>(), t0.AddSeconds(41));
+            Check("...three in a row over 10 s: fixed", $"{an.BalanceCrop.Active}", "False");
+            for (int i = 0; i < 3; i++) an.ObserveBalance(game, nums, t0.AddSeconds(50 + 3 * i));
+            an.ObserveBalance(game, new[] { new System.Drawing.Rectangle(60, 10, 30, 36), nums[0] }, t0.AddSeconds(60));
+            Check("...an icon read as a number left of it: the first number is still in its place", $"{an.BalanceCrop.Active} {an.BalanceCrop.Misses}", "True 0");
+            an.ObserveBalance(game, nums.Select(n => new System.Drawing.Rectangle(n.X, n.Y + 20, n.Width, n.Height)).ToArray(), t0.AddSeconds(63));
+            Check("...the row 20 px lower: the strip moved, fixed at once", $"{an.BalanceCrop.Active}", "False");
             for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chosen", true, t0);
             Check("Anchors: a chat chosen by hand never anchors", $"{an.ChatCrop.Active}", "False");
             for (int i = 0; i < 3; i++) an.ObserveChat(game, chatBox, "chat found above the input box: 9 line(s) visible", false, t0.AddSeconds(2 * i));
@@ -1569,7 +1585,7 @@ options: --process aion[,other]");
             Check("the anchor moving drops it at once, the line says what wasn't logged", $"{hc.Active} {hl.Count} {hl.Last().Contains("the anchor moved 40 px")} {hl.Last().Contains("(2 switch(es) since the last line not logged)")}", "False 2 True True");
             var noHold = new AnchoredCrop("balance", AnchoredCrop.BalanceFrom, 0.25) { Log = _ => { } };
             for (int i = 0; i < 3; i++) noHold.Observe(game, strip, 0.5, true);
-            Check("without hysteresis (the Kinah strip) a miss still drops at once", $"{noHold.Missing(game, "no numbers")} {noHold.Active}", "False False");
+            Check("without hysteresis a miss still drops at once", $"{noHold.Missing(game, "no numbers")} {noHold.Active}", "False False");
 
             // the audit line's pass part: each region's ms per pass over the minute
             var times = new KinahLedger.Session.PassTimes();
@@ -3963,6 +3979,16 @@ options: --process aion[,other]");
             long g5 = bc.Observe(10_863, 400, b0.AddSeconds(6));
             long g6 = bc.Observe(10_863, 400, b0.AddSeconds(10));         // held over six seconds: judged
             Check("the Kinah counter against the count", $"{g1} {g2} {g3} {g4} {g5} {g6} · agreed {bc.Agreed}", "0 0 0 0 0 463 · agreed 1");
+            // 2026-10-25: each bound Kina pickup (60,000, 70,000, 16,000) became an "under" of exactly its amount, and spends
+            // were judged as "under" too; bound Kina is left out (or agrees as a counter that holds it), a fall is no verdict
+            var bc2 = new BalanceCheck(); var bl2 = new List<string>(); bc2.Log = bl2.Add;
+            bc2.Observe(50_000, 0, 0, b0);
+            long h1 = bc2.Observe(50_300, 300, 60_000, b0.AddSeconds(3));     // 300 Kina and 60,000 bound counted, the counter rose 300
+            long h2 = bc2.Observe(48_300, 300, 60_000, b0.AddSeconds(6));     // fell 2,000: a repair
+            long h3 = bc2.Observe(48_300, 300, 60_000, b0.AddSeconds(20));    // nothing since
+            long h4 = bc2.Observe(118_300, 300, 130_000, b0.AddSeconds(23));  // a counter holding bound Kina: rose by the 70,000 bound
+            Check("...bound Kina left out, a fall is spending (no verdict), a counter with the bound in agrees too",
+                $"{h1} {h2} {h3} {h4} · agreed {bc2.Agreed}, spent {bc2.Spent}, under {bc2.Under} · {bl2.Count(l => l.EndsWith(": agrees"))} {bl2.Count(l => l.Contains("fell 2,000"))}", "0 0 0 0 · agreed 2, spent 1, under 0 · 2 1");
             var c13 = new LootCrossCheck(items);
             c13.Popup(new() { K(463) }, x0); c13.Popup(new(), x0.AddSeconds(1)); c13.Popup(new(), x0.AddSeconds(5));
             Check("a Kinah row read once waits for the counter", $"{c13.TakeSingleKinah(463, x0.AddSeconds(10))} {c13.TakeSingleKinah(463, x0.AddSeconds(10))} {c13.TakeSingleKinah(500, x0.AddSeconds(10))}", "True False False");
@@ -4209,25 +4235,45 @@ options: --process aion[,other]");
         }
 
         Console.WriteLine("\nBalance counter (0.7): which counter is Kinah, and when a read is trusted:");
-        var bt = new BalanceTracker();
+        // 2026-10-26: the counter changes in the frame its chat line appears and the chat counts it about a second later, so
+        // a read every 3 s mostly catches the counter ahead of the count; the counter is found from windows between steady
+        // readings (the same value read twice), never from two consecutive reads
+        var btLog = new List<string>();
+        var bt = new BalanceTracker { Log = btLog.Add };
+        var bt0 = new DateTime(2026, 10, 25, 19, 22, 0, DateTimeKind.Utc);
         List<CounterRead> Strip(long kinah, long other = 2751) => new() { new(7811, 40), new(kinah, 300), new(other, 560), new(15265, 820) };
-        (List<CounterRead> read, long picked, bool same, string expect, string why)[] steps =
+        (double at, List<CounterRead> read, long picked, bool same, string expect, string why)[] steps =
         {
-            (Strip(23501), 0, false, "none", "first read: nothing to compare yet"),
-            (Strip(24021), 520, false, "none", "grew by the 520 picked up: one match"),
-            (Strip(24457, 2752), 956, false, "24457", "grew by 436 again: found, and this read counts"),
-            (Strip(24857), 956, false, "24457", "a misread digit: not trusted"),
-            (Strip(24457), 956, false, "24457", "back to the right value, once: not yet"),
-            (Strip(24457), 956, false, "24457", "the same twice: trusted"),
-            (Strip(20000), 956, false, "24457", "spent on something: one read isn't enough"),
-            (Strip(20000), 956, true, "20000", "the same pixels again: trusted"),
+            (0, Strip(23501), 0, false, "none", "first read: nothing to compare yet"),
+            (3, Strip(23501), 0, false, "none", "read the same: a steady reading to compare from"),
+            (6, Strip(24021), 0, false, "none", "the counter rose 520 before the chat counted it (the line in flight): moving, not judged"),
+            (9, Strip(24021), 520, false, "none", "steady again, the chat has counted the 520: one window agrees"),
+            (12, Strip(24457), 520, false, "none", "rose 436, the chat a read behind again"),
+            (15, Strip(24457), 956, false, "24457", "steady, the chat caught up: two windows agree, found, and this read counts"),
+            (18, Strip(24857), 956, false, "24457", "a misread digit: not trusted"),
+            (21, Strip(24457), 956, false, "24457", "back to the right value, once: not yet"),
+            (24, Strip(24457), 956, false, "24457", "the same twice: trusted"),
+            (27, Strip(20000), 956, false, "24457", "spent on something: one read isn't enough"),
+            (30, Strip(20000), 956, true, "20000", "the same pixels again: trusted"),
         };
-        foreach (var (read, picked, same, expect, why) in steps)
+        foreach (var (at, read, picked, same, expect, why) in steps)
         {
-            bt.Observe(read, picked, same);
+            bt.Observe(read, picked, same, bt0.AddSeconds(at));
             Check(why, bt.Balance?.ToString() ?? "none", expect);
         }
         Check("the counter found", bt.KinahLeft?.ToString() ?? "none", "300");
+        Check("...from two windows, each one line, and the line that says so", $"{bt.WindowsAgreed} {btLog.Count(l => l.Contains(": agrees ("))} {btLog.Count(l => l.StartsWith("Kinah counter found: the number at x 300"))}", "2 2 1");
+        // the rule it replaces: the counter against the count between two consecutive reads never matched here
+        int consecutive = 0;
+        for (int i = 1; i < 6; i++) { long d = steps[i].read[1].Value - steps[i - 1].read[1].Value, p = steps[i].picked - steps[i - 1].picked; if (p > 0 && d == p) consecutive++; }
+        Check("...where consecutive reads never once differed by the Kina counted between them", $"{consecutive}", "0");
+        // a fall is Kinah spent: refused, never a vote; a rise the chat doesn't account for is no match either
+        var bfLog = new List<string>();
+        var bf = new BalanceTracker { Log = bfLog.Add };
+        (double, long, long)[] fallSteps = { (0, 30000, 0), (3, 30000, 0), (6, 28500, 120), (9, 28500, 120), (12, 29000, 120), (15, 29000, 420) };
+        foreach (var (at, v, p) in fallSteps) bf.Observe(Strip(v), p, false, bt0.AddSeconds(at));
+        Check("a fall between steady readings: refused (Kinah spent); a rise of 500 with 300 counted: no match; nothing found",
+            $"{bf.WindowsFell} {bf.WindowsMismatched} {bf.WindowsAgreed} {bf.KinahLeft?.ToString() ?? "none"} {bfLog.Count(l => l.Contains("fell 1,500 (Kinah spent"))}", "1 1 0 none 1");
         var split = BalanceReader.Counters(new[] { new OcrLineBox("x 23, 501 @ 7,811", new System.Drawing.Rectangle(0, 0, 200, 20), new[]
         {
             new OcrWordBox("x", new System.Drawing.Rectangle(0, 0, 10, 20)), new OcrWordBox("23,", new System.Drawing.Rectangle(20, 0, 26, 20)),

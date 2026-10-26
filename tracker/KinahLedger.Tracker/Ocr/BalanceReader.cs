@@ -23,6 +23,7 @@ public sealed partial class BalanceReader
 
     ulong _hash;
     List<CounterRead> _last = new();
+    DateTime _wordsAt = DateTime.MinValue;
 
     public long Reads { get; private set; }
     /// <summary>Where the numbers were on screen in the last read (an anchor for the strip, Ocr.Anchors), and when.</summary>
@@ -44,6 +45,14 @@ public sealed partial class BalanceReader
         Reads++;
         _last = Counters(lines);
         LastBoxes = NumberBoxes(lines); LastBoxesAt = DateTime.UtcNow;
+        // once a minute, what the recognizer saw on the strip and which numbers came of it: reads.log kept no strip reads
+        // before 2026-10-26, so why the counter went unread all of 2026-10-25 could only be inferred
+        if ((LastBoxesAt - _wordsAt).TotalSeconds >= 60)
+        {
+            _wordsAt = LastBoxesAt;
+            var words = lines.SelectMany(l => l.Words ?? new[] { new OcrWordBox(l.Text, l.Box) }).Select(w => $"{w.Text}@{w.Box.Left - strip.Left}");
+            CrashLog.Note($"balance strip ({(crop == null ? "fixed" : "anchored")} {strip.Width}x{strip.Height}): words {string.Join(" ", words)} -> numbers {string.Join(" ", _last.Select(c => $"{c.Value:N0}@{c.Left - strip.Left}"))}");
+        }
         Tracker.Observe(_last, pickupsTotal, samePixels: false);
     }
 
@@ -58,10 +67,17 @@ public sealed partial class BalanceReader
     /// <summary>The numbers' boxes on screen, left to right, joined the way <see cref="Counters"/> joins them.</summary>
     public static List<Rectangle> NumberBoxes(IEnumerable<OcrLineBox> lines) => Merged(lines).Select(m => m.Box).ToList();
 
+    /// <summary>A few characters that aren't digits in front of a number: the counter's icon read as part of it.</summary>
+    [GeneratedRegex(@"^[^0-9]{1,3}(?=[0-9][0-9,\.]*$)")]
+    private static partial Regex IconInFront();
+
+    /// <summary>A word with the icon in front of its number read as letters ("@29,281,753") is that number.</summary>
+    static string WithoutIcon(string t) => NumberShape().IsMatch(t) ? t : IconInFront().Match(t) is { Success: true } m ? t[m.Length..] : t;
+
     static List<(string Text, Rectangle Box)> Merged(IEnumerable<OcrLineBox> lines)
     {
         var words = lines.SelectMany(l => l.Words ?? new[] { new OcrWordBox(l.Text, l.Box) })
-            .Select(w => (Text: w.Text.Trim('(', ')', '[', ']', '|', ' ', ':', ';'), w.Box))
+            .Select(w => (Text: WithoutIcon(w.Text.Trim('(', ')', '[', ']', '|', ' ', ':', ';')), w.Box))
             .Where(w => w.Text.Length > 0 && NumberShape().IsMatch(w.Text) && w.Text.Any(char.IsDigit))
             .OrderBy(w => w.Box.Left).ToList();
         var merged = new List<(string Text, Rectangle Box)>();
@@ -99,10 +115,18 @@ public sealed partial class BalanceReader
 }
 
 /// <summary>
-/// Works out which counter on the strip is the Kinah balance and keeps its last trustworthy value. Between two reads
-/// the chat says how much Kina was picked up; the counter that grew by exactly that much, twice, is Kinah. A value
-/// is trusted when it moved by exactly the pickups, or when the strip read the same twice in a row; a misread digit
-/// is neither, so it never becomes the balance. Pure logic, so the self-test can drive it.
+/// Works out which counter on the strip is the Kinah balance and keeps its last trustworthy value. The counter that
+/// rose by exactly the Kina the chat counted, between two steady readings, twice, is Kinah. A value is trusted when it
+/// moved by exactly the pickups since the last read, or when the strip read the same twice in a row; a misread digit is
+/// neither, so it never becomes the balance. Pure logic, so the self-test can drive it.
+///
+/// Why steady readings (2026-10-26): the counter changes in the frame its chat line appears (kinah-bench timing.md) and
+/// the chat count follows 0.8 to 1.9 s later (median 1.1 s over 2026-10-25's 1,395 Kina lines after 12:25: the line's
+/// first read, then the vote), while the strip is read every 3 s. In a fight a line is in flight at most reads, so two
+/// consecutive reads seldom differ by exactly the Kina counted between them. A counter read the same twice has held
+/// still for a read's interval, long enough for the chat to have counted what raised it; two such readings bound a
+/// window whose rise is compared with the Kina counted in it. A fall is Kinah spent (the Market's cut, a repair, a
+/// teleport): never a match, never forced. Each window judged is one line in reads.log.
 /// </summary>
 public sealed class BalanceTracker
 {
@@ -110,11 +134,23 @@ public sealed class BalanceTracker
     public int Tolerance { get; init; } = 40;
     /// <summary>Matches needed before a counter is taken to be Kinah.</summary>
     public int VotesToLock { get; init; } = 2;
+    /// <summary>Two steady readings further apart than this aren't compared (the strip wasn't read steadily in between: a loading screen, a menu).</summary>
+    public double MaxWindowSeconds { get; init; } = 120;
+    /// <summary>Where each window's decision goes (reads.log; the self-test catches them).</summary>
+    public Action<string>? Log { get; set; } = CrashLog.Note;
 
     readonly List<(int Left, int Votes)> _candidates = new();
+    // per counter on the strip, its last steady reading: the value, the Kina counted then, and when
+    sealed class Steady { public int Left; public long Value; public long Pickups; public DateTime At; }
+    readonly List<Steady> _steady = new();
     List<CounterRead>? _prev;
     long _prevPickups;
     long? _lastRaw;
+
+    /// <summary>Windows between steady readings whose rise was exactly the Kina counted in them (the votes), that didn't match, and that fell.</summary>
+    public int WindowsAgreed { get; private set; }
+    public int WindowsMismatched { get; private set; }
+    public int WindowsFell { get; private set; }
 
     /// <summary>Where the Kinah counter starts on screen once found; null while it's still being worked out.</summary>
     public int? KinahLeft { get; private set; }
@@ -131,14 +167,7 @@ public sealed class BalanceTracker
         long picked = _prev == null ? 0 : pickupsTotal - _prevPickups;
         if (KinahLeft == null)
         {
-            if (_prev != null && picked > 0)
-                foreach (var c in cur)
-                {
-                    var p = Near(_prev, c.Left);
-                    if (p == null || c.Value - p.Value != picked) continue;
-                    int i = _candidates.FindIndex(x => Math.Abs(x.Left - c.Left) <= Tolerance);
-                    if (i < 0) _candidates.Add((c.Left, 1)); else _candidates[i] = (c.Left, _candidates[i].Votes + 1);
-                }
+            Windows(cur, pickupsTotal, samePixels, t);
             var best = _candidates.OrderByDescending(x => x.Votes).FirstOrDefault();
             // two counters that rise with every pickup alike (the strip's 2nd and 3rd figures, 2026-10-24: both +15,660 over a
             // farming run, so neither ever won and the counter check never compared once): the rightmost of the tied is taken,
@@ -148,8 +177,10 @@ public sealed class BalanceTracker
             if (best.Votes >= VotesToLock && (_candidates.Count(x => x.Votes >= VotesToLock) == 1 || tied.Count > 1 && best.Votes >= VotesToLock + 1))
             {
                 KinahLeft = best.Left;
-                _lastRaw = _prev == null ? null : Near(_prev, best.Left)?.Value;   // this read just matched the pickups, so it counts
+                // this read is a steady one that just matched the pickups (the same value as the last read), so it counts
+                _lastRaw = _prev == null ? null : Near(_prev, best.Left)?.Value;
                 Note = "Kinah counter found";
+                Log?.Invoke($"Kinah counter found: the number at x {best.Left}, its rise agreed with the chat's Kina in {best.Votes} windows between steady readings");
             }
             else if (_candidates.Count > 0) Note = "Kinah counter: one match so far, waiting for another pickup";
         }
@@ -165,6 +196,47 @@ public sealed class BalanceTracker
         }
         CounterSeen = KinahLeft is int seenLeft && Near(cur, seenLeft) != null;
         _prev = cur; _prevPickups = pickupsTotal;
+    }
+
+    /// <summary>
+    /// While the Kinah counter isn't known: each counter read the same as last time (or the same pixels) is a steady
+    /// reading. Against that counter's previous steady reading, a rise of exactly the Kina counted in between is a vote;
+    /// any other rise, a fall or a window too long is not, and each is one line. The same steady value again moves the
+    /// window's start up to now: Kina counted while the counter held still was a late count of an earlier rise (or a line
+    /// the counter never showed), and belongs to no later window.
+    /// </summary>
+    void Windows(List<CounterRead> cur, long pickups, bool samePixels, DateTime t)
+    {
+        foreach (var c in cur)
+        {
+            var p = _prev == null ? null : Near(_prev, c.Left);
+            if (!samePixels && (p == null || p.Value != c.Value)) continue;   // moving, or not read last time: not steady
+            var s = _steady.FirstOrDefault(x => Math.Abs(x.Left - c.Left) <= Tolerance);
+            if (s == null) { _steady.Add(new Steady { Left = c.Left, Value = c.Value, Pickups = pickups, At = t }); continue; }
+            if (s.Value == c.Value) { s.Left = c.Left; s.Pickups = pickups; s.At = t; continue; }
+            long rise = c.Value - s.Value, counted = pickups - s.Pickups;
+            double secs = (t - s.At).TotalSeconds;
+            string window = $"Kinah counter search, the number at x {c.Left}: between steady readings at {s.At.ToLocalTime():HH:mm:ss} and {t.ToLocalTime():HH:mm:ss}";
+            if (secs > MaxWindowSeconds) Log?.Invoke($"{window} ({secs:0} s, too long to judge) it went from {s.Value:N0} to {c.Value:N0}: not compared");
+            else if (rise < 0)
+            {
+                WindowsFell++;
+                Log?.Invoke($"{window} it fell {-rise:N0} (Kinah spent: the Market's cut, a repair, a teleport) while the chat counted {counted:N0}: no match");
+            }
+            else if (counted > 0 && rise == counted)
+            {
+                WindowsAgreed++;
+                int i = _candidates.FindIndex(x => Math.Abs(x.Left - c.Left) <= Tolerance);
+                if (i < 0) _candidates.Add((c.Left, 1)); else _candidates[i] = (c.Left, _candidates[i].Votes + 1);
+                Log?.Invoke($"{window} it rose {rise:N0} and the chat counted {counted:N0}: agrees ({_candidates.First(x => Math.Abs(x.Left - c.Left) <= Tolerance).Votes} of {VotesToLock})");
+            }
+            else
+            {
+                WindowsMismatched++;
+                Log?.Invoke($"{window} it rose {rise:N0} and the chat counted {counted:N0}: no match");
+            }
+            s.Left = c.Left; s.Value = c.Value; s.Pickups = pickups; s.At = t;
+        }
     }
 
     CounterRead? Near(List<CounterRead> list, int left) => list.Where(c => Math.Abs(c.Left - left) <= Tolerance).OrderBy(c => Math.Abs(c.Left - left)).FirstOrDefault();
