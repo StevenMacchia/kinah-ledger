@@ -245,6 +245,22 @@ public static class ReplayBank
         Console.WriteLine($"  strip {bmp.Width}x{bmp.Height}, words: {Words(lines)} -> numbers: {string.Join(" ", counters.Select(c => $"{c.Value}@{c.Left}"))}");
         fixedOut.Add(string.Join(" ", counters.Select(c => c.Value)));
         wordsOut.Add(Words(lines));
+        // DIAGNOSTIC (temporary): the same picture read other ways
+        foreach (var (sc, bo) in new[] { (3.0, false), (2.0, true), (2.0, false), (4.0, true), (1.5, true), (1.0, false) })
+        {
+            var lv = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, at, sc, bo)).GetAwaiter().GetResult();
+            wordsOut.Add($"x{sc}{(bo ? " boost" : "")}: {Words(lv)}");
+        }
+        using (var right = bmp.Clone(new Rectangle(240, 0, bmp.Width - 240, bmp.Height), bmp.PixelFormat))
+        {
+            var lr = Task.Run(() => ScreenReader.ReadBoxesAsync(right, new Point(at.X + 240, at.Y), 3, true)).GetAwaiter().GetResult();
+            wordsOut.Add($"from x 240: {Words(lr)}");
+        }
+        using (var mid = bmp.Clone(new Rectangle(270, 0, 180, bmp.Height), bmp.PixelFormat))
+        {
+            var lm = Task.Run(() => ScreenReader.ReadBoxesAsync(mid, new Point(at.X + 270, at.Y), 3, true)).GetAwaiter().GetResult();
+            wordsOut.Add($"x 270-450: {Words(lm)}");
+        }
         var an = new Anchors(new List<AnchorTemplate>());
         an.BalanceCrop.Log = l => Console.WriteLine("  " + l);
         var boxes = BalanceReader.NumberBoxes(lines);

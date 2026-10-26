@@ -85,3 +85,18 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   took one of the fight's kills for the witness of a second pair. Right: 1. A line under the same two lines a copy was
   counted under, one of them once in the read, is that copy wherever the scroll put it (`ItemRepeatGuard`; the guard's
   own checks in `Ocr/ChatCountTests.cs`). The Order Gloves were the 16:35 event cards, named right from their picture.
+- The Kinah counter's own path (2026-10-26; on 2026-10-25 it agreed 0x in 858 of 905 audit minutes). A `strip` frame
+  (`strip-*`) is a picture of the currency strip, the fixed 1296x97 crop at the window's top-left: it is read as the
+  watcher reads it, then again through the crop its anchor gives after three reads (`Anchors.ObserveBalance`), and the
+  anchored read is handed back to the anchor. Keys `strip` and `strip_anchored`: each picture's numbers left to right,
+  pictures joined by " | " (" (dropped)" when the anchored read dropped the anchor); `strip_words` shows what the
+  recognizer saw. `strip-2026-10-24-131029`: three pictures from the 131029 footage, scaled 4/3 to the window's size;
+  0.8.39 read `0 7811 118254`, `0 7811 11`, `0 7811` (the two Kinah figures never, an icon as 0) and its anchored crop
+  cut the first Kinah figure to `29`, the 124 px anchor and the 115 px flap reads.log shows all day.
+  A `strip` read in a trace (`{"t", "k": "strip", "l": ["7811@235", "29285750@383", ...]}`, "value@left" per number)
+  goes through a `BalanceTracker` with the Kina the chat has read and on to the session's `CheckBalance`, as
+  `GameWatcher.TickBalanceAsync` does; keys `counter_found` (0 or 1) and `counter_agreed` (BalanceCheck.Agreed).
+  `text-2026-10-25-kinah-counter-lag`: 15:22 to 15:26 local, 49 Kina lines; the strip reads are rebuilt from the
+  chat (reads.log keeps none): each counted Kina line raises both Kinah figures 0.3 s before the first chat read that
+  shows it. Two consecutive reads never differed by exactly the Kina counted between them (0.8.39: not found);
+  windows between steady readings find it.
