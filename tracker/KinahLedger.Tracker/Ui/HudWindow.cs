@@ -53,6 +53,8 @@ public static class HudFields
 public sealed class HudWindow : Window
 {
     readonly Dictionary<string, TextBlock> _cells = new();
+    /// <summary>The words beside a figure ("/ hr"), by key: the rate's goes while it warms up.</summary>
+    readonly Dictionary<string, TextBlock> _labels = new();
     readonly StackPanel _row = new() { Orientation = Orientation.Horizontal };
     List<string> _fields = HudFields.Parse(null);
 
@@ -274,7 +276,7 @@ public sealed class HudWindow : Window
 
     void Build()
     {
-        _row.Children.Clear(); _cells.Clear(); _feedLine = null; _timeDot = null;
+        _row.Children.Clear(); _cells.Clear(); _labels.Clear(); _feedLine = null; _timeDot = null;
         for (int i = 0; i < _fields.Count; i++)
         {
             var key = _fields[i]; var f = HudFields.All.First(x => x.Key == key);
@@ -309,12 +311,19 @@ public sealed class HudWindow : Window
                     break;
             }
             cell.Children.Add(number);
-            if (f.Label.Length > 0) cell.Children.Add(new TextBlock { Text = f.Label, FontSize = 12.5, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, key == "rate" ? 2 : 1) });
+            if (f.Label.Length > 0)
+            {
+                var label = new TextBlock { Text = f.Label, FontSize = 12.5, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, key == "rate" ? 2 : 1) };
+                cell.Children.Add(label);
+                _labels[key] = label;
+            }
             _row.Children.Add(cell);
             _cells[key] = number;
         }
     }
 
+    /// <summary>The rate while it warms up: there, but plainly not the figure yet.</summary>
+    const double WarmOpacity = 0.55;
     /// <summary>The timer cell's dot: red during a run, grey otherwise.</summary>
     Ellipse? _timeDot;
     static readonly SolidColorBrush RunRed = Frozen(Color.FromRgb(0xFF, 0x6B, 0x5E));
@@ -365,6 +374,7 @@ public sealed class HudWindow : Window
         _note.Foreground = flash ? Ink : Gold;
         _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_timeDot != null) _timeDot.Fill = V("run") == "1" ? RunRed : Muted;
+        bool warm = V("warm") == "1";
         if (_feedLine != null)
         {
             bool flagged = V("flag").Length > 0;
@@ -376,12 +386,16 @@ public sealed class HudWindow : Window
             _feedValue!.Text = V("feedValue");
             _feedRate!.Text = V("feedRate"); _feedUnit!.Text = V("feedRate").Length > 0 ? V("feedUnit") : "";
             _feedSep!.Visibility = V("feedRate").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _feedRate.Opacity = warm ? WarmOpacity : 1;
         }
         foreach (var (key, cell) in _cells)
         {
             cell.Text = values.TryGetValue(key, out var v) && v.Length > 0 ? v : "";
             if (cell.Parent is FrameworkElement box) box.Visibility = cell.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
+        // warming up ("warm"): the hour's figure reads "warming up", dimmed and without its "/ hr"
+        if (_cells.TryGetValue("rate", out var rate)) rate.Opacity = warm ? WarmOpacity : 1;
+        if (_labels.TryGetValue("rate", out var rateLabel)) rateLabel.Visibility = warm ? Visibility.Collapsed : Visibility.Visible;
         bool first = true;
         foreach (FrameworkElement c in _row.Children)
         {

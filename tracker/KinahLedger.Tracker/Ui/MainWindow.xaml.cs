@@ -820,9 +820,19 @@ public partial class MainWindow : Window
         : Math.Abs(v) < 1_000_000 ? $"{v / 1e3:0.#}K"
         : Math.Abs(v) < 1_000_000_000 ? $"{v / 1e6:0.##}M" : $"{v / 1e9:0.##}B";
 
+    /// <summary>The count on screen is too young for an hour's rate to mean much (FillNumbers); BestRuns.MinMinutes is separate.</summary>
+    bool _rateWarming;
+    static readonly TimeSpan RateWarmup = TimeSpan.FromMinutes(2);
+    const int RateWarmupCounts = 3;
+    /// <summary>The panel's rate while it warms up.</summary>
+    const string WarmingUp = "warming up";
+
     void FillNumbers(SessionEngine e, TimeSpan elapsed)
     {
         double h = Math.Max(elapsed.TotalHours, 1.0 / 3600);
+        // the first minute's hour swings wildly (one pickup 20 s in reads as millions an hour): until 2 minutes and 3
+        // counts, whichever comes later, the window dims its figure and the panel says it is warming up
+        _rateWarming = elapsed < RateWarmup || e.Events < RateWarmupCounts;
         var t = e.Totals(); long kinah = t.Kinah;   // farming Kinah only; bound Kinah is reward money
         var s = Build(e, h, t.Kills);
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
@@ -914,9 +924,10 @@ public partial class MainWindow : Window
         long rateTotal = (_mode == Mode.Gather ? 0 : kinah) + s.Value;
         bool rateHasKinah = _mode != Mode.Gather && kinah > 0;
         _hudValues["time"] = Clock(elapsed);
-        _hudValues["rate"] = rateTotal > 0 ? Fk(rateTotal / h) : "";
-        _hudValues["kinah"] = Fk(kinah / h);
-        _hudValues["loot"] = s.Priced > 0 && rateHasKinah ? Fk(s.Value / h) : "";
+        _hudValues["warm"] = _rateWarming ? "1" : "";
+        _hudValues["rate"] = rateTotal <= 0 ? "" : _rateWarming ? WarmingUp : Fk(rateTotal / h);
+        _hudValues["kinah"] = _rateWarming ? "" : Fk(kinah / h);
+        _hudValues["loot"] = s.Priced > 0 && rateHasKinah && !_rateWarming ? Fk(s.Value / h) : "";
         _hudValues["total"] = Fk(totalNow);
         _shareCard = new CardNumbers(e.Zone, ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : "Open world"), elapsed, totalNow, totalNow > 0 ? totalNow / h : 0,
             // the Discord card keeps its own three figures and labels, whatever the window's stats show

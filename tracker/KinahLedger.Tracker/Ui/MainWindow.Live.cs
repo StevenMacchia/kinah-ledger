@@ -310,11 +310,17 @@ public partial class MainWindow
         HeadRateLbl.Text = total <= 0 ? "Kinah and loot an hour, once something is counted"
             : priced > 0 || loot > 0 ? (_mode == Mode.Gather && kinah == 0 ? "an hour, loot after tax" : "an hour, Kinah and loot after tax")
             : "an hour, Kinah; loot not priced yet";
-        // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line)
+        // warming up (FillNumbers): the figure dimmed, and said so, until the count is old enough for an hour to mean something
+        bool warm = _rateWarming && total > 0;
+        HeadRate.Opacity = warm ? 0.4 : 1;
+        if (warm) HeadRateLbl.Text += " · warming up";
+        HeadRate.ToolTip = warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted." : null;
+        // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
+        // none while warming up, so the line doesn't open on a spike
         if (!_demo)
         {
             if (!ReferenceEquals(_rateOf, e)) { _rateOf = e; _rateLine.Clear(); }
-            if (total > 0) _rateLine.Add(DateTime.UtcNow, total / h);
+            if (total > 0 && !_rateWarming) _rateLine.Add(DateTime.UtcNow, total / h);
         }
         DrawRateLine(_rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now");
         KvLine.Inlines.Clear();
@@ -679,7 +685,10 @@ public partial class MainWindow
     Dictionary<string, string> HudFeedValues(FeedLine? l, string flag)
     {
         var d = new Dictionary<string, string> { ["flag"] = flag, ["feedText"] = "", ["feedValue"] = "", ["feedRate"] = "", ["feedUnit"] = "" };
-        if (l == null) { d["feedRate"] = _hudValues.GetValueOrDefault("rate", ""); d["feedUnit"] = "an hour"; return d; }
+        // the farming hour beside the line: "warming up" alone while the count is young (FillNumbers), else "1.27M an hour"
+        var hour = _hudValues.GetValueOrDefault("rate", "");
+        var hourUnit = hour == WarmingUp ? "" : "an hour";
+        if (l == null) { d["feedRate"] = hour; d["feedUnit"] = hourUnit; return d; }
         var (bold, plain, small) = FeedWords(l);
         d["feedText"] = l.Kind == "craft" ? $"{bold}{plain} {small}" : l.Kind == "kinah" ? bold : $"{bold}{(l.Amount > 1 ? plain : "")}";
         d["feedValue"] = (l.Tab == FeedTab.Crafting ? CraftValue(l) : PickupValue(l)).Text;
@@ -687,7 +696,7 @@ public partial class MainWindow
         {
             FeedTab.Crafting => (_craftNet, "today"),
             FeedTab.Events => (_eventsRate, "an hour"),
-            _ => (_hudValues.GetValueOrDefault("rate", ""), "an hour"),
+            _ => (hour, hourUnit),
         };
         return d;
     }
