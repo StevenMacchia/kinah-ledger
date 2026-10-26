@@ -96,8 +96,36 @@ public static class TableWitnessTests
         var table15 = new List<TableWitness.Slot> { Named("Enhance Stone", 4000), Named("Soul Codex", 5), Named("Silentium", 14), Named("Refining Stone", 6), Named("Expert's Refining Stone", 1), Named("Vagabond Gloves", 1, true) };
         Check("15:31 table: Enhance Stone x4.0K kept beside a lone x935 7 s later", J(TableWitness.Judge(table15, lines15)), "none");
         Check("...the same x935 in the table's own printout: not read", J(TableWitness.Judge(table15, lines15.Select(l => l.Name == "Enhance Stone" ? l with { At = p15 } : l).ToList())), "not read Enhance Stone x4000");
-        Check("...one slot x3 where its printout says x30: not read", J(TableWitness.Judge(new List<TableWitness.Slot> { Named("Odyle", 3), Named("Refining Stone", 6), Named("Silentium", 14) },
-            new List<TableWitness.Line> { new(p15, "Odyle", 30), new(p15, "Refining Stone", 6), new(p15, "Silentium", 14) })), "not read Odyle x3");
+        // the picture short of its printout keeps its count and is one to look at (2026-10-25 13:07:04 Hidden Lugi: card 3's
+        // Soul Codex x1, the chat x3, the other two in places the cards only showed cut)
+        Check("...one slot x3 where its printout says x30: kept, to look at", J(TableWitness.Judge(new List<TableWitness.Slot> { Named("Odyle", 3), Named("Refining Stone", 6), Named("Silentium", 14) },
+            new List<TableWitness.Line> { new(p15, "Odyle", 30), new(p15, "Refining Stone", 6), new(p15, "Silentium", 14) })), "to look at Odyle x3");
+        // ---- the chat's count that no read showed (2026-10-25 20:06:51 to 20:07:06, Vakron) ----
+        var t20 = new DateTime(2026, 10, 26, 0, 6, 51, DateTimeKind.Utc);
+        var table20 = new List<TableWitness.Slot> { Named("Amplify Stone Fragment (Unique)", 9), Named("Silentium", 14), Named("Soul Codex", 5), Named("Refining Stone", 3) };
+        var burst20 = new List<TableWitness.Line> { new(t20, "Amplify Stone Fragment (Unique)", 1, Assumed: true), new(t20, "Silentium", 14), new(t20, "Soul Codex", 5), new(t20, "Refining Stone", 3) };
+        Check("20:06 table: Amplify x9 beside the chat's assumed 1: kept", J(TableWitness.Judge(table20, burst20)), "none");
+        Check("...the same 1 read as a count: not read, as before", J(TableWitness.Judge(table20, burst20.Select(l => l with { Assumed = false }).ToList())), "not read Amplify Stone Fragment (Unique) x9");
+        Check("...an assumed line agrees with nothing: Soul Codex x5 beside x1 and two assumed lines kept",
+            J(TableWitness.Judge(new List<TableWitness.Slot> { Named("Soul Codex", 5), Named("Silentium", 14), Named("Refining Stone", 3) },
+                new List<TableWitness.Line> { new(t20, "Soul Codex", 1), new(t20, "Silentium", 1, Assumed: true), new(t20, "Refining Stone", 1, Assumed: true) })), "none");
+        var kept20 = new List<TableWitness.Line>();
+        TableWitness.AddLine(kept20, new(t20, "Amplify Stone Fragment (Unique)", 1, Assumed: true), settle: false);
+        TableWitness.AddLine(kept20, new(t20.AddSeconds(4), "Amplify Stone Fragment (Unique)", 8), settle: true);
+        TableWitness.AddLine(kept20, new(t20.AddSeconds(5), "Odyle", 2), settle: true);
+        Check("its count read again later completes the line; a lone settle stays assumed", string.Join(" | ", kept20.Select(l => $"{l.Name} x{l.Count}{(l.Assumed ? " assumed" : "")}")),
+            "Amplify Stone Fragment (Unique) x9 | Odyle x2 assumed");
+        // the parser joins a wrapped "(Bound) x9." under its line when the lines are parsed one at a time (a burst)
+        var cp = new ChatParser(items);
+        var read20 = new List<string> { "Earth Gloves acquired.", "Acquired Amplify Stone Fragment (Unique)", "(Bound) x9.", "Acquired Silentium (Bound) x14." };
+        string JT(IReadOnlyList<string> ls, IReadOnlyList<string> rd) => string.Join(" | ", cp.JoinWrappedTails(ls, rd, t20).Select(x => x.Text));
+        Check("burst: the tail joined to its line", JT(read20, read20), "Earth Gloves acquired. | Acquired Amplify Stone Fragment (Unique) (Bound) x9. | Acquired Silentium (Bound) x14.");
+        Check("...the settle's lines (no tail among them): taken from the read", JT(new[] { "Acquired Amplify Stone Fragment (Unique)", "Acquired Silentium (Bound) x14." }, read20),
+            "Acquired Amplify Stone Fragment (Unique) (Bound) x9. | Acquired Silentium (Bound) x14.");
+        Check("...a tail that isn't under it in the read: left alone", JT(new[] { "Acquired Amplify Stone Fragment (Unique)", "(Bound) x9." }, new[] { "(Bound) x9.", "Acquired Amplify Stone Fragment (Unique)" }),
+            "Acquired Amplify Stone Fragment (Unique) | (Bound) x9.");
+        var joined20 = cp.ParseBatch(new List<string> { "Acquired Amplify Stone Fragment (Unique) (Bound) x9." }, t20, wrap: false).SelectMany(x => x.Events).ToList();
+        Check("...and parsed as x9", string.Join(" ", joined20.Select(e => e is ItemAcquired a ? $"{Unb(items.NameOf(a.ItemId))} x{a.Count}" : e is RewardReceived r ? $"{Unb(r.Name)} x{r.Count}" : e.GetType().Name)), "Amplify Stone Fragment (Unique) x9");
         // gear twins by the chat: Worn Bow / Training Bow isn't on the faction list
         var bows = new List<TableWitness.Slot> { Twin("Worn Bow", "Training Bow"), Twin("Worn Bow", "Training Bow") };
         Check("twins by the chat: one line names one of two pieces", J(TableWitness.Judge(bows, new List<TableWitness.Line> { new(p15, "Training Bow", 1) })), "settle Training Bow x1");
@@ -107,6 +135,29 @@ public static class TableWitnessTests
         Check("a faction-settled piece the chat names as its twin: unknown gear again", J(TableWitness.Judge(new List<TableWitness.Slot> { Named("Forgotten Helm", 1, true, "Forgotten Helm", "Shade Helm") }, new List<TableWitness.Line> { new(burst, "Shade Helm", 1) })), "unsettle Forgotten Helm x1");
         Check("...the chat naming it as itself: kept", J(TableWitness.Judge(new List<TableWitness.Slot> { Named("Forgotten Helm", 1, true, "Forgotten Helm", "Shade Helm") }, new List<TableWitness.Line> { new(burst, "Forgotten Helm", 1), new(burst, "Shade Helm", 1) })), "none");
         Check("judged when due: 12 s after the screen's last sight, 90 s at most", $"{(TableWitness.Due(t18, t18.AddSeconds(1)) - t18).TotalSeconds} {(TableWitness.Due(t18, t18.AddMinutes(5)) - t18).TotalSeconds}", "13 90");
+
+        // ---- b2. two reads of one screen (2026-10-25) ----
+        Check("a count read with a minus before it is not read (13:08:29 \"-400\")", $"{RewardGrid.ParseCount("-400")} {RewardGrid.ParseCount("400")} {RewardGrid.ParseCount("4.0K")}", "0 400 4000");
+        var bx = new Rectangle(0, 0, 10, 10);
+        RewardGrid.Slot G(string key, double d, long n, string text = "") => new(bx, "Common", text.Length > 0 ? text : n.ToString(), n, new() { (key, d) });
+        var r1 = new List<RewardGrid.Slot> { G("A", 30, 2), G("B", 95, 6), G("C", 40, 1) };
+        var r2 = new List<RewardGrid.Slot> { G("A", 31, 2), G("B", 50, 6), G("C", 41, 1), G("World", 60, 1) };
+        var voted2 = RewardGrid.Vote(new List<List<RewardGrid.Slot>> { r1 }, 70);
+        var filled2 = RewardGrid.FillUnread(voted2, new List<List<RewardGrid.Slot>> { r1, r2 }, 70, out var said2);
+        Check("a table slot the vote left unsure, read surely in a read of another slot count: filled", $"{string.Join(" ", filled2.Select(s => $"{s.Icons[0].Key}{s.Icons[0].Distance:0}x{s.Count}"))} | {said2.Count}", "A30x2 B50x6 C40x1 | 1");
+        var r3 = new List<RewardGrid.Slot> { G("A", 31, 2), G("B2", 50, 6), G("C", 41, 1) };
+        Check("...two reads naming other icons there: left not read", string.Join(" ", RewardGrid.FillUnread(voted2, new List<List<RewardGrid.Slot>> { r1, r2, r3 }, 70, out _).Select(s => $"{s.Icons[0].Key}{s.Icons[0].Distance:0}")), "A30 B95 C40");
+        Check("...a slot the vote read is never changed", string.Join(" ", RewardGrid.FillUnread(voted2, new List<List<RewardGrid.Slot>> { r1, new() { G("A", 20, 3), G("B", 50, 6), G("C", 20, 4) } }, 70, out _).Select(s => $"x{s.Count}")), "x2 x6 x1");
+        // the live read against the read again of the kept pictures, place by place (18:06:11 x340, 18:07:41 x320)
+        var live = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Event = "Defend Shugo Merchants", Start = t18, FromPicture = true, PartlyRead = true, PictureSlots = 46, SlotsUnread = 2,
+            Items = { [700] = 340 + 440, [701] = 50 }, PictureCounts = { "c1.3|700|False|440", "c2.3|700|False|340", "c2.4|701|False|30", "c2.5|701|False|20" } };
+        var again = live.Clone(); again.Items[700] = 320 + 440; again.PictureCounts[1] = "c2.3|700|False|320";
+        Check("two reads of one screen, one place x340 and x320: not read on the run kept", $"{TrackerSession.TakeReread(live, again)} {live.Items[700]} {live.SlotsUnread} {live.UnknownItems} {live.PartlyRead} {live.UnknownSlots.LastOrDefault()}",
+            "False 440 3 1 True c2.3 · x340 or x320: two reads of the screen disagreed");
+        var shifted = live.Clone(); shifted.PictureCounts = new() { "c2.3|701|False|30", "c2.4|701|False|20" };
+        Check("...a card whose places don't line up (a row off) is not compared", $"{TrackerSession.CountsDiffer(new[] { "c2.4|701|False|30", "c2.5|701|False|20" }, shifted.PictureCounts).Count}", "0");
+        var doubted = new InstanceRun { Zone = "Vakron Sky Island", Kind = "Expedition", FromPicture = true, SlotDoubts = { "Special x1 · Soul Codex: the picture read x1, the chat's own line x3" } };
+        Check("a count in doubt: the run out of the averages, one to look at", $"{doubted.OutOfAverages} {doubted.ToLookAt}", "True True");
 
         // ---- c. a session: the cards filed, the chat read after the screen closed, the judge on the run ----
         var keepDir = CrashLog.DirOverride;

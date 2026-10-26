@@ -85,6 +85,21 @@ public sealed class InstanceRun
     /// <summary>Slots on the reward picture it was filed from (a read again from the pictures replaces it only when it reads more).</summary>
     public int PictureSlots { get; set; }
     /// <summary>
+    /// Slots whose count stands as the picture read it but is one to look at (since 2026-10-25): the chat's own line said
+    /// more than twice as many (TableWitness.Doubt), or two reads of the screen disagreed and the one kept is the live read's.
+    /// Each line says which and why. The run stays out of the averages while any is here.
+    /// </summary>
+    public List<string> SlotDoubts { get; set; } = new();
+    /// <summary>
+    /// The named stackable slots of the picture it was filed from, one "place|item id|bound|count" each (an event card's
+    /// place is "c2.3": card 2, its fourth place), since 2026-10-25: a read again of the run's pictures that reads a place
+    /// with another count is a disagreement, and that slot is then not read. Kept on this PC, never sent.
+    /// </summary>
+    public List<string> PictureCounts { get; set; } = new();
+    /// <summary>A run counted from its picture with anything on it to look at: slots not read, gear not named, a count in doubt.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool ToLookAt => FromPicture && (PartlyRead || SlotsUnread > 0 || UnknownGear > 0 || SlotDoubts.Count > 0);
+    /// <summary>
     /// Not sent: its rewards were not read when it was due to go to the site, so it is parked here (in instances.jsonl,
     /// never back in the queue, never retried every tick) until <c>replay-event-shots --send</c> reads its saved pictures
     /// and sends it (since 2026-10-24; before that such a run was dropped without a word).
@@ -123,6 +138,7 @@ public sealed class InstanceRun
         FromPicture = read.FromPicture; SlotsUnread = read.SlotsUnread; UnknownSlots = new(read.UnknownSlots);
         KinahNotRead = read.KinahNotRead; RewardsNotRead = !read.FromPicture;
         PartlyRead = read.PartlyRead; UnknownGear = read.UnknownGear; UnknownItems = read.UnknownItems; GearNotes = new(read.GearNotes); PictureSlots = read.PictureSlots;
+        SlotDoubts = new(read.SlotDoubts); PictureCounts = new(read.PictureCounts);
         PaidAt ??= read.PaidAt;
     }
 
@@ -154,7 +170,7 @@ public sealed class InstanceRun
     public string Suspect { get; set; } = "";
     /// <summary>Left out of the per-run, per-hour and total figures: its Kinah isn't known, or the record looks wrong.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool OutOfAverages => KinahUnknown || PartlyRead || OldUnread || Suspect.Length > 0;
+    public bool OutOfAverages => KinahUnknown || PartlyRead || OldUnread || Suspect.Length > 0 || SlotDoubts.Count > 0;
 
     /// <summary>
     /// The run's pieces, not a quantity sum (Steven, 2026-10-24: two pauldrons read "x1K" made "2,000 items"): every piece
@@ -914,7 +930,7 @@ public sealed class InstanceLog
     /// way, bound rewards count as the table shows them, and later chat items don't reach this run.
     /// </summary>
     public void RewardTable(DateTime t, IEnumerable<GameEvent> slots, int unread, IEnumerable<string>? unknown = null, bool kinahUnread = false,
-        int unknownItems = 0, IReadOnlyList<string>? unknownGear = null, bool partly = false, int pictureSlots = 0)
+        int unknownItems = 0, IReadOnlyList<string>? unknownGear = null, bool partly = false, int pictureSlots = 0, IReadOnlyList<string>? pictureCounts = null)
     {
         lock (_lock)
         {
@@ -936,6 +952,8 @@ public sealed class InstanceLog
             if (unknown != null) _cur.UnknownSlots.AddRange(unknown);
             _cur.UnknownItems += unknownItems; _cur.PictureSlots += pictureSlots;
             if (unknownGear != null) { _cur.UnknownGear += unknownGear.Count; _cur.GearNotes.AddRange(unknownGear); }
+            // as the items: the picture's own, in place of what was there
+            _cur.PictureCounts = pictureCounts?.ToList() ?? new();
             if (partly) _cur.PartlyRead = true;
             CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, out of the averages)" : "")}; the chat's {chatItems} set aside");
         }
@@ -979,6 +997,10 @@ public sealed class InstanceLog
                         r.UnknownGear++;
                         r.GearNotes.Add($"{d.Slot.Grade} gear, one of {string.Join(" / ", d.Slot.Twins.Take(3))}{(d.Slot.Twins.Count > 3 ? " …" : "")}");
                         break;
+                    case TableWitness.Doubt:
+                        // the picture's count stands; the slot is one to look at, and the run out of the averages until then
+                        r.SlotDoubts.Add($"{d.Slot.Note} · {d.Name}: {d.Why}");
+                        break;
                     case TableWitness.Unread:
                         if (into.GetValueOrDefault(d.ItemId) < d.Slot.Count) continue;
                         if ((into[d.ItemId] -= d.Slot.Count) == 0) into.Remove(d.ItemId);
@@ -990,7 +1012,7 @@ public sealed class InstanceLog
                         break;
                 }
             }
-            if (decisions.Count > 0) CrashLog.Note($"{r.Label}: the chat's lines beside its reward picture: {decisions.Count(d => d.Kind == TableWitness.Settle)} piece(s) of gear named, {decisions.Count(d => d.Kind == TableWitness.Unsettle)} back to unknown gear, {decisions.Count(d => d.Kind == TableWitness.Unread)} slot(s) not read; now {PiecesNote(r)}");
+            if (decisions.Count > 0) CrashLog.Note($"{r.Label}: the chat's lines beside its reward picture: {decisions.Count(d => d.Kind == TableWitness.Settle)} piece(s) of gear named, {decisions.Count(d => d.Kind == TableWitness.Unsettle)} back to unknown gear, {decisions.Count(d => d.Kind == TableWitness.Unread)} slot(s) not read, {decisions.Count(d => d.Kind == TableWitness.Doubt)} count(s) to look at; now {PiecesNote(r)}");
             if (closed) RewriteLocked(r);
             return true;
         }

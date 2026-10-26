@@ -7,6 +7,7 @@
   "expect": {
     "runs_kept": 1,
     "runs_from_picture": 1,
+    "run_not_read": 5,
     "run_items": {
       "Amplify Stone Fragment (Unique)": 9
     }

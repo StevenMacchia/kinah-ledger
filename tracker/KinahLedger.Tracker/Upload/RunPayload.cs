@@ -249,7 +249,8 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
                 var fix = RunCorrection.Of(r, key, off);
                 return new InstanceRunPayload(r.Zone, KindOf(r)!, fix != null ? 0 : (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
                     r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null, fix,
-                    r.PartlyRead ? true : null, r.SlotsUnread > 0 ? r.SlotsUnread : null, unknown.Count > 0 ? unknown : null,
+                    // a count in doubt (InstanceRun.SlotDoubts) keeps the run out of the site's averages the same way
+                    r.PartlyRead || r.SlotDoubts.Count > 0 ? true : null, r.SlotsUnread > 0 ? r.SlotsUnread : null, unknown.Count > 0 ? unknown : null,
                     r.GearNotes.Count > 0 ? r.GearNotes.Take(MaxNotes).ToList() : null, r.Acc);
             }).ToList();
         return list.Count > 0 ? list : null;

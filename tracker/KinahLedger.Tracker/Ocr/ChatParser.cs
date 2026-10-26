@@ -247,6 +247,49 @@ public sealed partial class ChatParser
         return res;
     }
 
+    /// <summary>
+    /// The same tail rule for lines that are parsed one at a time (a burst read that didn't line up, the lines counted once
+    /// the chat settled): "Acquired Amplify Stone Fragment (Unique)" then "(Bound) x9." in the read is one line, x9
+    /// (2026-10-25 20:06:51: the burst's first half counted as one, "quantity unsure, 1 assumed", and the table's witness took
+    /// that 1 for the chat's own count and set the slot's x9 not read). Two lines are joined only when they stand one under
+    /// the other in <paramref name="read"/> (the read they came from), the first an item line without "(Bound)" and the
+    /// second a tail alone, and the joined line parses to one item. The tail may be missing from <paramref name="lines"/>
+    /// (the settle takes only lines with a verb): it is the read's line under the item line. Each result keeps the lines it
+    /// was made of.
+    /// </summary>
+    public List<(string Text, IReadOnlyList<string> Parts)> JoinWrappedTails(IReadOnlyList<string> lines, IReadOnlyList<string> read, DateTime time)
+    {
+        var res = new List<(string, IReadOnlyList<string>)>();
+        for (int i = 0; i < lines.Count; i++)
+        {
+            if (TailUnder(read, lines[i]) is { } tail && !Regex.IsMatch(lines[i], @"\(\s*b[o0]und\s*\)", RegexOptions.IgnoreCase))
+            {
+                var first = Parse(lines[i], time).ToList();
+                if (first.Count == 1 && first[0] is ItemAcquired or RewardReceived)
+                {
+                    var joined = lines[i].Trim() + " " + tail.Trim();
+                    var j = Parse(joined, time).ToList();
+                    if (j.Count == 1 && j[0] is ItemAcquired or RewardReceived)
+                    {
+                        res.Add((joined, new[] { lines[i], tail }));
+                        if (i + 1 < lines.Count && lines[i + 1].Trim() == tail.Trim()) i++;
+                        continue;
+                    }
+                }
+            }
+            res.Add((lines[i], new[] { lines[i] }));
+        }
+        return res;
+    }
+
+    /// <summary>The wrapped tail ("(Bound) x9.") right under <paramref name="a"/> in the read, or null.</summary>
+    static string? TailUnder(IReadOnlyList<string> read, string a)
+    {
+        for (int k = 0; k + 1 < read.Count; k++)
+            if (read[k].Trim() == a.Trim() && WrappedTail.IsMatch(read[k + 1])) return read[k + 1];
+        return null;
+    }
+
     /// <summary>The text returned in place of the first half of a line joined to the one after it.</summary>
     public const string JoinedMark = "(wrapped: joined to the next line)";
     /// <summary>The end of a wrapped item line on its own: "(Bound) x2.", "(Bound).", "x12.".</summary>
