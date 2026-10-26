@@ -17,9 +17,22 @@ public sealed partial class TrackerSession
     TableWitness.Pending? _witness;
 
     /// <summary>The chat's item lines in the seconds before a picture is filed (as the reward table's own 20 s).</summary>
-    List<TableWitness.Line> WitnessChatBefore(DateTime now) =>
-        _runPickups.Where(p => p.Name != "Kina" && (now - p.At).TotalSeconds is >= 0 and <= TableWitness.BeforeSeconds)
-                   .Select(p => new TableWitness.Line(p.At, p.Name, p.Count)).ToList();
+    List<TableWitness.Line> WitnessChatBefore(DateTime now)
+    {
+        var res = new List<TableWitness.Line>();
+        foreach (var p in _runPickups.Where(p => p.Name != "Kina" && (now - p.At).TotalSeconds is >= 0 and <= TableWitness.BeforeSeconds))
+            TableWitness.AddLine(res, new TableWitness.Line(p.At, p.Name, p.Count, p.Assumed), p.Settle);
+        return res;
+    }
+
+    // pickups counted as one from a line that showed no count (ChatParser.CountUnsure), by the event itself: their count is
+    // no witness of the picture's (2026-10-25 20:07:03, "Acquired Amplify Stone Fragment (Unique)" then "(Bound) x9.")
+    readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameEvent, object> _countAssumed = new();
+    static readonly object Yes = true;
+    void MarkAssumed(GameEvent ev) => _countAssumed.AddOrUpdate(ev, Yes);
+    bool IsAssumed(GameEvent ev) => _countAssumed.TryGetValue(ev, out _);
+    /// <summary>The rest of a count read again for a pickup counted as one (the session's CountWatch delta).</summary>
+    static bool IsCountSettle(GameEvent ev) => ev.Via.Contains("count read again", StringComparison.Ordinal);
 
     /// <summary>
     /// The gear twin a slot is by the player's faction: the one name of <paramref name="names"/> the faction list gives the
@@ -53,14 +66,14 @@ public sealed partial class TrackerSession
         if (ev.Via.Contains("reward table")) return;
         var line = ev switch
         {
-            ItemAcquired a => new TableWitness.Line(ev.Time, Unbound(_items.NameOf(a.ItemId)), a.Count),
-            RewardReceived r => new TableWitness.Line(ev.Time, Unbound(r.Name), r.Count),
+            ItemAcquired a => new TableWitness.Line(ev.Time, Unbound(_items.NameOf(a.ItemId)), a.Count, IsAssumed(ev)),
+            RewardReceived r => new TableWitness.Line(ev.Time, Unbound(r.Name), r.Count, IsAssumed(ev)),
             _ => null,
         };
         if (line == null) return;
         lock (_witnessLock)
             if (_witness is { Judged: false } p && (line.At - p.At).TotalSeconds >= -TableWitness.BeforeSeconds && line.At <= TableWitness.Due(p.At, WitnessScreenSeen()))
-                p.Chat.Add(line);
+                TableWitness.AddLine(p.Chat, line, IsCountSettle(ev));
     }
 
     /// <summary>The reward screen's last sight: the event cards' screen or the reward table, whichever was later.</summary>

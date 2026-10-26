@@ -335,6 +335,8 @@ public static class EventCards
         public readonly double Sure;
         public Merger(double sure) { Sure = sure; }
         public int Reads { get; private set; }
+        /// <summary>Places whose reads disagreed on the count with no majority (<see cref="Voted"/> leaves them not read), one line each.</summary>
+        public readonly HashSet<string> Disagreed = new();
         /// <summary>Card reads not placed in their lists (yet): a later read can place them (<see cref="Add"/> tries them again).</summary>
         public int Unaligned => Cards.Values.Sum(l => l.Loose.Count);
         public readonly Dictionary<long, RewardGrid.Slot> Cache = new();
@@ -502,7 +504,17 @@ public static class EventCards
                 if (l.Full.TryGetValue(at, out var votes))
                 {
                     var sureOnes = votes.Where(v => v.Icons.Count > 0 && v.Icons[0].Distance <= Sure).ToList();
-                    res.Add(RewardGrid.Vote((sureOnes.Count > 0 ? sureOnes : votes).Select(v => new List<RewardGrid.Slot> { v }).ToList())[0]);
+                    var pool = sureOnes.Count > 0 ? sureOnes : votes;
+                    var slot = RewardGrid.Vote(pool.Select(v => new List<RewardGrid.Slot> { v }).ToList())[0];
+                    // reads of this place that disagree on its count with no majority (2026-10-25 18:06, Abyss Points x340 in
+                    // one read, x320 in another): neither is taken, the later never replaces the earlier; the place is not read
+                    var counts = pool.Where(v => v.Count > 0).GroupBy(v => v.Count).OrderByDescending(g => g.Count()).ToList();
+                    if (counts.Count > 1 && counts[0].Count() == counts[1].Count())
+                    {
+                        Disagreed.Add($"card {card + 1} place {at + 1}: {string.Join(", ", counts.Select(g => $"x{g.First().CountText} ({g.Count()} read(s))"))}");
+                        slot = slot with { Count = 0, CountText = "?" };
+                    }
+                    res.Add(slot);
                 }
                 else if (l.Cut.TryGetValue(at, out var cut)) res.Add(cut);
                 else res.Add(new RewardGrid.Slot(Rectangle.Empty, "Common", "", 0, new List<(string, double)>()));   // a place between seen ones, never shown

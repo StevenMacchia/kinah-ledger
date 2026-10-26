@@ -11,9 +11,17 @@ namespace KinahLedger.Session;
 /// those seconds, when it named exactly one of them;</item>
 /// <item>a piece settled by the player's faction (Data/GearFactions.cs) the chat names as its twin goes back to unknown
 /// gear: the two disagree, and the server setting may be another character's;</item>
-/// <item>a slot whose count the chat's own line contradicts by more than <see cref="Ratio"/>x is not read (Hidden Lugi
-/// 18:02: Soul Codex 43 on the cards, every other run 3, the chat "x3"). The chat's figure is not taken in its place:
-/// the picture's count is contradicted, and the chat alone is one witness.</item>
+/// <item>a slot whose count is more than <see cref="Ratio"/>x the chat's own line is not read (Hidden Lugi 18:02: Soul
+/// Codex 43 on the cards, every other run 3, the chat "x3"): a picture that counts far more than the game printed is a
+/// misread. The chat's figure is not taken in its place: the picture's count is contradicted, and the chat alone is one
+/// witness;</item>
+/// <item>a picture that counts less than the chat's own line by more than <see cref="Ratio"/>x keeps its count, and the
+/// slot is one to look at (<see cref="Doubt"/>; 2026-10-25 13:07:04 Hidden Lugi: card 3's Soul Codex x1, the chat "x3",
+/// the other two in places the cards only showed cut). The slot was read and what is missing may sit in a slot not read,
+/// so it is never dropped; the run stays out of the averages until someone looks;</item>
+/// <item>a chat line whose count no read showed ("Acquired Amplify Stone Fragment (Unique)" with its "(Bound) x9." lost,
+/// counted as one assumed: <see cref="Line.Assumed"/>) is no witness of a count at all, for or against (2026-10-25
+/// 20:07:03: that assumed 1 set the table's x9 not read).</item>
 /// </list>
 /// A chat line contradicts a count only when it was read together with lines that agree with the picture on two other
 /// items, so it is the picture's own printout and not another pickup of the same item in those seconds (2026-10-24 15:31:59,
@@ -32,8 +40,27 @@ public static class TableWitness
     /// <summary>A count and the chat's line further apart than this are a disagreement.</summary>
     public const double Ratio = 2;
 
-    /// <summary>One item line of the chat in the seconds around the picture: when it was counted, the item, how many.</summary>
-    public sealed record Line(DateTime At, string Name, int Count);
+    /// <summary>
+    /// One item line of the chat in the seconds around the picture: when it was counted, the item, how many. Assumed: the
+    /// line showed no count, so one was assumed (ChatParser.CountUnsure); its count is no witness.
+    /// </summary>
+    public sealed record Line(DateTime At, string Name, int Count, bool Assumed = false);
+
+    /// <summary>
+    /// Adds a chat line to the lines kept for a picture. A count read again later for a line that showed none
+    /// (<paramref name="settle"/>: the session's "count read again" delta) completes that line, which then witnesses its
+    /// count; with no such line kept, the delta alone is no witness of a total, so it is kept as assumed.
+    /// </summary>
+    public static void AddLine(List<Line> chat, Line line, bool settle)
+    {
+        if (settle)
+        {
+            int i = chat.FindLastIndex(l => l.Assumed && Same(l.Name, line.Name));
+            if (i >= 0) { chat[i] = chat[i] with { Count = chat[i].Count + line.Count, Assumed = false }; return; }
+            line = line with { Assumed = true };
+        }
+        chat.Add(line);
+    }
 
     /// <summary>
     /// A slot as the picture filed it: named (<paramref name="Name"/>, <paramref name="Count"/>), or a piece of unknown gear
@@ -46,7 +73,7 @@ public static class TableWitness
 
     /// <summary>What the chat decided for one slot: settled as an item, back to unknown gear, or not read.</summary>
     public sealed record Decision(Slot Slot, string Kind, string Name, long ItemId, bool Bound, string Why);
-    public const string Settle = "settle", Unsettle = "unsettle", Unread = "not read";
+    public const string Settle = "settle", Unsettle = "unsettle", Unread = "not read", Doubt = "to look at";
 
     /// <summary>A picture filed into a run, waiting for its chat.</summary>
     public sealed class Pending
@@ -106,13 +133,14 @@ public static class TableWitness
         var totals = slots.Where(s => s.Name.Length > 0 && s.Count > 0).GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
                           .ToDictionary(x => x.Key, x => x.Sum(s => s.Count), StringComparer.OrdinalIgnoreCase);
         var twins = slots.Where(s => s.Gear).SelectMany(s => s.Twins).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        bool Agrees(Line l) => (totals.TryGetValue(l.Name, out var t) && t == l.Count) || (twins.Contains(l.Name) && l.Count == 1);
+        bool Agrees(Line l) => !l.Assumed && ((totals.TryGetValue(l.Name, out var t) && t == l.Count) || (twins.Contains(l.Name) && l.Count == 1));
         bool Printout(Line l) =>
             chat.Where(o => !Same(o.Name, l.Name) && Math.Abs((o.At - l.At).TotalSeconds) <= BurstSeconds && Agrees(o))
                 .Select(o => o.Name.ToLowerInvariant()).Distinct().Count() >= 2;
         foreach (var g in slots.Where(s => !s.Gear && s.Name.Length > 0 && s.Count > 0).GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
         {
-            var lines = chat.Where(l => Same(l.Name, g.Key)).ToList();
+            // a line whose count was assumed (none shown) witnesses nothing about a count
+            var lines = chat.Where(l => Same(l.Name, g.Key) && !l.Assumed).ToList();
             var own = lines.Where(Printout).ToList();
             int c = own.Sum(l => l.Count);
             if (c <= 0) continue;
@@ -120,8 +148,10 @@ public static class TableWitness
             foreach (var s in list)
                 if (s.Count > Ratio * c)
                     res.Add(new Decision(s, Unread, s.Name, s.ItemId, s.Bound, $"the slot read x{s.Count}, the chat's own line x{c} ({string.Join(", ", own.Select(l => $"{l.At.ToLocalTime():HH:mm:ss}"))})"));
-            if (list.Count == 1 && list[0].Count * Ratio < c)
-                res.Add(new Decision(list[0], Unread, list[0].Name, list[0].ItemId, list[0].Bound, $"the slot read x{list[0].Count}, the chat's own line x{c}"));
+            // the picture short of the printout: kept as read, one to look at (the rest may be in a slot not read)
+            int total = list.Sum(s => s.Count);
+            if (total * Ratio < c && !res.Any(d => d.Kind == Unread && Same(d.Name, g.Key)))
+                res.Add(new Decision(list[0], Doubt, list[0].Name, list[0].ItemId, list[0].Bound, $"the picture read x{total}, the chat's own line x{c}"));
         }
         return res;
     }

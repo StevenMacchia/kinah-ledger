@@ -214,6 +214,33 @@ public static class RewardGrid
         return res;
     }
 
+    /// <summary>
+    /// The slots <paramref name="voted"/> left not read (no count, or no sure icon), filled from every read of the table,
+    /// whatever its slot count: the grid fills row by row from the same top, so slot i is the same place in each read, and a
+    /// read that saw fewer slots (still sliding in) or more (the world under it) still saw that place. A place is filled
+    /// only when its sure reads name one icon and a strict majority of them one count; a slot the vote read is never
+    /// changed (2026-10-25: all nine tables closed before they settled). <paramref name="said"/> gets one line a slot filled.
+    /// </summary>
+    public static List<Slot> FillUnread(List<Slot> voted, List<List<Slot>> reads, double sure, out List<string> said)
+    {
+        said = new List<string>();
+        var res = voted.ToList();
+        for (int i = 0; i < res.Count; i++)
+        {
+            var v = res[i];
+            if (v.Count > 0 && v.Icons.Count > 0 && v.Icons[0].Distance <= sure) continue;
+            var col = reads.Where(r => r.Count > i).Select(r => r[i]).Where(s => s.Count > 0 && s.Icons.Count > 0 && s.Icons[0].Distance <= sure).ToList();
+            if (col.Count == 0 || col.Select(s => s.Icons[0].Key).Distinct().Count() != 1) continue;
+            var counts = col.GroupBy(s => s.Count).OrderByDescending(g => g.Count()).ToList();
+            if (counts.Count > 1 && counts[0].Count() == counts[1].Count()) continue;
+            var best = col.OrderBy(s => s.Icons[0].Distance).First();
+            var grade = col.GroupBy(s => s.Grade).OrderByDescending(g => g.Count()).First().Key;
+            res[i] = best with { Count = counts[0].Key, CountText = counts[0].First().CountText, Grade = grade };
+            said.Add($"slot {i + 1} not read in the vote ({v.Grade} x{v.CountText}), read in {col.Count} other read(s) of the table as {grade} x{counts[0].First().CountText} {best.Icons[0].Key} {best.Icons[0].Distance:0}: filled from them");
+        }
+        return res;
+    }
+
     public static List<Slot> Vote(List<List<Slot>> reads)
     {
         var seen = reads.Where(r => r.Count > 0).ToList();
@@ -270,6 +297,11 @@ public static class RewardGrid
                 if (Border(frame, new Rectangle(xb + col * p, y, s, s)) >= BorderMin) clearAt[row] = col + 1;
             if (clearAt[row] > 0) lastRow = row;
         }
+        // ...but a row whose clear slots end three boxes or more before its end is the table's last row, whatever stands out
+        // below it (2026-10-25 13:53 Vakron: 29 slots, 8, 8, 8 and 5, read as 44: nameplates and health bars two rows under
+        // the grid stood out like a slot, so the short row was read as full and 15 boxes of the world were filed as slots)
+        for (int row = 0; row < lastRow; row++)
+            if (clearAt[row] is > 0 and <= 5) { lastRow = row; break; }
         for (int row = 0; row <= lastRow; row++)
         {
             int y = top + row * p;
@@ -395,6 +427,9 @@ public static class RewardGrid
     public static long ParseCount(string t)
     {
         var fixd = new string(t.Select(ch => ch switch { 'O' or 'o' or 'Q' or 'D' => '0', 'l' or 'I' or '|' or 'i' => '1', 'S' or 's' => '5', 'B' => '8', 'F' or 'G' or 'b' => '6', 'A' => '4', 'Z' or 'z' => '2', _ => ch }).ToArray());
+        // a minus before the figures: no reward count is negative, so the figures weren't read right and the count is not
+        // read (0), never the figures without it (2026-10-25 13:08:29 and 17:08:12: Abyss Points "-400" counted as 400)
+        if (System.Text.RegularExpressions.Regex.IsMatch(fixd, @"[-–—]\s*\d")) return 0;
         var m = System.Text.RegularExpressions.Regex.Match(fixd.Replace(',', '.').Replace(" ", ""), @"(\d+(?:\.\d+)?)([KkMm]?)");
         if (!m.Success) return 1;
         double v = double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);

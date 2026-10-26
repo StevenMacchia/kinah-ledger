@@ -63,6 +63,7 @@ public static class EventShotRecovery
         // the copy starts as the run closed: no reward picture read, nothing from one
         copy.Items.Clear(); copy.BoundItems.Clear(); copy.Bound = 0; copy.FromPicture = false; copy.SlotsUnread = 0; copy.UnknownSlots.Clear(); copy.KinahNotRead = false;
         copy.PartlyRead = false; copy.UnknownGear = 0; copy.UnknownItems = 0; copy.GearNotes.Clear(); copy.PictureSlots = 0;
+        copy.SlotDoubts.Clear(); copy.PictureCounts.Clear();
         session.Engine.SetZone(copy.Event.Length > 0 ? copy.Event : copy.Zone);
         session.Instances.Adopt(copy);
         int n = 0; DateTime last = run.LastLoot ?? run.Start;
