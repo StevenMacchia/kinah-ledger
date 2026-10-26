@@ -92,7 +92,9 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   pictures joined by " | " (" (dropped)" when the anchored read dropped the anchor); `strip_words` shows what the
   recognizer saw. `strip-2026-10-24-131029`: three pictures from the 131029 footage, scaled 4/3 to the window's size;
   0.8.39 read `0 7811 118254`, `0 7811 11`, `0 7811` (the two Kinah figures never, an icon as 0) and its anchored crop
-  cut the first Kinah figure to `29`, the 124 px anchor and the 115 px flap reads.log shows all day.
+  cut the first Kinah figure to `29`, the 124 px anchor and the 115 px flap reads.log shows all day. Read one number at
+  a time with the icons taken out (`BalanceReader.ReadStripAsync`), the anchored crop gives all twelve numbers and the
+  fixed crop all but one Kinah figure (not read, never wrong).
   A `strip` read in a trace (`{"t", "k": "strip", "l": ["7811@235", "29285750@383", ...]}`, "value@left" per number)
   goes through a `BalanceTracker` with the Kina the chat has read and on to the session's `CheckBalance`, as
   `GameWatcher.TickBalanceAsync` does; keys `counter_found` (0 or 1) and `counter_agreed` (BalanceCheck.Agreed).
