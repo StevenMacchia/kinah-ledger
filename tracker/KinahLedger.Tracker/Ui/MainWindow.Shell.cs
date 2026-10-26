@@ -18,6 +18,8 @@ public sealed record OptionsChoice(
     public string RareWatch { get; init; } = "";
     public bool RareChime { get; init; } = true;
     public double RareVolume { get; init; } = 0.6;
+    /// <summary>The That was wrong shortcut ("Ctrl+Shift+J"), "" when off (Ui/MainWindow.MarkWrong.cs).</summary>
+    public string MarkWrongKey { get; init; } = "";
 }
 
 /// <summary>
@@ -153,6 +155,7 @@ public partial class MainWindow
     {
         _hotkeySuspended = suspend;
         ApplyHotkey();
+        ApplyMarkWrongKey();   // the That was wrong key too: neither fires while a key is being recorded
     }
 
     /* ---------------- Options ---------------- */
@@ -234,7 +237,7 @@ public partial class MainWindow
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
-        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2) };
+        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -269,7 +272,13 @@ public partial class MainWindow
         if (c.Hotkey != was.Hotkey)
         {
             _prefs.Hotkey = c.Hotkey;
+            ReleaseMarkWrongKey();   // two keys swapped: the start/stop one first, then That was wrong again below
             if (ApplyHotkey() is { } err) problems.Add(err);
+        }
+        if (c.MarkWrongKey != was.MarkWrongKey || c.Hotkey != was.Hotkey)
+        {
+            _hudPrefs.MarkWrongKey = c.MarkWrongKey;
+            if (ApplyMarkWrongKey() is { } err) problems.Add(err);
         }
         _prefs.OnGameStart = c.OnGameStart;
         _prefs.HideWhenGameCloses = c.HideWhenGameCloses;

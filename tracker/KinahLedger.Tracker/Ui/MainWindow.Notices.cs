@@ -23,13 +23,13 @@ public partial class MainWindow
     /// was all there was, and a start from Windows sign-in (--background) never shows the window: so a tray notice, once,
     /// and the panel's line for its first minute in view.
     /// </summary>
-    void HotkeyProblemAtStart(string problem)
+    void HotkeyProblemAtStart(string problem, string title = "The start/stop shortcut is off")
     {
         Say(problem, "Warn");
         _hotkeyNoticeUntil = DateTime.MaxValue;
         if (_hotkeyBalloonShown || _demo) return;
         _hotkeyBalloonShown = true;
-        try { _tray.ShowBalloonTip(8000, "The start/stop shortcut is off", problem, WF.ToolTipIcon.Warning); } catch (Exception ex) { CrashLog.Write("shortcut notice", ex); }
+        try { _tray.ShowBalloonTip(8000, title, problem, WF.ToolTipIcon.Warning); } catch (Exception ex) { CrashLog.Write("shortcut notice", ex); }
     }
 
     /// <summary>How long a price alert stays on the panel and in the window's status line.</summary>
@@ -50,11 +50,30 @@ public partial class MainWindow
         UpdateHud();
     }
 
-    /// <summary>The panel's notice now: a price alert (its 8 s), the shortcut's problem (its first minute in view), else the update's line.</summary>
+    /// <summary>How long the That was wrong key's answer stays on the panel, its gold line running down meanwhile.</summary>
+    const double MarkNoticeSeconds = 3;
+    string _markNotice = "";
+    DateTime _markNoticeUntil = DateTime.MinValue;
+
+    /// <summary>
+    /// The That was wrong key's answer (Ui/MainWindow.MarkWrong.cs): "Saved the last minute · Report in tracker", or
+    /// "Nothing counted in the last 2 minutes", for <see cref="MarkNoticeSeconds"/> seconds, ahead of every other notice.
+    /// </summary>
+    void ShowMarkNotice(string line)
+    {
+        _markNotice = line; _markNoticeUntil = DateTime.UtcNow.AddSeconds(MarkNoticeSeconds);
+        UpdateHud();
+    }
+
+    /// <summary>The panel's "noticeClock" value while the That was wrong notice shows ("&lt;end ticks&gt;/3": the Card and the Ticker draw its gold line), else "".</summary>
+    string HudNoticeClock() => DateTime.UtcNow < _markNoticeUntil ? $"{_markNoticeUntil.Ticks}/{MarkNoticeSeconds}" : "";
+
+    /// <summary>The panel's notice now: the That was wrong key's answer (its 3 s), a price alert (its 8 s), a shortcut's problem (its first minute in view), else the update's line.</summary>
     string HudNotice()
     {
+        if (DateTime.UtcNow < _markNoticeUntil) return _markNotice;
         if (DateTime.UtcNow < _priceNoticeUntil) return _priceNotice;
-        if (_hotkeyProblem is { } hk && !_hotkeySuspended)
+        if ((_hotkeyProblem ?? _markKeyProblem) is { } hk && !_hotkeySuspended)
         {
             // the minute starts the first time the panel is in view (it is hidden while the game isn't in front)
             if (_hotkeyNoticeUntil == DateTime.MaxValue && _hudValues.GetValueOrDefault("show", "") != "hidden") _hotkeyNoticeUntil = DateTime.UtcNow.AddSeconds(HotkeyNoticeSeconds);

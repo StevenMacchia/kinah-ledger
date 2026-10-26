@@ -31,6 +31,10 @@ public partial class OptionsWindow : Window
     OptionsChoice _saved, _edit;
     Page _page;
     bool _loading, _capturing, _closeConfirmed;
+    /// <summary>The key being recorded is That was wrong's (MarkKeyBox), not the start/stop one.</summary>
+    bool _capMark;
+    const string HotkeyHintText = "Works while the game has focus. Click Change, then press the keys.";
+    const string MarkHintText = "Marks the newest counted line as wrong and saves the last minute for a report. Off until you pick a key.";
     /// <summary>In game › Reset position pressed and not yet saved (it is an action, not one of the choices).</summary>
     bool _resetSpot;
 
@@ -282,11 +286,17 @@ public partial class OptionsWindow : Window
         ShareMarketBtn.Click += (_, _) => _host.ShareMarketNow();
 
         HotkeyChangeBtn.Click += (_, _) => StartCapture();
-        HotkeyBox.PreviewMouseLeftButtonDown += (_, e) => { if (!_capturing) { StartCapture(); e.Handled = true; } };
+        HotkeyBox.PreviewMouseLeftButtonDown += (_, e) => { if (!_capturing || _capMark) { StartCapture(); e.Handled = true; } };
         HotkeyBox.PreviewKeyDown += OnHotkeyKey;
-        HotkeyBox.LostKeyboardFocus += (_, _) => EndCapture();
+        HotkeyBox.LostKeyboardFocus += (_, _) => { if (!_capMark) EndCapture(); };
         HotkeyOffBtn.Click += (_, _) => Edit(_edit with { Hotkey = "" });
         HotkeyResetBtn.Click += (_, _) => Edit(_edit with { Hotkey = Hotkey.Default });
+        // That was wrong: the same recording field, off by default (so no Default button)
+        MarkKeyChangeBtn.Click += (_, _) => StartCapture(mark: true);
+        MarkKeyBox.PreviewMouseLeftButtonDown += (_, e) => { if (!_capturing || !_capMark) { StartCapture(mark: true); e.Handled = true; } };
+        MarkKeyBox.PreviewKeyDown += OnHotkeyKey;
+        MarkKeyBox.LostKeyboardFocus += (_, _) => { if (_capMark) EndCapture(); };
+        MarkKeyOffBtn.Click += (_, _) => Edit(_edit with { MarkWrongKey = "" });
         // tried on the panel at once, kept on Save, moved back on Cancel, like the rest of the page
         HudResetBtn.Click += (_, _) => { _resetSpot = true; _host.PreviewHudSpot(); Refresh(); ShowNote("The panel moves to the top centre of the game's screen. Save keeps it there.", "Good"); };
 
@@ -322,8 +332,10 @@ public partial class OptionsWindow : Window
     /// <summary>The bits of the page that follow the edited copy, and the footer.</summary>
     void Refresh()
     {
-        HotkeyBox.Text = _capturing ? "Press the keys…" : _edit.Hotkey.Length > 0 ? _edit.Hotkey : "Off";
+        HotkeyBox.Text = _capturing && !_capMark ? "Press the keys…" : _edit.Hotkey.Length > 0 ? _edit.Hotkey : "Off";
         HotkeyOffBtn.IsEnabled = _edit.Hotkey.Length > 0;
+        MarkKeyBox.Text = _capturing && _capMark ? "Press the keys…" : _edit.MarkWrongKey.Length > 0 ? _edit.MarkWrongKey : "Off";
+        MarkKeyOffBtn.IsEnabled = _edit.MarkWrongKey.Length > 0;
         HotkeyResetBtn.IsEnabled = _edit.Hotkey != Hotkey.Default;
         StartupTip.Visibility = _edit.StartWithWindows && !_edit.CloseToTray ? Visibility.Visible : Visibility.Collapsed;
         ServerWarn.Visibility = _edit.Server.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -441,13 +453,17 @@ public partial class OptionsWindow : Window
 
     /* ---------------- recording a shortcut ---------------- */
 
-    void StartCapture()
+    /// <summary>The hint under the field being recorded: start/stop's, or That was wrong's.</summary>
+    TextBlock CaptureHint => _capMark ? MarkKeyHint : HotkeyHint;
+
+    void StartCapture(bool mark = false)
     {
-        _capturing = true;
-        _host.SuspendHotkey(true);   // the current shortcut would otherwise start a run instead of being recorded
-        HotkeyHint.Text = "Hold Ctrl and Shift (or Alt and Shift) and press a letter, or Ctrl, Alt or Shift with an F key. Esc cancels.";
-        HotkeyHint.Foreground = (Brush)FindResource("Accent");
-        HotkeyBox.Focus();
+        if (_capturing && _capMark != mark) EndCapture();   // one field records at a time
+        _capturing = true; _capMark = mark;
+        _host.SuspendHotkey(true);   // the current shortcuts would otherwise start a run or mark a line instead of being recorded
+        CaptureHint.Text = "Hold Ctrl and Shift (or Alt and Shift) and press a letter, or Ctrl, Alt or Shift with an F key. Esc cancels.";
+        CaptureHint.Foreground = (Brush)FindResource("Accent");
+        (mark ? MarkKeyBox : HotkeyBox).Focus();
         Refresh();
     }
 
@@ -456,8 +472,8 @@ public partial class OptionsWindow : Window
         if (!_capturing) return;
         _capturing = false;
         _host.SuspendHotkey(false);
-        HotkeyHint.Text = "Works while the game has focus. Click Change, then press the keys.";
-        HotkeyHint.Foreground = (Brush)FindResource("Muted");
+        CaptureHint.Text = _capMark ? MarkHintText : HotkeyHintText;
+        CaptureHint.Foreground = (Brush)FindResource("Muted");
         Refresh();
     }
 
@@ -468,19 +484,41 @@ public partial class OptionsWindow : Window
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (key == Key.Escape) { EndCapture(); Keyboard.ClearFocus(); return; }
         if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
-        var mods = Keyboard.Modifiers;
-        if (Hotkey.Refusal(mods, key) is { } why)
+        Record(Keyboard.Modifiers, key);
+    }
+
+    /// <summary>
+    /// A combination pressed while recording: refused with the reason under the field (the shortcut rules, or the other
+    /// shortcut's keys), else taken into the edited copy. The reason, or null when it was taken.
+    /// </summary>
+    string? Record(ModifierKeys mods, Key key)
+    {
+        var hint = CaptureHint;
+        var why = Hotkey.Refusal(mods, key)   // Ctrl+C, Alt+Tab and the like would be taken from every app on the PC
+            ?? (Hotkey.Same(new Hotkey(mods, key).ToString(), _capMark ? _edit.Hotkey : _edit.MarkWrongKey)
+                ? (_capMark ? "That's the start/stop shortcut. Pick another key." : "That's the That was wrong shortcut. Pick another key.") : null);
+        if (why != null)
         {
-            HotkeyHint.Text = why;   // Ctrl+C, Alt+Tab and the like would be taken from every app on the PC
-            HotkeyHint.Foreground = (Brush)FindResource("Warn");
-            return;
+            hint.Text = why;
+            hint.Foreground = (Brush)FindResource("Warn");
+            return why;
         }
         var text = new Hotkey(mods, key).ToString();
         _capturing = false;
         _host.SuspendHotkey(false);
-        Edit(_edit with { Hotkey = text });
-        HotkeyHint.Text = $"{text} it is. Save to start using it.";
-        HotkeyHint.Foreground = (Brush)FindResource("Good");
+        Edit(_capMark ? _edit with { MarkWrongKey = text } : _edit with { Hotkey = text });
+        hint.Text = $"{text} it is. Save to start using it.";
+        hint.Foreground = (Brush)FindResource("Good");
         Keyboard.ClearFocus();
+        return null;
+    }
+
+    /// <summary>For the options self-test: a combination recorded in a field as if pressed there; the reason it was refused, or null.</summary>
+    internal string? RecordForTest(bool mark, ModifierKeys mods, Key key)
+    {
+        StartCapture(mark);
+        var why = Record(mods, key);
+        if (why != null) EndCapture();
+        return why;
     }
 }

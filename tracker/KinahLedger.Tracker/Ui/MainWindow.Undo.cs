@@ -57,17 +57,20 @@ public partial class MainWindow
 
     /// <summary>
     /// Does <paramref name="apply"/> now (what the player sees) and shows the bar; <paramref name="commit"/> runs when the bar
-    /// goes, <paramref name="undo"/> on Undo. An action already waiting is made final first.
+    /// goes, <paramref name="undo"/> on Undo. An action already waiting is made final first. <paramref name="bar"/> false
+    /// keeps the bar down for an action that shows its own Undo (a line marked wrong, under its feed); <paramref name="seconds"/>
+    /// is how long Undo stays possible.
     /// </summary>
-    async Task Offer(string kind, string text, Action apply, Action undo, Func<Task> commit)
+    async Task Offer(string kind, string text, Action apply, Action undo, Func<Task> commit, bool bar = true, double seconds = UndoSeconds)
     {
         await CommitPending();
         apply();
         _pendingUndo = new PendingUndo(kind, text, undo, commit);
         UndoText.Text = text;
-        UndoBar.Visibility = Visibility.Visible;
-        UndoTimeScale.BeginAnimation(ScaleTransform.ScaleXProperty, _demo ? null : new DoubleAnimation(1, 0, TimeSpan.FromSeconds(UndoSeconds)));
+        UndoBar.Visibility = bar ? Visibility.Visible : Visibility.Collapsed;
+        UndoTimeScale.BeginAnimation(ScaleTransform.ScaleXProperty, _demo || !bar ? null : new DoubleAnimation(1, 0, TimeSpan.FromSeconds(seconds)));
         _undoTimer.Stop();
+        _undoTimer.Interval = TimeSpan.FromSeconds(seconds);
         if (!_demo) _undoTimer.Start();   // a layout render keeps the bar up
         CrashLog.Note($"undo bar: {kind} ({text})");
     }

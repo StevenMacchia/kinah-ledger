@@ -95,7 +95,7 @@ public partial class MainWindow
     {
         var now = DateTime.UtcNow;
         bool justNow = lines.Count > 0 && (now - lines[0].At).TotalSeconds < 60;
-        var sig = string.Join("|", lines.Select(l => $"{l.At.Ticks}:{l.Text}:{value(l).Text}")) + (justNow ? "*" : "");
+        var sig = string.Join("|", lines.Select(l => $"{l.At.Ticks}:{l.Text}:{value(l).Text}{(IsMarked(l) ? ":marked" : "")}")) + (justNow ? "*" : "");
         if (_feedDrawn.TryGetValue(host, out var was) && was.Sig == sig) return;
         bool fresh = lines.Count > 0 && (!_feedDrawn.ContainsKey(host) || was.Newest != lines[0].At) && _feedDrawn.ContainsKey(host);
         _feedDrawn[host] = (sig, lines.Count > 0 ? lines[0].At : default);
@@ -106,6 +106,7 @@ public partial class MainWindow
             var l = lines[i];
             var row = FeedRow(l, i == 0, i == 0 && justNow, i == LiveFeed.Shown - 1, i > 0, value(l), icon?.Invoke(l) ?? FeedIcon(l));
             row.MouseLeftButtonUp += (_, _) => ShowLineReport(l, tab, row);
+            if (IsMarked(l)) MarkRow(row, l);   // marked with the That was wrong key: a gold edge and a flag (Ui/MainWindow.MarkWrong.cs)
             host.Children.Add(row);
             if (i == 0 && fresh)
                 row.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260)));
@@ -386,7 +387,7 @@ public partial class MainWindow
     void FillLive()
     {
         DrawFeed(FeedHost, FeedEmpty, FeedFor(FeedTab.Farming), FeedTab.Farming, PickupValue);
-        FeedHint.Visibility = Visibility.Visible;
+        FeedHint.Visibility = _markHint == FeedHint ? Visibility.Collapsed : Visibility.Visible;   // a marked line's Undo stands in for it
     }
 
     /* ---------------- Session and Where to farm now ---------------- */
@@ -659,8 +660,21 @@ public partial class MainWindow
     /// </summary>
     void FileLineReport(MiscountLine m, string note)
     {
+        if (SaveLineReport(m, note) is not { } saved) return;
+        Say("Report saved with the line marked, in your reports folder. Thanks: it becomes a test the tracker must pass.", "Good");
+        Status.ToolTip = saved.Dir;
+        _ = SendReportPictures(saved.Dir, saved.Why);
+    }
+
+    /// <summary>
+    /// The report's saving part, shared with the That was wrong key (Ui/MainWindow.MarkWrong.cs): the last minute and
+    /// line.json written to a new folder under reports/. Its folder and summary, or null (said in the status line) when it
+    /// couldn't be saved. Nothing is sent from here.
+    /// </summary>
+    (string Dir, string Why)? SaveLineReport(MiscountLine m, string note)
+    {
         var c = _watcher.Chat;
-        if (c == null) { Say("Nothing to report yet: the last minute is kept once the tracker is reading the game.", "Warn"); return; }
+        if (c == null) { Say("Nothing to report yet: the last minute is kept once the tracker is reading the game.", "Warn"); return null; }
         try
         {
             var why = m.Why + (note.Length > 0 ? $" · {note}" : "");
@@ -668,11 +682,9 @@ public partial class MainWindow
             var frames = System.IO.Path.Combine(dir, "frames.jsonl");
             File.WriteAllText(System.IO.Path.Combine(dir, "line.json"), m.Json(File.Exists(frames) ? File.ReadAllLines(frames) : Array.Empty<string>()));
             CrashLog.Note($"feed line reported: {why}");
-            Say("Report saved with the line marked, in your reports folder. Thanks: it becomes a test the tracker must pass.", "Good");
-            Status.ToolTip = dir;
-            _ = SendReportPictures(dir, why);
+            return (dir, why);
         }
-        catch (Exception ex) { CrashLog.Write("line report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); }
+        catch (Exception ex) { CrashLog.Write("line report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); return null; }
     }
 
     /* ---------------- the panel over the game ---------------- */

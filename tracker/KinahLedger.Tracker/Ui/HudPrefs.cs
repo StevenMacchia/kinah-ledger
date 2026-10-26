@@ -24,6 +24,11 @@ public sealed class HudPrefs
     public bool Chime { get; set; } = true;
     /// <summary>The chime's volume, 0 to 1.</summary>
     public double ChimeVolume { get; set; } = 0.6;
+    /// <summary>
+    /// The "That was wrong" shortcut, as "Ctrl+Shift+J"; empty (the default) is off. Kept here rather than in UserPrefs,
+    /// which belongs to the counting side.
+    /// </summary>
+    public string MarkWrongKey { get; set; } = "";
 
     public const double MinScale = 0.7, MaxScale = 2;
 

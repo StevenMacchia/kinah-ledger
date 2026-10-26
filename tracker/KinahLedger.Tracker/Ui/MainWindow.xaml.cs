@@ -600,6 +600,7 @@ public partial class MainWindow : Window
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
         _hudValues["notice"] = HudNotice();   // a price alert, the shortcut's problem or a waiting update (Ui/MainWindow.Notices.cs)
+        _hudValues["noticeClock"] = HudNoticeClock();   // the That was wrong notice's gold line, while it counts down
         _hud.Update(_hudValues);
         _hud.SetAccuracy(_accView?.Hud, _accView?.HasRows == true);
     }
@@ -1480,12 +1481,14 @@ public partial class MainWindow : Window
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
         RefitIfNeeded();   // Full view against the screen the window opened on, now that it has one
         if (ApplyHotkey() is { } err) HotkeyProblemAtStart(err);   // the status line, a tray notice once, and the panel (Ui/MainWindow.Notices.cs)
+        if (ApplyMarkWrongKey() is { } markErr) HotkeyProblemAtStart(markErr, "The That was wrong shortcut is off");
         _foregroundWatch ??= Native.WatchForeground(HudFollowGame);   // the panel fades with an alt-tab, not a tick later
     }
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId) { _ = Toggle(); handled = true; }
+        else if (msg == Native.WM_HOTKEY && wParam.ToInt32() == Hotkey.MarkWrongId) { MarkLastLineWrong(); handled = true; }   // Ui/MainWindow.MarkWrong.cs
         else if (OnSizeMove(msg) && msg == WM_EXITSIZEMOVE) Dispatcher.BeginInvoke(RefitIfNeeded);   // dropped on another screen: Full view fitted to it
         return IntPtr.Zero;
     }
@@ -1526,7 +1529,7 @@ public partial class MainWindow : Window
             return;
         }
         var h = new WindowInteropHelper(this).Handle;
-        if (h != IntPtr.Zero) Native.UnregisterHotKey(h, HotkeyId);
+        if (h != IntPtr.Zero) { Native.UnregisterHotKey(h, HotkeyId); Native.UnregisterHotKey(h, Hotkey.MarkWrongId); }
         _options?.Discard();
         _foregroundWatch?.Dispose(); _foregroundWatch = null;
         CloseHud();
