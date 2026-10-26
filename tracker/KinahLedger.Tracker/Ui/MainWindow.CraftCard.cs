@@ -33,7 +33,7 @@ public partial class MainWindow
     void RefreshCraftCard(string output, PlayerBoards.BestCraft? best = null, int rank = 0)
     {
         if (_card is { IsOpen: true }) _card.Child = BuildCraftCard(output, best, rank);
-        FillCraft(_watcher.Chat?.CraftView);
+        FillCraft(CraftShown);
     }
 
     /// <param name="best">Set when the card opens from Best crafts today: the recipe that list priced (how many it makes) and its rank.</param>

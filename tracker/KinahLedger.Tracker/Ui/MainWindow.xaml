@@ -734,6 +734,45 @@
 
     </Grid>
 
+    <!-- the Undo bar (Ui/MainWindow.Undo.cs): for 8 s after clearing the tables or the runs, starting crafting over,
+         removing a run or stopping a run from this window. The game-tooltip look, the same in every look of the window;
+         a gold line runs down the seconds left. Ctrl+Z works too. -->
+    <Border x:Name="UndoBar" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="622" Margin="20,0,0,10" CornerRadius="6" BorderThickness="1" BorderBrush="#3C4466" Visibility="Collapsed">
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#151A2C" Offset="0"/><GradientStop Color="#0C0F1C" Offset="1"/></LinearGradientBrush>
+      </Border.Background>
+      <Border.Effect><DropShadowEffect BlurRadius="22" ShadowDepth="4" Opacity="0.55"/></Border.Effect>
+      <Grid>
+        <Grid Height="44" Margin="16,0,8,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <!-- a check in a gold-framed slot -->
+          <Border Width="22" Height="22" CornerRadius="4" BorderThickness="1" BorderBrush="#8CF8D598" Background="#0B0E1E" VerticalAlignment="Center" Margin="0,0,12,0">
+            <Path Data="M5,12 L10,17 L19,7" Stroke="#F8D598" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Margin="5"/>
+          </Border>
+          <TextBlock x:Name="UndoText" Grid.Column="1" Foreground="#EEECF6" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          <Button x:Name="UndoBtn" Grid.Column="2" Content="Undo" Height="30" FontSize="13" FontWeight="SemiBold" Margin="12,0,0,0" VerticalAlignment="Center"
+                  Foreground="#F8D598" ToolTip="Put it back (Ctrl+Z)" AutomationProperties.Name="Undo">
+            <!-- its own colours: the look's hover brushes are made for the window's cards, not this dark bar -->
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border x:Name="b" Background="#14F8D598" BorderBrush="#80F8D598" BorderThickness="1" CornerRadius="8" Padding="16,0">
+                  <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#33F8D598"/></Trigger>
+                  <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.8"/></Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+        </Grid>
+        <!-- the time left: a gold line along the bottom that shortens to nothing over the 8 seconds -->
+        <Border x:Name="UndoTime" Height="2" VerticalAlignment="Bottom" Margin="6,0,6,1" Background="#F8D598" Opacity="0.7" RenderTransformOrigin="0,0.5">
+          <Border.RenderTransform><ScaleTransform x:Name="UndoTimeScale" ScaleX="1"/></Border.RenderTransform>
+        </Border>
+      </Grid>
+    </Border>
+
     </Grid>
   </Border>
 </Window>

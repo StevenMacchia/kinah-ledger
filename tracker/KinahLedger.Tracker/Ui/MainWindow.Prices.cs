@@ -112,6 +112,6 @@ public partial class MainWindow
         _watcher.Market.QueueTyped(item, price);
         Say($"{item}: {price:N0}, as you typed it. Used from now on{(_settings.Upload.Enabled && HasServer ? " and shared as your read" : "")}.", "Good");
         Redraw();
-        if (_part == "Crafting") FillCraft(_watcher.Chat?.CraftView);
+        if (_part == "Crafting") FillCraft(CraftShown);
     }
 }

@@ -64,14 +64,22 @@ public partial class MainWindow
         cm.IsOpen = true;
     }
 
-    /// <summary>Starts the farming tables over (Steven, 2026-10-22); not during a farming run, which Stop ends.</summary>
+    /// <summary>
+    /// Starts the farming tables over (Steven, 2026-10-22); not during a farming run, which Stop ends. The tables look
+    /// empty at once, with Undo; what was counted is shared and the count starts over when the bar goes (Ui/MainWindow.Undo.cs).
+    /// </summary>
     async Task ClearFarmTables()
     {
-        if (Farming) { Say("A farming run is on: Stop ends it and starts the tables over.", "Warn"); return; }
-        if (MessageBox.Show(this, "Clear the farming tables and start counting again? What was counted is shared with the site first, as usual.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        await _watcher.ClearFarmingAsync();
-        _lastRun = null;
-        Redraw();
-        Say("Farming tables cleared. Counting starts again from here.", "Faint");
+        if (RunOn) { Say("A farming run is on: Stop ends it and starts the tables over.", "Warn"); return; }
+        await Offer("tables", "Farming tables cleared",
+            apply: () => { var blank = new KinahLedger.Session.SessionEngine(_items); blank.SetZone(_watcher.Chat?.ZoneView?.Zone); _clearedView = blank; Redraw(); },
+            undo: () => { _clearedView = null; Redraw(); Say("The farming tables are back as they were.", "Good"); },
+            commit: async () =>
+            {
+                await _watcher.ClearFarmingAsync();
+                _clearedView = null; _lastRun = null;
+                Redraw();
+                Say("Farming tables cleared. Counting starts again from here.", "Faint");
+            });
     }
 }

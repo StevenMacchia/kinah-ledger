@@ -149,16 +149,10 @@ public partial class MainWindow : Window
         EventsTab.Click += (_, _) => ShowPart("Events");
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
-        CraftResetLink.Click += (_, _) =>
-        {
-            if (MessageBox.Show(this, "Start crafting over? The recipes, tries and profit shown here are cleared.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView);
-        };
-        InstClearBtn.Click += (_, _) =>
-        {
-            if (MessageBox.Show(this, "Clear the expedition and event runs shown here? Runs not sent to the site yet are still sent.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            _watcher.Chat?.Instances.ClearShown(); ShowInstances();
-        };
+        // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
+        CraftResetLink.Click += async (_, _) => await StartCraftOver();
+        InstClearBtn.Click += async (_, _) => await ClearRuns();
+        WireUndo();
         _mode = Mode.Open;
         ApplyModeLabels(); ResetTiles();
         BuildTray();
@@ -336,18 +330,28 @@ public partial class MainWindow : Window
     /// </summary>
     SessionEngine? Shown()
     {
-        var chat = _watcher.Chat; var farm = _watcher.Farm;
+        if (_clearedView != null) return _clearedView;   // Clear the tables, while it can still be undone
+        var chat = _watcher.Chat; var farm = RunEngine;
         if (farm == null && _lastRun != null && DateTime.UtcNow < _lastRunUntil) return _lastRun;
         if (!_prefs.AllZones && chat != null) return chat.ZoneView;
         return farm ?? chat?.Engine;
     }
 
-    string ViewTitle() => _watcher.Farm != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "counted while the game is open" : "this zone");
+    string ViewTitle() => RunEngine != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "counted while the game is open" : "this zone");
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
     /// <param name="fromWindow">True for the window's Start/Stop button; the shortcut and the tray pass false.</param>
-    async Task Toggle(bool fromWindow = false) { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(fromWindow); }
+    async Task Toggle(bool fromWindow = false)
+    {
+        if (_welcome) { Say("Choose your server first.", "Warn"); return; }
+        // Start while a stop can still be undone: that stop becomes final (saved and shared), and a new run starts
+        if (_stopPending) { await CommitPending(); await StartTracking(); return; }
+        if (!Farming) await StartTracking();
+        // the window's own Stop gets the Undo bar; the shortcut and the tray stop at once, as before
+        else if (fromWindow) await StopFromWindow();
+        else await StopTracking();
+    }
 
     /// <summary>Says something in the status line and on the Options window's reading page when it is open.</summary>
     void Report(string text, string tone)
@@ -478,6 +482,9 @@ public partial class MainWindow : Window
     /// </param>
     async Task StopTracking(bool fromWindow = false)
     {
+        // a stop from anywhere else (the shortcut, the tray, the game closing, an update) makes the window's waiting one final
+        if (_pendingUndo?.Kind == "stop") EndUndo();
+        _stopPending = false;
         var e = _watcher.StopFarm(); if (e == null) return;
         // shared and saved under what the run turned out to be, not the label picked before it started
         var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
@@ -528,7 +535,7 @@ public partial class MainWindow : Window
         if (_demo || _moving) return;
         WatchGame();
         AskWhenFree();   // an update found during a run asks once the run has stopped
-        var chat = _watcher.Chat; var farm = _watcher.Farm;
+        var chat = _watcher.Chat; var farm = RunEngine;
         var show = Shown();
         if (show != null && (farm != null || show != _lastRun))
         {
@@ -570,7 +577,7 @@ public partial class MainWindow : Window
         // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
         // the panel over the game can't stop the rest of the refresh (the Crafting table, the pickups) if it fails to open
         if (_prefs.Hud && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
-        if (_part == "Crafting") FillCraft(chat?.CraftView);
+        if (_part == "Crafting") FillCraft(CraftShown);
         FillLive();
         FillAccuracyCard();
         AlertTick();
@@ -1005,7 +1012,7 @@ public partial class MainWindow : Window
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "SegOn" : "SegOff");
         if (_part == "Events") ShowInstances();
         if (remember && !_demo) { _prefs.Part = _part; _prefs.Save(); }
-        if (craft && !_demo) FillCraft(_watcher.Chat?.CraftView);
+        if (craft && !_demo) FillCraft(CraftShown);
     }
 
     /// <summary>Compact or Full view, remembered; the window grows to the right, or to the left near the screen's edge.</summary>
@@ -1167,7 +1174,8 @@ public partial class MainWindow : Window
         else _lastMobKinah = 0;
         // this zone's view: an empty section says what came in other zones, so nothing looks lost after a zone change
         // (Steven, 2026-10-21: the Soul Crystals from Eternal Isle "not showing" in Crimson Isle)
-        var allE = !_prefs.AllZones && e != null && _watcher.Chat?.Engine is { } ce && !ReferenceEquals(ce, e) ? ce : null;
+        // (not while a clear can still be undone: the counts it hides aren't "other zones")
+        var allE = !_prefs.AllZones && e != null && _clearedView == null && _watcher.Chat?.Engine is { } ce && !ReferenceEquals(ce, e) ? ce : null;
         var allRows = allE?.ItemRows() ?? new();
         int allPets = allE?.PetSnapshot().Values.Sum() ?? 0, allMobs = allE?.MobSnapshot().Count ?? 0;
         int allGather = allRows.Where(r => GatheringCatalog.Find(r.Name) != null).Sum(r => r.Count + r.Bound);
@@ -1491,6 +1499,13 @@ public partial class MainWindow : Window
         SavePrefs();
         // Options › General: the close button keeps the tracker in the tray, so it can open with the game; Quit is in the tray menu
         if (_prefs.CloseToTray && !_quitting && !_demo) { e.Cancel = true; HideToTray(); return; }
+        // an action behind the Undo bar becomes final first (a stopped run saved, a removed run gone), then the window closes
+        if (_pendingUndo != null && !_demo)
+        {
+            e.Cancel = true;
+            _ = CommitPending().ContinueWith(_ => Dispatcher.Invoke(Close));
+            return;
+        }
         if (Farming && !_quitting)
         {
             var r = MessageBox.Show(this, "You're still farming. Stop the run and quit?\n\nYes stops the run and closes Kinah Ledger.\nNo keeps it running and leaves this window open.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -1685,5 +1700,7 @@ public partial class MainWindow : Window
         {
             _demoMarket = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
         }
+        // KL_SHOT_UNDO=1: a render with the Undo bar up, as it shows just after Clear the tables (Ui/MainWindow.Undo.cs)
+        if (Environment.GetEnvironmentVariable("KL_SHOT_UNDO") == "1") ShowUndoSample();
     }
 }

@@ -32,7 +32,7 @@ public partial class MainWindow
     void ToggleSec(string key)
     {
         _secUser[key] = !SecOpen(key);
-        if (key is "CraftSession" or "Best") { if (!_demo) FillCraft(_watcher.Chat?.CraftView); else ApplySections(); return; }
+        if (key is "CraftSession" or "Best") { if (!_demo) FillCraft(CraftShown); else ApplySections(); return; }
         Redraw();
     }
 
@@ -317,12 +317,13 @@ public partial class MainWindow
         HeadRate.ToolTip = warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted." : null;
         // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
         // none while warming up, so the line doesn't open on a spike
-        if (!_demo)
+        // a clear that can still be undone draws no line and keeps the real one's samples for Undo
+        if (!_demo && !ReferenceEquals(e, _clearedView))
         {
             if (!ReferenceEquals(_rateOf, e)) { _rateOf = e; _rateLine.Clear(); }
             if (total > 0 && !_rateWarming) _rateLine.Add(DateTime.UtcNow, total / h);
         }
-        DrawRateLine(_rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now");
+        DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine,_demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now");
         KvLine.Inlines.Clear();
         void Fig(string text) { var r = new Run(text); r.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); r.SetResourceReference(TextElement.ForegroundProperty, "Ink"); KvLine.Inlines.Add(r); }
         if (_mode == Mode.Gather) { Fig($"{nodes:N0}"); KvLine.Inlines.Add(new Run(" attempts · ")); Fig(itemsPerTry > 0 ? itemsPerTry.ToString("0.0") : "0"); KvLine.Inlines.Add(new Run(" a try")); }
