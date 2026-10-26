@@ -26,8 +26,12 @@ public partial class MainWindow
     void HudCraftValues()
     {
         var chat = _watcher.Chat;
-        bool on = !_demo && chat != null && chat.Doing.Current.Kind == ActivityKind.Crafting;
         var now = DateTime.UtcNow;
+        // on with the crafting window or panel (the activity), and from the first race on even if the activity lags a read:
+        // a craft line under CraftLedger.PanelSeconds old turns the looks to crafting on the tick it lands
+        var crafts = chat == null || _demo ? new List<FeedLine>() : FeedFor(FeedTab.Crafting);
+        bool fresh = crafts.Any(l => l.Kind == "craft" && (now - l.At).TotalSeconds is >= -5 and <= CraftLedger.PanelSeconds);
+        bool on = !_demo && chat != null && (chat.Doing.Current.Kind == ActivityKind.Crafting || fresh);
         // the time crafting: each tick while the window is open adds its stretch (at most 2 s, so a stalled tick adds nothing odd)
         if (on && _craftTick != default) _craftTime += TimeSpan.FromSeconds(Math.Clamp((now - _craftTick).TotalSeconds, 0, 2));
         _craftTick = on ? now : default;
@@ -37,7 +41,7 @@ public partial class MainWindow
         // crafting started over (the part's Start over): the clock starts over with it
         if (tries < _craftTriesSeen) _craftTime = TimeSpan.Zero;
         _craftTriesSeen = tries;
-        foreach (var (k, v) in HudCraftValuesFor(e, FeedFor(FeedTab.Crafting), _craftTime)) _hudValues[k] = v;
+        foreach (var (k, v) in HudCraftValuesFor(e, crafts, _craftTime)) _hudValues[k] = v;
     }
 
     static Dictionary<string, string> HudCraftBlank()
