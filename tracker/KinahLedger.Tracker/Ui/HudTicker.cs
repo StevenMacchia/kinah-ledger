@@ -236,10 +236,11 @@ public sealed class HudTicker : IHudLook
         if (clock is { } c)
         {
             // the That was wrong key's answer: a gold clock, the words in two tones, a gold wash and the line running down its 3 s
-            var i = HudClockNotice.ClockIcon(); i.Margin = new Thickness(0, 0, 7, 0); row.Children.Add(i);
-            HudClockNotice.Words(t, text, 12.5); t.MaxWidth = 232;
+            // 11.75 px so the whole line fits the toast's 270 px (at 12.5 "Report in tracker" lost its end)
+            var i = HudClockNotice.ClockIcon(); i.Margin = new Thickness(0, 0, 6, 0); row.Children.Add(i);
+            HudClockNotice.Words(t, text, 11.75); t.MaxWidth = 235;
             row.Children.Add(t);
-            var drain = HudClockNotice.Drain(); drain.Margin = new Thickness(-8, 0, -6, 0);
+            var drain = HudClockNotice.Drain(); drain.Margin = new Thickness(-8, 0, -4, 0);
             HudClockNotice.Run(drain, c, Still);
             var wash = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
             wash.GradientStops.Add(new GradientStop(Rgb(0x302816, .96 * _alpha), 0));
@@ -248,7 +249,7 @@ public sealed class HudTicker : IHudLook
             wash.Freeze();
             return new Border
             {
-                Width = 270, Height = 34, Padding = new Thickness(8, 0, 6, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2, 0, 0, 0),
+                Width = 270, Height = 34, Padding = new Thickness(8, 0, 4, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2, 0, 0, 0),
                 BorderBrush = Gold, Background = wash, Child = new Grid { Children = { row, drain } },
             };
         }
