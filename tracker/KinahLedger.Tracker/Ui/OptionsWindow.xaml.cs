@@ -118,6 +118,7 @@ public partial class OptionsWindow : Window
         BuildSkins(c.Skin);
         BuildHudFields(c.HudFields);
         BuildHudLooks(c.HudLook);
+        LoadRareDrops(c);   // In game › Rare drops, built in Ui/OptionsWindow.RareDrops.cs
         _loading = false;
         Refresh();
     }
