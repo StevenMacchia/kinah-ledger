@@ -1487,9 +1487,6 @@ public partial class MainWindow : Window
     {
         if (msg == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId) { _ = Toggle(); handled = true; }
         else if (OnSizeMove(msg) && msg == WM_EXITSIZEMOVE) Dispatcher.BeginInvoke(RefitIfNeeded);   // dropped on another screen: Full view fitted to it
-        // a layout render only: Windows caps a window at the screen's size, and the CI runner's 1024 px screen cut Full view's
-        // right column off every render; off-screen, the render may be as wide as its layout (MINMAXINFO.ptMaxTrackSize)
-        else if (_demo && msg == 0x0024) { System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 32, 8000); System.Runtime.InteropServices.Marshal.WriteInt32(lParam, 36, 8000); }
         return IntPtr.Zero;
     }
 
