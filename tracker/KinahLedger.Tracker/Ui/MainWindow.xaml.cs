@@ -1274,12 +1274,12 @@ public partial class MainWindow : Window
     void EnsureHud()
     {
         if (_hud != null || !_prefs.Hud) return;
-        _hud = new HudWindow(HudFields.Parse(_prefs.HudFields)) { Owner = this };
+        _hud = new HudWindow(HudFields.Parse(_prefs.HudFields), HudLook) { Owner = this };
         _hud.SetOpacity(_prefs.HudOpacity);
         _hud.SetScale(_hudPrefs.Scale);
         // where the player left it, kept on a screen that is still there; else the top centre of the game's monitor
         if (SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault();
-        _hud.Dragged += () => { if (_hud != null && !_demo) { _prefs.HudX = _hud.Left; _prefs.HudY = _hud.Top; } };
+        _hud.Dragged += () => { if (_hud != null) RememberHudSpot(_hud.Left, _hud.Top); };   // the Ticker's spot is its own
         // it follows the game from the start: created while the game is behind another window, it waits out of sight
         UpdateHud();
         if (_hudValues.GetValueOrDefault("show", "") != "hidden") _hud.Show();

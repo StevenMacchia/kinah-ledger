@@ -115,6 +115,7 @@ public partial class OptionsWindow : Window
         AutoUpdateChk.IsEnabled = _host.AppSettings.Update.Check;
         BuildSkins(c.Skin);
         BuildHudFields(c.HudFields);
+        BuildHudLooks(c.HudLook);
         _loading = false;
         Refresh();
     }
@@ -152,9 +153,65 @@ public partial class OptionsWindow : Window
                 if (now.Count == 0) return;   // the panel needs one figure at least
                 Edit(_edit with { HudFields = HudFields.Join(now) });
                 BuildHudFields(_edit.HudFields);
+                BuildHudLooks(_edit.HudLook);   // the Strip's drawing shows the figures picked
             }, f.Hint);
             HudFieldHost.Children.Add(chip);
         }
+    }
+
+    /// <summary>
+    /// The panel's look (2026-10-25): a chip for each, and each drawn at its real size from the window's sample figures
+    /// (HudSample, the layout renders' figures), so the three can be compared with the game closed. A click on a drawing
+    /// picks it too. The figure chips are the Strip's: greyed for the Card and the Ticker, which show a set of their own.
+    /// </summary>
+    void BuildHudLooks(string current)
+    {
+        current = HudLooks.Parse(current);
+        HudLookHost.Children.Clear();
+        foreach (var l in HudLooks.All)
+        {
+            var key = l.Key;
+            HudLookHost.Children.Add(_host.Chip(l.Name, current == key, () => PickHudLook(key), l.Hint));
+        }
+        HudLookPreview.Children.Clear();
+        var sample = _host.HudSample();
+        foreach (var l in HudLooks.All)
+        {
+            var key = l.Key;
+            bool on = key == current;
+            FrameworkElement face;
+            try { face = HudWindow.Preview(key, HudFields.Parse(_edit.HudFields), sample); }
+            catch (Exception ex) { CrashLog.Write("panel look preview", ex); continue; }
+            face.HorizontalAlignment = HorizontalAlignment.Left;
+            // drawn as over the game: a dark scene whatever the window's theme, with the look's name and what it shows
+            var label = new TextBlock { FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6), TextTrimming = TextTrimming.CharacterEllipsis };
+            label.Inlines.Add(new System.Windows.Documents.Run(l.Name) { FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0xEE, 0xEC, 0xF6)) });
+            label.Inlines.Add(new System.Windows.Documents.Run((on ? "  ·  in use  ·  " : "  ·  ") + l.Hint) { Foreground = new SolidColorBrush(on ? Color.FromRgb(0xF8, 0xD5, 0x98) : Color.FromRgb(0x7D, 0x84, 0xA8)) });
+            var scene = new LinearGradientBrush(Color.FromRgb(0x1A, 0x20, 0x2C), Color.FromRgb(0x0B, 0x0E, 0x18), 90);
+            var box = new Border
+            {
+                CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 9, 10, 10), Margin = new Thickness(0, 6, 0, 0), Background = scene, Cursor = Cursors.Hand,
+                BorderThickness = new Thickness(on ? 2 : 1), BorderBrush = new SolidColorBrush(on ? Color.FromRgb(0xF8, 0xD5, 0x98) : Color.FromRgb(0x32, 0x3A, 0x66)),
+                Child = new StackPanel { Children = { label, face } }, ToolTip = on ? null : "Use the " + l.Name,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(box, l.Name + " panel look");
+            box.MouseLeftButtonUp += (_, _) => PickHudLook(key);
+            HudLookPreview.Children.Add(box);
+        }
+        bool strip = current == HudLooks.Strip;
+        HudFieldHost.IsEnabled = strip;
+        HudFieldHost.Opacity = strip ? 1 : .45;
+        HudFieldsNote.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
+        HudPositionHint.Text = current == HudLooks.Ticker
+            ? "Back to the left of the target bar, at the top of the game's screen. The Ticker keeps its own spot."
+            : "Back to the top centre of the game's screen, clear of the minimap and the chat.";
+    }
+
+    void PickHudLook(string key)
+    {
+        if (_loading || key == _edit.HudLook) return;
+        Edit(_edit with { HudLook = key });
+        BuildHudLooks(key);
     }
 
     void Wire()

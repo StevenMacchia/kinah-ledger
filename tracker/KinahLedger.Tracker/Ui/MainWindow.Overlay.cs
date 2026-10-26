@@ -87,7 +87,8 @@ public partial class MainWindow
         if (_hud == null) return;
         var area = _watcher.GameRect is { } g ? System.Windows.Forms.Screen.FromRectangle(g).WorkingArea
             : System.Windows.Forms.Screen.PrimaryScreen?.WorkingArea ?? new System.Drawing.Rectangle(0, 0, 1920, 1040);
-        _hud.PlaceTopCentre(area);
+        // the Ticker's toasts hang down over the target's name at the centre: it starts left of the target bar instead
+        _hud.PlaceTopCentre(area, _hud.Look == HudLooks.Ticker ? HudLooks.TickerLeftOfCentre : null);
     }
 
     /// <summary>
@@ -96,7 +97,7 @@ public partial class MainWindow
     /// </summary>
     System.Windows.Point? SavedHudSpot()
     {
-        if (_prefs.HudX is not double hx || _prefs.HudY is not double hy || double.IsNaN(hx) || double.IsNaN(hy)) return null;
+        if (HudSpotSaved() is not (double hx, double hy) || double.IsNaN(hx) || double.IsNaN(hy)) return null;
         const double keepW = 160, keepH = 40;   // the panel's size isn't known before it lays out: this much stays on screen
         double l = SystemParameters.VirtualScreenLeft, t = SystemParameters.VirtualScreenTop;
         double x = Math.Clamp(hx, l, Math.Max(l, l + SystemParameters.VirtualScreenWidth - keepW));

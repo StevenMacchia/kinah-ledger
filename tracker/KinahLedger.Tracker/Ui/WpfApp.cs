@@ -190,6 +190,30 @@ public static class WpfApp
         DoEvents();
         Check(w.HudLocked == !lockedBefore, "panel lock saved");
 
+        // the panel's look (2026-10-25): the Strip until another is picked; the three drawn in Options; the Strip's figures grey out for the others
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        Check(w.HudLook == HudLooks.Strip && o.HudFieldHost.IsEnabled, "panel look: the Strip, with its figures to pick");
+        Check(o.HudLookHost.Children.Count == 3 && o.HudLookPreview.Children.Count == 3, $"the three looks drawn in Options ({o.HudLookPreview.Children.Count})");
+        Click((System.Windows.Controls.Button)o.HudLookHost.Children[Array.FindIndex(HudLooks.All, l => l.Key == HudLooks.Ticker)]);
+        Check(o.SaveBtn.IsEnabled && w.HudLook == HudLooks.Strip && !o.HudFieldHost.IsEnabled && o.HudFieldsNote.Visibility == Visibility.Visible, "a panel look waits for Save; the Strip's figures grey out");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.HudLook == HudLooks.Ticker, "panel look saved: " + w.HudLook);
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        Click((System.Windows.Controls.Button)o.HudLookHost.Children[0]);
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.HudLook == HudLooks.Strip, "back to the Strip");
+        // the looks' pickups come from the feed: newest first, with the count, worth, grade and icon
+        var picks = w.HudPickValuesNow();
+        string Pk(int i, string k = "") => picks.GetValueOrDefault("pick" + i + k, "");
+        Check(Enumerable.Range(0, HudLooks.Picks).Any(i => Pk(i) == "Spiritstone" && Pk(i, "Count") == "×1" && Pk(i, "Worth").StartsWith("+"))
+              && Enumerable.Range(0, HudLooks.Picks).Any(i => Pk(i, "Kind") == "kinah" && Pk(i).EndsWith(" Kinah") && Pk(i, "Icon").EndsWith("Icon_gold.png"))
+              && long.Parse(Pk(0, "At")) >= long.Parse(Pk(1, "At")),
+            $"panel looks: the feed's pickups, newest first ({Pk(0)}, {Pk(1)}, {Pk(2)}, {Pk(3)})");
+
         // the panel's opacity and size: shown on the panel as the sliders move, kept on Save, put back by Cancel
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
@@ -314,6 +338,18 @@ public static class WpfApp
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-{page.ToString().ToLowerInvariant()}{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
+        // In game at the panel's look: the three looks drawn at their real size, the chosen one ringed
+        {
+            var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+            o.Show();
+            IconCache.Drain(TimeSpan.FromSeconds(8));
+            DoEvents();
+            var at = o.HudLookHost.TransformToAncestor(o.Scroller).Transform(new Point(0, 0));
+            o.Scroller.ScrollToVerticalOffset(Math.Max(0, o.Scroller.VerticalOffset + at.Y - 70));
+            DoEvents();
+            Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-look{(skin != null ? "-" + skin : "")}.png"), 0);
+            o.Close();
+        }
         // In game once more, scrolled to the end: the panel's rows below the fold (opacity, size and position)
         {
             var o = new OptionsWindow(w, OptionsWindow.Page.InGame) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
@@ -382,6 +418,8 @@ public static class WpfApp
         // the panel's three states (direction C): the newest feed line and the rate, farming and crafting, and a flagged run
         // (the farming and flagged states from a farming render, the crafting one from the Crafting render: each with its own sample prices)
         var states = !demo ? new() : w.HudStates().Where(x => kind == "Crafting" ? x.File == "ui-hud-crafting.png" : kind == "Open world" && x.File != "ui-hud-crafting.png").ToList();
+        // the Card and the Ticker in the mock's three states, from the window's sample figures
+        var lookStates = demo && kind == "Open world" ? w.HudLookStates() : new();
         if (states.Count > 0) foreach (var (k, v) in states[0].Values) values[k] = v;
         w.Close();
 
@@ -402,6 +440,19 @@ public static class WpfApp
             h.Update(values);
             if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ Nothing looked wrong", hudAcc != null && hudToLook);
             if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
+            DoEvents();
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
+            h.Close();
+        }
+
+        // the panel's looks (2026-10-25): ui-hud-card-normal/notice/rare.png and ui-hud-ticker-*.png, with their icons
+        foreach (var url in lookStates.SelectMany(st => st.Values.Where(kv => kv.Key.EndsWith("Icon")).Select(kv => kv.Value)).Distinct()) IconCache.Get(url);
+        if (lookStates.Count > 0) { IconCache.Drain(TimeSpan.FromSeconds(10)); DoEvents(); }
+        foreach (var (file, look, v) in lookStates)
+        {
+            var h = new HudWindow(null, look, still: true) { Left = -12000, Top = -12000, ShowActivated = false };
+            h.Show();
+            h.Update(v);
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();

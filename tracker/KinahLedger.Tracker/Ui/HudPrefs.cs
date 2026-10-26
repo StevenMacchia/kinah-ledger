@@ -12,6 +12,14 @@ public sealed class HudPrefs
     public bool Locked { get; set; } = true;
     /// <summary>The panel's size, 0.7 to 2 (70 to 200%).</summary>
     public double Scale { get; set; } = 1;
+    /// <summary>The panel's look (HudLooks: "strip", "card", "ticker"). The strip for everyone until they pick another.</summary>
+    public string Look { get; set; } = HudLooks.Strip;
+    /// <summary>
+    /// Where the player left the Ticker, kept apart from the strip's and the Card's spot (UserPrefs.HudX/HudY): its toasts
+    /// hang down, so its place is left of the target bar, not over it. Null until it is dragged.
+    /// </summary>
+    public double? TickerX { get; set; }
+    public double? TickerY { get; set; }
 
     public const double MinScale = 0.7, MaxScale = 2;
 

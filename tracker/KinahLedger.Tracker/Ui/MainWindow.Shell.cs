@@ -12,7 +12,7 @@ public sealed record OptionsChoice(
     string Region, string Server, bool Share, bool Hud, string Hotkey, string Skin, bool AutoUpdate,
     bool StartWithWindows, string OnGameStart, bool HideWhenGameCloses, bool CloseToTray, bool MinimizeToTray, string HudFields,
     bool ReportFrames = false, bool SendFrames = false, int GearScore = 0, bool HelpCounting = true, bool ShowAccuracy = false,
-    bool HudLocked = true, double HudOpacity = 0.9, double HudScale = 1);
+    bool HudLocked = true, double HudOpacity = 0.9, double HudScale = 1, string HudLook = HudLooks.Strip);
 
 /// <summary>
 /// The app around the live count: the tray, starting with Windows, reacting to the game starting and closing, the
@@ -170,7 +170,7 @@ public partial class MainWindow
         RegionKey, Server?.Label ?? "", _prefs.Share, _prefs.Hud, HotkeyText, Skins.Get(_prefs.Skin).Key, _prefs.AutoUpdate,
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
-        _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2));
+        _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook);
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -196,6 +196,7 @@ public partial class MainWindow
             UpdateHud();
         }
         if (c.HudLocked != was.HudLocked) { _hudPrefs.Locked = c.HudLocked; UpdateHud(); }
+        if (c.HudLook != was.HudLook) ApplyHudLook(c.HudLook);   // the panel is made again in the new look
         _prefs.HudOpacity = c.HudOpacity; _hudPrefs.Scale = c.HudScale;
         PreviewHud(c.HudOpacity, c.HudScale);
         if (c.Skin != Skins.Get(_prefs.Skin).Key) { _prefs.Skin = c.Skin; }
@@ -251,8 +252,9 @@ public partial class MainWindow
     /// <summary>Options › In game › Reset position: back where a first start puts it (PlaceHudDefault).</summary>
     public void ResetHudPosition()
     {
-        _prefs.HudX = null; _prefs.HudY = null;
-        if (!_demo) _prefs.Save();
+        // the look's own spot: the Ticker's is kept apart from the strip's and the Card's
+        if (HudLook == HudLooks.Ticker) { _hudPrefs.TickerX = null; _hudPrefs.TickerY = null; if (!_demo) _hudPrefs.Save(); }
+        else { _prefs.HudX = null; _prefs.HudY = null; if (!_demo) _prefs.Save(); }
         PlaceHudDefault();
     }
 
