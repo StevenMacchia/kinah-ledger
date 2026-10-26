@@ -96,6 +96,37 @@ public sealed partial class BalanceReader
         return merged;
     }
 
+    /// <summary>
+    /// The strip's white digits alone, dark on light: a coloured pixel (max channel minus min channel over
+    /// <paramref name="satMax"/>) is background, any other keeps its darkest channel, stretched from <paramref name="lo"/>
+    /// to <paramref name="hi"/>. The counters' icons are gold and blue: gone, they can't be read into the numbers.
+    /// </summary>
+    public static unsafe Bitmap WhiteText(Bitmap src, int satMax = 60, int lo = 90, int hi = 230)
+    {
+        var dst = new Bitmap(src.Width, src.Height, PixelFormat.Format24bppRgb);
+        var rect = new Rectangle(0, 0, src.Width, src.Height);
+        var rs = src.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        var ds = dst.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            for (int y = 0; y < src.Height; y++)
+            {
+                byte* s = (byte*)rs.Scan0 + y * rs.Stride;
+                byte* d = (byte*)ds.Scan0 + y * ds.Stride;
+                for (int x = 0; x < src.Width; x++, s += 4, d += 3)
+                {
+                    int mx = Math.Max(s[0], Math.Max(s[1], s[2])), mn = Math.Min(s[0], Math.Min(s[1], s[2]));
+                    int v = mx - mn > satMax ? 0 : (mn - lo) * 255 / (hi - lo);
+                    v = v < 0 ? 0 : v > 255 ? 255 : v;
+                    byte o = (byte)(255 - v);
+                    d[0] = o; d[1] = o; d[2] = o;
+                }
+            }
+        }
+        finally { src.UnlockBits(rs); dst.UnlockBits(ds); }
+        return dst;
+    }
+
     /// <summary>A cheap fingerprint of the strip (every fourth pixel), so an unchanged strip isn't recognized again.</summary>
     static unsafe ulong Hash(Bitmap bmp)
     {

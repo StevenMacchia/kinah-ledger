@@ -246,20 +246,11 @@ public static class ReplayBank
         fixedOut.Add(string.Join(" ", counters.Select(c => c.Value)));
         wordsOut.Add(Words(lines));
         // DIAGNOSTIC (temporary): the same picture read other ways
-        foreach (var (sc, bo) in new[] { (3.0, false), (2.0, true), (2.0, false), (4.0, true), (1.5, true), (1.0, false) })
+        foreach (var (sat, lo, sc) in new[] { (60, 90, 3.0), (60, 90, 2.0), (40, 120, 3.0), (90, 90, 3.0), (60, 150, 3.0), (60, 150, 2.0) })
         {
-            var lv = Task.Run(() => ScreenReader.ReadBoxesAsync(bmp, at, sc, bo)).GetAwaiter().GetResult();
-            wordsOut.Add($"x{sc}{(bo ? " boost" : "")}: {Words(lv)}");
-        }
-        using (var right = bmp.Clone(new Rectangle(240, 0, bmp.Width - 240, bmp.Height), bmp.PixelFormat))
-        {
-            var lr = Task.Run(() => ScreenReader.ReadBoxesAsync(right, new Point(at.X + 240, at.Y), 3, true)).GetAwaiter().GetResult();
-            wordsOut.Add($"from x 240: {Words(lr)}");
-        }
-        using (var mid = bmp.Clone(new Rectangle(270, 0, 180, bmp.Height), bmp.PixelFormat))
-        {
-            var lm = Task.Run(() => ScreenReader.ReadBoxesAsync(mid, new Point(at.X + 270, at.Y), 3, true)).GetAwaiter().GetResult();
-            wordsOut.Add($"x 270-450: {Words(lm)}");
+            using var wt = BalanceReader.WhiteText(bmp, sat, lo);
+            var lv = Task.Run(() => ScreenReader.ReadBoxesAsync(wt, at, sc, false)).GetAwaiter().GetResult();
+            wordsOut.Add($"white sat {sat} lo {lo} x{sc}: {Words(lv)} -> {string.Join(" ", BalanceReader.Counters(lv).Select(c => c.Value))}");
         }
         var an = new Anchors(new List<AnchorTemplate>());
         an.BalanceCrop.Log = l => Console.WriteLine("  " + l);
