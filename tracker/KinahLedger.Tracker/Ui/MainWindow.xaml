@@ -78,10 +78,11 @@
           <Grid x:Name="NameCell" Grid.Column="1" Margin="0,0,10,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-            <!-- Looks wrong?: shown on hover, kept on a flagged row. A flagged drop is never sent to the site -->
+            <!-- "Looks wrong? Report" (the hint, then the action): shown on hover, "Reported · Undo" kept on a flagged row. A
+                 flagged drop is never sent to the site -->
             <TextBlock x:Name="ReportLink" Grid.Column="1" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Hidden"
-                       ToolTip="Something looks wrong with this drop? Keep it out of what this run sends to the site.">
-              <Hyperlink Style="{StaticResource LinkStyle}" Click="ReportClick"><Run Text="{Binding ReportText, Mode=OneWay}"/></Hyperlink>
+                       ToolTip="Something looks wrong with this drop? Report keeps it out of what this run sends to the site.">
+              <Run Text="{Binding ReportHint, Mode=OneWay}" Foreground="{DynamicResource Faint}"/><Run Text=" "/><Hyperlink Style="{StaticResource LinkStyle}" Click="ReportClick"><Run Text="{Binding ReportText, Mode=OneWay}"/></Hyperlink>
             </TextBlock>
           </Grid>
           <TextBlock x:Name="QtyText" Grid.Column="2" Style="{StaticResource FTd}" Text="{Binding Drops}"/>
@@ -220,7 +221,8 @@
   </Window.Resources>
 
   <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="22,16,22,14">
-    <Grid>
+    <!-- FitHost: scaled down as one piece when Full view is wider than the screen (Ui/MainWindow.Fit.cs) -->
+    <Grid x:Name="FitHost">
     <!-- the ledger: always the same width, wherever the settings are -->
     <!-- never taller than the screen (Steven, 0.7.6): the header, the run card and the summary stay put; the pickups and
          the tables scroll below them once the window would run past the screen (Window.MaxHeight is the work area) -->
@@ -302,7 +304,7 @@
       <Border x:Name="WelcomeCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
         <StackPanel>
           <TextBlock Text="Welcome. Where do you play?" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Bold"/>
-          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three taps and you are in; change any of it later in Options."/>
+          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three clicks and you are in; change any of it later in Options."/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="REGION" Margin="0,16,0,8"/>
           <WrapPanel x:Name="RegionChips"/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="FACTION" Margin="0,8,0,8"/>
@@ -386,7 +388,7 @@
                 </Grid>
               </Border>
               <TextBlock x:Name="FeedHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left"
-                         Text="A line wrong or missing? Tap it." ToolTip="Tap a wrong line to report it, or here for a pickup that never showed. The report is saved on this PC."/>
+                         Text="A line wrong or missing? Click it." ToolTip="Click a wrong line to report it, or here for a pickup that never showed. The report is saved on this PC."/>
             </StackPanel>
             <StackPanel Grid.Column="2">
               <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="34" FontWeight="Light" Foreground="{DynamicResource Ink}" Text=" "/>
@@ -404,9 +406,9 @@
               </Grid>
               <!-- "161 kills · 3.9K a kill" and "best here 1.40M" -->
               <TextBlock x:Name="KvLine" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" LineHeight="21" TextWrapping="Wrap"/>
-              <!-- the one place the read count shows: "Reading the chat · 3,620 reads" -->
+              <!-- "Reading the chat" with a steady green tick; the read count, the Market and the Kinah counter on hover -->
               <StackPanel x:Name="HealthLine" Orientation="Horizontal" Margin="0,12,0,0">
-                <Path x:Name="HealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Gold}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                <Path x:Name="HealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="HealthText" FontSize="12" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
               </StackPanel>
             </StackPanel>
@@ -462,7 +464,7 @@
                wrong", "2 to look at"); a click opens the Accuracy card over the window (Ui/MainWindow.AccuracyCard.cs) -->
           <Border x:Name="AccuracyChip" Margin="20,0,20,16" HorizontalAlignment="Left" Height="30" CornerRadius="15" BorderThickness="1" Padding="12,0,13,1"
                   Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
-                  ToolTip="How the count held up against the game's own numbers. Tap to see." ToolTipService.InitialShowDelay="400">
+                  ToolTip="How the count held up against the game's own numbers. Click to see." ToolTipService.InitialShowDelay="400">
             <Border.Style>
               <Style TargetType="Border">
                 <Setter Property="Background" Value="{DynamicResource ChipOff}"/>
@@ -669,14 +671,14 @@
                 </Grid>
               </Border>
               <TextBlock x:Name="CraftHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left"
-                         Text="A craft wrong or missing? Tap it." ToolTip="Tap a wrong craft to report it, or here for one that never showed. The report is saved on this PC."/>
+                         Text="A craft wrong or missing? Click it." ToolTip="Click a wrong craft to report it, or here for one that never showed. The report is saved on this PC."/>
             </StackPanel>
             <StackPanel Grid.Column="2">
               <TextBlock x:Name="CraftProfit" FontFamily="{DynamicResource DisplayFont}" FontSize="34" FontWeight="Light" Foreground="{DynamicResource Ink}" Text=" "/>
               <TextBlock x:Name="CraftProfitNote" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" Text="profit this session"/>
               <TextBlock x:Name="CraftWhat" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" LineHeight="21" TextWrapping="Wrap"/>
               <StackPanel x:Name="CraftHealth" Orientation="Horizontal" Margin="0,12,0,0">
-                <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Gold}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                <Path x:Name="CraftHealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="CraftHealthText" FontSize="12" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
               </StackPanel>
             </StackPanel>
@@ -732,6 +734,45 @@
     </ScrollViewer>
 
     </Grid>
+
+    <!-- the Undo bar (Ui/MainWindow.Undo.cs): for 8 s after clearing the tables or the runs, starting crafting over,
+         removing a run or stopping a run from this window. The game-tooltip look, the same in every look of the window;
+         a gold line runs down the seconds left. Ctrl+Z works too. -->
+    <Border x:Name="UndoBar" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="622" Margin="20,0,0,10" CornerRadius="6" BorderThickness="1" BorderBrush="#3C4466" Visibility="Collapsed">
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#151A2C" Offset="0"/><GradientStop Color="#0C0F1C" Offset="1"/></LinearGradientBrush>
+      </Border.Background>
+      <Border.Effect><DropShadowEffect BlurRadius="22" ShadowDepth="4" Opacity="0.55"/></Border.Effect>
+      <Grid>
+        <Grid Height="44" Margin="16,0,8,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <!-- a check in a gold-framed slot -->
+          <Border Width="22" Height="22" CornerRadius="4" BorderThickness="1" BorderBrush="#8CF8D598" Background="#0B0E1E" VerticalAlignment="Center" Margin="0,0,12,0">
+            <Path Data="M5,12 L10,17 L19,7" Stroke="#F8D598" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Margin="5"/>
+          </Border>
+          <TextBlock x:Name="UndoText" Grid.Column="1" Foreground="#EEECF6" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          <Button x:Name="UndoBtn" Grid.Column="2" Content="Undo" Height="30" FontSize="13" FontWeight="SemiBold" Margin="12,0,0,0" VerticalAlignment="Center"
+                  Foreground="#F8D598" ToolTip="Put it back (Ctrl+Z)" AutomationProperties.Name="Undo">
+            <!-- its own colours: the look's hover brushes are made for the window's cards, not this dark bar -->
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border x:Name="b" Background="#14F8D598" BorderBrush="#80F8D598" BorderThickness="1" CornerRadius="8" Padding="16,0">
+                  <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#33F8D598"/></Trigger>
+                  <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.8"/></Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+        </Grid>
+        <!-- the time left: a gold line along the bottom that shortens to nothing over the 8 seconds -->
+        <Border x:Name="UndoTime" Height="2" VerticalAlignment="Bottom" Margin="6,0,6,1" Background="#F8D598" Opacity="0.7" RenderTransformOrigin="0,0.5">
+          <Border.RenderTransform><ScaleTransform x:Name="UndoTimeScale" ScaleX="1"/></Border.RenderTransform>
+        </Border>
+      </Grid>
+    </Border>
 
     </Grid>
   </Border>

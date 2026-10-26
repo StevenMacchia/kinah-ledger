@@ -85,6 +85,14 @@ jobs:
           mkdir -p shots
           dist/KinahLedger.exe ui-shot shots --demo --compact
           dist/KinahLedger.exe ui-shot shots --demo --full
+          # Full view on a narrow screen (KL_SCREEN_W, in DIPs): 1080p at 150% (1280) draws both columns scaled down to fit;
+          # 960 (1920 at 200%) is too narrow even scaled, so the window shows Compact with its one-line note
+          KL_SCREEN_W=1280 dist/KinahLedger.exe ui-shot shots/narrow-1280 --demo --full
+          KL_SCREEN_W=960 dist/KinahLedger.exe ui-shot shots/narrow-960 --demo --full
+          # the Undo bar (KL_SHOT_UNDO), as it shows just after Clear the tables, at both widths and in Daylight
+          KL_SHOT_UNDO=1 dist/KinahLedger.exe ui-shot shots/undo --demo --compact
+          KL_SHOT_UNDO=1 dist/KinahLedger.exe ui-shot shots/undo --demo --full
+          KL_SHOT_UNDO=1 dist/KinahLedger.exe ui-shot shots/undo --demo --compact --skin daylight
           dist/KinahLedger.exe ui-shot shots --demo --crafting
           dist/KinahLedger.exe ui-shot shots --options
           # the whole Farming view at both widths (however tall), the Events part with its Runs card alone (folded and

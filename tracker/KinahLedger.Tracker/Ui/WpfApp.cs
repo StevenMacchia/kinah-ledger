@@ -231,11 +231,41 @@ public static class WpfApp
         DoEvents();
         Check(Math.Abs(p.HudOpacity - 0.5) < 0.001 && Math.Abs(w.HudScale - 1.5) < 0.001, $"panel opacity and size saved: {p.HudOpacity:P0}, {w.HudScale:P0}");
 
+        // the panel's switch and figures are tried on the panel at once too (2026-10-25), and Cancel puts them back
+        o = Open();
+        o.Go(OptionsWindow.Page.InGame);
+        bool hudSaved = p.Hud; var fieldsSaved = p.HudFields;
+        Flip(o.HudChk);
+        var onNow = HudFields.Parse(fieldsSaved);
+        int chip = Array.FindIndex(HudFields.All, f => !onNow.Contains(f.Key));
+        if (chip < 0) chip = Array.FindIndex(HudFields.All, f => onNow.Contains(f.Key));
+        Click((System.Windows.Controls.Button)o.HudFieldHost.Children[chip]);
+        Check(w.HudShownForTest == !hudSaved && w.HudFieldsShownForTest != fieldsSaved && p.Hud == hudSaved && p.HudFields == fieldsSaved,
+            "the panel switch and a figure show at once, and wait for Save to be kept");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(w.HudShownForTest == hudSaved && w.HudFieldsShownForTest == fieldsSaved, "Cancel puts the panel's switch and figures back");
+
         o = Open();
         Click(o.HotkeyResetBtn);
         Click(o.SaveBtn);
         DoEvents();
         Check(p.Hotkey == Platform.Hotkey.Default, "Default puts Ctrl+Shift+K back");
+        // shortcut rules (2026-10-25): nothing Windows or typing needs is taken from every app on the PC
+        {
+            static bool Ok(System.Windows.Input.ModifierKeys m, System.Windows.Input.Key k) => Platform.Hotkey.IsUsable(m, k);
+            const System.Windows.Input.ModifierKeys C = System.Windows.Input.ModifierKeys.Control, A = System.Windows.Input.ModifierKeys.Alt, S = System.Windows.Input.ModifierKeys.Shift, W = System.Windows.Input.ModifierKeys.Windows;
+            Check(!Ok(C, System.Windows.Input.Key.C) && !Ok(C, System.Windows.Input.Key.V) && !Ok(C, System.Windows.Input.Key.Z) && !Ok(C, System.Windows.Input.Key.A) && !Ok(A, System.Windows.Input.Key.F)
+                && !Ok(C | A, System.Windows.Input.Key.K) && !Ok(S, System.Windows.Input.Key.K) && !Ok(C, System.Windows.Input.Key.D1),
+                "a letter or number needs Shift with Ctrl or Alt: Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+A, Alt+F, Ctrl+Alt+K, Shift+K, Ctrl+1 refused");
+            Check(!Ok(A, System.Windows.Input.Key.Tab) && !Ok(A, System.Windows.Input.Key.Escape) && !Ok(C, System.Windows.Input.Key.Escape) && !Ok(A, System.Windows.Input.Key.Space)
+                && !Ok(A, System.Windows.Input.Key.F4) && !Ok(W | S, System.Windows.Input.Key.S) && !Ok(S, System.Windows.Input.Key.Insert) && !Ok(C, System.Windows.Input.Key.Left),
+                "system keys refused: Alt+Tab, Alt+Esc, Ctrl+Esc, Alt+Space, Alt+F4, Win+Shift+S, Shift+Insert, Ctrl+Left");
+            Check(Ok(C | S, System.Windows.Input.Key.K) && Ok(A | S, System.Windows.Input.Key.R) && Ok(A, System.Windows.Input.Key.F9) && Ok(S, System.Windows.Input.Key.F8) && Ok(C | A, System.Windows.Input.Key.F2),
+                "allowed: Ctrl+Shift+K, Alt+Shift+R, Alt+F9, Shift+F8, Ctrl+Alt+F2");
+            Check(Platform.Hotkey.Parse("Ctrl+K") == null && Platform.Hotkey.Explain("Ctrl+K") is { Length: > 0 } && Platform.Hotkey.Explain("Ctrl+Shift+K") == null && Platform.Hotkey.Parse("Ctrl+Shift+K") != null,
+                "a saved Ctrl+K is off with a reason; Ctrl+Shift+K still parses");
+        }
 
         // Compact and Full view (0.7.6): the tables and pickups only in Full, which doubles the width; Crafting is one column either way
         w.ShowCompact(); DoEvents();
@@ -295,6 +325,13 @@ public static class WpfApp
         Check(w.HudValues.GetValueOrDefault("loot", "") == "" && w.HudValues.GetValueOrDefault("rate", "") == w.HeadRate.Text,
             $"panel, gathering: the hour once ({w.HudValues.GetValueOrDefault("rate", "")}, the window's {w.HeadRate.Text}), no second loot figure");
         Check(w.HudValues.GetValueOrDefault("warm", "") == "" && w.HeadRate.Opacity == 1, "a 42-minute count shows its rate, not warming up");
+
+        // Undo instead of "Are you sure?" (2026-10-25): Clear the tables happens at once with a bar, and Undo puts them back
+        w.ShowDemo(); DoEvents();
+        _ = w.ClearTablesForTest(); DoEvents();
+        Check(w.UndoShowing == "Farming tables cleared" && w.TablesClearedForUndo, "Clear the tables: cleared at once, with an Undo bar");
+        w.PressUndo(); DoEvents();
+        Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
 
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");

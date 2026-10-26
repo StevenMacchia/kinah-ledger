@@ -48,6 +48,7 @@ public sealed class RowItem : INotifyPropertyChanged
     public bool Child => _row.Child;
     public string Report => _row.Report;
     public string ReportText => _row.ReportText;
+    public string ReportHint => _row.ReportHint;
     public bool Reported => _row.Reported;
     public string Tip => _row.Tip;
     public long Worth => _row.Worth;

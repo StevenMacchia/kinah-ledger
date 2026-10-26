@@ -20,8 +20,10 @@ namespace KinahLedger.Ui;
 /// <param name="Worth">The row's tradeable copies at the lowest Market price, before the fee: what Top drops and the Discord card rank by.</param>
 public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false, string Report = "", bool Reported = false, string Tip = "", long Worth = 0, string PriceTone = "", string PriceTip = "", bool Mat = false)
 {
-    /// <summary>The row's report link: "Looks wrong?" flags the drop so the site never gets it; "Undo" takes the flag off.</summary>
-    public string ReportText => Reported ? "Undo" : "Looks wrong?";
+    /// <summary>The row's report link: "Report" flags the drop so the site never gets it; "Undo" takes the flag off.</summary>
+    public string ReportText => Reported ? "Undo" : "Report";
+    /// <summary>The words before the link: the hint "Looks wrong?", or "Reported ·" on a flagged row.</summary>
+    public string ReportHint => Reported ? "Reported ·" : "Looks wrong?";
     /// <summary>The line under the name, with a ⓘ when hovering the row tells more.</summary>
     public string SubShown => Tip.Length == 0 || Header ? Sub : Sub.Length > 0 ? Sub + "  ⓘ" : "ⓘ";
 }
@@ -120,7 +122,8 @@ public partial class MainWindow : Window
         MiscountLink.Click += (_, _) => ReportMiscount();
         DiscordLink.Click += (_, _) => Open(DiscordUrl);
         // Compact and Full view: the header button switches, and the summary's link opens Full view
-        ViewBtn.Click += (_, _) => SetView(!_prefs.FullView);
+        // the view as it shows: on a screen too narrow for Full view, a click asks for it again and says why it can't
+        ViewBtn.Click += (_, _) => SetView(!FullShown);
         // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
         OddsAsPct = _prefs.OddsAsPercent; ShowOddsHeader();
         PctHeader.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; OddsAsPct = _prefs.OddsAsPercent = !_prefs.OddsAsPercent; if (!_demo) _prefs.Save(); ShowOddsHeader(); Redraw(); };
@@ -148,16 +151,10 @@ public partial class MainWindow : Window
         EventsTab.Click += (_, _) => ShowPart("Events");
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
-        CraftResetLink.Click += (_, _) =>
-        {
-            if (MessageBox.Show(this, "Start crafting over? The recipes, tries and profit shown here are cleared.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            _watcher.Chat?.ResetCraftView(); FillCraft(_watcher.Chat?.CraftView);
-        };
-        InstClearBtn.Click += (_, _) =>
-        {
-            if (MessageBox.Show(this, "Clear the expedition and event runs shown here? Runs not sent to the site yet are still sent.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            _watcher.Chat?.Instances.ClearShown(); ShowInstances();
-        };
+        // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
+        CraftResetLink.Click += async (_, _) => await StartCraftOver();
+        InstClearBtn.Click += async (_, _) => await ClearRuns();
+        WireUndo();
         _mode = Mode.Open;
         ApplyModeLabels(); ResetTiles();
         BuildTray();
@@ -179,6 +176,7 @@ public partial class MainWindow : Window
             };
         ShowPart(_prefs.Part, remember: false);
         SizeChanged += (_, _) => KeepOnScreen();
+        DpiChanged += (_, _) => Dispatcher.BeginInvoke(RefitIfNeeded);   // the screen's scaling changed, or a screen with another one
         ShowTable(null);
         ServerRowState();
         InitWelcome();
@@ -237,7 +235,7 @@ public partial class MainWindow : Window
 
 
     /// <summary>Redraws the table for the count on screen: the run, the run just stopped, or the live count.</summary>
-    /// <summary>"Looks wrong?" on a drop or gathered row: flags the item so nothing about it is sent to the site; "Undo" takes the flag off.</summary>
+    /// <summary>"Looks wrong? Report" on a drop or gathered row: flags the item so nothing about it is sent to the site; "Undo" takes the flag off.</summary>
     void ReportClick(object sender, RoutedEventArgs e)
     {
         if (RowOf((sender as FrameworkContentElement)?.DataContext) is not { } r || r.Report.Length == 0) return;
@@ -321,7 +319,7 @@ public partial class MainWindow : Window
             {
                 "chat" => "Read in the chat.",
                 "recovered" => "Read again after the line scrolled away or came out blurred.",
-                "guessed" => "Part of the name was hidden, so it was matched to the closest item. Hover the item's row and press Looks wrong? if it's not right.",
+                "guessed" => "Part of the name was hidden, so it was matched to the closest item. Hover the item's row and press Report if it's not right.",
                 "loot list" => "Only the loot list beside your character showed it; the chat didn't.",
                 _ => char.ToUpperInvariant(v[0]) + v[1..] + ".",
             });
@@ -334,18 +332,28 @@ public partial class MainWindow : Window
     /// </summary>
     SessionEngine? Shown()
     {
-        var chat = _watcher.Chat; var farm = _watcher.Farm;
+        if (_clearedView != null) return _clearedView;   // Clear the tables, while it can still be undone
+        var chat = _watcher.Chat; var farm = RunEngine;
         if (farm == null && _lastRun != null && DateTime.UtcNow < _lastRunUntil) return _lastRun;
         if (!_prefs.AllZones && chat != null) return chat.ZoneView;
         return farm ?? chat?.Engine;
     }
 
-    string ViewTitle() => _watcher.Farm != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "counted while the game is open" : "this zone");
+    string ViewTitle() => RunEngine != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "counted while the game is open" : "this zone");
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
     /// <param name="fromWindow">True for the window's Start/Stop button; the shortcut and the tray pass false.</param>
-    async Task Toggle(bool fromWindow = false) { if (_welcome) { Say("Choose your server first.", "Warn"); return; } if (!Farming) await StartTracking(); else await StopTracking(fromWindow); }
+    async Task Toggle(bool fromWindow = false)
+    {
+        if (_welcome) { Say("Choose your server first.", "Warn"); return; }
+        // Start while a stop can still be undone: that stop becomes final (saved and shared), and a new run starts
+        if (_stopPending) { await CommitPending(); await StartTracking(); return; }
+        if (!Farming) await StartTracking();
+        // the window's own Stop gets the Undo bar; the shortcut and the tray stop at once, as before
+        else if (fromWindow) await StopFromWindow();
+        else await StopTracking();
+    }
 
     /// <summary>Says something in the status line and on the Options window's reading page when it is open.</summary>
     void Report(string text, string tone)
@@ -476,6 +484,9 @@ public partial class MainWindow : Window
     /// </param>
     async Task StopTracking(bool fromWindow = false)
     {
+        // a stop from anywhere else (the shortcut, the tray, the game closing, an update) makes the window's waiting one final
+        if (_pendingUndo?.Kind == "stop") EndUndo();
+        _stopPending = false;
         var e = _watcher.StopFarm(); if (e == null) return;
         // shared and saved under what the run turned out to be, not the label picked before it started
         var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
@@ -526,7 +537,7 @@ public partial class MainWindow : Window
         if (_demo || _moving) return;
         WatchGame();
         AskWhenFree();   // an update found during a run asks once the run has stopped
-        var chat = _watcher.Chat; var farm = _watcher.Farm;
+        var chat = _watcher.Chat; var farm = RunEngine;
         var show = Shown();
         if (show != null && (farm != null || show != _lastRun))
         {
@@ -567,8 +578,8 @@ public partial class MainWindow : Window
         // the panel over the game shows whenever its switch is on and the chat is being read: the run while one is on, the
         // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
         // the panel over the game can't stop the rest of the refresh (the Crafting table, the pickups) if it fails to open
-        if (_prefs.Hud && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
-        if (_part == "Crafting") FillCraft(chat?.CraftView);
+        if (HudWanted && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
+        if (_part == "Crafting") FillCraft(CraftShown);
         FillLive();
         FillAccuracyCard();
         AlertTick();
@@ -584,10 +595,11 @@ public partial class MainWindow : Window
     {
         if (_hud == null) return;
         _hudValues["show"] = HudPresence();
-        _hudValues["unlocked"] = HudMoving ? "move" : _hudPrefs.Locked ? "" : "1";
+        _hudValues["unlocked"] = HudMoving ? "move" : (_hudPreview?.HudLocked ?? _hudPrefs.Locked) ? "" : "1";   // a lock being tried in Options shows at once
         HudRunValues();
         _hudValues["last"] = _demo ? "Spiritstone ×1" : _watcher.Chat?.RecentPickups(1).FirstOrDefault()?.What ?? "";
         HudFeed();
+        _hudValues["notice"] = HudNotice();   // a price alert, the shortcut's problem or a waiting update (Ui/MainWindow.Notices.cs)
         _hud.Update(_hudValues);
         _hud.SetAccuracy(_accView?.Hud, _accView?.HasRows == true);
     }
@@ -685,7 +697,7 @@ public partial class MainWindow : Window
                         // every enemy fought has a table, none lists it, and some other enemy's does: a misread, or a drop
                         // credited to the wrong fight. An item on no table at all is one the tables don't cover: no warning
                         odds = "";
-                        tips.Add("None of the enemies you fought here lists this item. It may have been misread, or come from another fight. Press Looks wrong? to keep it off the site.");
+                        tips.Add("None of the enemies you fought here lists this item. It may have been misread, or come from another fight. Press Report to keep it off the site.");
                     }
                 }
                 bool flagged = ReportedDrops.Has(r.Name);
@@ -1003,7 +1015,7 @@ public partial class MainWindow : Window
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "SegOn" : "SegOff");
         if (_part == "Events") ShowInstances();
         if (remember && !_demo) { _prefs.Part = _part; _prefs.Save(); }
-        if (craft && !_demo) FillCraft(_watcher.Chat?.CraftView);
+        if (craft && !_demo) FillCraft(CraftShown);
     }
 
     /// <summary>Compact or Full view, remembered; the window grows to the right, or to the left near the screen's edge.</summary>
@@ -1011,8 +1023,11 @@ public partial class MainWindow : Window
     {
         _prefs.FullView = full;
         if (!_demo) _prefs.Save();
+        _fullAsked = full;   // a screen too narrow for it says so now, not only the first time
         ApplyView();
+        _fullAsked = false;
     }
+    bool _fullAsked;
 
     /// <summary>
     /// What shows where, for the part (Farming or Crafting), the view (Compact or Full) and the first-run screen.
@@ -1022,7 +1037,10 @@ public partial class MainWindow : Window
     /// </summary>
     void ApplyView()
     {
-        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, farm = !craft && !events && !_welcome, full = farm && _prefs.FullView;
+        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, farm = !craft && !events && !_welcome;
+        // Full view scaled to the screen it is on, or Compact when even scaled it can't fit (Ui/MainWindow.Fit.cs)
+        FitFull(farm && _prefs.FullView, _fullAsked);
+        bool full = farm && FullShown;
         LeftCol.Visibility = craft || events ? Visibility.Collapsed : Visibility.Visible;
         SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         SummaryCard.Visibility = farm && _hasSummary ? Visibility.Visible : Visibility.Collapsed;
@@ -1046,7 +1064,7 @@ public partial class MainWindow : Window
         HeadStack.Width = full ? 662 * 2 + 16 : 662;
         StatusBar.Width = 662;
         ViewFill.Opacity = full ? 1 : 0.25;
-        ViewBtn.ToolTip = full ? "Compact view: one column" : "Full view: twice as wide, with Session and Where to farm now open beside the tables";
+        ViewBtn.ToolTip = full ? "Compact view: one column" : _fullTooWide ? "Full view needs a wider screen than this one" : "Full view: twice as wide, with Session and Where to farm now open beside the tables";
         ViewBtn.Visibility = craft || events || _welcome ? Visibility.Collapsed : Visibility.Visible;
         // Session and Where to farm now open in Full view, folded in Compact, until the player opens or folds them
         _secUser.Remove("Session"); _secUser.Remove("Where");
@@ -1065,7 +1083,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Rows per table before "Show all": three in Compact, six in Full view.</summary>
-    int TableRows => _prefs.FullView ? 6 : 3;
+    int TableRows => FullShown ? 6 : 3;
 
     /// <summary>A layout render's sample count and clock, so switching views in a render redraws the same sample.</summary>
     SessionEngine? _demoEngine; TimeSpan _demoElapsed;
@@ -1113,7 +1131,7 @@ public partial class MainWindow : Window
         FillBestCrafts();
         // the feed: the last five crafts, worked or failed, with what each made or cost
         DrawFeed(CraftFeedHost, CraftEmpty, FeedFor(FeedTab.Crafting), FeedTab.Crafting, CraftValue);
-        FillHealth(CraftHealthText, null);
+        FillHealth(CraftHealthText, CraftHealthMark);
         // with nothing crafted yet, the feed's one sentence and Best crafts: no empty table, nothing to start over
         var some = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftHead.Visibility = CraftResetText.Visibility = some;
@@ -1159,7 +1177,8 @@ public partial class MainWindow : Window
         else _lastMobKinah = 0;
         // this zone's view: an empty section says what came in other zones, so nothing looks lost after a zone change
         // (Steven, 2026-10-21: the Soul Crystals from Eternal Isle "not showing" in Crimson Isle)
-        var allE = !_prefs.AllZones && e != null && _watcher.Chat?.Engine is { } ce && !ReferenceEquals(ce, e) ? ce : null;
+        // (not while a clear can still be undone: the counts it hides aren't "other zones")
+        var allE = !_prefs.AllZones && e != null && _clearedView == null && _watcher.Chat?.Engine is { } ce && !ReferenceEquals(ce, e) ? ce : null;
         var allRows = allE?.ItemRows() ?? new();
         int allPets = allE?.PetSnapshot().Values.Sum() ?? 0, allMobs = allE?.MobSnapshot().Count ?? 0;
         int allGather = allRows.Where(r => GatheringCatalog.Find(r.Name) != null).Sum(r => r.Count + r.Bound);
@@ -1273,13 +1292,14 @@ public partial class MainWindow : Window
     /// <summary>The draggable panel over the game, where it was last left; created once and kept until its switch goes off.</summary>
     void EnsureHud()
     {
-        if (_hud != null || !_prefs.Hud) return;
-        _hud = new HudWindow(HudFields.Parse(_prefs.HudFields), HudLook) { Owner = this };
-        _hud.SetOpacity(_prefs.HudOpacity);
-        _hud.SetScale(_hudPrefs.Scale);
+        if (_hud != null || !HudWanted) return;
+        // what Options is trying, while it is open (Ui/MainWindow.Shell.cs PreviewHudLook), else the saved choices
+        _hud = new HudWindow(HudFields.Parse(_hudPreview?.HudFields ?? _prefs.HudFields), HudLook) { Owner = this };   // the look waits for Save
+        _hud.SetOpacity(_hudPreview?.HudOpacity ?? _prefs.HudOpacity);
+        _hud.SetScale(_hudPreview?.HudScale ?? _hudPrefs.Scale);
         // where the player left it, kept on a screen that is still there; else the top centre of the game's monitor
-        if (SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault();
-        _hud.Dragged += () => { if (_hud != null) RememberHudSpot(_hud.Left, _hud.Top); };   // the Ticker's spot is its own
+        if (!_hudSpotPreview && SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault();
+        _hud.Dragged += () => { if (_hud != null) RememberHudSpot(_hud.Left, _hud.Top); };   // the Ticker's spot is its own (never in a render)
         // it follows the game from the start: created while the game is behind another window, it waits out of sight
         UpdateHud();
         if (_hudValues.GetValueOrDefault("show", "") != "hidden") _hud.Show();
@@ -1458,14 +1478,15 @@ public partial class MainWindow : Window
         var h = new WindowInteropHelper(this).Handle;
         Native.DarkTitleBar(h, Skins.IsDark(_prefs.Skin));
         HwndSource.FromHwnd(h)?.AddHook(WndProc);
-        if (ApplyHotkey() is { } err) Say(err, "Warn");
+        RefitIfNeeded();   // Full view against the screen the window opened on, now that it has one
+        if (ApplyHotkey() is { } err) HotkeyProblemAtStart(err);   // the status line, a tray notice once, and the panel (Ui/MainWindow.Notices.cs)
         _foregroundWatch ??= Native.WatchForeground(HudFollowGame);   // the panel fades with an alt-tab, not a tick later
     }
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == Native.WM_HOTKEY && wParam.ToInt32() == HotkeyId) { _ = Toggle(); handled = true; }
-        else OnSizeMove(msg);
+        else if (OnSizeMove(msg) && msg == WM_EXITSIZEMOVE) Dispatcher.BeginInvoke(RefitIfNeeded);   // dropped on another screen: Full view fitted to it
         return IntPtr.Zero;
     }
 
@@ -1482,6 +1503,13 @@ public partial class MainWindow : Window
         SavePrefs();
         // Options › General: the close button keeps the tracker in the tray, so it can open with the game; Quit is in the tray menu
         if (_prefs.CloseToTray && !_quitting && !_demo) { e.Cancel = true; HideToTray(); return; }
+        // an action behind the Undo bar becomes final first (a stopped run saved, a removed run gone), then the window closes
+        if (_pendingUndo != null && !_demo)
+        {
+            e.Cancel = true;
+            _ = CommitPending().ContinueWith(_ => Dispatcher.Invoke(Close));
+            return;
+        }
         if (Farming && !_quitting)
         {
             var r = MessageBox.Show(this, "You're still farming. Stop the run and quit?\n\nYes stops the run and closes Kinah Ledger.\nNo keeps it running and leaves this window open.", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -1676,5 +1704,7 @@ public partial class MainWindow : Window
         {
             _demoMarket = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";
         }
+        // KL_SHOT_UNDO=1: a render with the Undo bar up, as it shows just after Clear the tables (Ui/MainWindow.Undo.cs)
+        if (Environment.GetEnvironmentVariable("KL_SHOT_UNDO") == "1") ShowUndoSample();
     }
 }

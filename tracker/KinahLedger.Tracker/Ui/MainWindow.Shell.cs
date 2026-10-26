@@ -126,11 +126,21 @@ public partial class MainWindow
         var h = new WindowInteropHelper(this).Handle;
         if (h == IntPtr.Zero) return null;
         Native.UnregisterHotKey(h, HotkeyId);
-        if (_hotkeySuspended || Hotkey.Parse(_prefs.Hotkey) is not { } key) return null;
-        return Native.RegisterHotKey(h, HotkeyId, key.NativeModifiers, key.VirtualKey)
-            ? null
-            : $"{key} is already used by another app, so the shortcut is off. Pick another in Options › In game.";
+        if (_hotkeySuspended) return null;
+        // one saved before the shortcut rules (Ctrl+K, say) is off, and says why (Platform/Hotkey.cs Refusal)
+        if (Hotkey.Explain(_prefs.Hotkey) is { } why)
+        {
+            _hotkeyProblem = ($"The shortcut {_prefs.Hotkey.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › In game.", $"Shortcut {_prefs.Hotkey.Trim()} is off · pick another in Options");
+            return _hotkeyProblem.Value.Long;
+        }
+        if (Hotkey.Parse(_prefs.Hotkey) is not { } key) { _hotkeyProblem = null; return null; }
+        _hotkeyProblem = Native.RegisterHotKey(h, HotkeyId, key.NativeModifiers, key.VirtualKey) ? null
+            : ($"{key} is already used by another app, so the shortcut is off. Pick another in Options › In game.", $"{key} is taken by another app · pick another in Options");
+        return _hotkeyProblem?.Long;
     }
+
+    /// <summary>The shortcut couldn't be set: the status line's sentence and the panel's short line; null when it works or is off.</summary>
+    (string Long, string Short)? _hotkeyProblem;
 
     /// <summary>While Options records a new shortcut, the current one must not fire (it would start a run).</summary>
     public void SuspendHotkey(bool suspend)
@@ -162,6 +172,53 @@ public partial class MainWindow
         _hud?.SetOpacity(opacity);
         _hud?.SetScale(scale);
     }
+
+    /// <summary>
+    /// The rest of Options › In game the same way (2026-10-25 audit: the panel switch, its figures and its lock waited for
+    /// Save with nothing to see): the edited choices shown on the panel at once, remembered only on Save; Cancel puts the
+    /// saved ones back (<see cref="EndHudPreview"/>). Null while Options isn't previewing anything.
+    /// </summary>
+    OptionsChoice? _hudPreview;
+    /// <summary>Reset position being tried: the panel sits at the default spot until Save keeps it or Cancel moves it back.</summary>
+    bool _hudSpotPreview;
+    /// <summary>The panel's switch as it shows now: the one being tried in Options, else the saved one.</summary>
+    bool HudWanted => _hudPreview?.Hud ?? _prefs.Hud;
+
+    /// <summary>Options › In game changed: the panel shows the edited switch, figures, lock, opacity and size now.</summary>
+    public void PreviewHudLook(OptionsChoice c)
+    {
+        _hudPreview = c;
+        if (!c.Hud) CloseHud();
+        else if (_hud == null && !_demo && _watcher.Chat != null) EnsureHud();   // on: it shows over the game as it would after Save
+        _hud?.SetFields(Ui.HudFields.Parse(c.HudFields));
+        PreviewHud(c.HudOpacity, c.HudScale);
+        UpdateHud();
+    }
+
+    /// <summary>Options › In game › Reset position, being tried: the panel moves to the default spot now; Save keeps it there.</summary>
+    public void PreviewHudSpot()
+    {
+        _hudSpotPreview = true;
+        PlaceHudDefault();
+    }
+
+    /// <summary>Options closed (after Save or Cancel): the panel back to the saved choices, which Save has just made the edited ones.</summary>
+    public void EndHudPreview()
+    {
+        bool moved = _hudSpotPreview;
+        _hudPreview = null; _hudSpotPreview = false;
+        if (!_prefs.Hud) { CloseHud(); return; }
+        if (_hud == null) return;   // the next tick opens it, run or no run
+        _hud.SetFields(Ui.HudFields.Parse(_prefs.HudFields));
+        PreviewHud(_prefs.HudOpacity, _hudPrefs.Scale);
+        if (moved) { if (SavedHudSpot() is { } spot) { _hud.Left = spot.X; _hud.Top = spot.Y; } else PlaceHudDefault(); }
+        UpdateHud();
+    }
+
+    /// <summary>For the options self-test: the panel's switch as it shows now (the one being tried, or the saved one).</summary>
+    internal bool HudShownForTest => HudWanted;
+    /// <summary>For the options self-test: the panel's figures as it shows them now.</summary>
+    internal string HudFieldsShownForTest => _hudPreview?.HudFields ?? _prefs.HudFields;
     public Settings AppSettings => _settings;
     public bool CanStartWithWindows => _exe != null;
 
@@ -255,6 +312,7 @@ public partial class MainWindow
         // the look's own spot: the Ticker's is kept apart from the strip's and the Card's
         if (HudLook == HudLooks.Ticker) { _hudPrefs.TickerX = null; _hudPrefs.TickerY = null; if (!_demo) _hudPrefs.Save(); }
         else { _prefs.HudX = null; _prefs.HudY = null; if (!_demo) _prefs.Save(); }
+        _hudSpotPreview = false;
         PlaceHudDefault();
     }
 

@@ -37,6 +37,8 @@ public partial class MainWindow
     {
         var log = _watcher.Chat?.Instances ?? _demoInst;
         var all = log?.Snapshot() ?? new List<InstanceRun>();
+        // a Clear or a Remove that can still be undone: those runs look gone (Ui/MainWindow.Undo.cs)
+        if (_hiddenRuns.Count > 0) all = all.Where(r => !_hiddenRuns.Contains(RunKey(r.Start, r.Zone))).ToList();
         // the flags the player cleared with Keep as one stay off (RunFixes); a sheet reads the kept reward screens afresh
         RunFixes.ApplyKept(all);
         _screenLines = null;
@@ -730,13 +732,24 @@ public partial class MainWindow
         return g;
     }
 
-    /// <summary>A wrong run, removed on the player's say (Steven, 2026-10-23): it leaves the list and won't be sent to the site.</summary>
+    /// <summary>
+    /// A wrong run, removed on the player's say (Steven, 2026-10-23): it leaves the list and won't be sent to the site. It
+    /// goes from the list at once, with Undo; it leaves the history file when the bar goes (Ui/MainWindow.Undo.cs).
+    /// </summary>
     void RemoveRun(InstanceRun r, Action redraw)
     {
         if (_watcher.Chat?.Instances is not { } il || _demoInst != null) return;
-        if (il.Remove(r.Start, r.Zone)) Say($"Removed: {r.Zone}, {r.Start.ToLocalTime():MMM d HH:mm}. A copy is kept aside in instances.removed.jsonl.", "Good");
-        _fixOpen = null;
-        redraw();
+        var key = RunKey(r.Start, r.Zone); var start = r.Start; var zone = r.Zone;
+        _ = Offer("run", $"Removed: {zone}, {start.ToLocalTime():MMM d HH:mm}",
+            apply: () => { _hiddenRuns.Add(key); _fixOpen = null; redraw(); },
+            undo: () => { _hiddenRuns.Remove(key); ShowInstances(); },
+            commit: () =>
+            {
+                _hiddenRuns.Remove(key);
+                if (il.Remove(start, zone)) Say($"Removed: {zone}, {start.ToLocalTime():MMM d HH:mm}. A copy is kept aside in instances.removed.jsonl.", "Good");
+                ShowInstances();
+                return Task.CompletedTask;
+            });
     }
 
     static double Median(IEnumerable<double> xs)

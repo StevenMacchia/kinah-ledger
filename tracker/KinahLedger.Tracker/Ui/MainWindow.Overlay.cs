@@ -72,8 +72,8 @@ public partial class MainWindow
     /// </summary>
     void HudRunValues()
     {
-        _hudValues["run"] = Farming ? "1" : "";
-        if (_watcher.Farm is { } run) _hudValues["time"] = "RUN " + Clock(run.Active);
+        _hudValues["run"] = RunOn ? "1" : "";   // off the moment the window's Stop is pressed, though Undo can still bring it back
+        if (RunEngine is { } run) _hudValues["time"] = "RUN " + Clock(run.Active);
         else if (_hudValues.GetValueOrDefault("time", "").StartsWith("RUN ")) _hudValues["time"] = "";   // the next count puts the clock back
         _hudValues["flash"] = DateTime.UtcNow < _hudFlashUntil ? _hudFlash : "";
     }
