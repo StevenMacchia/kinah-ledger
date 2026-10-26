@@ -93,7 +93,8 @@ public sealed partial class BalanceReader
             }
             merged.Add(w);
         }
-        return merged;
+        // a lone digit is an icon read as one (the strip's bag of coins read "0" at its left, 2026-10-24 pictures), never Kinah worth checking
+        return merged.Where(m => m.Text.Count(c => char.IsDigit(c) || c is 'O' or 'o' or 'I' or 'l') >= 2).ToList();
     }
 
     /// <summary>
@@ -138,14 +139,56 @@ public sealed partial class BalanceReader
     public static async Task<List<OcrLineBox>> ReadNumbersAsync(Bitmap raw, Point origin, int lo = 150)
     {
         using var wt = WhiteText(raw, 60, lo);
-        var found = new List<OcrLineBox>();
-        foreach (var run in InkRuns(wt))
+        // each run cut to its ink rows; one narrower than 0.4 of the strip's height is what's left of an icon's white
+        // letter, not a counter (a counter under 100 isn't Kinah worth checking)
+        var parts = InkRuns(wt).Where(r => r.Width >= wt.Height * 0.4).Select(r => Rows(wt, r)).Where(r => r.Height > 0).ToList();
+        if (parts.Count == 0) return await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
+        // the runs stacked on a white sheet, one per line with a line's gap between, as a column of numbers: read alone,
+        // a single number with nothing around it was skipped as often as it was read
+        int band = parts.Max(p => p.Height), m = Math.Max(8, band), slot = band * 2;
+        using var sheet = new Bitmap(parts.Max(p => p.Width) + 2 * m, 2 * m + slot * parts.Count, PixelFormat.Format24bppRgb);
+        using (var g = Graphics.FromImage(sheet))
         {
-            using var part = wt.Clone(run, wt.PixelFormat);
-            found.AddRange(await ScreenReader.ReadBoxesAsync(part, new Point(origin.X + run.X, origin.Y + run.Y), 3));
+            g.Clear(Color.White);
+            for (int i = 0; i < parts.Count; i++) g.DrawImage(wt, new Rectangle(m, m + i * slot, parts[i].Width, parts[i].Height), parts[i], GraphicsUnit.Pixel);
+        }
+        var found = new List<OcrLineBox>();
+        foreach (var line in await ScreenReader.ReadBoxesAsync(sheet, Point.Empty, 3))
+        {
+            // each word back to the strip, by the line of the sheet it sits on
+            var words = new List<OcrWordBox>();
+            foreach (var w in line.Words ?? new[] { new OcrWordBox(line.Text, line.Box) })
+            {
+                int i = Math.Clamp((w.Box.Top + w.Box.Height / 2 - m) / slot, 0, parts.Count - 1);
+                int dx = origin.X + parts[i].X - m, dy = origin.Y + parts[i].Y - (m + i * slot);
+                words.Add(new OcrWordBox(w.Text, new Rectangle(w.Box.X + dx, w.Box.Y + dy, w.Box.Width, w.Box.Height)));
+            }
+            if (words.Count > 0) found.Add(new OcrLineBox(string.Join(" ", words.Select(x => x.Text)), words.Select(x => x.Box).Aggregate(Rectangle.Union), words));
         }
         if (Counters(found).Count > 0) return found;
         return await ScreenReader.ReadBoxesAsync(raw, origin, 3, boost: true);
+    }
+
+    /// <summary>The rows of <paramref name="run"/> with ink, padded a little: the run cut to its text.</summary>
+    static unsafe Rectangle Rows(Bitmap wt, Rectangle run)
+    {
+        int top = -1, bottom = -1;
+        var data = wt.LockBits(new Rectangle(0, 0, wt.Width, wt.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            for (int y = run.Top; y < run.Bottom; y++)
+            {
+                byte* row = (byte*)data.Scan0 + y * data.Stride;
+                bool any = false;
+                for (int x = run.Left; x < run.Right && !any; x++) any = row[x * 3] < 100;
+                if (any) { if (top < 0) top = y; bottom = y; }
+            }
+        }
+        finally { wt.UnlockBits(data); }
+        if (top < 0) return Rectangle.Empty;
+        int pad = Math.Max(2, (bottom - top) / 6);
+        int t = Math.Max(run.Top, top - pad), b = Math.Min(run.Bottom, bottom + 1 + pad);
+        return new Rectangle(run.X, t, run.Width, b - t);
     }
 
     /// <summary>The strip's runs of columns with dark (text) pixels in a <see cref="WhiteText"/> picture, padded, left to right, full height.</summary>
