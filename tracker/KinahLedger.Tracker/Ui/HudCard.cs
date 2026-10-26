@@ -26,7 +26,9 @@ public sealed class HudCard : IHudLook
     readonly Border _card, _ring, _notice, _acc;
     readonly Ellipse _dot;
     readonly TextBlock _run, _time, _zone, _newest, _rate, _total, _noticeText, _accText;
-    readonly Image _noticeIcon;
+    readonly Image _noticeIcon, _noticeClock;
+    /// <summary>The That was wrong notice's gold line, running down its 3 s (HudClockNotice).</summary>
+    readonly Border _drain;
     readonly StackPanel _tiles = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) };
     readonly Dictionary<string, string> _drawn = new();
     double _alpha = 1;
@@ -71,10 +73,12 @@ public sealed class HudCard : IHudLook
 
         _noticeIcon = WarnIcon(); _noticeIcon.Margin = new Thickness(0, 0, 7, 0);
         _noticeText = T("", 13, Warn, weight: FontWeights.SemiBold);
+        _noticeClock = HudClockNotice.ClockIcon(); _noticeClock.Margin = new Thickness(0, 0, 7, 0); _noticeClock.Visibility = Visibility.Collapsed;
+        _drain = HudClockNotice.Drain(); _drain.Margin = new Thickness(0, 0, 0, -5); _drain.Visibility = Visibility.Collapsed;
         _notice = new Border
         {
             Margin = new Thickness(0, 8, 0, 0), Padding = new Thickness(0, 6, 0, 0), BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = B(WarnC, .28), Visibility = Visibility.Collapsed,
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Height = 17, Children = { _noticeIcon, _noticeText } },
+            Child = new Grid { Children = { new StackPanel { Orientation = Orientation.Horizontal, Height = 17, Children = { _noticeIcon, _noticeClock, _noticeText } }, _drain } },
         };
         _accText = T("", 12.5, Warn, weight: FontWeights.SemiBold);
         _acc = new Border { Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, Child = _accText };
@@ -143,18 +147,22 @@ public sealed class HudCard : IHudLook
         }
 
         // the notice row: the reader paused (orange, with the sign), else a start or stop's flash, an update waiting, a flagged run
-        string note; Brush tone; bool sign = false;
+        string note, clockV = ""; Brush tone; bool sign = false;
         if (paused.Length > 0) { note = paused; tone = Warn; sign = true; }
         else if (V("flash").Length > 0) { note = V("flash"); tone = Ink; }
-        else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; }
+        else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; clockV = V("noticeClock"); }
         else if (V("flag").Length > 0) { note = V("flag") + " · fix in tracker"; tone = Gold; }
         else { note = ""; tone = Warn; }
-        if (Changed("notice", $"{note}|{sign}"))
+        if (Changed("notice", $"{note}|{sign}|{clockV}"))
         {
             _noticeText.Text = note; _noticeText.Foreground = tone;
             _noticeIcon.Visibility = sign ? Visibility.Visible : Visibility.Collapsed;
             _notice.BorderBrush = sign ? B(WarnC, .28) : B(LineC);
             _notice.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // the That was wrong key's answer: a gold clock, the words in two tones, and the gold line running down its 3 s
+            var ck = HudClockNotice.Parse(clockV);
+            _noticeClock.Visibility = _drain.Visibility = ck != null ? Visibility.Visible : Visibility.Collapsed;
+            if (ck is { } left) { HudClockNotice.Words(_noticeText, note, 13); _notice.BorderBrush = B(GoldC, .26); HudClockNotice.Run(_drain, left, Still); }
         }
 
         // the newest pickup in the head and the last three as tiles; a rare drop goes first, in its colour

@@ -333,6 +333,46 @@ public static class WpfApp
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
 
+        // That was wrong (2026-10-26): a second shortcut, off by default, recorded like the first, kept only on Save
+        {
+            const System.Windows.Input.ModifierKeys C = System.Windows.Input.ModifierKeys.Control, S = System.Windows.Input.ModifierKeys.Shift;
+            o = Open();
+            o.Go(OptionsWindow.Page.InGame);
+            Check(w.MarkWrongText == "" && o.MarkKeyBox.Text == "Off" && !o.MarkKeyOffBtn.IsEnabled, "That was wrong: off until a key is picked");
+            Check(o.RecordForTest(true, C | S, System.Windows.Input.Key.K) is { } same && same.Contains("start/stop") && !o.SaveBtn.IsEnabled, "That was wrong can't take the start/stop shortcut's keys");
+            Check(o.RecordForTest(true, C, System.Windows.Input.Key.J) is { } rule && rule.Contains("Shift") && !o.SaveBtn.IsEnabled, "...and keeps the shortcut rules (Ctrl+J refused)");
+            Check(o.RecordForTest(true, C | S, System.Windows.Input.Key.J) == null && o.MarkKeyBox.Text == "Ctrl+Shift+J" && o.SaveBtn.IsEnabled && w.MarkWrongText == "", "a recorded key waits for Save");
+            Click(o.CancelBtn);
+            DoEvents();
+            Check(!o.IsVisible && w.MarkWrongText == "", "Cancel leaves That was wrong off");
+            o = Open();
+            o.Go(OptionsWindow.Page.InGame);
+            o.RecordForTest(true, C | S, System.Windows.Input.Key.J);
+            Click(o.SaveBtn);
+            DoEvents();
+            Check(w.MarkWrongText == "Ctrl+Shift+J", "That was wrong saved: " + w.MarkWrongText);
+            if (o.IsVisible) { Console.WriteLine("      (Options stayed open: " + o.FooterNote.Text + ")"); Click(o.CancelBtn); DoEvents(); }
+            o = Open();
+            o.Go(OptionsWindow.Page.InGame);
+            Check(o.MarkKeyBox.Text == "Ctrl+Shift+J" && o.RecordForTest(false, C | S, System.Windows.Input.Key.J) is { } back && back.Contains("That was wrong"), "Options opens with it; start/stop can't take its keys");
+            Click(o.MarkKeyOffBtn);
+            Click(o.SaveBtn);
+            DoEvents();
+            Check(w.MarkWrongText == "" && p.Hotkey == Platform.Hotkey.Default, "That was wrong turned off again, start/stop untouched");
+
+            // the key pressed over the sample feed: the newest line marked with its report, the panel's 3 s notice, Undo
+            w.ShowDemo(); DoEvents();
+            Check(w.PressMarkWrongForTest(false) == "Saved the last minute · Report in tracker" && w.MarkStateForTest is (1, _, "mark"), "the key: the newest line marked, the panel says the minute is saved");
+            Check(w.PressMarkWrongForTest(false) == "Already marked · Report in tracker" && w.MarkStateForTest.Marked == 1, "pressed again: the same line isn't filed twice");
+            w.PressUndo(); DoEvents();
+            Check(w.MarkStateForTest is (0, false, null), "Undo takes the mark back");
+            w.ShowMarkedSample(); DoEvents();
+            Check(w.MarkStateForTest is (1, true, "mark") && w.UndoShowing == null && w.FeedHint.Visibility != Visibility.Visible, "a Farming line: marked, with Undo under the feed in place of the hint");
+            w.PressUndo(); DoEvents();
+            Check(w.MarkStateForTest is (0, false, null) && w.FeedHint.Visibility == Visibility.Visible, "...and Undo there takes it back, the hint returns");
+            Check(w.PressMarkWrongForTest(true) == "Nothing counted in the last 2 minutes" && w.MarkStateForTest is (0, false, null), "nothing counted in the last 2 minutes: the panel says so and nothing is filed");
+        }
+
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;
@@ -457,7 +497,16 @@ public static class WpfApp
         var states = !demo ? new() : w.HudStates().Where(x => kind == "Crafting" ? x.File == "ui-hud-crafting.png" : kind == "Open world" && x.File != "ui-hud-crafting.png").ToList();
         // the Card and the Ticker in the mock's three states, from the window's sample figures
         var lookStates = demo && kind == "Open world" ? w.HudLookStates() : new();
+        if (demo && kind == "Open world") lookStates.AddRange(w.MarkedLookStates());   // That was wrong's notice: ui-hud-card-marked.png, ui-hud-ticker-marked.png
         if (states.Count > 0) foreach (var (k, v) in states[0].Values) values[k] = v;
+        // That was wrong (2026-10-26): the window just after the key, the newest Farming line marked and Undo under the feed
+        // (last, once the panel's figures are taken; not over the Undo bar's render, which the mark would make final)
+        if (demo && kind == "Open world" && Environment.GetEnvironmentVariable("KL_SHOT_UNDO") != "1")
+        {
+            w.ShowMarkedSample();
+            DoEvents();
+            Save((FrameworkElement)w.Content, Path.Combine(dir, "ui-main-marked" + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        }
         w.Close();
 
         foreach (var (file, state) in states)

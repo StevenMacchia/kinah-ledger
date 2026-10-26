@@ -20,6 +20,11 @@ public sealed class HudPrefs
     /// </summary>
     public double? TickerX { get; set; }
     public double? TickerY { get; set; }
+    /// <summary>
+    /// The "That was wrong" shortcut, as "Ctrl+Shift+J"; empty (the default) is off. Kept here rather than in UserPrefs,
+    /// which belongs to the counting side.
+    /// </summary>
+    public string MarkWrongKey { get; set; } = "";
 
     public const double MinScale = 0.7, MaxScale = 2;
 

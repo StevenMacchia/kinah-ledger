@@ -107,13 +107,13 @@ public sealed class HudTicker : IHudLook
 
         // what the stack shows, top down: one notice, the accuracy line, the rare drop, then pickups under 6 s old; four at most
         var want = new List<(string Key, string Kind, Func<Border> Make)>();
-        string note; Brush tone; bool sign = false;
+        string note, clockV = ""; Brush tone; bool sign = false;
         if (paused.Length > 0) { note = paused; tone = Warn; sign = true; }
         else if (V("flash").Length > 0) { note = V("flash"); tone = Ink; }
-        else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; }
+        else if (V("notice").Length > 0) { note = V("notice"); tone = Gold; clockV = V("noticeClock"); }
         else if (V("flag").Length > 0) { note = V("flag") + " · fix in tracker"; tone = Gold; }
         else { note = ""; tone = Warn; }
-        if (note.Length > 0) { var (n, t, s) = (note, tone, sign); want.Add(("notice|" + n, "notice", () => NoticeToast(n, t, s))); }
+        if (note.Length > 0) { var (n, t, s, cv) = (note, tone, sign, clockV); want.Add(("notice|" + n + cv, "notice", () => NoticeToast(n, t, s, HudClockNotice.Parse(cv)))); }
         if (_acc is { } acc) { var check = _accCheck; want.Add(("acc|" + acc + check, "notice", () => NoticeToast(acc, check ? Warn : B(0x62D98B), check))); }
         var rare = Rare(values);
         if (rare != null) want.Add((rare.Id, "rare", () => RareToast(rare)));
@@ -228,11 +228,30 @@ public sealed class HudTicker : IHudLook
     }
 
     /// <summary>A notice: the reader paused (orange, with the sign), a flash, an update waiting; or the accuracy line.</summary>
-    Border NoticeToast(string text, Brush tone, bool sign)
+    Border NoticeToast(string text, Brush tone, bool sign, (double Left, double Seconds)? clock = null)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         if (sign) { var i = WarnIcon(); i.Margin = new Thickness(0, 0, 8, 0); row.Children.Add(i); }
         var t = T(text, 13, tone, weight: FontWeights.SemiBold); t.MaxWidth = sign ? 230 : 250;
+        if (clock is { } c)
+        {
+            // the That was wrong key's answer: a gold clock, the words in two tones, a gold wash and the line running down its 3 s
+            var i = HudClockNotice.ClockIcon(); i.Margin = new Thickness(0, 0, 7, 0); row.Children.Add(i);
+            HudClockNotice.Words(t, text, 12.5); t.MaxWidth = 232;
+            row.Children.Add(t);
+            var drain = HudClockNotice.Drain(); drain.Margin = new Thickness(-8, 0, -6, 0);
+            HudClockNotice.Run(drain, c, Still);
+            var wash = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            wash.GradientStops.Add(new GradientStop(Rgb(0x302816, .96 * _alpha), 0));
+            wash.GradientStops.Add(new GradientStop(Rgb(0x18161E, .92 * _alpha), .65));
+            wash.GradientStops.Add(new GradientStop(Rgb(0x12121E, .80 * _alpha), 1));
+            wash.Freeze();
+            return new Border
+            {
+                Width = 270, Height = 34, Padding = new Thickness(8, 0, 6, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2, 0, 0, 0),
+                BorderBrush = Gold, Background = wash, Child = new Grid { Children = { row, drain } },
+            };
+        }
         row.Children.Add(t);
         return new Border
         {

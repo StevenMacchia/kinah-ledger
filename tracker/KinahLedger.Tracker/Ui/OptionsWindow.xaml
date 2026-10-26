@@ -334,6 +334,18 @@
                   <Button x:Name="HotkeyResetBtn" Content="Default"/>
                 </WrapPanel>
               </StackPanel>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- That was wrong (Ui/MainWindow.MarkWrong.cs): off until a key is picked, recorded the same way -->
+              <StackPanel Margin="18,13,18,15">
+                <TextBlock Style="{StaticResource RowTitle}" Text="That was wrong"/>
+                <TextBlock x:Name="MarkKeyHint" Style="{StaticResource RowHint}" Text="Marks the newest counted line as wrong and saves the last minute for a report. Off until you pick a key."/>
+                <WrapPanel Margin="0,12,0,0">
+                  <TextBox x:Name="MarkKeyBox" Width="190" IsReadOnly="True" HorizontalContentAlignment="Center" FontFamily="Consolas" FontSize="14" Cursor="Arrow" Margin="0,0,8,0"
+                           AutomationProperties.Name="That was wrong shortcut"/>
+                  <Button x:Name="MarkKeyChangeBtn" Content="Change" Margin="0,0,8,0"/>
+                  <Button x:Name="MarkKeyOffBtn" Content="Turn off"/>
+                </WrapPanel>
+              </StackPanel>
             </StackPanel>
           </Border>
 
