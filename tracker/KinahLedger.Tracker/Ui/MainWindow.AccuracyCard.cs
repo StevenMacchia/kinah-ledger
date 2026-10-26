@@ -155,7 +155,7 @@ public partial class MainWindow
 
     /// <summary>
     /// The panel's accuracy line, as the chip worked it out last, and whether it is things to look at (its colour). Only with
-    /// Options â€º Show accuracy details on: Steven (2026-10-26, Ticker) read "23 to look at" on the panel as an error, so with
+    /// Options › Show accuracy details on: Steven (2026-10-26, Ticker) read "23 to look at" on the panel as an error, so with
     /// the switch off (the default) the panel shows none of it, in every look; the window's live and Accuracy cards still do.
     /// </summary>
     public string? HudAccuracy => _prefs.ShowAccuracy ? _accView?.Hud : null;

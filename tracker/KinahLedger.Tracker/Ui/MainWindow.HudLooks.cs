@@ -49,7 +49,7 @@ public partial class MainWindow
         var top = rows.Where(r => !r.Header && !r.Child && r.Worth > 0 && r.Name.Length > 0)
             .OrderByDescending(r => r.Worth / Count(r)).ThenByDescending(r => r.Worth).FirstOrDefault();
         if (top == null) return d;
-        d["top"] = top.Name; d["topCount"] = $"Ã—{Count(top):N0}"; d["topWorth"] = FeedK(top.Worth);
+        d["top"] = top.Name; d["topCount"] = $"×{Count(top):N0}"; d["topWorth"] = FeedK(top.Worth);
         d["topGrade"] = top.Grade.Length > 0 ? top.Grade : GradeOf(top.Name); d["topIcon"] = _items.IconUrl(_items.IdOf(top.Name));
         return d;
     }
@@ -132,7 +132,7 @@ public partial class MainWindow
         }
         foreach (var k in RareKeys) d[k] = "";
         // the session's top drop under the three newest pickups on the Ticker (a Legend, as the mock's rare drop)
-        d["top"] = "Shade Gloves"; d["topCount"] = "Ã—1"; d["topWorth"] = "+28K"; d["topGrade"] = "Legend"; d["topIcon"] = _items.IconUrl(_items.IdOf("Shade Gloves"));
+        d["top"] = "Shade Gloves"; d["topCount"] = "×1"; d["topWorth"] = "+28K"; d["topGrade"] = "Legend"; d["topIcon"] = _items.IconUrl(_items.IdOf("Shade Gloves"));
         return d;
     }
 
