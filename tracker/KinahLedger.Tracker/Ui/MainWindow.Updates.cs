@@ -198,6 +198,7 @@ public partial class MainWindow
     {
         if (!_askWhenFree || _asking || Farming || _welcome || _quitting || GameInFront()) return;
         _askWhenFree = false;
+        _hudValues["notice"] = "";   // AskToInstall puts it back if it has to wait again
         _ = AskToInstall();
     }
 
