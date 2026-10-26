@@ -144,7 +144,7 @@ public partial class MainWindow
         Grid.SetColumn(v, 3); g.Children.Add(v);
         var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
         b.SetResourceReference(Border.BorderBrushProperty, "Line");
-        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Tap if it's wrong." : "Tap if it's wrong.";
+        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Click if it's wrong." : "Click if it's wrong.";
         ToolTipService.SetInitialShowDelay(b, 400);
         if (newest)
         {
@@ -560,10 +560,10 @@ public partial class MainWindow
     /// <summary>A rate as a whole number ("58", "10"; under one, "under 1").</summary>
     static string Whole(double v) => v <= 0 ? "0" : v < 0.5 ? "under 1" : Math.Round(v).ToString("N0");
 
-    /* ---------------- tap a line: the miscount report ---------------- */
+    /* ---------------- click a line: the miscount report ---------------- */
 
     /// <summary>
-    /// A tapped feed line (or the hint, for a pickup that never showed): the line as it was, three choices (Wrong item, Wrong
+    /// A clicked feed line (or the hint, for a pickup that never showed): the line as it was, three choices (Wrong item, Wrong
     /// amount, Didn't happen) and "Missing a pickup" at the bottom, filed through the miscount report with the line marked.
     /// </summary>
     void ShowLineReport(FeedLine? line, FeedTab tab, FrameworkElement at)
@@ -618,7 +618,8 @@ public partial class MainWindow
             + (sends ? "Pictures of the loot list and crafting panel go to the site too (Options › Sharing)." : ReportBuffer.KeepFrames ? "Nothing is sent." : "Pictures aren't kept (Options › Sharing), so it holds the text read."));
         how2.Margin = new Thickness(20, 4, 20, 0); body.Children.Add(how2);
         var acts = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 12, 20, 0) };
-        var save = new Button { Content = "Save report", Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
+        // one name for it everywhere: Report on the action, Looks wrong? as the hint, Fine to leave the line as it is
+        var save = new Button { Content = "Report", Height = 30, Padding = new Thickness(16, 0, 16, 0), FontSize = 12.5 };
         save.SetResourceReference(StyleProperty, "PrimaryButton");
         save.Click += (_, _) =>
         {
@@ -626,7 +627,7 @@ public partial class MainWindow
             FileLineReport(new MiscountLine(chosen, chosen == "missing" ? null : line), missing?.Text.Trim() ?? "");
         };
         acts.Children.Add(save);
-        var cancel = new Button { Content = "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = line != null && label != "missing" ? "Fine" : "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
         cancel.Click += (_, _) => { if (_card != null) _card.IsOpen = false; };
         acts.Children.Add(cancel);
         body.Children.Add(acts);

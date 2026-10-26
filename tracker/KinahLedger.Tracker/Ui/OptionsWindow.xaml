@@ -319,7 +319,7 @@
         <!-- In game: the shortcut and the panel over the game -->
         <StackPanel x:Name="PageInGame" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="In game"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="The keyboard shortcut and the small panel shown over the game while you farm. The panel shows while the game is in front, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
+          <TextBlock Style="{StaticResource PageLead}" Text="The keyboard shortcut, and the panel: a small strip over the game that shows whenever the chat is being read, run or no run. It shows while the game is in front, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="SHORTCUT"/>
           <Border Style="{StaticResource Group}">
@@ -337,13 +337,13 @@
             </StackPanel>
           </Border>
 
-          <TextBlock Style="{StaticResource GroupLabel}" Text="PANEL OVER THE GAME"/>
+          <TextBlock Style="{StaticResource GroupLabel}" Text="THE PANEL"/>
           <Border Style="{StaticResource Group}">
             <StackPanel>
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel over the game"/>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Show the panel"/>
                   <TextBlock Style="{StaticResource RowHint}" Text="An always-on-top strip with the figures you pick below, shown while the game is in front."/>
                 </StackPanel>
                 <CheckBox x:Name="HudChk" Grid.Column="1" Style="{StaticResource Switch}"/>

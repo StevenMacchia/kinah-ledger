@@ -78,10 +78,11 @@
           <Grid x:Name="NameCell" Grid.Column="1" Margin="0,0,10,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-            <!-- Looks wrong?: shown on hover, kept on a flagged row. A flagged drop is never sent to the site -->
+            <!-- "Looks wrong? Report" (the hint, then the action): shown on hover, "Reported · Undo" kept on a flagged row. A
+                 flagged drop is never sent to the site -->
             <TextBlock x:Name="ReportLink" Grid.Column="1" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Hidden"
-                       ToolTip="Something looks wrong with this drop? Keep it out of what this run sends to the site.">
-              <Hyperlink Style="{StaticResource LinkStyle}" Click="ReportClick"><Run Text="{Binding ReportText, Mode=OneWay}"/></Hyperlink>
+                       ToolTip="Something looks wrong with this drop? Report keeps it out of what this run sends to the site.">
+              <Run Text="{Binding ReportHint, Mode=OneWay}" Foreground="{DynamicResource Faint}"/><Run Text=" "/><Hyperlink Style="{StaticResource LinkStyle}" Click="ReportClick"><Run Text="{Binding ReportText, Mode=OneWay}"/></Hyperlink>
             </TextBlock>
           </Grid>
           <TextBlock x:Name="QtyText" Grid.Column="2" Style="{StaticResource FTd}" Text="{Binding Drops}"/>
@@ -303,7 +304,7 @@
       <Border x:Name="WelcomeCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
         <StackPanel>
           <TextBlock Text="Welcome. Where do you play?" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Bold"/>
-          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three taps and you are in; change any of it later in Options."/>
+          <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three clicks and you are in; change any of it later in Options."/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="REGION" Margin="0,16,0,8"/>
           <WrapPanel x:Name="RegionChips"/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="FACTION" Margin="0,8,0,8"/>
@@ -387,7 +388,7 @@
                 </Grid>
               </Border>
               <TextBlock x:Name="FeedHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left"
-                         Text="A line wrong or missing? Tap it." ToolTip="Tap a wrong line to report it, or here for a pickup that never showed. The report is saved on this PC."/>
+                         Text="A line wrong or missing? Click it." ToolTip="Click a wrong line to report it, or here for a pickup that never showed. The report is saved on this PC."/>
             </StackPanel>
             <StackPanel Grid.Column="2">
               <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="34" FontWeight="Light" Foreground="{DynamicResource Ink}" Text=" "/>
@@ -463,7 +464,7 @@
                wrong", "2 to look at"); a click opens the Accuracy card over the window (Ui/MainWindow.AccuracyCard.cs) -->
           <Border x:Name="AccuracyChip" Margin="20,0,20,16" HorizontalAlignment="Left" Height="30" CornerRadius="15" BorderThickness="1" Padding="12,0,13,1"
                   Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
-                  ToolTip="How the count held up against the game's own numbers. Tap to see." ToolTipService.InitialShowDelay="400">
+                  ToolTip="How the count held up against the game's own numbers. Click to see." ToolTipService.InitialShowDelay="400">
             <Border.Style>
               <Style TargetType="Border">
                 <Setter Property="Background" Value="{DynamicResource ChipOff}"/>
@@ -670,7 +671,7 @@
                 </Grid>
               </Border>
               <TextBlock x:Name="CraftHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left"
-                         Text="A craft wrong or missing? Tap it." ToolTip="Tap a wrong craft to report it, or here for one that never showed. The report is saved on this PC."/>
+                         Text="A craft wrong or missing? Click it." ToolTip="Click a wrong craft to report it, or here for one that never showed. The report is saved on this PC."/>
             </StackPanel>
             <StackPanel Grid.Column="2">
               <TextBlock x:Name="CraftProfit" FontFamily="{DynamicResource DisplayFont}" FontSize="34" FontWeight="Light" Foreground="{DynamicResource Ink}" Text=" "/>

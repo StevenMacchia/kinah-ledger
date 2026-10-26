@@ -20,8 +20,10 @@ namespace KinahLedger.Ui;
 /// <param name="Worth">The row's tradeable copies at the lowest Market price, before the fee: what Top drops and the Discord card rank by.</param>
 public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false, string Report = "", bool Reported = false, string Tip = "", long Worth = 0, string PriceTone = "", string PriceTip = "", bool Mat = false)
 {
-    /// <summary>The row's report link: "Looks wrong?" flags the drop so the site never gets it; "Undo" takes the flag off.</summary>
-    public string ReportText => Reported ? "Undo" : "Looks wrong?";
+    /// <summary>The row's report link: "Report" flags the drop so the site never gets it; "Undo" takes the flag off.</summary>
+    public string ReportText => Reported ? "Undo" : "Report";
+    /// <summary>The words before the link: the hint "Looks wrong?", or "Reported ·" on a flagged row.</summary>
+    public string ReportHint => Reported ? "Reported ·" : "Looks wrong?";
     /// <summary>The line under the name, with a ⓘ when hovering the row tells more.</summary>
     public string SubShown => Tip.Length == 0 || Header ? Sub : Sub.Length > 0 ? Sub + "  ⓘ" : "ⓘ";
 }
@@ -233,7 +235,7 @@ public partial class MainWindow : Window
 
 
     /// <summary>Redraws the table for the count on screen: the run, the run just stopped, or the live count.</summary>
-    /// <summary>"Looks wrong?" on a drop or gathered row: flags the item so nothing about it is sent to the site; "Undo" takes the flag off.</summary>
+    /// <summary>"Looks wrong? Report" on a drop or gathered row: flags the item so nothing about it is sent to the site; "Undo" takes the flag off.</summary>
     void ReportClick(object sender, RoutedEventArgs e)
     {
         if (RowOf((sender as FrameworkContentElement)?.DataContext) is not { } r || r.Report.Length == 0) return;
@@ -317,7 +319,7 @@ public partial class MainWindow : Window
             {
                 "chat" => "Read in the chat.",
                 "recovered" => "Read again after the line scrolled away or came out blurred.",
-                "guessed" => "Part of the name was hidden, so it was matched to the closest item. Hover the item's row and press Looks wrong? if it's not right.",
+                "guessed" => "Part of the name was hidden, so it was matched to the closest item. Hover the item's row and press Report if it's not right.",
                 "loot list" => "Only the loot list beside your character showed it; the chat didn't.",
                 _ => char.ToUpperInvariant(v[0]) + v[1..] + ".",
             });
@@ -694,7 +696,7 @@ public partial class MainWindow : Window
                         // every enemy fought has a table, none lists it, and some other enemy's does: a misread, or a drop
                         // credited to the wrong fight. An item on no table at all is one the tables don't cover: no warning
                         odds = "";
-                        tips.Add("None of the enemies you fought here lists this item. It may have been misread, or come from another fight. Press Looks wrong? to keep it off the site.");
+                        tips.Add("None of the enemies you fought here lists this item. It may have been misread, or come from another fight. Press Report to keep it off the site.");
                     }
                 }
                 bool flagged = ReportedDrops.Has(r.Name);
