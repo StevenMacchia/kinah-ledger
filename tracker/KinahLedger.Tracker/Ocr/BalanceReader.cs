@@ -290,6 +290,7 @@ public sealed class BalanceTracker
     List<CounterRead>? _prev;
     long _prevPickups;
     long? _lastRaw;
+    long _trustedPickups;   // the Kina the chat had read when Balance was last trusted
 
     /// <summary>Windows between steady readings whose rise was exactly the Kina counted in them (the votes), that didn't match, and that fell.</summary>
     public int WindowsAgreed { get; private set; }
@@ -334,8 +335,12 @@ public sealed class BalanceTracker
             // the same pixels, or a move of exactly the Kina picked up since the last read (none: the same value twice)
             // ...or the same value read twice running: the Kina witness (Session/KinaWitness.cs) needs readings while the count
             // lags the counter (a Kina line waits for it), and a misread digit is seldom read the same way twice
-            bool trusted = samePixels || (_lastRaw is long r && _prev != null && picked >= 0 && k.Value - r == picked) || (_lastRaw is long r2 && k.Value == r2);
-            if (trusted) { Balance = k.Value; BalanceAt = t; Note = "Kinah balance read"; }
+            // ...or (2026-10-26) a move since the last trusted value of exactly the Kina the chat has read since then: in a
+            // fight the counter changes between most reads and the same value twice is rare, so the Kina witness went
+            // without a trusted reading for 15 s and let its lines count unchecked
+            bool trusted = samePixels || (_lastRaw is long r && _prev != null && picked >= 0 && k.Value - r == picked) || (_lastRaw is long r2 && k.Value == r2)
+                || (Balance is long b && k.Value != b && k.Value - b == pickupsTotal - _trustedPickups);
+            if (trusted) { Balance = k.Value; BalanceAt = t; _trustedPickups = pickupsTotal; Note = "Kinah balance read"; }
             _lastRaw = k.Value;
         }
         CounterSeen = KinahLeft is int seenLeft && Near(cur, seenLeft) != null;
@@ -372,7 +377,7 @@ public sealed class BalanceTracker
                 WindowsAgreed++;
                 int i = _candidates.FindIndex(x => Math.Abs(x.Left - c.Left) <= Tolerance);
                 if (i < 0) _candidates.Add((c.Left, 1)); else _candidates[i] = (c.Left, _candidates[i].Votes + 1);
-                Log?.Invoke($"{window} it rose {rise:N0} and the chat counted {counted:N0}: agrees ({_candidates.First(x => Math.Abs(x.Left - c.Left) <= Tolerance).Votes} of {VotesToLock})");
+                Log?.Invoke($"{window} it rose {rise:N0} and the chat counted {counted:N0}: agrees (vote {_candidates.First(x => Math.Abs(x.Left - c.Left) <= Tolerance).Votes})");
             }
             else
             {

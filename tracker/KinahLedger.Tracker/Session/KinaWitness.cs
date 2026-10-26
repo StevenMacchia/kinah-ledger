@@ -100,6 +100,17 @@ public sealed class KinaWitness
         var o = Outcome.Empty();
         Readings++;
         if (_last == null) { _last = value; _lastAt = at; return o; }
+        if ((at - _lastAt).TotalSeconds > LiveSeconds)
+        {
+            // the counter went unread longer than a witness may (Tick let the lines waiting count as read, and the lines since
+            // counted without it): what it rose meanwhile is theirs. This reading starts the pool again, and nothing is
+            // counted from that rise (2026-10-26: a fight's 4,076 Kina counted from its lines and again from the counter)
+            if (value != _last.Value || _pool != 0) o.Notes.Add($"the Kinah counter read again after {(at - _lastAt).TotalSeconds:0} s ({value - _last.Value:+#,0;-#,0;0} meanwhile, Kina counted without it): the counter's pool starts again from here");
+            foreach (var w in _pending.Where(w => w.C.Tag != null)) o.Unjudged.Add(w.C);
+            _pending.Clear();
+            _last = value; _lastAt = at; _pool = 0;
+            return o;
+        }
         long delta = value - _last.Value;
         _last = value; _lastAt = at;
         if (delta < 0)
