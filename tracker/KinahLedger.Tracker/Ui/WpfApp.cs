@@ -333,6 +333,57 @@ public static class WpfApp
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
 
+        // Place the panel… (Ui/PlacementGuide.cs): every snap spot inside the game on a 1080p and a 5120×2160 screen, in each
+        // look at its saved size; Enter keeps the spot for its look (the Ticker's apart from the Card's), Esc keeps nothing
+        foreach (var game in new[] { new DRect(0, 0, 1920, 1080), new DRect(0, 0, 5120, 2160) })
+        {
+            var outside = new List<string>();
+            foreach (var look in new[] { HudLooks.Strip, HudLooks.Card, HudLooks.Ticker })
+            {
+                var g = w.MakePlacementGuide(game, game, look);
+                var spots = new HashSet<System.Drawing.Point>();
+                foreach (var s in HudSpots.All.Select(x => x.Key))
+                {
+                    g.Snap(s);
+                    var r = g.PanelPx;
+                    spots.Add(r.Location);
+                    if (!game.Contains(r) || g.Chosen != s || r.Width < 60 || r.Height < 20) outside.Add($"{look} {s} {r}");
+                }
+                if (spots.Count != HudSpots.All.Length) outside.Add($"{look}: {spots.Count} different spots");
+                g.Close();
+            }
+            Check(outside.Count == 0, $"snap spots inside the {game.Width}×{game.Height} game in every look" + (outside.Count > 0 ? ": " + string.Join("; ", outside) : ""));
+        }
+        {
+            var game = new DRect(0, 0, 1920, 1080);
+            double k = w.HudSpotScaleForTest;
+            bool At(double? v, int px) => v is { } d && Math.Abs(d * k - px) < 1;
+            var card = (p.HudX, p.HudY);
+            var g = w.MakePlacementGuide(game, game, HudLooks.Ticker);
+            g.Snap(HudSpots.Minimap);
+            var want = g.PanelPx.Location;
+            g.Press(System.Windows.Input.Key.Enter);
+            var ticker = w.TickerSpotForTest;
+            Check(At(ticker.X, want.X) && At(ticker.Y, want.Y) && p.HudX == card.HudX && p.HudY == card.HudY,
+                $"placement guide: Enter keeps the Ticker under the minimap in its own spot ({ticker.X:0}, {ticker.Y:0}); the Card's is left alone");
+            g = w.MakePlacementGuide(game, game, HudLooks.Card);
+            g.Snap(HudSpots.Target);
+            want = g.PanelPx.Location;
+            g.Press(System.Windows.Input.Key.Enter);
+            Check(At(p.HudX, want.X) && At(p.HudY, want.Y) && w.TickerSpotForTest == ticker,
+                $"placement guide: Enter keeps the Card left of the target bar in the Card's spot ({p.HudX:0}, {p.HudY:0}); the Ticker's is left alone");
+            var before = (p.HudX, p.HudY, w.TickerSpotForTest);
+            g = w.MakePlacementGuide(game, game, HudLooks.Card);
+            g.Snap(HudSpots.Top);
+            g.Press(System.Windows.Input.Key.Escape);
+            Check((p.HudX, p.HudY, w.TickerSpotForTest) == before, "placement guide: Esc keeps nothing");
+            o = Open();
+            o.Go(OptionsWindow.Page.InGame);
+            Click(o.HudPlaceBtn);
+            Check(!w.PlacementGuideOpen && o.IsVisible, "Options › In game › Place the panel… with no game: a note, no guide");
+            o.Close();
+        }
+
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;
@@ -397,7 +448,48 @@ public static class WpfApp
             Save((FrameworkElement)o.Content, Path.Combine(dir, $"options-ingame-lower{(skin != null ? "-" + skin : "")}.png"), 0);
             o.Close();
         }
+        // Place the panel… (In game): the guide over a dark stand-in for the game, as the approved mock draws it
+        if (skin == null) ShotPlacementGuide(w, dir);
         w.Close();
+    }
+
+    /// <summary>
+    /// The placement guide as the approved mock draws it (f4-placement.png): a 1600×900 part of a 5120×2160 game, so the
+    /// minimap, loot list and chat box are markers on its edges, with the Card at the top centre and the Ticker left of the
+    /// target bar; and the Card's guide over a whole 1920×1080 game, every part outlined in place. No game runs in CI, so a
+    /// dark stand-in sits under the veil.
+    /// </summary>
+    static void ShotPlacementGuide(MainWindow w, string dir)
+    {
+        var wide = new DRect(0, 0, 5120, 2160);
+        var crop = new DRect(1760, 0, 1600, 900);
+        var hd = new DRect(0, 0, 1920, 1080);
+        foreach (var url in w.HudSample().Where(kv => kv.Key.EndsWith("Icon")).Select(kv => kv.Value).Distinct()) IconCache.Get(url);
+        IconCache.Drain(TimeSpan.FromSeconds(10));
+        DoEvents();
+        foreach (var (file, look, game, view) in new[]
+        {
+            ("ui-placement-guide-card.png", HudLooks.Card, wide, crop),
+            ("ui-placement-guide-ticker.png", HudLooks.Ticker, wide, crop),
+            ("ui-placement-guide-whole.png", HudLooks.Card, hd, hd),
+        })
+        {
+            var g = w.MakePlacementGuide(game, view, look);
+            var stand = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0.35, 1) };
+            stand.GradientStops.Add(new GradientStop(Color.FromRgb(0x3A, 0x26, 0x28), 0));
+            stand.GradientStops.Add(new GradientStop(Color.FromRgb(0x22, 0x1C, 0x24), 0.45));
+            stand.GradientStops.Add(new GradientStop(Color.FromRgb(0x12, 0x14, 0x1C), 1));
+            stand.Freeze();
+            var scene = new System.Windows.Controls.Grid { Width = view.Width, Height = view.Height, Background = stand };
+            scene.Children.Add(g.ShotFace());
+            scene.Measure(new Size(view.Width, view.Height));
+            scene.Arrange(new Rect(0, 0, view.Width, view.Height));
+            scene.UpdateLayout();
+            DoEvents();
+            Save(scene, Path.Combine(dir, file), view.Width);
+            scene.Children.Clear();
+            g.Close();
+        }
     }
 
     public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false, bool tall = false)

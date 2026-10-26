@@ -373,10 +373,11 @@ public partial class MainWindow : Window
     }
 
     /// <summary>The step-by-step setup check (first run, and Options › Game reading › Check the setup).</summary>
-    public void OpenCalibration(Window owner)
+    public CalibrationWindow OpenCalibration(Window owner)
     {
         var w = new CalibrationWindow(_settings, _items.Knows, () => _prefs.ManualChat ? _region : null, PickChat) { Owner = owner };
         w.Show();
+        return w;
     }
 
     /// <summary>Back to finding the chat on its own.</summary>
@@ -579,6 +580,7 @@ public partial class MainWindow : Window
         // always-on count otherwise. It was a farming-run thing before 0.7.1, which left the overlay missing most of the time.
         // the panel over the game can't stop the rest of the refresh (the Crafting table, the pickups) if it fails to open
         if (HudWanted && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
+        PlacementGuideTick();   // once after the first run's setup check, when the game is in front (Ui/MainWindow.Overlay.cs)
         if (_part == "Crafting") FillCraft(CraftShown);
         FillLive();
         FillAccuracyCard();
@@ -1463,11 +1465,12 @@ public partial class MainWindow : Window
         _trayToggle.Click += async (_, _) => await Toggle();
         var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
         var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
+        var placePanel = new WF.ToolStripMenuItem("Place the panel…"); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, "Place the panel", why, WF.ToolTipIcon.Info); };
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
         var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
         var quit = new WF.ToolStripMenuItem("Quit Kinah Ledger"); quit.Click += (_, _) => { _quitting = true; Close(); };
-        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, movePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
+        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, movePanel, placePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
         _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => Restore();
         _tray.BalloonTipClicked += (_, _) => Restore();

@@ -52,7 +52,8 @@ public partial class MainWindow
         _prefs.Welcomed = true;
         SavePrefs();
         SetWelcome(false);
-        OpenCalibration(this);   // first run: check the chat, the loot list and the HP bar read, step by step
+        // first run: check the chat, the loot list and the HP bar read, step by step; then place the panel over the game
+        OpenCalibration(this).Closed += (_, _) => PlacementGuideOwed();
         Say($"Server set to {_wServer.Label} · {_wServer.Region.Name}. Reading starts on its own when the game is open; the chat and the zone are found by themselves.", "Good");
     }
 
