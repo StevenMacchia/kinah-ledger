@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "killing Kailin fast in Ellun River Midstream, 2026-10-27 17:07:45 to 17:08:12 local: Raw Leather and Spiritstone drop together at 17:07:57. The chat read before them (56.4) caught both lines fading in (\"acquired.\") and couldn't be lined up; the next (57.4) showed \"Raw Leather acquired.\" whole, but as an old line, and the one after misread it (\"Raw\\Leåther\") before it scrolled away. The loot list showed Raw Leather x1 at 56.6 and waited for a chat line that never came. 0.8.47 counted Spiritstone (the settle took it) and lost Raw Leather; the chat's whole line and the list's row are two witnesses of one pickup",
+  "source": "Steven's trace.log, 21:07:45 to 21:08:12 UTC, chat and loot list reads as recorded; other players' lines, and the lines their messages wrapped onto, replaced by filler (the same text, the same filler)",
+  "expect": {
+    "items": {
+      "Raw Leather": 1,
+      "Spiritstone": 1
+    }
+  }
+}
