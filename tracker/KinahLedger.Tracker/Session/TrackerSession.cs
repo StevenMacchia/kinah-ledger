@@ -1199,7 +1199,9 @@ public sealed partial class TrackerSession
         // The window runs from when the line first showed, never from each read that still shows it: a line stays on screen
         // for many seconds (2026-10-27 15:37: "Stored item(s) in Storage." showed from :03 to :16, each read set the window
         // again, and a Comet Cloak that dropped at :26 with its kill and its loot list row was set aside)
-        foreach (var invLine in lines.Where(l => (PickupCheck.IsInventoryLine(l) || PickupCheck.IsSkinUnlock(l)) && NewLine(l, now)))
+        // another player's message wrapped onto lines without its name is never the inventory or a box (PickupCheck.PlayerText)
+        var playerText = PickupCheck.PlayerText(lines);
+        foreach (var invLine in lines.Where((l, i) => !playerText[i] && (PickupCheck.IsInventoryLine(l) || PickupCheck.IsSkinUnlock(l)) && NewLine(l, now)))
         {
             var until = WindowFrom(invLine, now);
             if (until <= _inventoryUntil) continue;
@@ -1208,7 +1210,7 @@ public sealed partial class TrackerSession
         }
         // a box obtained in this read, out in the world: what prints with it is its contents, even the lines read before its own
         if (!InRun && _boss == null)
-            foreach (var boxLine in lines.Where(l => PickupCheck.IsBoxLine(l) && NewLine(l, now)))
+            foreach (var boxLine in lines.Where((l, i) => !playerText[i] && PickupCheck.IsBoxLine(l) && NewLine(l, now)))
             {
                 var until = WindowFrom(boxLine, now);
                 if (until <= _boxUntil) continue;
@@ -1333,7 +1335,7 @@ public sealed partial class TrackerSession
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
                 // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
-                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0, Reread.FirstSeen(raw, _firstSeen))) : null;
+                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0, Reread.FirstSeen(raw, _firstSeen), parsed is PetCrystal pcr ? pcr.Name : null)) : null;
                 // ...except a gather the panel or its bar just produced (GatherAttempts)
                 if (parsed is ItemAcquired gx) why = NotForGather(why, gx.ItemId, gx.Count, parsed.Time);
                 // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
@@ -1521,6 +1523,34 @@ public sealed partial class TrackerSession
                 if (any) { LastLine = v.Line; LootLine?.Invoke(v.Line); NoteCounted(v.Line, now); }
             }
         }
+        // ---- a loot line read exactly that no path took, while the loot list waits on a row of it: two witnesses ----
+        // Killing fast, the chat fades in garbled and scrolls on quickly (2026-10-27 17:07:57: "Raw Leather acquired." read
+        // whole once, right after a read that showed it as "acquired." and couldn't be lined up, so no path took it as new:
+        // the unaligned watch follows only lines the garbled read had whole, and the ledger wants two exact reads in a row.
+        // It scrolled away, and the loot list's Raw Leather x1 row, waiting for a chat line, was lost). The chat's exact line
+        // and the list's row are two pictures of one pickup: it counts once, through the chat, which pairs it with the row.
+        // A line counts only while the read shows more lines of its item than any path took in the last half minute
+        {
+            var shownNow = new Dictionary<string, int>();
+            foreach (var l in lines)
+            {
+                if (PickupCheck.PlayerChat(l) || !Reread.LooksLikeLoot(l)) continue;
+                var m = _parser.Meaning(l);
+                if (!m.Exact || m.Key.Length == 0) continue;
+                shownNow[m.Key] = shownNow.GetValueOrDefault(m.Key) + 1;
+                int taken;
+                lock (_countedLines) taken = _countedLines.Count(x => (now - x.At).TotalSeconds <= TwoWitnessSeconds && _parser.Meaning(x.Line).Key == m.Key);
+                if (taken >= shownNow[m.Key]) continue;
+                var batches = _parser.ParseBatch(new List<string> { l }, now, wrap: false).ToList();
+                // a gathering material has its own second witness, the gathering bar's race, and while gathering the chat is
+                // only a cross-check that adds nothing (LootCrossCheck.Chat): never this path (the bank's Kukuru and Odyle cases)
+                if (!batches.SelectMany(b => b.Events).OfType<ItemAcquired>().Any(a => !IsGatherMaterial(a.ItemId) && _cross.RowWaiting(a, now))) continue;
+                bool any = false;
+                foreach (var (_, events) in batches) any |= Apply(events, l, "chat · with the loot list's row");
+                CrashLog.Read(l + "    (read whole but taken by no path; the loot list's row for it is the second witness)", any);
+                if (any) { LastLine = l; LootLine?.Invoke(l); NoteCounted(l, now); }
+            }
+        }
         // ---- the loot ledger: a loot line no read in ten minutes showed, that nothing counted, is new wherever it sits ----
         // Lining reads up finds new lines at the bottom. A line one read lost and the next showed sits between lines
         // already seen, and was never counted (the synthetic fights; 497 Kina at 16:16 on 2026-10-23). Read exactly, in
@@ -1652,6 +1682,8 @@ public sealed partial class TrackerSession
     readonly Dictionary<string, (DateTime First, int Reads, string Line)> _unalignedSeen = new();
     /// <summary>Reads that must show such a line the same way before it counts, and how long it is watched.</summary>
     public const int UnalignedReads = 3;
+    /// <summary>A chat line and a waiting loot list row count as two witnesses while no more lines of the item than the read shows were taken in this long (a line stays on screen about this long when kills are fast).</summary>
+    public const double TwoWitnessSeconds = 30;
     public const double UnalignedWatchSeconds = 20;
 
     DateTime _targetAt = DateTime.MinValue;
@@ -2247,13 +2279,13 @@ public sealed partial class TrackerSession
         || (Instances.Current is { } cur && cur.Kind != InstanceLog.WorldBoss && (cur.Leaving || Zone == null || Zone == SessionEngine.UnknownZone));
 
     /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
-    string? RewardWhy(DateTime t, bool isBox = false, long itemId = 0, DateTime? firstSeen = null) =>
+    string? RewardWhy(DateTime t, bool isBox = false, long itemId = 0, DateTime? firstSeen = null, string? crystal = null) =>
         t <= _achieveUntil ? "an achievement's reward"
         // an event's or expedition's reward screen was up: what lands for a minute after is its rewards, from the picture,
         // never farming or gathering, even once its run is closed or removed (Steven, 2026-10-24 10:07: "2 odyle just randomly
         // entered my gathering" from Hidden Lugi's rewards, read again 40 s later). A gather under way is still a gather, and
         // a drop is still a drop (DropAfterScreen)
-        : !InRun && t <= _rewardScreenUntil && !(itemId != 0 && GatheringNow(itemId, t)) && !DropAfterScreen(itemId, t, firstSeen) ? "an event's or expedition's reward (its reward screen was up)"
+        : !InRun && t <= _rewardScreenUntil && !(itemId != 0 && GatheringNow(itemId, t)) && !DropAfterScreen(itemId, t, firstSeen, crystal) ? "an event's or expedition's reward (its reward screen was up)"
         : t <= _inventoryUntil ? "the inventory at work (storage, Quick Register, the wardrobe)"
         : !InRun && !isBox && t <= _boxUntil ? "a box's or a reward's contents" : null;
     /// <summary>Until when what lands is an event's or expedition's reward: a minute after its reward screen was last seen.</summary>
@@ -2286,15 +2318,18 @@ public sealed partial class TrackerSession
     /// picture showed stays its reward for the minute (2026-10-24 10:07, Hidden Lugi's Odyle read again 40 s later), and
     /// with no picture filed for the screen nothing changes.
     /// </summary>
-    bool DropAfterScreen(long itemId, DateTime t, DateTime? firstSeen)
+    // Soul Crystals from kills too (crystal: their name, no item id): 2026-10-27 17:07:37 and :47, Fera Soul Crystals from
+    // the first kills after Hidden Lugi's cards were set aside as the event's reward
+    bool DropAfterScreen(long itemId, DateTime t, DateTime? firstSeen, string? crystal = null)
     {
-        if (itemId == 0 || firstSeen is not DateTime f) return false;
+        if ((itemId == 0 && crystal == null) || firstSeen is not DateTime f) return false;
+        var name = crystal ?? _items.NameOf(itemId);
         var screenLast = _rewardScreenUntil.AddSeconds(-RewardScreenSeconds);
         if (_pictureAt < screenLast.AddSeconds(-PictureBeforeScreenSeconds)) return false;
         if (f < screenLast.AddSeconds(AfterScreenSeconds)) return false;
         if ((t - _lastKillAt).TotalSeconds is < -1 or > DropKillSeconds) return false;
-        if (_pictureNames.Contains(Unbound(_items.NameOf(itemId)))) return false;
-        CrashLog.Note($"{_items.NameOf(itemId)}: in the minute after a reward screen, but its line came after the screen, with a kill, and the screen's picture didn't show it: a drop");
+        if (_pictureNames.Contains(Unbound(name)) || (crystal != null && _pictureNames.Any(n => n.StartsWith(crystal, StringComparison.OrdinalIgnoreCase)))) return false;
+        CrashLog.Note($"{name}: in the minute after a reward screen, but its line came after the screen, with a kill, and the screen's picture didn't show it: a drop");
         return true;
     }
 

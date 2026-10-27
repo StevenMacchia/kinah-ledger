@@ -302,6 +302,32 @@ public static class AccuracyTests
         sq.FlushVotes(q0.AddSeconds(63));
         Check("...a drop a minute later: counted", $"{N(sq, "Riverside Helm")}", "1");
 
+        // another player's message wrapped onto lines without its name: never the inventory (2026-10-27 17:00:18, a player's
+        // "...sitting in my storage..." on its second line set a Raw Leather 9 s later aside). The game's own line after a
+        // player's still is one
+        Check("a player's wrapped lines are theirs; the game's line after them isn't",
+            string.Join(" ", PickupCheck.PlayerText(new[] { "Acquired 448 Kina.", "[Someone] i've got a great sword and", "a dagger sitting in my storage i just can't", "afford the mats",
+                "Stored item(s) in Storage.", "[Other] hi", "Added Quick Register items to the list.", "Acquired 305 Kina." }).Select(b => b ? "P" : "g")),
+            "g P P P g P g g");
+        var wq = new TrackerSession(null, settings, items, "Test");
+        var wq0 = DateTime.UtcNow.AddMinutes(-4);
+        var wqChat = new List<string> { "Acquired 448 Kina.", "[Someone] i've got a great sword and", "a dagger sitting in my storage i just can't", "afford the mats" };
+        for (int i = 0; i < 3; i++) wq.ProcessChat(wqChat, wq0.AddSeconds(i * 0.4));
+        wqChat.AddRange(new[] { "Obtained 1 Kailin Soul Points.", "Raw Leather acquired." });
+        for (int i = 0; i < 3; i++) wq.ProcessChat(wqChat, wq0.AddSeconds(9 + i * 0.4));
+        wq.FlushVotes(wq0.AddSeconds(12));
+        Check("...so a drop 9 s after a player says storage counts", $"{N(wq, "Raw Leather")}", "1");
+        // a kill's Soul Crystals in the minute after a reward screen are the kill's, like its drops (2026-10-27 17:07:37: the
+        // first kills after Hidden Lugi's cards, their Fera Soul Crystals set aside as the event's reward)
+        var cs = new TrackerSession(null, settings, items, "Test");
+        var cs0 = DateTime.UtcNow.AddMinutes(-6);
+        cs.ProcessChat(new List<string> { "[Player] hi" }, cs0.AddSeconds(-5));
+        cs.RewardScreenSeen(cs0);
+        cs.RewardPictureFiled(new[] { "Pure Odyle" }, cs0.AddSeconds(-1));
+        for (int i = 0; i < 3; i++) cs.ProcessChat(new List<string> { "[Player] hi", "Obtained 1 Kailin Soul Points.", "Obtained 1 Fera Soul Crystals." }, cs0.AddSeconds(20 + i * 0.4));
+        cs.FlushVotes(cs0.AddSeconds(25));
+        Check("a kill's Soul Crystals right after a reward screen count with the kills", $"{cs.Engine.PetCrystals}", "1");
+
         // the same burst arriving all at once, from a read that doesn't line up with the last one (the burst path)
         var sb = new TrackerSession(null, settings, items, "Test");
         sb.ProcessChat(new List<string> { "[Player] chat a1", "[Player] chat a2", "[Player] chat a3" }, q0);

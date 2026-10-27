@@ -20,6 +20,33 @@ public static class PickupCheck
         return t.StartsWith('[') || (close >= 0 && close < 25);
     }
 
+    /// <summary>
+    /// Each line of a chat read that is another player's text: a "[Name] ..." line, and the lines its message wrapped onto
+    /// below it, up to the next line the game itself prints (2026-10-27 17:00:18: "[Okay] i've got splendent true dragon
+    /// and" / "artisan dagger sitting in my storage i just can't" / "afford the mats". The second line, without its name,
+    /// read as a storage line, and a Raw Leather dropped 9 s later was set aside as the inventory at work). A game line
+    /// starts with a capital and ends a sentence, or starts with one of the inventory's own verbs.
+    /// </summary>
+    public static bool[] PlayerText(IReadOnlyList<string> lines)
+    {
+        var p = new bool[lines.Count];
+        for (int i = 0; i < lines.Count; i++)
+            p[i] = PlayerChat(lines[i]) || (i > 0 && p[i - 1] && !GameSentence(lines[i]));
+        return p;
+    }
+
+    static readonly Regex GameVerbRx = new(@"^\W{0,2}(?:stored|added|purchase|registered|retrieved|withdr[ae]w|dismantled|salvaged|exchanged|acquired|obtained)\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>A line the game prints, as far as its shape says: a capital at the start and a sentence's end, or the inventory's own first word.</summary>
+    static bool GameSentence(string line)
+    {
+        var t = line.Trim().TrimStart('\'', '"', '`', '•', '-', '—');
+        if (t.Length == 0) return false;
+        if (GameVerbRx.IsMatch(t)) return true;
+        return char.IsUpper(t[0]) && Regex.IsMatch(t, @"[.!:]\W{0,2}$");
+    }
+
     // storage ("Stored item(s) in Storage.", read "inStorage"), Quick Register ("QuickCRegister", "Quicb Registeritetns"),
     // taking out, dismantling, an exchange or a purchase. Not "extract": a failed gather prints "Essence Extraction failed".
     static readonly Regex InventoryRx = new(@"\bstor(?:ed|age)|storage|quick\s*\S{0,2}\s*regi|\bregist|retriev|withdr[ae]w|dismantl|salvag|exchang|purchas|wardrobe",
