@@ -2925,6 +2925,49 @@ options: --process aion[,other]");
         ev2.FlushVotes(e0.AddSeconds(56));
         Check("after an event's reward screen: its Odyle are rewards, a gather the panel names still counts",
             $"{n(ev2.Engine, "Pure Odyle")} {n(ev2.Engine, "Fine Odyle")} {n(ev2.Engine, "Odyle")} {n(ev2.Engine, "Kukuru")}", "0 0 0 1");
+        // ...but a drop in that minute is a drop: its line came after the screen, a kill with it, and the screen's picture
+        // didn't show it. The screen's own item, read then with a kill, stays its reward; a drop with no kill near stays
+        // set aside (Steven, 2026-10-27 15:35:55: Order Greaves 50 s after the Beritra Air Raid cards, on none of them)
+        {
+            var dr = new TrackerSession(null, settings, items, "Test");
+            dr.Engine.SetZone("Contaminated Sanctum"); dr.ZoneView.SetZone("Contaminated Sanctum");
+            var d0 = new DateTime(2026, 10, 27, 19, 35, 5, DateTimeKind.Utc);
+            var dChat = new List<string> { "[Player1] hi" };
+            dr.ProcessChat(dChat, d0.AddSeconds(-5));
+            dr.RewardScreenSeen(d0);
+            dr.RewardPictureFiled(new[] { "Ethereal Gloves", "Chaos Gloves", "Riverside Cloak", "Phantasm Cloak", "Pure Odyle" }, d0.AddSeconds(-1));
+            dChat.AddRange(new[] { "Obtained 1 Agrint Soul Points.", "Order Greaves acquired." });
+            for (int i = 0; i < 3; i++) dr.ProcessChat(dChat, d0.AddSeconds(50 + i * 0.4));
+            dChat.AddRange(new[] { "Obtained 2 Agrint Soul Points.", "Riverside Cloak acquired." });
+            for (int i = 0; i < 3; i++) dr.ProcessChat(dChat, d0.AddSeconds(53 + i * 0.4));
+            dr.FlushVotes(d0.AddSeconds(56));
+            var dn = new TrackerSession(null, settings, items, "Test");
+            dn.Engine.SetZone("Contaminated Sanctum"); dn.ZoneView.SetZone("Contaminated Sanctum");
+            dn.ProcessChat(new List<string> { "[Player1] hi" }, d0.AddSeconds(-5));
+            dn.RewardScreenSeen(d0);
+            dn.RewardPictureFiled(new[] { "Pure Odyle" }, d0.AddSeconds(-1));
+            for (int i = 0; i < 3; i++) dn.ProcessChat(new List<string> { "[Player1] hi", "Order Greaves acquired." }, d0.AddSeconds(50 + i * 0.4));
+            dn.FlushVotes(d0.AddSeconds(56));
+            Check("after a reward screen: a drop with its kill, on no card, counts; the card's own item and a drop with no kill don't",
+                $"{n(dr.Engine, "Order Greaves")} {n(dr.Engine, "Riverside Cloak")} {n(dn.Engine, "Order Greaves")}", "1 0 0");
+        }
+        // the inventory at work sets aside what prints for 10 s from when its line first showed, not from each read that still
+        // shows it (Steven, 2026-10-27 15:37: "Stored item(s) in Storage." on screen 14 s, then a Comet Cloak dropped 23 s
+        // after it, with its kill and its loot list row, was set aside)
+        {
+            var iw = new TrackerSession(null, settings, items, "Test");
+            iw.Engine.SetZone("Contaminated Sanctum"); iw.ZoneView.SetZone("Contaminated Sanctum");
+            var i0 = new DateTime(2026, 10, 27, 19, 37, 3, DateTimeKind.Utc);
+            var iChat = new List<string> { "[Player1] hi", "Stored item(s) in Storage." };
+            iw.ProcessChat(iChat, i0);
+            iChat.Add("Riverside Boots acquired.");   // moved with it: not a drop
+            for (double s = 3; s <= 14; s += 0.5) iw.ProcessChat(iChat, i0.AddSeconds(s));
+            iChat.AddRange(new[] { "Obtained 1 Agrint Soul Points.", "Comet Cloak acquired." });   // a kill and its drop, 23 s on
+            for (int i = 0; i < 3; i++) iw.ProcessChat(iChat, i0.AddSeconds(23.5 + i * 0.4));
+            iw.FlushVotes(i0.AddSeconds(30));
+            Check("the inventory's window runs from its line's first sight: a drop 23 s on counts, the move with it doesn't",
+                $"{n(iw.Engine, "Riverside Boots")} {n(iw.Engine, "Comet Cloak")}", "0 1");
+        }
         // the gathering bar as the second witness for a gather the chat missed (step 1)
         var sg = new TrackerSession(null, settings, items, "Test");
         sg.Engine.SetZone("Ellun River Midstream");
