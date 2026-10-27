@@ -20,7 +20,8 @@ public sealed class UpdateException(string message, bool needsSite = false) : Ex
 
 /// <summary>
 /// Keeps the tracker current. The site publishes a small manifest (version, download address, size, SHA-256); the
-/// tracker reads it at start and every hour, downloads a newer exe next to the running one, checks its size and
+/// tracker reads it at start and every hour (sooner when the release's small latest.json, read every 10 minutes, names a
+/// newer version), downloads a newer exe next to the running one, checks its size and
 /// checksum, and swaps it in when the window closes (or at once, on Restart now). Windows lets a running exe be renamed
 /// but not overwritten, so the swap is: running exe → .old, verified download → the exe's own name. The .old copy is
 /// deleted on the next start. Only the app version goes up with these requests, in the User-Agent.
@@ -152,6 +153,49 @@ public static class Updater
             return new CheckResult(false, null, ex is TaskCanceledException ? "GitHub didn't answer in time" : "couldn't reach GitHub (" + ex.Message + ")");
         }
     }
+
+    /// <summary>
+    /// The small file every release carries (latest.json: {"version":"0.8.47", …}) at GitHub's "latest release" download
+    /// address. A download, not an API call, so it doesn't count against GitHub's 60 requests an hour per address: read every
+    /// 10 minutes, it says when the full check (Velopack, the API) is worth making (0.8.48; Steven, 2026-10-27: 0.8.47 went
+    /// out at 16:28 and a tracker started at 9:10 would only have looked at 17:11).
+    /// </summary>
+    public const string LatestFileUrl = "https://github.com/StevenMacchia/kinah-ledger/releases/latest/download/latest.json";
+
+    /// <summary>The version a latest.json names; null when it names none (an error page, junk).</summary>
+    public static Version? ParseLatestFile(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var r = doc.RootElement;
+            return r.ValueKind == JsonValueKind.Object && r.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.String
+                ? ParseVersion(v.GetString()) : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
+    /// <summary>Reads latest.json. Never throws: null when it can't be read, and the hourly full check still runs.</summary>
+    public static async Task<Version?> LatestFileVersionAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + Upload.RunPayload.AppVersion);
+            using var res = await http.GetAsync(LatestFileUrl, ct).ConfigureAwait(false);
+            if (!res.IsSuccessStatusCode) return null;
+            return ParseLatestFile(await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+        }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>
+    /// Whether this 10-minute tick makes the full check: the hourly one is due (<paramref name="sinceFull"/> at least
+    /// <paramref name="every"/>), or latest.json names a version above this one that no check has looked for yet
+    /// (<paramref name="found"/>: the newest version a check found or was made for).
+    /// </summary>
+    public static bool FullCheckDue(Version? fileVersion, Version current, Version? found, TimeSpan sinceFull, TimeSpan every) =>
+        sinceFull >= every || (fileVersion != null && fileVersion > current && (found == null || fileVersion > found));
 
     public static string Show(Version v) => $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0)}";
 

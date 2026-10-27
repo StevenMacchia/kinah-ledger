@@ -5,7 +5,9 @@ using KinahLedger.Update;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Updates: a check 20 seconds after start and every hour (0.8.31; it was six hours). With automatic updates on, a newer
+/// Updates: a check 20 seconds after start, then a look every 10 minutes at the small latest.json the newest release
+/// carries, which makes the full check at once when it names a newer version; the full check also runs every hour
+/// whatever it says (0.8.48; hourly since 0.8.31, six hours before). With automatic updates on, a newer
 /// version downloads in the background and is installed when the window closes; Restart now installs it at once. Off,
 /// the banner asks first. Either way a version found by the timed check also asks once, in a dialog, whether to install
 /// it now (AskToInstall). A run is never cut short by an update: the dialog waits for the run to stop and the game to leave the front, and Restart now
@@ -13,7 +15,7 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class MainWindow
 {
-    static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(20), CheckEvery = TimeSpan.FromHours(1), DataEvery = TimeSpan.FromHours(6);
+    static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(20), PeekEvery = TimeSpan.FromMinutes(10), CheckEvery = TimeSpan.FromHours(1), DataEvery = TimeSpan.FromHours(6);
     const string SiteDownloadPage = "https://kinahledger.com/#tracker";
     /// <summary>Always the newest installer: GitHub serves the latest release's asset at this one address.</summary>
     public const string LatestSetupUrl = "https://github.com/StevenMacchia/kinah-ledger/releases/latest/download/KinahLedger-Setup.exe";
@@ -35,7 +37,7 @@ public partial class MainWindow
     Version? _askedAbout;
     /// <summary>The dialog is open, or a found version waits for the run to stop before it asks.</summary>
     bool _asking, _askWhenFree;
-    string _updateStatus = "Checks GitHub for a newer release at start and every hour. Only the app version goes with the request.";
+    string _updateStatus = "Checks GitHub for a newer release at start and every 10 minutes. Only the app version goes with the request.";
 
     /// <summary>The update line for Options › Updates.</summary>
     public string UpdateStatusText => _updateStatus;
@@ -121,14 +123,30 @@ public partial class MainWindow
         if (_exe != null) await Updater.CleanupAsync(_exe);
         await Task.Delay(FirstCheck);
         var dataDue = DateTime.MinValue;
+        var fullAt = DateTime.MinValue;
         while (true)
         {
-            try
+            // the release's small latest.json every 10 minutes (with the default manifest only; tests and custom manifests
+            // keep the hourly check): the full check runs at once when it names a version above this one that no check has
+            // looked for yet, and every hour whatever it says, so an unreadable file never stops updates
+            Version? file = null;
+            if (_settings.Update.Manifest == Updater.DefaultManifest) file = await Updater.LatestFileVersionAsync();
+            var seen = _release?.Version is { } rv && (_fileChecked == null || rv > _fileChecked) ? rv : _fileChecked;
+            if (Updater.FullCheckDue(file, Updater.Current, seen, DateTime.UtcNow - fullAt, CheckEvery))
             {
-                await CheckForUpdate(manual: false);
-                await AskToInstall();
+                if (file != null && file > Updater.Current && (seen == null || file > seen))
+                {
+                    _fileChecked = file;
+                    CrashLog.Note($"update: latest.json names {Updater.Show(file)} (this is {Updater.Show(Updater.Current)}): checking now");
+                }
+                fullAt = DateTime.UtcNow;
+                try
+                {
+                    await CheckForUpdate(manual: false);
+                    await AskToInstall();
+                }
+                catch (Exception ex) { CrashLog.Write("update", ex); }
             }
-            catch (Exception ex) { CrashLog.Write("update", ex); }
             // the game data (zones, events, enemies, loot tables, skins…) between releases: see Data/DataFiles.cs. It
             // keeps its six hours; only the version check went hourly
             if (DateTime.UtcNow >= dataDue)
@@ -143,12 +161,16 @@ public partial class MainWindow
                 }
                 catch (Exception ex) { CrashLog.Note("data update: " + ex.Message); }
             }
-            await Task.Delay(CheckEvery);
+            await Task.Delay(PeekEvery);
         }
     }
 
+    /// <summary>The newest version latest.json named that a full check was made for (it isn't made again for it until the hourly one).</summary>
+    Version? _fileChecked;
+
     /// <summary>
-    /// The install dialog (Steven, 2026-10-25: check every hour and ask whether to install). A version the timed check
+    /// The install dialog (Steven, 2026-10-25: check every hour and ask whether to install; every 10 minutes since 0.8.48,
+    /// Steven, 2026-10-27). A version the timed check
     /// found, and that the staged rollout lets install here, asks once per start: Yes downloads it if it isn't yet and
     /// restarts into it, No leaves the banner (with automatic updates on it still installs when the tracker closes).
     /// It never asks during a run or with the game in front: it waits for both (AskWhenFree, from the window's tick). No is the default
