@@ -4261,7 +4261,7 @@ public sealed class UserPrefs
     public bool PetsOpen { get; set; }
     /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
     public bool AllZones { get; set; }
-    /// <summary>The Today strip over Farming and Events (0.8.49) opened to its loot; folded to its one line until opened.</summary>
+    /// <summary>The Today strip over Farming and Events (0.8.50) opened to its loot; folded to its one line until opened.</summary>
     public bool TodayOpen { get; set; }
     /// <summary>The Odds column as a percentage ("4.9%") instead of "1 in 21"; a click on its header switches.</summary>
     public bool OddsAsPercent { get; set; }

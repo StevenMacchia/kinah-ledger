@@ -348,7 +348,7 @@
         </StackPanel>
       </Border>
 
-      <!-- Today (0.8.49, option C of kinah-bench/mock-today, Steven 2026-10-27): one gold line over Farming and Events with
+      <!-- Today (0.8.50, option C of kinah-bench/mock-today, Steven 2026-10-27): one gold line over Farming and Events with
            the day so far ("2:41 farming · 412 kills · 4 runs" and what it made); opened, the day's loot as inventory slots,
            farming and the runs apart, zone chips to pin one zone, and the game-tooltip card on each slot (Ui/MainWindow.Today.cs).
            Since midnight on this PC, carried across restarts in today.json. -->

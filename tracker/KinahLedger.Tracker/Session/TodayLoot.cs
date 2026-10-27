@@ -21,7 +21,7 @@ public sealed record TodayFarm(long Kinah, int Kills, int Attempts, double Activ
 public sealed record TodayRuns(int Runs, int Counted, int Places, long Kinah, long Value, List<TodaySlot> Items, List<(string Where, long Count)> KinahWhere);
 
 /// <summary>
-/// The Today strip's figures (0.8.49), apart from the window so a self-test can check them. Farming is what the Farming
+/// The Today strip's figures (0.8.50), apart from the window so a self-test can check them. Farming is what the Farming
 /// tables count (drops from kills, gathering apart, the same split as the tables); runs are the reward pictures of the
 /// runs since midnight, counted as the Events page counts them (flagged runs left out of the loot and the value).
 /// </summary>

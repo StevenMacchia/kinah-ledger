@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace KinahLedger.Session;
 
 /// <summary>
-/// Today's count across restarts of the tracker (0.8.49, Steven 2026-10-27: "see your drops today in farming and
+/// Today's count across restarts of the tracker (0.8.50, Steven 2026-10-27: "see your drops today in farming and
 /// expedition"). The window's Today strip reads one engine fed every line since midnight; when the tracker closes, its
 /// figures go to today.json, and the next start seeds a fresh engine with them so the day counts on. Display only: what is
 /// shared to the site comes from the other counts, as before.

@@ -4,7 +4,7 @@ using KinahLedger.Data;
 namespace KinahLedger.Session;
 
 /// <summary>
-/// Today (0.8.49), part of parse-test: the all-zones and Today counts are fed every line the zone view gets and keep it
+/// Today (0.8.50), part of parse-test: the all-zones and Today counts are fed every line the zone view gets and keep it
 /// across a zone change; a day's count carries across a restart (today.json) and counts on from there; a file from another
 /// day is left alone; the strip's slots split drops from kills and gathering, pin one zone, and say where each came from;
 /// runs belong to today by their last loot. Writes only to a scratch folder.
@@ -19,7 +19,7 @@ public static class TodayTests
             bool pass = got == expect; ok &= pass;
             Console.WriteLine($"  {what,-62} -> {got,-40} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
         }
-        Console.WriteLine("\nToday: all zones and the day kept across zone changes and restarts (0.8.49):");
+        Console.WriteLine("\nToday: all zones and the day kept across zone changes and restarts (0.8.50):");
         var keepDir = CrashLog.DirOverride;
         var dir = TestTemp.Path("kl-today-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(dir);

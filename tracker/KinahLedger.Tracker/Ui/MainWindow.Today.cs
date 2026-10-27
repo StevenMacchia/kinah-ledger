@@ -12,7 +12,7 @@ using Path = System.Windows.Shapes.Path;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// The Today strip (0.8.49, option C of kinah-bench/mock-today, Steven 2026-10-27: "I really like the aesthetic of option
+/// The Today strip (0.8.50, option C of kinah-bench/mock-today, Steven 2026-10-27: "I really like the aesthetic of option
 /// C"). One gold line over Farming and Events says the day so far ("2:41 farming · 412 kills · 4 runs" and what it made);
 /// opened, the day's loot as inventory slots, farming and the runs apart. Zone chips pin one zone's farming, and the pick
 /// stays put when the player changes zone. Each slot opens the game-tooltip card on hover: where it came from, the odds,
@@ -204,7 +204,7 @@ public partial class MainWindow
         return (odds, HourText(s.Count, activeSecs));
     }
 
-    static string HourText(long count, double activeSecs) => activeSecs < 60 ? "" : $"{Fk(count / (activeSecs / 3600))} an hour";
+    static string HourText(long count, double activeSecs) => activeSecs < 60 ? "" : $"{Whole(count / (activeSecs / 3600))} an hour";   // whole numbers, as the tables
 
     /// <summary>An item's slot: its icon in its grade frame with the stack count, and the game-tooltip card on hover.</summary>
     FrameworkElement ItemSlot(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs = false)

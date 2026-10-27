@@ -339,7 +339,7 @@ public partial class MainWindow : Window
         if (farm == null && _lastRun != null && DateTime.UtcNow < _lastRunUntil) return _lastRun;
         if (!_prefs.AllZones && chat != null) return chat.ZoneView;
         // All zones: the run, or every zone since the tracker started (GameWatcher.AllView). It showed the always-on count
-        // before 0.8.49, which is shared and started over every 15 minutes, so All zones emptied itself on its own
+        // before 0.8.50, which is shared and started over every 15 minutes, so All zones emptied itself on its own
         return farm ?? (chat != null ? _watcher.AllView : null);
     }
 
@@ -1784,7 +1784,7 @@ public partial class MainWindow : Window
         }
         // KL_SHOT_UNDO=1: a render with the Undo bar up, as it shows just after Clear the tables (Ui/MainWindow.Undo.cs)
         if (Environment.GetEnvironmentVariable("KL_SHOT_UNDO") == "1") ShowUndoSample();
-        // KL_SHOT_TODAY=1: the Today strip opened to its slots (0.8.49)
+        // KL_SHOT_TODAY=1: the Today strip opened to its slots (0.8.50)
         FillToday();
         if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1") OpenTodaySample();
     }
