@@ -3590,7 +3590,32 @@ options: --process aion[,other]");
                 Check("kept pictures by kind", string.Join(" ", new[] { "x-reward-table.jpg", "x-event-rewards.jpg", "x-Quna-Shop.jpg", "x-in-run.jpg", "x-Daeva-Pass.jpg" }.Select(n => TrackerSession.KindOfShot(n).ToString())), "RunEnd RunEnd Shop Frequent Screen");
                 // the event reward cards (Ocr/EventCards.cs), on a drawn 5120x2160 screen with Hidden Lugi's geometry: five frames,
                 // received ones blue with the card icon's cyan "1", the others gold; slots three to a row in each card's window
-                System.Drawing.Bitmap DrawCards(bool[] received, int[] slots, int cards = 5, bool[]? noOne = null)
+                // the figure under a received card's card icon (how many times it was picked): its "1" and "2" copied pixel by
+                // pixel from Hidden Lugi 2026-10-27 15:06:52 at 5120x2160 ('#' the bright cyan, '+' its edge), its 3 and 4
+                // drawn in Arial Bold at the same height (no picture shows one yet); -1 a blot no figure reads from
+                const string GameOne = "..........#####|........+######|.......########|.....+#########|....+##########|...+###########|..#############|+##############|########+######|.######..######|.+###+...######|..+#.....######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######|.........######";
+                const string GameTwo = "......+##########+......|....+##############.....|...+################+...|..+##################+..|..####################..|.+######+......+######+.|.#######........#######.|+######..........######+|#######..........######+|######+..........#######|..+++#...........+######|.................+######|.................######+|.................######+|................#######.|...............+#######.|...............#######+.|..............########..|.............########...|............+#######+...|...........+#######+....|..........+#######+.....|.........+########......|........+########.......|.......+########........|.......########.........|......########..........|.....########+..........|....########+...........|...########+............|..########+.............|.#########..............|+#######################|########################|########################|########################|########################";
+                void DrawPick(System.Drawing.Graphics g, int l, int n)
+                {
+                    if (n == -1) { using var blot = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(40, 230, 240)); g.FillRectangle(blot, l + 415, 616 + 111, 22, 35); return; }
+                    if (n is 1 or 2)
+                    {
+                        var rows = (n == 1 ? GameOne : GameTwo).Split('|'); int x0 = l + (n == 1 ? 416 : 415);
+                        using var ink = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(40, 230, 240));
+                        using var edge = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(25, 140, 160));
+                        for (int y = 0; y < rows.Length; y++)
+                            for (int x = 0; x < rows[y].Length; x++)
+                                if (rows[y][x] != '.') g.FillRectangle(rows[y][x] == '#' ? ink : edge, x0 + x, 725 + y, 1, 1);
+                        return;
+                    }
+                    var hint = g.TextRenderingHint;
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+                    using var font = new System.Drawing.Font("Arial", 52, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+                    using var cyan = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(40, 230, 240));
+                    g.DrawString(n.ToString(), font, cyan, l + 405, 715);
+                    g.TextRenderingHint = hint;
+                }
+                System.Drawing.Bitmap DrawCards(bool[] received, int[] slots, int cards = 5, bool[]? noOne = null, int[]? picks = null)
                 {
                     var b = new System.Drawing.Bitmap(5120, 2160, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                     using var g = System.Drawing.Graphics.FromImage(b);
@@ -3604,7 +3629,7 @@ options: --process aion[,other]");
                         Fill(l, 616, 484, 1000, rec ? 10 : 8, rec ? 20 : 12, rec ? 40 : 19);
                         Fill(l, 615, 484, 6, rec ? 240 : 170, rec ? 240 : 152, rec ? 250 : 113);
                         Fill(l, 620, 4, 990, rec ? 184 : 133, rec ? 222 : 131, rec ? 222 : 121); Fill(r - 3, 620, 4, 990, rec ? 184 : 133, rec ? 222 : 131, rec ? 222 : 121);
-                        if (rec && noOne?[i] != true) Fill(l + 415, 616 + 111, 22, 35, 40, 230, 240);
+                        if (rec && noOne?[i] != true) DrawPick(g, l, picks != null && i < picks.Length ? picks[i] : 1);
                         for (int n = 0; n < slots[i]; n++)
                         {
                             int x = l + 32 + (n % 3) * 144, y = 787 + (n / 3) * 146;
@@ -3639,6 +3664,17 @@ options: --process aion[,other]");
                     Check("event cards: a blue frame without the card icon's 1 is not recognised", $"{Kinds(EventCards.Locate(mixed, out var whyM))} | {whyM.Contains("card 2")}", "none | True");
                 using (var black = new System.Drawing.Bitmap(5120, 2160))
                     Check("event cards: a black frame is no cards", $"{EventCards.LooksLikeCards(black)}", "False");
+                // how many times each card was picked (Steven, 2026-10-27: up to four, each pick its whole list again): the game's
+                // 1 and 2, a 3 and a 4 drawn, a blot no figure reads from (not sure: 0); and the same screen at half the size
+                using (var picked = DrawCards(new[] { true, true, true, true, true }, new[] { 3, 3, 3, 3, 3 }, picks: new[] { 1, 2, 3, 4, -1 }))
+                {
+                    Check("event cards: how many times each card was picked, the figure under its card icon",
+                        string.Join(" ", EventCards.Locate(picked, out var whyP)?.Cards.Select(c => c.Picks) ?? Array.Empty<int>()) + whyP, "1 2 3 4 0");
+                    using var half = new System.Drawing.Bitmap(2560, 1080, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (var hg = System.Drawing.Graphics.FromImage(half)) { hg.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic; hg.DrawImage(picked, 0, 0, 2560, 1080); }
+                    Check("...at half the size (1080 high)",
+                        string.Join(" ", Enumerable.Range(0, 5).Select(i => EventCards.PicksOf(half, 1280 + (int)Math.Round((-1355.25 + i * 556.5) * 0.5)))), "1 2 3 4 0");
+                }
                 // a list longer than its window, scrolled by the player between reads: placed by its slots, every place once
                 {
                     RewardGrid.Slot Sl(int k) => new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "1", 1, new() { ($"key{k}", 30.0), ("Other", 99.0) });
@@ -3693,6 +3729,25 @@ options: --process aion[,other]");
                         "R4 R15+ N N N | items 0 | unread 9 | unknown 9 more 1 | from picture True | Kinah unknown False | partly read True | out of averages True | unknown gear 11");
                     Check("...the hint to hold the screen and scroll each card, said once",
                         $"{Hints() - hintsBefore}", "1");
+                }
+                // a card picked more than once (2026-10-27): its list is counted once per pick, and a list running on past the
+                // window adds a place not read per pick; a figure no read is sure of counts the list once and adds a place not
+                // read. Pieces here are the slots not read plus the unknown gear (the drawn slots name nothing)
+                {
+                    (int Pieces, string Picks) Filed(int[] picks)
+                    {
+                        var ps = new TrackerSession(null, new Settings(), items, "Test"); var p0 = DateTime.UtcNow;
+                        ps.Engine.SetZone("Hidden Lugi"); ps.Instances.Zone("Hidden Lugi", p0.AddMinutes(-5));
+                        using var pshot = DrawCards(new[] { true, true, false, false, false }, new[] { 4, 15, 6, 6, 6 }, picks: picks);
+                        ps.EventCardsRead(pshot, p0).GetAwaiter().GetResult();
+                        ps.EventCardsRead(pshot, p0.AddSeconds(1)).GetAwaiter().GetResult();
+                        ps.FlushEventCards(p0.AddSeconds(5), "the screen closed", force: true);
+                        var pr = ps.Instances.CurrentRun;
+                        return ((pr?.SlotsUnread ?? 0) + (pr?.UnknownGear ?? 0), string.Join(" ", ps.LastEventPicks ?? Array.Empty<int>()));
+                    }
+                    Check("event cards: each pick counts the card's whole list again (4 and 15 slots, and one place past card 2's window, per pick)",
+                        string.Join(" | ", new[] { new[] { 1, 1 }, new[] { 2, 1 }, new[] { 1, 3 }, new[] { -1, 1 } }.Select(p => { var f = Filed(p); return $"{f.Picks}: {f.Pieces}"; })),
+                        "1 1 0 0 0: 20 | 2 1 0 0 0: 24 | 1 3 0 0 0: 52 | 0 1 0 0 0: 21");
                 }
                 var ft = new TrackerSession(null, new Settings(), items, "Test"); var ft0 = DateTime.UtcNow;
                 ft.Engine.SetZone("Ellun River Midstream"); ft.ZoneView.SetZone("Ellun River Midstream");

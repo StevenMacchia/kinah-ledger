@@ -34,9 +34,14 @@ public static class EventCards
     /// One card as one read saw it. <c>FirstTop</c>: the top of the topmost row in the window (5 px under the window's top
     /// when not scrolled). <c>End</c>: the list's end shows (an empty place after the last slot, inside the window).
     /// <c>Covered</c>: something over the list (a tooltip): a place without a slot that isn't the card's own backing, or a
-    /// slot after an empty place. <c>Scrolled</c>: the window isn't at its top.
+    /// slot after an empty place. <c>Scrolled</c>: the window isn't at its top. <c>Picks</c>: how many times a received
+    /// card was picked, the cyan figure under its card icon (<see cref="PicksOf(Bitmap, int)"/>), 0 when that figure
+    /// wasn't sure.
     /// </summary>
-    public sealed record Card(int Index, Rectangle Box, bool Received, int FirstTop, bool Scrolled, List<CardSlot> Slots, bool End, bool Covered, int Present);
+    public sealed record Card(int Index, Rectangle Box, bool Received, int FirstTop, bool Scrolled, List<CardSlot> Slots, bool End, bool Covered, int Present, int Picks = 1);
+
+    /// <summary>A card can be picked up to this many times (Steven, 2026-10-27).</summary>
+    public const int MaxPicks = 4;
 
     /// <summary>A read of the screen: the five cards left to right.</summary>
     public sealed record Screen(List<Card> Cards)
@@ -121,9 +126,72 @@ public static class EventCards
             bool one = cyan >= 80 * k * k, none = cyan <= 20 * k * k;
             if (!(blue && one) && !(gold && none))
             { why = $"card {i + 1}: its frame is {(blue ? "blue" : gold ? "gold" : $"neither blue nor gold ({tc.R},{tc.G},{tc.B})")} but its card icon {(one ? "shows" : none ? "doesn't show" : "half shows")} the \"1\" ({cyan} px)"; return null; }
-            cards.Add(new Card(i, Rectangle.FromLTRB(l.X, top, r.X, top + S(1000)), blue, 0, false, new List<CardSlot>(), false, false, 0));
+            cards.Add(new Card(i, Rectangle.FromLTRB(l.X, top, r.X, top + S(1000)), blue, 0, false, new List<CardSlot>(), false, false, 0, blue ? PicksOf(px, l.X) : 0));
         }
         return new Screen(cards);
+    }
+
+    /// <summary>
+    /// How many times a received card was picked, from the frame and the card's left frame line: 1 to <see cref="MaxPicks"/>,
+    /// 0 when the figure isn't sure. See the private overload for how it is read.
+    /// </summary>
+    public static int PicksOf(Bitmap frame, int cardLeft) => PicksOf(new Pixels(frame), cardLeft);
+
+    /// <summary>
+    /// How many times a received card was picked: the cyan figure under its card icon. A card can be picked up to four
+    /// times, and each pick gives its whole list again (Steven, 2026-10-27; Hidden Lugi 15:06, card 3 showed "2" over a
+    /// list of single-pick counts, Abyss Points x360, Centuryroot Token x30 and x20). Read by its shape, never by text
+    /// recognition, from the figure's ink (the bright cyan the card icon check counts): 37 px tall at 2160 in all 73 kept
+    /// pictures of 2026-10-24 to 27, a "1" 14 to 17 px wide, the "2" 24. A "1" is narrow; a "2" stands on a flat foot as
+    /// wide as itself with nothing on its lower right; a "4" has a bar across its whole width low down and only its stem
+    /// at the foot; a "3" has both bowls' right sides and an arc to the bottom left. The rules were set on 3 and 4 drawn in
+    /// seven Windows fonts, two weights and three screen sizes (all read right), then held on the first real 3, Beritra
+    /// Air Raid 2026-10-27 15:34 (26 px wide), on all eight of its face-up pictures; no picture shows a 4 yet. On the kept
+    /// pictures every 1, the 2 and the 3 read right and nothing reads 2 to 4 that isn't. Anything that isn't one of the
+    /// four shapes, or fits two, is 0: not sure (a tooltip over it, the card mid-flip), never a guess.
+    /// </summary>
+    static int PicksOf(Pixels px, int left)
+    {
+        double k = px.H / Ref;
+        int S(double v) => (int)Math.Round(v * k);
+        // where the card icon check looks (the figure sat at 415 to 438 across, 725 to 761 down, in every kept picture),
+        // above the first row of slots (787), whose teal backings would read as ink
+        int x0 = left + S(385), x1 = left + S(470), y0 = S(CardTop + 93), y1 = S(CardTop + 163);
+        bool Ink(int x, int y) { int c = px[x, y]; return G(c) > 170 && B(c) > 190 && R(c) < 130; }
+        int l = int.MaxValue, t = int.MaxValue, r = -1, b = -1;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                if (Ink(x, y)) { l = Math.Min(l, x); r = Math.Max(r, x); t = Math.Min(t, y); b = Math.Max(b, y); }
+        if (r < 0) return 0;
+        int w = r - l + 1, h = b - t + 1;
+        // the figure is 37 px tall at 2160 and never wider than tall; anything else is something over it
+        if (h < 37 * k * 0.8 || h > 37 * k * 1.25 || w > h) return 0;
+        if (w < h * 0.48) return 1;
+        // a row's longest unbroken run of ink, as a share of the figure's width
+        double Run(int y) { int best = 0, cur = 0; for (int x = l; x <= r; x++) { if (Ink(x, y)) best = Math.Max(best, ++cur); else cur = 0; } return best / (double)w; }
+        // any ink in a part of the figure's box, as shares of its width and height
+        bool Any(double fx0, double fx1, double fy0, double fy1)
+        {
+            for (int y = t + (int)(fy0 * h); y <= Math.Min(b, t + (int)(fy1 * h)); y++)
+                for (int x = l + (int)(fx0 * w); x <= Math.Min(r, l + (int)(fx1 * w)); x++)
+                    if (Ink(x, y)) return true;
+            return false;
+        }
+        // the foot: the widest run in the lowest eighth. The bar: the widest run between halfway down and four fifths
+        int foot = Math.Max(2, (int)Math.Round(h * 0.12));
+        double footRun = Enumerable.Range(b - foot + 1, foot).Max(Run);
+        int barFrom = t + (int)(h * 0.45), barTo = t + (int)(h * 0.80);
+        double bar = Enumerable.Range(barFrom, barTo - barFrom + 1).Max(Run);
+        // the right of the upper bowl (2, 3), the right of the lower bowl above any foot (3 only: a 2's stroke runs down to
+        // the left there), something at the bottom left (2's foot, 3's arc), and a row in the middle with no ink in the left
+        // half (all three; never a blot)
+        bool rTop = Any(0.75, 1, 0.15, 0.40), rBot = Any(0.8, 1, 0.62, 0.78), bottomLeft = Any(0, 0.25, 0.85, 1);
+        bool openLeft = Enumerable.Range(t + (int)(h * 0.25), (int)(h * 0.5)).Any(y => { for (int x = l; x < l + w / 2; x++) if (Ink(x, y)) return false; return true; });
+        bool two = footRun >= 0.85 && rTop && !rBot && openLeft;
+        bool four = bar >= 0.85 && Run(b) <= 0.45;
+        bool three = rTop && rBot && bottomLeft && openLeft && bar < 0.85 && Run(b) <= 0.85;
+        int fits = (two ? 1 : 0) + (three ? 1 : 0) + (four ? 1 : 0);
+        return fits != 1 ? 0 : two ? 2 : three ? 3 : 4;
     }
 
     /// <summary>
@@ -361,6 +429,20 @@ public static class EventCards
         }
         public readonly Dictionary<int, CardList> Cards = new();
         public bool?[] Received { get; } = new bool?[CardCount];
+        /// <summary>Each received card's pick figure as each read saw it (0: not sure).</summary>
+        public readonly Dictionary<int, List<int>> PickReads = new();
+
+        /// <summary>
+        /// How many times a card was picked: the figure most reads read surely (a read that wasn't sure doesn't vote). 0 when
+        /// no read was sure of it, or the sure ones tie: the picks aren't known.
+        /// </summary>
+        public int Picks(int card)
+        {
+            if (!PickReads.TryGetValue(card, out var reads)) return 0;
+            var votes = reads.Where(p => p > 0).GroupBy(p => p).OrderByDescending(g => g.Count()).ToList();
+            if (votes.Count == 0 || (votes.Count > 1 && votes[0].Count() == votes[1].Count())) return 0;
+            return votes[0].Key;
+        }
         readonly List<Dictionary<int, (int Offset, int FirstTop, List<string> Sig)>> _sigs = new();
 
         /// <summary>Adds one read; false when it doesn't fit the screen read so far (a different set of received cards).</summary>
@@ -374,6 +456,8 @@ public static class EventCards
             foreach (var c in s.Received)
             {
                 if (!Cards.TryGetValue(c.Index, out var list)) Cards[c.Index] = list = new CardList();
+                if (!PickReads.TryGetValue(c.Index, out var picks)) PickReads[c.Index] = picks = new List<int>();
+                picks.Add(c.Picks);
                 int? offset = Place(list, c);
                 if (offset is not int o) { list.Loose.Add((c, CropsOf(c, frame))); continue; }
                 Merge(list, c, o, cs => CropOf(cs, frame));
