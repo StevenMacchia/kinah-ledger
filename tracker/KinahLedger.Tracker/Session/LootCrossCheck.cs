@@ -245,6 +245,17 @@ public sealed class LootCrossCheck
     static string Label(string key) => key.StartsWith("k:") ? key[2..] + " Kina" : key[2..];
 
     /// <summary>
+    /// A row of this item and count is in the list's hands without a chat line yet: waiting for one, or left at one witness
+    /// within <see cref="MatchSeconds"/>. A chat line for it, from any path, is its second witness (<see cref="Chat"/> pairs them).
+    /// </summary>
+    public bool RowWaiting(ItemAcquired a, DateTime now)
+    {
+        var key = ItemKey(a.ItemId, a.Count);
+        return _waiting.Any(w => Same(w.Key, key) && (now - w.At).TotalSeconds is >= -2 and <= MatchSeconds)
+            || _declined.Any(x => Same(x.Key, key) && Math.Abs((now - x.At).TotalSeconds) <= MatchSeconds);
+    }
+
+    /// <summary>
     /// Whether a gathering bar race that finished on Success stands behind this row (the item, the moment it is judged):
     /// set by the session. While one does, a stack read once counts as shown and a row back a moment after it vanished
     /// is a new gather, not the same drop (each gather is its own race).
