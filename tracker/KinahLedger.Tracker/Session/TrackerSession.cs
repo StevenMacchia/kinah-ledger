@@ -2310,6 +2310,8 @@ public sealed partial class TrackerSession
     public const double CardsSeconds = 20, CardsRearmSeconds = 10, CardsGoneSeconds = 2.5;
     /// <summary>What the last filed event screen held, card by card, for the replay bank: received, its list as voted, whether its list ran past what was seen.</summary>
     internal List<(int Card, bool Received, List<RewardGrid.Slot> Slots, bool More)>? LastEventCards { get; private set; }
+    /// <summary>The last filed event screen's picks, card by card: how many times each received card was picked (its list counted that many times), 0 when not known or not received.</summary>
+    internal int[]? LastEventPicks { get; private set; }
 
     /// <summary>One read of the event reward screen's cards (live from RewardGridDue, or a kept picture in the replay bank).</summary>
     internal async Task EventCardsRead(System.Drawing.Bitmap frame, DateTime now)
@@ -2329,7 +2331,7 @@ public sealed partial class TrackerSession
             if (m.Reads == 0) _cardsFirst = now;
             if (!m.Add(screen, frame)) { CrashLog.Note("event cards: a read with other cards received than the ones before; left out"); return; }
             CrashLog.Note($"event cards read {m.Reads}: " + string.Join(" | ", screen.Cards.Select(c => !c.Received ? $"card {c.Index + 1} not received"
-                : $"card {c.Index + 1} {c.Slots.Count(x => !x.Clipped)} slots{(c.Slots.Any(x => x.Clipped) ? $" + {c.Slots.Count(x => x.Clipped)} cut" : "")}{(c.Scrolled ? " scrolled" : "")}{(c.End ? ", end shows" : "")}{(c.Covered ? ", covered" : "")}"))
+                : $"card {c.Index + 1} {c.Slots.Count(x => !x.Clipped)} slots{(c.Slots.Any(x => x.Clipped) ? $" + {c.Slots.Count(x => x.Clipped)} cut" : "")}{(c.Scrolled ? " scrolled" : "")}{(c.End ? ", end shows" : "")}{(c.Covered ? ", covered" : "")}{(c.Picks == 1 ? "" : c.Picks == 0 ? ", picks not read" : $", picked {c.Picks} times")}"))
                 + (m.Unaligned > 0 ? $" ({m.Unaligned} card read(s) couldn't be placed in their lists)" : ""));
             if ((m.Settled() && m.Complete) || m.Reads >= MaxCardReads || (now - _cardsFirst).TotalSeconds >= CardsSeconds)
                 FileEventCards(now, m.Settled() && m.Complete ? "settled, every list seen to its end" : m.Reads >= MaxCardReads ? $"{MaxCardReads} reads" : $"{CardsSeconds:0} s");
@@ -2367,6 +2369,7 @@ public sealed partial class TrackerSession
         try
         {
             var all = new List<RewardGrid.Slot>(); var more = new List<string>(); var report = new List<(int, bool, List<RewardGrid.Slot>, bool)>();
+            var picksOut = new int[EventCards.CardCount];
             var places = new List<string>();   // each slot's card and place ("c2.3"), for a read again of the pictures to compare with
             var byIcon = ByIcon(_items);
             for (int i = 0; i < EventCards.CardCount; i++)
@@ -2382,9 +2385,25 @@ public sealed partial class TrackerSession
                 int cut = list.Count(x => x.Count <= 0 && x.Icons.Count == 0);
                 CrashLog.Note($"event cards: card {i + 1} received, {list.Count} slot(s){(cut > 0 ? $", {cut} only ever seen cut by the card's window (count not shown: not read)" : "")}{(open ? ", and its list may run on past what was seen" : "")}: "
                     + string.Join(" | ", list.Select(x => $"{x.Grade} x{(x.Count > 0 ? x.CountText.Length > 0 ? x.CountText : "1" : "?")} {(x.Icons.Count > 0 ? $"{x.Icons[0].Key} {x.Icons[0].Distance:0} → {SlotName(_items, x) ?? "not sure"}" : "cut")}")));
-                all.AddRange(list);
-                places.AddRange(Enumerable.Range(0, list.Count).Select(at => $"c{i + 1}.{at}"));
-                if (open) more.Add($"card {i + 1}: partly read, {list.Count} slot(s) seen, more below what the screen showed{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
+                // each pick gives the card's whole list again (Steven, 2026-10-27: a card can be picked up to four times, Hidden
+                // Lugi 15:06 card 3 picked twice was counted once). A figure no read was sure of counts the list once and adds a
+                // place not read, so the run is one to look at, never a guess
+                int picks = m.Picks(i);
+                picksOut[i] = picks;
+                if (picks > 1) CrashLog.Note($"event cards: card {i + 1} picked {picks} times (the figure under its card icon): its list counted {picks} times");
+                if (picks == 0)
+                {
+                    CrashLog.Note($"event cards: card {i + 1}: the figure under its card icon (how many times it was picked) wasn't read surely in {m.PickReads.GetValueOrDefault(i)?.Count ?? 0} read(s): its list counted once, one place not read");
+                    more.Add($"card {i + 1}: picked how many times not read, its list counted once{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
+                }
+                for (int p = 1; p <= Math.Max(1, picks); p++)
+                {
+                    all.AddRange(list);
+                    // the first pick's places as before ("c2.3"); a further pick's carry its number ("c2.3*2"), so two reads of the
+                    // screen compare pick by pick
+                    places.AddRange(Enumerable.Range(0, list.Count).Select(at => p == 1 ? $"c{i + 1}.{at}" : $"c{i + 1}.{at}*{p}"));
+                    if (open) more.Add($"card {i + 1}: partly read, {list.Count} slot(s) seen, more below what the screen showed{(picks > 1 ? $" (pick {p} of {picks})" : "")}{(_gridShot.Length > 0 ? " · " + _gridShot : "")}");
+                }
                 report.Add((i, true, list, open));
                 // the crop of each slot that can't be named, kept beside the logs
                 if (cl != null)
@@ -2392,7 +2411,7 @@ public sealed partial class TrackerSession
                         if (SlotName(_items, list[at]) == null && m.CropAt(i, at) is { } crop)
                             RareGate.SaveProof(crop, $"card{i + 1}-slot{at + 1}-{list[at].Grade}", "event", now);
             }
-            LastEventCards = report;
+            LastEventCards = report; LastEventPicks = picksOut;
             foreach (var d in m.Disagreed) CrashLog.Note($"event cards: {d}: the reads of this screen disagree on the count, so neither is taken: not read, one to look at");
             CrashLog.Note($"event cards: filed after {m.Reads} read(s) ({why}){(m.Unaligned > 0 ? $"; {m.Unaligned} card read(s) left out, not placeable in their lists" : "")}");
             // a list cut, running on or never placed: once a session, how to give the reader a full read (the HUD can show it)

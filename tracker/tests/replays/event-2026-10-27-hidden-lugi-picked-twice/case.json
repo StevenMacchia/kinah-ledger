@@ -1,0 +1,32 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Hidden Lugi (Shugo Festival) reward cards, 2026-10-27 15:06:49 to 15:06:54, three pictures of one screen: card 2 received once (its cyan figure \"1\"), card 3 picked twice (\"2\"), cards 1, 4 and 5 not. Each pick gives the card's whole list again (Steven: a card can be picked up to four times); 0.8.46 counted card 3's list once. Card 3's list is single-pick counts (Abyss Points x360, Centuryroot Token x30 and x20, Fine Odyle x1 twice, Refining Stone x1 twice, Odyle x1), so the run holds it twice: Abyss Points 480 + 2 x 360 = 1,200 (0.8.46: 840), Centuryroot Token 50 + 2 x 50 = 150 (100), Fine Odyle 2 x 2 = 4 (2), Refining Stone 2 + 2 x 2 = 6 (4), Odyle 2 x 1 = 2 (1; the leaves only seen cut stay not read). The chat of that run said Fine Odyle x4, Refining Stone x6 and Odyle x7 (card 2's three cut leaves and card 3's two, twice), which is how the doubling was confirmed; the case counts from the pictures only. Everything but the title and the cards blacked out",
+  "source": "%LocalAppData%\\KinahLedger\\reward-shots\\20261027-150649, -150652, -150654-Hidden-Lugi-event-rewards.jpg (5120x2160); truth from the pictures",
+  "game": { "w": 5120, "h": 2160 },
+  "zone": "Hidden Lugi",
+  "frames": [
+    { "f": "150649.jpg", "k": "cards", "t": "2026-10-27T19:06:49Z", "x": 0, "y": 0 },
+    { "f": "150652.jpg", "k": "cards", "t": "2026-10-27T19:06:52Z", "x": 0, "y": 0 },
+    { "f": "150654.jpg", "k": "cards", "t": "2026-10-27T19:06:54Z", "x": 0, "y": 0 }
+  ],
+  "expect": {
+    "cards": [
+      { "received": false },
+      { "received": true, "picks": 1, "more": true },
+      { "received": true, "picks": 2, "more": false },
+      { "received": false },
+      { "received": false }
+    ],
+    "runs_kept": 1,
+    "runs_partly_read": 1,
+    "run_abyss_points": 1200,
+    "run_items": {
+      "Centuryroot Token": 150,
+      "Fine Odyle": 4,
+      "Refining Stone": 6,
+      "Radiant Odyle": 1,
+      "Odyle": 2
+    }
+  }
+}

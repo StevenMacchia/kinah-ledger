@@ -183,7 +183,11 @@ public static class ReplayBank
                 if (erc != grc) { d.Add($"card {ci + 1}: expected {(erc ? "received" : "not received")}, read {(grc ? "received" : "not received")}"); continue; }
                 if (!erc) continue;
                 if (e["more"] is { } em && em.GetValue<bool>() != (g["more"]?.GetValue<bool>() ?? false)) d.Add($"card {ci + 1}: expected its list {(em.GetValue<bool>() ? "to run on past the screen" : "seen to its end")}");
-                var es = e["slots"] as JsonArray ?? new JsonArray(); var gs = g["slots"] as JsonArray ?? new JsonArray();
+                // how many times the card was picked (2026-10-27): checked when the case names it
+                if (e["picks"] is { } ep && N(ep) != N(g["picks"])) d.Add($"card {ci + 1}: expected picked {ep} time(s), read {g["picks"]?.ToString() ?? "nothing"}");
+                // a card the case names without its slots is checked for the rest only (received, more, picks)
+                if (e["slots"] is not JsonArray es) continue;
+                var gs = g["slots"] as JsonArray ?? new JsonArray();
                 if (es.Count != gs.Count) d.Add($"card {ci + 1}: expected {es.Count} slots, read {gs.Count}");
                 for (int i = 0; i < Math.Min(es.Count, gs.Count); i++)
                 {
@@ -526,6 +530,9 @@ public static class ReplayBank
                             ["icon"] = x.Icons.Count > 0 ? $"{x.Icons[0].Key} {x.Icons[0].Distance:0}" + (x.Icons.Count > 1 ? $" / {x.Icons[1].Key} {x.Icons[1].Distance:0}" : "") : "none",
                         });
                     c["slots"] = arr; c["more"] = more;
+                    // how many times the card was picked (its list counted that many times; 0: not read)
+                    c["picks"] = session.LastEventPicks is { } lp && ci < lp.Length ? lp[ci] : 0;
+                    Console.WriteLine($"  card {ci + 1} picked {c["picks"]} time(s)");
                     for (int i = 0; i < arr.Count; i++) Console.WriteLine($"  card {ci + 1} slot {i + 1,2} {arr[i]!["grade"]} x{arr[i]!["n"]}: {arr[i]!["name"]} · {arr[i]!["icon"]} · same grade: {string.Join(" | ", TrackerSession.GradedCandidates(items, sl[i]).Take(3).Select(g => $"{g.Names} ({g.Key} {g.Distance:0})"))}");
                 }
                 outCards.Add(c);
