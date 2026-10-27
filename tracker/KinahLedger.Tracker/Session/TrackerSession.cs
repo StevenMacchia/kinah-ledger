@@ -1542,7 +1542,9 @@ public sealed partial class TrackerSession
                 lock (_countedLines) taken = _countedLines.Count(x => (now - x.At).TotalSeconds <= TwoWitnessSeconds && _parser.Meaning(x.Line).Key == m.Key);
                 if (taken >= shownNow[m.Key]) continue;
                 var batches = _parser.ParseBatch(new List<string> { l }, now, wrap: false).ToList();
-                if (!batches.SelectMany(b => b.Events).OfType<ItemAcquired>().Any(a => _cross.RowWaiting(a, now))) continue;
+                // a gathering material has its own second witness, the gathering bar's race, and while gathering the chat is
+                // only a cross-check that adds nothing (LootCrossCheck.Chat): never this path (the bank's Kukuru and Odyle cases)
+                if (!batches.SelectMany(b => b.Events).OfType<ItemAcquired>().Any(a => !IsGatherMaterial(a.ItemId) && _cross.RowWaiting(a, now))) continue;
                 bool any = false;
                 foreach (var (_, events) in batches) any |= Apply(events, l, "chat · with the loot list's row");
                 CrashLog.Read(l + "    (read whole but taken by no path; the loot list's row for it is the second witness)", any);
