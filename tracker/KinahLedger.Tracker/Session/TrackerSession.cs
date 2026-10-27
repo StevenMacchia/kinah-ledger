@@ -205,6 +205,17 @@ public sealed partial class TrackerSession
     /// <summary>Runs in expeditions and events, entry to last loot, kept across restarts.</summary>
     public InstanceLog Instances { get; } = new();
     public void ResetCraftView() => CraftView = new SessionEngine(_items);
+    /// <summary>Every zone since the tracker started (GameWatcher.AllView): fed like the zone view, never reset by a zone change.</summary>
+    public SessionEngine? AllView { get; set; }
+    /// <summary>Every zone since midnight (GameWatcher.DayView): fed like the zone view, carried across restarts by the watcher.</summary>
+    public SessionEngine? DayView { get; set; }
+    /// <summary>The window's own counts, fed every line and never shared: the zone view, and the watcher's all-zones and Today counts.</summary>
+    IEnumerable<SessionEngine> Views()
+    {
+        yield return ZoneView;
+        if (AllView is { } a) yield return a;
+        if (DayView is { } d) yield return d;
+    }
     /// <summary>Starts the zone view over in the zone the player is in now.</summary>
     public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
 
@@ -588,6 +599,8 @@ public sealed partial class TrackerSession
         // a new zone starts the zone view over: its tables are this zone's alone
         if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { OfferBest(); var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
         else ZoneView.SetZone(zone);
+        // the all-zones and Today counts only move on: a zone change never starts them over
+        AllView?.SetZone(zone); DayView?.SetZone(zone);
     }
 
     int _emptyReads;
@@ -751,7 +764,7 @@ public sealed partial class TrackerSession
                 // only the game is read: while it is minimized or another window sits over the chat, nothing is read and the clocks stop
                 else if (Cover(Region.Value) is { } cover)
                 {
-                    Engine.Pause(); Secondary?.Pause(); ZoneView.Pause();
+                    Engine.Pause(); Secondary?.Pause(); foreach (var v in Views()) v.Pause();
                     Paused = cover.StartsWith("the game") ? cover : cover + " covers the chat";
                     LastError = "";
                 }
@@ -792,7 +805,7 @@ public sealed partial class TrackerSession
             catch (System.ComponentModel.Win32Exception)
             {
                 // the screen can't be copied: the session is locked, a secure prompt is up, or a display is switching. Wait, like a cover.
-                Engine.Pause(); Secondary?.Pause(); ZoneView.Pause();
+                Engine.Pause(); Secondary?.Pause(); foreach (var v in Views()) v.Pause();
                 Paused = "the screen can't be read right now (locked, or a system prompt is up)";
                 LastError = "";
             }
@@ -930,7 +943,7 @@ public sealed partial class TrackerSession
     {
         // back in view: lines that arrived while it was covered weren't seen, so the first read is history and the clocks restart
         if (Paused.Length > 0) { Paused = ""; _tracker.Rebase(); }
-        Engine.Resume(); Secondary?.Resume(); ZoneView.Resume();
+        Engine.Resume(); Secondary?.Resume(); foreach (var v in Views()) v.Resume();
         var lines = await _reader!.ReadAsync();
         _parser.NoteAccents(_reader.LastAccents);
         if (lines.Count > 0) { ReadTrace.Chat(DateTime.UtcNow, lines); Report.Lines("chat", lines, DateTime.UtcNow); QuestCounter(lines); }
@@ -1144,7 +1157,7 @@ public sealed partial class TrackerSession
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
         CommitHeld();
         try { ProcessChatCore(lines, now); }
-        finally { ReleaseRepeats(now); ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(now); Score.Tick(now); }
+        finally { ReleaseRepeats(now); ReleaseAwaiting(now); foreach (var e in new[] { Engine, Secondary }.Concat(Views())) e?.SettleQuest(now); Score.Tick(now); }
     }
 
     void ProcessChatCore(List<string> lines, DateTime now)
@@ -1178,7 +1191,7 @@ public sealed partial class TrackerSession
         }
         _prevRead = lines;
         // the enemy on the target bar, as last read, goes with this read's events (Kinah by enemy, a best guess)
-        if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt); }
+        if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); foreach (var v in Views()) v.SetTarget(Target.Name, Target.NameAt); }
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
         // a Daeva Pass, shop or reward window open in the band: what lands now is a reward, not farming
         // a reward screen open turns what lands into rewards, except inside an event or expedition: there everything is the
@@ -1191,7 +1204,7 @@ public sealed partial class TrackerSession
             if ((now - Target.CraftAt).TotalSeconds > 5) CrashLog.NoteBurst("crafting window seen (its \"Show acquired designs only\" over the chat)");
             Target.MarkCraft(now);
         }
-        foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
+        foreach (var e in new[] { Engine, Secondary, CraftView }.Concat(Views())) e?.SetCraftWindow(Target.CraftAt);
         bool crafting = TargetReader.CraftOpen(Target.CraftAt, now);
         // ---- the pickup check (PickupCheck; Steven, 2026-10-23: "you need some type of quality assurance check") ----
         // the player's own inventory at work (storage, Quick Register, an exchange) or the wardrobe unlocking skins: what
@@ -1726,7 +1739,7 @@ public sealed partial class TrackerSession
             if (!names.SequenceEqual(Engaged)) CrashLog.Note("fighting: " + (names.Count == 0 ? "nobody" : string.Join(", ", names)));
             Engaged = names;
             if (names.Count > 0) _farmAt = now;
-            foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SetEngaged(names, now);
+            foreach (var e in new[] { Engine, Secondary }.Concat(Views())) e?.SetEngaged(names, now);
         }
         catch (Exception ex) { CrashLog.Write("nameplates", ex); }
     }
@@ -2665,7 +2678,7 @@ public sealed partial class TrackerSession
     /// the run's. Just out of one, InstanceLog.Route decides: what looks like its rewards is the run's, loose Kina and kills
     /// are the open world's and close it. Everywhere else it is farming.</para>
     /// </summary>
-    string Count(GameEvent ev)
+    internal string Count(GameEvent ev)
     {
         // a gathering result or failure line for the attempt tally (GatherAttempts)
         bool gathered = GatherSeen(ev);
@@ -2699,7 +2712,7 @@ public sealed partial class TrackerSession
         if (inside && kind == "Event" && Instances.OutAfterRewards(ev))
         {
             inside = false; kind = null;
-            Engine.SetZone(SessionEngine.UnknownZone); Secondary?.SetZone(SessionEngine.UnknownZone); ZoneView.SetZone(SessionEngine.UnknownZone);
+            Engine.SetZone(SessionEngine.UnknownZone); Secondary?.SetZone(SessionEngine.UnknownZone); foreach (var v in Views()) v.SetZone(SessionEngine.UnknownZone);
             _zoneAt = DateTime.MinValue;
         }
         if (!inside && kind == null && Instances.Current is { } run && run.Kind != InstanceLog.WorldBoss && ev is not CraftResult)
@@ -2731,7 +2744,7 @@ public sealed partial class TrackerSession
             if (_runPickups.Count > 60) _runPickups.RemoveAt(0);
             return where;
         }
-        Engine.Apply(ev); Secondary?.Apply(ev); ZoneView.Apply(ev);
+        Engine.Apply(ev); Secondary?.Apply(ev); foreach (var v in Views()) v.Apply(ev);
         // a farming sign: the activity is farming in this zone for a while
         if (ev is MobKilled or EnemySoul or GatherFailed or XpGained or CurrencyGained or ItemAcquired { Bound: false } or KinahChanged { Bound: false, Delta: > 0 } && kind != ZoneLocator.Ignored && !ZoneLocator.IsBase(Zone)) _farmAt = ev.Time;
         UpdateDoing(ev.Time);
@@ -2806,7 +2819,7 @@ public sealed partial class TrackerSession
                 _questSteps += steps; QuestStepsTotal += steps;
                 // each step is a kill the game counted: evidence for the kill count, joining the kill its Kinah or Soul
                 // line showed, or a kill of its own when those were lost (Steven, 2026-10-23: 25 kills counted as 20)
-                for (int s = 0; s < steps; s++) foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.QuestStep(p.At);
+                for (int s = 0; s < steps; s++) foreach (var e in new[] { Engine, Secondary }.Concat(Views())) e?.QuestStep(p.At);
                 Witness(p.At);
             }
             else _questPending.Remove(of);
@@ -3272,8 +3285,8 @@ public sealed partial class TrackerSession
             if (add.Count == 0) { UpdateDoing(now); return; }
             _batch = add.Count;
             bool reward = Target.RewardOpen(now);
-            foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.SetCraftWindow(Target.CraftAt);
-            Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); ZoneView.SetTarget(Target.Name, Target.NameAt);
+            foreach (var e in new[] { Engine, Secondary, CraftView }.Concat(Views())) e?.SetCraftWindow(Target.CraftAt);
+            Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); foreach (var v in Views()) v.SetTarget(Target.Name, Target.NameAt);
             foreach (var p0 in add)
             {
                 var parsed = p0 with { Via = "loot list" };
@@ -3872,7 +3885,7 @@ public sealed partial class TrackerSession
     /// <summary>The crafting panel is on screen, making this recipe (also what replay and the tests feed).</summary>
     internal void PanelUp(string recipe, DateTime now)
     {
-        foreach (var e in new[] { Engine, Secondary, ZoneView, CraftView }) e?.CraftPanelSeen(recipe, now);
+        foreach (var e in new[] { Engine, Secondary, CraftView }.Concat(Views())) e?.CraftPanelSeen(recipe, now);
     }
 
     /// <summary>
@@ -3969,7 +3982,7 @@ public sealed partial class TrackerSession
         // out (its watch dropped) is never "1 assumed"
         foreach (var w in _counts.Flush()) CountAssumed(w.Raw);
         ReleaseAwaiting(t.AddSeconds(WitnessWaitSeconds), final: true);   // a stop or the end of a replay: decided now
-        foreach (var e in new[] { Engine, Secondary, ZoneView }) e?.SettleQuest(t, final: true);
+        foreach (var e in new[] { Engine, Secondary }.Concat(Views())) e?.SettleQuest(t, final: true);
     }
 
     // ---- two witnesses for a drop (Steven's rule: no single-signal counting; the audit of 2026-10-23) ----
@@ -4248,6 +4261,8 @@ public sealed class UserPrefs
     public bool PetsOpen { get; set; }
     /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
     public bool AllZones { get; set; }
+    /// <summary>The Today strip over Farming and Events (0.8.50) opened to its loot; folded to its one line until opened.</summary>
+    public bool TodayOpen { get; set; }
     /// <summary>The Odds column as a percentage ("4.9%") instead of "1 in 21"; a click on its header switches.</summary>
     public bool OddsAsPercent { get; set; }
     /// <summary>Which part of the window shows: "Farming" (the run, the stats, the tables) or "Crafting" (recipes, cost, success, profit).</summary>

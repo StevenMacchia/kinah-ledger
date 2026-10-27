@@ -58,6 +58,50 @@ public sealed class GameWatcher
     {
         _settings = s; _items = items; ManualChat = manualChat;
         Market = new MarketCapture(s, items, marketRegion, server);
+        AllView = new SessionEngine(items);
+        _dayKey = DayStore.Today;
+        DayView = DayStore.Load(items);
+    }
+
+    /// <summary>
+    /// Every zone since the tracker started: the same lines as the zone view, never shared, never restarted by a zone change
+    /// or by the 15-minute chunks (the ⋯ menu's All zones showed the always-on chunk, which starts over every 15 minutes).
+    /// Clear the tables starts it over. Lives here, not on the reader, so a reader restarted mid-session keeps it.
+    /// </summary>
+    public SessionEngine AllView { get; private set; }
+    /// <summary>Every zone since midnight on this PC, carried across restarts in today.json (DayStore): the Today strip.</summary>
+    public SessionEngine DayView { get; private set; }
+    string _dayKey;
+    DateTime _daySavedAt = DateTime.UtcNow;
+
+    /// <summary>Starts the all-zones count over (Clear the tables).</summary>
+    public void ResetAllView()
+    {
+        var a = new SessionEngine(_items); a.SetZone(Chat?.Zone);
+        AllView = a;
+        if (Chat != null) Chat.AllView = a;
+    }
+
+    /// <summary>
+    /// Once a loop: at midnight the day's count is saved and a fresh one starts; otherwise today.json is written once a
+    /// minute, so a crash loses at most a minute of Today.
+    /// </summary>
+    void DayTick(bool final = false)
+    {
+        var key = DayStore.Today;
+        if (key != _dayKey)
+        {
+            DayStore.Save(DayView, _dayKey);
+            var d = new SessionEngine(_items); d.SetZone(Chat?.Zone);
+            DayView = d; _dayKey = key;
+            if (Chat != null) Chat.DayView = d;
+            CrashLog.Note("a new day: Today starts over");
+        }
+        if (final || (DateTime.UtcNow - _daySavedAt).TotalSeconds >= 60)
+        {
+            _daySavedAt = DateTime.UtcNow;
+            if (DayView.Events > 0 || File.Exists(DayStore.PathFor())) DayStore.Save(DayView, _dayKey);
+        }
     }
 
     /// <summary>The balance just read, when it was trusted in the last 20 seconds; an older one may predate Kina spent or picked up since.</summary>
@@ -177,7 +221,7 @@ public sealed class GameWatcher
         {
             var c = Chat;
             if (c != null && c.Running) return c;
-            var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server };
+            var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server, AllView = AllView, DayView = DayView };
             s.Parsed += ev => { if (ev is MarketSold or MarketListed or MarketExpired) Market.OnChatEvent(ev); };
             s.MarketOpen = t => (t - Market.SeenAt).TotalSeconds is >= -2 and <= 10;
             await s.StartAsync();
@@ -258,6 +302,7 @@ public sealed class GameWatcher
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
                 await FlushPassiveAsync(false);
+                DayTick();
                 // each finished run goes up on its own the moment it ends, when the site takes that (RemoteConfig.RunSync)
                 if (Chat is { } rc) try { await rc.SendRunsAsync(_settings); } catch (Exception ex) { CrashLog.Write("run sync", ex); }
                 try { await FetchBoardAsync(); } catch (Exception ex) { CrashLog.Write("price board", ex); }
@@ -268,6 +313,7 @@ public sealed class GameWatcher
             if (spent < interval) { try { await Task.Delay(interval - spent, ct); } catch (TaskCanceledException) { } }
         }
         // what was read in the last minutes still goes out when the window closes
+        DayTick(final: true);
         try
         {
             while (Market.Pending > 0 && await Market.FlushAsync()) { }
@@ -308,11 +354,12 @@ public sealed class GameWatcher
     /// </summary>
     public async Task ClearFarmingAsync()
     {
-        var c = Chat; if (c == null) return;
+        var c = Chat; if (c == null) { ResetAllView(); return; }
         await FlushPassiveAsync(final: true);
         if (c.Engine.Events > 0) RotateChat(c);
         c.ResetZoneView();
         c.ZoneView.SetBalance(FreshBalance);
+        ResetAllView();
     }
 
     /// <summary>Restarts the always-on count; the fresh one starts from the balance just read, when there is one.</summary>

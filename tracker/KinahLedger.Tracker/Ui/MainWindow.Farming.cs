@@ -54,7 +54,7 @@ public partial class MainWindow
         var all = new MenuItem
         {
             Header = "All zones", IsCheckable = true, IsChecked = _prefs.AllZones,
-            ToolTip = "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone. Either way, what goes to the site is kept apart by zone.",
+            ToolTip = "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone.",
         };
         all.Click += (_, _) => { _prefs.AllZones = all.IsChecked; if (!_demo) _prefs.Save(); Redraw(); Tick(); };
         var clear = new MenuItem { Header = "Clear the tables", ToolTip = "Start the farming tables over (what was counted is shared first)" };

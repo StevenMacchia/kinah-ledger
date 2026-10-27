@@ -348,6 +348,24 @@
         </StackPanel>
       </Border>
 
+      <!-- Today (0.8.50, option C of kinah-bench/mock-today, Steven 2026-10-27): one gold line over Farming and Events with
+           the day so far ("2:41 farming · 412 kills · 4 runs" and what it made); opened, the day's loot as inventory slots,
+           farming and the runs apart, zone chips to pin one zone, and the game-tooltip card on each slot (Ui/MainWindow.Today.cs).
+           Since midnight on this PC, carried across restarts in today.json. -->
+      <Border x:Name="TodayStrip" Margin="0,16,0,0" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource GoldTint}" Visibility="Collapsed">
+        <StackPanel>
+          <Grid x:Name="TodayHead" Height="46" Background="Transparent" Cursor="Hand" ToolTip="Today since midnight on this PC: farming in every zone, and every expedition and event. Click to see the loot.">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Path x:Name="TodayChev" Style="{StaticResource SecChev}" Margin="16,0,10,0"/>
+            <TextBlock Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SecGold}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBlock x:Name="TodayNote" Grid.Column="2" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="TodaySum" Grid.Column="3" FontSize="15" FontFamily="{DynamicResource MonoFont}" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
+          </Grid>
+          <Border x:Name="TodayBody" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource GoldLine}" Padding="16,0,16,12" Visibility="Collapsed">
+            <StackPanel x:Name="TodayHost"/>
+          </Border>
+        </StackPanel>
+      </Border>
 
     </StackPanel>
 

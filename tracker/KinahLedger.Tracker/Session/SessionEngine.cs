@@ -3,7 +3,7 @@ using KinahLedger.Data;
 namespace KinahLedger.Session;
 
 /// <summary>Running totals for one farming session and the per-hour rates derived from them.</summary>
-public sealed class SessionEngine
+public sealed partial class SessionEngine
 {
     readonly ItemDictionary _items;
     readonly object _lock = new();
@@ -492,7 +492,7 @@ public sealed class SessionEngine
     }
 
     /// <summary>Time the game could be read: paused stretches are left out.</summary>
-    public TimeSpan Elapsed { get { lock (_lock) return (Ended ?? _pausedAt ?? DateTime.UtcNow) - Started - _paused; } }
+    public TimeSpan Elapsed { get { lock (_lock) return (Ended ?? _pausedAt ?? DateTime.UtcNow) - Started - _paused + _carried; } }
     /// <summary>Never below one second, so rates are defined from the first event.</summary>
     public double Hours => Math.Max(Elapsed.TotalHours, 1.0 / 3600);
 

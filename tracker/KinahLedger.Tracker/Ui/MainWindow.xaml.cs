@@ -130,6 +130,7 @@ public partial class MainWindow : Window
         // "show all" / "show fewer" under the drops; the sections, the feed's hints and the chips' tables (Ui/MainWindow.Live.cs)
         DropsMoreLink.Click += (_, _) => { if (!_allRows.Remove("Drops")) _allRows.Add("Drops"); Redraw(); };
         InitLive();
+        InitToday();
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
@@ -301,10 +302,11 @@ public partial class MainWindow : Window
     void Redraw()
     {
         var e = Shown();
-        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); return; }   // a layout render keeps its sample
+        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); FillToday(); return; }   // a layout render keeps its sample
         if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; SummaryCard.Visibility = Visibility.Collapsed; }
         FillLive();
         FillAccuracyCard();
+        FillToday();
     }
 
     /// <summary>One line of the recent pickups strip; Tip says, in plain words, how it was read (on hover).</summary>
@@ -336,10 +338,12 @@ public partial class MainWindow : Window
         var chat = _watcher.Chat; var farm = RunEngine;
         if (farm == null && _lastRun != null && DateTime.UtcNow < _lastRunUntil) return _lastRun;
         if (!_prefs.AllZones && chat != null) return chat.ZoneView;
-        return farm ?? chat?.Engine;
+        // All zones: the run, or every zone since the tracker started (GameWatcher.AllView). It showed the always-on count
+        // before 0.8.50, which is shared and started over every 15 minutes, so All zones emptied itself on its own
+        return farm ?? (chat != null ? _watcher.AllView : null);
     }
 
-    string ViewTitle() => RunEngine != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "counted while the game is open" : "this zone");
+    string ViewTitle() => RunEngine != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "every zone since the tracker started" : "this zone");
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
@@ -584,6 +588,7 @@ public partial class MainWindow : Window
         if (_part == "Crafting") FillCraft(CraftShown);
         FillLive();
         FillAccuracyCard();
+        FillToday();   // the Today strip over Farming and Events (Ui/MainWindow.Today.cs)
         AlertTick();
         PriceAlertTick();
         UpdateHud();
@@ -1214,7 +1219,7 @@ public partial class MainWindow : Window
         // this zone's view: an empty section says what came in other zones, so nothing looks lost after a zone change
         // (Steven, 2026-10-21: the Soul Crystals from Eternal Isle "not showing" in Crimson Isle)
         // (not while a clear can still be undone: the counts it hides aren't "other zones")
-        var allE = !_prefs.AllZones && e != null && _clearedView == null && _watcher.Chat?.Engine is { } ce && !ReferenceEquals(ce, e) ? ce : null;
+        var allE = !_prefs.AllZones && e != null && _clearedView == null && _watcher.Chat != null && _watcher.AllView is { } ce && !ReferenceEquals(ce, e) ? ce : null;
         var allRows = allE?.ItemRows() ?? new();
         int allPets = allE?.PetSnapshot().Values.Sum() ?? 0, allMobs = allE?.MobSnapshot().Count ?? 0;
         int allGather = allRows.Where(r => GatheringCatalog.Find(r.Name) != null).Sum(r => r.Count + r.Bound);
@@ -1619,14 +1624,19 @@ public partial class MainWindow : Window
         ZoneLbl.Text = "Western Cantas Valley";
         ApplyServer("na_e", "Siel (Elyos)");
         LoadPlayerDemo(_items); _demoZone = "Western Cantas Valley";   // best crafts and where to farm, sample boards
+        _demoDay = DemoDay();   // the Today strip's sample day: three zones of farming (Ui/MainWindow.Today.cs)
         LoadDemoFeed(kind);   // the live feed's sample lines and rate line (Ui/MainWindow.Live.cs)
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         if (kind == "Events")
         {
             // sample runs (never the player's own, Ui/MainWindow.RunsCard.cs), for a layout render
             _demoInst = DemoRuns();
+            // the runs' board (DemoRuns) plus the farming render's, so the Today strip's farming slots carry values too
+            PriceBook.SetBoard(new() { ["Spiritstone Powder"] = 3_330, ["Artisan's Ultimate Refining Stone"] = 330_000, ["Sapphire Powder"] = 5_080, ["Magic Crystal"] = 4_550, ["Diamond Powder"] = 5_780,
+                ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Refining Stone"] = 899, ["Odyle"] = 2_300 });
             ShowPart("Events", remember: false); SetTrackingUi(false);
             Say("Reading the chat", "Faint");
+            if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1") OpenTodaySample();
             return;
         }
         if (kind == "CraftingEmpty")
@@ -1774,5 +1784,8 @@ public partial class MainWindow : Window
         }
         // KL_SHOT_UNDO=1: a render with the Undo bar up, as it shows just after Clear the tables (Ui/MainWindow.Undo.cs)
         if (Environment.GetEnvironmentVariable("KL_SHOT_UNDO") == "1") ShowUndoSample();
+        // KL_SHOT_TODAY=1: the Today strip opened to its slots (0.8.50)
+        FillToday();
+        if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1") OpenTodaySample();
     }
 }
