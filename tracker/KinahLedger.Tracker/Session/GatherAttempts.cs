@@ -45,7 +45,7 @@ public sealed partial class TrackerSession
     readonly List<DateTime> _okRaces = new();
     bool OkRaceNear(DateTime t, double before, double after) => _okRaces.Any(r => (t - r).TotalSeconds >= -after && (t - r).TotalSeconds <= before);
 
-    IEnumerable<SessionEngine> FarmEngines() => new[] { Engine, Secondary, ZoneView }.Where(e => e != null)!;
+    IEnumerable<SessionEngine> FarmEngines() => new[] { Engine, Secondary }.Concat(Views()).Where(e => e != null)!;
 
     /// <summary>What names an attempt at <paramref name="t"/>, short of its result: the panel, the target bar's node, the last named node, else unknown.</summary>
     (GatherFamily Family, string Node, string By) NameAt(DateTime t)

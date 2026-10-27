@@ -1266,6 +1266,7 @@ options: --process aion[,other]");
         ok &= Ocr.ChatCountTests.Run(items, s);
         ok &= UnsentRunsTest(items, s);
         ok &= Session.RunDataTests.Run(items, s);
+        ok &= Session.TodayTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);
         ok &= Session.AccuracyScoreTests.Run(items, s);
         ok &= Session.LabelWriterTests.Run(items, s);

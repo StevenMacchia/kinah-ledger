@@ -622,6 +622,8 @@ public static class WpfApp
         if (demo) w.ShotPlayerCards(dir, kind);
         // a tapped feed line's report sheet (direction C), for a farming render
         if (demo && kind == "Open world") w.ShotLineReport(Path.Combine(dir, "ui-line-report.png"));
+        // the Today strip's hover cards (0.8.49): a farming drop's and the Kinah's
+        if (demo && kind == "Open world") w.ShotTodayCards(dir);
         // the Accuracy card on its own (the card the Farming page's chip opens), with its things to look at
         if (demo && kind is not ("Crafting" or "CraftingEmpty" or "CraftingUpgrades" or "Events" or "Market")) w.ShotAccuracyCard(Path.Combine(dir, "ui-accuracy-card.png"));
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
