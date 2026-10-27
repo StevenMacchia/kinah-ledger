@@ -144,10 +144,11 @@ public static class EventCards
     /// recognition, from the figure's ink (the bright cyan the card icon check counts): 37 px tall at 2160 in all 73 kept
     /// pictures of 2026-10-24 to 27, a "1" 14 to 17 px wide, the "2" 24. A "1" is narrow; a "2" stands on a flat foot as
     /// wide as itself with nothing on its lower right; a "4" has a bar across its whole width low down and only its stem
-    /// at the foot; a "3" has both bowls' right sides and an arc to the bottom left. No kept picture shows a 3 or a 4 yet:
-    /// those rules are measured on 3 and 4 drawn in seven Windows fonts, two weights and three screen sizes (all read
-    /// right; on the kept pictures every 1 and the 2 read right and nothing reads 2 to 4 that isn't). Anything that isn't
-    /// one of the four shapes, or fits two, is 0: not sure (a tooltip over it, the card mid-flip), never a guess.
+    /// at the foot; a "3" has both bowls' right sides and an arc to the bottom left. The rules were set on 3 and 4 drawn in
+    /// seven Windows fonts, two weights and three screen sizes (all read right), then held on the first real 3, Beritra
+    /// Air Raid 2026-10-27 15:34 (26 px wide), on all eight of its face-up pictures; no picture shows a 4 yet. On the kept
+    /// pictures every 1, the 2 and the 3 read right and nothing reads 2 to 4 that isn't. Anything that isn't one of the
+    /// four shapes, or fits two, is 0: not sure (a tooltip over it, the card mid-flip), never a guess.
     /// </summary>
     static int PicksOf(Pixels px, int left)
     {
