@@ -4434,6 +4434,18 @@ options: --process aion[,other]");
             Check("a release without KinahLedger.exe", U(Rel("v0.7.3", asset: "KinahLedger.zip")), "none: no KinahLedger.exe in the release");
             Check("a release without a sha256 line", U(Rel("v0.7.3", body: "Fixes.")), "none: no sha256 line in the release notes");
             Check("the site's manifest still reads", U("{\"version\":\"0.7.3\",\"url\":\"https://kinahledger.com/download/KinahLedger.exe\",\"sha256\":\"" + new string('a', 64) + "\",\"size\":72500000}"), "0.7.3 72500000 aaaaaa");
+            // the release's small latest.json, read every 10 minutes (0.8.48): the version it names, or none
+            string F(string json) => KinahLedger.Update.Updater.ParseLatestFile(json) is { } lfv ? KinahLedger.Update.Updater.Show(lfv) : "none";
+            Check("latest.json as 0.8.47 published it, and what isn't one",
+                string.Join(" | ", F("{\n  \"version\": \"0.8.47\",\n  \"url\": \"https://kinahledger.com/download/v0.8.47/KinahLedger.exe\",\n  \"sha256\": \"7685d6653228e6d8991feab53aeb4bbf954d2de815e6e54a1208f0c3151979d1\",\n  \"size\": 80145847,\n  \"notes_url\": \"https://github.com/StevenMacchia/kinah-ledger/releases/tag/v0.8.47\",\n  \"published_at\": \"2026-10-27T20:27:49Z\"\n}"),
+                    F("{\"version\":\"v0.9.1\"}"), F("<html>Not Found</html>"), F("{\"version\":\"soon\"}"), F("{\"tag\":\"0.8.47\"}"), F("[]"), F("")),
+                "0.8.47 | 0.9.1 | none | none | none | none | none");
+            // when a 10-minute tick makes the full check: a newer version named that no check has looked for, or the hour
+            bool Due(string? file, string? found, double minutesSinceFull) => KinahLedger.Update.Updater.FullCheckDue(
+                file == null ? null : new Version(file), new Version("0.8.47"), found == null ? null : new Version(found), TimeSpan.FromMinutes(minutesSinceFull), TimeSpan.FromHours(1));
+            Check("the full check: newer named | same | older | unreadable | already looked for | a newer one still | the hour",
+                string.Join(" ", Due("0.8.48", null, 10), Due("0.8.47", null, 10), Due("0.8.46", null, 10), Due(null, null, 10), Due("0.8.48", "0.8.48", 10), Due("0.8.49", "0.8.48", 10), Due(null, null, 60)),
+                "True False False False False True True");
         }
 
         Console.WriteLine("\nBalance counter (0.7): which counter is Kinah, and when a read is trusted:");
