@@ -259,7 +259,7 @@ public sealed class HudWindow : Window
     readonly Border _frame;
     readonly TextBlock _alert;
     readonly TextBlock _acc;
-    /// <summary>One line under the figures from the "notice" value ("Update ready · installs when you leave the game").</summary>
+    /// <summary>One line under the figures from the "notice" value ("Update ready · installs when you close the tracker").</summary>
     readonly TextBlock _note;
     static readonly Brush AccGood = Frozen(Color.FromRgb(0x62, 0xD9, 0x8B)), AccCheck = Frozen(Color.FromRgb(0xF2, 0xA3, 0x5E));
 

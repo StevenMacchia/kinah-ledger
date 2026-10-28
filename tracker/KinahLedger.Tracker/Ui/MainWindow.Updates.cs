@@ -9,9 +9,9 @@ namespace KinahLedger.Ui;
 /// carries, which makes the full check at once when it names a newer version; the full check also runs every hour
 /// whatever it says (0.8.48; hourly since 0.8.31, six hours before). With automatic updates on, a newer
 /// version downloads in the background and is installed when the window closes; Restart now installs it at once. Off,
-/// the banner asks first. Either way a version found by the timed check also asks once, in a dialog, whether to install
-/// it now (AskToInstall). A run is never cut short by an update: the dialog waits for the run to stop and the game to leave the front, and Restart now
-/// during a run stops and saves it first, after asking.
+/// the banner asks first. The banner is the one prompt: a version found by the timed check is also said once on the
+/// panel and, with the window hidden, in a tray notice (TellAboutUpdate), and nothing asks on top of it. A run is never
+/// cut short by an update: Restart now during a run stops and saves it first, after asking.
 /// </summary>
 public partial class MainWindow
 {
@@ -33,10 +33,8 @@ public partial class MainWindow
     // installed (0.8+): Velopack finds, downloads (small deltas) and applies the update; a loose exe uses the swap above
     Velopack.UpdateInfo? _vInfo;
     bool _offeringInstall;
-    /// <summary>The version the install dialog has asked about this start: it asks once per version, so Later means later.</summary>
+    /// <summary>The version the panel and the tray have been told about this start: once per version.</summary>
     Version? _askedAbout;
-    /// <summary>The dialog is open, or a found version waits for the run to stop before it asks.</summary>
-    bool _asking, _askWhenFree;
     string _updateStatus = "Checks GitHub for a newer release at start and every 10 minutes. Only the app version goes with the request.";
 
     /// <summary>The update line for Options › Updates.</summary>
@@ -143,7 +141,7 @@ public partial class MainWindow
                 try
                 {
                     await CheckForUpdate(manual: false);
-                    await AskToInstall();
+                    TellAboutUpdate();
                 }
                 catch (Exception ex) { CrashLog.Write("update", ex); }
             }
@@ -169,60 +167,39 @@ public partial class MainWindow
     Version? _fileChecked;
 
     /// <summary>
-    /// The install dialog (Steven, 2026-10-25: check every hour and ask whether to install; every 10 minutes since 0.8.48,
-    /// Steven, 2026-10-27). A version the timed check
-    /// found, and that the staged rollout lets install here, asks once per start: Yes downloads it if it isn't yet and
-    /// restarts into it, No leaves the banner (with automatic updates on it still installs when the tracker closes).
-    /// It never asks during a run or with the game in front: it waits for both (AskWhenFree, from the window's tick). No is the default
-    /// button, so Enter or Space meant for the game can't restart the tracker. Check now in Options never asks: its own
-    /// Restart now is right there.
+    /// One prompt for an update, the banner (Steven, 2026-10-28: "Yes, fix it" to the Windows pop-up that showed beside the
+    /// banner asking the same thing; 0.8.31 to 0.8.57 asked "Install it now?" in a dialog, his ask of 2026-10-25). A version
+    /// the timed check found, and that the staged rollout lets install here, is said once per version where the player
+    /// is: the banner on the window (ShowUpdate), the panel's line for its first minute in view (HudNotice), and a tray
+    /// notice when the window is in the tray or minimized. Nothing asks and nothing takes focus from the game: with
+    /// automatic updates on it installs when the tracker closes, and Restart now on the banner installs it at once.
     /// </summary>
-    async Task AskToInstall()
+    void TellAboutUpdate()
     {
         var r = _release;
-        if (r == null || _asking || _askedAbout == r.Version || _downloading || _updateNeedsSite || _updateError != null || _offeringInstall) return;
+        if (r == null || _askedAbout == r.Version || _downloading || _updateNeedsSite || _updateError != null || _offeringInstall) return;
         if (_quitting || _restartForUpdate) return;
-        // never in the middle of play: a run, or the game in front (always-on counting, gathering and crafting are play too,
-        // and an ownerless dialog there takes the game's focus). The panel says so once; the banner stays on the window
-        if (Farming || _welcome || GameInFront()) { _askWhenFree = true; _updateNotice = UpdateWaitingNotice; UpdateHud(); return; }
-        _askWhenFree = false; _askedAbout = r.Version; _asking = true;
-        _updateNotice = ""; UpdateHud();
+        _askedAbout = r.Version;
+        var v = Updater.Show(r.Version);
+        bool ready = _staged != null;
+        _updateNotice = ready ? UpdateReadyNotice : $"Kinah Ledger {v} is out · Update on the tracker window";
+        _updateNoticeUntil = DateTime.MaxValue;   // its minute starts when the panel is first in view
+        UpdateHud();
+        bool hidden = !IsVisible || WindowState == WindowState.Minimized;
+        CrashLog.Note($"update {v}: on the banner and the panel{(hidden ? ", and in a tray notice (the window is hidden)" : "")}; nothing asks");
+        if (!hidden || _demo) return;
         try
         {
-            var v = Updater.Show(r.Version);
-            bool ready = _staged != null;
-            var text = $"Kinah Ledger {v} is available (you have {Updater.Show(Updater.Current)}).\n\n" +
-                       "Install it now? The tracker closes and opens again on the new version. Your settings and history are kept.\n\n" +
-                       (ready ? "No leaves it for later: it installs by itself the next time the tracker closes."
-                              : "No leaves it for later: Update on the banner installs it whenever you like.");
-            const string title = "Kinah Ledger update";
-            // in the tray or minimized there is no window to sit on (a dialog owned by a minimized window stays hidden with
-            // it): the dialog stands on its own then, with its own taskbar button
-            var answer = IsVisible && WindowState != WindowState.Minimized
-                ? MessageBox.Show(this, text, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)
-                : MessageBox.Show(text, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
-            CrashLog.Note($"update {v}: install dialog answered {(answer == MessageBoxResult.Yes ? "yes" : "later")}");
-            if (answer != MessageBoxResult.Yes || !ReferenceEquals(_release, r)) return;
-            if (_staged == null) await FetchUpdate(r);
-            if (_staged != null && ReferenceEquals(_release, r)) await RestartForUpdate();
+            _tray.ShowBalloonTip(8000, $"Kinah Ledger {v} is ready",
+                ready ? "It installs when you close the tracker. To install it now, open the tracker and pick Restart now."
+                      : "Open the tracker and pick Update to install it.",
+                System.Windows.Forms.ToolTipIcon.Info);
         }
-        finally { _asking = false; }
+        catch (Exception ex) { CrashLog.Write("update notice", ex); }
     }
 
-    /// <summary>The panel's line while a found version waits for the player to leave the game.</summary>
-    const string UpdateWaitingNotice = "Update ready · installs when you leave the game";
-
-    /// <summary>
-    /// From the window's tick: a found version that waited asks once no run is on and the game is no longer in front
-    /// (alt-tab, the game closed or minimized); a tracker closed before that asks on its next start.
-    /// </summary>
-    void AskWhenFree()
-    {
-        if (!_askWhenFree || _asking || Farming || _welcome || _quitting || GameInFront()) return;
-        _askWhenFree = false;
-        _updateNotice = "";   // AskToInstall puts it back if it has to wait again
-        _ = AskToInstall();
-    }
+    /// <summary>The panel's line for a downloaded update.</summary>
+    const string UpdateReadyNotice = "Update ready · installs when you close the tracker";
 
     /// <summary>The automatic-install choice changed in Options: a found version starts downloading at once when it was turned on.</summary>
     void AutoUpdateChanged(bool on)
@@ -348,7 +325,7 @@ public partial class MainWindow
     /// <summary>Restart now: a run in progress is stopped and saved first (after asking), then the window closes and the new version starts.</summary>
     async Task RestartForUpdate()
     {
-        _askedAbout = _release?.Version;   // the banner's Restart now answers the dialog's question: it never asks on top of it
+        _askedAbout = _release?.Version;   // pressed already: the panel and the tray needn't say it again
         if (Farming)
         {
             var answer = MessageBox.Show(this, "Restart now to install the update?\n\nYour run stops first and is saved (and shared, if sharing is on) as usual.",
