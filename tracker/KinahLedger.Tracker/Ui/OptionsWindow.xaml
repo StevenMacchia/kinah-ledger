@@ -81,6 +81,15 @@
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Switch pages to what I’m doing"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Farming, Crafting or Events, as you play. A page you click stays until you start something else. It always opens on Farming."/>
+                </StackPanel>
+                <CheckBox x:Name="FollowChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Close button keeps it running"/>
                   <TextBlock Style="{StaticResource RowHint}" Text="Closing the window sends Kinah Ledger to the tray, so it can open with the game. Quit from the tray icon's menu."/>
                 </StackPanel>

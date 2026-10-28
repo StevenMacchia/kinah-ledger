@@ -146,7 +146,8 @@ public partial class MainWindow : Window
                 Redraw();
             }
         };
-        // Farming and Crafting are two parts of the window; crafting never shows in the farming tables
+        // Farming, Crafting and Events are three parts of the window; crafting never shows in the farming tables. A click is a
+        // page picked by hand: it stays until the activity moves on (Session/PageFollow.cs)
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
         EventsTab.Click += (_, _) => ShowPart("Events");
@@ -175,7 +176,7 @@ public partial class MainWindow : Window
                 ev.Handled = true;
                 LowerScroll.RaiseEvent(new MouseWheelEventArgs(ev.MouseDevice, ev.Timestamp, ev.Delta) { RoutedEvent = MouseWheelEvent, Source = LowerScroll });
             };
-        ShowPart(_prefs.Part, remember: false);
+        ShowPart(PageFollow.Farming, byHand: false);   // always Farming at the start, whatever page it closed on (0.8.55)
         SizeChanged += (_, _) => KeepOnScreen();
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(RefitIfNeeded);   // the screen's scaling changed, or a screen with another one
         ShowTable(null);
@@ -585,6 +586,7 @@ public partial class MainWindow : Window
         // the panel over the game can't stop the rest of the refresh (the Crafting table, the pickups) if it fails to open
         if (HudWanted && chat != null) { try { EnsureHud(); } catch (Exception ex) { if (!_hudFailed) { _hudFailed = true; CrashLog.Write("panel over the game", ex); } } }
         PlacementGuideTick();   // once after the first run's setup check, when the game is in front (Ui/MainWindow.Overlay.cs)
+        if (chat != null) FollowActivity(chat.Doing.Current.Kind, DateTime.UtcNow);   // Farming, Crafting or Events, as the player is doing
         if (_part == "Crafting") FillCraft(CraftShown);
         FillLive();
         FillAccuracyCard();
@@ -1011,9 +1013,15 @@ public partial class MainWindow : Window
     /* ---------------- crafting ---------------- */
 
     string _part = "Farming";
+    /// <summary>The page following what the player is doing (Session/PageFollow.cs).</summary>
+    readonly PageFollow _follow = new();
 
-    /// <summary>Shows one part of the window: Farming (the run bar, the stats, the loot tables), Crafting (the crafting ledger) or Expeditions and events (each trip, never on the Farming page).</summary>
-    void ShowPart(string part, bool remember = true)
+    /// <summary>
+    /// Shows one part of the window: Farming (the run bar, the stats, the loot tables), Crafting (the crafting ledger) or
+    /// Expeditions and events (each trip, never on the Farming page). <paramref name="byHand"/>: the player clicked it, so
+    /// the page stays until the activity moves on. Since 0.8.55 the page isn't remembered: the window opens on Farming.
+    /// </summary>
+    void ShowPart(string part, bool byHand = true)
     {
         _part = part is "Crafting" or "Events" ? part : "Farming";
         bool craft = _part == "Crafting";
@@ -1022,9 +1030,22 @@ public partial class MainWindow : Window
         CraftTab.Style = (Style)FindResource(craft ? "SegOn" : "SegOff");
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "SegOn" : "SegOff");
         if (_part == "Events") ShowInstances();
-        if (remember && !_demo) { _prefs.Part = _part; _prefs.Save(); }
+        if (byHand) _follow.Picked();
         if (craft && !_demo) FillCraft(CraftShown);
     }
+
+    /// <summary>
+    /// The page follows what the player is doing (Options › General › Switch pages to what I'm doing, on by default), from
+    /// the window's tick with the session's activity: never on the first-run screen, and only once a change has held.
+    /// </summary>
+    void FollowActivity(Session.ActivityKind kind, DateTime now)
+    {
+        if (_follow.Step(kind, now, _prefs.FollowActivity && !_welcome) is { } page && page != _part) ShowPart(page, byHand: false);
+    }
+
+    /// <summary>For the options self-test: one tick of the page following an activity, and the page showing.</summary>
+    internal void FollowForTest(Session.ActivityKind kind, DateTime now) => FollowActivity(kind, now);
+    internal string PartForTest => _part;
 
     /// <summary>Compact or Full view, remembered; the window grows to the right, or to the left near the screen's edge.</summary>
     void SetView(bool full)
@@ -1631,7 +1652,7 @@ public partial class MainWindow : Window
         {
             // sample runs (never the player's own, Ui/MainWindow.RunsCard.cs), for a layout render
             _demoInst = DemoRuns();
-            ShowPart("Events", remember: false); SetTrackingUi(false);
+            ShowPart("Events", byHand: false); SetTrackingUi(false);
             Say("Reading the chat", "Faint");
             if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1") OpenTodaySample();
             return;
@@ -1640,7 +1661,7 @@ public partial class MainWindow : Window
         {
             // the Crafting part before anything is crafted: the one sentence and Best crafts, for a layout render
             _demoFeed.RemoveAll(l => l.Tab == Session.FeedTab.Crafting);
-            ShowPart("Crafting", remember: false);
+            ShowPart("Crafting", byHand: false);
             FillCraft(new SessionEngine(_items));
             SetTrackingUi(false);
             Say("Reading the chat", "Faint");
@@ -1669,7 +1690,7 @@ public partial class MainWindow : Window
                 if (roll.Length > 0) Race("Splendent Orichalcum Longsword", roll == "won", combo: true);
             }
             Race(expert, true); Race("Expert's Splendent Orichalcum Longsword", true, combo: true); Race(expert, false); Race(expert, true);
-            ShowPart("Crafting", remember: false);
+            ShowPart("Crafting", byHand: false);
             FillCraft(ue);
             SetTrackingUi(false);
             Say("Last: Expert's Orichalcum Longsword acquired", "Faint");
@@ -1689,13 +1710,13 @@ public partial class MainWindow : Window
                 ce.Apply(new CraftResult(at, recipe, ok) { Via = SessionEngine.CraftPanelVia, Makes = RecipeBook.ForOutput(recipe)?.OutputQty ?? 1 });
             }
             Craft("Sapphire Powder", true); Craft("Sapphire Powder", true); Craft("Orichalcum Greaves", true); Craft("Orichalcum Greaves", false); Craft("Diamond Powder", true);
-            ShowPart("Crafting", remember: false);
+            ShowPart("Crafting", byHand: false);
             FillCraft(ce);
             SetTrackingUi(false);
             Say("Last: Diamond Powder acquired", "Faint");
             return;
         }
-        ShowPart("Farming", remember: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
+        ShowPart("Farming", byHand: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
         PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });

@@ -4468,8 +4468,10 @@ public sealed class UserPrefs
     public bool TodayOpen { get; set; }
     /// <summary>The Odds column as a percentage ("4.9%") instead of "1 in 21"; a click on its header switches.</summary>
     public bool OddsAsPercent { get; set; }
-    /// <summary>Which part of the window shows: "Farming" (the run, the stats, the tables) or "Crafting" (recipes, cost, success, profit).</summary>
+    /// <summary>No longer read since 0.8.55: the window always opens on Farming. Kept so older ui.json files load.</summary>
     public string Part { get; set; } = "Farming";
+    /// <summary>Options › General › Switch pages to what I'm doing (0.8.55): the window shows Farming, Crafting or Events as the activity changes (Session/PageFollow.cs). Off: it stays on the page the player picks.</summary>
+    public bool FollowActivity { get; set; } = true;
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
     public bool ShareMarket { get; set; } = true;
     /// <summary>True once the player chose the Market area by hand; the title-and-headers search then stays off until they switch back.</summary>

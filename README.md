@@ -85,11 +85,13 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
    `KinahLedger replay <report>/trace.jsonl` counts the text again, and `KinahLedger report-replay <report>` reads the
    pictures again with the current reader, beside what was counted at the time.
 
-   **Crafting** is its own part of the window: press **Crafting** at the top. Each recipe shows how many times you tried it, how often it worked, what came out (a great success included), what one try costs and what the result sells for, with the profit or loss. Costs come from the recipe's materials at the lowest Market prices on your server; a failed try uses them too. Bound vendor materials can't be priced and are left out, and the row says so. The recipes come from [MetaBot.GG](https://metabot.gg/en/aion-2/crafting). Crafted items are never drops, crafting is never farming time, and none of it goes into a zone's numbers. Market settlement payouts ("A total payment of … completed") are never farming Kinah either.
+   **Crafting** is its own part of the window: it shows by itself while the crafting window is open, or press **Crafting** at the top. Each recipe shows how many times you tried it, how often it worked, what came out (a great success included), what one try costs and what the result sells for, with the profit or loss. Costs come from the recipe's materials at the lowest Market prices on your server; a failed try uses them too. Bound vendor materials can't be priced and are left out, and the row says so. The recipes come from [MetaBot.GG](https://metabot.gg/en/aion-2/crafting). Crafted items are never drops, crafting is never farming time, and none of it goes into a zone's numbers. Market settlement payouts ("A total payment of … completed") are never farming Kinah either.
 4. **Options** (its own window, with **Save** and **Cancel**) holds everything that can be set, page by page:
    - **General**: start with Windows (it then waits in the tray until Aion 2 is running), what happens when Aion 2
      starts (open the window, or stay in the tray; reading starts either way), hide when Aion 2 closes, the close
-     button keeping it in the tray, minimize to the tray, and the look.
+     button keeping it in the tray, minimize to the tray, switching pages to what you're doing (on by default: the
+     window shows Farming, Crafting or Events once a change has held 5 seconds, and a page you click stays until you
+     start something else; the window always opens on Farming), and the look.
    - **Server**: region and server; everything shared is filed under it.
    - **Sharing**: the one **Share** switch (runs and Market prices together), linking this PC to your profile on the
      site (the link code is a short form of the random install ID; without it runs stay anonymous), replacing the
