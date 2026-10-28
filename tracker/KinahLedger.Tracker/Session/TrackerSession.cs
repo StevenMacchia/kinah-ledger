@@ -333,7 +333,7 @@ public sealed partial class TrackerSession
         if (gap == 0) return;
         // the witness counts what the counter shows and no line claims; the old rule (a row the list showed once) is its fallback
         if (KinaWitnessOn(at)) return;
-        if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && _cross.TakeSingleKinah(gap, at))
+        if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && !InBase && _cross.TakeSingleKinah(gap, at))
         {
             var ev = new KinahChanged(at, gap, false) { Via = "loot list · balance" };
             Feed(ev, Count(ev));
@@ -395,6 +395,11 @@ public sealed partial class TrackerSession
         foreach (var (amount, line, at) in o.FromCounter)
         {
             bool row = _cross.TakeSingleKinah(amount, now);
+            if (InBase)
+            {
+                CrashLog.Note($"the Kinah counter rose {amount:N0} in a base ({Zone}) that no line claimed: a reward, a sale or the mail, never farming; not counted");
+                continue;
+            }
             // dated when the chat first showed it, else when the counter rose: that is when the kill was
             var ev = new KinahChanged(at == default || at > now ? now : at, amount, false) { Via = line != null ? "chat · unaligned · counter" : row ? "loot list · counter" : "counter" };
             CrashLog.Note(line != null
@@ -699,6 +704,16 @@ public sealed partial class TrackerSession
 
     /// <summary>An item picked up in a base that isn't Odyle: the only thing farmed in a base (Steven, 2026-10-22).</summary>
     bool InBaseNotOdyle(GameEvent ev) => ev is ItemAcquired a && ZoneLocator.IsBase(Zone) && !_items.NameOf(a.ItemId).Contains("Odyle", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Kina that comes in a base: never farming, since no enemy is fought there; it is a reward, a sale or the mail (Steven,
+    /// 2026-10-28: a Daeva Pass level reward's 9,000 Kina, claimed in Dawn Legion Base at 09:18:53 as its window closed, was
+    /// counted as farming Kinah and a kill, and Today's Farming strip showed "0:02 farming · 1 kill · 9K" on a day with no
+    /// farming). Such a line is a reward (bound Kina: tracked, never farming); a rise of the Kinah counter no line claims is
+    /// left out.
+    /// </summary>
+    bool InBaseKina(GameEvent ev) => ev is KinahChanged { Bound: false, Delta: > 0 } && InBase;
+    bool InBase => ZoneLocator.IsBase(Zone);
 
     async Task FollowGameAsync()
     {
@@ -1358,7 +1373,9 @@ public sealed partial class TrackerSession
                 if (why != null && parsed is PetCrystal wp) { CrashLog.Note($"{wp.Name} x{wp.Count}: {why}, not counted with the kills"); any = true; continue; }
                 if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
-                var ev = (reward || why != null || InBaseNotOdyle(parsed)) && !made ? _parser.AsReward(parsed) : parsed;
+                bool baseKina = InBaseKina(parsed);
+                if (baseKina) CrashLog.Note($"{((KinahChanged)parsed).Delta:N0} Kina in a base ({Zone}): a reward, a sale or the mail, never farming");
+                var ev = (reward || why != null || InBaseNotOdyle(parsed) || baseKina) && !made ? _parser.AsReward(parsed) : parsed;
                 // counted as one from a line that showed no count: that one is no witness of a reward picture's count
                 if (ev is ItemAcquired or RewardReceived && !via.Contains("count read again") && _parser.CountUnsure(raw)) MarkAssumed(ev);
                 // an item that is a reward only because a window was open doesn't open a new one: a window would chain on
@@ -3324,7 +3341,11 @@ public sealed partial class TrackerSession
                     continue;
                 }
                 // in a base, a loot-list row the chat never confirmed that isn't Odyle is left out entirely
-                if (!made && InBaseNotOdyle(parsed)) { CrashLog.Note($"in a base, so not counted from the loot list: {_items.NameOf(((ItemAcquired)parsed).ItemId)}"); _cross.Declined(parsed, now); continue; }
+                if (!made && (InBaseNotOdyle(parsed) || InBaseKina(parsed)))
+                {
+                    CrashLog.Note($"in a base, so not counted from the loot list: {(parsed is ItemAcquired bi ? _items.NameOf(bi.ItemId) : $"{((KinahChanged)parsed).Delta:N0} Kina")}");
+                    _cross.Declined(parsed, now); continue;
+                }
                 // an achievement's reward or a box's contents shows in the list too; out in the world, a row with no kill or
                 // gather around it is one (a box opened in town). Never a drop (Steven, 2026-10-23)
                 if (!made && parsed is ItemAcquired lr)

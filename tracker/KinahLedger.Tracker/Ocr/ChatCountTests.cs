@@ -207,6 +207,41 @@ static class ChatCountTests
             Check("witness: read again after going quiet: the rise meanwhile isn't counted again", $"[{string.Join(" ", log)}] live {w.Live(k0.AddSeconds(83))}", "[] live True");
         }
 
+        // 2026-10-28 09:18:53, Steven's Daeva Pass level reward: "Acquired 9,000 Kina (Bouna)." claimed in Dawn Legion Base as
+        // its window closed was counted as farming Kinah and a kill. Kina in a base is a reward, a sale or the mail, never
+        // farming: the line is bound Kina (tracked apart), and a rise of the counter no line claims isn't counted; out in a
+        // field the same line and the same rise are farming as before
+        {
+            var kb0 = t0.AddHours(3);
+            string Line(string zone)
+            {
+                var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+                s.ApplyZone(zone, kb0);
+                var calm = new List<string> { "[P1] hello", "[P2] hi there" };
+                s.ProcessChat(calm, kb0.AddSeconds(1));
+                for (int i = 2; i <= 6; i++) s.ProcessChat(new List<string>(calm) { "Acquired 9,000 Kina (Bouna)." }, kb0.AddSeconds(i));
+                s.FlushVotes(kb0.AddSeconds(8));
+                var t = s.Engine.Totals();
+                return $"{t.Kinah} {t.Kills} {s.Engine.KinahBound}";
+            }
+            string Counter(string zone)
+            {
+                var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+                s.ApplyZone(zone, kb0);
+                s.CheckBalance(1_000_000, kb0.AddSeconds(1));
+                s.CheckBalance(1_000_000, kb0.AddSeconds(3));
+                s.CheckBalance(1_001_200, kb0.AddSeconds(5));
+                s.CheckBalance(1_001_200, kb0.AddSeconds(8));
+                s.CheckBalance(1_001_200, kb0.AddSeconds(15));
+                s.FlushVotes(kb0.AddSeconds(20));
+                return s.Engine.Totals().Kinah.ToString();
+            }
+            Check("Kina in a base: a reward, never farming or a kill (Kinah kills bound)", Line("Dawn Legion Base"), "0 0 9000");
+            Check("...the same line in a field is farming", Line("Western Cantas Valley").Split(' ') is var f ? $"{f[0]} {f[2]}" : "", "9000 0");
+            Check("...a counter rise no line claims: not counted in a base, counted in a field", $"{Counter("Dawn Legion Base")} {Counter("Western Cantas Valley")}", "0 1200");
+            Check("...a forward base is a base too", Line("Andsha Forward Base"), "0 0 9000");
+        }
+
         // an item line the chat shows again after a scroll (ItemRepeatGuard; 2026-10-24 15:59, Kukuru 2 and Orichalcum Ore 4
         // for 1 and 3): a read three lines long that shares only its top two with the next one lines that one up on them, so
         // the line counted a moment ago comes back as new. Without a second witness it is that line; with a fresh loot list
