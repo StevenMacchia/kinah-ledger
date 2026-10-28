@@ -1038,13 +1038,13 @@ public partial class MainWindow : Window
     /// The page follows what the player is doing (Options › General › Switch pages to what I'm doing, on by default), from
     /// the window's tick with the session's activity: never on the first-run screen, and only once a change has held.
     /// </summary>
-    void FollowActivity(ActivityKind kind, DateTime now)
+    void FollowActivity(Session.ActivityKind kind, DateTime now)
     {
         if (_follow.Step(kind, now, _prefs.FollowActivity && !_welcome) is { } page && page != _part) ShowPart(page, byHand: false);
     }
 
     /// <summary>For the options self-test: one tick of the page following an activity, and the page showing.</summary>
-    internal void FollowForTest(ActivityKind kind, DateTime now) => FollowActivity(kind, now);
+    internal void FollowForTest(Session.ActivityKind kind, DateTime now) => FollowActivity(kind, now);
     internal string PartForTest => _part;
 
     /// <summary>Compact or Full view, remembered; the window grows to the right, or to the left near the screen's edge.</summary>
