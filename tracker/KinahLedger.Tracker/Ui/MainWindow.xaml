@@ -354,7 +354,7 @@
            Since midnight on this PC, carried across restarts in today.json. -->
       <Border x:Name="TodayStrip" Margin="0,16,0,0" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource GoldTint}" Visibility="Collapsed">
         <StackPanel>
-          <Grid x:Name="TodayHead" Height="46" Background="Transparent" Cursor="Hand" ToolTip="Today since midnight on this PC: farming in every zone, and every expedition and event. Click to see the loot.">
+          <Grid x:Name="TodayHead" Height="46" Background="Transparent" Cursor="Hand" ToolTip="Today since midnight on this PC. Click to see the loot.">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Path x:Name="TodayChev" Style="{StaticResource SecChev}" Margin="16,0,10,0"/>
             <TextBlock Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SecGold}" VerticalAlignment="Center" Margin="0,0,10,0"/>
