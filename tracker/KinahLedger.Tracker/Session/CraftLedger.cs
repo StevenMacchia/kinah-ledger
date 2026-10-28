@@ -58,6 +58,7 @@ public sealed class CraftLedger
             _panelRecipe = name = _lastCraft;
         if (!cr.Combo) _lastCraft = name;
         var r = Get(name);
+        var was = cr.Queue > 0 ? r.Copy() : null;
         if (cr.Combo)
         {
             if (cr.Ok) { r.Upgraded++; Upgrade(r); } else r.NotUpgraded++;
@@ -66,14 +67,74 @@ public sealed class CraftLedger
         {
             r.Ok++;
             // what it made: the recipe's yield as the panel's level tells it, never assumed (made ? when it can't tell)
-            if (name != "?" && cr.Makes is int y && y > 0) { r.Made[name] = r.Made.GetValueOrDefault(name) + y; _lastOk[name] = new LastOk { At = cr.Time, Item = name, Qty = y }; }
-            else { r.MadeUnknown++; _lastOk[name] = new LastOk { At = cr.Time, Item = name, Unknown = true }; }
+            if (name != "?" && cr.Makes is int y && y > 0) { r.Made[name] = r.Made.GetValueOrDefault(name) + y; _lastOk[name] = new LastOk { At = cr.Time, Item = name, Qty = y, Queue = cr.Queue }; }
+            else { r.MadeUnknown++; _lastOk[name] = new LastOk { At = cr.Time, Item = name, Unknown = true, Queue = cr.Queue }; }
         }
         else { r.Fail++; _lastOk.Remove(name); }
+        if (was != null) Track(cr, r, was);
+    }
+
+    // ---- a queue's crafts filed under a guess, moved when its recipe is read (Steven, 2026-10-28: "make sure crafting is
+    // fixed for all crafting ... it shouldnt happen every time i try a new recipe") ----
+
+    /// <summary>What one queue's races added to the row they went under, and the races themselves, so they can move whole.</summary>
+    sealed class Filed { public string Name = ""; public readonly List<CraftResult> Races = new(); public readonly Recipe Delta = new(); }
+    readonly Dictionary<int, Filed> _byQueue = new();
+
+    void Track(CraftResult cr, Recipe r, Recipe was)
+    {
+        // a queue's races go under one name; one that went under another starts its record over (the session never does that)
+        if (!_byQueue.TryGetValue(cr.Queue, out var f) || !string.Equals(f.Name, r.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            _byQueue[cr.Queue] = f = new Filed { Name = r.Name };
+            while (_byQueue.Count > 8) _byQueue.Remove(_byQueue.Keys.Min());
+        }
+        f.Races.Add(cr);
+        AddChange(f.Delta, r, was);
+    }
+
+    /// <summary>Adds to <paramref name="d"/> what changed in a row from <paramref name="was"/> to <paramref name="now"/>.</summary>
+    static void AddChange(Recipe d, Recipe now, Recipe was)
+    {
+        d.Ok += now.Ok - was.Ok; d.Fail += now.Fail - was.Fail;
+        d.Upgraded += now.Upgraded - was.Upgraded; d.NotUpgraded += now.NotUpgraded - was.NotUpgraded;
+        d.MadeUnknown += now.MadeUnknown - was.MadeUnknown;
+        foreach (var item in now.Made.Keys.Union(was.Made.Keys, StringComparer.OrdinalIgnoreCase).ToList())
+        {
+            int n = d.Made.GetValueOrDefault(item) + now.Made.GetValueOrDefault(item) - was.Made.GetValueOrDefault(item);
+            if (n != 0) d.Made[item] = n; else d.Made.Remove(item);
+        }
+    }
+
+    /// <summary>
+    /// A queue's crafts, filed under a best guess while the panel's title couldn't be read, moved to the recipe a later read
+    /// named: what they added to the guess's row comes off it (the row goes when nothing is left of it), and the same races
+    /// are filed again under <paramref name="to"/>, with its yield. Crafts of the guess from other queues stay. False when
+    /// this ledger filed none of the queue's races (a view started after them).
+    /// </summary>
+    public bool Move(int queue, string to, int? makes)
+    {
+        if (queue <= 0 || to.Length < 2 || !_byQueue.TryGetValue(queue, out var f) || f.Races.Count == 0) return false;
+        if (string.Equals(f.Name, to, StringComparison.OrdinalIgnoreCase)) return false;
+        if (_recipes.TryGetValue(f.Name, out var r))
+        {
+            var d = f.Delta;
+            r.Ok = Math.Max(0, r.Ok - d.Ok); r.Fail = Math.Max(0, r.Fail - d.Fail);
+            r.Upgraded = Math.Max(0, r.Upgraded - d.Upgraded); r.NotUpgraded = Math.Max(0, r.NotUpgraded - d.NotUpgraded);
+            r.MadeUnknown = Math.Max(0, r.MadeUnknown - d.MadeUnknown);
+            foreach (var (item, n) in d.Made) { int left = r.Made.GetValueOrDefault(item) - n; if (left > 0) r.Made[item] = left; else r.Made.Remove(item); }
+            if (r.Attempts == 0 && r.Upgraded + r.NotUpgraded == 0 && r.Made.Count == 0 && r.MadeUnknown == 0) _recipes.Remove(f.Name);
+        }
+        if (_lastOk.TryGetValue(f.Name, out var lo) && lo.Queue == queue) _lastOk.Remove(f.Name);
+        if (string.Equals(_lastCraft, f.Name, StringComparison.OrdinalIgnoreCase)) _lastCraft = "";
+        var races = f.Races.ToList();
+        _byQueue.Remove(queue);
+        foreach (var cr in races) OnPanel(cr with { Item = to, Makes = makes });
+        return true;
     }
 
     /// <summary>The last craft of a recipe that worked: when, and what it was credited as, so a won upgrade roll can swap that for the upgrade.</summary>
-    sealed class LastOk { public DateTime At; public string Item = ""; public int Qty; public bool Unknown, Upgraded; }
+    sealed class LastOk { public DateTime At; public string Item = ""; public int Qty; public bool Unknown, Upgraded; public int Queue; }
     readonly Dictionary<string, LastOk> _lastOk = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The recipe's upgrade, from the recipe book (the 25% roll's item: "Artisan's Splendent Asvata Bow" for "Artisan's Asvata Bow"); null when the book has none or the name wasn't read whole.</summary>
@@ -103,7 +164,12 @@ public sealed class CraftLedger
     {
         if (!PanelActive(t) || _panelRecipe.Length < 2 || !_recipes.TryGetValue(_panelRecipe, out var r)) return false;
         if (!_lastOk.TryGetValue(r.Name, out var last) || last.Upgraded || t < last.At || (t - last.At).TotalSeconds > PanelSeconds) return false;
-        return UpgradeOf(r.Name) is { } up && string.Equals(up.Item, item, StringComparison.OrdinalIgnoreCase) && Upgrade(r);
+        if (UpgradeOf(r.Name) is not { } up || !string.Equals(up.Item, item, StringComparison.OrdinalIgnoreCase)) return false;
+        var was = r.Copy();
+        if (!Upgrade(r)) return false;
+        // the craft's queue keeps what it made, should its crafts move (Move)
+        if (last.Queue > 0 && _byQueue.TryGetValue(last.Queue, out var f) && string.Equals(f.Name, r.Name, StringComparison.OrdinalIgnoreCase)) AddChange(f.Delta, r, was);
+        return true;
     }
 
     /// <summary>

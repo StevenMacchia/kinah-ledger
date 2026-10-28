@@ -3731,13 +3731,14 @@ public sealed partial class TrackerSession
     /// </summary>
     internal void PanelLook(DateTime now, bool visible, bool raised, IReadOnlyList<string>? lines, bool sceneLeft = false)
     {
+        QueueTick(now);
         if (!visible)
         {
             if (!_panelUp) return;
             _panelGonePasses++;
             // a pass or two without the panel between two crafts is the same queue
             if (_panelIsCraft && !sceneLeft && (_panelGonePasses < PanelGonePasses || (now - _panelSeenAt).TotalSeconds < PanelGoneSeconds)) return;
-            if (_panelIsCraft) { CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); }
+            if (_panelIsCraft) { CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); QueueEnd(now, "the panel went"); }
             _panelUp = false; _panelIsCraft = false; _panelGonePasses = 0;
             return;
         }
@@ -3745,7 +3746,7 @@ public sealed partial class TrackerSession
         // the raised panel above the skill bar is the gathering panel, never crafting, and ends any grace of a craft before
         if (raised)
         {
-            if (_panelIsCraft) CrashLog.NoteBurst("crafting panel gone: the gathering panel is up");
+            if (_panelIsCraft) { CrashLog.NoteBurst("crafting panel gone: the gathering panel is up"); QueueEnd(now, "the gathering panel came up"); }
             _panelIsCraft = false; _panelCraftAt = DateTime.MinValue;
         }
         bool graced = _panelCraftAt != DateTime.MinValue && (now - _panelCraftAt).TotalSeconds is >= 0 and <= PanelCraftGraceSeconds;
@@ -3763,36 +3764,207 @@ public sealed partial class TrackerSession
                     : title ? "crafting panel up"
                     : recipeLine ? "crafting panel up: its recipe line shows, the title read garbled"
                     : "crafting panel up: crafting a moment ago, the title read garbled");
+            if (_panelIsCraft && !craft) QueueEnd(now, "the panel isn't crafting");
+            if (craft && !_queueOpen) QueueStart(now);
             _panelIsCraft = craft;
             var text = CraftPanel.Parse(lines);
-            // a title the panel cut short ("Splendent Orichalcum Longsword (Novice Lv...", 2026-10-26) settled against the
-            // recipe book, the recipe being crafted and what the loot list or chat showed made (CraftPanel.Settle)
-            string recipe = ""; int readLevel = 0;
+            // a title the panel cut short ("Splendent Orichalcum Longsword (Novice Lv...", 2026-10-26) or read wrong settled
+            // against the recipe book, this queue's recipe and what the loot list or chat showed made (CraftPanel.Settle);
+            // what the read means for the queue's recipe is QueueRead's
             if (craft && text is { } t)
             {
-                var st = CraftPanel.Settle(t.Recipe, _panelRecipe, Engine.RecentOutputs(now));
-                recipe = st.Recipe; readLevel = st.Level;
+                var st = CraftPanel.Settle(t.Recipe, _queueName, Engine.RecentOutputs(now));
                 if (st.Note.Length > 0) CrashLog.NoteBurst($"crafting panel: \"{t.Recipe}\" {st.Note}");
+                if (st.Recipe.Length >= 2) QueueRead(now, st.Recipe, st.Level, CraftPanel.Sure(t.Recipe, st.Recipe), lines);
             }
-            // a known recipe read once with a letter wrong ("Wihd Serum", 20:26:22) is the same recipe, not a new one
-            if (recipe.Length >= 2 && recipe != _panelRecipe && _panelRecipe.Length >= 2 && RecipeBook.ForOutput(_panelRecipe) != null && RecipeBook.ForOutput(recipe) == null
-                && NameMatch.Distance(recipe.ToLowerInvariant(), _panelRecipe.ToLowerInvariant(), 20) <= 20)
-            {
-                CrashLog.NoteBurst($"crafting panel: \"{recipe}\" read for {_panelRecipe}, kept");
-                recipe = "";
-            }
-            if (recipe.Length >= 2 && readLevel > 0) _panelLevel = readLevel;
-            else if (recipe.Length >= 2 && recipe != _panelRecipe) _panelLevel = 0;
-            if (recipe.Length >= 2 && recipe != _panelRecipe) { _panelRecipe = recipe; CrashLog.Note($"crafting panel: {recipe} (read: {string.Join(" | ", lines)})"); }
         }
         else if (!raised && !_panelIsCraft && graced)
         {
             CrashLog.NoteBurst("crafting panel up: crafting a moment ago");
             _panelIsCraft = true;
+            if (!_queueOpen) QueueStart(now);
         }
         if (_panelIsCraft) _panelCraftAt = now;
         _panelUp = true;
     }
+
+    // ---- one queue, one recipe (Steven, 2026-10-28: "make sure crafting is fixed for all crafting not just a specific
+    // craft it shouldnt happen every time i try a new recipe") ----
+    // A queue runs from the panel coming up crafting to its going for good (PanelGonePasses and PanelGoneSeconds away, the
+    // gathering panel, a scene that ends it). Every craft in it is the same recipe. Until a read names that recipe for
+    // certain (CraftPanel.Sure: the recipe book has it as read whole), or the same name the book doesn't have is read twice,
+    // the queue's races are held, then filed under it. Before 0.8.52 each craft went under the latest read, so the first
+    // read of a new recipe, garbled ("tvQewa Potion" for Mana Potion, 2026-10-27), was a row of its own until the next
+    // clean read, and a near miss of the recipe before could be taken for it. A queue whose title stays unread past
+    // QueueHoldSeconds is filed under its best guess so the window keeps up, and its crafts move to the recipe a later read
+    // names (CraftLedger.Move). A queue's recipe changes only when another recipe is read whole twice in a row (a new queue
+    // started within PanelGoneSeconds); a single read of another name is a misread and is kept out.
+
+    /// <summary>How long a queue's crafts wait for its recipe to be read before they are filed under the best guess.</summary>
+    public const double QueueHoldSeconds = 30;
+
+    int _queueId;
+    bool _queueOpen, _queueSure, _queueGuessed;
+    string _queueName = ""; int _queueLevel;
+    string _switchTo = ""; int _switchLevel;
+    readonly List<(string Name, int Level, bool Sure, DateTime At)> _queueReads = new();
+    readonly List<(DateTime At, bool Ok, bool Combo)> _heldRaces = new();
+
+    void QueueStart(DateTime now)
+    {
+        if (_queueOpen) QueueEnd(now, "a new queue began");
+        _queueId++; _queueOpen = true; _queueSure = false; _queueGuessed = false;
+        _queueName = ""; _queueLevel = 0; _switchTo = ""; _switchLevel = 0;
+        _queueReads.Clear(); _heldRaces.Clear();
+    }
+
+    /// <summary>The queue is over: crafts still waiting for its recipe are filed under the best guess (or the recipe read whole that was taking over).</summary>
+    void QueueEnd(DateTime now, string why)
+    {
+        if (!_queueOpen) return;
+        if (_heldRaces.Count > 0)
+        {
+            if (_switchTo.Length > 0) SwitchQueue(now, $"{why}, the crafts after it held");
+            else if (!_queueSure) QueueGuess(now, why);
+        }
+        _queueOpen = false; _switchTo = "";
+    }
+
+    /// <summary>Crafts held past <see cref="QueueHoldSeconds"/>: filed under the best guess (or the recipe read whole that was taking over), so the window keeps up.</summary>
+    void QueueTick(DateTime now)
+    {
+        if (!_queueOpen || _heldRaces.Count == 0 || (now - _heldRaces[0].At).TotalSeconds < QueueHoldSeconds) return;
+        if (_switchTo.Length > 0) SwitchQueue(now, $"its crafts held {QueueHoldSeconds:0} s");
+        else if (!_queueSure && !_queueGuessed) QueueGuess(now, $"its title unread for {QueueHoldSeconds:0} s");
+    }
+
+    /// <summary>The recipe this queue's reads point to most: a sure read counts three, a name the book has wins a tie, then the latest. With no read, the recipe before (crafting held over a short gap).</summary>
+    (string Name, int Level)? QueueBest()
+    {
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        if (_queueReads.Count == 0)
+        {
+            if (_panelRecipe.Length < 2) return null;
+            return (_panelRecipe, _panelLevel);
+        }
+        var best = _queueReads.GroupBy(r => r.Name, cmp)
+            .Select(g => (Name: g.Key, Score: g.Sum(r => r.Sure ? 3 : 1) + (RecipeBook.ForOutput(g.Key) != null ? 0.5 : 0), Last: g.Max(r => r.At), Level: g.Select(r => r.Level).LastOrDefault(l => l > 0)))
+            .OrderByDescending(x => x.Score).ThenByDescending(x => x.Last).First();
+        return (best.Name, best.Level);
+    }
+
+    void QueueGuess(DateTime now, string why)
+    {
+        var guess = QueueBest();
+        _queueGuessed = true;
+        _queueName = guess?.Name ?? ""; _queueLevel = guess?.Level ?? 0;
+        _panelRecipe = _queueName; _panelLevel = _queueLevel;
+        CrashLog.Note($"crafting panel: {(_queueName.Length > 0 ? _queueName : "an unread recipe")}, this queue's best guess ({why}; reads: {string.Join(" | ", _queueReads.Select(r => r.Name + (r.Sure ? "" : "?")))})");
+        FileHeld(now);
+    }
+
+    void Confirm(DateTime now, string name, int level, string why)
+    {
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        if (_queueName.Length >= 2 && !cmp.Equals(_queueName, name))
+        {
+            // its crafts went under a guess, or a name the book doesn't have: they move to the recipe read now, in every
+            // count that filed them
+            int? makes = RecipeBook.YieldFor(name, level);
+            int moved = 0;
+            foreach (var e in new[] { Engine, Secondary, CraftView }.Concat(Views())) if (e?.CraftMove(_queueId, name, makes) == true) moved++;
+            CrashLog.Note($"crafting panel: this queue's crafts filed under {_queueName} moved to {name}, read later ({moved} counts)");
+        }
+        _queueSure = true; _queueGuessed = false;
+        _queueName = name; _queueLevel = level;
+        _panelRecipe = name; _panelLevel = level;
+        CrashLog.Note($"crafting panel: {name}, this queue's recipe ({why})");
+        FileHeld(now);
+    }
+
+    /// <summary>Another recipe read whole twice in a row while the queue's was settled: a new queue from the first of those reads.</summary>
+    void SwitchQueue(DateTime now, string why)
+    {
+        var (name, level) = (_switchTo, _switchLevel);
+        var held = _heldRaces.ToList(); _heldRaces.Clear();
+        CrashLog.Note($"crafting panel: {name} read whole after {_queueName} ({why}): a new queue");
+        _queueOpen = false;
+        QueueStart(now);
+        _heldRaces.AddRange(held);
+        _queueReads.Add((name, level, true, now));
+        Confirm(now, name, level, "read whole, taking over from the recipe before");
+    }
+
+    /// <summary>Whether two names are one recipe: the same, or one the other's upgrade (the blue combo panel names the upgrade).</summary>
+    static bool SameRecipe(string a, string b)
+    {
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        if (cmp.Equals(a, b)) return true;
+        return RecipeBook.ForOutput(a)?.GreatOutcomes.Any(g => cmp.Equals(g.Item, b)) == true || RecipeBook.ForOutput(b)?.GreatOutcomes.Any(g => cmp.Equals(g.Item, a)) == true;
+    }
+
+    /// <summary>Whether one name may be a misread or a cut of the other: one begins the other, or they are within four letters in ten.</summary>
+    static bool Near(string a, string b)
+    {
+        if (a.Length < 2 || b.Length < 2) return false;
+        if (a.StartsWith(b, StringComparison.OrdinalIgnoreCase) || b.StartsWith(a, StringComparison.OrdinalIgnoreCase)) return true;
+        var (x, y) = (a.ToLowerInvariant(), b.ToLowerInvariant());
+        return NameMatch.Distance(x, y, Math.Max(x.Length, y.Length) * 4) != int.MaxValue;
+    }
+
+    /// <summary>One read of the panel's title, as settled: what it says of the queue's recipe.</summary>
+    void QueueRead(DateTime now, string name, int level, bool sure, IReadOnlyList<string> lines)
+    {
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        if (!_queueOpen) QueueStart(now);
+        _queueReads.Add((name, level, sure, now));
+        if (_queueReads.Count > 40) _queueReads.RemoveAt(0);
+        if (_queueSure)
+        {
+            if (SameRecipe(_queueName, name))
+            {
+                if (_switchTo.Length > 0) { CrashLog.Note($"crafting panel: {_queueName} read again, {_switchTo} was a misread"); _switchTo = ""; FileHeld(now); }
+                if (cmp.Equals(_queueName, name) && level > 0 && sure) { _queueLevel = level; _panelLevel = level; }
+                return;
+            }
+            // settled on a name the book doesn't have (a title the panel cut short, read the same twice): the book's recipe
+            // it stands for, once a read names it whole or a near miss of it settles there, takes its crafts
+            if (RecipeBook.ForOutput(_queueName) == null && RecipeBook.ForOutput(name) != null && Near(_queueName, name))
+            {
+                Confirm(now, name, level, $"the recipe book's name for {_queueName}");
+                return;
+            }
+            if (!sure) { CrashLog.NoteBurst($"crafting panel: \"{name}\" read for {_queueName}, kept (one queue, one recipe)"); return; }
+            // another recipe read whole: a new queue started within seconds, or a misread; twice in a row, it is the new one
+            if (cmp.Equals(_switchTo, name)) { SwitchQueue(now, "read whole twice in a row"); return; }
+            _switchTo = name; _switchLevel = level;
+            CrashLog.Note($"crafting panel: {name} read whole in a queue of {_queueName}: crafts held until a second read says which (read: {string.Join(" | ", lines)})");
+            return;
+        }
+        if (sure) { Confirm(now, name, level, $"read whole: {string.Join(" | ", lines)}"); return; }
+        // a name the book doesn't have, read the same twice: a recipe the book lacks
+        if (RecipeBook.ForOutput(name) == null && _queueReads.Count(r => cmp.Equals(r.Name, name)) >= 2) { Confirm(now, name, level, "a name the recipe book doesn't have, read the same twice"); return; }
+        if (_queueGuessed) return;
+        CrashLog.NoteBurst($"crafting panel: \"{name}\" read, not sure yet: this queue's crafts wait for its recipe (read: {string.Join(" | ", lines)})");
+    }
+
+    /// <summary>The crafts held for the queue's recipe, filed under it now, at their own times.</summary>
+    void FileHeld(DateTime now)
+    {
+        if (_heldRaces.Count == 0) return;
+        var held = _heldRaces.ToList(); _heldRaces.Clear();
+        CrashLog.Note($"crafting panel: {held.Count} craft{(held.Count == 1 ? "" : "s")} held for this queue's recipe filed under {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")}");
+        foreach (var (at, ok, combo) in held) PanelRace(_panelRecipe, ok, combo, at, _panelLevel, _queueId);
+    }
+
+    /// <summary>Whether this queue's crafts wait for its recipe: not settled yet, or another recipe read whole that may be taking over.</summary>
+    bool QueueHolds => _queueOpen && ((!_queueSure && !_queueGuessed) || _switchTo.Length > 0);
+
+    /// <summary>The recipe the panel is likely making now, for telling its output from a drop: the queue's, else its best guess so far.</summary>
+    string PanelShows => QueueHolds && _switchTo.Length == 0 && QueueBest() is { } b && b.Name.Length >= 2 && RecipeBook.ForOutput(b.Name) != null ? b.Name : _panelRecipe;
+
+    /// <summary>A stop or the end of a replay: crafts still held for the queue's recipe are filed under the best guess.</summary>
+    internal void FlushCraftQueue(DateTime now) => QueueEnd(now, "the count stopped");
 
     /// <summary>Passes and seconds the crafting panel must be away before its queue is over (between two crafts it goes for about a second).</summary>
     public const int PanelGonePasses = 3;
@@ -3833,7 +4005,7 @@ public sealed partial class TrackerSession
     {
         // the crafting window's hold and its pictures last as long as the queue runs, and the passes keep a fight's pace
         Target.MarkCraft(now); _lastActivity = now;
-        PanelUp(_panelRecipe, now);
+        PanelUp(PanelShows, now);
     }
 
     /// <summary>Whether the panel is crafting now (replay asks, to do a crafting pass's part for a "panel" read).</summary>
@@ -3849,8 +4021,17 @@ public sealed partial class TrackerSession
 
     void CraftBarRace(DateTime now, bool ok, bool combo, string bars)
     {
+        QueueTick(now);
+        if (!_queueOpen) QueueStart(now);
+        if (QueueHolds)
+        {
+            // the queue's recipe isn't settled yet: the craft waits for it (one queue, one recipe)
+            _heldRaces.Add((now, ok, combo));
+            CrashLog.Note($"crafting panel: {(combo ? "combo roll " : "")}{(ok ? "success" : "fail")}, held until this queue's recipe is read ({bars})");
+            return;
+        }
         CrashLog.Note($"crafting panel: {(combo ? "combo roll " : "")}{(ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} ({bars})");
-        PanelRace(_panelRecipe, ok, combo, now, _panelLevel);
+        PanelRace(_panelRecipe, ok, combo, now, _panelLevel, _queueId);
     }
 
     /// <summary>
@@ -3892,10 +4073,10 @@ public sealed partial class TrackerSession
     /// One finished race of the panel's Success and Fail bars: the only way a craft is counted (Steven, 2026-10-23: "if u
     /// dont see the crafting bars why the fuck are u adding it to a craft window"). Also what replay and the tests feed.
     /// </summary>
-    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0)
+    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0)
     {
         PanelUp(recipe, now);
-        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia, Makes = recipe.Length >= 2 ? RecipeBook.YieldFor(recipe, level) : null };
+        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia, Makes = recipe.Length >= 2 ? RecipeBook.YieldFor(recipe, level) : null, Queue = queue };
         Count(ev);
         CraftView.Apply(ev);
         Accuracy.Add("craft_panel");
@@ -3983,6 +4164,7 @@ public sealed partial class TrackerSession
         foreach (var w in _counts.Flush()) CountAssumed(w.Raw);
         ReleaseAwaiting(t.AddSeconds(WitnessWaitSeconds), final: true);   // a stop or the end of a replay: decided now
         foreach (var e in new[] { Engine, Secondary }.Concat(Views())) e?.SettleQuest(t, final: true);
+        FlushCraftQueue(at ?? DateTime.UtcNow);   // crafts still waiting for their queue's recipe, under its best guess
     }
 
     // ---- two witnesses for a drop (Steven's rule: no single-signal counting; the audit of 2026-10-23) ----

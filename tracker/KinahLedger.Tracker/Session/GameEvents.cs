@@ -42,6 +42,8 @@ public sealed record CraftResult(DateTime Time, string Item, bool Ok, bool Combo
 {
     /// <summary>What one success of this recipe makes, from the panel's recipe level (RecipeBook.YieldFor); null when it isn't known.</summary>
     public int? Makes { get; init; }
+    /// <summary>The crafting panel's queue the race ran in (TrackerSession counts them from 1; 0 for none), so a queue's crafts filed under a guess can move to the recipe read later.</summary>
+    public int Queue { get; init; }
 }
 /// <summary>An enchant attempt: the item, the step (+From to +To, -1 when the line didn't show it) and whether it worked.</summary>
 public sealed record EnchantResult(DateTime Time, string Item, int From, int To, bool Ok) : GameEvent(Time);
