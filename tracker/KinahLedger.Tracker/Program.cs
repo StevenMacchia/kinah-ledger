@@ -4443,7 +4443,7 @@ options: --process aion[,other]");
                     var w = want.GetValueOrDefault(x); want[x] = (w.Ok + 2, w.Fail + 1);
                 }
                 Check($"crafting: every recipe in the book ({pairs.Count} recipes, {want.Count} items) opens its queue on a junk read; its crafts wait and go under it, none under a misread or a neighbour",
-                    $"book loaded {pairs.Count >= 400} · crafting view wrong: {Wrong(cq.CraftView, want)} · count wrong: {Wrong(cq.Engine, want)}",
+                    $"book loaded {want.Count >= 300 && want.Count == RecipeBook.Outputs.Count()} · crafting view wrong: {Wrong(cq.CraftView, want)} · count wrong: {Wrong(cq.Engine, want)}",
                     "book loaded True · crafting view wrong: none · count wrong: none");
 
                 // the same, with the title unread for longer than a queue's crafts wait (QueueHoldSeconds): they go under the best
