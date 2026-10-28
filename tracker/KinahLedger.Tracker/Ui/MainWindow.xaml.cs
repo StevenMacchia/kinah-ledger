@@ -550,7 +550,6 @@ public partial class MainWindow : Window
     {
         if (_demo || _moving) return;
         WatchGame();
-        AskWhenFree();   // an update found during a run asks once the run has stopped
         var chat = _watcher.Chat; var farm = RunEngine;
         var show = Shown();
         if (show != null && (farm != null || show != _lastRun))

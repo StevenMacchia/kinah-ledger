@@ -4,13 +4,17 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The panel's one line under its figures (its "notice" value), shared by everything that has to reach a player who is
-/// in the game and not looking at the window: a price alert, the start/stop shortcut not working, and an update waiting
-/// for the player to leave the game. The first that applies shows.
+/// in the game and not looking at the window: a price alert, the start/stop shortcut not working, and an update that is
+/// ready. The first that applies shows.
 /// </summary>
 public partial class MainWindow
 {
-    /// <summary>The update's own line ("Update ready · installs when you leave the game"), set by Ui/MainWindow.Updates.cs; "" when none.</summary>
+    /// <summary>The update's own line ("Update ready · installs when you close the tracker"), set by Ui/MainWindow.Updates.cs (TellAboutUpdate); "" when none.</summary>
     string _updateNotice = "";
+    /// <summary>How long the update's line stays on the panel once the panel is in view: the banner on the window keeps saying it.</summary>
+    const int UpdateNoticeSeconds = 60;
+    /// <summary>Until when the update's line shows; MaxValue until the panel is first in view after it was set.</summary>
+    DateTime _updateNoticeUntil = DateTime.MaxValue;
 
     /// <summary>How long the shortcut's problem stays on the panel once the panel is in view.</summary>
     const int HotkeyNoticeSeconds = 60;
@@ -68,7 +72,7 @@ public partial class MainWindow
     /// <summary>The panel's "noticeClock" value while the That was wrong notice shows ("&lt;end ticks&gt;/3": the Card and the Ticker draw its gold line), else "".</summary>
     string HudNoticeClock() => DateTime.UtcNow < _markNoticeUntil ? $"{_markNoticeUntil.Ticks}/{MarkNoticeSeconds}" : "";
 
-    /// <summary>The panel's notice now: the That was wrong key's answer (its 3 s), a price alert (its 8 s), a shortcut's problem (its first minute in view), else the update's line.</summary>
+    /// <summary>The panel's notice now: the That was wrong key's answer (its 3 s), a price alert (its 8 s), a shortcut's problem (its first minute in view), else the update's line (its first minute in view).</summary>
     string HudNotice()
     {
         if (DateTime.UtcNow < _markNoticeUntil) return _markNotice;
@@ -79,6 +83,8 @@ public partial class MainWindow
             if (_hotkeyNoticeUntil == DateTime.MaxValue && _hudValues.GetValueOrDefault("show", "") != "hidden") _hotkeyNoticeUntil = DateTime.UtcNow.AddSeconds(HotkeyNoticeSeconds);
             if (DateTime.UtcNow < _hotkeyNoticeUntil) return hk.Short;
         }
-        return _updateNotice;
+        if (_updateNotice.Length == 0) return "";
+        if (_updateNoticeUntil == DateTime.MaxValue && _hudValues.GetValueOrDefault("show", "") != "hidden") _updateNoticeUntil = DateTime.UtcNow.AddSeconds(UpdateNoticeSeconds);
+        return DateTime.UtcNow < _updateNoticeUntil ? _updateNotice : "";
     }
 }
