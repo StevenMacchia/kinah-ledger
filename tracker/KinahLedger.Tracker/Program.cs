@@ -4708,10 +4708,78 @@ options: --process aion[,other]");
                      && Servers.Find("eu", "Tiamat (Elyos)")?.Key == "eu-tiamat-elyos" && Servers.Find("eu", "Indnath (Asmodian)")?.Key == "eu-indnath-asmodian";
         ok &= rosterOk;
         Console.WriteLine($"  {roster.Count} servers in {Servers.Regions.Length} regions, keys {rosterKeys[0]} .. {rosterKeys[^1]}  {(rosterOk ? "ok" : "MISMATCH: expected 106 distinct well-formed keys")}");
+        Console.WriteLine("\nPrice uploads (what is queued, and what each answer from the site does to the queue):");
+        ok &= PriceUploadTests(items);
         Console.WriteLine("\nPlayer features (best crafts, where to farm, gear score, price alerts):");
         ok &= PlayerTests.Run();
         Console.WriteLine(ok ? "\nAll market cases passed." : "\nMarket mismatch, see above.");
         return ok ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The price queue against a fake site (2026-10-28): an ask the site can't take is never queued; a 4xx other than 408
+    /// and 429 drops its batch for good; a 5xx keeps it for the next try; a 429 keeps it and holds every send for the site's
+    /// retry-after. Before, one refused batch stayed at the front of the queue and was resent every ten seconds forever.
+    /// </summary>
+    static bool PriceUploadTests(ItemDictionary items)
+    {
+        bool ok = true;
+        void Check(string what, bool pass) { ok &= pass; Console.WriteLine($"  {what,-78} {(pass ? "ok" : "MISMATCH")}"); }
+
+        var row = "0 6576 0 6,576 2d 23h 0 6577 0 6,577 2d 22h 0 6577 0 6,577 2d 23h 0 6577 0 6,577 2d 23h";
+        Check("a Market row read whole as the name (over 64 characters) can't be shared", !MarketCapture.Shareable(row, 6576, 1));
+        Check("a name of 64 characters can", MarketCapture.Shareable(new string('a', 64), 1, 1));
+        Check("a price of 0 or over 10^12, a stack of 0 or over 100,000, a control character can't",
+            !MarketCapture.Shareable("Spiritstone", 0, 1) && !MarketCapture.Shareable("Spiritstone", 1_000_000_000_001, 1)
+            && !MarketCapture.Shareable("Spiritstone", 1, 0) && !MarketCapture.Shareable("Spiritstone", 1, 100_001)
+            && !MarketCapture.Shareable("Spirit\u0001stone", 1, 1) && !MarketCapture.Shareable("  ", 1, 1));
+
+        Check("400, 404 and 413 are refused for good; 408, 429, 500 and no connection may pass",
+            new SendResult(false, 400, null, "").Refused && new SendResult(false, 404, null, "").Refused && new SendResult(false, 413, null, "").Refused
+            && !new SendResult(false, 408, null, "").Refused && !new SendResult(false, 429, null, "").Refused
+            && !new SendResult(false, 500, null, "").Refused && !SendResult.NoConnection.Refused && !new SendResult(true, 202, null, "").Refused);
+        Check("the field a refusal names is read from its body",
+            new SendResult(false, 400, null, "{\"ok\":false,\"error\":\"expected an item name or id\",\"field\":\"asks[3].item\"}").Field == "asks[3].item"
+            && new SendResult(false, 400, null, "not json").Field == "" && new SendResult(false, 400, null, "{\"field\":3}").Field == "");
+        using (var r429 = new HttpResponseMessage((System.Net.HttpStatusCode)429))
+        {
+            r429.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(37));
+            using var rLong = new HttpResponseMessage((System.Net.HttpStatusCode)429);
+            rLong.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromHours(5));
+            using var rNone = new HttpResponseMessage((System.Net.HttpStatusCode)429);
+            Check("retry-after: 37 s is 37 s, 5 hours is capped at one, none is none",
+                Uploader.RetryAfterOf(r429) == TimeSpan.FromSeconds(37) && Uploader.RetryAfterOf(rLong) == Uploader.MaxRetryAfter && Uploader.RetryAfterOf(rNone) == null);
+        }
+
+        var answers = new Queue<SendResult>();
+        int sends = 0; PriceBatch? last = null;
+        var m = new MarketCapture(new Settings(), items, null, "Siel (Elyos)")
+        {
+            Send = (b, _) => { sends++; last = b; return Task.FromResult(answers.Count > 0 ? answers.Dequeue() : new SendResult(true, 202, null, "{\"ok\":true}")); }
+        };
+        bool Flush() => Task.Run(() => m.FlushAsync()).GetAwaiter().GetResult();
+
+        m.QueueTyped(row, 6576);
+        Check("such a name is counted and never queued", m.Pending == 0 && m.Unshareable == 1);
+
+        m.QueueTyped("Spiritstone", 7499); m.QueueTyped("Raw Leather", 14949);
+        answers.Enqueue(new SendResult(false, 400, null, "{\"ok\":false,\"error\":\"expected an item name or id\",\"field\":\"asks[1].item\"}"));
+        Check("a 400 drops the batch: nothing is left to send again", !Flush() && m.Pending == 0 && m.Refused == 2 && sends == 1);
+        Check("  the window says what the site named", m.LastError.Contains("400 asks[1].item"));
+        Check("  the next flush sends nothing", !Flush() && sends == 1);
+        m.QueueTyped("Spiritstone", 7500);
+        Check("  and the next price goes out alone", Flush() && sends == 2 && last?.asks.Count == 1 && m.Shared == 1 && m.LastError == "");
+
+        m.QueueTyped("Spiritstone", 7501);
+        answers.Enqueue(new SendResult(false, 503, null, ""));
+        Check("a 503 keeps the batch for the next try", !Flush() && m.Pending == 1 && m.Refused == 2);
+        Check("  which sends it", Flush() && m.Pending == 0 && sends == 4 && m.Shared == 2);
+
+        m.QueueTyped("Spiritstone", 7502);
+        answers.Enqueue(new SendResult(false, 429, TimeSpan.FromSeconds(30), "{\"ok\":false,\"retry_after\":30}"));
+        Check("a 429 keeps the batch", !Flush() && m.Pending == 1 && sends == 5);
+        Check("  and nothing goes out until its retry-after is over", !m.FlushDue && !Flush() && sends == 5 && m.LastError.Contains("30 s"));
+        return ok;
     }
 
     /// <summary>Runs the Market locator and reader over a screenshot: what it finds, where, and what each row parses to.</summary>

@@ -23,6 +23,8 @@ public sealed class MarketCapture
     readonly List<PriceExpired> _expired = new();
     readonly HashSet<string> _items = new();
     DateTime _detectAt = DateTime.MinValue, _firstPendingAt = DateTime.MinValue;
+    /// <summary>No send before this: the site answered 429 and said how long to wait (a minute when it didn't say).</summary>
+    DateTime _holdUntil = DateTime.MinValue;
     int _emptyReads;
     bool _enabled;
 
@@ -60,6 +62,12 @@ public sealed class MarketCapture
     public int Shared { get; private set; }
     /// <summary>Queued asks that couldn't be sent because there is no endpoint or no server yet.</summary>
     public int NotSent { get; private set; }
+    /// <summary>Asks, sales and expiries the site refused (a 4xx other than 408 and 429): dropped, never sent again.</summary>
+    public int Refused { get; private set; }
+    /// <summary>Asks read but never queued because the site couldn't take them (a name longer than it accepts, say).</summary>
+    public int Unshareable { get; private set; }
+    /// <summary>How each batch goes out; tests swap in a fake site.</summary>
+    public Func<PriceBatch, UploadSettings, Task<SendResult>> Send { get; set; } = Uploader.SendPricesAsync;
     public int Items { get { lock (_lock) return _items.Count; } }
     public int Pending { get { lock (_lock) return _pending.Count + _sales.Count + _expired.Count; } }
     /// <summary>The player's own sales and expiries read from the chat this session, and how many of those went out.</summary>
@@ -114,8 +122,7 @@ public sealed class MarketCapture
                 {
                     _seen[ask.Key] = now;
                     _items.Add(ask.Item);
-                    if (_pending.Count == 0) _firstPendingAt = now;
-                    if (_pending.Count < 2000) _pending.Add(new PriceAsk(ask.Item, ask.UnitPrice, ask.Qty, now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+                    Enqueue(ask.Item, ask.UnitPrice, ask.Qty, now);
                 }
             }
             if (fresh) { AsksSeen++; LastAsk = ask.ToString(); }
@@ -174,6 +181,30 @@ public sealed class MarketCapture
     /// <summary>The name asks for the same item go out under, so a sale and an ask land on the same row of the site's board.</summary>
     string Canonical(string name) => _dict.NameOf(_dict.IdOf(name));
 
+    /// <summary>Queues one ask for the site, under the lock, when the site can take it; one it can't is counted, never queued.</summary>
+    void Enqueue(string item, long unitPrice, int qty, DateTime now)
+    {
+        if (!Shareable(item, unitPrice, qty)) { Unshareable++; return; }
+        if (_pending.Count == 0) _firstPendingAt = now;
+        if (_pending.Count < 2000) _pending.Add(new PriceAsk(item.Trim(), unitPrice, qty, now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+    }
+
+    /// <summary>The site's own limits for one ask (backend validate.ts, priceAsk): a name of 1 to 64 characters with no control characters, a price of 1 to 10^12, a stack of 1 to 100,000.</summary>
+    public const int MaxItemLength = 64;
+    public const long MaxUnitPrice = 1_000_000_000_000;
+    public const int MaxQty = 100_000;
+
+    /// <summary>
+    /// Whether the site would take this ask. A Market row read whole as the name ("0 6576 0 6,576 2d 23h …", well over 64
+    /// characters) made every batch it rode in a 400 (2026-10-28); such an ask stays on this PC.
+    /// </summary>
+    public static bool Shareable(string? item, long unitPrice, int qty)
+    {
+        var t = (item ?? "").Trim();
+        return t.Length is >= 1 and <= MaxItemLength && !t.Any(char.IsControl)
+            && unitPrice is >= 1 and <= MaxUnitPrice && qty is >= 1 and <= MaxQty;
+    }
+
     /// <summary>A price the player typed on a card ("what I see in the game"), queued as their read when sharing is on.</summary>
     public void QueueTyped(string item, long unitPrice)
     {
@@ -181,8 +212,7 @@ public sealed class MarketCapture
         var now = DateTime.UtcNow;
         lock (_lock)
         {
-            if (_pending.Count == 0) _firstPendingAt = now;
-            if (_pending.Count < 2000) _pending.Add(new PriceAsk(Canonical(item), unitPrice, 1, now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+            Enqueue(Canonical(item), unitPrice, 1, now);
         }
     }
 
@@ -193,6 +223,7 @@ public sealed class MarketCapture
             lock (_lock)
             {
                 int n = _pending.Count + _sales.Count + _expired.Count;
+                if (DateTime.UtcNow < _holdUntil) return false;   // the site asked to wait (429)
                 return n > 0 && (_pending.Count >= _cfg.BatchSize || (DateTime.UtcNow - _firstPendingAt).TotalSeconds >= _cfg.FlushSec);
             }
         }
@@ -236,8 +267,7 @@ public sealed class MarketCapture
             lock (_lock)
             {
                 _seen[ask.Key] = now; _items.Add(ask.Item);
-                if (_pending.Count == 0) _firstPendingAt = now;
-                if (_pending.Count < 2000) _pending.Add(new PriceAsk(ask.Item, ask.UnitPrice, ask.Qty, now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")));
+                Enqueue(ask.Item, ask.UnitPrice, ask.Qty, now);
             }
             AsksSeen++; LastAsk = ask.ToString();
         }
@@ -257,6 +287,7 @@ public sealed class MarketCapture
         lock (_lock)
         {
             if (_pending.Count + _sales.Count + _expired.Count == 0) return false;
+            if (DateTime.UtcNow < _holdUntil) return false;   // the site asked to wait (429); LastError says how long
             batch = _pending.Take(_cfg.BatchSize).ToList(); sales = _sales.ToList(); expired = _expired.ToList();
         }
         if (string.IsNullOrWhiteSpace(_upload.PricesUrl) || string.IsNullOrWhiteSpace(Server))
@@ -264,22 +295,43 @@ public sealed class MarketCapture
             lock (_lock) { _pending.RemoveRange(0, batch.Count); _sales.Clear(); _expired.Clear(); NotSent += batch.Count + sales.Count + expired.Count; _firstPendingAt = DateTime.UtcNow; }
             return false;
         }
-        var ok = await Uploader.SendPricesAsync(new PriceBatch(RunPayload.AppVersion, ServerKey, InstallId.Get(), batch, sales.Count > 0 ? sales : null, expired.Count > 0 ? expired : null), _upload);
+        var res = await Send(new PriceBatch(RunPayload.AppVersion, ServerKey, InstallId.Get(), batch, sales.Count > 0 ? sales : null, expired.Count > 0 ? expired : null), _upload);
+        string? note = null;
         lock (_lock)
         {
-            if (ok)
+            if (res.Ok)
             {
                 _pending.RemoveRange(0, batch.Count); _sales.RemoveRange(0, sales.Count); _expired.RemoveRange(0, expired.Count);
                 Shared += batch.Count; SalesShared += sales.Count; LastError = "";
             }
+            else if (res.Refused)
+            {
+                // refused for what is in it: sent again it gets the same answer, so it is dropped. Before 2026-10-28 it stayed at
+                // the front of the queue and went out every ten seconds for good, and nothing queued after it was ever shared
+                int n = batch.Count + sales.Count + expired.Count;
+                _pending.RemoveRange(0, batch.Count); _sales.RemoveRange(0, sales.Count); _expired.RemoveRange(0, expired.Count);
+                Refused += n;
+                var why = res.Status + (res.Field.Length > 0 ? " " + res.Field : "");
+                LastError = $"the site refused {n:N0} price{(n == 1 ? "" : "s")} ({why}); not sent again";
+                note = $"market prices: the site answered {why}; {n} dropped, not sent again";
+                _firstPendingAt = DateTime.UtcNow;
+            }
             else
             {
-                LastError = "couldn't reach the site";
+                // may pass later, so kept and sent again; a 429 first waits as long as the site asked (a minute when it didn't say)
+                if (res.TooMany || res.RetryAfter != null)
+                {
+                    var wait = res.RetryAfter ?? TimeSpan.FromMinutes(1);
+                    _holdUntil = DateTime.UtcNow + wait;
+                    LastError = $"the site asked to wait {Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds))} s";
+                }
+                else LastError = "couldn't reach the site";
                 _firstPendingAt = DateTime.UtcNow;
                 if (_pending.Count > 500) _pending.RemoveRange(0, _pending.Count - 500);   // keep the newest for the retry
             }
         }
-        return ok;
+        if (note != null) CrashLog.NoteBurst(note);
+        return res.Ok;
     }
 
     /// <summary>One line for the window: what the reader is doing and what it has shared this session.</summary>
