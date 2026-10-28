@@ -117,6 +117,7 @@ public static class WpfApp
 
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
+        Check(w.PartForTest == "Farming", "the window opens on Farming (0.8.55)");
         w.ShowDemo();
         var startSkin = Skins.Current;
         // a known start: the window and tray choices off (0.7.6 turns two of them on for new installs)
@@ -125,12 +126,13 @@ public static class WpfApp
 
         var o = Open();
         Check(!o.SaveBtn.IsEnabled, "Save is off until something changes");
+        Check(o.FollowChk.IsChecked == true && w.Prefs.FollowActivity, "Switch pages to what I'm doing: on by default");
         Flip(o.HideOnCloseChk);
         Check(o.SaveBtn.IsEnabled, "a change turns Save on");
         Flip(o.HideOnCloseChk);
         Check(!o.SaveBtn.IsEnabled, "changing it back turns Save off again");
 
-        Flip(o.CloseToTrayChk); Flip(o.MinToTrayChk); Flip(o.HideOnCloseChk);
+        Flip(o.CloseToTrayChk); Flip(o.MinToTrayChk); Flip(o.HideOnCloseChk); Flip(o.FollowChk);
         o.GameStartBox.SelectedIndex = 1;
         Flip(o.ShareChk);
         var eu = Data.Servers.Regions.First(r => r.Key != w.RegionKey);
@@ -142,12 +144,13 @@ public static class WpfApp
         Click((System.Windows.Controls.Button)o.SkinHost.Children[Array.FindIndex(Skins.All, s => s.Key == other)]);
         Check(Skins.Current == other, "a theme chip previews the theme at once");
         o.GearBox.Text = "1450";
-        Check(!w.Prefs.CloseToTray && w.Prefs.Share && w.Prefs.GearScore != 1450, "nothing applies before Save");
+        Check(!w.Prefs.CloseToTray && w.Prefs.Share && w.Prefs.GearScore != 1450 && w.Prefs.FollowActivity, "nothing applies before Save");
         Click(o.SaveBtn);
         DoEvents();
         Check(!o.IsVisible, "Save closes the window");
         var p = w.Prefs;
         Check(p.CloseToTray && p.MinimizeToTray && p.HideWhenGameCloses, "window and tray choices saved");
+        Check(!p.FollowActivity, "Switch pages to what I'm doing: turned off and saved");
         Check(p.OnGameStart == "tray", "when Aion 2 starts: stay in the tray");
         Check(!p.Share && !w.AppSettings.Upload.Enabled, "sharing off reaches the uploader");
         Check(w.RegionKey == eu.Key && w.Server?.Label == euServer.Label, "server saved: " + w.Server?.Label);
@@ -157,6 +160,7 @@ public static class WpfApp
 
         o = Open();
         Check(o.CloseToTrayChk.IsChecked == true && o.GameStartBox.SelectedIndex == 1 && o.ServerPick.SelectedItem is Data.GameServer gs && gs.Label == euServer.Label, "Options opens with the saved choices");
+        Check(o.FollowChk.IsChecked == false, "...Switch pages to what I'm doing among them, off");
         Flip(o.HudChk);
         var third = Skins.All.First(s => s.Key != other).Key;
         Click((System.Windows.Controls.Button)o.SkinHost.Children[Array.FindIndex(Skins.All, s => s.Key == third)]);
@@ -462,6 +466,33 @@ public static class WpfApp
             Click(o.HudPlaceBtn);
             Check(!w.PlacementGuideOpen && o.IsVisible, "Options › In game › Place the panel… with no game: a note, no guide");
             o.Close();
+        }
+
+        // the page follows what the player is doing (0.8.55, Session/PageFollow.cs), through the window's own code: a change
+        // that holds 5 s switches the page and lights its tab, a tab clicked by hand stays until the activity moves on, and
+        // switched off nothing moves. parse-test has the rules in full; this is the window's side of them.
+        {
+            w.ShowDemo(); DoEvents();
+            p.FollowActivity = true;
+            var ft = DateTime.UtcNow;
+            string Follow(Session.ActivityKind kind, double secs)
+            {
+                for (double x = 0; x < secs; x += 0.5) { w.FollowForTest(kind, ft); ft = ft.AddSeconds(0.5); }
+                DoEvents();
+                return w.PartForTest;
+            }
+            bool Lit(System.Windows.Controls.Button tab) => ReferenceEquals(tab.Style, w.FindResource("SegOn"));
+            Check(Follow(Session.ActivityKind.Farming, 10) == "Farming", "the page: farming leaves it on Farming");
+            Check(Follow(Session.ActivityKind.Crafting, 3) == "Farming" && Follow(Session.ActivityKind.Farming, 5) == "Farming", "...3 s of crafting doesn't move it");
+            Check(Follow(Session.ActivityKind.Crafting, 6) == "Crafting" && Lit(w.CraftTab) && !Lit(w.FarmTab), "...crafting that holds shows Crafting, its tab lit");
+            Check(Follow(Session.ActivityKind.Expedition, 6) == "Events" && Lit(w.EventsTab), "...an expedition shows Events");
+            Click(w.FarmTab);
+            Check(w.PartForTest == "Farming" && Follow(Session.ActivityKind.Expedition, 30) == "Farming", "Farming clicked in the expedition stays through it");
+            Check(Follow(Session.ActivityKind.Crafting, 6) == "Crafting", "...until crafting starts");
+            p.FollowActivity = false;
+            Check(Follow(Session.ActivityKind.Farming, 10) == "Crafting" && Follow(Session.ActivityKind.Expedition, 10) == "Crafting", "switched off: farming and an expedition leave Crafting showing");
+            p.FollowActivity = true;
+            w.ShowDemo(); DoEvents();
         }
 
         w.ForceClose();

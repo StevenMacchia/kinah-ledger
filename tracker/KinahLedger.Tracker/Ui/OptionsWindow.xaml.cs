@@ -104,6 +104,7 @@ public partial class OptionsWindow : Window
         HideOnCloseChk.IsChecked = c.HideWhenGameCloses;
         CloseToTrayChk.IsChecked = c.CloseToTray;
         MinToTrayChk.IsChecked = c.MinimizeToTray;
+        FollowChk.IsChecked = c.FollowActivity;
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
         ShareChk.IsChecked = c.Share;
@@ -228,6 +229,7 @@ public partial class OptionsWindow : Window
         HideOnCloseChk.Click += (_, _) => Edit(_edit with { HideWhenGameCloses = HideOnCloseChk.IsChecked == true });
         CloseToTrayChk.Click += (_, _) => Edit(_edit with { CloseToTray = CloseToTrayChk.IsChecked == true });
         MinToTrayChk.Click += (_, _) => Edit(_edit with { MinimizeToTray = MinToTrayChk.IsChecked == true });
+        FollowChk.Click += (_, _) => Edit(_edit with { FollowActivity = FollowChk.IsChecked == true });
         RegionPick.SelectionChanged += (_, _) =>
         {
             if (_loading || RegionPick.SelectedItem is not GameRegion r) return;
