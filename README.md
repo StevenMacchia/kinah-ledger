@@ -53,8 +53,15 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
 
    **Zones.** The tables start over when you change zone, so they show the zone you are in. Tick **All zones** under the activity picker to keep them counting across zones. Either way, what goes to the site is split by zone: each zone sends its own time, Kinah, kills and items, so one zone's drops are never filed under another.
 
-   **Compact and Full view.** The button beside Options switches between one column and Full view, every table beside
-   the run card. On a screen narrower than Full view (a 1080p screen at 150% scaling, say) both columns are drawn smaller
+   **Loot.** Under the run card, **Loot** shows what was picked up as inventory slots, one period at a time: **This zone**
+   (the run while one is on, every zone with All zones on) or **Today**, since midnight on this PC, with the zones you
+   farmed a minute or more to pin one. One total sits on its line. Hover a slot for its odds, how many come an hour and
+   what it is worth; click it for its full card, right-click it to report it. Time reads one way everywhere: 5 min,
+   1 h 12 min. Lines that only matter when something is wrong (how reading is going, reward lines left out, the last
+   line read) wait in the ⋯ menu until they do.
+
+   **Compact and Full view.** The button beside Options switches between one column (the run card and Loot) and Full
+   view, the drop tables beside them. On a screen narrower than Full view (a 1080p screen at 150% scaling, say) both columns are drawn smaller
    to fit, down to 75%; on a narrower one still the window shows Compact and says so.
 
    **Undo.** Clear the tables (the … menu), Clear on Events, Start over on Crafting, Remove on a run and Stop run in the

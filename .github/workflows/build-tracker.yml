@@ -129,6 +129,13 @@ jobs:
           KL_SHOT_TODAY=1 dist/KinahLedger.exe ui-shot shots/today --demo --full --tall
           KL_SHOT_TODAY=1 dist/KinahLedger.exe ui-shot shots/today --demo --events --tall
           KL_SHOT_TODAY=1 dist/KinahLedger.exe ui-shot shots/today --demo --compact --tall --skin daylight
+          # the calm Farming page (2026-10-28, kinah-bench/mock-calm-farming option C): its other states, each the window alone
+          # (ui-main-tracking-<state>-compact.png): a run on, the chat out of view, just after Stop run, and nothing counted yet
+          # (also in Daylight); the renders above draw LOOT on This zone, and the shots/today ones LOOT on Today
+          mkdir -p shots/states
+          for s in run paused stopped empty; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/states --demo --compact; done
+          KL_SHOT_STATE=paused dist/KinahLedger.exe ui-shot shots/states --demo --full
+          KL_SHOT_STATE=empty dist/KinahLedger.exe ui-shot shots/states --demo --compact --skin daylight
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.publish.outcome == 'success'

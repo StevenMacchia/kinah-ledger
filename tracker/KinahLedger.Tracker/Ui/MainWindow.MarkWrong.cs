@@ -166,7 +166,8 @@ public partial class MainWindow
     void HideMarkLine()
     {
         if (_markLine?.Parent is Panel p) p.Children.Remove(_markLine);
-        if (_markHint != null) _markHint.Visibility = Visibility.Visible;
+        // the Farming feed's hint stays hidden (2026-10-28: it moved to the feed's hover and ⋯); the Crafting one comes back
+        if (_markHint != null && !ReferenceEquals(_markHint, FeedHint)) _markHint.Visibility = Visibility.Visible;
         _markLine = _markHint = null;
     }
 

@@ -127,11 +127,23 @@ public static class TodayLoot
     /// <summary>"2:41": hours and minutes.</summary>
     public static string HourMin(double secs) { var t = TimeSpan.FromSeconds(Math.Max(0, secs)); return $"{(int)t.TotalHours}:{t.Minutes:00}"; }
 
+    /// <summary>
+    /// How long, the one way the Farming page writes it: "5 min", "2 h 41 min", "2 h", "under a minute" (Steven, 2026-10-28:
+    /// "0:21" on the Today line meant minutes while "5:19" on the card meant seconds, on one window).
+    /// </summary>
+    public static string Dur(double secs)
+    {
+        int m = (int)(Math.Max(0, secs) / 60);
+        if (m < 1) return "under a minute";
+        if (m < 60) return $"{m} min";
+        return m % 60 == 0 ? $"{m / 60} h" : $"{m / 60} h {m % 60} min";
+    }
+
     /// <summary>The Farming page's line: time farming (or gathering), then the kills (or the attempts). It never says a run.</summary>
     public static List<(string Fig, string Word)> FarmLine(TodayFarm f)
     {
         var note = new List<(string, string)>();
-        if (f.Active >= 60 || f.Kills > 0) note.Add((HourMin(f.Active), f.Attempts > f.Kills ? " gathering" : " farming"));
+        if (f.Active >= 60 || f.Kills > 0) note.Add((Dur(f.Active), f.Attempts > f.Kills ? " gathering" : " farming"));
         if (f.Kills > 0) note.Add((f.Kills.ToString("N0"), f.Kills == 1 ? " kill" : " kills"));
         else if (f.Attempts > 0) note.Add((f.Attempts.ToString("N0"), f.Attempts == 1 ? " attempt" : " attempts"));
         return note;

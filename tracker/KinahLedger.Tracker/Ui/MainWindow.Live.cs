@@ -46,7 +46,6 @@ public partial class MainWindow
 
     void ApplySections()
     {
-        SetSec(SessionChev, SessionBody, SecOpen("Session"));
         SetSec(DropsChev, DropsOpenBody, SecOpen("Drops"));
         SetSec(ExtrasChev, ExtrasBody, SecOpen("Extras"));
         SetSec(WhereChev, WhereBody, SecOpen("Where") && WhereBody.Children.Count > 0);
@@ -54,7 +53,7 @@ public partial class MainWindow
         SetSec(BestChev, BestCraftsHost, SecOpen("Best"));
     }
 
-    /// <summary>What options-test knows as the recent pickups strip: since the feed (0.8.30), the Session section's figures, open in Full view.</summary>
+    /// <summary>What options-test knows as the recent pickups strip: since 2026-10-28, LOOT's slots, under the live card in both views.</summary>
     internal FrameworkElement PickupStrip => SessionBody;
     /// <summary>What options-test knows as the top drops: since the feed, Where to farm now's zones, open in Full view.</summary>
     internal FrameworkElement TopDropsBox => WhereBody;
@@ -62,7 +61,7 @@ public partial class MainWindow
     /// <summary>The section heads, the feed's hints and the in-place table's "show all", wired once from the constructor.</summary>
     void InitLive()
     {
-        foreach (var (head, key) in new (FrameworkElement, string)[] { (SessionHead, "Session"), (DropsHead, "Drops"), (ExtrasHead, "Extras"), (WhereHead, "Where"), (CraftSessionHead, "CraftSession"), (BestHead, "Best") })
+        foreach (var (head, key) in new (FrameworkElement, string)[] { (DropsHead, "Drops"), (ExtrasHead, "Extras"), (WhereHead, "Where"), (CraftSessionHead, "CraftSession"), (BestHead, "Best") })
             head.MouseLeftButtonUp += (_, ev) => { if (ev.OriginalSource is TextBlock { Name: "PctHeader" }) return; ToggleSec(key); };
         FeedHint.MouseLeftButtonUp += (_, _) => ShowLineReport(null, FeedTab.Farming, FeedHint);
         CraftHint.MouseLeftButtonUp += (_, _) => ShowLineReport(null, FeedTab.Crafting, CraftHint);
@@ -332,7 +331,7 @@ public partial class MainWindow
         var best = _demo ? new BestRuns.Best(1_400_000, 48, "2026-10-19") : BestRuns.For(Server?.Label ?? "", _watcher.Chat?.ZoneView?.Zone ?? e.Zone);
         if (best != null) { if (KvLine.Inlines.Count > 0) KvLine.Inlines.Add(new LineBreak()); KvLine.Inlines.Add(new Run("best here ")); Fig(Fk(best.PerHr)); }
         KvLine.Visibility = KvLine.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        FillHealth(HealthText, HealthMark);
+        FillHealth(HealthText, HealthMark, hideOk: true);
     }
 
     static string AgoMinutes(DateTime minuteUtc)
@@ -360,11 +359,12 @@ public partial class MainWindow
     /// warning mark. How many reads, the Market and the Kinah counter are on hover (2026-10-25 audit: "Reading the chat ·
     /// 3,620 reads" read like a parse log, and the count ticking up twice a second drew the eye for nothing).
     /// </summary>
-    void FillHealth(TextBlock text, Path? mark)
+    /// <param name="hideOk">The Farming card's line (2026-10-28): said only when something is wrong; "Reading the chat" is in ⋯.</param>
+    void FillHealth(TextBlock text, Path? mark, bool hideOk = false)
     {
         var c = _watcher.Chat;
         string t; bool ok = true;
-        if (_demo) t = "Reading the chat";
+        if (_demo) { t = _demoPaused ? "Paused: the chat is out of view" : "Reading the chat"; ok = !_demoPaused; }
         else if (c == null) { t = _watcher.GameRect == null ? "Waiting for the game" : "Looking for the chat"; ok = false; }
         else if (c.LastError.Length > 0) { t = "Read problem: " + c.LastError; ok = false; }
         else if (c.Paused.Length > 0) { t = "Paused: the chat is out of view"; ok = false; }
@@ -375,7 +375,11 @@ public partial class MainWindow
         text.ToolTip = _demo ? reads : c == null ? null : string.Join("\n", new[] { reads, $"{MarketShort()}.", $"{BalanceShort()}.",
             _watcher.Flushed > 0 ? $"{_watcher.Flushed} batch{(_watcher.Flushed == 1 ? "" : "es")} shared with the site." : "" }.Where(x => x.Length > 0));
         // the hover covers the whole line, the tick too
-        if (text.Parent is Panel line) { line.ToolTip = text.ToolTip; line.Background ??= Brushes.Transparent; }
+        if (text.Parent is Panel line)
+        {
+            line.ToolTip = text.ToolTip; line.Background ??= Brushes.Transparent;
+            if (hideOk) line.Visibility = ok ? Visibility.Collapsed : Visibility.Visible;
+        }
         if (mark != null)
         {
             mark.Data = Geometry.Parse(ok ? "M3.5,8.5 L6.5,11.5 L12.5,4.5" : "M8,3 V9.5 M8,12.5 V13");
@@ -387,52 +391,28 @@ public partial class MainWindow
     void FillLive()
     {
         DrawFeed(FeedHost, FeedEmpty, FeedFor(FeedTab.Farming), FeedTab.Farming, PickupValue);
-        FeedHint.Visibility = _markHint == FeedHint ? Visibility.Collapsed : Visibility.Visible;   // a marked line's Undo stands in for it
+        // the hint under the feed stays hidden (2026-10-28): its words are the feed's hover, its action ⋯ › A pickup is missing;
+        // the line a marked row's Undo takes still goes where it stood (ShowMarkLine)
     }
 
     /* ---------------- Session and Where to farm now ---------------- */
 
     /// <summary>
-    /// Session, opened: Kinah, loot after the Market's cut, and what players at your gear make here. Your best hour here is
-    /// said once, under the hour on the live card (2026-10-25: it was here too, "1.40M" twice on one screen).
+    /// What players at your gear make here, an hour, for LOOT's total hover (it was a row of the Session section, which LOOT
+    /// replaced on 2026-10-28). Your best hour here is said once, under the hour on the live card.
     /// </summary>
-    void FillSessionRows(long kinah, long loot, int priced, string? zone)
-    {
-        var rows = new List<(string Left, string Right, bool Strong)>();
-        if (kinah > 0 || _mode != Mode.Gather) rows.Add(("Kinah picked up", Fk(kinah), true));
-        if (priced > 0) rows.Add(($"Loot, after the Market's {1 - PriceBook.SellerKeeps:P0}", Fk(loot), true));
-        if (PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v) rows.Add((h.AtGear ? "Players at your gear, an hour" : "Players here, an hour", Fk(v), false));
-        if (!Changed("session", string.Join("\n", rows))) return;
-        SessionRows.Children.Clear();
-        foreach (var (left, right, strong) in rows)
-        {
-            var g = new Grid { Height = 36 };
-            g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var l = new TextBlock { Text = left, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }; l.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); g.Children.Add(l);
-            var r = new TextBlock { Text = right, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
-            r.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); r.SetResourceReference(TextBlock.ForegroundProperty, strong ? "Ink" : "Muted");
-            Grid.SetColumn(r, 1); g.Children.Add(r);
-            var b = new Border { Child = g, BorderThickness = new Thickness(0, 1, 0, 0) }; b.SetResourceReference(Border.BorderBrushProperty, "Line");
-            SessionRows.Children.Add(b);
-        }
-    }
+    string PlayersHereLine(string? zone)
+        => PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v ? $"{(h.AtGear ? "Players at your gear" : "Players")} make {Fk(v)} an hour here." : "";
 
     /// <summary>Where to farm now: folded, the best zone and its hour; opened, the best zones for the player's gear on the server.</summary>
     void FillWhere(string? zone)
     {
         if (PlayerBoards.FarmAt == null) { WhereSection.Visibility = Visibility.Collapsed; return; }
-        WhereSection.Visibility = _part == "Farming" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
         var (zones, atGear) = PlayerBoards.Top(GearBracket, 5);
+        // a section with nothing to suggest isn't shown (2026-10-28: "not enough runs on your server yet" took a line for nothing)
+        WhereSection.Visibility = _part == "Farming" && !_welcome && zones.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         bool open = SecOpen("Where");
-        if (zones.Count == 0)
-        {
-            WhereNote.Text = "not enough runs on your server yet"; WhereSum.Text = "";
-            if (!Changed("where", "none")) return;
-            WhereBody.Children.Clear();
-            var f = Faint($"A zone shows once {PlayerBoards.MinRuns} runs from {PlayerBoards.MinPlayers} players are in. Yours count."); f.Margin = new Thickness(0, 4, 0, 0);
-            WhereBody.Children.Add(f);
-            return;
-        }
+        if (zones.Count == 0) { _drawnSig.Remove("where"); return; }
         var server = Server?.Name ?? "your server";
         WhereNote.Text = open ? (atGear ? $"gear {GearBracket!.Replace("-", "–")} · {server}" : $"all players · {server}") : $"best: {zones[0].Zone}";
         WhereSum.Text = open ? "" : Fk(zones[0].ValueHr ?? 0);
