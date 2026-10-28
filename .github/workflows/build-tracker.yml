@@ -95,9 +95,6 @@ jobs:
           KL_SHOT_UNDO=1 dist/KinahLedger.exe ui-shot shots/undo --demo --compact --skin daylight
           dist/KinahLedger.exe ui-shot shots --demo --crafting
           dist/KinahLedger.exe ui-shot shots --options
-          # every Options page drawn 1400 tall, so rows below the fold show (General's Theme under Switch pages, 0.8.55)
-          mkdir -p shots/options-tall
-          KL_OPTIONS_H=1400 dist/KinahLedger.exe ui-shot shots/options-tall --options
           # the first-run server picker with Europe, the region with the most servers (23 a faction since 2026-10-26)
           mkdir -p shots/welcome-eu
           KL_WELCOME_REGION=eu dist/KinahLedger.exe ui-shot shots/welcome-eu --welcome
