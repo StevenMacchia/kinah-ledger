@@ -17,13 +17,15 @@ public sealed record TodayFarm(long Kinah, int Kills, int Attempts, double Activ
     public bool Any => Kinah > 0 || Drops.Count + Gathered.Count > 0 || Kills > 0 || Attempts > 0;
 }
 
-/// <summary>Today's expeditions and events: every run since midnight, and the loot of the counted ones.</summary>
-public sealed record TodayRuns(int Runs, int Counted, int Places, long Kinah, long Value, List<TodaySlot> Items, List<(string Where, long Count)> KinahWhere);
+/// <summary>Today's expeditions and events: every run since midnight (expeditions and events apart), and the loot of the counted ones.</summary>
+public sealed record TodayRuns(int Runs, int Counted, int Places, int Expeditions, int Events, long Kinah, long Value, List<TodaySlot> Items, List<(string Where, long Count)> KinahWhere);
 
 /// <summary>
 /// The Today strip's figures (0.8.50), apart from the window so a self-test can check them. Farming is what the Farming
 /// tables count (drops from kills, gathering apart, the same split as the tables); runs are the reward pictures of the
-/// runs since midnight, counted as the Events page counts them (flagged runs left out of the loot and the value).
+/// runs since midnight, counted as the Events page counts them (flagged runs left out of the loot and the value). Since
+/// 0.8.51 each page's strip is its own day (Steven, 2026-10-27: "Farming should be todays Farming. Events should be Todays
+/// events and expeditions"): <see cref="FarmLine"/> for Farming, <see cref="RunsLine"/> for Events, never one in the other.
 /// </summary>
 public static class TodayLoot
 {
@@ -117,7 +119,33 @@ public static class TodayLoot
         slots = slots.OrderBy(Rank).ThenByDescending(s => s.Worth).ThenByDescending(s => s.Gear ? GradeRank(items.Get(s.Id)?.Grade ?? "") : 0).ThenByDescending(s => s.Count).ToList();
         long value = kinah + slots.Sum(s => s.Worth);
         int places = today.Select(r => r.Zone).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-        return new TodayRuns(today.Count, counted.Count, places, kinah, value, slots, kinahWhere.Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList());
+        int exp = today.Count(r => string.Equals(r.Kind, "Expedition", StringComparison.OrdinalIgnoreCase));
+        int ev = today.Count(r => string.Equals(r.Kind, "Event", StringComparison.OrdinalIgnoreCase));
+        return new TodayRuns(today.Count, counted.Count, places, exp, ev, kinah, value, slots, kinahWhere.Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList());
+    }
+
+    /// <summary>"2:41": hours and minutes.</summary>
+    public static string HourMin(double secs) { var t = TimeSpan.FromSeconds(Math.Max(0, secs)); return $"{(int)t.TotalHours}:{t.Minutes:00}"; }
+
+    /// <summary>The Farming page's line: time farming (or gathering), then the kills (or the attempts). It never says a run.</summary>
+    public static List<(string Fig, string Word)> FarmLine(TodayFarm f)
+    {
+        var note = new List<(string, string)>();
+        if (f.Active >= 60 || f.Kills > 0) note.Add((HourMin(f.Active), f.Attempts > f.Kills ? " gathering" : " farming"));
+        if (f.Kills > 0) note.Add((f.Kills.ToString("N0"), f.Kills == 1 ? " kill" : " kills"));
+        else if (f.Attempts > 0) note.Add((f.Attempts.ToString("N0"), f.Attempts == 1 ? " attempt" : " attempts"));
+        return note;
+    }
+
+    /// <summary>The Events page's line: the expeditions, then the events (a run of neither kind as a run). It never says farming.</summary>
+    public static List<(string Fig, string Word)> RunsLine(TodayRuns r)
+    {
+        var note = new List<(string, string)>();
+        void Add(int n, string one, string many) { if (n > 0) note.Add((n.ToString("N0"), n == 1 ? one : many)); }
+        Add(r.Expeditions, " expedition", " expeditions");
+        Add(r.Events, " event", " events");
+        Add(r.Runs - r.Expeditions - r.Events, " run", " runs");
+        return note;
     }
 
     static int GradeRank(string g) => g switch { "Epic" => 4, "Unique" => 3, "Legend" => 2, "Rare" => 1, _ => 0 };

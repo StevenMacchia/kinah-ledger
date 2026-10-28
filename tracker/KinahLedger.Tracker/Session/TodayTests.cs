@@ -104,6 +104,21 @@ public static class TodayTests
             Check("today's runs: count, places, Kinah", $"{rt.Runs} {rt.Places} {rt.Kinah}", "2 2 600000");
             var rs = rt.Items.First(x => x.Id == stone);
             Check("a run item: summed, with its places", $"{rs.Count} " + string.Join(",", rs.Where.Select(w => $"{w.Where} {w.Count}")), "9 Urugugu Canyon 7,Shugo Festival 2");
+
+            // e. each page's strip is its own day (0.8.51): Farming says only farming, Events only the runs
+            string Line(List<(string Fig, string Word)> l) => string.Join(" ·", l.Select(n => n.Fig + n.Word));
+            var fl = TodayLoot.FarmLine(all3);
+            Check("the Farming line: farming time, then the kills", string.Join(",", fl.Select(n => n.Word.Trim())) + " " + fl[^1].Fig, "farming,kills 10");
+            Check("...and never a run", fl.Any(n => n.Word.Contains("run") || n.Word.Contains("expedition") || n.Word.Contains("event")).ToString(), "False");
+            Check("the Events line: expeditions, then events", Line(TodayLoot.RunsLine(rt)), "1 expedition ·1 event");
+            var odd = new InstanceRun { Zone = "Night Dew Cave", Kind = "", Start = midnight.AddHours(15).ToUniversalTime(), LastLoot = midnight.AddHours(15.2).ToUniversalTime(), Kinah = 1, Suspect = "looks like several runs" };
+            var exp2 = new InstanceRun { Zone = "Urugugu Canyon", Kind = "expedition", Start = midnight.AddHours(16).ToUniversalTime(), LastLoot = midnight.AddHours(16.1).ToUniversalTime() };
+            var rt3 = TodayLoot.Runs(new[] { today1, late, odd, exp2 }, items, _ => false);
+            Check("...a run of neither kind as a run, kinds in any case", Line(TodayLoot.RunsLine(rt3)), "2 expeditions ·1 event ·1 run");
+            Check("...and never farming", TodayLoot.RunsLine(rt3).Any(n => n.Word.Contains("farm") || n.Word.Contains("kill") || n.Word.Contains("gather")).ToString(), "False");
+            Check("a run left out of the averages adds nothing", $"{rt3.Counted} {rt3.Kinah}", "3 600000");
+            var gatherOnly = new TodayFarm(0, 0, 12, 1800, new(), new(), new(), new());
+            Check("a day of gathering only says gathering", Line(TodayLoot.FarmLine(gatherOnly)), "0:30 gathering ·12 attempts");
         }
         finally
         {

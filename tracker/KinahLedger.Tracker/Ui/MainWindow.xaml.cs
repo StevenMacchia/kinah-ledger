@@ -1631,9 +1631,6 @@ public partial class MainWindow : Window
         {
             // sample runs (never the player's own, Ui/MainWindow.RunsCard.cs), for a layout render
             _demoInst = DemoRuns();
-            // the runs' board (DemoRuns) plus the farming render's, so the Today strip's farming slots carry values too
-            PriceBook.SetBoard(new() { ["Spiritstone Powder"] = 3_330, ["Artisan's Ultimate Refining Stone"] = 330_000, ["Sapphire Powder"] = 5_080, ["Magic Crystal"] = 4_550, ["Diamond Powder"] = 5_780,
-                ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Refining Stone"] = 899, ["Odyle"] = 2_300 });
             ShowPart("Events", remember: false); SetTrackingUi(false);
             Say("Reading the chat", "Faint");
             if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1") OpenTodaySample();

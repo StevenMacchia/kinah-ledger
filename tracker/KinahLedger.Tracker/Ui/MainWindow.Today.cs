@@ -13,8 +13,10 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The Today strip (0.8.50, option C of kinah-bench/mock-today, Steven 2026-10-27: "I really like the aesthetic of option
-/// C"). One gold line over Farming and Events says the day so far ("2:41 farming · 412 kills · 4 runs" and what it made);
-/// opened, the day's loot as inventory slots, farming and the runs apart. Zone chips pin one zone's farming, and the pick
+/// C"). One gold line over Farming and Events says the day so far and what it made; opened, the day's loot as inventory
+/// slots. Each page's strip is its own day (0.8.51, Steven: "Farming should be todays Farming. Events should be Todays
+/// events and expeditions"): on Farming, "2:41 farming · 412 kills", the drops and the gathering; on Events, "3 expeditions
+/// · 2 events" and their rewards. Neither shows the other's loot or figures. Zone chips pin one zone's farming, and the pick
 /// stays put when the player changes zone. Each slot opens the game-tooltip card on hover: where it came from, the odds,
 /// what it is worth. Since midnight on this PC, carried across restarts (GameWatcher.DayView, DayStore). Drawn by hand and
 /// only when what it shows has changed (Changed("today")).
@@ -42,7 +44,7 @@ public partial class MainWindow
         return log.Snapshot().Where(r => !_hiddenRuns.Contains(RunKey(r.Start, r.Zone)) && TodayLoot.IsToday(r, midnight)).ToList();
     }
 
-    static string HourMin(double secs) { var t = TimeSpan.FromSeconds(Math.Max(0, secs)); return $"{(int)t.TotalHours}:{t.Minutes:00}"; }
+    static string HourMin(double secs) => TodayLoot.HourMin(secs);
 
     void InitToday()
     {
@@ -55,32 +57,30 @@ public partial class MainWindow
         };
     }
 
-    /// <summary>Draws the strip: always its line (cheap, every tick), the slots only when the day's loot, the pin or the width changed.</summary>
+    /// <summary>
+    /// Draws the strip: always its line (cheap, every tick), the slots only when the day's loot, the page, the pin or the width
+    /// changed. Farming draws today's farming only, Events today's runs only.
+    /// </summary>
     void FillToday()
     {
-        bool part = (_part == "Farming" || _part == "Events") && !_welcome;
-        var day = TodayEngine;
-        var runs = TodayRunList();
-        var whole = day != null ? TodayLoot.Farm(day, _items) : null;
-        // a pinned zone the day no longer has (a new day began) lets go
-        if (_todayZone != null && whole?.Zones.Any(z => z.Zone == _todayZone) != true) _todayZone = null;
-        var farm = _todayZone != null && day != null ? TodayLoot.Farm(day, _items, _todayZone) : whole;
-        var r = TodayLoot.Runs(runs, _items, IsCurrency);
-        bool any = whole?.Any == true || r.Runs > 0;
-        TodayStrip.Visibility = part && any ? Visibility.Visible : Visibility.Collapsed;
-        if (TodayStrip.Visibility != Visibility.Visible) return;
-
-        // the line: what the day has been, the figures in the data face; and what it made, farming and runs together
-        long made = (whole?.Made ?? 0) + r.Value;
-        var note = new List<(string Fig, string Word)>();
-        if (whole is { } w)
+        bool farming = _part == "Farming" && !_welcome, events = _part == "Events" && !_welcome;
+        TodayFarm? whole = null, farm = null; TodayRuns? r = null;
+        if (farming && TodayEngine is { } day)
         {
-            if (w.Active >= 60 || w.Kills > 0) note.Add((HourMin(w.Active), w.Attempts > w.Kills ? " gathering" : " farming"));
-            if (w.Kills > 0) note.Add((w.Kills.ToString("N0"), w.Kills == 1 ? " kill" : " kills"));
-            else if (w.Attempts > 0) note.Add((w.Attempts.ToString("N0"), w.Attempts == 1 ? " attempt" : " attempts"));
+            whole = TodayLoot.Farm(day, _items);
+            // a pinned zone the day no longer has (a new day began) lets go
+            if (_todayZone != null && !whole.Zones.Any(z => z.Zone == _todayZone)) _todayZone = null;
+            farm = _todayZone != null ? TodayLoot.Farm(day, _items, _todayZone) : whole;
         }
-        if (r.Runs > 0) note.Add((r.Runs.ToString("N0"), r.Runs == 1 ? " run" : " runs"));
-        var noteSig = string.Join("|", note.Select(n => n.Fig + n.Word)) + "|" + made;
+        if (events) r = TodayLoot.Runs(TodayRunList(), _items, IsCurrency);
+        bool any = whole?.Any == true || r?.Runs > 0;
+        TodayStrip.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        if (!any) return;
+
+        // the line: this page's day, the figures in the data face, and what it made
+        var note = whole != null ? TodayLoot.FarmLine(whole) : TodayLoot.RunsLine(r!);
+        long made = whole?.Made ?? r!.Value;
+        var noteSig = _part + "|" + string.Join("|", note.Select(n => n.Fig + n.Word)) + "|" + made;
         if (Changed("today-line", noteSig))
         {
             TodayNote.Inlines.Clear();
@@ -92,7 +92,12 @@ public partial class MainWindow
                 TodayNote.Inlines.Add(PR(note[i].Word, "Muted"));
             }
             TodaySum.Text = made > 0 ? Fk(made) : "";
-            TodaySum.ToolTip = made > 0 ? $"Made today: Kinah plus loot at the lowest Market price, after the Market's cut. Farming {Fk(whole?.Made ?? 0)}, expeditions and events {Fk(r.Value)}. Bound gear and items with no price yet add nothing." : null;
+            TodaySum.ToolTip = made <= 0 ? null : whole != null
+                ? "Made farming today, every zone: Kinah plus drops and gathering at the lowest Market price, after the Market's cut. Bound items and items with no price yet add nothing."
+                : "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, after the Market's cut. Gear, currencies, items with no price yet and runs left out of the averages add nothing.";
+            TodayHead.ToolTip = whole != null
+                ? "Today's farming since midnight on this PC, every zone. Click to see the drops."
+                : "Today's expeditions and events since midnight on this PC. Click to see the rewards.";
         }
         bool open = _prefs.TodayOpen;
         SetSec(TodayChev, TodayBody, open);
@@ -100,14 +105,23 @@ public partial class MainWindow
 
         // the slots, drawn again only when something in them changed
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
-        var sig = $"{_todayZone}|{HeadStack.Width}|{string.Join(",", _todayAll)}|{Skins.Current}|{whole?.Zones.Count}|" + string.Join(";", whole?.Zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}") ?? Array.Empty<string>())
-            + $"|{farm?.Kinah}:{farm?.Kills}:{farm?.Attempts}:{(int)((farm?.Active ?? 0) / 60)}|{Slots(farm?.Drops ?? new())}|{Slots(farm?.Gathered ?? new())}|{r.Runs}:{r.Kinah}:{Slots(r.Items)}";
+        var sig = $"{_part}|{HeadStack.Width}|{string.Join(",", _todayAll)}|{Skins.Current}|" + (whole != null
+            ? $"{_todayZone}|{whole.Zones.Count}|" + string.Join(";", whole.Zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))
+              + $"|{farm!.Kinah}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|{Slots(farm.Drops)}|{Slots(farm.Gathered)}"
+            : $"{r!.Runs}:{r.Places}:{r.Kinah}:{Slots(r.Items)}");
         if (!Changed("today", sig)) return;
         TodayHost.Children.Clear();
         int perRow = Math.Max(4, (int)((HeadStack.Width - 2 - 32 + TodayGap) / (TodaySlotSize + TodayGap)));
+        if (whole != null) FillTodayFarm(whole, farm!, perRow);
+        else FillTodayRuns(r!, perRow);
+    }
 
+    /// <summary>The Farming page's slots: the zone chips, the drops from kills, and the gathering (open-world loot, as the Farming tables).</summary>
+    void FillTodayFarm(TodayFarm whole, TodayFarm farm, int perRow)
+    {
         // the zone chips: every zone, or one pinned; a pin stays on its zone while the player moves
-        if (whole != null && whole.Zones.Count >= 2)
+        int zones = whole.Zones.Count;
+        if (zones >= 2)
         {
             var chips = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
             chips.Children.Add(ZoneChip("All zones", "", _todayZone == null, () => _todayZone = null));
@@ -119,31 +133,35 @@ public partial class MainWindow
             }
             TodayHost.Children.Add(chips);
         }
-
-        if (farm != null && (farm.Kinah > 0 || farm.Drops.Count > 0))
+        bool showWhere = _todayZone == null && zones > 1;
+        if (farm.Kinah > 0 || farm.Drops.Count > 0)
         {
-            int zones = whole?.Zones.Count ?? 0;
-            var what = _todayZone != null ? (_todayZone == SessionEngine.UnknownZone ? "Zone not read" : _todayZone) : zones > 1 ? $"{zones} zones" : zones == 1 ? whole!.Zones[0].Zone : "";
+            var what = _todayZone != null ? (_todayZone == SessionEngine.UnknownZone ? "Zone not read" : _todayZone) : zones > 1 ? $"{zones} zones" : zones == 1 ? whole.Zones[0].Zone : "";
             var slots = new List<FrameworkElement>();
             if (farm.Kinah > 0) slots.Add(KinahSlot(farm.Kinah, farm.KinahWhere, farm.Kills > 0 ? $"{farm.Kills:N0} kills · {Fk(farm.Kinah / (double)farm.Kills)} a kill" : ""));
-            foreach (var s in farm.Drops) slots.Add(ItemSlot(s, FarmOdds(s, farm.Kills, farm.Active), _todayZone == null && zones > 1));
+            foreach (var s in farm.Drops) slots.Add(ItemSlot(s, FarmOdds(s, farm.Kills, farm.Active), showWhere));
             TodayHost.Children.Add(TodayGroup("farm", "FROM FARMING", (what.Length > 0 ? what + " · " : "") + "drops from kills", farm.Kinah + farm.DropWorth, slots, perRow));
         }
-        if (farm != null && farm.Gathered.Count > 0)
+        if (farm.Gathered.Count > 0)
         {
-            var slots = farm.Gathered.Select(s => ItemSlot(s, farm.Attempts > 0 ? ($"{s.Count / (double)farm.Attempts:0.00} a try", HourText(s.Count, farm.Active)) : ("", HourText(s.Count, farm.Active)), _todayZone == null && (whole?.Zones.Count ?? 0) > 1)).ToList();
+            var slots = farm.Gathered.Select(s => ItemSlot(s, farm.Attempts > 0 ? ($"{s.Count / (double)farm.Attempts:0.00} a try", HourText(s.Count, farm.Active)) : ("", HourText(s.Count, farm.Active)), showWhere)).ToList();
             TodayHost.Children.Add(TodayGroup("gather", "GATHERED", farm.Attempts > 0 ? $"{farm.Attempts:N0} attempts" : "", farm.GatherWorth, slots, perRow));
         }
-        if (r.Runs > 0)
-        {
-            var slots = new List<FrameworkElement>();
-            if (r.Kinah > 0) slots.Add(KinahSlot(r.Kinah, r.KinahWhere, ""));
-            foreach (var s in r.Items) slots.Add(ItemSlot(s, ("", ""), true, runs: true));
-            var g = TodayGroup("runs", "FROM EXPEDITIONS AND EVENTS", $"{r.Runs} run{(r.Runs == 1 ? "" : "s")} · {r.Places} place{(r.Places == 1 ? "" : "s")}", r.Value, slots, perRow);
-            if (slots.Count == 0) { var t = PT("Nothing read from the reward screens yet.", "Faint", 12.5); t.Margin = new Thickness(0, 0, 0, 4); ((StackPanel)g).Children.Add(t); }
-            TodayHost.Children.Add(g);
-        }
+        if (farm.Kinah <= 0 && farm.Drops.Count + farm.Gathered.Count == 0) TodayHost.Children.Add(TodayEmpty(_todayZone != null ? "Nothing picked up here yet today." : "Nothing picked up from farming yet today."));
     }
+
+    /// <summary>The Events page's slots: the rewards of today's expeditions and events, and their Kinah.</summary>
+    void FillTodayRuns(TodayRuns r, int perRow)
+    {
+        var slots = new List<FrameworkElement>();
+        if (r.Kinah > 0) slots.Add(KinahSlot(r.Kinah, r.KinahWhere, ""));
+        foreach (var s in r.Items) slots.Add(ItemSlot(s, ("", ""), true, runs: true));
+        var g = TodayGroup("runs", "FROM EXPEDITIONS AND EVENTS", $"{r.Places} place{(r.Places == 1 ? "" : "s")}", r.Value, slots, perRow);
+        if (slots.Count == 0) ((StackPanel)g).Children.Add(TodayEmpty("Nothing read from the reward screens yet."));
+        TodayHost.Children.Add(g);
+    }
+
+    TextBlock TodayEmpty(string text) { var t = PT(text, "Faint", 12.5); t.Margin = new Thickness(0, 12, 0, 4); return t; }
 
     /// <summary>A group under the line: its name in the heading gold, a faint word, its worth on the right, then two rows of slots and "Show all".</summary>
     FrameworkElement TodayGroup(string key, string title, string note, long worth, List<FrameworkElement> slots, int perRow)
@@ -341,6 +359,14 @@ public partial class MainWindow
         var day = TodayEngine; if (day == null) return;
         var f = TodayLoot.Farm(day, _items);
         if (f.Kinah > 0 && KinahTodayCard(f.Kinah, f.KinahWhere, f.Kills > 0 ? $"{f.Kills:N0} kills · {Fk(f.Kinah / (double)f.Kills)} a kill" : "") is Border k) SaveCard(k, System.IO.Path.Combine(dir, "ui-today-kinah.png"));
+    }
+
+    /// <summary>Layout render of the Events page: the cards a hover on today's first run reward and on the runs' Kinah open (ui-today-run-card.png, ui-today-run-kinah.png).</summary>
+    internal void ShotTodayRunCard(string dir)
+    {
+        var r = TodayLoot.Runs(TodayRunList(), _items, IsCurrency);
+        if (r.Items.FirstOrDefault() is { } s && ItemTodayCard(s, ("", ""), true, true) is Border b) SaveCard(b, System.IO.Path.Combine(dir, "ui-today-run-card.png"));
+        if (r.Kinah > 0 && KinahTodayCard(r.Kinah, r.KinahWhere, "") is Border k) SaveCard(k, System.IO.Path.Combine(dir, "ui-today-run-kinah.png"));
     }
 
     /// <summary>The card a hover on today's first farming drop opens, drawn on its own for review (ui-today-card.png).</summary>

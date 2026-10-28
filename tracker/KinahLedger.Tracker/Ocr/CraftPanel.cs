@@ -291,8 +291,18 @@ public static class CraftPanel
     /// the crafting window at work when the title above it comes out garbled.
     /// </summary>
     public static bool IsRecipeLine(string line) =>
-        Regex.IsMatch(line, @"\([^()]{0,24}\bL[vy][\.\-,:;']?\s*[0-9IlOo|]{1,3}\b", RegexOptions.IgnoreCase)
-        || Regex.IsMatch(line, @"\b(?:novice|apprentice|journeyman|expert|master|professional|artisan)\s+L[vy]\b", RegexOptions.IgnoreCase);
+        Regex.IsMatch(line, @"\([^()]{0,24}" + Lv + @"[^\w\s]{0,2}\s*[0-9IlOo|]{1,3}\b", RegexOptions.IgnoreCase)
+        || Regex.IsMatch(line, @"\b(?:novice|apprentice|journeyman|expert|master|professional|artisan)\s+" + Lv + @"\b", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// "Lv" as the reader gives it: "Lv", "Ly", and since 2026-10-27 "I-v", "L-v", "1v", "|v" (Steven's Mana Potions read as
+    /// "Mana Potion (Novice I-v-40)1", each misread filed as a recipe of its own). Symbols may follow it before the digits
+    /// ("Lv.€40").
+    /// </summary>
+    const string Lv = @"(?<![A-Za-z])[LI1|][\-\.]?[vy]";
+
+    /// <summary>What can follow the level's bracket on the panel's title and goes with it: the close button's X, or a short run of stray marks ("1 '", "l", "~").</summary>
+    const string AfterLevel = @"(?:\s*(?:[XxＸ×✕✖]|[^()\s]{1,3})){0,2}\s*$";
 
     /// <summary>
     /// The panel's lines top down, split into the queue ("1 / 2", read from the title) and the recipe: the line with the
@@ -321,7 +331,7 @@ public static class CraftPanel
     }
 
     /// <summary>The recipe's mastery level in the panel's title ("Orichalcum Ingot (Novice Lv. 25)" → 25, "Lv- 10" as read too), 0 when it isn't read.</summary>
-    public static int LevelOf(string recipe) => Regex.Match(recipe, @"\bLv[\.\-,:;']?\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
+    public static int LevelOf(string recipe) => Regex.Match(recipe, Lv + @"[^\w\s]{0,2}\s*(\d{1,3})", RegexOptions.IgnoreCase) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
     /// <summary>The recipe's item name without the level the panel adds: "Life Serum (Bound) (Novice Lv. 1)" → "Life Serum (Bound)".</summary>
     /// The panel's close button can come with the title as a lone "X" after the level (2026-10-25 07:22:39, a great success:
@@ -343,9 +353,9 @@ public static class CraftPanel
     public static string ItemOf(string recipe, out bool cut)
     {
         cut = false;
-        var s = Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+        var s = Regex.Replace(recipe, @"\s*\((?:novice|apprentice|journeyman|expert|master|professional|artisan|grand ?master)[^)]*\)" + AfterLevel, "", RegexOptions.IgnoreCase).Trim();
         // a whole bracket holding a level (its tier read wrong); one that never closes is the cut form below
-        s = Regex.Replace(s, @"\s*\([^()]{0,24}\bL[vy][\.\-,:;']?\s*[0-9IlOo|]{1,3}\s*\)(?:\s*(?:[XxＸ×✕✖]|[^\w\s]{1,3}))?\s*$", "", RegexOptions.IgnoreCase).Trim();
+        s = Regex.Replace(s, @"\s*\([^()]{0,24}" + Lv + @"[^\w\s]{0,2}\s*[0-9IlOo|]{1,3}\s*\)" + AfterLevel, "", RegexOptions.IgnoreCase).Trim();
         // the ellipsis ("…", read as "..." or ".."), with the close button's X after it
         var t = Regex.Replace(s, @"\s*(?:…|‥|\.{2,})(?:\s*[XxＸ×✕✖])?\s*$", "").Trim();
         if (t != s) cut = true;
@@ -367,7 +377,7 @@ public static class CraftPanel
     static bool IsLevelStart(string inside)
     {
         var x = Regex.Replace(inside, @"\s+", " ").Trim();
-        if (x.Length == 0 || Regex.IsMatch(x, @"\bL[vy](?:\b|[\.\-,:;'])", RegexOptions.IgnoreCase)) return true;
+        if (x.Length == 0 || Regex.IsMatch(x, Lv + @"(?:\b|[^\w\s])", RegexOptions.IgnoreCase)) return true;
         foreach (var tier in Tiers)
         {
             if (tier.StartsWith(x, StringComparison.OrdinalIgnoreCase)) return true;
@@ -390,7 +400,13 @@ public static class CraftPanel
     {
         var item = ItemOf(read, out bool cut);
         int level = LevelOf(read);
-        if (!cut || item.Length < 2) return (item, level, "");
+        if (!cut || item.Length < 2)
+        {
+            // a whole name the reader got wrong ("tvQewa Potion" for Mana Potion, 2026-10-27) is the recipe it stands for
+            if (item.Length >= 3 && KinahLedger.Data.RecipeBook.ForOutput(item) == null && Nearest(item, level, crafting, madeLately) is { } near)
+                return (near, level, $"read wrong, settled as {near}");
+            return (item, level, "");
+        }
         var cmp = StringComparer.OrdinalIgnoreCase;
         string settled = item, note;
         var named = KinahLedger.Data.RecipeBook.StartingWith(item);
@@ -407,6 +423,58 @@ public static class CraftPanel
         }
         else note = $"recipe cut by the panel, {named.Count} candidates: kept as read";
         return (settled, LevelAtCut(settled, level), note);
+    }
+
+    /// <summary>
+    /// The recipe a name read wrong stands for (2026-10-27: Steven's Mana Potion queue showed four rows, "Mana Potion",
+    /// "Mana Potion (Novice I-v-40)1", "Mana Potion (Novice I-v-40)1 '" and "tvQewa Potion (Novice Lv.€40)l"). First the
+    /// recipe being crafted and the items the loot list showed made lately, when the level read fits theirs and the name
+    /// shares a word with it (with a level read) or is within four letters in ten of it; then, with a level read, the one
+    /// recipe at that level in the book within three letters in ten, clearly closer than any other. Null when none is: the
+    /// name stays as read, a craft is never dropped.
+    /// </summary>
+    internal static string? Nearest(string item, int level, string crafting, IEnumerable<string>? madeLately = null)
+    {
+        var read = Norm(item);
+        if (read.Length < 3) return null;
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        bool Fits(string c) { if (level <= 0) return true; var ms = KinahLedger.Data.RecipeBook.MasteriesOf(c); return ms.Count == 0 || ms.Contains(level); }
+        foreach (var c in new[] { crafting }.Concat(madeLately ?? Enumerable.Empty<string>()).Where(c => c.Length >= 2).Distinct(cmp))
+        {
+            if (KinahLedger.Data.RecipeBook.ForOutput(c) is not { } book || !Fits(c)) continue;
+            var n = Norm(c);
+            if ((level > 0 && SharesWord(read, n)) || KinahLedger.Data.NameMatch.Distance(read, n, n.Length * 4) != int.MaxValue) return book.Output;
+        }
+        if (level <= 0) return null;
+        lock (NearCache)
+        {
+            var key = $"{level}|{read}";
+            if (NearCache.TryGetValue(key, out var hit)) return hit;
+            string? best = null; int bestD = int.MaxValue, second = int.MaxValue;
+            foreach (var c in KinahLedger.Data.RecipeBook.Outputs)
+            {
+                if (!KinahLedger.Data.RecipeBook.MasteriesOf(c).Contains(level)) continue;
+                var n = Norm(c);
+                int d = KinahLedger.Data.NameMatch.Distance(read, n, n.Length * 3);
+                if (d == int.MaxValue) continue;
+                if (d < bestD) { second = bestD; bestD = d; best = c; } else if (d < second) second = d;
+            }
+            var found = best != null && (second == int.MaxValue || second - bestD >= KinahLedger.Data.NameMatch.Unit) ? best : null;
+            if (NearCache.Count > 200) NearCache.Clear();
+            NearCache[key] = found;
+            return found;
+        }
+    }
+
+    static readonly Dictionary<string, string?> NearCache = new(StringComparer.Ordinal);
+
+    static string Norm(string s) => Regex.Replace(s.ToLowerInvariant(), @"\s+", " ").Trim();
+
+    /// <summary>Whether two names share a word of four letters or more ("potion").</summary>
+    static bool SharesWord(string a, string b)
+    {
+        static IEnumerable<string> Words(string s) => s.Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries).Select(w => w.Trim('.', ',', '\'', '’')).Where(w => w.Length >= 4);
+        return Words(a).Intersect(Words(b)).Any();
     }
 
     /// <summary>A level read up to a cut: kept when the item's recipes have it and no longer level begins with it, else the one level that does, else none.</summary>
