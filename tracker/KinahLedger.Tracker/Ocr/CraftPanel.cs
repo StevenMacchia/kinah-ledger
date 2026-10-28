@@ -426,6 +426,21 @@ public static class CraftPanel
     }
 
     /// <summary>
+    /// Whether a title read names its recipe for certain (<paramref name="settled"/>, what <see cref="Settle"/> made of
+    /// <paramref name="read"/>): the recipe book has the name as read whole, or it is the one recipe a name the panel cut
+    /// short begins. A name settled from a near miss, or from what was being crafted, is a guess; a name the book doesn't
+    /// have is never sure on one read (two reads that agree are, TrackerSession's queue).
+    /// </summary>
+    public static bool Sure(string read, string settled)
+    {
+        if (settled.Length < 2 || KinahLedger.Data.RecipeBook.ForOutput(settled) == null) return false;
+        var item = ItemOf(read, out bool cut);
+        if (!cut) return string.Equals(item, settled, StringComparison.OrdinalIgnoreCase);
+        var named = KinahLedger.Data.RecipeBook.StartingWith(item);
+        return named.Count == 1 && string.Equals(named[0], settled, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// The recipe a name read wrong stands for (2026-10-27: Steven's Mana Potion queue showed four rows, "Mana Potion",
     /// "Mana Potion (Novice I-v-40)1", "Mana Potion (Novice I-v-40)1 '" and "tvQewa Potion (Novice Lv.€40)l"). First the
     /// recipe being crafted and the items the loot list showed made lately, when the level read fits theirs and the name

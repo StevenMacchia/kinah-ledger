@@ -4389,6 +4389,123 @@ options: --process aion[,other]");
                 Check("crafting panel: gone a while, a pickup is a drop again", $"{pe.CraftPanelActive(pt.AddSeconds(31))}", "False");
             }
             {
+                // one queue, one recipe, for every recipe in the book (Steven, 2026-10-28: "make sure crafting is fixed for all
+                // crafting not just a specific craft it shouldnt happen every time i try a new recipe"). Before 0.8.52 each craft
+                // went under the panel's latest read, so a new recipe's first read, garbled ("tvQewa Potion" for Mana Potion,
+                // 2026-10-27), was a row of its own until the next clean read. Here one session crafts every recipe in the book,
+                // one queue after another (each the recipe before's neighbour in the book), and every queue opens on a read
+                // whose first word is junk.
+                static string Junk(string word, int seed)
+                {
+                    const string table = "tvQewazxqjkgh";
+                    var sb = new System.Text.StringBuilder();
+                    for (int qi = 0; qi < Math.Max(4, word.Length + 1); qi++) sb.Append(table[(seed + qi * 7 + (qi < word.Length ? word[qi] : 3)) % table.Length]);
+                    return sb.ToString();
+                }
+                string[] lvs = { "I-v-", "L-v. ", "1v ", "|v.", "Lv.€", "Lv- ", "Lv. " };
+                string[] tails = { "1 '", "1", "l", " ~", "", " X" };
+                // the first word turned to junk, "Lv" misread, stray marks after the bracket: no name the book has
+                string JunkRead(string name, int level, int seed)
+                {
+                    var w = name.Split(' ');
+                    w[0] = Junk(w[0], seed);
+                    return $"{string.Join(" ", w)} (Novice {lvs[seed % lvs.Length]}{level}){tails[seed % tails.Length]}";
+                }
+                // the name read right, "Lv" and what follows the bracket misread as 0.8.51 cleans them
+                string CleanRead(string name, int level, int seed) => $"{name} (Novice {lvs[(seed + 3) % lvs.Length]}{level}){tails[(seed + 2) % tails.Length]}";
+                var pairs = RecipeBook.Outputs.OrderBy(x => x, StringComparer.Ordinal)
+                    .SelectMany(x => (RecipeBook.MasteriesOf(x) is { Count: > 0 } ms ? ms : new List<int> { 1 }).Select(l => (Name: x, Level: l))).ToList();
+                string Wrong(SessionEngine view, Dictionary<string, (int Ok, int Fail)> want)
+                {
+                    var got = view.CraftSnapshot().ToDictionary(r => r.Name, r => (r.Ok, r.Fail), StringComparer.OrdinalIgnoreCase);
+                    var bad = new List<string>();
+                    foreach (var (n, w) in want)
+                        if (!got.TryGetValue(n, out var g) || g != w) bad.Add($"{n} {(got.TryGetValue(n, out var g2) ? $"{g2.Ok}/{g2.Fail}" : "missing")} (want {w.Ok}/{w.Fail})");
+                    foreach (var (n, g) in got) if (!want.ContainsKey(n)) bad.Add($"\"{n}\" {g.Ok}/{g.Fail} (no queue crafted it)");
+                    return bad.Count == 0 ? "none" : $"{bad.Count}: " + string.Join("; ", bad.Take(6));
+                }
+                void Away(TrackerSession s, DateTime from, int passes) { for (int qi = 0; qi < passes; qi++) s.PanelLook(from.AddSeconds(qi * 0.4), false, false, null); }
+                var want = new Dictionary<string, (int Ok, int Fail)>(StringComparer.OrdinalIgnoreCase);
+                var cq = new TrackerSession(null, new Settings(), items, "Test"); cq.Engine.SetZone("Dawn Legion Base"); cq.ZoneView.SetZone("Dawn Legion Base");
+                var cq0 = new DateTime(2026, 10, 28, 1, 0, 0, DateTimeKind.Utc);
+                for (int qk = 0; qk < pairs.Count; qk++)
+                {
+                    var (x, lv) = pairs[qk]; var tk = cq0.AddSeconds(qk * 30);
+                    cq.PanelLook(tk, true, false, new[] { "Crafting in Progress 1 / 3", JunkRead(x, lv, qk) });
+                    cq.PanelBars(tk.AddSeconds(3), true, false);
+                    Away(cq, tk.AddSeconds(3.4), 2);
+                    cq.PanelLook(tk.AddSeconds(4.2), true, false, new[] { "Crafting in Progress 2 / 3", CleanRead(x, lv, qk) });
+                    cq.PanelBars(tk.AddSeconds(8), true, false);
+                    Away(cq, tk.AddSeconds(8.4), 2);
+                    cq.PanelLook(tk.AddSeconds(9.2), true, false, new[] { "3 / 3", JunkRead(x, lv, qk + 5) });
+                    cq.PanelBars(tk.AddSeconds(13), false, false);
+                    Away(cq, tk.AddSeconds(13.4), 14);   // the queue is over
+                    var w = want.GetValueOrDefault(x); want[x] = (w.Ok + 2, w.Fail + 1);
+                }
+                Check($"crafting: every recipe in the book ({pairs.Count} recipes, {want.Count} items) opens its queue on a junk read; its crafts wait and go under it, none under a misread or a neighbour",
+                    $"book loaded {want.Count >= 300 && want.Count == RecipeBook.Outputs.Count()} · crafting view wrong: {Wrong(cq.CraftView, want)} · count wrong: {Wrong(cq.Engine, want)}",
+                    "book loaded True · crafting view wrong: none · count wrong: none");
+
+                // the same, with the title unread for longer than a queue's crafts wait (QueueHoldSeconds): they go under the best
+                // guess so the window keeps up, then move to the recipe once a read names it, the guess's other crafts left alone
+                var want2 = new Dictionary<string, (int Ok, int Fail)>(StringComparer.OrdinalIgnoreCase);
+                var mq = new TrackerSession(null, new Settings(), items, "Test"); mq.Engine.SetZone("Dawn Legion Base"); mq.ZoneView.SetZone("Dawn Legion Base");
+                var mq0 = new DateTime(2026, 10, 28, 9, 0, 0, DateTimeKind.Utc);
+                bool[] outcome = { true, true, false, true, true, false, true };
+                for (int qk = 0; qk < pairs.Count; qk++)
+                {
+                    var (x, lv) = pairs[qk]; var tk = mq0.AddSeconds(qk * 60);
+                    mq.PanelLook(tk, true, false, new[] { "Crafting in Progress 1 / 8", JunkRead(x, lv, qk * 10) });
+                    for (int qi = 0; qi < outcome.Length; qi++)
+                    {
+                        mq.PanelBars(tk.AddSeconds(3 + 5 * qi), outcome[qi], false);
+                        Away(mq, tk.AddSeconds(3.4 + 5 * qi), 2);
+                        mq.PanelLook(tk.AddSeconds(4.2 + 5 * qi), true, false, new[] { $"{qi + 2} / 8", JunkRead(x, lv, qk * 10 + qi + 1) });
+                    }
+                    mq.PanelLook(tk.AddSeconds(39.2), true, false, new[] { "Crafting in Progress 8 / 8", CleanRead(x, lv, qk) });
+                    mq.PanelBars(tk.AddSeconds(43), true, false);
+                    Away(mq, tk.AddSeconds(43.4), 14);
+                    var w = want2.GetValueOrDefault(x); want2[x] = (w.Ok + 6, w.Fail + 2);
+                }
+                Check("crafting: every recipe's queue unread past the hold goes under a guess, then moves whole to the recipe read later",
+                    $"crafting view wrong: {Wrong(mq.CraftView, want2)} · count wrong: {Wrong(mq.Engine, want2)}",
+                    "crafting view wrong: none · count wrong: none");
+
+                // Steven's Mana Potion queue as read on 2026-10-27, after a Wind Serum queue, its junk read first; another recipe read
+                // whole twice in a row mid-queue is a new queue (crafts after its first read go to it), once is a misread; a recipe
+                // the book doesn't have, read the same twice, is its own row; a queue whose title never reads is the recipe before's
+                var sq = new TrackerSession(null, new Settings(), items, "Test"); sq.Engine.SetZone("Dawn Legion Base");
+                var sq0 = new DateTime(2026, 10, 27, 20, 0, 0, DateTimeKind.Utc);
+                string Rows(TrackerSession s) => string.Join(" | ", s.CraftView.CraftSnapshot().OrderBy(r => r.Name, StringComparer.Ordinal).Select(r => $"{r.Name} {r.Ok}/{r.Fail}"));
+                void RunQueue(TrackerSession s, DateTime at, params (string Read, bool? Race)[] steps)
+                {
+                    var t = at;
+                    foreach (var (read, race) in steps)
+                    {
+                        s.PanelLook(t, true, false, read.Length > 0 ? new[] { "Crafting in Progress", read } : new[] { "Crafting in Progress 1 / 2" });
+                        if (race is bool ok) { s.PanelBars(t.AddSeconds(2), ok, false); Away(s, t.AddSeconds(2.4), 2); }
+                        t = t.AddSeconds(4);
+                    }
+                    Away(s, t, 14);
+                }
+                RunQueue(sq, sq0, ("Wind Serum (Novice Lv. 10)", true), ("Wind Serum (Novice Lv- 10)", true));
+                RunQueue(sq, sq0.AddMinutes(1), ("tvQewa Potion (Novice Lv.€40)l", true), ("Mana Potion (Novice I-v-40)1", true), ("Mana Potion (Novice I-v-40)1 '", false), ("Mana Potion", true));
+                Check("crafting: Steven's Mana Potion queue after Wind Serum, its first read junk: two rows, no misread row", Rows(sq), "Mana Potion 3/1 | Wind Serum 2/0");
+                RunQueue(sq, sq0.AddMinutes(2), ("Wind Serum (Novice Lv. 10)", true), ("Mana Potion (Novice Lv. 40)", true), ("Mana Potion (Novice Lv. 40)", true), ("Mana Potion (Novice Lv. 40)", true));
+                Check("...another recipe read whole twice mid-queue: the crafts from its first read on are its", Rows(sq), "Mana Potion 6/1 | Wind Serum 3/0");
+                RunQueue(sq, sq0.AddMinutes(3), ("Wind Serum (Novice Lv. 10)", true), ("Mana Potion (Novice Lv. 40)", true), ("Wind Serum (Novice Lv. 10)", true));
+                Check("...read whole once, then the queue's own again: a misread, its craft stays with the queue", Rows(sq), "Mana Potion 6/1 | Wind Serum 6/0");
+                RunQueue(sq, sq0.AddMinutes(4), ("Qwzx Blade (Novice Lv. 3)", true), ("Qwzx Blade (Novice Lv. 3)", true), ("Qwzx Blade (Novice Lv. 3)", false));
+                Check("...a recipe the book doesn't have, read the same twice: its own row, every craft in it", Rows(sq), "Mana Potion 6/1 | Qwzx Blade 2/1 | Wind Serum 6/0");
+                RunQueue(sq, sq0.AddMinutes(5), ("Wind Serum (Novice Lv. 10)", true));
+                RunQueue(sq, sq0.AddMinutes(6), ("", true), ("", true));
+                Check("...a queue whose title never reads: the recipe before, once the queue is over", Rows(sq), "Mana Potion 6/1 | Qwzx Blade 2/1 | Wind Serum 9/0");
+                sq.PanelLook(sq0.AddMinutes(7), true, false, new[] { "Crafting in Progress 1 / 2", "tvQewa Potion (Novice Lv.€40)l" });
+                sq.PanelBars(sq0.AddMinutes(7).AddSeconds(2), true, false);
+                sq.FlushVotes(sq0.AddMinutes(7).AddSeconds(3));
+                Check("...a stop while a craft waits for its queue's recipe: counted under the best guess, not lost", $"{sq.CraftView.CraftSnapshot().Sum(r => r.Attempts)}", "20");
+            }
+            {
                 // a world boss with a Force (Steven, 2026-10-22): other players' shares are never the player's; the player's own share is
                 var fp = new ChatParser(items); var ft = DateTime.UtcNow;
                 string Got(string l) => string.Join(",", fp.Parse(l, ft).Select(e => e switch { ItemAcquired a => items.NameOf(a.ItemId), KinahChanged k => k.Delta + " Kina", _ => e.GetType().Name }));
