@@ -65,6 +65,9 @@ public static class RecipeBook
         return list;
     }
 
+    /// <summary>Every item the book has a recipe for.</summary>
+    public static IEnumerable<string> Outputs => ByOutput.Keys;
+
     /// <summary>The recipe that makes this item, or null when the book doesn't have it.</summary>
     public static Recipe? ForOutput(string item) => For(item, 0);
 

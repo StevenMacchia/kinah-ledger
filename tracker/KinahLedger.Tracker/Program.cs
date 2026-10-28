@@ -4262,6 +4262,12 @@ options: --process aion[,other]");
                     string.Join(" ", new[] { "Wind Serum (Novice Lv- 10)", "Wind Serum (Novice Lv. IO)", "Wihd Serum (Novite Lv. 10)", "(Novice Lv. 3)", "Orichalcum LonUFword (iNovice Lv. 3)", "Fail", "Success", "4 /z:iT,", "Aria" }.Select(CraftPanel.IsRecipeLine)),
                     "True True True True True False False False False");
                 Check("...its item and level as read", $"{CraftPanel.ItemOf("Wind Serum (Novice Lv- 10)")} {CraftPanel.LevelOf("Wind Serum (Novice Lv- 10)")} | {CraftPanel.ItemOf("Wihd Serum (Novite Lv. 10)")}", "Wind Serum 10 | Wihd Serum");
+                // 2026-10-27, Steven's Mana Potions: four rows for one recipe, each misread its own ("no one is gonna use it")
+                var manaReads = new[] { "Mana Potion (Novice I-v-40)1 '", "Mana Potion (Novice I-v-40)1", "tvQewa Potion (Novice Lv.€40)l", "Mana Potion (Novice L-v. 40)", "Mana Potion (Novice 1v 40) ~", "Mana Potion (Novice |v.40)" };
+                Check("crafting panel: \"Lv\" read as I-v and stray marks after the bracket go with the level",
+                    string.Join(" | ", manaReads.Select(x => $"{CraftPanel.ItemOf(x)} {CraftPanel.LevelOf(x)} {CraftPanel.IsRecipeLine(x)}")),
+                    "Mana Potion 40 True | Mana Potion 40 True | tvQewa Potion 40 True | Mana Potion 40 True | Mana Potion 40 True | Mana Potion 40 True");
+                Check("...and none of them is the title", string.Join(" ", manaReads.Select(CraftPanel.IsTitleLine)), "False False False False False False");
                 // 2026-10-26 (0.8.40): the panel cuts a long title with an ellipsis, inside the level's bracket or before it, and
                 // the reader drops the rest; every form below was filed as a recipe of its own ("Splendent Orichalcum Longsword
                 // (Novice Lv...", "Expert's Orichalcum Longsword (Novice Lv. 1"), with no price, no profit and no icon
@@ -4291,6 +4297,13 @@ options: --process aion[,other]");
                 Check("...several recipes start with it: the one being crafted, the one shown made, else kept as read with the count",
                     $"{Settled("Splendent White Dragon Lord G…", "Splendent White Dragon Lord Greaves")} | {Settled("Splendent White Dragon Lord G…", "", "Orichalcum Ore", "Splendent White Dragon Lord Guard")} | {Settled("Splendent White Dragon Lord G…")} | {CraftPanel.Settle("Splendent White Dragon Lord G…", "").Note}",
                     "Splendent White Dragon Lord Greaves 0 | Splendent White Dragon Lord Guard 0 | Splendent White Dragon Lord G 0 | recipe cut by the panel, 4 candidates: kept as read");
+                Check("crafting panel: a name read wrong is the recipe being crafted, or the one the loot list showed made, at its level",
+                    string.Join(" | ", Settled("tvQewa Potion (Novice Lv.€40)l", "Mana Potion"), Settled("tvQewa Potion (Novice Lv.€40)l", "", "Odyle", "Mana Potion"), Settled("Mana Potion (Novice I-v-40)1 '", "Mana Potion"),
+                        Settled("Mana Potion (Novice I-v-40)1"), Settled("Wihd Serum (Novite Lv. 10)"), Settled("Mama Potion (Novice Lv. 40)")),
+                    "Mana Potion 40 | Mana Potion 40 | Mana Potion 40 | Mana Potion 40 | Wind Serum 10 | Mana Potion 40");
+                Check("...never another level, a stranger name, or a recipe the book has",
+                    string.Join(" | ", Settled("tvQewa Potion (Novice Lv. 60)", "Mana Potion"), Settled("tvQewa Potion", ""), Settled("Qwzx Blade (Novice Lv. 3)", "Orichalcum Longsword"), Settled("Superior Healing Potion (Novice Lv. 60)", "Mana Potion"), Settled("Greater Elixir Flask (Novice Lv. 40)", "Mana Potion")),
+                    "tvQewa Potion 60 | tvQewa Potion 0 | Qwzx Blade 3 | Superior Healing Potion 60 | Greater Elixir Flask 40");
                 Check("...no recipe starts with it and it is no upgrade of the one being crafted: kept as read, never dropped",
                     $"{Settled("Splendent Orichalcum Longsword (Novice Lv...")} | {Settled("Qwzx Blade (Novice Lv...", "Orichalcum Longsword")}", "Splendent Orichalcum Longsword 0 | Qwzx Blade 0");
                 {
