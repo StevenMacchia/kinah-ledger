@@ -278,21 +278,36 @@ public static class WpfApp
         w.ShowCompact(); DoEvents();
         // the layout's own width, not the window's: a small screen (the CI runner's) squeezes the window but not the layout
         double compactW = w.ActualWidth, compactLayout = w.HeadStack.Width;
-        Check(w.TablesCard.Visibility == Visibility.Visible && w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility != Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
-            "Compact: run card, slim total, tables at three rows, no pickups");
+        // Compact since 2026-10-28 (the calm Farming page, mock C): the live card and LOOT's slots, no tables; Full view adds them
+        Check(w.TablesCard.Visibility != Visibility.Visible && w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
+            "Compact: run card and LOOT's slots, no tables, Where to farm now folded");
         w.ShowFull(); DoEvents();
         Check(w.TablesCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.HeadStack.Width > compactLayout * 1.8,
-            $"Full view: pickups, top drops, more rows, {compactW:0} -> {w.ActualWidth:0} px wide");
+            $"Full view: LOOT, Where to farm now open, the tables with more rows, {compactW:0} -> {w.ActualWidth:0} px wide");
         w.ShowCompact(); DoEvents();
         Check(Math.Abs(w.HeadStack.Width - compactLayout) < 1, "back to Compact: the width it had");
 
-        // the Farming page, calmer (2026-10-25): the session total labelled and in K/M, best here said once (under the
-        // hour), accuracy as one chip, and the panel's loot an hour only beside a rate with Kinah in it
-        Check(w.FootTotalNote.Text == "so far, after the Market's cut" && !w.FootTotal.Text.Contains(',') && w.FootTotal.Text.Length > 0 && "KMB".Contains(w.FootTotal.Text[^1]),
-            $"Session total labelled, in K/M: {w.FootTotalNote.Text} {w.FootTotal.Text}");
-        Check(!w.SessionRows.Children.OfType<System.Windows.Controls.Border>().Any(b => b.Child is System.Windows.Controls.Grid g && g.Children.OfType<System.Windows.Controls.TextBlock>().Any(t => t.Text.Contains("best here"))),
-            "Session rows: your best here only under the hour");
-        Check(w.AccuracyChip.Visibility == Visibility.Visible && w.AccuracyChip.Child is System.Windows.Controls.TextBlock { Text: "1 to look at" }, "Accuracy: one chip, the sample's refused line to look at");
+        // the Farming page, calm (2026-10-28, Steven: "THIS IS A LOT OF INFO ON ONE WINDOW"): one period at a time in LOOT, one
+        // way to write time, no zone chip under a minute, nothing said while all is well, no section with nothing in it
+        w.ShowDemo(); w.ShowCompact(); DoEvents();   // the sample again, after the Options round above changed the server and said things
+        var here = w.LootForTest();
+        Check(here.Here == "This zone" && here.Slots >= 10 && here.Note.Contains("kinds · 42 min") && "KMB".Contains(here.Total[^1]) && !here.Total.Contains(','),
+            $"LOOT, This zone: {here.Slots} slots, \"{here.Note}\", {here.Total}");
+        Check(w.FootTotal.ToolTip is string tt && tt.Contains("Kinah picked up") && tt.Contains("Total, after the Market's cut"), "LOOT's total says how it adds up on hover");
+        Check(w.TableTitle.Text == "Open world · 42 min" && !w.TableTitle.Text.Contains(':'), $"the card says how long in minutes: \"{w.TableTitle.Text}\"");
+        Check(w.TodayStrip.Visibility != Visibility.Visible, "no Today strip over the Farming card: Today is LOOT's other side");
+        Check(w.HealthLine.Visibility != Visibility.Visible && w.Summary.Visibility != Visibility.Visible && w.FeedHint.Visibility != Visibility.Visible && w.Status.Text.Length == 0,
+            "nothing said while all is well: no Reading the chat, no skipped lines, no feed hint, no Last: line");
+        Check(w.MoreInfo().Any(i => i.Text == "Reading the chat") && w.MoreInfo().Any(i => i.Text.StartsWith("Last: ")), "...they are in ⋯: " + string.Join(" | ", w.MoreInfo().Select(i => i.Text)));
+        w.PickLootForTest(true); DoEvents();
+        var day = w.LootForTest(); var chips = w.LootChipsForTest();
+        Check(day.Note.Contains("h") && day.Note.Contains("farming") && !day.Note.Contains(':') && day.Slots >= 10 && chips.Count == 4 && chips[0] == "All zones",
+            $"LOOT, Today: \"{day.Note}\" {day.Total}, {day.Slots} slots, chips {string.Join(" / ", chips)}");
+        Check(!chips.Any(c => c.Contains("Drana")) && chips.Skip(1).All(c => c.EndsWith(" min") || c.EndsWith(" h")), "no chip for a zone under a minute; each says its minutes");
+        w.PickLootForTest(false); DoEvents();
+        Check(w.LootForTest().Note == here.Note, "back to This zone");
+        Check(w.AccuracyChip.Visibility == Visibility.Visible && w.AccuracyChip.Child is System.Windows.Controls.TextBlock { Text: "1 to look at" } && ReferenceEquals(w.AccuracyChip.Parent, w.StatusRow),
+            "Accuracy: one chip in the footer, the sample's refused line to look at");
         Check(w.HudValues.GetValueOrDefault("loot", "").Length > 0, "panel: loot an hour beside a rate with Kinah in it");
         // rows update in place (2026-10-25): a redraw keeps the row controls and only hands them new words, so a tick with a
         // farming session on screen no longer rebuilds the tables (which is what made clicks and drags wait)
@@ -413,7 +428,7 @@ public static class WpfApp
             w.ShowMarkedSample(); DoEvents();
             Check(w.MarkStateForTest is (1, true, "mark") && w.UndoShowing == null && w.FeedHint.Visibility != Visibility.Visible, "a Farming line: marked, with Undo under the feed in place of the hint");
             w.PressUndo(); DoEvents();
-            Check(w.MarkStateForTest is (0, false, null) && w.FeedHint.Visibility == Visibility.Visible, "...and Undo there takes it back, the hint returns");
+            Check(w.MarkStateForTest is (0, false, null) && w.FeedHint.Visibility != Visibility.Visible, "...and Undo there takes it back (the hint itself stays in ⋯)");
             Check(w.PressMarkWrongForTest(true) == "Nothing counted in the last 2 minutes" && w.MarkStateForTest is (0, false, null), "nothing counted in the last 2 minutes: the panel says so and nothing is filed");
         }
 
@@ -630,6 +645,9 @@ public static class WpfApp
         if (compact) w.ShowCompact();
         if (full) w.ShowFull();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
+        // KL_SHOT_STATE=run|paused|stopped|empty (2026-10-28): the Farming page's other states, each its own "-<state>" render
+        var shotState = demo && kind == "Open world" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
+        if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
         if (Environment.GetEnvironmentVariable("KL_DEBUG_LAYOUT") == "1")
@@ -647,7 +665,9 @@ public static class WpfApp
             Console.WriteLine($"window {w.ActualWidth:0}"); Dump(w, 0);
         }
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
-        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        // a state render is the window only: the cards and the panel come from the plain farming renders
+        if (shotState.Length > 0) { w.Close(); return; }
         // the Events part's card on its own: folded, and with Materials open
         if (demo && kind == "Events") w.ShotRunsCards(dir);
         // KL_CARD_ZONE=<zone>: also draw the card a click on the first drop opens, with the live site's data for that zone

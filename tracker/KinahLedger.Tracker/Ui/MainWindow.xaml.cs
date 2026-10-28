@@ -131,6 +131,7 @@ public partial class MainWindow : Window
         DropsMoreLink.Click += (_, _) => { if (!_allRows.Remove("Drops")) _allRows.Add("Drops"); Redraw(); };
         InitLive();
         InitToday();
+        InitLoot();   // LOOT's This zone / Today switch (Ui/MainWindow.Loot.cs)
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
@@ -241,6 +242,13 @@ public partial class MainWindow : Window
     void ReportClick(object sender, RoutedEventArgs e)
     {
         if (RowOf((sender as FrameworkContentElement)?.DataContext) is not { } r || r.Report.Length == 0) return;
+        ToggleReport(r);
+    }
+
+    /// <summary>Report, or its Undo, for a drop or gathered item: from its row's link, or a right-click on its LOOT slot.</summary>
+    void ToggleReport(DropRow r)
+    {
+        if (r.Report.Length == 0) return;
         bool on = ReportedDrops.Toggle(r.Report);
         CrashLog.Note(on ? $"reported: {r.Report} (not sent to the site)" : $"report undone: {r.Report}");
         // a flagged drop also keeps the last minute of what was read, so the misread can be found and fixed
@@ -304,7 +312,7 @@ public partial class MainWindow : Window
     {
         var e = Shown();
         if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); FillToday(); return; }   // a layout render keeps its sample
-        if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; SummaryCard.Visibility = Visibility.Collapsed; }
+        if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; _lootHere = null; FillLoot(); }
         FillLive();
         FillAccuracyCard();
         FillToday();
@@ -571,8 +579,11 @@ public partial class MainWindow : Window
         {
             // one plain line; the reader's details (reads, Market, the Kinah counter, uploads) are on hover
             // the footer (the approved mock): "Tracking Western Cantas Valley · last: Spiritstone acquired"; read counts on hover
-            Tell(!chat.ChatFound ? "Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows."
-                : chat.LastLine.Length > 0 ? "Last: " + chat.LastLine : chat.Zone is { Length: > 0 } tz ? "Tracking " + tz : "Reading the chat", "Faint");
+            var line = !chat.ChatFound ? "Reading the game: crafting, loot and zone. The chat is picked up as soon as it shows."
+                : chat.LastLine.Length > 0 ? "Last: " + chat.LastLine : chat.Zone is { Length: > 0 } tz ? "Tracking " + tz : "Reading the chat";
+            _lastRead = chat.ChatFound ? line : "";
+            // the Farming page says nothing here while all is well (2026-10-28, the calm page): the last line read is in ⋯
+            Tell(_part == "Farming" && chat.ChatFound ? "" : line, "Faint");
         }
         if (chat != null && _options is { WantsPreview: true } && ++_ticks % 4 == 0 && !_framing)
         {
@@ -859,10 +870,11 @@ public partial class MainWindow : Window
         var s = Build(e, h, t.Kills);
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
         // quest and payment rewards: bound Kinah, a payment line, or one line far above what the mobs pay. Never farming income.
-        string skipped = t.Rewards > 0 ? $" · {t.Rewards} reward line{(t.Rewards == 1 ? "" : "s")} skipped" + (e.KinahSkipped > 0 ? $" ({Fk(e.KinahSkipped)} Kinah)" : "") : "";
+        // said in ⋯ since 2026-10-28, not on the page: the player doesn't need it while counting goes right
+        _leftOut = t.Rewards > 0 ? $"{t.Rewards} reward line{(t.Rewards == 1 ? "" : "s")}" + (e.KinahSkipped > 0 ? $" ({Fk(e.KinahSkipped)} Kinah)" : "") : "";
         string crystals = t.Pets > 0 ? $" · {t.Pets} soul crystal{(t.Pets == 1 ? "" : "s")}" : "";
-        // the clock is farming time; a minute or more of readable time with no loot is shown as idle beside it
-        string idle = e.Idle >= TimeSpan.FromMinutes(1) ? $"{Clock(e.Idle)} idle (not counted in any rate)" : "";
+        // the clock is farming time; a minute or more of readable time with no loot is idle, said in ⋯
+        _idleNote = e.Idle >= TimeSpan.FromMinutes(1) ? $"{TodayLoot.Dur(e.Idle.TotalSeconds)} idle, not counted in any rate" : "";
         switch (_mode)
         {
             case Mode.Gather:
@@ -902,37 +914,29 @@ public partial class MainWindow : Window
                 : $"{s.Priced} of {s.Priced + s.Unpriced} tradeable items priced, at the lowest Market price, keeping {PriceBook.SellerKeeps:P0} after the Market's fee and tax. Bound items can't be sold and aren't counted."
                   + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
             + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
-        // the card's head: what and how long, then the hour's total (Kinah plus the loot after the Market's cut)
-        // the band's one line: what and how long ("Open world · farming 42:17"); what the count covers on hover
-        var verb = _mode == Mode.Gather ? "gathering" : "farming";
-        TableTitle.Text = $"{ZoneLocator.KindOf(e.Zone) ?? "Open world"} · {verb} {Clock(elapsed)}";
+        // the card's head: what and how long ("Open world · 42 min"), in the one way the page writes time (2026-10-28: it was
+        // "farming 5:19", minutes and seconds, under a Today line whose "0:21" was hours and minutes); what it covers on hover
+        var verb = _mode == Mode.Gather ? "gathering · " : "";
+        TableTitle.Text = $"{ZoneLocator.KindOf(e.Zone) ?? "Open world"} · {verb}{TodayLoot.Dur(elapsed.TotalSeconds)}";
         TableTitle.ToolTip = _tableWhat.Length > 0 ? "Counting " + _tableWhat + "." : null;
         long totalNow = kinah + s.Value;
         // the live card's right side: the hour's worth, its line since the start, kills and Kinah a kill, best here, the health line
         FillRate(e, h, _mode == Mode.Gather ? 0 : kinah, s.Value, s.Priced, t.Kills, t.Nodes, t.Nodes > 0 ? s.GatherCount / (double)t.Nodes : 0);
-        Summary.Text = string.Join(" · ", new[] { idle, skipped.TrimStart(' ', '·') }.Where(x => x.Length > 0));
-        Summary.Visibility = Summary.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        Summary.Visibility = Visibility.Collapsed;   // idle and skipped reward lines: in ⋯ (ShowMoreMenu)
 
-        // Session, folded to one line: the total and what it is, "SESSION so far, after the Market's cut 894K" (2026-10-25:
-        // the line was "161 kills · 112 drops · 7 gathered" beside an unlabelled 894,009, the page's only N0 figure);
-        // opened, how it splits, and what was counted under it. Only what happened: gathering doesn't say "0 kills"
-        var counted = string.Join(" · ", new[]
-        {
-            t.Kills > 0 ? $"{t.Kills} kill{(t.Kills == 1 ? "" : "s")}" : "", s.DropCount > 0 ? $"{s.DropCount} drop{(s.DropCount == 1 ? "" : "s")}" : "",
-            s.GatherCount > 0 ? $"{s.GatherCount} gathered" : "",
-        }.Where(x => x.Length > 0));
-        FootTotalNote.Text = "so far, after the Market's cut";
+        // LOOT's first side (Ui/MainWindow.Loot.cs): what this count picked up and its total, with how it adds up on hover.
+        // It replaced the SESSION line (2026-10-28), which was this same count; only what happened: gathering doesn't say "0 kills"
         _hasSummary = e.Events > 0;
-        SummaryCard.Visibility = _hasSummary && _part == "Farming" && !_welcome ? Visibility.Visible : Visibility.Collapsed;
         ShareCardBtn.IsEnabled = totalNow > 0;
-        FootTotal.Text = Fk(totalNow);
-        FootTotal.ToolTip = $"Kinah picked up plus loot at the lowest Market price, after the Market's {1 - PriceBook.SellerKeeps:P0}: {totalNow:N0}.";
-        SumBreakdown.Text = string.Join("\n", new[] { counted, s.Unpriced > 0 ? $"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add nothing." : "" }.Where(x => x.Length > 0));
-        SumBreakdown.Visibility = SumBreakdown.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        SumBreakdown.ToolTip = $"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.\n"
-            + (s.Priced > 0 ? $"Loot at the lowest Market price: {s.Gross:N0}.\nMarket fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}.\n" : "")
-            + $"Session total: {totalNow:N0}.";
-        FillSessionRows(kinah, s.Value, s.Priced, _watcher.Chat?.ZoneView?.Zone ?? e.Zone);
+        var sums = new List<string>();
+        if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
+        if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
+        if (s.Unpriced > 0) sums.Add($"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add{(s.Unpriced == 1 ? "s" : "")} nothing.");
+        sums.Add($"Total, after the Market's cut: {totalNow:N0}.");
+        if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
+        var byEnemy = e.MobSnapshot().Where(m => m.Kinah > 0).GroupBy(m => m.Name).Select(g => (Where: g.Key, Count: g.Sum(m => m.Kinah))).OrderByDescending(x => x.Count).ToList();
+        _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy);
+        FillLoot();
         var top = s.Drops.Concat(s.Gathered).Where(r => !r.Header && r.Worth > 0).OrderByDescending(r => r.Worth).ToList();
         _topRows = top;
 
@@ -958,8 +962,14 @@ public partial class MainWindow : Window
         ShowTable(e, elapsed, s);
     }
 
-    /// <summary>True once the count on screen has something in it: the summary card shows from then on.</summary>
+    /// <summary>True once the count on screen has something in it: LOOT's first side shows it from then on.</summary>
     bool _hasSummary;
+
+    /// <summary>
+    /// What the Farming page stopped saying while all is well (2026-10-28), kept for the ⋯ menu: the reward lines left out
+    /// of the count, the idle time, and the last line read ("Last: Spiritstone acquired").
+    /// </summary>
+    string _leftOut = "", _idleNote = "", _lastRead = "";
 
     /// <summary>Every priced drop and gathered item, most valuable first, from the last FillNumbers (Top drops shows three, the Discord card five).</summary>
     List<DropRow> _topRows = new();
@@ -1072,11 +1082,12 @@ public partial class MainWindow : Window
         bool full = farm && FullShown;
         LeftCol.Visibility = craft || events ? Visibility.Collapsed : Visibility.Visible;
         SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
-        SummaryCard.Visibility = farm && _hasSummary ? Visibility.Visible : Visibility.Collapsed;
-        TablesCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
+        if (!farm) SummaryCard.Visibility = Visibility.Collapsed;   // LOOT shows itself on Farming (FillLoot)
+        // the tables only in Full view since 2026-10-28 (the calm Farming page, mock C): Compact is the live card and LOOT
+        TablesCard.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
         EventsCard.Visibility = events ? Visibility.Visible : Visibility.Collapsed;
-        LowerScroll.Visibility = farm || craft || events ? Visibility.Visible : Visibility.Collapsed;
+        LowerScroll.Visibility = full || craft || events ? Visibility.Visible : Visibility.Collapsed;
         // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
         System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
         System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
@@ -1085,15 +1096,15 @@ public partial class MainWindow : Window
         // fixed column widths: an Auto column would take half the header's width from the span and leave a gap
         LeftColDef.Width = new GridLength(662);
         RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
-        // Full view (the C mock): the feed and the rate top left with Session and Where to farm now under them and the footer
-        // closing that card; the drops and the chips on the right. Compact: one card, Where to farm now after the chips
-        MoveTo(WhereSection, full ? LeftCol : TableStack, full ? LeftCol.Children.IndexOf(SummaryCard) + 1 : TableStack.Children.Count);
+        // the feed and the rate with LOOT and Where to farm now under them and the footer closing that card, in both views;
+        // Full view adds the drops and the chips on the right
+        MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(SummaryCard) + 1);
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
         System.Windows.Controls.Grid.SetRow(StatusBar, 3); System.Windows.Controls.Grid.SetColumnSpan(StatusBar, 2);
         HeadStack.Width = full ? 662 * 2 + 16 : 662;
         StatusBar.Width = 662;
         ViewFill.Opacity = full ? 1 : 0.25;
-        ViewBtn.ToolTip = full ? "Compact view: one column" : _fullTooWide ? "Full view needs a wider screen than this one" : "Full view: twice as wide, with Session and Where to farm now open beside the tables";
+        ViewBtn.ToolTip = full ? "Compact view: one column" : _fullTooWide ? "Full view needs a wider screen than this one" : "Full view: twice as wide, with the drop tables beside the loot";
         ViewBtn.Visibility = craft || events || _welcome ? Visibility.Collapsed : Visibility.Visible;
         // Session and Where to farm now open in Full view, folded in Compact, until the player opens or folds them
         _secUser.Remove("Session"); _secUser.Remove("Where");
@@ -1759,7 +1770,7 @@ public partial class MainWindow : Window
                 break;
         }
         ApplyModeLabels();
-        _tableWhat = "this run";
+        _tableWhat = "this zone";   // no run on, as a player mostly has it (KL_SHOT_STATE=run draws one)
         if (_mode == Mode.Open) _extraOpen = "Mob";   // the mock opens Kinah by enemy in place
         _demoEngine = e; _demoElapsed = TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17);
         LoadAccuracyDemo();
@@ -1793,9 +1804,11 @@ public partial class MainWindow : Window
             }
             SetPreview((System.Drawing.Bitmap)b.Clone());
         }
-        SetTrackingUi(true);
+        SetTrackingUi(false);
         LiveMark.Visibility = Visibility.Visible;
-        Say(_mode == Mode.Gather ? "Last: Sapphire Gemstone acquired" : "Last: Spiritstone acquired", "Faint");
+        // all is well, so the footer says nothing on Farming (2026-10-28); the last line read is in ⋯
+        _lastRead = _mode == Mode.Gather ? "Last: Sapphire Gemstone acquired" : "Last: Spiritstone acquired";
+        Tell("", "Faint");
         if (market)
         {
             _demoMarket = "Market open · 318 asks read · 41 items · 318 shared · last read 12 s ago";

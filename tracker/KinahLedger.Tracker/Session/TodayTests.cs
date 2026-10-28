@@ -118,7 +118,10 @@ public static class TodayTests
             Check("...and never farming", TodayLoot.RunsLine(rt3).Any(n => n.Word.Contains("farm") || n.Word.Contains("kill") || n.Word.Contains("gather")).ToString(), "False");
             Check("a run left out of the averages adds nothing", $"{rt3.Counted} {rt3.Kinah}", "3 600000");
             var gatherOnly = new TodayFarm(0, 0, 12, 1800, new(), new(), new(), new());
-            Check("a day of gathering only says gathering", Line(TodayLoot.FarmLine(gatherOnly)), "0:30 gathering ·12 attempts");
+            Check("a day of gathering only says gathering", Line(TodayLoot.FarmLine(gatherOnly)), "30 min gathering ·12 attempts");
+            // f. one way to write how long (2026-10-28): minutes, then hours and minutes; never "0:21" beside "5:19"
+            Check("how long, in words", string.Join(",", new[] { 20.0, 59, 60, 21 * 60 + 40, 3600, 2 * 3600 + 41 * 60 + 59 }.Select(TodayLoot.Dur)),
+                "under a minute,under a minute,1 min,21 min,1 h,2 h 41 min");
         }
         finally
         {

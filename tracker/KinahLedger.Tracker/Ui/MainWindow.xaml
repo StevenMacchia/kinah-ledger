@@ -298,13 +298,14 @@
         </StackPanel>
       </Grid>
       <!-- a newer version: downloaded on its own, installed when the window closes or on Restart now -->
-      <Border x:Name="UpdateCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="14,10,14,10" Visibility="Collapsed">
+      <!-- one line (2026-10-28, the calm Farming page): the ready notice fits beside its two actions -->
+      <Border x:Name="UpdateCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="14,6,6,6" Visibility="Collapsed">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <TextBlock x:Name="UpdateText" Style="{StaticResource BodyStyle}" FontSize="12.5" LineHeight="17" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"/>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
             <TextBlock x:Name="UpdateNotesText" FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"><Hyperlink x:Name="UpdateNotesLink" Style="{StaticResource LinkStyle}">What's new</Hyperlink></TextBlock>
-            <Button x:Name="UpdateBtn" Style="{StaticResource PrimaryButton}" Content="Restart now" Height="34" Padding="16,0" FontSize="13"/>
+            <Button x:Name="UpdateBtn" Style="{StaticResource PrimaryButton}" Content="Restart now" Height="32" Padding="16,0" FontSize="13"/>
           </StackPanel>
         </Grid>
       </Border>
@@ -393,15 +394,18 @@
             </Border>
             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
               <TextBlock x:Name="ZoneLbl" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Text="Waiting for the game" TextTrimming="CharacterEllipsis"/>
-              <!-- what and how long ("Open world · farming 42:17") -->
-              <TextBlock x:Name="TableTitle" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="0,2,0,0" Text="Not reading yet" TextTrimming="CharacterEllipsis"/>
-            </StackPanel>
-            <!-- live: the game is being read now -->
-            <StackPanel x:Name="LiveMark" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Visibility="Collapsed" ToolTip="The game is being read now.">
-              <Ellipse x:Name="RecDot" Width="6" Height="6" Fill="{DynamicResource Gold}" Margin="0,1,6,0" VerticalAlignment="Center">
-                <Ellipse.Effect><DropShadowEffect Color="#F8D598" BlurRadius="8" ShadowDepth="0" Opacity="0.7"/></Ellipse.Effect>
-              </Ellipse>
-              <TextBlock Text="live" Foreground="{DynamicResource Gold}" FontSize="11.5" VerticalAlignment="Center"/>
+              <!-- what and how long, then live ("Open world · 42 min · ● live", the calm Farming mock C, 2026-10-28) -->
+              <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                <TextBlock x:Name="TableTitle" Foreground="{DynamicResource Muted}" FontSize="12.5" Text="Not reading yet" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                <!-- live: the game is being read now -->
+                <StackPanel x:Name="LiveMark" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="The game is being read now." Background="Transparent">
+                  <TextBlock Text=" · " Foreground="{DynamicResource Muted}" FontSize="12.5" VerticalAlignment="Center"/>
+                  <Ellipse x:Name="RecDot" Width="6" Height="6" Fill="{DynamicResource Gold}" Margin="0,1,5,0" VerticalAlignment="Center">
+                    <Ellipse.Effect><DropShadowEffect Color="#F8D598" BlurRadius="8" ShadowDepth="0" Opacity="0.7"/></Ellipse.Effect>
+                  </Ellipse>
+                  <TextBlock Text="live" Foreground="{DynamicResource Gold}" FontSize="12.5" VerticalAlignment="Center"/>
+                </StackPanel>
+              </StackPanel>
             </StackPanel>
           </Grid>
 
@@ -409,14 +413,16 @@
           <Grid Margin="20,16,20,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="200"/></Grid.ColumnDefinitions>
             <StackPanel>
-              <Border x:Name="FeedBox" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource Line}" Background="{DynamicResource Slot}" Padding="0,4" ClipToBounds="True">
+              <Border x:Name="FeedBox" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource Line}" Background="{DynamicResource Slot}" Padding="0,4" ClipToBounds="True"
+                      ToolTip="A line wrong? Click it to report it. A pickup that never showed: ⋯ › A pickup is missing." ToolTipService.InitialShowDelay="900">
                 <Grid>
                   <StackPanel x:Name="FeedHost"/>
                   <TextBlock x:Name="FeedEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="12,10,12,10" TextWrapping="Wrap"
                              Text="Each pickup shows here as it is counted, newest first."/>
                 </Grid>
               </Border>
-              <TextBlock x:Name="FeedHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left"
+              <!-- kept as the place a marked line's Undo goes; the hint itself moved to the feed's hover and ⋯ (2026-10-28) -->
+              <TextBlock x:Name="FeedHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left" Visibility="Collapsed"
                          Text="A line wrong or missing? Click it." ToolTip="Click a wrong line to report it, or here for a pickup that never showed. The report is saved on this PC."/>
             </StackPanel>
             <StackPanel Grid.Column="2">
@@ -436,7 +442,8 @@
               <!-- "161 kills · 3.9K a kill" and "best here 1.40M" -->
               <TextBlock x:Name="KvLine" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" LineHeight="21" TextWrapping="Wrap"/>
               <!-- "Reading the chat" with a steady green tick; the read count, the Market and the Kinah counter on hover -->
-              <StackPanel x:Name="HealthLine" Orientation="Horizontal" Margin="0,12,0,0">
+              <!-- shown only when something is wrong (2026-10-28); FillHealth -->
+              <StackPanel x:Name="HealthLine" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
                 <Path x:Name="HealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="HealthText" FontSize="12" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
               </StackPanel>
@@ -472,38 +479,30 @@
         </StackPanel>
       </Border>
 
-      <!-- Session, folded to one line: what was counted and the total; opened, Kinah, loot, best here, players at your gear -->
+      <!-- LOOT (2026-10-28, option C of kinah-bench/mock-calm-farming, Steven's pick): what was picked up, as inventory
+           slots with the game-tooltip card on hover, for one period at a time: this zone since you arrived (or the run, or
+           every zone with All zones on) or Today; one total. It replaced the SESSION line (the same count as the card above
+           it) and, on this page, the Today strip. Drawn in Ui/MainWindow.Loot.cs. -->
       <Border x:Name="SummaryCard" Background="{DynamicResource Card}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1,0,1,0" Visibility="Collapsed">
         <StackPanel>
           <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-            <Grid x:Name="SessionHead" Height="48" Background="Transparent" Cursor="Hand">
-              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <Path x:Name="SessionChev" Style="{StaticResource SecChev}" Margin="20,0,10,0"/>
-              <TextBlock Grid.Column="1" Style="{StaticResource SecTitle}" Text="SESSION"/>
-              <TextBlock x:Name="FootTotalNote" Grid.Column="2" Style="{StaticResource SecNote}"/>
-              <TextBlock x:Name="FootTotal" Grid.Column="3" Style="{StaticResource SecSum}" Foreground="{DynamicResource Gold}" FontSize="14" Text=" "/>
+            <Grid x:Name="SessionHead" Height="50">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock Style="{StaticResource SecTitle}" Text="LOOT" FontWeight="Bold" Margin="20,0,10,0"/>
+              <TextBlock x:Name="FootTotalNote" Grid.Column="1" Style="{StaticResource SecNote}"/>
+              <!-- one period at a time: this zone (or the run, or All zones) or today -->
+              <Border x:Name="LootScope" Grid.Column="2" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Margin="12,0,0,0">
+                <StackPanel Orientation="Horizontal">
+                  <Button x:Name="LootHereBtn" Style="{StaticResource SegOn}" Content="This zone" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Since you came to this zone. It starts over when you change zone."/>
+                  <Button x:Name="LootTodayBtn" Style="{StaticResource SegOff}" Content="Today" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Today's farming since midnight on this PC, every zone."/>
+                </StackPanel>
+              </Border>
+              <TextBlock x:Name="FootTotal" Grid.Column="3" Style="{StaticResource SecSum}" Foreground="{DynamicResource Gold}" FontSize="14" Text=" " MinWidth="40" TextAlignment="Right" Background="Transparent" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000"/>
             </Grid>
           </Border>
-          <StackPanel x:Name="SessionBody" Margin="20,0,20,16" Visibility="Collapsed">
-            <StackPanel x:Name="SessionRows"/>
-            <!-- how the total adds up, the whole sum on hover -->
-            <TextBlock x:Name="SumBreakdown" Foreground="{DynamicResource Faint}" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" Background="Transparent" ToolTipService.InitialShowDelay="250"/>
+          <StackPanel x:Name="SessionBody" Margin="20,0,20,14">
+            <StackPanel x:Name="LootHost"/>
           </StackPanel>
-          <!-- how the count held up against the game's own numbers, as one chip in the look's colours ("✓ Nothing looked
-               wrong", "2 to look at"); a click opens the Accuracy card over the window (Ui/MainWindow.AccuracyCard.cs) -->
-          <Border x:Name="AccuracyChip" Margin="20,0,20,16" HorizontalAlignment="Left" Height="30" CornerRadius="15" BorderThickness="1" Padding="12,0,13,1"
-                  Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
-                  ToolTip="How the count held up against the game's own numbers. Click to see." ToolTipService.InitialShowDelay="400">
-            <Border.Style>
-              <Style TargetType="Border">
-                <Setter Property="Background" Value="{DynamicResource ChipOff}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource ChipOffLine}"/>
-                <Style.Triggers>
-                  <Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource GoldLine}"/></Trigger>
-                </Style.Triggers>
-              </Style>
-            </Border.Style>
-          </Border>
         </StackPanel>
       </Border>
 
@@ -528,15 +527,30 @@
       <Border x:Name="StatusBar" Grid.Row="3" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left" Margin="0,14,0,0">
       <Border x:Name="StatusInner" BorderBrush="{DynamicResource Line}">
       <Grid x:Name="StatusRow">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBlock x:Name="Status" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250" VerticalAlignment="Center"/>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <!-- how the count held up against the game's own numbers, as one chip in the look's colours ("2 to look at"); a click
+             opens the Accuracy card over the window (Ui/MainWindow.AccuracyCard.cs). In the footer since 2026-10-28 -->
+        <Border x:Name="AccuracyChip" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center" Height="26" CornerRadius="13" BorderThickness="1" Padding="11,0,12,1"
+                Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
+                ToolTip="How the count held up against the game's own numbers. Click to see." ToolTipService.InitialShowDelay="400">
+          <Border.Style>
+            <Style TargetType="Border">
+              <Setter Property="Background" Value="{DynamicResource ChipOff}"/>
+              <Setter Property="BorderBrush" Value="{DynamicResource ChipOffLine}"/>
+              <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource GoldLine}"/></Trigger>
+              </Style.Triggers>
+            </Style>
+          </Border.Style>
+        </Border>
+        <TextBlock x:Name="Status" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250" VerticalAlignment="Center"/>
         <!-- shown with a reading problem: straight to the page that fixes it -->
-        <TextBlock x:Name="FixText" Grid.Column="1" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
+        <TextBlock x:Name="FixText" Grid.Column="2" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
         <!-- the last minute of what was read and counted, saved on this PC for a bug report (2026-10-23) -->
-        <TextBlock x:Name="MiscountText" Grid.Column="2" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+        <TextBlock x:Name="MiscountText" Grid.Column="3" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
                    ToolTip="Saves what the tracker read and counted in the last minute to a folder on this PC, for a bug report. Nothing is sent."><Hyperlink x:Name="MiscountLink" Style="{StaticResource LinkStyle}">Report a miscount</Hyperlink></TextBlock>
         <!-- the Kinah Ledger Discord: where a miscount report goes (#bugs-and-feedback), help and release news (2026-10-25) -->
-        <TextBlock x:Name="DiscordText" Grid.Column="3" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+        <TextBlock x:Name="DiscordText" Grid.Column="4" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
                    ToolTip="Opens the Kinah Ledger Discord in your browser. Post a miscount in #bugs-and-feedback with a screenshot, your server and the tracker version."><Hyperlink x:Name="DiscordLink" Style="{StaticResource LinkStyle}">Discord</Hyperlink></TextBlock>
       </Grid>
       </Border>
