@@ -6,7 +6,8 @@ namespace KinahLedger.Session;
 /// <summary>
 /// The player's data folder kept to a size (2026-10-25: 919 MB, of which reward-shots 554 MB, reports 277 MB, trace logs
 /// 49 MB). At the start of the app and then at most once an hour, on its own low-priority thread, it deletes old pictures
-/// from reward-shots (<see cref="TrackerSession.PruneRewardShots"/>) and old miscount reports from reports/ (<see cref="PruneReports"/>).
+/// from reward-shots (<see cref="TrackerSession.PruneRewardShots"/>) and old miscount reports from reports/ (<see cref="PruneReports"/>),
+/// then holds every picture folder together under <see cref="CeilingMB"/> (<see cref="PruneToCeiling"/>).
 /// It never works while a read pass is running: before each delete it waits for the pass to end (<see cref="PassStarted"/>
 /// and <see cref="PassEnded"/> bracket every pass of the read loop), and it gives up for a few minutes when none ends.
 /// Only files and folders the tracker named itself are touched.
@@ -76,7 +77,69 @@ public static class Housekeeping
         if (Directory.Exists(shots)) pictures = TrackerSession.PruneRewardShots(shots, now, null, idle);
         reports = PruneReports(dir, now, idle);
         if (pictures > 0 || reports > 0) CrashLog.Note($"housekeeping: {pictures} old picture(s) in reward-shots and {reports} old report(s) in reports deleted");
+        int over = PruneToCeiling(dir, idle);
+        if (over > 0) CrashLog.Note($"housekeeping: the tracker's pictures were over {CeilingMB / 1024} GB in all; the {over} oldest deleted");
         return (pictures, reports);
+    }
+
+    // ---- the whole folder's ceiling (Steven, 2026-10-28: "this folder created for the users should never be above like 5
+    // gigs of screenshot and it should auto clear") ----
+
+    /// <summary>
+    /// What all the tracker's pictures may take together, whatever each folder's own limit allows (reward-shots 400 MB,
+    /// reports 200 MB, proof 100 MB, but reports kept because they weren't sent, or are under an hour old, have no size
+    /// limit). Under 5 GB, so the folder can't pass 5 GB between two clean-ups an hour apart.
+    /// </summary>
+    public const long CeilingMB = 4096;
+
+    /// <summary>The folders the tracker saves pictures in. Each is pruned by its own rule first; the ceiling covers them all, and any picture folder added later goes here.</summary>
+    internal static readonly string[] PictureFolders = { "reward-shots", "reports", "proof", "cards", "labels" };
+
+    /// <summary>
+    /// Past <see cref="CeilingMB"/> in all, the oldest go first from every picture folder, the exemptions included: a report
+    /// folder goes whole, anything else file by file. Returns how many went. Nothing outside <see cref="PictureFolders"/> is touched.
+    /// </summary>
+    internal static int PruneToCeiling(string root, Action? idle = null, long? maxBytes = null)
+    {
+        long max = maxBytes ?? CeilingMB * 1024 * 1024;
+        var units = new List<(FileSystemInfo Item, DateTime At, long Bytes)>();
+        static long Size(FileInfo f) { try { return f.Length; } catch (Exception) { return 0; } }
+        foreach (var name in PictureFolders)
+        {
+            var d = new DirectoryInfo(Path.Combine(root, name));
+            if (!d.Exists) continue;
+            try
+            {
+                if (name == "reports")
+                {
+                    // a report is its folder: its pictures and its notes go together
+                    foreach (var r in d.GetDirectories())
+                    {
+                        long bytes = 0; DateTime at = r.LastWriteTimeUtc;
+                        try { foreach (var f in r.EnumerateFiles("*", SearchOption.AllDirectories)) { bytes += Size(f); if (f.LastWriteTimeUtc > at) at = f.LastWriteTimeUtc; } } catch (Exception) { }
+                        units.Add((r, at, bytes));
+                    }
+                    foreach (var f in d.GetFiles()) units.Add((f, f.LastWriteTimeUtc, Size(f)));
+                }
+                else foreach (var f in d.EnumerateFiles("*", SearchOption.AllDirectories)) units.Add((f, f.LastWriteTimeUtc, Size(f)));
+            }
+            catch (Exception) { /* a folder that can't be listed is left as it is */ }
+        }
+        long total = units.Sum(u => u.Bytes);
+        if (total <= max) return 0;
+        int gone = 0;
+        foreach (var u in units.OrderBy(u => u.At))
+        {
+            if (total <= max) break;
+            idle?.Invoke();
+            try
+            {
+                if (u.Item is DirectoryInfo di) di.Delete(true); else u.Item.Delete();
+                total -= u.Bytes; gone++;
+            }
+            catch (Exception) { /* in use: the next one goes instead */ }
+        }
+        return gone;
     }
 
     /// <summary>Waits until no read pass is running; gives up (TimeoutException) when one has run for <see cref="IdleWaitSeconds"/> s without a gap.</summary>

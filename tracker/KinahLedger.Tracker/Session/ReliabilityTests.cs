@@ -203,6 +203,32 @@ public static class ReliabilityTests
             Housekeeping.PassEnded();
             bool d4 = Housekeeping.WaitForLast(TimeSpan.FromSeconds(10));
             Check("a read pass running: it waits; the pass over, it deletes", $"{s4} {waiting} {d4} {File.Exists(pic)}", "True True True False");
+
+            // h. one ceiling over every picture folder (Steven, 2026-10-28: "this folder created for the users should never be
+            // above like 5 gigs of screenshot and it should auto clear"): past it the oldest go first from any picture folder,
+            // an unsent report included (whole); data and icons are never touched
+            var croot = Path.Combine(dir, "ceiling");
+            var old0 = DateTime.UtcNow.AddDays(-3);
+            void Put(string rel, int bytes, int hoursAgo)
+            {
+                var p = Path.Combine(croot, rel); Directory.CreateDirectory(Path.GetDirectoryName(p)!);
+                File.WriteAllBytes(p, new byte[bytes]); File.SetLastWriteTimeUtc(p, old0.AddHours(-hoursAgo));
+            }
+            Put("reward-shots/a.jpg", 1000, 50); Put("proof/b.png", 1000, 40);
+            Put("reports/20261020-100000/frames/loot-1.png", 1000, 30); Put("reports/20261020-100000/unsent.txt", 1, 30);
+            Directory.SetLastWriteTimeUtc(Path.Combine(croot, "reports", "20261020-100000", "frames"), old0.AddHours(-30));
+            Directory.SetLastWriteTimeUtc(Path.Combine(croot, "reports", "20261020-100000"), old0.AddHours(-30));
+            Put("reward-shots/c.jpg", 1000, 20); Put("cards/d.png", 1000, 10);
+            Put("data/prices.json", 5000, 60); Put("icons/e.png", 5000, 60);
+            int c1 = Housekeeping.PruneToCeiling(croot, maxBytes: 2500);
+            string Have() => string.Join(" ", Directory.EnumerateFiles(croot, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(croot, f).Replace('\\', '/')).OrderBy(n => n, StringComparer.Ordinal));
+            Check("ceiling: over it, the oldest go from every picture folder, an unsent report whole; data and icons untouched",
+                $"{c1} {Have()}", "3 cards/d.png data/prices.json icons/e.png reward-shots/c.jpg");
+            int c2 = Housekeeping.PruneToCeiling(croot, maxBytes: 2500);
+            Check("...under it, nothing goes", $"{c2}", "0");
+            Check("...the ceiling is under 5 GB, so an hour of pictures can't take the folder past 5 GB",
+                $"{Housekeeping.CeilingMB < 5 * 1024} {string.Join(",", Housekeeping.PictureFolders)}", "True reward-shots,reports,proof,cards,labels");
         }
         finally
         {
