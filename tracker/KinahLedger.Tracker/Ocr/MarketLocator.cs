@@ -197,27 +197,43 @@ public static class MarketReader
             }
             rows.Add(new Row(string.Join(" ", g.Select(x => x.Text)), cells, box));
         }
-        // the main board shows each item on two lines, the name and "Item Level N"; the numbers sit between them and
-        // may land on either. Fold a level line (or a line with numbers but no name) into the row above it.
+        // The main board shows each item on two lines, the name and "Item Level N"; the numbers sit between them and may
+        // land on either, or on a line of their own. An item takes its level line and one line of numbers, each within a
+        // line and a half of it. Unbounded, the fold ran on down an item's listings showing under the board's headers and
+        // glued a page of them into one name ("16,799 16,799 2d 23h a 16,799 537,568 2d 23h ...", 2026-10-28). The board
+        // has no time-left column, so a line with a time left is never folded either way: it stays a row of its own and
+        // reads as nothing, and after a few such reads the Market is looked for again.
         if (layout.Kinds != null && Array.IndexOf(layout.Kinds, "lowest") >= 0)
         {
             var merged = new List<Row>();
+            int open = -1, lineHeight = 0; bool hasLevel = false, hasNumbers = false;   // the item that can still take a line
             foreach (var r in rows)
             {
-                var name = r.Cells != null && r.Cells.TryGetValue("name", out var n) ? n.Trim() : "";
-                bool level = LevelLine.IsMatch(name), nameless = name.Length == 0 || name.Count(char.IsLetter) < 3;
-                if (merged.Count > 0 && (level || nameless) && r.Box.Top - merged[^1].Box.Bottom < merged[^1].Box.Height * 1.5)
-                {
-                    var prev = merged[^1];
-                    var cells = new Dictionary<string, string>(prev.Cells!);
-                    foreach (var (k, v) in r.Cells!) if (k != "name" || !level) cells[k] = cells.TryGetValue(k, out var s) && s.Length > 0 ? s + " " + v : v;
-                    merged[^1] = new Row(prev.Flat + " " + r.Flat, cells, Rectangle.Union(prev.Box, r.Box));
-                }
-                else merged.Add(r);
+                if (MarketParser.HasTimeLeft(r.Flat)) { merged.Add(r); open = -1; continue; }
+                var name = CellOf(r, "name");
+                bool level = LevelLine.IsMatch(name), nameless = !level && name.Count(char.IsLetter) < 3;
+                bool numbers = r.Cells!.Any(kv => kv.Key != "name" && kv.Value.Any(char.IsDigit));
+                if (nameless && !numbers) continue;   // a stray mark or icon between lines: no name and no price
+                bool near = open >= 0 && r.Box.Top - merged[open].Box.Bottom < lineHeight * 1.5;
+                if (near && level && !hasLevel) { merged[open] = Fold(merged[open], r); hasLevel = true; continue; }
+                if (near && nameless && !hasNumbers && !CellOf(merged[open], "lowest").Any(char.IsDigit)) { merged[open] = Fold(merged[open], r); hasNumbers = true; continue; }
+                merged.Add(r);
+                if (level) open = -1;                 // a level line on its own ends the item above it
+                else if (!nameless) { open = merged.Count - 1; lineHeight = r.Box.Height; hasLevel = hasNumbers = false; }
             }
             rows = merged;
         }
         return rows;
+    }
+
+    static string CellOf(Row r, string kind) => r.Cells != null && r.Cells.TryGetValue(kind, out var v) ? v.Trim() : "";
+
+    /// <summary>A board item's level line or numbers line added to it; the line's own name cell ("Item Level 10", a stray mark) stays out of the name.</summary>
+    static Row Fold(Row item, Row line)
+    {
+        var cells = new Dictionary<string, string>(item.Cells!);
+        foreach (var (k, v) in line.Cells!) if (k != "name") cells[k] = cells.TryGetValue(k, out var s) && s.Length > 0 ? s + " " + v : v;
+        return new Row(item.Flat + " " + line.Flat, cells, Rectangle.Union(item.Box, line.Box));
     }
 
     static readonly Regex LevelLine = new(@"^(?:item\s*)?[l1]eve[l1]\s*\d{1,3}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);

@@ -4781,6 +4781,8 @@ options: --process aion[,other]");
             bool pass = got == expect; ok &= pass;
             Console.WriteLine($"  {string.Join(" | ", c.Select(kv => kv.Key + "=" + kv.Value)),-50} -> {got,-38} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
         }
+        // whole Market rows read as one name (2026-10-28): the reader's board fold, and the name check behind it
+        ok &= MarketReadTests.Run(parser, items);
 
         Console.WriteLine("\nServer keys:");
         foreach (var (server, expect) in new[] { ("Siel (Elyos)", "na_e-siel-elyos"), ("  Israphel / Asmodian ", "na_e-israphel-asmodian"), ("", "na_e") })
