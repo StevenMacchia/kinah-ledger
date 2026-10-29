@@ -337,30 +337,71 @@ public static class ServerKeys
 
 public static class Uploader
 {
-    public static Task<bool> SendAsync(RunPayload p, UploadSettings u) =>
-        !u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint) ? Task.FromResult(false) : PostAsync(u.Endpoint, p);
+    public static async Task<bool> SendAsync(RunPayload p, UploadSettings u) =>
+        !u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint) ? false : (await PostAsync(u.Endpoint, p)).Ok;
 
     /// <summary>Market asks have their own switch in the window; here only the route matters.</summary>
-    public static Task<bool> SendPricesAsync(PriceBatch p, UploadSettings u) =>
-        string.IsNullOrWhiteSpace(u.PricesUrl) ? Task.FromResult(false) : PostAsync(u.PricesUrl, p);
+    public static Task<SendResult> SendPricesAsync(PriceBatch p, UploadSettings u) =>
+        string.IsNullOrWhiteSpace(u.PricesUrl) ? Task.FromResult(SendResult.NoConnection) : PostAsync(u.PricesUrl, p);
 
     /// <summary>Why the last send failed, in plain words, so the window can say more than "couldn't reach the site".</summary>
     public static string LastError { get; private set; } = "";
 
-    static async Task<bool> PostAsync<T>(string url, T payload)
+    /// <summary>The longest wait a site's retry-after is followed for; anything longer is read as this.</summary>
+    public static readonly TimeSpan MaxRetryAfter = TimeSpan.FromHours(1);
+
+    static async Task<SendResult> PostAsync<T>(string url, T payload)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("KinahLedger/" + RunPayload.AppVersion);
         try
         {
-            var r = await http.PostAsJsonAsync(url, payload);
-            if (r.IsSuccessStatusCode) { LastError = ""; return true; }
+            using var r = await http.PostAsJsonAsync(url, payload);
             string body = "";
             try { body = (await r.Content.ReadAsStringAsync()).Trim(); } catch (Exception) { /* no body */ }
+            if (r.IsSuccessStatusCode) { LastError = ""; return new SendResult(true, (int)r.StatusCode, null, body); }
             LastError = $"the site answered {(int)r.StatusCode}" + (body.Length > 0 ? ": " + (body.Length > 140 ? body[..140] + "…" : body) : "");
-            return false;
+            return new SendResult(false, (int)r.StatusCode, RetryAfterOf(r), body);
         }
-        catch (HttpRequestException ex) { LastError = "no connection: " + ex.Message; return false; }
-        catch (TaskCanceledException) { LastError = "the site didn't answer within 15 s"; return false; }
+        catch (HttpRequestException ex) { LastError = "no connection: " + ex.Message; return SendResult.NoConnection; }
+        catch (TaskCanceledException) { LastError = "the site didn't answer within 15 s"; return SendResult.NoConnection; }
+    }
+
+    /// <summary>The site's retry-after (seconds or a date), from now, at most <see cref="MaxRetryAfter"/>; null when it sent none.</summary>
+    public static TimeSpan? RetryAfterOf(HttpResponseMessage r)
+    {
+        var h = r.Headers.RetryAfter;
+        TimeSpan? wait = h?.Delta;
+        if (wait == null && h?.Date is { } at) wait = at - DateTimeOffset.UtcNow;
+        if (wait is not { } w) return null;
+        return w < TimeSpan.Zero ? TimeSpan.Zero : w > MaxRetryAfter ? MaxRetryAfter : w;
+    }
+}
+
+/// <summary>
+/// How the site answered one send. <see cref="Refused"/>: a 4xx other than 408 and 429, which the same payload would get
+/// again, so it is dropped, never sent again (2026-10-28: one misread Market name made every batch a 400, and the batch was
+/// resent every ten seconds for good). Anything else that isn't <see cref="Ok"/> (no connection, a timeout, a 5xx, a 429)
+/// may pass later; <see cref="RetryAfter"/> is how long the site asked to be left alone, when it said.
+/// </summary>
+public sealed record SendResult(bool Ok, int Status, TimeSpan? RetryAfter, string Body)
+{
+    public static readonly SendResult NoConnection = new(false, 0, null, "");
+    public bool Refused => !Ok && Status is >= 400 and < 500 and not 408 and not 429;
+    public bool TooMany => Status == 429;
+
+    /// <summary>The field the site named in a refusal ({"field":"asks[3].item"}), or "".</summary>
+    public string Field
+    {
+        get
+        {
+            if (Body.Length == 0 || Body[0] != '{') return "";
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(Body);
+                return doc.RootElement.TryGetProperty("field", out var f) && f.ValueKind == System.Text.Json.JsonValueKind.String ? f.GetString() ?? "" : "";
+            }
+            catch (System.Text.Json.JsonException) { return ""; }
+        }
     }
 }
