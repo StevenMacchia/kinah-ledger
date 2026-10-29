@@ -340,6 +340,19 @@
    "bound": false,
    "url": "https://metabot.gg/en/aion-2/items/balaurs-essence",
    "sourceNote": "In data/loot-tables.json (dropped by Balaur enemies) but not in the item list. Steven's reads.log 2026-10-25: \"Acquired Balaurls Essence x70.\" (the apostrophe read as l) not counted at 07:18 and 07:34 (\"not in the item list\"); in runs from 13:53 on it was counted for the run by its misread name. Grade, tradable and category from MetaBot; icon on the NC CDN (MetaBot's icon_item_craft_drop_draconic_soul_all_a_u_001a)."
+  },
+  {
+   "id": null,
+   "name": "Wisdom Stone (Bound)",
+   "grade": "",
+   "tradable": false,
+   "category": "Reward",
+   "icon": "",
+   "iconSource": "",
+   "metabotCategory": "",
+   "bound": true,
+   "url": "",
+   "sourceNote": "Seen in the chat on 2026-10-28 (\"Acquired Wisdom Stone (Bound) x2.\") in a reward with Sealed Wing Featherdown; not on MetaBot yet. Grade and icon unknown. Without it the name snapped to Wisdom Staff (Unique) on a player's tracker (reading reports, 2026-10-29)."
   }
  ]
 }
