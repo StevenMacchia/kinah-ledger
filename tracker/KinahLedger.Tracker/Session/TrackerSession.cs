@@ -1369,6 +1369,10 @@ public sealed partial class TrackerSession
             _applied.Clear();
             foreach (var p0 in events)
             {
+                // a kill's line read, before any witness holds it (a Kina line waits for the counter): what a crystal just after
+                // it is judged by (KillJustBefore)
+                if (p0 is KinahChanged { Bound: false, Delta: > 0 } or MobKilled or XpGained || (p0 is CurrencyGained kg && kg.Name.EndsWith("Soul Points", StringComparison.OrdinalIgnoreCase)))
+                    if (p0.Time > _killLineAt) _killLineAt = p0.Time;
                 var parsed = p0 with { Via = p0.Via.Length > 0 ? via + " · " + p0.Via : via };
                 // the loot list beside the character already added this pickup (this chat line came late): it counts once
                 if (_cross.Chat(parsed, now)) { any = true; continue; }
@@ -1381,6 +1385,15 @@ public sealed partial class TrackerSession
                 // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
                 if (why == null && !made && parsed is ItemAcquired big && !InRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
                 if (why == null && parsed is PetCrystal bigc && !InRun) why = PickupCheck.TooManyCrystals(bigc.Count);
+                // a kill's own crystal (one or two, a kill counted just before it) is the kill's, whatever achievement, box or
+                // reward window is open: quests complete every few kills while farming and each one's window set aside the
+                // crystals of the kills around it (2026-10-29 13:11 to 13:15: five Fera and Natura crystals in four minutes).
+                // A quest's or reward's crystals come in big amounts ("Special Soul Crystals" x200) and stay rewards
+                if (why != null && parsed is PetCrystal kc && !InRun && kc.Count <= KillCrystalMax && KillJustBefore(parsed.Time))
+                {
+                    CrashLog.NoteBurst($"{kc.Name} x{kc.Count}: {why} window open, but a kill came just before it: counted with the kills");
+                    why = null;
+                }
                 // Soul Crystals from a quest or a reward are not crystals from kills: left out, so the per hour stays the kills'
                 if (why != null && parsed is PetCrystal wp) { CrashLog.Note($"{wp.Name} x{wp.Count}: {why}, not counted with the kills"); any = true; continue; }
                 if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
@@ -2309,6 +2322,17 @@ public sealed partial class TrackerSession
     public const double PayoutWindowSeconds = 3;
     /// <summary>A loot list row out in the world with no kill or gather this long before it is a box or a reward.</summary>
     public const double NoKillSeconds = 15;
+    /// <summary>A Soul Crystal line of at most this many, with a kill counted at most <see cref="KillCrystalSeconds"/> s before it, is the kill's (0.8.61).</summary>
+    public const int KillCrystalMax = 2;
+    public const double KillCrystalSeconds = 3;
+    /// <summary>Whether a kill (its Kinah, Soul Points, soul row or XP) was counted or read at most <see cref="KillCrystalSeconds"/> s before <paramref name="t"/>.</summary>
+    bool KillJustBefore(DateTime t)
+    {
+        var at = _lastKillAt > _killLineAt ? _lastKillAt : _killLineAt;
+        return at != DateTime.MinValue && (t - at).TotalSeconds is >= -1 and <= KillCrystalSeconds;
+    }
+    /// <summary>When the chat last showed a kill's line (Kinah, Soul Points, XP), counted yet or not.</summary>
+    DateTime _killLineAt = DateTime.MinValue;
     DateTime _achieveUntil = DateTime.MinValue, _boxUntil = DateTime.MinValue, _lastKillAt = DateTime.MinValue, _lastGatherAt = DateTime.MinValue;
     static readonly Regex BoxName = new(@"\b(?:chest|box|pouch|bundle|cube|coffer|crate|package|parcel)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     static HashSet<string>? _gatherNames;
