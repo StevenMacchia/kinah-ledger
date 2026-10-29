@@ -2692,6 +2692,8 @@ options: --process aion[,other]");
         sayA(a0.AddSeconds(670), new[] { "Acquired 236 Kina.", "Refining Stone acquired." });
         Check("...and after it: farming in the zone", $"{sa.Engine.Totals().Kinah} {n(sa.Engine, "Refining Stone")} {sa.Doing.Current.Label}", "734 1 Farming · Northern Tolbas Forest");
         Check("each pickup carries where it landed", sa.RecentPickups(1).FirstOrDefault()?.Where ?? "", "Farming · Northern Tolbas Forest");
+        // the rare-drop chime: out in the world only, never a run's reward (Steven, 2026-10-29: every Epic on an event's cards dinged)
+        Check("a run's reward doesn't chime, the open world's drop does", string.Join(" ", new[] { "Farming · Northern Tolbas Forest", "Event · Defend Shugo Merchants (Shugo Festival)", "Expedition · Urugugu Canyon · rewards landing", "World boss · Saursus", "Reward screen · Rewards Collected", "Event or expedition", "" }.Select(w => Activity.IsRunLabel(w) ? "run" : "world")), "world run run run run run world");
 
         // a Daeva Pass level reward over an event's lobby (2026-10-29 13:02:25, Defend Shugo Merchants): its items are the
         // pass's reward, not the run's, and the run's rewards haven't come in, so the lobby is no "event rewards" picture
