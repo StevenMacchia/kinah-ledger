@@ -1392,7 +1392,9 @@ public partial class MainWindow : Window
     /// <summary>The live status line, rewritten each tick: in the look's own colour, so a change of look repaints it.</summary>
     void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
-    public static void Open(string url) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { } }
+    public static void Open(string url) { if (OpenForTest != null) { OpenForTest(url); return; } try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch (Exception) { } }
+    /// <summary>Set by the options self-test: takes the address instead of starting a browser.</summary>
+    internal static Action<string>? OpenForTest;
 
     /// <summary>The privacy statement in the code signing policy, in this repository.</summary>
     public const string PrivacyUrl = "https://github.com/StevenMacchia/kinah-ledger/blob/main/CODE_SIGNING_POLICY.md#privacy";
