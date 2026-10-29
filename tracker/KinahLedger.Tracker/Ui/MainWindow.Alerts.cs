@@ -62,7 +62,7 @@ public partial class MainWindow
     /// and the Ticker get the item, its grade, count, price and whether it is watched (MainWindow.RareWatch.cs); the
     /// strip its one line with the price. Returns whether it alerted (the options self-test).
     /// </summary>
-    internal bool AlertFor(string what, DateTime at, string where = "")
+    internal bool AlertFor(string what, DateTime at, string landed = "")
     {
         int x = what.LastIndexOf(" ×", StringComparison.Ordinal);
         if (x <= 0) return false;                                   // Kinah, not an item
@@ -78,7 +78,7 @@ public partial class MainWindow
             "Legend" => Color.FromRgb(0x5A, 0xA6, 0xFF), "Unique" => Color.FromRgb(0xF3, 0xD3, 0x5E), "Epic" => Color.FromRgb(0xB4, 0x8B, 0xFF),
             "Rare" => Color.FromRgb(0x62, 0xD9, 0x8B), _ => Color.FromRgb(0x5E, 0xD8, 0xCB),
         };
-        bool chime = _hudPrefs.Chime && ChimesFor(where);
+        bool chime = _hudPrefs.Chime && ChimesFor(landed);
         if (chime && !_demo && (DateTime.UtcNow - _chimedAt).TotalSeconds >= ChimeGapSeconds) { _chimedAt = DateTime.UtcNow; Chime(); }
         var (price, where) = RarePrice(name, count);
         var priceText = price.Length > 0 ? ("sells for " + price + " " + where).TrimEnd() : "no price yet";
