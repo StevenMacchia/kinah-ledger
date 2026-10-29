@@ -98,6 +98,8 @@ public sealed class AccuracyScore
     {
         public DateTime At; public string What = ""; public string Key = ""; public bool Kina;
         public bool ByCounter, ByRow, ByRace, BySecondRead, CountAssumed, CounterLive, Unjudged;
+        /// <summary>A reward screen's coin counted on its picture alone (the Kinah counter didn't rise with it in time): no chat line, so outside the Kina share, and a run's slot already (0.8.60).</summary>
+        public bool ByPicture;
         public bool Verified => (ByCounter || ByRow || ByRace || BySecondRead) && !CountAssumed;
         public bool RowJudged => ByRow || ByRace;
     }
@@ -138,6 +140,9 @@ public sealed class AccuracyScore
                 case "second read": e.BySecondRead = true; break;
                 case "row": e.ByRow = true; break;
                 case "unjudged": e.Unjudged = true; break;
+                // a reward screen's coin with no rise of the counter beside it: it was never a chat line the counter could
+                // confirm, so it is no Kina line of the share (0.8.58 counted it as one the counter missed: a share of 0)
+                case "picture": e.ByPicture = true; e.Kina = false; break;
             }
             // the loot list's row for it was matched before it counted (a Kina line waiting for the counter, a late chat line)
             int ahead = key.Length == 0 ? -1 : _rowAhead.FindIndex(r => r.Key == key && Math.Abs((r.At - at).TotalSeconds) <= MatchSeconds);
@@ -396,7 +401,8 @@ public sealed class AccuracyScore
         bool In(DateTime t) => t >= from && t <= to;
         lock (_lock)
         {
-            var c = _counted.Where(e => In(e.At)).ToList();
+            // a coin counted off the reward screen's picture alone is that screen's slot, which Slots counts: not twice
+            var c = _counted.Where(e => In(e.At) && !e.ByPicture).ToList();
             var aside = _setAside.Where(s => In(s.At)).ToList();
             var (slotsRead, slotsUnread) = Slots(new[] { r });
             int judged = c.Count + aside.Count + slotsRead + slotsUnread;
