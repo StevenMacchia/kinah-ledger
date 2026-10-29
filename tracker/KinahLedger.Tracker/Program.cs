@@ -1403,6 +1403,33 @@ options: --process aion[,other]");
             "none | none | Ink (Bound)");
         Check("names: what a name's own words are", string.Join("|", new[] { "ink (bound)", "kerubar (bound) x", "tinkerer (bound) x1", "odyle x12.", "wisdom stone" }.Select(ItemDictionary.Stem)),
             "ink|kerubar|tinkerer|odyle|wisdom stone");
+
+        // cut soul rows (0.8.60): those pieces were soul rows of the enemies fought (Eternal Isle's Kerubiel, Kerubian and
+        // Kerubar, a Kuru Tinkerer), so a piece that fits one soul of the moment is that soul, a kill
+        var souls = new[] { "Soul: Kerubiel (Bound)", "Soul: Kerubian (Bound)", "Soul: Kerubar (Bound)", "Soul: Kuru Tinkerer (Bound)", "Soul: Dratona (Bound)", "Soul: Elite Dratona (Bound)" };
+        string SP(string r, IEnumerable<string>? s = null) => LootCrossCheck.SoulPieceOf(r, s ?? souls) ?? "-";
+        Check("loot list: cut soul rows from the reports are the enemy's soul",
+            string.Join(" | ", new[] { "erubiel (Bound)", "9rubiel (Bound)", "biel (Bound)", "bian (Bound)", "jbian (Bound)", "kerubar (Bound) xt", "Tinkerer (Bound) x1", "I Tinkerer (Bound) x1" }.Select(r => SP(r))),
+            "Kerubiel | Kerubiel | Kerubiel | Kerubian | Kerubian | Kerubar | Kuru Tinkerer | Kuru Tinkerer");
+        Check("...never too short, without (Bound), another item, or when two souls fit",
+            string.Join(" | ", new[] { "n (Bound)", "e' el (Bound)", "Kerubiel", "Odyle (Bound) x2", "dratona (Bound)" }.Select(r => SP(r))) + " · " + SP("dratona (Bound)", new[] { "Soul: Dratona (Bound)" }),
+            "- | - | - | - | - · Dratona");
+        var sx = new LootCrossCheck(fd) { SoulPiece = r => LootCrossCheck.SoulPieceOf(r, souls) };
+        var sx0 = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var sxe = sx.Popup(new() { new("erubiel (Bound) x1", "erubiel (Bound)", 0, 1, false) }, sx0).Concat(sx.Popup(new(), sx0.AddSeconds(6))).ToList();
+        Check("loot list: a cut soul row read is a kill of that kind, nothing else",
+            string.Join(",", sxe.Select(e => e is EnemySoul es ? "soul " + es.Kind : e.GetType().Name)), "soul Kerubiel");
+
+        // bound-only items (0.8.60): the chat parser takes "(Bound)" off before it looks a name up, so an item the list has only
+        // bound ("Sealed Wing Featherdown (Bound)") was never found; it is known by its plain name now, and a line that lost
+        // its "(Bound)" (a wrap, a cut) is still bound: a reward, as the whole line would have been
+        Check("names: an item the list has only bound is known by its plain name",
+            $"{F("Sealed Wing Featherdown")} | {fd.BoundOnly("Sealed Wing Featherdown")} | {fd.BoundOnly("Odyle")}", "Sealed Wing Featherdown (Bound) | True | False");
+        var bp = new ChatParser(fd);
+        var bt = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        string Kinds(string line) => string.Join(",", bp.Parse(line, bt).Select(e => e switch { RewardReceived r => "reward " + r.Name, ItemAcquired a => (a.Bound ? "bound " : "") + fd.NameOf(a.ItemId), _ => e.GetType().Name }));
+        Check("chat: a bound-only item with its (Bound) or without it: a reward by its name either way",
+            $"{Kinds("Acquired Sealed Wing Featherdown (Bound) x2.")} | {Kinds("Acquired Sealed Wing Featherdown x2.")}", "reward Sealed Wing Featherdown | reward Sealed Wing Featherdown");
         return ok;
     }
 

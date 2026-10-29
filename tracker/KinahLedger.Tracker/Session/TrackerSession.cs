@@ -49,6 +49,17 @@ public sealed partial class TrackerSession
     /// recipe's outputs ("recipe"); this run's items ("run"). Closed (a misread fitting none of them may be refused) only in
     /// the open world while fighting an enemy whose loot table is known: the same condition as a guess held back.
     /// </summary>
+    /// <summary>
+    /// The soul a cut loot row is a piece of ("…rubiel (Bound) x1"), among the souls on the loot tables of the enemies of the
+    /// moment (the target bar's lately, and those engaged): LootCrossCheck.SoulPieceOf. Null with no enemy known.
+    /// </summary>
+    string? SoulPieceNow(string rowName)
+    {
+        var souls = NameContextNow().Sets.Where(s => s.Source == NameMatch.TargetTable).SelectMany(s => s.Names)
+            .Where(n => n.StartsWith("Soul:", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return souls.Count == 0 ? null : LootCrossCheck.SoulPieceOf(rowName, souls);
+    }
+
     internal NameContext NameContextNow()
     {
         var now = _ctxNow == DateTime.MinValue ? DateTime.UtcNow : _ctxNow;
@@ -473,6 +484,7 @@ public sealed partial class TrackerSession
         ZoneView = new SessionEngine(items);
         _cross = new LootCrossCheck(items) { Resolve = ResolveName };
         _cross.Gathered = GatherWitnessFor;
+        _cross.SoulPiece = SoulPieceNow;
         _voter.Confirmed = l => FastChatOn && ListShows(_parser.Meaning(l).Key, _ctxNow);
         WireScore();
         _rows = new LootRows(items) { NewGather = (canon, first) => IsGatherName(canon) && GatherRaceAfter(first), NotARow = (obj, why) => { _repeats.Withdraw(obj); _cross.Withdraw(obj, why); } };
