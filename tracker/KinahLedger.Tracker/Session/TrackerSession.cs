@@ -2100,7 +2100,7 @@ public sealed partial class TrackerSession
                 if (kseen2 >= 0) { _runPickups.RemoveAt(kseen2); known++; fromGrid.Add(new KinahChanged(now, rose, false) { Via = "reward table" }); continue; }
                 CrashLog.Note($"reward table: a slot x{sl.CountText} (closest {best.Distance:0}) is Kinah: the Kinah counter rose {rose:N0} with it");
                 Instances.Loot(new KinahChanged(now, rose, false) { Via = "reward table" }); _gridKina.Add((now, rose));
-                Feed(new KinahChanged(now, rose, false) { Via = "reward table" }, RunWhere());
+                FeedWitnessed(new KinahChanged(now, rose, false) { Via = "reward table" }, RunWhere(), "counter");
                 fromGrid.Add(new KinahChanged(now, rose, false) { Via = "reward table" });
                 added++;
                 continue;
@@ -2118,10 +2118,11 @@ public sealed partial class TrackerSession
                 bool clearCoin = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25);
                 // the counter's rise within 1% of the slot is the amount (a 600.0K coin read as 605.0K, 2026-10-23)
                 long? rise = BalanceRoseNear(amt, now);
-                if (!clearCoin && rise == null && !BalanceRose(amt, now)) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
+                bool counterRose = rise != null || BalanceRose(amt, now);
+                if (!clearCoin && !counterRose) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
                 if (rise is long r1 && r1 != amt) { CrashLog.Note($"reward table: the coin slot read {amt:N0}, the Kinah counter rose {r1:N0}: the counter's amount counts"); amt = r1; }
                 Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" }); _gridKina.Add((now, amt));
-                Feed(new KinahChanged(now, amt, false) { Via = "reward table" }, RunWhere());
+                FeedWitnessed(new KinahChanged(now, amt, false) { Via = "reward table" }, RunWhere(), counterRose ? "counter" : "picture");
                 fromGrid.Add(new KinahChanged(now, amt, false) { Via = "reward table" });
                 added++;
                 continue;
@@ -2157,7 +2158,7 @@ public sealed partial class TrackerSession
                 if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; continue; }
                 bool bnd = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
                 Instances.Loot(new KinahChanged(now, amt, bnd) { Via = "reward table" }); _gridKina.Add((now, amt));
-                Feed(new KinahChanged(now, amt, bnd) { Via = "reward table" }, RunWhere());
+                FeedWitnessed(new KinahChanged(now, amt, bnd) { Via = "reward table" }, RunWhere(), BalanceRoseNear(amt, now) != null ? "counter" : "picture");
                 added++;
                 continue;
             }
@@ -2905,6 +2906,17 @@ public sealed partial class TrackerSession
     readonly List<Pickup> _pickups = new();
     /// <summary>The last pickups counted, newest first: items and Kinah only, rewards and bound Kinah left out.</summary>
     public List<Pickup> RecentPickups(int n) { lock (_pickups) return _pickups.TakeLast(n).Reverse().ToList(); }
+    /// <summary>
+    /// A reward screen's coin fed as <see cref="Feed"/> does, with what backed it for the accuracy score (0.8.60): "counter"
+    /// when the Kinah counter rose by it, "picture" when only the screen's picture did (no chat line the counter could have
+    /// confirmed, so it stays out of the run's Kina share instead of counting against it).
+    /// </summary>
+    void FeedWitnessed(GameEvent ev, string where, string witness)
+    {
+        var was = _scoreWitness; _scoreWitness = witness;
+        try { Feed(ev, where); } finally { _scoreWitness = was; }
+    }
+
     void Feed(GameEvent ev, string where = "")
     {
         // Kina is money, never an item: a loot list row the icon named Kina, its amount cut off ("Vana" read as "Kina x1"),
