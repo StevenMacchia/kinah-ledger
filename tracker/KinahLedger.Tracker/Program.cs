@@ -2693,6 +2693,20 @@ options: --process aion[,other]");
         Check("...and after it: farming in the zone", $"{sa.Engine.Totals().Kinah} {n(sa.Engine, "Refining Stone")} {sa.Doing.Current.Label}", "734 1 Farming · Northern Tolbas Forest");
         Check("each pickup carries where it landed", sa.RecentPickups(1).FirstOrDefault()?.Where ?? "", "Farming · Northern Tolbas Forest");
 
+        // a Daeva Pass level reward over an event's lobby (2026-10-29 13:02:25, Defend Shugo Merchants): its items are the
+        // pass's reward, not the run's, and the run's rewards haven't come in, so the lobby is no "event rewards" picture
+        var dp0 = new DateTime(2026, 10, 29, 17, 1, 0, DateTimeKind.Utc);
+        var (sdp, sayDp) = Session(dp0.AddMinutes(-2), "Destroyed Temple Site");
+        sayDp(dp0.AddSeconds(-9), new[] { "Player2 joined event." });
+        sdp.ApplyZone("Defend Shugo Merchants", dp0); sdp.UpdateDoing(dp0);
+        sdp.Target.MarkReward(dp0.AddSeconds(85), "Daevä Pass Level Reward");
+        sayDp(dp0.AddSeconds(87), new[] { "Small Odyle Energy (Bound) acquired.", "Odyle Energy (Bound) acquired.", "Acquired Fine Odyle x2." });
+        var runDp = sdp.Instances.Current;
+        Check("a Daeva Pass reward in an event's lobby is the pass's: not the run's items, the run not paid, no event-rewards pictures",
+            $"{runDp?.Label} · items {(runDp == null ? -1 : runDp.Items.Values.Sum() + runDp.BoundItems.Values.Sum())} · paid {runDp?.PaidAt != null} · {sdp.Instances.EventPaidWithin(dp0.AddSeconds(90), 20)}",
+            "Defend Shugo Merchants (Shugo Festival) · items 0 · paid False · False");
+        Check("...the screens that pay for something else", string.Join(" ", new[] { "Daevä Pass Level Reward", "Attendance Rewards", "Achievement Reward", "Quna Shop", "Victory Reward", "" }.Select(t => TrackerSession.NotTheRunsScreen(t) ? "y" : "n")), "y y y y n n");
+
         // Hidden Lugi with a minimap that can't be read: the chat opens the run, the drops are the run's, not farming
         var h0 = new DateTime(2026, 10, 23, 15, 1, 3, DateTimeKind.Utc);
         var (sh, sayH) = Session(h0.AddMinutes(-2), "Ruin Exploration Campsite");

@@ -2779,6 +2779,15 @@ public sealed partial class TrackerSession
         // a gather the panel or its bar just produced is gathering, even in a zone the minimap calls an instance (Steven, 2026-10-24
         // 15:21: Odyle gathered in Auldor's Sanctum); never the run's loot
         if (inside && gathered) { inside = false; CrashLog.Note($"{_items.NameOf(((ItemAcquired)ev).ItemId)}: gathered here, counted with gathering, not the run's loot"); }
+        // a reward screen that isn't the run's own over it (the Daeva Pass's level reward, attendance, an achievement, a shop,
+        // the mail): what lands with it is that screen's reward, never the run's, and never says the run's rewards came in
+        // (2026-10-29 13:02:27: the Daeva Pass level reward in Defend Shugo Merchants' lobby marked the run paid, so 20 s of
+        // the lobby were kept as "event rewards" and read again as its cards: Abyss Points 1,100 became 780)
+        if (inside && ev is not CraftResult && Target.RewardOpen(ev.Time) && NotTheRunsScreen(Target.RewardTitle))
+        {
+            inside = false;
+            CrashLog.NoteBurst($"{Describe(ev)}: the {Target.RewardTitle} screen's reward, not the run's");
+        }
         if (inside)
         {
             // the reward table's coin slot, read first, then the same Kina in the chat: once
@@ -2806,6 +2815,14 @@ public sealed partial class TrackerSession
         Landed?.Invoke(ev, label);
         return label;
     }
+
+    /// <summary>
+    /// Whether a reward screen's title is one that pays for something other than the run (0.8.62): the Daeva Pass and its
+    /// level rewards, attendance, an achievement, a shop or the mail. A run's own screens (its reward table, an event's cards)
+    /// are none of these.
+    /// </summary>
+    internal static bool NotTheRunsScreen(string title) =>
+        title.Length > 0 && Regex.IsMatch(ChatParser.StripAccents(title), @"\bpass\b|attendance|achiev|\bshop\b|\bstore\b|\bmail\b|login|check-?in", RegexOptions.IgnoreCase);
 
     /// <summary>The open run as an activity label, for a pickup that went to it.</summary>
     string RunWhere()
