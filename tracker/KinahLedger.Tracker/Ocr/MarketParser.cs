@@ -34,6 +34,27 @@ public sealed partial class MarketParser
     private static partial Regex NameTags();
     [GeneratedRegex(@"^(?:buy|sell|search|my\s+listings?|listings?|page|register|registration|sort|filter|all|category|categories|cancel|collect|settle(?:ment)?|settlement\s+details?|main|list|grade|item|exchange|market|enter\s+a\s+search.*|current\s+tax\s+rate.*|sales?\s*list|lowest\s*sale\s*price)$", RegexOptions.IgnoreCase)]
     private static partial Regex UiWords();
+    /// <summary>A listing's time left as the recognizer reads it: "2d 23h", "ld 2h" (a 1 read as l), "3h 5min". No item name holds one.</summary>
+    [GeneratedRegex(@"(?<![A-Za-z0-9])[0-9lI|]{1,2}\s?d\s+[0-9lI|]{1,2}\s?h(?![A-Za-z0-9])|(?<![A-Za-z0-9])[0-9lI|]{1,2}\s?h\s+[0-9lI|]{1,2}\s?m(?:in)?(?![A-Za-z0-9])", RegexOptions.IgnoreCase)]
+    private static partial Regex TimeLeftRx();
+
+    public static bool HasTimeLeft(string text) => TimeLeftRx().IsMatch(text);
+
+    /// <summary>The longest name kept: the site takes item names up to 64 characters, and the longest item is 55.</summary>
+    public const int MaxNameLength = 64;
+
+    /// <summary>
+    /// Text that is a Market row's numbers rather than a name: longer than any item name, a time left in it, or more digits
+    /// and separators than letters. Whole rows were read as names this way ("0 6576 0 6,576 2d 23h 0 6577 ...",
+    /// "0 50,000 ld 2h", 34 of the 59 names in one player's prices.json, 2026-10-28).
+    /// </summary>
+    public static bool IsRowText(string name)
+    {
+        if (name.Length > MaxNameLength || HasTimeLeft(name)) return true;
+        int letters = 0, digits = 0;
+        foreach (var c in name) { if (char.IsLetter(c)) letters++; else if (char.IsDigit(c) || c is ',' or '.') digits++; }
+        return digits > letters;
+    }
 
     public MarketAsk? Parse(MarketReader.Row row) => row.Cells != null ? ParseCells(row.Cells) : Parse(row.Flat);
 
@@ -126,7 +147,7 @@ public sealed partial class MarketParser
 
     static readonly char[] NameEdges = { '.', ':', ',', ';', '|', '-', '_', '[', ']', '(', ')', '"', '•', '·' };
 
-    /// <summary>A name worth keeping: tags and stray icon characters removed, at least three letters, not a header or a button.</summary>
+    /// <summary>A name worth keeping: tags and stray icon characters removed, at least three letters, not a header or a button, not a row's numbers.</summary>
     public static string? CleanName(string raw)
     {
         var name = NameTags().Replace(raw, " ");
@@ -134,6 +155,7 @@ public sealed partial class MarketParser
         name = Regex.Replace(name, @"^[^A-Za-z0-9]{1,2}\s+", "");   // an item icon often reads as one or two symbols before the name
         if (name.Count(char.IsLetter) < 3) return null;
         if (MarketLocator.KindOf(name) != null || UiWords().IsMatch(name)) return null;
+        if (IsRowText(name)) return null;   // a backstop: the reader keeps rows apart, but a misread one must never become an item
         return name;
     }
 }
