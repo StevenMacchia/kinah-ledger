@@ -1374,6 +1374,35 @@ options: --process aion[,other]");
         Check("chat: a rare item is never refused", Got("Bxld Leathex acquired."), "Bold Leather");
         p.Rare = null; p.Context = null;
         Check("chat: without a context, the list's closest as before", Got("Bxld Leathex acquired."), "Bold Leather");
+
+        // the first reading reports from players (2026-10-29): one tracker filed 79 different cut-off reads as Ink (Bound),
+        // 161 times, each snap a letter or two from a misread snapped before it ("inc", "in", "n", "an", "ion", "ona",
+        // "atona", "dratona"…): pieces of soul rows (Eternal Kerubiel, Kerubian, Kerubar) and of Tinkerer (Bound) scrolling
+        // past in the loot list; and "Wisdom Stone", missing from the list, as Wisdom Staff, a Unique weapon. The whole list
+        // and the extras, fed in the order that used to chain
+        var fd = ItemDictionary.LoadOrEmpty(TestTemp.Path("kl-no-items-here.json"));
+        string F(string read) => fd.NameOf(fd.IdOf(read));
+        var cutReads = new[]
+        {
+            "In (Bound)", "n (Bound)", "an (Bound)", "ion (Bound)", "ona (Bound)", "atona (Bound)", "dratona (Bound)", "i (Bound)",
+            "tr (Bound)", "bian (Bound)", "jbian (Bound)", "erubiel (Bound)", "9rubiel (Bound)", "biel (Bound)", "dar (Bound)",
+            "jar (Bound)", "oar (Bound)", "el (Bound)", "e' el (Bound)", "shard (Bound)", "3r (Bound)", "jr (Bound)", "lb (Bound)",
+            "jbar (Bound)", "kerubar (Bound) x", "kerubar (Bound) xt", "Tinkerer (Bound) x1", "inkerer (Bound) x1",
+            "I Tinkerer (Bound) x1", "e (Bound)", "tone (Bound)",
+        };
+        Check("names: a letter misread in a short name still snaps (\"Inc (Bound)\" is Ink)", F("Inc (Bound)"), "Ink (Bound)");
+        var wrong = cutReads.Select(r => (r, F(r))).Where(x => x.Item2 is "Ink (Bound)" or "Salt (Bound)" or "Wisdom Staff").Select(x => $"{x.r} -> {x.Item2}").ToList();
+        Check($"names: none of {cutReads.Length} cut-off reads from the reports is Ink (Bound), Salt (Bound) or Wisdom Staff, however they chain",
+            wrong.Count == 0 ? "none" : string.Join("; ", wrong), "none");
+        Check("names: Wisdom Stone is its own item, never Wisdom Staff; Wisdom Staff is still itself",
+            $"{F("Wisdom Stone")} | {F("Wisdom Stone (Bound)")} | {F("Wisdom Staff")}", "Wisdom Stone (Bound) | Wisdom Stone (Bound) | Wisdom Staff");
+        // the same with Ink on the run's items (the context matcher allows two edits on a name this short)
+        var inkRun = new NameContext().Add(NameMatch.Run, new[] { "Ink (Bound)" });
+        Check("names: with Ink (Bound) on the run, a cut piece is still not Ink; a letter misread still is",
+            $"{(fd.Match("n (Bound)", inkRun).Id is long ni ? fd.NameOf(ni) : "none")} | {(fd.Match("ion (Bound)", inkRun).Id is long oi ? fd.NameOf(oi) : "none")} | {(fd.Match("Inc (Bound)", inkRun).Id is long ii ? fd.NameOf(ii) : "none")}",
+            "none | none | Ink (Bound)");
+        Check("names: what a name's own words are", string.Join("|", new[] { "ink (bound)", "kerubar (bound) x", "tinkerer (bound) x1", "odyle x12.", "wisdom stone" }.Select(ItemDictionary.Stem)),
+            "ink|kerubar|tinkerer|odyle|wisdom stone");
         return ok;
     }
 

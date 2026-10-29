@@ -260,8 +260,8 @@ public sealed class ItemDictionary
                         var n = Norm(name);
                         if (!_byName.TryGetValue(n, out var nid) || !Real(nid) || _snapped.Contains(n)) continue;
                         ctxIds.Add(nid);
-                        if (nid == best) continue;
-                        int d = n == key ? 0 : NameMatch.Distance(key, n, Math.Min(max, bestCost));
+                        if (nid == best || !StemsMayMatch(key, n)) continue;
+                        int d = n == key ? 0 : NameMatch.Distance(key, n, Math.Min(ShortStem(key, n) ? NameMatch.Unit : max, bestCost));
                         if (d == int.MaxValue) continue;
                         if (d < bestCost) { best = nid; bestCost = d; tie = false; }
                         else if (d == bestCost) tie = true;
@@ -362,7 +362,11 @@ public sealed class ItemDictionary
         foreach (var kv in _byName)
         {
             if (Math.Abs(kv.Key.Length - key.Length) > budget || !NameMatch.CloseFirst(kv.Key[0], key[0])) continue;
-            int d = NameMatch.Distance(key, kv.Key, bestD - 1);
+            // only a real name is a target, never a misread snapped before: one snap after another drifts a letter or two
+            // each time, until a cut piece of a soul row is Ink (Bound) (2026-10-29: 79 reads, "n (bound)", "erubiel (bound)",
+            // "dratona (bound)", all filed as Ink on one tracker)
+            if (_snapped.Contains(kv.Key) || !StemsMayMatch(key, kv.Key)) continue;
+            int d = NameMatch.Distance(key, kv.Key, ShortStem(key, kv.Key) ? Math.Min(bestD - 1, NameMatch.Unit) : bestD - 1);
             if (d < bestD) { bestD = d; best = kv.Value; if (d == 0) break; }
         }
         if (bestD <= max) { cost = bestD; return best; }
@@ -373,11 +377,41 @@ public sealed class ItemDictionary
         foreach (var kv in _byName)
         {
             if (kv.Key.Length != key.Length || kv.Key[0] == key[0] || string.CompareOrdinal(kv.Key, 1, key, 1, key.Length - 1) != 0) continue;
+            if (_snapped.Contains(kv.Key) || !StemsMayMatch(key, kv.Key)) continue;
             if (only != null && only != kv.Value) return null;
             only = kv.Value;
         }
         return only;
     }
+
+    /// <summary>A name's own words: without "(bound)" and a count ("x2", "x") after it, as <see cref="Norm"/> writes it.</summary>
+    internal static string Stem(string key)
+    {
+        var s = key.TrimEnd(' ', '.');
+        int x = s.LastIndexOf(" x", StringComparison.Ordinal);
+        if (x > 0 && s.Skip(x + 2).All(c => char.IsDigit(c) || c == ',' || c == '.')) s = s[..x].TrimEnd();
+        if (s.EndsWith("(bound)", StringComparison.Ordinal)) s = s[..^7].TrimEnd();
+        return s;
+    }
+
+    /// <summary>
+    /// Whether a misread may be taken for a name on its letters at all (2026-10-29, the first reading reports): a read with
+    /// under three letters of its own before "(bound)" says too little to be any item ("n (bound)", "3r (bound)"), and a
+    /// short name (under five letters before "(bound)", "Ink (Bound)") is matched only by a read of its own length, a letter
+    /// misread ("inc (bound)"), never by a shorter or longer one: that is a cut piece of a longer name scrolling past in the
+    /// loot list ("…in (bound)" of Tinkerer (Bound), "…rubiel (bound)" of an Eternal Kerubiel's soul).
+    /// </summary>
+    internal static bool StemsMayMatch(string read, string name)
+    {
+        string a = Stem(read), b = Stem(name);
+        int la = a.Count(char.IsLetterOrDigit), lb = b.Count(char.IsLetterOrDigit);
+        if (la < 3) return false;
+        if ((la < 5 || lb < 5) && a.Length != b.Length) return false;
+        return true;
+    }
+
+    /// <summary>Whether either name has under five letters of its own: then a misread may be one plain edit off it at most ("inc" for "ink", never "ion").</summary>
+    internal static bool ShortStem(string read, string name) => Stem(read).Count(char.IsLetterOrDigit) < 5 || Stem(name).Count(char.IsLetterOrDigit) < 5;
 
     /// <summary>Levenshtein distance with a cutoff, so the scan over thousands of names stays cheap.</summary>
     static int Edit(string a, string b, int max)
