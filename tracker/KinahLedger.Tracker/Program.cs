@@ -2692,6 +2692,22 @@ options: --process aion[,other]");
         sayA(a0.AddSeconds(670), new[] { "Acquired 236 Kina.", "Refining Stone acquired." });
         Check("...and after it: farming in the zone", $"{sa.Engine.Totals().Kinah} {n(sa.Engine, "Refining Stone")} {sa.Doing.Current.Label}", "734 1 Farming · Northern Tolbas Forest");
         Check("each pickup carries where it landed", sa.RecentPickups(1).FirstOrDefault()?.Where ?? "", "Farming · Northern Tolbas Forest");
+        // the rare-drop chime: out in the world only, never a run's reward (Steven, 2026-10-29: every Epic on an event's cards dinged)
+        Check("a run's reward doesn't chime, the open world's drop does", string.Join(" ", new[] { "Farming · Northern Tolbas Forest", "Event · Defend Shugo Merchants (Shugo Festival)", "Expedition · Urugugu Canyon · rewards landing", "World boss · Saursus", "Reward screen · Rewards Collected", "Event or expedition", "" }.Select(w => Activity.IsRunLabel(w) ? "run" : "world")), "world run run run run run world");
+
+        // a Daeva Pass level reward over an event's lobby (2026-10-29 13:02:25, Defend Shugo Merchants): its items are the
+        // pass's reward, not the run's, and the run's rewards haven't come in, so the lobby is no "event rewards" picture
+        var dp0 = new DateTime(2026, 10, 29, 17, 1, 0, DateTimeKind.Utc);
+        var (sdp, sayDp) = Session(dp0.AddMinutes(-2), "Destroyed Temple Site");
+        sayDp(dp0.AddSeconds(-9), new[] { "Player2 joined event." });
+        sdp.ApplyZone("Defend Shugo Merchants", dp0); sdp.UpdateDoing(dp0);
+        sdp.Target.MarkReward(dp0.AddSeconds(85), "Daevä Pass Level Reward");
+        sayDp(dp0.AddSeconds(87), new[] { "Small Odyle Energy (Bound) acquired.", "Odyle Energy (Bound) acquired.", "Acquired Fine Odyle x2." });
+        var runDp = sdp.Instances.CurrentRun;
+        Check("a Daeva Pass reward in an event's lobby is the pass's: not the run's items, the run not paid, no event-rewards pictures",
+            $"{runDp?.Label} · items {(runDp == null ? -1 : runDp.Items.Values.Sum() + runDp.BoundItems.Values.Sum())} · paid {runDp?.PaidAt != null} · {sdp.Instances.EventPaidWithin(dp0.AddSeconds(90), 20)}",
+            "Defend Shugo Merchants (Shugo Festival) · items 0 · paid False · False");
+        Check("...the screens that pay for something else", string.Join(" ", new[] { "Daevä Pass Level Reward", "Attendance Rewards", "Achievement Reward", "Quna Shop", "Victory Reward", "" }.Select(t => TrackerSession.NotTheRunsScreen(t) ? "y" : "n")), "y y y y n n");
 
         // Hidden Lugi with a minimap that can't be read: the chat opens the run, the drops are the run's, not farming
         var h0 = new DateTime(2026, 10, 23, 15, 1, 3, DateTimeKind.Utc);
@@ -2739,6 +2755,24 @@ options: --process aion[,other]");
         if (ri(runsU.FirstOrDefault(), "Enhance Stone") != 470)
             foreach (var nl in File.ReadLines(CrashLog.ReadsPath).TakeLast(30)) Console.WriteLine("      note: " + nl);
         Check("in again 43 s after leaving: a new run", $"{runsU.Count} closed: {runsU.FirstOrDefault()?.Ended} / open: {su.Instances.Open}", "1 closed: left, then a new entry / open: Urugugu Canyon");
+
+        // a chest opened while a run's rewards are still landing, then a quest's pay (2026-10-29 13:36, 26 s and 74 s after
+        // Odylium Repository was left): the run takes neither, so they get the open world's checks. 125 and 130 Soul Crystals
+        // are a reward, and so is the Cogni line printed with them (its count garbled); an Enhance Stone whose count the read
+        // lost, no kill near it, is a reward too. A kill's Kina and crystal after them still count. Was "True 256" and "1 257"
+        var o0 = new DateTime(2026, 10, 29, 17, 30, 0, DateTimeKind.Utc);
+        var (so, sayO) = Session(o0.AddMinutes(-1), "Ruin Exploration Campsite");
+        so.ApplyZone("Urugugu Village", o0);
+        sayO(o0.AddSeconds(200), new[] { "Divine Canyon Gloves acquired." });
+        var leftO = o0.AddSeconds(240);
+        so.ApplyZone("Northern Tolbas Forest", leftO);
+        sayO(leftO.AddSeconds(26), new[] { "Obtained ZI IO 'icogni Soul crystals.-", "Obtained 125'Nat-ura Soul Crystals.", "Obtained 130 Varian Soul Crystals." });
+        Check("a chest's Soul Crystals while a run's rewards land: not farming", $"{so.Instances.Current?.Leaving} {so.Engine.PetCrystals}", "True 0");
+        sayO(leftO.AddSeconds(74), new[] { "Acquired Enhance 4tone", "Acquired 380 Abyss Point(s).", "Delivered 101 supply items.", "Delivery complete." });
+        sayO(leftO.AddSeconds(90), new[] { "Acquired 236 Kina.", "Obtained 1 Natura Soul Crystals." });
+        so.FlushVotes(leftO.AddSeconds(100));
+        Check("...a quest's stone, its count lost, neither; a kill after them counts", $"{n(so.Engine, "Enhance Stone")} {so.Engine.PetCrystals} {so.Engine.Totals().Kinah}", "0 1 236");
+        Check("a reward-sized crystal line, read garbled", string.Join(" ", new[] { "Obtained 125'Nat-ura Soul Crystals.", "Obtained 1,200 Special Soul Crystals.", "Obtained 2 Fera Soul Crystals.", "Obtained 10 Natura Soul Crystals.", "Obtained 130 Soul Points." }.Select(l => TrackerSession.RewardCrystalLine(l) ? "y" : "n")), "y y n n n");
 
         // Urugugu Canyon, 15:23: out, then a Daeva Pass screen pays out: that is the screen's, not the run's
         var v0 = new DateTime(2026, 10, 22, 19, 13, 46, DateTimeKind.Utc);

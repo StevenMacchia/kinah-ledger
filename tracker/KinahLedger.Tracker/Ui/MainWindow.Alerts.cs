@@ -41,8 +41,20 @@ public partial class MainWindow
         var fresh = chat.RecentPickups(12).Where(p => p.At > _alertSeen).OrderBy(p => p.At).ToList();
         if (fresh.Count == 0) return;
         _alertSeen = fresh[^1].At;
-        foreach (var p in fresh) AlertFor(p.What, p.At);
+        foreach (var p in fresh) AlertFor(p.What, p.At, p.Where);
     }
+
+    /// <summary>
+    /// Whether a pickup that landed here chimes (0.8.62): a drop out in the world does; a run's reward never does (an
+    /// event's cards, an expedition's table, an arena, a legion area, a world boss's loot, a reward screen). Steven,
+    /// 2026-10-29: "it gives a windows ding sound every time something is logged from an event and i hate it": each Epic
+    /// on an event's cards chimed. The panel and the status line still show the item.
+    /// </summary>
+    internal static bool ChimesFor(string where) => !KinahLedger.Session.Activity.IsRunLabel(where);
+
+    /// <summary>A chime at most this often: drops that land together chime once.</summary>
+    public const double ChimeGapSeconds = 10;
+    DateTime _chimedAt = DateTime.MinValue;
 
     /// <summary>
     /// One pickup ("Shade Gloves ×1"): a Legend, Unique or Epic item, or any item on the watch list whatever its grade,
@@ -50,7 +62,7 @@ public partial class MainWindow
     /// and the Ticker get the item, its grade, count, price and whether it is watched (MainWindow.RareWatch.cs); the
     /// strip its one line with the price. Returns whether it alerted (the options self-test).
     /// </summary>
-    internal bool AlertFor(string what, DateTime at)
+    internal bool AlertFor(string what, DateTime at, string landed = "")
     {
         int x = what.LastIndexOf(" ×", StringComparison.Ordinal);
         if (x <= 0) return false;                                   // Kinah, not an item
@@ -66,8 +78,8 @@ public partial class MainWindow
             "Legend" => Color.FromRgb(0x5A, 0xA6, 0xFF), "Unique" => Color.FromRgb(0xF3, 0xD3, 0x5E), "Epic" => Color.FromRgb(0xB4, 0x8B, 0xFF),
             "Rare" => Color.FromRgb(0x62, 0xD9, 0x8B), _ => Color.FromRgb(0x5E, 0xD8, 0xCB),
         };
-        bool chime = _hudPrefs.Chime;
-        if (chime && !_demo) Chime();
+        bool chime = _hudPrefs.Chime && ChimesFor(landed);
+        if (chime && !_demo && (DateTime.UtcNow - _chimedAt).TotalSeconds >= ChimeGapSeconds) { _chimedAt = DateTime.UtcNow; Chime(); }
         var (price, where) = RarePrice(name, count);
         var priceText = price.Length > 0 ? ("sells for " + price + " " + where).TrimEnd() : "no price yet";
         _hud?.Alert((rare ? "Rare drop: " : "Watched drop: ") + what + " · " + priceText, color);

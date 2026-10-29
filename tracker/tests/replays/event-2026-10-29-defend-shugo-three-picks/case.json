@@ -1,0 +1,28 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Defend Shugo Merchants (Shugo Festival) reward cards, 2026-10-29 13:04:58 to 13:05:02, the screen's last five seconds (\"00:05\", \"Can select 0 time(s)\"): cards 2, 3 and 4 picked once each (their cyan \"1\"), cards 1 and 5 not. Card 2 has 12 slots, card 3 12 and two leaves cut by its window, card 4 12 and one cut; the cut leaves show no count, so the run stays partly read. Truth from the pictures: Enhance Stone 3 x 700 = 2,100, Centuryroot Token 30 + 20 three times = 150, Abyss Points 320 + 400 + 360 = 1,080. The live read (0.8.59) filed Abyss Points 1,100: card 2's 320 read as 340 in every read, so Abyss Points is not in this case yet; the re-read from the kept pictures then filed 780, because a Daeva Pass level reward in the event's lobby (13:02:25) had marked the run paid and 20 s of lobby frames were kept as event-rewards pictures and read with the cards (fixed in 0.8.62: TrackerSession.NotTheRunsScreen). Everything but the title and the cards blacked out",
+  "source": "%LocalAppData%\\KinahLedger\\reward-shots\\20261029-130458, -130500, -130502-Defend-Shugo-Merchants-event-rewards.jpg (5120x2160); truth from the pictures",
+  "game": { "w": 5120, "h": 2160 },
+  "zone": "Defend Shugo Merchants",
+  "frames": [
+    { "f": "130458.jpg", "k": "cards", "t": "2026-10-29T17:04:58Z", "x": 0, "y": 0 },
+    { "f": "130500.jpg", "k": "cards", "t": "2026-10-29T17:05:00Z", "x": 0, "y": 0 },
+    { "f": "130502.jpg", "k": "cards", "t": "2026-10-29T17:05:02Z", "x": 0, "y": 0 }
+  ],
+  "expect": {
+    "cards": [
+      { "received": false },
+      { "received": true, "picks": 1 },
+      { "received": true, "picks": 1 },
+      { "received": true, "picks": 1 },
+      { "received": false }
+    ],
+    "runs_kept": 1,
+    "runs_partly_read": 1,
+    "run_items": {
+      "Enhance Stone": 2100,
+      "Centuryroot Token": 150
+    }
+  }
+}

@@ -24,6 +24,13 @@ public sealed record Activity(ActivityKind Kind, string Where = "", string Event
         _ => "Not read yet",
     };
 
+    /// <summary>
+    /// Whether a pickup's place (its <see cref="Label"/>) is a run's reward: an event, an expedition, an arena, a legion area,
+    /// a world boss or a reward screen, never the open world (the rare-drop chime plays only out there, 0.8.62).
+    /// </summary>
+    public static bool IsRunLabel(string label) =>
+        System.Text.RegularExpressions.Regex.IsMatch(label, @"^(?:Event|Expedition|Arena|Legion|World boss|Reward screen)\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     /// <summary>The same state, apart from when it began.</summary>
     public bool SameAs(Activity o) => Kind == o.Kind && Where == o.Where && Event == o.Event && Family == o.Family && Leaving == o.Leaving;
 }
