@@ -899,7 +899,7 @@ public sealed partial class ChatParser
     /// Soul Crystal or Soul Points line with no pet name, and is logged, so a misread never becomes a new name on the site.
     /// Add a pet here when the game shows a new one.
     /// </summary>
-    public static readonly string[] KnownPets = { "Natura", "Varian", "Fera", "Ivera", "Papis", "Oculazen" };
+    public static readonly string[] KnownPets = { "Natura", "Varian", "Fera", "Ivera", "Papis", "Oculazen", "Cogni" };
 
     static string PetName(string raw)
     {

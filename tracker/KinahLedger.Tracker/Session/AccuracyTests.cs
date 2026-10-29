@@ -327,6 +327,19 @@ public static class AccuracyTests
         for (int i = 0; i < 3; i++) cs.ProcessChat(new List<string> { "[Player] hi", "Obtained 1 Kailin Soul Points.", "Obtained 1 Fera Soul Crystals." }, cs0.AddSeconds(20 + i * 0.4));
         cs.FlushVotes(cs0.AddSeconds(25));
         Check("a kill's Soul Crystals right after a reward screen count with the kills", $"{cs.Engine.PetCrystals}", "1");
+        // a kill's crystal inside a reward's or a quest's window is still the kill's (2026-10-29 13:11 to 13:15: quests complete
+        // every few kills while farming, and each reward's window set aside the crystals of the kills around it); a reward's
+        // own crystals (x200) stay a reward; and Cogni is a pet (37 crystals a day counted without its name)
+        var qc = new TrackerSession(null, settings, items, "Test");
+        var qc0 = DateTime.UtcNow.AddMinutes(-8);
+        qc.ProcessChat(new List<string> { "[Player] hi" }, qc0.AddSeconds(-5));
+        var qcChat = new List<string> { "[Player] hi", "Acquired Daevanion Crystal (Bound) x2.", "Acquired 477 Kina.", "Obtained 1 Fera Soul Crystals.", "Obtained 1 Cogni Soul Crystals." };
+        for (int i = 0; i < 3; i++) qc.ProcessChat(qcChat, qc0.AddSeconds(i * 0.4));
+        qcChat.Add("Obtained 200 Special Soul Crystals.");
+        for (int i = 0; i < 3; i++) qc.ProcessChat(qcChat, qc0.AddSeconds(2 + i * 0.4));
+        qc.FlushVotes(qc0.AddSeconds(6));
+        Check("a kill's crystal in a reward's window counts with the kills; a reward's x200 doesn't; Cogni is a pet",
+            $"{qc.Engine.PetCrystals} {string.Join(",", qc.Engine.Pets.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Key + "=" + p.Value))}", "2 Cogni Soul Crystal=1,Fera Soul Crystal=1");
 
         // the same burst arriving all at once, from a read that doesn't line up with the last one (the burst path)
         var sb = new TrackerSession(null, settings, items, "Test");
