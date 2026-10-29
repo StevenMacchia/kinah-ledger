@@ -1361,6 +1361,8 @@ public sealed partial class TrackerSession
         if (_tracker.LastPanel) CrashLog.NoteBurst("a game window over the chat (numbers, no line the chat prints): not a read of the chat, skipped");
         else if (lines.Count > 0) { _lastLines = lines; _chatLinesAt = now; }
         bool batchAchievement = false;
+        // a reward-sized Soul Crystal line in the lines being counted (RewardCrystalLine): their other crystal lines are its reward
+        bool batchCrystals = false;
         bool Apply(IEnumerable<GameEvent> events, string raw, string via = "chat", ChatVoter.Out? meta = null)
         {
             bool any = false;
@@ -1378,18 +1380,20 @@ public sealed partial class TrackerSession
                 if (_cross.Chat(parsed, now)) { any = true; continue; }
                 // with the crafting window open, an item a recipe makes is a craft, never a reward or a drop
                 bool made = crafting && parsed is ItemAcquired ia && RecipeBook.ForOutput(_items.NameOf(ia.ItemId)) != null;
+                // inside the run, or (a run being left) landing on the Farming page, where the open world's checks apply
+                bool inRun = InRunFor(parsed);
                 // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
-                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0, Reread.FirstSeen(raw, _firstSeen), parsed is PetCrystal pcr ? pcr.Name : null)) : null;
+                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0, Reread.FirstSeen(raw, _firstSeen), parsed is PetCrystal pcr ? pcr.Name : null, inRun)) : null;
                 // ...except a gather the panel or its bar just produced (GatherAttempts)
                 if (parsed is ItemAcquired gx) why = NotForGather(why, gx.ItemId, gx.Count, parsed.Time);
                 // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
-                if (why == null && !made && parsed is ItemAcquired big && !InRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
-                if (why == null && parsed is PetCrystal bigc && !InRun) why = PickupCheck.TooManyCrystals(bigc.Count);
+                if (why == null && !made && parsed is ItemAcquired big && !inRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
+                if (why == null && parsed is PetCrystal bigc && !inRun) why = PickupCheck.TooManyCrystals(bigc.Count) ?? (batchCrystals ? "printed with a reward's Soul Crystals (a chest, a quest)" : null);
                 // a kill's own crystal (one or two, a kill counted just before it) is the kill's, whatever achievement, box or
                 // reward window is open: quests complete every few kills while farming and each one's window set aside the
                 // crystals of the kills around it (2026-10-29 13:11 to 13:15: five Fera and Natura crystals in four minutes).
                 // A quest's or reward's crystals come in big amounts ("Special Soul Crystals" x200) and stay rewards
-                if (why != null && parsed is PetCrystal kc && !InRun && kc.Count <= KillCrystalMax && KillJustBefore(parsed.Time))
+                if (why != null && parsed is PetCrystal kc && !inRun && kc.Count <= KillCrystalMax && KillJustBefore(parsed.Time))
                 {
                     CrashLog.NoteBurst($"{kc.Name} x{kc.Count}: {why} window open, but a kill came just before it: counted with the kills");
                     why = null;
@@ -1443,6 +1447,7 @@ public sealed partial class TrackerSession
         // an achievement line among them: the items printed with it are its reward, and those in the next few seconds too
         // only an achievement line that is new: one that stays on screen is read a little differently each time
         batchAchievement = voted.Any(l => Reread.IsAchievement(l) && NewLine(l, now));
+        batchCrystals = voted.Any(RewardCrystalLine);
         if (batchAchievement) { _achieveUntil = now.AddSeconds(RewardWindowSeconds); CrashLog.Note($"achievement: {voted.First(Reread.IsAchievement)}; its rewards are not drops"); }
         var thisRead = new List<string>();   // lines the vote and the read-again count in this read, for the settle below
         // ---- counts lost on a line's first read (2026-10-24 13:07: "Acquired Odyle" for x7) ----
@@ -1522,6 +1527,7 @@ public sealed partial class TrackerSession
             if (any) { LastLine = l; LootLine?.Invoke(l); if (_garbledSince != null) _countedGarbled.Add(l); NoteCounted(l, now); thisRead.Add(l.Trim()); }
         }
         batchAchievement = reread.Concat(fresh).Any(l => Reread.IsAchievement(l) && NewLine(l, now));
+        batchCrystals = reread.Any(RewardCrystalLine);
         // parsed one line at a time, so a wrapped "(Bound) x9." tail is joined to the line above it first (ChatParser.JoinWrappedTails)
         foreach (var (l, parts) in _parser.JoinWrappedTails(reread, lines, now))
         {
@@ -1539,6 +1545,7 @@ public sealed partial class TrackerSession
         // only an achievement line that first showed with the garbled reads: one that sat in the chat before is an old one
         if (settledAchievement) settledAchievement = _lastLines.Any(l => Reread.IsAchievement(l) && (Reread.FirstSeen(l, _firstSeen) is not DateTime f || f >= settledAt.AddSeconds(-5)));
         batchAchievement = settledAchievement;
+        batchCrystals = settled.Any(RewardCrystalLine);
         if (settledAchievement) { _achieveUntil = settledAt.AddSeconds(RewardWindowSeconds); CrashLog.Note("the settled lines came with an achievement: they are its reward, not drops"); }
         foreach (var (l, parts) in _parser.JoinWrappedTails(settled, settledRead, settledAt))
         {
@@ -2345,16 +2352,42 @@ public sealed partial class TrackerSession
     bool InRun => (ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored)
         || (Instances.Current is { } cur && cur.Kind != InstanceLog.WorldBoss && (cur.Leaving || Zone == null || Zone == SessionEngine.UnknownZone));
 
+    /// <summary>
+    /// <see cref="InRun"/> for one pickup (0.8.62). While a run is being left (its rewards landing, the minimap naming the
+    /// open world), only what the run takes (InstanceLog.Route) is inside it: the rest lands on the Farming page, so the open
+    /// world's checks apply to it (2026-10-29 13:36, 75 s after Odylium Repository was left: a chest's 125 Natura and 130
+    /// Varian Soul Crystals and a delivery's Enhance Stone, its count lost, all counted as farming).
+    /// </summary>
+    bool InRunFor(GameEvent ev) =>
+        (ZoneLocator.KindOf(Zone) is { } rk && rk != ZoneLocator.Ignored)
+        || (Instances.Current is { } cur && cur.Kind != InstanceLog.WorldBoss
+            && (cur.Leaving ? Instances.WouldTake(ev, _batch, Target.RewardOpen(ev.Time)) : Zone == null || Zone == SessionEngine.UnknownZone));
+
+    /// <summary>
+    /// A line of more Soul Crystals than a kill gives ("Obtained 125 Natura Soul Crystals."): a chest's, a quest's or a
+    /// reward's. The crystal lines printed with it are the same reward, a count read or not (2026-10-29 13:36:00, a chest's
+    /// Cogni line read "Obtained ZI IO 'icogni Soul crystals." beside its Natura and Varian).
+    /// </summary>
+    internal static bool RewardCrystalLine(string line)
+    {
+        var m = RewardCrystalRx.Match(ChatParser.StripAccents(line));
+        return m.Success && int.TryParse(m.Groups["n"].Value.Replace(",", "").Replace(".", ""), out var n) && n > Update.RemoteConfig.Current.MaxOneCrystal;
+    }
+    static readonly Regex RewardCrystalRx = new(@"\bob\w{0,2}ain\w*\W+(?<n>\d[\d,.]*)\D[^\n]*?cr[yv]?st", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     /// <summary>Why a pickup at <paramref name="t"/> is a reward, or null: an achievement's (anywhere), a box's or a reward's (out in the world).</summary>
-    string? RewardWhy(DateTime t, bool isBox = false, long itemId = 0, DateTime? firstSeen = null, string? crystal = null) =>
+    // inRun: the pickup's own answer (InRunFor), for a pickup while a run is being left; the session's (InRun) otherwise
+    string? RewardWhy(DateTime t, bool isBox = false, long itemId = 0, DateTime? firstSeen = null, string? crystal = null, bool? inRun = null) =>
+        RewardWhyIn(inRun ?? InRun, t, isBox, itemId, firstSeen, crystal);
+    string? RewardWhyIn(bool inRun, DateTime t, bool isBox, long itemId, DateTime? firstSeen, string? crystal) =>
         t <= _achieveUntil ? "an achievement's reward"
         // an event's or expedition's reward screen was up: what lands for a minute after is its rewards, from the picture,
         // never farming or gathering, even once its run is closed or removed (Steven, 2026-10-24 10:07: "2 odyle just randomly
         // entered my gathering" from Hidden Lugi's rewards, read again 40 s later). A gather under way is still a gather, and
         // a drop is still a drop (DropAfterScreen)
-        : !InRun && t <= _rewardScreenUntil && !(itemId != 0 && GatheringNow(itemId, t)) && !DropAfterScreen(itemId, t, firstSeen, crystal) ? "an event's or expedition's reward (its reward screen was up)"
+        : !inRun && t <= _rewardScreenUntil && !(itemId != 0 && GatheringNow(itemId, t)) && !DropAfterScreen(itemId, t, firstSeen, crystal) ? "an event's or expedition's reward (its reward screen was up)"
         : t <= _inventoryUntil ? "the inventory at work (storage, Quick Register, the wardrobe)"
-        : !InRun && !isBox && t <= _boxUntil ? "a box's or a reward's contents" : null;
+        : !inRun && !isBox && t <= _boxUntil ? "a box's or a reward's contents" : null;
     /// <summary>Until when what lands is an event's or expedition's reward: a minute after its reward screen was last seen.</summary>
     DateTime _rewardScreenUntil = DateTime.MinValue;
     public const double RewardScreenSeconds = 60;
@@ -2417,7 +2450,7 @@ public sealed partial class TrackerSession
     /// <summary>A reward line, or an item that is a box ("Growth Pet Chest"), out in the world opens the window for what comes out of it.</summary>
     void NoteReward(GameEvent ev, DateTime now)
     {
-        if (InRun || _boss != null) return;
+        if (InRunFor(ev) || _boss != null) return;
         // a Kina payout marked (Bound) (a quest, a pass or a claim): an item printed with it, in the same read or the next
         // few seconds, is the payout's too (Steven, 2026-10-23 12:39: 11,000 Kina (Bound) and a refining stone, counted as a drop)
         if (ev is KinahChanged { Bound: true, Delta: > 0 })
@@ -4264,7 +4297,7 @@ public sealed partial class TrackerSession
     const double WitnessWaitSeconds = 8;
 
     bool NeedsWitness(ItemAcquired a, bool made, bool crafting) =>
-        WitnessSeconds > 0 && !InRun && _boss == null && !made && !IsGatherMaterial(a.ItemId) && !IsRare(a.ItemId) && !RunTakes(a);
+        WitnessSeconds > 0 && !InRunFor(a) && _boss == null && !made && !IsGatherMaterial(a.ItemId) && !IsRare(a.ItemId) && !RunTakes(a);
 
     /// <summary>
     /// The open run takes this pickup on its own rules, with no kill or gather to witness it: inside it while the minimap
