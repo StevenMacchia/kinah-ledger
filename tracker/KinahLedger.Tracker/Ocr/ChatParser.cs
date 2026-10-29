@@ -707,6 +707,9 @@ public sealed partial class ChatParser
             bool bound = name.Contains("(bound)", StringComparison.OrdinalIgnoreCase);
             // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
+            // an item that only comes bound, read without its "(Bound)": the tail wrapped onto the next line or was cut off, so
+            // the line is bound all the same, a reward where a bound line is one (0.8.60)
+            else if (_items.BoundOnly(name)) { bound = true; CrashLog.NoteBurst($"\"{name}\" only comes bound: its \"(Bound)\" was lost from the line"); }
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
             // the count lost or garbled (2026-10-24 13:07: "Acquired Odyle" for x7; "Refining StonevxT"): the line's own tail
             // read through the digit slips first; a verb-first line with no count left is unsure (a name-first line is one)

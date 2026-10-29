@@ -278,6 +278,13 @@ public sealed class LootCrossCheck
             // a Kinah row read without its amount ("Kina x1") is not an item called Kina (0.8.2 put Kina on the item list)
             if (!row.IsKinah && System.Text.RegularExpressions.Regex.IsMatch(row.Name, @"^\W*kin[ae]h?\W*(\(bound\))?\W*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;
             var soul = row.IsKinah ? null : SoulOf(row.Name);
+            // a cut piece of a soul row ("…rubiel (Bound) x1" of Soul: Kerubiel (Bound)): that enemy's soul, a kill, when the
+            // piece fits one soul of the enemies of the moment and no item (0.8.60; 0.8.58 counted such pieces as Ink (Bound))
+            if (soul == null && !row.IsKinah && SoulPiece != null && !_items.KnowsExactly(row.Name) && !_items.Knows(row.Name) && SoulPiece(row.Name) is { } piece)
+            {
+                soul = piece;
+                CrashLog.NoteBurst($"loot list: \"{row.Name}\" is a cut piece of the soul of {piece}: a kill");
+            }
             // a misread item name settled by the candidate sets of the moment, or refused (brief item 1)
             if (!row.IsKinah && soul == null && _items.Knows(row.Name)) { if (Settled(row, now) is not { } st) continue; row = st; }
             string? key = row.IsKinah ? (row.Amount >= MinKinah ? KinahKey(row.Amount) : null)
@@ -394,6 +401,52 @@ public sealed class LootCrossCheck
     {
         var m = System.Text.RegularExpressions.Regex.Match(name, @"^\s*s[o0]u[l1i]\s*(?:[:;.]\s*(?<k>[A-Za-z' -]{3,}?))?\s*(?:\(bound\S*)?\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         return m.Success ? System.Text.RegularExpressions.Regex.Replace(m.Groups["k"].Value, @"\s+", " ").Trim() : null;
+    }
+
+    /// <summary>
+    /// The soul a loot row is a cut piece of, from the souls of the enemies of the moment (the session's, as "Soul: Kerubiel
+    /// (Bound)" names from their loot tables), or null. Set by the session; unset, no piece is ever a soul.
+    /// </summary>
+    public Func<string, string?>? SoulPiece { get; set; }
+
+    /// <summary>
+    /// The soul kind a loot row is a cut piece of (2026-10-29, the first reading reports): a soul row's name is long and
+    /// scrolls in the loot list, so a read can hold only its end or middle ("…rubiel (Bound) x1" of "Soul: Kerubiel
+    /// (Bound)", "Tinkerer (Bound) x1" of "Soul: Kuru Tinkerer (Bound)"). The row must carry "(Bound)", as every soul row
+    /// does, and four letters or more before it; the soul is the one among <paramref name="souls"/> whose name holds those
+    /// letters, one misread at most, when no other soul does. Null when none does or two do (Dratona and Elite Dratona).
+    /// </summary>
+    public static string? SoulPieceOf(string rowName, IEnumerable<string> souls)
+    {
+        var norm = ItemDictionary.Norm(rowName);
+        var m = System.Text.RegularExpressions.Regex.Match(norm, @"^(?<p>.*?)\(\s*b[o0]u");
+        if (!m.Success) return null;
+        // letters only: a stray mark or digit where the cut fell ("9rubiel", "e' el") is no part of the name
+        var piece = System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(m.Groups["p"].Value, "[^a-z ]", ""), @"\s+", " ").Trim();
+        if (piece.Count(char.IsLetter) < 4) return null;
+        string? found = null;
+        foreach (var s in souls)
+        {
+            if (SoulOf(s) is not { Length: >= 3 } kind) continue;
+            if (!HoldsPiece(ItemDictionary.Norm(kind), piece)) continue;
+            if (found != null && !string.Equals(found, kind, StringComparison.OrdinalIgnoreCase)) return null;
+            found = kind;
+        }
+        return found;
+    }
+
+    /// <summary>Whether a soul's name holds a piece read off it: as it is, or with one letter misread in a piece of five or more.</summary>
+    static bool HoldsPiece(string kind, string piece)
+    {
+        if (kind.Contains(piece, StringComparison.Ordinal)) return true;
+        if (piece.Length < 5) return false;
+        for (int i = 0; i + piece.Length <= kind.Length; i++)
+        {
+            int diff = 0;
+            for (int j = 0; j < piece.Length && diff <= 1; j++) if (kind[i + j] != piece[j]) diff++;
+            if (diff <= 1) return true;
+        }
+        return false;
     }
 
     /// <summary>Matches waiting rows to chat pickups; returns the rows that waited past WaitSeconds unmatched, as events.</summary>

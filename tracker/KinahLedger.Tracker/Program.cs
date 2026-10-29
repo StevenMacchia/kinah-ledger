@@ -1374,6 +1374,62 @@ options: --process aion[,other]");
         Check("chat: a rare item is never refused", Got("Bxld Leathex acquired."), "Bold Leather");
         p.Rare = null; p.Context = null;
         Check("chat: without a context, the list's closest as before", Got("Bxld Leathex acquired."), "Bold Leather");
+
+        // the first reading reports from players (2026-10-29): one tracker filed 79 different cut-off reads as Ink (Bound),
+        // 161 times, each snap a letter or two from a misread snapped before it ("inc", "in", "n", "an", "ion", "ona",
+        // "atona", "dratona"…): pieces of soul rows (Eternal Kerubiel, Kerubian, Kerubar) and of Tinkerer (Bound) scrolling
+        // past in the loot list; and "Wisdom Stone", missing from the list, as Wisdom Staff, a Unique weapon. The whole list
+        // and the extras, fed in the order that used to chain
+        var fd = ItemDictionary.LoadOrEmpty(TestTemp.Path("kl-no-items-here.json"));
+        string F(string read) => fd.NameOf(fd.IdOf(read));
+        var cutReads = new[]
+        {
+            "In (Bound)", "n (Bound)", "an (Bound)", "ion (Bound)", "ona (Bound)", "atona (Bound)", "dratona (Bound)", "i (Bound)",
+            "tr (Bound)", "bian (Bound)", "jbian (Bound)", "erubiel (Bound)", "9rubiel (Bound)", "biel (Bound)", "dar (Bound)",
+            "jar (Bound)", "oar (Bound)", "el (Bound)", "e' el (Bound)", "shard (Bound)", "3r (Bound)", "jr (Bound)", "lb (Bound)",
+            "jbar (Bound)", "kerubar (Bound) x", "kerubar (Bound) xt", "Tinkerer (Bound) x1", "inkerer (Bound) x1",
+            "I Tinkerer (Bound) x1", "e (Bound)", "tone (Bound)",
+        };
+        Check("names: a letter misread in a short name still snaps (\"Inc (Bound)\" is Ink)", F("Inc (Bound)"), "Ink (Bound)");
+        var wrong = cutReads.Select(r => (r, F(r))).Where(x => x.Item2 is "Ink (Bound)" or "Salt (Bound)" or "Wisdom Staff").Select(x => $"{x.r} -> {x.Item2}").ToList();
+        Check($"names: none of {cutReads.Length} cut-off reads from the reports is Ink (Bound), Salt (Bound) or Wisdom Staff, however they chain",
+            wrong.Count == 0 ? "none" : string.Join("; ", wrong), "none");
+        Check("names: Wisdom Stone is its own item, never Wisdom Staff; Wisdom Staff is still itself",
+            $"{F("Wisdom Stone")} | {F("Wisdom Stone (Bound)")} | {F("Wisdom Staff")}", "Wisdom Stone (Bound) | Wisdom Stone (Bound) | Wisdom Staff");
+        // the same with Ink on the run's items (the context matcher allows two edits on a name this short)
+        var inkRun = new NameContext().Add(NameMatch.Run, new[] { "Ink (Bound)" });
+        Check("names: with Ink (Bound) on the run, a cut piece is still not Ink; a letter misread still is",
+            $"{(fd.Match("n (Bound)", inkRun).Id is long ni ? fd.NameOf(ni) : "none")} | {(fd.Match("ion (Bound)", inkRun).Id is long oi ? fd.NameOf(oi) : "none")} | {(fd.Match("Inc (Bound)", inkRun).Id is long ii ? fd.NameOf(ii) : "none")}",
+            "none | none | Ink (Bound)");
+        Check("names: what a name's own words are", string.Join("|", new[] { "ink (bound)", "kerubar (bound) x", "tinkerer (bound) x1", "odyle x12.", "wisdom stone" }.Select(ItemDictionary.Stem)),
+            "ink|kerubar|tinkerer|odyle|wisdom stone");
+
+        // cut soul rows (0.8.60): those pieces were soul rows of the enemies fought (Eternal Isle's Kerubiel, Kerubian and
+        // Kerubar, a Kuru Tinkerer), so a piece that fits one soul of the moment is that soul, a kill
+        var souls = new[] { "Soul: Kerubiel (Bound)", "Soul: Kerubian (Bound)", "Soul: Kerubar (Bound)", "Soul: Kuru Tinkerer (Bound)", "Soul: Dratona (Bound)", "Soul: Elite Dratona (Bound)" };
+        string SP(string r, IEnumerable<string>? s = null) => LootCrossCheck.SoulPieceOf(r, s ?? souls) ?? "-";
+        Check("loot list: cut soul rows from the reports are the enemy's soul",
+            string.Join(" | ", new[] { "erubiel (Bound)", "9rubiel (Bound)", "biel (Bound)", "bian (Bound)", "jbian (Bound)", "kerubar (Bound) xt", "Tinkerer (Bound) x1", "I Tinkerer (Bound) x1" }.Select(r => SP(r))),
+            "Kerubiel | Kerubiel | Kerubiel | Kerubian | Kerubian | Kerubar | Kuru Tinkerer | Kuru Tinkerer");
+        Check("...never too short, without (Bound), another item, or when two souls fit",
+            string.Join(" | ", new[] { "n (Bound)", "e' el (Bound)", "Kerubiel", "Odyle (Bound) x2", "dratona (Bound)" }.Select(r => SP(r))) + " · " + SP("dratona (Bound)", new[] { "Soul: Dratona (Bound)" }),
+            "- | - | - | - | - · Dratona");
+        var sx = new LootCrossCheck(fd) { SoulPiece = r => LootCrossCheck.SoulPieceOf(r, souls) };
+        var sx0 = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var sxe = sx.Popup(new() { new("erubiel (Bound) x1", "erubiel (Bound)", 0, 1, false) }, sx0).Concat(sx.Popup(new(), sx0.AddSeconds(6))).ToList();
+        Check("loot list: a cut soul row read is a kill of that kind, nothing else",
+            string.Join(",", sxe.Select(e => e is EnemySoul es ? "soul " + es.Kind : e.GetType().Name)), "soul Kerubiel");
+
+        // bound-only items (0.8.60): the chat parser takes "(Bound)" off before it looks a name up, so an item the list has only
+        // bound ("Sealed Wing Featherdown (Bound)") was never found; it is known by its plain name now, and a line that lost
+        // its "(Bound)" (a wrap, a cut) is still bound: a reward, as the whole line would have been
+        Check("names: an item the list has only bound is known by its plain name",
+            $"{F("Sealed Wing Featherdown")} | {fd.BoundOnly("Sealed Wing Featherdown")} | {fd.BoundOnly("Odyle")}", "Sealed Wing Featherdown (Bound) | True | False");
+        var bp = new ChatParser(fd);
+        var bt = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        string Kinds(string line) => string.Join(",", bp.Parse(line, bt).Select(e => e switch { RewardReceived r => "reward " + r.Name, ItemAcquired a => (a.Bound ? "bound " : "") + fd.NameOf(a.ItemId), _ => e.GetType().Name }));
+        Check("chat: a bound-only item with its (Bound) or without it: a reward by its name either way",
+            $"{Kinds("Acquired Sealed Wing Featherdown (Bound) x2.")} | {Kinds("Acquired Sealed Wing Featherdown x2.")}", "reward Sealed Wing Featherdown | reward Sealed Wing Featherdown");
         return ok;
     }
 

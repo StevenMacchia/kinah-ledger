@@ -185,6 +185,21 @@ public static class AccuracyScoreTests
             var evRun = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Event = "Hidden Lugi", Start = t0.AddHours(3), LastLoot = t0.AddHours(3).AddMinutes(4), FromPicture = true, PictureSlots = 45 };
             Check("run acc: an event read in full from its cards (no Kina judged) is verified", $"{ev.ForRun(evRun)?.status} {ev.ForRun(evRun)?.kina_confirmed?.ToString() ?? "null"}", "verified null");
             Check("...its slots read off the picture: not checked", $"{ev.ForRun(evRun)?.@checked} {ev.ForRun(evRun)?.matched} {ev.ForRun(evRun)?.not_checked}", "0 0 45");
+            // a reward screen's coin (0.8.60, the first reading reports: Kina shares of 0 or none): on its picture alone it is
+            // no chat line the counter could confirm, so it is out of the Kina share and not counted beside its slot; with the
+            // counter's rise it is a confirmed Kina line. 0.8.58 counted it as one the counter missed: a share of 0, unconfirmed
+            var cs0 = t0.AddHours(4);
+            var coinRun = new InstanceRun { Zone = "Urugugu Canyon", Kind = "Expedition", Start = cs0, LastLoot = cs0.AddMinutes(1), FromPicture = true, PictureSlots = 1 };
+            AccuracyScore Coin(string witness)
+            {
+                var sc = new AccuracyScore();
+                for (int i = 0; i < 6; i++) sc.Counted(cs0.AddSeconds(10 + i), $"Odyle ×{i + 1}", false, "i:odyle" + i, "row", false);
+                sc.Counted(cs0.AddSeconds(30), "600,000 Kinah", true, "k:600000", witness, true);
+                return sc;
+            }
+            var onPicture = Coin("picture").ForRun(coinRun)!; var byCounter = Coin("counter").ForRun(coinRun)!;
+            Check("run acc: a reward coin on its picture alone is no Kina line; with the counter's rise it is a confirmed one",
+                $"{onPicture.kina_confirmed?.ToString() ?? "null"} {onPicture.status} | {byCounter.kina_confirmed?.ToString() ?? "null"} {byCounter.status}", "null verified | 1 verified");
 
             // 11. the once-a-minute audit line carries one short clause; the session's own wiring feeds the score
             string[] AuditLines() { try { return File.ReadAllLines(CrashLog.ReadsPath).Where(l => l.Contains("audit: ")).ToArray(); } catch (Exception) { return Array.Empty<string>(); } }

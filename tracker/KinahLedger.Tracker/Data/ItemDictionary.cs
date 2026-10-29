@@ -17,6 +17,8 @@ public sealed class ItemDictionary
     readonly Dictionary<string, long> _byName = new();
     /// <summary>Misreads remembered under the item they snapped to (IdOf): never a name of their own, so never a candidate.</summary>
     readonly HashSet<string> _snapped = new();
+    /// <summary>Plain names ("sealed wing featherdown") that stand for an item the list has only in its "(Bound)" form (<see cref="AddBoundOnlyNames"/>).</summary>
+    readonly HashSet<string> _boundOnly = new();
     /// <summary>Misreads the crowd settled (data/aliases.json): looked up like a snapped misread, never reported as one.</summary>
     readonly HashSet<string> _aliased = new();
     readonly object _lock = new();
@@ -260,8 +262,8 @@ public sealed class ItemDictionary
                         var n = Norm(name);
                         if (!_byName.TryGetValue(n, out var nid) || !Real(nid) || _snapped.Contains(n)) continue;
                         ctxIds.Add(nid);
-                        if (nid == best) continue;
-                        int d = n == key ? 0 : NameMatch.Distance(key, n, Math.Min(max, bestCost));
+                        if (nid == best || !StemsMayMatch(key, n)) continue;
+                        int d = n == key ? 0 : NameMatch.Distance(key, n, Math.Min(ShortStem(key, n) ? NameMatch.Unit : max, bestCost));
                         if (d == int.MaxValue) continue;
                         if (d < bestCost) { best = nid; bestCost = d; tie = false; }
                         else if (d == bestCost) tie = true;
@@ -362,7 +364,11 @@ public sealed class ItemDictionary
         foreach (var kv in _byName)
         {
             if (Math.Abs(kv.Key.Length - key.Length) > budget || !NameMatch.CloseFirst(kv.Key[0], key[0])) continue;
-            int d = NameMatch.Distance(key, kv.Key, bestD - 1);
+            // only a real name is a target, never a misread snapped before: one snap after another drifts a letter or two
+            // each time, until a cut piece of a soul row is Ink (Bound) (2026-10-29: 79 reads, "n (bound)", "erubiel (bound)",
+            // "dratona (bound)", all filed as Ink on one tracker)
+            if (_snapped.Contains(kv.Key) || !StemsMayMatch(key, kv.Key)) continue;
+            int d = NameMatch.Distance(key, kv.Key, ShortStem(key, kv.Key) ? Math.Min(bestD - 1, NameMatch.Unit) : bestD - 1);
             if (d < bestD) { bestD = d; best = kv.Value; if (d == 0) break; }
         }
         if (bestD <= max) { cost = bestD; return best; }
@@ -373,11 +379,41 @@ public sealed class ItemDictionary
         foreach (var kv in _byName)
         {
             if (kv.Key.Length != key.Length || kv.Key[0] == key[0] || string.CompareOrdinal(kv.Key, 1, key, 1, key.Length - 1) != 0) continue;
+            if (_snapped.Contains(kv.Key) || !StemsMayMatch(key, kv.Key)) continue;
             if (only != null && only != kv.Value) return null;
             only = kv.Value;
         }
         return only;
     }
+
+    /// <summary>A name's own words: without "(bound)" and a count ("x2", "x") after it, as <see cref="Norm"/> writes it.</summary>
+    internal static string Stem(string key)
+    {
+        var s = key.TrimEnd(' ', '.');
+        int x = s.LastIndexOf(" x", StringComparison.Ordinal);
+        if (x > 0 && s.Skip(x + 2).All(c => char.IsDigit(c) || c == ',' || c == '.')) s = s[..x].TrimEnd();
+        if (s.EndsWith("(bound)", StringComparison.Ordinal)) s = s[..^7].TrimEnd();
+        return s;
+    }
+
+    /// <summary>
+    /// Whether a misread may be taken for a name on its letters at all (2026-10-29, the first reading reports): a read with
+    /// under three letters of its own before "(bound)" says too little to be any item ("n (bound)", "3r (bound)"), and a
+    /// short name (under five letters before "(bound)", "Ink (Bound)") is matched only by a read of its own length, a letter
+    /// misread ("inc (bound)"), never by a shorter or longer one: that is a cut piece of a longer name scrolling past in the
+    /// loot list ("…in (bound)" of Tinkerer (Bound), "…rubiel (bound)" of an Eternal Kerubiel's soul).
+    /// </summary>
+    internal static bool StemsMayMatch(string read, string name)
+    {
+        string a = Stem(read), b = Stem(name);
+        int la = a.Count(char.IsLetterOrDigit), lb = b.Count(char.IsLetterOrDigit);
+        if (la < 3) return false;
+        if ((la < 5 || lb < 5) && a.Length != b.Length) return false;
+        return true;
+    }
+
+    /// <summary>Whether either name has under five letters of its own: then a misread may be one plain edit off it at most ("inc" for "ink", never "ion").</summary>
+    internal static bool ShortStem(string read, string name) => Stem(read).Count(char.IsLetterOrDigit) < 5 || Stem(name).Count(char.IsLetterOrDigit) < 5;
 
     /// <summary>Levenshtein distance with a cutoff, so the scan over thousands of names stays cheap.</summary>
     static int Edit(string a, string b, int max)
@@ -422,7 +458,7 @@ public sealed class ItemDictionary
         if (d._byId.Count(kv => kv.Key > 0) == 0) d.LoadEmbedded();
         // the gathering materials are always known, so misreads of them snap to the right name even without the full list
         foreach (var g in GatheringCatalog.All)
-            if (!d._byName.ContainsKey(Norm(g.Name)))
+            if (d.Free(Norm(g.Name)))
             {
                 long id = -(long)(Fnv("gather:" + Norm(g.Name)) & 0x7FFFFFFF) - 1;
                 d._byId[id] = new ItemInfo(id, g.Name, g.Grade, true, "", "Gathering Material");
@@ -488,14 +524,14 @@ public sealed class ItemDictionary
             foreach (var e in arr.EnumerateArray())
             {
                 var name = Str(e, "name");
-                if (name.Length == 0 || _byName.ContainsKey(Norm(name))) continue;
+                if (name.Length == 0 || !Free(Norm(name))) continue;
                 long id = -(long)(Fnv("extra:" + Norm(name)) & 0x7FFFFFFF) - 1;
                 bool tradable = !(e.TryGetProperty("tradable", out var t) && t.ValueKind == JsonValueKind.False);
                 var cat = Str(e, "category"); if (cat.Length == 0) cat = "Currency";
                 _byId[id] = new ItemInfo(id, name, Str(e, "grade"), tradable, Str(e, "icon"), cat);
                 _byName[Norm(name)] = id;
                 var plain = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
-                if (plain != name && !_byName.ContainsKey(Norm(plain))) _byName[Norm(plain)] = id;
+                if (plain != name && Free(Norm(plain))) _byName[Norm(plain)] = id;
             }
         }
         catch (Exception) { /* without the extras, those slots stay unnamed */ }
@@ -517,13 +553,13 @@ public sealed class ItemDictionary
                 // MetaBot's own name carries "(Bound)" ("Dawnfrost (Skin: Cloak) (Bound)"); bound and tradable copies are one item
                 string set = Str(e, "set"), slot = Str(e, "slot"), raw = System.Text.RegularExpressions.Regex.Replace(Str(e, "name"), @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
                 var name = set.Length > 0 && slot.Length > 0 ? $"{set} (Skin: {slot})" : raw;
-                if (name.Length == 0 || _byName.ContainsKey(Norm(name))) continue;
+                if (name.Length == 0 || !Free(Norm(name))) continue;
                 long id = e.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number && idEl.TryGetInt64(out var v) && v > 0 && !_byId.ContainsKey(v)
                     ? v : -(long)(Fnv("skin:" + Norm(name)) & 0x7FFFFFFF) - 1;
                 bool tradable = !(e.TryGetProperty("tradable", out var t) && t.ValueKind == JsonValueKind.False);
                 _byId[id] = new ItemInfo(id, name, Str(e, "grade"), tradable, "", "Skin");
                 _byName[Norm(name)] = id;
-                if (raw.Length > 0 && !_byName.ContainsKey(Norm(raw))) _byName[Norm(raw)] = id;
+                if (raw.Length > 0 && Free(Norm(raw))) _byName[Norm(raw)] = id;
             }
         }
         catch (Exception) { /* without the skins file, skins count only when the item list has them */ }
@@ -588,10 +624,35 @@ public sealed class ItemDictionary
             n++;
             // first real ID wins per name, so a later duplicate doesn't flip the mapping; a synthetic one gives way
             var key = Norm(name);
-            if (!_byName.TryGetValue(key, out var cur) || cur < 0) _byName[key] = id;
+            // a plain name that only stood for a bound-only item gives way to the item of that name, when a list has one
+            if (!_byName.TryGetValue(key, out var cur) || cur < 0 || _boundOnly.Remove(key)) _byName[key] = id;
         }
+        AddBoundOnlyNames();
         return n;
     }
+
+    /// <summary>
+    /// Every item the list has only in its "(Bound)" form is also known by its plain name (2026-10-29: the chat parser takes
+    /// "(Bound)" off a name before it looks it up, keeping the flag, so "Acquired Sealed Wing Featherdown (Bound) x2."
+    /// looked up "Sealed Wing Featherdown", which the list doesn't hold: 26 reads in the first reading reports, never
+    /// counted). The extras were already known both ways (LoadExtras). A plain name another item has is never taken.
+    /// </summary>
+    void AddBoundOnlyNames()
+    {
+        foreach (var (id, info) in _byId)
+        {
+            if (id <= 0 || !info.Name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase)) continue;
+            var plain = Norm(System.Text.RegularExpressions.Regex.Replace(info.Name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+            if (plain.Length < 3 || _byName.ContainsKey(plain)) continue;
+            _byName[plain] = id; _boundOnly.Add(plain);
+        }
+    }
+
+    /// <summary>Whether a name is free to be given to an item: no one has it, or only a bound-only item's plain name, which gives it up.</summary>
+    bool Free(string key) => !_byName.ContainsKey(key) || _boundOnly.Remove(key);
+
+    /// <summary>Whether a name read without "(Bound)" is an item that only comes bound: its "(Bound)" was lost from the line (a wrap, a cut).</summary>
+    public bool BoundOnly(string name) { lock (_lock) return _boundOnly.Contains(Norm(name)); }
 
     static string Str(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : "";
