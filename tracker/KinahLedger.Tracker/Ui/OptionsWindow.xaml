@@ -208,6 +208,15 @@
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Share my week"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Opens your profile with this week's recap card, ready to post on Discord. Sign in with Discord if it asks."/>
+                </StackPanel>
+                <Button x:Name="ShareWeekBtn" Grid.Column="1" Content="Share my week" VerticalAlignment="Center"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Link code"/>
                   <TextBlock Style="{StaticResource RowHint}" Text="The same code, for pasting by hand into Profile › Link your tracker."/>
                 </StackPanel>

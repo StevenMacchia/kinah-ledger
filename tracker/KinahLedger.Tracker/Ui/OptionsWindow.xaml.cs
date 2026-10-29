@@ -265,6 +265,7 @@ public partial class OptionsWindow : Window
         WhatsSentLink.Click += (_, _) => _host.WhatsSent(this);
         WhatsReadLink.Click += (_, _) => _host.WhatsRead(this);
         LinkBtn.Click += (_, _) => _host.LinkProfile();
+        ShareWeekBtn.Click += (_, _) => _host.ShareWeek();
         CopyCodeBtn.Click += (_, _) =>
         {
             try { Clipboard.SetText(LinkCodeText.Text); ShowNote("Link code copied. Paste it into your profile on the site to see your runs there.", "Good"); }

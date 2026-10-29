@@ -510,6 +510,23 @@ public static class WpfApp
             w.ShowDemo(); DoEvents();
         }
 
+        // Options › Sharing › Share my week opens the profile with the share card (site PR 28), no browser started here
+        {
+            var opened = new List<string>();
+            MainWindow.OpenForTest = opened.Add;
+            try
+            {
+                o = Open();
+                o.Go(OptionsWindow.Page.Sharing);
+                Check((string)o.ShareWeekBtn.Content == "Share my week" && o.ShareWeekBtn.IsEnabled, "Options › Sharing has a Share my week button");
+                Click(o.ShareWeekBtn);
+                Check(opened.Count == 1 && opened[0] == "https://kinahledger.com/#profile?share=1", "...it opens " + string.Join(", ", opened));
+                Check(o.IsVisible && !o.SaveBtn.IsEnabled, "...and leaves Options open with nothing to save");
+                o.Close();
+            }
+            finally { MainWindow.OpenForTest = null; }
+        }
+
         w.ForceClose();
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;

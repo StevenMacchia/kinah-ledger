@@ -320,6 +320,16 @@ public partial class MainWindow
         Report("Opened kinahledger.com in your browser. Sign in with Discord if it asks; this PC is then linked to your profile.", "Good");
     }
 
+    /// <summary>The profile with the "Share my week" card open (site PR 28); the site keeps the request through a Discord sign-in.</summary>
+    public const string ShareWeekUrl = SiteUrl + "/#profile?share=1";
+
+    /// <summary>Options › Sharing › Share my week: opens the weekly recap card on the site, linked or not.</summary>
+    public void ShareWeek()
+    {
+        Open(ShareWeekUrl);
+        Report("Opened your profile on kinahledger.com with this week's card. Sign in with Discord if it asks.", "Good");
+    }
+
     public void ResetInstallId()
     {
         Upload.InstallId.Reset();
