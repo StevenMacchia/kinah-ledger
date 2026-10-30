@@ -37,7 +37,12 @@ public partial class MainWindow
     static readonly Color GoalGold = Color.FromRgb(0xF8, 0xD5, 0x98);
 
     /// <summary>The player's goals at the start; a layout render or a self-test (no watching) never reads them.</summary>
-    void InitGoals(bool watch) { if (watch) _goals = Goals.Load(); }
+    void InitGoals(bool watch)
+    {
+        if (watch) _goals = Goals.Load();
+        // the slim row's one action (2026-10-30): the same sheet as ⋯ › Set a goal, once the click has finished
+        GoalsSlim.Click += (_, _) => OpenGoalSheetLater(null, new GoalDraft(), GoalsSlim);
+    }
 
     void SaveGoals() { if (!_demo) Goals.Save(_goals); }
 
@@ -58,11 +63,18 @@ public partial class MainWindow
 
     void RedrawGoals() { _drawnSig.Remove("goals"); FillGoals(); }
 
-    /// <summary>The GOALS box: shown on Farming once there is a goal, its slots drawn again only when a goal or its count changed.</summary>
+    /// <summary>
+    /// GOALS on Farming: with no goal, the slim one-line row ("⊕ Set a goal for today"), there from the page's first look
+    /// (before any kill, whatever LOOT shows) because the ⋯ entry alone was never found (Steven, 2026-10-30); with a goal,
+    /// the box of slots in its place, drawn again only when a goal or its count changed. Removing the last goal brings the
+    /// row back.
+    /// </summary>
     void FillGoals()
     {
-        bool show = _part == "Farming" && !_welcome && _goals.Count > 0;
-        GoalsCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        bool farm = _part == "Farming" && !_welcome, show = farm && _goals.Count > 0;
+        GoalsCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
+        GoalsSlim.Visibility = farm && !show ? Visibility.Visible : Visibility.Collapsed;
+        GoalsBox.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _drawnSig.Remove("goals"); return; }
         var today = TodayGoalCounts();
         var prog = _goals.Select(g => ProgressOf(g, today)).ToList();
@@ -579,19 +591,25 @@ public partial class MainWindow
     /// <summary>For options-test: one look for goals reached, as the tick does; the lines said.</summary>
     internal List<string> GoalTickForTest() => CheckGoals();
 
-    /// <summary>For options-test: whether GOALS shows, its goal slots, the "+" slot, its line, and that it sits between the actions and LOOT.</summary>
-    internal (bool Shown, int Slots, bool Add, string Note, bool Placed) GoalsForTest()
+    /// <summary>
+    /// For options-test: whether the GOALS box (with goals) shows, its goal slots, the "+" slot, its line, that it sits between
+    /// the actions and LOOT, and whether the slim no-goal row shows instead (Slim).
+    /// </summary>
+    internal (bool Shown, int Slots, bool Add, string Note, bool Placed, bool Slim) GoalsForTest()
     {
         int at = LeftCol.Children.IndexOf(GoalsCard);
         bool placed = at > 0 && LeftCol.Children.IndexOf(SessionCard) == at - 1 && LeftCol.Children.IndexOf(SummaryCard) == at + 1;
         var slots = GoalsHost.Children.OfType<FrameworkElement>().ToList();
         var note = string.Concat(GoalsNote.Inlines.OfType<Run>().Select(r => r.Text));
-        return (GoalsCard.Visibility == Visibility.Visible, slots.Count(s => s.Tag as string == "goal"), slots.Any(s => s.Tag as string == "add"), note, placed);
+        bool card = GoalsCard.Visibility == Visibility.Visible;
+        return (card && GoalsBox.Visibility == Visibility.Visible, slots.Count(s => s.Tag as string == "goal"), slots.Any(s => s.Tag as string == "add"), note, placed,
+            card && GoalsSlim.Visibility == Visibility.Visible);
     }
 
     /// <summary>
     /// Sample goals over the sample day (KL_SHOT_STATE=goals: three, the expeditions one reached; goals-add: two and the "+"
-    /// slot), for the layout renders and options-test. Example figures, never the player's goals or runs.
+    /// slot; goals-none: none, the slim row), for the layout renders and options-test. Example figures, never the player's
+    /// goals or runs.
     /// </summary>
     internal void ShowGoalsSample(int count)
     {
