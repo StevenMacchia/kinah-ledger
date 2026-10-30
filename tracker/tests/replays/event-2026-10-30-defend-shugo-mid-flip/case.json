@@ -1,0 +1,30 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Defend Shugo Merchants (Shugo Festival) reward cards, 2026-10-30 11:04:32 to 11:04:38: cards 2, 3 and 4 picked once each (blue frames, their cyan \"1\"), cards 1 and 5 not (gold frames, no card icon). The cards flip open over several seconds. The live read at 11:04:34.7 caught card 5 mid-flip and took it for received (\"card 5 12 slots + 2 cut, end shows, picks not read\"); every later read saw it gold and was left out as \"other cards received than the ones before\", so 0.9.0 filed the run from that one read with card 5's 14 slots in it (Enhance Stone 3,900 and Centuryroot Token 230 where the screen gave 3,200 and 180). The frame that read saw isn't kept, so 110433-flip.jpg stands in for it: 110434.jpg with card 4's top (its blue frame edge, card icon and \"1\", 590 to 782 down) copied over card 5's, so card 5 reads received over its own list, as the live read had it. The other four are the kept pictures as taken (110432 is card 5 mid-flip, read as not face up). Truth from the pictures: cards 2, 3, 4 only, 13 + 15 + 12 = 40 slots; Enhance Stone 700 + 1,100 + 700 + 700 = 3,200, Centuryroot Token 50 + 80 + 50 = 180. Abyss Points left out (card 2's 480 and card 3's 400 misread in the 0.9.0 re-read). Everything but the title and the cards blacked out",
+  "source": "%LocalAppData%\KinahLedger\reward-shots\20261030-110432, -110434, -110436, -110438-Defend-Shugo-Merchants-event-rewards.jpg (5120x2160); 110433-flip.jpg made from 110434 as the name says; truth from the pictures",
+  "game": { "w": 5120, "h": 2160 },
+  "server": "Siel (Elyos)",
+  "zone": "Defend Shugo Merchants",
+  "frames": [
+    { "f": "110432.jpg", "k": "cards", "t": "2026-10-30T15:04:32Z", "x": 0, "y": 0 },
+    { "f": "110433-flip.jpg", "k": "cards", "t": "2026-10-30T15:04:33Z", "x": 0, "y": 0 },
+    { "f": "110434.jpg", "k": "cards", "t": "2026-10-30T15:04:34Z", "x": 0, "y": 0 },
+    { "f": "110436.jpg", "k": "cards", "t": "2026-10-30T15:04:36Z", "x": 0, "y": 0 },
+    { "f": "110438.jpg", "k": "cards", "t": "2026-10-30T15:04:38Z", "x": 0, "y": 0 }
+  ],
+  "expect": {
+    "cards": [
+      { "received": false },
+      { "received": true, "picks": 1 },
+      { "received": true, "picks": 1 },
+      { "received": true, "picks": 1 },
+      { "received": false }
+    ],
+    "runs_kept": 1,
+    "run_items": {
+      "Enhance Stone": 3200,
+      "Centuryroot Token": 180
+    }
+  }
+}
