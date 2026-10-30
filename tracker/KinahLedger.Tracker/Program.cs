@@ -987,11 +987,11 @@ options: --process aion[,other]");
             // 2026-10-30 11:04 Defend Shugo Merchants: the live read had card 5 received (mid-flip), 54 slots; the pictures' read
             // had it gold, 40 slots. Other cards received: the pictures' read is taken though it has fewer slots
             var live = pr.Clone(); live.PictureSlots = 54; live.SlotsUnread = 33; live.CardsReceived = "2,3,4,5";
-            var pics = pr.Clone(); pics.PictureSlots = 40; pics.SlotsUnread = 5; pics.CardsReceived = "2,3,4";
+            var fromPics = pr.Clone(); fromPics.PictureSlots = 40; fromPics.SlotsUnread = 5; fromPics.CardsReceived = "2,3,4";
             var same = pr.Clone(); same.PictureSlots = 40; same.SlotsUnread = 5; same.CardsReceived = "2,3,4,5";
             var live2 = live.Clone();
             Check("...and replaces it with fewer slots when the two saw other cards received; with the same cards, more slots still win",
-                $"{TrackerSession.TakeReread(live, pics)} {live.PictureSlots} {live.CardsReceived} · {TrackerSession.TakeReread(live2, same)} {live2.PictureSlots}", "True 40 2,3,4 · False 54");
+                $"{TrackerSession.TakeReread(live, fromPics)} {live.PictureSlots} {live.CardsReceived} · {TrackerSession.TakeReread(live2, same)} {live2.PictureSlots}", "True 40 2,3,4 · False 54");
         }
         finally { CrashLog.DirOverride = keepDir; try { Directory.Delete(dir, true); } catch (Exception) { } }
         return ok;
