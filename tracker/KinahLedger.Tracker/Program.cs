@@ -3105,7 +3105,7 @@ options: --process aion[,other]");
         // crafts under the crafting window (2026-10-29 16:34:47 to 16:35:04, Steven: "orichalcum ingot x10 crafted 2x, it
         // counted as a single craft ONE time"): the first craft's bars read, then the window over the chat ("Can craft") hid
         // the panel and the second craft finished under it. Its pop-up beside the character counts as that craft (Steven's
-        // pick); the first craft's own pop-up, still up, doesn't count again; the next recipe's panel ends it. Was "1/0 made 0, 1 unknown"
+        // pick); the first craft's own pop-up, still up, doesn't count again; the next recipe's panel ends it. Was "1/0 made 10, 0 unknown"
         Check("the crafting window's lines over the chat", string.Join(" ", new[] { "Can craft", "Cannot craft", "Can crafl", "Show acquired designs only", "[Player] can craft", "Can craft this?", "Orichalcum Ingot" }.Select(l => TrackerSession.IsCraftWindowLine(l) ? "y" : "n")), "y y y y n n n");
         string Ingots(TrackerSession s) => s.CraftView.CraftSnapshot().Where(r => r.Name == "Orichalcum Ingot").Select(r => $"{r.Ok}/{r.Fail} made {r.Made.GetValueOrDefault("Orichalcum Ingot")}, {r.MadeUnknown} unknown").FirstOrDefault() ?? "none";
         var hw = new TrackerSession(null, settings, items, "Test");
@@ -3133,7 +3133,7 @@ options: --process aion[,other]");
         for (int i = 0; i < 5; i++) hn.ProcessChat(new List<string> { "Orichalcum Ingot", "Can craft" }, hw0.AddSeconds(i));
         for (int i = 0; i < 6; i++) hn.ProcessList(new List<(int, string)> { (1100, "Orichalcum Ingot x10") }, hw0.AddSeconds(2 + i * 0.4));
         Check("a craft finished under the crafting window counts from its pop-up, once; the first craft's pop-up isn't another; nothing after the next panel or with no queue",
-            $"{hwa} · after the next panel {Ingots(hw)} · no queue {Ingots(hn)}", "2/0 made 10, 1 unknown · after the next panel 2/0 made 10, 1 unknown · no queue none");
+            $"{hwa} · after the next panel {Ingots(hw)} · no queue {Ingots(hn)}", "2/0 made 20, 0 unknown · after the next panel 2/0 made 20, 0 unknown · no queue none");
         // a row refused for no second witness, then its chat line late: the line counts, once (Steven's Kukuru, 2026-10-24:
         // the cross-check took the late line for the refused row's duplicate and the pickup counted zero times)
         var sl = new TrackerSession(null, settings, items, "Test");
