@@ -554,8 +554,9 @@
       <Border x:Name="StatusInner" BorderBrush="{DynamicResource Line}">
       <Grid x:Name="StatusRow">
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <!-- how the count held up against the game's own numbers, as one chip in the look's colours ("2 to look at"); a click
-             opens the Accuracy card over the window (Ui/MainWindow.AccuracyCard.cs). In the footer since 2026-10-28 -->
+        <!-- how the count held up against the game's own numbers, as one chip in the look's colours; a click opens the Accuracy
+             card over the window (Ui/MainWindow.AccuracyCard.cs). In the footer since 2026-10-28. Since 0.9.0 it shows only
+             with Options › Show accuracy details on: the "2 to look at" pill is gone for players (Steven, 2026-10-30) -->
         <Border x:Name="AccuracyChip" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center" Height="26" CornerRadius="13" BorderThickness="1" Padding="11,0,12,1"
                 Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
                 ToolTip="How the count held up against the game's own numbers. Click to see." ToolTipService.InitialShowDelay="400">
@@ -572,9 +573,10 @@
         <TextBlock x:Name="Status" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250" VerticalAlignment="Center"/>
         <!-- shown with a reading problem: straight to the page that fixes it -->
         <TextBlock x:Name="FixText" Grid.Column="2" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
-        <!-- the last minute of what was read and counted, saved on this PC for a bug report (2026-10-23) -->
+        <!-- the last minute of what was read and counted, saved on this PC (2026-10-23) and, since 0.9.0, sent to the site's
+             report table with other players' chat taken out (Ui/MainWindow.xaml.cs ReportMiscount, Upload/ReportClient.cs) -->
         <TextBlock x:Name="MiscountText" Grid.Column="3" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
-                   ToolTip="Saves what the tracker read and counted in the last minute to a folder on this PC, for a bug report. Nothing is sent."><Hyperlink x:Name="MiscountLink" Style="{StaticResource LinkStyle}">Report a miscount</Hyperlink></TextBlock>
+                   ToolTip="Sends this report to Kinah Ledger (no chat from other players): what the tracker read and counted in the last minute. A copy stays on this PC."><Hyperlink x:Name="MiscountLink" Style="{StaticResource LinkStyle}">Report a miscount</Hyperlink></TextBlock>
         <!-- the Kinah Ledger Discord: where a miscount report goes (#bugs-and-feedback), help and release news (2026-10-25) -->
         <TextBlock x:Name="DiscordText" Grid.Column="4" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
                    ToolTip="Opens the Kinah Ledger Discord in your browser. Post a miscount in #bugs-and-feedback with a screenshot, your server and the tracker version."><Hyperlink x:Name="DiscordLink" Style="{StaticResource LinkStyle}">Discord</Hyperlink></TextBlock>

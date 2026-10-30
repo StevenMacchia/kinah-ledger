@@ -189,6 +189,8 @@ public partial class MainWindow : Window
         else Say("Reading the chat whenever the game is open. Start run times a stretch on top.", "Faint");
         // the data folder's clean-up: pictures and miscount reports past their time, on its own thread, then hourly (Housekeeping)
         if (watch) Housekeeping.RunIfDue(DateTime.Now);
+        // miscount reports the site couldn't take before (no connection, the route not deployed yet) go now, when the backoff allows
+        if (watch) { var up = _settings.Upload; _ = Task.Run(async () => { try { await Upload.ReportClient.FlushAsync(up); } catch (Exception ex) { CrashLog.Write("miscount report upload", ex); } }); }
         if (watch) _watcher.Start();
     }
 
@@ -281,7 +283,10 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// "Report a miscount": the last minute of what the tracker read and counted (ReportBuffer), saved to a folder on this
-    /// PC that opens for attaching to a bug report. The first time, while pictures are off, it asks whether to keep them.
+    /// PC as before, and since 0.9.0 sent to the site's report table in the background (Upload/ReportClient.cs; Steven,
+    /// 2026-10-30: reports should arrive by themselves, not wait for a zip on Discord). Other players' chat is taken out
+    /// before it goes; no pictures go with it. The first time, while pictures are off, it asks whether to keep them (on
+    /// this PC). The status line says "Report sent", or that it waits for the site, and nothing more.
     /// </summary>
     void ReportMiscount()
     {
@@ -291,22 +296,45 @@ public partial class MainWindow : Window
         if (!_prefs.ReportFrames)
         {
             var answer = MessageBox.Show(this,
-                "Also keep the last minute of the chat and the loot list as pictures, for the next reports?\n\n" +
+                "Sends this report to Kinah Ledger (no chat from other players).
+
+" +
+                "Also keep the last minute of the chat and the loot list as pictures on this PC, for the next reports? " +
                 "Pictures show exactly what the screen said, which is what finds a misread. They can show other players' names " +
-                "and messages. They stay on this PC; nothing is sent. Options › Sharing turns them off again.\n\n" +
-                "This report has the text the tracker read and what it counted either way.",
+                "and messages, so they are never sent with a report. Options › Sharing turns them off again.",
                 "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer == MessageBoxResult.Yes) { _prefs.ReportFrames = ReportBuffer.KeepFrames = true; SavePrefs(); asked = true; }
         }
         try
         {
             var dir = c.WriteReport("");
-            Open(dir);
-            _ = SendReportPictures(dir, "Report a miscount");
-            Say("Saved the last minute to a folder on this PC" + (asked ? "; pictures are kept from now on" : "") + ". Zip it and post it in #bugs-and-feedback on Discord.", "Good");
             Status.ToolTip = dir;
+            _ = SendReportPictures(dir, "Report a miscount");
+            Say("Sending the report…" + (asked ? " Pictures are kept on this PC from now on." : ""), "Faint");
+            _ = UploadReport(dir, "Report a miscount", "");
         }
         catch (Exception ex) { CrashLog.Write("miscount report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); }
+    }
+
+    /// <summary>
+    /// A saved report folder to the site (ReportClient), built and sent on a worker thread so neither the window nor the
+    /// reader waits for it; then one short line in the status bar, no figures.
+    /// </summary>
+    async Task UploadReport(string dir, string why, string flagged)
+    {
+        var server = Upload.ServerKeys.Build(RegionKey, Server?.Label ?? "");
+        var u = _settings.Upload;
+        try
+        {
+            var o = await Task.Run(() => Upload.ReportClient.SendAsync(u, dir, why, flagged, server));
+            Say(o switch
+            {
+                Upload.ReportClient.Outcome.Sent => "Report sent. Thanks: it helps fix the count.",
+                Upload.ReportClient.Outcome.Queued => "Report saved; it will send when the site answers.",
+                _ => "Report saved on this PC.",
+            }, o == Upload.ReportClient.Outcome.Sent ? "Good" : "Faint");
+        }
+        catch (Exception ex) { CrashLog.Write("miscount report upload", ex); Say("Report saved on this PC.", "Faint"); }
     }
 
     void Redraw()

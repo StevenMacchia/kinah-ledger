@@ -269,6 +269,8 @@ public static class AccuracyTests
             Accuracy.Reset();
         }
 
+        ReportUploadTests(Check);
+
         // ---- the pickup check (PickupCheck; Steven, 2026-10-23: "you need some type of quality assurance check") ----
         RemoteConfig.Current = RemoteConfig.BuiltIn;
         Check("storage line: the inventory at work", $"{PickupCheck.IsInventoryLine("Stored item(s) in Storage.")} {PickupCheck.IsInventoryLine("Stored item(s) inStorage.")}", "True True");
@@ -473,6 +475,109 @@ public static class AccuracyTests
     }
 
     /// <summary>A local web server that answers every request 404 (an API that doesn't know a route), for the tests above.</summary>
+    /// <summary>
+    /// "Report a miscount" sent to the site (0.9.0, Upload/ReportClient.cs): the privacy filter (other players' chat never
+    /// leaves; the game's own lines and the tracker's notes do), the body's shape and its 1 MB cap, and the queue: a 404
+    /// (the route not deployed yet) or a 429 keeps the report on disk with a backoff, a 202 sends it and the queue empties,
+    /// another 4xx drops it.
+    /// </summary>
+    static void ReportUploadTests(Action<string, string, string> Check)
+    {
+        Console.WriteLine("Miscount reports sent to the site (no chat from other players):");
+        // reads.log: a parsed pickup, an unparsed Kina line, a player's message and the lines it wrapped onto, a bracketed
+        // whisper, another player's Force loot, a line of nothing the game prints, and the tracker's own notes
+        var log = new List<string>
+        {
+            "12:00:01.2  ??  zone: Eastern Cantas Valley",
+            "12:00:02.0  ok  Acquired 131 Kina.",
+            "12:00:02.5  --  Acquired 2367 Kina.    (after a fade)",
+            "12:00:03.1  --  [Okay] i've got splendent true dragon and",
+            "12:00:03.1  --  artisan dagger sitting in my storage i just can't",
+            "12:00:03.1  --  afford the mats",
+            "12:00:04.0  --  Spiritstone acquired.",
+            "12:00:04.4  --  [Whisper] [Bob]: wts kinah cheap",
+            "12:00:05.0  --  Yarie acquired Soul: Ursus (Bound) through Force distribution.",
+            "12:00:05.5  --  lol same",
+            "12:00:05.7  --  Bob: selling kinah cheap",
+            "12:00:06.0  ??  audit: checked 3, matched 3",
+            "12:00:06.5  ??  refused '[Bob] hi' as a pickup",
+        };
+        var kept = ReportClient.FilterLog(log);
+        Check("log: other players' chat out, the game's lines and notes kept", string.Join(" | ", kept.Select(l => l[12..])),
+            "??  zone: Eastern Cantas Valley | ok  Acquired 131 Kina. | --  Acquired 2367 Kina.    (after a fade) | --  Spiritstone acquired. | ??  audit: checked 3, matched 3");
+        Check("...\"Acquired 131 Kina.\" kept, a player line and a [Name] line gone",
+            $"{kept.Any(l => l.EndsWith("Acquired 131 Kina."))} {kept.Any(l => l.Contains("splendent") || l.Contains("storage"))} {kept.Any(l => l.Contains("[Bob]") || l.Contains("[Okay]"))}", "True False False");
+        var trace = new List<string>
+        {
+            JsonSerializer.Serialize(new { t = "2026-10-30T12:00:02Z", k = "chat", l = new[] { "Acquired 131 Kina.", "[Okay] hello there", "and more of my message", "Raw Leather acquired." } }),
+            JsonSerializer.Serialize(new { t = "2026-10-30T12:00:03Z", k = "list", l = new[] { "463 Kina", "Spiritstone x2" } }),
+            JsonSerializer.Serialize(new { t = "2026-10-30T12:00:04Z", k = "chat", l = new[] { "[Bob] wts" } }),
+        };
+        var tk = ReportClient.FilterTrace(trace).Select(l => string.Join(",", JsonNode.Parse(l)!["l"]!.AsArray().Select(x => x!.GetValue<string>()))).ToList();
+        Check("trace: chat reads lose other players' lines, the list keeps its rows", string.Join(" | ", tk), "Acquired 131 Kina.,Raw Leather acquired. | 463 Kina,Spiritstone x2 | ");
+
+        // a report folder as TrackerSession.WriteReport leaves one
+        var dir = Path.Combine(CrashLog.Dir, "reports", "20261030-120000");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "summary.txt"), "Kinah Ledger 0.9.0 · miscount report\r\nZone: Eastern Cantas Valley\r\n");
+        File.WriteAllText(Path.Combine(dir, "counted.jsonl"), JsonSerializer.Serialize(new { t = "2026-10-30T12:00:02Z", what = "131 Kinah", via = "chat", where = "Farming" }) + "\n");
+        File.WriteAllLines(Path.Combine(dir, "trace.jsonl"), trace);
+        File.WriteAllText(Path.Combine(dir, "game.json"), JsonSerializer.Serialize(new { x = 0, y = 0, w = 2560, h = 1440 }));
+        File.WriteAllLines(Path.Combine(dir, "reads-log.txt"), log);
+        var body = ReportClient.BuildBody(dir, new string('w', 900), new string('f', 400), "abcdef0123456789abcdef0123456789", "na_e-siel-elyos", "0.9.0");
+        var b = JsonNode.Parse(body)!.AsObject();
+        Check("body: the contract's fields, in order", string.Join(",", b.Select(kv => kv.Key)), "v,app,install,why,flagged,server,game,summary,counted,trace,log");
+        Check("...v 1, why cut to 500, flagged to 300, the window size",
+            $"{b["v"]} {b["app"]} {b["why"]!.ToString().Length} {b["flagged"]!.ToString().Length} {b["server"]} {b["game"]!["w"]}x{b["game"]!["h"]}",
+            "1 0.9.0 500 300 na_e-siel-elyos 2560x1440");
+        Check("...no other player's chat anywhere in it",
+            $"{body.Contains("[Okay]") || body.Contains("[Bob]") || body.Contains("splendent") || body.Contains("hello there")} {b["log"]!.ToString().Contains("Acquired 131 Kina.")}", "False True");
+        // the 1 MB cap: a long log loses its oldest lines; the newest (the miscount's moment) stay
+        var big = Enumerable.Range(0, 40000).Select(i => $"12:{i / 600 % 60:00}:{i / 10 % 60:00}.{i % 10}  ok  Acquired {i} Kina.").ToList();
+        File.WriteAllLines(Path.Combine(dir, "reads-log.txt"), big);
+        var fat = ReportClient.BuildBody(dir, "x", "", "abcdef0123456789abcdef0123456789", "", "0.9.0");
+        var flog = JsonNode.Parse(fat)!["log"]!.ToString().Split('\n');
+        Check("1 MB cap: under it, the log trimmed from its oldest end",
+            $"{Encoding.UTF8.GetByteCount(fat) <= ReportClient.MaxBodyBytes} {flog.Length < big.Count} {flog[^1] == big[^1]} {flog[0] != big[0]}", "True True True True");
+        File.WriteAllLines(Path.Combine(dir, "reads-log.txt"), log);
+
+        // the queue: 404 (route not deployed), 429 with Retry-After, then 202; another 4xx drops
+        using var site = new NotFoundSite();
+        var u = new UploadSettings { Endpoint = $"http://127.0.0.1:{site.Port}/v1/runs" };
+        Check("the address: /v1/reports beside /v1/runs", ReportClient.Url(u), $"http://127.0.0.1:{site.Port}/v1/reports");
+        Check("...none with sharing off in settings.json", ReportClient.Url(new UploadSettings { Endpoint = u.Endpoint, Enabled = false }), "");
+        ReportClient.ResetBackoff();
+        site.Answer = 404;
+        var o1 = ReportClient.SendAsync(u, dir, "Report a miscount", "", "na_e-siel-elyos").GetAwaiter().GetResult();
+        Check("404 (not deployed yet): kept on disk to send later", $"{o1} {ReportClient.QueuedCount()} {site.Requests}", "Queued 1 1");
+        var o2 = ReportClient.SendAsync(u, dir, "Report a miscount", "", "").GetAwaiter().GetResult();
+        Check("...a second report within the backoff: kept, the site not asked", $"{o2} {ReportClient.QueuedCount()} {site.Requests}", "Queued 2 1");
+        ReportClient.ResetBackoff();
+        site.Answer = 429; site.RetryAfter = 120;
+        ReportClient.FlushAsync(u).GetAwaiter().GetResult();
+        var bo = JsonNode.Parse(File.ReadAllText(Path.Combine(CrashLog.Dir, "report-queue", "backoff.json")))!;
+        var next = DateTime.Parse(bo["NextUtc"]!.ToString(), null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+        Check("429 with Retry-After 120: both kept, the next try 2 minutes on", $"{ReportClient.QueuedCount()} {Math.Abs((next - DateTime.UtcNow).TotalSeconds - 120) < 15}", "2 True");
+        ReportClient.ResetBackoff();
+        site.Answer = 202; site.RetryAfter = 0;
+        while (site.Bodies.TryDequeue(out _)) { }
+        ReportClient.FlushAsync(u).GetAwaiter().GetResult();
+        var sent = site.Bodies.ToList();
+        Check("the site answers 202: both go, oldest first, the queue empty",
+            $"{sent.Count} {ReportClient.QueuedCount()} {JsonNode.Parse(sent[0])!["server"]} {JsonNode.Parse(sent[0])!["v"]}", "2 0 na_e-siel-elyos 1");
+        Check("...plain JSON, nothing from other players in what went", $"{sent.All(x => x.TrimStart().StartsWith("{"))} {sent.Any(x => x.Contains("[Okay]") || x.Contains("[Bob]"))}", "True False");
+        var o3 = ReportClient.SendAsync(u, dir, "x", "", "").GetAwaiter().GetResult();
+        Check("a new report with the site up: sent at once", $"{o3} {ReportClient.QueuedCount()}", "Sent 0");
+        site.Answer = 400;
+        var o4 = ReportClient.SendAsync(u, dir, "x", "", "").GetAwaiter().GetResult();
+        Check("400 (the site will never take it): dropped, not kept", $"{o4} {ReportClient.QueuedCount()}", "Dropped 0");
+        // the cap: never more than 30 waiting
+        site.Answer = 404;
+        for (int i = 0; i < 33; i++) { ReportClient.ResetBackoff(); ReportClient.SendAsync(u, dir, "x", "", "").GetAwaiter().GetResult(); }
+        Check("33 reports while the site lacks the route: at most 30 kept", $"{ReportClient.QueuedCount()}", "30");
+        foreach (var f in Directory.GetFiles(Path.Combine(CrashLog.Dir, "report-queue"))) File.Delete(f);
+    }
+
     sealed class NotFoundSite : IDisposable
     {
         readonly System.Net.Sockets.TcpListener _l = new(System.Net.IPAddress.Loopback, 0);
@@ -482,6 +587,8 @@ public static class AccuracyTests
         public int Requests => Volatile.Read(ref _requests);
         /// <summary>What it answers (404 until a test says the route exists), and the body of each request it got.</summary>
         public volatile int Answer = 404;
+        /// <summary>A Retry-After header (seconds) to answer with, or 0 for none.</summary>
+        public volatile int RetryAfter;
         public readonly System.Collections.Concurrent.ConcurrentQueue<string> Bodies = new();
         public NotFoundSite()
         {
@@ -522,9 +629,9 @@ public static class AccuracyTests
                     Interlocked.Increment(ref _requests);
                     if (end >= 0) Bodies.Enqueue(text);
                     int status = Answer;
-                    var body = status == 200 ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"not found\"}";
-                    var reason = status switch { 200 => "OK", 400 => "Bad Request", 404 => "Not Found", 500 => "Internal Server Error", _ => "Other" };
-                    var resp = $"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
+                    var body = status == 200 ? "{\"ok\":true}" : status == 202 ? "{\"id\":\"r1\"}" : "{\"ok\":false,\"error\":\"not found\"}";
+                    var reason = status switch { 200 => "OK", 202 => "Accepted", 400 => "Bad Request", 404 => "Not Found", 429 => "Too Many Requests", 500 => "Internal Server Error", _ => "Other" };
+                    var resp = $"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\n{(RetryAfter > 0 ? $"Retry-After: {RetryAfter}\r\n" : "")}Connection: close\r\n\r\n{body}";
                     await ns.WriteAsync(Encoding.ASCII.GetBytes(resp), _cts.Token);
                 }
                 catch (Exception) when (!_cts.IsCancellationRequested) { }
