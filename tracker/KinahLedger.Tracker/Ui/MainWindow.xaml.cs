@@ -296,9 +296,7 @@ public partial class MainWindow : Window
         if (!_prefs.ReportFrames)
         {
             var answer = MessageBox.Show(this,
-                "Sends this report to Kinah Ledger (no chat from other players).
-
-" +
+                "Sends this report to Kinah Ledger (no chat from other players).\n\n" +
                 "Also keep the last minute of the chat and the loot list as pictures on this PC, for the next reports? " +
                 "Pictures show exactly what the screen said, which is what finds a misread. They can show other players' names " +
                 "and messages, so they are never sent with a report. Options › Sharing turns them off again.",
