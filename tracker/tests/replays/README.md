@@ -161,6 +161,10 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   windows between steady readings find it, the check agrees 3 times, 8,443 (a first try counted 12,519: the counter
   went unread through a fight and the lines' 4,076 was counted again from it, `KinaWitness.Observe`). A case may name
   `print_log`, a pattern: the lines of its reads.log that match are printed, for reading a case on the build server.
+  `text-2026-10-29-kinah-counter-digit-group` (synthetic strip and chat reads after reads.log of 2026-10-29): the
+  counter read a digit group short ("1," dropped) and a group long (a stray "839" joined on), each twice in a row. Key
+  `counter_over` (BalanceCheck.Over, the Kinah the counter check judged the counter over the count): 0.9.0 trusted
+  both misreads and judged a million and a billion over; right is 0, every line counted.
 - `text-2026-10-26-longsword-upgrade-cut` (Steven crafting ten Orichalcum Longswords, 10:11 to 10:14): on each blue combo
   roll the panel names the recipe's upgrade, cut short, "Splendent Orichalcum Longsword (Novice Lv...". 0.8.40 kept the cut
   bracket in the name and filed each roll under that "recipe" (no tries, nothing credited), so the three won rolls made no

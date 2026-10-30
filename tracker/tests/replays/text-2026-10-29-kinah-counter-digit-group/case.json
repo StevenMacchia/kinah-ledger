@@ -1,0 +1,13 @@
+{
+  "pending": false,
+  "needs_ocr": false,
+  "trace": "trace.jsonl",
+  "name": "farming, 90 s: six Kina lines (2,233 Kina) read through the watcher's own counter path, with the two digit-group misreads of the Kinah counter that reads.log shows on 2026-10-29: the leading \"1,\" dropped (16:41:51, \"1@285 ,@300 280,557@309\": the figure read a million low, 24 px to the right, still within the counter's 40 px) and a stray copy of the last group joined back on (21:12:38, \"1,051839@233 839@318\" read as 1,051,839,839). Each misread is read the same way twice, which the counter trusted (the same value twice running), so 0.9.0 took the first as a million Kinah spent (the Kina witness's pool started again, the per-minute check rebased) and the way back as a rise of a million no line claims, judged \"over\" by the counter check; the second the same, a billion. Right: neither misread is trusted (a jump of a digit group needs reading the same way three times over 20 s, BalanceTracker), the counter check sees no gap, the six lines count, 2,233",
+  "source": "Synthetic: the strip reads and their misreads follow reads.log of 2026-10-29 (16:41 to 16:59 and 21:07 to 21:13 local; kinah-bench logs-2026-10-30); the counter rises 0.3 s before the first chat read that shows its line, as in text-2026-10-25-kinah-counter-lag",
+  "expect": {
+    "kinah": 2233,
+    "counter_found": 1,
+    "counter_agreed": 4,
+    "counter_over": 0
+  }
+}

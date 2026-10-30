@@ -103,7 +103,7 @@ public static class ReplayBank
         static long N(JsonNode? n) => n == null ? 0 : long.TryParse(n.ToJsonString(), out var v) ? v : 0;
         foreach (var k in new[] { "craft_ok", "craft_fail", "kinah", "pets", "kills", "list_unsure", "list_notrow", "list_same", "runs_kept", "runs_from_picture", "run_kinah", "run_gear", "run_materials",
                                     "runs_partly_read", "runs_sent", "run_not_read", "run_pieces", "run_unknown_gear", "run_unknown_items", "run_abyss_points", "run_kinah_set_aside",
-                                    "counter_found", "counter_agreed" })
+                                    "counter_found", "counter_agreed", "counter_over" })
             if (expect[k] is { } e && N(e) != N(got[k])) d.Add($"{k}: expected {e}, counted {got[k]?.ToString() ?? "0"}");
         // the chat's alignment (2026-10-25): reads that couldn't be lined up, and lines the settle took that came after them
         foreach (var k in new[] { "chat_unaligned", "chat_settled_late" })
@@ -568,6 +568,8 @@ public static class ReplayBank
         // the Kinah counter: found on the strip (strip reads), and how often it agreed with the count (BalanceCheck)
         if (strip != null) res["counter_found"] = strip.KinahLeft != null ? 1 : 0;
         if (strip != null || session.Kina.Readings > 0) res["counter_agreed"] = session.BalanceCheck.Agreed;
+        // ...and the Kinah it judged the counter over the count (2026-10-29: a misread digit group came out as a million over)
+        if (strip != null) res["counter_over"] = session.BalanceCheck.Over;
         if (stripFixed.Count > 0) { res["strip"] = string.Join(" | ", stripFixed); res["strip_anchored"] = string.Join(" | ", stripAnchored); res["strip_words"] = string.Join(" || ", stripWords); }
         // Soul Crystals from kills and the kills counted, for the cases about them (2026-10-23)
         if (e.PetCrystals > 0) res["pets"] = e.PetCrystals;
