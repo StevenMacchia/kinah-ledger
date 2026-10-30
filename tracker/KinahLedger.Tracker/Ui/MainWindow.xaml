@@ -356,11 +356,18 @@
       <Border x:Name="TodayStrip" Margin="0,16,0,0" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource GoldTint}" Visibility="Collapsed">
         <StackPanel>
           <Grid x:Name="TodayHead" Height="46" Background="Transparent" Cursor="Hand" ToolTip="Today since midnight on this PC. Click to see the loot.">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Path x:Name="TodayChev" Style="{StaticResource SecChev}" Margin="16,0,10,0"/>
-            <TextBlock Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SecGold}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBlock x:Name="TodayTitle" Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SecGold}" VerticalAlignment="Center" Margin="0,0,10,0"/>
             <TextBlock x:Name="TodayNote" Grid.Column="2" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-            <TextBlock x:Name="TodaySum" Grid.Column="3" FontSize="15" FontFamily="{DynamicResource MonoFont}" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
+            <!-- today or the last 7 days (0.9, History A): the runs' Week side, Ui/MainWindow.Week.cs -->
+            <Border x:Name="TodayScope" Grid.Column="3" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Margin="12,0,0,0">
+              <StackPanel Orientation="Horizontal">
+                <Button x:Name="TodayDayBtn" Style="{StaticResource SegOn}" Content="Today" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Today's expeditions and events since midnight on this PC."/>
+                <Button x:Name="TodayWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of expeditions and events on this PC, a bar a day."/>
+              </StackPanel>
+            </Border>
+            <TextBlock x:Name="TodaySum" Grid.Column="4" FontSize="15" FontFamily="{DynamicResource MonoFont}" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
           </Grid>
           <Border x:Name="TodayBody" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource GoldLine}" Padding="16,0,16,12" Visibility="Collapsed">
             <StackPanel x:Name="TodayHost"/>
@@ -495,6 +502,8 @@
                 <StackPanel Orientation="Horizontal">
                   <Button x:Name="LootHereBtn" Style="{StaticResource SegOn}" Content="This zone" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Since you came to this zone. It starts over when you change zone."/>
                   <Button x:Name="LootTodayBtn" Style="{StaticResource SegOff}" Content="Today" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Today's farming since midnight on this PC, every zone."/>
+                  <!-- the last 7 days (0.9, History A of kinah-bench/mock-goals-history): Ui/MainWindow.Week.cs -->
+                  <Button x:Name="LootWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of farming on this PC, a bar a day."/>
                 </StackPanel>
               </Border>
               <TextBlock x:Name="FootTotal" Grid.Column="3" Style="{StaticResource SecSum}" Foreground="{DynamicResource Gold}" FontSize="14" Text=" " MinWidth="40" TextAlignment="Right" Background="Transparent" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000"/>

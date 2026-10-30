@@ -63,9 +63,15 @@ public partial class MainWindow
     {
         if (_part == "Farming" && !_welcome) { TodayStrip.Visibility = Visibility.Collapsed; _drawnSig.Remove("today"); FillLoot(); return; }
         TodayRuns? r = _part == "Events" && !_welcome ? TodayLoot.Runs(TodayRunList(), _items, IsCurrency) : null;
-        bool any = r?.Runs > 0;
+        // the runs' Week side (0.9, Ui/MainWindow.Week.cs): the strip shows too when only the last days had runs
+        var week = r != null ? RunsWeekDays() : null;
+        bool any = r?.Runs > 0 || week?.Any(d => d.Runs.Runs > 0) == true;
         TodayStrip.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-        if (r == null || !any) return;
+        if (r == null || week == null || !any) return;
+        TodayDayBtn.Style = (Style)FindResource(_runsWeek ? "SegOff" : "SegOn");
+        TodayWeekBtn.Style = (Style)FindResource(_runsWeek ? "SegOn" : "SegOff");
+        TodayTitle.Text = _runsWeek ? "WEEK" : "TODAY";
+        if (_runsWeek) { FillRunsWeek(week); return; }
 
         // the line: today's runs, the figures in the data face, and what they made
         var note = TodayLoot.RunsLine(r);
@@ -74,6 +80,7 @@ public partial class MainWindow
         if (Changed("today-line", noteSig))
         {
             TodayNote.Inlines.Clear();
+            if (note.Count == 0) TodayNote.Inlines.Add(PR("No runs yet today", "Faint"));
             for (int i = 0; i < note.Count; i++)
             {
                 if (i > 0) TodayNote.Inlines.Add(PR(" · ", "Faint"));
@@ -96,7 +103,8 @@ public partial class MainWindow
         if (!Changed("today", sig)) return;
         TodayHost.Children.Clear();
         int perRow = Math.Max(4, (int)((HeadStack.Width - 2 - 32 + TodayGap) / (TodaySlotSize + TodayGap)));
-        FillTodayRuns(r, perRow);
+        if (r.Runs == 0) TodayHost.Children.Add(TodayEmpty("No runs yet today. Week has the last 7 days."));
+        else FillTodayRuns(r, perRow);
     }
 
     /// <summary>The Events page's slots: the rewards of today's expeditions and events, and their Kinah.</summary>

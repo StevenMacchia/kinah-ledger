@@ -40,9 +40,10 @@ public partial class MainWindow
     {
         LootHereBtn.Click += (_, _) => PickLoot(false);
         LootTodayBtn.Click += (_, _) => PickLoot(true);
+        InitWeek();   // LOOT's Week side and the Events page's (Ui/MainWindow.Week.cs)
     }
 
-    void PickLoot(bool day) { _lootDay = day; _drawnSig.Remove("loot"); FillLoot(); }
+    void PickLoot(bool day) { _lootDay = day; _lootWeek = false; _drawnSig.Remove("loot"); FillLoot(); }
 
     /// <summary>For options-test and the layout renders: LOOT on Today or on its first side.</summary>
     internal void PickLootForTest(bool day) => PickLoot(day);
@@ -52,14 +53,16 @@ public partial class MainWindow
     {
         bool farm = _part == "Farming" && !_welcome;
         TodayFarm? whole = farm && TodayEngine is { } day ? TodayLoot.Farm(day, _items) : null;
-        bool show = farm && (_hasSummary || whole?.Any == true);
+        // shown too when only the last days had farming, so the Week side is there before the day's first kill
+        bool show = farm && (_hasSummary || whole?.Any == true || FarmedThisWeek());
         SummaryCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         LootHereBtn.Content = LootHereName;
         LootHereBtn.ToolTip = _prefs.AllZones ? "Every zone since the tracker started (All zones is on, in ⋯)." : RunShown ? "This run, in this zone." : "Since you came to this zone. It starts over when you change zone.";
-        LootHereBtn.Style = (Style)FindResource(_lootDay ? "SegOff" : "SegOn");
-        LootTodayBtn.Style = (Style)FindResource(_lootDay ? "SegOn" : "SegOff");
-        if (_lootDay) FillLootDay(whole); else FillLootHere();
+        LootHereBtn.Style = (Style)FindResource(_lootDay || _lootWeek ? "SegOff" : "SegOn");
+        LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
+        LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");
+        if (_lootWeek) FillLootWeek(); else if (_lootDay) FillLootDay(whole); else FillLootHere();
     }
 
     /// <summary>LOOT's first side: the Kinah, every drop and gathered item, and the Soul Crystals of the count on screen.</summary>
@@ -240,7 +243,8 @@ public partial class MainWindow
 
     /// <summary>
     /// Layout renders of the Farming page's other states (KL_SHOT_STATE): "run" (a run on), "paused" (the chat out of view),
-    /// "stopped" (just after Stop run), "empty" (the game open, nothing counted yet). Example figures, never the player's.
+    /// "stopped" (just after Stop run), "empty" (the game open, nothing counted yet), "week" and "week-new" (LOOT's Week
+    /// side, Ui/MainWindow.Week.cs). Example figures, never the player's.
     /// </summary>
     internal void ShowStateSample(string state)
     {
@@ -260,8 +264,13 @@ public partial class MainWindow
             case "empty":
                 _demoEngine = new SessionEngine(_items); _demoElapsed = TimeSpan.FromSeconds(40);
                 _demoFeed.RemoveAll(l => l.Tab == FeedTab.Farming);
-                _demoDay = null; _demoScore = null; _rateLine.Clear();
+                _demoDay = null; _demoScore = null; _rateLine.Clear(); _demoDays = null;
                 Tell("", "Faint");
+                break;
+            // LOOT's Week side (0.9): a past day picked, as the mock draws it; and history that began two days ago
+            case "week":
+            case "week-new":
+                ShowWeekSample(state == "week-new");
                 break;
         }
         _drawnSig.Remove("loot");

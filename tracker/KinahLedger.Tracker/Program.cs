@@ -1267,6 +1267,7 @@ options: --process aion[,other]");
         ok &= UnsentRunsTest(items, s);
         ok &= Session.RunDataTests.Run(items, s);
         ok &= Session.TodayTests.Run(items, s);
+        ok &= Session.HistoryTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);
         ok &= Session.AccuracyScoreTests.Run(items, s);
         ok &= Session.LabelWriterTests.Run(items, s);
