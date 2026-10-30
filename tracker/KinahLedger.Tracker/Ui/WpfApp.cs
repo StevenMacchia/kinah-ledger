@@ -355,6 +355,33 @@ public static class WpfApp
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
 
+        // GOALS (0.9, Goals B of kinah-bench/mock-goals-history): no box with no goal; sample goals as slots between the
+        // actions and LOOT; the "+" slot while fewer than three; a goal reached said once; the box gone with the last goal
+        {
+            var none = w.GoalsForTest();
+            Check(!none.Shown && none.Slots == 0, "GOALS: no goal, no box");
+            w.ShowGoalsSample(3); DoEvents();
+            var three = w.GoalsForTest();
+            Check(three.Shown && three.Slots == 3 && !three.Add && three.Placed && three.Note == "today · 1 of 3 done",
+                $"GOALS: three slots between the actions and LOOT, no + slot, \"{three.Note}\"");
+            w.ShowGoalsSample(2); DoEvents();
+            var two = w.GoalsForTest();
+            Check(two.Shown && two.Slots == 2 && two.Add && two.Note == "today · 0 of 2 done", $"GOALS: two slots and Add a goal, \"{two.Note}\"");
+            Check(w.SummaryCard.Visibility == Visibility.Visible && w.LootForTest().Slots >= 10, "LOOT still shows under GOALS");
+            // reached between two looks: said once on the status line (and the panel), never again that day
+            w.SetGoalsForTest(new[] { new Session.Goal { Kind = Session.Goal.KindRuns, Which = Session.Goal.Expeditions, Target = 3 } });
+            var said = w.GoalTickForTest(); var again = w.GoalTickForTest();
+            Check(said.Count == 1 && said[0] == "Goal reached · 3 expeditions" && again.Count == 0 && w.Status.Text == said[0],
+                $"a goal reached is said once: \"{string.Join(" | ", said)}\", then {again.Count}");
+            Check(w.GoalCard(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 }) is { } gc && gc.Child is System.Windows.Controls.StackPanel gs && gs.Children.Count >= 6,
+                "a goal's hover card: band, bar, TODAY, Have, To go, pace");
+            w.ShowPartForTest("Crafting"); DoEvents();
+            Check(!w.GoalsForTest().Shown, "GOALS only on the Farming page");
+            w.ShowPartForTest("Farming"); DoEvents();
+            w.SetGoalsForTest(null); DoEvents();
+            Check(!w.GoalsForTest().Shown, "the last goal removed: the box goes");
+        }
+
         // the panel's crafting line (2026-10-26): the Card's and the Ticker's craft values from a sample ledger that adds up,
         // summed as the Crafting part sums it, at the Crafting render's prices
         w.ShowDemo("Crafting"); DoEvents();
@@ -683,6 +710,9 @@ public static class WpfApp
         }
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
+        // ui-goal-sheet.png, ui-goal-sheet-item.png)
+        if (shotState == "goals" && skin == null && !full) w.ShotGoalCards(dir);
         // a state render is the window only: the cards and the panel come from the plain farming renders
         if (shotState.Length > 0) { w.Close(); return; }
         // the Events part's card on its own: folded, and with Materials open

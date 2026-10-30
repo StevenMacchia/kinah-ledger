@@ -50,6 +50,7 @@ public partial class MainWindow
     /// <summary>LOOT for the side picked: shown once there is loot here or today, its slots drawn again only when they changed.</summary>
     void FillLoot()
     {
+        FillGoals();   // GOALS sits over LOOT once there is a goal (Ui/MainWindow.Goals.cs)
         bool farm = _part == "Farming" && !_welcome;
         TodayFarm? whole = farm && TodayEngine is { } day ? TodayLoot.Farm(day, _items) : null;
         bool show = farm && (_hasSummary || whole?.Any == true);
@@ -185,7 +186,9 @@ public partial class MainWindow
         tile.MouseLeftButtonUp += (_, _) => ShowItemCard(r, tile);
         var rep = new MenuItem { Header = r.Reported ? "Reported · Undo" : "Looks wrong? Report", ToolTip = "Keeps it out of what this count sends to the site, and saves the last minute of what was read." };
         rep.Click += (_, _) => ToggleReport(r);
-        var menu = new ContextMenu(); menu.Items.Add(rep);
+        var menu = new ContextMenu();
+        menu.Items.Add(GoalMenuItem(() => GoalDraft.ForItem(name), tile, "A number of these to pick up today. It shows over LOOT."));
+        menu.Items.Add(rep);
         tile.ContextMenu = menu;
         return tile;
     }
@@ -240,7 +243,8 @@ public partial class MainWindow
 
     /// <summary>
     /// Layout renders of the Farming page's other states (KL_SHOT_STATE): "run" (a run on), "paused" (the chat out of view),
-    /// "stopped" (just after Stop run), "empty" (the game open, nothing counted yet). Example figures, never the player's.
+    /// "stopped" (just after Stop run), "empty" (the game open, nothing counted yet), "goals" and "goals-add" (the GOALS box with
+    /// three sample goals, or two and the "+" slot). Example figures, never the player's.
     /// </summary>
     internal void ShowStateSample(string state)
     {
@@ -262,6 +266,12 @@ public partial class MainWindow
                 _demoFeed.RemoveAll(l => l.Tab == FeedTab.Farming);
                 _demoDay = null; _demoScore = null; _rateLine.Clear();
                 Tell("", "Faint");
+                break;
+            // GOALS (0.9, Goals B of kinah-bench/mock-goals-history): three sample goals over the sample day, the expeditions
+            // one reached; "goals-add" two of them and the "+" slot (Ui/MainWindow.Goals.cs)
+            case "goals":
+            case "goals-add":
+                ShowGoalsSample(state == "goals" ? 3 : 2);
                 break;
         }
         _drawnSig.Remove("loot");

@@ -132,6 +132,13 @@ public partial class MainWindow
         watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop the drop alert" : "Alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, watch);
+        // Set a goal, beside Watch (0.9): how many of it to pick up today, in the goal sheet (Ui/MainWindow.Goals.cs)
+        var goal = new Hyperlink(new Run("Set a goal")) { Foreground = Ck(CkGold), TextDecorations = null };
+        goal.Click += (_, _) => { if (_card != null) _card.IsOpen = false; OpenGoalSheetLater(null, GoalDraft.ForItem(name), null); };
+        linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
+        linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, goal);
+        linkLine.TextWrapping = TextWrapping.Wrap;   // four links run past the card's width on one line
+        linkLine.LineHeight = 20;
         body.Children.Add(linkLine);
         return card;
     }

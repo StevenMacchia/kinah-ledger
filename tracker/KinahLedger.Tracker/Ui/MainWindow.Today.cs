@@ -178,6 +178,13 @@ public partial class MainWindow
     {
         var tile = CkIcon(s.Name, 46, FrameOf(s.Id), badge: CountBadge(s.Count));
         CardTip(tile, () => ItemTodayCard(s, rate, showWhere, runs));
+        // a right-click sets a goal for it (0.9); a currency is an amount, not something picked up
+        if (!s.Currency)
+        {
+            var menu = new ContextMenu();
+            menu.Items.Add(GoalMenuItem(() => GoalDraft.ForItem(s.Name), tile, "A number of these to pick up today. It shows on the Farming page."));
+            tile.ContextMenu = menu;
+        }
         return tile;
     }
 
@@ -188,6 +195,13 @@ public partial class MainWindow
         var tile = WithBadge(CoinTile(46), CountBadge(kinah), "");
         tile.ToolTip = null;
         CardTip(tile, () => KinahTodayCard(kinah, where, line, foot, whereTitle));
+        // a right-click on farming's Kinah sets a Kinah goal (0.9); a run's Kinah isn't farming's, so not on the Events page
+        if (_part == "Farming")
+        {
+            var menu = new ContextMenu();
+            menu.Items.Add(GoalMenuItem(() => new GoalDraft(), tile, "Kinah from farming to make today. It shows over LOOT."));
+            tile.ContextMenu = menu;
+        }
         return tile;
     }
 

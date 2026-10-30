@@ -479,6 +479,23 @@
         </StackPanel>
       </Border>
 
+      <!-- GOALS (0.9, Goals B of kinah-bench/mock-goals-history, Steven's pick 2026-10-29): up to three of today's goals as
+           slots, a gold ring round each item tile, between the actions and LOOT; shown only once there is a goal. Drawn in
+           Ui/MainWindow.Goals.cs. -->
+      <Border x:Name="GoalsCard" Background="{DynamicResource Card}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1,0,1,0" Visibility="Collapsed">
+        <StackPanel>
+          <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+            <Grid Height="50">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <TextBlock Style="{StaticResource SecTitle}" Text="GOALS" FontWeight="Bold" Margin="20,0,10,0"/>
+              <!-- "today · 1 of 3 done" -->
+              <TextBlock x:Name="GoalsNote" Grid.Column="1" Style="{StaticResource SecNote}"/>
+            </Grid>
+          </Border>
+          <WrapPanel x:Name="GoalsHost" Margin="20,2,20,16"/>
+        </StackPanel>
+      </Border>
+
       <!-- LOOT (2026-10-28, option C of kinah-bench/mock-calm-farming, Steven's pick): what was picked up, as inventory
            slots with the game-tooltip card on hover, for one period at a time: this zone since you arrived (or the run, or
            every zone with All zones on) or Today; one total. It replaced the SESSION line (the same count as the card above
