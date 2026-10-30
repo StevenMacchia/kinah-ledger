@@ -373,7 +373,7 @@ public static class WpfApp
             var said = w.GoalTickForTest(); var again = w.GoalTickForTest();
             Check(said.Count == 1 && said[0] == "Goal reached · 3 expeditions" && again.Count == 0 && w.Status.Text == said[0],
                 $"a goal reached is said once: \"{string.Join(" | ", said)}\", then {again.Count}");
-            Check(w.GoalCard(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 }) is { } gc && gc.Child is System.Windows.Controls.StackPanel gs && gs.Children.Count >= 6,
+            Check(w.GoalCard(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 }) is { } gc && gc.Child is System.Windows.Controls.StackPanel goalBody && goalBody.Children.Count >= 6,
                 "a goal's hover card: band, bar, TODAY, Have, To go, pace");
             w.ShowPartForTest("Crafting"); DoEvents();
             Check(!w.GoalsForTest().Shown, "GOALS only on the Farming page");
