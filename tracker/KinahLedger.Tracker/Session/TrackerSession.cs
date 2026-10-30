@@ -1181,6 +1181,8 @@ public sealed partial class TrackerSession
         ChatSeen(lines, now);   // new chat lines: the next loot list capture is recognized (ocr.list_skip_same)
         GatherTick(now);
         Seen(now);
+        // the crafting window's recipe list over the chat ("Can craft" under each recipe): a queue's panel may be under it
+        if (lines.Any(IsCraftWindowLine)) CraftWindowSign(now);
         // rare pickups still waiting from an earlier step that had no picture to read again (a replay): counted as read
         CommitHeld();
         try { ProcessChatCore(lines, now); }
@@ -2642,7 +2644,7 @@ public sealed partial class TrackerSession
 
     public static bool IsCraftTitle(string line) =>
         Update.RemoteConfig.HasAny(line, Update.RemoteConfig.Current.CraftPanelWords)
-        || Regex.IsMatch(line, @"r[aåäà4]ft(?:ing|in|ng)|r[aåäà4]fting", RegexOptions.IgnoreCase);
+        || Regex.IsMatch(line, @"r[aåäà4]ft(?:ing|in|ng)\b|r[aåäà4]fting", RegexOptions.IgnoreCase);
 
     // ---- the gathering bar as a witness (Steven's plan, step 1, 2026-10-23) ----
     // The gathering panel is the crafting panel's widget: one race per gather, Success or Fail, and when the game rolls an
@@ -3345,6 +3347,8 @@ public sealed partial class TrackerSession
             CommitHeld();   // anything a step without a picture left waiting (a replay) counts as read first
             // a shop or reward screen covers the place the loot list shows: nothing there is loot
             if (Target.RewardOpen(now)) { _rows.Reset(); return; }
+            // a queue crafting under the crafting window: the list is read for its recipe's own pop-ups alone (HiddenCraftRows)
+            if (HiddenCraftRows(lines, now)) return;
             // the crafting panel or window covers the place the loot list shows (its title read as a row, "Expert's Orichalcum
             // Cloak", 2026-10-23 21:17:53), and a craft's output is the panel's alone: the list isn't read while either is up,
             // nor for the panel's tail after it goes
@@ -3904,6 +3908,8 @@ public sealed partial class TrackerSession
             if (!_queueOpen) QueueStart(now);
         }
         if (_panelIsCraft) _panelCraftAt = now;
+        // the panel crafting in sight again: its bars count, not the pop-ups
+        if (_panelIsCraft) EndHidden(now, "the crafting panel is back");
         _panelUp = true;
     }
 
@@ -3931,6 +3937,7 @@ public sealed partial class TrackerSession
 
     void QueueStart(DateTime now)
     {
+        EndHidden(now, "a new queue's panel came up");
         if (_queueOpen) QueueEnd(now, "a new queue began");
         _queueId++; _queueOpen = true; _queueSure = false; _queueGuessed = false;
         _queueName = ""; _queueLevel = 0; _switchTo = ""; _switchLevel = 0;
@@ -4085,6 +4092,96 @@ public sealed partial class TrackerSession
     /// <summary>A stop or the end of a replay: crafts still held for the queue's recipe are filed under the best guess.</summary>
     internal void FlushCraftQueue(DateTime now) => QueueEnd(now, "the count stopped");
 
+    // ---- crafts under the crafting window (Steven, 2026-10-29: "orichalcum ingot x10 crafted 2x, it counted as a single
+    // craft ONE time") ----
+    // Opening the crafting window while a queue runs hides the panel; the queue goes on with its bars out of sight. That
+    // day, 16:34:47 to 16:35:04: two Orichalcum Ingot crafts of ×10, the first race read at 16:34:55, the window back at
+    // 16:34:58 to set up the next recipe, the second craft finished under it, and the queue was taken as over. While the
+    // window hides a queue, a pop-up beside the character of that queue's own item, with its count read, is one of its
+    // crafts that worked, made as many as the pop-up says (Steven's pick, 2026-10-29: "Count the pop-up"). Only that
+    // recipe, only while the window hides the queue; a craft that failed under the window shows nothing and isn't counted.
+
+    /// <summary>The window's sign this soon after the panel last showed crafting: the queue went under it.</summary>
+    public const double HiddenStartSeconds = 6;
+    /// <summary>The hidden queue lasts this long after the window's last sign (its last craft's pop-up), and this long at most.</summary>
+    public const double HiddenGraceSeconds = 15, HiddenMaxSeconds = 1200;
+    /// <summary>A pop-up first seen this soon after a craft counted from its bars (or from a pop-up) is that craft's own (a pop-up is up about 2.5 s).</summary>
+    public const double OwnPopupSeconds = 4;
+
+    string _hiddenRecipe = ""; int _hiddenLevel, _hiddenQueue, _hiddenCounted;
+    DateTime _hiddenSince = DateTime.MinValue, _hiddenSignAt = DateTime.MinValue, _hiddenLastOk = DateTime.MinValue, _lastBarRaceAt = DateTime.MinValue;
+    readonly HashSet<int> _hiddenObjs = new();
+
+    /// <summary>The crafting window's recipe list as the chat's reader sees it over the chat: "Can craft" (or "Cannot craft") under a recipe, "Show acquired designs only".</summary>
+    internal static bool IsCraftWindowLine(string line) =>
+        Regex.IsMatch(ChatParser.StripAccents(line).Trim(), @"^(?:can(?:not|'?t)?\s*cr[a4]f[t1l]|show\s+acquired\s+designs(?:\s+only)?)\W{0,3}$", RegexOptions.IgnoreCase);
+
+    /// <summary>The crafting window seen over the chat: a queue crafting a moment ago, its panel out of sight now, goes on under it.</summary>
+    internal void CraftWindowSign(DateTime now)
+    {
+        if (_hiddenRecipe.Length > 0) { if (now > _hiddenSignAt) _hiddenSignAt = now; return; }
+        if (_panelCraftAt == DateTime.MinValue || (now - _panelCraftAt).TotalSeconds is < 0 or > HiddenStartSeconds) return;
+        // the panel still in sight: the window isn't over it, and its bars count
+        if (_panelUp && _panelIsCraft && _panelGonePasses == 0) return;
+        var recipe = _queueName.Length >= 2 && (_queueSure || _queueGuessed) ? _queueName : QueueBest()?.Name ?? _panelRecipe;
+        if (recipe.Length < 2) return;
+        _hiddenRecipe = recipe; _hiddenLevel = _queueLevel > 0 ? _queueLevel : _panelLevel; _hiddenQueue = _queueId;
+        // the pop-ups counted before are kept: the window opened twice over one queue doesn't count a pop-up still up twice
+        _hiddenSince = _hiddenSignAt = now; _hiddenCounted = 0;
+        CrashLog.Note($"crafting window over a queue of {recipe}: its crafts go on out of sight; a pop-up of {recipe} with its count is one that worked");
+    }
+
+    void EndHidden(DateTime now, string why)
+    {
+        if (_hiddenRecipe.Length == 0) return;
+        CrashLog.Note($"crafting window over the queue of {_hiddenRecipe} over ({why}): {_hiddenCounted} craft(s) counted from its pop-ups");
+        _hiddenRecipe = "";
+    }
+
+    /// <summary>
+    /// One read of the loot list while the crafting window hides a queue: the rows of the queue's own item (or its upgrade),
+    /// with their count read, each one craft that worked; everything else is left alone, as the list always is while the
+    /// window is up. False when no queue is hidden (the list goes its usual way).
+    /// </summary>
+    bool HiddenCraftRows(List<LootLine> lines, DateTime now)
+    {
+        if (_hiddenRecipe.Length == 0) return false;
+        if ((now - _hiddenSignAt).TotalSeconds > HiddenGraceSeconds || (now - _hiddenSince).TotalSeconds > HiddenMaxSeconds)
+        {
+            EndHidden(now, (now - _hiddenSince).TotalSeconds > HiddenMaxSeconds ? $"{HiddenMaxSeconds / 60:0} minutes" : "the crafting window went");
+            return false;
+        }
+        // the list's own checks first: the window's text in the band (its recipe's name at the window's place, no icon, static)
+        // is no row
+        NoteScreenNames(now);
+        var rows = _rows.Feed(NotRow.Filter(lines, now), now);
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        var recipe = Unbound(_hiddenRecipe);
+        var ups = RecipeBook.ForOutput(_hiddenRecipe)?.GreatOutcomes.Select(g => Unbound(g.Item)).Where(u => !cmp.Equals(u, recipe)).ToHashSet(cmp) ?? new HashSet<string>(cmp);
+        foreach (var r in rows)
+        {
+            if (r.IsKinah || r.Obj <= 0 || _hiddenObjs.Contains(r.Obj)) continue;
+            var name = Unbound(_items.Find(r.Name) is long fid ? _items.NameOf(fid) : r.Name);
+            bool own = cmp.Equals(name, recipe), up = !own && ups.Contains(name);
+            if (!own && !up) continue;
+            _hiddenObjs.Add(r.Obj); if (_hiddenObjs.Count > 200) _hiddenObjs.Remove(_hiddenObjs.Min());
+            var at = r.First ?? now;
+            if (r.NoCount || r.Count <= 0) { CrashLog.Note($"crafting window over the queue: \"{r.Text.Trim()}\" beside the character, its count not read: not counted"); continue; }
+            if ((at - _lastBarRaceAt).TotalSeconds is >= -1 and < OwnPopupSeconds || (at - _hiddenLastOk).TotalSeconds is >= -1 and < OwnPopupSeconds)
+            {
+                CrashLog.Note($"crafting window over the queue: {name} x{r.Count} at {at.ToLocalTime():HH:mm:ss.f} is the pop-up of the craft just counted, not another");
+                continue;
+            }
+            _hiddenLastOk = at; _hiddenCounted++;
+            // what it made: the pop-up's count, the book's yield when the two disagree (a count read cut); an upgrade's, the book's
+            int? yield = RecipeBook.YieldFor(_hiddenRecipe, _hiddenLevel);
+            int? makes = up ? null : yield is int y && y != r.Count ? y : r.Count;
+            CrashLog.Note($"crafting window over the queue: {name} x{r.Count} beside the character at {at.ToLocalTime():HH:mm:ss.f}: a craft of {_hiddenRecipe} that worked, its bars out of sight{(up ? " (its upgrade)" : makes != r.Count ? $" (the recipe makes {makes})" : "")}");
+            PanelRace(_hiddenRecipe, true, false, at, _hiddenLevel, _hiddenQueue, makes);
+        }
+        return true;
+    }
+
     /// <summary>Passes and seconds the crafting panel must be away before its queue is over (between two crafts it goes for about a second).</summary>
     public const int PanelGonePasses = 3;
     public const double PanelGoneSeconds = 4;
@@ -4140,6 +4237,7 @@ public sealed partial class TrackerSession
 
     void CraftBarRace(DateTime now, bool ok, bool combo, string bars)
     {
+        _lastBarRaceAt = now;
         QueueTick(now);
         if (!_queueOpen) QueueStart(now);
         if (QueueHolds)
@@ -4192,10 +4290,11 @@ public sealed partial class TrackerSession
     /// One finished race of the panel's Success and Fail bars: the only way a craft is counted (Steven, 2026-10-23: "if u
     /// dont see the crafting bars why the fuck are u adding it to a craft window"). Also what replay and the tests feed.
     /// </summary>
-    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0)
+    // makes: what the craft made when something other than the recipe book says it (a hidden craft's pop-up, HiddenCraftRows)
+    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0, int? makes = null)
     {
         PanelUp(recipe, now);
-        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia, Makes = recipe.Length >= 2 ? RecipeBook.YieldFor(recipe, level) : null, Queue = queue };
+        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia, Makes = makes ?? (recipe.Length >= 2 ? RecipeBook.YieldFor(recipe, level) : null), Queue = queue };
         Count(ev);
         CraftView.Apply(ev);
         Accuracy.Add("craft_panel");

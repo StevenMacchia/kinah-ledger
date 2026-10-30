@@ -3102,6 +3102,38 @@ options: --process aion[,other]");
         int cpm = cps.Engine.SkillSnapshot().Values.Sum(st => st.Nodes);
         Check("crafting panel: recipe line a witness, a pass away kept, 4 s away ended, no gather just after, raised never crafting, a gather after it counts",
             $"{cpa} {cpb} {cpc} {cpn} {cpd} {cpm}", "True True False 0 False 1");
+        // crafts under the crafting window (2026-10-29 16:34:47 to 16:35:04, Steven: "orichalcum ingot x10 crafted 2x, it
+        // counted as a single craft ONE time"): the first craft's bars read, then the window over the chat ("Can craft") hid
+        // the panel and the second craft finished under it. Its pop-up beside the character counts as that craft (Steven's
+        // pick); the first craft's own pop-up, still up, doesn't count again; the next recipe's panel ends it. Was "1/0 made 10, 0 unknown"
+        Check("the crafting window's lines over the chat", string.Join(" ", new[] { "Can craft", "Cannot craft", "Can crafl", "Show acquired designs only", "[Player] can craft", "Can craft this?", "Orichalcum Ingot" }.Select(l => TrackerSession.IsCraftWindowLine(l) ? "y" : "n")), "y y y y n n n");
+        string Ingots(TrackerSession s) => s.CraftView.CraftSnapshot().Where(r => r.Name == "Orichalcum Ingot").Select(r => $"{r.Ok}/{r.Fail} made {r.Made.GetValueOrDefault("Orichalcum Ingot")}, {r.MadeUnknown} unknown").FirstOrDefault() ?? "none";
+        var hw = new TrackerSession(null, settings, items, "Test");
+        hw.Engine.SetZone("Zumion Village");
+        var hw0 = new DateTime(2026, 10, 29, 20, 34, 47, DateTimeKind.Utc);
+        hw.PanelLook(hw0, true, false, new[] { "Cråfting in Progress 1 / 2", "Orichalcum Ingot (Novice Lv. 25)" });
+        hw.PanelLook(hw0.AddSeconds(0.2), true, false, new[] { "Crafting in Progress 1 / 2", "Orichalcum Ingot (Novice Lv. 25)" });
+        for (int i = 1; i <= 21; i++) hw.PanelLook(hw0.AddSeconds(i * 0.4), true, false, null);
+        hw.PanelBars(hw0.AddSeconds(8.7), true, false);
+        for (int i = 0; i < 40; i++) hw.PanelLook(hw0.AddSeconds(9.1 + i * 0.4), false, false, null);
+        for (int i = 0; i < 30; i++) hw.ProcessChat(new List<string> { "Fine Thick Balaur Horn", "Can craft" }, hw0.AddSeconds(9.5 + i));
+        // the first craft's pop-up, up when the list is read again: that craft's own
+        for (int i = 0; i < 6; i++) hw.ProcessList(new List<(int, string)> { (1100, "Orichalcum Ingot x10") }, hw0.AddSeconds(9.9 + i * 0.4));
+        for (int i = 0; i < 4; i++) hw.ProcessList(new List<(int, string)>(), hw0.AddSeconds(12.5 + i * 0.5));
+        // the second craft, finished under the window
+        for (int i = 0; i < 6; i++) hw.ProcessList(new List<(int, string)> { (1100, "Orichalcum Ingot x10") }, hw0.AddSeconds(17.5 + i * 0.4));
+        for (int i = 0; i < 4; i++) hw.ProcessList(new List<(int, string)>(), hw0.AddSeconds(20.5 + i * 0.5));
+        string hwa = Ingots(hw);
+        // the next recipe's panel: the window's gone, so is the hidden queue; that recipe's pop-up is its own
+        hw.PanelLook(hw0.AddSeconds(41), true, false, new[] { "Crafting in Progress 1 / 1", "Orichalcum Longsword (Novice Lv. 3)" });
+        for (int i = 0; i < 6; i++) hw.ProcessList(new List<(int, string)> { (1100, "Orichalcum Ingot x10") }, hw0.AddSeconds(43 + i * 0.4));
+        // the window open with no queue: an ingot beside the character is no craft
+        var hn = new TrackerSession(null, settings, items, "Test");
+        hn.Engine.SetZone("Zumion Village");
+        for (int i = 0; i < 5; i++) hn.ProcessChat(new List<string> { "Orichalcum Ingot", "Can craft" }, hw0.AddSeconds(i));
+        for (int i = 0; i < 6; i++) hn.ProcessList(new List<(int, string)> { (1100, "Orichalcum Ingot x10") }, hw0.AddSeconds(2 + i * 0.4));
+        Check("a craft finished under the crafting window counts from its pop-up, once; the first craft's pop-up isn't another; nothing after the next panel or with no queue",
+            $"{hwa} · after the next panel {Ingots(hw)} · no queue {Ingots(hn)}", "2/0 made 20, 0 unknown · after the next panel 2/0 made 20, 0 unknown · no queue none");
         // a row refused for no second witness, then its chat line late: the line counts, once (Steven's Kukuru, 2026-10-24:
         // the cross-check took the late line for the refused row's duplicate and the pickup counted zero times)
         var sl = new TrackerSession(null, settings, items, "Test");
