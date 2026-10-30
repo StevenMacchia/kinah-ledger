@@ -137,6 +137,22 @@ jobs:
           for s in run paused stopped empty; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/states --demo --compact --tall; done
           KL_SHOT_STATE=paused dist/KinahLedger.exe ui-shot shots/states --demo --full --tall
           KL_SHOT_STATE=empty dist/KinahLedger.exe ui-shot shots/states --demo --compact --tall --skin daylight
+          # GOALS (0.9, kinah-bench/mock-goals-history Goals B): three sample goals over the sample day (one reached) and two
+          # with the "+" slot, at both widths and in Daylight (ui-main-tracking-goals-*.png, ui-main-tracking-goals-add-*.png);
+          # the goals render also writes ui-goal-card.png and ui-goal-card-kinah.png (a goal's hover card) and
+          # ui-goal-sheet.png and ui-goal-sheet-item.png (Set a goal)
+          mkdir -p shots/goals
+          for s in goals goals-add; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/goals --demo --compact --tall; done
+          KL_SHOT_STATE=goals dist/KinahLedger.exe ui-shot shots/goals --demo --full --tall
+          KL_SHOT_STATE=goals dist/KinahLedger.exe ui-shot shots/goals --demo --compact --tall --skin daylight
+          # History (0.9, kinah-bench/mock-goals-history option A): LOOT's Week side with a past day picked as the mock has it
+          # (ui-main-tracking-week-*.png, both widths and Daylight), history that began two days ago (-week-new-: the "–" days
+          # and the line under the bars), and the Events strip's Week side opened (ui-main-events-week-tall*.png)
+          for s in week week-new; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/states --demo --compact --tall; done
+          KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --full --tall
+          KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --compact --tall --skin daylight
+          KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --events --tall
+          KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --events --tall --skin daylight
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.publish.outcome == 'success'

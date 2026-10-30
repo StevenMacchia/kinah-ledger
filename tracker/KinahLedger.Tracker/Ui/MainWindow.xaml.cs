@@ -132,6 +132,7 @@ public partial class MainWindow : Window
         InitLive();
         InitToday();
         InitLoot();   // LOOT's This zone / Today switch (Ui/MainWindow.Loot.cs)
+        InitGoals(watch);   // the player's goals, from goals.json (Ui/MainWindow.Goals.cs); a render or a self-test has none
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
@@ -602,6 +603,7 @@ public partial class MainWindow : Window
         FillAccuracyCard();
         FillToday();   // the Today strip over Farming and Events (Ui/MainWindow.Today.cs)
         AlertTick();
+        GoalTick();   // a goal reached is said once, on the panel and in the status line (Ui/MainWindow.Goals.cs)
         PriceAlertTick();
         UpdateHud();
     }
@@ -1082,6 +1084,7 @@ public partial class MainWindow : Window
         LeftCol.Visibility = craft || events ? Visibility.Collapsed : Visibility.Visible;
         SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         if (!farm) SummaryCard.Visibility = Visibility.Collapsed;   // LOOT shows itself on Farming (FillLoot)
+        if (!farm) GoalsCard.Visibility = Visibility.Collapsed;     // GOALS too (FillGoals)
         // the tables only in Full view since 2026-10-28 (the calm Farming page, mock C): Compact is the live card and LOOT
         TablesCard.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
@@ -1658,12 +1661,14 @@ public partial class MainWindow : Window
         ApplyServer("na_e", "Siel (Elyos)");
         LoadPlayerDemo(_items); _demoZone = "Western Cantas Valley";   // best crafts and where to farm, sample boards
         _demoDay = DemoDay();   // the Today strip's sample day: three zones of farming (Ui/MainWindow.Today.cs)
+        _demoDays = DemoDays();   // the Week side's six days before it (Ui/MainWindow.Week.cs)
         LoadDemoFeed(kind);   // the live feed's sample lines and rate line (Ui/MainWindow.Live.cs)
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         if (kind == "Events")
         {
             // sample runs (never the player's own, Ui/MainWindow.RunsCard.cs), for a layout render
             _demoInst = DemoRuns();
+            _demoWeekRuns = DemoWeekRuns(_demoInst);   // and four days more for the strip's Week side
             ShowPart("Events", byHand: false); SetTrackingUi(false);
             Say("Reading the chat", "Faint");
             if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1") OpenTodaySample();

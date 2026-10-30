@@ -1,4 +1,5 @@
 using System.Text.Json;
+using KinahLedger.Data;
 
 namespace KinahLedger.Session;
 
@@ -12,6 +13,9 @@ public sealed partial class SessionEngine
 {
     /// <summary>Readable time counted before this engine started (Today's earlier stretches); added to <see cref="Elapsed"/>.</summary>
     TimeSpan _carried;
+
+    /// <summary>The item list this count names and prices its items by: what days.json's day entry is worked out with (DayStore.Save).</summary>
+    internal ItemDictionary ItemBook => _items;
 
     /// <summary>
     /// What a day's count carries across a restart: the totals the Farming tables and the Today strip read, by zone and by

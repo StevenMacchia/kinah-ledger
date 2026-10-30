@@ -304,6 +304,16 @@ public static class WpfApp
         Check(day.Note.Contains("h") && day.Note.Contains("farming") && !day.Note.Contains(':') && day.Slots >= 10 && chips.Count == 4 && chips[0] == "All zones",
             $"LOOT, Today: \"{day.Note}\" {day.Total}, {day.Slots} slots, chips {string.Join(" / ", chips)}");
         Check(!chips.Any(c => c.Contains("Drana")) && chips.Skip(1).All(c => c.EndsWith(" min") || c.EndsWith(" h")), "no chip for a zone under a minute; each says its minutes");
+        // History (0.9, Ui/MainWindow.Week.cs): LOOT's Week side draws the last seven days with today picked, today's bar the
+        // Today side's total; a click on a past bar picks that day, its line and its zones
+        w.PickLootWeekForTest(); DoEvents();
+        var wk = w.WeekForTest();
+        Check(wk.Bars == 7 && wk.Picked == "Today" && wk.Line.StartsWith("TODAY") && wk.TodayFig == day.Total && w.FootTotalNote.Text.Contains(" to ") && ReferenceEquals(w.LootWeekBtn.Style, w.FindResource("SegOn")),
+            $"LOOT, Week: {wk.Bars} bars, {wk.Picked} picked, \"{wk.Line}\", today's bar {wk.TodayFig} as Today's {day.Total}, \"{w.FootTotalNote.Text}\"");
+        w.PickWeekDayForTest(2); DoEvents();
+        var wk2 = w.WeekForTest();
+        Check(wk2.Bars == 7 && wk2.Picked.Length > 0 && wk2.Picked != "Today" && wk2.Line.StartsWith(wk2.Picked.ToUpperInvariant()) && wk2.Chips.Count >= 2 && !wk2.Line.Contains('%'),
+            $"...a click on a past bar picks it: {wk2.Picked}, \"{wk2.Line}\", chips {string.Join(" / ", wk2.Chips)}");
         w.PickLootForTest(false); DoEvents();
         Check(w.LootForTest().Note == here.Note, "back to This zone");
         Check(w.AccuracyChip.Visibility == Visibility.Visible && w.AccuracyChip.Child is System.Windows.Controls.TextBlock { Text: "1 to look at" } && ReferenceEquals(w.AccuracyChip.Parent, w.StatusRow),
@@ -354,6 +364,33 @@ public static class WpfApp
         Check(w.UndoShowing == "Farming tables cleared" && w.TablesClearedForUndo, "Clear the tables: cleared at once, with an Undo bar");
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
+
+        // GOALS (0.9, Goals B of kinah-bench/mock-goals-history): no box with no goal; sample goals as slots between the
+        // actions and LOOT; the "+" slot while fewer than three; a goal reached said once; the box gone with the last goal
+        {
+            var none = w.GoalsForTest();
+            Check(!none.Shown && none.Slots == 0, "GOALS: no goal, no box");
+            w.ShowGoalsSample(3); DoEvents();
+            var three = w.GoalsForTest();
+            Check(three.Shown && three.Slots == 3 && !three.Add && three.Placed && three.Note == "today · 1 of 3 done",
+                $"GOALS: three slots between the actions and LOOT, no + slot, \"{three.Note}\"");
+            w.ShowGoalsSample(2); DoEvents();
+            var two = w.GoalsForTest();
+            Check(two.Shown && two.Slots == 2 && two.Add && two.Note == "today · 0 of 2 done", $"GOALS: two slots and Add a goal, \"{two.Note}\"");
+            Check(w.SummaryCard.Visibility == Visibility.Visible && w.LootForTest().Slots >= 10, "LOOT still shows under GOALS");
+            // reached between two looks: said once on the status line (and the panel), never again that day
+            w.SetGoalsForTest(new[] { new Session.Goal { Kind = Session.Goal.KindRuns, Which = Session.Goal.Expeditions, Target = 3 } });
+            var said = w.GoalTickForTest(); var again = w.GoalTickForTest();
+            Check(said.Count == 1 && said[0] == "Goal reached · 3 expeditions" && again.Count == 0 && w.Status.Text == said[0],
+                $"a goal reached is said once: \"{string.Join(" | ", said)}\", then {again.Count}");
+            Check(w.GoalCard(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 }) is { } gc && gc.Child is System.Windows.Controls.StackPanel goalBody && goalBody.Children.Count >= 6,
+                "a goal's hover card: band, bar, TODAY, Have, To go, pace");
+            w.ShowPartForTest("Crafting"); DoEvents();
+            Check(!w.GoalsForTest().Shown, "GOALS only on the Farming page");
+            w.ShowPartForTest("Farming"); DoEvents();
+            w.SetGoalsForTest(null); DoEvents();
+            Check(!w.GoalsForTest().Shown, "the last goal removed: the box goes");
+        }
 
         // the panel's crafting line (2026-10-26): the Card's and the Ticker's craft values from a sample ledger that adds up,
         // summed as the Crafting part sums it, at the Crafting render's prices
@@ -481,6 +518,24 @@ public static class WpfApp
             Click(o.HudPlaceBtn);
             Check(!w.PlacementGuideOpen && o.IsVisible, "Options › In game › Place the panel… with no game: a note, no guide");
             o.Close();
+        }
+
+        // History on the Events page (0.9): the Today strip's Week side draws seven days of runs with today picked, and a
+        // click on yesterday's bar shows its runs by name (the sample's five Urugugu Canyon runs)
+        {
+            w.ShowDemo("Events"); DoEvents();
+            bool stripOpen = w.TodayOpenForTest;
+            w.PickRunsWeekForTest(true); DoEvents();
+            var rw = w.WeekForTest(runs: true);
+            Check(w.TodayStrip.Visibility == Visibility.Visible && rw.Bars == 7 && rw.Picked == "Today" && rw.Line.StartsWith("TODAY") && w.TodayTitle.Text == "WEEK" && MainWindow.InlineText(w.TodayNote).Contains(" to "),
+                $"Events, Week: {rw.Bars} bars, {rw.Picked} picked, \"{rw.Line}\", head \"{w.TodayTitle.Text} {MainWindow.InlineText(w.TodayNote)} {w.TodaySum.Text}\"");
+            w.PickWeekDayForTest(5, runs: true); DoEvents();
+            var rw2 = w.WeekForTest(runs: true);
+            Check(rw2.Picked != "Today" && rw2.Line.StartsWith(rw2.Picked.ToUpperInvariant()) && rw2.Chips.Any(c => c.StartsWith("Urugugu Canyon ×")),
+                $"...yesterday picked: {rw2.Picked}, \"{rw2.Line}\", chips {string.Join(" / ", rw2.Chips)}");
+            w.PickRunsWeekForTest(false); DoEvents();
+            Check(w.TodayTitle.Text == "TODAY" && !MainWindow.InlineText(w.TodayNote).Contains(" to "), $"...and back to Today: \"{MainWindow.InlineText(w.TodayNote)}\"");
+            w.TodayOpenForTest = stripOpen; DoEvents();
         }
 
         // the page follows what the player is doing (0.8.55, Session/PageFollow.cs), through the window's own code: a change
@@ -663,8 +718,11 @@ public static class WpfApp
         if (full) w.ShowFull();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
         // KL_SHOT_STATE=run|paused|stopped|empty (2026-10-28): the Farming page's other states, each its own "-<state>" render
-        var shotState = demo && kind == "Open world" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
-        if (shotState.Length > 0) w.ShowStateSample(shotState);
+        // and KL_SHOT_STATE=week|week-new (0.9): LOOT's Week side; with --events, week is the Events strip's Week side
+        var shotState = demo && kind is "Open world" or "Events" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
+        if (kind == "Events" && shotState != "week") shotState = "";
+        if (shotState.Length > 0 && kind == "Events") w.ShowRunsWeekSample();
+        else if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
         if (Environment.GetEnvironmentVariable("KL_DEBUG_LAYOUT") == "1")
@@ -683,6 +741,13 @@ public static class WpfApp
         }
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
+        // ui-goal-sheet.png, ui-goal-sheet-item.png)
+        if (shotState == "goals" && skin == null && !full) w.ShotGoalCards(dir);
+        // the Week side whole (0.9): the window stops at the runner's screen height, so the LOOT box (ui-loot-week*.png) or the
+        // Events strip (ui-runs-week*.png) is drawn on its own too, with the picked day and its chips under the bars
+        if (shotState.StartsWith("week"))
+            SavePart(kind == "Events" ? w.TodayStrip : w.SummaryCard, Path.Combine(dir, (kind == "Events" ? "ui-runs-" : "ui-loot-") + shotState + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), w.TryFindResource("Bg") as Brush);
         // a state render is the window only: the cards and the panel come from the plain farming renders
         if (shotState.Length > 0) { w.Close(); return; }
         // the Events part's card on its own: folded, and with Materials open
@@ -796,6 +861,30 @@ public static class WpfApp
         var frame = new System.Windows.Threading.DispatcherFrame();
         System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() => frame.Continue = false));
         System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
+
+    /// <summary>
+    /// One part of the window drawn whole on its own, over the page's colour with a margin, through a brush of its own visual
+    /// (so its place in the window doesn't shift it): a part the window cuts off at the screen's height still shows in full.
+    /// </summary>
+    static void SavePart(FrameworkElement el, string path, Brush? page)
+    {
+        double w = el.ActualWidth, h = el.ActualHeight;
+        if (w < 1 || h < 1) return;
+        const int pad = 12;
+        int wpx = (int)Math.Ceiling(w) + 2 * pad, hpx = (int)Math.Ceiling(h) + 2 * pad;
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            if (page != null) dc.DrawRectangle(page, null, new Rect(0, 0, wpx, hpx));
+            dc.DrawRectangle(new VisualBrush(el) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, w, h), Stretch = Stretch.Fill }, null, new Rect(pad, pad, w, h));
+        }
+        var rtb = new RenderTargetBitmap(wpx, hpx, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(rtb));
+        using var fs = File.Create(path);
+        enc.Save(fs);
     }
 
     /// <param name="backdrop">Painted under the drawing (the panel looks' renders); transparent when null.</param>

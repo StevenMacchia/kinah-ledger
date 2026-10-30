@@ -29,6 +29,8 @@ public partial class MainWindow
         SessionCard.BorderThickness = new Thickness(1, 1, 1, 0);
         SummaryCard.CornerRadius = new CornerRadius(0);
         SummaryCard.BorderThickness = new Thickness(1, 0, 1, 0);
+        GoalsCard.CornerRadius = new CornerRadius(0);   // GOALS, between the actions and LOOT: the card's sides, square
+        GoalsCard.BorderThickness = new Thickness(1, 0, 1, 0);
         TablesCard.CornerRadius = new CornerRadius(full ? 6 : 0);
         TablesCard.BorderThickness = new Thickness(1, full ? 1 : 0, 1, full ? 1 : 0);
         TablesCard.Margin = new Thickness(0, full ? 16 : 0, 0, 0);
@@ -47,7 +49,7 @@ public partial class MainWindow
         else { StatusBar.Background = null; StatusBar.BorderBrush = null; }
     }
 
-    /// <summary>The "…" menu beside the run's buttons: All zones, clearing the tables, and the shortcut that works in the game.</summary>
+    /// <summary>The "…" menu beside the run's buttons: Set a goal, All zones, clearing the tables, and the shortcut that works in the game.</summary>
     void ShowMoreMenu()
     {
         var cm = new ContextMenu { PlacementTarget = MoreBtn, Placement = PlacementMode.Bottom, HorizontalOffset = -150 };
@@ -63,6 +65,12 @@ public partial class MainWindow
         var missing = new MenuItem { Header = "A pickup is missing…", ToolTip = "Report a pickup the feed never showed. The report is saved on this PC." };
         missing.Click += (_, _) => ShowLineReport(null, Session.FeedTab.Farming, FeedBox);
         var key = new MenuItem { Header = HotkeyText.Length > 0 ? $"{HotkeyText} in game" : "No shortcut set (Options)", IsEnabled = false };
+        // a goal for today (0.9): Kinah, an item or runs; up to three, shown over LOOT (Ui/MainWindow.Goals.cs)
+        bool room = _goals.Count < Session.Goals.Max;
+        var goal = GoalMenuItem(() => new GoalDraft(), MoreBtn, room ? "Kinah, an item or runs to reach today. Up to three, shown over LOOT." : "Three goals are set. Right-click one to change or remove it.");
+        goal.IsEnabled = room;
+        ToolTipService.SetShowOnDisabled(goal, true);
+        cm.Items.Add(goal);
         cm.Items.Add(all); cm.Items.Add(clear); cm.Items.Add(missing); cm.Items.Add(new Separator());
         // what the page stopped saying while all is well (2026-10-28): how reading goes, the last line read, what was left out, idle time
         foreach (var (text, tip) in MoreInfo())
