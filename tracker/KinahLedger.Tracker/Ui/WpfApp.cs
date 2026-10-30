@@ -714,6 +714,10 @@ public static class WpfApp
         }
         var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
+        // the Week side whole (0.9): the window stops at the runner's screen height, so the LOOT box (ui-loot-week*.png) or the
+        // Events strip (ui-runs-week*.png) is drawn on its own too, with the picked day and its chips under the bars
+        if (shotState.StartsWith("week"))
+            SavePart(kind == "Events" ? w.TodayStrip : w.SummaryCard, Path.Combine(dir, (kind == "Events" ? "ui-runs-" : "ui-loot-") + shotState + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), w.TryFindResource("Bg") as Brush);
         // a state render is the window only: the cards and the panel come from the plain farming renders
         if (shotState.Length > 0) { w.Close(); return; }
         // the Events part's card on its own: folded, and with Materials open
@@ -827,6 +831,30 @@ public static class WpfApp
         var frame = new System.Windows.Threading.DispatcherFrame();
         System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() => frame.Continue = false));
         System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
+
+    /// <summary>
+    /// One part of the window drawn whole on its own, over the page's colour with a margin, through a brush of its own visual
+    /// (so its place in the window doesn't shift it): a part the window cuts off at the screen's height still shows in full.
+    /// </summary>
+    static void SavePart(FrameworkElement el, string path, Brush? page)
+    {
+        double w = el.ActualWidth, h = el.ActualHeight;
+        if (w < 1 || h < 1) return;
+        const int pad = 12;
+        int wpx = (int)Math.Ceiling(w) + 2 * pad, hpx = (int)Math.Ceiling(h) + 2 * pad;
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            if (page != null) dc.DrawRectangle(page, null, new Rect(0, 0, wpx, hpx));
+            dc.DrawRectangle(new VisualBrush(el) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, w, h), Stretch = Stretch.Fill }, null, new Rect(pad, pad, w, h));
+        }
+        var rtb = new RenderTargetBitmap(wpx, hpx, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(rtb));
+        using var fs = File.Create(path);
+        enc.Save(fs);
     }
 
     /// <param name="backdrop">Painted under the drawing (the panel looks' renders); transparent when null.</param>

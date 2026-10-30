@@ -297,7 +297,9 @@ public partial class MainWindow
         }
         var gold = Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98));
         var deep = Res("SecGold", Color.FromRgb(0xE9, 0xB4, 0x5A));
-        return (Down(A(gold, 0x6B), A(deep, 0x29)), Solid(A(gold, 0x52)), Down(gold, deep), Solid(gold));
+        // Daylight's gold and heading gold are one colour: the picked bar still fades from a lighter top
+        var top = gold == deep ? Mix(gold, Colors.White, 0.3) : gold;
+        return (Down(A(gold, 0x6B), A(deep, 0x29)), Solid(A(gold, 0x52)), Down(top, deep), Solid(gold));
     }
 
     /// <summary>The picked day under the bars, over a rule: "SUN 25", its line, its total on the right; then its chips.</summary>
