@@ -2714,7 +2714,8 @@ options: --process aion[,other]");
         // out of an event, then nothing for half an hour (2026-10-30 11:05:23, Defend Shugo Merchants: "rewards that land in the
         // next 45 s are still its own", and it stayed "rewards landing" until the next event closed it at 11:36:34). The time
         // for rewards runs out on the clock, with no pickup or zone change to notice it, and what is picked up after is farming
-        var ql = new DateTime(2026, 10, 30, 15, 3, 0, DateTimeKind.Utc);
+        // dated before the other cases: runs are kept on disk across sessions, and theirs pick runs by date
+        var ql = new DateTime(2026, 10, 1, 15, 3, 0, DateTimeKind.Utc);
         var (sql, sayQl) = Session(ql.AddMinutes(-2), "Northern Tolbas Forest");
         sayQl(ql.AddSeconds(-9), new[] { "Player2 joined event." });
         sql.ApplyZone("Defend Shugo Merchants", ql); sql.UpdateDoing(ql);
