@@ -445,11 +445,62 @@ public static class EventCards
         }
         readonly List<Dictionary<int, (int Offset, int FirstTop, List<string> Sig)>> _sigs = new();
 
-        /// <summary>Adds one read; false when it doesn't fit the screen read so far (a different set of received cards).</summary>
+        /// <summary>
+        /// Reads since the last one that fit, all with the same other set of received cards, each with its received cards'
+        /// slot crops: the screen as it may have settled (<see cref="Add"/>, <see cref="TakeLater"/>).
+        /// </summary>
+        readonly List<(Screen Read, Dictionary<int, Dictionary<(int, int), Bitmap>> Crops)> _later = new();
+        /// <summary>Reads held aside because they saw other cards received than the reads before (none once taken).</summary>
+        public int HeldAside => _later.Count;
+        /// <summary>How many times reads held aside replaced the ones before them (for the log).</summary>
+        public int Replaced { get; private set; }
+
+        /// <summary>
+        /// Adds one read; false when it doesn't fit the screen read so far (a different set of received cards): it is then
+        /// held aside. The cards flip open over several seconds, and a card mid-flip can look received (2026-10-30 11:04
+        /// Defend Shugo Merchants: the first read took card 5's blue flash for a frame and a card icon, the three after it
+        /// saw it gold, and all three were left out, so the run was filed from the one mid-flip read with card 5's 14 slots).
+        /// So the reads before never win by coming first: two reads in a row that agree with each other on another set
+        /// replace them (the screen settled there), and so does a later set still standing when the screen closes
+        /// (<see cref="TakeLater"/>). A read that fits again drops what was held aside (the odd ones were the flip).
+        /// </summary>
         public bool Add(Screen s, Bitmap frame)
         {
+            bool fits = true;
             for (int i = 0; i < CardCount; i++)
-                if (Received[i] is bool was && was != s.Cards[i].Received) return false;
+                if (Received[i] is bool was && was != s.Cards[i].Received) fits = false;
+            if (fits) { DropLater(); Apply(s, c => CropsOf(c, frame)); return true; }
+            // another set than the one held aside starts the count again: only reads that agree with each other settle it
+            if (_later.Count > 0 && Enumerable.Range(0, CardCount).Any(i => _later[0].Read.Cards[i].Received != s.Cards[i].Received)) DropLater();
+            _later.Add((s, s.Received.ToDictionary(c => c.Index, c => CropsOf(c, frame))));
+            if (_later.Count >= 2) { TakeLater(); return true; }
+            return false;
+        }
+
+        /// <summary>
+        /// The reads held aside replace everything read before them: the later screen is the settled one. True when there
+        /// were any. Called by <see cref="Add"/> on the second of them, and when the cards are filed (the screen closed on them).
+        /// </summary>
+        public bool TakeLater()
+        {
+            if (_later.Count == 0) return false;
+            var later = _later.ToList(); _later.Clear(); Replaced++;
+            foreach (var l in Cards.Values) { foreach (var b in l.Crops.Values) b.Dispose(); foreach (var lr in l.Loose) foreach (var b in lr.Crops.Values) b.Dispose(); }
+            Cards.Clear(); PickReads.Clear(); _sigs.Clear(); Disagreed.Clear(); Reads = 0;
+            for (int i = 0; i < CardCount; i++) Received[i] = null;
+            foreach (var (read, crops) in later) Apply(read, c => crops.Remove(c.Index, out var d) ? d : new());
+            return true;
+        }
+
+        void DropLater()
+        {
+            foreach (var (_, crops) in _later) foreach (var d in crops.Values) foreach (var b in d.Values) b.Dispose();
+            _later.Clear();
+        }
+
+        /// <summary>One read that fits the screen so far into the card lists, each card's slot crops from <paramref name="cropsOf"/>.</summary>
+        void Apply(Screen s, Func<Card, Dictionary<(int, int), Bitmap>> cropsOf)
+        {
             for (int i = 0; i < CardCount; i++) Received[i] = s.Cards[i].Received;
             Reads++;
             var sig = new Dictionary<int, (int, int, List<string>)>();
@@ -458,9 +509,11 @@ public static class EventCards
                 if (!Cards.TryGetValue(c.Index, out var list)) Cards[c.Index] = list = new CardList();
                 if (!PickReads.TryGetValue(c.Index, out var picks)) PickReads[c.Index] = picks = new List<int>();
                 picks.Add(c.Picks);
+                var crops = cropsOf(c);
                 int? offset = Place(list, c);
-                if (offset is not int o) { list.Loose.Add((c, CropsOf(c, frame))); continue; }
-                Merge(list, c, o, cs => CropOf(cs, frame));
+                if (offset is not int o) { list.Loose.Add((c, crops)); continue; }
+                Merge(list, c, o, cs => crops.Remove((cs.Row, cs.Col), out var b) ? b : null);
+                foreach (var b in crops.Values) b.Dispose();
                 sig[c.Index] = (o, c.FirstTop, c.Slots.Where(x => !x.Clipped).Select(x => $"{x.Row}.{x.Col}:{Top(x.Slot)}:{x.Slot.Count}").ToList());
                 // a read placed now may place the ones left out before (their crops kept with them)
                 for (bool moved = true; moved;)
@@ -476,7 +529,6 @@ public static class EventCards
                 }
             }
             _sigs.Add(sig);
-            return true;
         }
 
         /// <summary>One placed read into its card's list at whole-row offset <paramref name="o"/>.</summary>
@@ -615,6 +667,6 @@ public static class EventCards
             return x != null && l.Loose.First(lr => lr.Read == best).Crops.TryGetValue((x.Row, x.Col), out var b) ? b : null;
         }
 
-        public void Dispose() { foreach (var l in Cards.Values) { foreach (var b in l.Crops.Values) b.Dispose(); foreach (var lr in l.Loose) foreach (var b in lr.Crops.Values) b.Dispose(); } }
+        public void Dispose() { DropLater(); foreach (var l in Cards.Values) { foreach (var b in l.Crops.Values) b.Dispose(); foreach (var lr in l.Loose) foreach (var b in lr.Crops.Values) b.Dispose(); } }
     }
 }

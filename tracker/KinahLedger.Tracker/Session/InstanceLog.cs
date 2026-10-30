@@ -96,6 +96,12 @@ public sealed class InstanceRun
     /// with another count is a disagreement, and that slot is then not read. Kept on this PC, never sent.
     /// </summary>
     public List<string> PictureCounts { get; set; } = new();
+    /// <summary>
+    /// The event cards received on the picture it was filed from, by number ("2,3,4"; since 2026-10-30, "" before and for a
+    /// reward table): a read again of its pictures that saw other cards received settles which, as the later read of the
+    /// whole screen (TrackerSession.TakeReread). Kept on this PC, never sent.
+    /// </summary>
+    public string CardsReceived { get; set; } = "";
     /// <summary>A run counted from its picture with anything on it to look at: slots not read, gear not named, a count in doubt.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool ToLookAt => FromPicture && (PartlyRead || SlotsUnread > 0 || UnknownGear > 0 || SlotDoubts.Count > 0);
@@ -138,7 +144,7 @@ public sealed class InstanceRun
         FromPicture = read.FromPicture; SlotsUnread = read.SlotsUnread; UnknownSlots = new(read.UnknownSlots);
         KinahNotRead = read.KinahNotRead; RewardsNotRead = !read.FromPicture;
         PartlyRead = read.PartlyRead; UnknownGear = read.UnknownGear; UnknownItems = read.UnknownItems; GearNotes = new(read.GearNotes); PictureSlots = read.PictureSlots;
-        SlotDoubts = new(read.SlotDoubts); PictureCounts = new(read.PictureCounts);
+        SlotDoubts = new(read.SlotDoubts); PictureCounts = new(read.PictureCounts); CardsReceived = read.CardsReceived;
         PaidAt ??= read.PaidAt;
     }
 
@@ -1578,6 +1584,12 @@ public sealed class InstanceLog
             ResetEdgesLocked();
             _cur = r; _byMinimap = true;
         }
+    }
+
+    /// <summary>Which event cards the reward picture just filed into the open run had received ("2,3,4"): <see cref="InstanceRun.CardsReceived"/>.</summary>
+    internal void CardsReceived(string cards)
+    {
+        lock (_lock) { if (_cur != null && _cur.FromPicture) _cur.CardsReceived = cards; }
     }
 
     /// <summary>The adopted run back, as its pictures left it, without closing it (nothing written, nothing queued).</summary>
