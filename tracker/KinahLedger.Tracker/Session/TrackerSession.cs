@@ -1684,6 +1684,9 @@ public sealed partial class TrackerSession
         Activity next;
         string why;
         var zone = Zone;
+        // a left run whose time for rewards is over closes here, every pass, not only when the next pickup or zone change
+        // comes (2026-10-30: 31 idle minutes as "rewards landing" after Defend Shugo Merchants)
+        Instances.RewardsOver(now);
         if (_boss != null) { next = new Activity(ActivityKind.WorldBoss, _boss); why = _bossDeadAt == DateTime.MinValue ? "on the target bar" : "its loot window"; }
         else if (Instances.Current is { } run && run.Kind != InstanceLog.WorldBoss && !(run.Leaving && Target.RewardOpen(now) && Target.RewardTitle.Length > 0))
         {
