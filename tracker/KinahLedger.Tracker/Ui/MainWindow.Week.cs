@@ -425,6 +425,9 @@ public partial class MainWindow
         set { _prefs.TodayOpen = value; _drawnSig.Remove("today"); FillToday(); }
     }
 
+    /// <summary>For options-test: what a text says, its runs put together when it is built of them.</summary>
+    internal static string InlineText(TextBlock t) => t.Inlines.Count == 0 ? t.Text : string.Concat(t.Inlines.OfType<Run>().Select(r => r.Text));
+
     static IEnumerable<FrameworkElement> WeekWalk(DependencyObject d)
     {
         foreach (var c in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>())
@@ -448,7 +451,7 @@ public partial class MainWindow
         var on = cols.FirstOrDefault(c => (c.Tag as string ?? "").EndsWith("|on"));
         string picked = on?.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? "";
         string Fig(StackPanel c) => c.Children.OfType<Grid>().FirstOrDefault()?.Children.OfType<StackPanel>().FirstOrDefault()?.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? "";
-        var line = all.OfType<TextBlock>().FirstOrDefault(t => t.Tag as string == "week-line")?.Text ?? "";
+        var line = all.OfType<TextBlock>().FirstOrDefault(t => t.Tag as string == "week-line") is { } lt ? InlineText(lt) : "";
         var chips = all.OfType<WrapPanel>().Where(w => w.Tag as string == "week-chips").SelectMany(w => w.Children.OfType<Border>())
             .Select(b => string.Join(" ", ((Panel)b.Child).Children.OfType<TextBlock>().Select(t => t.Text))).ToList();
         return (cols.Count, picked, line, chips, cols.Count > 0 ? Fig(cols[^1]) : "");

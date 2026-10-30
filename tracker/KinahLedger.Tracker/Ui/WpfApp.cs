@@ -500,14 +500,14 @@ public static class WpfApp
             bool stripOpen = w.TodayOpenForTest;
             w.PickRunsWeekForTest(true); DoEvents();
             var rw = w.WeekForTest(runs: true);
-            Check(w.TodayStrip.Visibility == Visibility.Visible && rw.Bars == 7 && rw.Picked == "Today" && rw.Line.StartsWith("TODAY") && w.TodayTitle.Text == "WEEK" && w.TodayNote.Text.Contains(" to "),
-                $"Events, Week: {rw.Bars} bars, {rw.Picked} picked, \"{rw.Line}\", head \"{w.TodayTitle.Text} {w.TodayNote.Text} {w.TodaySum.Text}\"");
+            Check(w.TodayStrip.Visibility == Visibility.Visible && rw.Bars == 7 && rw.Picked == "Today" && rw.Line.StartsWith("TODAY") && w.TodayTitle.Text == "WEEK" && MainWindow.InlineText(w.TodayNote).Contains(" to "),
+                $"Events, Week: {rw.Bars} bars, {rw.Picked} picked, \"{rw.Line}\", head \"{w.TodayTitle.Text} {MainWindow.InlineText(w.TodayNote)} {w.TodaySum.Text}\"");
             w.PickWeekDayForTest(5, runs: true); DoEvents();
             var rw2 = w.WeekForTest(runs: true);
             Check(rw2.Picked != "Today" && rw2.Line.StartsWith(rw2.Picked.ToUpperInvariant()) && rw2.Chips.Any(c => c.StartsWith("Urugugu Canyon ×")),
                 $"...yesterday picked: {rw2.Picked}, \"{rw2.Line}\", chips {string.Join(" / ", rw2.Chips)}");
             w.PickRunsWeekForTest(false); DoEvents();
-            Check(w.TodayTitle.Text == "TODAY" && !w.TodayNote.Text.Contains(" to "), $"...and back to Today: \"{w.TodayNote.Text}\"");
+            Check(w.TodayTitle.Text == "TODAY" && !MainWindow.InlineText(w.TodayNote).Contains(" to "), $"...and back to Today: \"{MainWindow.InlineText(w.TodayNote)}\"");
             w.TodayOpenForTest = stripOpen; DoEvents();
         }
 
