@@ -31,16 +31,35 @@ public static class DayStore
         return e;
     }
 
-    /// <summary>Writes the day's figures (to a temporary file first, so a crash mid-write never leaves half a file).</summary>
+    /// <summary>
+    /// Writes the day's figures (to a temporary file first, so a crash mid-write never leaves half a file), and the day's
+    /// entry in days.json beside it (0.9, DayHistory): the Week side's history, updated with every save.
+    /// </summary>
     public static void Save(SessionEngine day, string dayKey, string? path = null)
     {
+        SessionEngine.Carry? carry = null;
         try
         {
             var p = path ?? PathFor();
             var tmp = p + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(day.ToCarry(dayKey), SessionEngine.CarryJson));
+            carry = day.ToCarry(dayKey);
+            File.WriteAllText(tmp, JsonSerializer.Serialize(carry, SessionEngine.CarryJson));
             File.Move(tmp, p, overwrite: true);
         }
         catch (Exception ex) { CrashLog.Write("today save", ex); }
+        if (carry == null) return;
+        try { DayHistory.Record(carry, day.ItemBook, path != null ? DayHistory.PathBeside(path) : null); }
+        catch (Exception ex) { CrashLog.Write("days save", ex); }
+    }
+
+    /// <summary>
+    /// At midnight on this PC (<paramref name="nowKey"/> is no longer <paramref name="dayKey"/>): the old day's count saved
+    /// for good, today.json and its final entry in days.json, and a fresh count for the new day. Null while the day is the same.
+    /// </summary>
+    public static SessionEngine? Roll(SessionEngine day, string dayKey, string nowKey, string? path = null)
+    {
+        if (nowKey == dayKey) return null;
+        Save(day, dayKey, path);
+        return new SessionEngine(day.ItemBook);
     }
 }

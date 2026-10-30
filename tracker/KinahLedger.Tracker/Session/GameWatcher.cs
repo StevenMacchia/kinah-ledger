@@ -89,10 +89,10 @@ public sealed class GameWatcher
     void DayTick(bool final = false)
     {
         var key = DayStore.Today;
-        if (key != _dayKey)
+        // the old day's last save is its final figure in days.json (DayHistory), the Week side's yesterday
+        if (DayStore.Roll(DayView, _dayKey, key) is { } d)
         {
-            DayStore.Save(DayView, _dayKey);
-            var d = new SessionEngine(_items); d.SetZone(Chat?.Zone);
+            d.SetZone(Chat?.Zone);
             DayView = d; _dayKey = key;
             if (Chat != null) Chat.DayView = d;
             CrashLog.Note("a new day: Today starts over");
@@ -281,6 +281,9 @@ public sealed class GameWatcher
     async Task Loop(CancellationToken ct)
     {
         int interval = Math.Clamp(_settings.Market.IntervalMs, 1000, 10000);
+        // the day history (0.9): days.json starts here the first time, and a today.json from an earlier day becomes that day's
+        // entry, before the day's first save writes today.json over (DayHistory.Seed)
+        try { DayHistory.Seed(_items); } catch (Exception ex) { CrashLog.Write("days seed", ex); }
         while (!ct.IsCancellationRequested)
         {
             var t0 = DateTime.UtcNow;

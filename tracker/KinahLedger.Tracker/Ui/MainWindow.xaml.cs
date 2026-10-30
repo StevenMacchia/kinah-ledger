@@ -1661,12 +1661,14 @@ public partial class MainWindow : Window
         ApplyServer("na_e", "Siel (Elyos)");
         LoadPlayerDemo(_items); _demoZone = "Western Cantas Valley";   // best crafts and where to farm, sample boards
         _demoDay = DemoDay();   // the Today strip's sample day: three zones of farming (Ui/MainWindow.Today.cs)
+        _demoDays = DemoDays();   // the Week side's six days before it (Ui/MainWindow.Week.cs)
         LoadDemoFeed(kind);   // the live feed's sample lines and rate line (Ui/MainWindow.Live.cs)
         SetWelcome(false);   // a layout render of the main window, not of the first-run screen
         if (kind == "Events")
         {
             // sample runs (never the player's own, Ui/MainWindow.RunsCard.cs), for a layout render
             _demoInst = DemoRuns();
+            _demoWeekRuns = DemoWeekRuns(_demoInst);   // and four days more for the strip's Week side
             ShowPart("Events", byHand: false); SetTrackingUi(false);
             Say("Reading the chat", "Faint");
             if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1") OpenTodaySample();

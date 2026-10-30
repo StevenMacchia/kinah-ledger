@@ -304,6 +304,16 @@ public static class WpfApp
         Check(day.Note.Contains("h") && day.Note.Contains("farming") && !day.Note.Contains(':') && day.Slots >= 10 && chips.Count == 4 && chips[0] == "All zones",
             $"LOOT, Today: \"{day.Note}\" {day.Total}, {day.Slots} slots, chips {string.Join(" / ", chips)}");
         Check(!chips.Any(c => c.Contains("Drana")) && chips.Skip(1).All(c => c.EndsWith(" min") || c.EndsWith(" h")), "no chip for a zone under a minute; each says its minutes");
+        // History (0.9, Ui/MainWindow.Week.cs): LOOT's Week side draws the last seven days with today picked, today's bar the
+        // Today side's total; a click on a past bar picks that day, its line and its zones
+        w.PickLootWeekForTest(); DoEvents();
+        var wk = w.WeekForTest();
+        Check(wk.Bars == 7 && wk.Picked == "Today" && wk.Line.StartsWith("TODAY") && wk.TodayFig == day.Total && w.FootTotalNote.Text.Contains(" to ") && ReferenceEquals(w.LootWeekBtn.Style, w.FindResource("SegOn")),
+            $"LOOT, Week: {wk.Bars} bars, {wk.Picked} picked, \"{wk.Line}\", today's bar {wk.TodayFig} as Today's {day.Total}, \"{w.FootTotalNote.Text}\"");
+        w.PickWeekDayForTest(2); DoEvents();
+        var wk2 = w.WeekForTest();
+        Check(wk2.Bars == 7 && wk2.Picked.Length > 0 && wk2.Picked != "Today" && wk2.Line.StartsWith(wk2.Picked.ToUpperInvariant()) && wk2.Chips.Count >= 2 && !wk2.Line.Contains('%'),
+            $"...a click on a past bar picks it: {wk2.Picked}, \"{wk2.Line}\", chips {string.Join(" / ", wk2.Chips)}");
         w.PickLootForTest(false); DoEvents();
         Check(w.LootForTest().Note == here.Note, "back to This zone");
         Check(w.AccuracyChip.Visibility == Visibility.Visible && w.AccuracyChip.Child is System.Windows.Controls.TextBlock { Text: "1 to look at" } && ReferenceEquals(w.AccuracyChip.Parent, w.StatusRow),
@@ -510,6 +520,24 @@ public static class WpfApp
             o.Close();
         }
 
+        // History on the Events page (0.9): the Today strip's Week side draws seven days of runs with today picked, and a
+        // click on yesterday's bar shows its runs by name (the sample's five Urugugu Canyon runs)
+        {
+            w.ShowDemo("Events"); DoEvents();
+            bool stripOpen = w.TodayOpenForTest;
+            w.PickRunsWeekForTest(true); DoEvents();
+            var rw = w.WeekForTest(runs: true);
+            Check(w.TodayStrip.Visibility == Visibility.Visible && rw.Bars == 7 && rw.Picked == "Today" && rw.Line.StartsWith("TODAY") && w.TodayTitle.Text == "WEEK" && MainWindow.InlineText(w.TodayNote).Contains(" to "),
+                $"Events, Week: {rw.Bars} bars, {rw.Picked} picked, \"{rw.Line}\", head \"{w.TodayTitle.Text} {MainWindow.InlineText(w.TodayNote)} {w.TodaySum.Text}\"");
+            w.PickWeekDayForTest(5, runs: true); DoEvents();
+            var rw2 = w.WeekForTest(runs: true);
+            Check(rw2.Picked != "Today" && rw2.Line.StartsWith(rw2.Picked.ToUpperInvariant()) && rw2.Chips.Any(c => c.StartsWith("Urugugu Canyon ×")),
+                $"...yesterday picked: {rw2.Picked}, \"{rw2.Line}\", chips {string.Join(" / ", rw2.Chips)}");
+            w.PickRunsWeekForTest(false); DoEvents();
+            Check(w.TodayTitle.Text == "TODAY" && !MainWindow.InlineText(w.TodayNote).Contains(" to "), $"...and back to Today: \"{MainWindow.InlineText(w.TodayNote)}\"");
+            w.TodayOpenForTest = stripOpen; DoEvents();
+        }
+
         // the page follows what the player is doing (0.8.55, Session/PageFollow.cs), through the window's own code: a change
         // that holds 5 s switches the page and lights its tab, a tab clicked by hand stays until the activity moves on, and
         // switched off nothing moves. parse-test has the rules in full; this is the window's side of them.
@@ -690,8 +718,11 @@ public static class WpfApp
         if (full) w.ShowFull();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
         // KL_SHOT_STATE=run|paused|stopped|empty (2026-10-28): the Farming page's other states, each its own "-<state>" render
-        var shotState = demo && kind == "Open world" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
-        if (shotState.Length > 0) w.ShowStateSample(shotState);
+        // and KL_SHOT_STATE=week|week-new (0.9): LOOT's Week side; with --events, week is the Events strip's Week side
+        var shotState = demo && kind is "Open world" or "Events" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
+        if (kind == "Events" && shotState != "week") shotState = "";
+        if (shotState.Length > 0 && kind == "Events") w.ShowRunsWeekSample();
+        else if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
         if (Environment.GetEnvironmentVariable("KL_DEBUG_LAYOUT") == "1")
@@ -713,6 +744,10 @@ public static class WpfApp
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)
         if (shotState == "goals" && skin == null && !full) w.ShotGoalCards(dir);
+        // the Week side whole (0.9): the window stops at the runner's screen height, so the LOOT box (ui-loot-week*.png) or the
+        // Events strip (ui-runs-week*.png) is drawn on its own too, with the picked day and its chips under the bars
+        if (shotState.StartsWith("week"))
+            SavePart(kind == "Events" ? w.TodayStrip : w.SummaryCard, Path.Combine(dir, (kind == "Events" ? "ui-runs-" : "ui-loot-") + shotState + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), w.TryFindResource("Bg") as Brush);
         // a state render is the window only: the cards and the panel come from the plain farming renders
         if (shotState.Length > 0) { w.Close(); return; }
         // the Events part's card on its own: folded, and with Materials open
@@ -826,6 +861,30 @@ public static class WpfApp
         var frame = new System.Windows.Threading.DispatcherFrame();
         System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() => frame.Continue = false));
         System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
+
+    /// <summary>
+    /// One part of the window drawn whole on its own, over the page's colour with a margin, through a brush of its own visual
+    /// (so its place in the window doesn't shift it): a part the window cuts off at the screen's height still shows in full.
+    /// </summary>
+    static void SavePart(FrameworkElement el, string path, Brush? page)
+    {
+        double w = el.ActualWidth, h = el.ActualHeight;
+        if (w < 1 || h < 1) return;
+        const int pad = 12;
+        int wpx = (int)Math.Ceiling(w) + 2 * pad, hpx = (int)Math.Ceiling(h) + 2 * pad;
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            if (page != null) dc.DrawRectangle(page, null, new Rect(0, 0, wpx, hpx));
+            dc.DrawRectangle(new VisualBrush(el) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, w, h), Stretch = Stretch.Fill }, null, new Rect(pad, pad, w, h));
+        }
+        var rtb = new RenderTargetBitmap(wpx, hpx, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(rtb));
+        using var fs = File.Create(path);
+        enc.Save(fs);
     }
 
     /// <param name="backdrop">Painted under the drawing (the panel looks' renders); transparent when null.</param>
