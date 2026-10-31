@@ -316,8 +316,9 @@ public static class WpfApp
             $"...a click on a past bar picks it: {wk2.Picked}, \"{wk2.Line}\", chips {string.Join(" / ", wk2.Chips)}");
         w.PickLootForTest(false); DoEvents();
         Check(w.LootForTest().Note == here.Note, "back to This zone");
-        Check(w.AccuracyChip.Visibility == Visibility.Visible && w.AccuracyChip.Child is System.Windows.Controls.TextBlock { Text: "1 to look at" } && ReferenceEquals(w.AccuracyChip.Parent, w.StatusRow),
-            "Accuracy: one chip in the footer, the sample's refused line to look at");
+        // 0.9.0 (Steven, 2026-10-30): no "1 to look at" pill, though the sample has a refused line; Report a miscount stays
+        Check(w.AccuracyChip.Visibility == Visibility.Collapsed && ReferenceEquals(w.AccuracyChip.Parent, w.StatusRow) && w.MiscountText.Visibility == Visibility.Visible,
+            "Accuracy: no pill in the footer for the sample's refused line, Report a miscount shown");
         Check(w.HudValues.GetValueOrDefault("loot", "").Length > 0, "panel: loot an hour beside a rate with Kinah in it");
         // rows update in place (2026-10-25): a redraw keeps the row controls and only hands them new words, so a tick with a
         // farming session on screen no longer rebuilds the tables (which is what made clicks and drags wait)
