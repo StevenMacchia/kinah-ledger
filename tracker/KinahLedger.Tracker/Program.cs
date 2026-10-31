@@ -1304,8 +1304,7 @@ options: --process aion[,other]");
             bool pass = got == expect; ok &= pass;
             Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
         }
-        Console.WriteLine("
-Share: the picture's words (0.9.3):");
+        Console.WriteLine("\nShare: the picture's words (0.9.3):");
         Func<double, string> fk = MainWindow.FkForTest;
         var day = new DateTime(2026, 10, 31, 22, 41, 0);
         var drops = new List<ShareDrop>
@@ -1329,8 +1328,7 @@ Share: the picture's words (0.9.3):");
         Check("session: Kinah an hour, made after the cut", $"{off.Rate} {off.RateLabel} · {off.Made} {off.MadeLabel}", "224K Kinah an hour · 269K made, after the Market's cut");
         Check("session: the five icons, most worth first", string.Join(",", off.Icons.Select(i => i.Name)), "Spiritstone,Ruby,Thick Hide,Iron Ore,Gold Dust");
         Check("session: the best drop is the rarest", off.Best, "best drop: Ruby");
-        Check("Copy as text: the same words, a line each", SharePicture.Text(off).Replace("
-", " | "),
+        Check("Copy as text: the same words, a line each", SharePicture.Text(off).Replace("\n", " | "),
             "Kinah Ledger · Sat 31 Oct · Siel · NA East | Northern Tolbas Forest | 1 h 12 min of farming · 722 kills | 224K Kinah an hour · 269K made, after the Market's cut | best drop: Ruby | kinahledger.com");
         var withRing = drops.Append(new ShareDrop("Ancient Ring", "Legend", 1, 0)).ToList();
         var ring = SharePicture.Compose(session with { Drops = withRing }, false, null, fk);
@@ -1357,8 +1355,7 @@ Share: the picture's words (0.9.3):");
         Check("under a minute: no rate, one kill", $"{young.Rate} | {young.Sub}", "– | under a minute of farming · 1 kill");
 
         // 6. never an accuracy figure or a count to look at
-        var all = string.Join("
-", new[] { off, on, rp, wp, young }.Select(SharePicture.Text));
+        var all = string.Join("\n", new[] { off, on, rp, wp, young }.Select(SharePicture.Text));
         Check("no accuracy figures, nothing to look at", all.Contains('%') || all.Contains("look at", StringComparison.OrdinalIgnoreCase) || all.Contains("accura", StringComparison.OrdinalIgnoreCase) ? "found" : "none", "none");
         Check("Save picture's file name", SharePicture.FileName(SharePicture.Week, day), "kinah-ledger-2026-10-31-2241-week.png");
         return ok;
