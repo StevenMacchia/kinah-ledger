@@ -487,10 +487,34 @@
       </Border>
 
       <!-- GOALS (0.9, Goals B of kinah-bench/mock-goals-history, Steven's pick 2026-10-29): up to three of today's goals as
-           slots, a gold ring round each item tile, between the actions and LOOT; shown only once there is a goal. Drawn in
+           slots, a gold ring round each item tile, between the actions and LOOT. With no goal (2026-10-30, the "Slim GOALS
+           row" Steven picked after "Goals in a ⋯ is so out of the way no one will ever see it"): one line in its place,
+           GOALS and "⊕ Set a goal for today", always there on Farming so the way in is seen before the first kill. Drawn in
            Ui/MainWindow.Goals.cs. -->
       <Border x:Name="GoalsCard" Background="{DynamicResource Card}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1,0,1,0" Visibility="Collapsed">
         <StackPanel>
+          <!-- no goal yet: the whole row is one button (keyboard focus, a name for screen readers) that opens Set a goal,
+               the same sheet as ⋯ › Set a goal. The link sits in the faint note colour and brightens on hover or focus;
+               38 px against the box header's 50, as the window sits small beside the game. -->
+          <Button x:Name="GoalsSlim" Cursor="Hand" Visibility="Collapsed" AutomationProperties.Name="Set a goal for today"
+                  ToolTip="Kinah, an item or runs to reach today. Up to three, shown here.">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+                  <Grid Height="38">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource SecTitle}" Text="GOALS" FontWeight="Bold" Margin="20,0,10,0"/>
+                    <TextBlock x:Name="SlimLink" Grid.Column="1" Style="{StaticResource SecNote}" Text="⊕ Set a goal for today"/>
+                  </Grid>
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SlimLink" Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
+                  <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SlimLink" Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+          <StackPanel x:Name="GoalsBox">
           <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
             <Grid Height="50">
               <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -500,6 +524,7 @@
             </Grid>
           </Border>
           <WrapPanel x:Name="GoalsHost" Margin="20,2,20,16"/>
+          </StackPanel>
         </StackPanel>
       </Border>
 

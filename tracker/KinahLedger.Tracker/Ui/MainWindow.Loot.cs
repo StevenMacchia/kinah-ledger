@@ -247,7 +247,7 @@ public partial class MainWindow
     /// <summary>
     /// Layout renders of the Farming page's other states (KL_SHOT_STATE): "run" (a run on), "paused" (the chat out of view),
     /// "stopped" (just after Stop run), "empty" (the game open, nothing counted yet), "goals" and "goals-add" (the GOALS box with
-    /// three sample goals, or two and the "+" slot), "week" and "week-new" (LOOT's Week side, Ui/MainWindow.Week.cs).
+    /// three sample goals, or two and the "+" slot), "goals-none" (no goal: the slim "Set a goal for today" row), "week" and "week-new" (LOOT's Week side, Ui/MainWindow.Week.cs).
     /// Example figures, never the player's.
     /// </summary>
     internal void ShowStateSample(string state)
@@ -273,9 +273,11 @@ public partial class MainWindow
                 break;
             // GOALS (0.9, Goals B of kinah-bench/mock-goals-history): three sample goals over the sample day, the expeditions
             // one reached; "goals-add" two of them and the "+" slot (Ui/MainWindow.Goals.cs)
+            // "goals-none": no goal, so the slim row in the box's place (2026-10-30)
             case "goals":
             case "goals-add":
-                ShowGoalsSample(state == "goals" ? 3 : 2);
+            case "goals-none":
+                ShowGoalsSample(state == "goals" ? 3 : state == "goals-add" ? 2 : 0);
                 break;
             // LOOT's Week side (0.9): a past day picked, as the mock draws it; and history that began two days ago
             case "week":

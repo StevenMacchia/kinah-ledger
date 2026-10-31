@@ -369,11 +369,14 @@ public static class WpfApp
         // GOALS (0.9, Goals B of kinah-bench/mock-goals-history): no box with no goal; sample goals as slots between the
         // actions and LOOT; the "+" slot while fewer than three; a goal reached said once; the box gone with the last goal
         {
+            // no goal: the slim "Set a goal for today" row in the box's place (2026-10-30), between the actions and LOOT
             var none = w.GoalsForTest();
-            Check(!none.Shown && none.Slots == 0, "GOALS: no goal, no box");
+            Check(!none.Shown && none.Slots == 0 && none.Slim && none.Placed, "GOALS: no goal, the slim Set a goal row, no box");
+            Check(w.GoalsSlim.Focusable && System.Windows.Automation.AutomationProperties.GetName(w.GoalsSlim) == "Set a goal for today",
+                "the slim GOALS row: keyboard focusable, named Set a goal for today");
             w.ShowGoalsSample(3); DoEvents();
             var three = w.GoalsForTest();
-            Check(three.Shown && three.Slots == 3 && !three.Add && three.Placed && three.Note == "today · 1 of 3 done",
+            Check(three.Shown && !three.Slim && three.Slots == 3 && !three.Add && three.Placed && three.Note == "today · 1 of 3 done",
                 $"GOALS: three slots between the actions and LOOT, no + slot, \"{three.Note}\"");
             w.ShowGoalsSample(2); DoEvents();
             var two = w.GoalsForTest();
@@ -387,10 +390,10 @@ public static class WpfApp
             Check(w.GoalCard(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 }) is { } gc && gc.Child is System.Windows.Controls.StackPanel goalBody && goalBody.Children.Count >= 6,
                 "a goal's hover card: band, bar, TODAY, Have, To go, pace");
             w.ShowPartForTest("Crafting"); DoEvents();
-            Check(!w.GoalsForTest().Shown, "GOALS only on the Farming page");
+            Check(w.GoalsForTest() is { Shown: false, Slim: false }, "GOALS (and the slim row) only on the Farming page");
             w.ShowPartForTest("Farming"); DoEvents();
             w.SetGoalsForTest(null); DoEvents();
-            Check(!w.GoalsForTest().Shown, "the last goal removed: the box goes");
+            Check(w.GoalsForTest() is { Shown: false, Slim: true }, "the last goal removed: the box goes, the slim row is back");
         }
 
         // the panel's crafting line (2026-10-26): the Card's and the Ticker's craft values from a sample ledger that adds up,
