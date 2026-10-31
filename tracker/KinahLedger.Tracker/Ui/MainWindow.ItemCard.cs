@@ -137,7 +137,12 @@ public partial class MainWindow
         goal.Click += (_, _) => { if (_card != null) _card.IsOpen = false; OpenGoalSheetLater(null, GoalDraft.ForItem(name), null); };
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, goal);
-        linkLine.TextWrapping = TextWrapping.Wrap;   // four links run past the card's width on one line
+        // Looks wrong? (or its Undo) at the end, what a right-click on a LOOT slot used to hide (2026-10-31)
+        var rep = new Hyperlink(new Run(r.Reported ? "Reported · Undo" : "Looks wrong? Report")) { Foreground = Ck(CkGold), TextDecorations = null, ToolTip = "Keeps it out of what this count sends to the site, and saves the last minute of what was read." };
+        rep.Click += (_, _) => { if (_card != null) _card.IsOpen = false; ToggleReport(r); };
+        linkLine.Inlines.Add(new Run("   ·   ") { Foreground = Ck(CkFaint) });
+        linkLine.Inlines.Add(rep);
+        linkLine.TextWrapping = TextWrapping.Wrap;   // five links run past the card's width on one line
         linkLine.LineHeight = 20;
         body.Children.Add(linkLine);
         return card;

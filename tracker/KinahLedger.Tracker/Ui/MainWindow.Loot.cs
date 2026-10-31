@@ -10,8 +10,8 @@ namespace KinahLedger.Ui;
 /// LOOT on the Farming page (2026-10-28, option C of kinah-bench/mock-calm-farming; Steven, of 0.8.53's page: "THIS IS A LOT
 /// OF INFO ON ONE WINDOW"). Under the live card, one box of inventory slots for one period at a time: this zone since you
 /// arrived (the run while one is on, every zone with All zones on), or Today since midnight on this PC; one total on its
-/// line. Each slot opens the game-tooltip card on hover (odds, an hour, worth); a click opens the item's full card, a
-/// right-click reports it. It replaced the SESSION line (the same count as the card above it), the Today strip on this page
+/// line. Each slot opens the game-tooltip card on hover (odds, an hour, worth); a click opens the item's full card (Set a
+/// goal, Looks wrong?). It replaced the SESSION line (the same count as the card above it), the Today strip on this page
 /// and, in Compact view, the tables (Full view keeps them beside it). Drawn again only when what it shows changed.
 /// </summary>
 public partial class MainWindow
@@ -177,7 +177,7 @@ public partial class MainWindow
         LootHost.Children.Add(sp);
     }
 
-    /// <summary>A drop or gathered item of the count on screen: its slot, the card on hover, its full card on a click, Report on a right-click.</summary>
+    /// <summary>A drop or gathered item of the count on screen: its slot, the card on hover, its full card (Set a goal, Looks wrong?) on a click.</summary>
     FrameworkElement HereSlot(DropRow r, bool gathered, string where)
     {
         var name = r.Report.Length > 0 ? r.Report : r.Name;
@@ -186,13 +186,8 @@ public partial class MainWindow
         CardTip(tile, () => ItemHereCard(r, gathered, where));
         if (r.Report.Length == 0) return tile;
         tile.Cursor = Cursors.Hand;
+        // a click opens its full card, whose foot has Set a goal and Looks wrong? (no right-click, 2026-10-31)
         tile.MouseLeftButtonUp += (_, _) => ShowItemCard(r, tile);
-        var rep = new MenuItem { Header = r.Reported ? "Reported · Undo" : "Looks wrong? Report", ToolTip = "Keeps it out of what this count sends to the site, and saves the last minute of what was read." };
-        rep.Click += (_, _) => ToggleReport(r);
-        var menu = new ContextMenu();
-        menu.Items.Add(GoalMenuItem(() => GoalDraft.ForItem(name), tile, "A number of these to pick up today. It shows over LOOT."));
-        menu.Items.Add(rep);
-        tile.ContextMenu = menu;
         return tile;
     }
 
@@ -211,7 +206,7 @@ public partial class MainWindow
             if (r.PerHour.Length > 0) body.Children.Add(CkKv("An hour", r.PerHour, CkInk));
         }
         if (r.Tip.Length > 0) { var n = CkNote(r.Tip); n.Margin = new Thickness(20, 10, 20, 2); body.Children.Add(n); }
-        if (r.Report.Length > 0) { var n = CkNote(r.Reported ? "Click for more · right-click to undo the report" : "Click for more · right-click to report"); n.Margin = new Thickness(20, 10, 20, 0); body.Children.Add(n); }
+        if (r.Report.Length > 0) { var n = CkNote(r.Reported ? "Reported · click to set a goal or undo the report" : "Click to set a goal or report it"); n.Margin = new Thickness(20, 10, 20, 0); body.Children.Add(n); }
         bool bound = r.Sub.Contains("bound");
         body.Children.Add(r.Value.Length > 0 ? TodayFooter("Worth, after the Market's cut", r.Value)
             : bound ? TodayFooter("Bound to you", "can't be sold", muted: true)

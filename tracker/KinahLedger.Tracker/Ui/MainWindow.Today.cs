@@ -181,18 +181,13 @@ public partial class MainWindow
 
     static string HourText(long count, double activeSecs) => activeSecs < 60 ? "" : $"{Whole(count / (activeSecs / 3600))} an hour";   // whole numbers, as the tables
 
-    /// <summary>An item's slot: its icon in its grade frame with the stack count, and the game-tooltip card on hover.</summary>
+    /// <summary>An item's slot: its icon in its grade frame with the stack count, the game-tooltip card on hover, pinned with Set a goal on a click.</summary>
     FrameworkElement ItemSlot(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs = false)
     {
         var tile = CkIcon(s.Name, 46, FrameOf(s.Id), badge: CountBadge(s.Count));
         CardTip(tile, () => ItemTodayCard(s, rate, showWhere, runs));
-        // a right-click sets a goal for it (0.9); a currency is an amount, not something picked up
-        if (!s.Currency)
-        {
-            var menu = new ContextMenu();
-            menu.Items.Add(GoalMenuItem(() => GoalDraft.ForItem(s.Name), tile, "A number of these to pick up today. It shows on the Farming page."));
-            tile.ContextMenu = menu;
-        }
+        // a click pins the card with Set a goal at its foot (0.9; a right-click until 2026-10-31); a currency is an amount, not something picked up
+        if (!s.Currency) PinOnClick(tile, () => ItemTodayCard(s, rate, showWhere, runs), ("Set a goal for this", () => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), tile)));
         return tile;
     }
 
@@ -203,13 +198,8 @@ public partial class MainWindow
         var tile = WithBadge(CoinTile(46), CountBadge(kinah), "");
         tile.ToolTip = null;
         CardTip(tile, () => KinahTodayCard(kinah, where, line, foot, whereTitle));
-        // a right-click on farming's Kinah sets a Kinah goal (0.9); a run's Kinah isn't farming's, so not on the Events page
-        if (_part == "Farming")
-        {
-            var menu = new ContextMenu();
-            menu.Items.Add(GoalMenuItem(() => new GoalDraft(), tile, "Kinah from farming to make today. It shows over LOOT."));
-            tile.ContextMenu = menu;
-        }
+        // a click on farming's Kinah pins its card with Set a Kinah goal (0.9); a run's Kinah isn't farming's, so not on the Events page
+        if (_part == "Farming") PinOnClick(tile, () => KinahTodayCard(kinah, where, line, foot, whereTitle), ("Set a Kinah goal", () => OpenGoalSheet(null, new GoalDraft(), tile)));
         return tile;
     }
 
@@ -332,6 +322,9 @@ public partial class MainWindow
     internal void ShotTodayCards(string dir)
     {
         if (TodayCardSample() is Border b) SaveCard(b, System.IO.Path.Combine(dir, "ui-today-card.png"));
+        // the same card pinned by a click, its action at the foot (2026-10-31)
+        if (PinnedCard(() => TodayCardSample() ?? new Border(), new (string, Action)[] { ("Set a goal for this", () => { }) }) is Border pin && pin.Child != null)
+            SaveCard(pin, System.IO.Path.Combine(dir, "ui-today-card-pinned.png"));
         var day = TodayEngine; if (day == null) return;
         var f = TodayLoot.Farm(day, _items);
         if (f.Kinah > 0 && KinahTodayCard(f.Kinah, f.KinahWhere, f.Kills > 0 ? $"{f.Kills:N0} kills · {Fk(f.Kinah / (double)f.Kills)} a kill" : "") is Border k) SaveCard(k, System.IO.Path.Combine(dir, "ui-today-kinah.png"));

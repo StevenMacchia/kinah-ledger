@@ -16,9 +16,10 @@ namespace KinahLedger.Ui;
 /// GOALS on the Farming page (0.9, Goals B "goals as slots" of kinah-bench/mock-goals-history, Steven's pick 2026-10-29).
 /// Between the live card's actions and LOOT, once there is a goal: up to three slots, each a gold ring (from 12 o'clock)
 /// round the thing's tile, the count under it ("137K / 300K", "9 / 20", "8 / 8 ✓") and a short name; a dashed "+" slot
-/// while fewer than three. A hover opens the game-tooltip card (Have, To go, at today's pace); a click changes the goal, a
-/// right-click changes or removes it. Goals are set from ⋯, an item's card, a LOOT slot's right-click or the "+", all in
-/// one small sheet. Reaching one turns its ring full gold, and the panel and the status line say it once a day; no sound.
+/// while fewer than three. A hover opens the game-tooltip card (Have, To go, at today's pace); a click opens the goal
+/// in the sheet, to change or remove it. Goals are set from the slim row, ⋯, the "+", or the card a click on an item or
+/// Kinah slot pins, all in one small sheet; nothing hangs off a right-click (2026-10-31).
+/// Reaching one turns its ring full gold, and the panel and the status line say it once a day; no sound.
 /// Kept in goals.json (Session/Goals.cs); drawn again only when what it shows changed (Changed("goals")).
 /// </summary>
 public partial class MainWindow
@@ -86,7 +87,7 @@ public partial class MainWindow
         var d = PR(done.ToString(), "Ink"); d.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont");
         GoalsNote.Inlines.Add(d);
         GoalsNote.Inlines.Add(PR($" of {_goals.Count} done", "Faint"));
-        GoalsNote.ToolTip = "Today's goals, from midnight on this PC. Click one to change it; right-click to remove it.";
+        GoalsNote.ToolTip = "Today's goals, from midnight on this PC. Click one to change or remove it.";
         GoalsHost.Children.Clear();
         for (int i = 0; i < _goals.Count; i++) GoalsHost.Children.Add(GoalSlot(_goals[i], prog[i]));
         if (_goals.Count < Goals.Max) GoalsHost.Children.Add(AddGoalSlot());
@@ -110,7 +111,7 @@ public partial class MainWindow
         _ => CoinTile(size),
     };
 
-    /// <summary>One goal as a slot: the ring round its tile, the count, the name; the card on hover, Change on a click, Change and Remove on a right-click.</summary>
+    /// <summary>One goal as a slot: the ring round its tile, the count, the name; the card on hover, the sheet (Change, Remove goal) on a click.</summary>
     FrameworkElement GoalSlot(Goal g, GoalProgress p)
     {
         var slot = new StackPanel { Width = GoalSlotWidth, Background = Brushes.Transparent, Cursor = Cursors.Hand, Tag = "goal", Margin = new Thickness(0, 0, GoalGap, 0) };
@@ -136,13 +137,8 @@ public partial class MainWindow
         CardTip(slot, () => GoalCard(g));
         slot.MouseEnter += (_, _) => sel.Visibility = Visibility.Visible;
         slot.MouseLeave += (_, _) => sel.Visibility = Visibility.Hidden;
+        // a click opens the goal in the sheet, where it can be changed or removed (no right-click, 2026-10-31)
         slot.MouseLeftButtonUp += (_, _) => OpenGoalSheet(g, GoalDraft.From(g), slot);
-        var change = new MenuItem { Header = "Change…" };
-        change.Click += (_, _) => OpenGoalSheetLater(g, GoalDraft.From(g), slot);
-        var remove = new MenuItem { Header = "Remove", ToolTip = "Takes the goal off, with Undo." };
-        remove.Click += (_, _) => RemoveGoal(g);
-        var menu = new ContextMenu(); menu.Items.Add(change); menu.Items.Add(remove);
-        slot.ContextMenu = menu;
         return slot;
     }
 
@@ -203,7 +199,7 @@ public partial class MainWindow
         body.Children.Add(p.Done ? CkKv("Reached", "✓", CkGold) : CkKv("To go", GoalAmount(g, p.ToGo), CkInk));
         if (Goals.PaceText(p) is { Length: > 0 } pace) body.Children.Add(CkKv("At today's pace", pace, CkInk, mono: false));
         if (g.Kind == Goal.KindItem) { var n = CkNote("Drops, gathering and run rewards picked up today."); n.Margin = new Thickness(20, 8, 20, 0); body.Children.Add(n); }
-        var how = CkNote("Click to change · right-click to remove"); how.Margin = new Thickness(20, 12, 20, 14);
+        var how = CkNote("Click to change or remove it"); how.Margin = new Thickness(20, 12, 20, 14);
         body.Children.Add(how);
         return card;
     }
@@ -241,7 +237,7 @@ public partial class MainWindow
         return bar;
     }
 
-    /// <summary>Remove from a goal's right-click: gone at once, with the Undo bar (no "Are you sure?", Ui/MainWindow.Undo.cs).</summary>
+    /// <summary>Remove goal, in the sheet a goal's click opens: gone at once, with the Undo bar (no "Are you sure?", Ui/MainWindow.Undo.cs).</summary>
     void RemoveGoal(Goal g)
     {
         int at = _goals.IndexOf(g);
@@ -254,14 +250,6 @@ public partial class MainWindow
                 RedrawGoals(); Say("The goal is back.", "Good");
             },
             commit: () => Task.CompletedTask);
-    }
-
-    /// <summary>"Set a goal…" for a menu (⋯, a LOOT slot's right-click): the sheet with <paramref name="draft"/>'s kind and thing.</summary>
-    MenuItem GoalMenuItem(Func<GoalDraft> draft, FrameworkElement at, string tip)
-    {
-        var mi = new MenuItem { Header = "Set a goal…", ToolTip = tip };
-        mi.Click += (_, _) => OpenGoalSheetLater(null, draft(), at);
-        return mi;
     }
 
     /* ---------------- Set a goal: one small sheet ---------------- */
@@ -311,7 +299,7 @@ public partial class MainWindow
     /// <param name="editing">The goal a click or Change opened, replaced in place on Set goal; null adds one.</param>
     void OpenGoalSheet(Goal? editing, GoalDraft d, FrameworkElement? at)
     {
-        if (editing == null && _goals.Count >= Goals.Max) { Say("Three goals are set. Right-click one to change or remove it.", "Warn"); return; }
+        if (editing == null && _goals.Count >= Goals.Max) { Say("Three goals are set. Click one to change or remove it.", "Warn"); return; }
         if (_card != null) _card.IsOpen = false;
         _card = new Popup { Child = BuildGoalSheet(d, editing), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = at ?? (UIElement)Content };
         _card.IsOpen = true;
@@ -473,7 +461,16 @@ public partial class MainWindow
         var cancel = new Button { Content = "Cancel", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0) };
         cancel.Click += (_, _) => { if (_card != null) _card.IsOpen = false; };
         acts.Children.Add(cancel);
-        body.Children.Add(new Border { Child = acts, Padding = new Thickness(20, 12, 20, 14), BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Ck(CkSlotLine, 0xCC) });
+        var foot = new DockPanel { LastChildFill = false };
+        DockPanel.SetDock(acts, Dock.Left); foot.Children.Add(acts);
+        // changing a goal: Remove goal at the right, gone at once with Undo (what a right-click used to hide)
+        if (editing != null)
+        {
+            var remove = new Button { Content = "Remove goal", Height = 30, Padding = new Thickness(14, 0, 14, 0), FontSize = 12.5, ToolTip = "Takes the goal off, with Undo." };
+            remove.Click += (_, _) => { if (_card != null) _card.IsOpen = false; RemoveGoal(editing); };
+            DockPanel.SetDock(remove, Dock.Right); foot.Children.Add(remove);
+        }
+        body.Children.Add(new Border { Child = foot, Padding = new Thickness(20, 12, 20, 14), BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Ck(CkSlotLine, 0xCC) });
 
         void Update()
         {
@@ -543,7 +540,7 @@ public partial class MainWindow
         Goals.Settle(g, p, DayStore.Today);   // already reached when set: nothing announced for it
         int at = editing != null ? _goals.IndexOf(editing) : -1;
         if (at >= 0) _goals[at] = g;
-        else if (!Goals.Add(_goals, g)) { Say("Three goals are set. Right-click one to change or remove it.", "Warn"); return; }
+        else if (!Goals.Add(_goals, g)) { Say("Three goals are set. Click one to change or remove it.", "Warn"); return; }
         SaveGoals();
         if (_card != null) _card.IsOpen = false;
         RedrawGoals();
@@ -588,6 +585,9 @@ public partial class MainWindow
     /// <summary>For options-test: a page shown as the activity would show it.</summary>
     internal void ShowPartForTest(string part) => ShowPart(part, byHand: false);
 
+    /// <summary>For options-test: the sheet a goal's click opens (Change this goal, with Remove goal).</summary>
+    internal Border GoalChangeSheetForTest(Goal g) => BuildGoalSheet(GoalDraft.From(g), g);
+
     /// <summary>For options-test: one look for goals reached, as the tick does; the lines said.</summary>
     internal List<string> GoalTickForTest() => CheckGoals();
 
@@ -628,12 +628,16 @@ public partial class MainWindow
         RedrawGoals();
     }
 
-    /// <summary>Layout renders: a goal's hover card (the item's and the Kinah's) and the Set a goal sheet (Kinah, and from an item).</summary>
+    /// <summary>Layout renders: a goal's hover card (the item's and the Kinah's), the Set a goal sheet (Kinah, from an item, changing a goal) and the ⋯ menu.</summary>
     internal void ShotGoalCards(string dir)
     {
         if (_goals.FirstOrDefault(g => g.Kind == Goal.KindItem) is { } item) SaveCard(GoalCard(item), System.IO.Path.Combine(dir, "ui-goal-card.png"));
         if (_goals.FirstOrDefault(g => g.Kind == Goal.KindKinah) is { } kinah) SaveCard(GoalCard(kinah), System.IO.Path.Combine(dir, "ui-goal-card-kinah.png"));
         SaveCard(BuildGoalSheet(new GoalDraft(), null), System.IO.Path.Combine(dir, "ui-goal-sheet.png"));
         SaveCard(BuildGoalSheet(GoalDraft.ForItem(_items.NameOf(_items.IdOf("Spiritstone"))), null), System.IO.Path.Combine(dir, "ui-goal-sheet-item.png"));
+        // a goal's click: the same sheet, to change it, with Remove goal (2026-10-31)
+        if (_goals.FirstOrDefault(g => g.Kind == Goal.KindItem) is { } edit) SaveCard(BuildGoalSheet(GoalDraft.From(edit), edit), System.IO.Path.Combine(dir, "ui-goal-sheet-change.png"));
+        // the ⋯ menu, in the card's own look (ui-more-menu.png)
+        SaveCard(BuildMenu(MoreEntries()), System.IO.Path.Combine(dir, "ui-more-menu.png"));
     }
 }
