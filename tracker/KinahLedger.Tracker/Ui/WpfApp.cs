@@ -314,6 +314,22 @@ public static class WpfApp
         var wk2 = w.WeekForTest();
         Check(wk2.Bars == 7 && wk2.Picked.Length > 0 && wk2.Picked != "Today" && wk2.Line.StartsWith(wk2.Picked.ToUpperInvariant()) && wk2.Chips.Count >= 2 && !wk2.Line.Contains('%'),
             $"...a click on a past bar picks it: {wk2.Picked}, \"{wk2.Line}\", chips {string.Join(" / ", wk2.Chips)}");
+        // Compare (0.9.3, Ui/MainWindow.Compare.cs): off by default, so Week has no Days | Zones and the card no usual line;
+        // on, Zones ranks the week's zones (none under ten minutes), the zone here picked; a second tick shows the pair and a verdict
+        var c0 = w.CompareForTest();
+        Check(!w.Prefs.CompareZones && !c0.Switch && c0.Rows.Count == 0 && c0.Usual == "", "Compare zones and runs: off by default, no Days | Zones on Week, no usual line");
+        w.SetCompareForTest(true); w.PickLootWeekForTest(); DoEvents();
+        Check(w.CompareForTest().Switch && w.WeekForTest().Bars == 7, "...on: Days | Zones over the same seven bars");
+        w.PickZonesForTest(true); DoEvents();
+        var c1 = w.CompareForTest();
+        Check(c1.Rows.Count >= 3 && !c1.Rows.Contains("Drana Cultivation Area") && c1.Picked.SequenceEqual(new[] { "Western Cantas Valley" }) && !c1.Vs,
+            $"...Zones: {string.Join(" / ", c1.Rows)}, the zone here picked ({string.Join(",", c1.Picked)}), no zone under 10 minutes");
+        w.PickZoneRowForTest(c1.Rows[0] == "Western Cantas Valley" ? 1 : 0); DoEvents();
+        var c2 = w.CompareForTest();
+        Check(c2.Picked.Count == 2 && c2.Vs && c2.Verdict.Length > 0 && !c2.Verdict.Contains('%'), $"...a second tick: side by side, \"{c2.Verdict}\"");
+        Check(c2.Usual.StartsWith("Your usual here"), $"...the Farming card's usual here: \"{c2.Usual}\"");
+        w.PickZonesForTest(false); w.SetCompareForTest(false); DoEvents();
+        Check(!w.CompareForTest().Switch && w.CompareForTest().Usual == "", "...off again: Week as before, no usual line");
         w.PickLootForTest(false); DoEvents();
         Check(w.LootForTest().Note == here.Note, "back to This zone");
         // 0.9.0 (Steven, 2026-10-30): no "1 to look at" pill, though the sample has a refused line; Report a miscount stays
@@ -724,8 +740,9 @@ public static class WpfApp
         // KL_SHOT_STATE=run|paused|stopped|empty (2026-10-28): the Farming page's other states, each its own "-<state>" render
         // and KL_SHOT_STATE=week|week-new (0.9): LOOT's Week side; with --events, week is the Events strip's Week side
         var shotState = demo && kind is "Open world" or "Events" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
-        if (kind == "Events" && shotState != "week") shotState = "";
-        if (shotState.Length > 0 && kind == "Events") w.ShowRunsWeekSample();
+        // and Compare (0.9.3, Ui/MainWindow.Compare.cs): week-zones and compare-on on Farming, week-places and run-vs-average on Events
+        if (kind == "Events" && shotState is not ("week" or "week-places" or "run-vs-average")) shotState = "";
+        if (shotState.Length > 0 && kind == "Events") w.ShowEventsStateSample(shotState);
         else if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();

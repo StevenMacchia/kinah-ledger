@@ -329,6 +329,8 @@ public partial class MainWindow
         if (_mode == Mode.Gather) { Fig($"{nodes:N0}"); KvLine.Inlines.Add(new Run(" attempts · ")); Fig(itemsPerTry > 0 ? itemsPerTry.ToString("0.0") : "0"); KvLine.Inlines.Add(new Run(" a try")); }
         else if (kills > 0) { Fig($"{kills:N0}"); KvLine.Inlines.Add(new Run($" kill{(kills == 1 ? "" : "s")} · ")); Fig(Fk(kinah / (double)kills)); KvLine.Inlines.Add(new Run(" a kill")); }
         var best = _demo ? new BestRuns.Best(1_400_000, 48, "2026-10-19") : BestRuns.For(Server?.Label ?? "", _watcher.Chat?.ZoneView?.Zone ?? e.Zone);
+        // Compare (0.9.3, Ui/MainWindow.Compare.cs): your usual and best here under the hour; it says "best here" itself, so this line doesn't
+        if (FillUsual(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone)) best = null;
         if (best != null) { if (KvLine.Inlines.Count > 0) KvLine.Inlines.Add(new LineBreak()); KvLine.Inlines.Add(new Run("best here ")); Fig(Fk(best.PerHr)); }
         KvLine.Visibility = KvLine.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         FillHealth(HealthText, HealthMark, hideOk: true);

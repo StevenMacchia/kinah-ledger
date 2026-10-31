@@ -256,6 +256,8 @@ public partial class MainWindow
         // the four figures, each with its label under it
         body.Children.Add(Figures(zone, runs, counted, secs, value, redraw));
         if (withNow && secs > 10) _eventsRate = Fk(value / secs * 3600);
+        // Compare (0.9.3, Ui/MainWindow.Compare.cs): the last closed run against your runs there, with Compare on
+        if (withNow && open == null && newest != null && _prefs.CompareZones && RunVsCard(zone, newest) is { } vs) body.Children.Add(vs);
 
         // Now: the place being run (or the last one run), its last five lines and where the open run stands
         if (withNow)

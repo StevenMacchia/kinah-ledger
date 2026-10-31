@@ -100,10 +100,13 @@ public partial class MainWindow
         FootTotal.ToolTip = t.Made <= 0 ? null
             : "Made farming in the last 7 days on this PC: Kinah plus drops and gathering at the lowest Market price, after the Market's cut (each earlier day as priced that day). Bound items and items with no price yet add nothing.";
         var pd = days.First(d => d.Date == picked);
+        // Compare (0.9.3, Ui/MainWindow.Compare.cs): with it on, Days | Zones over the bars; Zones ranks the week's zones
+        if (_prefs.CompareZones && _lootZones) { FillLootZones(days); return; }
         var sig = "week|" + string.Join(";", days.Select(d => $"{d.Key}:{d.BeforeHistory}:{d.Farm.Made}:{(int)(d.Farm.Active / 60)}:{d.Farm.Kills}:{d.Farm.Attempts}"))
             + $"|{picked:yyyyMMdd}|{string.Join(",", pd.Farm.Zones.Select(z => $"{z.Zone}:{z.Made}:{(int)(z.Active / 60)}:{z.Kills}"))}|{Skins.Current}";
         if (!Changed("loot", sig)) return;
         LootHost.Children.Clear();
+        if (_prefs.CompareZones) LootHost.Children.Add(CmpSwitch(false, false));
         var right = new List<(string, string)>();
         if (t.Active >= 60) { right.Add((TodayLoot.Dur(t.Active), "")); if (t.Made > 0) right.Add((Fk(t.Made / (t.Active / 3600)), " an hour")); }
         LootHost.Children.Add(WeekSum(Fk(t.Made), "from farming this week", right,
@@ -167,6 +170,8 @@ public partial class MainWindow
         bool open = _prefs.TodayOpen;
         SetSec(TodayChev, TodayBody, open);
         if (!open) { _drawnSig.Remove("today"); return; }
+        // Compare (0.9.3, Ui/MainWindow.Compare.cs): with it on, Days | Places over the bars; Places ranks the week's places
+        if (_prefs.CompareZones && _runsPlaces) { FillRunsPlaces(days); return; }
         var picked = PickedDay(days, _runsPick);
         var pd = days.First(d => d.Date == picked);
         var sig = "week|" + string.Join(";", days.Select(d => $"{d.Key}:{d.Runs.Runs}:{d.Runs.Counted}:{d.Runs.Kinah}"))
@@ -174,6 +179,7 @@ public partial class MainWindow
         if (!Changed("today", sig)) return;
         TodayHost.Children.Clear();
         var box = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
+        if (_prefs.CompareZones) box.Children.Add(CmpSwitch(true, false));
         var right = new List<(string, string)>();
         if (t.Counted > 0 && t.RunKinah > 0) right.Add((Fk(t.RunKinah / (double)t.Counted), " a run"));
         box.Children.Add(WeekSum(Fk(t.RunKinah), $"from {t.Runs:N0} run{(t.Runs == 1 ? "" : "s")} this week", right,
