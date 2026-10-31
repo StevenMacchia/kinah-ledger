@@ -17,7 +17,7 @@ namespace KinahLedger.Ui;
 /// The Events part (0.8.31, kinah-bench/mock-events-v2.html, Steven 2026-10-25: "build it as shown"): one card per place,
 /// drawn in the window's own look (Daylight is white cards on a light page; the old cards were fixed dark and sat as navy
 /// slabs on white, "awful, especially in light mode"). The band names the place and its kind and where its run stands;
-/// four labelled figures (an hour, a run, how long a run takes, how many are counted and why the rest aren't); the place
+/// four labelled figures (an hour, a run, how long a run takes, the best run); the place
 /// being run opens with Now (the last five lines and the run's steps); then the runs as a table with column names, a
 /// wrong run flagged in place with its fix sheet under it; then the loot of the counted runs as an inventory row and three
 /// folded groups. Only the item icons keep the game's dark slots.
@@ -87,7 +87,7 @@ public partial class MainWindow
             foreach (var r in list.Where(r => !r.OutOfAverages)) { counted++; made += RunValue(r); }
             first = false;
         }
-        InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · {counted} counted · {Fk(made)} made" : "";
+        InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · {Fk(made)} made" : "";
         InstWhat.ToolTip = InstHost.Children.Count > 0 ? "Made: Kinah plus materials at the lowest Market price, after the Market's cut, over the counted runs. Gear is bound and not in it." : null;
         InstEmpty.Visibility = InstHost.Children.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -312,7 +312,7 @@ public partial class MainWindow
             chev.SetResourceReference(Shape.StrokeProperty, "Faint");
             fold.Children.Add(chev);
             var ft = PT("Loot", "Ink", 13.5, FontWeights.SemiBold); Grid.SetColumn(ft, 1); fold.Children.Add(ft);
-            var fs = PT($"from the {n} counted run{(n == 1 ? "" : "s")}", "Muted", 12.5); fs.Margin = new Thickness(0, 0, 14, 0); Grid.SetColumn(fs, 2); fold.Children.Add(fs);
+            var fs = PT(n == 1 ? "from the run here" : "from the runs here", "Muted", 12.5); fs.Margin = new Thickness(0, 0, 14, 0); Grid.SetColumn(fs, 2); fold.Children.Add(fs);
             var fb = new Border { Child = fold, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(20, 4, 20, 18) };
             fold.Margin = new Thickness(0);
             fb.SetResourceReference(Border.BorderBrushProperty, "Line"); fb.SetResourceReference(Border.BackgroundProperty, "Card2");
@@ -333,7 +333,7 @@ public partial class MainWindow
 
     /// <summary>
     /// The four figures: an hour, a run (Kinah and loot, or loot for a place that pays no Kinah), how long a run takes, and
-    /// how many runs are counted, with "why 4 aren't" (the reasons on hover; a click shows every run, the flagged ones too).
+    /// the best run here.
     /// </summary>
     FrameworkElement Figures(string zone, List<InstanceRun> runs, List<InstanceRun> counted, double secs, long value, Action redraw)
     {
@@ -358,7 +358,7 @@ public partial class MainWindow
         if (n == 0)
         {
             // nothing counted yet: one line instead of four empty boxes
-            var why = runs.Count == 0 ? "No run here yet." : $"No run counted yet. {Reasons(runs)}.";
+            var why = runs.Count == 0 ? "No run here yet." : "No run counted yet.";
             var t = PT(why, "Muted", 13); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None;
             var b0 = new Border { Child = t, Padding = new Thickness(20, 14, 20, 14), BorderThickness = new Thickness(0, 0, 0, 1) };
             b0.SetResourceReference(Border.BorderBrushProperty, "Line");
@@ -372,36 +372,14 @@ public partial class MainWindow
         var runL = new TextBlock { FontSize = 12 }; runL.Inlines.Add(PR("a run", "Muted")); runL.Inlines.Add(PR(paysKinah ? " · Kinah + loot" : " · loot", "Faint"));
         Cell(1, Worth(Fk(value / (double)n), 26), runL);
         Cell(2, Big(Clock(TimeSpan.FromSeconds(secs / n)), 26), PT("a run", "Muted", 12));
-        var cv = new TextBlock { TextTrimming = TextTrimming.None, VerticalAlignment = VerticalAlignment.Center };
-        cv.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
-        var big = PR(n.ToString(CultureInfo.InvariantCulture), "Ink", FontWeights.Light); big.FontSize = 26; cv.Inlines.Add(big);
-        if (runs.Count > n) { var of = PR($" of {runs.Count}", "Muted", FontWeights.Normal); of.FontSize = 15; cv.Inlines.Add(of); }
-        var cl = new TextBlock { FontSize = 12 };
-        cl.Inlines.Add(PR("counted", "Muted"));
-        int left = runs.Count - n;
-        if (left > 0)
-        {
-            cl.Inlines.Add(PR(" · ", "Faint"));
-            var link = new Hyperlink(new Run($"why {left} {(left == 1 ? "isn't" : "aren't")}")) { TextDecorations = TextDecorations.Underline, Cursor = Cursors.Hand };
-            link.SetResourceReference(TextElement.ForegroundProperty, "Gold");
-            link.Click += (_, _) => { _runsAll.Add(zone); redraw(); };
-            cl.Inlines.Add(link);
-            cl.ToolTip = Reasons(runs) + ". Left out of the figures; the runs show below with what to do about each.";
-        }
-        Cell(3, cv, cl);
+        // the fourth box is the best run here (2026-10-31): no "9 of 11 counted" or "why 2 aren't", players see no accuracy
+        // figures; flagged runs still show in the runs table below with their fix
+        long best = counted.Max(RunValue);
+        Cell(3, Worth(Fk(best), 26), PT("best run", "Muted", 12));
         var box = new Border { Child = g, BorderThickness = new Thickness(0, 0, 0, 1) };
         box.SetResourceReference(Border.BorderBrushProperty, "Line");
         box.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, after the Market's cut. Gear is bound and not in the value. Flagged runs are left out.";
         return box;
-    }
-
-    /// <summary>Why runs are left out, counted: "1 not a run, 2 rewards not read, 1 partly read".</summary>
-    static string Reasons(List<InstanceRun> runs)
-    {
-        double med = Median(runs.Where(r => !r.OutOfAverages).Select(r => r.Seconds));
-        var parts = runs.Where(r => r.OutOfAverages).Select(r => FlagReason(r, med) is { Length: > 0 } w ? (w.StartsWith("Partly read", StringComparison.Ordinal) ? "partly read" : w.Contains("merged") ? "several runs saved as one" : w.ToLowerInvariant()) : "left out")
-            .GroupBy(x => x).Select(x => $"{x.Count()} {x.Key}");
-        return string.Join(", ", parts) is { Length: > 0 } s ? char.ToUpperInvariant(s[0]) + s[1..] : "";
     }
 
     /// <summary>The runs table's column names.</summary>
@@ -566,7 +544,7 @@ public partial class MainWindow
             unread += r.SlotsUnread;
         }
         var sec = new StackPanel { Margin = new Thickness(20, 8, 20, 18) };
-        var head = PSection("LOOT", n == 1 ? "from the one counted run" : $"from the {n} counted runs");
+        var head = PSection("LOOT", n == 1 ? "from the run here" : "from the runs here");
         if (foldable) { head.Cursor = Cursors.Hand; head.Background = Brushes.Transparent; head.MouseLeftButtonUp += (_, _) => { _runsOpen.Remove(zone + "|loot"); redraw(); }; head.ToolTip = "Fold the loot"; }
         sec.Children.Add(head);
 
