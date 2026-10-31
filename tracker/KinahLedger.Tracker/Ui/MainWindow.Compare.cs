@@ -328,7 +328,7 @@ public partial class MainWindow
     /// days; the difference line also needs ten minutes of this stay (<paramref name="staySeconds"/>) and an hour that is
     /// no longer warming up (Session/Compare.cs). True when the block shows.
     /// </summary>
-    bool FillUsual(string? zone, long headline, double staySeconds)
+    bool FillUsual(string? zone, long headline, double staySeconds, long? bestHour = null)
     {
         UsualHere? u = null;
         if (_prefs.CompareZones && !string.IsNullOrEmpty(zone) && TodayEngine is { } day
@@ -347,9 +347,12 @@ public partial class MainWindow
             UsualLine.Inlines.Add(new LineBreak());
             UsualLine.Inlines.Add(PR(x.Text, x.Sign > 0 ? "Good" : x.Sign < 0 ? "SecGold" : "Muted"));
         }
-        if (u.Best is long best) { UsualLine.Inlines.Add(new LineBreak()); UsualLine.Inlines.Add(PR("Your best here ", "Muted")); Fig(Fk(best)); }
+        // the higher of your best day there and the card's own "best here" (Session/BestRuns.cs, your best hour), so the
+        // figure is the same one the card shows with Compare off
+        long? shownBest = u.Best is long bd ? Math.Max(bd, bestHour ?? 0) : bestHour;
+        if (shownBest is long best) { UsualLine.Inlines.Add(new LineBreak()); UsualLine.Inlines.Add(PR("Your best here ", "Muted")); Fig(Fk(best)); }
         UsualBox.ToolTip = $"Made an hour in {ZoneName(zone!)} on this PC: your usual is over {TodayLoot.Dur(u.EarlierActive)} on earlier days"
-            + (vs != null ? $", set against the hour above ({Fk(headline)}, this stay)" : "") + (u.Best != null ? "; your best is your best day there." : ".")
+            + (vs != null ? $", set against the hour above ({Fk(headline)}, this stay)" : "") + (shownBest != null ? "; your best is your best hour there." : ".")
             + " Kinah plus loot after the Market's cut.";
         UsualBox.Visibility = Visibility.Visible;
         return true;
