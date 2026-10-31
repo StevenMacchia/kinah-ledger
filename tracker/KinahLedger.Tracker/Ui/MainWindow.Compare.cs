@@ -34,7 +34,7 @@ public partial class MainWindow
     List<string> _zonePicks = new(), _placePicks = new();
     bool _zonePicksTouched, _placePicksTouched;
 
-    const double CmpNameW = 178, CmpFigW = 58, CmpSubW = 62, CmpGap = 10;
+    const double CmpNameW = 178, CmpFigW = 58, CmpSubW = 84, CmpGap = 10;
 
     /// <summary>Options › Compare zones and runs, saved with the rest: every part that shows it is drawn again.</summary>
     void SetCompare(bool on)
@@ -445,12 +445,41 @@ public partial class MainWindow
         {
             _runsPlaces = true;
             var places = Cmp.Places(WeekRuns(RunsWeekDays()), RunValue);
-            _placePicks = places.Take(1).Select(p => p.Place).Concat(new[] { _demoLive ?? "" }).Where(p => p.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var here = _demoLive ?? places.FirstOrDefault()?.Place ?? "";
+            _placePicks = new[] { here }.Concat(places.Select(p => p.Place).Where(p => !string.Equals(p, here, StringComparison.OrdinalIgnoreCase)).Take(1)).Where(p => p.Length > 0).ToList();
             _placePicksTouched = true;
             ShowRunsWeekSample();
             return;
         }
         if (state == "run-vs-average") { _demoLive = null; _drawnSig.Remove("runs"); ShowInstances(); }
+    }
+
+    /// <summary>
+    /// Layout renders: what a Compare state draws, whole (the window stops at the runner's screen height): LOOT's box
+    /// content (ui-cmp-zones*.png), the strip's (ui-cmp-places*.png) or the first place card (ui-cmp-run*.png), lifted out
+    /// onto a card of their width for the picture and put back.
+    /// </summary>
+    internal void ShotCompareParts(string dir, string state, string suffix)
+    {
+        Panel? host = state switch { "week-zones" => LootHost, "week-places" => TodayHost, "run-vs-average" => InstHost, _ => null };
+        if (host == null || host.Children.Count == 0) return;
+        double width = Math.Max(300, host.ActualWidth);
+        var kids = state == "run-vs-average" ? host.Children.OfType<UIElement>().Take(1).ToList() : host.Children.OfType<UIElement>().ToList();
+        foreach (var k in kids) host.Children.Remove(k);
+        var sp = new StackPanel { Width = width };
+        foreach (var k in kids) sp.Children.Add(k);
+        var frame = new Border { Child = sp, Padding = new Thickness(20, 4, 20, 16) };
+        frame.SetResourceReference(Border.BackgroundProperty, state == "run-vs-average" ? "Bg" : "Card");
+        try
+        {
+            var name = state switch { "week-zones" => "ui-cmp-zones", "week-places" => "ui-cmp-places", _ => "ui-cmp-run" };
+            SaveCard(frame, System.IO.Path.Combine(dir, name + suffix + ".png"));
+        }
+        finally
+        {
+            sp.Children.Clear();
+            for (int i = 0; i < kids.Count; i++) host.Children.Insert(i, kids[i]);
+        }
     }
 
     /// <summary>For options-test: Compare on or off as Save would set it.</summary>

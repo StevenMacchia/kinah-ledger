@@ -769,6 +769,9 @@ public static class WpfApp
         // Events strip (ui-runs-week*.png) is drawn on its own too, with the picked day and its chips under the bars
         if (shotState.StartsWith("week"))
             SavePart(kind == "Events" ? w.TodayStrip : w.SummaryCard, Path.Combine(dir, (kind == "Events" ? "ui-runs-" : "ui-loot-") + shotState + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), w.TryFindResource("Bg") as Brush);
+        // Compare (0.9.3): the state's list and card whole, off the window (ui-cmp-zones*.png, ui-cmp-places*.png, ui-cmp-run*.png)
+        if (shotState is "week-zones" or "week-places" or "run-vs-average")
+            w.ShotCompareParts(dir, shotState, (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : ""));
         // a state render is the window only: the cards and the panel come from the plain farming renders
         if (shotState.Length > 0) { w.Close(); return; }
         // the Events part's card on its own: folded, and with Materials open
