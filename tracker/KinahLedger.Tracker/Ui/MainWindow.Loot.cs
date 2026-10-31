@@ -247,7 +247,8 @@ public partial class MainWindow
     /// <summary>
     /// Layout renders of the Farming page's other states (KL_SHOT_STATE): "run" (a run on), "paused" (the chat out of view),
     /// "stopped" (just after Stop run), "empty" (the game open, nothing counted yet), "goals" and "goals-add" (the GOALS box with
-    /// three sample goals, or two and the "+" slot), "goals-none" (no goal: the slim "Set a goal for today" row), "week" and "week-new" (LOOT's Week side, Ui/MainWindow.Week.cs).
+    /// three sample goals, or two and the "+" slot), "goals-none" (no goal: the slim "Set a goal for today" row), "week" and "week-new" (LOOT's Week side, Ui/MainWindow.Week.cs),
+    /// "share-session", "share-run", "share-week" and "share-picture" (the Share sheet open, Ui/MainWindow.Share.cs).
     /// Example figures, never the player's.
     /// </summary>
     internal void ShowStateSample(string state)
@@ -288,6 +289,8 @@ public partial class MainWindow
         _drawnSig.Remove("loot");
         Redraw();
         if (state == "paused" && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
+        // Share (0.9.3): the sheet open on This session, Last run or This week; share-picture also draws the pictures themselves
+        if (state.StartsWith("share-")) OpenShareSample(state);
     }
 
     /// <summary>The chat out of view in a layout render (KL_SHOT_STATE=paused).</summary>

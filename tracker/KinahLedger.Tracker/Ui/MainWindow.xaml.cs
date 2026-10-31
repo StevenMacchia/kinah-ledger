@@ -115,7 +115,7 @@ public partial class MainWindow : Window
         // the server: everything shared is per server, so it is chosen first (welcome screen or Options) and remembered
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
 
-        ShareCardBtn.Click += (_, _) => CopyShareCard();
+        InitShare();   // Share: the sheet with the picture to paste (Ui/MainWindow.Share.cs)
         // the miscount report keeps pictures only once the player said yes (Options › Sharing, or the question on its first use)
         ReportBuffer.KeepFrames = _prefs.ReportFrames;
         ReportBuffer.KeepUiFrames = _prefs.SendReportFrames;
@@ -533,6 +533,7 @@ public partial class MainWindow : Window
         var chat = _watcher.Chat; var kind = e.Events > 0 ? GameWatcher.DominantKind(e) : _watcher.FarmKind; var activity = TrackerSession.ActivityOf(e, kind);
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
         long worth = BestRuns.Value(e);
+        KeepShareRun(e);   // Share's Last run
         FlashHud(worth > 0 ? $"Run stopped · {Fk(worth)} this run" : "Run stopped");
         if (fromWindow)
         {
@@ -629,6 +630,7 @@ public partial class MainWindow : Window
         FillAccuracyCard();
         FillToday();   // the Today strip over Farming and Events (Ui/MainWindow.Today.cs)
         AlertTick();
+        ShareTick();   // the Share sheet's preview follows the count (Ui/MainWindow.Share.cs)
         GoalTick();   // a goal reached is said once, on the panel and in the status line (Ui/MainWindow.Goals.cs)
         PriceAlertTick();
         UpdateHud();
@@ -954,7 +956,7 @@ public partial class MainWindow : Window
         // LOOT's first side (Ui/MainWindow.Loot.cs): what this count picked up and its total, with how it adds up on hover.
         // It replaced the SESSION line (2026-10-28), which was this same count; only what happened: gathering doesn't say "0 kills"
         _hasSummary = e.Events > 0;
-        ShareCardBtn.IsEnabled = totalNow > 0;
+        ShareCardBtn.IsEnabled = true;   // the sheet says what each of its sides waits for
         var sums = new List<string>();
         if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
         if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
@@ -982,10 +984,8 @@ public partial class MainWindow : Window
         _hudValues["kinah"] = _rateWarming ? "" : Fk(kinah / h);
         _hudValues["loot"] = s.Priced > 0 && rateHasKinah && !_rateWarming ? Fk(s.Value / h) : "";
         _hudValues["total"] = Fk(totalNow);
-        _shareCard = new CardNumbers(e.Zone, ZoneLocator.KindOf(e.Zone) ?? (_mode == Mode.Gather ? "Gathering" : "Open world"), elapsed, totalNow, totalNow > 0 ? totalNow / h : 0,
-            // the Discord card keeps its own three figures and labels, whatever the window's stats show
-            _mode == Mode.Gather ? new[] { (KinahHr.Text, "attempts/hr"), (KinahKill.Text, "items/hr"), (KillsHr.Text, "per try") }
-                                 : new[] { (Fk(kinah / h), "Kinah/hr"), (KillsHr.Text, "kills/hr"), (_mode == Mode.Mixed ? DropsHr.Text : Fk(s.DropCount / h), _mode == Mode.Mixed ? "attempts/hr" : "drops/hr") });
+        // the Share picture's This session: this count's zone, time and total (Ui/MainWindow.Share.cs)
+        SetShareSession(e, elapsed, totalNow);
         ShowTable(e, elapsed, s);
     }
 

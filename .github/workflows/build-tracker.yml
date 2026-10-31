@@ -158,6 +158,15 @@ jobs:
           KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --compact --tall --skin daylight
           KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --events --tall
           KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --events --tall --skin daylight
+          # Share (0.9.3, ShareA): the sheet open in the Farming card on each side at both widths and in Daylight
+          # (ui-main-tracking-share-<side>-*.png), the Events page's Share on its last run, and the 1200×630 pictures themselves
+          # (share-picture writes ui-share-picture-session.png, -run, -week and -named, the name switch on with a sample name)
+          mkdir -p shots/share
+          for s in share-session share-run share-week share-picture; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/share --demo --compact --tall; done
+          for s in share-session share-run share-week; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/share --demo --full --tall; done
+          for s in share-session share-week; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/share --demo --compact --tall --skin daylight; done
+          KL_SHOT_STATE=share-run dist/KinahLedger.exe ui-shot shots/share --demo --events --tall
+          KL_SHOT_STATE=share-run dist/KinahLedger.exe ui-shot shots/share --demo --events --tall --skin daylight
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.publish.outcome == 'success'
