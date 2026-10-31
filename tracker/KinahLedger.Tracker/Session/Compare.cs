@@ -177,7 +177,7 @@ public static class ZoneCompare
     }
 
     /// <summary>The verdict under two zones: (lead, bold part, rest), "Kraka Footpath made" "123K more an hour" "this week."</summary>
-    public static (string Lead, string Bold, string Rest) ZoneVerdict(ZoneWeek a, ZoneWeek b, Func<double, string> fk)
+    public static (string Lead, string Bold, string Tail) ZoneVerdict(ZoneWeek a, ZoneWeek b, Func<double, string> fk)
     {
         var (hi, lo) = a.PerHour >= b.PerHour ? (a, b) : (b, a);
         if (hi.PerHour <= 0) return ("Neither made anything yet this week.", "", "");
@@ -187,7 +187,7 @@ public static class ZoneCompare
     }
 
     /// <summary>The verdict under two places: more a run, and whether the quicker one makes up for it an hour.</summary>
-    public static (string Lead, string Bold, string Rest) PlaceVerdict(PlaceWeek a, PlaceWeek b, Func<double, string> fk)
+    public static (string Lead, string Bold, string Tail) PlaceVerdict(PlaceWeek a, PlaceWeek b, Func<double, string> fk)
     {
         var (hi, lo) = a.PerRun >= b.PerRun ? (a, b) : (b, a);
         if (hi.PerRun <= 0) return ("Neither paid anything yet this week.", "", "");

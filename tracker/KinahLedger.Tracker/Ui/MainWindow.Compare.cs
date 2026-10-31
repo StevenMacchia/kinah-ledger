@@ -310,12 +310,12 @@ public partial class MainWindow
     }
 
     /// <summary>The one plain verdict line under the pair: its key part in gold.</summary>
-    static FrameworkElement Verdict((string Lead, string Bold, string Rest) v)
+    static FrameworkElement Verdict((string Lead, string Bold, string Tail) v)
     {
         var t = new TextBlock { FontSize = 13, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap, Tag = "cmp-verdict" };
         t.Inlines.Add(PR(v.Lead, "Muted"));
         if (v.Bold.Length > 0) t.Inlines.Add(PR(v.Bold, "Gold", FontWeights.SemiBold));
-        if (v.Rest.Length > 0) t.Inlines.Add(PR(v.Rest, "Muted"));
+        if (v.Tail.Length > 0) t.Inlines.Add(PR(v.Tail, "Muted"));
         return t;
     }
 
