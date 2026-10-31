@@ -570,6 +570,27 @@ public sealed class InstanceLog
         }
     }
 
+    /// <summary>
+    /// A left run's time for rewards ran out on the clock with nothing landing: it closes now (called every pass). Until
+    /// 0.9.2 only the next zone change or pickup closed it (2026-10-30, Defend Shugo Merchants: left at 11:05:23, "rewards
+    /// landing" for 31 idle minutes until the next event's rewards at 11:36:34), and all that time the session's open-world
+    /// checks were off (InRun) for what came next. A pickup dated inside the time for rewards can be read a few seconds
+    /// after it (the chat fading in, the settle), so the clock waits <see cref="RewardClockSlackSeconds"/> more than the
+    /// pickup test (<see cref="Route"/>) does. True when a run was closed.
+    /// </summary>
+    public bool RewardsOver(DateTime now)
+    {
+        lock (_lock)
+        {
+            if (_cur == null || _cur.Kind == WorldBoss || _leftAt is not { } left || (now - left).TotalSeconds <= RewardGraceSeconds + RewardClockSlackSeconds) return false;
+            CrashLog.Note($"{_cur.Label}: nothing landed in the {RewardGraceSeconds:0} s after it was left ({left.ToLocalTime():HH:mm:ss}): its time for rewards is over");
+            CloseLocked("time for rewards over");
+            return true;
+        }
+    }
+    /// <summary>How much longer than <see cref="RewardGraceSeconds"/> the clock waits before closing a left run with no pickup (<see cref="RewardsOver"/>).</summary>
+    public const double RewardClockSlackSeconds = 15;
+
     /// <summary>An event as it was counted (rewards already turned into rewards): loot and kills go to the open run.</summary>
     /// <param name="batch">How many loot lines landed with it at once: three or more items are the run's rewards coming in.</param>
     public void Loot(GameEvent ev, int batch = 1)

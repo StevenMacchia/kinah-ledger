@@ -2711,6 +2711,23 @@ options: --process aion[,other]");
             "Defend Shugo Merchants (Shugo Festival) · items 0 · paid False · False");
         Check("...the screens that pay for something else", string.Join(" ", new[] { "Daevä Pass Level Reward", "Attendance Rewards", "Achievement Reward", "Quna Shop", "Victory Reward", "" }.Select(t => TrackerSession.NotTheRunsScreen(t) ? "y" : "n")), "y y y y n n");
 
+        // out of an event, then nothing for half an hour (2026-10-30 11:05:23, Defend Shugo Merchants: "rewards that land in the
+        // next 45 s are still its own", and it stayed "rewards landing" until the next event closed it at 11:36:34). The time
+        // for rewards runs out on the clock, with no pickup or zone change to notice it, and what is picked up after is farming
+        // dated before the other cases: runs are kept on disk across sessions, and theirs pick runs by date
+        var ql = new DateTime(2026, 10, 1, 15, 3, 0, DateTimeKind.Utc);
+        var (sql, sayQl) = Session(ql.AddMinutes(-2), "Northern Tolbas Forest");
+        sayQl(ql.AddSeconds(-9), new[] { "Player2 joined event." });
+        sql.ApplyZone("Defend Shugo Merchants", ql); sql.UpdateDoing(ql);
+        sayQl(ql.AddSeconds(100), new[] { "Forgotten Bow acquired.", "Riverside Helm acquired.", "Acquired Fine Odyle x4." });
+        var qLeft = ql.AddSeconds(140);
+        sql.ApplyZone("Northern Tolbas Forest", qLeft); sql.UpdateDoing(qLeft);
+        Check("out of the event: its rewards may still land", sql.Doing.Current.Label, "Event · Defend Shugo Merchants (Shugo Festival) · rewards landing");
+        sayQl(qLeft.AddMinutes(10), Array.Empty<string>());
+        Check("ten idle minutes later the run is closed by the clock, not left open for the next pickup", $"{sql.Instances.Open ?? "closed"} / {sql.Instances.Snapshot().LastOrDefault()?.Ended} / {sql.Doing.Current.Label.Contains("rewards landing")}", "closed / time for rewards over / False");
+        sayQl(qLeft.AddMinutes(10).AddSeconds(20), new[] { "Acquired 236 Kina.", "Refining Stone acquired." });
+        Check("...and the open world's pickups after it are farming", $"{sql.Engine.Totals().Kinah} {n(sql.Engine, "Refining Stone")} {sql.Doing.Current.Label} / {sql.RecentPickups(1).FirstOrDefault()?.Where}", "236 1 Farming · Northern Tolbas Forest / Farming · Northern Tolbas Forest");
+
         // Hidden Lugi with a minimap that can't be read: the chat opens the run, the drops are the run's, not farming
         var h0 = new DateTime(2026, 10, 23, 15, 1, 3, DateTimeKind.Utc);
         var (sh, sayH) = Session(h0.AddMinutes(-2), "Ruin Exploration Campsite");
