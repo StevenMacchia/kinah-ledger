@@ -49,38 +49,33 @@ public partial class MainWindow
         else { StatusBar.Background = null; StatusBar.BorderBrush = null; }
     }
 
-    /// <summary>The "…" menu beside the run's buttons: Set a goal, All zones, clearing the tables, and the shortcut that works in the game.</summary>
-    void ShowMoreMenu()
+    /// <summary>
+    /// The ⋯ menu beside the run's buttons, in the card's own look (Ui/MainWindow.Menus.cs, 2026-10-31): Set a goal, All
+    /// zones as a switch, clearing the tables, a missing pickup; then the page's quiet lines and the shortcut that works in the game.
+    /// </summary>
+    void ShowMoreMenu() => ShowMenu(MoreBtn, MoreEntries());
+
+    internal List<MenuEntry> MoreEntries()
     {
-        var cm = new ContextMenu { PlacementTarget = MoreBtn, Placement = PlacementMode.Bottom, HorizontalOffset = -150 };
-        var all = new MenuItem
-        {
-            Header = "All zones", IsCheckable = true, IsChecked = _prefs.AllZones,
-            ToolTip = "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone.",
-        };
-        all.Click += (_, _) => { _prefs.AllZones = all.IsChecked; if (!_demo) _prefs.Save(); Redraw(); Tick(); };
-        var clear = new MenuItem { Header = "Clear the tables", ToolTip = "Start the farming tables over (what was counted is shared first)" };
-        clear.Click += async (_, _) => await ClearFarmTables();
-        // the feed's hint, moved here (2026-10-28): a pickup the feed never showed
-        var missing = new MenuItem { Header = "A pickup is missing…", ToolTip = "Report a pickup the feed never showed. The report is saved on this PC." };
-        missing.Click += (_, _) => ShowLineReport(null, Session.FeedTab.Farming, FeedBox);
-        var key = new MenuItem { Header = HotkeyText.Length > 0 ? $"{HotkeyText} in game" : "No shortcut set (Options)", IsEnabled = false };
         // a goal for today (0.9): Kinah, an item or runs; up to three, shown over LOOT (Ui/MainWindow.Goals.cs)
         bool room = _goals.Count < Session.Goals.Max;
-        var goal = GoalMenuItem(() => new GoalDraft(), MoreBtn, room ? "Kinah, an item or runs to reach today. Up to three, shown over LOOT." : "Three goals are set. Right-click one to change or remove it.");
-        goal.IsEnabled = room;
-        ToolTipService.SetShowOnDisabled(goal, true);
-        cm.Items.Add(goal);
-        cm.Items.Add(all); cm.Items.Add(clear); cm.Items.Add(missing); cm.Items.Add(new Separator());
-        // what the page stopped saying while all is well (2026-10-28): how reading goes, the last line read, what was left out, idle time
-        foreach (var (text, tip) in MoreInfo())
+        var list = new List<MenuEntry>
         {
-            var mi = new MenuItem { Header = text, IsEnabled = false, ToolTip = tip };
-            ToolTipService.SetShowOnDisabled(mi, true);
-            cm.Items.Add(mi);
-        }
-        cm.Items.Add(new Separator()); cm.Items.Add(key);
-        cm.IsOpen = true;
+            room ? new MenuEntry("Set a goal…", () => OpenGoalSheet(null, new GoalDraft(), MoreBtn), Tip: "Kinah, an item or runs to reach today. Up to three, shown over LOOT.")
+                 : new MenuEntry("Set a goal…", Sub: "Three goals are set. Click one to change or remove it."),
+            new("All zones", () => { _prefs.AllZones = !_prefs.AllZones; if (!_demo) _prefs.Save(); Redraw(); Tick(); }, On: _prefs.AllZones,
+                Sub: "Keep counting across every zone",
+                Tip: "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
+            new("Clear the tables", () => _ = ClearFarmTables(), Tip: "Start the farming tables over (what was counted is shared first)"),
+            // the feed's hint, moved here (2026-10-28): a pickup the feed never showed
+            new("A pickup is missing…", () => ShowLineReport(null, Session.FeedTab.Farming, FeedBox), Tip: "Report a pickup the feed never showed."),
+        };
+        // what the page stopped saying while all is well (2026-10-28): how reading goes, the last line read, what was left out, idle time
+        var info = MoreInfo();
+        if (info.Count > 0) { list.Add(MenuEntry.Line); foreach (var (text, tip) in info) list.Add(new(text, Tip: tip, Info: true)); }
+        list.Add(MenuEntry.Line);
+        list.Add(new(HotkeyText.Length > 0 ? $"{HotkeyText} in game starts or stops farming" : "No shortcut set (Options)", Info: true));
+        return list;
     }
 
     /// <summary>The ⋯ menu's quiet lines: reading, the last line read, reward lines left out, idle time (each only when there is one).</summary>

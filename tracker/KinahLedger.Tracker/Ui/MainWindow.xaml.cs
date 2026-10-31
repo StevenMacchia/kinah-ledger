@@ -248,7 +248,7 @@ public partial class MainWindow : Window
         ToggleReport(r);
     }
 
-    /// <summary>Report, or its Undo, for a drop or gathered item: from its row's link, or a right-click on its LOOT slot.</summary>
+    /// <summary>Report, or its Undo, for a drop or gathered item: from its row's link, or the card a click on its LOOT slot opens.</summary>
     void ToggleReport(DropRow r)
     {
         if (r.Report.Length == 0) return;

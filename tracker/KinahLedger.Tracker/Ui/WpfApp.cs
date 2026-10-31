@@ -389,6 +389,21 @@ public static class WpfApp
                 $"a goal reached is said once: \"{string.Join(" | ", said)}\", then {again.Count}");
             Check(w.GoalCard(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 }) is { } gc && gc.Child is System.Windows.Controls.StackPanel goalBody && goalBody.Children.Count >= 6,
                 "a goal's hover card: band, bar, TODAY, Have, To go, pace");
+            // no right-click anywhere (2026-10-31): a goal's click opens the sheet with Remove goal, the ⋯ menu is the card's own
+            w.ShowGoalsSample(3); DoEvents();
+            var rightClick = w.RightClickMenusForTest();
+            Check(rightClick.Count == 0, "no right-click menus in the window: " + string.Join(", ", rightClick));
+            static IEnumerable<DependencyObject> Tree(DependencyObject d) => new[] { d }.Concat(LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>().SelectMany(Tree));
+            var change = w.GoalChangeSheetForTest(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 });
+            Check(Tree(change).OfType<System.Windows.Controls.Button>().Any(b => b.Content as string == "Remove goal") && Tree(change).OfType<System.Windows.Controls.TextBlock>().Any(t => t.Text == "Change this goal"),
+                "a goal's click: the sheet says Change this goal and has Remove goal");
+            var more = w.MoreEntries();
+            Check(more.Any(e => e.Text == "All zones" && e.On != null) && more.Any(e => e.Text == "Clear the tables" && e.Do != null) && more.Any(e => e.Text == "Set a goal…" && e.Do == null && e.Sub.Length > 0),
+                "the ⋯ menu: All zones a switch, Clear the tables, Set a goal off (with why) once three are set: " + string.Join(" | ", more.Select(e => e.Text)));
+            Check(w.BuildMenu(more) is { } menuCard && Tree(menuCard).OfType<System.Windows.Controls.ContextMenu>().Count() == 0 && Tree(menuCard).OfType<System.Windows.Controls.MenuItem>().Count() == 0,
+                "the ⋯ menu is drawn in the card kit, no Windows menu items");
+            w.ShowGoalsSample(2); DoEvents();
+            Check(w.MoreEntries().First().Do != null, "with room for a goal, ⋯ › Set a goal… opens the sheet");
             w.ShowPartForTest("Crafting"); DoEvents();
             Check(w.GoalsForTest() is { Shown: false, Slim: false }, "GOALS (and the slim row) only on the Farming page");
             w.ShowPartForTest("Farming"); DoEvents();
