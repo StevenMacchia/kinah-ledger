@@ -158,6 +158,18 @@ jobs:
           KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --compact --tall --skin daylight
           KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --events --tall
           KL_SHOT_STATE=week dist/KinahLedger.exe ui-shot shots/states --demo --events --tall --skin daylight
+          # Compare (0.9.3, kinah-bench canvas Compare A and B, Options › Compare zones and runs on): LOOT's Week side on Zones with two
+          # picked (ui-main-tracking-week-zones-*.png and the box alone, ui-loot-week-zones-*.png), the Farming card's usual here
+          # (ui-main-tracking-compare-on-*.png), the Events strip's Week side on Places (ui-main-events-week-places-*.png,
+          # ui-runs-week-places*.png), and the last run against your runs there (ui-main-events-run-vs-average-*.png); at both
+          # widths and in Daylight. The renders above are the same states with the switch off, as it ships
+          mkdir -p shots/compare
+          for s in week-zones compare-on; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/compare --demo --compact --tall; done
+          for s in week-zones compare-on; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/compare --demo --full --tall; done
+          for s in week-zones compare-on; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/compare --demo --compact --tall --skin daylight; done
+          for s in week-places run-vs-average; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/compare --demo --events --compact --tall; done
+          for s in week-places run-vs-average; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/compare --demo --events --full --tall; done
+          for s in week-places run-vs-average; do KL_SHOT_STATE=$s dist/KinahLedger.exe ui-shot shots/compare --demo --events --tall --skin daylight; done
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.publish.outcome == 'success'

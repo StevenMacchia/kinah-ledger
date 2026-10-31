@@ -22,6 +22,8 @@ public sealed record OptionsChoice(
     public string MarkWrongKey { get; init; } = "";
     /// <summary>Options › General › Switch pages to what I'm doing (0.8.55, Session/PageFollow.cs).</summary>
     public bool FollowActivity { get; init; } = true;
+    /// <summary>Options › General › Compare zones and runs (0.9.3, Session/Compare.cs). Off by default.</summary>
+    public bool Compare { get; init; }
 }
 
 /// <summary>
@@ -239,7 +241,7 @@ public partial class MainWindow
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
-        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity };
+        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Compare = _prefs.CompareZones };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -287,6 +289,7 @@ public partial class MainWindow
         _prefs.CloseToTray = c.CloseToTray;
         _prefs.MinimizeToTray = c.MinimizeToTray;
         _prefs.FollowActivity = c.FollowActivity;   // on again: it follows from the next change, never jumping to an old one
+        if (c.Compare != was.Compare) SetCompare(c.Compare);   // Ui/MainWindow.Compare.cs
         _prefs.ReportFrames = ReportBuffer.KeepFrames = c.ReportFrames;
         if (c.GearScore != was.GearScore) SetGearScore(c.GearScore);
         _prefs.SendReportFrames = ReportBuffer.KeepUiFrames = c.SendFrames;

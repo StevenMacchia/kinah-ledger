@@ -87,6 +87,16 @@
                 <CheckBox x:Name="FollowChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
               <Border Style="{StaticResource Divider}"/>
+              <!-- Compare (0.9.3, Ui/MainWindow.Compare.cs): off by default, so the base app stays light -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Compare zones and runs"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Week gets Zones and Places, ranked, two side by side. The Farming card shows your usual here, a closed run your average there."/>
+                </StackPanel>
+                <CheckBox x:Name="CompareChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
