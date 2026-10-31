@@ -4744,6 +4744,27 @@ options: --process aion[,other]");
         foreach (var (at, v, p) in fallSteps) bf.Observe(Strip(v), p, false, bt0.AddSeconds(at));
         Check("a fall between steady readings: refused (Kinah spent); a rise of 500 with 300 counted: no match; nothing found",
             $"{bf.WindowsFell} {bf.WindowsMismatched} {bf.WindowsAgreed} {bf.KinahLeft?.ToString() ?? "none"} {bfLog.Count(l => l.Contains("fell 1,500 (Kinah spent"))}", "1 1 0 none 1");
+        // 2026-10-29: a digit group dropped or joined on, read the same way twice, was trusted; now a jump waits for three
+        // fresh reads over 20 s that move only by the Kina picked up (BalanceTracker.JumpReads), and a real one gets there
+        (double at, long v, long picked, bool same, string expect, string why)[] jumpSteps =
+        {
+            (33, 20_000_000, 956, false, "20000", "a stray group joined on (20,000 read 20,000,000): moving, not trusted"),
+            (36, 20_000_000, 956, false, "20000", "...read the same twice: a jump, held"),
+            (39, 20_000_000, 956, true, "20000", "...the same pixels: not a fresh read, still held"),
+            (42, 20_000, 956, false, "20000", "back to the real figure: the held jump dropped"),
+            (45, 520_000, 956, false, "20000", "a mail claim of 500,000: moving"),
+            (48, 520_000, 956, false, "20000", "...the same twice: held (one read)"),
+            (54, 520_300, 1256, false, "20000", "...300 picked up and the figure moved 300: two reads"),
+            (57, 520_300, 1256, false, "20000", "...three reads, but only 9 s"),
+            (69, 520_300, 1256, false, "520300", "...21 s since: taken"),
+            (72, 520_500, 1456, false, "520500", "the next pickup: trusted at once"),
+        };
+        foreach (var (at, v, picked, same, expect, why) in jumpSteps)
+        {
+            bt.Observe(Strip(v), picked, same, bt0.AddSeconds(at));
+            Check(why, bt.Balance?.ToString() ?? "none", expect);
+        }
+        Check("...one line per jump held, one when taken", $"{btLog.Count(l => l.Contains("held until read the same way"))} {btLog.Count(l => l.Contains(": taken as the balance (it was 20,000)"))}", "2 1");
         var split = BalanceReader.Counters(new[] { new OcrLineBox("x 23, 501 @ 7,811", new System.Drawing.Rectangle(0, 0, 200, 20), new[]
         {
             new OcrWordBox("x", new System.Drawing.Rectangle(0, 0, 10, 20)), new OcrWordBox("23,", new System.Drawing.Rectangle(20, 0, 26, 20)),

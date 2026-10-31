@@ -309,6 +309,51 @@ public sealed class BalanceTracker
     /// <summary>The Kinah counter showed on the strip in the last read (false while it isn't found yet, or the interface is gone).</summary>
     public bool CounterSeen { get; private set; }
 
+    /// <summary>
+    /// A move off the last trusted value this large, or one that changes how many digit groups the figure has, is a jump:
+    /// it becomes the balance only once read the same way <see cref="JumpReads"/> times over <see cref="JumpSeconds"/>.
+    /// Why (2026-10-29, reads.log): the recognizer dropped the Kinah figure's leading "1," ("1@285 ,@300 280,557@309",
+    /// a million low and 24 px right, still inside <see cref="Tolerance"/>) and joined a stray copy of its last group
+    /// back on ("1,051839@233 839@318" read as 1,051,839,839). Read the same way twice running, each was trusted: the Kina
+    /// witness took a million Kinah spent (its pool started again, the lines waiting counted unchecked), then the way
+    /// back as a million no line claims, and the minute audit's "over" grew by a million each time (1,405,413 to
+    /// 3,482,201 in six minutes) until it said nothing. The old rules stand for everything else, a spend of a few
+    /// thousand included. While a jump is held no new trusted reading comes, so after 15 s the witness lets its lines
+    /// count as read (KinaWitness.Tick): the chat's own rules, never a refusal on a reading the counter isn't sure of.
+    /// A real jump (a purchase, a sale, a mail claim, another character) is the balance 20 s later, once the figure has
+    /// been recognized afresh three times and moved only by the Kina picked up in between; the same pixels again add
+    /// nothing, since they are the same recognition.
+    /// </summary>
+    public const long JumpKinah = 100_000;
+    public const int JumpReads = 3;
+    public const double JumpSeconds = 20;
+    sealed class Held { public long Value, Pickups; public int Reads; public DateTime Since; }
+    Held? _jump;
+
+    static int Groups(long v) => Math.Abs(v).ToString().Length is var n ? (n + 2) / 3 : 1;
+    static bool Jump(long value, long expected)
+    {
+        long d = Math.Abs(value - expected);
+        return d >= JumpKinah || (d >= 1_000 && Groups(value) != Groups(expected));
+    }
+
+    /// <summary>One more reading of a jump: true once it has been read the same way (moved only by the Kina picked up) enough times, long enough.</summary>
+    bool HoldJump(CounterRead k, bool samePixels, long pickups, DateTime t, long trusted)
+    {
+        if (_jump == null || k.Value - _jump.Value != pickups - _jump.Pickups)
+        {
+            _jump = new Held { Value = k.Value, Pickups = pickups, Reads = 1, Since = t };
+            Log?.Invoke($"Kinah counter: read {k.Value:N0} at x {k.Left}, {k.Value - trusted:+#,0;-#,0} off the last trusted {trusted:N0} (a digit group dropped or added, or another number): held until read the same way {JumpReads} times over {JumpSeconds:0} s");
+            return false;
+        }
+        if (!samePixels) _jump.Reads++;
+        _jump.Value = k.Value; _jump.Pickups = pickups;
+        if (_jump.Reads < JumpReads || (t - _jump.Since).TotalSeconds < JumpSeconds) return false;
+        Log?.Invoke($"Kinah counter: {k.Value:N0} read the same way {_jump.Reads} times since {_jump.Since.ToLocalTime():HH:mm:ss}: taken as the balance (it was {trusted:N0})");
+        _jump = null;
+        return true;
+    }
+
     public void Observe(List<CounterRead> cur, long pickupsTotal, bool samePixels, DateTime? now = null)
     {
         var t = now ?? DateTime.UtcNow;
@@ -343,6 +388,10 @@ public sealed class BalanceTracker
             // without a trusted reading for 15 s and let its lines count unchecked
             bool trusted = samePixels || (_lastRaw is long r && _prev != null && picked >= 0 && k.Value - r == picked) || (_lastRaw is long r2 && k.Value == r2)
                 || (Balance is long b && k.Value != b && k.Value - b == pickupsTotal - _trustedPickups);
+            // a jump off the last trusted value by a digit group (2026-10-29) is held until it is read the same way again
+            if (Balance is long tb && Jump(k.Value, tb + pickupsTotal - _trustedPickups))
+                trusted = trusted && HoldJump(k, samePixels, pickupsTotal, t, tb);
+            else _jump = null;   // back on the trusted value's track: whatever was held was a misread
             if (trusted) { Balance = k.Value; BalanceAt = t; _trustedPickups = pickupsTotal; Note = "Kinah balance read"; }
             _lastRaw = k.Value;
         }
