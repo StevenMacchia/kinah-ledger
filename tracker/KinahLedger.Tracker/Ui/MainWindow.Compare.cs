@@ -358,14 +358,15 @@ public partial class MainWindow
     /* ---------------- B: a run against your runs there ---------------- */
 
     /// <summary>
-    /// The place card's last closed run against the earlier counted runs there (from the run log): your average, this run,
-    /// your best, and "Your 4th best of 20 runs there". Null with Compare off, a run still open or flagged, or fewer than
+    /// The place card's last closed run against the earlier counted runs on the same card (the runs its header counts): your average, this run,
+    /// your best, and "Your 4th best of the 9 counted runs here". Null with Compare off, a run still open or flagged, or fewer than
     /// three earlier runs.
     /// </summary>
-    FrameworkElement? RunVsCard(string zone, InstanceRun last)
+    FrameworkElement? RunVsCard(string zone, InstanceRun last, List<InstanceRun> cardRuns)
     {
         if (!_prefs.CompareZones || last.OutOfAverages || last.LastLoot == null) return null;
-        var earlier = WeekRunList().Where(r => string.Equals(r.Zone, zone, StringComparison.OrdinalIgnoreCase) && r.Start < last.Start && !r.OutOfAverages).Select(RunValue);
+        // the card's own runs (what its header counts, "11 runs", and its "9 of 11 counted"), so the box never names another count
+        var earlier = cardRuns.Where(r => !ReferenceEquals(r, last) && r.Start < last.Start && !r.OutOfAverages).Select(RunValue);
         long value = RunValue(last);
         if (Cmp.VsPlace(value, earlier) is not { } v) return null;
         var sp = new StackPanel { Tag = "cmp-run" };
@@ -401,10 +402,10 @@ public partial class MainWindow
         var line = new TextBlock { FontSize = 13, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap, Tag = "cmp-rank" };
         line.Inlines.Add(PR("Your ", "Muted"));
         line.Inlines.Add(PR(v.Rank == 1 ? "best yet" : Cmp.Nth(v.Rank) + " best", "Gold", FontWeights.SemiBold));
-        line.Inlines.Add(PR($" of {v.Of:N0} {zone} runs.", "Muted"));
+        line.Inlines.Add(PR($" of the {v.Of:N0} counted runs here.", "Muted"));
         sp.Children.Add(line);
         var card = new Border { Child = sp, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(20, 16, 20, 0),
-            ToolTip = $"This run against your {v.Of - 1:N0} earlier counted runs of {zone} on this PC: Kinah plus materials at the lowest Market price, after the Market's cut, as the figures above count them." };
+            ToolTip = $"This run against the {v.Of - 1:N0} earlier counted runs on this card (the runs its header counts, flagged ones left out): Kinah plus materials at the lowest Market price, after the Market's cut, as the figures above count them." };
         card.SetResourceReference(Border.BackgroundProperty, "GoldTint");
         card.SetResourceReference(Border.BorderBrushProperty, "GoldLine");
         ToolTipService.SetInitialShowDelay(card, 500);
