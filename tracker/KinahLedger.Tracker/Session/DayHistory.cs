@@ -12,6 +12,10 @@ public sealed class FarmDayZone
     public long Made { get; set; }
     public double Active { get; set; }
     public int Kills { get; set; }
+    /// <summary>The zone's best drop that day, the sellable item worth most there, its count and worth (Compare, 0.9.3); empty on days kept before 0.9.3.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public string Best { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int BestCount { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long BestWorth { get; set; }
 }
 
 /// <summary>
@@ -159,7 +163,7 @@ public static class DayHistory
     public static FarmDay FromFarm(string day, TodayFarm f) => new()
     {
         Day = day, Made = f.Made, Kinah = f.Kinah, Active = f.Active, Kills = f.Kills, Attempts = f.Attempts,
-        Zones = f.Zones.Select(z => new FarmDayZone { Zone = z.Zone, Made = z.Made, Active = z.Active, Kills = z.Kills }).ToList(),
+        Zones = f.Zones.Select(z => new FarmDayZone { Zone = z.Zone, Made = z.Made, Active = z.Active, Kills = z.Kills, Best = z.Best, BestCount = z.BestCount, BestWorth = z.BestWorth }).ToList(),
     };
 
     /// <summary>A day's farming from what today.json carries: a fresh engine seeded with it, read the way LOOT's Today side reads the live one.</summary>

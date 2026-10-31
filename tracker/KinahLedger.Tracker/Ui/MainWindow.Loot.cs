@@ -280,6 +280,11 @@ public partial class MainWindow
             case "week-new":
                 ShowWeekSample(state == "week-new");
                 break;
+            // Compare (0.9.3, Ui/MainWindow.Compare.cs): the switch on, LOOT's Week side on Zones; or LOOT as it opens, the usual here under the hour
+            case "week-zones":
+            case "compare-on":
+                ShowCompareSample(state);
+                break;
         }
         _drawnSig.Remove("loot");
         Redraw();
