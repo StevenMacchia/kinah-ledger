@@ -366,6 +366,31 @@ public static class WpfApp
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
 
+        // Share (0.9.3, ShareA): the Farming card's button says Share and opens the sheet inside the card (never a window or a
+        // menu) on This session, the character name off by default; typed but off it is nowhere, on it is in the head line
+        {
+            var keep = w.SharePrefsForTest;
+            w.SharePrefsForTest = (false, "");
+            Check(w.ShareCardBtn.Content as string == "Share" && w.ShareCardBtn.IsEnabled, "the Farming card's button says Share");
+            w.ToggleShareForTest("Farming"); DoEvents();
+            var sh = w.ShareForTest();
+            Check(sh.Open && sh.Host == "ShareHost" && sh.Scope == KinahLedger.Session.SharePicture.Session && !sh.Switch, $"Share opens inside the farming card on This session, name off ({sh.Host} {sh.Scope})");
+            Check(new[] { "Copy picture", "Save picture", "Copy as text", "Close Share", "This session", "Last run", "This week" }.All(sh.Buttons.Contains),
+                "...with the switch, Copy picture, Save picture, Copy as text and ✕: " + string.Join(", ", sh.Buttons));
+            Check(w.SharePicForTest(KinahLedger.Session.SharePicture.Session) is { } sp && sp.Made != "0" && sp.Sub.Contains("kill") && sp.Site == "kinahledger.com",
+                "This session's picture has the count's total and kills");
+            w.SharePrefsForTest = (false, "Aerin"); DoEvents();
+            Check(!w.ShareForTest().Head.Contains("Aerin") && w.SharePicForTest(KinahLedger.Session.SharePicture.Session) is { } off && !KinahLedger.Session.SharePicture.Text(off).Contains("Aerin"),
+                "a name typed but the switch off: on neither the picture nor the text");
+            w.SharePrefsForTest = (true, "Aerin"); DoEvents();
+            Check(w.ShareForTest().Head.Contains("Aerin") && w.ShareForTest().Switch, "the switch on: the name in the picture's head line");
+            w.PickShareScopeForTest(KinahLedger.Session.SharePicture.Week); DoEvents();
+            Check(w.ShareForTest().Scope == KinahLedger.Session.SharePicture.Week, "This week picked");
+            w.ToggleShareForTest("Farming"); DoEvents();
+            Check(!w.ShareForTest().Open && w.ShareHost.Visibility != Visibility.Visible, "Share again closes the sheet");
+            w.SharePrefsForTest = keep;
+        }
+
         // GOALS (0.9, Goals B of kinah-bench/mock-goals-history): no box with no goal; sample goals as slots between the
         // actions and LOOT; the "+" slot while fewer than three; a goal reached said once; the box gone with the last goal
         {
@@ -724,8 +749,10 @@ public static class WpfApp
         // KL_SHOT_STATE=run|paused|stopped|empty (2026-10-28): the Farming page's other states, each its own "-<state>" render
         // and KL_SHOT_STATE=week|week-new (0.9): LOOT's Week side; with --events, week is the Events strip's Week side
         var shotState = demo && kind is "Open world" or "Events" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
-        if (kind == "Events" && shotState != "week") shotState = "";
-        if (shotState.Length > 0 && kind == "Events") w.ShowRunsWeekSample();
+        // and KL_SHOT_STATE=share-session|share-run|share-week|share-picture (0.9.3): the Share sheet open; with --events, share-run
+        if (kind == "Events" && shotState is not ("week" or "share-run")) shotState = "";
+        if (shotState == "share-run" && kind == "Events") w.OpenShareSample(shotState, events: true);
+        else if (shotState.Length > 0 && kind == "Events") w.ShowRunsWeekSample();
         else if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
@@ -748,6 +775,8 @@ public static class WpfApp
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)
         if (shotState == "goals" && skin == null && !full) w.ShotGoalCards(dir);
+        // Share (0.9.3): the 1200×630 pictures themselves (ui-share-picture-session.png, -run, -week, and -named with a sample name on)
+        if (shotState == "share-picture" && skin == null && !full) w.ShotSharePictures(dir);
         // the Week side whole (0.9): the window stops at the runner's screen height, so the LOOT box (ui-loot-week*.png) or the
         // Events strip (ui-runs-week*.png) is drawn on its own too, with the picked day and its chips under the bars
         if (shotState.StartsWith("week"))
