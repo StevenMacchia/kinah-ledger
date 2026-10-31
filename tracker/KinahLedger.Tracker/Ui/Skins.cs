@@ -38,6 +38,9 @@ public static class Skins
         _current = dict; Current = skin.Key;
     }
 
+    /// <summary>Night's brushes, for a part drawn dark in every look (the Share sheet sets them on itself).</summary>
+    internal static ResourceDictionary Night() => Build("night");
+
     static ResourceDictionary Build(string key)
     {
         var d = new ResourceDictionary();

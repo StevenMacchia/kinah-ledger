@@ -4663,6 +4663,9 @@ public sealed class UserPrefs
     public bool HelpImproveCounting { get; set; } = true;
     /// <summary>Options › Reading › Show accuracy details (0.8.34): the Accuracy chip, its counts and the panel and Discord lines. Off, a player sees only things to look at.</summary>
     public bool ShowAccuracy { get; set; }
+    /// <summary>Share (0.9.3): the character name on the picture. Off until the player turns it on; the name is the one they typed in the sheet.</summary>
+    public bool ShareShowName { get; set; }
+    public string ShareName { get; set; } = "";
     /// <summary>True once the one-time "Help improve counting" notice was answered.</summary>
     public bool CountingNoticeSeen { get; set; }
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>

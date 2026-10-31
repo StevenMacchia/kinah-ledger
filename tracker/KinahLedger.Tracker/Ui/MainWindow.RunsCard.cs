@@ -41,6 +41,7 @@ public partial class MainWindow
         if (_hiddenRuns.Count > 0) all = all.Where(r => !_hiddenRuns.Contains(RunKey(r.Start, r.Zone))).ToList();
         // the flags the player cleared with Keep as one stay off (RunFixes); a sheet reads the kept reward screens afresh
         RunFixes.ApplyKept(all);
+        EventsShareBtn.IsEnabled = all.Any(r => r.LastLoot != null);   // Share: the last run finished (Ui/MainWindow.Share.cs)
         _screenLines = null;
         if (_demoInst != null && _demoScreens == null) DemoScreens(all);
         // this session's runs; earlier ones kept on this PC only on request, so yesterday's trip doesn't sit there all day
