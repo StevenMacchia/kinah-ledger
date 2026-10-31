@@ -25,21 +25,20 @@ public sealed record AccuracyCardView(
     public bool HasRows => Rows.Count > 0;
 
     /// <summary>
-    /// What a player sees (0.8.34, Steven 2026-10-25: a low "accuracy %" "makes the tool look useless and obsolete"): nothing
-    /// while nothing needs a look; only "2 to look at" when the game's own numbers disagreed with a count, opening the list
-    /// to Report or mark Fine. No percentage, no counts, nothing on the panel's tick or the Discord card. With
-    /// <paramref name="details"/> (Options › Reading › Show accuracy details, for checking the tracker) the full card: the
-    /// line, the four counts, the tick on the panel and the Discord line. The measuring underneath runs either way.
+    /// What a player sees. 0.8.34 (Steven 2026-10-25: a low "accuracy %" "makes the tool look useless and obsolete") cut it
+    /// to a lone "2 to look at" chip; 0.9.0 (Steven 2026-10-30: "i would like to get rid of the '15 to look at' etc. just
+    /// 'Report a miscount' should automatically send the logs") cuts that too: with details off there is no chip, no line,
+    /// no counts, nothing on the panel or the Discord card. The things to check are still found, logged (the audit line,
+    /// reads.log) and pin their pictures for a report; only the player-facing words go. "Report a miscount" in the footer
+    /// is the one way in. With <paramref name="details"/> (Options › Reading › Show accuracy details, off by default, for
+    /// checking the tracker) the full card as before: the line, the four counts, the list, the panel's tick and Discord line.
     /// </summary>
     public static AccuracyCardView From(AccuracyScore.Summary s, bool details)
     {
         var full = From(s);
         if (details) return full;
-        int n = full.Rows.Count;
-        return n == 0
-            ? new AccuracyCardView("", "good", "", null, null, "", Array.Empty<(string, int, string)>(), full.Rows)
-            : new AccuracyCardView(full.Chip, full.Tone, n == 1 ? "The game's own numbers disagreed with this one." : "The game's own numbers disagreed with these.",
-                full.Chip, null, "", Array.Empty<(string, int, string)>(), full.Rows);
+        // the rows stay on the (unseen) view so the panel's colour and the tests can still tell a check is open
+        return new AccuracyCardView("", "good", "", null, null, "", Array.Empty<(string, int, string)>(), full.Rows);
     }
 
     public static AccuracyCardView From(AccuracyScore.Summary s)

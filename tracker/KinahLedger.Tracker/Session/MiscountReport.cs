@@ -12,7 +12,8 @@ namespace KinahLedger.Session;
 /// messages. A picture is kept only when it changed since the last one of its kind, and the loot list (the world shows
 /// behind it) at most once a second, within <see cref="MaxPictureBytes"/>.
 ///
-/// Nothing leaves the PC. <see cref="Write"/> makes a folder under reports/ beside the logs: the pictures with an
+/// The folder stays on the PC; "Report a miscount" also sends its text, other players' chat taken out, to the site
+/// (Upload/ReportClient.cs, 0.9.0), never the pictures. <see cref="Write"/> makes a folder under reports/ beside the logs: the pictures with an
 /// index, trace.jsonl in trace.log's own form (so `replay` runs it as it is), what was counted, the tracker's state and
 /// the end of reads.log. `report-replay` reads the pictures again with the current reader.
 /// </summary>
@@ -186,15 +187,18 @@ public sealed class ReportBuffer
         File.WriteAllText(Path.Combine(dir, "summary.txt"), summary);
         File.WriteAllLines(Path.Combine(dir, "reads-log.txt"), logTail);
         File.WriteAllText(Path.Combine(dir, "README.txt"),
-            "Kinah Ledger miscount report: the last minute before it was saved, on this PC only.\r\n\r\n" +
+            "Kinah Ledger miscount report: the last minute before it was saved.\r\n\r\n" +
             "summary.txt     the tracker's state (version, chat area, text size, checks so far)\r\n" +
             "counted.jsonl   every pickup counted, how it was read, and where it landed (a run or farming)\r\n" +
             "trace.jsonl     every chat and loot list read as text, and the zone as it changed; `KinahLedger replay trace.jsonl` counts it again\r\n" +
             "reads-log.txt   the end of reads.log: what the tracker noted while reading\r\n" +
             (shots.Count > 0 ? "frames/         the pictures those reads came from (frames.jsonl says when and where);\r\n" +
                                "                `KinahLedger report-replay <this folder>` reads them again with the current reader\r\n" : "") +
-            "\r\nThe pictures and the chat lines can show other players' names and messages. Nothing here is sent anywhere;\r\n" +
-            "zip the folder yourself to attach it to a bug report, and look through it first.\r\n");
+            // what leaves the PC (0.9.0, Upload/ReportClient.cs), said here so the folder explains itself
+            "\r\nWhat is sent: \"Report a miscount\" sends summary.txt, counted.jsonl, the game window's size, and trace.jsonl\r\n" +
+            "and reads-log.txt with every chat line from other players taken out first (only the game's own system lines and\r\n" +
+            "the tracker's notes go), to Kinah Ledger with this install's random id. Pictures are never sent with it.\r\n" +
+            "The copy in this folder is the full one: its chat lines and pictures can show other players' names and messages.\r\n");
         return dir;
     }
 

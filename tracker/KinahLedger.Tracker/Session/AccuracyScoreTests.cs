@@ -77,9 +77,10 @@ public static class AccuracyScoreTests
             Check("player view, all fine: no chip, no line, no counts, no panel or Discord line",
                 $"'{pAll.Chip}' '{pAll.Line}' {pAll.Counts.Count} {pAll.Hud ?? "none"} {pAll.Discord ?? "none"} | '{pTown.Chip}' {pTown.Hud ?? "none"}", "'' '' 0 none none | '' none");
             var rsFresh = Kina(12); rsFresh.Refused(t0.AddSeconds(70), "Acquired 2367 Kina.", 2367); var pr0 = AccuracyCardView.From(rsFresh.Snapshot(), details: false);
-            Check("player view, one refused: only \"1 to look at\", no % anywhere",
-                $"{pr0.Chip} {pr0.Tone} | {pr0.Line} | {pr0.Counts.Count} | {pr0.Hud} | {pr0.Discord ?? "none"} | {pr0.Rows.Count}",
-                "1 to look at warn | The game's own numbers disagreed with this one. | 0 | 1 to look at | none | 1");
+            // 0.9.0 (Steven, 2026-10-30): not even "1 to look at"; Report a miscount is the one way in. Still on the list underneath
+            Check("player view, one refused: no chip, no line, no panel line, no % anywhere; the check is still kept",
+                $"'{pr0.Chip}' {pr0.Tone} | '{pr0.Line}' | {pr0.Counts.Count} | {pr0.Hud ?? "none"} | {pr0.Discord ?? "none"} | {pr0.Rows.Count}",
+                "'' good | '' | 0 | none | none | 1");
             Check("...details on: the full card as before", AccuracyCardView.From(rsFresh.Snapshot(), details: true).Line, "Checked by the game: 12 of 13 matched (92%)");
             var small = Kina(5); small.Refused(t0.AddSeconds(70), "Acquired 999 Kina.", 999);
             var smv = AccuracyCardView.From(small.Snapshot());

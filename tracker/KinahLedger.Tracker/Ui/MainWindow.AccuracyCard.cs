@@ -129,8 +129,10 @@ public partial class MainWindow
             var dir = chat.WriteReport(p.Why, p.Focus);
             Open(dir);
             if (p.SendPictures) _ = SendReportPictures(dir, "Accuracy: " + c.Reason);
-            Say($"Saved what was read around {c.At.ToLocalTime():HH:mm:ss} to a folder on this PC. Zip it to attach to a bug report.", "Good");
+            Say($"Saved what was read around {c.At.ToLocalTime():HH:mm:ss}. Sending the report…", "Faint");
             Status.ToolTip = dir;
+            // sent like Report a miscount (0.9.0), with the flagged check as its line; this row shows only with accuracy details on
+            _ = UploadReport(dir, p.Why, $"{c.Text}: {c.Reason}");
         }
         catch (Exception ex) { CrashLog.Write("miscount report", ex); Say("Couldn't save the report: " + ex.Message, "Bad"); }
     }
@@ -146,11 +148,14 @@ public partial class MainWindow
         _demoScore = a;
     }
 
-    /// <summary>The card on its own, with its things to look at, for a layout render.</summary>
+    /// <summary>
+    /// The card on its own, for a layout render. Since 0.9.0 a player never opens it (no chip with Show accuracy details
+    /// off), so the render draws what that switch shows: the full card, for checking the tracker.
+    /// </summary>
     public void ShotAccuracyCard(string path)
     {
         FillAccuracyCard();
-        if (_accView != null) SaveCard(BuildAccuracyCard(_accView), path);
+        if (_demoScore?.Snapshot() is { } s) SaveCard(BuildAccuracyCard(AccuracyCardView.From(s, details: true)), path);
     }
 
     /// <summary>
