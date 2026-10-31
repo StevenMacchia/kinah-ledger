@@ -4663,6 +4663,9 @@ public sealed class UserPrefs
     public bool HelpImproveCounting { get; set; } = true;
     /// <summary>Options › Reading › Show accuracy details (0.8.34): the Accuracy chip, its counts and the panel and Discord lines. Off, a player sees only things to look at.</summary>
     public bool ShowAccuracy { get; set; }
+    /// <summary>Share (0.9.3): the character name on the picture. Off until the player turns it on; the name is the one they typed in the sheet.</summary>
+    public bool ShareShowName { get; set; }
+    public string ShareName { get; set; } = "";
     /// <summary>True once the one-time "Help improve counting" notice was answered.</summary>
     public bool CountingNoticeSeen { get; set; }
     /// <summary>True once the player chose the chat by hand; auto-detection then stays off until they switch back.</summary>
@@ -4685,6 +4688,8 @@ public sealed class UserPrefs
     public string Part { get; set; } = "Farming";
     /// <summary>Options › General › Switch pages to what I'm doing (0.8.55): the window shows Farming, Crafting or Events as the activity changes (Session/PageFollow.cs). Off: it stays on the page the player picks.</summary>
     public bool FollowActivity { get; set; } = true;
+    /// <summary>Options › General › Compare zones and runs (0.9.3, Session/Compare.cs): Days | Zones and Days | Places on the Week sides, your usual here, a run against your runs there. Off by default: the base app stays light.</summary>
+    public bool CompareZones { get; set; }
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
     public bool ShareMarket { get; set; } = true;
     /// <summary>True once the player chose the Market area by hand; the title-and-headers search then stays off until they switch back.</summary>

@@ -41,6 +41,7 @@ public partial class MainWindow
         if (_hiddenRuns.Count > 0) all = all.Where(r => !_hiddenRuns.Contains(RunKey(r.Start, r.Zone))).ToList();
         // the flags the player cleared with Keep as one stay off (RunFixes); a sheet reads the kept reward screens afresh
         RunFixes.ApplyKept(all);
+        EventsShareBtn.IsEnabled = all.Any(r => r.LastLoot != null);   // Share: the last run finished (Ui/MainWindow.Share.cs)
         _screenLines = null;
         if (_demoInst != null && _demoScreens == null) DemoScreens(all);
         // this session's runs; earlier ones kept on this PC only on request, so yesterday's trip doesn't sit there all day
@@ -256,6 +257,8 @@ public partial class MainWindow
         // the four figures, each with its label under it
         body.Children.Add(Figures(zone, runs, counted, secs, value, redraw));
         if (withNow && secs > 10) _eventsRate = Fk(value / secs * 3600);
+        // Compare (0.9.3, Ui/MainWindow.Compare.cs): the last closed run against your runs there, with Compare on
+        if (withNow && open == null && newest != null && _prefs.CompareZones && RunVsCard(zone, newest, runs) is { } vs) body.Children.Add(vs);
 
         // Now: the place being run (or the last one run), its last five lines and where the open run stands
         if (withNow)

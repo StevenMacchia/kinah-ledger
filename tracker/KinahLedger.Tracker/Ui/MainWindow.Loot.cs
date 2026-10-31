@@ -10,8 +10,8 @@ namespace KinahLedger.Ui;
 /// LOOT on the Farming page (2026-10-28, option C of kinah-bench/mock-calm-farming; Steven, of 0.8.53's page: "THIS IS A LOT
 /// OF INFO ON ONE WINDOW"). Under the live card, one box of inventory slots for one period at a time: this zone since you
 /// arrived (the run while one is on, every zone with All zones on), or Today since midnight on this PC; one total on its
-/// line. Each slot opens the game-tooltip card on hover (odds, an hour, worth); a click opens the item's full card, a
-/// right-click reports it. It replaced the SESSION line (the same count as the card above it), the Today strip on this page
+/// line. Each slot opens the game-tooltip card on hover (odds, an hour, worth); a click opens the item's full card (Set a
+/// goal, Looks wrong?). It replaced the SESSION line (the same count as the card above it), the Today strip on this page
 /// and, in Compact view, the tables (Full view keeps them beside it). Drawn again only when what it shows changed.
 /// </summary>
 public partial class MainWindow
@@ -177,7 +177,7 @@ public partial class MainWindow
         LootHost.Children.Add(sp);
     }
 
-    /// <summary>A drop or gathered item of the count on screen: its slot, the card on hover, its full card on a click, Report on a right-click.</summary>
+    /// <summary>A drop or gathered item of the count on screen: its slot, the card on hover, its full card (Set a goal, Looks wrong?) on a click.</summary>
     FrameworkElement HereSlot(DropRow r, bool gathered, string where)
     {
         var name = r.Report.Length > 0 ? r.Report : r.Name;
@@ -186,13 +186,8 @@ public partial class MainWindow
         CardTip(tile, () => ItemHereCard(r, gathered, where));
         if (r.Report.Length == 0) return tile;
         tile.Cursor = Cursors.Hand;
+        // a click opens its full card, whose foot has Set a goal and Looks wrong? (no right-click, 2026-10-31)
         tile.MouseLeftButtonUp += (_, _) => ShowItemCard(r, tile);
-        var rep = new MenuItem { Header = r.Reported ? "Reported · Undo" : "Looks wrong? Report", ToolTip = "Keeps it out of what this count sends to the site, and saves the last minute of what was read." };
-        rep.Click += (_, _) => ToggleReport(r);
-        var menu = new ContextMenu();
-        menu.Items.Add(GoalMenuItem(() => GoalDraft.ForItem(name), tile, "A number of these to pick up today. It shows over LOOT."));
-        menu.Items.Add(rep);
-        tile.ContextMenu = menu;
         return tile;
     }
 
@@ -211,7 +206,7 @@ public partial class MainWindow
             if (r.PerHour.Length > 0) body.Children.Add(CkKv("An hour", r.PerHour, CkInk));
         }
         if (r.Tip.Length > 0) { var n = CkNote(r.Tip); n.Margin = new Thickness(20, 10, 20, 2); body.Children.Add(n); }
-        if (r.Report.Length > 0) { var n = CkNote(r.Reported ? "Click for more · right-click to undo the report" : "Click for more · right-click to report"); n.Margin = new Thickness(20, 10, 20, 0); body.Children.Add(n); }
+        if (r.Report.Length > 0) { var n = CkNote(r.Reported ? "Reported · click to set a goal or undo the report" : "Click to set a goal or report it"); n.Margin = new Thickness(20, 10, 20, 0); body.Children.Add(n); }
         bool bound = r.Sub.Contains("bound");
         body.Children.Add(r.Value.Length > 0 ? TodayFooter("Worth, after the Market's cut", r.Value)
             : bound ? TodayFooter("Bound to you", "can't be sold", muted: true)
@@ -247,7 +242,8 @@ public partial class MainWindow
     /// <summary>
     /// Layout renders of the Farming page's other states (KL_SHOT_STATE): "run" (a run on), "paused" (the chat out of view),
     /// "stopped" (just after Stop run), "empty" (the game open, nothing counted yet), "goals" and "goals-add" (the GOALS box with
-    /// three sample goals, or two and the "+" slot), "goals-none" (no goal: the slim "Set a goal for today" row), "week" and "week-new" (LOOT's Week side, Ui/MainWindow.Week.cs).
+    /// three sample goals, or two and the "+" slot), "goals-none" (no goal: the slim "Set a goal for today" row), "week" and "week-new" (LOOT's Week side, Ui/MainWindow.Week.cs),
+    /// "share-session", "share-run", "share-week" and "share-picture" (the Share sheet open, Ui/MainWindow.Share.cs).
     /// Example figures, never the player's.
     /// </summary>
     internal void ShowStateSample(string state)
@@ -284,10 +280,17 @@ public partial class MainWindow
             case "week-new":
                 ShowWeekSample(state == "week-new");
                 break;
+            // Compare (0.9.3, Ui/MainWindow.Compare.cs): the switch on, LOOT's Week side on Zones; or LOOT as it opens, the usual here under the hour
+            case "week-zones":
+            case "compare-on":
+                ShowCompareSample(state);
+                break;
         }
         _drawnSig.Remove("loot");
         Redraw();
         if (state == "paused" && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
+        // Share (0.9.3): the sheet open on This session, Last run or This week; share-picture also draws the pictures themselves
+        if (state.StartsWith("share-")) OpenShareSample(state);
     }
 
     /// <summary>The chat out of view in a layout render (KL_SHOT_STATE=paused).</summary>

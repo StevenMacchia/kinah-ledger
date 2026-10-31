@@ -5,8 +5,8 @@ namespace KinahLedger.Session;
 /// <summary>One slot of the Today strip: an item, how many came today, what the sellable copies are worth after the Market's cut, and where they came from.</summary>
 public sealed record TodaySlot(long Id, string Name, long Count, long Bound, long Worth, bool Priced, bool Gear, bool Currency, List<(string Where, long Count)> Where);
 
-/// <summary>A farming zone today: time farming, kills, and what it made (Kinah plus loot after the Market's cut).</summary>
-public sealed record TodayZone(string Zone, double Active, int Kills, long Made);
+/// <summary>A farming zone today: time farming, kills, and what it made (Kinah plus loot after the Market's cut); its best drop, the sellable item worth most there (Compare, 0.9.3).</summary>
+public sealed record TodayZone(string Zone, double Active, int Kills, long Made, string Best = "", int BestCount = 0, long BestWorth = 0);
 
 /// <summary>Today's farming, every zone or one: the slots the strip draws and the figures its line says.</summary>
 public sealed record TodayFarm(long Kinah, int Kills, int Attempts, double Active, List<TodaySlot> Drops, List<TodaySlot> Gathered, List<TodayZone> Zones, List<(string Where, long Count)> KinahWhere)
@@ -72,8 +72,17 @@ public static class TodayLoot
         var list = zones.Where(kv => kv.Value.Kinah > 0 || kv.Value.Kills > 0 || kv.Value.Nodes > 0 || kv.Value.Items.Count + kv.Value.ItemsBound.Count > 0)
             .Select(kv =>
             {
-                long made = kv.Value.Kinah + kv.Value.Items.Sum(x => Worth(items.NameOf(x.Key), x.Value) ?? 0);
-                return new TodayZone(kv.Key, kv.Value.Active, kv.Value.Kills, made);
+                long made = kv.Value.Kinah;
+                string best = ""; int bestN = 0; long bestW = 0;
+                foreach (var x in kv.Value.Items)
+                {
+                    var name = items.NameOf(x.Key);
+                    long w = Worth(name, x.Value) ?? 0;
+                    made += w;
+                    // the zone's best drop (Compare, 0.9.3): the sellable item worth most there
+                    if (w > bestW) { best = name; bestN = x.Value; bestW = w; }
+                }
+                return new TodayZone(kv.Key, kv.Value.Active, kv.Value.Kills, made, best, bestN, bestW);
             })
             .OrderByDescending(z => z.Made).ThenByDescending(z => z.Active).ToList();
         var kinahWhere = (zone != null ? zones.Where(kv => kv.Key == zone) : zones).Where(kv => kv.Value.Kinah > 0)

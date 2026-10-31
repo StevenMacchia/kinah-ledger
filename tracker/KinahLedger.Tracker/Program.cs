@@ -1277,6 +1277,7 @@ options: --process aion[,other]");
         ok &= Session.TodayTests.Run(items, s);
         ok &= Session.GoalsTests.Run(items, s);
         ok &= Session.HistoryTests.Run(items, s);
+        ok &= Session.CompareTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);
         ok &= Session.AccuracyScoreTests.Run(items, s);
         ok &= Session.LabelWriterTests.Run(items, s);
@@ -1285,8 +1286,80 @@ options: --process aion[,other]");
         ok &= Session.QtySettleTests.Run(items, s);
         ok &= Session.PassCostTests.Run(items, s);
         ok &= Session.PageFollowTests.Run();
+        ok &= SharePictureTest();
         Console.WriteLine(ok ? "\nAll parser, tracker and 0.7 cases passed." : "\nMismatch, see above.");
         return ok ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Share (0.9.3, ShareA): the picture's words for each side. The character name is off by default and nowhere on the
+    /// picture or its text while off, even when one is typed; on, it sits in the head line. This session, the last run and
+    /// the week each give the right time, kills, Kinah an hour and what was made; the five icons keep the best drop; a count
+    /// under a minute has no hour's rate. No accuracy figures and no "to look at" counts, ever.
+    /// </summary>
+    static bool SharePictureTest()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect)
+        {
+            bool pass = got == expect; ok &= pass;
+            Console.WriteLine($"  {what,-58} -> {got,-46} {(pass ? "ok" : "MISMATCH, expected " + expect)}");
+        }
+        Console.WriteLine("\nShare: the picture's words (0.9.3):");
+        Func<double, string> fk = MainWindow.FkForTest;
+        var day = new DateTime(2026, 10, 31, 22, 41, 0);
+        var drops = new List<ShareDrop>
+        {
+            new("Ruby", "Rare", 1, 40_000), new("Spiritstone", "", 30, 90_000), new("Thick Hide", "", 12, 24_000),
+            new("Iron Ore", "", 8, 16_000), new("Gold Dust", "", 5, 10_000), new("Fine Powder", "", 3, 3_000),
+        };
+        var session = new ShareFacts(SharePicture.Session, day, "Siel · NA East", "Northern Tolbas Forest", "of farming", 72 * 60, 722, "kill", 269_000, drops);
+
+        // 1. the name: off by default, so nowhere; typed but off, still nowhere; on, in the head line; blank, nothing
+        var off = SharePicture.Compose(session, showName: new UserPrefs().ShareShowName, name: "Aerin", fk);
+        Check("a new install: Show my character name is off", $"{new UserPrefs().ShareShowName} '{new UserPrefs().ShareName}'", "False ''");
+        Check("off: the head line has no name", off.Head, "Sat 31 Oct · Siel · NA East");
+        Check("off: the name is nowhere on the picture or the text", SharePicture.Text(off).Contains("Aerin") || off.Title.Contains("Aerin") || off.Sub.Contains("Aerin") ? "named" : "no name", "no name");
+        var on = SharePicture.Compose(session, true, "  Aerin ", fk);
+        Check("on: the name in the head line", on.Head, "Sat 31 Oct · Aerin · Siel · NA East");
+        Check("on with nothing typed: no name, no empty dot", SharePicture.Compose(session, true, "   ", fk).Head, "Sat 31 Oct · Siel · NA East");
+
+        // 2. This session: 269K made over 1 h 12 min is 224K an hour; the top five by worth, the best drop by grade
+        Check("session: title and the line under it", $"{off.Title} | {off.Sub}", "Northern Tolbas Forest | 1 h 12 min of farming · 722 kills");
+        Check("session: Kinah an hour, made after the cut", $"{off.Rate} {off.RateLabel} · {off.Made} {off.MadeLabel}", "224K Kinah an hour · 269K made, after the Market's cut");
+        Check("session: the five icons, most worth first", string.Join(",", off.Icons.Select(i => i.Name)), "Spiritstone,Ruby,Thick Hide,Iron Ore,Gold Dust");
+        Check("session: the best drop is the rarest", off.Best, "best drop: Ruby");
+        Check("Copy as text: the same words, a line each", SharePicture.Text(off).Replace("\n", " | "),
+            "Kinah Ledger · Sat 31 Oct · Siel · NA East | Northern Tolbas Forest | 1 h 12 min of farming · 722 kills | 224K Kinah an hour · 269K made, after the Market's cut | best drop: Ruby | kinahledger.com");
+        var withRing = drops.Append(new ShareDrop("Ancient Ring", "Legend", 1, 0)).ToList();
+        var ring = SharePicture.Compose(session with { Drops = withRing }, false, null, fk);
+        Check("a bound Legend drop worth nothing still shows, in fifth place", $"{string.Join(",", ring.Icons.Select(i => i.Name))} | {ring.Best}", "Spiritstone,Ruby,Thick Hide,Iron Ore,Ancient Ring | best drop: Ancient Ring");
+
+        // 3. Last run: an expedition of 7 min 41 s that made 512K is 4.00M an hour
+        var run = new ShareFacts(SharePicture.Run, day, "Siel · NA East", "Urugugu Canyon", "Expedition", 7 * 60 + 41, 18, "kill", 512_000,
+            new List<ShareDrop> { new("Spiritstone Powder", "", 18, 59_940), new("Elder Breastplate", "Epic", 1, 0), new("Magic Crystal", "Rare", 6, 27_300) });
+        var rp = SharePicture.Compose(run, false, "Aerin", fk);
+        Check("run: title and the line under it", $"{rp.Title} | {rp.Sub}", "Urugugu Canyon | Expedition · 7 min · 18 kills");
+        Check("run: Kinah an hour, made after the cut", $"{rp.Rate} · {rp.Made}", "4.00M · 512K");
+        Check("run: icons and the best drop", $"{string.Join(",", rp.Icons.Select(i => i.Name))} | {rp.Best}", "Spiritstone Powder,Magic Crystal,Elder Breastplate | best drop: Elder Breastplate");
+
+        // 4. This week: 3.10M over 9 h 40 min is 321K an hour; no items kept, so its best day and zone in their place
+        var note = SharePicture.WeekNote(new DateTime(2026, 10, 29), 1_200_000, "Northern Tolbas Forest", fk);
+        var week = new ShareFacts(SharePicture.Week, day, "Siel · NA East", "This week", "of farming", 9 * 3600 + 40 * 60, 4_120, "kill", 3_100_000, new List<ShareDrop>(), note);
+        var wp = SharePicture.Compose(week, false, null, fk);
+        Check("week: the line under the title", wp.Sub, "9 h 40 min of farming · 4,120 kills");
+        Check("week: Kinah an hour, made after the cut", $"{wp.Rate} · {wp.Made}", "321K · 3.10M");
+        Check("week: no icons, its best day and zone instead", $"{wp.Icons.Count} | {wp.Best}", "0 | best day: Thu 29, 1.20M · most made in Northern Tolbas Forest");
+
+        // 5. under a minute: no hour's rate; one kill is "1 kill"
+        var young = SharePicture.Compose(session with { Seconds = 40, Count = 1 }, false, null, fk);
+        Check("under a minute: no rate, one kill", $"{young.Rate} | {young.Sub}", "– | under a minute of farming · 1 kill");
+
+        // 6. never an accuracy figure or a count to look at
+        var all = string.Join("\n", new[] { off, on, rp, wp, young }.Select(SharePicture.Text));
+        Check("no accuracy figures, nothing to look at", all.Contains('%') || all.Contains("look at", StringComparison.OrdinalIgnoreCase) || all.Contains("accura", StringComparison.OrdinalIgnoreCase) ? "found" : "none", "none");
+        Check("Save picture's file name", SharePicture.FileName(SharePicture.Week, day), "kinah-ledger-2026-10-31-2241-week.png");
+        return ok;
     }
 
     /// <summary>Reads the currency strip once, the way the window does every ten seconds, and lists the numbers with where each starts.</summary>

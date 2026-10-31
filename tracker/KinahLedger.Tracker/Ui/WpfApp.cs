@@ -314,6 +314,22 @@ public static class WpfApp
         var wk2 = w.WeekForTest();
         Check(wk2.Bars == 7 && wk2.Picked.Length > 0 && wk2.Picked != "Today" && wk2.Line.StartsWith(wk2.Picked.ToUpperInvariant()) && wk2.Chips.Count >= 2 && !wk2.Line.Contains('%'),
             $"...a click on a past bar picks it: {wk2.Picked}, \"{wk2.Line}\", chips {string.Join(" / ", wk2.Chips)}");
+        // Compare (0.9.3, Ui/MainWindow.Compare.cs): off by default, so Week has no Days | Zones and the card no usual line;
+        // on, Zones ranks the week's zones (none under ten minutes), the zone here picked; a second tick shows the pair and a verdict
+        var c0 = w.CompareForTest();
+        Check(!w.Prefs.CompareZones && !c0.Switch && c0.Rows.Count == 0 && c0.Usual == "", "Compare zones and runs: off by default, no Days | Zones on Week, no usual line");
+        w.SetCompareForTest(true); w.PickLootWeekForTest(); DoEvents();
+        Check(w.CompareForTest().Switch && w.WeekForTest().Bars == 7, "...on: Days | Zones over the same seven bars");
+        w.PickZonesForTest(true); DoEvents();
+        var c1 = w.CompareForTest();
+        Check(c1.Rows.Count >= 3 && !c1.Rows.Contains("Drana Cultivation Area") && c1.Picked.SequenceEqual(new[] { "Western Cantas Valley" }) && !c1.Vs,
+            $"...Zones: {string.Join(" / ", c1.Rows)}, the zone here picked ({string.Join(",", c1.Picked)}), no zone under 10 minutes");
+        w.PickZoneRowForTest(c1.Rows[0] == "Western Cantas Valley" ? 1 : 0); DoEvents();
+        var c2 = w.CompareForTest();
+        Check(c2.Picked.Count == 2 && c2.Vs && c2.Verdict.Length > 0 && !c2.Verdict.Contains('%'), $"...a second tick: side by side, \"{c2.Verdict}\"");
+        Check(c2.Usual.StartsWith("Your usual here") && (c2.Usual.Contains(" than usual") || c2.Usual.Contains("about your usual")) && !c2.Usual.Contains("today"), $"...the Farming card's usual here, set against the hour above: \"{c2.Usual}\"");
+        w.PickZonesForTest(false); w.SetCompareForTest(false); DoEvents();
+        Check(!w.CompareForTest().Switch && w.CompareForTest().Usual == "", "...off again: Week as before, no usual line");
         w.PickLootForTest(false); DoEvents();
         Check(w.LootForTest().Note == here.Note, "back to This zone");
         // 0.9.0 (Steven, 2026-10-30): no "1 to look at" pill, though the sample has a refused line; Report a miscount stays
@@ -366,6 +382,31 @@ public static class WpfApp
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
 
+        // Share (0.9.3, ShareA): the Farming card's button says Share and opens the sheet inside the card (never a window or a
+        // menu) on This session, the character name off by default; typed but off it is nowhere, on it is in the head line
+        {
+            var keep = w.SharePrefsForTest;
+            w.SharePrefsForTest = (false, "");
+            Check(w.ShareCardBtn.Content as string == "Share" && w.ShareCardBtn.IsEnabled, "the Farming card's button says Share");
+            w.ToggleShareForTest("Farming"); DoEvents();
+            var sh = w.ShareForTest();
+            Check(sh.Open && sh.Host == "ShareHost" && sh.Scope == KinahLedger.Session.SharePicture.Session && !sh.Switch, $"Share opens inside the farming card on This session, name off ({sh.Host} {sh.Scope})");
+            Check(new[] { "Copy picture", "Save picture", "Copy as text", "Close Share", "This session", "Last run", "This week" }.All(sh.Buttons.Contains),
+                "...with the switch, Copy picture, Save picture, Copy as text and ✕: " + string.Join(", ", sh.Buttons));
+            Check(w.SharePicForTest(KinahLedger.Session.SharePicture.Session) is { } sp && sp.Made != "0" && sp.Sub.Contains("kill") && sp.Site == "kinahledger.com",
+                "This session's picture has the count's total and kills");
+            w.SharePrefsForTest = (false, "Aerin"); DoEvents();
+            Check(!w.ShareForTest().Head.Contains("Aerin") && w.SharePicForTest(KinahLedger.Session.SharePicture.Session) is { } off && !KinahLedger.Session.SharePicture.Text(off).Contains("Aerin"),
+                "a name typed but the switch off: on neither the picture nor the text");
+            w.SharePrefsForTest = (true, "Aerin"); DoEvents();
+            Check(w.ShareForTest().Head.Contains("Aerin") && w.ShareForTest().Switch, "the switch on: the name in the picture's head line");
+            w.PickShareScopeForTest(KinahLedger.Session.SharePicture.Week); DoEvents();
+            Check(w.ShareForTest().Scope == KinahLedger.Session.SharePicture.Week, "This week picked");
+            w.ToggleShareForTest("Farming"); DoEvents();
+            Check(!w.ShareForTest().Open && w.ShareHost.Visibility != Visibility.Visible, "Share again closes the sheet");
+            w.SharePrefsForTest = keep;
+        }
+
         // GOALS (0.9, Goals B of kinah-bench/mock-goals-history): no box with no goal; sample goals as slots between the
         // actions and LOOT; the "+" slot while fewer than three; a goal reached said once; the box gone with the last goal
         {
@@ -389,6 +430,21 @@ public static class WpfApp
                 $"a goal reached is said once: \"{string.Join(" | ", said)}\", then {again.Count}");
             Check(w.GoalCard(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 }) is { } gc && gc.Child is System.Windows.Controls.StackPanel goalBody && goalBody.Children.Count >= 6,
                 "a goal's hover card: band, bar, TODAY, Have, To go, pace");
+            // no right-click anywhere (2026-10-31): a goal's click opens the sheet with Remove goal, the ⋯ menu is the card's own
+            w.ShowGoalsSample(3); DoEvents();
+            var rightClick = w.RightClickMenusForTest();
+            Check(rightClick.Count == 0, "no right-click menus in the window: " + string.Join(", ", rightClick));
+            static IEnumerable<DependencyObject> Tree(DependencyObject d) => new[] { d }.Concat(LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>().SelectMany(Tree));
+            var change = w.GoalChangeSheetForTest(new Session.Goal { Kind = Session.Goal.KindKinah, Target = 2_000_000 });
+            Check(Tree(change).OfType<System.Windows.Controls.Button>().Any(b => b.Content as string == "Remove goal") && Tree(change).OfType<System.Windows.Controls.TextBlock>().Any(t => t.Text == "Change this goal"),
+                "a goal's click: the sheet says Change this goal and has Remove goal");
+            var more = w.MoreEntries();
+            Check(more.Any(e => e.Text == "All zones" && e.On != null) && more.Any(e => e.Text == "Clear the tables" && e.Do != null) && more.Any(e => e.Text == "Set a goal…" && e.Do == null && e.Sub.Length > 0),
+                "the ⋯ menu: All zones a switch, Clear the tables, Set a goal off (with why) once three are set: " + string.Join(" | ", more.Select(e => e.Text)));
+            Check(w.BuildMenu(more) is { } menuCard && Tree(menuCard).OfType<System.Windows.Controls.ContextMenu>().Count() == 0 && Tree(menuCard).OfType<System.Windows.Controls.MenuItem>().Count() == 0,
+                "the ⋯ menu is drawn in the card kit, no Windows menu items");
+            w.ShowGoalsSample(2); DoEvents();
+            Check(w.MoreEntries().First().Do != null, "with room for a goal, ⋯ › Set a goal… opens the sheet");
             w.ShowPartForTest("Crafting"); DoEvents();
             Check(w.GoalsForTest() is { Shown: false, Slim: false }, "GOALS (and the slim row) only on the Farming page");
             w.ShowPartForTest("Farming"); DoEvents();
@@ -724,8 +780,11 @@ public static class WpfApp
         // KL_SHOT_STATE=run|paused|stopped|empty (2026-10-28): the Farming page's other states, each its own "-<state>" render
         // and KL_SHOT_STATE=week|week-new (0.9): LOOT's Week side; with --events, week is the Events strip's Week side
         var shotState = demo && kind is "Open world" or "Events" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
-        if (kind == "Events" && shotState != "week") shotState = "";
-        if (shotState.Length > 0 && kind == "Events") w.ShowRunsWeekSample();
+        // and KL_SHOT_STATE=share-session|share-run|share-week|share-picture (0.9.3): the Share sheet open; with --events, share-run
+        // and Compare (0.9.3, Ui/MainWindow.Compare.cs): week-zones and compare-on on Farming, week-places and run-vs-average on Events
+        if (kind == "Events" && shotState is not ("week" or "share-run" or "week-places" or "run-vs-average")) shotState = "";
+        if (shotState == "share-run" && kind == "Events") w.OpenShareSample(shotState, events: true);
+        else if (shotState.Length > 0 && kind == "Events") w.ShowEventsStateSample(shotState);
         else if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
@@ -748,10 +807,18 @@ public static class WpfApp
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)
         if (shotState == "goals" && skin == null && !full) w.ShotGoalCards(dir);
+        // Share (0.9.3): the 1200×630 pictures themselves (ui-share-picture-session.png, -run, -week, and -named with a sample name on)
+        if (shotState == "share-picture" && skin == null && !full) w.ShotSharePictures(dir);
+        // the whole sheet on its own too (ui-share-sheet-*.png): the window stops at the runner's screen height, under the preview
+        if (shotState.StartsWith("share-") && shotState != "share-picture")
+            w.ShotShareSheet(Path.Combine(dir, "ui-share-sheet-" + shotState[6..] + (kind == "Events" ? "-events" : "") + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), w.TryFindResource(kind == "Events" ? "Bg" : "Card") as Brush);
         // the Week side whole (0.9): the window stops at the runner's screen height, so the LOOT box (ui-loot-week*.png) or the
         // Events strip (ui-runs-week*.png) is drawn on its own too, with the picked day and its chips under the bars
         if (shotState.StartsWith("week"))
             SavePart(kind == "Events" ? w.TodayStrip : w.SummaryCard, Path.Combine(dir, (kind == "Events" ? "ui-runs-" : "ui-loot-") + shotState + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), w.TryFindResource("Bg") as Brush);
+        // Compare (0.9.3): the state's list and card whole, off the window (ui-cmp-zones*.png, ui-cmp-places*.png, ui-cmp-run*.png)
+        if (shotState is "week-zones" or "week-places" or "run-vs-average")
+            w.ShotCompareParts(dir, shotState, (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : ""));
         // a state render is the window only: the cards and the panel come from the plain farming renders
         if (shotState.Length > 0) { w.Close(); return; }
         // the Events part's card on its own: folded, and with Materials open
