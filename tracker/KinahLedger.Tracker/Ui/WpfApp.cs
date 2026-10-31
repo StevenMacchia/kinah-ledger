@@ -777,6 +777,9 @@ public static class WpfApp
         if (shotState == "goals" && skin == null && !full) w.ShotGoalCards(dir);
         // Share (0.9.3): the 1200×630 pictures themselves (ui-share-picture-session.png, -run, -week, and -named with a sample name on)
         if (shotState == "share-picture" && skin == null && !full) w.ShotSharePictures(dir);
+        // the whole sheet on its own too (ui-share-sheet-*.png): the window stops at the runner's screen height, under the preview
+        if (shotState.StartsWith("share-") && shotState != "share-picture")
+            SavePart(kind == "Events" ? w.EventsShareHost : w.ShareHost, Path.Combine(dir, "ui-share-sheet-" + shotState[6..] + (kind == "Events" ? "-events" : "") + (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : "") + ".png"), w.TryFindResource(kind == "Events" ? "Bg" : "Card") as Brush);
         // the Week side whole (0.9): the window stops at the runner's screen height, so the LOOT box (ui-loot-week*.png) or the
         // Events strip (ui-runs-week*.png) is drawn on its own too, with the picked day and its chips under the bars
         if (shotState.StartsWith("week"))
