@@ -493,6 +493,24 @@ public partial class MainWindow
         if (ShareFactsFor(SharePicture.Session) is { } s) SavePng(RenderSharePicture(SharePicture.Compose(s, true, "Aerin", Fk)), System.IO.Path.Combine(dir, "ui-share-picture-named.png"));
     }
 
+    /// <summary>Layout renders: the open sheet drawn again on its own, whole, over <paramref name="page"/> (the window stops at the screen's height).</summary>
+    internal void ShotShareSheet(string path, Brush? page)
+    {
+        var host = _shareOn == "Events" ? EventsShareHost : ShareHost;
+        double w = host.ActualWidth > 1 ? host.ActualWidth : 636;
+        var sheet = BuildShareSheet();
+        sheet.Width = w;
+        var holder = new Border { Child = sheet, Background = page ?? Brushes.Transparent, Padding = new Thickness(12) };
+        holder.Measure(new Size(w + 24, double.PositiveInfinity));
+        holder.Arrange(new Rect(holder.DesiredSize));
+        holder.UpdateLayout();
+        IconCache.Drain(TimeSpan.FromSeconds(5));
+        holder.UpdateLayout();
+        var bmp = new RenderTargetBitmap((int)Math.Ceiling(holder.ActualWidth), (int)Math.Ceiling(holder.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(holder);
+        SavePng(bmp, path);
+    }
+
     /// <summary>For options-test: the sheet as drawn: open, where (inside which card), its side, the head line and the buttons' names.</summary>
     internal (bool Open, string Host, string Scope, string Head, List<string> Buttons, bool Switch) ShareForTest()
     {
