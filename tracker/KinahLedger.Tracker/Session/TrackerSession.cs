@@ -2517,7 +2517,9 @@ public sealed partial class TrackerSession
             }
             if (!screen.FaceUp) return;   // still face down, or a card mid-flip
             if (m.Reads == 0) _cardsFirst = now;
-            if (!m.Add(screen, frame)) { CrashLog.Note("event cards: a read with other cards received than the ones before; left out"); return; }
+            int replaced = m.Replaced;
+            if (!m.Add(screen, frame)) { CrashLog.Note("event cards: a read with other cards received than the ones before; held aside (a card mid-flip, or the screen settled since: a second such read replaces the ones before)"); return; }
+            if (m.Replaced > replaced) CrashLog.Note("event cards: two reads in a row saw other cards received than the reads before; the screen settled there, so those reads replace the earlier ones (a card mid-flip)");
             CrashLog.Note($"event cards read {m.Reads}: " + string.Join(" | ", screen.Cards.Select(c => !c.Received ? $"card {c.Index + 1} not received"
                 : $"card {c.Index + 1} {c.Slots.Count(x => !x.Clipped)} slots{(c.Slots.Any(x => x.Clipped) ? $" + {c.Slots.Count(x => x.Clipped)} cut" : "")}{(c.Scrolled ? " scrolled" : "")}{(c.End ? ", end shows" : "")}{(c.Covered ? ", covered" : "")}{(c.Picks == 1 ? "" : c.Picks == 0 ? ", picks not read" : $", picked {c.Picks} times")}"))
                 + (m.Unaligned > 0 ? $" ({m.Unaligned} card read(s) couldn't be placed in their lists)" : ""));
@@ -2556,6 +2558,10 @@ public sealed partial class TrackerSession
         _cardsFiled = true;
         try
         {
+            // the screen closed on reads that saw other cards received than the ones before them: the later screen is the
+            // settled one (a gold frame seen after an early "received" is that card's flip ending), never the first read
+            int before = m.Reads;
+            if (m.TakeLater()) CrashLog.Note($"event cards: the last read(s) saw other cards received than the {before} before; filed from the last (the cards flip open, the early reads caught one mid-flip)");
             var all = new List<RewardGrid.Slot>(); var more = new List<string>(); var report = new List<(int, bool, List<RewardGrid.Slot>, bool)>();
             var picksOut = new int[EventCards.CardCount];
             var places = new List<string>();   // each slot's card and place ("c2.3"), for a read again of the pictures to compare with
@@ -2608,6 +2614,7 @@ public sealed partial class TrackerSession
             if (!all.Any(x => x.Icons.Count > 0)) { CrashLog.Note($"event cards: no card read ({m.Reads} read(s), {all.Count} slot(s) seen only cut or not at all): the run's rewards stay not read"); return; }
             LabelCards(m, report, now);   // Help improve counting: sure slots and their crops
             ApplyGrid(all, now, more, what: "event cards", places: places);
+            Instances.CardsReceived(string.Join(",", report.Where(c => c.Item2).Select(c => c.Item1 + 1)));
         }
         catch (Exception ex) { CrashLog.Write("event cards filing", ex); }
         finally { m.Dispose(); _cards = null; }
@@ -4542,15 +4549,21 @@ public sealed partial class TrackerSession
 
     /// <summary>
     /// A read of a run's kept pictures onto the run: always for one whose rewards weren't read; for a partly read one only
-    /// when it read more slots than the live read, or as many with fewer not read. True when taken.
+    /// when it read more slots than the live read, or as many with fewer not read. Either way when the two disagree on
+    /// which event cards were received: the read of the pictures saw the whole screen to its end, the live read may have
+    /// filed early or from a card mid-flip (2026-10-30 11:04 Defend Shugo Merchants: live, card 5 received, 54 slots; the
+    /// pictures, card 5 gold, 40; the 54 were kept for being more, 14 slots of a card the player never got). True when taken.
     /// </summary>
     internal static bool TakeReread(InstanceRun r, InstanceRun read)
     {
         if (!read.FromPicture) return false;
-        bool better = r.KinahUnknown || !r.FromPicture || read.PictureSlots > r.PictureSlots || (read.PictureSlots == r.PictureSlots && read.SlotsUnread < r.SlotsUnread);
+        bool otherCards = r.CardsReceived.Length > 0 && read.CardsReceived.Length > 0 && r.CardsReceived != read.CardsReceived;
+        bool better = otherCards || r.KinahUnknown || !r.FromPicture || read.PictureSlots > r.PictureSlots || (read.PictureSlots == r.PictureSlots && read.SlotsUnread < r.SlotsUnread);
+        if (otherCards) CrashLog.Note($"{r.Label} {r.Start.ToLocalTime():HH:mm:ss}: the live read had cards {r.CardsReceived} received, the read of its kept pictures cards {read.CardsReceived}: the pictures' read is taken (the whole screen, to its end)");
         // a place both reads named as the same item with another count (2026-10-25 18:06: Abyss Points x340 live, x320 from
-        // the pictures at 18:07:41): the later read doesn't replace the earlier, and the earlier doesn't stand either
-        var differ = CountsDiffer(r.PictureCounts, read.PictureCounts);
+        // the pictures at 18:07:41): the later read doesn't replace the earlier, and the earlier doesn't stand either. Two
+        // reads with other cards received hold other lists: nothing to compare
+        var differ = otherCards ? new List<(string Place, long Id, bool Bound, int A, int B)>() : CountsDiffer(r.PictureCounts, read.PictureCounts);
         if (better) r.TakeRewardsFrom(read);
         foreach (var (place, id, bound, mine, theirs) in differ) PlaceNotRead(r, place, id, bound, better ? theirs : mine, better ? mine : theirs);
         return better;

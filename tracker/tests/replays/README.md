@@ -56,7 +56,11 @@ is checked), `needs_ocr` (skipped, not failed, on a machine without Windows text
   also name `picks`, how many times it was picked (the cyan figure under its card icon, 1 to 4; each pick counts its
   list again), and may leave out `slots` to check only the rest. `event-2026-10-27-hidden-lugi-picked-twice`: card 3
   picked twice, its list in the run twice (0.8.46 counted it once). `event-2026-10-27-beritra-picked-three`: a
-  Dimensional Invasion's card picked three times, the first real 3.
+  Dimensional Invasion's card picked three times, the first real 3. `event-2026-10-30-defend-shugo-mid-flip`: the first
+  read caught card 5 mid-flip and took it for received; 0.9.0 left out every later read (card 5 gold) and filed card 5's
+  14 slots. Reads that agree on other cards received now replace the ones before (`EventCards.Merger.TakeLater`), and a
+  read again of the pictures that saw other cards received than the live read replaces it (`TrackerSession.TakeReread`).
+  Its `110433-flip.jpg` is a kept picture edited to stand in for the mid-flip frame, which wasn't kept (the case says how).
 - `text-2026-10-24-farm-kina-counter`: the 131029 farming trace (player names shifted) with `balance` reads, a trusted
   reading of the Kinah counter (`{"t", "k": "balance", "l": ["29281753"]}`, written from the footage every 2.5 s). The
   counter decides Kina (`Session/KinaWitness.cs`): 15,660 Kina, where main counts 17,120. `text-2026-10-24-chat-repeat-*`:

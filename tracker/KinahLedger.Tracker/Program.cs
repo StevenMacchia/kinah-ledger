@@ -984,6 +984,14 @@ options: --process aion[,other]");
             var keep = pr.Clone();
             Check("a read again from the pictures replaces a partly read run only when it reads more slots",
                 $"{TrackerSession.TakeReread(keep, fewer)} {keep.PictureSlots} · {TrackerSession.TakeReread(keep, more)} {keep.PictureSlots} {keep.SlotsUnread} {keep.UnknownGear}", "False 46 · True 48 1 10");
+            // 2026-10-30 11:04 Defend Shugo Merchants: the live read had card 5 received (mid-flip), 54 slots; the pictures' read
+            // had it gold, 40 slots. Other cards received: the pictures' read is taken though it has fewer slots
+            var live = pr.Clone(); live.PictureSlots = 54; live.SlotsUnread = 33; live.CardsReceived = "2,3,4,5";
+            var fromPics = pr.Clone(); fromPics.PictureSlots = 40; fromPics.SlotsUnread = 5; fromPics.CardsReceived = "2,3,4";
+            var same = pr.Clone(); same.PictureSlots = 40; same.SlotsUnread = 5; same.CardsReceived = "2,3,4,5";
+            var live2 = live.Clone();
+            Check("...and replaces it with fewer slots when the two saw other cards received; with the same cards, more slots still win",
+                $"{TrackerSession.TakeReread(live, fromPics)} {live.PictureSlots} {live.CardsReceived} · {TrackerSession.TakeReread(live2, same)} {live2.PictureSlots}", "True 40 2,3,4 · False 54");
         }
         finally { CrashLog.DirOverride = keepDir; try { Directory.Delete(dir, true); } catch (Exception) { } }
         return ok;
@@ -3894,6 +3902,23 @@ options: --process aion[,other]");
                     var lv = ml.Voted(0);
                     Check("event cards: a card no read of which can be placed is its fullest read",
                         $"{lv.Count} slots, {lv.Count(v => v.Icons.Count > 0)} read, loose {ml.Cards[0].FromLoose}, unplaced {ml.Unaligned}", "15 slots, 12 read, loose True, unplaced 2");
+                    // 2026-10-30 11:04 Defend Shugo Merchants: the first read caught card 5 mid-flip and took it for received, the
+                    // reads after it saw it gold. Two later reads that agree replace the first; one still standing when the screen
+                    // closes does too (TakeLater); a lone odd read between agreeing ones is dropped
+                    var c0 = CardOf(787, false, true, Enumerable.Range(0, 6).Select(n => (n / 3, n % 3, n, false)));
+                    EventCards.Screen Set(bool second) => new(new List<EventCards.Card> { c0, second ? c0 with { Index = 1 } : new EventCards.Card(1, default, false, 0, false, new(), false, false, 0) }
+                        .Concat(Enumerable.Range(2, 3).Select(i => new EventCards.Card(i, default, false, 0, false, new(), false, false, 0))).ToList());
+                    var mx = new EventCards.Merger(70);
+                    string sx = $"{mx.Add(Set(true), dummy)} {mx.Add(Set(false), dummy)} held {mx.HeldAside} {mx.Add(Set(false), dummy)} held {mx.HeldAside}";
+                    Check("event cards: two later reads that agree on other cards received replace the read before them",
+                        $"{sx} · card 2 {mx.Received[1]}, {mx.Reads} reads, lists {mx.Cards.Count}", "True False held 1 True held 0 · card 2 False, 2 reads, lists 1");
+                    var my = new EventCards.Merger(70);
+                    my.Add(Set(true), dummy); my.Add(Set(false), dummy);
+                    Check("...one later read still standing when the screen closes replaces it too", $"{my.TakeLater()} card 2 {my.Received[1]}, {my.Reads} read", "True card 2 False, 1 read");
+                    var mz = new EventCards.Merger(70);
+                    mz.Add(Set(true), dummy); mz.Add(Set(false), dummy); mz.Add(Set(true), dummy);
+                    Check("...and a lone odd read between two that agree is dropped", $"held {mz.HeldAside} {mz.TakeLater()} card 2 {mz.Received[1]}, {mz.Reads} reads", "held 0 False card 2 True, 2 reads");
+                    mx.Dispose(); my.Dispose(); mz.Dispose();
                 }
                 // the unknown-item path: received cards whose slots the item list can't name are filed as unknown items with the
                 // run's rewards, never dropped and never guessed; a list running past the window adds a place not read and leaves
