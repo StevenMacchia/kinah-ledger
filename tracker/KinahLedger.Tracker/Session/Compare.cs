@@ -172,6 +172,9 @@ public static class ZoneCompare
     /// <summary>The stay must be this long before the hour on the card is set against your usual (10 minutes).</summary>
     public const double VersusStaySeconds = 600;
 
+    /// <summary>A figure rounded as the window writes it: "1.27M" to ten thousand, "805K" to a thousand, "7.5K" to a hundred.</summary>
+    public static long Shown(long v) { long a = Math.Abs(v); long step = a >= 1_000_000 ? 10_000 : a >= 10_000 ? 1_000 : a >= 1_000 ? 100 : 1; return (long)Math.Round(v / (double)step, MidpointRounding.AwayFromZero) * step; }
+
     /// <summary>
     /// The hour the card shows (<paramref name="headline"/>, this stay's or this run's, the big figure the player reads)
     /// against your usual here: "465K more than usual", "12K less than usual", "about your usual"; the difference is
@@ -181,7 +184,8 @@ public static class ZoneCompare
     public static (string Text, int Sign, long Diff)? Versus(long usual, long headline, double staySeconds, Func<double, string> fk)
     {
         if (usual <= 0 || headline <= 0 || staySeconds < VersusStaySeconds) return null;
-        long diff = headline - usual;
+        // the two figures as the card shows them ("1.27M", "805K"), so the difference adds up on screen: 1.27M less 805K is 465K
+        long diff = Shown(headline) - Shown(usual);
         if (Math.Abs(diff) < Math.Max(1_000, usual * 0.03)) return ("about your usual", 0, diff);
         return diff > 0 ? ($"{fk(diff)} more than usual", 1, diff) : ($"{fk(-diff)} less than usual", -1, diff);
     }

@@ -110,6 +110,7 @@ public static class CompareTests
         Check("usual here: over the earlier days, today's, the best day", u == null ? "none" : $"{Fk(u.Usual)} {Fk(u.Today)} {Fk(u.Best ?? 0)}", "1.20M 1.20M 1.50M");
         // the difference is the card's own hour (this stay's, the big figure) less the usual: never a different figure
         Check("versus: the headline 1.27M against a usual 805K", ZoneCompare.Versus(805_000, 1_270_000, 2_520, Fk)?.Text ?? "none", "465K more than usual");
+        Check("...a headline of 1,268,400 shows as 1.27M, so still 465K", ZoneCompare.Versus(805_300, 1_268_400, 2_520, Fk)?.Text ?? "none", "465K more than usual");
         Check("...less than usual", ZoneCompare.Versus(1_200_000, 1_000_000, 1_800, Fk)?.Text ?? "none", "200K less than usual");
         Check("...within 3%: about your usual", ZoneCompare.Versus(1_200_000, 1_220_000, 1_800, Fk)?.Text ?? "none", "about your usual");
         Check("...no difference line with a stay under 10 minutes", (ZoneCompare.Versus(805_000, 1_270_000, 599, Fk) == null).ToString(), "True");
@@ -122,9 +123,9 @@ public static class CompareTests
             long usual = rnd.Next(50_000, 3_000_000), head = rnd.Next(50_000, 3_000_000);
             var vs = ZoneCompare.Versus(usual, head, 600 + rnd.Next(0, 7_200), Fk);
             if (vs is not { } x) { matches = false; break; }
-            bool same = x.Diff == head - usual
-                && (x.Sign == 0 ? x.Text == "about your usual" : x.Text == $"{Fk(Math.Abs(head - usual))} {(head > usual ? "more" : "less")} than usual")
-                && (x.Sign == 0 || x.Sign == Math.Sign(head - usual));
+            bool same = x.Diff == ZoneCompare.Shown(head) - ZoneCompare.Shown(usual)
+                && (x.Sign == 0 ? x.Text == "about your usual" : x.Text == $"{Fk(Math.Abs(ZoneCompare.Shown(head) - ZoneCompare.Shown(usual)))} {(ZoneCompare.Shown(head) > ZoneCompare.Shown(usual) ? "more" : "less")} than usual")
+                && (x.Sign == 0 || x.Sign == Math.Sign(ZoneCompare.Shown(head) - ZoneCompare.Shown(usual)));
             if (!same) { matches = false; Console.WriteLine($"    headline {head}, usual {usual}: \"{x.Text}\" ({x.Diff})"); break; }
         }
         Check("...500 random cases: the difference always the shown headline less the usual", matches.ToString(), "True");
