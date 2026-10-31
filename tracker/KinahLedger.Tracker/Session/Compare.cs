@@ -169,11 +169,21 @@ public static class ZoneCompare
         return n.ToString("N0") + s;
     }
 
-    /// <summary>How today stands against your usual: "35K more today", "12K less today", or "about the same today".</summary>
-    public static (string Text, int Sign) TodayWords(UsualHere u, Func<double, string> fk)
+    /// <summary>The stay must be this long before the hour on the card is set against your usual (10 minutes).</summary>
+    public const double VersusStaySeconds = 600;
+
+    /// <summary>
+    /// The hour the card shows (<paramref name="headline"/>, this stay's or this run's, the big figure the player reads)
+    /// against your usual here: "465K more than usual", "12K less than usual", "about your usual"; the difference is
+    /// always the shown figure less the usual one, so the two lines never disagree. Null while the stay is under
+    /// <see cref="VersusStaySeconds"/> (an early hour swings) or there is no hour yet.
+    /// </summary>
+    public static (string Text, int Sign, long Diff)? Versus(long usual, long headline, double staySeconds, Func<double, string> fk)
     {
-        if (u.Usual <= 0 || Math.Abs(u.Diff) < Math.Max(1_000, u.Usual * 0.03)) return ("about the same today", 0);
-        return u.Diff > 0 ? ($"{fk(u.Diff)} more today", 1) : ($"{fk(-u.Diff)} less today", -1);
+        if (usual <= 0 || headline <= 0 || staySeconds < VersusStaySeconds) return null;
+        long diff = headline - usual;
+        if (Math.Abs(diff) < Math.Max(1_000, usual * 0.03)) return ("about your usual", 0, diff);
+        return diff > 0 ? ($"{fk(diff)} more than usual", 1, diff) : ($"{fk(-diff)} less than usual", -1, diff);
     }
 
     /// <summary>The verdict under two zones: (lead, bold part, rest), "Kraka Footpath made" "123K more an hour" "this week."</summary>

@@ -289,11 +289,11 @@ public partial class MainWindow
             var s = PT(sub, "Faint", 11.5); s.Margin = new Thickness(0, 2, 0, 8); sp.Children.Add(s);
             foreach (var (label, a, b, win) in rows)
             {
-                var r = new Grid { Height = 24 };
+                var r = new Grid { MinHeight = 24 };
                 r.ColumnDefinitions.Add(new ColumnDefinition()); r.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                r.Children.Add(PT(label, "Muted", 12.5));
+                var lt = PT(label, "Muted", 12.5); lt.VerticalAlignment = VerticalAlignment.Top; lt.Margin = new Thickness(0, 3, 0, 3); r.Children.Add(lt);
                 bool best = left ? win < 0 : win > 0;
-                var v = PT(left ? a : b, best ? "Gold" : "Ink", 12.5, null, "MonoFont"); v.Margin = new Thickness(10, 0, 0, 0); v.MaxWidth = 150;
+                var v = PT(left ? a : b, best ? "Gold" : "Ink", 12.5, null, "MonoFont"); v.MaxWidth = 150; v.TextWrapping = TextWrapping.Wrap; v.TextTrimming = TextTrimming.None; v.TextAlignment = TextAlignment.Right; v.VerticalAlignment = VerticalAlignment.Top; v.Margin = new Thickness(10, 3, 0, 3);
                 Grid.SetColumn(v, 1); r.Children.Add(v);
                 sp.Children.Add(r);
             }
@@ -322,10 +322,13 @@ public partial class MainWindow
     /* ---------------- B: your usual here ---------------- */
 
     /// <summary>
-    /// Under the hour on the Farming card: "Your usual here 152K", how today stands, "Your best here 214K"; only with Compare
-    /// on, ten minutes in this zone today and thirty there on earlier days (Session/Compare.cs). True when it shows.
+    /// Under the hour on the Farming card: "Your usual here 805K", then the card's own hour against it ("465K more than
+    /// usual": <paramref name="headline"/> is the big figure above, this stay's or run's hour, so the two never disagree),
+    /// then "Your best here 840K". The block needs Compare on, ten minutes in this zone today and thirty there on earlier
+    /// days; the difference line also needs ten minutes of this stay (<paramref name="staySeconds"/>) and an hour that is
+    /// no longer warming up (Session/Compare.cs). True when the block shows.
     /// </summary>
-    bool FillUsual(string? zone)
+    bool FillUsual(string? zone, long headline, double staySeconds)
     {
         UsualHere? u = null;
         if (_prefs.CompareZones && !string.IsNullOrEmpty(zone) && TodayEngine is { } day
@@ -338,12 +341,16 @@ public partial class MainWindow
         UsualLine.Inlines.Clear();
         void Fig(string text) { var r = PR(text, "Ink"); r.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); UsualLine.Inlines.Add(r); }
         UsualLine.Inlines.Add(PR("Your usual here ", "Muted")); Fig(Fk(u.Usual));
-        var (words, sign) = Cmp.TodayWords(u, v => Fk(v));
-        UsualLine.Inlines.Add(new LineBreak());
-        UsualLine.Inlines.Add(PR(words, sign > 0 ? "Good" : sign < 0 ? "SecGold" : "Muted"));
+        var vs = _rateWarming ? null : Cmp.Versus(u.Usual, headline, staySeconds, v => Fk(v));
+        if (vs is { } x)
+        {
+            UsualLine.Inlines.Add(new LineBreak());
+            UsualLine.Inlines.Add(PR(x.Text, x.Sign > 0 ? "Good" : x.Sign < 0 ? "SecGold" : "Muted"));
+        }
         if (u.Best is long best) { UsualLine.Inlines.Add(new LineBreak()); UsualLine.Inlines.Add(PR("Your best here ", "Muted")); Fig(Fk(best)); }
-        UsualBox.ToolTip = $"Made an hour in {ZoneName(zone!)} on this PC: your usual over {TodayLoot.Dur(u.EarlierActive)} on earlier days, today's over {TodayLoot.Dur(u.TodayActive)}"
-            + (u.Best != null ? ", and your best day there." : ".") + " Kinah plus loot after the Market's cut.";
+        UsualBox.ToolTip = $"Made an hour in {ZoneName(zone!)} on this PC: your usual is over {TodayLoot.Dur(u.EarlierActive)} on earlier days"
+            + (vs != null ? $", set against the hour above ({Fk(headline)}, this stay)" : "") + (u.Best != null ? "; your best is your best day there." : ".")
+            + " Kinah plus loot after the Market's cut.";
         UsualBox.Visibility = Visibility.Visible;
         return true;
     }

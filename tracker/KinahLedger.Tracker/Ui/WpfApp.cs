@@ -327,7 +327,7 @@ public static class WpfApp
         w.PickZoneRowForTest(c1.Rows[0] == "Western Cantas Valley" ? 1 : 0); DoEvents();
         var c2 = w.CompareForTest();
         Check(c2.Picked.Count == 2 && c2.Vs && c2.Verdict.Length > 0 && !c2.Verdict.Contains('%'), $"...a second tick: side by side, \"{c2.Verdict}\"");
-        Check(c2.Usual.StartsWith("Your usual here"), $"...the Farming card's usual here: \"{c2.Usual}\"");
+        Check(c2.Usual.StartsWith("Your usual here") && (c2.Usual.Contains(" than usual") || c2.Usual.Contains("about your usual")) && !c2.Usual.Contains("today"), $"...the Farming card's usual here, set against the hour above: \"{c2.Usual}\"");
         w.PickZonesForTest(false); w.SetCompareForTest(false); DoEvents();
         Check(!w.CompareForTest().Switch && w.CompareForTest().Usual == "", "...off again: Week as before, no usual line");
         w.PickLootForTest(false); DoEvents();
