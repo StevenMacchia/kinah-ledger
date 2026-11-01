@@ -84,7 +84,7 @@ public static class CompareTests
         InstanceRun R(string zone, double hoursAgo, long kinah, int mins, bool flagged = false, string ev = "")
         {
             var r = new InstanceRun { Zone = zone, Event = ev, Kind = ev.Length > 0 ? "Event" : "Expedition", Start = now.AddHours(-hoursAgo), LastLoot = now.AddHours(-hoursAgo).AddMinutes(mins), Kinah = kinah };
-            if (flagged) r.PartlyRead = true;
+            if (flagged) r.Suspect = "looks like several runs";
             return r;
         }
         var runs = new List<InstanceRun>

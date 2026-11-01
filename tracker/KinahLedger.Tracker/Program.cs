@@ -959,13 +959,13 @@ options: --process aion[,other]");
             }
 
             // a partly read event run (2026-10-24 16:02 Hidden Lugi: cards read, 5 slots not): sent with its flag and its unknown
-            // pieces, out of the averages, never parked; it waits once for its read again from its pictures, which replaces the
+            // pieces, counted with what was read, never parked; it waits once for its read again from its pictures, which replaces the
             // live read only when it reads more
             var ps = new TrackerSession(null, settings, items, "Test");
             var pr = new InstanceRun { Zone = "Shugo Festival", Kind = "Event", Event = "Hidden Lugi", Family = "Shugo Festival", Start = t0.AddHours(2), LastLoot = t0.AddHours(2).AddMinutes(4),
                 FromPicture = true, PartlyRead = true, SlotsUnread = 5, UnknownGear = 9, UnknownItems = 4, PictureSlots = 46, GearNotes = { "Legend gear, one of Elder Gloves / Relic Collector Gloves" } };
             pr.Items[items.IdOf("Abyss Points")] = 2120; pr.Items[items.IdOf("Enhance Stone")] = 3200; pr.Items[items.IdOf("Odyle")] = 7; pr.BoundItems[items.IdOf("Soul Codex (Bound)")] = 3;
-            Check("partly read: its own flag, not rewards or Kinah not read; out of the averages", $"{pr.PartlyRead} {pr.RewardsNotRead} {pr.KinahUnknown} {pr.OutOfAverages}", "True False False True");
+            Check("partly read: its own flag, not rewards or Kinah not read; counted with what was read", $"{pr.PartlyRead} {pr.RewardsNotRead} {pr.KinahUnknown} {pr.OutOfAverages}", "True False False False");
             var pp = InstanceRunPayload.From(new[] { pr }, id => items.KeyOf(id));
             Check("...the payload keeps it and carries the flag, the slots not read, the unknown pieces and what the gear may be",
                 pp == null ? "dropped" : System.Text.Json.JsonSerializer.Serialize(new { pp[0].partly_read, pp[0].not_read, pp[0].unknown, pp[0].notes }),
@@ -4010,7 +4010,7 @@ options: --process aion[,other]");
                     // drawn gear whose icon two items share is unknown gear (11 pieces), no longer slots not read
                     Check("event cards: unknown slots filed as unknown items, the cut ones too, the open list marked",
                         $"{string.Join(" ", (es.LastEventCards ?? new()).Select(c => c.Received ? $"R{c.Slots.Count}{(c.More ? "+" : "")}" : "N"))} | items {er2?.Items.Count} | unread {er2?.SlotsUnread} | unknown {er2?.UnknownSlots.Count} more {er2?.UnknownSlots.Count(u => u.Contains("more below"))} | from picture {er2?.FromPicture} | Kinah unknown {er2?.KinahUnknown} | partly read {er2?.PartlyRead} | out of averages {er2?.OutOfAverages} | unknown gear {er2?.UnknownGear}",
-                        "R4 R15+ N N N | items 0 | unread 9 | unknown 9 more 1 | from picture True | Kinah unknown False | partly read True | out of averages True | unknown gear 11");
+                        "R4 R15+ N N N | items 0 | unread 9 | unknown 9 more 1 | from picture True | Kinah unknown False | partly read True | out of averages False | unknown gear 11");
                     Check("...the hint to hold the screen and scroll each card, said once",
                         $"{Hints() - hintsBefore}", "1");
                 }

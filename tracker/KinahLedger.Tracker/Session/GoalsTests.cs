@@ -54,7 +54,7 @@ public static class GoalsTests
                 RunOf("Expedition", 1, (stone, 50, false)),
                 RunOf("Event", 0.5, (powder, 2, true)),
             };
-            runs[1].PartlyRead = true;
+            runs[1].Suspect = "not a run";
             Check("a flagged run is out of the averages", runs[1].OutOfAverages.ToString(), "True");
             var c = GoalCounts.Day(day, runs, now);
             Check("Kinah: loose Kinah from farming, as LOOT's Today side", $"{c.Kinah} {c.Kinah == TodayLoot.Farm(day, items).Kinah}", "152000 True");

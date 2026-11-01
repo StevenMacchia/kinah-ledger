@@ -477,7 +477,7 @@ public partial class MainWindow
         return $"{pcs} piece{(pcs == 1 ? "" : "s")}" + (gearN > 0 ? $" · {gearN} gear" : "");
     }
 
-    /// <summary>Why a run is left out, in three words: "5 runs merged", "Kinah not read", "Rewards not read", "Not a run", "Partly read: 4"; "" when it counts.</summary>
+    /// <summary>Why a run is left out, in three words: "5 runs merged", "Kinah not read", "Rewards not read", "Not a run"; "" when it counts.</summary>
     static string FlagReason(InstanceRun r, double medianSecs)
     {
         if (r.Suspect == "looks like several runs")
@@ -489,8 +489,7 @@ public partial class MainWindow
         if (r.Suspect.Length > 0) return char.ToUpperInvariant(r.Suspect[0]) + string.Join(' ', r.Suspect.Split(' ').Take(3))[1..];
         if (r.RewardsNotRead) return "Rewards not read";
         if (r.KinahNotRead || r.OldUnread) return "Kinah not read";
-        // a partly read run that still counts (a slot or two not named) carries no flag, only its "unnamed" count
-        if (r.PartlyRead && r.OutOfAverages) return $"Partly read: {r.SlotsUnread}";
+        // a partly read run counts with what was read (2026-11-01): no flag, only its "unnamed" count
         return "";
     }
 
