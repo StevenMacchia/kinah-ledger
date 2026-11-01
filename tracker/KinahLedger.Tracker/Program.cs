@@ -4010,7 +4010,7 @@ options: --process aion[,other]");
                     // drawn gear whose icon two items share is unknown gear (11 pieces), no longer slots not read
                     Check("event cards: unknown slots filed as unknown items, the cut ones too, the open list marked",
                         $"{string.Join(" ", (es.LastEventCards ?? new()).Select(c => c.Received ? $"R{c.Slots.Count}{(c.More ? "+" : "")}" : "N"))} | items {er2?.Items.Count} | unread {er2?.SlotsUnread} | unknown {er2?.UnknownSlots.Count} more {er2?.UnknownSlots.Count(u => u.Contains("more below"))} | from picture {er2?.FromPicture} | Kinah unknown {er2?.KinahUnknown} | partly read {er2?.PartlyRead} | out of averages {er2?.OutOfAverages} | unknown gear {er2?.UnknownGear}",
-                        "R4 R15+ N N N | items 0 | unread 9 | unknown 9 more 1 | from picture True | Kinah unknown False | partly read True | out of averages True | unknown gear 11");
+                        "R4 R15+ N N N | items 0 | unread 9 | unknown 9 more 1 | from picture True | Kinah unknown False | partly read True | out of averages False | unknown gear 11");
                     Check("...the hint to hold the screen and scroll each card, said once",
                         $"{Hints() - hintsBefore}", "1");
                 }

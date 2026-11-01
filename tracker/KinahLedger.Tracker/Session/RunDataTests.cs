@@ -209,7 +209,7 @@ public static class RunDataTests
             File.WriteAllLines(file, new[] { oldShape, eventRun, paidRun, bagRec }.Select(r => JsonSerializer.Serialize(r)));
             var hl = new InstanceLog();
             Check("before-the-rules records: the 14:03 shape and the bag run are not runs", string.Join(" ", hl.Snapshot().OrderBy(r => r.Start).Select(r => r.Suspect == "not a run" ? "not" : r.Suspect.Length > 0 ? r.Suspect : "ok")), "not ok ok not");
-            Check("...out of the averages with the partly read event; the paid run counts", $"{hl.Snapshot().Count(r => r.OutOfAverages)} {hl.Snapshot().Single(r => r.Kinah == 600_000).OutOfAverages}", "3 False");
+            Check("...out of the averages; the partly read event counts with what was read, as the paid run does", $"{hl.Snapshot().Count(r => r.OutOfAverages)} {hl.Snapshot().Single(r => r.Kinah == 600_000).OutOfAverages} {hl.Snapshot().Single(r => r.Kind == \"Event\").OutOfAverages}", "2 False False");
             Check("...the bag run's line in reads.log", File.ReadAllText(CrashLog.ReadsPath).Contains("its reward picture named nothing and showed no Kinah") ? "logged" : "no line", "logged");
 
             // ---- run edges from the chat's own lines, and a picture run's Kinah from its picture alone (2026-10-25) ----
