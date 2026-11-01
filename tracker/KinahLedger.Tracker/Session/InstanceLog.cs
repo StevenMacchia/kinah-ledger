@@ -67,7 +67,10 @@ public sealed class InstanceRun
     /// <summary>
     /// Partly read (since 2026-10-24): its reward cards were read, at least one received card of them, but some places
     /// weren't (seen only cut by a card's window, a list running past what was seen, a slot no item matches): what was read
-    /// is filed and sent, with this flag so the site can say so, and the run stays out of the averages. Distinct from
+    /// is filed and sent, with this flag so the site can say so. It counts in the figures and totals with what was read
+    /// (Steven, 2026-11-01: a Shugo or Dimensional Invasion card's last row is cut by its window unless scrolled, and a card
+    /// picked three times cuts it three times, so every such run was left out of the Events page); the places not read stay
+    /// not read, never guessed. Distinct from
     /// <see cref="RewardsNotRead"/> (no card read at all: not sent, parked). <see cref="SlotsUnread"/> says how many.
     /// </summary>
     public bool PartlyRead { get; set; }
@@ -176,7 +179,7 @@ public sealed class InstanceRun
     public string Suspect { get; set; } = "";
     /// <summary>Left out of the per-run, per-hour and total figures: its Kinah isn't known, or the record looks wrong.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool OutOfAverages => KinahUnknown || PartlyRead || OldUnread || Suspect.Length > 0 || SlotDoubts.Count > 0;
+    public bool OutOfAverages => KinahUnknown || OldUnread || Suspect.Length > 0 || SlotDoubts.Count > 0;
 
     /// <summary>
     /// The run's pieces, not a quantity sum (Steven, 2026-10-24: two pauldrons read "x1K" made "2,000 items"): every piece
@@ -982,7 +985,7 @@ public sealed class InstanceLog
             // as the items: the picture's own, in place of what was there
             _cur.PictureCounts = pictureCounts?.ToList() ?? new();
             if (partly) _cur.PartlyRead = true;
-            CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, out of the averages)" : "")}; the chat's {chatItems} set aside");
+            CrashLog.Note($"{_cur.Label}: counted from the reward {(partly || pictureSlots > 0 ? "cards" : "table")}: {PiecesNote(_cur)} from its slots, {unread} slot(s) not read{(partly ? $" (partly read: {_cur.SlotsUnread} slot(s) not read; sent, counted with what was read)" : "")}; the chat's {chatItems} set aside");
         }
     }
 
