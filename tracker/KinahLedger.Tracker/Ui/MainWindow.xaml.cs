@@ -78,6 +78,7 @@ public partial class MainWindow : Window
         _settings = settings;
         _items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         IconCache.Enabled = settings.Ui.Icons;
+        Data.PriceBook.ShowGross = _prefs.ShowGross;
         Upload.RunPayload.Gear = GearScore.Payload(_prefs.GearScore);   // runs are shared under the player's gear bracket, or "unknown"
         if (!_prefs.ManualMarket) _marketRegion = null;
         _settings.Upload.Enabled = _prefs.Share;
@@ -157,6 +158,7 @@ public partial class MainWindow : Window
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
         CraftResetLink.Click += async (_, _) => await StartCraftOver();
+        NewSessionBtn.Click += async (_, _) => await ClearFarmTables();
         InstClearBtn.Click += async (_, _) => await ClearRuns();
         WireUndo();
         _mode = Mode.Open;
@@ -415,7 +417,7 @@ public partial class MainWindow : Window
     /// <summary>The step-by-step setup check (first run, and Options › Game reading › Check the setup).</summary>
     public CalibrationWindow OpenCalibration(Window owner)
     {
-        var w = new CalibrationWindow(_settings, _items.Knows, () => _prefs.ManualChat ? _region : null, PickChat) { Owner = owner };
+        var w = new CalibrationWindow(_settings, _items.Knows, () => _prefs.ManualChat ? _region : null, PickChat, () => HotkeyText) { Owner = owner };
         w.Show();
         return w;
     }
@@ -571,6 +573,7 @@ public partial class MainWindow : Window
         StartBtn.Content = on ? "Stop run" : "Start run";
         StartBtn.IsEnabled = on || HasServer;
         _trayToggle.Text = on ? "Stop run" : "Start run";
+        UpdateStartHint(on);
         UpdateTrayTip();
     }
 
@@ -586,8 +589,17 @@ public partial class MainWindow : Window
             : "reading";
         var tip = "Kinah Ledger · " + what + (UpdateReady ? " · update ready" : "");
         if (tip != _trayTip) { _trayTip = tip; try { _tray.Text = tip; } catch (Exception) { /* a text over the limit must not stop the tick */ } }
+        // the icon says it too, with a dot: red for a read problem, amber for paused, teal for an update ready; none while all is well
+        var dot = what == "read problem" ? System.Drawing.Color.FromArgb(0xFF, 0x6B, 0x5E) : what == "paused" ? System.Drawing.Color.FromArgb(0xF3, 0xB4, 0x5E)
+            : UpdateReady ? System.Drawing.Color.FromArgb(0x5E, 0xD8, 0xCB) : System.Drawing.Color.Empty;
+        if (dot != _trayDot)
+        {
+            _trayDot = dot;
+            try { _tray.Icon = dot.IsEmpty ? Native.AppIcon() : Native.AppIconWithDot(dot); } catch (Exception ex) { CrashLog.Write("tray icon", ex); }
+        }
     }
     string _trayTip = "";
+    System.Drawing.Color _trayDot = System.Drawing.Color.Empty;
 
     /// <summary>
     /// The 500 ms refresh. An exception in it used to reach the app's handler every half second, a dialog each time: now it is
@@ -627,7 +639,7 @@ public partial class MainWindow : Window
             FillNumbers(show, show.Active);
         }
         else if (chat == null) { TableTitle.Text = _watcher.GameRect == null ? "Reading starts once the game is open" : "Looking for the chat"; HeadRate.Text = " "; HeadRateUnit.Visibility = Visibility.Collapsed; }
-        FillReading(chat);
+        FillReading(chat, show);
         UpdateTrayTip();
         // the live dot: the game is being read right now
         LiveMark.Visibility = chat != null && chat.Paused.Length == 0 && chat.LastError.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -756,7 +768,7 @@ public partial class MainWindow : Window
             if (r.Count > 0)
             {
                 var price = PriceBook.Price(r.Name);
-                if (price != null) { long g0 = price.Value * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; rowValue = Short(kept); worthN[r.Name] = g0; keptN[r.Name] = kept; } else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
+                if (price != null) { long g0 = price.Value * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; rowValue = Amounts.Short(kept); worthN[r.Name] = g0; keptN[r.Name] = kept; } else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
             }
             worth[r.Name] = rowValue;
             var g = GatheringCatalog.Find(r.Name);
@@ -837,7 +849,7 @@ public partial class MainWindow : Window
             bool open = _openMobs.Contains(key), known = book.Knows(m.Name);
             var where = zonesToo && m.Zone is { Length: > 0 } mz ? mz + " · " : "";
             // every enemy opens: its loot table when one is known, and always what it dropped for you
-            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: Short(m.Kinah),
+            mobs.Add(new DropRow(m.Name, m.Kills.ToString("N0"), m.Kills > 0 ? Fk(m.Kinah / (double)m.Kills) : "", Fk(m.Kinah / hours), Initial: InitialOf(m.Name), Icon: IconCache.Get(MobImages.Url(m.Name)), Value: Amounts.Short(m.Kinah),
                 Sub: where + (open ? "hide drops" : "show drops"), Key: key,
                 Tip: "A best guess: the Kinah that landed just after the target bar named this enemy. Click to " + (open ? "hide" : "show") + " its drops."));
             if (!open) continue;
@@ -917,11 +929,6 @@ public partial class MainWindow : Window
     /// <summary>The Kinah by enemy adds up to, from the last Build, for its folded box.</summary>
     long _lastMobKinah;
 
-    /// <summary>A price or value that fits its column: in full under 100,000, then "680K", "1.68M" (Steven, 2026-10-22: "1,680,000" ran out of the column).</summary>
-    static string Short(long v) => Math.Abs(v) < 100_000 ? v.ToString("N0")
-        : Math.Abs(v) < 1_000_000 ? $"{v / 1e3:0.#}K"
-        : Math.Abs(v) < 1_000_000_000 ? $"{v / 1e6:0.##}M" : $"{v / 1e9:0.##}B";
-
     /// <summary>The count on screen is too young for an hour's rate to mean much (FillNumbers); BestRuns.MinMinutes is separate.</summary>
     bool _rateWarming;
     static readonly TimeSpan RateWarmup = TimeSpan.FromMinutes(2);
@@ -980,7 +987,7 @@ public partial class MainWindow : Window
         ValueHr.Text = s.Priced > 0 || (_mode != Mode.Gather && kinah > 0) ? Fk(worthHr) : "";
         ValueTile.ToolTip = (s.Priced + s.Unpriced == 0 ? "No tradeable items yet."
                 : s.Priced == 0 ? "No Market price yet for any of these items. Open the Market in the game once: the prices you see there value your drops, and the site's price board fills in the rest."
-                : $"{s.Priced} of {s.Priced + s.Unpriced} tradeable items priced, at the lowest Market price, keeping {PriceBook.SellerKeeps:P0} after the Market's fee and tax. Bound items can't be sold and aren't counted."
+                : $"{s.Priced} of {s.Priced + s.Unpriced} tradeable items priced, at the lowest Market price, at {PriceBook.Fee}. Bound items can't be sold and aren't counted."
                   + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
             + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
         // the card's head: what and how long ("Open world · 42 min"), in the one way the page writes time (2026-10-28: it was
@@ -999,9 +1006,9 @@ public partial class MainWindow : Window
         ShareCardBtn.IsEnabled = true;   // the sheet says what each of its sides waits for
         var sums = new List<string>();
         if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
-        if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
+        if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); if (!PriceBook.ShowGross) sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
         if (s.Unpriced > 0) sums.Add($"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add{(s.Unpriced == 1 ? "s" : "")} nothing.");
-        sums.Add($"Total, after the Market's cut: {totalNow:N0}.");
+        sums.Add($"Total, {PriceBook.Fee}: {totalNow:N0}.");
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
         var byEnemy = e.MobSnapshot().Where(m => m.Kinah > 0).GroupBy(m => m.Name).Select(g => (Where: g.Key, Count: g.Sum(m => m.Kinah))).OrderByDescending(x => x.Count).ToList();
         _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy, e.AbyssPoints);
@@ -1263,7 +1270,7 @@ public partial class MainWindow : Window
         // This session's line: the recipes, the cut, and the gaps said once
         var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? " has" : "s have")} no price yet" : "";
         var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
-        CraftSpentNote.Text = $"{recipes} recipe{(recipes == 1 ? "" : "s")} · after the Market's {1 - PriceBook.SellerKeeps:P0}";
+        CraftSpentNote.Text = $"{recipes} recipe{(recipes == 1 ? "" : "s")} · {PriceBook.Fee}";
         CraftSpent.Text = spent > 0 || worth > 0 ? Signed(net) : "";
         CraftSpent.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, net >= 0 ? "Gold" : "Faint");
         CraftMadeNote.Text = string.Join(" · ", new[] { gapNote, noBookNote, noPrice > 0 ? $"{noPrice} with no Market price for what came out" : "" }.Where(x => x.Length > 0));
@@ -1292,7 +1299,7 @@ public partial class MainWindow : Window
             long? extra = sells is long sv && PriceBook.Price(r.Name) is long bp ? sv - (long)Math.Round(bp * (double)rolls * baseYield * PriceBook.SellerKeeps) : null;
             var cell = PriceCell(item);
             var tip = $"An upgrade of {r.Name}: {n:N0} made by {rolls:N0} won upgrade roll{(rolls == 1 ? "" : "s")}, counted in the recipe's row above."
-                + (sells is long s1 ? $"\nSells for {Fk(s1)} after the Market's cut." : "\nNo Market price for it yet.")
+                + (sells is long s1 ? $"\nSells for {Fk(s1)} {PriceBook.Cut}." : "\nNo Market price for it yet.")
                 + (extra is long e1 ? $"\n{Signed(e1)} against {rolls * baseYield:N0} {r.Name} at its price." : "");
             rows.Add(new DropRow(item, "—", "—", "", Child: true, Sub: "  ×" + n.ToString("N0"),
                 Initial: InitialOf(item), Icon: Slot(_items.IdOf(item)), Grade: _items.Get(_items.IdOf(item))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
@@ -1405,18 +1412,8 @@ public partial class MainWindow : Window
 
     static string Pct(double p) => p >= 1 ? p.ToString("0.0") + "×" : p >= .1 ? (p * 100).ToString("0") + "%" : p >= .01 ? (p * 100).ToString("0.0") + "%" : (p * 100).ToString("0.00") + "%";
     static string Rate(double v) => v >= 100 ? v.ToString("0") : v >= 10 ? v.ToString("0.0") : v.ToString("0.00");
-    /// <summary>A figure: "4.26M", "641K", "7.5K", "474", "7.5"; exactly nothing is "0" (the HUD said "0.00 Kinah / hr", the Events feed "paid 0.00").</summary>
-    /// A whole number under 1,000 has no decimals ("47", "-500"; they read "47.0" and "-500.00"); a rate like 7.5 an hour keeps them.
-    static string Fk(double v)
-    {
-        double a = Math.Abs(v);
-        if (v == 0) return "0";
-        if (a >= 1e6) return $"{v / 1e6:0.00}M";
-        if (a >= 1e4) return $"{v / 1e3:0}K";
-        if (a >= 1e3) return $"{v / 1e3:0.0}K";
-        if (a >= 100 || v == Math.Round(v)) return $"{v:0}";
-        return a >= 10 ? $"{v:0.0}" : $"{v:0.00}";
-    }
+    /// <summary>A figure in the window's one format (<see cref="Amounts.Short"/>): "474", "9,500", "123.5K", "4.26M"; exactly nothing is "0" (the HUD said "0.00 Kinah / hr", the Events feed "paid 0.00").</summary>
+    static string Fk(double v) => Amounts.Short(v);
 
     /// <summary>A new frame for the Options window's preview; null clears it (the chat area changed).</summary>
     void SetPreview(System.Drawing.Bitmap? bmp)
@@ -1597,10 +1594,28 @@ public partial class MainWindow : Window
 
     /* ---------------- tray, hotkey, window state ---------------- */
 
+    WF.ContextMenuStrip? _trayMenu;
+
+    void ToggleFromTray()
+    {
+        if (IsVisible && WindowState != WindowState.Minimized && !_quitting) HideToTray(); else Restore();
+    }
+
+    /// <summary>The tray menu in the look now chosen: its colours are taken again (a menu's colours are not WPF resources, so they don't follow on their own).</summary>
+    void RepaintTray()
+    {
+        if (_trayMenu == null) return;
+        var pal = TrayPalette.Current();
+        _trayMenu.BackColor = pal.Bg; _trayMenu.ForeColor = pal.Ink;
+        _trayMenu.Renderer = new TrayMenuRenderer(pal);
+        _trayMenu.Invalidate();
+    }
+
     void BuildTray()
     {
-        var menu = new WF.ContextMenuStrip { BackColor = System.Drawing.Color.FromArgb(17, 26, 40), ForeColor = System.Drawing.Color.FromArgb(233, 239, 247), ShowImageMargin = false, Font = new System.Drawing.Font("Segoe UI", 9.75f) };
-        menu.Renderer = new TrayMenuRenderer();
+        var pal = TrayPalette.Current();
+        var menu = new WF.ContextMenuStrip { BackColor = pal.Bg, ForeColor = pal.Ink, ShowImageMargin = false, Font = new System.Drawing.Font("Segoe UI", 9.75f) };
+        menu.Renderer = new TrayMenuRenderer(pal); _trayMenu = menu;
         var open = new WF.ToolStripMenuItem("Open Kinah Ledger") { Font = new System.Drawing.Font("Segoe UI", 9.75f, System.Drawing.FontStyle.Bold) };
         open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
@@ -1614,6 +1629,8 @@ public partial class MainWindow : Window
         menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, movePanel, placePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
         _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => Restore();
+        // one left click toggles the window: shown (and not minimized) goes to the tray, else it comes up
+        _tray.MouseClick += (_, e) => { if (e.Button == WF.MouseButtons.Left) ToggleFromTray(); };
         _tray.BalloonTipClicked += (_, _) => Restore();
     }
 

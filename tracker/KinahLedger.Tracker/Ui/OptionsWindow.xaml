@@ -100,6 +100,15 @@
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Show amounts before the Market fee"/>
+                  <TextBlock x:Name="GrossHint" Style="{StaticResource RowHint}"/>
+                </StackPanel>
+                <CheckBox x:Name="GrossChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Close button keeps it running"/>
                   <TextBlock Style="{StaticResource RowHint}" Text="Closing the window sends Kinah Ledger to the tray, so it can open with the game. Quit from the tray icon's menu."/>
                 </StackPanel>

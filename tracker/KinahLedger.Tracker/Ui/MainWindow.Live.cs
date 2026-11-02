@@ -368,15 +368,19 @@ public partial class MainWindow
     static readonly TimeSpan NothingReadAfter = TimeSpan.FromMinutes(2);
 
     /// <summary>"Reading · last pickup 4s ago" under the zone while all is well; "Nothing read for 2 min. Is chat visible?" when the chat has gone quiet with the game in front.</summary>
-    void FillReading(TrackerSession? c)
+    void FillReading(TrackerSession? c, SessionEngine? shown)
     {
         string text = ""; string tone = "Faint";
         if (c != null && c.ChatFound && c.Paused.Length == 0 && c.LastError.Length == 0)
         {
             var now = DateTime.UtcNow;
             if (now - c.LastLinesAt >= NothingReadAfter) { text = $"Nothing read for {(int)(now - c.LastLinesAt).TotalMinutes} min. Is chat visible?"; tone = "Warn"; }
-            else if (c.RecentPickups(1).FirstOrDefault() is { } p && p.At != DateTime.MinValue) text = "Reading · last pickup " + Ago(now - p.At) + " ago";
-            else text = "Reading · nothing picked up yet";
+            else
+            {
+                text = c.RecentPickups(1).FirstOrDefault() is { } p && p.At != DateTime.MinValue ? "Reading · last pickup " + Ago(now - p.At) + " ago" : "Reading · nothing picked up yet";
+                // when the count on screen began: a run's start, or this zone's / this session's (it starts over with New session)
+                if (shown != null) text += " · counting since " + shown.Started.ToLocalTime().ToString("HH:mm");
+            }
         }
         if (ReadingLbl.Text != text) ReadingLbl.Text = text;
         ReadingLbl.SetResourceReference(TextBlock.ForegroundProperty, tone);

@@ -464,15 +464,20 @@
           </Grid>
 
           <Grid Margin="20,16,20,16">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start run" MinWidth="112" Height="34" Padding="24,0" FontSize="13" VerticalAlignment="Center"
                     ToolTip="Everything is counted while the game is open. A run times one stretch on top; it is what gets saved and shared."/>
             <!-- Share (0.9.3, ShareA): opens the Share sheet under the actions, in this card (Ui/MainWindow.Share.cs) -->
             <Button x:Name="ShareCardBtn" Grid.Column="1" Margin="8,0,0,0" IsEnabled="False" Height="34" Padding="16,0" FontSize="13" Content="Share"
                     BorderBrush="{DynamicResource GoldLine}" Foreground="{DynamicResource Gold}" AutomationProperties.Name="Share"
                     ToolTip="A picture of this session, the last run or the week, to paste in Discord or anywhere. Nothing is uploaded."/>
+            <!-- the shortcut that starts and stops a run, read from the setting (UpdateStartHint) -->
+            <TextBlock x:Name="StartHint" Grid.Column="2" Margin="12,0,8,0" FontSize="12" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+            <!-- a new session, in plain sight (0.9.9): the same as ⋯ › Clear the tables, with its Undo bar -->
+            <Button x:Name="NewSessionBtn" Grid.Column="3" Margin="0,0,8,0" Height="34" Padding="14,0" FontSize="13" Content="New session" Foreground="{DynamicResource Muted}"
+                    AutomationProperties.Name="New session" ToolTip="Start the farming tables over. What was counted is shared first, and Undo brings the tables back."/>
             <!-- the rest, out of the way: All zones, clearing the tables, the shortcut -->
-            <Button x:Name="MoreBtn" Grid.Column="3" Width="34" Height="34" Padding="0" ToolTip="More" AutomationProperties.Name="More">
+            <Button x:Name="MoreBtn" Grid.Column="4" Width="34" Height="34" Padding="0" ToolTip="More" AutomationProperties.Name="More">
               <TextBlock Text="⋯" FontSize="17" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
             </Button>
           </Grid>
@@ -651,7 +656,7 @@
                   <TextBlock Grid.Column="2" Style="{StaticResource FTh}" Text="Qty"/>
                   <TextBlock x:Name="PctHeader" Grid.Column="3" Style="{StaticResource FTh}" Text="Odds" Background="Transparent" Cursor="Hand"/>
                   <TextBlock Grid.Column="4" Style="{StaticResource FTh}" Text="An hour"/>
-                  <TextBlock Grid.Column="5" Style="{StaticResource FTh}" Text="Value" ToolTip="Quantity times the lowest Market price on your server, after the Market's fee and tax, like the Session total. Bound copies can't be sold and have no value here."/>
+                  <TextBlock Grid.Column="5" Style="{StaticResource FTh}" Text="Value" ToolTip="Quantity times the lowest Market price on your server, less the Market's fee and tax unless Options › General shows amounts before it, like the Session total. Bound copies can't be sold and have no value here."/>
                 </Grid>
                 <Grid MinHeight="40">
                   <ScrollViewer x:Name="DropsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -813,8 +818,8 @@
                   <TextBlock Grid.Column="2" Style="{StaticResource FTh}" Text="Tries"/>
                   <TextBlock Grid.Column="3" Style="{StaticResource FTh}" Text="Worked"/>
                   <TextBlock Grid.Column="4" Style="{StaticResource FTh}" Text="Spent" ToolTip="Every try's materials at the lowest Market prices on your server. A failed try uses them too."/>
-                  <TextBlock Grid.Column="5" Style="{StaticResource FTh}" Text="Sells for" ToolTip="What came out, at the lowest Market price, after the Market's fee and tax."/>
-                  <TextBlock Grid.Column="6" Style="{StaticResource FTh}" Text="Profit" ToolTip="What came out, after the Market's cut, minus the cost of every try."/>
+                  <TextBlock Grid.Column="5" Style="{StaticResource FTh}" Text="Sells for" ToolTip="What came out, at the lowest Market price, less the Market's fee and tax (Options › General can show amounts before it)."/>
+                  <TextBlock Grid.Column="6" Style="{StaticResource FTh}" Text="Profit" ToolTip="What came out, less the Market's cut, minus the cost of every try."/>
                 </Grid>
                 <ScrollViewer x:Name="CraftScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                   <ItemsControl x:Name="CraftRows" ItemTemplate="{StaticResource CraftRowTemplate}"/>

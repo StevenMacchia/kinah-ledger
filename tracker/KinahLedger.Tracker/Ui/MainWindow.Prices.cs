@@ -22,7 +22,7 @@ public partial class MainWindow
     (string Text, string Tone, string Tip) PriceCell(string name)
     {
         if (PriceBook.QuoteOf(name) is not { } q) return ("", "", "");
-        var text = (q.From == PriceBook.From.Region ? "≈" : "") + Short(q.Price);
+        var text = (q.From == PriceBook.From.Region ? "≈" : "") + Amounts.Short(q.Price);
         var tone = q.Mine ? "Mine" : !q.Sure ? "Unsure" : "";
         return (text, tone, PriceHover(name, q));
     }

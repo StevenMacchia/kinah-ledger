@@ -1,3 +1,4 @@
+using KinahLedger.Data;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -153,7 +154,7 @@ public sealed partial class HudCard : IHudLook
             else { _rate.Inlines.Add(R(V("rate"), 20, Gold, mono: true)); _rate.Inlines.Add(R(" an hour", 12, Faint)); }
             _rate.Opacity = warm ? .55 : 1;
             _total.Inlines.Clear();
-            if (V("total").Length > 0 && counted) { _total.Inlines.Add(R(V("total"), 13, Muted, mono: true)); _total.Inlines.Add(R(" session, after the Market's cut", 12, Faint)); }
+            if (V("total").Length > 0 && counted) { _total.Inlines.Add(R(V("total"), 13, Muted, mono: true)); _total.Inlines.Add(R(" session, " + PriceBook.Fee, 12, Faint)); }
             _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
         }
 

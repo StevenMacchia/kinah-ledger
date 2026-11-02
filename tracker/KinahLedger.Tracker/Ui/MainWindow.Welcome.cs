@@ -131,6 +131,7 @@ public partial class MainWindow
     public void ApplySkin(string key)
     {
         Skins.Apply(key);
+        RepaintTray();
         var h = new WindowInteropHelper(this).Handle;
         if (h != IntPtr.Zero) Native.DarkTitleBar(h, Skins.IsDark(key));
         _options?.SkinChanged();

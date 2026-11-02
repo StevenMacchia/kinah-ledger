@@ -1,3 +1,4 @@
+using KinahLedger.Data;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -98,7 +99,7 @@ public partial class MainWindow
         FootTotalNote.Text = $"{DayName(days[0].Date)} to {DayName(days[^1].Date)}";
         FootTotal.Text = t.Made > 0 ? Fk(t.Made) : " ";
         FootTotal.ToolTip = t.Made <= 0 ? null
-            : "Made farming in the last 7 days on this PC: Kinah plus drops and gathering at the lowest Market price, after the Market's cut (each earlier day as priced that day). Bound items and items with no price yet add nothing.";
+            : "Made farming in the last 7 days on this PC: Kinah plus drops and gathering at the lowest Market price, " + PriceBook.Cut + " (each earlier day as priced that day). Bound items and items with no price yet add nothing.";
         var pd = days.First(d => d.Date == picked);
         // Compare (0.9.3, Ui/MainWindow.Compare.cs): with it on, Days | Zones over the bars; Zones ranks the week's zones
         if (_prefs.CompareZones && _lootZones) { FillLootZones(days); return; }
@@ -148,7 +149,7 @@ public partial class MainWindow
         }
         // the zones farmed a minute or more, as the Today side's chips (2026-10-28: a zone passed through gets none)
         var chips = f.Zones.Where(z => z.Active >= 60).OrderByDescending(z => z.Made).ThenByDescending(z => z.Active)
-            .Select(z => WeekChip(ZoneName(z.Zone), Fk(z.Made), $"{ZoneName(z.Zone)}: {TodayLoot.Dur(z.Active)} farming, {z.Kills:N0} kills, {Fk(z.Made)} made after the Market's cut.")).ToList();
+            .Select(z => WeekChip(ZoneName(z.Zone), Fk(z.Made), $"{ZoneName(z.Zone)}: {TodayLoot.Dur(z.Active)} farming, {z.Kills:N0} kills, {Fk(z.Made)} made {PriceBook.Cut}.")).ToList();
         return DayDetail(DayLabel(d), line, f.Made > 0 ? Fk(f.Made) : "", chips, "Gold");
     }
 

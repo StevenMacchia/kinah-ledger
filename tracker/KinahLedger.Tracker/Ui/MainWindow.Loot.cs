@@ -1,3 +1,4 @@
+using KinahLedger.Data;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -116,7 +117,7 @@ public partial class MainWindow
         FootTotalNote.Text = string.Join(" · ", TodayLoot.FarmLine(farm).Select(n => n.Fig + n.Word));
         long made = farm.Made;
         FootTotal.Text = made > 0 ? Fk(made) : " ";
-        FootTotal.ToolTip = made <= 0 ? null : $"Made farming today{(_todayZone != null ? " in " + ZoneName(_todayZone) : ", every zone")}: Kinah plus drops and gathering at the lowest Market price, after the Market's cut. Bound items and items with no price yet add nothing.";
+        FootTotal.ToolTip = made <= 0 ? null : $"Made farming today{(_todayZone != null ? " in " + ZoneName(_todayZone) : ", every zone")}: Kinah plus drops and gathering at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
         var sig = $"day|{_todayZone}|{string.Join(";", zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))}|{farm.Kinah}:{farm.Abyss}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|"
             + $"{Slots(farm.Drops)}|{Slots(farm.Gathered)}|{string.Join(",", _todayAll)}|{Skins.Current}";
@@ -130,7 +131,7 @@ public partial class MainWindow
             {
                 var zone = z.Zone;
                 chips.Children.Add(ZoneChip(ZoneName(zone), TodayLoot.Dur(z.Active), _todayZone == zone, () => _todayZone = zone,
-                    $"{ZoneName(zone)}: {TodayLoot.Dur(z.Active)} farming, {z.Kills:N0} kills, {Fk(z.Made)} made after the Market's cut. Click to see only its loot; it stays pinned when you move."));
+                    $"{ZoneName(zone)}: {TodayLoot.Dur(z.Active)} farming, {z.Kills:N0} kills, {Fk(z.Made)} made {PriceBook.Cut}. Click to see only its loot; it stays pinned when you move."));
             }
             LootHost.Children.Add(chips);
         }
@@ -210,7 +211,7 @@ public partial class MainWindow
         if (r.Tip.Length > 0) { var n = CkNote(r.Tip); n.Margin = new Thickness(20, 10, 20, 2); body.Children.Add(n); }
         if (r.Report.Length > 0) { var n = CkNote(r.Reported ? "Reported · click to set a goal or undo the report" : "Click to set a goal or report it"); n.Margin = new Thickness(20, 10, 20, 0); body.Children.Add(n); }
         bool bound = r.Sub.Contains("bound");
-        body.Children.Add(r.Value.Length > 0 ? TodayFooter("Worth, after the Market's cut", r.Value)
+        body.Children.Add(r.Value.Length > 0 ? TodayFooter("Worth, " + PriceBook.Cut, r.Value)
             : bound ? TodayFooter("Bound to you", "can't be sold", muted: true)
             : TodayFooter("No Market price yet", "adds nothing", muted: true));
         return card;

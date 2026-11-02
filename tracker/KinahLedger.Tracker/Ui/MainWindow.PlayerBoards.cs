@@ -174,7 +174,7 @@ public partial class MainWindow
         var pt = new TextBlock
         {
             Text = Signed(profit), FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 9, 0, 0),
-            ToolTip = vendorUnpriced > 0 ? "A craft's profit before the vendor items without a cost" : "A craft's profit at today's lowest asks, after the Market's cut",
+            ToolTip = vendorUnpriced > 0 ? "A craft's profit before the vendor items without a cost" : "A craft's profit at today's lowest asks, " + PriceBook.Cut,
         };
         pt.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); pt.SetResourceReference(TextBlock.ForegroundProperty, profit >= 0 ? "Gold" : "Faint");
         Grid.SetColumn(pt, 3); g.Children.Add(pt);
@@ -194,7 +194,7 @@ public partial class MainWindow
         FarmLine.Text = h.AtGear ? $"Players at your gear {Fk(v)}" : $"Players here {Fk(v)}";   // after "Your best here 1.40M · " (JoinCompare)
         var who = $"{h.Row.Runs} runs from {h.Row.Players} players on {Server?.Label ?? "your server"} in the last 7 days";
         var gear = h.AtGear ? $", gear score {GearBracket}." : GearBracket != null ? $". Not enough players at gear score {GearBracket} yet, so this is everyone's." : ". Set your gear score in Options › Server to compare with players at your gear.";
-        FarmLine.ToolTip = $"What players made an hour in {h.Row.Zone}: Kinah plus tradeable loot at today's prices, after the Market's cut.\n{who}{gear}";
+        FarmLine.ToolTip = $"What players made an hour in {h.Row.Zone}: Kinah plus tradeable loot at today's prices, {PriceBook.Cut}.\n{who}{gear}";
     }
 
     /* ---------------- small pieces in the window's own look ---------------- */

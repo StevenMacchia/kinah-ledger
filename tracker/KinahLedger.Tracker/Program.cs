@@ -1326,11 +1326,11 @@ options: --process aion[,other]");
 
         // 2. This session: 269K made over 1 h 12 min is 224K an hour; the top five by worth, the best drop by grade
         Check("session: title and the line under it", $"{off.Title} | {off.Sub}", "Northern Tolbas Forest | 1 h 12 min of farming · 722 kills");
-        Check("session: Kinah an hour, made after the cut", $"{off.Rate} {off.RateLabel} · {off.Made} {off.MadeLabel}", "224K Kinah an hour · 269K made, after the Market's cut");
+        Check("session: Kinah an hour, made after the cut", $"{off.Rate} {off.RateLabel} · {off.Made} {off.MadeLabel}", "224.2K Kinah an hour · 269K made, after the Market's cut");
         Check("session: the five icons, most worth first", string.Join(",", off.Icons.Select(i => i.Name)), "Spiritstone,Ruby,Thick Hide,Iron Ore,Gold Dust");
         Check("session: the best drop is the rarest", off.Best, "best drop: Ruby");
         Check("Copy as text: the same words, a line each", SharePicture.Text(off).Replace("\n", " | "),
-            "Kinah Ledger · Sat 31 Oct · Siel · NA East | Northern Tolbas Forest | 1 h 12 min of farming · 722 kills | 224K Kinah an hour · 269K made, after the Market's cut | best drop: Ruby | kinahledger.com");
+            "Kinah Ledger · Sat 31 Oct · Siel · NA East | Northern Tolbas Forest | 1 h 12 min of farming · 722 kills | 224.2K Kinah an hour · 269K made, after the Market's cut | best drop: Ruby | kinahledger.com");
         var withRing = drops.Append(new ShareDrop("Ancient Ring", "Legend", 1, 0)).ToList();
         var ring = SharePicture.Compose(session with { Drops = withRing }, false, null, fk);
         Check("a bound Legend drop worth nothing still shows, in fifth place", $"{string.Join(",", ring.Icons.Select(i => i.Name))} | {ring.Best}", "Spiritstone,Ruby,Thick Hide,Iron Ore,Ancient Ring | best drop: Ancient Ring");
@@ -1340,7 +1340,7 @@ options: --process aion[,other]");
             new List<ShareDrop> { new("Spiritstone Powder", "", 18, 59_940), new("Elder Breastplate", "Epic", 1, 0), new("Magic Crystal", "Rare", 6, 27_300) });
         var rp = SharePicture.Compose(run, false, "Aerin", fk);
         Check("run: title and the line under it", $"{rp.Title} | {rp.Sub}", "Urugugu Canyon | Expedition · 7 min · 18 kills");
-        Check("run: Kinah an hour, made after the cut", $"{rp.Rate} · {rp.Made}", "4.00M · 512K");
+        Check("run: Kinah an hour, made after the cut", $"{rp.Rate} · {rp.Made}", "4M · 512K");
         Check("run: icons and the best drop", $"{string.Join(",", rp.Icons.Select(i => i.Name))} | {rp.Best}", "Spiritstone Powder,Magic Crystal,Elder Breastplate | best drop: Elder Breastplate");
 
         // 4. This week: 3.10M over 9 h 40 min is 321K an hour; no items kept, so its best day and zone in their place
@@ -1348,8 +1348,8 @@ options: --process aion[,other]");
         var week = new ShareFacts(SharePicture.Week, day, "Siel · NA East", "This week", "of farming", 9 * 3600 + 40 * 60, 4_120, "kill", 3_100_000, new List<ShareDrop>(), note);
         var wp = SharePicture.Compose(week, false, null, fk);
         Check("week: the line under the title", wp.Sub, "9 h 40 min of farming · 4,120 kills");
-        Check("week: Kinah an hour, made after the cut", $"{wp.Rate} · {wp.Made}", "321K · 3.10M");
-        Check("week: no icons, its best day and zone instead", $"{wp.Icons.Count} | {wp.Best}", "0 | best day: Thu 29, 1.20M · most made in Northern Tolbas Forest");
+        Check("week: Kinah an hour, made after the cut", $"{wp.Rate} · {wp.Made}", "320.7K · 3.1M");
+        Check("week: no icons, its best day and zone instead", $"{wp.Icons.Count} | {wp.Best}", "0 | best day: Thu 29, 1.2M · most made in Northern Tolbas Forest");
 
         // 5. under a minute: no hour's rate; one kill is "1 kill"
         var young = SharePicture.Compose(session with { Seconds = 40, Count = 1 }, false, null, fk);
