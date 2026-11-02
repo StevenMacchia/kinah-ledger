@@ -3014,6 +3014,17 @@ public sealed partial class TrackerSession
             CrashLog.Note($"Kina x{km.Count} as an item ({ev.Via}): Kina is money, not a drop, and its amount wasn't read; not counted");
             return;
         }
+        // Abyss Points in the Abyss's zones are counted like Kinah (SessionEngine.AbyssPoints) and show in the feed and the last
+        // pickups; they take no part in the loot-list and Kina cross-checks, which know nothing of them
+        if (ev is CurrencyGained { Amount: > 0 } ap && SessionEngine.IsAbyssPoints(ap.Name))
+        {
+            if (!ZoneLocator.IsAbyss(Engine.Zone)) return;
+            var apText = $"Abyss Points ×{ap.Amount:N0}";
+            Report.Counted(ev.Time, apText, ev.Via, where);
+            lock (_pickups) { _pickups.Add(new Pickup(ev.Time, apText, ev.Via, ev.Unconfirmed, where)); if (_pickups.Count > 50) _pickups.RemoveRange(0, _pickups.Count - 50); }
+            Live.Add(new FeedLine(ev.Time, LiveFeed.TabOf(where), "item", "Abyss Points", ap.Amount, Via: ev.Via, Where: where, ItemId: _items.IdOf("Abyss Points")));
+            return;
+        }
         string? what = ev switch
         {
             ItemAcquired a => $"{_items.NameOf(a.ItemId)} ×{a.Count}" + (a.Bound ? " (bound)" : ""),

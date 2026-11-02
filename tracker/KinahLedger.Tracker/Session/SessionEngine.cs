@@ -18,6 +18,11 @@ public sealed partial class SessionEngine
     /// <summary>Points pickups (Soul Points and the like): one line per kill, never a drop.</summary>
     public int CurrencyLines { get; private set; }
     public Dictionary<string, long> Currencies { get; } = new();
+    /// <summary>Abyss Points picked up in the Abyss's zones (<see cref="Ocr.ZoneLocator.IsAbyss"/>), shown like Kinah; elsewhere they stay in <see cref="Currencies"/> only.</summary>
+    public long AbyssPoints { get; private set; }
+    static readonly System.Text.RegularExpressions.Regex AbyssPointsName = new(@"^abyss\s*po[i1l]nts?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+    /// <summary>True for a currency line naming Abyss Points, as the recognizer may read it ("Abyss Point", "Abyss Poi1ts").</summary>
+    public static bool IsAbyssPoints(string name) => AbyssPointsName.IsMatch(name.Trim());
     /// <summary>Quest, title and box rewards seen and deliberately left out of the farming numbers.</summary>
     public int RewardsSkipped { get; private set; }
     /// <summary>Gathering: node attempts, one per primary-resource line (ore, log, Odyle, herb, food) plus failed attempts.</summary>
@@ -150,7 +155,7 @@ public sealed partial class SessionEngine
     /// <summary>What happened in one zone: time spent there plus the counters the "best spot" tables need.</summary>
     public sealed class ZoneStats
     {
-        public double Seconds; public long Kinah; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
+        public double Seconds; public long Kinah, AbyssPoints; public int KinahDrops, CurrencyLines, Defeated, Xp, Pets, Drops, Nodes, KillsSeen;
         /// <summary>Seconds of farming in the zone: time within a minute of a loot, kill or gather line. What the zone's per-hour rates divide by.</summary>
         public double Active;
         public Dictionary<string, int> PetsByName = new();
@@ -646,6 +651,8 @@ public sealed partial class SessionEngine
                     }
 
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
+                    if (IsAbyssPoints(c.Name) && Ocr.ZoneLocator.IsAbyss(_zone))
+                    { AbyssPoints += c.Amount; Z().AbyssPoints += c.Amount; }
                     break;
                 case EnemySoul es:
                     // a "Soul: <enemy>" row in the loot list beside the character: every enemy drops its soul, so a new row is a kill of it
@@ -726,7 +733,7 @@ public sealed partial class SessionEngine
             var now = Ended ?? DateTime.UtcNow;
             var copy = new Dictionary<string, ZoneStats>();
             foreach (var (k, v) in Zones)
-                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
+                copy[k] = new ZoneStats { Seconds = v.Seconds + (k == (_zone ?? UnknownZone) && Ended == null && _pausedAt == null ? (now - _zoneSince).TotalSeconds : 0), Active = v.Active + (k == (_zone ?? UnknownZone) ? TrailingLocked() : 0), Kinah = v.Kinah, AbyssPoints = v.AbyssPoints, KinahDrops = v.KinahDrops, CurrencyLines = v.CurrencyLines, Defeated = v.Defeated, Xp = v.Xp, Pets = v.Pets, Drops = v.Drops, Nodes = v.Nodes, KillsSeen = v.KillsSeen, PetsByName = new Dictionary<string, int>(v.PetsByName), Items = new Dictionary<long, int>(v.Items), ItemsBound = new Dictionary<long, int>(v.ItemsBound) };
             return copy;
         }
     }

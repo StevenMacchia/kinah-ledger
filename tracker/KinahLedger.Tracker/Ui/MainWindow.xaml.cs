@@ -1004,7 +1004,7 @@ public partial class MainWindow : Window
         sums.Add($"Total, after the Market's cut: {totalNow:N0}.");
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
         var byEnemy = e.MobSnapshot().Where(m => m.Kinah > 0).GroupBy(m => m.Name).Select(g => (Where: g.Key, Count: g.Sum(m => m.Kinah))).OrderByDescending(x => x.Count).ToList();
-        _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy);
+        _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy, e.AbyssPoints);
         FillLoot();
         var top = s.Drops.Concat(s.Gathered).Where(r => !r.Header && r.Worth > 0).OrderByDescending(r => r.Worth).ToList();
         _topRows = top;

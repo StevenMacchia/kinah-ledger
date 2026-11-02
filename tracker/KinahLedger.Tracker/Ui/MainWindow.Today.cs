@@ -182,14 +182,21 @@ public partial class MainWindow
     static string HourText(long count, double activeSecs) => activeSecs < 60 ? "" : $"{Whole(count / (activeSecs / 3600))} an hour";   // whole numbers, as the tables
 
     /// <summary>An item's slot: its icon in its grade frame with the stack count, the game-tooltip card on hover, pinned with Set a goal on a click.</summary>
-    FrameworkElement ItemSlot(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs = false)
+    FrameworkElement ItemSlot(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs = false, string when = "today")
     {
         var tile = CkIcon(s.Name, 46, FrameOf(s.Id), badge: CountBadge(s.Count));
-        CardTip(tile, () => ItemTodayCard(s, rate, showWhere, runs));
+        CardTip(tile, () => ItemTodayCard(s, rate, showWhere, runs, when));
         // a click pins the card with Set a goal at its foot (0.9; a right-click until 2026-10-31); a currency is an amount, not something picked up
-        if (!s.Currency) PinOnClick(tile, () => ItemTodayCard(s, rate, showWhere, runs), ("Set a goal for this", () => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), tile)));
+        if (!s.Currency) PinOnClick(tile, () => ItemTodayCard(s, rate, showWhere, runs, when), ("Set a goal for this", () => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), tile)));
         return tile;
     }
+
+    /// <summary>
+    /// The Abyss Points picked up in the Abyss's zones, a slot beside the Kinah's: a currency, so an amount and a pace, no price.
+    /// <paramref name="when"/> is what the card says it covers ("today", "here", "this run").
+    /// </summary>
+    FrameworkElement AbyssSlot(long points, double activeSeconds, string when) =>
+        ItemSlot(new TodaySlot(_items.IdOf("Abyss Points"), "Abyss Points", points, 0, 0, false, false, true, new()), ("", HourText(points, activeSeconds)), false, when: when);
 
     /// <param name="foot">The card's footer label ("Picked up today", LOOT's "Picked up here").</param>
     /// <param name="whereTitle">The heading over <paramref name="where"/>: zones for the day, enemies for LOOT's first side.</param>
@@ -219,13 +226,13 @@ public partial class MainWindow
     }
 
     /// <summary>The item's card: its band, where it came from today, its odds and pace (farming), and what it is worth.</summary>
-    internal FrameworkElement ItemTodayCard(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs)
+    internal FrameworkElement ItemTodayCard(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs, string when = "today")
     {
         var (card, body) = CkShell(300);
         var item = _items.Get(s.Id);
         var grade = item?.Grade ?? "";
         var cat = s.Gear ? "Gear" : s.Currency ? "Currency" : item?.Category is { Length: > 0 } c ? c : runs ? "Reward" : "Drop";
-        body.Children.Add(CkBand(s.Name, grade, $"{cat} · ×{s.Count:N0} today"));
+        body.Children.Add(CkBand(s.Name, grade, $"{cat} · ×{s.Count:N0} {when}"));
         if (showWhere && s.Where.Count > 0)
         {
             body.Children.Add(CkSection("WHERE"));
