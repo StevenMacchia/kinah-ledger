@@ -1211,7 +1211,7 @@ public partial class MainWindow : Window
         foreach (var r in e?.CraftSnapshot() ?? new())
         {
             tries += r.Attempts; ok += r.Ok;
-            long? cost = RecipeBook.CostPerTry(r.Name, out int unpricedMats, out int vendorMats, out int farmedMats, missing);
+            long? cost = RecipeBook.CostOfTries(r.Name, r.Tries, out int unpricedMats, out int vendorMats, out int farmedMats, missing);
             // vendor materials with no NPC price are unpriced too: the cost is then the least a try costs
             int gaps = unpricedMats + vendorMats;
             long made = 0; bool madeKnown = r.MadeUnknown == 0;
@@ -1219,10 +1219,10 @@ public partial class MainWindow : Window
             {
                 if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
             }
-            if (cost != null) spent += cost.Value * r.Attempts; else noBook++;
+            if (cost != null) spent += cost.Value; else noBook++;
             if (madeKnown) worth += made; else noPrice++;
-            long? profit = cost != null && madeKnown ? made - cost.Value * r.Attempts : null;
-            var spentCell = cost is not long cv ? "" : gaps == 0 ? Fk(cv * r.Attempts) : cv == 0 && farmedMats == 0 ? "" : "≥ " + Fk(cv * r.Attempts);
+            long? profit = cost != null && madeKnown ? made - cost.Value : null;
+            var spentCell = cost is not long cv ? "" : gaps == 0 ? Fk(cv) : cv == 0 && farmedMats == 0 ? "" : "≥ " + Fk(cv);
             var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
             var book = RecipeBook.ForOutput(r.Name);

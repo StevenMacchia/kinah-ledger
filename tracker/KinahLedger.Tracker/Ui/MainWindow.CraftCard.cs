@@ -41,7 +41,11 @@ public partial class MainWindow
     /// <param name="best">Set when the card opens from Best crafts today: the recipe that list priced (how many it makes) and its rank.</param>
     internal Border BuildCraftCard(string output, PlayerBoards.BestCraft? best = null, int rank = 0)
     {
-        var recipe = RecipeBook.For(output, best?.Makes ?? 0);
+        var mine = _crafted.FirstOrDefault(c => string.Equals(c.Name, output, StringComparison.OrdinalIgnoreCase));
+        // the recipe this session crafted most (Orichalcum Ingot has a x1 and a x10 with different materials), unless the card
+        // opened from Best crafts, which names the one it priced
+        int crafted = mine?.Tries.Where(kv => kv.Key > 0).OrderByDescending(kv => kv.Value).Select(kv => kv.Key).FirstOrDefault() ?? 0;
+        var recipe = RecipeBook.For(output, best?.Makes ?? crafted);
         // prices: this PC's (its Market reads, then the board it fetched); opened from Best crafts, the site's prices fill any gap
         long? Price(string item)
         {
@@ -52,7 +56,6 @@ public partial class MainWindow
             if (id == best.UpgradeId) return best.UpgradePrice;
             return best.Materials.FirstOrDefault(m => m.Id == id)?.Price;
         }
-        var mine = _crafted.FirstOrDefault(c => string.Equals(c.Name, output, StringComparison.OrdinalIgnoreCase));
         void Redo() => RefreshCraftCard(output, best, rank);
         var grade = GradeOf(output);
         var (card, body) = CkShell(460);
@@ -156,7 +159,14 @@ public partial class MainWindow
                 foreach (var (item, n) in mine.Made.OrderByDescending(x => x.Value)) came.Children.Add(CkChip($"{item} ×{n}", GradeColor(GradeOf(item))));
                 body.Children.Add(came);
             }
-            if (unpriced == 0) body.Children.Add(CkKv("Spent on materials", (total * mine.Attempts).ToString("N0"), CkInk));
+            if (unpriced == 0)
+            {
+                // tries of the recipe on the card at its cost; tries of another variant of the item at that variant's own
+                var elsewhere = mine.Tries.Where(kv => kv.Key != 0 && kv.Key != recipe.OutputQty).ToDictionary(kv => kv.Key, kv => kv.Value);
+                long spentMats = total * (mine.Attempts - elsewhere.Values.Sum());
+                if (elsewhere.Count == 0) body.Children.Add(CkKv("Spent on materials", spentMats.ToString("N0"), CkInk));
+                else if (RecipeBook.CostOfTries(output, elsewhere, out int eu, out int ev, out _) is long ec && eu + ev == 0) body.Children.Add(CkKv("Spent on materials", (spentMats + ec).ToString("N0"), CkInk));
+            }
         }
         long Sells(string item, int qty) => Price(item) is long p ? (long)Math.Round(p * qty * PriceBook.SellerKeeps) : -1;
         long outValue = Sells(recipe.Output, recipe.OutputQty);

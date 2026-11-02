@@ -71,13 +71,13 @@ public partial class MainWindow
         foreach (var r in e?.CraftSnapshot() ?? new())
         {
             tries += r.Attempts; ok += r.Ok;
-            long? cost = RecipeBook.CostPerTry(r.Name, out _, out _, out _, missing);
+            long? cost = RecipeBook.CostOfTries(r.Name, r.Tries, out _, out _, out _, missing);
             long made = 0; bool madeKnown = r.MadeUnknown == 0;
             foreach (var (item, n) in r.Made)
             {
                 if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
             }
-            if (cost != null) spent += cost.Value * r.Attempts; else noBook++;
+            if (cost != null) spent += cost.Value; else noBook++;
             if (madeKnown) worth += made;
         }
         return new CraftSums(tries, ok, spent, worth, missing.Count + noBook > 0);
@@ -141,7 +141,7 @@ public partial class MainWindow
             var at = t0.AddSeconds(90 * i);
             e.CraftPanelSeen(recipe, at);
             e.Apply(new CraftResult(at, recipe, outcome[i]) { Via = SessionEngine.CraftPanelVia, Makes = RecipeBook.ForOutput(recipe)?.OutputQty ?? 1 });
-            lines.Add(new FeedLine(at, FeedTab.Crafting, "craft", recipe, 1, Ok: outcome[i], Via: SessionEngine.CraftPanelVia, Where: "Crafting"));
+            lines.Add(new FeedLine(at, FeedTab.Crafting, "craft", recipe, 1, Ok: outcome[i], Via: SessionEngine.CraftPanelVia, Where: "Crafting", Makes: RecipeBook.ForOutput(recipe)?.OutputQty ?? 0));
         }
         return (e, lines, new TimeSpan(0, 18, 5));
     }

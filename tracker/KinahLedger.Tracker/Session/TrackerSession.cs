@@ -4311,7 +4311,7 @@ public sealed partial class TrackerSession
         CraftView.Apply(ev);
         Accuracy.Add("craft_panel");
         Report.Counted(now, $"craft {(ok ? "success" : "fail")}{(combo ? " (combo)" : "")}: {(recipe.Length > 0 ? recipe : "?")}", ev.Via);
-        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, 1, Ok: ok, Via: ev.Via, Where: "Crafting"));
+        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, 1, Ok: ok, Via: ev.Via, Where: "Crafting", Makes: ev.Makes ?? 0));
         try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
 

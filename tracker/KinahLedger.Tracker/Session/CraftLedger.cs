@@ -19,8 +19,13 @@ public sealed class CraftLedger
         public Dictionary<string, int> Made = new(StringComparer.OrdinalIgnoreCase);
         /// <summary>Successes whose output count isn't known: the recipe has variants (×1 and ×10) and the panel didn't say which.</summary>
         public int MadeUnknown;
+        /// <summary>
+        /// Every try (worked or failed) by how many one success of its recipe makes, 0 when the panel's level didn't say: the
+        /// recipe has variants (Orichalcum Ingot ×1 and ×10) that use different materials, so what a try cost depends on it.
+        /// </summary>
+        public Dictionary<int, int> Tries = new();
         public int Attempts => Ok + Fail;
-        public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, MadeUnknown = MadeUnknown, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase) };
+        public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, MadeUnknown = MadeUnknown, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase), Tries = new Dictionary<int, int>(Tries) };
     }
 
     // ---- the crafting panel: the one way in (Steven, 2026-10-23: "if u dont see the crafting bars why the fuck are u
@@ -59,6 +64,7 @@ public sealed class CraftLedger
         if (!cr.Combo) _lastCraft = name;
         var r = Get(name);
         var was = cr.Queue > 0 ? r.Copy() : null;
+        if (!cr.Combo) { int ty = name != "?" && cr.Makes is int my && my > 0 ? my : 0; r.Tries[ty] = r.Tries.GetValueOrDefault(ty) + 1; }
         if (cr.Combo)
         {
             if (cr.Ok) { r.Upgraded++; Upgrade(r); } else r.NotUpgraded++;
@@ -99,6 +105,11 @@ public sealed class CraftLedger
         d.Ok += now.Ok - was.Ok; d.Fail += now.Fail - was.Fail;
         d.Upgraded += now.Upgraded - was.Upgraded; d.NotUpgraded += now.NotUpgraded - was.NotUpgraded;
         d.MadeUnknown += now.MadeUnknown - was.MadeUnknown;
+        foreach (var k in now.Tries.Keys.Union(was.Tries.Keys).ToList())
+        {
+            int t = d.Tries.GetValueOrDefault(k) + now.Tries.GetValueOrDefault(k) - was.Tries.GetValueOrDefault(k);
+            if (t != 0) d.Tries[k] = t; else d.Tries.Remove(k);
+        }
         foreach (var item in now.Made.Keys.Union(was.Made.Keys, StringComparer.OrdinalIgnoreCase).ToList())
         {
             int n = d.Made.GetValueOrDefault(item) + now.Made.GetValueOrDefault(item) - was.Made.GetValueOrDefault(item);
@@ -122,6 +133,7 @@ public sealed class CraftLedger
             r.Ok = Math.Max(0, r.Ok - d.Ok); r.Fail = Math.Max(0, r.Fail - d.Fail);
             r.Upgraded = Math.Max(0, r.Upgraded - d.Upgraded); r.NotUpgraded = Math.Max(0, r.NotUpgraded - d.NotUpgraded);
             r.MadeUnknown = Math.Max(0, r.MadeUnknown - d.MadeUnknown);
+            foreach (var (k, t) in d.Tries) { int left = r.Tries.GetValueOrDefault(k) - t; if (left > 0) r.Tries[k] = left; else r.Tries.Remove(k); }
             foreach (var (item, n) in d.Made) { int left = r.Made.GetValueOrDefault(item) - n; if (left > 0) r.Made[item] = left; else r.Made.Remove(item); }
             if (r.Attempts == 0 && r.Upgraded + r.NotUpgraded == 0 && r.Made.Count == 0 && r.MadeUnknown == 0) _recipes.Remove(f.Name);
         }

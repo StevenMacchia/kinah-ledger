@@ -142,10 +142,17 @@ public static class RecipeBook
 
     public static long? CostPerTry(string recipeOutput, out int unpriced, out int vendor) => CostPerTry(recipeOutput, out unpriced, out vendor, out _);
 
-    public static long? CostPerTry(string recipeOutput, out int unpriced, out int vendor, out int farmed, ICollection<string>? missing = null)
+    public static long? CostPerTry(string recipeOutput, out int unpriced, out int vendor, out int farmed, ICollection<string>? missing = null) =>
+        CostPerTry(recipeOutput, 0, out unpriced, out vendor, out farmed, missing);
+
+    /// <summary>
+    /// The cost of one try of the recipe that makes <paramref name="makes"/> per success (Orichalcum Ingot: 2 Ore and 1 Solvent
+    /// makes 1, 20 and 10 make 10); 0 or a count no recipe makes is the first recipe the book has for the item.
+    /// </summary>
+    public static long? CostPerTry(string recipeOutput, int makes, out int unpriced, out int vendor, out int farmed, ICollection<string>? missing = null)
     {
         unpriced = 0; vendor = 0; farmed = 0;
-        var r = ForOutput(recipeOutput);
+        var r = For(recipeOutput, makes);
         if (r == null) return null;
         long cost = r.Kinah ?? 0;
         foreach (var m in r.Materials)
@@ -156,5 +163,24 @@ public static class RecipeBook
             else { unpriced++; missing?.Add(m.Item); }
         }
         return cost;
+    }
+
+    /// <summary>
+    /// What a run of tries cost, each at its own recipe's cost: <paramref name="tries"/> is the tries by how many one success
+    /// makes (CraftLedger.Recipe.Tries), so 3 tries of the ×10 recipe are not priced as the ×1 one. The counts of unpriced,
+    /// vendor and farmed materials are the most any one recipe had. Null when the book doesn't have the item.
+    /// </summary>
+    public static long? CostOfTries(string recipeOutput, IReadOnlyDictionary<int, int> tries, out int unpriced, out int vendor, out int farmed, ICollection<string>? missing = null)
+    {
+        unpriced = 0; vendor = 0; farmed = 0;
+        long? total = null;
+        foreach (var (makes, n) in tries)
+        {
+            if (n <= 0) continue;
+            if (CostPerTry(recipeOutput, makes, out int u, out int v, out int f, missing) is not long c) return null;
+            total = (total ?? 0) + c * n;
+            unpriced = Math.Max(unpriced, u); vendor = Math.Max(vendor, v); farmed = Math.Max(farmed, f);
+        }
+        return total ?? (CostPerTry(recipeOutput, 0, out unpriced, out vendor, out farmed, missing) == null ? null : 0);
     }
 }

@@ -171,7 +171,7 @@ public partial class MainWindow
                 var enemy = l.Enemy.Length > 0 ? l.Enemy : _watcher.Chat?.Engine.CreditedTo(l.At, l.Amount) ?? "";
                 return ($"{l.Amount:N0} Kinah", "", l.Tab == FeedTab.Events ? "in the run" : enemy);
             }
-            case "craft": return (l.Name.Length > 0 ? l.Name : "A craft", CraftMakes(l.Name) is int m && m > 1 && l.Ok ? $" ×{m}" : "", l.Ok ? "worked" : "failed");
+            case "craft": return (l.Name.Length > 0 ? l.Name : "A craft", CraftMakes(l) is int m && m > 1 && l.Ok ? $" ×{m}" : "", l.Ok ? "worked" : "failed");
             case "step": return (l.Name, "", l.Enemy);
             case "flag": return (l.Name, "", "");
             default:
@@ -180,7 +180,8 @@ public partial class MainWindow
         }
     }
 
-    static int? CraftMakes(string recipe) => recipe.Length >= 2 ? RecipeBook.ForOutput(recipe)?.OutputQty : null;
+    /// <summary>How many a craft line's success made: the yield the panel's level told, else the recipe's when the book has one count for the item.</summary>
+    static int? CraftMakes(FeedLine l) => l.Makes > 0 ? l.Makes : l.Name.Length >= 2 ? RecipeBook.YieldFor(l.Name, 0) : null;
 
     /// <summary>A line's tile: the item's own icon (the tracker's icon cache, as the drops table), a coin for Kinah, a drawn glyph for a run step.</summary>
     FrameworkElement FeedIcon(FeedLine l)
@@ -283,11 +284,11 @@ public partial class MainWindow
     (string Text, bool Muted) CraftValue(FeedLine l)
     {
         if (l.Name.Length < 2) return ("", true);
-        var cost = RecipeBook.CostPerTry(l.Name, out int unpriced, out int vendor, out _, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        var cost = RecipeBook.CostPerTry(l.Name, l.Makes, out int unpriced, out int vendor, out _, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         if (cost == null) return ("", true);
         bool floor = unpriced + vendor > 0;
         if (!l.Ok) return ((floor ? "≤ " : "") + FeedK(-cost.Value), true);
-        int makes = CraftMakes(l.Name) ?? 1;
+        int makes = CraftMakes(l) ?? 1;
         if (PriceBook.Price(l.Name) is not long p) return ("", true);
         var worth = FeedK(p * makes * PriceBook.SellerKeeps - cost.Value);
         return floor ? ("≤ " + worth, true) : (worth, false);
