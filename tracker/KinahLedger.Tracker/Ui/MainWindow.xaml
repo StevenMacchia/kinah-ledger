@@ -337,7 +337,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Margin="0,0,16,0">
               <TextBlock Text="Share my runs and Market prices, anonymously" FontSize="13.5" FontWeight="SemiBold"/>
-              <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" Margin="0,2,0,0" Text="Totals only, for the site's public tables. Never your character, chat text or screenshots. Change it any time in Options."/>
+              <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" Margin="0,2,0,0" Text="Totals only, sent in small batches about every 15 minutes while you play, for the site's public tables. Never your character, chat text or screenshots. Turn it off any time in Options."/>
               <TextBlock FontSize="12.5" Margin="0,4,0,0"><Hyperlink x:Name="WelcomeSentLink" Style="{StaticResource LinkStyle}">What's shared</Hyperlink><Run Text="   "/><Hyperlink x:Name="WelcomePrivacyLink" Style="{StaticResource LinkStyle}">Privacy</Hyperlink></TextBlock>
             </StackPanel>
             <CheckBox x:Name="WelcomeShareChk" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True" VerticalAlignment="Center" AutomationProperties.Name="Share my runs and Market prices, anonymously"/>
@@ -413,6 +413,8 @@
                   <TextBlock Text="live" Foreground="{DynamicResource Gold}" FontSize="12.5" VerticalAlignment="Center"/>
                 </StackPanel>
               </StackPanel>
+              <!-- is it working: "Reading · last pickup 4s ago", or a nudge when nothing has been read for a while -->
+              <TextBlock x:Name="ReadingLbl" Foreground="{DynamicResource Faint}" FontSize="12" Margin="0,1,0,0" Visibility="Collapsed" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
           </Grid>
 

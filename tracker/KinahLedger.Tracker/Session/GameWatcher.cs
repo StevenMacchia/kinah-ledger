@@ -44,6 +44,23 @@ public sealed class GameWatcher
     public int Flushed { get; private set; }
     public string FlushNote { get; private set; } = "";
 
+    /// <summary>Chunks the site did not take, oldest first, sent again with the next flush. A day's worth (96 at 15 minutes); beyond that the oldest are let go.</summary>
+    readonly List<Upload.RunPayload> _unsent = new();
+    const int MaxUnsent = 96;
+    readonly SemaphoreSlim _sendGate = new(1, 1);
+    /// <summary>When the site last took a chunk (local time); null until one has gone.</summary>
+    public DateTime? LastSharedAt { get; private set; }
+    /// <summary>The last send did not reach the site; the chunks wait here for the next flush.</summary>
+    public bool ShareFailing { get; private set; }
+    public int ChunksWaiting { get { lock (_unsent) return _unsent.Count; } }
+
+    /// <summary>The one line the window shows for sharing: "Sharing: last sent 12:04", "Sharing: couldn't reach the site, will retry", or off.</summary>
+    public string ShareLine =>
+        !_settings.Upload.Enabled ? "Sharing: off"
+        : ShareFailing ? "Sharing: couldn't reach the site, will retry"
+        : LastSharedAt is { } at ? $"Sharing: last sent {at:HH:mm}"
+        : "Sharing: nothing sent yet";
+
     /// <summary>The currency counter at the top-left, read every <see cref="BalanceEverySec"/> while the game is open.</summary>
     public BalanceReader Balance { get; } = new();
     readonly RelogDetector _relog = new();
@@ -332,7 +349,8 @@ public sealed class GameWatcher
 
     /// <summary>
     /// Every FlushMinutes (and once at close) the always-on count is shared as one anonymous chunk under the kind it
-    /// looks like, then restarted. A chunk under five minutes or with nothing in it is just restarted. Nothing is kept here.
+    /// looks like, then restarted. A chunk under five minutes or with nothing in it is just restarted. A chunk the site
+    /// doesn't take waits here (up to a day's worth) and goes with the next flush; with sharing off they are let go.
     /// </summary>
     public async Task FlushPassiveAsync(bool final)
     {
@@ -340,15 +358,53 @@ public sealed class GameWatcher
         if (!final && (DateTime.UtcNow - _flushAt).TotalMinutes < FlushMinutes) return;
         _flushAt = DateTime.UtcNow;
         var e = c.Engine;
-        if (e.Elapsed.TotalMinutes < 5 || e.Events == 0) { if (e.Elapsed.TotalMinutes >= FlushMinutes) RotateChat(c); return; }
-        var old = RotateChat(c);
-        if (!_settings.Upload.Enabled) { FlushNote = "sharing is off"; return; }
-        // time in town with a stray line or two isn't farming: sharing it would add a zero to some zone's Kinah per hour
-        if (!Worth(old)) { FlushNote = "nothing farmed in the last chunk, so nothing shared"; return; }
-        var kind = DominantKind(old);
-        bool ok = await c.UploadAsync(_settings, old, kind, TrackerSession.ActivityOf(old, kind));
-        if (ok) { Flushed++; FlushNote = $"shared {old.Events} lines as {kind.ToLowerInvariant()}"; }
-        else FlushNote = "couldn't reach the site";
+        if (!_settings.Upload.Enabled) { lock (_unsent) _unsent.Clear(); ShareFailing = false; }
+        if (e.Elapsed.TotalMinutes < 5 || e.Events == 0) { if (e.Elapsed.TotalMinutes >= FlushMinutes) RotateChat(c); }
+        else
+        {
+            var old = RotateChat(c);
+            if (!_settings.Upload.Enabled) FlushNote = "sharing is off";
+            // time in town with a stray line or two isn't farming: sharing it would add a zero to some zone's Kinah per hour
+            else if (!Worth(old)) FlushNote = "nothing farmed in the last chunk, so nothing shared";
+            else
+            {
+                var kind = DominantKind(old);
+                var chunk = c.BuildChunk(_settings, old, kind, TrackerSession.ActivityOf(old, kind));
+                lock (_unsent) { _unsent.Add(chunk); while (_unsent.Count > MaxUnsent) _unsent.RemoveAt(0); }
+                _lastChunkNote = $"shared {old.Events} lines as {kind.ToLowerInvariant()}";
+            }
+        }
+        await SendWaitingAsync();
+    }
+    string _lastChunkNote = "";
+
+    /// <summary>Sends the waiting chunks oldest first; stops at the first the site can't be reached for (it and the rest stay), drops one the site refuses (the same chunk would be refused again).</summary>
+    async Task SendWaitingAsync()
+    {
+        if (!_settings.Upload.Enabled) return;
+        await _sendGate.WaitAsync();
+        try
+        {
+            bool sent = false;
+            while (true)
+            {
+                Upload.RunPayload next;
+                lock (_unsent) { if (_unsent.Count == 0) break; next = _unsent[0]; }
+                var r = await Upload.Uploader.SendResultAsync(next, _settings.Upload);
+                if (!r.Ok && !r.Refused)
+                {
+                    ShareFailing = true; FlushNote = "couldn't reach the site";
+                    CrashLog.Note($"shared chunk not taken ({Upload.Uploader.LastError}); {ChunksWaiting} waiting for the next flush");
+                    break;
+                }
+                lock (_unsent) { if (_unsent.Count > 0 && ReferenceEquals(_unsent[0], next)) _unsent.RemoveAt(0); }
+                if (r.Ok) { Flushed++; sent = true; LastSharedAt = DateTime.Now; ShareFailing = false; FlushNote = _lastChunkNote; }
+                else CrashLog.Note($"shared chunk refused by the site ({Upload.Uploader.LastError}); dropped");
+            }
+            // the reading health since the last report goes with what was sent
+            if (sent) { try { await Upload.AccuracyClient.SendAsync(_settings.Upload); } catch (Exception ex) { CrashLog.Write("accuracy report", ex); } }
+        }
+        finally { _sendGate.Release(); }
     }
 
     /// <summary>

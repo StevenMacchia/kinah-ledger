@@ -251,10 +251,12 @@ bracket, minutes, kills, Kinah (tradeable and bound), item counts by ID, app ver
 used only to drop duplicates and spam. Never the character name, account, class, level, chat text or
 screenshots. Sharing is on by default and off with one setting; the live readout works either way.
 
-The totals post once, when the run stops, to `https://kinahledger.com/v1/runs` (`upload.endpoint` in
-`settings.json`, set by default; blank it and nothing is sent). Runs under 5 minutes or with no loot are
-never sent. If the site can't be reached, the run simply stays on this PC: it is still saved to your
-history and is not sent later.
+The totals post to `https://kinahledger.com/v1/runs` (`upload.endpoint` in `settings.json`, set by default;
+blank it and nothing is sent) in small batches: every 15 minutes while the game is being read, once more when
+the tracker closes, and when a farming run is stopped. Batches under 5 minutes or with no loot are never sent.
+A 15-minute batch the site can't take is kept (up to a day's worth) and goes with the next one; the window
+shows when sharing last worked. A stopped run the site can't take stays in your history and is not sent later.
+The Share switch turns all of it off.
 
 ### What a shared price contains
 

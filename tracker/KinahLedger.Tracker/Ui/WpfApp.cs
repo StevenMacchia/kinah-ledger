@@ -59,11 +59,20 @@ public static class WpfApp
         if (Update.Updater.ExePath is { } exe) Platform.AutoStart.Repair(exe);   // the exe moved or was renamed since startup was turned on
         var app = Ensure();
         // an error in a button handler must not take the whole app down: log it, tell the player, carry on
+        bool dialogUp = false; var dialogAt = DateTime.MinValue;
         app.DispatcherUnhandledException += (_, e) =>
         {
             CrashLog.Write("ui", e.Exception);
             e.Handled = true;
-            MessageBox.Show($"Something went wrong, but the tracker is still running.\n\n{e.Exception.Message}\n\nDetails were saved to:\n{CrashLog.CrashPath}", "Kinah Ledger", MessageBoxButton.OK, MessageBoxImage.Warning);
+            // one dialog at a time and not a second within a minute of the last (a failure that repeats still lands in the log)
+            if (dialogUp || DateTime.UtcNow - dialogAt < TimeSpan.FromMinutes(1)) return;
+            dialogUp = true;
+            try
+            {
+                var open = MessageBox.Show("Something went wrong, but Kinah Ledger is still running and carried on.\n\nThe details were saved to a log. Do you want to open the log folder? (If it keeps happening, the log helps to fix it.)", "Kinah Ledger", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+                if (open == MessageBoxResult.Yes) MainWindow.Open(CrashLog.Dir);
+            }
+            finally { dialogUp = false; dialogAt = DateTime.UtcNow; }
         };
         AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write("process", e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString()));
         TaskScheduler.UnobservedTaskException += (_, e) => { CrashLog.Write("task", e.Exception); e.SetObserved(); };
