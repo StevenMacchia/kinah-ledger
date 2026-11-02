@@ -4241,6 +4241,13 @@ options: --process aion[,other]");
                 var back = new SessionEngine(items); back.Seed(ae.ToCarry(DayStore.Today));
                 Check("Abyss Points count only in an Abyss zone, by zone, and carry over", $"{ae.AbyssPoints} | {ae.ZoneSnapshot().GetValueOrDefault("Altam")?.AbyssPoints} {ae.ZoneSnapshot().GetValueOrDefault("Chaotic Upper Reshanta")?.AbyssPoints} | {back.AbyssPoints} | {TodayLoot.Farm(ae, items, "Chaotic Upper Reshanta").Abyss}", "400 | 0 400 | 400 | 400");
             }
+            {
+                // Diamond Powder: x3 at mastery 20 (1 Gemstone), x30 at 45 (10); the panel's "(Novice Lv. 45)" says which was crafted
+                PriceBook.SetBoard(new() { ["Diamond Gemstone"] = 1_500 });
+                Check("Diamond Powder at Lv. 45 makes x30 for ten Gemstones, at Lv. 20 x3 for one",
+                    $"{RecipeBook.YieldFor("Diamond Powder", 45)} {RecipeBook.CostPerTry("Diamond Powder", 30, out _, out _, out _)} | {RecipeBook.YieldFor("Diamond Powder", 20)} {RecipeBook.CostPerTry("Diamond Powder", 3, out _, out _, out _)} | level unread {RecipeBook.YieldFor("Diamond Powder", 0)?.ToString() ?? "unknown"}",
+                    "30 15000 | 3 1500 | level unread unknown");
+            }
             PriceBook.SetBoard(new());
         }
 
