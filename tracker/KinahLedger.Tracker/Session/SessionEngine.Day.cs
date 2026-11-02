@@ -30,6 +30,7 @@ public sealed partial class SessionEngine
         public long Kinah { get; set; }
         public long KinahBound { get; set; }
         public long KinahSkipped { get; set; }
+        public long AbyssPoints { get; set; }
         public int KillsSeen { get; set; }
         public int Defeated { get; set; }
         public int Xp { get; set; }
@@ -62,7 +63,7 @@ public sealed partial class SessionEngine
                 Day = day,
                 Elapsed = ((Ended ?? _pausedAt ?? DateTime.UtcNow) - Started - _paused + _carried).TotalSeconds,
                 Active = _active + TrailingLocked(),
-                Kinah = Kinah, KinahBound = KinahBound, KinahSkipped = KinahSkipped,
+                Kinah = Kinah, KinahBound = KinahBound, KinahSkipped = KinahSkipped, AbyssPoints = AbyssPoints,
                 KillsSeen = KillsSeen, Defeated = KillsDefeated, Xp = KillsXp, KinahDrops = KinahDrops, CurrencyLines = CurrencyLines,
                 Events = Events, Nodes = Nodes, NodesFailed = NodesFailed, Plentiful = Plentiful, Bonus = BonusFinds, Rewards = RewardsSkipped, PetCrystals = PetCrystals,
                 Items = new Dictionary<long, int>(Items), ItemsBound = new Dictionary<long, int>(ItemsBound), Pets = new Dictionary<string, int>(Pets),
@@ -84,7 +85,7 @@ public sealed partial class SessionEngine
         {
             _carried += TimeSpan.FromSeconds(Math.Max(0, c.Elapsed));
             _active += Math.Max(0, c.Active);
-            Kinah += c.Kinah; KinahBound += c.KinahBound; KinahSkipped += c.KinahSkipped;
+            Kinah += c.Kinah; KinahBound += c.KinahBound; KinahSkipped += c.KinahSkipped; AbyssPoints += c.AbyssPoints;
             KillsSeen += c.KillsSeen; KillsDefeated += c.Defeated; KillsXp += c.Xp; KinahDrops += c.KinahDrops; CurrencyLines += c.CurrencyLines;
             Events += c.Events; Nodes += c.Nodes; NodesFailed += c.NodesFailed; Plentiful += c.Plentiful; BonusFinds += c.Bonus; RewardsSkipped += c.Rewards; PetCrystals += c.PetCrystals;
             foreach (var (id, n) in c.Items) Items[id] = Items.GetValueOrDefault(id) + n;
@@ -93,7 +94,7 @@ public sealed partial class SessionEngine
             foreach (var (k, z) in c.Zones)
             {
                 if (!Zones.TryGetValue(k, out var to)) Zones[k] = to = new ZoneStats();
-                to.Seconds += z.Seconds; to.Active += z.Active; to.Kinah += z.Kinah; to.KinahDrops += z.KinahDrops; to.CurrencyLines += z.CurrencyLines;
+                to.Seconds += z.Seconds; to.Active += z.Active; to.Kinah += z.Kinah; to.AbyssPoints += z.AbyssPoints; to.KinahDrops += z.KinahDrops; to.CurrencyLines += z.CurrencyLines;
                 to.Defeated += z.Defeated; to.Xp += z.Xp; to.Pets += z.Pets; to.Drops += z.Drops; to.Nodes += z.Nodes; to.KillsSeen += z.KillsSeen;
                 foreach (var (p, n) in z.PetsByName) to.PetsByName[p] = to.PetsByName.GetValueOrDefault(p) + n;
                 foreach (var (id, n) in z.Items) to.Items[id] = to.Items.GetValueOrDefault(id) + n;

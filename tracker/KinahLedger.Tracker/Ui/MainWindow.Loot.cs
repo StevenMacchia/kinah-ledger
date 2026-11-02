@@ -24,7 +24,7 @@ public partial class MainWindow
     /// <param name="Total">Kinah plus loot after the Market's cut, as the total on LOOT's line.</param>
     /// <param name="TotalTip">How the total adds up, on its hover.</param>
     /// <param name="ByEnemy">The Kinah by the enemy it was credited to, most first, for the Kinah slot's card.</param>
-    sealed record LootHere(Tables S, long Kinah, int Kills, TimeSpan Elapsed, long Total, string TotalTip, List<(string Where, long Count)> ByEnemy);
+    sealed record LootHere(Tables S, long Kinah, int Kills, TimeSpan Elapsed, long Total, string TotalTip, List<(string Where, long Count)> ByEnemy, long Abyss = 0);
 
     /// <summary>The slots' width: the card's 662 less its two sides and LOOT's 20 px margins.</summary>
     const double LootWidth = 662 - 2 - 40;
@@ -85,13 +85,14 @@ public partial class MainWindow
         FootTotal.Text = h.Total > 0 ? Fk(h.Total) : " ";
         FootTotal.ToolTip = h.TotalTip;
         string Row(DropRow r) => $"{r.Name}:{r.Drops}:{r.DropPct}:{r.PerHour}:{r.Value}:{r.Reported}:{r.Grade}:{r.Sub}";
-        var sig = $"here|{LootHereName}|{h.Kinah}|{h.Kills}|{crystals}|{string.Join(";", drops.Select(Row))}|{string.Join(";", gathered.Select(Row))}|"
+        var sig = $"here|{LootHereName}|{h.Kinah}|{h.Abyss}|{h.Kills}|{crystals}|{string.Join(";", drops.Select(Row))}|{string.Join(";", gathered.Select(Row))}|"
             + $"{string.Join(",", h.ByEnemy.Take(6).Select(x => x.Where + x.Count))}|{string.Join(",", _todayAll)}|{Skins.Current}";
         if (!Changed("loot", sig)) return;
         LootHost.Children.Clear();
         string where = _prefs.AllZones ? "since the tracker started" : RunShown ? "this run" : "here";
         var slots = new List<FrameworkElement>();
         if (h.Kinah > 0) slots.Add(KinahSlot(h.Kinah, h.ByEnemy, h.Kills > 0 ? $"{h.Kills:N0} kills · {Fk(h.Kinah / (double)h.Kills)} a kill" : "", "Picked up " + where, "BY ENEMY"));
+        if (h.Abyss > 0) slots.Add(AbyssSlot(h.Abyss, h.Elapsed.TotalSeconds, where));
         foreach (var r in drops) slots.Add(HereSlot(r, false, where));
         foreach (var r in gathered) slots.Add(HereSlot(r, true, where));
         if (crystals > 0) slots.Add(SoulSlot(pets, crystals, where));
@@ -117,7 +118,7 @@ public partial class MainWindow
         FootTotal.Text = made > 0 ? Fk(made) : " ";
         FootTotal.ToolTip = made <= 0 ? null : $"Made farming today{(_todayZone != null ? " in " + ZoneName(_todayZone) : ", every zone")}: Kinah plus drops and gathering at the lowest Market price, after the Market's cut. Bound items and items with no price yet add nothing.";
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
-        var sig = $"day|{_todayZone}|{string.Join(";", zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))}|{farm.Kinah}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|"
+        var sig = $"day|{_todayZone}|{string.Join(";", zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))}|{farm.Kinah}:{farm.Abyss}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|"
             + $"{Slots(farm.Drops)}|{Slots(farm.Gathered)}|{string.Join(",", _todayAll)}|{Skins.Current}";
         if (!Changed("loot", sig)) return;
         LootHost.Children.Clear();
@@ -136,6 +137,7 @@ public partial class MainWindow
         bool showWhere = _todayZone == null && whole.Zones.Count > 1;
         var kills = new List<FrameworkElement>();
         if (farm.Kinah > 0) kills.Add(KinahSlot(farm.Kinah, farm.KinahWhere, farm.Kills > 0 ? $"{farm.Kills:N0} kills · {Fk(farm.Kinah / (double)farm.Kills)} a kill" : ""));
+        if (farm.Abyss > 0) kills.Add(AbyssSlot(farm.Abyss, farm.Active, "today"));
         foreach (var s in farm.Drops) kills.Add(ItemSlot(s, FarmOdds(s, farm.Kills, farm.Active), showWhere));
         var gather = farm.Gathered.Select(s => ItemSlot(s, farm.Attempts > 0 ? ($"{s.Count / (double)farm.Attempts:0.00} a try", HourText(s.Count, farm.Active)) : ("", HourText(s.Count, farm.Active)), showWhere)).ToList();
         // one group needs no heading; with both, each says what it is

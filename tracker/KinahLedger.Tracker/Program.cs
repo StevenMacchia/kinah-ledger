@@ -4233,6 +4233,14 @@ options: --process aion[,other]");
                 Check("a x10 craft costs ten times the x1: tries by what one success makes", $"x1 {RecipeBook.CostPerTry("Orichalcum Ingot", 1, out _, out _, out _)} x10 {RecipeBook.CostPerTry("Orichalcum Ingot", 10, out _, out _, out _)} | {string.Join(",", orow.Tries.OrderBy(k => k.Key).Select(k => $"{k.Key}:{k.Value}"))} | session {RecipeBook.CostOfTries("Orichalcum Ingot", orow.Tries, out _, out _, out _)}", "x1 250 x10 2500 | 1:1,10:3 | session 7750");
                 PriceBook.SetVendorPrice("Orichalcum Solvent (Bound)", 0);
             }
+            {
+                // Abyss Points are an income of their own only in the Abyss's zones, per zone and carried across a restart like Kinah
+                var ae = new SessionEngine(items); var at0 = DateTime.UtcNow;
+                ae.SetZone("Altam"); ae.Apply(new CurrencyGained(at0, "Abyss Points", 50));
+                ae.SetZone("Chaotic Upper Reshanta"); ae.Apply(new CurrencyGained(at0.AddSeconds(5), "Abyss Points", 360)); ae.Apply(new CurrencyGained(at0.AddSeconds(9), "Abyss Point", 40));
+                var back = new SessionEngine(items); back.Seed(ae.ToCarry(DayStore.Today));
+                Check("Abyss Points count only in an Abyss zone, by zone, and carry over", $"{ae.AbyssPoints} | {ae.ZoneSnapshot().GetValueOrDefault("Altam")?.AbyssPoints} {ae.ZoneSnapshot().GetValueOrDefault("Chaotic Upper Reshanta")?.AbyssPoints} | {back.AbyssPoints} | {TodayLoot.Farm(ae, items, "Chaotic Upper Reshanta").Abyss}", "400 | 0 400 | 400 | 400");
+            }
             PriceBook.SetBoard(new());
         }
 
