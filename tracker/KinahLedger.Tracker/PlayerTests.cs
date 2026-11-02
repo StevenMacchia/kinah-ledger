@@ -122,15 +122,28 @@ static class PlayerTests
                 "{\"item\":\"Fine Orichalcum Ore\",\"price\":997,\"price_from\":\"feed\",\"readings\":40,\"sure\":true}," +
                 "{\"item\":\"Fine Odyle\",\"price\":3098,\"price_from\":\"feed\",\"readings\":117,\"sure\":true}," +
                 "{\"item\":\"Old Board Item\",\"lowest_ask\":777,\"stale\":false,\"n_obs\":1}," +
-                "{\"item\":\"Artisan's Splendent Orichalcum Longsword\",\"price\":23999999,\"price_from\":\"feed\",\"readings\":12,\"sure\":true}]}";
+                // an older board (no price pick): the tracker picks the lowest ask itself, so it is held against the other servers
+                "{\"item\":\"Artisan's Splendent Orichalcum Longsword\",\"lowest_ask\":23999999,\"stale\":false,\"n_obs\":12}," +
+                // 2026-11-01: Siel's Kukuru Fried Meat, 11,800 from 30 listings, picked by the site with the region at 7,000 over 4 servers
+                "{\"item\":\"Kukuru Fried Meat\",\"price\":11800,\"price_from\":\"feed\",\"readings\":30,\"sure\":true,\"region_price\":7000,\"region_servers\":4}]}";
             PriceBook.SetBoardQuotes(PriceBook.ParseQuotes(board, null));
-            PriceBook.SetRegionBoards(new[] { 2_000_000L, 2_100_000L, 1_900_000L }.Select(p => new Dictionary<string, long> { ["Artisan's Splendent Orichalcum Longsword"] = p }));
+            // the other servers' boards as the tracker fetches them: Fregion's Kukuru Fried Meat is one listing at 1,450 (unsure), Vaizel's 7,000 is sure
+            var others = new[]
+            {
+                "{\"items\":[{\"item\":\"Artisan's Splendent Orichalcum Longsword\",\"price\":2000000,\"price_from\":\"feed\",\"readings\":3,\"sure\":true},{\"item\":\"Kukuru Fried Meat\",\"price\":1450,\"price_from\":\"feed\",\"readings\":1,\"sure\":false}]}",
+                "{\"items\":[{\"item\":\"Artisan's Splendent Orichalcum Longsword\",\"price\":2100000,\"price_from\":\"feed\",\"readings\":2,\"sure\":true},{\"item\":\"Kukuru Fried Meat\",\"price\":7000,\"price_from\":\"feed\",\"readings\":5,\"sure\":true}]}",
+                "{\"items\":[{\"item\":\"Artisan's Splendent Orichalcum Longsword\",\"price\":1900000,\"price_from\":\"feed\",\"readings\":4,\"sure\":true}]}",
+            };
+            PriceBook.SetRegionBoards(others.Select(j => PriceBook.ParseRegionBoard(j, null)));
+            string Reg(string n) => PriceBook.RegionOf(n) is { } r ? $"{r.Price:N0} · {r.Servers} server(s)" : "none";
 
             string Q(string n) => PriceBook.QuoteOf(n) is { } q ? $"{q.Price:N0} {q.From} {(q.Sure ? "sure" : "unsure")}" : "none";
             Check("the sword on the board: the lowest of 42 listings, sure", Q(sword) + " · " + PriceBook.Describe(PriceBook.QuoteOf(sword)!, now), "43,500 Feed sure · aion2.exchange · lowest of 42 listings · 40 min ago");
             Check("a lone listing is shown, unsure, and out of totals", $"{Q("Chaos Longsword")} · Price {PriceBook.Price("Chaos Longsword")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Chaos Longsword")!, now)}", "5,000,000 Feed unsure · Price null · aion2.exchange · 1 listing · unsure");
             Check("an older board's single listing is unsure too", Q("Old Board Item"), "777 Feed unsure");
-            Check("over 3x the other servers' middle: the region's ≈ price instead", Q("Artisan's Splendent Orichalcum Longsword"), "2,000,000 Region sure");
+            Check("an older board's own pick over 3x the other servers' middle: the region's ≈ price instead", Q("Artisan's Splendent Orichalcum Longsword") + " · region " + Reg("Artisan's Splendent Orichalcum Longsword"), "2,000,000 Region sure · region 2,000,000 · 3 server(s)");
+            Check("the site's pick stands, however thin the other servers look (Siel's Kukuru Fried Meat, 2026-11-01)", Q("Kukuru Fried Meat") + " · " + PriceBook.Describe(PriceBook.QuoteOf("Kukuru Fried Meat")!, now, withAge: false), "11,800 Feed sure · aion2.exchange · lowest of 30 listings");
+            Check("a lone listing on another server stays out of the region middle", Reg("Kukuru Fried Meat"), "7,000 · 1 server(s)");
             Check("the 330K was the recipe's cost per try, not the sword's price", $"cost/try {RecipeBook.CostPerTry(sword, out var unp):N0} ({unp} unpriced) · sword {PriceBook.Price(sword):N0}", "cost/try 450,274 (0 unpriced) · sword 43,500");
 
             // his Market read wins at once (read with sharing off too: only sending follows the switch)

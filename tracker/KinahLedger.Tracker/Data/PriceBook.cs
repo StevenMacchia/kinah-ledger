@@ -9,7 +9,9 @@ namespace KinahLedger.Data;
 ///   1. yours: a price the player typed on a card (typed-prices.json) or the lowest ask this PC read on the Market in
 ///      the last day (prices.json), whichever is newer. Read with sharing off too; nothing leaves the PC then.
 ///   2. the server's board on kinahledger.com, as the site picked it: players' reads, what it sold for, or the
-///      aion2.exchange listing, with its readings and age. Dropped when it is over 3x the other servers' middle.
+///      aion2.exchange listing, with its readings and age. The site held that pick against the item's own level and
+///      the other servers already (price-pick.ts), so it stands; only an older board's lowest ask, which the tracker
+///      picks itself, is dropped when it is over 3x the other servers' middle.
 ///   3. the other servers of the region and faction: their middle, marked ≈.
 /// A price with fewer than 2 readings is "unsure": it is shown (dimmed) but <see cref="Price"/> leaves it out, so no
 /// total, value per hour or profit leans on one listing. Nothing is valued with made-up numbers.
@@ -27,8 +29,11 @@ public static class PriceBook
         public bool Mine => From is From.Market or From.Typed;
     }
 
-    /// <summary>A board item as the site sends it (price-pick.ts on the site), plus the other servers' middle when it has one.</summary>
-    public sealed record BoardQuote(long Price, From From, int Readings, bool Sure, DateTime? At, long? Region = null, int RegionServers = 0);
+    /// <summary>
+    /// A board item as the site sends it (price-pick.ts on the site), plus the other servers' middle when it has one.
+    /// Picked: the site chose this price (and checked it); false for an older board, where the tracker chose the lowest ask.
+    /// </summary>
+    public sealed record BoardQuote(long Price, From From, int Readings, bool Sure, DateTime? At, long? Region = null, int RegionServers = 0, bool Picked = false);
 
     static readonly object Lock = new();
     static Dictionary<string, Seen>? _local, _typed;
@@ -68,7 +73,10 @@ public static class PriceBook
             if (typed != null && (read == null || typed.at >= read.at)) return new Quote(typed.price, From.Typed, 1, true, typed.at);
             if (read != null) return new Quote(read.price, From.Market, 1, true, read.at);
             var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
-            if (_board.TryGetValue(k, out var b) && !(reg is { } rg && b.Price > OutlierX * rg.Price))
+            // the site's pick was held against the item's own level and the other servers before it was published; the
+            // tracker's own region middle, from fewer servers, must not overrule it (2026-11-01: Siel's Kukuru Fried Meat,
+            // 11,800 from 30 listings, lost to Fregion's lone 1,450). Only the tracker's own pick from an older board is held to it.
+            if (_board.TryGetValue(k, out var b) && !(!b.Picked && reg is { } rg && b.Price > OutlierX * rg.Price))
             {
                 // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure
                 if (b.Sure || reg == null) return new Quote(b.Price, b.From, b.Readings, b.Sure, b.At);
@@ -290,7 +298,7 @@ public static class PriceBook
                 if (Num(e, "price") is not long p || p <= 0) continue;
                 var from = pf.ValueKind == JsonValueKind.String ? pf.GetString() switch { "player" => From.Server, "sold" => From.Sold, _ => From.Feed } : From.Feed;
                 bool sure = e.TryGetProperty("sure", out var su) && su.ValueKind == JsonValueKind.True;
-                d[name] = new BoardQuote(p, from, (int)(Num(e, "readings") ?? 0), sure, Time(e, "price_seen_at"), region, regionN);
+                d[name] = new BoardQuote(p, from, (int)(Num(e, "readings") ?? 0), sure, Time(e, "price_seen_at"), region, regionN, Picked: true);
                 continue;
             }
             bool stale = e.TryGetProperty("stale", out var st) && st.ValueKind == JsonValueKind.True;
@@ -307,9 +315,17 @@ public static class PriceBook
         return d;
     }
 
-    /// <summary>A board's prices by name, sure or not: what the other servers' boards give the region middle (a lower middle, so one listing can't lift it).</summary>
+    /// <summary>A board's prices by name, sure or not.</summary>
     public static Dictionary<string, long> ParseBoard(string json, ItemDictionary? items) =>
         ParseQuotes(json, items).ToDictionary(kv => kv.Key, kv => kv.Value.Price);
+
+    /// <summary>
+    /// Another server's board as the region middle takes it: its sure prices only (a lower middle, so one listing can't
+    /// lift it). A lone listing on another server proves nothing and stays out: two of them made a "sure" region middle
+    /// before, and one at 1,450 was enough to throw out a server's own 11,800 from 30 listings (2026-11-01).
+    /// </summary>
+    public static Dictionary<string, long> ParseRegionBoard(string json, ItemDictionary? items) =>
+        ParseQuotes(json, items).Where(kv => kv.Value.Sure).ToDictionary(kv => kv.Key, kv => kv.Value.Price);
 
     static long? Num(JsonElement e, string prop) => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var x) ? (long)Math.Round(x) : null;
     static DateTime? Time(JsonElement e, string prop) => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String && v.TryGetDateTime(out var t) ? t.ToUniversalTime() : null;
