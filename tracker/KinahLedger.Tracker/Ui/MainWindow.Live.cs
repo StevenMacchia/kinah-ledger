@@ -363,6 +363,28 @@ public partial class MainWindow
     /// 3,620 reads" read like a parse log, and the count ticking up twice a second drew the eye for nothing).
     /// </summary>
     /// <param name="hideOk">The Farming card's line (2026-10-28): said only when something is wrong; "Reading the chat" is in ⋯.</param>
+    /// <summary>How long without a line from the chat before the reading line says so, and asks whether the chat is in view.</summary>
+    static readonly TimeSpan NothingReadAfter = TimeSpan.FromMinutes(2);
+
+    /// <summary>"Reading · last pickup 4s ago" under the zone while all is well; "Nothing read for 2 min. Is chat visible?" when the chat has gone quiet with the game in front.</summary>
+    void FillReading(TrackerSession? c)
+    {
+        string text = ""; string tone = "Faint";
+        if (c != null && c.ChatFound && c.Paused.Length == 0 && c.LastError.Length == 0)
+        {
+            var now = DateTime.UtcNow;
+            if (now - c.LastLinesAt >= NothingReadAfter) { text = $"Nothing read for {(int)(now - c.LastLinesAt).TotalMinutes} min. Is chat visible?"; tone = "Warn"; }
+            else if (c.RecentPickups(1).FirstOrDefault() is { } p && p.At != DateTime.MinValue) text = "Reading · last pickup " + Ago(now - p.At) + " ago";
+            else text = "Reading · nothing picked up yet";
+        }
+        if (ReadingLbl.Text != text) ReadingLbl.Text = text;
+        ReadingLbl.SetResourceReference(TextBlock.ForegroundProperty, tone);
+        var vis = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (ReadingLbl.Visibility != vis) ReadingLbl.Visibility = vis;
+    }
+
+    static string Ago(TimeSpan t) => t.TotalSeconds < 60 ? $"{Math.Max(0, (int)t.TotalSeconds)}s" : t.TotalMinutes < 60 ? $"{(int)t.TotalMinutes} min" : $"{(int)t.TotalHours} h";
+
     void FillHealth(TextBlock text, Path? mark, bool hideOk = false)
     {
         var c = _watcher.Chat;

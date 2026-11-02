@@ -247,6 +247,8 @@ public sealed partial class TrackerSession
     /// <summary>Seconds spent per detected zone, so the run can be attributed to where most of it happened.</summary>
     public Dictionary<string, double> ZoneSeconds => Engine.ZoneSnapshot().Where(kv => kv.Key != SessionEngine.UnknownZone).ToDictionary(kv => kv.Key, kv => kv.Value.Seconds);
     public long Reads { get; private set; }
+    /// <summary>When a read last found any line in the chat (the reader's start counts), for the window's "Nothing read for 2 min" nudge.</summary>
+    public DateTime LastLinesAt { get; private set; } = DateTime.UtcNow;
     public int Unaligned => _tracker.Unaligned;
     public int Empty => _tracker.Empty;
     public string LastError { get; private set; } = "";
@@ -973,7 +975,7 @@ public sealed partial class TrackerSession
         Engine.Resume(); Secondary?.Resume(); foreach (var v in Views()) v.Resume();
         var lines = await _reader!.ReadAsync();
         _parser.NoteAccents(_reader.LastAccents);
-        if (lines.Count > 0) { ReadTrace.Chat(DateTime.UtcNow, lines); Report.Lines("chat", lines, DateTime.UtcNow); QuestCounter(lines); }
+        if (lines.Count > 0) { LastLinesAt = DateTime.UtcNow; ReadTrace.Chat(DateTime.UtcNow, lines); Report.Lines("chat", lines, DateTime.UtcNow); QuestCounter(lines); }
         Reads++;
         Accuracy.Add("chat_reads");
         var readAt = DateTime.UtcNow;
@@ -4444,6 +4446,13 @@ public sealed partial class TrackerSession
     public string Server { get; set; } = "";
 
     public Task<bool> UploadAsync(Settings s) => UploadAsync(s, Engine, Kind, Activity);
+
+    /// <summary>
+    /// A chunk of the always-on count as it would be sent, with the finished runs that were waiting taken along. The caller
+    /// sends it (GameWatcher keeps it for the next try when the site isn't reached), so the runs are not put back here.
+    /// </summary>
+    public RunPayload BuildChunk(Settings s, SessionEngine e, string kind, string activity) =>
+        RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, KeepUnread(Instances.TakeUnshared(e.Started)));
 
     /// <summary>
     /// Sends the runs that finished since the last send, on their own, when the site takes that (RemoteConfig.RunSync):

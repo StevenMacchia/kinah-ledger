@@ -26,6 +26,9 @@ public sealed class CalibrationWindow : Window
         new("done", "All set", "", "✓"),
     };
 
+    /// <summary>The window's width at full size, frame included.</summary>
+    const double DesignWidth = 1340;
+
     readonly Settings _settings;
     readonly Func<string, bool> _knows;
     readonly Func<DRect?> _manualChat;
@@ -43,23 +46,40 @@ public sealed class CalibrationWindow : Window
     {
         _settings = settings; _knows = knows; _manualChat = manualChat; _pickChat = pickChat;
         Title = "Kinah Ledger · Check the setup";
-        Width = 1340; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.CanMinimize;
+        // 1340 wide is two columns' worth; a 1080p screen at 150% scaling is 1280 DIP, so the window takes the work area
+        // when that is smaller and the content below is scaled down to fit (the Viewbox), never cut off
+        Width = Math.Min(DesignWidth, SystemParameters.WorkArea.Width); SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.CanMinimize;
+        MaxHeight = SystemParameters.WorkArea.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         SetResourceReference(BackgroundProperty, "Bg");
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
         var left = new Border { CornerRadius = new CornerRadius(16), Padding = new Thickness(16), BorderThickness = new Thickness(1), Width = 860, Child = new StackPanel { Children = { new Border { CornerRadius = new CornerRadius(10), ClipToBounds = true, Child = _frame, MinHeight = 380 }, _pips } } };
         left.SetResourceReference(Border.BorderBrushProperty, "Line");
         left.SetResourceReference(Border.BackgroundProperty, "Card");
-        Content = new Grid
+        var grid = new Grid
         {
-            Margin = new Thickness(22),
+            Width = DesignWidth - 16, Margin = new Thickness(22),
             ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) } },
             Children = { left, _cardHost }
         };
+        Content = new Viewbox { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Child = grid };
         Grid.SetColumn(_cardHost, 1); _cardHost.Margin = new Thickness(18, 0, 0, 0); _cardHost.VerticalAlignment = VerticalAlignment.Top;
+        SourceInitialized += (_, _) => FitToScreen();
         _timer.Tick += async (_, _) => await Refresh();
         Loaded += async (_, _) => { Show(0); await Refresh(); _timer.Start(); };
         Closed += (_, _) => _timer.Stop();
+    }
+
+    /// <summary>The window's width and height held to the work area of the screen it opened on, which may not be the primary one.</summary>
+    void FitToScreen()
+    {
+        var h = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (h == IntPtr.Zero) return;
+        double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var wa = System.Windows.Forms.Screen.FromHandle(h).WorkingArea;
+        if (dpi <= 0) dpi = 1;
+        Width = Math.Min(DesignWidth, wa.Width / dpi);
+        MaxHeight = wa.Height / dpi;
     }
 
     /// <summary>Goes to a step (for the off-screen renders).</summary>

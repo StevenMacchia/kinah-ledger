@@ -84,6 +84,7 @@ public partial class MainWindow
         var info = new List<(string Text, object? Tip)>();
         if (HealthText.Text.Length > 0) info.Add((HealthText.Text, HealthLine.ToolTip));
         if (_lastRead.Length > 0) info.Add((_lastRead, null));
+        info.Add((_watcher.ShareLine, _watcher.ShareFailing ? $"{_watcher.ChunksWaiting} batch{(_watcher.ChunksWaiting == 1 ? "" : "es")} waiting; they go out with the next one (every 15 minutes), up to a day's worth." : "Counts are shared with kinahledger.com in 15-minute batches. The Share switch in Options turns it off."));
         if (_leftOut.Length > 0) info.Add(("Left out: " + _leftOut, "Quest and payment rewards: bound Kinah, a payment line, or one line far above what the enemies here pay. Never farming income."));
         if (_idleNote.Length > 0) info.Add((char.ToUpperInvariant(_idleNote[0]) + _idleNote[1..], "A minute or more of the game being read with nothing picked up."));
         return info;

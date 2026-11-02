@@ -337,8 +337,11 @@ public static class ServerKeys
 
 public static class Uploader
 {
-    public static async Task<bool> SendAsync(RunPayload p, UploadSettings u) =>
-        !u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint) ? false : (await PostAsync(u.Endpoint, p)).Ok;
+    public static async Task<bool> SendAsync(RunPayload p, UploadSettings u) => (await SendResultAsync(p, u)).Ok;
+
+    /// <summary>Like <see cref="SendAsync"/>, with how the site answered, so a caller can tell a send worth trying again from a refusal.</summary>
+    public static async Task<SendResult> SendResultAsync(RunPayload p, UploadSettings u) =>
+        !u.Enabled || string.IsNullOrWhiteSpace(u.Endpoint) ? SendResult.NoConnection : await PostAsync(u.Endpoint, p);
 
     /// <summary>Market asks have their own switch in the window; here only the route matters.</summary>
     public static Task<SendResult> SendPricesAsync(PriceBatch p, UploadSettings u) =>

@@ -571,10 +571,46 @@ public partial class MainWindow : Window
         StartBtn.Content = on ? "Stop run" : "Start run";
         StartBtn.IsEnabled = on || HasServer;
         _trayToggle.Text = on ? "Stop run" : "Start run";
-        _tray.Text = on ? "Kinah Ledger · farming" : "Kinah Ledger";
+        UpdateTrayTip();
     }
 
+    /// <summary>The tray icon's hover text: what the tracker is doing now (a notify icon's text is at most 63 characters).</summary>
+    void UpdateTrayTip()
+    {
+        var chat = _watcher.Chat;
+        string what = Farming ? "farming"
+            : _watcher.GameRect == null ? "waiting for the game"
+            : chat == null ? "looking for the chat"
+            : chat.Paused.Length > 0 ? "paused"
+            : chat.LastError.Length > 0 ? "read problem"
+            : "reading";
+        var tip = "Kinah Ledger · " + what + (UpdateReady ? " · update ready" : "");
+        if (tip != _trayTip) { _trayTip = tip; try { _tray.Text = tip; } catch (Exception) { /* a text over the limit must not stop the tick */ } }
+    }
+    string _trayTip = "";
+
+    /// <summary>
+    /// The 500 ms refresh. An exception in it used to reach the app's handler every half second, a dialog each time: now it is
+    /// logged (at most once a minute) and the status line says so (at most once every few minutes); the next tick tries again.
+    /// </summary>
     void Tick()
+    {
+        try { TickCore(); }
+        catch (Exception ex)
+        {
+            var now = DateTime.UtcNow;
+            if (now - _tickLoggedAt >= TimeSpan.FromMinutes(1)) { _tickLoggedAt = now; CrashLog.Write("refresh", ex); }
+            if (now - _tickSaidAt >= TimeSpan.FromMinutes(5))
+            {
+                _tickSaidAt = now;
+                Say("Something went wrong, see log", "Warn");
+                Status.ToolTip = "The window's refresh hit an error and carries on. Details are in " + CrashLog.CrashPath;
+            }
+        }
+    }
+    DateTime _tickLoggedAt = DateTime.MinValue, _tickSaidAt = DateTime.MinValue;
+
+    void TickCore()
     {
         if (_demo || _moving) return;
         WatchGame();
@@ -591,6 +627,8 @@ public partial class MainWindow : Window
             FillNumbers(show, show.Active);
         }
         else if (chat == null) { TableTitle.Text = _watcher.GameRect == null ? "Reading starts once the game is open" : "Looking for the chat"; HeadRate.Text = " "; HeadRateUnit.Visibility = Visibility.Collapsed; }
+        FillReading(chat);
+        UpdateTrayTip();
         // the live dot: the game is being read right now
         LiveMark.Visibility = chat != null && chat.Paused.Length == 0 && chat.LastError.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (farm?.Paused == true && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
@@ -610,7 +648,9 @@ public partial class MainWindow : Window
                 : chat.LastLine.Length > 0 ? "Last: " + chat.LastLine : chat.Zone is { Length: > 0 } tz ? "Tracking " + tz : "Reading the chat";
             _lastRead = chat.ChatFound ? line : "";
             // the Farming page says nothing here while all is well (2026-10-28, the calm page): the last line read is in ⋯
-            Tell(_part == "Farming" && chat.ChatFound ? "" : line, "Faint");
+            // sharing that isn't getting through is the one thing that line does say
+            if (_part == "Farming" && chat.ChatFound && _watcher.ShareFailing && _settings.Upload.Enabled) Tell(_watcher.ShareLine, "Warn");
+            else Tell(_part == "Farming" && chat.ChatFound ? "" : line, "Faint");
         }
         if (chat != null && _options is { WantsPreview: true } && ++_ticks % 4 == 0 && !_framing)
         {
@@ -1429,11 +1469,11 @@ public partial class MainWindow : Window
     public const string PrivacyUrl = "https://github.com/StevenMacchia/kinah-ledger/blob/main/CODE_SIGNING_POLICY.md#privacy";
 
     public void WhatsSent(Window? owner = null) => MessageBox.Show(owner ?? this,
-        "When a run ends, these totals go to the public tables:\n\n" +
+        "These totals go to the public tables:\n\n" +
         "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
         "Never your character name, account, class, level, chat text or screenshots.\n" +
         "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
-        "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) once, when you press Stop. If the site can't be reached, the run simply stays on this PC: it's still saved to your history here and isn't sent later.\n\n" +
+        "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) in small batches: every 15 minutes while the game is being read, once more when you close the tracker, and when you press Stop on a farming run. A 15-minute batch the site can't take is kept on this PC (up to a day's worth) and sent with the next one; the window says when sharing last worked. A stopped run the site can't take stays in your history here and isn't sent later. The Share switch (Options › Sharing) turns all of this off, and anything still waiting is let go.\n\n" +
         "Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.\n\n" +
         "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +
         "Updates: at start and every 10 minutes the tracker asks GitHub which release is newest; only the app version goes with that request. A newer version is downloaded from that release and checked against the checksum in its notes before it's installed. update.check in settings.json turns the check off.\n\n" +
