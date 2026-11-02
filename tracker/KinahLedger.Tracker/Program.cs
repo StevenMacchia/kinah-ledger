@@ -4240,6 +4240,14 @@ options: --process aion[,other]");
                     $"{RecipeBook.YieldFor("Diamond Powder", 45)} {RecipeBook.CostPerTry("Diamond Powder", 30, out _, out _, out _)} | {RecipeBook.YieldFor("Diamond Powder", 20)} {RecipeBook.CostPerTry("Diamond Powder", 3, out _, out _, out _)} | level unread {RecipeBook.YieldFor("Diamond Powder", 0)?.ToString() ?? "unknown"}",
                     "30 15000 | 3 1500 | level unread unknown");
             }
+            {
+                // Abyss Points are an income of their own only in the Abyss's zones, per zone and carried across a restart like Kinah
+                var ae = new SessionEngine(items); var at0 = DateTime.UtcNow;
+                ae.SetZone("Altam"); ae.Apply(new CurrencyGained(at0, "Abyss Points", 50));
+                ae.SetZone("Chaotic Upper Reshanta"); ae.Apply(new CurrencyGained(at0.AddSeconds(5), "Abyss Points", 360)); ae.Apply(new CurrencyGained(at0.AddSeconds(9), "Abyss Point", 40));
+                var back = new SessionEngine(items); back.Seed(ae.ToCarry(DayStore.Today));
+                Check("Abyss Points count only in an Abyss zone, by zone, and carry over", $"{ae.AbyssPoints} | {ae.ZoneSnapshot().GetValueOrDefault("Altam")?.AbyssPoints} {ae.ZoneSnapshot().GetValueOrDefault("Chaotic Upper Reshanta")?.AbyssPoints} | {back.AbyssPoints} | {TodayLoot.Farm(ae, items, "Chaotic Upper Reshanta").Abyss}", "400 | 0 400 | 400 | 400");
+            }
             PriceBook.SetBoard(new());
         }
 

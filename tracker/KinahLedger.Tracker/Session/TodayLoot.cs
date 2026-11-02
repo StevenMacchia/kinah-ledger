@@ -9,12 +9,12 @@ public sealed record TodaySlot(long Id, string Name, long Count, long Bound, lon
 public sealed record TodayZone(string Zone, double Active, int Kills, long Made, string Best = "", int BestCount = 0, long BestWorth = 0);
 
 /// <summary>Today's farming, every zone or one: the slots the strip draws and the figures its line says.</summary>
-public sealed record TodayFarm(long Kinah, int Kills, int Attempts, double Active, List<TodaySlot> Drops, List<TodaySlot> Gathered, List<TodayZone> Zones, List<(string Where, long Count)> KinahWhere)
+public sealed record TodayFarm(long Kinah, int Kills, int Attempts, double Active, List<TodaySlot> Drops, List<TodaySlot> Gathered, List<TodayZone> Zones, List<(string Where, long Count)> KinahWhere, long Abyss = 0)
 {
     public long DropWorth => Drops.Sum(d => d.Worth);
     public long GatherWorth => Gathered.Sum(d => d.Worth);
     public long Made => Kinah + DropWorth + GatherWorth;
-    public bool Any => Kinah > 0 || Drops.Count + Gathered.Count > 0 || Kills > 0 || Attempts > 0;
+    public bool Any => Kinah > 0 || Abyss > 0 || Drops.Count + Gathered.Count > 0 || Kills > 0 || Attempts > 0;
 }
 
 /// <summary>Today's expeditions and events: every run since midnight (expeditions and events apart), and the loot of the counted ones.</summary>
@@ -42,16 +42,16 @@ public static class TodayLoot
     {
         var zones = day.ZoneSnapshot();
         var t = day.Totals();
-        Dictionary<long, int> its, bound; long kinah; int kills, attempts; double active;
+        Dictionary<long, int> its, bound; long kinah, abyss; int kills, attempts; double active;
         if (zone != null)
         {
             var z = zones.GetValueOrDefault(zone) ?? new SessionEngine.ZoneStats();
-            its = z.Items; bound = z.ItemsBound; kinah = z.Kinah; kills = z.Kills; attempts = z.Nodes; active = z.Active;
+            its = z.Items; bound = z.ItemsBound; kinah = z.Kinah; abyss = z.AbyssPoints; kills = z.Kills; attempts = z.Nodes; active = z.Active;
         }
         else
         {
             its = new Dictionary<long, int>(day.Items); bound = new Dictionary<long, int>(day.ItemsBound);
-            kinah = t.Kinah; kills = t.Kills; attempts = t.Nodes; active = day.Active.TotalSeconds;
+            kinah = t.Kinah; abyss = day.AbyssPoints; kills = t.Kills; attempts = t.Nodes; active = day.Active.TotalSeconds;
         }
         var drops = new List<TodaySlot>(); var gathered = new List<TodaySlot>();
         foreach (var id in its.Keys.Union(bound.Keys))
@@ -87,7 +87,7 @@ public static class TodayLoot
             .OrderByDescending(z => z.Made).ThenByDescending(z => z.Active).ToList();
         var kinahWhere = (zone != null ? zones.Where(kv => kv.Key == zone) : zones).Where(kv => kv.Value.Kinah > 0)
             .Select(kv => (ZoneName(kv.Key), kv.Value.Kinah)).OrderByDescending(x => x.Kinah).ToList();
-        return new TodayFarm(kinah, kills, attempts, active, Order(drops), Order(gathered), list, kinahWhere);
+        return new TodayFarm(kinah, kills, attempts, active, Order(drops), Order(gathered), list, kinahWhere, abyss);
     }
 
     /// <param name="today">The runs since midnight (<see cref="IsToday"/>).</param>

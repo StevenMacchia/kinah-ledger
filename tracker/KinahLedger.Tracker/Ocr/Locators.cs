@@ -238,6 +238,13 @@ public static class ZoneLocator
     /// </summary>
     public static readonly string[] Known = LoadZones().Concat(LoadInstances().Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
+    /// <summary>
+    /// A zone of the Abyss (Reshanta, and the Abyss gates): the only open-world zones where Abyss Points are an income of their
+    /// own, shown like Kinah. Elsewhere the points come from quests and events, which aren't farming.
+    /// </summary>
+    public static bool IsAbyss(string? zone) =>
+        zone != null && (zone.Contains("Reshanta", StringComparison.OrdinalIgnoreCase) || zone.Contains("Abyss Gate", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Instanced areas (dungeons, trials, arenas, event areas) and the kind a run in one is filed under: data/instances.txt.</summary>
     public static readonly Dictionary<string, string> Instances = LoadInstances();
 
