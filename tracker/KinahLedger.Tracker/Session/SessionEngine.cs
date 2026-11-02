@@ -20,6 +20,9 @@ public sealed partial class SessionEngine
     public Dictionary<string, long> Currencies { get; } = new();
     /// <summary>Abyss Points picked up in the Abyss's zones (<see cref="Ocr.ZoneLocator.IsAbyss"/>), shown like Kinah; elsewhere they stay in <see cref="Currencies"/> only.</summary>
     public long AbyssPoints { get; private set; }
+    static readonly System.Text.RegularExpressions.Regex AbyssPointsName = new(@"^abyss\s*po[i1l]nts?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+    /// <summary>True for a currency line naming Abyss Points, as the recognizer may read it ("Abyss Point", "Abyss Poi1ts").</summary>
+    public static bool IsAbyssPoints(string name) => AbyssPointsName.IsMatch(name.Trim());
     /// <summary>Quest, title and box rewards seen and deliberately left out of the farming numbers.</summary>
     public int RewardsSkipped { get; private set; }
     /// <summary>Gathering: node attempts, one per primary-resource line (ore, log, Odyle, herb, food) plus failed attempts.</summary>
@@ -648,7 +651,7 @@ public sealed partial class SessionEngine
                     }
 
                     Currencies[c.Name] = Currencies.GetValueOrDefault(c.Name) + c.Amount;
-                    if (System.Text.RegularExpressions.Regex.IsMatch(c.Name, @"^abyss\s*po[i1l]nts?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase) && Ocr.ZoneLocator.IsAbyss(_zone))
+                    if (IsAbyssPoints(c.Name) && Ocr.ZoneLocator.IsAbyss(_zone))
                     { AbyssPoints += c.Amount; Z().AbyssPoints += c.Amount; }
                     break;
                 case EnemySoul es:
