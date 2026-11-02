@@ -55,7 +55,14 @@ static class PlayerTests
         Check("farm: a zone nobody published", Here("1400-1599", "Western Cantas Valley"), "none");
         var (top, atGear) = PlayerBoards.Top("1600-1799", 5);
         Check("farm: Full view list falls back to every player's, best first", $"{atGear} " + string.Join(", ", top.Select(z => z.Zone)), "False Night Dew Cave, Crimson Isle");
-        PlayerBoards.Load(null, "{\"brackets\":{}}");
+        // every region pooled (Where to farm now's default): the line falls back to it, saying "everywhere", when the server has no row
+        PlayerBoards.Load(null, FarmJson, "{\"brackets\":{\"all\":[{\"zone\":\"Western Cantas Valley\",\"n_runs\":30,\"n_installs\":9,\"minutes\":100,\"published\":true,\"value_hr\":2000000},{\"zone\":\"Night Dew Cave\",\"n_runs\":80,\"n_installs\":20,\"minutes\":400,\"published\":true,\"value_hr\":1100000}]}}");
+        string Everywhere(string? b, string z) => PlayerBoards.Here(b, z) is { } h ? $"{h.Row.ValueHr:N0} {(h.Everywhere ? "everywhere" : "server")}" : "none";
+        Check("farm: the server's own row first", Everywhere("1400-1599", "Night Dew Cave"), "1,500,000 server");
+        Check("farm: no row on the server: the all-regions one, said so", Everywhere("1400-1599", "Western Cantas Valley"), "2,000,000 everywhere");
+        Check("farm: Full view list over every region by default", string.Join(", ", PlayerBoards.Top(null, 5, allRegions: true).Zones.Select(z => z.Zone)) + " | " + string.Join(", ", PlayerBoards.Top(null, 5).Zones.Select(z => z.Zone)),
+            "Western Cantas Valley, Night Dew Cave | Night Dew Cave, Crimson Isle");
+        PlayerBoards.Load(null, "{\"brackets\":{}}", "{\"brackets\":{}}");
 
         // the gear score's bracket, as runs are shared
         Check("gear score 1450: bracket and payload", $"{GearScore.Bracket(1450)} {GearScore.Payload(1450)}", "1400-1599 gs:1400-1599");

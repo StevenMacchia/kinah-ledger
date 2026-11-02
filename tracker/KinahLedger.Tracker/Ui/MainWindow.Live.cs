@@ -432,22 +432,31 @@ public partial class MainWindow
     /// replaced on 2026-10-28). Your best hour here is said once, under the hour on the live card.
     /// </summary>
     string PlayersHereLine(string? zone)
-        => PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v ? $"{(h.AtGear ? "Players at your gear" : "Players")} make {Fk(v)} an hour here." : "";
+        => PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v ? $"{(h.AtGear ? "Players at your gear" : "Players")} make {Fk(v)} an hour here{(h.Everywhere ? ", everywhere" : "")}." : "";
 
-    /// <summary>Where to farm now: folded, the best zone and its hour; opened, the best zones for the player's gear on the server.</summary>
+    /// <summary>
+    /// Where to farm now: folded, the best zone and its hour; opened, the best zones for the player's gear, over every region
+    /// by default (0.9.9) or on the player's own server, one click apart. A scope with nothing published yet still shows,
+    /// saying so, as long as the other has something, so the switch is always there to go back.
+    /// </summary>
     void FillWhere(string? zone)
     {
         if (PlayerBoards.FarmAt == null) { WhereSection.Visibility = Visibility.Collapsed; return; }
-        var (zones, atGear) = PlayerBoards.Top(GearBracket, 5);
+        bool all = !_prefs.WhereYourServer;
+        var (zones, atGear) = PlayerBoards.Top(GearBracket, 5, all);
+        bool otherHas = PlayerBoards.Top(GearBracket, 1, !all).Zones.Count > 0;
         // a section with nothing to suggest isn't shown (2026-10-28: "not enough runs on your server yet" took a line for nothing)
-        WhereSection.Visibility = _part == "Farming" && !_welcome && zones.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        WhereSection.Visibility = _part == "Farming" && !_welcome && (zones.Count > 0 || otherHas) ? Visibility.Visible : Visibility.Collapsed;
         bool open = SecOpen("Where");
-        if (zones.Count == 0) { _drawnSig.Remove("where"); return; }
         var server = Server?.Name ?? "your server";
-        WhereNote.Text = open ? (atGear ? $"gear {GearBracket!.Replace("-", "–")} · {server}" : $"all players · {server}") : $"best: {zones[0].Zone}";
-        WhereSum.Text = open ? "" : Fk(zones[0].ValueHr ?? 0);
-        if (!Changed("where", $"{zone}|" + string.Join(";", zones.Select(z => $"{z.Zone}|{z.Runs}|{z.Players}|{z.ValueHr}")))) return;
+        var scope = all ? "every region" : server;
+        WhereNote.Text = zones.Count == 0 ? $"nothing published for {scope} yet"
+            : open ? (atGear ? $"gear {GearBracket!.Replace("-", "–")} · {scope}, last 7 days" : $"all players · {scope}, last 7 days") : $"best: {zones[0].Zone} · {(all ? "all regions" : "your server")}";
+        WhereSum.Text = open || zones.Count == 0 ? "" : Fk(zones[0].ValueHr ?? 0);
+        if (!Changed("where", $"{zone}|{all}|{server}|" + string.Join(";", zones.Select(z => $"{z.Zone}|{z.Runs}|{z.Players}|{z.ValueHr}")))) return;
         WhereBody.Children.Clear();
+        WhereBody.Children.Add(WhereScopeSwitch(all));
+        if (zones.Count == 0) WhereBody.Children.Add(Faint(all ? "No zone has enough runs across the regions yet." : $"No zone has enough runs on {server} yet. Every region has some."));
         foreach (var z in zones)
         {
             var g = new Grid { Height = 36 };
@@ -463,10 +472,28 @@ public partial class MainWindow
             var v = new TextBlock { Text = Fk(z.ValueHr ?? 0), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
             v.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); v.SetResourceReference(TextBlock.ForegroundProperty, "Gold");
             Grid.SetColumn(v, 2); g.Children.Add(v);
-            var b = new Border { Child = g, BorderThickness = new Thickness(0, 1, 0, 0), ToolTip = $"{z.Runs} runs from {z.Players} players in the last 7 days · Kinah plus loot after tax, an hour" };
+            var b = new Border { Child = g, BorderThickness = new Thickness(0, 1, 0, 0), ToolTip = $"{z.Runs} runs from {z.Players} players {(all ? "across every region" : "on " + server)} in the last 7 days · Kinah plus loot {PriceBook.Cut}, an hour" };
             b.SetResourceReference(Border.BorderBrushProperty, "Line");
             WhereBody.Children.Add(b);
         }
+    }
+
+    /// <summary>"All regions | Your server" over the zones, as LOOT's side switch: the choice is kept in the prefs.</summary>
+    FrameworkElement WhereScopeSwitch(bool all)
+    {
+        Button Seg(string text, bool on, bool yourServer, string tip)
+        {
+            var b = new Button { Content = text, Height = 26, FontSize = 12.5, Padding = new Thickness(10, 0, 10, 0), ToolTip = tip, Margin = new Thickness(yourServer ? 2 : 0, 0, 0, 0) };
+            b.SetResourceReference(StyleProperty, on ? "SegOn" : "SegOff");
+            b.Click += (_, _) => { _prefs.WhereYourServer = yourServer; if (!_demo) _prefs.Save(); _drawnSig.Remove("where"); FillWhere(_watcher.Chat?.ZoneView?.Zone ?? _demoZone); };
+            return b;
+        }
+        var group = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 8),
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = {
+                Seg("All regions", all, false, "Every region's players pooled, the last 7 days."),
+                Seg("Your server", !all, true, $"Only players on {Server?.Name ?? "your server"}, the last 7 days.") } } };
+        group.SetResourceReference(Border.BorderBrushProperty, "LineStrong"); group.SetResourceReference(Border.BackgroundProperty, "SegGroup");
+        return group;
     }
 
     /* ---------------- Also this session ---------------- */

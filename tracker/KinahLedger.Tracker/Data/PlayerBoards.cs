@@ -7,7 +7,8 @@ namespace KinahLedger.Data;
 /// Two boards kinahledger.com builds for each server, read like the price board (nothing is sent), every 15 minutes
 /// while sharing is on: the best crafts today (/crafts/{server}.json: every recipe at the server's lowest asks, profit
 /// per try) and where to farm (/farm/{server}.json: what players' shared open-world runs made an hour by zone and
-/// gear bracket, last 7 days). Empty until the first fetch; the window hides what isn't there.
+/// gear bracket, last 7 days) and, for Where to farm now, the same board pooled over every region (/farm/all.json, 0.9.9).
+/// Empty until the first fetch; the window hides what isn't there.
 /// </summary>
 public static class PlayerBoards
 {
@@ -18,7 +19,7 @@ public static class PlayerBoards
 
     static readonly object Lock = new();
     static List<BestCraft> _crafts = new();
-    static Dictionary<string, List<FarmZone>> _farm = new(StringComparer.OrdinalIgnoreCase);
+    static Dictionary<string, List<FarmZone>> _farm = new(StringComparer.OrdinalIgnoreCase), _farmAll = new(StringComparer.OrdinalIgnoreCase);
     public static DateTime? CraftsAt { get; private set; }
     /// <summary>When the site built the best crafts from the server's board (its generated_at): the age the list shows.</summary>
     public static DateTime? CraftsBoardAt { get; private set; }
@@ -43,6 +44,13 @@ public static class PlayerBoards
             if (r.IsSuccessStatusCode) LoadFarm(await r.Content.ReadAsStringAsync());
         }
         catch (Exception ex) { CrashLog.Note("site farm: " + ex.Message); }
+        // every region pooled (what Where to farm now shows first); a site without it leaves the server's board to stand in
+        try
+        {
+            var r = await http.GetAsync($"{origin}/farm/all.json");
+            if (r.IsSuccessStatusCode) LoadFarm(await r.Content.ReadAsStringAsync(), all: true);
+        }
+        catch (Exception ex) { CrashLog.Note("site farm, all regions: " + ex.Message); }
     }
 
     public static List<BestCraft> ParseCrafts(string json)
@@ -67,7 +75,7 @@ public static class PlayerBoards
         return outp;
     }
 
-    public static void LoadFarm(string json)
+    public static void LoadFarm(string json, bool all = false)
     {
         var d = new Dictionary<string, List<FarmZone>>(StringComparer.OrdinalIgnoreCase);
         using var doc = JsonDocument.Parse(json);
@@ -84,38 +92,50 @@ public static class PlayerBoards
                             z.TryGetProperty("published", out var p) && p.ValueKind == JsonValueKind.True, Num(z, "value_hr") is double vh ? (long)vh : null, Num(z, "kina_hr") is double kh ? (long)kh : null));
                 d[b.Name] = list;
             }
-        lock (Lock) { _farm = d; MinRuns = minRuns; MinPlayers = minPlayers; FarmAt = DateTime.UtcNow; }
+        lock (Lock) { if (all) _farmAll = d; else { _farm = d; MinRuns = minRuns; MinPlayers = minPlayers; } FarmAt = DateTime.UtcNow; }
     }
 
     /// <summary>
-    /// What players make an hour in a zone: at the player's gear bracket when that row is published, else every player's
-    /// (gear unknown or not enough players at it yet). Null when neither is published. AtGear says which one it is.
+    /// What players make an hour in a zone: on the player's own server first (at their gear bracket when that row is published,
+    /// else every player's there), and when the server's board has no published row for the zone, the pooled all-regions
+    /// one (<c>Everywhere</c>), so the line isn't hidden because the server's row is thin. Null when none is published.
+    /// AtGear says which row it is.
     /// </summary>
-    public static (FarmZone Row, bool AtGear)? Here(string? bracket, string? zone)
+    public static (FarmZone Row, bool AtGear, bool Everywhere)? Here(string? bracket, string? zone)
     {
         if (string.IsNullOrWhiteSpace(zone)) return null;
         lock (Lock)
         {
-            FarmZone? Find(string b) => _farm.TryGetValue(b, out var l) ? l.FirstOrDefault(z => z.Published && z.ValueHr != null && string.Equals(z.Zone, zone, StringComparison.OrdinalIgnoreCase)) : null;
-            if (!string.IsNullOrEmpty(bracket) && Find(bracket) is { } g) return (g, true);
-            return Find(AllGear) is { } a ? (a, false) : null;
+            FarmZone? Find(Dictionary<string, List<FarmZone>> board, string b) => board.TryGetValue(b, out var l) ? l.FirstOrDefault(z => z.Published && z.ValueHr != null && string.Equals(z.Zone, zone, StringComparison.OrdinalIgnoreCase)) : null;
+            (FarmZone, bool)? In(Dictionary<string, List<FarmZone>> board)
+            {
+                if (!string.IsNullOrEmpty(bracket) && Find(board, bracket) is { } g) return (g, true);
+                return Find(board, AllGear) is { } a ? (a, false) : null;
+            }
+            if (In(_farm) is { } mine) return (mine.Item1, mine.Item2, false);
+            return In(_farmAll) is { } all ? (all.Item1, all.Item2, true) : null;
         }
     }
 
-    /// <summary>The best zones for a bracket (published only, most per hour first), else every player's when the bracket has none.</summary>
-    public static (List<FarmZone> Zones, bool AtGear) Top(string? bracket, int n)
+    /// <summary>
+    /// The best zones for a bracket (published only, most per hour first), else every player's when the bracket has none; from
+    /// the all-regions board when <paramref name="allRegions"/>, else the player's server's.
+    /// </summary>
+    public static (List<FarmZone> Zones, bool AtGear) Top(string? bracket, int n, bool allRegions = false)
     {
         lock (Lock)
         {
-            List<FarmZone> Of(string b) => _farm.TryGetValue(b, out var l) ? l.Where(z => z.Published && z.ValueHr != null).OrderByDescending(z => z.ValueHr).Take(n).ToList() : new();
+            var board = allRegions ? _farmAll : _farm;
+            List<FarmZone> Of(string b) => board.TryGetValue(b, out var l) ? l.Where(z => z.Published && z.ValueHr != null).OrderByDescending(z => z.ValueHr).Take(n).ToList() : new();
             if (!string.IsNullOrEmpty(bracket) && Of(bracket) is { Count: > 0 } g) return (g, true);
             return (Of(AllGear), false);
         }
     }
 
-    /// <summary>For tests and layout renders: replace both boards.</summary>
-    public static void Load(string? craftsJson, string? farmJson)
+    /// <summary>For tests and layout renders: replace the boards.</summary>
+    public static void Load(string? craftsJson, string? farmJson, string? farmAllJson = null)
     {
+        if (farmAllJson != null) LoadFarm(farmAllJson, all: true);
         if (craftsJson != null) { var c = ParseCrafts(craftsJson); lock (Lock) { _crafts = c; CraftsAt = DateTime.UtcNow; CraftsBoardAt = GeneratedAt(craftsJson); } }
         if (farmJson != null) LoadFarm(farmJson);
     }
