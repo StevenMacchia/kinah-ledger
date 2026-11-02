@@ -4221,6 +4221,18 @@ options: --process aion[,other]");
             Check("recipe book: the Longsword's materials", RecipeBook.ForOutput("Artisan's Orichalcum Longsword") is { } rb ? string.Join(", ", rb.Materials.Select(m => $"{m.Qty} {m.Item}")) : "missing", "1 Expert's Splendent Orichalcum Longsword, 5 Artisan's Refining Stone, 8 Pure Orichalcum Ore, 4 Pure Odyle");
             PriceBook.SetBoard(new() { ["Expert's Splendent Orichalcum Longsword"] = 400_000, ["Artisan's Refining Stone"] = 20_000, ["Pure Orichalcum Ore"] = 5_000, ["Pure Odyle"] = 6_000 });
             Check("cost of one try at Market prices", $"{RecipeBook.CostPerTry("Artisan's Orichalcum Longsword", out var unp):N0} ({unp} unpriced)", "564,000 (0 unpriced)");
+            {
+                // Orichalcum Ingot is made by a x1 recipe (2 Ore, 1 Solvent) and a x10 one (20 Ore, 10 Solvent): a try costs what its own recipe uses
+                PriceBook.SetBoard(new() { ["Orichalcum Ore"] = 100 });
+                PriceBook.SetVendorPrice("Orichalcum Solvent (Bound)", 50);
+                var oe = new SessionEngine(items); var ot = DateTime.UtcNow;
+                oe.CraftPanelSeen("Orichalcum Ingot", ot);
+                for (int i = 0; i < 3; i++) oe.Apply(new CraftResult(ot.AddSeconds(i * 10), "Orichalcum Ingot", i != 1) { Via = SessionEngine.CraftPanelVia, Makes = 10 });
+                oe.Apply(new CraftResult(ot.AddSeconds(40), "Orichalcum Ingot", true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                var orow = oe.CraftSnapshot().Single();
+                Check("a x10 craft costs ten times the x1: tries by what one success makes", $"x1 {RecipeBook.CostPerTry("Orichalcum Ingot", 1, out _, out _, out _)} x10 {RecipeBook.CostPerTry("Orichalcum Ingot", 10, out _, out _, out _)} | {string.Join(",", orow.Tries.OrderBy(k => k.Key).Select(k => $"{k.Key}:{k.Value}"))} | session {RecipeBook.CostOfTries("Orichalcum Ingot", orow.Tries, out _, out _, out _)}", "x1 250 x10 2500 | 1:1,10:3 | session 7750");
+                PriceBook.SetVendorPrice("Orichalcum Solvent (Bound)", 0);
+            }
             PriceBook.SetBoard(new());
         }
 

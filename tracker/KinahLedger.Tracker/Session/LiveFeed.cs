@@ -16,7 +16,7 @@ public enum FeedTab { Farming, Crafting, Events }
 /// <param name="Ok">For a craft: it worked.</param>
 /// <param name="Via">How it was read (GameEvent.Via): "chat", "loot list", "reward table", "crafting panel".</param>
 /// <param name="Where">The activity it landed in (Activity.Label): "Farming · Western Cantas Valley", "Expedition · Urugugu Canyon".</param>
-public sealed record FeedLine(DateTime At, FeedTab Tab, string Kind, string Name, long Amount, string Enemy = "", bool Ok = true, string Via = "", string Where = "", long ItemId = 0, bool Bound = false)
+public sealed record FeedLine(DateTime At, FeedTab Tab, string Kind, string Name, long Amount, string Enemy = "", bool Ok = true, string Via = "", string Where = "", long ItemId = 0, bool Bound = false, int Makes = 0)
 {
     /// <summary>The line in plain words, as a miscount report files it: "1,192 Kinah · Cantas Raider", "Spiritstone ×1", "Orichalcum Greaves failed".</summary>
     public string Text => Kind switch
