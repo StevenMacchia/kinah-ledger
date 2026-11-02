@@ -4233,6 +4233,13 @@ options: --process aion[,other]");
                 Check("a x10 craft costs ten times the x1: tries by what one success makes", $"x1 {RecipeBook.CostPerTry("Orichalcum Ingot", 1, out _, out _, out _)} x10 {RecipeBook.CostPerTry("Orichalcum Ingot", 10, out _, out _, out _)} | {string.Join(",", orow.Tries.OrderBy(k => k.Key).Select(k => $"{k.Key}:{k.Value}"))} | session {RecipeBook.CostOfTries("Orichalcum Ingot", orow.Tries, out _, out _, out _)}", "x1 250 x10 2500 | 1:1,10:3 | session 7750");
                 PriceBook.SetVendorPrice("Orichalcum Solvent (Bound)", 0);
             }
+            {
+                // Diamond Powder: x3 at mastery 20 (1 Gemstone), x30 at 45 (10); the panel's "(Novice Lv. 45)" says which was crafted
+                PriceBook.SetBoard(new() { ["Diamond Gemstone"] = 1_500 });
+                Check("Diamond Powder at Lv. 45 makes x30 for ten Gemstones, at Lv. 20 x3 for one",
+                    $"{RecipeBook.YieldFor("Diamond Powder", 45)} {RecipeBook.CostPerTry("Diamond Powder", 30, out _, out _, out _)} | {RecipeBook.YieldFor("Diamond Powder", 20)} {RecipeBook.CostPerTry("Diamond Powder", 3, out _, out _, out _)} | level unread {RecipeBook.YieldFor("Diamond Powder", 0)?.ToString() ?? "unknown"}",
+                    "30 15000 | 3 1500 | level unread unknown");
+            }
             PriceBook.SetBoard(new());
         }
 
