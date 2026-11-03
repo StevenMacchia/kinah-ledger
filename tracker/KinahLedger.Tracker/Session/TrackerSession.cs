@@ -4730,6 +4730,8 @@ public sealed class UserPrefs
     public bool AutoUpdate { get; set; } = true;
     /// <summary>The version that last opened the window, so the first start after an update can say so.</summary>
     public string LastVersion { get; set; } = "";
+    /// <summary>The version whose What's new card was put away with Got it (0.9.12, Ui/MainWindow.WhatsNew.cs); the card shows once for each newer one.</summary>
+    public string WhatsNewSeen { get; set; } = "";
     /// <summary>When the game starts while the tracker waits in the tray: "open" shows the window, "tray" stays in the tray. Reading starts either way.</summary>
     public string OnGameStart { get; set; } = "open";
     /// <summary>Hide to the tray once the game has been closed for a few seconds (never during a run).</summary>

@@ -288,6 +288,11 @@ public partial class MainWindow
             case "compare-on":
                 ShowCompareSample(state);
                 break;
+            // What's new (0.9.12): the card over the live card, with this build's notes (Ui/MainWindow.WhatsNew.cs)
+            case "whats-new":
+                ShowWhatsNewSample();
+                break;
+
         }
         _drawnSig.Remove("loot");
         Redraw();

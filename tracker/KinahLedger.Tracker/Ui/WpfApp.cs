@@ -485,7 +485,54 @@ public static class WpfApp
             Check(w.GoalsForTest() is { Shown: false, Slim: true }, "the last goal removed: the box goes, the slim row is back");
         }
 
+        // What's new (0.9.12, Ui/MainWindow.WhatsNew.cs): the notes' bullets as bold lead and rest; once per version, never on
+        // a fresh install; Got it stores the version; Farming only; six bullets, then "and N more"; the link to the release
+        {
+            const string sample = "Kinah Ledger tracker 9.9.9: a sample.\r\n\r\n- **A zone row is a button.** Hover a row and it lights up.\r\n"
+                + "- **Each row's tooltip says what a click does.**\r\n* **Links keep their text.** See [the site](https://kinahledger.com) and `code`.\r\n"
+                + "- A bullet with no bold lead.\r\n\r\nInstalled copies update by themselves in the background.\r\n";
+            var notes = Platform.WhatsNew.Parse(sample);
+            Check(notes.Count == 4 && notes[0] == new Platform.WhatsNew.Note("A zone row is a button.", "Hover a row and it lights up.")
+                && notes[1] == new Platform.WhatsNew.Note("Each row's tooltip says what a click does.", "")
+                && notes[2].Rest == "See the site and code." && notes[3] == new Platform.WhatsNew.Note("", "A bullet with no bold lead."),
+                "What's new: bullets split into lead and rest, no summary or closing line: " + string.Join(" | ", notes.Select(n => $"[{n.Lead}] {n.Rest}")));
+            Check(Platform.WhatsNew.Parse("Only a summary.\n\nInstalled copies update by themselves in the background.").Count == 0 && Platform.WhatsNew.Parse("").Count == 0,
+                "What's new: notes with no bullets give none");
+            Check(Platform.WhatsNew.Built().Count > 0, $"What's new: this build carries its notes (release-notes/v{Upload.RunPayload.AppVersion}.md)");
+            var cur = Upload.RunPayload.AppVersion; var keepSeen = w.Prefs.WhatsNewSeen; var keepFull = w.Prefs.FullView;
+            w.ShowPartForTest("Farming"); DoEvents();
+            var fresh = w.WhatsNewStartForTest("", "", sample);
+            Check(!fresh.Shown && w.Prefs.WhatsNewSeen == cur, $"What's new: a fresh install shows nothing and counts {cur} as seen ({w.Prefs.WhatsNewSeen})");
+            var same = w.WhatsNewStartForTest(cur, cur, sample);
+            Check(!same.Shown, "What's new: not shown when the stored version is this one");
+            var older = w.WhatsNewStartForTest("", "0.9.11", sample);
+            Check(older.Shown, "What's new: shown after an update from a version before the card (nothing stored, an older one ran)");
+            var shown = w.WhatsNewStartForTest("0.9.11", cur, sample);
+            Check(shown.Shown && shown.Title == $"WHAT'S NEW IN {cur}" && shown.Lines == 4 && shown.More == "" && w.WhatsNewCard.Parent == w.LeftCol && w.LeftCol.Children.IndexOf(w.WhatsNewCard) == 0,
+                $"What's new: shown when the stored version differs, at the top of the left column: \"{shown.Title}\", {shown.Lines} bullets");
+            string? opened = null; MainWindow.OpenForTest = u => opened = u;
+            w.WhatsNewAllLink.RaiseEvent(new RoutedEventArgs(System.Windows.Documents.Hyperlink.ClickEvent));
+            MainWindow.OpenForTest = null;
+            Check(opened == $"https://github.com/StevenMacchia/kinah-ledger/releases/tag/v{cur}", $"What's new: All notes opens the release ({opened})");
+            w.ShowPartForTest("Crafting"); DoEvents();
+            Check(!w.WhatsNewForTest().Shown, "What's new: not on the Crafting page");
+            w.ShowPartForTest("Farming"); w.ShowFull(); DoEvents();
+            Check(w.WhatsNewForTest().Shown, "What's new: back on Farming, in Full view too");
+            if (!keepFull) w.ShowCompact();
+            DoEvents();
+            Click(w.WhatsNewGotIt); DoEvents();
+
+            Check(!w.WhatsNewForTest().Shown && w.Prefs.WhatsNewSeen == cur, $"What's new: Got it puts it away and stores {cur} ({w.Prefs.WhatsNewSeen})");
+            var many = string.Join("\n", Enumerable.Range(1, 8).Select(i => $"- **Bullet {i}.** rest {i}."));
+            var eight = w.WhatsNewStartForTest("0.0.1", cur, many);
+            Check(eight.Shown && eight.Lines == MainWindow.WhatsNewMax && eight.More == "and 2 more in the notes", $"What's new: {eight.Lines} bullets, then \"{eight.More}\"");
+            Click(w.WhatsNewGotIt); DoEvents();
+            Check(!w.WhatsNewStartForTest("0.0.1", cur, "Summary only.").Shown, "What's new: a notes file with no bullets shows nothing");
+            w.Prefs.WhatsNewSeen = keepSeen;
+        }
+
         // the panel's crafting line (2026-10-26): the Card's and the Ticker's craft values from a sample ledger that adds up,
+
         // summed as the Crafting part sums it, at the Crafting render's prices
         w.ShowDemo("Crafting"); DoEvents();
         {
