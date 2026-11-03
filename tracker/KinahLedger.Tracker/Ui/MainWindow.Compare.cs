@@ -46,6 +46,19 @@ public partial class MainWindow
         if (_part == "Events") ShowInstances();   // else the Events page draws afresh when shown, its "runs" drawing forgotten
     }
 
+    /// <summary>
+    /// Options › Show amounts before the Market fee: every figure the window works out then keeps the Market's cut (PriceBook.SellerKeeps),
+    /// so every part is drawn again. What was already saved to the history (Week, best runs) stays as it was priced.
+    /// </summary>
+    void SetGross(bool on)
+    {
+        _prefs.ShowGross = Data.PriceBook.ShowGross = on;
+        _drawnSig.Clear();
+        Redraw();
+        if (_part == "Events") ShowInstances();
+        if (_part == "Crafting") FillCraft(CraftShown);
+    }
+
     /// <summary>The zone the player is in: the live zone view's, a render's sample zone, else none.</summary>
     string? HereZone() => _demo ? _demoZone : _watcher.Chat?.ZoneView?.Zone ?? _watcher.Chat?.Zone;
 
@@ -353,7 +366,7 @@ public partial class MainWindow
         if (shownBest is long best) { UsualLine.Inlines.Add(new LineBreak()); UsualLine.Inlines.Add(PR("Your best here ", "Muted")); Fig(Fk(best)); }
         UsualBox.ToolTip = $"Made an hour in {ZoneName(zone!)} on this PC: your usual is over {TodayLoot.Dur(u.EarlierActive)} on earlier days"
             + (vs != null ? $", set against the hour above ({Fk(headline)}, this stay)" : "") + (shownBest != null ? "; your best is your best hour there." : ".")
-            + " Kinah plus loot after the Market's cut.";
+            + " Kinah plus loot " + PriceBook.Cut + ".";
         UsualBox.Visibility = Visibility.Visible;
         return true;
     }
@@ -408,7 +421,7 @@ public partial class MainWindow
         line.Inlines.Add(PR(v.Rank == 1 ? " here yet." : " run here.", "Muted"));
         sp.Children.Add(line);
         var card = new Border { Child = sp, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(20, 16, 20, 0),
-            ToolTip = "This run against your earlier runs on this card (flagged ones left out): Kinah plus materials at the lowest Market price, after the Market's cut, as the figures above count them." };
+            ToolTip = "This run against your earlier runs on this card (flagged ones left out): Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ", as the figures above count them." };
         card.SetResourceReference(Border.BackgroundProperty, "GoldTint");
         card.SetResourceReference(Border.BorderBrushProperty, "GoldLine");
         ToolTipService.SetInitialShowDelay(card, 500);

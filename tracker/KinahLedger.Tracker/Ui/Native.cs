@@ -118,6 +118,29 @@ internal static class Native
         return _icon;
     }
 
+    static readonly Dictionary<System.Drawing.Color, Icon> _dotted = new();
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+
+    /// <summary>The tray icon with a status dot at its lower right (paused, a read problem, an update ready); one icon made per colour, then kept.</summary>
+    public static Icon AppIconWithDot(System.Drawing.Color dot)
+    {
+        if (_dotted.TryGetValue(dot, out var have)) return have;
+        var baseIcon = AppIcon();
+        using var bmp = baseIcon.ToBitmap();
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            float d = bmp.Width * 0.46f, x = bmp.Width - d - 0.5f, y = bmp.Height - d - 0.5f;
+            using var ring = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(235, 12, 15, 30));
+            using var fill = new System.Drawing.SolidBrush(dot);
+            g.FillEllipse(ring, x - 1.2f, y - 1.2f, d + 2.4f, d + 2.4f);
+            g.FillEllipse(fill, x, y, d, d);
+        }
+        var h = bmp.GetHicon();
+        try { have = (Icon)Icon.FromHandle(h).Clone(); } finally { DestroyIcon(h); }
+        return _dotted[dot] = have;
+    }
+
     /// <summary>The whole app.ico for a window: WPF takes the title-bar and Alt+Tab sizes from its frames.</summary>
     public static BitmapSource AppIconSource()
     {

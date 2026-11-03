@@ -38,8 +38,16 @@ public static class PriceBook
 
     /// <summary>How long an ask read on this PC stays the price before the board's takes over again.</summary>
     public static TimeSpan LocalFor { get; set; } = TimeSpan.FromHours(24);
-    /// <summary>What a seller keeps of a sale: the Market takes a listing fee and a sales tax, about 12% together.</summary>
-    public static double SellerKeeps { get; set; } = 0.88;
+    /// <summary>The share of a sale the Market takes as its listing fee and sales tax together (the 12% the window names).</summary>
+    public const double FeeRate = 0.12;
+    /// <summary>Options › General › Show amounts before the Market fee: every figure the window works out is then the sale's gross.</summary>
+    public static bool ShowGross { get; set; }
+    /// <summary>What a seller keeps of a sale: 88%, or all of it while <see cref="ShowGross"/> is on.</summary>
+    public static double SellerKeeps => ShowGross ? 1 : 1 - FeeRate;
+    /// <summary>The full wording for a figure: "after the 12% Market fee" (the HUD card, the first tooltips), or "before the Market fee".</summary>
+    public static string Fee => ShowGross ? "before the Market fee" : $"after the {FeeRate:P0} Market fee";
+    /// <summary>The short wording, where space is tight: "after the Market's cut", or "before the Market's cut".</summary>
+    public static string Cut => ShowGross ? "before the Market's cut" : "after the Market's cut";
     /// <summary>Readings a price needs to count in totals and profit; an ask this many times the other servers' middle is dropped.</summary>
     public const int SureReadings = 2;
     public const double OutlierX = 3;

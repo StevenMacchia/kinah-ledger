@@ -90,7 +90,7 @@ public partial class MainWindow
             }
             TodaySum.Text = made > 0 ? Fk(made) : "";
             TodaySum.ToolTip = made <= 0 ? null
-                : "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, after the Market's cut. Gear, currencies, items with no price yet and runs left out of the averages add nothing.";
+                : "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, " + PriceBook.Cut + ". Gear, currencies, items with no price yet and runs left out of the averages add nothing.";
             TodayHead.ToolTip = "Today's expeditions and events since midnight on this PC. Click to see the rewards.";
         }
         bool open = _prefs.TodayOpen;
@@ -133,7 +133,7 @@ public partial class MainWindow
         if (worth > 0)
         {
             var v = PT(Fk(worth), "Gold", 13, null, "MonoFont"); v.Margin = new Thickness(12, 0, 0, 0);
-            v.ToolTip = "Kinah plus loot at the lowest Market price, after the Market's cut. Bound items and items with no price yet add nothing.";
+            v.ToolTip = "Kinah plus loot at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
             Grid.SetColumn(v, 1); head.Children.Add(v);
         }
         sp.Children.Add(head);
@@ -245,7 +245,7 @@ public partial class MainWindow
             body.Children.Add(CkKv(rate.Odds.Length > 0 ? rate.Odds : rate.Hour, rate.Odds.Length > 0 ? rate.Hour : "", CkInk));
         }
         if (s.Bound > 0 && s.Bound < s.Count) body.Children.Add(CkNote($"{s.Bound:N0} of these are bound and add nothing."));
-        body.Children.Add(s.Worth > 0 ? TodayFooter("Worth, after the Market's cut", Fk(s.Worth))
+        body.Children.Add(s.Worth > 0 ? TodayFooter("Worth, " + PriceBook.Cut, Fk(s.Worth))
             : s.Gear || s.Bound >= s.Count ? TodayFooter("Bound to you", "can't be sold", muted: true)
             : s.Currency ? TodayFooter("A currency", "not sold", muted: true)
             : TodayFooter("No Market price yet", "adds nothing", muted: true));

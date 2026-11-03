@@ -172,8 +172,8 @@ public static class ZoneCompare
     /// <summary>The stay must be this long before the hour on the card is set against your usual (10 minutes).</summary>
     public const double VersusStaySeconds = 600;
 
-    /// <summary>A figure rounded as the window writes it: "1.27M" to ten thousand, "805K" to a thousand, "7.5K" to a hundred.</summary>
-    public static long Shown(long v) { long a = Math.Abs(v); long step = a >= 1_000_000 ? 10_000 : a >= 10_000 ? 1_000 : a >= 1_000 ? 100 : 1; return (long)Math.Round(v / (double)step, MidpointRounding.AwayFromZero) * step; }
+    /// <summary>A figure rounded as the window writes it (Ui/Amounts.cs): "1.27M" to ten thousand, "805.5K" to a hundred, in full below 100,000.</summary>
+    public static long Shown(long v) { long a = Math.Abs(v); long step = Ui.Amounts.Step(v); return (long)Math.Round(v / (double)step, MidpointRounding.AwayFromZero) * step; }
 
     /// <summary>
     /// The hour the card shows (<paramref name="headline"/>, this stay's or this run's, the big figure the player reads)

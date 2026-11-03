@@ -4710,6 +4710,10 @@ public sealed class UserPrefs
     public bool FollowActivity { get; set; } = true;
     /// <summary>Options › General › Compare zones and runs (0.9.3, Session/Compare.cs): Days | Zones and Days | Places on the Week sides, your usual here, a run against your runs there. Off by default: the base app stays light.</summary>
     public bool CompareZones { get; set; }
+    /// <summary>Options › General › Show amounts before the Market fee (0.9.9): every figure is the sale's gross, not what the seller keeps. Off by default.</summary>
+    public bool ShowGross { get; set; }
+    /// <summary>Where to farm now (0.9.9): false (the default) pools every region, true is the player's own server only.</summary>
+    public bool WhereYourServer { get; set; }
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>
     public bool ShareMarket { get; set; } = true;
     /// <summary>True once the player chose the Market area by hand; the title-and-headers search then stays off until they switch back.</summary>

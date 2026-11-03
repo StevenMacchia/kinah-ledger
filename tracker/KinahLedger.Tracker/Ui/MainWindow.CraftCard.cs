@@ -171,7 +171,7 @@ public partial class MainWindow
         long Sells(string item, int qty) => Price(item) is long p ? (long)Math.Round(p * qty * PriceBook.SellerKeeps) : -1;
         long outValue = Sells(recipe.Output, recipe.OutputQty);
         body.Children.Add(CkPriceLine(recipe.Output, "Lowest Market price", Redo, server: Server?.Name ?? ""));
-        body.Children.Add(CkKv($"Sells for, after the Market's {1 - PriceBook.SellerKeeps:P0}", outValue >= 0 ? outValue.ToString("N0") : "no sure price yet", outValue >= 0 ? CkGold : CkFaint, recipe.OutputQty > 1 ? $"{recipe.OutputQty} made per craft" : ""));
+        body.Children.Add(CkKv($"Sells for, {PriceBook.Fee}", outValue >= 0 ? outValue.ToString("N0") : "no sure price yet", outValue >= 0 ? CkGold : CkFaint, recipe.OutputQty > 1 ? $"{recipe.OutputQty} made per craft" : ""));
         if (recipe.GreatOutcomes.Count > 0)
         {
             var ups = new WrapPanel { Margin = new Thickness(20, 6, 14, 0) };
@@ -223,7 +223,7 @@ public partial class MainWindow
         if (farmed.Count == 0) return;
         if (farmed.FirstOrDefault(f => f.Price == null) is { Item: { } gap }) { body.Children.Add(CkNote($"Sell-the-mats line needs a price for {gap}.")); return; }
         long sell = (long)Math.Round(farmed.Sum(f => f.Price!.Value * f.Qty * PriceBook.SellerKeeps));
-        body.Children.Add(CkKv("Or sell the mats instead", $"{sell:N0} per try", CkGold, $"after the Market's {1 - PriceBook.SellerKeeps:P0}"));
+        body.Children.Add(CkKv("Or sell the mats instead", $"{sell:N0} per try", CkGold, $"{PriceBook.Fee}"));
         if (per is not double p) return;
         double z = p - sell;
         body.Children.Add(CkNote(z >= 0 ? $"Crafting beats selling the mats by {z:N0} per try." : $"Selling the mats beats crafting by {-z:N0} per try."));

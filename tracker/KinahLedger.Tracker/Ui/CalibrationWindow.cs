@@ -26,6 +26,11 @@ public sealed class CalibrationWindow : Window
         new("done", "All set", "", "✓"),
     };
 
+    /// <summary>A brush of the look now chosen (Skins), as a colour: the cards are drawn fresh every refresh, so a change of look shows at the next one.</summary>
+    static Color Res(string key, Color fallback) => Application.Current?.TryFindResource(key) is SolidColorBrush b ? b.Color : fallback;
+    static Color Al(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
+    static Color StateColor(State st) => st == State.Good ? Res("Good", Color.FromRgb(0x62, 0xD9, 0x8B)) : st == State.Waiting ? Res("Warn", Color.FromRgb(0xF3, 0xB4, 0x5E)) : Res("Bad", Color.FromRgb(0xFF, 0x6B, 0x5E));
+
     /// <summary>The window's width at full size, frame included.</summary>
     const double DesignWidth = 1340;
 
@@ -33,6 +38,8 @@ public sealed class CalibrationWindow : Window
     readonly Func<string, bool> _knows;
     readonly Func<DRect?> _manualChat;
     readonly Action _pickChat;
+    /// <summary>The start/stop shortcut as bound now ("Ctrl+Shift+K"), "" when it is off; read when the last card draws.</summary>
+    readonly Func<string> _hotkey;
     int _step;
     readonly Image _frame = new() { Stretch = Stretch.Uniform };
     readonly StackPanel _pips = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 12, 0, 0) };
@@ -42,9 +49,9 @@ public sealed class CalibrationWindow : Window
     bool _busy;
     readonly Dictionary<string, (State State, string Sub, List<string> Read, string Size)> _results = new();
 
-    public CalibrationWindow(Settings settings, Func<string, bool> knows, Func<DRect?> manualChat, Action pickChat)
+    public CalibrationWindow(Settings settings, Func<string, bool> knows, Func<DRect?> manualChat, Action pickChat, Func<string>? hotkey = null)
     {
-        _settings = settings; _knows = knows; _manualChat = manualChat; _pickChat = pickChat;
+        _settings = settings; _knows = knows; _manualChat = manualChat; _pickChat = pickChat; _hotkey = hotkey ?? (() => "");
         Title = "Kinah Ledger · Check the setup";
         // 1340 wide is two columns' worth; a 1080p screen at 150% scaling is 1280 DIP, so the window takes the work area
         // when that is smaller and the content below is scaled down to fit (the Viewbox), never cut off
@@ -90,7 +97,7 @@ public sealed class CalibrationWindow : Window
         _step = Math.Clamp(step, 0, Steps.Length - 1);
         _pips.Children.Clear();
         for (int i = 0; i < Steps.Length; i++)
-            _pips.Children.Add(new Border { Width = 28, Height = 5, CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 0, 6, 0), Background = new SolidColorBrush(i <= _step ? Color.FromRgb(0xF8, 0xD5, 0x98) : Color.FromRgb(0x2A, 0x30, 0x58)) });
+            _pips.Children.Add(new Border { Width = 28, Height = 5, CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 0, 6, 0), Background = new SolidColorBrush(i <= _step ? Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98)) : Res("Line", Color.FromRgb(0x2A, 0x30, 0x58))) });
         Draw();
     }
 
@@ -198,14 +205,14 @@ public sealed class CalibrationWindow : Window
         var card = Card(r.Item1, s.Icon, s.Name, $"Step {_step + 1} of 3 · {s.Where}", r.Item1 == State.Good ? (s.Key == "loot" ? "Reads" : "Reading") : r.Item1 == State.Waiting ? Hint(s.Key) : "Needs a fix");
         var body = (StackPanel)((Border)card.Child).Child;
         body.Children.Add(Section("WHAT IT READS"));
-        var readBox = new TextBlock { FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12.5, Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xD9, 0xA6)), TextWrapping = TextWrapping.Wrap };
+        var readBox = new TextBlock { FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12.5, Foreground = new SolidColorBrush(Res("Gold", Color.FromRgb(0xE8, 0xD9, 0xA6))), TextWrapping = TextWrapping.Wrap };
         if (r.Item3.Count == 0) readBox.Text = r.Item2;
         foreach (var l in r.Item3)
         {
             bool loot = System.Text.RegularExpressions.Regex.IsMatch(l, @"acqui|obtain|kina|×", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            readBox.Inlines.Add(new System.Windows.Documents.Run(l + "\n") { Foreground = loot ? new SolidColorBrush(Color.FromRgb(0x62, 0xD9, 0x8B)) : readBox.Foreground });
+            readBox.Inlines.Add(new System.Windows.Documents.Run(l + "\n") { Foreground = loot ? new SolidColorBrush(StateColor(State.Good)) : readBox.Foreground });
         }
-        body.Children.Add(Pad(new Border { Background = new SolidColorBrush(Color.FromArgb(0x60, 0, 0, 0)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 255, 255, 255)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 8, 10, 8), Child = readBox }));
+        body.Children.Add(Pad(new Border { Background = new SolidColorBrush(Al(Res("Bg", Color.FromRgb(0, 0, 0)), 0xA0)), BorderBrush = new SolidColorBrush(Res("Line", Color.FromArgb(0x20, 255, 255, 255))), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 8, 10, 8), Child = readBox }));
         if (r.Item4.Length > 0) { body.Children.Add(Section("TEXT SIZE")); body.Children.Add(Pad(Text(r.Item4))); }
         if (r.Item2.StartsWith("another window")) { body.Children.Add(Section("FIX")); body.Children.Add(Pad(Text("Bring Aion 2 to the front, or move the other window off this area. The tracker reads what is on screen."))); }
         else if (s.Key == "loot" && r.Item1 != State.Good) { body.Children.Add(Section("HOW")); body.Children.Add(Pad(Text("The list shows for about three seconds after a kill. Defeat anything nearby and this turns green."))); }
@@ -215,7 +222,7 @@ public sealed class CalibrationWindow : Window
         if (s.Key == "chat") foot.Children.Add(Btn("Pick the area myself", false, () => { _pickChat(); _results.Remove("chat"); }));
         else if (r.Item1 != State.Good) foot.Children.Add(Btn("Skip", false, () => Show(_step + 1)));
         if (_step > 0) foot.Children.Add(Btn("Back", false, () => Show(_step - 1)));
-        body.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x10, 0x5A, 0xA6, 0xFF)), BorderBrush = new SolidColorBrush(Color.FromRgb(0x26, 0x2B, 0x4A)), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 6, 0, 0), Child = foot });
+        body.Children.Add(new Border { Background = new SolidColorBrush(Al(Res("Line", Color.FromRgb(0x5A, 0xA6, 0xFF)), 0x40)), BorderBrush = new SolidColorBrush(Res("Line", Color.FromRgb(0x26, 0x2B, 0x4A))), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 6, 0, 0), Child = foot });
         _cardHost.Child = card;
     }
 
@@ -233,6 +240,7 @@ public sealed class CalibrationWindow : Window
             var r = _results.TryGetValue(s.Key, out var x) ? x : (State.Waiting, "not checked", new List<string>(), "");
             body.Children.Add(Pad(Text($"{(r.Item1 == State.Good ? "✓" : "•")}  {s.Name}: {r.Item2}", r.Item1 == State.Good ? "Good" : "Muted")));
         }
+        if (_hotkey() is { Length: > 0 } key) { body.Children.Add(Section("SHORTCUT")); body.Children.Add(Pad(Text($"{key} in the game starts or stops a run. Change it in Options."))); }
         var foot = new WrapPanel { Margin = new Thickness(14, 10, 14, 12) };
         foot.Children.Add(Btn("Done", true, Close));
         foot.Children.Add(Btn("Check again", false, () => { _results.Clear(); Show(0); }));
@@ -242,7 +250,7 @@ public sealed class CalibrationWindow : Window
 
     static Border Card(State st, string icon, string name, string sub, string chip)
     {
-        var col = st == State.Good ? Color.FromRgb(0x62, 0xD9, 0x8B) : st == State.Waiting ? Color.FromRgb(0xF3, 0xB4, 0x5E) : Color.FromRgb(0xFF, 0x6B, 0x5E);
+        var col = StateColor(st);
         var band = new Border
         {
             Padding = new Thickness(14, 12, 14, 12), BorderThickness = new Thickness(0, 0, 0, 1),
@@ -250,8 +258,8 @@ public sealed class CalibrationWindow : Window
             Background = new LinearGradientBrush(Color.FromArgb(0x48, col.R, col.G, col.B), Color.FromArgb(0x0A, col.R, col.G, col.B), 0),
         };
         var g = new Grid { ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition(), new ColumnDefinition { Width = GridLength.Auto } } };
-        var ic = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 255, 255, 255)), Background = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0)), Child = new TextBlock { Text = icon, FontSize = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White } };
-        var names = new StackPanel { Margin = new Thickness(12, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Children = { new TextBlock { Text = name, FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(0xE9, 0xEC, 0xF7)) }, new TextBlock { Text = sub, FontSize = 12.5, Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0xA1, 0xC2)), TextTrimming = TextTrimming.CharacterEllipsis } } };
+        var ic = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Res("Line", Color.FromArgb(0x40, 255, 255, 255))), Background = new SolidColorBrush(Al(Res("Bg", Color.FromRgb(0, 0, 0)), 0x70)), Child = new TextBlock { Text = icon, FontSize = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Res("Ink", Colors.White)) } };
+        var names = new StackPanel { Margin = new Thickness(12, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Children = { new TextBlock { Text = name, FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Res("Ink", Color.FromRgb(0xE9, 0xEC, 0xF7))) }, new TextBlock { Text = sub, FontSize = 12.5, Foreground = new SolidColorBrush(Res("Muted", Color.FromRgb(0x9A, 0xA1, 0xC2))), TextTrimming = TextTrimming.CharacterEllipsis } } };
         var chipB = new Border { CornerRadius = new CornerRadius(20), Padding = new Thickness(9, 3, 9, 3), VerticalAlignment = VerticalAlignment.Center, Background = new SolidColorBrush(Color.FromArgb(0x2E, col.R, col.G, col.B)), Child = new TextBlock { Text = chip, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(col) } };
         Grid.SetColumn(names, 1); Grid.SetColumn(chipB, 2);
         g.Children.Add(ic); g.Children.Add(names); g.Children.Add(chipB);
@@ -260,8 +268,8 @@ public sealed class CalibrationWindow : Window
         return new Border
         {
             Width = 350, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), ClipToBounds = true,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2F, 0x36, 0x60)),
-            Background = new LinearGradientBrush(Color.FromRgb(0x14, 0x18, 0x33), Color.FromRgb(0x0F, 0x12, 0x26), 90),
+            BorderBrush = new SolidColorBrush(Res("Line", Color.FromRgb(0x2F, 0x36, 0x60))),
+            Background = new LinearGradientBrush(Res("Card2", Color.FromRgb(0x14, 0x18, 0x33)), Res("Card", Color.FromRgb(0x0F, 0x12, 0x26)), 90),
             Child = new Border { Child = body },
         };
     }
@@ -269,8 +277,8 @@ public sealed class CalibrationWindow : Window
     static UIElement Section(string t)
     {
         var g = new Grid { Margin = new Thickness(14, 12, 14, 6), ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition() } };
-        var tb = new TextBlock { Text = t, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0xD5, 0x98)) };
-        var rule = new Border { Height = 1, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Color.FromArgb(0x70, 0xF8, 0xD5, 0x98), Color.FromArgb(0, 0xF8, 0xD5, 0x98), 0) };
+        var tb = new TextBlock { Text = t, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98))) };
+        var rule = new Border { Height = 1, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Al(Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98)), 0x70), Al(Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98)), 0), 0) };
         Grid.SetColumn(rule, 1); g.Children.Add(tb); g.Children.Add(rule);
         return g;
     }
@@ -278,7 +286,7 @@ public sealed class CalibrationWindow : Window
     static FrameworkElement Pad(FrameworkElement e) { e.Margin = new Thickness(14, 0, 14, 4); return e; }
 
     static TextBlock Text(string t, string tone = "")
-        => new() { Text = t, FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(tone == "Good" ? Color.FromRgb(0x62, 0xD9, 0x8B) : tone == "Muted" ? Color.FromRgb(0x9A, 0xA1, 0xC2) : Color.FromRgb(0xCD, 0xD2, 0xEA)) };
+        => new() { Text = t, FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(tone == "Good" ? StateColor(State.Good) : tone == "Muted" ? Res("Muted", Color.FromRgb(0x9A, 0xA1, 0xC2)) : Res("Ink", Color.FromRgb(0xCD, 0xD2, 0xEA))) };
 
     static Button Btn(string text, bool primary, Action click)
     {

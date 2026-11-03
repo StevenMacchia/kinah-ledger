@@ -88,7 +88,7 @@ public partial class MainWindow
             first = false;
         }
         InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · {Fk(made)} made" : "";
-        InstWhat.ToolTip = InstHost.Children.Count > 0 ? "Made: Kinah plus materials at the lowest Market price, after the Market's cut, over the counted runs. Gear is bound and not in it." : null;
+        InstWhat.ToolTip = InstHost.Children.Count > 0 ? "Made: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ", over the counted runs. Gear is bound and not in it." : null;
         InstEmpty.Visibility = InstHost.Children.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -378,7 +378,7 @@ public partial class MainWindow
         Cell(3, Worth(Fk(best), 26), PT("best run", "Muted", 12));
         var box = new Border { Child = g, BorderThickness = new Thickness(0, 0, 0, 1) };
         box.SetResourceReference(Border.BorderBrushProperty, "Line");
-        box.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, after the Market's cut. Gear is bound and not in the value. Flagged runs are left out.";
+        box.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in the value. Flagged runs are left out.";
         return box;
     }
 
@@ -552,7 +552,7 @@ public partial class MainWindow
         var pick = new List<FrameworkElement>();
         if (kinah > 0) pick.Add(WithBadge(CoinTile(46), CountBadge(kinah), $"Kinah: {kinah:N0}"));
         var matSlots = mats.OrderByDescending(x => x.Value.Value).ThenByDescending(x => x.Value.Count)
-            .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value.Count)), _items.NameOf(x.Key) + (x.Value.Value > 0 ? $": {Fk(x.Value.Value)} after the Market's cut" : ""))).ToList();
+            .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value.Count)), _items.NameOf(x.Key) + (x.Value.Value > 0 ? $": {Fk(x.Value.Value)} {PriceBook.Cut}" : ""))).ToList();
         var gearSlots = gear.OrderByDescending(x => GradeRank(_items.Get(x.Key)?.Grade ?? "")).ThenByDescending(x => x.Value)
             .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value)), _items.NameOf(x.Key) + " (bound)")).ToList();
         var currSlots = curr.OrderByDescending(x => x.Value)
@@ -572,7 +572,7 @@ public partial class MainWindow
             long mv = mats.Values.Sum(x => x.Value);
             var sum = new List<Inline> { PR($"{mats.Count} kind{(mats.Count == 1 ? "" : "s")}", "Muted") };
             sum.Add(PR(" · ", "Faint"));
-            if (mv > 0) { var v = PR(Fk(mv), "Gold"); v.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); sum.Add(v); sum.Add(PR(" after the Market's cut", "Muted")); }
+            if (mv > 0) { var v = PR(Fk(mv), "Gold"); v.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); sum.Add(v); sum.Add(PR(" " + PriceBook.Cut, "Muted")); }
             else sum.Add(PR("no prices yet", "Faint"));
             sec.Children.Add(RunsGroup(zone, "Materials", sum, () =>
             {

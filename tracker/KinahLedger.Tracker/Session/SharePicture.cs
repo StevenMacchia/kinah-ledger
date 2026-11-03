@@ -1,3 +1,4 @@
+using KinahLedger.Data;
 using System.Globalization;
 
 namespace KinahLedger.Session;
@@ -28,7 +29,9 @@ public static class SharePicture
 {
     public const string Session = "session", Run = "run", Week = "week";
     public const string Site = "kinahledger.com";
-    public const string RateLabel = "Kinah an hour", MadeLabel = "made, after the Market's cut";
+    public const string RateLabel = "Kinah an hour";
+    /// <summary>"made, after the Market's cut", or "before" it while Options shows amounts before the fee.</summary>
+    public static string MadeLabel => "made, " + PriceBook.Cut;
     /// <summary>The one line under the sheet's buttons.</summary>
     public const string Note = "Paste it in Discord or anywhere. Nothing is uploaded.";
     public const int Width = 1200, Height = 630;

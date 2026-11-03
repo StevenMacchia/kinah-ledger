@@ -24,6 +24,8 @@ public sealed record OptionsChoice(
     public bool FollowActivity { get; init; } = true;
     /// <summary>Options › General › Compare zones and runs (0.9.3, Session/Compare.cs). Off by default.</summary>
     public bool Compare { get; init; }
+    /// <summary>Options › General › Show amounts before the Market fee (0.9.9). Off by default.</summary>
+    public bool ShowGross { get; init; }
 }
 
 /// <summary>
@@ -121,7 +123,11 @@ public partial class MainWindow
             _watcher.Chat?.ResetCraftView();
             _lastRun = null;
             Redraw();
-            if (had) Say($"{why}: the run so far is saved, and counting starts fresh.", "Faint");
+            if (had)
+            {
+                Say($"{why}, so this session ended: what was counted is saved, and counting starts fresh.", "Faint");
+                _statusHoldUntil = DateTime.UtcNow.AddSeconds(15);   // said once, and left up long enough to be read after a tab back
+            }
         }
         catch (Exception ex) { CrashLog.Write("start fresh", ex); }
         finally { _startingFresh = false; }
@@ -131,6 +137,16 @@ public partial class MainWindow
 
     /// <summary>The shortcut as the player sees it ("Ctrl+Shift+K"); empty when it is off.</summary>
     public string HotkeyText => Hotkey.Parse(_prefs.Hotkey)?.ToString() ?? "";
+
+    const string StartTip = "Everything is counted while the game is open. A run times one stretch on top; it is what gets saved and shared.";
+
+    /// <summary>The shortcut, as bound now, on the Start button's tooltip and as a faint hint beside it (never a key typed into the code).</summary>
+    void UpdateStartHint(bool running)
+    {
+        var key = HotkeyText;
+        StartBtn.ToolTip = key.Length > 0 ? $"{StartTip}\n{key} in the game starts or stops it." : StartTip;
+        StartHint.Text = key.Length > 0 ? (running ? $"{key} stops it" : $"{key} in game") : "";
+    }
 
     /// <summary>Registers the shortcut from the prefs. A message when Windows refused it (another app has it), else null.</summary>
     string? ApplyHotkey()
@@ -241,7 +257,7 @@ public partial class MainWindow
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
-        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Compare = _prefs.CompareZones };
+        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -276,6 +292,7 @@ public partial class MainWindow
         if (c.Hotkey != was.Hotkey)
         {
             _prefs.Hotkey = c.Hotkey;
+            UpdateStartHint(Farming);
             ReleaseMarkWrongKey();   // two keys swapped: the start/stop one first, then That was wrong again below
             if (ApplyHotkey() is { } err) problems.Add(err);
         }
@@ -290,6 +307,7 @@ public partial class MainWindow
         _prefs.MinimizeToTray = c.MinimizeToTray;
         _prefs.FollowActivity = c.FollowActivity;   // on again: it follows from the next change, never jumping to an old one
         if (c.Compare != was.Compare) SetCompare(c.Compare);   // Ui/MainWindow.Compare.cs
+        if (c.ShowGross != was.ShowGross) SetGross(c.ShowGross);
         _prefs.ReportFrames = ReportBuffer.KeepFrames = c.ReportFrames;
         if (c.GearScore != was.GearScore) SetGearScore(c.GearScore);
         _prefs.SendReportFrames = ReportBuffer.KeepUiFrames = c.SendFrames;
@@ -352,26 +370,40 @@ public partial class MainWindow
     public static string DataFolder => CrashLog.Dir;
 }
 
+/// <summary>The colours of the tray menu: the current look's own brushes (Skins), read when the menu is made and again when the look changes.</summary>
+readonly record struct TrayPalette(System.Drawing.Color Bg, System.Drawing.Color Hover, System.Drawing.Color Line, System.Drawing.Color Ink)
+{
+    public static TrayPalette Current()
+    {
+        static System.Drawing.Color Of(string key, System.Drawing.Color fallback) =>
+            System.Windows.Application.Current?.TryFindResource(key) is System.Windows.Media.SolidColorBrush b ? System.Drawing.Color.FromArgb(b.Color.R, b.Color.G, b.Color.B) : fallback;
+        // the card's colour for the menu, the look's own hover and line, its ink; Night's colours when there is no application yet
+        return new(Of("Card", System.Drawing.Color.FromArgb(17, 26, 40)), Of("ItemHover", System.Drawing.Color.FromArgb(30, 45, 69)),
+            Of("Line", System.Drawing.Color.FromArgb(35, 47, 69)), Of("Ink", System.Drawing.Color.FromArgb(233, 239, 247)));
+    }
+}
+
 /// <summary>The tray menu in the window's colours instead of the default light grey.</summary>
 sealed class TrayMenuRenderer : WF.ToolStripProfessionalRenderer
 {
-    static readonly System.Drawing.Color Bg = System.Drawing.Color.FromArgb(17, 26, 40), Hover = System.Drawing.Color.FromArgb(30, 45, 69),
-        Line = System.Drawing.Color.FromArgb(35, 47, 69), Ink = System.Drawing.Color.FromArgb(233, 239, 247);
+    readonly TrayPalette _p;
 
-    public TrayMenuRenderer() : base(new Colors()) { RoundedEdges = false; }
+    public TrayMenuRenderer(TrayPalette p) : base(new Colors(p)) { _p = p; RoundedEdges = false; }
 
-    protected override void OnRenderItemText(WF.ToolStripItemTextRenderEventArgs e) { e.TextColor = Ink; base.OnRenderItemText(e); }
+    protected override void OnRenderItemText(WF.ToolStripItemTextRenderEventArgs e) { e.TextColor = _p.Ink; base.OnRenderItemText(e); }
 
     sealed class Colors : WF.ProfessionalColorTable
     {
-        public override System.Drawing.Color ToolStripDropDownBackground => Bg;
-        public override System.Drawing.Color MenuBorder => Line;
-        public override System.Drawing.Color MenuItemBorder => Hover;
-        public override System.Drawing.Color MenuItemSelected => Hover;
-        public override System.Drawing.Color SeparatorDark => Line;
-        public override System.Drawing.Color SeparatorLight => Bg;
-        public override System.Drawing.Color ImageMarginGradientBegin => Bg;
-        public override System.Drawing.Color ImageMarginGradientMiddle => Bg;
-        public override System.Drawing.Color ImageMarginGradientEnd => Bg;
+        readonly TrayPalette _p;
+        public Colors(TrayPalette p) { _p = p; }
+        public override System.Drawing.Color ToolStripDropDownBackground => _p.Bg;
+        public override System.Drawing.Color MenuBorder => _p.Line;
+        public override System.Drawing.Color MenuItemBorder => _p.Hover;
+        public override System.Drawing.Color MenuItemSelected => _p.Hover;
+        public override System.Drawing.Color SeparatorDark => _p.Line;
+        public override System.Drawing.Color SeparatorLight => _p.Bg;
+        public override System.Drawing.Color ImageMarginGradientBegin => _p.Bg;
+        public override System.Drawing.Color ImageMarginGradientMiddle => _p.Bg;
+        public override System.Drawing.Color ImageMarginGradientEnd => _p.Bg;
     }
 }

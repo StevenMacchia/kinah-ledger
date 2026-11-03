@@ -106,6 +106,8 @@ public partial class OptionsWindow : Window
         MinToTrayChk.IsChecked = c.MinimizeToTray;
         FollowChk.IsChecked = c.FollowActivity;
         CompareChk.IsChecked = c.Compare;
+        GrossChk.IsChecked = c.ShowGross;
+        GrossHint.Text = $"Values and profit show after the Market's {Data.PriceBook.FeeRate:P0} fee and tax by default. Turn this on to see what things sell for before it.";
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
         ShareChk.IsChecked = c.Share;
@@ -232,6 +234,7 @@ public partial class OptionsWindow : Window
         MinToTrayChk.Click += (_, _) => Edit(_edit with { MinimizeToTray = MinToTrayChk.IsChecked == true });
         FollowChk.Click += (_, _) => Edit(_edit with { FollowActivity = FollowChk.IsChecked == true });
         CompareChk.Click += (_, _) => Edit(_edit with { Compare = CompareChk.IsChecked == true });
+        GrossChk.Click += (_, _) => Edit(_edit with { ShowGross = GrossChk.IsChecked == true });
         RegionPick.SelectionChanged += (_, _) =>
         {
             if (_loading || RegionPick.SelectedItem is not GameRegion r) return;

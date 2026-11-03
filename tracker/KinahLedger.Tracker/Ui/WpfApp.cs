@@ -302,7 +302,7 @@ public static class WpfApp
         var here = w.LootForTest();
         Check(here.Here == "This zone" && here.Slots >= 10 && here.Note.Contains("kinds · 42 min") && "KMB".Contains(here.Total[^1]) && !here.Total.Contains(','),
             $"LOOT, This zone: {here.Slots} slots, \"{here.Note}\", {here.Total}");
-        Check(w.FootTotal.ToolTip is string tt && tt.Contains("Kinah picked up") && tt.Contains("Total, after the Market's cut"), "LOOT's total says how it adds up on hover");
+        Check(w.FootTotal.ToolTip is string tt && tt.Contains("Kinah picked up") && tt.Contains("Total, " + Data.PriceBook.Fee), "LOOT's total says how it adds up on hover");
         Check(w.TableTitle.Text == "Open world · 42 min" && !w.TableTitle.Text.Contains(':'), $"the card says how long in minutes: \"{w.TableTitle.Text}\"");
         Check(w.TodayStrip.Visibility != Visibility.Visible, "no Today strip over the Farming card: Today is LOOT's other side");
         Check(w.HealthLine.Visibility != Visibility.Visible && w.Summary.Visibility != Visibility.Visible && w.FeedHint.Visibility != Visibility.Visible && w.Status.Text.Length == 0,
@@ -491,7 +491,7 @@ public static class WpfApp
                 new("Thick hide", "3", "", "", Worth: 0),
             };
             var tv = w.HudTopValues(rows);
-            Check(tv["top"] == "Shade Gloves" && tv["topCount"] == "×1" && tv["topWorth"] == "+28K" && tv["topGrade"] == "Legend",
+            Check(tv["top"] == "Shade Gloves" && tv["topCount"] == "×1" && tv["topWorth"] == "+28,000" && tv["topGrade"] == "Legend",
                 $"top drop: {tv["top"]} {tv["topCount"]} {tv["topWorth"]} ({tv["topGrade"]})");
             Check(w.HudTopValues(new List<DropRow> { new("Thick hide", "3", "", "") })["top"] == "", "top drop: none before anything priced");
             // the panel's accuracy line ("23 to look at" read as an error): none with Show accuracy details off, the default

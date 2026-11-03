@@ -174,7 +174,7 @@ public partial class MainWindow
         var pt = new TextBlock
         {
             Text = Signed(profit), FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 9, 0, 0),
-            ToolTip = vendorUnpriced > 0 ? "A craft's profit before the vendor items without a cost" : "A craft's profit at today's lowest asks, after the Market's cut",
+            ToolTip = vendorUnpriced > 0 ? "A craft's profit before the vendor items without a cost" : "A craft's profit at today's lowest asks, " + PriceBook.Cut,
         };
         pt.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); pt.SetResourceReference(TextBlock.ForegroundProperty, profit >= 0 ? "Gold" : "Faint");
         Grid.SetColumn(pt, 3); g.Children.Add(pt);
@@ -191,10 +191,11 @@ public partial class MainWindow
         var here = PlayerBoards.Here(GearBracket, zone);
         if (here is not { } h || h.Row.ValueHr is not long v) { FarmLine.Visibility = Visibility.Collapsed; return; }
         FarmLine.Visibility = Visibility.Visible;
-        FarmLine.Text = h.AtGear ? $"Players at your gear {Fk(v)}" : $"Players here {Fk(v)}";   // after "Your best here 1.40M · " (JoinCompare)
-        var who = $"{h.Row.Runs} runs from {h.Row.Players} players on {Server?.Label ?? "your server"} in the last 7 days";
+        // after "Your best here 1.40M · " (JoinCompare); "everywhere" when only the pooled all-regions board has a row for this zone
+        FarmLine.Text = (h.AtGear ? $"Players at your gear {Fk(v)}" : $"Players here {Fk(v)}") + (h.Everywhere ? " everywhere" : "");
+        var who = $"{h.Row.Runs} runs from {h.Row.Players} players {(h.Everywhere ? "across every region" : "on " + (Server?.Label ?? "your server"))} in the last 7 days";
         var gear = h.AtGear ? $", gear score {GearBracket}." : GearBracket != null ? $". Not enough players at gear score {GearBracket} yet, so this is everyone's." : ". Set your gear score in Options › Server to compare with players at your gear.";
-        FarmLine.ToolTip = $"What players made an hour in {h.Row.Zone}: Kinah plus tradeable loot at today's prices, after the Market's cut.\n{who}{gear}";
+        FarmLine.ToolTip = $"What players made an hour in {h.Row.Zone}: Kinah plus tradeable loot at today's prices, {PriceBook.Cut}.\n{who}{gear}";
     }
 
     /* ---------------- small pieces in the window's own look ---------------- */
@@ -237,6 +238,6 @@ public partial class MainWindow
         var fj = "{\"publish_rule\":{\"min_runs\":5,\"min_installs\":3},\"brackets\":{" +
             "\"all\":[{\"zone\":\"Northern Tolbas Forest\",\"n_runs\":14,\"n_installs\":6,\"minutes\":900,\"published\":true,\"value_hr\":1640000,\"kina_hr\":1100000},{\"zone\":\"Western Cantas Valley\",\"n_runs\":9,\"n_installs\":4,\"minutes\":600,\"published\":true,\"value_hr\":1310000,\"kina_hr\":900000}]," +
             "\"1400-1599\":[{\"zone\":\"Northern Tolbas Forest\",\"n_runs\":9,\"n_installs\":4,\"minutes\":540,\"published\":true,\"value_hr\":1820000,\"kina_hr\":1200000},{\"zone\":\"Western Cantas Valley\",\"n_runs\":7,\"n_installs\":3,\"minutes\":420,\"published\":true,\"value_hr\":1460000,\"kina_hr\":950000},{\"zone\":\"Night Dew Cave\",\"n_runs\":6,\"n_installs\":3,\"minutes\":360,\"published\":true,\"value_hr\":1310000,\"kina_hr\":880000},{\"zone\":\"Drana Processing Area\",\"n_runs\":5,\"n_installs\":3,\"minutes\":300,\"published\":true,\"value_hr\":1120000,\"kina_hr\":700000},{\"zone\":\"Crimson Isle\",\"n_runs\":3,\"n_installs\":2,\"minutes\":180,\"published\":false}]}}";
-        PlayerBoards.Load(cj, fj);
+        PlayerBoards.Load(cj, fj, fj);
     }
 }

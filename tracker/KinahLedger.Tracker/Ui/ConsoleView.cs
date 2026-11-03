@@ -34,6 +34,6 @@ public sealed class ConsoleView
         Console.Write(sb.ToString());
     }
 
-    static string Fk(double v) => Math.Abs(v) >= 1e6 ? $"{v / 1e6:0.00}M" : Math.Abs(v) >= 1e3 ? $"{v / 1e3:0}K" : $"{v:0}";
+    static string Fk(double v) => Amounts.Short(v);
     static string Trunc(string s, int n) => s.Length <= n ? s : s[..(n - 1)] + "…";
 }
