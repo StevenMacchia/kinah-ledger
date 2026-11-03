@@ -8,8 +8,8 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Undo instead of "Are you sure?" (2026-10-25 audit): Clear the tables, Clear on Events, Start over on Crafting, Remove
-/// on a run and Stop run from the window each happen on screen at once, with an Undo bar for <see cref="UndoSeconds"/>
+/// Undo instead of "Are you sure?" (2026-10-25 audit): Clear everything, Start run with counts on the tables (0.9.13),
+/// Clear on Events, Start over on Crafting, Remove on a run and Stop run from the window each happen on screen at once, with an Undo bar for <see cref="UndoSeconds"/>
 /// seconds. Nothing under Session/ can put a count back once it is gone, so the window holds the action instead: the
 /// tables, crafts or runs only look cleared, and the real clear (which shares what was counted, as before) happens when
 /// the bar goes. A stop works the same way: the run keeps counting underneath until the bar goes, so Undo carries on
@@ -19,7 +19,7 @@ public partial class MainWindow
 {
     const int UndoSeconds = 8;
 
-    /// <summary>The action waiting behind the bar: what it is ("tables", "crafts", "runs", "run", "stop"), its words, how to put it back, and how to make it final.</summary>
+    /// <summary>The action waiting behind the bar: what it is ("tables", "fresh", "crafts", "runs", "run", "stop"), its words, how to put it back, and how to make it final.</summary>
     sealed record PendingUndo(string Kind, string Text, Action Undo, Func<Task> Commit);
     PendingUndo? _pendingUndo;
     readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromSeconds(UndoSeconds) };
@@ -129,7 +129,38 @@ public partial class MainWindow
         undo: () => { _stopPending = false; SetTrackingUi(true); FlashHud("Run resumed"); Say("Run resumed: the same run carries on.", "Good"); Tick(); },
         commit: async () => { _stopPending = false; await StopTracking(); });
 
-    /// <summary>For layout renders (KL_SHOT_UNDO=1): the bar as it shows two seconds after Clear the tables.</summary>
+    /// <summary>
+    /// True when the tables hold a count that Start run would start over (0.9.13): this zone's or every zone's since the
+    /// tracker started (or since the last clear). The Today strip is never part of it.
+    /// </summary>
+    bool HasCounts() => _demo ? _demoFromZero == null && (_demoEngine?.Events ?? 0) > 0
+        : _watcher.Chat is { } c && (c.ZoneView.Events > 0 || _watcher.AllView.Events > 0);
+
+    /// <summary>A layout render's or the self-test's run started from zero, while its Undo bar is up: the sample count it hides.</summary>
+    SessionEngine? _demoFromZero;
+
+    /// <summary>
+    /// Start run with counts on the tables (0.9.13, Steven: a player who presses Start run has already said "fresh start"):
+    /// the run is already on and its tables start at zero, the old counts held underneath (GameWatcher.HoldViews). Undo puts
+    /// the counts back and cancels the run, as if Start run was never pressed: the run's first seconds are in the held counts
+    /// too, so nothing is lost, and nothing of the cancelled run is saved or shared. When the bar goes, what was counted is
+    /// shared and the always-on count starts over, as Clear everything does; the run carries on.
+    /// </summary>
+    Task OfferFromZero() => Offer("fresh", "Run started from zero",
+        apply: () => { if (_demo) { _demoFromZero = _demoEngine; _demoEngine = new SessionEngine(_items); Redraw(); } },
+        undo: () =>
+        {
+            if (_demo) { if (_demoFromZero != null) _demoEngine = _demoFromZero; _demoFromZero = null; }
+            else { _watcher.StopFarm(); _watcher.RestoreHeld(); }
+            _lastRun = null;
+            SetTrackingUi(false);
+            FlashHud("Run undone");
+            Say("No run started: the counts are back as they were.", "Good");
+            Redraw(); Tick();
+        },
+        commit: async () => { _demoFromZero = null; if (!_demo) await _watcher.CommitHeldAsync(); });
+
+    /// <summary>For layout renders (KL_SHOT_UNDO=1): the bar as it shows two seconds after Clear everything.</summary>
     void ShowUndoSample()
     {
         _ = Offer("tables", "Farming tables cleared", () => { }, () => { }, () => Task.CompletedTask);
@@ -140,8 +171,12 @@ public partial class MainWindow
     internal string? UndoShowing => UndoBar.Visibility == Visibility.Visible ? UndoText.Text : null;
     /// <summary>For the options self-test: Undo pressed.</summary>
     internal void PressUndo() => UndoPending();
-    /// <summary>For the options self-test: the "…" menu's Clear the tables.</summary>
+    /// <summary>For the options self-test: the ⋯ menu's Clear everything.</summary>
     internal Task ClearTablesForTest() => ClearFarmTables();
+    /// <summary>For the options self-test: Start run pressed on a sample count (the run itself needs the game; this is its window side).</summary>
+    internal async Task StartFromZeroForTest() { if (HasCounts()) { SetTrackingUi(true); await OfferFromZero(); } }
+    /// <summary>For the options self-test: the sample count's events as the tables show it now.</summary>
+    internal int ShownEventsForTest => _demoEngine?.Events ?? 0;
     /// <summary>For the options self-test: true while the tables only look cleared (the clear can still be undone).</summary>
     internal bool TablesClearedForUndo => _clearedView != null;
 }

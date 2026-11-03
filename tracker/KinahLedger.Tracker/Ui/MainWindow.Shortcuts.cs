@@ -6,27 +6,30 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// Keys in this window (0.9.10), beside Ctrl+Z for Undo and Esc on the sheets: Ctrl+, opens Options, Ctrl+N is New
-/// session (the button's own way: at once, with its Undo bar), Ctrl+Shift+C copies the share picture without opening the
+/// Keys in this window (0.9.10), beside Ctrl+Z for Undo and Esc on the sheets: Ctrl+, opens Options, Ctrl+N is Clear
+/// everything (New session until 0.9.13; the ⋯ menu's own way: at once, with its Undo bar), Ctrl+Shift+C copies the share picture without opening the
 /// sheet. None of them means anything in a text box (Ctrl+C there still copies the text). Each button's tooltip says its
 /// key, as Start run's says the in-game one; Start run and Share say why while they are off.
 /// </summary>
 public partial class MainWindow
 {
     public const string OptionsKey = "Ctrl+,", NewSessionKey = "Ctrl+N", CopyPictureKey = "Ctrl+Shift+C";
+    /// <summary>New session's name since it left the card (0.9.13), in the ⋯ menu and the tray.</summary>
+    public const string ClearAllText = "Clear everything";
 
     string _shareTip = "";
 
     void InitShortcuts()
     {
         InputBindings.Add(new KeyBinding(new KeyAct(() => OpenOptions()), Key.OemComma, ModifierKeys.Control));
-        InputBindings.Add(new KeyBinding(new KeyAct(() => _ = NewSessionFromKey()), Key.N, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new KeyAct(() => _ = ClearAllFromKey()), Key.N, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new KeyAct(() => CopySharePictureNow()), Key.C, ModifierKeys.Control | ModifierKeys.Shift));
         OptionsBtn.ToolTip = $"{OptionsBtn.ToolTip}\n{OptionsKey} opens it.";
-        NewSessionBtn.ToolTip = $"{NewSessionBtn.ToolTip}\n{NewSessionKey} does the same.";
         _shareTip = $"{ShareCardBtn.ToolTip}\n{CopyPictureKey} copies the picture without opening it.";
         // a button that is off says why: Start until a server is chosen, Share until the game is being read
         foreach (var b in new[] { StartBtn, ShareCardBtn }) { ToolTipService.SetShowOnDisabled(b, true); b.IsEnabledChanged += (_, _) => ButtonTips(); }
+        // whether a run would clear counts changes with every pickup: said as the tooltip opens (0.9.13)
+        StartBtn.ToolTipOpening += (_, _) => ButtonTips();
         ButtonTips();
     }
 
@@ -36,12 +39,13 @@ public partial class MainWindow
         var key = HotkeyText;
         StartBtn.ToolTip = !StartBtn.IsEnabled
             ? (!HasServer && !Farming ? "Pick your server first, in Options › Server: prices and drops are kept per server." : "A moment: the run is starting or stopping.")
-            : key.Length > 0 ? $"{StartTip}\n{key} in the game starts or stops it." : StartTip;
+            : (key.Length > 0 ? $"{StartTip}\n{key} in the game starts or stops it." : StartTip)
+              + (!Farming && HasCounts() ? "\nStarting a run clears the counts on the tables first (Undo brings them back). The Today strip keeps the day." : "");
         if (_shareTip.Length > 0) ShareCardBtn.ToolTip = ShareCardBtn.IsEnabled ? _shareTip : "Nothing to share yet: Share opens once the game is being read.";
     }
 
-    /// <summary>Ctrl+N and the tray's New session: the Farming page, then the button's own clear with its Undo bar.</summary>
-    async Task NewSessionFromKey()
+    /// <summary>Ctrl+N and the tray's Clear everything: the Farming page, then the ⋯ menu's own clear with its Undo bar.</summary>
+    async Task ClearAllFromKey()
     {
         if (_welcome) { Say("Choose your server first.", "Warn"); return; }
         if (_part != "Farming") ShowPart("Farming");

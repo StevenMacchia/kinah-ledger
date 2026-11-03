@@ -51,7 +51,7 @@ public partial class MainWindow
 
     /// <summary>
     /// The ⋯ menu beside the run's buttons, in the card's own look (Ui/MainWindow.Menus.cs, 2026-10-31): Set a goal, All
-    /// zones as a switch, clearing the tables, a missing pickup; then the page's quiet lines and the shortcut that works in the game.
+    /// zones as a switch, Clear everything, a missing pickup; then the page's quiet lines and the shortcut that works in the game.
     /// </summary>
     void ShowMoreMenu() => ShowMenu(MoreBtn, MoreEntries());
 
@@ -66,7 +66,9 @@ public partial class MainWindow
             new("All zones", () => { _prefs.AllZones = !_prefs.AllZones; if (!_demo) _prefs.Save(); Redraw(); Tick(); }, On: _prefs.AllZones,
                 Sub: "Keep counting across every zone",
                 Tip: "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
-            new("Clear the tables", () => _ = ClearFarmTables(), Tip: "Start the farming tables over (what was counted is shared first)"),
+            // New session's way back into the menu (0.9.13): Start run is the card's fresh start; this clears without a run
+            new(ClearAllText, () => _ = ClearFarmTables(), Sub: $"The tables start over, no run · {NewSessionKey}",
+                Tip: "Start the farming tables over without starting a run. What was counted is shared first, Undo brings the tables back, and the Today strip keeps the day."),
             // the feed's hint, moved here (2026-10-28): a pickup the feed never showed
             new("A pickup is missing…", () => ShowLineReport(null, Session.FeedTab.Farming, FeedBox), Tip: "Report a pickup the feed never showed."),
         };
@@ -91,12 +93,13 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Starts the farming tables over (Steven, 2026-10-22); not during a farming run, which Stop ends. The tables look
+    /// Clear everything (New session on the card in 0.9.9 to 0.9.12): starts the farming tables over (Steven, 2026-10-22);
+    /// not during a farming run, which started from zero already. The tables look
     /// empty at once, with Undo; what was counted is shared and the count starts over when the bar goes (Ui/MainWindow.Undo.cs).
     /// </summary>
     async Task ClearFarmTables()
     {
-        if (RunOn) { Say("A farming run is on: Stop ends it and starts the tables over.", "Warn"); return; }
+        if (RunOn) { Say("A run is on, and it started from zero. Stop it first to clear everything.", "Warn"); return; }
         await Offer("tables", "Farming tables cleared",
             apply: () => { var blank = new KinahLedger.Session.SessionEngine(_items); blank.SetZone(_watcher.Chat?.ZoneView?.Zone); _clearedView = blank; Redraw(); },
             undo: () => { _clearedView = null; Redraw(); Say("The farming tables are back as they were.", "Good"); },

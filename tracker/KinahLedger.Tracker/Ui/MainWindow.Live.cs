@@ -387,7 +387,7 @@ public partial class MainWindow
             else
             {
                 text = c.RecentPickups(1).FirstOrDefault() is { } p && p.At != DateTime.MinValue ? "Reading · last pickup " + Ago(now - p.At) + " ago" : "Reading · nothing picked up yet";
-                // when the count on screen began: a run's start, or this zone's / this session's (it starts over with New session)
+                // when the count on screen began: a run's start, or this zone's / this session's (it starts over with Start run and Clear everything)
                 if (shown != null) text += " · counting since " + shown.Started.ToLocalTime().ToString("HH:mm");
             }
         }

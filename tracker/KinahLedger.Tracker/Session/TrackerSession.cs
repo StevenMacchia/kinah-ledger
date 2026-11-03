@@ -226,9 +226,19 @@ public sealed partial class TrackerSession
         yield return ZoneView;
         if (AllView is { } a) yield return a;
         if (DayView is { } d) yield return d;
+        if (HeldZone is { } hz) yield return hz;
+        if (HeldAll is { } ha) yield return ha;
     }
     /// <summary>Starts the zone view over in the zone the player is in now.</summary>
     public void ResetZoneView() { var z = new SessionEngine(_items); z.SetZone(Engine.Zone); ZoneView = z; }
+    /// <summary>
+    /// The zone and all-zones counts from before a run started from zero (0.9.13), still fed every line while that start can
+    /// be undone, so Undo puts them back with nothing missing. Null otherwise (GameWatcher.HoldViews).
+    /// </summary>
+    public SessionEngine? HeldZone { get; set; }
+    public SessionEngine? HeldAll { get; set; }
+    /// <summary>Undo of a run started from zero: the held zone view goes back on screen.</summary>
+    public void RestoreZoneView(SessionEngine z) => ZoneView = z;
 
     /// <summary>The zone view's stay, offered as the zone's best hour on this server (kept only past ten minutes and a better rate).</summary>
     public void OfferBest() { try { BestRuns.Offer(Server, ZoneView); } catch (Exception ex) { CrashLog.Write("best runs", ex); } }
@@ -619,7 +629,7 @@ public sealed partial class TrackerSession
         if (zone != null && ZoneView.Zone != null && zone != ZoneView.Zone) { OfferBest(); var fresh = new SessionEngine(_items); fresh.SetZone(zone); ZoneView = fresh; }
         else ZoneView.SetZone(zone);
         // the all-zones and Today counts only move on: a zone change never starts them over
-        AllView?.SetZone(zone); DayView?.SetZone(zone);
+        AllView?.SetZone(zone); DayView?.SetZone(zone); HeldZone?.SetZone(zone); HeldAll?.SetZone(zone);
     }
 
     int _emptyReads;

@@ -403,7 +403,7 @@ public static class WpfApp
         // Undo instead of "Are you sure?" (2026-10-25): Clear the tables happens at once with a bar, and Undo puts them back
         w.ShowDemo(); DoEvents();
         _ = w.ClearTablesForTest(); DoEvents();
-        Check(w.UndoShowing == "Farming tables cleared" && w.TablesClearedForUndo, "Clear the tables: cleared at once, with an Undo bar");
+        Check(w.UndoShowing == "Farming tables cleared" && w.TablesClearedForUndo, "Clear everything: cleared at once, with an Undo bar");
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
         // 0.9.10: a "done" shows in the toast over the page, not the faint status line; the window's keys and their tooltips
@@ -411,8 +411,25 @@ public static class WpfApp
         var keys = w.InputBindings.OfType<System.Windows.Input.KeyBinding>().Select(k => (k.Modifiers, k.Key)).ToList();
         Check(keys.Contains((System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.OemComma)) && keys.Contains((System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.N))
               && keys.Contains((System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift, System.Windows.Input.Key.C)), "Ctrl+, Ctrl+N and Ctrl+Shift+C are bound in the window");
-        Check(w.OptionsBtn.ToolTip is string ot && ot.Contains(MainWindow.OptionsKey) && w.NewSessionBtn.ToolTip is string nt && nt.Contains(MainWindow.NewSessionKey)
-              && w.ShareCardBtn.ToolTip is string st && st.Contains(MainWindow.CopyPictureKey), "each button's tooltip says its key");
+        Check(w.OptionsBtn.ToolTip is string ot && ot.Contains(MainWindow.OptionsKey) && w.MoreEntries().Any(e => e.Text == MainWindow.ClearAllText && e.Sub.Contains(MainWindow.NewSessionKey))
+              && w.ShareCardBtn.ToolTip is string st && st.Contains(MainWindow.CopyPictureKey), "each button's tooltip says its key, and ⋯ › Clear everything says Ctrl+N");
+
+        // 0.9.13: Start run is the fresh start. New session left the card (it is Clear everything in ⋯ and the tray); Start run
+        // with counts on the tables clears them at once with an Undo bar, and Undo brings them back and cancels the run
+        {
+            static IEnumerable<DependencyObject> Kids(DependencyObject d) => new[] { d }.Concat(LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>().SelectMany(Kids));
+            Check(!Kids(w).OfType<System.Windows.Controls.Button>().Any(b => b.Content as string == "New session" || System.Windows.Automation.AutomationProperties.GetName(b) == "New session"),
+                "the live card has no New session button");
+            w.ShowDemo(); DoEvents();
+            int counted = w.ShownEventsForTest;
+            Check(w.StartBtn.ToolTip is string sTip && sTip.Contains("clears the counts"), "Start run's tooltip says it clears the counts when there are some");
+            _ = w.StartFromZeroForTest(); DoEvents();
+            Check(counted > 0 && w.UndoShowing == "Run started from zero" && w.ShownEventsForTest == 0 && w.StartBtn.Content as string == "Stop run",
+                $"Start run with counts: the tables start at zero, with an Undo bar ({counted} → {w.ShownEventsForTest}, \"{w.UndoShowing}\")");
+            w.PressUndo(); DoEvents();
+            Check(w.UndoShowing == null && w.ShownEventsForTest == counted && w.StartBtn.Content as string == "Start run",
+                $"Undo brings the counts back ({w.ShownEventsForTest}) and the run is not started");
+        }
         Check(System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.StartBtn) && System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.ShareCardBtn), "Start run and Share say why while they are off");
 
         // Share (0.9.3, ShareA): the Farming card's button says Share and opens the sheet inside the card (never a window or a
@@ -472,8 +489,8 @@ public static class WpfApp
             Check(Tree(change).OfType<System.Windows.Controls.Button>().Any(b => b.Content as string == "Remove goal") && Tree(change).OfType<System.Windows.Controls.TextBlock>().Any(t => t.Text == "Change this goal"),
                 "a goal's click: the sheet says Change this goal and has Remove goal");
             var more = w.MoreEntries();
-            Check(more.Any(e => e.Text == "All zones" && e.On != null) && more.Any(e => e.Text == "Clear the tables" && e.Do != null) && more.Any(e => e.Text == "Set a goal…" && e.Do == null && e.Sub.Length > 0),
-                "the ⋯ menu: All zones a switch, Clear the tables, Set a goal off (with why) once three are set: " + string.Join(" | ", more.Select(e => e.Text)));
+            Check(more.Any(e => e.Text == "All zones" && e.On != null) && more.Any(e => e.Text == "Clear everything" && e.Do != null) && more.Any(e => e.Text == "Set a goal…" && e.Do == null && e.Sub.Length > 0),
+                "the ⋯ menu: All zones a switch, Clear everything, Set a goal off (with why) once three are set: " + string.Join(" | ", more.Select(e => e.Text)));
             Check(w.BuildMenu(more) is { } menuCard && Tree(menuCard).OfType<System.Windows.Controls.ContextMenu>().Count() == 0 && Tree(menuCard).OfType<System.Windows.Controls.MenuItem>().Count() == 0,
                 "the ⋯ menu is drawn in the card kit, no Windows menu items");
             w.ShowGoalsSample(2); DoEvents();

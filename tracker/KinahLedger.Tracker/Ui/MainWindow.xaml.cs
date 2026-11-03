@@ -118,7 +118,7 @@ public partial class MainWindow : Window
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
 
         InitShare();   // Share: the sheet with the picture to paste (Ui/MainWindow.Share.cs)
-        InitShortcuts();   // Ctrl+, Ctrl+N, Ctrl+Shift+C and the buttons' tooltips (Ui/MainWindow.Shortcuts.cs)
+        InitShortcuts();   // Ctrl+, Ctrl+N (Clear everything), Ctrl+Shift+C and the buttons' tooltips (Ui/MainWindow.Shortcuts.cs)
         // the miscount report keeps pictures only once the player said yes (Options › Sharing, or the question on its first use)
         ReportBuffer.KeepFrames = _prefs.ReportFrames;
         ReportBuffer.KeepUiFrames = _prefs.SendReportFrames;
@@ -160,7 +160,6 @@ public partial class MainWindow : Window
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
         CraftResetLink.Click += async (_, _) => await StartCraftOver();
-        NewSessionBtn.Click += async (_, _) => await ClearFarmTables();
         InstClearBtn.Click += async (_, _) => await ClearRuns();
         WireUndo();
         _mode = Mode.Open;
@@ -375,7 +374,7 @@ public partial class MainWindow : Window
     /// </summary>
     SessionEngine? Shown()
     {
-        if (_clearedView != null) return _clearedView;   // Clear the tables, while it can still be undone
+        if (_clearedView != null) return _clearedView;   // Clear everything, while it can still be undone
         var chat = _watcher.Chat; var farm = RunEngine;
         if (farm == null && _lastRun != null && DateTime.UtcNow < _lastRunUntil) return _lastRun;
         if (!_prefs.AllZones && chat != null) return chat.ZoneView;
@@ -505,6 +504,10 @@ public partial class MainWindow : Window
             _settings.Upload.Enabled = _prefs.Share;
             var chat = await _watcher.EnsureChatAsync();
             _region = chat.Region;
+            // Start run is the fresh start (0.9.13): counts on the tables start over with it, held so Undo can bring them back
+            await CommitPending();
+            bool fromZero = HasCounts();
+            if (fromZero) _watcher.HoldViews();
             var farm = _watcher.StartFarm(ActivityName());
             _lastRun = null;
             ZoneLbl.Text = chat.Zone ?? "Zone not read yet";
@@ -513,8 +516,9 @@ public partial class MainWindow : Window
             Redraw();
             SetTrackingUi(true);
             ShowFix(false);
-            Say($"Run started · {chat.Zone ?? "zone not read yet"}. Minimize this window; the panel and {(HotkeyText.Length > 0 ? HotkeyText : "the tray")} keep working.", "Faint");
-            FlashHud("Run started");   // the shortcut pressed in the game shows it took
+            Say($"Run started{(fromZero ? " from zero" : "")} · {chat.Zone ?? "zone not read yet"}. Minimize this window; the panel and {(HotkeyText.Length > 0 ? HotkeyText : "the tray")} keep working.", "Faint");
+            FlashHud(fromZero ? "Run started from zero" : "Run started");   // the shortcut pressed in the game shows it took
+            if (fromZero) await OfferFromZero();
         }
         catch (Exception ex)
         {
@@ -532,6 +536,8 @@ public partial class MainWindow : Window
     {
         // a stop from anywhere else (the shortcut, the tray, the game closing, an update) makes the window's waiting one final
         if (_pendingUndo?.Kind == "stop") EndUndo();
+        // a run started from zero that is stopped before its bar goes: the start is final first (the old counts are not coming back)
+        if (_pendingUndo?.Kind == "fresh") await CommitPending();
         _stopPending = false;
         var e = _watcher.StopFarm(); if (e == null) return;
         // shared and saved under what the run turned out to be, not the label picked before it started
@@ -1641,10 +1647,10 @@ public partial class MainWindow : Window
         var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
         var placePanel = new WF.ToolStripMenuItem("Place the panel…"); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, "Place the panel", why, WF.ToolTipIcon.Info); };
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
-        // New session and the share picture (0.9.10): New session brings the window up, so its Undo bar is seen; the picture
-        // is copied where the window is, and said by the tray when the window is out of sight
-        var newSession = new WF.ToolStripMenuItem("New session");
-        newSession.Click += async (_, _) => { Restore(); await NewSessionFromKey(); };
+        // Clear everything and the share picture (0.9.10; New session until 0.9.13): Clear everything brings the window up, so
+        // its Undo bar is seen; the picture is copied where the window is, and said by the tray when the window is out of sight
+        var clearAll = new WF.ToolStripMenuItem(ClearAllText);
+        clearAll.Click += async (_, _) => { Restore(); await ClearAllFromKey(); };
         var copyPic = new WF.ToolStripMenuItem("Copy share picture");
         copyPic.Click += (_, _) =>
         {
@@ -1657,13 +1663,13 @@ public partial class MainWindow : Window
         {
             _trayToggle.Text = RunOn ? "Stop run" : "Start run";
             _trayToggle.Enabled = Farming || (HasServer && !_welcome);
-            newSession.Enabled = !RunOn && !_welcome;
+            clearAll.Enabled = !RunOn && !_welcome;
             copyPic.Enabled = ShareCardBtn.IsEnabled && !_welcome;
         };
         var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
         var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
         var quit = new WF.ToolStripMenuItem("Quit Kinah Ledger"); quit.Click += (_, _) => { _quitting = true; Close(); };
-        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, newSession, copyPic, new WF.ToolStripSeparator(), movePanel, placePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
+        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, clearAll, copyPic, new WF.ToolStripSeparator(), movePanel, placePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
         _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => Restore();
         // one left click toggles the window: shown (and not minimized) goes to the tray, else it comes up

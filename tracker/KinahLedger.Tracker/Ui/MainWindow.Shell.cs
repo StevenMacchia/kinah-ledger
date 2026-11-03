@@ -400,7 +400,7 @@ sealed class TrayMenuRenderer : WF.ToolStripProfessionalRenderer
 
     public TrayMenuRenderer(TrayPalette p) : base(new Colors(p)) { _p = p; RoundedEdges = false; }
 
-    // an item that is off (0.9.10: Start run with no server, New session during a run) in the ink half-faded into the menu
+    // an item that is off (0.9.10: Start run with no server, Clear everything during a run) in the ink half-faded into the menu
     protected override void OnRenderItemText(WF.ToolStripItemTextRenderEventArgs e)
     {
         e.TextColor = e.Item.Enabled ? _p.Ink : System.Drawing.Color.FromArgb((_p.Ink.R + _p.Bg.R) / 2, (_p.Ink.G + _p.Bg.G) / 2, (_p.Ink.B + _p.Bg.B) / 2);
