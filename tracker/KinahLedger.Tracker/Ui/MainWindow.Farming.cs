@@ -100,7 +100,7 @@ public partial class MainWindow
     async Task ClearFarmTables()
     {
         if (RunOn) { Say("A run is on, and it started from zero. Stop it first to clear everything.", "Warn"); return; }
-        await Offer("tables", "Farming tables cleared",
+        await Offer("tables", "Everything cleared",
             apply: () => { var blank = new KinahLedger.Session.SessionEngine(_items); blank.SetZone(_watcher.Chat?.ZoneView?.Zone); _clearedView = blank; Redraw(); },
             undo: () => { _clearedView = null; Redraw(); Say("The farming tables are back as they were.", "Good"); },
             commit: async () =>
@@ -108,7 +108,7 @@ public partial class MainWindow
                 await _watcher.ClearFarmingAsync();
                 _clearedView = null; _lastRun = null;
                 Redraw();
-                Say("Farming tables cleared. Counting starts again from here.", "Faint");
+                Say("Everything cleared. Counting starts again from here.", "Faint");
             });
     }
 }

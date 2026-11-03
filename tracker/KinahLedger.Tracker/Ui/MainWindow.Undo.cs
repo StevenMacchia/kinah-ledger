@@ -163,7 +163,7 @@ public partial class MainWindow
     /// <summary>For layout renders (KL_SHOT_UNDO=1): the bar as it shows two seconds after Clear everything.</summary>
     void ShowUndoSample()
     {
-        _ = Offer("tables", "Farming tables cleared", () => { }, () => { }, () => Task.CompletedTask);
+        _ = Offer("tables", "Everything cleared", () => { }, () => { }, () => Task.CompletedTask);
         UndoTimeScale.ScaleX = 0.75;
     }
 

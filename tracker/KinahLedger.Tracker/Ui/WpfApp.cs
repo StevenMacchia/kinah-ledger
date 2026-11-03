@@ -403,7 +403,7 @@ public static class WpfApp
         // Undo instead of "Are you sure?" (2026-10-25): Clear the tables happens at once with a bar, and Undo puts them back
         w.ShowDemo(); DoEvents();
         _ = w.ClearTablesForTest(); DoEvents();
-        Check(w.UndoShowing == "Farming tables cleared" && w.TablesClearedForUndo, "Clear everything: cleared at once, with an Undo bar");
+        Check(w.UndoShowing == "Everything cleared" && w.TablesClearedForUndo, "Clear everything: cleared at once, with an Undo bar");
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
         // 0.9.10: a "done" shows in the toast over the page, not the faint status line; the window's keys and their tooltips
