@@ -112,11 +112,13 @@ public partial class MainWindow : Window
         SiteBtn.Click += (_, _) => Open(SiteUrl);
         ServerChip.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Server);
         FixLink.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
+        ReadingLine.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Reading);   // the reading line and its dot (0.9.10)
         Version.Text = "v" + Upload.RunPayload.AppVersion;
         // the server: everything shared is per server, so it is chosen first (welcome screen or Options) and remembered
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
 
         InitShare();   // Share: the sheet with the picture to paste (Ui/MainWindow.Share.cs)
+        InitShortcuts();   // Ctrl+, Ctrl+N, Ctrl+Shift+C and the buttons' tooltips (Ui/MainWindow.Shortcuts.cs)
         // the miscount report keeps pictures only once the player said yes (Options › Sharing, or the question on its first use)
         ReportBuffer.KeepFrames = _prefs.ReportFrames;
         ReportBuffer.KeepUiFrames = _prefs.SendReportFrames;
@@ -560,7 +562,7 @@ public partial class MainWindow : Window
             msg += $" Saved to your history ({SessionStore.Count()} runs). Still counting.";
         }
         SetTrackingUi(false);
-        Say(msg, tone);
+        SayOnLine(msg, tone);   // a result to read, so on the line for 15 s, not a passing toast
         _statusHoldUntil = DateTime.UtcNow.AddSeconds(15);
         Tick();
     }
@@ -1452,8 +1454,18 @@ public partial class MainWindow : Window
         // Full view doubles the width: near the right edge the window moves left to stay on the screen
         if (Left + ActualWidth > wa.Right) Left = Math.Max(wa.Left, wa.Right - ActualWidth);
     }
-    /// <summary>A message to read (saved, set, fixed, split): it stays about 6 s before the live status takes the line back, the whole text on hover (it used to last one 500 ms tick).</summary>
-    void Say(string text, string tone) { Tell(text, tone); Status.ToolTip = text; if (DateTime.UtcNow.AddSeconds(SayHoldSeconds) > _statusHoldUntil) _statusHoldUntil = DateTime.UtcNow.AddSeconds(SayHoldSeconds); }
+    /// <summary>
+    /// A message to read. A "done" in the good tone (copied, set, saved, put back) shows in the toast over the page
+    /// (Ui/MainWindow.Toast.cs, 0.9.10), where it is seen; the rest (working, warnings, problems) on the status line, where
+    /// it stays about 6 s before the live status takes the line back, the whole text on hover.
+    /// </summary>
+    void Say(string text, string tone)
+    {
+        if (tone == "Good") { ShowToast(text); return; }
+        SayOnLine(text, tone);
+    }
+    /// <summary>On the status line whatever the tone: a stopped run's result, and a saved report whose folder is on the line's hover.</summary>
+    void SayOnLine(string text, string tone) { Tell(text, tone); Status.ToolTip = text; if (DateTime.UtcNow.AddSeconds(SayHoldSeconds) > _statusHoldUntil) _statusHoldUntil = DateTime.UtcNow.AddSeconds(SayHoldSeconds); }
     const double SayHoldSeconds = 6;
     /// <summary>The live status line, rewritten each tick: in the look's own colour, so a change of look repaints it.</summary>
     void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }
@@ -1623,10 +1635,29 @@ public partial class MainWindow : Window
         var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
         var placePanel = new WF.ToolStripMenuItem("Place the panel…"); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, "Place the panel", why, WF.ToolTipIcon.Info); };
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
+        // New session and the share picture (0.9.10): New session brings the window up, so its Undo bar is seen; the picture
+        // is copied where the window is, and said by the tray when the window is out of sight
+        var newSession = new WF.ToolStripMenuItem("New session");
+        newSession.Click += async (_, _) => { Restore(); await NewSessionFromKey(); };
+        var copyPic = new WF.ToolStripMenuItem("Copy share picture");
+        copyPic.Click += (_, _) =>
+        {
+            bool away = !IsVisible || WindowState == WindowState.Minimized;
+            bool copied = CopySharePictureNow();
+            if (away) _tray.ShowBalloonTip(3000, copied ? "Picture copied" : "Nothing to share yet", copied ? "Paste it in Discord or anywhere with Ctrl+V." : "Kill or gather something and the picture fills in.", WF.ToolTipIcon.Info);
+        };
+        // the rows say what they would do now: Stop run while a run is on, and off (greyed) when they can't
+        menu.Opening += (_, _) =>
+        {
+            _trayToggle.Text = RunOn ? "Stop run" : "Start run";
+            _trayToggle.Enabled = Farming || (HasServer && !_welcome);
+            newSession.Enabled = !RunOn && !_welcome;
+            copyPic.Enabled = ShareCardBtn.IsEnabled && !_welcome;
+        };
         var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
         var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
         var quit = new WF.ToolStripMenuItem("Quit Kinah Ledger"); quit.Click += (_, _) => { _quitting = true; Close(); };
-        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, movePanel, placePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
+        menu.Items.AddRange(new WF.ToolStripItem[] { open, _trayToggle, newSession, copyPic, new WF.ToolStripSeparator(), movePanel, placePanel, new WF.ToolStripSeparator(), options, updates, site, support, new WF.ToolStripSeparator(), quit });
         _tray.Icon = Native.AppIcon(); _tray.Text = "Kinah Ledger"; _tray.ContextMenuStrip = menu; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => Restore();
         // one left click toggles the window: shown (and not minimized) goes to the tray, else it comes up

@@ -136,7 +136,7 @@ public partial class MainWindow
             bar: line.Tab == FeedTab.Events,   // the Events card has no line under its feed: the Undo bar says it there
             seconds: MarkUndoSeconds);
         ShowMarkNotice(MarkSaved);
-        Say(text + ": the last minute is saved in your reports folder.", "Good");
+        SayOnLine(text + ": the last minute is saved in your reports folder.", "Good");
         if (saved is { } sv) Status.ToolTip = sv.Dir;
     }
 

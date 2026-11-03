@@ -262,7 +262,7 @@ public partial class MainWindow
                 Tell("Paused: the chat is out of view. Only the game is read, so reading picks up when the chat is in view again", "Warn");
                 break;
             case "stopped":
-                Say("Run stopped (00:42:17 · 632K Kinah · 161 kills) and shared anonymously. Saved to your history (12 runs). Still counting.", "Good");
+                SayOnLine("Run stopped (00:42:17 · 632K Kinah · 161 kills) and shared anonymously. Saved to your history (12 runs). Still counting.", "Good");
                 break;
             case "empty":
                 _demoEngine = new SessionEngine(_items); _demoElapsed = TimeSpan.FromSeconds(40);
