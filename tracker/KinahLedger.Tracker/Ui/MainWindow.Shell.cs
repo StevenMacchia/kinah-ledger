@@ -341,6 +341,17 @@ public partial class MainWindow
         Report("Opened kinahledger.com in your browser. Sign in with Discord if it asks; this PC is then linked to your profile.", "Good");
     }
 
+    /// <summary>
+    /// A name as the site writes it in a page's address (kinah-ledger-site tools/seo/build-seo-pages.js, slug): lower case,
+    /// apostrophes dropped, every other run of characters that aren't a-z or 0-9 a single "-", none at either end.
+    /// </summary>
+    internal static string Slug(string s)
+        => System.Text.RegularExpressions.Regex.Replace(s.ToLowerInvariant().Replace("'", "").Replace("’", ""), "[^a-z0-9]+", "-").Trim('-');
+
+    /// <summary>A zone's page on the site, /farming/{map}/{zone}, when its map is known (Data/SiteData.cs, MapOf); else the Farming spots hub.</summary>
+    internal static string ZonePageUrl(string zone)
+        => Data.SiteData.MapOf(zone) is { } map ? $"{SiteUrl}/farming/{Slug(map)}/{Slug(zone)}" : SiteUrl + "/farming/";
+
     /// <summary>The profile with the "Share my week" card open (site PR 28); the site keeps the request through a Discord sign-in.</summary>
     public const string ShareWeekUrl = SiteUrl + "/#profile?share=1";
 

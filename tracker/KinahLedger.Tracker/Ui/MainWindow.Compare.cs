@@ -433,12 +433,12 @@ public partial class MainWindow
     /// <summary>
     /// A click on a Where to farm now row (0.9.11): with Compare on, LOOT turns to its Week side on Zones with that zone
     /// picked beside the zone you are in, and comes into view; a zone you haven't farmed 10 minutes this week isn't among
-    /// Zones, and the status line says so. With Compare off (the base window stays as it was) the click opens every zone
-    /// on the site, as the row's right-click does.
+    /// Zones, and the status line says so. With Compare off (the base window stays as it was) the click opens the zone's
+    /// page on the site, as the row's right-click does (ZonePageUrl).
     /// </summary>
     void CompareZone(string zone)
     {
-        if (!_prefs.CompareZones) { Open(SiteUrl + "/#atlas"); return; }
+        if (!_prefs.CompareZones) { Open(ZonePageUrl(zone)); return; }
         var listed = Cmp.Zones(FarmWeekDays()).Select(z => z.Zone).ToList();
         bool Has(string? z) => z != null && listed.Contains(z, StringComparer.OrdinalIgnoreCase);
         _zonePicks = new[] { HereZone(), zone }.Where(Has).Select(z => z!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

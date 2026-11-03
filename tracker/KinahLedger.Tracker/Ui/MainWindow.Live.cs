@@ -534,7 +534,7 @@ public partial class MainWindow
             g.MouseEnter += (_, _) => g.SetResourceReference(Panel.BackgroundProperty, "HoverTint");
             g.MouseLeave += (_, _) => g.Background = Brushes.Transparent;
             g.MouseLeftButtonUp += (_, _) => CompareZone(key);
-            g.MouseRightButtonUp += (_, e) => { e.Handled = true; Open(SiteUrl + "/#atlas"); };
+            g.MouseRightButtonUp += (_, e) => { e.Handled = true; Open(ZonePageUrl(key)); };
             // the zone you are in: the look's gold tint and a short gold bar in the margin, as the side menu marks its page (0.9.11)
             var tint = new Border { Child = g, Background = Brushes.Transparent };
             if (isHere)
@@ -546,8 +546,8 @@ public partial class MainWindow
             }
             var tip = $"{(isHere ? "You are here. " : "")}{z.Runs} runs from {z.Players} players {(all ? "across every region" : "on " + server)} in the last 7 days · Kinah plus loot {PriceBook.Cut}, an hour."
                 + (bests[i] is long tb ? $"\nYour best hour here on {server}: {Fk(tb)}." : "")
-                + (cmp ? $"\nClick to compare it with your zones this week (LOOT › Week › Zones). Right-click for every zone on kinahledger.com."
-                       : $"\nClick for every zone on kinahledger.com. With Compare zones and runs on (Options › General), a click compares it with your own zones.");
+                + (cmp ? "\nClick to compare it with your zones this week (LOOT › Week › Zones). Right-click for its page on kinahledger.com."
+                       : "\nClick for its page on kinahledger.com. Turn on Compare zones and runs in Options › General to compare zones here.");
             var b = new Border { Child = tint, BorderThickness = new Thickness(0, 1, 0, 0), ToolTip = tip, Tag = "where-row|" + key + (isHere ? "|here" : "") };
             ToolTipService.SetInitialShowDelay(b, 500);
             b.SetResourceReference(Border.BorderBrushProperty, "Line");

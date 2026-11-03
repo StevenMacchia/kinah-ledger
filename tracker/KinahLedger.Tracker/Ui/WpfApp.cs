@@ -349,6 +349,12 @@ public static class WpfApp
             $"...a click on a row opens Compare on it: picked {string.Join(",", c3.Picked)}");
         w.ClickWhereRowForTest(wh.Rows.First(r => !c3.Rows.Contains(r))); DoEvents();
         Check(w.CompareForTest().Picked.SequenceEqual(new[] { "Western Cantas Valley" }) && w.Status.Text.Contains("isn't in Compare yet"), $"...a zone not farmed this week: the zone here stays picked, \"{w.Status.Text}\"");
+        // a row's site link: the zone's page under its map (/farming/{map}/{zone}, the site's slug rule), the Farming spots hub with no map known
+        Check(MainWindow.Slug("Steel Titan's Grave") == "steel-titans-grave" && MainWindow.Slug("  Black Fragments Area - Abandoned Island’s ") == "black-fragments-area-abandoned-islands"
+            && MainWindow.ZonePageUrl("Nowhere Known") == MainWindow.SiteUrl + "/farming/", $"a zone's site address: {MainWindow.Slug("Steel Titan's Grave")}, no map {MainWindow.ZonePageUrl("Nowhere Known")}");
+        Data.SiteData.Load("{}", "{\"items\":{\"1\":{\"name\":\"Spiritstone\",\"sources\":[{\"monster\":\"Stonebeak\",\"chance\":0.02,\"zone\":\"Steel Titan's Grave\",\"map\":\"Chaotic Middle Reshanta\",\"level\":40}]}}}");
+        Check(MainWindow.ZonePageUrl("steel titan's grave") == "https://kinahledger.com/farming/chaotic-middle-reshanta/steel-titans-grave", "...with its map known: " + MainWindow.ZonePageUrl("steel titan's grave"));
+        Data.SiteData.Load("{}", "{}");
         w.PickZonesForTest(false); w.SetCompareForTest(false); DoEvents();
         Check(!w.CompareForTest().Switch && w.CompareForTest().Usual == "", "...off again: Week as before, no usual line");
         w.PickLootForTest(false); DoEvents();

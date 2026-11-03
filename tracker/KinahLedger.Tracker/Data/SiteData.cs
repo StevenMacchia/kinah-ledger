@@ -99,6 +99,17 @@ public static class SiteData
             return (id > 0 && _listed.TryGetValue(id.ToString(), out var a)) ? a : _listed.TryGetValue(name, out var b) ? b : null;
     }
 
+    /// <summary>
+    /// The map a zone is on, from the listed drops' sources (the first whose zone matches), or null before the listed drops
+    /// are fetched or for a zone none of them names. The site's zone pages sit under their map (/farming/{map}/{zone}).
+    /// </summary>
+    public static string? MapOf(string? zone)
+    {
+        if (string.IsNullOrEmpty(zone)) return null;
+        lock (Lock)
+            return _listed.Values.SelectMany(l => l.Sources).FirstOrDefault(s => s.Map.Length > 0 && string.Equals(s.Zone, zone, StringComparison.OrdinalIgnoreCase))?.Map;
+    }
+
     /// <summary>For tests: load both files from text.</summary>
     public static void Load(string zonesJson, string listedJson)
     {
