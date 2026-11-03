@@ -390,6 +390,14 @@ public static class WpfApp
         Check(w.UndoShowing == "Farming tables cleared" && w.TablesClearedForUndo, "Clear the tables: cleared at once, with an Undo bar");
         w.PressUndo(); DoEvents();
         Check(w.UndoShowing == null && !w.TablesClearedForUndo, "Undo puts the tables back and the bar goes");
+        // 0.9.10: a "done" shows in the toast over the page, not the faint status line; the window's keys and their tooltips
+        Check(w.ToastShowing == "The farming tables are back as they were." && w.Status.Text != w.ToastShowing, $"a done is said in the toast: \"{w.ToastShowing}\"");
+        var keys = w.InputBindings.OfType<System.Windows.Input.KeyBinding>().Select(k => (k.Modifiers, k.Key)).ToList();
+        Check(keys.Contains((System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.OemComma)) && keys.Contains((System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.N))
+              && keys.Contains((System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift, System.Windows.Input.Key.C)), "Ctrl+, Ctrl+N and Ctrl+Shift+C are bound in the window");
+        Check(w.OptionsBtn.ToolTip is string ot && ot.Contains(MainWindow.OptionsKey) && w.NewSessionBtn.ToolTip is string nt && nt.Contains(MainWindow.NewSessionKey)
+              && w.ShareCardBtn.ToolTip is string st && st.Contains(MainWindow.CopyPictureKey), "each button's tooltip says its key");
+        Check(System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.StartBtn) && System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.ShareCardBtn), "Start run and Share say why while they are off");
 
         // Share (0.9.3, ShareA): the Farming card's button says Share and opens the sheet inside the card (never a window or a
         // menu) on This session, the character name off by default; typed but off it is nowhere, on it is in the head line

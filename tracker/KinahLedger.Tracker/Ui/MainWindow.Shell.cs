@@ -144,7 +144,7 @@ public partial class MainWindow
     void UpdateStartHint(bool running)
     {
         var key = HotkeyText;
-        StartBtn.ToolTip = key.Length > 0 ? $"{StartTip}\n{key} in the game starts or stops it." : StartTip;
+        ButtonTips();   // the tooltip with the key, or why Start is off (Ui/MainWindow.Shortcuts.cs)
         StartHint.Text = key.Length > 0 ? (running ? $"{key} stops it" : $"{key} in game") : "";
     }
 
@@ -390,7 +390,12 @@ sealed class TrayMenuRenderer : WF.ToolStripProfessionalRenderer
 
     public TrayMenuRenderer(TrayPalette p) : base(new Colors(p)) { _p = p; RoundedEdges = false; }
 
-    protected override void OnRenderItemText(WF.ToolStripItemTextRenderEventArgs e) { e.TextColor = _p.Ink; base.OnRenderItemText(e); }
+    // an item that is off (0.9.10: Start run with no server, New session during a run) in the ink half-faded into the menu
+    protected override void OnRenderItemText(WF.ToolStripItemTextRenderEventArgs e)
+    {
+        e.TextColor = e.Item.Enabled ? _p.Ink : System.Drawing.Color.FromArgb((_p.Ink.R + _p.Bg.R) / 2, (_p.Ink.G + _p.Bg.G) / 2, (_p.Ink.B + _p.Bg.B) / 2);
+        base.OnRenderItemText(e);
+    }
 
     sealed class Colors : WF.ProfessionalColorTable
     {

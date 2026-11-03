@@ -367,14 +367,23 @@ public partial class MainWindow
     /// <summary>How long without a line from the chat before the reading line says so, and asks whether the chat is in view.</summary>
     static readonly TimeSpan NothingReadAfter = TimeSpan.FromMinutes(2);
 
-    /// <summary>"Reading · last pickup 4s ago" under the zone while all is well; "Nothing read for 2 min. Is chat visible?" when the chat has gone quiet with the game in front.</summary>
+    /// <summary>
+    /// "Reading · last pickup 4s ago" under the zone while all is well; "Nothing read for 2 min. Is chat visible?" when the
+    /// chat has gone quiet with the game in front; once the game is read, also while the chat is looked for, paused or has
+    /// a read problem (0.9.10). Its dot says which at a glance: green reading, gold looking or paused, red a read problem.
+    /// Before the game is read the zone and the line under it already say so, and it stays hidden.
+    /// </summary>
     void FillReading(TrackerSession? c, SessionEngine? shown)
     {
-        string text = ""; string tone = "Faint";
-        if (c != null && c.ChatFound && c.Paused.Length == 0 && c.LastError.Length == 0)
+        string text = "", tone = "Faint", dot = "Good";
+        if (c == null) { }
+        else if (c.LastError.Length > 0) { text = "Read problem · Game reading options"; dot = "Bad"; }
+        else if (c.Paused.Length > 0) { text = "Paused · the chat is out of view"; dot = "Gold"; }
+        else if (!c.ChatFound) { text = "Looking for the chat · reading the game"; dot = "Gold"; }
+        else
         {
             var now = DateTime.UtcNow;
-            if (now - c.LastLinesAt >= NothingReadAfter) { text = $"Nothing read for {(int)(now - c.LastLinesAt).TotalMinutes} min. Is chat visible?"; tone = "Warn"; }
+            if (now - c.LastLinesAt >= NothingReadAfter) { text = $"Nothing read for {(int)(now - c.LastLinesAt).TotalMinutes} min. Is chat visible?"; tone = "Warn"; dot = "Gold"; }
             else
             {
                 text = c.RecentPickups(1).FirstOrDefault() is { } p && p.At != DateTime.MinValue ? "Reading · last pickup " + Ago(now - p.At) + " ago" : "Reading · nothing picked up yet";
@@ -384,9 +393,42 @@ public partial class MainWindow
         }
         if (ReadingLbl.Text != text) ReadingLbl.Text = text;
         ReadingLbl.SetResourceReference(TextBlock.ForegroundProperty, tone);
+        ReadingDot.SetResourceReference(Shape.FillProperty, dot);
         var vis = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (ReadingLbl.Visibility != vis) ReadingLbl.Visibility = vis;
+        if (ReadingLine.Visibility != vis) ReadingLine.Visibility = vis;
+        // the rate column's health line said the same paused or read problem a second time: this line says it now
+        if (vis == Visibility.Visible && HealthLine.Visibility == Visibility.Visible) HealthLine.Visibility = Visibility.Collapsed;
+        if (ReadingLine.ToolTip == null) ReadingLine.ToolTip = "How reading goes. Click for Options › Game reading.";
     }
+
+    /// <summary>
+    /// What the empty Farming feed waits for (0.9.10), from the reader: the game ("Waiting for Aion 2 to start"), the chat
+    /// (with the Game reading link, as the footer has), or the first pickup. Redrawn only when that changes.
+    /// </summary>
+    void FillFeedEmpty()
+    {
+        var c = _watcher.Chat;
+        string text; bool link = false;
+        if (_demo) text = _demoPaused ? "Paused: the chat is out of view. Counting picks up when it shows again." : "Ready. Pick something up and it shows here, newest first.";
+        else if (c == null && _watcher.GameRect == null) text = "Waiting for Aion 2 to start. Reading starts on its own once it is open.";
+        else if (c == null || !c.ChatFound) { text = "Game found, looking for the chat. Keep the chat window open at the bottom left of the game. "; link = true; }
+        else if (c.LastError.Length > 0) { text = "The game can't be read right now: " + c.LastError + " "; link = true; }
+        else if (c.Paused.Length > 0) text = "Paused: the chat is out of view. Counting picks up when it shows again.";
+        else text = "Ready. Pick something up and it shows here, newest first.";
+        var sig = text + (link ? "|link" : "");
+        if (sig == _feedEmptySig) return;
+        _feedEmptySig = sig;
+        FeedEmpty.Inlines.Clear();
+        FeedEmpty.Inlines.Add(new Run(text));
+        if (link)
+        {
+            var go = new Hyperlink(new Run("Game reading options")) { Cursor = Cursors.Hand };
+            go.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
+            go.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
+            FeedEmpty.Inlines.Add(go);
+        }
+    }
+    string _feedEmptySig = "";
 
     static string Ago(TimeSpan t) => t.TotalSeconds < 60 ? $"{Math.Max(0, (int)t.TotalSeconds)}s" : t.TotalMinutes < 60 ? $"{(int)t.TotalMinutes} min" : $"{(int)t.TotalHours} h";
 
@@ -421,6 +463,7 @@ public partial class MainWindow
     void FillLive()
     {
         DrawFeed(FeedHost, FeedEmpty, FeedFor(FeedTab.Farming), FeedTab.Farming, PickupValue);
+        FillFeedEmpty();
         // the hint under the feed stays hidden (2026-10-28): its words are the feed's hover, its action ⋯ › A pickup is missing;
         // the line a marked row's Undo takes still goes where it stood (ShowMarkLine)
     }
@@ -698,7 +741,7 @@ public partial class MainWindow
     void FileLineReport(MiscountLine m, string note)
     {
         if (SaveLineReport(m, note) is not { } saved) return;
-        Say("Report saved with the line marked, in your reports folder. Thanks: it becomes a test the tracker must pass.", "Good");
+        SayOnLine("Report saved with the line marked, in your reports folder. Thanks: it becomes a test the tracker must pass.", "Good");
         Status.ToolTip = saved.Dir;
         _ = SendReportPictures(saved.Dir, saved.Why);
     }

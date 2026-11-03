@@ -287,7 +287,7 @@ public partial class MainWindow
             acts.Children.Add(b);
             return b;
         }
-        Act("Copy picture", "Puts the picture on the clipboard. Paste it with Ctrl+V.", CopySharePicture, primary: true);
+        Act("Copy picture", "Puts the picture on the clipboard. Paste it with Ctrl+V.", () => CopySharePicture(), primary: true);
         Act("Save picture", @"Saves the picture as a PNG in Pictures\Kinah Ledger.", SaveSharePicture);
         Act("Copy as text", "The same figures as plain text, for a channel that takes no pictures.", CopyShareText);
         body.Children.Add(acts);
@@ -430,9 +430,9 @@ public partial class MainWindow
 
     /* ---------------- the three buttons ---------------- */
 
-    void CopySharePicture()
+    bool CopySharePicture()
     {
-        if (CurrentSharePic() is not { } p) return;
+        if (CurrentSharePic() is not { } p) return false;
         try
         {
             var bmp = RenderSharePicture(p);
@@ -442,8 +442,9 @@ public partial class MainWindow
             data.SetImage(bmp);
             Clipboard.SetDataObject(data, true);
             Say("Picture copied. Paste it in Discord or anywhere with Ctrl+V.", "Good");
+            return true;
         }
-        catch (Exception ex) { CrashLog.Write("share picture", ex); Say("Couldn't copy the picture: " + ex.Message, "Bad"); }
+        catch (Exception ex) { CrashLog.Write("share picture", ex); Say("Couldn't copy the picture: " + ex.Message, "Bad"); return false; }
     }
 
     void SaveSharePicture()

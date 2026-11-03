@@ -413,8 +413,14 @@
                   <TextBlock Text="live" Foreground="{DynamicResource Gold}" FontSize="12.5" VerticalAlignment="Center"/>
                 </StackPanel>
               </StackPanel>
-              <!-- is it working: "Reading · last pickup 4s ago", or a nudge when nothing has been read for a while -->
-              <TextBlock x:Name="ReadingLbl" Foreground="{DynamicResource Faint}" FontSize="12" Margin="0,1,0,0" Visibility="Collapsed" TextTrimming="CharacterEllipsis"/>
+              <!-- is it working: "Reading · last pickup 4s ago", or a nudge when nothing has been read for a while; a dot says how
+                   reading goes at a glance (green reading, gold looking or paused, red a read problem), and a click opens
+                   Options › Game reading, like the footer's link (0.9.10) -->
+              <StackPanel x:Name="ReadingLine" Orientation="Horizontal" Margin="0,1,0,0" Visibility="Collapsed" Background="Transparent" Cursor="Hand"
+                          ToolTipService.InitialShowDelay="600" AutomationProperties.Name="Game reading options">
+                <Ellipse x:Name="ReadingDot" Width="6" Height="6" Fill="{DynamicResource Good}" Margin="0,1,6,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ReadingLbl" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="420"/>
+              </StackPanel>
             </StackPanel>
           </Grid>
 
@@ -426,8 +432,9 @@
                       ToolTip="A line wrong? Click it to report it. A pickup that never showed: ⋯ › A pickup is missing." ToolTipService.InitialShowDelay="900">
                 <Grid>
                   <StackPanel x:Name="FeedHost"/>
+                  <!-- what the empty feed waits for, from the reader (FillFeedEmpty): the game, the chat, or the first pickup -->
                   <TextBlock x:Name="FeedEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="12,10,12,10" TextWrapping="Wrap"
-                             Text="Each pickup shows here as it is counted, newest first."/>
+                             Text="Ready. Pick something up and it shows here, newest first."/>
                 </Grid>
               </Border>
               <!-- kept as the place a marked line's Undo goes; the hint itself moved to the feed's hover and ⋯ (2026-10-28) -->
@@ -890,6 +897,26 @@
           <Border.RenderTransform><ScaleTransform x:Name="UndoTimeScale" ScaleX="1"/></Border.RenderTransform>
         </Border>
       </Grid>
+    </Border>
+
+    <!-- the toast (Ui/MainWindow.Toast.cs, 0.9.10): a "done" said where it is seen (copied, goal set, server set), bottom
+         centre of the left column, over the page so the window never changes size. The Undo bar's look, the same in every
+         look of the window; it fades in, holds a moment and fades out. Never takes a click or the focus. -->
+    <Border x:Name="Toast" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="662" Margin="0,0,0,14" IsHitTestVisible="False" Focusable="False" Visibility="Collapsed">
+      <Border x:Name="ToastCard" HorizontalAlignment="Center" MaxWidth="560" CornerRadius="6" BorderThickness="1" BorderBrush="#3C4466" Padding="12,9,16,9">
+        <Border.Background>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#151A2C" Offset="0"/><GradientStop Color="#0C0F1C" Offset="1"/></LinearGradientBrush>
+        </Border.Background>
+        <Border.Effect><DropShadowEffect BlurRadius="22" ShadowDepth="4" Opacity="0.55"/></Border.Effect>
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <!-- a check in a gold-framed slot, as on the Undo bar -->
+          <Border Width="20" Height="20" CornerRadius="4" BorderThickness="1" BorderBrush="#8CF8D598" Background="#0B0E1E" VerticalAlignment="Top" Margin="0,0,10,0">
+            <Path Data="M5,12 L10,17 L19,7" Stroke="#F8D598" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Margin="4.5"/>
+          </Border>
+          <TextBlock x:Name="ToastText" Grid.Column="1" Foreground="#EEECF6" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" LineHeight="19"/>
+        </Grid>
+      </Border>
     </Border>
 
     </Grid>
