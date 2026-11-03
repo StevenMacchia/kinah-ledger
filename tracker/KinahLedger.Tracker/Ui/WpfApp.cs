@@ -337,6 +337,22 @@ public static class WpfApp
         var c2 = w.CompareForTest();
         Check(c2.Picked.Count == 2 && c2.Vs && c2.Verdict.Length > 0 && !c2.Verdict.Contains('%'), $"...a second tick: side by side, \"{c2.Verdict}\"");
         Check(c2.Usual.StartsWith("Your usual here") && (c2.Usual.Contains(" than usual") || c2.Usual.Contains("about your usual")) && !c2.Usual.Contains("today"), $"...the Farming card's usual here, set against the hour above: \"{c2.Usual}\"");
+        // Where to farm now's rows (0.9.11): a hand on each, the zone here tinted, your best hour beside its figure; with Compare
+        // on, a click turns LOOT to Week › Zones with that zone picked; one not farmed this week leaves the zone here picked and says so
+        var wh = w.WhereForTest();
+        Check(wh.Rows.Count >= 3 && wh.Hand && wh.Here == "Western Cantas Valley" && wh.Best.Count == 1 && wh.Best[0].StartsWith("your best ") && wh.Tip.Contains("Click to compare"),
+            $"Where to farm now: rows {string.Join(" / ", wh.Rows)}, here \"{wh.Here}\", best {string.Join(",", wh.Best)}, hand {wh.Hand}");
+        w.PickZonesForTest(false); DoEvents();   // LOOT back on Days, so the click is what turns it to Zones
+        w.ClickWhereRowForTest("Western Cantas Valley"); DoEvents();
+        var c3 = w.CompareForTest();
+        Check(c3.Switch && c3.Rows.Count >= 3 && c3.Picked.SequenceEqual(new[] { "Western Cantas Valley" }) && ReferenceEquals(w.LootWeekBtn.Style, w.FindResource("SegOn")),
+            $"...a click on a row opens Compare on it: picked {string.Join(",", c3.Picked)}");
+        w.ClickWhereRowForTest(wh.Rows.First(r => !c3.Rows.Contains(r))); DoEvents();
+        Check(w.CompareForTest().Picked.SequenceEqual(new[] { "Western Cantas Valley" }) && w.Status.Text.Contains("isn't in Compare yet"), $"...a zone not farmed this week: the zone here stays picked, \"{w.Status.Text}\"");
+        // a row's site link: the zone's page through the site's /farming/zone/{zone} redirect, in the site's slug rule
+        Check(MainWindow.Slug("Steel Titan's Grave") == "steel-titans-grave" && MainWindow.Slug("  Black Fragments Area - Abandoned Island’s ") == "black-fragments-area-abandoned-islands"
+            && MainWindow.ZonePageUrl("Western Cantas Valley") == "https://kinahledger.com/farming/zone/western-cantas-valley",
+            $"a zone's site address: {MainWindow.Slug("Steel Titan's Grave")}, {MainWindow.ZonePageUrl("Western Cantas Valley")}");
         w.PickZonesForTest(false); w.SetCompareForTest(false); DoEvents();
         Check(!w.CompareForTest().Switch && w.CompareForTest().Usual == "", "...off again: Week as before, no usual line");
         w.PickLootForTest(false); DoEvents();

@@ -27,6 +27,12 @@ public static class PlayerBoards
     public static int MinRuns { get; private set; } = 5;
     public static int MinPlayers { get; private set; } = 3;
     public const string AllGear = "all";
+    /// <summary>
+    /// The most a zone's row may say players make an hour (Kinah plus loot, after the Market fee) and still be listed. Above
+    /// it the figure is a bad price, not a farm: on 2026-11-03 gear listed at absurd lowest asks inflated the loot's worth
+    /// and put a zone near 32M an hour at the top of Where to farm now. Real open-world hours are well under 5M.
+    /// </summary>
+    public const long MaxValueHr = 5_000_000;
 
     public static IReadOnlyList<BestCraft> Crafts { get { lock (Lock) return _crafts; } }
 
@@ -88,8 +94,13 @@ public static class PlayerBoards
                 var list = new List<FarmZone>();
                 if (b.Value.ValueKind == JsonValueKind.Array)
                     foreach (var z in b.Value.EnumerateArray())
-                        list.Add(new FarmZone(Str(z, "zone"), (int)(Num(z, "n_runs") ?? 0), (int)(Num(z, "n_installs") ?? 0), (int)(Num(z, "minutes") ?? 0),
+                    {
+                        // never a row the tracker can't trust (0.9.11): the pooled runs whose zone wasn't read, or an hour no one could make
+                        var zone = Str(z, "zone");
+                        if (zone.Length == 0 || string.Equals(zone, Session.SessionEngine.UnknownZone, StringComparison.OrdinalIgnoreCase) || Num(z, "value_hr") > MaxValueHr) continue;
+                        list.Add(new FarmZone(zone, (int)(Num(z, "n_runs") ?? 0), (int)(Num(z, "n_installs") ?? 0), (int)(Num(z, "minutes") ?? 0),
                             z.TryGetProperty("published", out var p) && p.ValueKind == JsonValueKind.True, Num(z, "value_hr") is double vh ? (long)vh : null, Num(z, "kina_hr") is double kh ? (long)kh : null));
+                    }
                 d[b.Name] = list;
             }
         lock (Lock) { if (all) _farmAll = d; else { _farm = d; MinRuns = minRuns; MinPlayers = minPlayers; } FarmAt = DateTime.UtcNow; }

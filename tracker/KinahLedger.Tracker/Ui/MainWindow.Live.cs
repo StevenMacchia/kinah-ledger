@@ -496,30 +496,68 @@ public partial class MainWindow
         WhereNote.Text = zones.Count == 0 ? $"nothing published for {scope} yet"
             : open ? (atGear ? $"gear {GearBracket!.Replace("-", "–")} · {scope}, last 7 days" : $"all players · {scope}, last 7 days") : $"best: {zones[0].Zone} · {(all ? "all regions" : "your server")}";
         WhereSum.Text = open || zones.Count == 0 ? "" : Fk(zones[0].ValueHr ?? 0);
-        if (!Changed("where", $"{zone}|{all}|{server}|" + string.Join(";", zones.Select(z => $"{z.Zone}|{z.Runs}|{z.Players}|{z.ValueHr}")))) return;
+        // your own best hour in each zone on your server (Session/BestRuns.cs, the card's "best here"), beside the players' figure (0.9.11)
+        var bests = zones.Select(z => YourBestHour(z.Zone)).ToList();
+        bool anyBest = bests.Any(x => x != null);
+        bool cmp = _prefs.CompareZones;
+        if (!Changed("where", $"{zone}|{all}|{server}|{cmp}|" + string.Join(";", zones.Select((z, i) => $"{z.Zone}|{z.Runs}|{z.Players}|{z.ValueHr}|{bests[i]}")))) return;
         WhereBody.Children.Clear();
         WhereBody.Children.Add(WhereScopeSwitch(all));
         if (zones.Count == 0) WhereBody.Children.Add(Faint(all ? "No zone has enough runs across the regions yet." : $"No zone has enough runs on {server} yet. Every region has some."));
-        foreach (var z in zones)
+        for (int i = 0; i < zones.Count; i++)
         {
-            var g = new Grid { Height = 36 };
-            g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+            var z = zones[i];
+            var key = z.Zone;
+            bool isHere = zone != null && string.Equals(zone, z.Zone, StringComparison.OrdinalIgnoreCase);
+            // the whole row is the click target, as Compare's rows: a faint tint on hover (0.9.11)
+            var g = new Grid { Height = 36, Background = Brushes.Transparent, Cursor = Cursors.Hand };
+            g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(anyBest ? 112 : 0) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
             var name = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             name.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
             name.Inlines.Add(new Run(z.Zone));
-            if (zone != null && string.Equals(zone, z.Zone, StringComparison.OrdinalIgnoreCase)) { var here = new Run("  you are here") { FontSize = 11.5, FontWeight = FontWeights.Normal }; here.SetResourceReference(TextElement.ForegroundProperty, "Gold"); name.Inlines.Add(here); }
+            if (isHere) { var here = new Run("  you are here") { FontSize = 11.5, FontWeight = FontWeights.Normal }; here.SetResourceReference(TextElement.ForegroundProperty, "Gold"); name.Inlines.Add(here); }
             g.Children.Add(name);
             var who = new TextBlock { Text = $"{z.Runs} runs, {z.Players} players", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
             who.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
             Grid.SetColumn(who, 1); g.Children.Add(who);
+            if (bests[i] is long yb)
+            {
+                var y = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Tag = "where-best" };
+                y.Inlines.Add(PR("your best ", "Faint"));
+                var yf = PR(Fk(yb), "Muted"); yf.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); y.Inlines.Add(yf);
+                Grid.SetColumn(y, 2); g.Children.Add(y);
+            }
             var v = new TextBlock { Text = Fk(z.ValueHr ?? 0), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
             v.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); v.SetResourceReference(TextBlock.ForegroundProperty, "Gold");
-            Grid.SetColumn(v, 2); g.Children.Add(v);
-            var b = new Border { Child = g, BorderThickness = new Thickness(0, 1, 0, 0), ToolTip = $"{z.Runs} runs from {z.Players} players {(all ? "across every region" : "on " + server)} in the last 7 days · Kinah plus loot {PriceBook.Cut}, an hour" };
+            Grid.SetColumn(v, 3); g.Children.Add(v);
+            g.MouseEnter += (_, _) => g.SetResourceReference(Panel.BackgroundProperty, "HoverTint");
+            g.MouseLeave += (_, _) => g.Background = Brushes.Transparent;
+            g.MouseLeftButtonUp += (_, _) => CompareZone(key);
+            g.MouseRightButtonUp += (_, e) => { e.Handled = true; Open(ZonePageUrl(key)); };
+            // the zone you are in: the look's gold tint and a short gold bar in the margin, as the side menu marks its page (0.9.11)
+            var tint = new Border { Child = g, Background = Brushes.Transparent };
+            if (isHere)
+            {
+                tint.SetResourceReference(Border.BackgroundProperty, "GoldTint");
+                var bar = new Border { Width = 3, Height = 18, CornerRadius = new CornerRadius(1.5), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-9, 0, 0, 0), IsHitTestVisible = false };
+                bar.SetResourceReference(Border.BackgroundProperty, "Gold");
+                Grid.SetColumnSpan(bar, 4); g.Children.Add(bar);
+            }
+            var tip = $"{(isHere ? "You are here. " : "")}{z.Runs} runs from {z.Players} players {(all ? "across every region" : "on " + server)} in the last 7 days · Kinah plus loot {PriceBook.Cut}, an hour."
+                + (bests[i] is long tb ? $"\nYour best hour here on {server}: {Fk(tb)}." : "")
+                + (cmp ? "\nClick to compare it with your zones this week (LOOT › Week › Zones). Right-click for its page on kinahledger.com."
+                       : "\nClick for its page on kinahledger.com. Turn on Compare zones and runs in Options › General to compare zones here.");
+            var b = new Border { Child = tint, BorderThickness = new Thickness(0, 1, 0, 0), ToolTip = tip, Tag = "where-row|" + key + (isHere ? "|here" : "") };
+            ToolTipService.SetInitialShowDelay(b, 500);
             b.SetResourceReference(Border.BorderBrushProperty, "Line");
             WhereBody.Children.Add(b);
         }
     }
+
+    /// <summary>Your best hour in a zone on your server (Session/BestRuns.cs), or null; a render's sample zone has the card's sample best.</summary>
+    long? YourBestHour(string zone)
+        => _demo ? (string.Equals(zone, _demoZone, StringComparison.OrdinalIgnoreCase) ? 1_400_000 : null) : BestRuns.For(Server?.Label ?? "", zone)?.PerHr;
 
     /// <summary>"All regions | Your server" over the zones, as LOOT's side switch: the choice is kept in the prefs.</summary>
     FrameworkElement WhereScopeSwitch(bool all)
