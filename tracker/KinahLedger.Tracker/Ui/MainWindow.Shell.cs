@@ -348,9 +348,8 @@ public partial class MainWindow
     internal static string Slug(string s)
         => System.Text.RegularExpressions.Regex.Replace(s.ToLowerInvariant().Replace("'", "").Replace("’", ""), "[^a-z0-9]+", "-").Trim('-');
 
-    /// <summary>A zone's page on the site, /farming/{map}/{zone}, when its map is known (Data/SiteData.cs, MapOf); else the Farming spots hub.</summary>
-    internal static string ZonePageUrl(string zone)
-        => Data.SiteData.MapOf(zone) is { } map ? $"{SiteUrl}/farming/{Slug(map)}/{Slug(zone)}" : SiteUrl + "/farming/";
+    /// <summary>A zone's page on the site: /farming/zone/{zone} redirects to it (/farming/{map}/{zone}) for every zone, so no map is needed here.</summary>
+    internal static string ZonePageUrl(string zone) => SiteUrl + "/farming/zone/" + Slug(zone);
 
     /// <summary>The profile with the "Share my week" card open (site PR 28); the site keeps the request through a Discord sign-in.</summary>
     public const string ShareWeekUrl = SiteUrl + "/#profile?share=1";
