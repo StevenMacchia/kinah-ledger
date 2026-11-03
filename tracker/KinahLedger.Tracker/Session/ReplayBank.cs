@@ -725,16 +725,26 @@ public static class ReplayBank
 
     /// <summary>
     /// The panel's strip as the game draws it, for <paramref name="bars"/> (null: no panel): dark see-through backing,
-    /// the white Success and Fail labels at their measured cells, the blue and orange bars filled that far.
+    /// the white Success and Fail labels at their measured cells, the blue and orange bars filled that far. With
+    /// <paramref name="world"/> the strip shows that colour instead of the dark, and with <paramref name="body"/> the panel's
+    /// body (its see-through box, 2088 to 3030 across and 1795 down on a 2160-high screen) that one: the world through it,
+    /// or the upgrade roll's blue tint.
     /// </summary>
-    internal static Bitmap DrawPanel(Rectangle region, Rectangle game, (double S, double F)? bars)
+    internal static Bitmap DrawPanel(Rectangle region, Rectangle game, (double S, double F)? bars, Color? world = null, Color? body = null)
     {
         var bmp = new Bitmap(region.Width, region.Height, PixelFormat.Format32bppArgb);
-        using (var g = Graphics.FromImage(bmp)) g.Clear(Color.FromArgb(255, 34, 40, 34));
+        using (var g = Graphics.FromImage(bmp)) g.Clear(world ?? Color.FromArgb(255, 34, 40, 34));
         if (bars is not { } b) return bmp;
         int h = game.Height, cx = game.X + game.Width / 2;
         double k = h / 2160.0;
         void Px(int gx, int gy, Color c) { int x = gx - region.X, y = gy - region.Y; if (x >= 0 && y >= 0 && x < bmp.Width && y < bmp.Height) bmp.SetPixel(x, y, c); }
+        if (body is { } bc)
+            using (var g = Graphics.FromImage(bmp))
+            using (var brush = new SolidBrush(bc))
+            {
+                int bx0 = cx + (int)Math.Round((2088 - 2560) * k), bx1 = cx + (int)Math.Round((3030 - 2560) * k), by0 = game.Y + (int)Math.Round(1795 * k);
+                g.FillRectangle(brush, bx0 - region.X, by0 - region.Y, bx1 - bx0, region.Bottom - by0);
+            }
         int x0 = cx + (int)((2227 - 2560) / 2160.0 * h), x1 = cx + (int)((2998 - 2560) / 2160.0 * h);
         int ys = game.Y + (int)(1910 / 2160.0 * h), yf = game.Y + (int)(1956 / 2160.0 * h);
         void Bar(int y, double frac, Color c) { int end = x0 + (int)Math.Round(frac * (x1 - x0)); for (int x = x0; x <= end; x++) for (int dy = -2; dy <= 2; dy++) Px(x, y + dy, c); }

@@ -1293,7 +1293,10 @@ public partial class MainWindow : Window
     List<DropRow> UpgradeRows(Session.CraftLedger.Recipe r, RecipeBook.Recipe? book)
     {
         var rows = new List<DropRow>();
-        int baseYield = Math.Max(1, book?.OutputQty ?? 1);
+        // what one craft of the recipe made as this session crafted it (Orichalcum Ingot: ×1 at Lv. 1, ×10 at Lv. 25), not the
+        // book's first variant
+        int tried = r.Tries.Where(kv => kv.Key > 0).OrderByDescending(kv => kv.Value).Select(kv => kv.Key).FirstOrDefault();
+        int baseYield = Math.Max(1, tried > 0 ? tried : book?.OutputQty ?? 1);
         foreach (var (item, n) in r.Made.Where(m => m.Value > 0 && !string.Equals(m.Key, r.Name, StringComparison.OrdinalIgnoreCase))
                      .OrderByDescending(m => m.Value).ThenBy(m => m.Key, StringComparer.Ordinal))
         {

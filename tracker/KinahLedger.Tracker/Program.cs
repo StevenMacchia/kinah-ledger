@@ -4744,12 +4744,15 @@ options: --process aion[,other]");
                 var sq = new TrackerSession(null, new Settings(), items, "Test"); sq.Engine.SetZone("Dawn Legion Base");
                 var sq0 = new DateTime(2026, 10, 27, 20, 0, 0, DateTimeKind.Utc);
                 string Rows(TrackerSession s) => string.Join(" | ", s.CraftView.CraftSnapshot().OrderBy(r => r.Name, StringComparer.Ordinal).Select(r => $"{r.Name} {r.Ok}/{r.Fail}"));
+                // a read without the recipe line shows the queue's count as the game does, the craft under way (until 0.9.12 it
+                // said "1 / 2" at every step, which the count now reads as one craft and its upgrade roll)
                 void RunQueue(TrackerSession s, DateTime at, params (string Read, bool? Race)[] steps)
                 {
-                    var t = at;
+                    var t = at; int step = 0;
                     foreach (var (read, race) in steps)
                     {
-                        s.PanelLook(t, true, false, read.Length > 0 ? new[] { "Crafting in Progress", read } : new[] { "Crafting in Progress 1 / 2" });
+                        step++;
+                        s.PanelLook(t, true, false, read.Length > 0 ? new[] { "Crafting in Progress", read } : new[] { $"Crafting in Progress {step} / {steps.Length}" });
                         if (race is bool ok) { s.PanelBars(t.AddSeconds(2), ok, false); Away(s, t.AddSeconds(2.4), 2); }
                         t = t.AddSeconds(4);
                     }
@@ -4771,6 +4774,71 @@ options: --process aion[,other]");
                 sq.PanelBars(sq0.AddMinutes(7).AddSeconds(2), true, false);
                 sq.FlushVotes(sq0.AddMinutes(7).AddSeconds(3));
                 Check("...a stop while a craft waits for its queue's recipe: counted under the best guess, not lost", $"{sq.CraftView.CraftSnapshot().Sum(r => r.Attempts)}", "20");
+
+                // ---- upgrade rolls told from the queue's count and the panel's title, no colour (0.9.12) ----
+                // Steven's 2026-11-03 13:23:30 queue of ten Orichalcum Longswords (reads.log; frames 20261103-132348 and
+                // -132428): 13 races, three of them the upgrade roll after a craft, to Splendent Orichalcum Longsword (Rare).
+                // The one pixel that told the blue roll panel sat over sunlit grass (R111 G114 B85) and said none was; the
+                // title naming the upgrade, read three times as "Splendent Orichalcum Longsword (Novice I-VEE.", was kept as a
+                // recipe of its own. 0.9.11 counted 13 plain crafts. Here the bars carry no tint at all.
+                string Sword(TrackerSession s) => string.Join(" | ", s.CraftView.CraftSnapshot().Select(r =>
+                    $"{r.Name} {r.Ok}/{r.Attempts}, up {r.Upgraded}/{r.Upgraded + r.NotUpgraded}, made {string.Join(", ", r.Made.OrderByDescending(m => m.Value).ThenBy(m => m.Key, StringComparer.Ordinal).Select(m => $"{m.Key} x{m.Value}"))}"));
+                static DateTime Local(int m, double s) => new DateTime(2026, 11, 3, 18, m, 0, DateTimeKind.Utc).AddSeconds(s);   // 13:mm, UTC-5
+                var swordRaces = new[] { Local(23, 35.3), Local(23, 44.4), Local(23, 52.9), Local(24, 0.0), Local(24, 12.6), Local(24, 21.0), Local(24, 28.0),
+                    Local(24, 38.3), Local(24, 45.0), Local(24, 59.6), Local(25, 12.8), Local(25, 21.1), Local(25, 35.3) };
+                var la = new TrackerSession(null, new Settings(), items, "Test"); la.Engine.SetZone("Eastern Cantas Valley");
+                la.PanelLook(Local(23, 30.1), true, false, new[] { "Crafting in Progress 1 / 10", "Orichalcum Longsword (Novice Lv. 3)" });
+                var upTitles = new[] { Local(23, 57.7), Local(24, 50.0), Local(24, 59.5) };
+                foreach (var (at, title) in swordRaces.Select(r => (r, false)).Concat(upTitles.Select(x => (x, true))).OrderBy(x => x.Item1))
+                {
+                    if (title) la.PanelLook(at, true, false, new[] { "Splendent Orichalcum Longsword (Novice I-VEE." });
+                    else la.PanelBars(at, true, false);
+                }
+                Away(la, Local(25, 41.8), 14);
+                Check("crafting: Steven's queue of 10 Longswords, 13 races: the queue's 10 and the title naming the upgrade tell the 3 upgrade rolls",
+                    Sword(la), "Orichalcum Longsword 10/10, up 3/3, made Orichalcum Longsword x7, Splendent Orichalcum Longsword x3");
+                Check("...the garbled title is the upgrade, not a recipe kept as read",
+                    $"{CraftPanel.ItemOf("Splendent Orichalcum Longsword (Novice I-VEE.")} | {CraftPanel.Settle("Splendent Orichalcum Longsword (Novice I-VEE.", "Orichalcum Longsword").Note} | {CraftPanel.NamesUpgrade("Splendent Orichalcum Longsword (Novice I-VEE.", "Orichalcum Longsword")} {CraftPanel.NamesUpgrade("Splendent Orichalcum Long…", "Orichalcum Longsword")} {CraftPanel.NamesUpgrade("Orichalcum Longsword (Novice Lv. 3)", "Orichalcum Longsword")} {CraftPanel.NamesUpgrade("Expert's Orichalcum Longsword (Novice Lv. 15)", "Orichalcum Longsword")} {CraftPanel.NamesUpgrade("Orichalcum Long…", "Orichalcum Longsword")}",
+                    "Splendent Orichalcum Longsword | cut by the panel, the upgrade Orichalcum Longsword rolls for: Orichalcum Longsword | True True False False False");
+                // the same queue with only the count read, as the game shows it during each race (3 / 10 at 13:23:48, 5 / 10
+                // through the roll at 13:24:28, 8 / 10 at 13:25:10): it stays at a craft's number through that craft's roll
+                int[] under = { 1, 2, 3, 3, 4, 5, 5, 6, 7, 7, 8, 9, 10 };
+                var lc = new TrackerSession(null, new Settings(), items, "Test"); lc.Engine.SetZone("Eastern Cantas Valley");
+                lc.PanelLook(Local(23, 30.1), true, false, new[] { "Crafting in Progress 1 / 10", "Orichalcum Longsword (Novice Lv. 3)" });
+                for (int i = 0; i < swordRaces.Length; i++)
+                {
+                    if (i > 0) lc.PanelLook(swordRaces[i].AddSeconds(-2), true, false, new[] { $"Crafting in Progress {under[i]} / 10" });
+                    lc.PanelBars(swordRaces[i], true, false);
+                }
+                Away(lc, Local(25, 41.8), 14);
+                Check("...the count alone tells them too", Sword(lc), "Orichalcum Longsword 10/10, up 3/3, made Orichalcum Longsword x7, Splendent Orichalcum Longsword x3");
+                // and a race whose bars carry the blue tint, with the count and the title read and saying a plain craft: the
+                // count and the title win (the tint is the third sign)
+                var lt = new TrackerSession(null, new Settings(), items, "Test"); lt.Engine.SetZone("Eastern Cantas Valley");
+                lt.PanelLook(Local(23, 30.1), true, false, new[] { "Crafting in Progress 1 / 10", "Orichalcum Longsword (Novice Lv. 3)" });
+                lt.PanelBars(Local(23, 35.3), true, false);
+                lt.PanelLook(Local(23, 40.0), true, false, new[] { "Crafting in Progress 2 / 10", "Orichalcum Longsword (Novice Lv. 3)" });
+                lt.PanelBars(Local(23, 44.4), true, true);
+                lt.PanelBars(Local(23, 52.9), true, true);
+                Away(lt, Local(23, 55), 14);
+                Check("...a blue tint the count contradicts is a craft; with nothing read, the tint says the roll", Sword(lt), "Orichalcum Longsword 2/2, up 1/1, made Orichalcum Longsword x1, Splendent Orichalcum Longsword x1");
+
+                // Steven's 2026-11-03 13:23:07 queue of one Orichalcum Ingot at Lv. 25 (×10): the panel came up at 07.6, the
+                // bars empty at 08.0 and the Success bar full at 09.8, 2.2 s on, then empty at 15.2 and the real race full at
+                // 20.5. 0.9.11 counted 2 tries, 2 worked. A race quicker than CraftPanelTracker.MinRaceSeconds is no race.
+                var lb = new TrackerSession(null, new Settings(), items, "Test"); lb.Engine.SetZone("Eastern Cantas Valley");
+                static DateTime B(double s) => new DateTime(2026, 11, 3, 18, 23, 0, DateTimeKind.Utc).AddSeconds(s);
+                lb.PanelLook(B(7.6), true, false, new[] { "Crafting in Progress 1 / 1", "Orichalcum Ingot (Novice Lv. 25)" });
+                foreach (var (at, sb, fb) in new[] { (8.0, 0.0, 0.0), (9.8, 1.0, 0.0), (15.2, 0.0, 0.0), (17.9, 0.5, 0.1), (20.5, 0.99, 0.14) })
+                {
+                    lb.CraftingPass(B(at));
+                    lb.PanelSample(B(at), new CraftPanel.Sample(true, sb, fb, false));
+                }
+                Away(lb, B(26.6), 14);
+                Check("crafting: Steven's 1/1 Orichalcum Ingot at Lv. 25: the bar that flickered full as the panel opened is no try; it made 10",
+                    string.Join(" | ", lb.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts}, made {string.Join(", ", r.Made.Select(m => $"{m.Key} x{m.Value}"))}")),
+                    "1/1, made Orichalcum Ingot x10");
+                Check("...its feed line says what it made", string.Join(" | ", lb.Live.Recent(FeedTab.Crafting).Select(l => $"{l.Text} (amount {l.Amount})")), "Orichalcum Ingot ×10 worked (amount 10)");
             }
             {
                 // a world boss with a Force (Steven, 2026-10-22): other players' shares are never the player's; the player's own share is

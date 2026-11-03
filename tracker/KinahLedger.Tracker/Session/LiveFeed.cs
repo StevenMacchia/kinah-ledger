@@ -22,7 +22,7 @@ public sealed record FeedLine(DateTime At, FeedTab Tab, string Kind, string Name
     public string Text => Kind switch
     {
         "kinah" => $"{Amount:N0} Kinah" + (Enemy.Length > 0 ? $" · {Enemy}" : ""),
-        "craft" => $"{(Name.Length > 0 ? Name : "A craft")} {(Ok ? "worked" : "failed")}",
+        "craft" => $"{(Name.Length > 0 ? Name : "A craft")}{(Ok && Makes > 1 ? $" ×{Makes}" : "")} {(Ok ? "worked" : "failed")}",
         _ => $"{Name} ×{Amount:N0}" + (Bound ? " (bound)" : ""),
     };
 }
