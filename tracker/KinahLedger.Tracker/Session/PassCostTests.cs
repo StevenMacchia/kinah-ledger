@@ -79,6 +79,38 @@ public static class PassCostTests
             }
             Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
 
+            // ---- 1b. the upgrade roll's blue tint over a bright world (0.9.12) ----
+            // 2026-11-03 13:24:28: the see-through panel over sunlit grass read R111 G114 B85 at the one pixel 0.9.11 looked
+            // at, so no race was ever the blue upgrade roll. Drawn here: the panel's body over that world, plain and with a blue
+            // tint too weak for the old one-pixel test (blue only 30 over red). Measured, the averaged patches say combo for
+            // the tinted one only; and as races (a plain craft first, as a queue opens), the vote calls the tinted race the roll.
+            {
+                var grass = Color.FromArgb(255, 111, 114, 85); var tinted = Color.FromArgb(255, 100, 140, 130);
+                foreach (var (w, h) in new[] { (1920, 1080), (5120, 2160) })
+                {
+                    var game = new Rectangle(0, 0, w, h);
+                    var region = CraftPanel.Region(game);
+                    CraftPanel.Sample At((double S, double F) bars, Color body)
+                    {
+                        using var bmp = ReplayBank.DrawPanel(region, game, bars, grass, body);
+                        return CraftPanel.Measure(bmp, region, game);
+                    }
+                    var plainS = At((0.5, 0.3), grass); var tintS = At((0.5, 0.3), tinted);
+                    bool oldTest = tinted.B > tinted.R + 35 && tinted.B > 70;
+                    Check($"{w}x{h}: the blue tint over a (111,114,85) world: combo, the plain panel not (the old pixel test: {oldTest})", $"{tintS.Visible} {tintS.Combo} | {plainS.Visible} {plainS.Combo}", "True True | True False");
+                    var tr = new CraftPanelTracker(); tr.NewQueue();
+                    var tq = new DateTime(2026, 11, 3, 18, 23, 30, DateTimeKind.Utc);
+                    var outs = new List<string>();
+                    void Race(double from, Color body)
+                    {
+                        foreach (var (dt, sb, fb) in new[] { (0.0, 0.0, 0.0), (2.0, 0.4, 0.2), (4.0, 0.8, 0.3), (6.0, 1.0, 0.3) })
+                            if (tr.Feed(tq.AddSeconds(from + dt), At((sb, fb), body)) is { } o) outs.Add(o.Combo ? "roll" : "craft");
+                    }
+                    Race(0, grass); Race(10, tinted); Race(20, grass);
+                    Check("...as races: the queue's first craft gives the panel's colour, the tinted race is the roll", string.Join(" ", outs), "craft roll craft");
+                }
+            }
+
             // ---- 2. the loot list's unchanged check ----
             var t0 = new DateTime(2026, 10, 25, 12, 0, 0, DateTimeKind.Utc);
             var sb = new SameBand<string>();

@@ -188,6 +188,7 @@ public partial class MainWindow : Window
         ShowTable(null);
         ServerRowState();
         InitWelcome();
+        InitWhatsNew(watch);   // after an update, this version's notes once at the top (Ui/MainWindow.WhatsNew.cs)
         InitCounting(watch);   // Help improve counting: the choice applied, the one-time notice
         if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
         else Say("Reading the chat whenever the game is open. Start run times a stretch on top.", "Faint");
@@ -1162,7 +1163,9 @@ public partial class MainWindow : Window
         if (!farm) GoalsCard.Visibility = Visibility.Collapsed;     // GOALS too (FillGoals)
         // the tables only in Full view since 2026-10-28 (the calm Farming page, mock C): Compact is the live card and LOOT
         TablesCard.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
+        PlaceWhatsNew();   // What's new on Farming only, in both views (0.9.12)
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
+
         EventsCard.Visibility = events ? Visibility.Visible : Visibility.Collapsed;
         LowerScroll.Visibility = full || craft || events ? Visibility.Visible : Visibility.Collapsed;
         // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
@@ -1290,7 +1293,10 @@ public partial class MainWindow : Window
     List<DropRow> UpgradeRows(Session.CraftLedger.Recipe r, RecipeBook.Recipe? book)
     {
         var rows = new List<DropRow>();
-        int baseYield = Math.Max(1, book?.OutputQty ?? 1);
+        // what one craft of the recipe made as this session crafted it (Orichalcum Ingot: ×1 at Lv. 1, ×10 at Lv. 25), not the
+        // book's first variant
+        int tried = r.Tries.Where(kv => kv.Key > 0).OrderByDescending(kv => kv.Value).Select(kv => kv.Key).FirstOrDefault();
+        int baseYield = Math.Max(1, tried > 0 ? tried : book?.OutputQty ?? 1);
         foreach (var (item, n) in r.Made.Where(m => m.Value > 0 && !string.Equals(m.Key, r.Name, StringComparison.OrdinalIgnoreCase))
                      .OrderByDescending(m => m.Value).ThenBy(m => m.Key, StringComparer.Ordinal))
         {

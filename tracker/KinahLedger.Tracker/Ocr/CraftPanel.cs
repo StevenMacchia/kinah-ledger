@@ -13,11 +13,16 @@ namespace KinahLedger.Ocr;
 /// </summary>
 public static class CraftPanel
 {
-    /// <summary>One look at the panel: whether it is up, how full each bar is (0 to 1), and whether it is a combo roll.</summary>
+    /// <summary>One look at the panel: whether it is up, how full each bar is (0 to 1), and whether its colour says a combo roll.</summary>
     public sealed record Sample(bool Visible, double Success, double Fail, bool Combo)
     {
         /// <summary>The panel sits higher, above the skill bar: the gathering panel (never a craft).</summary>
         public bool Raised { get; init; }
+        /// <summary>
+        /// The panel's own colour beside its text (<see cref="TintPatches"/>, averaged), for telling the blue upgrade-roll
+        /// tint from what the queue's first craft showed (CraftPanelTracker); null when not measured.
+        /// </summary>
+        public (double R, double G, double B)? Panel { get; init; }
     }
 
     // The gathering panel is the same widget, raised above the skill bar by 213 px on a 2160-high screen (measured
@@ -248,9 +253,40 @@ public static class CraftPanel
             for (int x = x1; x >= x0; x--) if (v.At(x, y) is { } c && isFill(c)) return (x - x0 + 1) / (double)(x1 - x0 + 1);
             return 0;
         }
-        // a combo roll tints the whole panel blue
-        bool combo = v.At(cx + (int)(PanelLeft * h) + 30, (int)(TextBottom * h) - 30) is { } bg && bg.B > bg.R + 35 && bg.B > 70;
-        return new Sample(true, Fill(ys, Blue), Fill(yf, Orange), combo);
+        // a combo roll tints the whole panel blue. Until 0.9.12 one pixel, 30 raw pixels in from the panel's corner whatever
+        // the screen's size, said so; over sunlit grass the see-through panel read R111 G114 B85 there, and three upgrade
+        // rolls in a queue of ten Orichalcum Longswords went in as plain crafts (2026-11-03 13:23). Now the patches beside
+        // the text are averaged; the tracker compares them to the panel's colour on the queue's first craft and votes over
+        // the race. It is the third sign of an upgrade roll, after the queue's count and the panel's title (TrackerSession).
+        var panel = PanelColour(v);
+        bool combo = panel is { } pc && pc.B - pc.R > 25 && pc.G - pc.R > 25 && pc.B > 70;
+        return new Sample(true, Fill(ys, Blue), Fill(yf, Orange), combo) { Panel = panel };
+    }
+
+    /// <summary>
+    /// Where the panel shows its own colour, clear of text, icon and bars (2160-high pixels, x from the centre): four down
+    /// its left margin and three in the gap between the recipe's line and the Success bar. Measured 2026-11-03 on Steven's
+    /// frames: about (88, 96, 54) over grass on a plain craft, (88, 138, 126) on the blue upgrade roll.
+    /// </summary>
+    internal static readonly (int Dx, int Y)[] TintPatches = { (-460, 1830), (-460, 1880), (-460, 1930), (-460, 1960), (-260, 1880), (40, 1880), (340, 1880) };
+
+    /// <summary>The average colour of <see cref="TintPatches"/>, each a small square scaled with the screen; null when any falls outside the picture.</summary>
+    static (double R, double G, double B)? PanelColour(View v)
+    {
+        double k = v.H / 2160.0;
+        int r = Math.Max(1, (int)Math.Round(3 * k));
+        long sr = 0, sg = 0, sb = 0; int n = 0;
+        foreach (var (dx, y) in TintPatches)
+        {
+            int px = v.Cx + (int)Math.Round(dx * k), py = (int)Math.Round(y * k);
+            for (int j = -r; j <= r; j += r)
+                for (int i = -r; i <= r; i += r)
+                {
+                    if (v.At(px + i, py + j) is not { } c) return null;
+                    sr += c.R; sg += c.G; sb += c.B; n++;
+                }
+        }
+        return n == 0 ? null : (sr / (double)n, sg / (double)n, sb / (double)n);
     }
 
     /// <summary>The lines the last text read saw, top to bottom, for the reads log.</summary>
@@ -317,8 +353,9 @@ public static class CraftPanel
         {
             if (IsTitleLine(text))
             {
-                // "Crafting in Progress 1 / 2"; the reader sometimes drops the spaces, reads the 1 as I or l, or litters the slash
-                var m = Regex.Match(text.Replace('I', '1').Replace('l', '1').Replace('|', '/'), @"(\d+)\D{0,4}/\D{0,4}(\d+)\D{0,2}$");
+                // "Crafting in Progress 1 / 2"; the reader sometimes drops the spaces, reads the 1 as I or l, a 0 as O ("1 / 1O" would
+                // be a queue of 1, and every race after the first an upgrade roll), or litters the slash
+                var m = Regex.Match(text.Replace('I', '1').Replace('l', '1').Replace('O', '0').Replace('|', '/'), @"(\d+)\D{0,4}/\D{0,4}(\d+)\D{0,2}$");
                 if (m.Success) { done = int.Parse(m.Groups[1].Value); of = int.Parse(m.Groups[2].Value); }
                 continue;
             }
@@ -381,7 +418,9 @@ public static class CraftPanel
         foreach (var tier in Tiers)
         {
             if (tier.StartsWith(x, StringComparison.OrdinalIgnoreCase)) return true;
-            if (x.StartsWith(tier + " ", StringComparison.OrdinalIgnoreCase) && "lv".StartsWith(x[(tier.Length + 1)..].Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+            // the tier whole and anything after it: "Novice L", and "Novice I-VEE." (2026-11-03 13:23:57, the blue panel's
+            // "Splendent Orichalcum Longsword (Novice Lv..." read with its tail garbled, kept as a recipe of its own)
+            if (x.StartsWith(tier + " ", StringComparison.OrdinalIgnoreCase)) return true;
         }
         return false;
     }
@@ -423,6 +462,31 @@ public static class CraftPanel
         }
         else note = $"recipe cut by the panel, {named.Count} candidates: kept as read";
         return (settled, LevelAtCut(settled, level), note);
+    }
+
+    /// <summary>
+    /// Whether a recipe line read names the upgrade the recipe being crafted rolls for ("Splendent Orichalcum Longsword
+    /// (Novice Lv..." while crafting Orichalcum Longsword): the panel shows it, in green, for the upgrade roll after a craft
+    /// and for nothing else. The name whole, the start of it where the panel cut it, or within a letter in ten of it; never
+    /// the recipe itself, a cut of it, or another recipe the book has ("Expert's Orichalcum Longsword").
+    /// </summary>
+    public static bool NamesUpgrade(string read, string crafting)
+    {
+        if (crafting.Length < 2 || KinahLedger.Data.RecipeBook.ForOutput(crafting) is not { } book) return false;
+        var item = ItemOf(read, out bool cut);
+        if (item.Length < 3) return false;
+        var cmp = StringComparison.OrdinalIgnoreCase;
+        if (string.Equals(item, crafting, cmp) || crafting.StartsWith(item, cmp)) return false;
+        foreach (var g in book.GreatOutcomes)
+        {
+            if (string.Equals(g.Item, crafting, cmp)) continue;
+            if (string.Equals(g.Item, item, cmp)) return true;
+            if (KinahLedger.Data.RecipeBook.ForOutput(item) != null) continue;
+            if (cut && item.Length >= 6 && g.Item.StartsWith(item, cmp)) return true;
+            var (a, b) = (Norm(item), Norm(g.Item));
+            if (KinahLedger.Data.NameMatch.Distance(a, b, b.Length) != int.MaxValue) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -505,30 +569,82 @@ public static class CraftPanel
 
 /// <summary>
 /// Turns panel samples into crafts: each race ends when a bar is full (success when the blue one, failure when the
-/// orange one), counted once; the next race starts when both bars are low again. A race on a combo panel is the combo
-/// roll for the craft before it. Samples need to come often (a race lasts about five seconds; twice a second is plenty).
+/// orange one), counted once; the next race starts when both bars are low again. Whether the race ran on the blue
+/// upgrade-roll panel is a vote over its samples (<see cref="Outcome.Combo"/>): each sample's colour against the panel's
+/// own on the queue's first craft (<see cref="NewQueue"/>), or the sample's own test before that is known. Samples need to
+/// come often (a race lasts five to fifteen seconds; twice a second is plenty).
 /// </summary>
 public sealed class CraftPanelTracker
 {
+    /// <param name="Combo">Half or more of the race's samples showed the upgrade roll's blue tint.</param>
     public sealed record Outcome(DateTime At, bool Ok, bool Combo);
 
     public const double Full = 0.97, Low = 0.15;
+
+    /// <summary>
+    /// The shortest race the crafting panel runs, from both bars empty to one full. Measured 2026-11-03 on Steven's logs:
+    /// race to race, the quickest real ones were 3.1 s (an upgrade roll, 2026-11-02 19:22:55.9 to 59.0) and 3.6 s (a
+    /// craft), most 5 to 15 s; the bar that flickered full as a 1/1 queue of Orichalcum Ingots opened (2026-11-03
+    /// 13:23:08.0 empty, 09.8 full, the panel up at 07.6) took 1.8 to 2.2 s, and was counted as a second craft.
+    /// </summary>
+    public const double MinRaceSeconds = 2.5;
+
+    /// <summary>A race quicker than this is no race (<see cref="MinRaceSeconds"/> for the crafting panel; 0, the default, keeps every race).</summary>
+    public double MinSeconds { get; init; }
+
+    /// <summary>A race the last <see cref="Feed"/> dropped as too quick, for the reads log; null when it dropped none.</summary>
+    public string? Dropped { get; private set; }
+
+    /// <summary>A colour this far from the queue's first craft, in blue and in green over red, is the upgrade roll's tint (about 70 and 40 on 2026-11-03).</summary>
+    public const double TintBlue = 30, TintGreen = 20;
+
     bool _done = true;
+    DateTime _start;
+    int _samples, _tinted;
+    double _sr, _sg, _sb; int _sn;
+    (double R, double G, double B)? _base;
+
+    /// <summary>A new queue: the panel's own colour is taken again from its first craft (the world behind the see-through panel has changed).</summary>
+    public void NewQueue() => _base = null;
 
     public Outcome? Feed(DateTime t, CraftPanel.Sample s)
     {
+        Dropped = null;
         if (!s.Visible) return null;
         if (_done)
         {
             // a new race: both bars back near empty
-            if (s.Success < Low && s.Fail < Low) _done = false;
+            if (s.Success < Low && s.Fail < Low) { _done = false; _start = t; _samples = _tinted = _sn = 0; _sr = _sg = _sb = 0; Look(s); }
             return null;
         }
+        Look(s);
         if (s.Success >= Full || s.Fail >= Full)
         {
             _done = true;
-            return new Outcome(t, s.Success >= Full && s.Success >= s.Fail, s.Combo);
+            bool ok = s.Success >= Full && s.Success >= s.Fail;
+            double took = (t - _start).TotalSeconds;
+            if (MinSeconds > 0 && took < MinSeconds)
+            {
+                Dropped = $"{(ok ? "success" : "fail")} bar full {took:0.0} s after both were empty, quicker than any real race ({MinSeconds:0.0} s): not a craft";
+                return null;
+            }
+            bool combo = _tinted > 0 && _tinted * 2 >= _samples;
+            // the queue's first plain craft gives the panel's own colour for the rest of it
+            if (_base == null && !combo && _sn > 0) _base = (_sr / _sn, _sg / _sn, _sb / _sn);
+            return new Outcome(t, ok, combo);
         }
         return null;
     }
+
+    void Look(CraftPanel.Sample s)
+    {
+        _samples++;
+        if (Tinted(s)) _tinted++;
+        if (s.Panel is { } p) { _sr += p.R; _sg += p.G; _sb += p.B; _sn++; }
+    }
+
+    bool Tinted(CraftPanel.Sample s) =>
+        _base is { } b && s.Panel is { } p
+            ? (p.B - b.B) - (p.R - b.R) >= TintBlue && (p.G - b.G) - (p.R - b.R) >= TintGreen
+            : s.Combo;
 }

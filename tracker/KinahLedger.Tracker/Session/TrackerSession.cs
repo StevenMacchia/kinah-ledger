@@ -3728,7 +3728,7 @@ public sealed partial class TrackerSession
     // queue like 100 crafts and never see the chat"). The panel at the bottom centre races a Success bar against a Fail
     // bar for each craft; see CraftPanel. Its strip is read every pass (pixels only; a race lasts about five seconds), its
     // recipe line by OCR when the panel opens and every few seconds after, and each race's outcome is one craft.
-    readonly CraftPanelTracker _panel = new();
+    readonly CraftPanelTracker _panel = new() { MinSeconds = CraftPanelTracker.MinRaceSeconds };
     // the same Success/Fail bars when a node is gathered: each race's outcome, for the audit and the loot list's gathers
     readonly CraftPanelTracker _gatherBar = new();
     readonly List<(DateTime At, bool Ok)> _gatherRaces = new();
@@ -3922,6 +3922,7 @@ public sealed partial class TrackerSession
                 var st = CraftPanel.Settle(t.Recipe, _queueName, Engine.RecentOutputs(now));
                 if (st.Note.Length > 0) CrashLog.NoteBurst($"crafting panel: \"{t.Recipe}\" {st.Note}");
                 if (st.Recipe.Length >= 2) QueueRead(now, st.Recipe, st.Level, CraftPanel.Sure(t.Recipe, st.Recipe), lines);
+                RaceSigns(now, t);
             }
         }
         else if (!raised && !_panelIsCraft && graced)
@@ -3965,6 +3966,70 @@ public sealed partial class TrackerSession
         _queueId++; _queueOpen = true; _queueSure = false; _queueGuessed = false;
         _queueName = ""; _queueLevel = 0; _switchTo = ""; _switchLevel = 0;
         _queueReads.Clear(); _heldRaces.Clear();
+        _queueOf = 0; _queueCrafts = 0; _ofReads.Clear(); _raceReadsFrom = now; _raceCount = 0; _raceUpgradeTitle = _raceBaseTitle = false;
+        _panel.NewQueue();
+    }
+
+    // ---- which race is an upgrade roll (Steven's 2026-11-03 13:23 queue of ten Orichalcum Longswords: 13 races, three of
+    // them the upgrade roll after a craft; the one pixel that told the blue roll panel sat over sunlit grass and said none
+    // was, and the title naming the upgrade, read three times, was kept as a recipe of its own: 13 plain crafts, no
+    // Splendent). The game's own count says it first: "Crafting in Progress d / N" shows the craft under way and stays at d
+    // through that craft's upgrade roll, so a race during which a read showed d with d crafts already counted is the roll,
+    // and a queue of N holds N crafts, so a race past them is one too. Then the title: the panel names the recipe's upgrade
+    // ("Splendent Orichalcum Longsword") only for the roll. Last the panel's blue tint (CraftPanelTracker's vote), only
+    // when neither the count nor the title was read during the race. A roll credits the craft before it (CraftLedger).
+
+    /// <summary>A read this soon after a race ended may still show that race's panel: it says nothing of the next race.</summary>
+    public const double RaceReadMargin = 1.0;
+    /// <summary>The queue's size as its count reads (the most read "N" of "d / N"), 0 while unread; the crafts its races counted (not the rolls).</summary>
+    int _queueOf, _queueCrafts;
+    readonly Dictionary<int, int> _ofReads = new();
+    /// <summary>From when a read speaks for the race under way; the count read during it (0 none); the title naming the upgrade, or the recipe itself, during it.</summary>
+    DateTime _raceReadsFrom = DateTime.MinValue;
+    int _raceCount;
+    bool _raceUpgradeTitle, _raceBaseTitle;
+
+    /// <summary>One read of the panel while crafting, as it speaks for the race under way: the queue's count and what the title names.</summary>
+    void RaceSigns(DateTime now, (int Done, int Of, string Recipe) t)
+    {
+        if (now < _raceReadsFrom) return;
+        if (t.Of > 0 && t.Done >= 1 && t.Done <= t.Of)
+        {
+            _ofReads[t.Of] = _ofReads.GetValueOrDefault(t.Of) + 1;
+            int of = _ofReads.OrderByDescending(kv => kv.Value).ThenByDescending(kv => kv.Key == t.Of).First().Key;
+            if (_queueOf > 0 && of != _queueOf) { CrashLog.Note($"crafting panel: the queue's count reads {t.Done} / {t.Of} after {_queueOf}: a queue of {of}"); _queueCrafts = 0; }
+            _queueOf = of;
+            if (t.Of == of) _raceCount = t.Done;
+        }
+        var cur = _queueName.Length >= 2 ? _queueName : PanelShows;
+        if (t.Recipe.Length < 3 || cur.Length < 2) return;
+        if (CraftPanel.NamesUpgrade(t.Recipe, cur)) _raceUpgradeTitle = true;
+        else if (CraftPanel.IsRecipeLine(t.Recipe) && string.Equals(CraftPanel.Settle(t.Recipe, cur).Recipe, cur, StringComparison.OrdinalIgnoreCase)) _raceBaseTitle = true;
+    }
+
+    /// <summary>
+    /// Whether the race that just finished is the upgrade roll after a craft, and why (for the reads log): the queue's
+    /// count, then the title, then the tint (<paramref name="tint"/>, CraftPanelTracker's vote). Starts the next race's reads.
+    /// </summary>
+    (bool Roll, string Why) RaceKind(DateTime now, bool tint)
+    {
+        int c = _queueCrafts;
+        (bool Roll, string Why) k;
+        if (_raceCount > 0)
+        {
+            if (_raceCount == 1 && c >= 2) { c = 0; k = (false, $"the queue's count back at 1 / {_queueOf}: a new queue"); }
+            else if (_raceCount <= c) k = (true, $"the queue's count stayed at {_raceCount} / {_queueOf}, {c} craft{(c == 1 ? "" : "s")} counted");
+            else { c = _raceCount - 1; k = (false, $"the queue's count at {_raceCount} / {_queueOf}"); }
+        }
+        else if (_queueOf > 0 && c >= _queueOf) k = (true, $"past the queue's {_queueOf} craft{(_queueOf == 1 ? "" : "s")}");
+        else if (_raceUpgradeTitle) k = (true, "the panel's title named the upgrade");
+        else if (_raceBaseTitle) k = (false, tint ? "the panel's title named the recipe, its blue tint left out" : "");
+        else if (tint) k = (true, "the panel's blue tint");
+        else k = (false, "");
+        if (!k.Roll) c++;
+        _queueCrafts = c;
+        _raceReadsFrom = now.AddSeconds(RaceReadMargin); _raceCount = 0; _raceUpgradeTitle = _raceBaseTitle = false;
+        return k;
     }
 
     /// <summary>The queue is over: crafts still waiting for its recipe are filed under the best guess (or the recipe read whole that was taking over).</summary>
@@ -4239,6 +4304,18 @@ public sealed partial class TrackerSession
         CraftBarRace(now, ok, combo, "as traced");
     }
 
+    /// <summary>
+    /// One look at the crafting panel's bars while it is crafting (CraftPanelDue, and the tests): a race they finish is a
+    /// craft or the upgrade roll after one; a race quicker than any real one is logged and left out.
+    /// </summary>
+    internal void PanelSample(DateTime now, CraftPanel.Sample s)
+    {
+        var o = _panel.Feed(now, s);
+        if (_panel.Dropped is { } why) CrashLog.Note($"crafting panel: {why} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
+        if (o == null) return;
+        CraftBarRace(now, o.Ok, o.Combo, $"success bar {s.Success:P0}, fail bar {s.Fail:P0}");
+    }
+
     /// <summary>A pass with the panel up while crafting, behind the gate (also what replay's "panel" reads feed while crafting).</summary>
     internal void CraftingPass(DateTime now)
     {
@@ -4258,11 +4335,14 @@ public sealed partial class TrackerSession
         GatherOutcome(now, ok, combo);
     }
 
-    void CraftBarRace(DateTime now, bool ok, bool combo, string bars)
+    // combo: the panel's blue tint, the third sign of an upgrade roll (RaceKind)
+    void CraftBarRace(DateTime now, bool ok, bool tint, string bars)
     {
         _lastBarRaceAt = now;
         QueueTick(now);
         if (!_queueOpen) QueueStart(now);
+        var (combo, why) = RaceKind(now, tint);
+        if (why.Length > 0) bars += "; " + why;
         if (QueueHolds)
         {
             // the queue's recipe isn't settled yet: the craft waits for it (one queue, one recipe)
@@ -4296,8 +4376,7 @@ public sealed partial class TrackerSession
             // the panel's picture for a miscount report (the panel's own strip only, at most once a second)
             if (ReportBuffer.Keeps("craft")) try { Report.Picture("craft", bmp, region.Location, now, minGapSeconds: 1); } catch (Exception ex) { CrashLog.Write("report picture", ex); }
             CraftingPass(now);
-            if (_panel.Feed(now, s) is not { } o) return Task.CompletedTask;
-            CraftBarRace(now, o.Ok, o.Combo, $"success bar {s.Success:P0}, fail bar {s.Fail:P0}");
+            PanelSample(now, s);
         }
         catch (Exception ex) { CrashLog.Write("crafting panel", ex); }
         return Task.CompletedTask;
@@ -4322,7 +4401,8 @@ public sealed partial class TrackerSession
         CraftView.Apply(ev);
         Accuracy.Add("craft_panel");
         Report.Counted(now, $"craft {(ok ? "success" : "fail")}{(combo ? " (combo)" : "")}: {(recipe.Length > 0 ? recipe : "?")}", ev.Via);
-        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, 1, Ok: ok, Via: ev.Via, Where: "Crafting", Makes: ev.Makes ?? 0));
+        // the line's amount is what the craft made (10 for a ×10 Orichalcum Ingot), as its Makes says; never a flat 1
+        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, ok && !combo && ev.Makes is int mk && mk > 0 ? mk : 1, Ok: ok, Via: ev.Via, Where: "Crafting", Makes: ev.Makes ?? 0));
         try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
 
@@ -4730,6 +4810,8 @@ public sealed class UserPrefs
     public bool AutoUpdate { get; set; } = true;
     /// <summary>The version that last opened the window, so the first start after an update can say so.</summary>
     public string LastVersion { get; set; } = "";
+    /// <summary>The version whose What's new card was put away with Got it (0.9.12, Ui/MainWindow.WhatsNew.cs); the card shows once for each newer one.</summary>
+    public string WhatsNewSeen { get; set; } = "";
     /// <summary>When the game starts while the tracker waits in the tray: "open" shows the window, "tray" stays in the tray. Reading starts either way.</summary>
     public string OnGameStart { get; set; } = "open";
     /// <summary>Hide to the tray once the game has been closed for a few seconds (never during a run).</summary>

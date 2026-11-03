@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.9.11</Version>
+    <Version>0.9.12</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
@@ -58,6 +58,10 @@
   <ItemGroup>
     <!-- the window and tray take their sizes from this copy of the exe's icon (Ui/Native.cs) -->
     <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
+    <!-- this version's release notes, for the What's new card after an update (Platform/WhatsNew.cs). The release workflow
+         refuses a tag without its notes file; a build with none has no card -->
+    <EmbeddedResource Include="..\..\release-notes\v$(Version).md" LogicalName="whats-new.md" Condition="Exists('..\..\release-notes\v$(Version).md')" />
+
     <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- the 46 gathering materials' icon file names (8 KB), so their icons work before any item list is downloaded -->
     <EmbeddedResource Include="..\..\data\gathering-items.json" LogicalName="gathering-items.json" />

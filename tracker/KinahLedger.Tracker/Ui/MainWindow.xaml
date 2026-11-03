@@ -380,6 +380,20 @@
     <!-- the left column: the live card (the feed, the rate, the actions) and the Session section; in Full view also Where to
          farm now and the footer (moved here by ApplyView) -->
     <StackPanel x:Name="LeftCol" Grid.Row="1" Width="662" VerticalAlignment="Top">
+      <!-- What's new (0.9.12): after an update, this version's release notes as bold leads and the rest, once; Got it puts
+           it away until the next version (Ui/MainWindow.WhatsNew.cs, the notes built in by Platform/WhatsNew.cs) -->
+      <Border x:Name="WhatsNewCard" Margin="0,16,0,0" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
+        <StackPanel Margin="20,14,20,14">
+          <TextBlock x:Name="WhatsNewTitle" Text="WHAT'S NEW" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SecGold}"/>
+          <StackPanel x:Name="WhatsNewList" Margin="0,8,0,0"/>
+          <Grid Margin="0,10,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="WhatsNewLinks" FontSize="12.5" VerticalAlignment="Center"><Hyperlink x:Name="WhatsNewAllLink" Style="{StaticResource LinkStyle}">All notes on GitHub</Hyperlink></TextBlock>
+            <Button x:Name="WhatsNewGotIt" Grid.Column="1" Content="Got it" Height="30" Padding="16,0" FontSize="12.5" ToolTip="Put this away until the next version"/>
+          </Grid>
+        </StackPanel>
+      </Border>
+
       <!-- the farming card (Steven, 2026-10-24, direction C "Live"): the zone and whether it is live; the last five things
            counted beside the rate and its line since the start; the actions. Sections fold under it (Session, Drops from
            kills, Also this session, Where to farm now) and join it as one card (JoinCards). -->
