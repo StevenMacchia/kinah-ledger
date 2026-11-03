@@ -62,6 +62,9 @@ static class PlayerTests
         Check("farm: no row on the server: the all-regions one, said so", Everywhere("1400-1599", "Western Cantas Valley"), "2,000,000 everywhere");
         Check("farm: Full view list over every region by default", string.Join(", ", PlayerBoards.Top(null, 5, allRegions: true).Zones.Select(z => z.Zone)) + " | " + string.Join(", ", PlayerBoards.Top(null, 5).Zones.Select(z => z.Zone)),
             "Western Cantas Valley, Night Dew Cave | Night Dew Cave, Crimson Isle");
+        // never listed (0.9.11): the pooled "Unknown zone" row (any case) and an hour over the ceiling, a bad price and not a farm
+        PlayerBoards.Load(null, FarmJson, "{\"brackets\":{\"all\":[{\"zone\":\"unknown ZONE\",\"n_runs\":90,\"n_installs\":30,\"minutes\":900,\"published\":true,\"value_hr\":1900000},{\"zone\":\"Altamia Canyon\",\"n_runs\":12,\"n_installs\":5,\"minutes\":300,\"published\":true,\"value_hr\":32000000},{\"zone\":\"Night Dew Cave\",\"n_runs\":80,\"n_installs\":20,\"minutes\":400,\"published\":true,\"value_hr\":1100000}]}}");
+        Check("farm: no unknown zone, no impossible hour", string.Join(", ", PlayerBoards.Top(null, 5, allRegions: true).Zones.Select(z => z.Zone)) + $" | {Here(null, SessionEngine.UnknownZone)}", "Night Dew Cave | none");
         PlayerBoards.Load(null, "{\"brackets\":{}}", "{\"brackets\":{}}");
 
         // the gear score's bracket, as runs are shared
