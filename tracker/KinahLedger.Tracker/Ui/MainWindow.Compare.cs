@@ -428,6 +428,46 @@ public partial class MainWindow
         return card;
     }
 
+    /* ---------------- from Where to farm now ---------------- */
+
+    /// <summary>
+    /// A click on a Where to farm now row (0.9.11): with Compare on, LOOT turns to its Week side on Zones with that zone
+    /// picked beside the zone you are in, and comes into view; a zone you haven't farmed 10 minutes this week isn't among
+    /// Zones, and the status line says so. With Compare off (the base window stays as it was) the click opens every zone
+    /// on the site, as the row's right-click does.
+    /// </summary>
+    void CompareZone(string zone)
+    {
+        if (!_prefs.CompareZones) { Open(SiteUrl + "/#atlas"); return; }
+        var listed = Cmp.Zones(FarmWeekDays()).Select(z => z.Zone).ToList();
+        bool Has(string? z) => z != null && listed.Contains(z, StringComparer.OrdinalIgnoreCase);
+        _zonePicks = new[] { HereZone(), zone }.Where(Has).Select(z => z!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _zonePicksTouched = true;
+        _lootWeek = true; _lootZones = true;
+        _drawnSig.Remove("loot"); FillLoot();
+        SummaryCard.BringIntoView();
+        if (!Has(zone)) Say($"{zone} isn't in Compare yet: it lists the zones you farmed 10 minutes or more this week.", "Muted");
+    }
+
+    /// <summary>For options-test: Where to farm now's rows by zone, the one marked as here, whether each shows a hand, and the rows' "your best" lines.</summary>
+    internal (List<string> Rows, string Here, bool Hand, List<string> Best, string Tip) WhereForTest()
+    {
+        var rows = WhereBody.Children.OfType<Border>().Where(b => (b.Tag as string ?? "").StartsWith("where-row|")).ToList();
+        string Zone(Border b) => ((string)b.Tag).Split('|')[1];
+        var here = rows.FirstOrDefault(b => b.Child is Border t && ReferenceEquals(t.Background, TryFindResource("GoldTint")));
+        var grids = rows.Select(b => (b.Child as Border)?.Child as Grid).ToList();
+        return (rows.Select(Zone).ToList(), here != null ? Zone(here) : "", grids.Count > 0 && grids.All(g => g?.Cursor == Cursors.Hand),
+            grids.SelectMany(g => g?.Children.OfType<TextBlock>().Where(t => t.Tag as string == "where-best") ?? Enumerable.Empty<TextBlock>()).Select(InlineText).ToList(),
+            rows.FirstOrDefault()?.ToolTip as string ?? "");
+    }
+
+    /// <summary>For options-test: a click on the Where to farm now row for <paramref name="zone"/>, through the row's own handler.</summary>
+    internal void ClickWhereRowForTest(string zone)
+    {
+        if (WhereBody.Children.OfType<Border>().FirstOrDefault(b => b.Tag is string t && t.StartsWith("where-row|") && t.Split('|')[1] == zone) is not { Child: Border { Child: Grid g } }) return;
+        g.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent, Source = g });
+    }
+
     /* ---------------- samples, renders and the self-test ---------------- */
 
     /// <summary>A best drop for each sample zone, so the side-by-side card has one on every day (example figures, never the player's).</summary>
