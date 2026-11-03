@@ -83,7 +83,7 @@ public sealed class GameWatcher
     /// <summary>
     /// Every zone since the tracker started: the same lines as the zone view, never shared, never restarted by a zone change
     /// or by the 15-minute chunks (the ⋯ menu's All zones showed the always-on chunk, which starts over every 15 minutes).
-    /// Clear the tables starts it over. Lives here, not on the reader, so a reader restarted mid-session keeps it.
+    /// Clear everything and a run started from zero start it over. Lives here, not on the reader, so a reader restarted mid-session keeps it.
     /// </summary>
     public SessionEngine AllView { get; private set; }
     /// <summary>Every zone since midnight on this PC, carried across restarts in today.json (DayStore): the Today strip.</summary>
@@ -91,7 +91,7 @@ public sealed class GameWatcher
     string _dayKey;
     DateTime _daySavedAt = DateTime.UtcNow;
 
-    /// <summary>Starts the all-zones count over (Clear the tables).</summary>
+    /// <summary>Starts the all-zones count over (Clear everything, Start run).</summary>
     public void ResetAllView()
     {
         var a = new SessionEngine(_items); a.SetZone(Chat?.Zone);
@@ -419,6 +419,38 @@ public sealed class GameWatcher
         c.ResetZoneView();
         c.ZoneView.SetBalance(FreshBalance);
         ResetAllView();
+    }
+
+    /// <summary>
+    /// Start run is the fresh start (0.9.13): the zone and all-zones counts start over with the run, the old ones held and
+    /// still fed so the window's Undo can put them back. StartFarm starts the zone view over right after.
+    /// </summary>
+    public void HoldViews()
+    {
+        var c = Chat; if (c == null) return;
+        c.HeldZone = c.ZoneView; c.HeldAll = AllView;
+        ResetAllView();
+    }
+
+    /// <summary>Undo of a run started from zero: the held counts back, as if the run never started (the window stops the run).</summary>
+    public void RestoreHeld()
+    {
+        var c = Chat; if (c == null) return;
+        if (c.HeldZone is { } z) c.RestoreZoneView(z);
+        if (c.HeldAll is { } a) { AllView = a; c.AllView = a; }
+        c.HeldZone = null; c.HeldAll = null;
+    }
+
+    /// <summary>
+    /// A run started from zero made final: the held counts go, and what was counted is shared first and the always-on count
+    /// starts over, as Clear everything does (ClearFarmingAsync); the run's own zone view and all-zones count stay.
+    /// </summary>
+    public async Task CommitHeldAsync()
+    {
+        var c = Chat; if (c == null) return;
+        c.HeldZone = null; c.HeldAll = null;
+        await FlushPassiveAsync(final: true);
+        if (c.Engine.Events > 0) RotateChat(c);
     }
 
     /// <summary>Restarts the always-on count; the fresh one starts from the balance just read, when there is one.</summary>

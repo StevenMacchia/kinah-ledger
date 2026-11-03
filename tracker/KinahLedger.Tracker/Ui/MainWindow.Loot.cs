@@ -244,7 +244,7 @@ public partial class MainWindow
 
     /// <summary>
     /// Layout renders of the Farming page's other states (KL_SHOT_STATE): "run" (a run on), "paused" (the chat out of view),
-    /// "stopped" (just after Stop run), "empty" (the game open, nothing counted yet), "goals" and "goals-add" (the GOALS box with
+    /// "stopped" (just after Stop run), "fresh" (just after Start run with counts, its Undo bar up), "empty" (the game open, nothing counted yet), "goals" and "goals-add" (the GOALS box with
     /// three sample goals, or two and the "+" slot), "goals-none" (no goal: the slim "Set a goal for today" row), "week" and "week-new" (LOOT's Week side, Ui/MainWindow.Week.cs),
     /// "share-session", "share-run", "share-week" and "share-picture" (the Share sheet open, Ui/MainWindow.Share.cs).
     /// Example figures, never the player's.
@@ -260,6 +260,13 @@ public partial class MainWindow
             case "paused":
                 _demoPaused = true; LiveMark.Visibility = Visibility.Collapsed;
                 Tell("Paused: the chat is out of view. Only the game is read, so reading picks up when the chat is in view again", "Warn");
+                break;
+            // "fresh" (0.9.13): just after Start run with counts on the tables, the run on at zero and its Undo bar up
+            case "fresh":
+                _demoRun = true; _tableWhat = "this run";
+                _ = OfferFromZero();
+                Say("Run started from zero · Western Cantas Valley. Minimize this window; the panel and Ctrl+Shift+K keep working.", "Faint");
+                SetTrackingUi(true);
                 break;
             case "stopped":
                 SayOnLine("Run stopped (00:42:17 · 632K Kinah · 161 kills) and shared anonymously. Saved to your history (12 runs). Still counting.", "Good");
