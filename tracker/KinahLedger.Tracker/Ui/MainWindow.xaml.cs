@@ -1254,7 +1254,7 @@ public partial class MainWindow : Window
             var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
             var book = RecipeBook.ForOutput(r.Name);
-            var tip = "Click for the materials, what a try costs and what it makes."
+            var tip = "Click for the materials, what a craft costs and what it makes."
                 + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
                 + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{(Session.CraftLedger.DoublesOnCombo(r.Name) ? "Combo rolls (each makes two)" : "Upgrade rolls")}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
@@ -1283,7 +1283,7 @@ public partial class MainWindow : Window
         void Fig(string text) { var run = new Run(text); run.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); run.SetResourceReference(TextElement.ForegroundProperty, "Ink"); CraftWhat.Inlines.Add(run); }
         if (tries > 0)
         {
-            Fig(tries.ToString("N0")); CraftWhat.Inlines.Add(new Run($" tr{(tries == 1 ? "y" : "ies")} · ")); Fig(ok.ToString("N0")); CraftWhat.Inlines.Add(new Run(" worked"));
+            Fig(tries.ToString("N0")); CraftWhat.Inlines.Add(new Run($" craft{(tries == 1 ? "" : "s")} · ")); Fig(ok.ToString("N0")); CraftWhat.Inlines.Add(new Run(" worked"));
             if (spent > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(spent)); CraftWhat.Inlines.Add(new Run(" spent")); }
             if (worth > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(worth)); CraftWhat.Inlines.Add(new Run(" sells for")); }
         }

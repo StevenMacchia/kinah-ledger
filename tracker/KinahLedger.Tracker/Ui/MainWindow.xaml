@@ -805,7 +805,7 @@
                 <Grid>
                   <StackPanel x:Name="CraftFeedHost"/>
                   <TextBlock x:Name="CraftEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="12,10,12,10" TextWrapping="Wrap"
-                             Text="Craft something in the game. Each craft shows here as the crafting panel finishes it."/>
+                             Text="Open the crafting window and queue a craft.&#x0A;Profit shows with the first one."/>
                 </Grid>
               </Border>
               <TextBlock x:Name="CraftHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left"
@@ -835,11 +835,11 @@
               <StackPanel x:Name="CraftBody" Margin="20,0,20,16">
                 <Grid Height="24">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/><ColumnDefinition Width="58"/><ColumnDefinition Width="64"/><ColumnDefinition Width="72"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
-                  <TextBlock Grid.Column="2" Style="{StaticResource FTh}" Text="Tries"/>
+                  <TextBlock Grid.Column="2" Style="{StaticResource FTh}" Text="Crafts"/>
                   <TextBlock Grid.Column="3" Style="{StaticResource FTh}" Text="Worked"/>
-                  <TextBlock Grid.Column="4" Style="{StaticResource FTh}" Text="Spent" ToolTip="Every try's materials at the lowest Market prices on your server. A failed try uses them too."/>
+                  <TextBlock Grid.Column="4" Style="{StaticResource FTh}" Text="Spent" ToolTip="Every craft's materials at the lowest Market prices on your server. A failed craft uses them too."/>
                   <TextBlock Grid.Column="5" Style="{StaticResource FTh}" Text="Sells for" ToolTip="What came out, at the lowest Market price, less the Market's fee and tax (Options › General can show amounts before it)."/>
-                  <TextBlock Grid.Column="6" Style="{StaticResource FTh}" Text="Profit" ToolTip="What came out, less the Market's cut, minus the cost of every try."/>
+                  <TextBlock Grid.Column="6" Style="{StaticResource FTh}" Text="Profit" ToolTip="What came out, less the Market's cut, minus the cost of every craft."/>
                 </Grid>
                 <ScrollViewer x:Name="CraftScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                   <ItemsControl x:Name="CraftRows" ItemTemplate="{StaticResource CraftRowTemplate}"/>
