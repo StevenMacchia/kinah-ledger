@@ -1389,6 +1389,7 @@ public partial class MainWindow : Window
         // Also this session: a chip each for Gathered, the gathering skills, Soul Crystals and Kinah by enemy (Ui/MainWindow.Live.cs)
         var target = _watcher.Chat?.TargetNote ?? "";
         FillExtras(gathered, skills, pets, mobs, e?.Totals().Kinah ?? 0);
+        ShowGatherLimit();
         ApplySections();
         ShowInstances();
 

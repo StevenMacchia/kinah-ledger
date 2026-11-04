@@ -4348,6 +4348,10 @@ public sealed partial class TrackerSession
     {
         _gatherRaces.Add((now, ok)); if (_gatherRaces.Count > 50) _gatherRaces.RemoveAt(0);
         if (ok) GatherBarOk++; else GatherBarFailed++;
+        // the game's daily limit counts every attempt (patch notes 2026-10-28: "the number of times players can gather"), a failed one
+        // too: nothing says a failed gather is free. Only races on the live clock count: a replay's times are the recording's.
+        var nowUtc = now.ToUniversalTime();
+        if (Math.Abs((nowUtc - DateTime.UtcNow).TotalMinutes) < 10) GatherDay.Add(Server, nowUtc);
         CrashLog.Note($"gathering bar: {(combo ? "upgrade roll " : "")}{(ok ? "success" : "fail")} ({bars})");
         GatherOutcome(now, ok, combo);
     }

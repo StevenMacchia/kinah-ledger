@@ -2,6 +2,7 @@
 # the tracker (ZoneLocator.Known, built into the exe) and the site (backend/src/zones.ts, generated) both read it.
 # Sources: metabot.gg/en/aion-2/zones and aion2db.gg/zones (2026-10-20), plus names seen in play.
 # A new zone goes here, then rebuild the tracker and run backend/scripts/gen-zones.mjs on the site.
+# Chaotic Outer Reshanta: the Nov 4 2026 patch (Lv 45+, standardized stats); its area names are not known yet, so a read of one needs two looks like any unlisted name.
 Abandoned Barracks Site
 Abandoned Campsite
 Abandoned Observatory
@@ -56,6 +57,7 @@ Canyon Dispatch Area
 Canyon Thieves Den
 Chaotic Lower Reshanta
 Chaotic Middle Reshanta
+Chaotic Outer Reshanta
 Chaotic Upper Reshanta
 Chloris's Secret Base
 Clione Lake

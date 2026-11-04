@@ -908,6 +908,32 @@ options: --process aion[,other]");
             var run = s.Instances.Snapshot().Single();
             Check("an event closed with no reward picture: rewards not read", $"{run.RewardsNotRead} {run.ChatItemsSetAside}", "True 6");
             Check("...and the payload leaves it out", $"{InstanceRunPayload.From(new[] { run }, id => id.ToString())?.Count ?? 0}", "0");
+            // the game's gathering day rolls at midnight Pacific (the daily limit of 1,000 a server, patch notes 2026-10-28)
+            Check("the game's day: 07:59 UTC on 4 Nov is still the 3rd in Pacific time", Session.GatherDay.DayKeyOf(new DateTime(2026, 11, 4, 7, 59, 0, DateTimeKind.Utc)), "2026-11-03");
+            Check("...and 08:00 UTC is the 4th", Session.GatherDay.DayKeyOf(new DateTime(2026, 11, 4, 8, 0, 0, DateTimeKind.Utc)), "2026-11-04");
+            Check("...in October, with daylight saving, the roll is an hour earlier", Session.GatherDay.DayKeyOf(new DateTime(2026, 10, 28, 6, 59, 0, DateTimeKind.Utc)) + " " + Session.GatherDay.DayKeyOf(new DateTime(2026, 10, 28, 7, 0, 0, DateTimeKind.Utc)), "2026-10-27 2026-10-28");
+            var gdPath = Path.Combine(Path.GetTempPath(), "kl-gathers-test-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                var gd0 = new DateTime(2026, 11, 4, 9, 0, 0, DateTimeKind.Utc);
+                Session.GatherDay.Add("Siel (Elyos)", gd0, gdPath); Session.GatherDay.Add("Siel (Elyos)", gd0.AddMinutes(1), gdPath); Session.GatherDay.Add("Israphel (Asmodian)", gd0, gdPath);
+                Check("gathers are counted per server", $"{Session.GatherDay.Count("Siel (Elyos)", gd0, gdPath)} {Session.GatherDay.Count("Israphel (Asmodian)", gd0, gdPath)} {Session.GatherDay.Count("Other", gd0, gdPath)}", "2 1 0");
+                Check("a restart keeps the day's count", Session.GatherDay.Count("Siel (Elyos)", gd0.AddHours(5), gdPath).ToString(), "2");
+                Check("the line says how many of 1,000 and when it resets", Session.GatherDay.Line("Siel (Elyos)", gd0, gdPath).StartsWith("2 of 1,000 gathers today · resets 00:00 Pacific (") ? "ok" : Session.GatherDay.Line("Siel (Elyos)", gd0, gdPath), "ok");
+                Check("...and is empty with no gathers", Session.GatherDay.Line("Other", gd0, gdPath), "");
+                Check("at midnight Pacific the count starts fresh", Session.GatherDay.Count("Siel (Elyos)", new DateTime(2026, 11, 5, 8, 0, 0, DateTimeKind.Utc), gdPath).ToString(), "0");
+                Check("...and the new day counts from one", Session.GatherDay.Add("Siel (Elyos)", new DateTime(2026, 11, 5, 8, 0, 0, DateTimeKind.Utc), gdPath).ToString(), "1");
+                for (int i = 0; i < 899; i++) Session.GatherDay.Add("Siel (Elyos)", gd0.AddDays(1), gdPath);
+                var gd1 = gd0.AddDays(1);
+                Check("900 gathers say so once", (Session.GatherDay.Warning("Siel (Elyos)", gd1, gdPath) ?? "none") + " | " + (Session.GatherDay.Warning("Siel (Elyos)", gd1, gdPath) ?? "none"), "900 of 1,000 gathers today: 100 left before the game's daily limit | none");
+                for (int i = 0; i < 100; i++) Session.GatherDay.Add("Siel (Elyos)", gd1, gdPath);
+                Check("1,000 gathers say the limit is reached, once", (Session.GatherDay.Warning("Siel (Elyos)", gd1, gdPath) ?? "none") + " | " + (Session.GatherDay.Warning("Siel (Elyos)", gd1, gdPath) ?? "none"), "Daily gathering limit reached (1,000 a server): gathers fail until 00:00 Pacific | none");
+            }
+            finally { try { File.Delete(gdPath); } catch { } }
+            var trueDragon = RecipeBook.Outputs.FirstOrDefault(o => o.Contains("True Dragon", StringComparison.OrdinalIgnoreCase) && RecipeBook.ForOutput(o)?.SuccessRate is < 1) ?? "";
+            Check("a True Dragon gear recipe below 100% gets the safe-recipe note", Session.CraftLedger.SafeRecipeNote(trueDragon).StartsWith("A safe recipe for this gear exists since Nov 4") ? "note" : "none (" + trueDragon + ")", "note");
+            Check("...a Star Dragon one too", Session.CraftLedger.SafeRecipeNote("Star Dragon Lord Longsword").Length > 0 ? "note" : "none", "note");
+            Check("...a food recipe gets none", Session.CraftLedger.SafeRecipeNote("Artisan's Steamed Cypri"), "");
             long before = Accuracy.Get("runs_unsent");
             // first pass: an event run waits in the queue for its one read again from its pictures
             var send1 = s.KeepUnread(s.Instances.TakeUnshared(t0));

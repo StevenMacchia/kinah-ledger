@@ -134,6 +134,7 @@ public partial class MainWindow
             slots.Children.Add(Sized(CkBox(row, new Thickness(0, 0, 14, 10), new Thickness(8)), 196));
         }
         body.Children.Add(slots);
+        if (Session.CraftLedger.SafeRecipeNote(recipe.Output) is { Length: > 0 } safeNote) body.Children.Add(CkKv(safeNote, "", CkMuted));
         if (recipe.Kinah is long fee && fee > 0) body.Children.Add(CkTip(CkKv("Crafting fee", Amounts.Short(fee), CkGold), $"{Amounts.Full(fee)} kinah a craft"));
 
         // the cost per craft, boxed like the game's totals
