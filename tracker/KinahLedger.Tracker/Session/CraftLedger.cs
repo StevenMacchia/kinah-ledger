@@ -149,9 +149,12 @@ public sealed class CraftLedger
     sealed class LastOk { public DateTime At; public string Item = ""; public int Qty; public bool Unknown, Upgraded; public int Queue; }
     readonly Dictionary<string, LastOk> _lastOk = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The recipe's upgrade, from the recipe book (the 25% roll's item: "Artisan's Splendent Asvata Bow" for "Artisan's Asvata Bow"); null when the book has none or the name wasn't read whole.</summary>
+    /// <summary>The recipe's upgrade, from the recipe book (the 25% roll's item: "Artisan's Splendent Asvata Bow" for "Artisan's Asvata Bow"); null when the book has none (a combo then makes two) or the name wasn't read whole.</summary>
     static RecipeBook.Great? UpgradeOf(string recipe) =>
-        recipe.Length >= 2 && recipe != "?" ? RecipeBook.ForOutput(recipe)?.GreatOutcomes.FirstOrDefault(g => !string.Equals(g.Item, recipe, StringComparison.OrdinalIgnoreCase)) : null;
+        recipe.Length >= 2 && recipe != "?" ? RecipeBook.ForOutput(recipe)?.Upgrade : null;
+
+    /// <summary>Whether a won combo roll on this recipe makes the craft twice over rather than an upgrade item (the recipe book has no upgrade for it).</summary>
+    public static bool DoublesOnCombo(string recipe) => recipe.Length >= 2 && recipe != "?" && UpgradeOf(recipe) == null;
 
     /// <summary>
     /// A won upgrade roll: the craft before it made the recipe's upgrade, not its base item. The game swaps the result's
@@ -160,7 +163,16 @@ public sealed class CraftLedger
     /// </summary>
     bool Upgrade(Recipe r)
     {
-        if (!_lastOk.TryGetValue(r.Name, out var last) || last.Upgraded || UpgradeOf(r.Name) is not { } up) return false;
+        if (!_lastOk.TryGetValue(r.Name, out var last) || last.Upgraded) return false;
+        if (UpgradeOf(r.Name) is not { } up)
+        {
+            // no upgrade item: the combo made the craft twice over ("x2 COMBO" on the Cooking window, 2026-11-03: an Artisan's
+            // Steamed Cypri combo made 2, the window counted 1); a craft whose yield wasn't known can't be doubled
+            if (last.Unknown || last.Qty <= 0) return false;
+            r.Made[last.Item] = r.Made.GetValueOrDefault(last.Item) + last.Qty;
+            last.Qty *= 2; last.Upgraded = true;
+            return true;
+        }
         if (last.Unknown) r.MadeUnknown = Math.Max(0, r.MadeUnknown - 1);
         else { int n = r.Made.GetValueOrDefault(last.Item) - last.Qty; if (n > 0) r.Made[last.Item] = n; else r.Made.Remove(last.Item); }
         r.Made[up.Item] = r.Made.GetValueOrDefault(up.Item) + up.Qty;

@@ -62,7 +62,7 @@ public partial class MainWindow
         body.Children.Add(CkBand(output, grade, recipe == null ? "Not in the recipe book yet" : string.Join(" · ", new[] { recipe.Skill, grade, $"makes ×{recipe.OutputQty}" }.Where(x => x.Length > 0))));
         if (recipe == null) { body.Children.Add(CkNote("Its materials and cost show once the recipe book has it.")); body.Children.Add(new Border { Height = 14 }); return card; }
         // what is live for the recipe (direction C): where it ranks on the server today and its upgrade, when the site has it
-        var upgrade = recipe.GreatOutcomes.FirstOrDefault(g => !string.Equals(g.Item, recipe.Output, StringComparison.OrdinalIgnoreCase));
+        var upgrade = recipe.Upgrade;
         if (rank > 0 || (best != null && upgrade != null))
         {
             var lv = new StackPanel();
@@ -152,7 +152,7 @@ public partial class MainWindow
             double rate = (double)mine.Ok / mine.Attempts;
             body.Children.Add(CkKv($"{mine.Attempts} craft{(mine.Attempts == 1 ? "" : "s")} · {mine.Ok} worked · {mine.Fail} failed", $"{rate:P0}", rate >= 0.5 ? CkGood : CkBad));
             // the upgrade rolls the crafting panel showed after a craft worked
-            if (mine.Upgraded + mine.NotUpgraded > 0) body.Children.Add(CkKv($"Upgrade rolls · {mine.Upgraded} won · {mine.NotUpgraded} lost", $"{mine.Upgraded}/{mine.Upgraded + mine.NotUpgraded}", mine.Upgraded > 0 ? CkGood : CkMuted));
+            if (mine.Upgraded + mine.NotUpgraded > 0) body.Children.Add(CkKv($"{(Session.CraftLedger.DoublesOnCombo(mine.Name) ? "Combo rolls (×2)" : "Upgrade rolls")} · {mine.Upgraded} won · {mine.NotUpgraded} lost", $"{mine.Upgraded}/{mine.Upgraded + mine.NotUpgraded}", mine.Upgraded > 0 ? CkGood : CkMuted));
             if (mine.Made.Count > 0)
             {
                 var came = new WrapPanel { Margin = new Thickness(20, 6, 14, 0) };
@@ -172,16 +172,20 @@ public partial class MainWindow
         long outValue = Sells(recipe.Output, recipe.OutputQty);
         body.Children.Add(CkPriceLine(recipe.Output, "Lowest Market price", Redo, server: Server?.Name ?? ""));
         body.Children.Add(CkKv($"Sells for, {PriceBook.Fee}", outValue >= 0 ? outValue.ToString("N0") : "no sure price yet", outValue >= 0 ? CkGold : CkFaint, recipe.OutputQty > 1 ? $"{recipe.OutputQty} made per craft" : ""));
-        if (recipe.GreatOutcomes.Count > 0)
+        // the book's great outcomes, the upgrade inferred when the book lacks it, else the combo that makes two
+        var outcomes = recipe.GreatOutcomes.ToList();
+        if (recipe.Upgrade is { } inferred && !outcomes.Any(g => string.Equals(g.Item, inferred.Item, StringComparison.OrdinalIgnoreCase))) outcomes.Add(inferred);
+        if (outcomes.Count == 0 && recipe.ComboChance is > 0) outcomes.Add(new RecipeBook.Great(recipe.Output, recipe.OutputQty * 2, recipe.ComboChance));
+        if (outcomes.Count > 0)
         {
             var ups = new WrapPanel { Margin = new Thickness(20, 6, 14, 0) };
-            foreach (var g in recipe.GreatOutcomes)
+            foreach (var g in outcomes)
             {
                 bool more = string.Equals(g.Item, recipe.Output, StringComparison.OrdinalIgnoreCase);
                 var uq = more ? null : PriceBook.QuoteOf(g.Item);
                 // the chance a craft that worked turns into the upgrade, the figure the profit uses (UpgradeChance); the recipe's
                 // own chance is a combo's, before the combo itself has to succeed (0.25 × 0.77 = 19% for the earrings, not 25%)
-                ups.Children.Add(CkChip((more ? $"Quantity upgrade ×{g.Qty}" : $"Quality upgrade: {g.Item}") + (UpgradeChance(recipe, g) is double c ? $" · {c:P0}" : "")
+                ups.Children.Add(CkChip((more ? $"Combo makes ×{g.Qty}" : $"Quality upgrade: {g.Item}") + (UpgradeChance(recipe, g) is double c ? $" · {c:P0}" : "")
                     + (uq != null ? $" · {(uq.From == PriceBook.From.Region ? "≈" : "")}{uq.Price:N0}{(uq.Sure ? "" : ", unsure")}" : ""), more ? Color.FromRgb(0x5E, 0xD8, 0xCB) : GradeColor(GradeOf(g.Item))));
             }
             body.Children.Add(ups);
@@ -195,13 +199,16 @@ public partial class MainWindow
         if (unpriced == 0 && outValue >= 0)
         {
             double rate = recipe.SuccessRate ?? (mine is { Attempts: > 0 } ? (double)mine.Ok / mine.Attempts : 1);
-            var up = recipe.GreatOutcomes.FirstOrDefault(g => !string.Equals(g.Item, recipe.Output, StringComparison.OrdinalIgnoreCase));
+            var up = recipe.Upgrade;
+            double normal = Price(recipe.Output) is long op ? op * recipe.OutputQty : 0;
             double combo = up != null && UpgradeChance(recipe, up) is double gc ? gc : 0;
             double? upPrice = up != null && Price(up.Item) is long upp ? upp * up.Qty : null;
+            // no upgrade item: a won combo makes the craft twice over, at the combo's chance times its own success
+            bool doubles = up == null && recipe.ComboChance is > 0 && normal > 0;
+            if (doubles) { combo = recipe.ComboChance!.Value * (recipe.ComboSuccess ?? 1); upPrice = normal * 2; }
             if (upPrice == null) combo = 0;
-            double normal = Price(recipe.Output) is long op ? op * recipe.OutputQty : 0;
             double per = CraftMath.ProfitPerTry(rate, combo, normal, upPrice, total, PriceBook.SellerKeeps);
-            body.Children.Add(CkFooter("Profit per craft", $"at {rate:P0} success{(combo > 0 ? $" · {combo:P0} upgrade chance" : "")} · after tax", $"{(per >= 0 ? "+" : "−")}{Math.Abs(per):N0}", per >= 0));
+            body.Children.Add(CkFooter("Profit per craft", $"at {rate:P0} success{(combo > 0 ? (doubles ? $" · {combo:P0} combo ×2" : $" · {combo:P0} upgrade chance") : "")} · after tax", $"{(per >= 0 ? "+" : "−")}{Math.Abs(per):N0}", per >= 0));
             SellTheMats(body, farmed, per);
         }
         else

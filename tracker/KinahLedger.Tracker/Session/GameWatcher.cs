@@ -219,7 +219,7 @@ public sealed class GameWatcher
             try
             {
                 var r = await http.GetAsync($"{site}/prices/{other.Key}.json");
-                if (r.IsSuccessStatusCode) boards.Add(PriceBook.ParseBoard(await r.Content.ReadAsStringAsync(), _items));
+                if (r.IsSuccessStatusCode) boards.Add(PriceBook.ParseBoard(await r.Content.ReadAsStringAsync(), _items, sureOnly: true));
             }
             catch (Exception) { /* one server's board missing is fine */ }
         }

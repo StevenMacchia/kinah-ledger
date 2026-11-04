@@ -17,7 +17,34 @@ public static class RecipeBook
         public char Faction { get; init; }
         /// <summary>The chance a combo (great success) that rolled then succeeds; with the combo chance, how often a success turns into the upgrade.</summary>
         public double? ComboSuccess { get; init; }
+        /// <summary>The chance a craft that worked rolls a combo (the crafting window's "Combo Activation Chance"); null when the book doesn't say.</summary>
+        public double? ComboChance { get; init; }
         public int Mastery { get; init; }
+
+        /// <summary>
+        /// The item a won combo turns the craft into, when it is another item: the book's great outcome, else the "Splendent"
+        /// variant the book has a recipe for (the Dragon Lord gear's great outcomes are missing from the source). Null when a
+        /// combo makes more of the same item instead (<see cref="DoublesOnCombo"/>).
+        /// </summary>
+        public Great? Upgrade
+        {
+            get
+            {
+                var cmp = StringComparison.OrdinalIgnoreCase;
+                if (GreatOutcomes.FirstOrDefault(g => !string.Equals(g.Item, Output, cmp)) is { } g1) return g1;
+                if (Output.Contains("Splendent", cmp)) return null;
+                // "Artisan's Truth Orb" → "Artisan's Splendent Truth Orb"; "Truth Orb" → "Splendent Truth Orb"
+                int cut = Output.IndexOf("'s ", cmp);
+                var cand = cut > 0 ? Output[..(cut + 3)] + "Splendent " + Output[(cut + 3)..] : "Splendent " + Output;
+                return ByOutput.ContainsKey(cand) ? new Great(cand, 1, ComboChance) : null;
+            }
+        }
+
+        /// <summary>
+        /// A won combo makes the craft twice over, as the Cooking window shows it ("x2 COMBO", 2026-11-03: an Artisan's Steamed
+        /// Cypri combo made 2 and was counted as 1): every recipe whose combo has no upgrade item (dishes, potions, serums, stones).
+        /// </summary>
+        public bool DoublesOnCombo => Upgrade == null;
     }
 
     /// <summary>The player's faction ('E' or 'A', from the chosen server), so a recipe's materials are the ones they craft with.</summary>
@@ -58,7 +85,7 @@ public static class RecipeBook
                 var rid = r.TryGetProperty("recipe_id", out var ri) && ri.ValueKind == JsonValueKind.Number ? ri.GetRawText() : "";
                 char faction = rid.Length > 1 ? (rid[1] == '1' ? 'E' : rid[1] == '2' ? 'A' : '\0') : '\0';
                 list.Add(new Recipe(Str("name").Length > 0 ? Str("name") : output, Str("skill"), output, Math.Max(1, Int(r, "output_qty", 1)), mats, kinah, Dbl(r, "success_rate"), great)
-                    { Faction = faction, ComboSuccess = Dbl(r, "combo_success_rate"), Mastery = Int(r, "mastery", 0) });
+                    { Faction = faction, ComboSuccess = Dbl(r, "combo_success_rate"), ComboChance = Dbl(r, "combo_chance"), Mastery = Int(r, "mastery", 0) });
             }
         }
         catch (Exception) { /* no recipes: costs show as unknown */ }
