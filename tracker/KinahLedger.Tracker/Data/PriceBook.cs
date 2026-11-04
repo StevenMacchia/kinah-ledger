@@ -52,6 +52,11 @@ public static class PriceBook
     /// <summary>Readings a price needs to count in totals and profit; an ask this many times the other servers' middle is dropped.</summary>
     public const int SureReadings = 2;
     public const double OutlierX = 3;
+    /// <summary>A board price last seen longer ago than this is unsure (2026-11-03: a price weeks old stood as sure); over <see cref="OldAfter"/> it is shown dimmed as old.</summary>
+    public static readonly TimeSpan BoardMaxAge = TimeSpan.FromHours(72);
+    public static readonly TimeSpan OldAfter = TimeSpan.FromHours(24);
+    /// <summary>When the other servers' boards were fetched: the age of a region price.</summary>
+    static DateTime? _regionAt;
     public static DateTime? BoardAt { get; private set; }
     static ItemDictionary? _items;
     static bool _purgeLogged;
@@ -93,11 +98,13 @@ public static class PriceBook
             // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask.
             if (_board.TryGetValue(k, out var b) && !(reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price))
             {
-                // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure
-                if (b.Sure || reg == null) return new Quote(b.Price, b.From, b.Readings, b.Sure, b.At);
+                // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure.
+                // One last seen over 72 h ago is unsure however many readings it had.
+                bool sure = b.Sure && !(b.At is DateTime seenAt && DateTime.UtcNow - seenAt > BoardMaxAge);
+                if (sure || reg == null) return new Quote(b.Price, b.From, b.Readings, sure, b.At);
             }
-            if (reg is { } rr) return new Quote(rr.Price, From.Region, rr.Servers, true, null);
-            if (_region.TryGetValue(k, out var one)) return new Quote(one.Price, From.Region, one.Servers, false, null);
+            if (reg is { } rr) return new Quote(rr.Price, From.Region, rr.Servers, true, _regionAt);
+            if (_region.TryGetValue(k, out var one)) return new Quote(one.Price, From.Region, one.Servers, false, _regionAt);
             return null;
         }
     }
@@ -127,10 +134,18 @@ public static class PriceBook
             case From.Feed: parts.Add(q.Readings == 1 ? "aion2.exchange · 1 listing" : $"aion2.exchange · lowest of {q.Readings} listings"); break;
             case From.Region: parts.Add(q.Readings == 1 ? "another server's price" : $"other servers' middle · {q.Readings} servers"); break;
         }
-        if (withAge && q.At is DateTime at) parts.Add(Ago(at, now ?? DateTime.UtcNow));
+        if (withAge)
+        {
+            // a board price the site gave no time for (a sold average, an older board) is as old as the last check of the board
+            if (q.At is DateTime at) parts.Add(Ago(at, now ?? DateTime.UtcNow));
+            else if (q.From is From.Server or From.Sold or From.Feed && BoardAt is DateTime bat) parts.Add("board checked " + Ago(bat, now ?? DateTime.UtcNow));
+        }
         if (!q.Sure) parts.Add("unsure");
         return string.Join(" · ", parts);
     }
+
+    /// <summary>True when a price was last seen over a day ago (<see cref="OldAfter"/>); one with no time of its own is not judged.</summary>
+    public static bool IsOld(Quote q, DateTime? now = null) => q.At is DateTime at && (now ?? DateTime.UtcNow) - at > OldAfter;
 
     /// <summary>"just now", "12 min ago", "3 h ago", "2 days ago".</summary>
     public static string Ago(DateTime at, DateTime now)
@@ -154,7 +169,7 @@ public static class PriceBook
                 if (p > 0) { var k = Norm(name); if (!all.TryGetValue(k, out var l)) all[k] = l = new(); l.Add(p); }
         // the lower middle for an even count, so one joke ask never lifts it (as the site's regionMiddles)
         var med = all.ToDictionary(kv => kv.Key, kv => { var l = kv.Value; l.Sort(); return (l[(l.Count - 1) / 2], l.Count); });
-        lock (Lock) _region = med;
+        lock (Lock) { _region = med; _regionAt = DateTime.UtcNow; }
     }
 
     /// <summary>An ask read on the Market: kept when it is the lowest of the last day for that item.</summary>
