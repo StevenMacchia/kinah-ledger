@@ -22,6 +22,13 @@ public partial class MainWindow
     DateTime _craftTick;
     int _craftTriesSeen;
 
+    /// <summary>Crafts an hour this session, from every craft over the time the crafting window was open (HudCraftValues); null before a minute of it.</summary>
+    internal double? CraftsPerHour(SessionEngine? e = null)
+    {
+        int n = (e ?? CraftShown)?.CraftSnapshot().Sum(r => r.Attempts) ?? 0;
+        return n > 0 && _craftTime.TotalMinutes >= 1 ? n / _craftTime.TotalHours : null;
+    }
+
     /// <summary>The looks' crafting values, from the window's tick (HudFeed): all blank while the player isn't crafting.</summary>
     void HudCraftValues()
     {

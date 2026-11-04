@@ -174,6 +174,49 @@ public static class CraftMath
         => success * keeps * ((1 - combo) * normal + combo * (upgrade ?? normal)) - cost;
 
     /// <summary>
+    /// How often a craft that worked turns into this upgrade: the combo's chance times the chance the combo then succeeds
+    /// (the site's best crafts use the same). Null when the recipe doesn't list one.
+    /// </summary>
+    public static double? UpgradeChance(RecipeBook.Recipe recipe, RecipeBook.Great g) => g.Chance is double c ? c * (recipe.ComboSuccess ?? 1) : null;
+
+    /// <summary>
+    /// One recipe's verdict at a price list: the profit per craft, the combo that went into it, and the sell price of the
+    /// item that makes it break even. The card and the HUD both read this, so they never disagree.
+    /// </summary>
+    /// <param name="Combo">The chance a craft turns into the upgrade, or into two (<paramref name="Doubles"/>); 0 when the upgrade has no price.</param>
+    /// <param name="UpgradeUnpriced">The recipe has an upgrade the price list doesn't price: it is counted as the base item.</param>
+    /// <param name="BreakEven">The Market price of the output (each) at which a craft makes nothing; null when nothing sells for that.</param>
+    public sealed record Verdict(double Profit, double Combo, bool Doubles, bool UpgradeUnpriced, double? BreakEven);
+
+    /// <summary>
+    /// The verdict of <paramref name="recipe"/> costing <paramref name="cost"/> a craft, with <paramref name="rate"/> of crafts
+    /// working; null when the output has no price (nothing to sell). A won combo makes two when the recipe has no upgrade item.
+    /// </summary>
+    public static Verdict? Judge(RecipeBook.Recipe recipe, Func<string, long?> price, double cost, double rate, double keeps)
+    {
+        if (price(recipe.Output) is not long op) return null;
+        double normal = op * recipe.OutputQty;
+        var up = recipe.Upgrade;
+        double combo = up != null && UpgradeChance(recipe, up) is double gc ? gc : 0;
+        double? upPrice = up != null && price(up.Item) is long upp ? upp * up.Qty : null;
+        // no upgrade item: a won combo makes the craft twice over, at the combo's chance times its own success
+        bool doubles = up == null && recipe.ComboChance is > 0 && normal > 0;
+        if (doubles) { combo = recipe.ComboChance!.Value * (recipe.ComboSuccess ?? 1); upPrice = normal * 2; }
+        bool unpriced = up != null && combo > 0 && upPrice == null;
+        if (upPrice == null) combo = 0;
+        double profit = ProfitPerTry(rate, combo, normal, upPrice, cost, keeps);
+        // cost = rate × keeps × (units × price + combo × upgrade value): solve for the price
+        double? even = null;
+        double units = recipe.OutputQty * (doubles ? 1 + combo : 1 - combo);
+        if (rate > 0 && keeps > 0 && units > 0)
+        {
+            double e = (cost / (rate * keeps) - (doubles ? 0 : combo * (upPrice ?? 0))) / units;
+            if (e > 0) even = e;
+        }
+        return new Verdict(profit, combo, doubles, unpriced, even);
+    }
+
+    /// <summary>
     /// A best craft's profit at this player's own prices where they have one (typed, or read on their PC: they win over the
     /// board), the site's for the rest. With no own price at all it is the site's profit unchanged.
     /// </summary>
