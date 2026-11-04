@@ -4908,6 +4908,8 @@ public sealed class UserPrefs
     public string Skin { get; set; } = "night";
     /// <summary>Install a newer version on its own (downloaded in the background, swapped in when the window closes). Off: the window asks first.</summary>
     public bool AutoUpdate { get; set; } = true;
+    /// <summary>Starting with Windows was turned on once by default (0.9.19, Steven, 2026-11-04); from then on Options › Startup decides, and a switch-off there holds.</summary>
+    public bool StartupDefaulted { get; set; }
     /// <summary>The version that last opened the window, so the first start after an update can say so.</summary>
     public string LastVersion { get; set; } = "";
     /// <summary>The version whose What's new card was put away with Got it (0.9.12, Ui/MainWindow.WhatsNew.cs); the card shows once for each newer one.</summary>

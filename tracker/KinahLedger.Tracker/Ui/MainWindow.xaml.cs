@@ -94,6 +94,16 @@ public partial class MainWindow : Window
         if (_prefs.HudFields == HudFields.OldDefault) _prefs.HudFields = HudFields.Default;
         // the panel's lock and size: locked for a new install, left draggable for one that used the tracker before
         _hudPrefs = HudPrefs.Load(existingInstall: _prefs.Welcomed || _prefs.LastVersion.Length > 0, remember: watch);
+        // starting with Windows is on by default since 0.9.19 (Steven, 2026-11-04: "run on by default when you start Windows"):
+        // the installed tracker waits in the tray from sign-in. Set once per install, so a switch-off in Options › Startup holds;
+        // never for a build run from its folder (the self-tests, dotnet run), which Windows must not start
+        if (!_prefs.StartupDefaulted && _exe != null && Platform.Installer.IsInstalled)
+        {
+            _prefs.StartupDefaulted = true;
+            if (Platform.AutoStart.Set(true, _exe, out var startErr)) CrashLog.Note("start with Windows: on by default (Options › Startup turns it off)");
+            else CrashLog.Note("start with Windows: Windows refused the default (" + startErr + ")");
+            _prefs.Save();
+        }
 
         // off by default: the tables start over on a new zone. The site gets each zone's own numbers either way.
         // every start: the drops table open; Gathered, each gathering skill, Kinah by enemy and Soul Crystals folded into one line
