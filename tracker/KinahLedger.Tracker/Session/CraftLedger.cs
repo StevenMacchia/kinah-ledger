@@ -206,10 +206,13 @@ public sealed class CraftLedger
     /// quick, or read as lost. With <paramref name="apply"/> the second output is credited to the craft, once, and the
     /// rolls' tally follows (a roll read as lost becomes the won one). False when the count says nothing new.
     /// </summary>
+    public const double PopupLeadSeconds = 6;
+
     public bool PopupSays(string recipe, int count, DateTime t, bool apply)
     {
         if (recipe.Length < 2 || count <= 0 || !_recipes.TryGetValue(recipe, out var r) || !_lastOk.TryGetValue(r.Name, out var last)) return false;
-        if (last.Unknown || last.Qty <= 0 || t < last.At.AddSeconds(-1) || (t - last.At).TotalSeconds > PanelSeconds) return false;
+        // the craft's time is its race's settled time (CraftPanelTracker), which can trail the pop-up by a few seconds
+        if (last.Unknown || last.Qty <= 0 || t < last.At.AddSeconds(-PopupLeadSeconds) || (t - last.At).TotalSeconds > PanelSeconds) return false;
         if (!string.Equals(last.Item, r.Name, StringComparison.OrdinalIgnoreCase) || !DoublesOnCombo(r.Name)) return false;
         // a won roll already credited doubled Qty, so a count at or under it is old news; the combo makes exactly twice the yield
         if (count <= last.Qty || count != last.Qty * 2) return false;
