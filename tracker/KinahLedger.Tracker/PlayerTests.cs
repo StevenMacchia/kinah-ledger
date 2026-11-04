@@ -28,6 +28,16 @@ static class PlayerTests
             "Test Helm #100 ×1 80% combo 20% up 101@400,000 cost 20,000 profit 92,640 mats 2 vendor 1");
         Check("the card's profit per try is the site's", $"{CraftMath.ProfitPerTry(0.8, 0.2, 100_000, 400_000, 20_000, 0.88):N0}", "92,640");
         Check("no upgrade price: a combo is worth the normal result", $"{CraftMath.ProfitPerTry(0.95, 0.25, 30_000, null, 18_000, 0.88):N0}", $"{0.95 * 0.88 * 30_000 - 18_000:N0}");
+        // the shared craft math: a recipe whose combo makes two, at a price list; the chance counted when the book lacks one
+        var ingot = new RecipeBook.Recipe("Test Ingot", "Alchemy", "Test Ingot", 10, new(), null, null, new()) { ComboChance = 0.3 };
+        var judged = CraftMath.Judge(ingot, _ => 1_000, 5_000, 0.8, 0.88);
+        Check("judged: a combo that makes two, profit and break-even", $"{Math.Round(judged!.Profit):N0} {judged.Doubles} {judged.Combo:P0} {Math.Round(judged.BreakEven ?? 0)}", "4,152 True 30% 546");
+        Check("judged: no price for the output, no verdict", $"{CraftMath.Judge(ingot, _ => null, 5_000, 0.8, 0.88) == null}", "True");
+        Check("success chance: listed", $"{CraftMath.SuccessUsed(0.73, 5, 2)}", "(0.73, Listed)");
+        Check("success chance: listed, 20 crafts at the same rate", $"{CraftMath.SuccessUsed(0.75, 20, 15)}", "(0.75, Listed)");
+        Check("success chance: listed, 20 crafts at another rate: yours", $"{CraftMath.SuccessUsed(0.73, 20, 13)}", "(0.65, Yours)");
+        Check("success chance: unlisted, 9 crafts: unknown, counted as 1", $"{CraftMath.SuccessUsed(null, 9, 9)}", "(1, Unknown)");
+        Check("success chance: unlisted, 10 crafts: measured", $"{CraftMath.SuccessUsed(null, 10, 7)}", "(0.7, Observed)");
         Check("vendor cost not typed yet: profit as the site has it", $"{CraftMath.WithVendor(c, _ => null)}", "(92640, 1)");
         Check("a typed vendor cost comes off the profit", $"{CraftMath.WithVendor(c, id => id == 300 ? 2_640 : null)}", "(90000, 0)");
         // a row the site already priced the vendor material in (the API knows the NPC prices now): not charged twice

@@ -173,6 +173,25 @@ public static class CraftMath
     public static double ProfitPerTry(double success, double combo, double normal, double? upgrade, double cost, double keeps)
         => success * keeps * ((1 - combo) * normal + combo * (upgrade ?? normal)) - cost;
 
+    /// <summary>Where the success chance a card or the HUD counts with came from.</summary>
+    public enum RateKind { Listed, Yours, Observed, Unknown }
+
+    /// <summary>Crafts before a measured success rate stands in for a missing listed one, and before it overrules a listed one.</summary>
+    public const int ObservedFrom = 10, YoursFrom = 20;
+
+    /// <summary>
+    /// The success chance to count with, never assumed 100% as a fact. The listed chance, unless the player has at least
+    /// <see cref="YoursFrom"/> crafts and their own rate differs from it (then theirs). With no listed chance, the measured rate
+    /// from <see cref="ObservedFrom"/> crafts; with fewer the chance is unknown and is counted as 100% only as an upper bound.
+    /// </summary>
+    public static (double Rate, RateKind Kind) SuccessUsed(double? listed, int attempts, int ok)
+    {
+        double? mine = attempts > 0 ? (double)ok / attempts : null;
+        if (listed is double l)
+            return attempts >= YoursFrom && mine is double m && Math.Round(m * 100) != Math.Round(l * 100) ? (m, RateKind.Yours) : (l, RateKind.Listed);
+        return attempts >= ObservedFrom && mine is double o ? (o, RateKind.Observed) : (1, RateKind.Unknown);
+    }
+
     /// <summary>
     /// How often a craft that worked turns into this upgrade: the combo's chance times the chance the combo then succeeds
     /// (the site's best crafts use the same). Null when the recipe doesn't list one.

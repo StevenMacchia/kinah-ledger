@@ -153,7 +153,8 @@ public partial class MainWindow
         {
             body.Children.Add(CkSection("THIS SESSION"));
             double sessRate = (double)mine.Ok / mine.Attempts;
-            body.Children.Add(CkKv($"{mine.Attempts} craft{(mine.Attempts == 1 ? "" : "s")} · {mine.Ok} worked · {mine.Fail} failed", $"{sessRate:P0}", sessRate >= 0.5 ? CkGood : CkBad));
+            body.Children.Add(CkKv($"{mine.Attempts} craft{(mine.Attempts == 1 ? "" : "s")} · {mine.Ok} worked · {mine.Fail} failed", $"{sessRate:P0}", mine.Attempts < CraftMath.ObservedFrom ? CkInk : sessRate >= (recipe.SuccessRate ?? 0) ? CkGood : CkBad,
+                recipe.SuccessRate is double lr ? $"listed {lr:P0}" : ""));
             // the upgrade rolls the crafting panel showed after a craft worked
             if (mine.Upgraded + mine.NotUpgraded > 0) body.Children.Add(CkKv($"{(Session.CraftLedger.DoublesOnCombo(mine.Name) ? "Combo rolls (×2)" : "Upgrade rolls")} · {mine.Upgraded} won · {mine.NotUpgraded} lost", $"{mine.Upgraded}/{mine.Upgraded + mine.NotUpgraded}", mine.Upgraded > 0 ? CkGood : CkMuted));
             if (mine.Made.Count > 0)
@@ -199,15 +200,25 @@ public partial class MainWindow
 
         // the verdict, in the top band: profit per craft at the success chance (the same sum as the site's best crafts: CraftMath),
         // then profit an hour and the break-even price; the materials-for-sale line closes the card
-        double rate = recipe.SuccessRate ?? (mine is { Attempts: > 0 } ? (double)mine.Ok / mine.Attempts : 1);
+        var (rate, kind) = CraftMath.SuccessUsed(recipe.SuccessRate, mine?.Attempts ?? 0, mine?.Ok ?? 0);
         if (unpriced == 0 && CraftMath.Judge(recipe, Price, total, rate, PriceBook.SellerKeeps) is { } v)
         {
             double per = v.Profit;
-            top.Children.Add(CraftVerdictBand("Profit per craft", $"at {rate:P0} success{(v.Combo > 0 ? (v.Doubles ? $" · {v.Combo:P0} combo ×2" : $" · {v.Combo:P0} upgrade chance") : "")} · {PriceBook.Fee}", per));
+            // the chance counted: the listed one, the player's own once it differs over 20 crafts, or measured; unknown is an upper bound
+            string chance = kind switch
+            {
+                CraftMath.RateKind.Yours => $"{recipe.SuccessRate:P0} listed · {rate:P0} yours",
+                CraftMath.RateKind.Observed => $"at {rate:P0} success, from {mine!.Attempts} crafts",
+                CraftMath.RateKind.Unknown => "success chance unknown",
+                _ => $"at {rate:P0} success",
+            };
+            top.Children.Add(CraftVerdictBand(kind == CraftMath.RateKind.Unknown ? "Profit per craft, at most" : "Profit per craft",
+                $"{chance}{(v.Combo > 0 ? (v.Doubles ? $" · {v.Combo:P0} combo ×2" : $" · {v.Combo:P0} upgrade chance") : "")} · {PriceBook.Fee}", per, upTo: kind == CraftMath.RateKind.Unknown));
+            if (v.UpgradeUnpriced) top.Children.Add(CkNote($"{recipe.Upgrade?.Item ?? "The upgrade"} has no price: upgrade unpriced, counted as the base item."));
             if (mine is { Attempts: >= 3 } && CraftsPerHour() is double cph)
-                top.Children.Add(CkKv("Profit per hour", Signed(per * cph), per >= 0 ? CkGood : CkBad, $"{cph:0.#} crafts an hour this session", rightSize: 15));
+                top.Children.Add(CkKv(kind == CraftMath.RateKind.Unknown ? "Profit per hour, at most" : "Profit per hour", (kind == CraftMath.RateKind.Unknown ? "up to " : "") + Signed(per * cph), per >= 0 ? CkGood : CkBad, $"{cph:0.#} crafts an hour this session", rightSize: 15));
             if (v.BreakEven is double be)
-                top.Children.Add(CkKv("Break-even sell price", Amounts.Short(be), CkGold, "each, at this success chance and yield"));
+                top.Children.Add(CkKv("Break-even sell price", Amounts.Short(be), CkGold, kind == CraftMath.RateKind.Unknown ? "each, if every craft worked (a floor)" : "each, at this success chance and yield"));
             top.Children.Add(new Border { Height = 4 });
             SellTheMats(body, farmed, per);
         }
@@ -250,7 +261,7 @@ public partial class MainWindow
     }
 
     /// <summary>The card's verdict under the recipe name: the label with its detail under it, and the profit per craft big, green or red.</summary>
-    static Border CraftVerdictBand(string label, string sub, double per)
+    static Border CraftVerdictBand(string label, string sub, double per, bool upTo = false)
     {
         bool good = per >= 0;
         var g = new Grid();
@@ -259,7 +270,7 @@ public partial class MainWindow
         l.Children.Add(CkText(label, CkMuted, 13.5));
         if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 11.5));
         g.Children.Add(l);
-        var v = CkText(Signed(per), good ? CkGood : CkBad, 26, FontWeights.SemiBold, display: true); Grid.SetColumn(v, 1); g.Children.Add(v);
+        var v = CkText((upTo ? "up to " : "") + Signed(per), good ? CkGood : CkBad, 26, FontWeights.SemiBold, display: true); Grid.SetColumn(v, 1); g.Children.Add(v);
         v.ToolTip = (per >= 0 ? "+" : "−") + Amounts.Full(Math.Abs(per)) + " a craft";
         var tint = good ? Color.FromRgb(0x0F, 0x1E, 0x16) : Color.FromRgb(0x1A, 0x0F, 0x12);
         return new Border
