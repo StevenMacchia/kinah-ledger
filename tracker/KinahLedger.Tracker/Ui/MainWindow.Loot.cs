@@ -227,7 +227,7 @@ public partial class MainWindow
             body.Children.Add(CkSection("SOUL CRYSTALS"));
             foreach (var p in pets.Take(6)) body.Children.Add(CkKv(p.Name, p.Drops, CkInk));
             if (pets.Count > 6) body.Children.Add(CkNote($"and {pets.Count - 6} more"));
-            body.Children.Add(TodayFooter("Picked up " + where, crystals.ToString("N0")));
+            body.Children.Add(TodayFooter("Picked up " + where, Fk(crystals), tip: Amounts.Full(crystals)));
             return card;
         });
         return tile;

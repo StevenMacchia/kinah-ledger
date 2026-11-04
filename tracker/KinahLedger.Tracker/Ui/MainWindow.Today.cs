@@ -274,18 +274,19 @@ public partial class MainWindow
             foreach (var (w, n) in where.Take(6)) body.Children.Add(CkKv(w, Fk(n), CkInk));
             if (where.Count > 6) body.Children.Add(CkNote($"and {where.Count - 6} more"));
         }
-        body.Children.Add(TodayFooter(foot, kinah.ToString("N0")));
+        body.Children.Add(TodayFooter(foot, Fk(kinah), tip: Amounts.Full(kinah)));
         return card;
     }
 
     /// <summary>The card's tinted footer in the heading gold: a label and a figure.</summary>
-    static Border TodayFooter(string label, string value, bool muted = false)
+    static Border TodayFooter(string label, string value, bool muted = false, string? tip = null)
     {
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.Children.Add(CkText(label, CkMuted, 13));
         var v = CkText(value, muted ? CkFaint : CkGold, muted ? 13 : 18, FontWeights.SemiBold, mono: !muted); v.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(v, 1); g.Children.Add(v);
+        if (tip != null) v.ToolTip = tip;
         return new Border
         {
             Child = g, Margin = new Thickness(0, 14, 0, 0), Padding = new Thickness(20, 11, 20, 12), BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Ck(CkGoldRule, 0x50),

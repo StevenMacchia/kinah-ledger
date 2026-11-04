@@ -315,7 +315,7 @@ public partial class MainWindow
         bool warm = _rateWarming && total > 0;
         HeadRate.Opacity = warm ? 0.4 : 1;
         if (warm) HeadRateLbl.Text += " · warming up";
-        HeadRate.ToolTip = warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted." : null;
+        HeadRate.ToolTip = warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted." : total > 0 ? Amounts.Full(total / h) + " an hour" : null;
         // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
         // none while warming up, so the line doesn't open on a spike
         // a clear that can still be undone draws no line and keeps the real one's samples for Undo
@@ -338,11 +338,7 @@ public partial class MainWindow
         FillHealth(HealthText, HealthMark, hideOk: true);
     }
 
-    static string AgoMinutes(DateTime minuteUtc)
-    {
-        int m = (int)Math.Round((DateTime.UtcNow - minuteUtc).TotalMinutes);
-        return m < 1 ? "a minute ago" : m < 60 ? $"{m} min ago" : $"{m / 60} h {m % 60} min ago";
-    }
+    static string AgoMinutes(DateTime minuteUtc) => TodayLoot.Dur((DateTime.UtcNow - minuteUtc).TotalSeconds) + " ago";
 
     void DrawRateLine(RateLine line, string from, string to)
     {

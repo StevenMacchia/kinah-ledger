@@ -550,7 +550,7 @@ public partial class MainWindow
         // the inventory row, nine slots at most: the Kinah, the most valuable materials (five at most), the best gear, then
         // whatever is left (more materials, the currencies)
         var pick = new List<FrameworkElement>();
-        if (kinah > 0) pick.Add(WithBadge(CoinTile(46), CountBadge(kinah), $"Kinah: {kinah:N0}"));
+        if (kinah > 0) pick.Add(WithBadge(CoinTile(46), CountBadge(kinah), $"Kinah: {Fk(kinah)} ({Amounts.Full(kinah)})"));
         var matSlots = mats.OrderByDescending(x => x.Value.Value).ThenByDescending(x => x.Value.Count)
             .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value.Count)), _items.NameOf(x.Key) + (x.Value.Value > 0 ? $": {Fk(x.Value.Value)} {PriceBook.Cut}" : ""))).ToList();
         var gearSlots = gear.OrderByDescending(x => GradeRank(_items.Get(x.Key)?.Grade ?? "")).ThenByDescending(x => x.Value)
