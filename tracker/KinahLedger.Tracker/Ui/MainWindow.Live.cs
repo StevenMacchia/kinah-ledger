@@ -171,6 +171,7 @@ public partial class MainWindow
                 var enemy = l.Enemy.Length > 0 ? l.Enemy : _watcher.Chat?.Engine.CreditedTo(l.At, l.Amount) ?? "";
                 return ($"{l.Amount:N0} Kinah", "", l.Tab == FeedTab.Events ? "in the run" : enemy);
             }
+            case "craft" when l.Combo: return (l.Name.Length > 0 ? l.Name : "A craft", "", l.Ok ? ComboWon(l.Name) : "combo lost");
             case "craft": return (l.Name.Length > 0 ? l.Name : "A craft", CraftMakes(l) is int m && m > 1 && l.Ok ? $" ×{m}" : "", l.Ok ? "worked" : "failed");
             case "step": return (l.Name, "", l.Enemy);
             case "flag": return (l.Name, "", "");
@@ -281,9 +282,27 @@ public partial class MainWindow
     /// ceiling, "≤ +38K" in grey, as the This session table says it (Steven, 2026-10-25: the newest Fine Hard Balaur Horn
     /// line was blank while the table showed "≤ +269K"). Blank only when what came out, or every material, has no price.
     /// </summary>
+    /// <summary>The faint word after a won combo roll: what it made of the craft before it ("combo ×2", "combo: Splendent Orichalcum Longsword").</summary>
+    static string ComboWon(string recipe) => CraftLedger.ComboOf(recipe) switch
+    {
+        RecipeBook.ComboMakes.Double => "combo ×2",
+        RecipeBook.ComboMakes.Upgrade => "combo: " + RecipeBook.ForOutput(recipe)!.Upgrade!.Item,
+        _ => "combo won",
+    };
+
     (string Text, bool Muted) CraftValue(FeedLine l)
     {
         if (l.Name.Length < 2) return ("", true);
+        if (l.Combo)
+        {
+            // a roll costs nothing; a won one is worth what it added to the craft before it (a second output, or the upgrade over the base item)
+            if (!l.Ok || RecipeBook.ForOutput(l.Name) is not { } rb) return ("", true);
+            int per = Math.Max(1, rb.OutputQty);
+            if (rb.Combo == RecipeBook.ComboMakes.Double) return PriceBook.Price(l.Name) is long dp ? (FeedK(dp * per * PriceBook.SellerKeeps), false) : ("", true);
+            if (rb.Combo == RecipeBook.ComboMakes.Upgrade && rb.Upgrade is { } ug && PriceBook.Price(ug.Item) is long gp)
+                return (FeedK((gp * ug.Qty - (PriceBook.Price(l.Name) ?? 0) * per) * PriceBook.SellerKeeps), false);
+            return ("", true);
+        }
         var cost = RecipeBook.CostPerTry(l.Name, l.Makes, out int unpriced, out int vendor, out _, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         if (cost == null) return ("", true);
         bool floor = unpriced + vendor > 0;

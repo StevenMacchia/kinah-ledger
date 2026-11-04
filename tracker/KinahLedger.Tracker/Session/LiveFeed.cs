@@ -16,12 +16,14 @@ public enum FeedTab { Farming, Crafting, Events }
 /// <param name="Ok">For a craft: it worked.</param>
 /// <param name="Via">How it was read (GameEvent.Via): "chat", "loot list", "reward table", "crafting panel".</param>
 /// <param name="Where">The activity it landed in (Activity.Label): "Farming · Western Cantas Valley", "Expedition · Urugugu Canyon".</param>
-public sealed record FeedLine(DateTime At, FeedTab Tab, string Kind, string Name, long Amount, string Enemy = "", bool Ok = true, string Via = "", string Where = "", long ItemId = 0, bool Bound = false, int Makes = 0)
+/// <param name="Combo">For a craft: the line is the combo roll after a craft (won when Ok), not a craft of its own.</param>
+public sealed record FeedLine(DateTime At, FeedTab Tab, string Kind, string Name, long Amount, string Enemy = "", bool Ok = true, string Via = "", string Where = "", long ItemId = 0, bool Bound = false, int Makes = 0, bool Combo = false)
 {
     /// <summary>The line in plain words, as a miscount report files it: "1,192 Kinah · Cantas Raider", "Spiritstone ×1", "Orichalcum Greaves failed".</summary>
     public string Text => Kind switch
     {
         "kinah" => $"{Amount:N0} Kinah" + (Enemy.Length > 0 ? $" · {Enemy}" : ""),
+        "craft" when Combo => $"{(Name.Length > 0 ? Name : "A craft")} combo {(Ok ? "won" : "lost")}",
         "craft" => $"{(Name.Length > 0 ? Name : "A craft")}{(Ok && Makes > 1 ? $" ×{Makes}" : "")} {(Ok ? "worked" : "failed")}",
         _ => $"{Name} ×{Amount:N0}" + (Bound ? " (bound)" : ""),
     };

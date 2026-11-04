@@ -10,6 +10,8 @@ namespace KinahLedger.Data;
 public static class RecipeBook
 {
     public sealed record Material(string Item, int Qty);
+    /// <summary>What a won combo makes of a craft (<see cref="Recipe.Combo"/>).</summary>
+    public enum ComboMakes { Upgrade, Double, Unknown }
     public sealed record Great(string Item, int Qty, double? Chance);
     public sealed record Recipe(string Name, string Skill, string Output, int OutputQty, List<Material> Materials, long? Kinah, double? SuccessRate, List<Great> GreatOutcomes)
     {
@@ -41,10 +43,19 @@ public static class RecipeBook
         }
 
         /// <summary>
-        /// A won combo makes the craft twice over, as the Cooking window shows it ("x2 COMBO", 2026-11-03: an Artisan's Steamed
-        /// Cypri combo made 2 and was counted as 1): every recipe whose combo has no upgrade item (dishes, potions, serums, stones).
+        /// What a won combo makes of this craft: the upgrade item the book names (gear), the craft twice over as the Cooking
+        /// window shows it ("x2 COMBO", 2026-11-03: an Artisan's Steamed Cypri combo made 2 and was counted as 1) for every
+        /// dish, potion, serum, stone, powder and material, or nothing the book can say: gear it has no upgrade for (the
+        /// Chaser, Dawn, Liberator and Pilgrim bracelets, the Splendent Dragon Lord pieces), which a won combo must not double.
         /// </summary>
-        public bool DoublesOnCombo => Upgrade == null;
+        public ComboMakes Combo => Upgrade != null ? ComboMakes.Upgrade : IsGear ? ComboMakes.Unknown : ComboMakes.Double;
+
+        /// <summary>A won combo makes the craft twice over (<see cref="Combo"/>).</summary>
+        public bool DoublesOnCombo => Combo == ComboMakes.Double;
+
+        /// <summary>Equipment, by its name: a Splendent piece or one of the gear words it ends with. What a combo makes of gear is never "two of it".</summary>
+        public bool IsGear => Output.Contains("Splendent", StringComparison.OrdinalIgnoreCase) || GearWords.Any(w => Output.EndsWith(" " + w, StringComparison.OrdinalIgnoreCase));
+        static readonly string[] GearWords = { "Bow", "Bracelet", "Earrings", "Necklace", "Ring", "Staff", "Dagger", "Greatsword", "Guard", "Longsword", "Mace", "Boots", "Breastplate", "Cloak", "Gloves", "Greaves", "Helm", "Pauldrons", "Orb", "Spellbook", "Shield", "Tome", "Harp", "Pistol", "Cannon", "Polearm", "Leggings", "Shoes", "Jacket", "Belt", "Plume", "Wings", "Sword", "Hammer", "Scythe" };
     }
 
     /// <summary>The player's faction ('E' or 'A', from the chosen server), so a recipe's materials are the ones they craft with.</summary>
