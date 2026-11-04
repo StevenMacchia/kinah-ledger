@@ -22,7 +22,8 @@ public static class PriceBook
     public enum From { None, Market, Server, Region, Typed, Sold, Feed }
 
     /// <summary>One price as shown: the figure, where it is from, how many readings back it, whether it counts, when it was seen.</summary>
-    public sealed record Quote(long Price, From From, int Readings, bool Sure, DateTime? At)
+    /// <param name="Note">Said first by <see cref="Describe"/> when something is worth telling: a typed price that lost to the board.</param>
+    public sealed record Quote(long Price, From From, int Readings, bool Sure, DateTime? At, string? Note = null)
     {
         public bool Mine => From is From.Market or From.Typed;
     }
@@ -52,7 +53,25 @@ public static class PriceBook
     /// <summary>Readings a price needs to count in totals and profit; an ask this many times the other servers' middle is dropped.</summary>
     public const int SureReadings = 2;
     public const double OutlierX = 3;
+    /// <summary>A board price last seen longer ago than this is unsure (2026-11-03: a price weeks old stood as sure); over <see cref="OldAfter"/> it is shown dimmed as old.</summary>
+    public static readonly TimeSpan BoardMaxAge = TimeSpan.FromHours(72);
+    public static readonly TimeSpan OldAfter = TimeSpan.FromHours(24);
+    /// <summary>A typed price older than this gives way to a sure board price (2026-11-03: a typed price had no age limit).</summary>
+    public static readonly TimeSpan TypedFor = TimeSpan.FromDays(7);
+    /// <summary>When the other servers' boards were fetched: the age of a region price.</summary>
+    static DateTime? _regionAt;
     public static DateTime? BoardAt { get; private set; }
+    static ItemDictionary? _items;
+    static bool _purgeLogged;
+    /// <summary>
+    /// The item list a Market read is checked against (set when the Market reader starts). With none, reads are not checked
+    /// (tests). Setting it also drops the stored reads that are not items (2026-11-03: 87 keys, "dawn legion", "t the party").
+    /// </summary>
+    public static ItemDictionary? Items
+    {
+        get => _items;
+        set { lock (Lock) { _items = value; if (_local != null) PurgeUnknown(_local); } }
+    }
     public static int BoardItems { get { lock (Lock) return _board.Count; } }
     /// <summary>Tests point this elsewhere so the player's own file is never touched.</summary>
     public static string? PathOverride { get; set; }
@@ -74,21 +93,35 @@ public static class PriceBook
             // the player's own: the newer of what they typed and what this PC read (a read lasts a day, a typed price until replaced)
             Seen? read = Local().TryGetValue(k, out var s) && DateTime.UtcNow - s.at <= LocalFor ? s : null;
             Seen? typed = Typed().TryGetValue(k, out var t) ? t : null;
-            if (typed != null && (read == null || typed.at >= read.at)) return new Quote(typed.price, From.Typed, 1, true, typed.at);
-            if (read != null) return new Quote(read.price, From.Market, 1, true, read.at);
-            var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
-            // 2026-11-03: Siel's Artisan's Steamed Cypri at 44,994 (57 listings) was thrown out as 3x a 14,000 region middle
-            // that two lone asks had pulled down, and the card said 12.3K. The site's pick was already judged against the
-            // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask.
-            if (_board.TryGetValue(k, out var b) && !(reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price))
+            if (typed != null && (read == null || typed.at >= read.at))
             {
-                // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure
-                if (b.Sure || reg == null) return new Quote(b.Price, b.From, b.Readings, b.Sure, b.At);
+                var typedQuote = new Quote(typed.price, From.Typed, 1, true, typed.at);
+                // a week-old typed price gives way to a sure board price; with none, it stands
+                if (DateTime.UtcNow - typed.at <= TypedFor || SharedQuote(k) is not { Sure: true, From: From.Server or From.Sold or From.Feed } board) return typedQuote;
+                return board with { Note = $"you typed {typed.price:N0} on {typed.at.ToLocalTime():yyyy-MM-dd}; the board says {board.Price:N0}" };
             }
-            if (reg is { } rr) return new Quote(rr.Price, From.Region, rr.Servers, true, null);
-            if (_region.TryGetValue(k, out var one)) return new Quote(one.Price, From.Region, one.Servers, false, null);
-            return null;
+            if (read != null) return new Quote(read.price, From.Market, 1, true, read.at);
+            return SharedQuote(k);
         }
+    }
+
+    /// <summary>The best price that is not the player's own: the board's, else the other servers' middle; null when there is none. Call with the lock held.</summary>
+    static Quote? SharedQuote(string k)
+    {
+        var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
+        // 2026-11-03: Siel's Artisan's Steamed Cypri at 44,994 (57 listings) was thrown out as 3x a 14,000 region middle
+        // that two lone asks had pulled down, and the card said 12.3K. The site's pick was already judged against the
+        // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask.
+        if (_board.TryGetValue(k, out var b) && !(reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price))
+        {
+            // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure.
+            // One last seen over 72 h ago is unsure however many readings it had.
+            bool sure = b.Sure && !(b.At is DateTime seenAt && DateTime.UtcNow - seenAt > BoardMaxAge);
+            if (sure || reg == null) return new Quote(b.Price, b.From, b.Readings, sure, b.At);
+        }
+        if (reg is { } rr) return new Quote(rr.Price, From.Region, rr.Servers, true, _regionAt);
+        if (_region.TryGetValue(k, out var one)) return new Quote(one.Price, From.Region, one.Servers, false, _regionAt);
+        return null;
     }
 
     /// <summary>Where an item's price comes from (what <see cref="QuoteOf"/> would give), or None.</summary>
@@ -107,6 +140,7 @@ public static class PriceBook
     public static string Describe(Quote q, DateTime? now = null, bool withAge = true)
     {
         var parts = new List<string>();
+        if (q.Note != null) parts.Add(q.Note);
         switch (q.From)
         {
             case From.Typed: parts.Add("you typed it"); break;
@@ -116,10 +150,18 @@ public static class PriceBook
             case From.Feed: parts.Add(q.Readings == 1 ? "aion2.exchange · 1 listing" : $"aion2.exchange · lowest of {q.Readings} listings"); break;
             case From.Region: parts.Add(q.Readings == 1 ? "another server's price" : $"other servers' middle · {q.Readings} servers"); break;
         }
-        if (withAge && q.At is DateTime at) parts.Add(Ago(at, now ?? DateTime.UtcNow));
+        if (withAge)
+        {
+            // a board price the site gave no time for (a sold average, an older board) is as old as the last check of the board
+            if (q.At is DateTime at) parts.Add(Ago(at, now ?? DateTime.UtcNow));
+            else if (q.From is From.Server or From.Sold or From.Feed && BoardAt is DateTime bat) parts.Add("board checked " + Ago(bat, now ?? DateTime.UtcNow));
+        }
         if (!q.Sure) parts.Add("unsure");
         return string.Join(" · ", parts);
     }
+
+    /// <summary>True when a price was last seen over a day ago (<see cref="OldAfter"/>); one with no time of its own is not judged.</summary>
+    public static bool IsOld(Quote q, DateTime? now = null) => q.At is DateTime at && (now ?? DateTime.UtcNow) - at > OldAfter;
 
     /// <summary>"just now", "12 min ago", "3 h ago", "2 days ago".</summary>
     public static string Ago(DateTime at, DateTime now)
@@ -143,7 +185,7 @@ public static class PriceBook
                 if (p > 0) { var k = Norm(name); if (!all.TryGetValue(k, out var l)) all[k] = l = new(); l.Add(p); }
         // the lower middle for an even count, so one joke ask never lifts it (as the site's regionMiddles)
         var med = all.ToDictionary(kv => kv.Key, kv => { var l = kv.Value; l.Sort(); return (l[(l.Count - 1) / 2], l.Count); });
-        lock (Lock) _region = med;
+        lock (Lock) { _region = med; _regionAt = DateTime.UtcNow; }
     }
 
     /// <summary>An ask read on the Market: kept when it is the lowest of the last day for that item.</summary>
@@ -153,6 +195,17 @@ public static class PriceBook
         var k = Norm(name);
         lock (Lock)
         {
+            if (_items != null && _items.Find(name) == null)
+            {
+                CrashLog.Note($"Market read refused: \"{name}\" at {unitPrice:N0} is not an item in the list.");
+                return;
+            }
+            long? refPrice = _board.TryGetValue(k, out var bq) ? bq.Price : _region.TryGetValue(k, out var rq) ? rq.Price : null;
+            if (refPrice is long rp && rp > 0 && (unitPrice * 10 < rp || unitPrice > OutlierX * rp))
+            {
+                CrashLog.Note($"Market read refused: {name} at {unitPrice:N0} is out of range of {rp:N0} on the board.");
+                return;
+            }
             var local = Local();
             if (local.TryGetValue(k, out var s) && at - s.at <= LocalFor && s.price <= unitPrice) return;
             local[k] = new Seen(unitPrice, at);
@@ -334,7 +387,24 @@ public static class PriceBook
     static string TypedPath => Path.Combine(Dir, "typed-prices.json");
 
     /// <summary>The prices.json file: { "updated": "…", "prices": { "Orichalcum Ore": 1950 }, "seen": { "Orichalcum Ore": "…" } }.</summary>
-    static Dictionary<string, Seen> Local() => _local ??= Load(LocalPath, "prices");
+    static Dictionary<string, Seen> Local()
+    {
+        if (_local != null) return _local;
+        _local = Load(LocalPath, "prices");
+        PurgeUnknown(_local);
+        return _local;
+    }
+
+    /// <summary>Drops stored reads whose name is not an item in the list and saves; logged once with the count.</summary>
+    static void PurgeUnknown(Dictionary<string, Seen> d)
+    {
+        if (_items == null) return;
+        var bad = d.Keys.Where(k => _items.Find(k) == null).ToList();
+        if (bad.Count == 0) return;
+        foreach (var k in bad) d.Remove(k);
+        if (!_purgeLogged) { _purgeLogged = true; CrashLog.Note($"Prices: dropped {bad.Count} stored Market reads that are not items."); }
+        Save(d, LocalPath);
+    }
     /// <summary>typed-prices.json, the same shape: the prices the player typed on cards.</summary>
     static Dictionary<string, Seen> Typed() => _typed ??= Load(TypedPath, "typed prices");
 

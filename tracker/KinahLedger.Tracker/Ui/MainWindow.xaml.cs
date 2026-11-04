@@ -736,8 +736,9 @@ public partial class MainWindow : Window
 
     /// <param name="Value">What the tradeable items would sell for on the Market, after its cut; bound items can't be sold.</param>
     /// <param name="Priced">Tradeable items with a price; <paramref name="Unpriced"/> those without, left out of the value.</param>
+    /// <param name="Unsure">Items with only an unsure price (one listing, or too old): shown dimmed with "~", not in the value, and not counted as unpriced.</param>
     /// <param name="Gross">What the priced tradeable items sell for before the Market's fee and tax.</param>
-    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs, long Gross = 0, List<DropRow>? Pets = null, List<SkillBox>? Skills = null, int DropsUnpriced = 0);
+    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs, long Gross = 0, List<DropRow>? Pets = null, List<SkillBox>? Skills = null, int DropsUnpriced = 0, int Unsure = 0, int DropsUnsure = 0);
 
     /// <summary>A gathering skill's own box under the drops: its attempts, how many failed or came plentiful, the pace and what its items are worth.</summary>
     sealed record SkillBox(string Name, int Attempts, int Failed, int Plentiful, double PerHour, long Value);
@@ -754,7 +755,7 @@ public partial class MainWindow : Window
     /// </summary>
     Tables Build(SessionEngine e, double hours, int kills)
     {
-        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0, gross = 0; int priced = 0, unpriced = 0, dropsUnpriced = 0;
+        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0, gross = 0; int priced = 0, unpriced = 0, dropsUnpriced = 0, unsure = 0, dropsUnsure = 0;
         // the enemies fought in this view and their loot tables: odds count only kills of enemies that can drop the item
         var ms = e.MobSnapshot();
         _lastMobKinah = ms.Sum(m => (long)m.Kinah);
@@ -777,7 +778,14 @@ public partial class MainWindow : Window
             if (r.Count > 0)
             {
                 var price = PriceBook.Price(r.Name);
-                if (price != null) { long g0 = price.Value * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; rowValue = Amounts.Short(kept); worthN[r.Name] = g0; keptN[r.Name] = kept; } else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
+                if (price != null) { long g0 = price.Value * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; rowValue = Amounts.Short(kept); worthN[r.Name] = g0; keptN[r.Name] = kept; }
+                else if (PriceBook.QuoteOf(r.Name) is { Sure: false } uq)
+                {
+                    // a one-listing (or too old) price: shown, dimmed with a ~ (the Prices column dims it too), but in no total
+                    unsure++; if (GatheringCatalog.Find(r.Name) == null) dropsUnsure++;
+                    rowValue = "~" + Amounts.Short((long)Math.Round(uq.Price * r.Count * PriceBook.SellerKeeps));
+                }
+                else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
             }
             worth[r.Name] = rowValue;
             var g = GatheringCatalog.Find(r.Name);
@@ -887,7 +895,7 @@ public partial class MainWindow : Window
             if (!known && m.Drops.Count == 0 && m.Crystals == 0)
                 mobs.Add(new DropRow("No item drops yet", "", "", "", Sub: "only Kinah so far · its loot table isn't in the list yet", Child: true));
         }
-        return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross, petRows, skills, dropsUnpriced);
+        return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross, petRows, skills, dropsUnpriced, unsure, dropsUnsure);
     }
 
     /// <summary>Sections showing every row, by name ("Drops", "Gather", "Mob", "Pet"); the others show their top rows.</summary>
@@ -994,9 +1002,10 @@ public partial class MainWindow : Window
         _lastValue = s.Value; _lastPriced = s.Priced;
         long worthHr = (long)((s.Value + (_mode == Mode.Gather ? 0 : kinah)) / h);
         ValueHr.Text = s.Priced > 0 || (_mode != Mode.Gather && kinah > 0) ? Fk(worthHr) : "";
-        ValueTile.ToolTip = (s.Priced + s.Unpriced == 0 ? "No tradeable items yet."
+        ValueTile.ToolTip = (s.Priced + s.Unsure + s.Unpriced == 0 ? "No tradeable items yet."
                 : s.Priced == 0 ? "No Market price yet for any of these items. Open the Market in the game once: the prices you see there value your drops, and the site's price board fills in the rest."
-                : $"{s.Priced} of {s.Priced + s.Unpriced} tradeable items priced, at the lowest Market price, at {PriceBook.Fee}. Bound items can't be sold and aren't counted."
+                : $"{s.Priced} of {s.Priced + s.Unsure + s.Unpriced} tradeable items priced, at the lowest Market price, at {PriceBook.Fee}. Bound items can't be sold and aren't counted."
+                  + (s.Unsure > 0 ? $" {s.Unsure} {(s.Unsure == 1 ? "has" : "have")} a one-listing price (shown with ~), which is left out." : "")
                   + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
             + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
         // the card's head: what and how long ("Open world · 42 min"), in the one way the page writes time (2026-10-28: it was
@@ -1016,6 +1025,7 @@ public partial class MainWindow : Window
         var sums = new List<string>();
         if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
         if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); if (!PriceBook.ShowGross) sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
+        if (s.Unsure > 0) sums.Add($"{s.Unsure} item{(s.Unsure == 1 ? " has" : "s have")} a one-listing price, not counted.");
         if (s.Unpriced > 0) sums.Add($"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add{(s.Unpriced == 1 ? "s" : "")} nothing.");
         sums.Add($"Total, {PriceBook.Fee}: {totalNow:N0}.");
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
@@ -1370,7 +1380,8 @@ public partial class MainWindow : Window
         DropsMore.Visibility = plain.Count > TableRows || mats.Count > TableRows ? Visibility.Visible : Visibility.Collapsed;
         DropsMoreRun.Text = allDropsShown ? "Show fewer" : $"Show all {drops.Count}";
         int noPriceRows = pre?.DropsUnpriced ?? drops.Count(r => r.Value.Length == 0 && r.Worth == 0);
-        DropsNote.Text = drops.Count == 0 ? "" : $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")}" + (noPriceRows > 0 ? $" · {noPriceRows} {(noPriceRows == 1 ? "has" : "have")} no price yet" : "");
+        int unsureRows = pre?.DropsUnsure ?? drops.Count(r => r.Value.StartsWith('~'));
+        DropsNote.Text = drops.Count == 0 ? "" : $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")}" + (unsureRows > 0 ? $" · {unsureRows} {(unsureRows == 1 ? "has" : "have")} a one-listing price, not counted" : "") + (noPriceRows > 0 ? $" · {noPriceRows} {(noPriceRows == 1 ? "has" : "have")} no price yet" : "");
         TableEmpty.Visibility = drops.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the odds and how many come an hour." : "No drops yet.";
 

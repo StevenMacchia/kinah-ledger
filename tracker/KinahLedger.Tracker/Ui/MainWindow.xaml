@@ -98,6 +98,7 @@
         <DataTrigger Binding="{Binding Tip}" Value=""><Setter TargetName="RowBorder" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <DataTrigger Binding="{Binding PriceTip}" Value=""><Setter TargetName="ValueText" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <DataTrigger Binding="{Binding PriceTone}" Value="Unsure"><Setter TargetName="ValueText" Property="Opacity" Value="0.5"/></DataTrigger>
+        <DataTrigger Binding="{Binding PriceTone}" Value="Old"><Setter TargetName="ValueText" Property="Opacity" Value="0.7"/></DataTrigger>
         <!-- a drop no enemy you fought can drop, by their loot tables: the name says check -->
         <DataTrigger Binding="{Binding Tone}" Value="Warn"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource Warn}"/></DataTrigger>
         <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/><Setter TargetName="ReportLink" Property="Visibility" Value="Visible"/></Trigger>
@@ -220,6 +221,7 @@
         <DataTrigger Binding="{Binding Tip}" Value=""><Setter TargetName="RowBorder" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <DataTrigger Binding="{Binding PriceTip}" Value=""><Setter TargetName="SellsText" Property="ToolTip" Value="{x:Null}"/></DataTrigger>
         <DataTrigger Binding="{Binding PriceTone}" Value="Unsure"><Setter TargetName="SellsText" Property="Opacity" Value="0.5"/></DataTrigger>
+        <DataTrigger Binding="{Binding PriceTone}" Value="Old"><Setter TargetName="SellsText" Property="Opacity" Value="0.7"/></DataTrigger>
         <DataTrigger Binding="{Binding Tone}" Value="Bad"><Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Faint}"/></DataTrigger>
         <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True"><Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
         <DataTrigger Binding="{Binding Grade}" Value="Rare"><Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeRare}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#9962D98B"/></DataTrigger>

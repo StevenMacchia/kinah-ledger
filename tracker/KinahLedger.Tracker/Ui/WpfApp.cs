@@ -579,7 +579,7 @@ public static class WpfApp
                 new("Thick hide", "3", "", "", Worth: 0),
             };
             var tv = w.HudTopValues(rows);
-            Check(tv["top"] == "Shade Gloves" && tv["topCount"] == "×1" && tv["topWorth"] == "+28,000" && tv["topGrade"] == "Legend",
+            Check(tv["top"] == "Shade Gloves" && tv["topCount"] == "×1" && tv["topWorth"] == "+24,640" && tv["topGrade"] == "Legend",
                 $"top drop: {tv["top"]} {tv["topCount"]} {tv["topWorth"]} ({tv["topGrade"]})");
             Check(w.HudTopValues(new List<DropRow> { new("Thick hide", "3", "", "") })["top"] == "", "top drop: none before anything priced");
             // the panel's accuracy line ("23 to look at" read as an error): none with Show accuracy details off, the default
