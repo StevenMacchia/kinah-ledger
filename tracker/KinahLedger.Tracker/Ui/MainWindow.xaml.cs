@@ -1538,7 +1538,9 @@ public partial class MainWindow : Window
     void ServerRowState()
     {
         bool ok = HasServer;
-        ServerChip.Text = Server is { } s ? $"{s.Label} · {s.Region.Name}" : "No server chosen · pick one in Options";
+        // on the Welcome card Options is out of reach, so the way to a server is the card's own chips
+        ServerChip.Text = Server is { } s ? $"{s.Label} · {s.Region.Name}" : _welcome ? "No server chosen · pick yours below" : "No server chosen · pick one in Options";
+        ServerChip.ToolTip = _welcome ? "Pick your server below." : "Your server. Change it in Options.";
         ServerChip.Foreground = B(ok ? "Muted" : "Warn");
         if (!Farming) StartBtn.IsEnabled = ok;
     }
