@@ -28,7 +28,8 @@ public static class PriceBook
     }
 
     /// <summary>A board item as the site sends it (price-pick.ts on the site), plus the other servers' middle when it has one.</summary>
-    public sealed record BoardQuote(long Price, From From, int Readings, bool Sure, DateTime? At, long? Region = null, int RegionServers = 0);
+    /// <param name="Picked">The site's pick (price-pick.ts), already judged against the item's own level and the other servers: the tracker never second-guesses it.</param>
+    public sealed record BoardQuote(long Price, From From, int Readings, bool Sure, DateTime? At, long? Region = null, int RegionServers = 0, bool Picked = false);
 
     static readonly object Lock = new();
     static Dictionary<string, Seen>? _local, _typed;
@@ -76,7 +77,10 @@ public static class PriceBook
             if (typed != null && (read == null || typed.at >= read.at)) return new Quote(typed.price, From.Typed, 1, true, typed.at);
             if (read != null) return new Quote(read.price, From.Market, 1, true, read.at);
             var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
-            if (_board.TryGetValue(k, out var b) && !(reg is { } rg && b.Price > OutlierX * rg.Price))
+            // 2026-11-03: Siel's Artisan's Steamed Cypri at 44,994 (57 listings) was thrown out as 3x a 14,000 region middle
+            // that two lone asks had pulled down, and the card said 12.3K. The site's pick was already judged against the
+            // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask.
+            if (_board.TryGetValue(k, out var b) && !(reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price))
             {
                 // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure
                 if (b.Sure || reg == null) return new Quote(b.Price, b.From, b.Readings, b.Sure, b.At);
@@ -298,7 +302,7 @@ public static class PriceBook
                 if (Num(e, "price") is not long p || p <= 0) continue;
                 var from = pf.ValueKind == JsonValueKind.String ? pf.GetString() switch { "player" => From.Server, "sold" => From.Sold, _ => From.Feed } : From.Feed;
                 bool sure = e.TryGetProperty("sure", out var su) && su.ValueKind == JsonValueKind.True;
-                d[name] = new BoardQuote(p, from, (int)(Num(e, "readings") ?? 0), sure, Time(e, "price_seen_at"), region, regionN);
+                d[name] = new BoardQuote(p, from, (int)(Num(e, "readings") ?? 0), sure, Time(e, "price_seen_at"), region, regionN, Picked: true);
                 continue;
             }
             bool stale = e.TryGetProperty("stale", out var st) && st.ValueKind == JsonValueKind.True;
@@ -315,9 +319,12 @@ public static class PriceBook
         return d;
     }
 
-    /// <summary>A board's prices by name, sure or not: what the other servers' boards give the region middle (a lower middle, so one listing can't lift it).</summary>
-    public static Dictionary<string, long> ParseBoard(string json, ItemDictionary? items) =>
-        ParseQuotes(json, items).ToDictionary(kv => kv.Key, kv => kv.Value.Price);
+    /// <summary>
+    /// A board's prices by name. With <paramref name="sureOnly"/>, only the sure ones: what the other servers' boards give the
+    /// region middle (a lower middle, so one listing can't lift it; and no lone ask in it, so one can't sink it either).
+    /// </summary>
+    public static Dictionary<string, long> ParseBoard(string json, ItemDictionary? items, bool sureOnly = false) =>
+        ParseQuotes(json, items).Where(kv => !sureOnly || kv.Value.Sure).ToDictionary(kv => kv.Key, kv => kv.Value.Price);
 
     static long? Num(JsonElement e, string prop) => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var x) ? (long)Math.Round(x) : null;
     static DateTime? Time(JsonElement e, string prop) => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String && v.TryGetDateTime(out var t) ? t.ToUniversalTime() : null;

@@ -140,7 +140,9 @@ static class PlayerTests
             Check("the sword on the board: the lowest of 42 listings, sure", Q(sword) + " · " + PriceBook.Describe(PriceBook.QuoteOf(sword)!, now), "43,500 Feed sure · aion2.exchange · lowest of 42 listings · 40 min ago");
             Check("a lone listing is shown, unsure, and out of totals", $"{Q("Chaos Longsword")} · Price {PriceBook.Price("Chaos Longsword")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Chaos Longsword")!, now)}", "5,000,000 Feed unsure · Price null · aion2.exchange · 1 listing · unsure");
             Check("an older board's single listing is unsure too", Q("Old Board Item"), "777 Feed unsure");
-            Check("over 3x the other servers' middle: the region's ≈ price instead", Q("Artisan's Splendent Orichalcum Longsword"), "2,000,000 Region sure");
+            // the site's pick stands even far over the other servers' middle: it was judged against the region with every listing
+            // (2026-11-03: the tracker's cruder middle threw out Siel's Artisan's Steamed Cypri, 44,994 with 57 listings)
+            Check("the site's pick stands over the other servers' middle", Q("Artisan's Splendent Orichalcum Longsword"), "23,999,999 Feed sure");
             Check("the 330K was the recipe's cost per try, not the sword's price", $"cost/try {RecipeBook.CostPerTry(sword, out var unp):N0} ({unp} unpriced) · sword {PriceBook.Price(sword):N0}", "cost/try 450,274 (0 unpriced) · sword 43,500");
 
             // his Market read wins at once (read with sharing off too: only sending follows the switch)

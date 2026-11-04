@@ -3421,6 +3421,18 @@ options: --process aion[,other]");
             PriceBook.SetBoard(new() { ["Spiritstone"] = 7_000 });
             PriceBook.SetRegionBoards(new[] { new Dictionary<string, long> { ["Thick hide"] = 1_000, ["Spiritstone"] = 9_000 }, new Dictionary<string, long> { ["Thick hide"] = 1_400 }, new Dictionary<string, long> { ["Thick hide"] = 1_100 } });
             Check("server board first, the region's middle price second", $"{PriceBook.Price("Spiritstone")} {PriceBook.SourceOf("Spiritstone")} {PriceBook.Price("thick hide")} {PriceBook.SourceOf("Thick hide")} {PriceBook.SourceOf("Manastone")}", "7000 Server 1100 Region None");
+            {
+                // 2026-11-03: Siel's Artisan's Steamed Cypri, 44,994 with 57 listings, was dropped as 3x a region middle two lone
+                // asks (14,000 and 1,000) had sunk to 14,000, and the card said 12.3K. The site's pick stands (it was judged against
+                // the region already); an older board's lowest ask 3x the region still gives way; lone asks never make the middle
+                PriceBook.SetBoardQuotes(new() { ["Artisan's Steamed Cypri"] = new PriceBook.BoardQuote(44_994, PriceBook.From.Feed, 57, true, null, Picked: true), ["Odd Sword"] = new PriceBook.BoardQuote(45_000, PriceBook.From.Feed, 1, false, null) });
+                PriceBook.SetRegionBoards(new long[] { 1_000, 14_000, 14_000, 19_975, 26_000, 52_000 }.Select(p => new Dictionary<string, long> { ["Artisan's Steamed Cypri"] = p, ["Odd Sword"] = p }));
+                Check("the site's pick is never an outlier here; an older board's lone ask still is", $"{PriceBook.Price("Artisan's Steamed Cypri")} {PriceBook.SourceOf("Artisan's Steamed Cypri")} · {PriceBook.QuoteOf("Odd Sword")?.Price} {PriceBook.SourceOf("Odd Sword")}", "44994 Feed · 14000 Region");
+                var sure = PriceBook.ParseBoard("""{"items":[{"item":"Artisan's Steamed Cypri","price":14000,"price_from":"feed","readings":1,"sure":false},{"item":"Cypri","price":6499,"price_from":"feed","readings":23,"sure":true}]}""", null, sureOnly: true);
+                Check("the region middle takes only sure prices from a board", string.Join(",", sure.Select(kv => kv.Key + "=" + kv.Value)), "Cypri=6499");
+                PriceBook.SetBoard(new() { ["Spiritstone"] = 7_000 });
+                PriceBook.SetRegionBoards(new[] { new Dictionary<string, long> { ["Thick hide"] = 1_000, ["Spiritstone"] = 9_000 }, new Dictionary<string, long> { ["Thick hide"] = 1_400 }, new Dictionary<string, long> { ["Thick hide"] = 1_100 } });
+            }
 
             var t0 = DateTime.UtcNow;
             long hide = items.IdOf("Thick hide");
@@ -4597,7 +4609,23 @@ options: --process aion[,other]");
                 pe.Apply(new CraftResult(pt.AddSeconds(16), "Crafting failed.", false) { Via = "chat" });
                 var pr = pe.CraftSnapshot();
                 Check("crafting panel: tries, combo and output (the recipe's yield), the ore a drop", string.Join(" | ", pr.Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.Select(m => m.Key + " x" + m.Value))}")) + $" · drops {pe.Items.Count + pe.ItemsBound.Count}",
-                    "Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x2 · drops 1");
+                    "Life Serum (Bound) 2/2 up 1/1 made Life Serum (Bound) x3 · drops 1");
+                {
+                    // a won combo on a recipe with no upgrade item makes the craft twice over (Steven, 2026-11-03: an Artisan's Steamed
+                    // Cypri combo made 2, counted as 1); a lost one makes nothing more; a gear recipe's combo is still its upgrade
+                    var cx = new SessionEngine(items); var cx0 = DateTime.UtcNow;
+                    void Cook(string recipe, bool ok, bool combo, int s) { cx.CraftPanelSeen(recipe, cx0.AddSeconds(s)); cx.Apply(new CraftResult(cx0.AddSeconds(s), recipe, ok, Combo: combo) { Via = SessionEngine.CraftPanelVia, Makes = combo ? null : 1 }); }
+                    Cook("Artisan's Steamed Cypri", true, false, 0); Cook("Artisan's Steamed Cypri", true, true, 6);
+                    Cook("Artisan's Steamed Cypri", true, false, 14); Cook("Artisan's Steamed Cypri", false, true, 20);
+                    Cook("Artisan's Steamed Cypri", false, false, 28);
+                    Cook("Mana Potion", true, false, 40); Cook("Mana Potion", true, true, 46);
+                    Check("crafting: a won combo on a dish or potion makes two of it",
+                        string.Join(" | ", cx.CraftSnapshot().Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.OrderBy(m => m.Key, StringComparer.Ordinal).Select(m => m.Key + " x" + m.Value))}")),
+                        "Artisan's Steamed Cypri 2/3 up 1/2 made Artisan's Steamed Cypri x3 | Mana Potion 1/1 up 1/1 made Mana Potion x2");
+                    Check("recipe book: a combo's outcome by recipe", string.Join(" | ", new[] { "Artisan's Steamed Cypri", "Mana Potion", "Orichalcum Longsword", "Dark Dragon Lord Orb", "Splendent Dark Dragon Lord Orb" }
+                        .Select(n => $"{n}: {(RecipeBook.ForOutput(n)?.Upgrade?.Item ?? (Session.CraftLedger.DoublesOnCombo(n) ? "x2" : "-"))}")),
+                        "Artisan's Steamed Cypri: x2 | Mana Potion: x2 | Orichalcum Longsword: Splendent Orichalcum Longsword | Dark Dragon Lord Orb: Splendent Dark Dragon Lord Orb | Splendent Dark Dragon Lord Orb: x2");
+                }
                 // 2026-10-25: a won upgrade roll (the blue combo race after a craft) makes the recipe's upgrade, not its base item;
                 // the loot list naming the upgrade right after a craft says the same when the blue race was missed. Neither is a drop.
                 var ue = new SessionEngine(items); var ut = DateTime.UtcNow;

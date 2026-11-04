@@ -1247,7 +1247,7 @@ public partial class MainWindow : Window
             var tip = "Click for the materials, what a try costs and what it makes."
                 + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
-                + (r.Upgraded + r.NotUpgraded > 0 ? $"\nUpgrade rolls: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
+                + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{(Session.CraftLedger.DoublesOnCombo(r.Name) ? "Combo rolls (each makes two)" : "Upgrade rolls")}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
                 + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "");
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Ok.ToString("N0"), spentCell,
                 Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
