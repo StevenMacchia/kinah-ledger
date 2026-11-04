@@ -2818,6 +2818,32 @@ options: --process aion[,other]");
             $"{runDp?.Label} · items {(runDp == null ? -1 : runDp.Items.Values.Sum() + runDp.BoundItems.Values.Sum())} · paid {runDp?.PaidAt != null} · {sdp.Instances.EventPaidWithin(dp0.AddSeconds(90), 20)}",
             "Defend Shugo Merchants (Shugo Festival) · items 0 · paid False · False");
         Check("...the screens that pay for something else", string.Join(" ", new[] { "Daevä Pass Level Reward", "Attendance Rewards", "Achievement Reward", "Quna Shop", "Victory Reward", "" }.Select(t => TrackerSession.NotTheRunsScreen(t) ? "y" : "n")), "y y y y n n");
+        {
+            // the Daeva Pass level reward opened inside an expedition (2026-11-04 11:25:00, Ferocious Horn Den): its "Reward
+            // collected." table of two Odyle Energy slots was read as the run's, the run closed, a phantom run opened, the Odyle
+            // filed as its loot. With the title read, the table is the pass's; with the title missed, Odyle Energy on a small
+            // table says the same
+            var pt0 = new DateTime(2026, 11, 4, 16, 17, 51, DateTimeKind.Utc);
+            var pbox = new System.Drawing.Rectangle(0, 0, 10, 10);
+            var ode = new List<RewardGrid.Slot>
+            {
+                new(pbox, "Special", "1", 1, new() { ("Icon_Item_Odenergy_A_002", 69.0), ("Other", 98.0) }),
+                new(pbox, "Special", "1", 1, new() { ("Icon_Item_Odenergy_A_001", 66.0), ("Other", 97.0) }),
+            };
+            // the runs closed or with loot, and whether the open one was paid: a refused table changes none of it
+            static string RunsOf(TrackerSession s) => $"{s.Instances.Snapshot().Count} run(s) closed or with loot · open {s.Instances.CurrentRun?.Label ?? "none"} · paid {s.Instances.CurrentRun?.PaidAt != null}";
+            var pt = new TrackerSession(null, new Settings(), items, "Test");
+            pt.Engine.SetZone("Ferocious Horn Den"); pt.Instances.Zone("Ferocious Horn Den", pt0);
+            var ptBefore = RunsOf(pt);
+            pt.Target.MarkReward(pt0.AddSeconds(30), "Daeva Pass Level Reward");
+            pt.ApplyGrid(ode, pt0.AddSeconds(31));
+            Check("a Daeva Pass level reward's table inside an expedition is the pass's: the run goes on unpaid, no phantom run", $"{pt.OtherRewardScreenUp(pt0.AddSeconds(31))} · {(RunsOf(pt) == ptBefore ? "unchanged" : RunsOf(pt))} · {ptBefore}", "True · unchanged · 1 run(s) closed or with loot · open Ferocious Horn Den · paid False");
+            var pu = new TrackerSession(null, new Settings(), items, "Test");
+            pu.Engine.SetZone("Ferocious Horn Den"); pu.Instances.Zone("Ferocious Horn Den", pt0);
+            var puBefore = RunsOf(pu);
+            pu.ApplyGrid(ode, pt0.AddSeconds(31));
+            Check("...and with its title missed, Odyle Energy on a small table says the same", RunsOf(pu) == puBefore ? "unchanged" : RunsOf(pu), "unchanged");
+        }
 
         // out of an event, then nothing for half an hour (2026-10-30 11:05:23, Defend Shugo Merchants: "rewards that land in the
         // next 45 s are still its own", and it stayed "rewards landing" until the next event closed it at 11:36:34). The time
@@ -3795,6 +3821,18 @@ options: --process aion[,other]");
                     got = $"{cs.Instances.Snapshot().LastOrDefault(r => r.Start >= c0.AddSeconds(-1))?.Kinah ?? 0:N0}";
                 }
                 Check("a coin slot is Kinah when the counter agrees", $"{withCounter} · {without}", "600,000 · 0");
+                // the plain coin at 51 with the bound coin next at 55 (2026-11-04, Ferocious Horn Den Exploration, whose Kina is bound
+                // since the Nov 4 patch and never moves the counter): the coin beside a coin is a clear coin, counted from its picture
+                var boundCoin = IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina (Bound)").Icon);
+                var plainCoin = IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina").Icon);
+                var cb = new TrackerSession(null, new Settings(), items, "Test"); var cb0 = DateTime.UtcNow;
+                cb.Engine.SetZone("Ferocious Horn Den"); cb.Instances.Zone("Ferocious Horn Den", cb0);
+                cb.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "800.0K", 800_000, new() { (plainCoin, 51.0), (boundCoin, 55.0), ("Other", 103.7) }) }, cb0.AddSeconds(3));
+                Check("a coin beside the bound coin is a clear coin without the counter (an Exploration's bound Kina)", $"{cb.Instances.Snapshot().LastOrDefault(r => r.Start >= cb0.AddSeconds(-1))?.Kinah ?? 0:N0}", "800,000");
+                var cn = new TrackerSession(null, new Settings(), items, "Test"); var cn0 = DateTime.UtcNow;
+                cn.Engine.SetZone("Ferocious Horn Den"); cn.Instances.Zone("Ferocious Horn Den", cn0);
+                cn.ApplyGrid(new List<RewardGrid.Slot> { new(new System.Drawing.Rectangle(0, 0, 10, 10), "Common", "800.0K", 800_000, new() { (plainCoin, 51.0), ("Other", 56.0) }) }, cn0.AddSeconds(3));
+                Check("...a lookalike that isn't a coin next to it still needs the counter", $"{cn.Instances.Snapshot().LastOrDefault(r => r.Start >= cn0.AddSeconds(-1))?.Kinah ?? 0:N0}", "0");
                 // a clear match to the coin as the game draws it (Icon_gold, 4.4 against 84.4) needs no counter
                 var cs2 = new TrackerSession(null, new Settings(), items, "Test"); var cz = DateTime.UtcNow;
                 cs2.Engine.SetZone("Urugugu Canyon"); cs2.Instances.Zone("Urugugu Canyon", cz);
