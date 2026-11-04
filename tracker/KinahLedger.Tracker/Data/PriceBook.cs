@@ -22,7 +22,8 @@ public static class PriceBook
     public enum From { None, Market, Server, Region, Typed, Sold, Feed }
 
     /// <summary>One price as shown: the figure, where it is from, how many readings back it, whether it counts, when it was seen.</summary>
-    public sealed record Quote(long Price, From From, int Readings, bool Sure, DateTime? At)
+    /// <param name="Note">Said first by <see cref="Describe"/> when something is worth telling: a typed price that lost to the board.</param>
+    public sealed record Quote(long Price, From From, int Readings, bool Sure, DateTime? At, string? Note = null)
     {
         public bool Mine => From is From.Market or From.Typed;
     }
@@ -55,6 +56,8 @@ public static class PriceBook
     /// <summary>A board price last seen longer ago than this is unsure (2026-11-03: a price weeks old stood as sure); over <see cref="OldAfter"/> it is shown dimmed as old.</summary>
     public static readonly TimeSpan BoardMaxAge = TimeSpan.FromHours(72);
     public static readonly TimeSpan OldAfter = TimeSpan.FromHours(24);
+    /// <summary>A typed price older than this gives way to a sure board price (2026-11-03: a typed price had no age limit).</summary>
+    public static readonly TimeSpan TypedFor = TimeSpan.FromDays(7);
     /// <summary>When the other servers' boards were fetched: the age of a region price.</summary>
     static DateTime? _regionAt;
     public static DateTime? BoardAt { get; private set; }
@@ -90,23 +93,35 @@ public static class PriceBook
             // the player's own: the newer of what they typed and what this PC read (a read lasts a day, a typed price until replaced)
             Seen? read = Local().TryGetValue(k, out var s) && DateTime.UtcNow - s.at <= LocalFor ? s : null;
             Seen? typed = Typed().TryGetValue(k, out var t) ? t : null;
-            if (typed != null && (read == null || typed.at >= read.at)) return new Quote(typed.price, From.Typed, 1, true, typed.at);
-            if (read != null) return new Quote(read.price, From.Market, 1, true, read.at);
-            var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
-            // 2026-11-03: Siel's Artisan's Steamed Cypri at 44,994 (57 listings) was thrown out as 3x a 14,000 region middle
-            // that two lone asks had pulled down, and the card said 12.3K. The site's pick was already judged against the
-            // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask.
-            if (_board.TryGetValue(k, out var b) && !(reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price))
+            if (typed != null && (read == null || typed.at >= read.at))
             {
-                // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure.
-                // One last seen over 72 h ago is unsure however many readings it had.
-                bool sure = b.Sure && !(b.At is DateTime seenAt && DateTime.UtcNow - seenAt > BoardMaxAge);
-                if (sure || reg == null) return new Quote(b.Price, b.From, b.Readings, sure, b.At);
+                var typedQuote = new Quote(typed.price, From.Typed, 1, true, typed.at);
+                // a week-old typed price gives way to a sure board price; with none, it stands
+                if (DateTime.UtcNow - typed.at <= TypedFor || SharedQuote(k) is not { Sure: true, From: From.Server or From.Sold or From.Feed } board) return typedQuote;
+                return board with { Note = $"you typed {typed.price:N0} on {typed.at.ToLocalTime():yyyy-MM-dd}; the board says {board.Price:N0}" };
             }
-            if (reg is { } rr) return new Quote(rr.Price, From.Region, rr.Servers, true, _regionAt);
-            if (_region.TryGetValue(k, out var one)) return new Quote(one.Price, From.Region, one.Servers, false, _regionAt);
-            return null;
+            if (read != null) return new Quote(read.price, From.Market, 1, true, read.at);
+            return SharedQuote(k);
         }
+    }
+
+    /// <summary>The best price that is not the player's own: the board's, else the other servers' middle; null when there is none. Call with the lock held.</summary>
+    static Quote? SharedQuote(string k)
+    {
+        var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
+        // 2026-11-03: Siel's Artisan's Steamed Cypri at 44,994 (57 listings) was thrown out as 3x a 14,000 region middle
+        // that two lone asks had pulled down, and the card said 12.3K. The site's pick was already judged against the
+        // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask.
+        if (_board.TryGetValue(k, out var b) && !(reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price))
+        {
+            // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure.
+            // One last seen over 72 h ago is unsure however many readings it had.
+            bool sure = b.Sure && !(b.At is DateTime seenAt && DateTime.UtcNow - seenAt > BoardMaxAge);
+            if (sure || reg == null) return new Quote(b.Price, b.From, b.Readings, sure, b.At);
+        }
+        if (reg is { } rr) return new Quote(rr.Price, From.Region, rr.Servers, true, _regionAt);
+        if (_region.TryGetValue(k, out var one)) return new Quote(one.Price, From.Region, one.Servers, false, _regionAt);
+        return null;
     }
 
     /// <summary>Where an item's price comes from (what <see cref="QuoteOf"/> would give), or None.</summary>
@@ -125,6 +140,7 @@ public static class PriceBook
     public static string Describe(Quote q, DateTime? now = null, bool withAge = true)
     {
         var parts = new List<string>();
+        if (q.Note != null) parts.Add(q.Note);
         switch (q.From)
         {
             case From.Typed: parts.Add("you typed it"); break;

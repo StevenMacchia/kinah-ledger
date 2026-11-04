@@ -133,6 +133,7 @@ static class PlayerTests
                 "{\"item\":\"Fine Odyle\",\"price\":3098,\"price_from\":\"feed\",\"readings\":117,\"sure\":true}," +
                 "{\"item\":\"Old Board Item\",\"lowest_ask\":777,\"stale\":false,\"n_obs\":1}," +
                 $"{{\"item\":\"Four Day Item\",\"price\":6000,\"price_from\":\"feed\",\"readings\":20,\"sure\":true,\"price_seen_at\":\"{now.AddDays(-4):yyyy-MM-dd'T'HH:mm:ss'Z'}\"}}," +
+                "{\"item\":\"Typed Old Item\",\"price\":5000,\"price_from\":\"feed\",\"readings\":30,\"sure\":true}," +
                 "{\"item\":\"Sold Item\",\"price\":7000,\"price_from\":\"sold\",\"readings\":9,\"sure\":true,\"price_seen_at\":null}," +
                 "{\"item\":\"Artisan's Splendent Orichalcum Longsword\",\"price\":23999999,\"price_from\":\"feed\",\"readings\":12,\"sure\":true}]}";
             PriceBook.SetBoardQuotes(PriceBook.ParseQuotes(board, null));
@@ -145,6 +146,13 @@ static class PlayerTests
             // 2026-11-03: a board price last seen 4 days ago is unsure; a sold average says when the board was checked
             Check("a 4-day-old board price is unsure and out of totals", $"{Q("Four Day Item")} · Price {PriceBook.Price("Four Day Item")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Four Day Item")!, now)}", "6,000 Feed unsure · Price null · aion2.exchange · lowest of 20 listings · 4 days ago · unsure");
             Check("a sold average with no time says when the board was checked", $"{Q("Sold Item")} · {PriceBook.Describe(PriceBook.QuoteOf("Sold Item")!, now)}", "7,000 Sold sure · sold average · 9 sold · board checked just now");
+            // 2026-11-03: a typed price over 7 days old loses to a sure board price; with no board price it stands
+            PriceBook.SetTyped("Typed Old Item", 9_000, now.AddDays(-8)); PriceBook.SetTyped("Typed Only Item", 7_000, now.AddDays(-8)); PriceBook.SetTyped("Typed New Item", 9_000, now.AddDays(-6));
+            var typedCmp = PriceBook.QuoteOf("Typed Old Item")!;
+            Check("an 8-day-old typed price loses to the board's", $"{Q("Typed Old Item")} · {PriceBook.Describe(typedCmp, now)}", $"5,000 Feed sure · you typed 9,000 on {now.AddDays(-8).ToLocalTime():yyyy-MM-dd}; the board says 5,000 · aion2.exchange · lowest of 30 listings · board checked just now");
+            PriceBook.SetBoardQuotes(PriceBook.ParseQuotes("{\"items\":[{\"item\":\"Typed New Item\",\"price\":5000,\"price_from\":\"feed\",\"readings\":30,\"sure\":true}]}", null));
+            Check("a typed price with no board price stands, and a 6-day-old one beats the board", $"{Q("Typed Only Item")} · {Q("Typed New Item")}", "7,000 Typed sure · 9,000 Typed sure");
+            PriceBook.SetBoardQuotes(PriceBook.ParseQuotes(board, null));
             // the site's pick stands even far over the other servers' middle: it was judged against the region with every listing
             // (2026-11-03: the tracker's cruder middle threw out Siel's Artisan's Steamed Cypri, 44,994 with 57 listings)
             Check("the site's pick stands over the other servers' middle", Q("Artisan's Splendent Orichalcum Longsword"), "23,999,999 Feed sure");
