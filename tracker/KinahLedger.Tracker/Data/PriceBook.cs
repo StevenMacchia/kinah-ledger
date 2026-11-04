@@ -53,6 +53,17 @@ public static class PriceBook
     public const int SureReadings = 2;
     public const double OutlierX = 3;
     public static DateTime? BoardAt { get; private set; }
+    static ItemDictionary? _items;
+    static bool _purgeLogged;
+    /// <summary>
+    /// The item list a Market read is checked against (set when the Market reader starts). With none, reads are not checked
+    /// (tests). Setting it also drops the stored reads that are not items (2026-11-03: 87 keys, "dawn legion", "t the party").
+    /// </summary>
+    public static ItemDictionary? Items
+    {
+        get => _items;
+        set { lock (Lock) { _items = value; if (_local != null) PurgeUnknown(_local); } }
+    }
     public static int BoardItems { get { lock (Lock) return _board.Count; } }
     /// <summary>Tests point this elsewhere so the player's own file is never touched.</summary>
     public static string? PathOverride { get; set; }
@@ -153,6 +164,17 @@ public static class PriceBook
         var k = Norm(name);
         lock (Lock)
         {
+            if (_items != null && _items.Find(name) == null)
+            {
+                CrashLog.Note($"Market read refused: \"{name}\" at {unitPrice:N0} is not an item in the list.");
+                return;
+            }
+            long? refPrice = _board.TryGetValue(k, out var bq) ? bq.Price : _region.TryGetValue(k, out var rq) ? rq.Price : null;
+            if (refPrice is long rp && rp > 0 && (unitPrice * 10 < rp || unitPrice > OutlierX * rp))
+            {
+                CrashLog.Note($"Market read refused: {name} at {unitPrice:N0} is out of range of {rp:N0} on the board.");
+                return;
+            }
             var local = Local();
             if (local.TryGetValue(k, out var s) && at - s.at <= LocalFor && s.price <= unitPrice) return;
             local[k] = new Seen(unitPrice, at);
@@ -334,7 +356,24 @@ public static class PriceBook
     static string TypedPath => Path.Combine(Dir, "typed-prices.json");
 
     /// <summary>The prices.json file: { "updated": "…", "prices": { "Orichalcum Ore": 1950 }, "seen": { "Orichalcum Ore": "…" } }.</summary>
-    static Dictionary<string, Seen> Local() => _local ??= Load(LocalPath, "prices");
+    static Dictionary<string, Seen> Local()
+    {
+        if (_local != null) return _local;
+        _local = Load(LocalPath, "prices");
+        PurgeUnknown(_local);
+        return _local;
+    }
+
+    /// <summary>Drops stored reads whose name is not an item in the list and saves; logged once with the count.</summary>
+    static void PurgeUnknown(Dictionary<string, Seen> d)
+    {
+        if (_items == null) return;
+        var bad = d.Keys.Where(k => _items.Find(k) == null).ToList();
+        if (bad.Count == 0) return;
+        foreach (var k in bad) d.Remove(k);
+        if (!_purgeLogged) { _purgeLogged = true; CrashLog.Note($"Prices: dropped {bad.Count} stored Market reads that are not items."); }
+        Save(d, LocalPath);
+    }
     /// <summary>typed-prices.json, the same shape: the prices the player typed on cards.</summary>
     static Dictionary<string, Seen> Typed() => _typed ??= Load(TypedPath, "typed prices");
 

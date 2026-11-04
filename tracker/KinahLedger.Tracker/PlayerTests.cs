@@ -145,6 +145,16 @@ static class PlayerTests
             Check("the site's pick stands over the other servers' middle", Q("Artisan's Splendent Orichalcum Longsword"), "23,999,999 Feed sure");
             Check("the 330K was the recipe's cost per try, not the sword's price", $"cost/try {RecipeBook.CostPerTry(sword, out var unp):N0} ({unp} unpriced) · sword {PriceBook.Price(sword):N0}", "cost/try 450,274 (0 unpriced) · sword 43,500");
 
+            // 2026-11-03: a Market read is kept only for a real item, and not 10x off the board (the owner's prices.json held "dawn legion"=461)
+            var known = new ItemDictionary(); known.Remember(-1, sword); known.Remember(-2, "Chaos Longsword");
+            PriceBook.Items = known;
+            PriceBook.Observe("Dawn Legion", 461, now); PriceBook.Observe(sword, 435_000, now); PriceBook.Observe(sword, 4_000, now);
+            Check("a junk name and an ask 10x the board are refused", $"dawn {PriceBook.QuoteOf("Dawn Legion")?.Price.ToString() ?? "none"} · sword {Q(sword)}", "dawn none · sword 43,500 Feed sure");
+            File.WriteAllText(PriceBook.PathOverride!, "{\"prices\":{\"dawn legion\":461,\"t the party\":160000,\"" + sword.ToLowerInvariant() + "\":80000},\"seen\":{\"dawn legion\":\"" + seen + "\",\"t the party\":\"" + seen + "\",\"" + sword.ToLowerInvariant() + "\":\"" + seen + "\"}}");
+            PriceBook.Reset();
+            Check("stored keys that are not items are dropped on load", $"{PriceBook.QuoteOf("dawn legion")?.Price.ToString() ?? "none"} · {Q(sword)}", "none · 80,000 Market sure");
+            File.Delete(PriceBook.PathOverride!); PriceBook.Reset();
+
             // his Market read wins at once (read with sharing off too: only sending follows the switch)
             PriceBook.Observe(sword, 80_000, now.AddMinutes(-2));
             Check("this PC's Market read wins over the board", Q(sword) + " · " + PriceBook.Describe(PriceBook.QuoteOf(sword)!, now) + $" · board still {PriceBook.BoardOf(sword)?.Price:N0}", "80,000 Market sure · your Market read · 2 min ago · board still 43,500");
@@ -165,7 +175,7 @@ static class PlayerTests
         }
         finally
         {
-            PriceBook.PathOverride = oldPath; PriceBook.Reset();
+            PriceBook.PathOverride = oldPath; PriceBook.Items = null; PriceBook.Reset();
             PriceBook.SetBoard(new()); PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>());
         }
     }
