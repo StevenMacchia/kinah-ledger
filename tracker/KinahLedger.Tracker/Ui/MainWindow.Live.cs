@@ -265,14 +265,14 @@ public partial class MainWindow
         return (v < 0 ? "−" : "+") + s;
     }
 
-    /// <summary>A pickup's worth for the feed: Kinah as it is, an item's tradeable copies at the lowest Market price; blank with no price.</summary>
+    /// <summary>A pickup's worth for the feed: Kinah as it is, an item's tradeable copies at the lowest Market price after the Market's cut (before it with Show amounts before the fee on); blank with no price.</summary>
     (string Text, bool Muted) PickupValue(FeedLine l)
     {
         if (l.Kind == "kinah") return (FeedK(l.Amount), false);
         if (l.Kind == "flag") return ("fix below", false);
         if (l.Kind == "step") return (l.Amount > 0 ? FeedK(l.Amount) : "", false);
         if (l.Bound) return ("", true);
-        return PriceBook.Price(l.Name) is long p ? (FeedK(p * l.Amount), false) : ("", true);
+        return PriceBook.Price(l.Name) is long p ? (FeedK((long)Math.Round(p * l.Amount * PriceBook.SellerKeeps)), false) : ("", true);
     }
 
     /// <summary>

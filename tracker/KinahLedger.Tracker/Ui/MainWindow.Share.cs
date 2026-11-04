@@ -111,11 +111,11 @@ public partial class MainWindow
     /// <summary>"Siel · NA East", or nothing before a server is chosen.</summary>
     string ShareServer() => Server is { } sv ? $"{sv.Name} · {sv.Region.Name}" : "";
 
-    /// <summary>The items a count picked up, each with its grade and its worth at the lowest Market price (0 with no price).</summary>
+    /// <summary>The items a count picked up, each with its grade and its worth at the lowest Market price after the Market's cut (0 with no price), so the drops add up to the picture's total.</summary>
     List<ShareDrop> ShareDropsOf(SessionEngine e) => e.ItemRows()
         .Where(r => r.Count + r.Bound > 0)
         .Select(r => new ShareDrop(r.Name, GatheringCatalog.Find(r.Name)?.Grade ?? _items.Get(r.Id)?.Grade ?? "", r.Count + r.Bound,
-            r.Count > 0 && PriceBook.Price(r.Name) is long p ? p * r.Count : 0))
+            r.Count > 0 && PriceBook.Price(r.Name) is long p ? (long)Math.Round(p * r.Count * PriceBook.SellerKeeps) : 0))
         .ToList();
 
     /// <summary>The zone a count is named by: its own, else the one on screen.</summary>
@@ -144,7 +144,7 @@ public partial class MainWindow
         var drops = new Dictionary<long, (int N, long Worth)>();
         foreach (var (id, n) in r.Items)
         {
-            long worth = !_items.IsGear(id) && PriceBook.Price(_items.NameOf(id)) is long p ? p * n : 0;
+            long worth = !_items.IsGear(id) && PriceBook.Price(_items.NameOf(id)) is long p ? (long)Math.Round(p * n * PriceBook.SellerKeeps) : 0;
             drops[id] = (n, worth);
         }
         foreach (var (id, n) in r.BoundItems) { var had = drops.GetValueOrDefault(id); drops[id] = (had.N + n, had.Worth); }

@@ -49,7 +49,7 @@ public partial class MainWindow
         var top = rows.Where(r => !r.Header && !r.Child && r.Worth > 0 && r.Name.Length > 0)
             .OrderByDescending(r => r.Worth / Count(r)).ThenByDescending(r => r.Worth).FirstOrDefault();
         if (top == null) return d;
-        d["top"] = top.Name; d["topCount"] = $"×{Count(top):N0}"; d["topWorth"] = FeedK(top.Worth);
+        d["top"] = top.Name; d["topCount"] = $"×{Count(top):N0}"; d["topWorth"] = FeedK((long)Math.Round(top.Worth * PriceBook.SellerKeeps));   // Worth is gross (ranking only); shown after the Market's cut like every other figure
         d["topGrade"] = top.Grade.Length > 0 ? top.Grade : GradeOf(top.Name); d["topIcon"] = _items.IconUrl(_items.IdOf(top.Name));
         return d;
     }
