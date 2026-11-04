@@ -182,11 +182,12 @@ public sealed class GameWatcher
     DateTime _boardAt = DateTime.MinValue;
     /// <summary>
     /// Every 15 minutes, the community price board for the player's server from the site the runs go to (a public page,
-    /// read like a browser would; nothing is sent). Follows the Share switch, so sharing off keeps the tracker offline.
+    /// read like a browser would; nothing is sent but the server's name in the address). Does not follow the Share switch:
+    /// sharing off stops what leaves the PC, not what comes in, so the prices stay fresh either way (2026-11-03).
     /// </summary>
     async Task FetchBoardAsync()
     {
-        if ((DateTime.UtcNow - _boardAt).TotalMinutes < 15 || !_settings.Upload.Enabled || string.IsNullOrWhiteSpace(Market.Server)) return;
+        if ((DateTime.UtcNow - _boardAt).TotalMinutes < 15 || string.IsNullOrWhiteSpace(Market.Server)) return;
         _boardAt = DateTime.UtcNow;
         if (!Uri.TryCreate(_settings.Upload.Endpoint, UriKind.Absolute, out var u)) return;
         using var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All }) { Timeout = TimeSpan.FromSeconds(10) };
