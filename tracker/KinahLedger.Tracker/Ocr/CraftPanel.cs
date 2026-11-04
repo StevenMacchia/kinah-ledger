@@ -598,11 +598,18 @@ public sealed class CraftPanelTracker
     /// <summary>A colour this far from the queue's first craft, in blue and in green over red, is the upgrade roll's tint (about 70 and 40 on 2026-11-03).</summary>
     public const double TintBlue = 30, TintGreen = 20;
 
+    /// <summary>Two samples this close on both bars are the bars stopped: the race is over and can be scored.</summary>
+    public const double Settled = 0.02;
+
     bool _done = true;
     DateTime _start;
     int _samples, _tinted;
     double _sr, _sg, _sb; int _sn;
     (double R, double G, double B)? _base;
+    // a bar full, the race waiting for the bars to stop: the loser stops just short of full while the winner is still
+    // climbing (2026-11-04 09:41:54, Steven's Artisan's Steamed Cypri read "fail" at success 83%, fail 98%, and worked; an
+    // Inina Pasta the same at 88%). The highest each bar got decides once both have stopped, or the panel has gone.
+    bool _pending; double _peakS, _peakF, _lastS, _lastF;
 
     /// <summary>A new queue: the panel's own colour is taken again from its first craft (the world behind the see-through panel has changed).</summary>
     public void NewQueue() => _base = null;
@@ -610,30 +617,60 @@ public sealed class CraftPanelTracker
     public Outcome? Feed(DateTime t, CraftPanel.Sample s)
     {
         Dropped = null;
-        if (!s.Visible) return null;
+        // the panel gone with a race waiting: scored as it stood
+        if (!s.Visible) return _pending ? Finish(t) : null;
         if (_done)
         {
             // a new race: both bars back near empty
-            if (s.Success < Low && s.Fail < Low) { _done = false; _start = t; _samples = _tinted = _sn = 0; _sr = _sg = _sb = 0; Look(s); }
+            if (s.Success < Low && s.Fail < Low) Start(t, s);
             return null;
         }
-        Look(s);
-        if (s.Success >= Full || s.Fail >= Full)
+        // the next race started under a race waiting: that one is scored as it stood, this sample is the new one's first
+        if (_pending && s.Success < Low && s.Fail < Low)
         {
-            _done = true;
-            bool ok = s.Success >= Full && s.Success >= s.Fail;
+            var o = Finish(t);
+            Start(t, s);
+            return o;
+        }
+        Look(s);
+        _peakS = Math.Max(_peakS, s.Success); _peakF = Math.Max(_peakF, s.Fail);
+        if (!_pending)
+        {
+            if (s.Success < Full && s.Fail < Full) { _lastS = s.Success; _lastF = s.Fail; return null; }
             double took = (t - _start).TotalSeconds;
             if (MinSeconds > 0 && took < MinSeconds)
             {
-                Dropped = $"{(ok ? "success" : "fail")} bar full {took:0.0} s after both were empty, quicker than any real race ({MinSeconds:0.0} s): not a craft";
+                _done = true;
+                bool quick = s.Success >= Full && s.Success >= s.Fail;
+                Dropped = $"{(quick ? "success" : "fail")} bar full {took:0.0} s after both were empty, quicker than any real race ({MinSeconds:0.0} s): not a craft";
                 return null;
             }
-            bool combo = _tinted > 0 && _tinted * 2 >= _samples;
-            // the queue's first plain craft gives the panel's own colour for the rest of it
-            if (_base == null && !combo && _sn > 0) _base = (_sr / _sn, _sg / _sn, _sb / _sn);
-            return new Outcome(t, ok, combo);
+            _pending = true; _lastS = s.Success; _lastF = s.Fail;
+            return null;
         }
-        return null;
+        bool still = Math.Abs(s.Success - _lastS) <= Settled && Math.Abs(s.Fail - _lastF) <= Settled;
+        _lastS = s.Success; _lastF = s.Fail;
+        return still ? Finish(t) : null;
+    }
+
+    /// <summary>The race waiting to be scored, scored now (the crafting panel went): null when none waits.</summary>
+    public Outcome? Flush(DateTime t) => _pending ? Finish(t) : null;
+
+    void Start(DateTime t, CraftPanel.Sample s)
+    {
+        _done = false; _pending = false; _start = t;
+        _samples = _tinted = _sn = 0; _sr = _sg = _sb = 0; _peakS = _peakF = _lastS = _lastF = 0;
+        Look(s);
+    }
+
+    /// <summary>The race's outcome: success when the success bar got full and the fail bar no higher; the tint vote; the queue's first plain craft gives the panel's own colour for the rest of it.</summary>
+    Outcome Finish(DateTime t)
+    {
+        _done = true; _pending = false;
+        bool ok = _peakS >= Full && _peakS >= _peakF;
+        bool combo = _tinted > 0 && _tinted * 2 >= _samples;
+        if (_base == null && !combo && _sn > 0) _base = (_sr / _sn, _sg / _sn, _sb / _sn);
+        return new Outcome(t, ok, combo);
     }
 
     void Look(CraftPanel.Sample s)

@@ -26,7 +26,7 @@ static class CraftKit
         return g;
     }
 
-    /// <summary>The crafts in the values, newest first; a craft's Note is "worked" or "failed".</summary>
+    /// <summary>The crafts in the values, newest first; a craft's Note is "worked" or "failed", a won combo roll's what it made of the craft before it ("combo ×2", "combo: Splendent Orichalcum Greaves").</summary>
     public static List<Pick> Crafts(IReadOnlyDictionary<string, string> v)
     {
         string V(string k) => v.TryGetValue(k, out var s) ? s : "";
@@ -36,12 +36,16 @@ static class CraftKit
             var c = "craft" + i;
             if (V(c).Length == 0) continue;
             var at = long.TryParse(V(c + "At"), out var ticks) && ticks > 0 ? new DateTime(ticks, DateTimeKind.Utc) : DateTime.MinValue;
-            list.Add(new Pick("craft|" + V(c + "Id") + "|" + i, V(c), "", V(c + "Worth"), "", V(c + "Icon"), V(c + "Ok") == "1" ? "worked" : "failed", false, at));
+            var note = V(c + "Combo").Length > 0 ? V(c + "Combo") : V(c + "Ok") == "1" ? "worked" : "failed";
+            list.Add(new Pick("craft|" + V(c + "Id") + "|" + i, V(c), "", V(c + "Worth"), "", V(c + "Icon"), note, false, at));
         }
         return list;
     }
 
-    public static bool Worked(Pick p) => p.Note == "worked";
+    /// <summary>A craft that worked, or a won combo roll: anything but a failed craft.</summary>
+    public static bool Worked(Pick p) => p.Note != "failed";
+    /// <summary>A won combo roll's line: the craft before it made more, or better.</summary>
+    public static bool IsCombo(Pick p) => p.Note.StartsWith("combo", StringComparison.Ordinal);
 
     /// <summary>The success and fail bar: blue for the crafts that worked, orange for those that failed, rounded ends.</summary>
     public static Grid Bar(double width, double height)
@@ -88,8 +92,8 @@ static class CraftKit
 
 /// <summary>
 /// The Card while crafting: "CRAFT 18:05 Orichalcum Greaves" in the head with the newest craft on the right ("worked
-/// +137K" plain, "failed −39K" in red), then "12 crafts · 3 failed · +1.12M" over the success bar and "+137K a craft
-/// · +420K/h" (the recipe's profit a craft and an hour, "Combos 2/5" under it when it rolled any), and the last three crafts as tiles. The farming head and figures come back when crafting ends.
+/// +137K" plain, "failed −39K" in red, "combo ×2 +37K" in gold when a roll was won), then "12 crafts · 3 failed · +1.12M" over the success bar and "+137K a craft
+/// · +420K/h" (the recipe's profit a craft and an hour, "Combos ×2 2/5" or "Upgrades 2/5" under it when it rolled any), and the last three crafts as tiles. The farming head and figures come back when crafting ends.
 /// </summary>
 public sealed partial class HudCard
 {
@@ -160,15 +164,15 @@ public sealed partial class HudCard
             _cNewest.Inlines.Clear();
             if (newest != null)
             {
-                bool ok = CraftKit.Worked(newest);
-                _cNewest.Inlines.Add(R(ok ? "worked" : "failed", 13, ok ? CraftKit.Ok2 : CraftKit.Fail));
+                bool ok = CraftKit.Worked(newest), combo = CraftKit.IsCombo(newest);
+                _cNewest.Inlines.Add(R(newest.Note, 13, combo ? Gold : ok ? CraftKit.Ok2 : CraftKit.Fail));
                 if (newest.Worth.Length > 0) { _cNewest.Inlines.Add(R("  ", 13, Ink)); _cNewest.Inlines.Add(R(newest.Worth, 13, ok ? Gold : CraftKit.Fail, mono: true)); }
             }
         }
 
         // "12 crafts · 3 failed · +1.12M" over the bar and "+137K a craft · +420K/h" (what a craft of the queue's recipe is worth), then
-        // "Combos 2/5" (won of rolled) when the recipe has rolled any; before the first craft, a faint line
-        if (Changed("craftFigs", $"{V("craftTries")}|{V("craftOk")}|{V("craftFail")}|{V("craftProfit")}|{V("craftPer")}|{V("craftPerHr")}|{V("craftCombos")}"))
+        // "Combos ×2 2/5" or "Upgrades 2/5" (won of rolled) when the recipe has rolled any; before the first craft, a faint line
+        if (Changed("craftFigs", $"{V("craftTries")}|{V("craftOk")}|{V("craftFail")}|{V("craftProfit")}|{V("craftPer")}|{V("craftPerHr")}|{V("craftCombos")}|{V("craftCombosKind")}"))
         {
             _cFigs.Inlines.Clear(); _cSells.Inlines.Clear(); _cCombos.Inlines.Clear();
             _cCombos.Visibility = Visibility.Collapsed;
@@ -206,7 +210,7 @@ public sealed partial class HudCard
                 else _cSells.Inlines.Add(R("no sure price yet", 12, Faint));
                 if (V("craftCombos").Length > 0)
                 {
-                    _cCombos.Inlines.Add(R("Combos ", 12, Faint));
+                    _cCombos.Inlines.Add(R(V("craftCombosKind") switch { "×2" => "Combos ×2 ", "upgrade" => "Upgrades ", _ => "Combos " }, 12, Faint));
                     _cCombos.Inlines.Add(R(V("craftCombos"), 12, Ink, mono: true));
                     _cCombos.Visibility = Visibility.Visible;
                 }
@@ -214,8 +218,8 @@ public sealed partial class HudCard
             }
         }
 
-        // the last three crafts as tiles, newest first, the newest lit
-        var tiles = crafts.Take(3).ToList();
+        // the last three crafts as tiles, newest first, the newest lit; a won roll is no craft of its own (its craft's tile is there already)
+        var tiles = crafts.Where(c => !CraftKit.IsCombo(c)).Take(3).ToList();
         if (Changed("craftTiles", string.Join("|", tiles.Select(t => $"{t.Id}:{t.Icon}"))))
         {
             _cTiles.Children.Clear();
@@ -304,10 +308,10 @@ public sealed partial class HudTicker
         return true;
     }
 
-    /// <summary>One craft: the recipe's tile with ✓ or ✕, "Orichalcum Greaves · worked", and what it made in gold or cost in red; a failed one on a red edge.</summary>
+    /// <summary>One craft: the recipe's tile with ✓ or ✕, "Orichalcum Greaves · worked", and what it made in gold or cost in red; a failed one on a red edge; a won combo roll "· combo ×2" in gold with what the roll added.</summary>
     Border CraftToast(Pick p)
     {
-        bool ok = CraftKit.Worked(p);
+        bool ok = CraftKit.Worked(p), combo = CraftKit.IsCombo(p);
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition());
@@ -315,7 +319,7 @@ public sealed partial class HudTicker
         g.Children.Add(CraftKit.Tile(p, 24));
         var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(9, 0, 0, 0) };
         name.Inlines.Add(R(p.Name, 13, Ink));
-        name.Inlines.Add(R(" · " + p.Note, 12, ok ? Faint : CraftKit.Fail));
+        name.Inlines.Add(R(" · " + p.Note, 12, combo ? Gold : ok ? Faint : CraftKit.Fail));
         Grid.SetColumn(name, 1); g.Children.Add(name);
         var worth = T(p.Worth, 13, ok ? Gold : CraftKit.Fail, mono: true); worth.Margin = new Thickness(9, 0, 0, 0);
         Grid.SetColumn(worth, 2); g.Children.Add(worth);

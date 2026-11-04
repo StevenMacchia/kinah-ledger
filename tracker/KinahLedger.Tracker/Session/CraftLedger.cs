@@ -56,6 +56,8 @@ public sealed class CraftLedger
     public void OnPanel(CraftResult cr)
     {
         PanelSeen(cr.Item, cr.Time);
+        // the pop-up beside the character with the craft's count (PopupSays): no race of its own
+        if (cr.Popup is int popup) { PopupSays(cr.Item, popup, cr.Time, apply: true); return; }
         var name = _panelRecipe.Length >= 2 ? _panelRecipe : "?";
         // a combo roll is the roll for the craft before it: the blue panel names that recipe's upgrade ("Splendent Orichalcum
         // Longsword" while crafting Orichalcum Longsword, 2026-10-26), which is no recipe of its own (it showed in the
@@ -196,6 +198,31 @@ public sealed class CraftLedger
 
     /// <summary>"2 crafts not seen" for a recipe's crafts the queue's count jumped past; "" with none.</summary>
     public static string UnseenNote(Recipe r) => r.Unseen > 0 ? $"{r.Unseen} craft{(r.Unseen == 1 ? "" : "s")} not seen (the bars were covered): counted as nothing" : "";
+
+    /// <summary>
+    /// The pop-up beside the character naming the recipe's item with its count, right after a craft that worked: the game's
+    /// own word on what the craft made (Steven, 2026-11-04: "it says x2 when I'm doing it and it shows up as 2 in the icon").
+    /// Twice what was credited, on a recipe whose combo makes two, is that combo, its blue race missed, dropped as too
+    /// quick, or read as lost. With <paramref name="apply"/> the second output is credited to the craft, once, and the
+    /// rolls' tally follows (a roll read as lost becomes the won one). False when the count says nothing new.
+    /// </summary>
+    public bool PopupSays(string recipe, int count, DateTime t, bool apply)
+    {
+        if (recipe.Length < 2 || count <= 0 || !_recipes.TryGetValue(recipe, out var r) || !_lastOk.TryGetValue(r.Name, out var last)) return false;
+        if (last.Unknown || last.Qty <= 0 || t < last.At.AddSeconds(-1) || (t - last.At).TotalSeconds > PanelSeconds) return false;
+        if (!string.Equals(last.Item, r.Name, StringComparison.OrdinalIgnoreCase) || !DoublesOnCombo(r.Name)) return false;
+        // a won roll already credited doubled Qty, so a count at or under it is old news; the combo makes exactly twice the yield
+        if (count <= last.Qty || count != last.Qty * 2) return false;
+        if (!apply) return true;
+        var was = r.Copy();
+        r.Made[last.Item] = r.Made.GetValueOrDefault(last.Item) + count - last.Qty;
+        last.Qty = count;
+        if (last.Upgraded) r.NotUpgraded = Math.Max(0, r.NotUpgraded - 1);   // the roll read as lost: the pop-up says it was won
+        last.Upgraded = true; r.Upgraded++;
+        // the craft's queue keeps what it made, should its crafts move (Move)
+        if (last.Queue > 0 && _byQueue.TryGetValue(last.Queue, out var f) && string.Equals(f.Name, r.Name, StringComparison.OrdinalIgnoreCase)) AddChange(f.Delta, r, was);
+        return true;
+    }
 
     /// <summary>
     /// A won upgrade roll: the craft before it made the recipe's upgrade, not its base item. The game swaps the result's

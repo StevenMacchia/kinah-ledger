@@ -568,6 +568,15 @@ public static class WpfApp
                   && C("craft3").Length > 0 && long.Parse(C("craft0At")) > long.Parse(C("craft1At")),
                 $"panel crafting: the last crafts newest first, {C("craft0Worth")} worked, {C("craft1Worth")} failed");
             Check(!cv.Keys.Any(k => k.Contains("ccura", StringComparison.OrdinalIgnoreCase)) && !cv.Values.Any(x => x.Contains('%')), "panel crafting: no accuracy figure");
+            // the 10th craft's won combo roll is a line of its own after it (2026-11-04: a Cypri combo made a second dish and
+            // the panel only said "worked"), worded by what the book says a win makes; the tiles stay crafts
+            var up = Data.RecipeBook.ForOutput("Orichalcum Greaves")?.Upgrade?.Item;
+            var comboWord = up != null ? "combo: " + up : Data.RecipeBook.ForOutput("Orichalcum Greaves")?.DoublesOnCombo == true ? "combo ×2" : "combo won";
+            Check(C("craft2Combo") == comboWord && C("craft2Ok") == "1" && C("craft2Id").EndsWith(":combo") && C("craft0Combo") == "" && C("craft1Combo") == "" && C("craft3Combo") == "",
+                $"panel crafting: a won combo roll is its own line, \"{C("craft2Combo")}\" (expected \"{comboWord}\")");
+            var cpicks = CraftKit.Crafts(cv);
+            Check(cpicks.Count == 4 && CraftKit.IsCombo(cpicks[2]) && CraftKit.Worked(cpicks[2]) && cpicks[2].Note == comboWord && !CraftKit.IsCombo(cpicks[0]) && cpicks.Count(CraftKit.IsCombo) == 1,
+                $"panel crafting: the looks read the roll as worked, noted \"{cpicks.ElementAtOrDefault(2)?.Note}\"");
         }
 
         // the Ticker's top drop (2026-10-26): the most valuable one of an item wins over a stack of cheap ones; blank with nothing priced

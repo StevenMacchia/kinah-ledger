@@ -14,8 +14,8 @@ public partial class MainWindow
 {
     /// <summary>How many crafts the looks get ("craft0" newest to "craft3"): the Card shows three as tiles, the Ticker four toasts.</summary>
     const int HudCrafts = 4;
-    static readonly string[] CraftHeadKeys = { "craft", "craftTime", "craftRecipe", "craftRecipeId", "craftIcon", "craftTries", "craftOk", "craftFail", "craftProfit", "craftSells", "craftPer", "craftPerHr", "craftCombos" };
-    static readonly string[] CraftLineKeys = { "", "Id", "Item", "Ok", "Worth", "Icon", "At" };
+    static readonly string[] CraftHeadKeys = { "craft", "craftTime", "craftRecipe", "craftRecipeId", "craftIcon", "craftTries", "craftOk", "craftFail", "craftProfit", "craftSells", "craftPer", "craftPerHr", "craftCombos", "craftCombosKind" };
+    static readonly string[] CraftLineKeys = { "", "Id", "Item", "Ok", "Worth", "Icon", "At", "Combo" };
 
     /// <summary>Time with the crafting window open this session, added up tick by tick; the tick it was last added at; the tries then.</summary>
     TimeSpan _craftTime;
@@ -113,8 +113,11 @@ public partial class MainWindow
     {
         var d = HudCraftBlank();
         var s = SumCrafts(e);
-        // the tiles are crafts; a combo roll is the line after the craft it credits, never a craft of its own
-        var crafts = lines.Where(l => l.Kind == "craft" && !l.Combo).OrderByDescending(l => l.At).Take(HudCrafts).ToList();
+        // the tiles are crafts; a combo roll is the line after the craft it credits, never a craft of its own. A won roll
+        // is still a line of its own here, "combo ×2" or "combo: Splendent ...", so the panel says what the craft before
+        // it turned into (Steven, 2026-11-04: a Cypri combo made a second dish and the panel only said "worked"); a lost
+        // roll is in the Combos count and nowhere else
+        var crafts = lines.Where(l => l.Kind == "craft" && (!l.Combo || l.Ok)).OrderByDescending(l => l.At).Take(HudCrafts).ToList();
         var ledger = e?.CraftSnapshot() ?? new();
         var recipe = QueueRecipe(ledger, crafts);
         long recipeId = recipe.Length > 0 ? _items.IdOf(recipe) : 0;
@@ -142,19 +145,27 @@ public partial class MainWindow
                 if (mine is { Attempts: >= 3 } && CraftsPerHourOf(ledger.Sum(r => r.Attempts), time) is double cph) d["craftPerHr"] = upTo + Signed(v.Profit * cph);
             }
         }
-        if (mine is { } m && m.Upgraded + m.NotUpgraded > 0) d["craftCombos"] = $"{m.Upgraded}/{m.Upgraded + m.NotUpgraded}";
+        if (mine is { } m && m.Upgraded + m.NotUpgraded > 0)
+        {
+            d["craftCombos"] = $"{m.Upgraded}/{m.Upgraded + m.NotUpgraded}";
+            // what a won roll makes, for the line's label: "Combos ×2 1/3", "Upgrades 1/3", or just "Combos" when the book can't say
+            d["craftCombosKind"] = CraftLedger.ComboOf(m.Name) switch { RecipeBook.ComboMakes.Double => "×2", RecipeBook.ComboMakes.Upgrade => "upgrade", _ => "" };
+        }
         for (int i = 0; i < crafts.Count; i++)
         {
             var l = crafts[i];
             var c = "craft" + i;
+            // a won roll's line carries the recipe, not the upgrade the blue panel named, so its words and worth are the recipe's
+            if (l.Combo && QueueRecipe(ledger, new[] { l }) is { Length: >= 2 } rn && rn != l.Name) l = l with { Name = rn };
             long id = l.Name.Length >= 2 ? _items.IdOf(l.Name) : 0;
             d[c] = l.Name.Length >= 2 ? l.Name : "A craft";
-            d[c + "Id"] = $"{l.At.Ticks}:{l.Name}:{l.Ok}";
+            d[c + "Id"] = $"{l.At.Ticks}:{l.Name}:{l.Ok}{(l.Combo ? ":combo" : "")}";
             d[c + "Item"] = id != 0 ? id.ToString() : "";
             d[c + "Ok"] = l.Ok ? "1" : "";
             d[c + "Worth"] = CraftValue(l).Text;
             d[c + "Icon"] = id != 0 ? _items.IconUrl(id) : "";
             d[c + "At"] = l.At.Ticks.ToString();
+            d[c + "Combo"] = l.Combo ? ComboWon(l.Name) : "";
         }
         return d;
     }
@@ -179,6 +190,8 @@ public partial class MainWindow
             e.CraftPanelSeen(recipe, at);
             e.Apply(new CraftResult(at, recipe, outcome[i]) { Via = SessionEngine.CraftPanelVia, Makes = RecipeBook.ForOutput(recipe)?.OutputQty ?? 1 });
             lines.Add(new FeedLine(at, FeedTab.Crafting, "craft", recipe, 1, Ok: outcome[i], Via: SessionEngine.CraftPanelVia, Where: "Crafting", Makes: RecipeBook.ForOutput(recipe)?.OutputQty ?? 0));
+            // the 10th craft's combo roll, won, as a feed line only (the ledger's sums stay the plain twelve the checks add up)
+            if (i == 9) lines.Add(new FeedLine(at.AddSeconds(8), FeedTab.Crafting, "craft", recipe, 1, Ok: true, Via: SessionEngine.CraftPanelVia, Where: "Crafting", Combo: true));
         }
         return (e, lines, new TimeSpan(0, 18, 5));
     }

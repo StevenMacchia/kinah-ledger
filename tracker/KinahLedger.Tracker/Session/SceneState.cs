@@ -369,7 +369,7 @@ public sealed class SceneState
     {
         //                World Bag Craft Market Reward Event Load Death Cut ChatX Unknown
         ("chat",          "++++++-+-+h", "the chat box; hidden on loading screens and in cutscenes"),
-        ("loot_list",     "++--------h", "rows beside the character: only in the world (a panel, a shop, the cards or an expanded chat sit over its band)"),
+        ("loot_list",     "+++-------h", "rows beside the character: the world, and while crafting for the queue's own pop-ups alone (a shop, the cards or an expanded chat sit over its band)"),
         ("craft_panel",   "--+--------", "crafts count only from the crafting panel's own race"),
         ("gather_bar",    "++-------++", "the same bars on a gathering node: never while crafting"),
         ("nameplates",    "++-------+-", "enemies' health bars around the character: the world only"),

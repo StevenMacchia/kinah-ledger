@@ -103,7 +103,7 @@ public static class PassCostTests
                     var outs = new List<string>();
                     void Race(double from, Color body)
                     {
-                        foreach (var (dt, sb, fb) in new[] { (0.0, 0.0, 0.0), (2.0, 0.4, 0.2), (4.0, 0.8, 0.3), (6.0, 1.0, 0.3) })
+                        foreach (var (dt, sb, fb) in new[] { (0.0, 0.0, 0.0), (2.0, 0.4, 0.2), (4.0, 0.8, 0.3), (6.0, 1.0, 0.3), (7.0, 1.0, 0.3) })
                             if (tr.Feed(tq.AddSeconds(from + dt), At((sb, fb), body)) is { } o) outs.Add(o.Combo ? "roll" : "craft");
                     }
                     Race(0, grass); Race(10, tinted); Race(20, grass);
