@@ -4991,6 +4991,24 @@ options: --process aion[,other]");
                 Check("...the x2 pop-up says it was won: the second dish credited, the roll won not lost", Rolls(pl), "1/1, rolls 1/1, made Artisan's Inina Pasta x2");
             }
             {
+                // Steven's 2026-11-04 14:13 Orichalcum Guard queue of 10: three crafts finished in an instant (a critical success, the
+                // bar full 1.6 to 1.9 s after empty), dropped as flickers, and the next race said "1 craft before it not seen". A quick
+                // success the queue's count passes was that craft; the last craft of a queue the same at its end; a flicker the count
+                // never passes (the 1/1 Orichalcum Ingot above) stays dropped
+                var cs = new TrackerSession(null, new Settings(), items, "Test"); cs.Engine.SetZone("Eastern Cantas Valley");
+                static DateTime Q(double s) => new DateTime(2026, 11, 4, 19, 13, 0, DateTimeKind.Utc).AddSeconds(s);
+                void Count(double at, int done) => cs.PanelLook(Q(at), true, false, new[] { $"Crafting in Progress {done} / 4", "Orichalcum Longsword (Novice Lv. 3)" });
+                void Race(double from, double length, double fail) { foreach (var (dt, sb, fb) in new[] { (0.0, 0.0, 0.0), (length * 0.5, 0.5, fail * 0.5), (length, 1.0, fail) }) { cs.CraftingPass(Q(from + dt)); cs.PanelSample(Q(from + dt), new CraftPanel.Sample(true, sb, fb, false)); } }
+                Count(0, 1); Race(1, 8, 0.4);          // craft 1, a race
+                Count(12, 2); Race(13, 1.7, 0);        // craft 2 in an instant: dropped for now
+                Count(17, 3); Race(18, 8, 0.3);        // craft 3: its count says one was passed
+                Count(29, 4); Race(30, 1.8, 0);        // craft 4, the last, in an instant
+                Count(34, 4);
+                for (int qi = 0; qi < 14; qi++) cs.PanelLook(Q(36 + qi * 0.4), false, false, null);
+                Check("crafting: a craft that finished in an instant is counted once the queue's count passes it, the last one when the queue ends",
+                    string.Join(" | ", cs.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts} unseen {r.Unseen} made {string.Join(", ", r.Made.Select(m => $"{m.Key} x{m.Value}"))}")), "4/4 unseen 0 made Orichalcum Longsword x4");
+            }
+            {
                 // a world boss with a Force (Steven, 2026-10-22): other players' shares are never the player's; the player's own share is
                 var fp = new ChatParser(items); var ft = DateTime.UtcNow;
                 string Got(string l) => string.Join(",", fp.Parse(l, ft).Select(e => e switch { ItemAcquired a => items.NameOf(a.ItemId), KinahChanged k => k.Delta + " Kina", _ => e.GetType().Name }));
