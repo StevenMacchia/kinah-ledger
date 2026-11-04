@@ -1655,15 +1655,15 @@ public partial class MainWindow : Window
         var open = new WF.ToolStripMenuItem("Open Kinah Ledger") { Font = new System.Drawing.Font("Segoe UI", 9.75f, System.Drawing.FontStyle.Bold) };
         open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
-        var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
+        var options = new WF.ToolStripMenuItem("Options…") { ShortcutKeyDisplayString = OptionsKey }; options.Click += (_, _) => OpenOptions();
         var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
         var placePanel = new WF.ToolStripMenuItem("Place the panel…"); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, "Place the panel", why, WF.ToolTipIcon.Info); };
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         // Clear everything and the share picture (0.9.10; New session until 0.9.13): Clear everything brings the window up, so
         // its Undo bar is seen; the picture is copied where the window is, and said by the tray when the window is out of sight
-        var clearAll = new WF.ToolStripMenuItem(ClearAllText);
+        var clearAll = new WF.ToolStripMenuItem(ClearAllText) { ShortcutKeyDisplayString = NewSessionKey };
         clearAll.Click += async (_, _) => { Restore(); await ClearAllFromKey(); };
-        var copyPic = new WF.ToolStripMenuItem("Copy share picture");
+        var copyPic = new WF.ToolStripMenuItem("Copy share picture") { ShortcutKeyDisplayString = CopyPictureKey };
         copyPic.Click += (_, _) =>
         {
             bool away = !IsVisible || WindowState == WindowState.Minimized;
@@ -1674,6 +1674,7 @@ public partial class MainWindow : Window
         menu.Opening += (_, _) =>
         {
             _trayToggle.Text = RunOn ? "Stop run" : "Start run";
+            _trayToggle.ShortcutKeyDisplayString = HotkeyText;   // the in-game key, when one is set
             _trayToggle.Enabled = Farming || (HasServer && !_welcome);
             clearAll.Enabled = !RunOn && !_welcome;
             copyPic.Enabled = ShareCardBtn.IsEnabled && !_welcome;
