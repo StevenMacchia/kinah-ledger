@@ -59,8 +59,8 @@ public partial class MainWindow
         void Redo() => RefreshCraftCard(output, best, rank);
         var grade = GradeOf(output);
         var (card, body) = CkShell(460);
-        body.Children.Add(CkBand(output, grade, recipe == null ? "Not in the recipe book yet" : string.Join(" · ", new[] { recipe.Skill, grade, $"makes ×{recipe.OutputQty}" }.Where(x => x.Length > 0))));
-        if (recipe == null) { body.Children.Add(CkNote("Its materials and cost show once the recipe book has it.")); body.Children.Add(new Border { Height = 14 }); return card; }
+        body.Children.Add(CkBand(output, grade, recipe == null ? $"“{output}” is not in the recipe book yet" : string.Join(" · ", new[] { recipe.Skill, grade, $"makes ×{recipe.OutputQty}" }.Where(x => x.Length > 0))));
+        if (recipe == null) { body.Children.Add(CkNote($"The recipe book has no recipe for “{output}”, so its materials and cost can't show. They will once the book has it.")); body.Children.Add(new Border { Height = 14 }); return card; }
         // the verdict leads: profit per craft right under the name, filled in once the cost is known (below)
         var top = new StackPanel();
         body.Children.Add(top);

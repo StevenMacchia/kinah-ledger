@@ -803,7 +803,7 @@
                 <Grid>
                   <StackPanel x:Name="CraftFeedHost"/>
                   <TextBlock x:Name="CraftEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="12,10,12,10" TextWrapping="Wrap"
-                             Text="Craft something in the game. Each craft shows here as the crafting panel finishes it."/>
+                             Text="Open the crafting window and queue a craft.&#x0A;Profit shows with the first one."/>
                 </Grid>
               </Border>
               <TextBlock x:Name="CraftHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left"
