@@ -64,7 +64,7 @@ public partial class MainWindow : Window
     public System.Windows.Media.Imaging.BitmapSource? PreviewSource { get; private set; }
 
     readonly WF.NotifyIcon _tray = new();
-    readonly WF.ToolStripMenuItem _trayToggle = new("Start farming");
+    readonly WF.ToolStripMenuItem _trayToggle = new("Start run");
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     bool _framing; int _ticks;
 
@@ -190,7 +190,7 @@ public partial class MainWindow : Window
         InitWhatsNew(watch);   // after an update, this version's notes once at the top (Ui/MainWindow.WhatsNew.cs)
         InitCounting(watch);   // Help improve counting: the choice applied, the one-time notice
         if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
-        else Say("Reading the chat whenever the game is open. Start run times a stretch on top.", "Faint");
+        else Say("Reading the chat whenever the game is open. Start run times a run.", "Faint");
         // the data folder's clean-up: pictures and miscount reports past their time, on its own thread, then hourly (Housekeeping)
         if (watch) Housekeeping.RunIfDue(DateTime.Now);
         // miscount reports the site couldn't take before (no connection, the route not deployed yet) go now, when the backoff allows
@@ -1469,7 +1469,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// A message to read. A "done" in the good tone (copied, set, saved, put back) shows in the toast over the page
     /// (Ui/MainWindow.Toast.cs, 0.9.10), where it is seen; the rest (working, warnings, problems) on the status line, where
-    /// it stays about 6 s before the live status takes the line back, the whole text on hover.
+    /// it stays about 6 s (a warning or problem 30 s) before the live status takes the line back, the whole text on hover.
     /// </summary>
     void Say(string text, string tone)
     {
@@ -1477,8 +1477,20 @@ public partial class MainWindow : Window
         SayOnLine(text, tone);
     }
     /// <summary>On the status line whatever the tone: a stopped run's result, and a saved report whose folder is on the line's hover.</summary>
-    void SayOnLine(string text, string tone) { Tell(text, tone); Status.ToolTip = text; if (DateTime.UtcNow.AddSeconds(SayHoldSeconds) > _statusHoldUntil) _statusHoldUntil = DateTime.UtcNow.AddSeconds(SayHoldSeconds); }
-    const double SayHoldSeconds = 6;
+    void SayOnLine(string text, string tone)
+    {
+        // a warning or a problem stays 30 s (the player may be in the game and tab back later) and only a newer one replaces it;
+        // anything gentler is replaced as before, after 6 s
+        bool strong = tone is "Warn" or "Bad";
+        var now = DateTime.UtcNow;
+        if (!strong && now < _strongHoldUntil) return;
+        Tell(text, tone); Status.ToolTip = text;
+        var until = now.AddSeconds(strong ? SayHoldStrongSeconds : SayHoldSeconds);
+        if (strong) { _strongHoldUntil = until; _statusHoldUntil = until; }
+        else if (until > _statusHoldUntil) _statusHoldUntil = until;
+    }
+    DateTime _strongHoldUntil;
+    const double SayHoldSeconds = 6, SayHoldStrongSeconds = 30;
     /// <summary>The live status line, rewritten each tick: in the look's own colour, so a change of look repaints it.</summary>
     void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
@@ -1526,7 +1538,9 @@ public partial class MainWindow : Window
     void ServerRowState()
     {
         bool ok = HasServer;
-        ServerChip.Text = Server is { } s ? $"{s.Label} · {s.Region.Name}" : "No server chosen · pick one in Options";
+        // on the Welcome card Options is out of reach, so the way to a server is the card's own chips
+        ServerChip.Text = Server is { } s ? $"{s.Label} · {s.Region.Name}" : _welcome ? "No server chosen · pick yours below" : "No server chosen · pick one in Options";
+        ServerChip.ToolTip = _welcome ? "Pick your server below." : "Your server. Change it in Options.";
         ServerChip.Foreground = B(ok ? "Muted" : "Warn");
         if (!Farming) StartBtn.IsEnabled = ok;
     }
@@ -1643,15 +1657,15 @@ public partial class MainWindow : Window
         var open = new WF.ToolStripMenuItem("Open Kinah Ledger") { Font = new System.Drawing.Font("Segoe UI", 9.75f, System.Drawing.FontStyle.Bold) };
         open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
-        var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
+        var options = new WF.ToolStripMenuItem("Options…") { ShortcutKeyDisplayString = OptionsKey }; options.Click += (_, _) => OpenOptions();
         var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
         var placePanel = new WF.ToolStripMenuItem("Place the panel…"); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, "Place the panel", why, WF.ToolTipIcon.Info); };
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         // Clear everything and the share picture (0.9.10; New session until 0.9.13): Clear everything brings the window up, so
         // its Undo bar is seen; the picture is copied where the window is, and said by the tray when the window is out of sight
-        var clearAll = new WF.ToolStripMenuItem(ClearAllText);
+        var clearAll = new WF.ToolStripMenuItem(ClearAllText) { ShortcutKeyDisplayString = NewSessionKey };
         clearAll.Click += async (_, _) => { Restore(); await ClearAllFromKey(); };
-        var copyPic = new WF.ToolStripMenuItem("Copy share picture");
+        var copyPic = new WF.ToolStripMenuItem("Copy share picture") { ShortcutKeyDisplayString = CopyPictureKey };
         copyPic.Click += (_, _) =>
         {
             bool away = !IsVisible || WindowState == WindowState.Minimized;
@@ -1662,6 +1676,7 @@ public partial class MainWindow : Window
         menu.Opening += (_, _) =>
         {
             _trayToggle.Text = RunOn ? "Stop run" : "Start run";
+            _trayToggle.ShortcutKeyDisplayString = HotkeyText;   // the in-game key, when one is set
             _trayToggle.Enabled = Farming || (HasServer && !_welcome);
             clearAll.Enabled = !RunOn && !_welcome;
             copyPic.Enabled = ShareCardBtn.IsEnabled && !_welcome;

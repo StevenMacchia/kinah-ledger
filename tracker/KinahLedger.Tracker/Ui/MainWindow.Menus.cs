@@ -18,8 +18,8 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class MainWindow
 {
-    /// <summary>One line of a menu: an action (Do), a switch (On), a quiet line of information (Info) or a rule.</summary>
-    internal sealed record MenuEntry(string Text, Action? Do = null, string Sub = "", object? Tip = null, bool? On = null, bool Info = false, bool Rule = false)
+    /// <summary>One line of a menu: an action (Do), a switch (On), a quiet line of information (Info) or a rule. Key: the shortcut, faint at the row's right.</summary>
+    internal sealed record MenuEntry(string Text, Action? Do = null, string Sub = "", object? Tip = null, bool? On = null, bool Info = false, bool Rule = false, string Key = "")
     {
         public static MenuEntry Line => new("", Rule: true);
     }
@@ -86,6 +86,11 @@ public partial class MainWindow
         words.Children.Add(text);
         if (e.Sub.Length > 0) { var s = CkText(e.Sub, CkFaint, 11.5); s.TextWrapping = TextWrapping.Wrap; s.TextTrimming = TextTrimming.None; s.Margin = new Thickness(0, 2, 0, 0); words.Children.Add(s); }
         g.Children.Add(words);
+        if (e.Key.Length > 0 && e.On == null)
+        {
+            var k = CkText(e.Key, CkFaint, 11.5); k.VerticalAlignment = VerticalAlignment.Center; k.HorizontalAlignment = HorizontalAlignment.Right; k.Margin = new Thickness(14, 0, 0, 0); k.IsHitTestVisible = false;
+            Grid.SetColumn(k, 1); g.Children.Add(k);
+        }
         bool on = e.On == true;
         Border? sw = null;
         if (e.On != null) { sw = MenuSwitch(on); sw.Margin = new Thickness(14, 0, 0, 0); Grid.SetColumn(sw, 1); g.Children.Add(sw); }

@@ -287,7 +287,7 @@
               <Rectangle x:Name="ViewFill" Width="6" Height="9" Fill="{DynamicResource Muted}" HorizontalAlignment="Right" Margin="0,0,1.5,0" Opacity="0.25"/>
             </Grid>
           </Button>
-          <Button x:Name="OptionsBtn" Height="32" Padding="12,0" FontSize="12.5" ToolTip="Server, startup, sharing, game reading, hotkey, updates.">
+          <Button x:Name="OptionsBtn" Height="32" Padding="12,0" FontSize="12.5" ToolTip="Startup and look, server and price alerts, sharing and your data, game reading, the shortcut and the panel over the game, updates.">
             <StackPanel Orientation="Horizontal">
               <!-- a gear, drawn so no image ships -->
               <Path Width="14" Height="14" Stretch="Uniform" Fill="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,7,0"
@@ -487,7 +487,7 @@
           <Grid Margin="20,16,20,16">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start run" MinWidth="112" Height="34" Padding="24,0" FontSize="13" VerticalAlignment="Center"
-                    ToolTip="Everything is counted while the game is open. A run times one stretch on top; it is what gets saved and shared."/>
+                    ToolTip="Times a run. Counting happens anyway; a run is what gets saved and shared."/>
             <!-- Share (0.9.3, ShareA): opens the Share sheet under the actions, in this card (Ui/MainWindow.Share.cs) -->
             <Button x:Name="ShareCardBtn" Grid.Column="1" Margin="8,0,0,0" IsEnabled="False" Height="34" Padding="16,0" FontSize="13" Content="Share"
                     BorderBrush="{DynamicResource GoldLine}" Foreground="{DynamicResource Gold}" AutomationProperties.Name="Share"
@@ -495,7 +495,7 @@
             <!-- the shortcut that starts and stops a run, read from the setting (UpdateStartHint) -->
             <TextBlock x:Name="StartHint" Grid.Column="2" Margin="12,0,8,0" FontSize="12" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
             <!-- the rest, out of the way: All zones, Clear everything (New session, on the card from 0.9.9 to 0.9.12), the shortcut -->
-            <Button x:Name="MoreBtn" Grid.Column="3" Width="34" Height="34" Padding="0" ToolTip="More" AutomationProperties.Name="More">
+            <Button x:Name="MoreBtn" Grid.Column="3" Width="34" Height="34" Padding="0" ToolTip="More: goals, all zones, clear everything, report a missing pickup" AutomationProperties.Name="More">
               <TextBlock Text="⋯" FontSize="17" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
             </Button>
           </Grid>
@@ -629,7 +629,7 @@
             </Style>
           </Border.Style>
         </Border>
-        <TextBlock x:Name="Status" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250" VerticalAlignment="Center"/>
+        <TextBlock x:Name="Status" Grid.Column="1" Foreground="{DynamicResource Faint}" FontSize="12" TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis" Background="Transparent" ToolTipService.InitialShowDelay="250" VerticalAlignment="Center"/>
         <!-- shown with a reading problem: straight to the page that fixes it -->
         <TextBlock x:Name="FixText" Grid.Column="2" FontSize="12" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center"><Hyperlink x:Name="FixLink" Style="{StaticResource LinkStyle}">Game reading options</Hyperlink></TextBlock>
         <!-- the last minute of what was read and counted, saved on this PC (2026-10-23) and, since 0.9.0, sent to the site's
