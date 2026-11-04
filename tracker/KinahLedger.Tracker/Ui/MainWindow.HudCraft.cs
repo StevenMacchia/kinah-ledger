@@ -113,7 +113,8 @@ public partial class MainWindow
     {
         var d = HudCraftBlank();
         var s = SumCrafts(e);
-        var crafts = lines.Where(l => l.Kind == "craft").OrderByDescending(l => l.At).Take(HudCrafts).ToList();
+        // the tiles are crafts; a combo roll is the line after the craft it credits, never a craft of its own
+        var crafts = lines.Where(l => l.Kind == "craft" && !l.Combo).OrderByDescending(l => l.At).Take(HudCrafts).ToList();
         var ledger = e?.CraftSnapshot() ?? new();
         var recipe = QueueRecipe(ledger, crafts);
         long recipeId = recipe.Length > 0 ? _items.IdOf(recipe) : 0;

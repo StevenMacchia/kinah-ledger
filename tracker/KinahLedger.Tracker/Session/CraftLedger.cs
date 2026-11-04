@@ -171,6 +171,17 @@ public sealed class CraftLedger
     /// <summary>Whether a won combo roll on this recipe makes the craft twice over rather than an upgrade item.</summary>
     public static bool DoublesOnCombo(string recipe) => ComboOf(recipe) == RecipeBook.ComboMakes.Double;
 
+    /// <summary>The rolls' label on the card and the tab, by what a won one makes: "Upgrade rolls", "Combo rolls (each makes two)", or that it isn't known.</summary>
+    public static string ComboRollsLabel(string recipe) => ComboOf(recipe) switch
+    {
+        RecipeBook.ComboMakes.Upgrade => "Upgrade rolls",
+        RecipeBook.ComboMakes.Double => "Combo rolls (each makes two)",
+        _ => "Combo rolls (what a won one makes isn't known)",
+    };
+
+    /// <summary>"2 crafts not seen" for a recipe's crafts the queue's count jumped past; "" with none.</summary>
+    public static string UnseenNote(Recipe r) => r.Unseen > 0 ? $"{r.Unseen} craft{(r.Unseen == 1 ? "" : "s")} not seen (the bars were covered): counted as nothing" : "";
+
     /// <summary>
     /// A won upgrade roll: the craft before it made the recipe's upgrade, not its base item. The game swaps the result's
     /// colour and count the moment the roll lands, and the loot list names the upgrade (Steven, 2026-10-25: a won roll

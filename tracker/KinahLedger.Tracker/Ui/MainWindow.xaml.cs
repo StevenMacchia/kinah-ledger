@@ -1257,8 +1257,9 @@ public partial class MainWindow : Window
             var tip = "Click for the materials, what a craft costs and what it makes."
                 + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
-                + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{(Session.CraftLedger.DoublesOnCombo(r.Name) ? "Combo rolls (each makes two)" : "Upgrade rolls")}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
-                + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "");
+                + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{Session.CraftLedger.ComboRollsLabel(r.Name)}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
+                + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "")
+                + (r.Unseen > 0 ? "\n" + Session.CraftLedger.UnseenNote(r) + "." : "");
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Ok.ToString("N0"), spentCell,
                 Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
                 Price: madeKnown && made > 0 ? Fk(made) : "", PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : ""));
@@ -1490,17 +1491,14 @@ public partial class MainWindow : Window
     /// <summary>On the status line whatever the tone: a stopped run's result, and a saved report whose folder is on the line's hover.</summary>
     void SayOnLine(string text, string tone)
     {
-        // a warning or a problem stays 30 s (the player may be in the game and tab back later) and only a newer one replaces it;
-        // anything gentler is replaced as before, after 6 s
+        // a warning or a problem holds the live status off the line for 30 s (the player may be in the game and tab back later);
+        // anything said on purpose still replaces it at once (a click's answer must show), and gentler lines hold 6 s
         bool strong = tone is "Warn" or "Bad";
         var now = DateTime.UtcNow;
-        if (!strong && now < _strongHoldUntil) return;
         Tell(text, tone); Status.ToolTip = text;
         var until = now.AddSeconds(strong ? SayHoldStrongSeconds : SayHoldSeconds);
-        if (strong) { _strongHoldUntil = until; _statusHoldUntil = until; }
-        else if (until > _statusHoldUntil) _statusHoldUntil = until;
+        if (strong || until > _statusHoldUntil) _statusHoldUntil = until;
     }
-    DateTime _strongHoldUntil;
     const double SayHoldSeconds = 6, SayHoldStrongSeconds = 30;
     /// <summary>The live status line, rewritten each tick: in the look's own colour, so a change of look repaints it.</summary>
     void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }

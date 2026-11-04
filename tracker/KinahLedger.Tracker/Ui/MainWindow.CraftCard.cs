@@ -157,7 +157,9 @@ public partial class MainWindow
             body.Children.Add(CkKv($"{mine.Attempts} craft{(mine.Attempts == 1 ? "" : "s")} · {mine.Ok} worked · {mine.Fail} failed", $"{sessRate:P0}", mine.Attempts < CraftMath.ObservedFrom ? CkInk : sessRate >= (recipe.SuccessRate ?? 0) ? CkGood : CkBad,
                 recipe.SuccessRate is double lr ? $"listed {lr:P0}" : ""));
             // the upgrade rolls the crafting panel showed after a craft worked
-            if (mine.Upgraded + mine.NotUpgraded > 0) body.Children.Add(CkKv($"{(Session.CraftLedger.DoublesOnCombo(mine.Name) ? "Combo rolls (×2)" : "Upgrade rolls")} · {mine.Upgraded} won · {mine.NotUpgraded} lost", $"{mine.Upgraded}/{mine.Upgraded + mine.NotUpgraded}", mine.Upgraded > 0 ? CkGood : CkMuted));
+            if (mine.Upgraded + mine.NotUpgraded > 0) body.Children.Add(CkKv($"{Session.CraftLedger.ComboRollsLabel(mine.Name)} · {mine.Upgraded} won · {mine.NotUpgraded} lost", $"{mine.Upgraded}/{mine.Upgraded + mine.NotUpgraded}", mine.Upgraded > 0 ? CkGood : CkMuted));
+            // crafts the queue's count jumped past while the bars were covered: they ran, and count as nothing (never guessed worked or failed)
+            if (mine.Unseen > 0) body.Children.Add(CkKv(Session.CraftLedger.UnseenNote(mine), "", CkMuted));
             if (mine.Made.Count > 0)
             {
                 var came = new WrapPanel { Margin = new Thickness(20, 6, 14, 0) };
