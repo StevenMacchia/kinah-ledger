@@ -179,6 +179,21 @@ public sealed class CraftLedger
         _ => "Combo rolls (what a won one makes isn't known)",
     };
 
+    /// <summary>
+    /// Patch notes of 2026-11-04: new recipes for True Dragon and Star Dragon gear succeed 100%, never roll a combo, and give
+    /// Bound gear. The recipe book (MetaBot) has only the old ones and the panel does not show which was used, so a card for
+    /// this gear says so. "" when the recipe is not that gear or already listed at 100%.
+    /// </summary>
+    public static string SafeRecipeNote(string recipeName)
+    {
+        if (string.IsNullOrEmpty(recipeName)) return "";
+        var cmp = StringComparison.OrdinalIgnoreCase;
+        if (!recipeName.Contains("True Dragon", cmp) && !recipeName.Contains("Star Dragon", cmp)) return "";
+        var r = RecipeBook.ForOutput(recipeName);
+        if (r?.SuccessRate is double sr && sr >= 1) return "";
+        return "A safe recipe for this gear exists since Nov 4 (100%, no combo, Bound output that can't be sold). The tracker can't tell which recipe you used: if every craft works and none rolls a combo, that's the safe one, and the sale value here doesn't apply.";
+    }
+
     /// <summary>"2 crafts not seen" for a recipe's crafts the queue's count jumped past; "" with none.</summary>
     public static string UnseenNote(Recipe r) => r.Unseen > 0 ? $"{r.Unseen} craft{(r.Unseen == 1 ? "" : "s")} not seen (the bars were covered): counted as nothing" : "";
 

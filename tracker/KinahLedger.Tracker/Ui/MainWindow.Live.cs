@@ -601,6 +601,20 @@ public partial class MainWindow
     /// The chips under the drops, one per thing counted besides them (Gathered, each gathering skill, Soul Crystals, Kinah by
     /// enemy), each opening its own small table in place under a gold rule. Only one is open at a time.
     /// </summary>
+    /// <summary>The game's daily gathering limit (1,000 a server, reset at midnight Pacific): a muted line under the chips, and each warning said once a game day.</summary>
+    void ShowGatherLimit()
+    {
+        try
+        {
+            var server = Server?.Label ?? "";
+            var now = DateTime.UtcNow;
+            var line = Session.GatherDay.Line(server, now);
+            GatherLimit.Text = line; GatherLimit.Visibility = line.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (Session.GatherDay.Warning(server, now) is { } w) SayOnLine(w, "Warn");
+        }
+        catch (Exception ex) { CrashLog.Write("gather limit", ex); }
+    }
+
     void FillExtras(List<DropRow> gathered, List<SkillBox> skills, List<DropRow> pets, List<DropRow> mobs, long kinah)
     {
         var keys = new List<string>();
