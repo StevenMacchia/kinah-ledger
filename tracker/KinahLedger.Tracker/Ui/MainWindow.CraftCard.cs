@@ -112,7 +112,7 @@ public partial class MainWindow
                 // free in cash: "farmed · 0", with what it would cost dimmed beside it
                 var fp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
                 fp.Children.Add(CkText("farmed · 0", Color.FromRgb(0x5E, 0xD8, 0xCB), 12.5, mono: true));
-                if (each is long ref1) { var dim = CkText(vendor ? $"NPC {ref1:N0}" : $"Market {ref1:N0}", CkFaint, 11.5, mono: true); dim.Margin = new Thickness(8, 0, 0, 0); fp.Children.Add(dim); }
+                if (each is long ref1) { var dim = CkText(vendor ? $"NPC {Amounts.Short(ref1)}" : $"Market {Amounts.Short(ref1)}", CkFaint, 11.5, mono: true); dim.ToolTip = Amounts.Full(ref1) + " each"; dim.Margin = new Thickness(8, 0, 0, 0); fp.Children.Add(dim); }
                 info.Children.Add(fp);
                 if (!vendor) farmed.Add((m.Item, m.Qty, each));
             }
@@ -134,7 +134,7 @@ public partial class MainWindow
             slots.Children.Add(Sized(CkBox(row, new Thickness(0, 0, 14, 10), new Thickness(8)), 196));
         }
         body.Children.Add(slots);
-        if (recipe.Kinah is long fee && fee > 0) body.Children.Add(CkKv("Crafting fee", fee.ToString("N0"), CkGold));
+        if (recipe.Kinah is long fee && fee > 0) body.Children.Add(CkTip(CkKv("Crafting fee", Amounts.Short(fee), CkGold), $"{Amounts.Full(fee)} kinah a craft"));
 
         // the cost per craft, boxed like the game's totals
         var tot = new Grid();
@@ -144,7 +144,8 @@ public partial class MainWindow
         if (unpriced > 0) tl.Children.Add(CkText(unpriced == 1 ? "one price unsure or missing, left out: click it to type yours" : $"{unpriced} prices unsure or missing, left out", CkWarn, 11.5));
         tot.Children.Add(tl);
         // a floor says so: "at least 246,619"; with nothing priced it is "no price yet", never "0+" (the CI render of 2026-10-24)
-        var tv = total <= 0 && unpriced > 0 ? CkText("no price yet", CkFaint, 15) : CkText((unpriced > 0 ? "at least " : "") + total.ToString("N0"), CkGold, 19, FontWeights.SemiBold, mono: true);
+        var tv = total <= 0 && unpriced > 0 ? CkText("no price yet", CkFaint, 15) : CkText((unpriced > 0 ? "at least " : "") + Amounts.Short(total), CkGold, 19, FontWeights.SemiBold, mono: true);
+        tv.ToolTip = Amounts.Full(total) + " kinah a craft";
         Grid.SetColumn(tv, 1); tot.Children.Add(tv);
         body.Children.Add(CkBox(tot, new Thickness(20, 4, 20, 0)));
 
@@ -168,14 +169,13 @@ public partial class MainWindow
                 // tries of the recipe on the card at its cost; tries of another variant of the item at that variant's own
                 var elsewhere = mine.Tries.Where(kv => kv.Key != 0 && kv.Key != recipe.OutputQty).ToDictionary(kv => kv.Key, kv => kv.Value);
                 long spentMats = total * (mine.Attempts - elsewhere.Values.Sum());
-                if (elsewhere.Count == 0) body.Children.Add(CkKv("Spent on materials", spentMats.ToString("N0"), CkInk));
-                else if (RecipeBook.CostOfTries(output, elsewhere, out int eu, out int ev, out _) is long ec && eu + ev == 0) body.Children.Add(CkKv("Spent on materials", (spentMats + ec).ToString("N0"), CkInk));
+                if (elsewhere.Count == 0) body.Children.Add(CkTip(CkKv("Spent on materials", Amounts.Short(spentMats), CkInk), Amounts.Full(spentMats) + " kinah"));
+                else if (RecipeBook.CostOfTries(output, elsewhere, out int eu, out int ev, out _) is long ec && eu + ev == 0) body.Children.Add(CkTip(CkKv("Spent on materials", Amounts.Short(spentMats + ec), CkInk), Amounts.Full(spentMats + ec) + " kinah"));
             }
         }
         long Sells(string item, int qty) => Price(item) is long p ? (long)Math.Round(p * qty * PriceBook.SellerKeeps) : -1;
         long outValue = Sells(recipe.Output, recipe.OutputQty);
-        body.Children.Add(CkPriceLine(recipe.Output, "Lowest Market price", Redo, server: Server?.Name ?? ""));
-        body.Children.Add(CkKv($"Sells for, {PriceBook.Fee}", outValue >= 0 ? outValue.ToString("N0") : "no sure price yet", outValue >= 0 ? CkGold : CkFaint, recipe.OutputQty > 1 ? $"{recipe.OutputQty} made per craft" : ""));
+        body.Children.Add(SellsLine(recipe, outValue, Redo));
         // the book's great outcomes, the upgrade inferred when the book lacks it, else the combo that makes two
         var outcomes = recipe.GreatOutcomes.ToList();
         if (recipe.Upgrade is { } inferred && !outcomes.Any(g => string.Equals(g.Item, inferred.Item, StringComparison.OrdinalIgnoreCase))) outcomes.Add(inferred);
@@ -190,7 +190,7 @@ public partial class MainWindow
                 // the chance a craft that worked turns into the upgrade, the figure the profit uses (UpgradeChance); the recipe's
                 // own chance is a combo's, before the combo itself has to succeed (0.25 × 0.77 = 19% for the earrings, not 25%)
                 ups.Children.Add(CkChip((more ? $"Combo makes ×{g.Qty}" : $"Quality upgrade: {g.Item}") + (UpgradeChance(recipe, g) is double c ? $" · {c:P0}" : "")
-                    + (uq != null ? $" · {(uq.From == PriceBook.From.Region ? "≈" : "")}{uq.Price:N0}{(uq.Sure ? "" : ", unsure")}" : ""), more ? Color.FromRgb(0x5E, 0xD8, 0xCB) : GradeColor(GradeOf(g.Item))));
+                    + (uq != null ? $" · {(uq.From == PriceBook.From.Region ? "≈" : "")}{Amounts.Short(uq.Price)}{(uq.Sure ? "" : ", unsure")}" : ""), more ? Color.FromRgb(0x5E, 0xD8, 0xCB) : GradeColor(GradeOf(g.Item))));
             }
             body.Children.Add(ups);
         }
@@ -234,7 +234,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// With materials ticked "I have these": what selling them on the Market would bring per try instead, after its cut,
+    /// With materials ticked "I have these": what selling them on the Market would bring per craft instead, after its cut,
     /// and which way wins against the cash profit per craft. Needs a sure price for every ticked material.
     /// </summary>
     static void SellTheMats(StackPanel body, List<(string Item, int Qty, long? Price)> farmed, double? per)
@@ -242,10 +242,10 @@ public partial class MainWindow
         if (farmed.Count == 0) return;
         if (farmed.FirstOrDefault(f => f.Price == null) is { Item: { } gap }) { body.Children.Add(CkNote($"Sell-the-mats line needs a price for {gap}.")); return; }
         long sell = (long)Math.Round(farmed.Sum(f => f.Price!.Value * f.Qty * PriceBook.SellerKeeps));
-        body.Children.Add(CkKv("Or sell the mats instead", $"{sell:N0} per try", CkGold, $"{PriceBook.Fee}"));
+        body.Children.Add(CkTip(CkKv("Or sell the mats instead", $"{Amounts.Short(sell)} per craft", CkGold, $"{PriceBook.Fee}"), $"{Amounts.Full(sell)} kinah per craft"));
         if (per is not double p) return;
         double z = p - sell;
-        body.Children.Add(CkNote(z >= 0 ? $"Crafting beats selling the mats by {z:N0} per try." : $"Selling the mats beats crafting by {-z:N0} per try."));
+        body.Children.Add(CkNote(z >= 0 ? $"Crafting beats selling the mats by {Amounts.Short(z)} per craft." : $"Selling the mats beats crafting by {Amounts.Short(-z)} per craft."));
     }
 
     /// <summary>"I have these": a material the player farmed, gathered or already owns costs nothing in cash.</summary>
@@ -278,6 +278,36 @@ public partial class MainWindow
             Child = g, Margin = new Thickness(0, 0, 0, 8), Padding = new Thickness(20, 10, 20, 12), BorderThickness = new Thickness(0, 0, 0, 1), BorderBrush = Ck(CkSlotLine),
             Background = new LinearGradientBrush(tint, Color.FromRgb((byte)(tint.R * 0.7), (byte)(tint.G * 0.7), (byte)(tint.B * 0.7)), 90),
         };
+    }
+
+    /// <summary>A tooltip on a card line: the full figure the line shows short.</summary>
+    static FrameworkElement CkTip(FrameworkElement e, string tip) { e.ToolTip = tip; return e; }
+
+    /// <summary>
+    /// What the recipe sells for, as one line: the net figure after the Market's cut first, the gross Market price under it
+    /// (clickable, to type what the game shows) with its source, and how many a craft makes.
+    /// </summary>
+    FrameworkElement SellsLine(RecipeBook.Recipe recipe, long net, Action redo)
+    {
+        var q = PriceBook.QuoteOf(recipe.Output);
+        var g = new Grid { Margin = new Thickness(20, 3, 20, 3) };
+        g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        left.Children.Add(CkText($"Sells for, {PriceBook.Fee}", CkInk, 13.5));
+        var sub = new StackPanel { Orientation = Orientation.Horizontal };
+        sub.Children.Add(CkText(q == null ? $"no Market price on {Server?.Name ?? "your server"} yet:  " : "Market price  ", CkFaint, 11.5));
+        sub.Children.Add(CkPriceEditor(recipe.Output, q, redo, 1, 11.5));
+        sub.Children.Add(CkText(q == null ? "" : recipe.OutputQty > 1 ? $"  each · {recipe.OutputQty} made per craft" : "  each", CkFaint, 11.5));
+        left.Children.Add(sub);
+        if (q != null && CardSourceOnLine) left.Children.Add(CkText(PriceBook.Describe(q), q.Mine ? Color.FromRgb(0x5E, 0xD8, 0xCB) : q.Sure ? CkFaint : CkWarn, 11));
+        if (q is { Sure: false }) left.Opacity = 0.75;
+        g.Children.Add(left);
+        var right = net >= 0 ? CkText(Amounts.Short(net), CkGold, 13.5, FontWeights.SemiBold, mono: true) : CkText("no sure price yet", CkFaint, 13.5, FontWeights.SemiBold);
+        if (net >= 0) right.ToolTip = $"{Amounts.Full(net)} kinah for the {recipe.OutputQty} a craft makes, {PriceBook.Fee}";
+        right.Margin = new Thickness(12, 0, 0, 0); right.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(right, 1); g.Children.Add(right);
+        if (q != null) g.ToolTip = PriceHover(recipe.Output, q);
+        return g;
     }
 
     static Border Sized(Border b, double width) { b.Width = width; return b; }
