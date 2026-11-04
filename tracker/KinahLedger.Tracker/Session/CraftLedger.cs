@@ -19,13 +19,15 @@ public sealed class CraftLedger
         public Dictionary<string, int> Made = new(StringComparer.OrdinalIgnoreCase);
         /// <summary>Successes whose output count isn't known: the recipe has variants (×1 and ×10) and the panel didn't say which.</summary>
         public int MadeUnknown;
+        /// <summary>Crafts of this recipe that ran while their race wasn't seen (the queue's count jumped past them): not tries, not output; the session's rate leaves them out.</summary>
+        public int Unseen;
         /// <summary>
         /// Every try (worked or failed) by how many one success of its recipe makes, 0 when the panel's level didn't say: the
         /// recipe has variants (Orichalcum Ingot ×1 and ×10) that use different materials, so what a try cost depends on it.
         /// </summary>
         public Dictionary<int, int> Tries = new();
         public int Attempts => Ok + Fail;
-        public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, MadeUnknown = MadeUnknown, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase), Tries = new Dictionary<int, int>(Tries) };
+        public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, MadeUnknown = MadeUnknown, Unseen = Unseen, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase), Tries = new Dictionary<int, int>(Tries) };
     }
 
     // ---- the crafting panel: the one way in (Steven, 2026-10-23: "if u dont see the crafting bars why the fuck are u
@@ -64,10 +66,17 @@ public sealed class CraftLedger
         if (!cr.Combo) _lastCraft = name;
         var r = Get(name);
         var was = cr.Queue > 0 ? r.Copy() : null;
-        if (!cr.Combo) { int ty = name != "?" && cr.Makes is int my && my > 0 ? my : 0; r.Tries[ty] = r.Tries.GetValueOrDefault(ty) + 1; }
+        if (!cr.Combo) { int ty = name != "?" && cr.Makes is int my && my > 0 ? my : 0; r.Tries[ty] = r.Tries.GetValueOrDefault(ty) + 1; if (cr.Unseen > 0) r.Unseen += cr.Unseen; }
         if (cr.Combo)
         {
-            if (cr.Ok) { r.Upgraded++; Upgrade(r); } else r.NotUpgraded++;
+            // a roll is for the craft before it, one that worked and hasn't been rolled yet; a fail can't roll a combo, and a
+            // craft rolls once (2026-11-03: a "roll" read after a Cypri fail made the card say 2 won of 1 craft that worked)
+            if (!_lastOk.TryGetValue(name, out var lo) || lo.Upgraded)
+            {
+                CrashLog.Note($"crafting: a combo roll ({(cr.Ok ? "won" : "lost")}) for {name} with no craft to credit: not counted");
+                return;
+            }
+            if (cr.Ok) { r.Upgraded++; Upgrade(r); } else { r.NotUpgraded++; lo.Upgraded = true; }
         }
         else if (cr.Ok)
         {
@@ -105,6 +114,7 @@ public sealed class CraftLedger
         d.Ok += now.Ok - was.Ok; d.Fail += now.Fail - was.Fail;
         d.Upgraded += now.Upgraded - was.Upgraded; d.NotUpgraded += now.NotUpgraded - was.NotUpgraded;
         d.MadeUnknown += now.MadeUnknown - was.MadeUnknown;
+        d.Unseen += now.Unseen - was.Unseen;
         foreach (var k in now.Tries.Keys.Union(was.Tries.Keys).ToList())
         {
             int t = d.Tries.GetValueOrDefault(k) + now.Tries.GetValueOrDefault(k) - was.Tries.GetValueOrDefault(k);
@@ -133,9 +143,10 @@ public sealed class CraftLedger
             r.Ok = Math.Max(0, r.Ok - d.Ok); r.Fail = Math.Max(0, r.Fail - d.Fail);
             r.Upgraded = Math.Max(0, r.Upgraded - d.Upgraded); r.NotUpgraded = Math.Max(0, r.NotUpgraded - d.NotUpgraded);
             r.MadeUnknown = Math.Max(0, r.MadeUnknown - d.MadeUnknown);
+            r.Unseen = Math.Max(0, r.Unseen - d.Unseen);
             foreach (var (k, t) in d.Tries) { int left = r.Tries.GetValueOrDefault(k) - t; if (left > 0) r.Tries[k] = left; else r.Tries.Remove(k); }
             foreach (var (item, n) in d.Made) { int left = r.Made.GetValueOrDefault(item) - n; if (left > 0) r.Made[item] = left; else r.Made.Remove(item); }
-            if (r.Attempts == 0 && r.Upgraded + r.NotUpgraded == 0 && r.Made.Count == 0 && r.MadeUnknown == 0) _recipes.Remove(f.Name);
+            if (r.Attempts == 0 && r.Upgraded + r.NotUpgraded == 0 && r.Made.Count == 0 && r.MadeUnknown == 0 && r.Unseen == 0) _recipes.Remove(f.Name);
         }
         if (_lastOk.TryGetValue(f.Name, out var lo) && lo.Queue == queue) _lastOk.Remove(f.Name);
         if (string.Equals(_lastCraft, f.Name, StringComparison.OrdinalIgnoreCase)) _lastCraft = "";
@@ -153,8 +164,23 @@ public sealed class CraftLedger
     static RecipeBook.Great? UpgradeOf(string recipe) =>
         recipe.Length >= 2 && recipe != "?" ? RecipeBook.ForOutput(recipe)?.Upgrade : null;
 
-    /// <summary>Whether a won combo roll on this recipe makes the craft twice over rather than an upgrade item (the recipe book has no upgrade for it).</summary>
-    public static bool DoublesOnCombo(string recipe) => recipe.Length >= 2 && recipe != "?" && UpgradeOf(recipe) == null;
+    /// <summary>What a won combo makes of this recipe's craft (RecipeBook.Recipe.Combo); unknown for a name the book lacks or one not read whole.</summary>
+    public static RecipeBook.ComboMakes ComboOf(string recipe) =>
+        recipe.Length >= 2 && recipe != "?" ? RecipeBook.ForOutput(recipe)?.Combo ?? RecipeBook.ComboMakes.Unknown : RecipeBook.ComboMakes.Unknown;
+
+    /// <summary>Whether a won combo roll on this recipe makes the craft twice over rather than an upgrade item.</summary>
+    public static bool DoublesOnCombo(string recipe) => ComboOf(recipe) == RecipeBook.ComboMakes.Double;
+
+    /// <summary>The rolls' label on the card and the tab, by what a won one makes: "Upgrade rolls", "Combo rolls (each makes two)", or that it isn't known.</summary>
+    public static string ComboRollsLabel(string recipe) => ComboOf(recipe) switch
+    {
+        RecipeBook.ComboMakes.Upgrade => "Upgrade rolls",
+        RecipeBook.ComboMakes.Double => "Combo rolls (each makes two)",
+        _ => "Combo rolls (what a won one makes isn't known)",
+    };
+
+    /// <summary>"2 crafts not seen" for a recipe's crafts the queue's count jumped past; "" with none.</summary>
+    public static string UnseenNote(Recipe r) => r.Unseen > 0 ? $"{r.Unseen} craft{(r.Unseen == 1 ? "" : "s")} not seen (the bars were covered): counted as nothing" : "";
 
     /// <summary>
     /// A won upgrade roll: the craft before it made the recipe's upgrade, not its base item. The game swaps the result's
@@ -166,11 +192,15 @@ public sealed class CraftLedger
         if (!_lastOk.TryGetValue(r.Name, out var last) || last.Upgraded) return false;
         if (UpgradeOf(r.Name) is not { } up)
         {
+            // the roll is spent either way: a second roll read for the same craft is noise (OnPanel)
+            last.Upgraded = true;
+            // gear the book has no upgrade for: what the combo made isn't known, so nothing more is credited (the card says so)
+            if (!DoublesOnCombo(r.Name)) return false;
             // no upgrade item: the combo made the craft twice over ("x2 COMBO" on the Cooking window, 2026-11-03: an Artisan's
             // Steamed Cypri combo made 2, the window counted 1); a craft whose yield wasn't known can't be doubled
             if (last.Unknown || last.Qty <= 0) return false;
             r.Made[last.Item] = r.Made.GetValueOrDefault(last.Item) + last.Qty;
-            last.Qty *= 2; last.Upgraded = true;
+            last.Qty *= 2;
             return true;
         }
         if (last.Unknown) r.MadeUnknown = Math.Max(0, r.MadeUnknown - 1);

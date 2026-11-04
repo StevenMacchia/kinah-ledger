@@ -23,7 +23,7 @@ public partial class MainWindow
     {
         if (PriceBook.QuoteOf(name) is not { } q) return ("", "", "");
         var text = (q.From == PriceBook.From.Region ? "≈" : "") + Amounts.Short(q.Price);
-        var tone = q.Mine ? "Mine" : !q.Sure ? "Unsure" : "";
+        var tone = q.Mine ? "Mine" : !q.Sure ? "Unsure" : PriceBook.IsOld(q) ? "Old" : "";
         return (text, tone, PriceHover(name, q));
     }
 
@@ -34,7 +34,10 @@ public partial class MainWindow
         var server = Server?.Name ?? "your server";
         if (q.Mine && PriceBook.BoardOf(name) is { } b) lines.Add($"{server}'s board: {b.Price:N0} · {PriceBook.Describe(new PriceBook.Quote(b.Price, b.From, b.Readings, b.Sure, b.At))}");
         if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } r) lines.Add($"Other {Server?.Faction ?? ""} servers in {Server?.Region.Name ?? "your region"}: {r.Price:N0} · middle of {r.Servers}".Replace("  ", " "));
-        if (!q.Sure) lines.Add("Unsure: one reading isn't a price, so it's left out of totals and profit.");
+        if (!q.Sure) lines.Add(q.At is DateTime seen && DateTime.UtcNow - seen > PriceBook.BoardMaxAge
+            ? $"Unsure: last seen {PriceBook.Ago(seen, DateTime.UtcNow)}, too old to count, so it's left out of totals and profit."
+            : "Unsure: one reading isn't a price, so it's left out of totals and profit.");
+        else if (PriceBook.IsOld(q) && q.At is DateTime old) lines.Add($"Old: last seen {PriceBook.Ago(old, DateTime.UtcNow)}.");
         lines.Add("Open the card and click the price to type what you see in the game.");
         return string.Join("\n", lines);
     }
@@ -49,6 +52,7 @@ public partial class MainWindow
         var g = new Grid { Margin = new Thickness(20, 3, 20, 3) };
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        if (q?.From == PriceBook.From.Sold && label == "Lowest Market price") label = "Sold average";   // the site's pick was what it sold for, not a listing
         left.Children.Add(CkText(label, CkInk, 13.5));
         if (q != null && CardSourceOnLine) left.Children.Add(CkText(PriceBook.Describe(q), q.Mine ? Color.FromRgb(0x5E, 0xD8, 0xCB) : q.Sure ? CkFaint : CkWarn, 11.5));
         if (q == null) left.Children.Add(CkText($"no Market price on {(server.Length > 0 ? server : "your server")} yet", CkFaint, 11.5));
@@ -56,7 +60,7 @@ public partial class MainWindow
         var right = CkPriceEditor(item, q, changed, qty);
         Grid.SetColumn(right, 1); g.Children.Add(right);
         if (q != null) g.ToolTip = PriceHover(item, q);
-        if (q is { Sure: false }) left.Opacity = 0.75;
+        if (q is { Sure: false } || (q != null && PriceBook.IsOld(q))) left.Opacity = 0.75;
         return g;
     }
 
@@ -67,7 +71,7 @@ public partial class MainWindow
         var shown = new StackPanel { Orientation = Orientation.Horizontal, Cursor = Cursors.Hand, Background = Brushes.Transparent, ToolTip = "Click to type what you see in the game" };
         var figure = q == null ? "set price" : (q.From == PriceBook.From.Region ? "≈" : "") + (q.Price * qty).ToString("N0");
         var t = CkText(figure, q == null ? CkWarn : q.Mine ? Color.FromRgb(0x5E, 0xD8, 0xCB) : CkGold, size, FontWeights.SemiBold, mono: true);
-        if (q is { Sure: false }) t.Opacity = 0.6;
+        if (q is { Sure: false } || (q != null && PriceBook.IsOld(q))) t.Opacity = 0.6;
         shown.Children.Add(new Border { Child = t, BorderThickness = new Thickness(0, 0, 0, 1), BorderBrush = Ck(CkGold, 0x55) });
         shown.Children.Add(CkText(" ✎", CkFaint, 11));
         if (!CardSourceOnLine && q != null)

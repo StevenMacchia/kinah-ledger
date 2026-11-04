@@ -64,7 +64,7 @@ public partial class MainWindow : Window
     public System.Windows.Media.Imaging.BitmapSource? PreviewSource { get; private set; }
 
     readonly WF.NotifyIcon _tray = new();
-    readonly WF.ToolStripMenuItem _trayToggle = new("Start farming");
+    readonly WF.ToolStripMenuItem _trayToggle = new("Start run");
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     bool _framing; int _ticks;
 
@@ -190,7 +190,7 @@ public partial class MainWindow : Window
         InitWhatsNew(watch);   // after an update, this version's notes once at the top (Ui/MainWindow.WhatsNew.cs)
         InitCounting(watch);   // Help improve counting: the choice applied, the one-time notice
         if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
-        else Say("Reading the chat whenever the game is open. Start run times a stretch on top.", "Faint");
+        else Say("Reading the chat whenever the game is open. Start run times a run.", "Faint");
         // the data folder's clean-up: pictures and miscount reports past their time, on its own thread, then hourly (Housekeeping)
         if (watch) Housekeeping.RunIfDue(DateTime.Now);
         // miscount reports the site couldn't take before (no connection, the route not deployed yet) go now, when the backoff allows
@@ -736,8 +736,9 @@ public partial class MainWindow : Window
 
     /// <param name="Value">What the tradeable items would sell for on the Market, after its cut; bound items can't be sold.</param>
     /// <param name="Priced">Tradeable items with a price; <paramref name="Unpriced"/> those without, left out of the value.</param>
+    /// <param name="Unsure">Items with only an unsure price (one listing, or too old): shown dimmed with "~", not in the value, and not counted as unpriced.</param>
     /// <param name="Gross">What the priced tradeable items sell for before the Market's fee and tax.</param>
-    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs, long Gross = 0, List<DropRow>? Pets = null, List<SkillBox>? Skills = null, int DropsUnpriced = 0);
+    sealed record Tables(List<DropRow> Drops, List<DropRow> Gathered, long DropCount, long GatherCount, long Value, int Priced, int Unpriced, List<DropRow> Mobs, long Gross = 0, List<DropRow>? Pets = null, List<SkillBox>? Skills = null, int DropsUnpriced = 0, int Unsure = 0, int DropsUnsure = 0);
 
     /// <summary>A gathering skill's own box under the drops: its attempts, how many failed or came plentiful, the pace and what its items are worth.</summary>
     sealed record SkillBox(string Name, int Attempts, int Failed, int Plentiful, double PerHour, long Value);
@@ -754,7 +755,7 @@ public partial class MainWindow : Window
     /// </summary>
     Tables Build(SessionEngine e, double hours, int kills)
     {
-        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0, gross = 0; int priced = 0, unpriced = 0, dropsUnpriced = 0;
+        var drops = new List<DropRow>(); long dc = 0, gc = 0, value = 0, gross = 0; int priced = 0, unpriced = 0, dropsUnpriced = 0, unsure = 0, dropsUnsure = 0;
         // the enemies fought in this view and their loot tables: odds count only kills of enemies that can drop the item
         var ms = e.MobSnapshot();
         _lastMobKinah = ms.Sum(m => (long)m.Kinah);
@@ -777,7 +778,14 @@ public partial class MainWindow : Window
             if (r.Count > 0)
             {
                 var price = PriceBook.Price(r.Name);
-                if (price != null) { long g0 = price.Value * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; rowValue = Amounts.Short(kept); worthN[r.Name] = g0; keptN[r.Name] = kept; } else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
+                if (price != null) { long g0 = price.Value * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; rowValue = Amounts.Short(kept); worthN[r.Name] = g0; keptN[r.Name] = kept; }
+                else if (PriceBook.QuoteOf(r.Name) is { Sure: false } uq)
+                {
+                    // a one-listing (or too old) price: shown, dimmed with a ~ (the Prices column dims it too), but in no total
+                    unsure++; if (GatheringCatalog.Find(r.Name) == null) dropsUnsure++;
+                    rowValue = "~" + Amounts.Short((long)Math.Round(uq.Price * r.Count * PriceBook.SellerKeeps));
+                }
+                else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
             }
             worth[r.Name] = rowValue;
             var g = GatheringCatalog.Find(r.Name);
@@ -887,7 +895,7 @@ public partial class MainWindow : Window
             if (!known && m.Drops.Count == 0 && m.Crystals == 0)
                 mobs.Add(new DropRow("No item drops yet", "", "", "", Sub: "only Kinah so far · its loot table isn't in the list yet", Child: true));
         }
-        return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross, petRows, skills, dropsUnpriced);
+        return new Tables(drops, gathered, dc, gc, value, priced, unpriced, mobs, gross, petRows, skills, dropsUnpriced, unsure, dropsUnsure);
     }
 
     /// <summary>Sections showing every row, by name ("Drops", "Gather", "Mob", "Pet"); the others show their top rows.</summary>
@@ -994,9 +1002,10 @@ public partial class MainWindow : Window
         _lastValue = s.Value; _lastPriced = s.Priced;
         long worthHr = (long)((s.Value + (_mode == Mode.Gather ? 0 : kinah)) / h);
         ValueHr.Text = s.Priced > 0 || (_mode != Mode.Gather && kinah > 0) ? Fk(worthHr) : "";
-        ValueTile.ToolTip = (s.Priced + s.Unpriced == 0 ? "No tradeable items yet."
+        ValueTile.ToolTip = (s.Priced + s.Unsure + s.Unpriced == 0 ? "No tradeable items yet."
                 : s.Priced == 0 ? "No Market price yet for any of these items. Open the Market in the game once: the prices you see there value your drops, and the site's price board fills in the rest."
-                : $"{s.Priced} of {s.Priced + s.Unpriced} tradeable items priced, at the lowest Market price, at {PriceBook.Fee}. Bound items can't be sold and aren't counted."
+                : $"{s.Priced} of {s.Priced + s.Unsure + s.Unpriced} tradeable items priced, at the lowest Market price, at {PriceBook.Fee}. Bound items can't be sold and aren't counted."
+                  + (s.Unsure > 0 ? $" {s.Unsure} {(s.Unsure == 1 ? "has" : "have")} a one-listing price (shown with ~), which is left out." : "")
                   + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
             + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
         // the card's head: what and how long ("Open world · 42 min"), in the one way the page writes time (2026-10-28: it was
@@ -1016,6 +1025,7 @@ public partial class MainWindow : Window
         var sums = new List<string>();
         if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
         if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); if (!PriceBook.ShowGross) sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
+        if (s.Unsure > 0) sums.Add($"{s.Unsure} item{(s.Unsure == 1 ? " has" : "s have")} a one-listing price, not counted.");
         if (s.Unpriced > 0) sums.Add($"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add{(s.Unpriced == 1 ? "s" : "")} nothing.");
         sums.Add($"Total, {PriceBook.Fee}: {totalNow:N0}.");
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
@@ -1244,11 +1254,12 @@ public partial class MainWindow : Window
             var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
             var book = RecipeBook.ForOutput(r.Name);
-            var tip = "Click for the materials, what a try costs and what it makes."
+            var tip = "Click for the materials, what a craft costs and what it makes."
                 + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
-                + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{(Session.CraftLedger.DoublesOnCombo(r.Name) ? "Combo rolls (each makes two)" : "Upgrade rolls")}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
-                + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "");
+                + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{Session.CraftLedger.ComboRollsLabel(r.Name)}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
+                + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "")
+                + (r.Unseen > 0 ? "\n" + Session.CraftLedger.UnseenNote(r) + "." : "");
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Ok.ToString("N0"), spentCell,
                 Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
                 Price: madeKnown && made > 0 ? Fk(made) : "", PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : ""));
@@ -1273,7 +1284,7 @@ public partial class MainWindow : Window
         void Fig(string text) { var run = new Run(text); run.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); run.SetResourceReference(TextElement.ForegroundProperty, "Ink"); CraftWhat.Inlines.Add(run); }
         if (tries > 0)
         {
-            Fig(tries.ToString("N0")); CraftWhat.Inlines.Add(new Run($" tr{(tries == 1 ? "y" : "ies")} · ")); Fig(ok.ToString("N0")); CraftWhat.Inlines.Add(new Run(" worked"));
+            Fig(tries.ToString("N0")); CraftWhat.Inlines.Add(new Run($" craft{(tries == 1 ? "" : "s")} · ")); Fig(ok.ToString("N0")); CraftWhat.Inlines.Add(new Run(" worked"));
             if (spent > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(spent)); CraftWhat.Inlines.Add(new Run(" spent")); }
             if (worth > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(worth)); CraftWhat.Inlines.Add(new Run(" sells for")); }
         }
@@ -1370,7 +1381,8 @@ public partial class MainWindow : Window
         DropsMore.Visibility = plain.Count > TableRows || mats.Count > TableRows ? Visibility.Visible : Visibility.Collapsed;
         DropsMoreRun.Text = allDropsShown ? "Show fewer" : $"Show all {drops.Count}";
         int noPriceRows = pre?.DropsUnpriced ?? drops.Count(r => r.Value.Length == 0 && r.Worth == 0);
-        DropsNote.Text = drops.Count == 0 ? "" : $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")}" + (noPriceRows > 0 ? $" · {noPriceRows} {(noPriceRows == 1 ? "has" : "have")} no price yet" : "");
+        int unsureRows = pre?.DropsUnsure ?? drops.Count(r => r.Value.StartsWith('~'));
+        DropsNote.Text = drops.Count == 0 ? "" : $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")}" + (unsureRows > 0 ? $" · {unsureRows} {(unsureRows == 1 ? "has" : "have")} a one-listing price, not counted" : "") + (noPriceRows > 0 ? $" · {noPriceRows} {(noPriceRows == 1 ? "has" : "have")} no price yet" : "");
         TableEmpty.Visibility = drops.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the odds and how many come an hour." : "No drops yet.";
 
@@ -1469,7 +1481,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// A message to read. A "done" in the good tone (copied, set, saved, put back) shows in the toast over the page
     /// (Ui/MainWindow.Toast.cs, 0.9.10), where it is seen; the rest (working, warnings, problems) on the status line, where
-    /// it stays about 6 s before the live status takes the line back, the whole text on hover.
+    /// it stays about 6 s (a warning or problem 30 s) before the live status takes the line back, the whole text on hover.
     /// </summary>
     void Say(string text, string tone)
     {
@@ -1477,8 +1489,17 @@ public partial class MainWindow : Window
         SayOnLine(text, tone);
     }
     /// <summary>On the status line whatever the tone: a stopped run's result, and a saved report whose folder is on the line's hover.</summary>
-    void SayOnLine(string text, string tone) { Tell(text, tone); Status.ToolTip = text; if (DateTime.UtcNow.AddSeconds(SayHoldSeconds) > _statusHoldUntil) _statusHoldUntil = DateTime.UtcNow.AddSeconds(SayHoldSeconds); }
-    const double SayHoldSeconds = 6;
+    void SayOnLine(string text, string tone)
+    {
+        // a warning or a problem holds the live status off the line for 30 s (the player may be in the game and tab back later);
+        // anything said on purpose still replaces it at once (a click's answer must show), and gentler lines hold 6 s
+        bool strong = tone is "Warn" or "Bad";
+        var now = DateTime.UtcNow;
+        Tell(text, tone); Status.ToolTip = text;
+        var until = now.AddSeconds(strong ? SayHoldStrongSeconds : SayHoldSeconds);
+        if (strong || until > _statusHoldUntil) _statusHoldUntil = until;
+    }
+    const double SayHoldSeconds = 6, SayHoldStrongSeconds = 30;
     /// <summary>The live status line, rewritten each tick: in the look's own colour, so a change of look repaints it.</summary>
     void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
@@ -1526,7 +1547,9 @@ public partial class MainWindow : Window
     void ServerRowState()
     {
         bool ok = HasServer;
-        ServerChip.Text = Server is { } s ? $"{s.Label} · {s.Region.Name}" : "No server chosen · pick one in Options";
+        // on the Welcome card Options is out of reach, so the way to a server is the card's own chips
+        ServerChip.Text = Server is { } s ? $"{s.Label} · {s.Region.Name}" : _welcome ? "No server chosen · pick yours below" : "No server chosen · pick one in Options";
+        ServerChip.ToolTip = _welcome ? "Pick your server below." : "Your server. Change it in Options.";
         ServerChip.Foreground = B(ok ? "Muted" : "Warn");
         if (!Farming) StartBtn.IsEnabled = ok;
     }
@@ -1643,15 +1666,15 @@ public partial class MainWindow : Window
         var open = new WF.ToolStripMenuItem("Open Kinah Ledger") { Font = new System.Drawing.Font("Segoe UI", 9.75f, System.Drawing.FontStyle.Bold) };
         open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
-        var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
+        var options = new WF.ToolStripMenuItem("Options…") { ShortcutKeyDisplayString = OptionsKey }; options.Click += (_, _) => OpenOptions();
         var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
         var placePanel = new WF.ToolStripMenuItem("Place the panel…"); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, "Place the panel", why, WF.ToolTipIcon.Info); };
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         // Clear everything and the share picture (0.9.10; New session until 0.9.13): Clear everything brings the window up, so
         // its Undo bar is seen; the picture is copied where the window is, and said by the tray when the window is out of sight
-        var clearAll = new WF.ToolStripMenuItem(ClearAllText);
+        var clearAll = new WF.ToolStripMenuItem(ClearAllText) { ShortcutKeyDisplayString = NewSessionKey };
         clearAll.Click += async (_, _) => { Restore(); await ClearAllFromKey(); };
-        var copyPic = new WF.ToolStripMenuItem("Copy share picture");
+        var copyPic = new WF.ToolStripMenuItem("Copy share picture") { ShortcutKeyDisplayString = CopyPictureKey };
         copyPic.Click += (_, _) =>
         {
             bool away = !IsVisible || WindowState == WindowState.Minimized;
@@ -1662,6 +1685,7 @@ public partial class MainWindow : Window
         menu.Opening += (_, _) =>
         {
             _trayToggle.Text = RunOn ? "Stop run" : "Start run";
+            _trayToggle.ShortcutKeyDisplayString = HotkeyText;   // the in-game key, when one is set
             _trayToggle.Enabled = Farming || (HasServer && !_welcome);
             clearAll.Enabled = !RunOn && !_welcome;
             copyPic.Enabled = ShareCardBtn.IsEnabled && !_welcome;

@@ -4618,13 +4618,19 @@ options: --process aion[,other]");
                     Cook("Artisan's Steamed Cypri", true, false, 0); Cook("Artisan's Steamed Cypri", true, true, 6);
                     Cook("Artisan's Steamed Cypri", true, false, 14); Cook("Artisan's Steamed Cypri", false, true, 20);
                     Cook("Artisan's Steamed Cypri", false, false, 28);
+                    // a "roll" read after a fail credits nothing (a fail can't roll; 2026-11-03 the Cypri card said 2 won of 1 that worked)
+                    Cook("Artisan's Steamed Cypri", true, true, 31);
                     Cook("Mana Potion", true, false, 40); Cook("Mana Potion", true, true, 46);
-                    Check("crafting: a won combo on a dish or potion makes two of it",
-                        string.Join(" | ", cx.CraftSnapshot().Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.OrderBy(m => m.Key, StringComparer.Ordinal).Select(m => m.Key + " x" + m.Value))}")),
-                        "Artisan's Steamed Cypri 2/3 up 1/2 made Artisan's Steamed Cypri x3 | Mana Potion 1/1 up 1/1 made Mana Potion x2");
-                    Check("recipe book: a combo's outcome by recipe", string.Join(" | ", new[] { "Artisan's Steamed Cypri", "Mana Potion", "Orichalcum Longsword", "Dark Dragon Lord Orb", "Splendent Dark Dragon Lord Orb" }
-                        .Select(n => $"{n}: {(RecipeBook.ForOutput(n)?.Upgrade?.Item ?? (Session.CraftLedger.DoublesOnCombo(n) ? "x2" : "-"))}")),
-                        "Artisan's Steamed Cypri: x2 | Mana Potion: x2 | Orichalcum Longsword: Splendent Orichalcum Longsword | Dark Dragon Lord Orb: Splendent Dark Dragon Lord Orb | Splendent Dark Dragon Lord Orb: x2");
+                    // a craft the queue's count jumped past (its race unseen) is counted as nothing, and said
+                    cx.Apply(new CraftResult(cx0.AddSeconds(60), "Mana Potion", true) { Via = SessionEngine.CraftPanelVia, Makes = 1, Unseen = 2 });
+                    // gear the book has no upgrade for: a won combo is a won roll, what it made isn't known, nothing more is credited
+                    Cook("Chaser Bracelet", true, false, 70); Cook("Chaser Bracelet", true, true, 76);
+                    Check("crafting: a won combo on a dish or potion makes two of it; a roll after a fail, nothing; gear with no known upgrade, nothing more",
+                        string.Join(" | ", cx.CraftSnapshot().Select(r => $"{r.Name} {r.Ok}/{r.Attempts} up {r.Upgraded}/{r.Upgraded + r.NotUpgraded} made {string.Join(",", r.Made.OrderBy(m => m.Key, StringComparer.Ordinal).Select(m => m.Key + " x" + m.Value))}{(r.Unseen > 0 ? $" unseen {r.Unseen}" : "")}")),
+                        "Artisan's Steamed Cypri 2/3 up 1/2 made Artisan's Steamed Cypri x3 | Mana Potion 2/2 up 1/1 made Mana Potion x3 unseen 2 | Chaser Bracelet 1/1 up 1/1 made Chaser Bracelet x1");
+                    Check("recipe book: a combo's outcome by recipe", string.Join(" | ", new[] { "Artisan's Steamed Cypri", "Mana Potion", "Orichalcum Ingot", "Orichalcum Longsword", "Dark Dragon Lord Orb", "Splendent Dark Dragon Lord Orb", "Chaser Bracelet", "Sapphire Powder" }
+                        .Select(n => $"{n}: {(RecipeBook.ForOutput(n)?.Upgrade?.Item ?? (Session.CraftLedger.DoublesOnCombo(n) ? "x2" : "?"))}")),
+                        "Artisan's Steamed Cypri: x2 | Mana Potion: x2 | Orichalcum Ingot: x2 | Orichalcum Longsword: Splendent Orichalcum Longsword | Dark Dragon Lord Orb: Splendent Dark Dragon Lord Orb | Splendent Dark Dragon Lord Orb: ? | Chaser Bracelet: ? | Sapphire Powder: x2");
                 }
                 // 2026-10-25: a won upgrade roll (the blue combo race after a craft) makes the recipe's upgrade, not its base item;
                 // the loot list naming the upgrade right after a craft says the same when the blue race was missed. Neither is a drop.

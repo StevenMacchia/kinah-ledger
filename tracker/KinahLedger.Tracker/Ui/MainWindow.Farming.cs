@@ -67,7 +67,7 @@ public partial class MainWindow
                 Sub: "Keep counting across every zone",
                 Tip: "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
             // New session's way back into the menu (0.9.13): Start run is the card's fresh start; this clears without a run
-            new(ClearAllText, () => _ = ClearFarmTables(), Sub: $"The tables start over, no run · {NewSessionKey}",
+            new(ClearAllText, () => _ = ClearFarmTables(), Sub: "The tables start over, no run", Key: NewSessionKey,
                 Tip: "Start the farming tables over without starting a run. What was counted is shared first, Undo brings the tables back, and the Today strip keeps the day."),
             // the feed's hint, moved here (2026-10-28): a pickup the feed never showed
             new("A pickup is missing…", () => ShowLineReport(null, Session.FeedTab.Farming, FeedBox), Tip: "Report a pickup the feed never showed."),

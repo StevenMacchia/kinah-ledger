@@ -30,7 +30,7 @@ public sealed class MarketCapture
 
     public MarketCapture(Settings s, ItemDictionary items, Rectangle? manualRegion, string server)
     {
-        _cfg = s.Market; _upload = s.Upload; _parser = new MarketParser(items); _dict = items;
+        _cfg = s.Market; _upload = s.Upload; _parser = new MarketParser(items); _dict = items; PriceBook.Items = items;
         Region = s.Region; Server = server;
         _enabled = s.Market.Enabled;
         if (manualRegion is { } r) { Layout = MarketLayout.FromRegion(r); Manual = true; }

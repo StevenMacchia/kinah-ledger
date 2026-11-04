@@ -411,7 +411,7 @@ public static class WpfApp
         var keys = w.InputBindings.OfType<System.Windows.Input.KeyBinding>().Select(k => (k.Modifiers, k.Key)).ToList();
         Check(keys.Contains((System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.OemComma)) && keys.Contains((System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.N))
               && keys.Contains((System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift, System.Windows.Input.Key.C)), "Ctrl+, Ctrl+N and Ctrl+Shift+C are bound in the window");
-        Check(w.OptionsBtn.ToolTip is string ot && ot.Contains(MainWindow.OptionsKey) && w.MoreEntries().Any(e => e.Text == MainWindow.ClearAllText && e.Sub.Contains(MainWindow.NewSessionKey))
+        Check(w.OptionsBtn.ToolTip is string ot && ot.Contains(MainWindow.OptionsKey) && w.MoreEntries().Any(e => e.Text == MainWindow.ClearAllText && e.Key == MainWindow.NewSessionKey)
               && w.ShareCardBtn.ToolTip is string st && st.Contains(MainWindow.CopyPictureKey), "each button's tooltip says its key, and ⋯ › Clear everything says Ctrl+N");
 
         // 0.9.13: Start run is the fresh start. New session left the card (it is Clear everything in ⋯ and the tray); Start run
@@ -579,7 +579,7 @@ public static class WpfApp
                 new("Thick hide", "3", "", "", Worth: 0),
             };
             var tv = w.HudTopValues(rows);
-            Check(tv["top"] == "Shade Gloves" && tv["topCount"] == "×1" && tv["topWorth"] == "+28,000" && tv["topGrade"] == "Legend",
+            Check(tv["top"] == "Shade Gloves" && tv["topCount"] == "×1" && tv["topWorth"] == "+24,640" && tv["topGrade"] == "Legend",
                 $"top drop: {tv["top"]} {tv["topCount"]} {tv["topWorth"]} ({tv["topGrade"]})");
             Check(w.HudTopValues(new List<DropRow> { new("Thick hide", "3", "", "") })["top"] == "", "top drop: none before anything priced");
             // the panel's accuracy line ("23 to look at" read as an error): none with Show accuracy details off, the default

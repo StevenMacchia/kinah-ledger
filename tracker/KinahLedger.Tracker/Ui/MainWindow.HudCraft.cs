@@ -7,20 +7,41 @@ namespace KinahLedger.Ui;
 /// The panel's crafting line (the mock's feature 2, approved 2026-10-26): while the crafting window or panel is open (the
 /// tracker's activity is Crafting), the Card and the Ticker show crafting instead of farming. Every figure comes from the
 /// craft ledger, summed as the window's Crafting part sums it (FillCraft): the tries, how many worked and failed, the
-/// profit after the Market's cut, what the recipe sells for each, and the last crafts with what each made or cost (the
+/// profit after the Market's cut, what a craft of the queue's recipe is worth (profit a craft and an hour, combos won), and the last crafts with what each made or cost (the
 /// feed's CraftValue). The Strip keeps its own crafting line (HudFeedValues).
 /// </summary>
 public partial class MainWindow
 {
     /// <summary>How many crafts the looks get ("craft0" newest to "craft3"): the Card shows three as tiles, the Ticker four toasts.</summary>
     const int HudCrafts = 4;
-    static readonly string[] CraftHeadKeys = { "craft", "craftTime", "craftRecipe", "craftRecipeId", "craftIcon", "craftTries", "craftOk", "craftFail", "craftProfit", "craftSells" };
+    static readonly string[] CraftHeadKeys = { "craft", "craftTime", "craftRecipe", "craftRecipeId", "craftIcon", "craftTries", "craftOk", "craftFail", "craftProfit", "craftSells", "craftPer", "craftPerHr", "craftCombos" };
     static readonly string[] CraftLineKeys = { "", "Id", "Item", "Ok", "Worth", "Icon", "At" };
 
     /// <summary>Time with the crafting window open this session, added up tick by tick; the tick it was last added at; the tries then.</summary>
     TimeSpan _craftTime;
     DateTime _craftTick;
     int _craftTriesSeen;
+
+    /// <summary>Crafts an hour this session, from every craft over the time the crafting window was open (HudCraftValues); null before a minute of it.</summary>
+    internal double? CraftsPerHour(SessionEngine? e = null) => CraftsPerHourOf((e ?? CraftShown)?.CraftSnapshot().Sum(r => r.Attempts) ?? 0, _craftTime);
+
+    static double? CraftsPerHourOf(int crafts, TimeSpan time) => crafts > 0 && time.TotalMinutes >= 1 ? crafts / time.TotalHours : null;
+
+    /// <summary>
+    /// The recipe the queue is crafting, by name: the newest craft line's, unless that line is the upgrade a combo won (its
+    /// name would flip the panel to "Splendent ..." for a moment), then the recipe it upgrades. A line the ledger doesn't know is taken as it is.
+    /// </summary>
+    static string QueueRecipe(IReadOnlyList<CraftLedger.Recipe> ledger, IReadOnlyList<FeedLine> newestFirst)
+    {
+        foreach (var l in newestFirst)
+        {
+            if (l.Name.Length < 2) continue;
+            if (ledger.FirstOrDefault(r => string.Equals(r.Name, l.Name, StringComparison.OrdinalIgnoreCase)) is { } own) return own.Name;
+            if (ledger.FirstOrDefault(r => string.Equals(RecipeBook.ForOutput(r.Name)?.Upgrade?.Item, l.Name, StringComparison.OrdinalIgnoreCase)) is { } owner) return owner.Name;
+        }
+        var first = newestFirst.FirstOrDefault()?.Name ?? "";
+        return first.Length < 2 ? "" : first;
+    }
 
     /// <summary>The looks' crafting values, from the window's tick (HudFeed): all blank while the player isn't crafting.</summary>
     void HudCraftValues()
@@ -92,9 +113,10 @@ public partial class MainWindow
     {
         var d = HudCraftBlank();
         var s = SumCrafts(e);
-        var crafts = lines.Where(l => l.Kind == "craft").OrderByDescending(l => l.At).Take(HudCrafts).ToList();
-        var recipe = crafts.FirstOrDefault()?.Name ?? "";
-        if (recipe.Length < 2) recipe = "";
+        // the tiles are crafts; a combo roll is the line after the craft it credits, never a craft of its own
+        var crafts = lines.Where(l => l.Kind == "craft" && !l.Combo).OrderByDescending(l => l.At).Take(HudCrafts).ToList();
+        var ledger = e?.CraftSnapshot() ?? new();
+        var recipe = QueueRecipe(ledger, crafts);
         long recipeId = recipe.Length > 0 ? _items.IdOf(recipe) : 0;
         d["craft"] = "1";
         d["craftTime"] = time.TotalHours >= 1 ? $"{(int)time.TotalHours}:{time.Minutes:00}:{time.Seconds:00}" : $"{time.Minutes:00}:{time.Seconds:00}";
@@ -106,6 +128,21 @@ public partial class MainWindow
         d["craftFail"] = s.Fail.ToString("N0");
         d["craftProfit"] = s.Any ? (s.AtMost ? "≤ " : "") + Signed(s.Net) : "";
         d["craftSells"] = recipe.Length > 0 && PriceBook.Price(recipe) is long p ? Fk(Math.Round(p * PriceBook.SellerKeeps)) : "";
+        // what a craft of this recipe is worth, from the same math as the recipe card (CraftMath.Judge): profit a craft, an hour, combos won of rolled
+        var mine = ledger.FirstOrDefault(r => string.Equals(r.Name, recipe, StringComparison.OrdinalIgnoreCase));
+        int makes = mine?.Tries.Where(kv => kv.Key > 0).OrderByDescending(kv => kv.Value).Select(kv => kv.Key).FirstOrDefault() ?? 0;
+        if (recipe.Length > 0 && RecipeBook.For(recipe, makes) is { } book
+            && RecipeBook.CostPerTry(recipe, makes, out int noPrice, out int noVendor, out _) is long cost && noPrice + noVendor == 0)
+        {
+            var (rate, kind) = CraftMath.SuccessUsed(book.SuccessRate, mine?.Attempts ?? 0, mine?.Ok ?? 0);
+            if (CraftMath.Judge(book, PriceBook.Price, cost, rate, PriceBook.SellerKeeps) is { } v)
+            {
+                var upTo = kind == CraftMath.RateKind.Unknown ? "≤ " : "";
+                d["craftPer"] = upTo + Signed(v.Profit);
+                if (mine is { Attempts: >= 3 } && CraftsPerHourOf(ledger.Sum(r => r.Attempts), time) is double cph) d["craftPerHr"] = upTo + Signed(v.Profit * cph);
+            }
+        }
+        if (mine is { } m && m.Upgraded + m.NotUpgraded > 0) d["craftCombos"] = $"{m.Upgraded}/{m.Upgraded + m.NotUpgraded}";
         for (int i = 0; i < crafts.Count; i++)
         {
             var l = crafts[i];

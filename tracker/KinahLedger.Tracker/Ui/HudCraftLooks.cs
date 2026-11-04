@@ -88,8 +88,8 @@ static class CraftKit
 
 /// <summary>
 /// The Card while crafting: "CRAFT 18:05 Orichalcum Greaves" in the head with the newest craft on the right ("worked
-/// +137K" plain, "failed −39K" in red), then "12 crafts · 3 failed · +1.12M" over the success bar and "sells for
-/// 176K each", and the last three crafts as tiles. The farming head and figures come back when crafting ends.
+/// +137K" plain, "failed −39K" in red), then "12 crafts · 3 failed · +1.12M" over the success bar and "+137K a craft
+/// · +420K/h" (the recipe's profit a craft and an hour, "Combos 2/5" under it when it rolled any), and the last three crafts as tiles. The farming head and figures come back when crafting ends.
 /// </summary>
 public sealed partial class HudCard
 {
@@ -98,6 +98,7 @@ public sealed partial class HudCard
     Ellipse _cDot = null!;
     TextBlock _cTime = null!, _cRecipe = null!, _cNewest = null!, _cFigs = null!, _cSells = null!;
     StackPanel _cLine2 = null!, _cTiles = null!;
+    TextBlock _cCombos = null!;
     string _craftLitId = "";
 
     /// <summary>The crafting head and body, laid over the farming ones in the card's stack; only one of each shows.</summary>
@@ -118,7 +119,8 @@ public sealed partial class HudCard
         _cBar = CraftKit.Bar(72, 6);
         _cSells = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         _cLine2 = new StackPanel { Orientation = Orientation.Horizontal, Height = 16, Margin = new Thickness(0, 3, 0, 0), Children = { _cBar, _cSells } };
-        var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _cFigs, _cLine2 } };
+        _cCombos = new TextBlock { Margin = new Thickness(0, 1, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed };
+        var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _cFigs, _cLine2, _cCombos } };
         _cTiles = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) };
         _craftBody = new Grid { Visibility = Visibility.Collapsed };
         _craftBody.ColumnDefinitions.Add(new ColumnDefinition());
@@ -164,10 +166,12 @@ public sealed partial class HudCard
             }
         }
 
-        // "12 crafts · 3 failed · +1.12M" over the bar and "sells for 176K each"; before the first craft, a faint line
-        if (Changed("craftFigs", $"{V("craftTries")}|{V("craftOk")}|{V("craftFail")}|{V("craftProfit")}|{V("craftSells")}"))
+        // "12 crafts · 3 failed · +1.12M" over the bar and "+137K a craft · +420K/h" (what a craft of the queue's recipe is worth), then
+        // "Combos 2/5" (won of rolled) when the recipe has rolled any; before the first craft, a faint line
+        if (Changed("craftFigs", $"{V("craftTries")}|{V("craftOk")}|{V("craftFail")}|{V("craftProfit")}|{V("craftPer")}|{V("craftPerHr")}|{V("craftCombos")}"))
         {
-            _cFigs.Inlines.Clear(); _cSells.Inlines.Clear();
+            _cFigs.Inlines.Clear(); _cSells.Inlines.Clear(); _cCombos.Inlines.Clear();
+            _cCombos.Visibility = Visibility.Collapsed;
             int.TryParse(V("craftOk").Replace(",", ""), out int ok);
             int.TryParse(V("craftFail").Replace(",", ""), out int fail);
             if (ok + fail == 0)
@@ -188,13 +192,24 @@ public sealed partial class HudCard
                     _cFigs.Inlines.Add(R(profit, 18, profit.Contains('−') ? CraftKit.Fail : Gold, mono: true));
                 }
                 CraftKit.SetBar(_cBar, ok, fail);
-                if (V("craftSells").Length > 0)
+                var per = V("craftPer");
+                if (per.Length > 0)
                 {
-                    _cSells.Inlines.Add(R("sells for ", 12, Faint));
-                    _cSells.Inlines.Add(R(V("craftSells"), 12, Gold, mono: true));
-                    _cSells.Inlines.Add(R(" each", 12, Faint));
+                    _cSells.Inlines.Add(R(per, 12, per.Contains('−') ? CraftKit.Fail : Gold, mono: true));
+                    _cSells.Inlines.Add(R(" a craft", 12, Faint));
+                    if (V("craftPerHr").Length > 0)
+                    {
+                        _cSells.Inlines.Add(R(" · ", 12, Faint));
+                        _cSells.Inlines.Add(R(V("craftPerHr") + "/h", 12, V("craftPerHr").Contains('−') ? CraftKit.Fail : Gold, mono: true));
+                    }
                 }
-                else _cSells.Inlines.Add(R("no Market price yet", 12, Faint));
+                else _cSells.Inlines.Add(R("no sure price yet", 12, Faint));
+                if (V("craftCombos").Length > 0)
+                {
+                    _cCombos.Inlines.Add(R("Combos ", 12, Faint));
+                    _cCombos.Inlines.Add(R(V("craftCombos"), 12, Ink, mono: true));
+                    _cCombos.Visibility = Visibility.Visible;
+                }
                 _cLine2.Visibility = Visibility.Visible;
             }
         }

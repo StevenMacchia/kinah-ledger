@@ -28,6 +28,16 @@ static class PlayerTests
             "Test Helm #100 ×1 80% combo 20% up 101@400,000 cost 20,000 profit 92,640 mats 2 vendor 1");
         Check("the card's profit per try is the site's", $"{CraftMath.ProfitPerTry(0.8, 0.2, 100_000, 400_000, 20_000, 0.88):N0}", "92,640");
         Check("no upgrade price: a combo is worth the normal result", $"{CraftMath.ProfitPerTry(0.95, 0.25, 30_000, null, 18_000, 0.88):N0}", $"{0.95 * 0.88 * 30_000 - 18_000:N0}");
+        // the shared craft math: a recipe whose combo makes two, at a price list; the chance counted when the book lacks one
+        var ingot = new RecipeBook.Recipe("Test Ingot", "Alchemy", "Test Ingot", 10, new(), null, null, new()) { ComboChance = 0.3 };
+        var judged = CraftMath.Judge(ingot, _ => 1_000, 5_000, 0.8, 0.88);
+        Check("judged: a combo that makes two, profit and break-even", $"{Math.Round(judged!.Profit):N0} {judged.Doubles} {judged.Combo:P0} {Math.Round(judged.BreakEven ?? 0)}", "4,152 True 30% 546");
+        Check("judged: no price for the output, no verdict", $"{CraftMath.Judge(ingot, _ => null, 5_000, 0.8, 0.88) == null}", "True");
+        Check("success chance: listed", $"{CraftMath.SuccessUsed(0.73, 5, 2)}", "(0.73, Listed)");
+        Check("success chance: listed, 20 crafts at the same rate", $"{CraftMath.SuccessUsed(0.75, 20, 15)}", "(0.75, Listed)");
+        Check("success chance: listed, 20 crafts at another rate: yours", $"{CraftMath.SuccessUsed(0.73, 20, 13)}", "(0.65, Yours)");
+        Check("success chance: unlisted, 9 crafts: unknown, counted as 1", $"{CraftMath.SuccessUsed(null, 9, 9)}", "(1, Unknown)");
+        Check("success chance: unlisted, 10 crafts: measured", $"{CraftMath.SuccessUsed(null, 10, 7)}", "(0.7, Observed)");
         Check("vendor cost not typed yet: profit as the site has it", $"{CraftMath.WithVendor(c, _ => null)}", "(92640, 1)");
         Check("a typed vendor cost comes off the profit", $"{CraftMath.WithVendor(c, id => id == 300 ? 2_640 : null)}", "(90000, 0)");
         // a row the site already priced the vendor material in (the API knows the NPC prices now): not charged twice
@@ -132,18 +142,41 @@ static class PlayerTests
                 "{\"item\":\"Fine Orichalcum Ore\",\"price\":997,\"price_from\":\"feed\",\"readings\":40,\"sure\":true}," +
                 "{\"item\":\"Fine Odyle\",\"price\":3098,\"price_from\":\"feed\",\"readings\":117,\"sure\":true}," +
                 "{\"item\":\"Old Board Item\",\"lowest_ask\":777,\"stale\":false,\"n_obs\":1}," +
+                $"{{\"item\":\"Four Day Item\",\"price\":6000,\"price_from\":\"feed\",\"readings\":20,\"sure\":true,\"price_seen_at\":\"{now.AddDays(-4):yyyy-MM-dd'T'HH:mm:ss'Z'}\"}}," +
+                "{\"item\":\"Typed Old Item\",\"price\":5000,\"price_from\":\"feed\",\"readings\":30,\"sure\":true}," +
+                "{\"item\":\"Sold Item\",\"price\":7000,\"price_from\":\"sold\",\"readings\":9,\"sure\":true,\"price_seen_at\":null}," +
                 "{\"item\":\"Artisan's Splendent Orichalcum Longsword\",\"price\":23999999,\"price_from\":\"feed\",\"readings\":12,\"sure\":true}]}";
             PriceBook.SetBoardQuotes(PriceBook.ParseQuotes(board, null));
             PriceBook.SetRegionBoards(new[] { 2_000_000L, 2_100_000L, 1_900_000L }.Select(p => new Dictionary<string, long> { ["Artisan's Splendent Orichalcum Longsword"] = p }));
 
             string Q(string n) => PriceBook.QuoteOf(n) is { } q ? $"{q.Price:N0} {q.From} {(q.Sure ? "sure" : "unsure")}" : "none";
             Check("the sword on the board: the lowest of 42 listings, sure", Q(sword) + " · " + PriceBook.Describe(PriceBook.QuoteOf(sword)!, now), "43,500 Feed sure · aion2.exchange · lowest of 42 listings · 40 min ago");
-            Check("a lone listing is shown, unsure, and out of totals", $"{Q("Chaos Longsword")} · Price {PriceBook.Price("Chaos Longsword")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Chaos Longsword")!, now)}", "5,000,000 Feed unsure · Price null · aion2.exchange · 1 listing · unsure");
+            Check("a lone listing is shown, unsure, and out of totals", $"{Q("Chaos Longsword")} · Price {PriceBook.Price("Chaos Longsword")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Chaos Longsword")!, now)}", "5,000,000 Feed unsure · Price null · aion2.exchange · 1 listing · board checked just now · unsure");
             Check("an older board's single listing is unsure too", Q("Old Board Item"), "777 Feed unsure");
+            // 2026-11-03: a board price last seen 4 days ago is unsure; a sold average says when the board was checked
+            Check("a 4-day-old board price is unsure and out of totals", $"{Q("Four Day Item")} · Price {PriceBook.Price("Four Day Item")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Four Day Item")!, now)}", "6,000 Feed unsure · Price null · aion2.exchange · lowest of 20 listings · 4 days ago · unsure");
+            Check("a sold average with no time says when the board was checked", $"{Q("Sold Item")} · {PriceBook.Describe(PriceBook.QuoteOf("Sold Item")!, now)}", "7,000 Sold sure · sold average · 9 sold · board checked just now");
+            // 2026-11-03: a typed price over 7 days old loses to a sure board price; with no board price it stands
+            PriceBook.SetTyped("Typed Old Item", 9_000, now.AddDays(-8)); PriceBook.SetTyped("Typed Only Item", 7_000, now.AddDays(-8)); PriceBook.SetTyped("Typed New Item", 9_000, now.AddDays(-6));
+            var typedCmp = PriceBook.QuoteOf("Typed Old Item")!;
+            Check("an 8-day-old typed price loses to the board's", $"{Q("Typed Old Item")} · {PriceBook.Describe(typedCmp, now)}", $"5,000 Feed sure · you typed 9,000 on {now.AddDays(-8).ToLocalTime():yyyy-MM-dd}; the board says 5,000 · aion2.exchange · lowest of 30 listings · board checked just now");
+            PriceBook.SetBoardQuotes(PriceBook.ParseQuotes("{\"items\":[{\"item\":\"Typed New Item\",\"price\":5000,\"price_from\":\"feed\",\"readings\":30,\"sure\":true}]}", null));
+            Check("a typed price with no board price stands, and a 6-day-old one beats the board", $"{Q("Typed Only Item")} · {Q("Typed New Item")}", "7,000 Typed sure · 9,000 Typed sure");
+            PriceBook.SetBoardQuotes(PriceBook.ParseQuotes(board, null));
             // the site's pick stands even far over the other servers' middle: it was judged against the region with every listing
             // (2026-11-03: the tracker's cruder middle threw out Siel's Artisan's Steamed Cypri, 44,994 with 57 listings)
             Check("the site's pick stands over the other servers' middle", Q("Artisan's Splendent Orichalcum Longsword"), "23,999,999 Feed sure");
             Check("the 330K was the recipe's cost per try, not the sword's price", $"cost/try {RecipeBook.CostPerTry(sword, out var unp):N0} ({unp} unpriced) · sword {PriceBook.Price(sword):N0}", "cost/try 450,274 (0 unpriced) · sword 43,500");
+
+            // 2026-11-03: a Market read is kept only for a real item, and not 10x off the board (the owner's prices.json held "dawn legion"=461)
+            var known = new ItemDictionary(); known.Remember(-1, sword); known.Remember(-2, "Chaos Longsword");
+            PriceBook.Items = known;
+            PriceBook.Observe("Dawn Legion", 461, now); PriceBook.Observe(sword, 435_000, now); PriceBook.Observe(sword, 4_000, now);
+            Check("a junk name and an ask 10x the board are refused", $"dawn {PriceBook.QuoteOf("Dawn Legion")?.Price.ToString() ?? "none"} · sword {Q(sword)}", "dawn none · sword 43,500 Feed sure");
+            File.WriteAllText(PriceBook.PathOverride!, "{\"prices\":{\"dawn legion\":461,\"t the party\":160000,\"" + sword.ToLowerInvariant() + "\":80000},\"seen\":{\"dawn legion\":\"" + seen + "\",\"t the party\":\"" + seen + "\",\"" + sword.ToLowerInvariant() + "\":\"" + seen + "\"}}");
+            PriceBook.Reset();
+            Check("stored keys that are not items are dropped on load", $"{PriceBook.QuoteOf("dawn legion")?.Price.ToString() ?? "none"} · {Q(sword)}", "none · 80,000 Market sure");
+            File.Delete(PriceBook.PathOverride!); PriceBook.Reset();
 
             // his Market read wins at once (read with sharing off too: only sending follows the switch)
             PriceBook.Observe(sword, 80_000, now.AddMinutes(-2));
@@ -165,7 +198,7 @@ static class PlayerTests
         }
         finally
         {
-            PriceBook.PathOverride = oldPath; PriceBook.Reset();
+            PriceBook.PathOverride = oldPath; PriceBook.Items = null; PriceBook.Reset();
             PriceBook.SetBoard(new()); PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>());
         }
     }

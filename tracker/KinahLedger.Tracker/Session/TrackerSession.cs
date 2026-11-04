@@ -3967,7 +3967,7 @@ public sealed partial class TrackerSession
     string _queueName = ""; int _queueLevel;
     string _switchTo = ""; int _switchLevel;
     readonly List<(string Name, int Level, bool Sure, DateTime At)> _queueReads = new();
-    readonly List<(DateTime At, bool Ok, bool Combo)> _heldRaces = new();
+    readonly List<(DateTime At, bool Ok, bool Combo, int Unseen)> _heldRaces = new();
 
     void QueueStart(DateTime now)
     {
@@ -4020,16 +4020,23 @@ public sealed partial class TrackerSession
     /// <summary>
     /// Whether the race that just finished is the upgrade roll after a craft, and why (for the reads log): the queue's
     /// count, then the title, then the tint (<paramref name="tint"/>, CraftPanelTracker's vote). Starts the next race's reads.
+    /// Unseen: crafts the queue's count jumped past without a race of theirs being seen (a queue of 27 whose first race
+    /// read "2 / 27" ran one before it, 2026-11-03): they happened, they are counted as nothing, and the card says so.
     /// </summary>
-    (bool Roll, string Why) RaceKind(DateTime now, bool tint)
+    (bool Roll, int Unseen, string Why) RaceKind(DateTime now, bool tint)
     {
-        int c = _queueCrafts;
+        int c = _queueCrafts, unseen = 0;
         (bool Roll, string Why) k;
         if (_raceCount > 0)
         {
             if (_raceCount == 1 && c >= 2) { c = 0; k = (false, $"the queue's count back at 1 / {_queueOf}: a new queue"); }
             else if (_raceCount <= c) k = (true, $"the queue's count stayed at {_raceCount} / {_queueOf}, {c} craft{(c == 1 ? "" : "s")} counted");
-            else { c = _raceCount - 1; k = (false, $"the queue's count at {_raceCount} / {_queueOf}"); }
+            else
+            {
+                unseen = _raceCount - 1 - c;
+                c = _raceCount - 1;
+                k = (false, $"the queue's count at {_raceCount} / {_queueOf}" + (unseen > 0 ? $", {unseen} craft{(unseen == 1 ? "" : "s")} before it not seen" : ""));
+            }
         }
         else if (_queueOf > 0 && c >= _queueOf) k = (true, $"past the queue's {_queueOf} craft{(_queueOf == 1 ? "" : "s")}");
         else if (_raceUpgradeTitle) k = (true, "the panel's title named the upgrade");
@@ -4039,7 +4046,7 @@ public sealed partial class TrackerSession
         if (!k.Roll) c++;
         _queueCrafts = c;
         _raceReadsFrom = now.AddSeconds(RaceReadMargin); _raceCount = 0; _raceUpgradeTitle = _raceBaseTitle = false;
-        return k;
+        return (k.Roll, unseen, k.Why);
     }
 
     /// <summary>The queue is over: crafts still waiting for its recipe are filed under the best guess (or the recipe read whole that was taking over).</summary>
@@ -4178,7 +4185,7 @@ public sealed partial class TrackerSession
         if (_heldRaces.Count == 0) return;
         var held = _heldRaces.ToList(); _heldRaces.Clear();
         CrashLog.Note($"crafting panel: {held.Count} craft{(held.Count == 1 ? "" : "s")} held for this queue's recipe filed under {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")}");
-        foreach (var (at, ok, combo) in held) PanelRace(_panelRecipe, ok, combo, at, _panelLevel, _queueId);
+        foreach (var (at, ok, combo, unseen) in held) PanelRace(_panelRecipe, ok, combo, at, _panelLevel, _queueId, unseen: unseen);
     }
 
     /// <summary>Whether this queue's crafts wait for its recipe: not settled yet, or another recipe read whole that may be taking over.</summary>
@@ -4351,17 +4358,17 @@ public sealed partial class TrackerSession
         _lastBarRaceAt = now;
         QueueTick(now);
         if (!_queueOpen) QueueStart(now);
-        var (combo, why) = RaceKind(now, tint);
+        var (combo, unseen, why) = RaceKind(now, tint);
         if (why.Length > 0) bars += "; " + why;
         if (QueueHolds)
         {
             // the queue's recipe isn't settled yet: the craft waits for it (one queue, one recipe)
-            _heldRaces.Add((now, ok, combo));
+            _heldRaces.Add((now, ok, combo, unseen));
             CrashLog.Note($"crafting panel: {(combo ? "combo roll " : "")}{(ok ? "success" : "fail")}, held until this queue's recipe is read ({bars})");
             return;
         }
         CrashLog.Note($"crafting panel: {(combo ? "combo roll " : "")}{(ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} ({bars})");
-        PanelRace(_panelRecipe, ok, combo, now, _panelLevel, _queueId);
+        PanelRace(_panelRecipe, ok, combo, now, _panelLevel, _queueId, unseen: unseen);
     }
 
     /// <summary>
@@ -4403,16 +4410,16 @@ public sealed partial class TrackerSession
     /// dont see the crafting bars why the fuck are u adding it to a craft window"). Also what replay and the tests feed.
     /// </summary>
     // makes: what the craft made when something other than the recipe book says it (a hidden craft's pop-up, HiddenCraftRows)
-    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0, int? makes = null)
+    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0, int? makes = null, int unseen = 0)
     {
         PanelUp(recipe, now);
-        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia, Makes = makes ?? (recipe.Length >= 2 ? RecipeBook.YieldFor(recipe, level) : null), Queue = queue };
+        var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia, Makes = makes ?? (recipe.Length >= 2 ? RecipeBook.YieldFor(recipe, level) : null), Queue = queue, Unseen = unseen };
         Count(ev);
         CraftView.Apply(ev);
         Accuracy.Add("craft_panel");
         Report.Counted(now, $"craft {(ok ? "success" : "fail")}{(combo ? " (combo)" : "")}: {(recipe.Length > 0 ? recipe : "?")}", ev.Via);
         // the line's amount is what the craft made (10 for a ×10 Orichalcum Ingot), as its Makes says; never a flat 1
-        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, ok && !combo && ev.Makes is int mk && mk > 0 ? mk : 1, Ok: ok, Via: ev.Via, Where: "Crafting", Makes: ev.Makes ?? 0));
+        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, ok && !combo && ev.Makes is int mk && mk > 0 ? mk : 1, Ok: ok, Via: ev.Via, Where: "Crafting", Makes: ev.Makes ?? 0, Combo: combo));
         try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
 

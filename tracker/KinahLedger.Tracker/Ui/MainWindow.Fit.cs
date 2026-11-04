@@ -71,12 +71,30 @@ public partial class MainWindow
     /// <summary>The window moved to another screen, or the screen's scaling changed: Full view fitted again when that changes anything.</summary>
     void RefitIfNeeded()
     {
+        FitMaxHeight();   // whatever the view: a taller window than the new screen could not be resized back
         if (!_prefs.FullView || _part != "Farming" || _welcome) return;
         double scale = FullScale();
         bool tooWide = scale < MinFitScale;
         double fit = !tooWide && scale < 0.995 ? Math.Round(scale, 3) : 1;
         if (tooWide != _fullTooWide || Math.Abs(fit - _fitScale) > 0.01) ApplyView();
         else if (tooWide && !_fullNoteShown) { Say(FullTooWideNote, "Warn"); _fullNoteShown = true; }   // the first fit ran before the window was up
+    }
+
+    /// <summary>
+    /// The window is never taller than the working area of the screen it is on: set at start, and again when it moves to
+    /// another screen or the scaling changes. Moved up if its bottom would now sit below the screen.
+    /// </summary>
+    void FitMaxHeight()
+    {
+        if (_demo) return;
+        var h = new WindowInteropHelper(this).Handle;
+        if (h == IntPtr.Zero) return;
+        double dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
+        if (dpi <= 0) dpi = 1;
+        var wa = WF.Screen.FromHandle(h).WorkingArea;
+        if (wa.Height <= 0) return;
+        MaxHeight = wa.Height / dpi;
+        if (WindowState == WindowState.Normal && ActualHeight > 0 && Top + ActualHeight > wa.Bottom / dpi) Top = Math.Max(wa.Top / dpi, wa.Bottom / dpi - ActualHeight);
     }
 
     /// <summary>For the options self-test and layout review: the scale Full view is drawn at, and whether it fell back to Compact.</summary>
