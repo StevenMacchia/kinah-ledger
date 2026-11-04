@@ -1469,7 +1469,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// A message to read. A "done" in the good tone (copied, set, saved, put back) shows in the toast over the page
     /// (Ui/MainWindow.Toast.cs, 0.9.10), where it is seen; the rest (working, warnings, problems) on the status line, where
-    /// it stays about 6 s before the live status takes the line back, the whole text on hover.
+    /// it stays about 6 s (a warning or problem 30 s) before the live status takes the line back, the whole text on hover.
     /// </summary>
     void Say(string text, string tone)
     {
@@ -1477,8 +1477,20 @@ public partial class MainWindow : Window
         SayOnLine(text, tone);
     }
     /// <summary>On the status line whatever the tone: a stopped run's result, and a saved report whose folder is on the line's hover.</summary>
-    void SayOnLine(string text, string tone) { Tell(text, tone); Status.ToolTip = text; if (DateTime.UtcNow.AddSeconds(SayHoldSeconds) > _statusHoldUntil) _statusHoldUntil = DateTime.UtcNow.AddSeconds(SayHoldSeconds); }
-    const double SayHoldSeconds = 6;
+    void SayOnLine(string text, string tone)
+    {
+        // a warning or a problem stays 30 s (the player may be in the game and tab back later) and only a newer one replaces it;
+        // anything gentler is replaced as before, after 6 s
+        bool strong = tone is "Warn" or "Bad";
+        var now = DateTime.UtcNow;
+        if (!strong && now < _strongHoldUntil) return;
+        Tell(text, tone); Status.ToolTip = text;
+        var until = now.AddSeconds(strong ? SayHoldStrongSeconds : SayHoldSeconds);
+        if (strong) { _strongHoldUntil = until; _statusHoldUntil = until; }
+        else if (until > _statusHoldUntil) _statusHoldUntil = until;
+    }
+    DateTime _strongHoldUntil;
+    const double SayHoldSeconds = 6, SayHoldStrongSeconds = 30;
     /// <summary>The live status line, rewritten each tick: in the look's own colour, so a change of look repaints it.</summary>
     void Tell(string text, string tone) { Status.Text = text; Status.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, tone); Status.ToolTip = null; }
     void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
