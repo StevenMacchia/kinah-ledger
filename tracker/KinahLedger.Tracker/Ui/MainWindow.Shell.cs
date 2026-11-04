@@ -138,7 +138,7 @@ public partial class MainWindow
     /// <summary>The shortcut as the player sees it ("Ctrl+Shift+K"); empty when it is off.</summary>
     public string HotkeyText => Hotkey.Parse(_prefs.Hotkey)?.ToString() ?? "";
 
-    const string StartTip = "Everything is counted while the game is open. A run times one stretch on top; it is what gets saved and shared.";
+    const string StartTip = "Times a run. Counting happens anyway; a run is what gets saved and shared.";
 
     /// <summary>The shortcut, as bound now, on the Start button's tooltip and as a faint hint beside it (never a key typed into the code).</summary>
     void UpdateStartHint(bool running)

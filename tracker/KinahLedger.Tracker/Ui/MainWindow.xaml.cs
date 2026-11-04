@@ -64,7 +64,7 @@ public partial class MainWindow : Window
     public System.Windows.Media.Imaging.BitmapSource? PreviewSource { get; private set; }
 
     readonly WF.NotifyIcon _tray = new();
-    readonly WF.ToolStripMenuItem _trayToggle = new("Start farming");
+    readonly WF.ToolStripMenuItem _trayToggle = new("Start run");
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     bool _framing; int _ticks;
 
@@ -190,7 +190,7 @@ public partial class MainWindow : Window
         InitWhatsNew(watch);   // after an update, this version's notes once at the top (Ui/MainWindow.WhatsNew.cs)
         InitCounting(watch);   // Help improve counting: the choice applied, the one-time notice
         if (!HasServer) Say("Choose your region and server first: prices and drops are kept per server.", "Warn");
-        else Say("Reading the chat whenever the game is open. Start run times a stretch on top.", "Faint");
+        else Say("Reading the chat whenever the game is open. Start run times a run.", "Faint");
         // the data folder's clean-up: pictures and miscount reports past their time, on its own thread, then hourly (Housekeeping)
         if (watch) Housekeeping.RunIfDue(DateTime.Now);
         // miscount reports the site couldn't take before (no connection, the route not deployed yet) go now, when the backoff allows
