@@ -600,6 +600,8 @@ public sealed class CraftPanelTracker
 
     /// <summary>Two samples this close on both bars are the bars stopped: the race is over and can be scored.</summary>
     public const double Settled = 0.02;
+    /// <summary>A race is close, and waits for the bars to stop, when the losing bar is this far along too; a clear one is scored the moment a bar is full, as before 0.9.17.</summary>
+    public const double CloseBar = 0.8;
 
     bool _done = true;
     DateTime _start;
@@ -645,7 +647,10 @@ public sealed class CraftPanelTracker
                 Dropped = $"{(quick ? "success" : "fail")} bar full {took:0.0} s after both were empty, quicker than any real race ({MinSeconds:0.0} s): not a craft";
                 return null;
             }
-            _pending = true; _lastS = s.Success; _lastF = s.Fail;
+            _lastS = s.Success; _lastF = s.Fail;
+            // a clear race is over now; a close one (the loser four fifths along or more) waits for the bars to stop
+            if (Math.Min(s.Success, s.Fail) < CloseBar) return Finish(t);
+            _pending = true;
             return null;
         }
         bool still = Math.Abs(s.Success - _lastS) <= Settled && Math.Abs(s.Fail - _lastF) <= Settled;

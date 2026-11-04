@@ -3809,6 +3809,16 @@ options: --process aion[,other]");
                     new(box, rs.Grade, "3", 3, new() { (key, 41.0), ("Other", 99.0) }),
                     new(box, "Common", "6", 6, new() { ("Icon_GM_0030_T04_Shoulder", 82.2), ("Other", 85.1) }) }, gt0.AddSeconds(3));
                 var grun2 = gt.Instances.Snapshot().LastOrDefault();
+                // the chat called the stones bound ("Acquired Refining Stone (Bound) x4.", Ferocious Horn Den Exploration, 2026-11-04):
+                // the slot the picture can't tell apart is bound too, shown and never valued
+                var gb = new TrackerSession(null, new Settings(), items, "Test"); var gb0 = DateTime.UtcNow;
+                gb.Engine.SetZone("Ferocious Horn Den"); gb.ZoneView.SetZone("Ferocious Horn Den"); gb.Instances.Zone("Ferocious Horn Den", gb0);
+                gb.ProcessChat(new List<string> { "[x] a" }, gb0);
+                gb.ProcessChat(new List<string> { "[x] a", "Acquired Refining Stone (Bound) x4." }, gb0.AddSeconds(1));
+                gb.ProcessChat(new List<string> { "[x] a", "Acquired Refining Stone (Bound) x4." }, gb0.AddSeconds(2));   // the chat settles on the second read
+                gb.ApplyGrid(new List<RewardGrid.Slot> { new(box, rs.Grade, "4", 4, new() { (key, 39.6), ("Other", 98.7) }), new(box, rs.Grade, "3", 3, new() { (key, 41.0), ("Other", 99.0) }) }, gb0.AddSeconds(3));
+                var gbRun = gb.Instances.Snapshot().LastOrDefault();
+                Check("a table slot the chat called bound is bound: shown, never valued", $"bound {gbRun?.BoundItems.Values.Sum() ?? -1} · tradeable {gbRun?.Items.Values.Sum() ?? -1}", "bound 7 · tradeable 0");
                 // the gold coin counts as Kinah only when the Kinah counter rose by exactly its amount (Urugugu: 17,889 to 617,889)
                 var coin = IconIndex.KeyOf(items.AllWithIcons().First(i => i.Name == "Kina (Bound)").Icon);
                 Slot600(out var withCounter, true); Slot600(out var without, false);
@@ -4578,6 +4588,12 @@ options: --process aion[,other]");
                 new InstanceRun { Zone = "Nowhere Known", Kind = "Event", Start = x0, LastLoot = x0.AddSeconds(20) } };
             var wbSent = InstanceRunPayload.From(wbRuns, id => id.ToString()) ?? new();
             Check("a world boss's loot is sent as its own kind", string.Join(" | ", wbSent.Select(r => $"{r.zone} {r.kind} {r.kills} kill {r.items.Values.Sum()} items")), "Saursus World Boss 1 kill 2 items");
+            // the bound ones among a run's items go as their own list too (2026-11-04: they show on the site and never count as Kinah)
+            var bdRun = new InstanceRun { Zone = "Ferocious Horn Den", Kind = "Expedition", Start = x0, LastLoot = x0.AddSeconds(20), Kinah = 800_000, Items = { [items.IdOf("Refining Stone")] = 2 }, BoundItems = { [items.IdOf("Refining Stone")] = 7, [items.IdOf("Silentium (Bound)")] = 14 } };
+            var bdSent = InstanceRunPayload.From(new[] { bdRun }, id => items.NameOf(id)) ?? new();
+            Check("a run's bound items are sent as items_bound beside items", string.Join(" | ", bdSent.Select(r => $"items {string.Join(",", r.items.OrderBy(k => k.Key).Select(k => $"{k.Key} {k.Value}"))} · bound {string.Join(",", (r.items_bound ?? new()).OrderBy(k => k.Key).Select(k => $"{k.Key} {k.Value}"))}")),
+                "items Refining Stone 9,Silentium (Bound) 14 · bound Refining Stone 7,Silentium (Bound) 14");
+            Check("...and none when a run has no bound item", wbSent[0].items_bound == null ? "none" : "some", "none");
             Check("gear from the item list's groups", $"{items.IsGear(items.IdOf("Orichalcum Longsword"))} {items.IsGear(items.IdOf("Holy Spirit Helm"))} {items.IsGear(items.IdOf("Refining Stone"))} {items.IsGear(items.IdOf("Fine Odyle"))}", "True True False False");
             Check("crafting window: its tabs, alone or joined on one line", $"{TargetReader.IsCraftTab("Blacksmithing")} {TargetReader.IsCraftTab("Blacksmithing Armorsmithing Handicrafting")} {TargetReader.IsCraftTab("Cooking Pot")}", "True True False");
             {
@@ -4600,7 +4616,7 @@ options: --process aion[,other]");
                     (30, 0, 0, true), (32, .83, .98, true), (32.5, 1, .98, true), (33, 0, 0, true), (35, .2, 1, true), (35.5, .2, 1, true),
                 };
                 var closeOuts = close.Select(x => ct.Feed(ct0.AddSeconds(x.At), new CraftPanel.Sample(x.Up, x.S, x.F, false))).Select((o, i) => o == null ? null : $"{(o.Ok ? "ok" : "fail")}@{close[i].At}").Where(x => x != null);
-                Check("crafting panel: a close race is scored once the bars stop, by the bar that got full (the fail bar at 98% can be the loser)", string.Join(" ", closeOuts), "ok@5 fail@12.5 fail@22.5 ok@33 fail@35.5");
+                Check("crafting panel: a close race is scored once the bars stop, by the bar that got full (the fail bar at 98% can be the loser); a clear one at once", string.Join(" ", closeOuts), "ok@5 fail@12 fail@22.5 ok@33 fail@35");
                 Check("crafting panel: the recipe's item", CraftPanel.ItemOf("Life Serum (Bound) (Novice Lv. 1)"), "Life Serum (Bound)");
                 // 2026-10-25 07:22:39: the close button read with the title on a great success
                 Check("...with the close button's X after the level", $"{CraftPanel.ItemOf("Fine Durable Balaur Horn (Professional Lv. 30) X")} | {CraftPanel.ItemOf("Fine Durable Balaur Horn (Professional Lv. 30) ×")} | {CraftPanel.ItemOf("Orichalcum Ingot (Novice Lv. 25) ~")}", "Fine Durable Balaur Horn | Fine Durable Balaur Horn | Orichalcum Ingot");

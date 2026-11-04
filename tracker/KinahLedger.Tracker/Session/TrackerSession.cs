@@ -1821,7 +1821,12 @@ public sealed partial class TrackerSession
     static string Unbound(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
     Dictionary<string, List<ItemInfo>>? _byIcon;
     // Assumed: counted as one from a line with no count; Settle: the rest of such a count, read again (TableWitness.AddLine)
-    readonly List<(DateTime At, string Name, int Count, bool Assumed, bool Settle)> _runPickups = new();
+    // Bound: the chat line said "(Bound)": the table's slot can't (the icon is the same), so the chat decides (Steven, 2026-11-04:
+    // bound materials and gear show, and never count as Kinah; an Exploration's refining stones and materials are bound since Nov 4)
+    readonly List<(DateTime At, string Name, int Count, bool Assumed, bool Settle, bool Bound)> _runPickups = new();
+    // the chat's "(Bound)" item lines of the last minute, whatever route they took (a reward line is never filed as a pickup):
+    // the reward table's witness that a slot's item came bound
+    readonly List<(DateTime At, string Name)> _boundLines = new();
     // the reward table's Kina, for the chat line that may print the same amount after it
     readonly List<(DateTime At, long Amount)> _gridKina = new();
 
@@ -1874,7 +1879,9 @@ public sealed partial class TrackerSession
             // Ferocious Horn Den: read as the run's table, the run closed, a phantom run opened, the Odyle filed as its loot).
             // The band's title says whose screen it is, and it is read now, not at the target reader's once-a-second pace:
             // at 11:33:33 the grid was counted 0.2 s before the title landed
-            if (!_gridDone && await ScreenOverTable(g, now)) { _gridSeenAt = now; _gridDone = true; return; }
+            // refused, nothing is marked done: the run's own table can follow the pass's screen within seconds (the pass
+            // levels up on the run's XP), and it is read the pass after that title is gone
+            if (!_gridDone && await ScreenOverTable(g, now)) return;
             _gridSeenAt = now;
             RewardScreenSeen(now);
             if (_gridDone) return;
@@ -2240,7 +2247,11 @@ public sealed partial class TrackerSession
             int count = TableCount(_items, graded, sl, out var clamped);
             if (clamped != null) CrashLog.Note($"{what}: a {sl.Grade} slot named {names[0]}: {clamped}");
             int seen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Count == count && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
-            bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase));
+            // bound when every item behind the icon is, or when the chat called this item bound in the last seconds (the picture
+            // can't tell a bound Refining Stone from a plain one; the chat line can)
+            bool boundSlot = graded.All(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase))
+                || _runPickups.Any(p => (now - p.At).TotalSeconds <= 20 && p.Bound && names.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
+                || _boundLines.Any(b => (now - b.At).TotalSeconds is >= -2 and <= 20 && names.Contains(b.Name, StringComparer.OrdinalIgnoreCase));
             var gridItem = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
             // every slot ends counted or not read: here a chat line doesn't decide between the names a picture leaves open;
             // the chat's lines of those seconds are judged together once they are all in (TableWitness), one line one piece
@@ -2263,8 +2274,8 @@ public sealed partial class TrackerSession
             }
             if (names.Count != 1) { unnamed++; NotRead(sl); CrashLog.Note($"{what}: a {sl.Grade} slot x{sl.CountText} is one of {string.Join(" / ", names.Take(3))}{(names.Count > 3 ? " …" : "")}: counted as one unknown item"); continue; }
             var item = graded.OrderBy(i => i.Name.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)).First();
-            Instances.Loot(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" });
-            Feed(new ItemAcquired(now, item.Id, count, false) { Via = "reward table" }, RunWhere());
+            Instances.Loot(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" });
+            Feed(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" }, RunWhere());
             fromGrid.Add(new ItemAcquired(now, item.Id, count, boundSlot) { Via = "reward table" });
             witness.Add(new TableWitness.Slot(witness.Count, sl.Grade, names[0], count, item.Id, boundSlot, slotGear, twins, slotNote));
             added++;
@@ -2829,6 +2840,12 @@ public sealed partial class TrackerSession
     /// </summary>
     internal string Count(GameEvent ev)
     {
+        // a "(Bound)" item line, a reward out of a run or a bound pickup inside one: the item came bound (the table's witness)
+        if (ev is RewardReceived or ItemAcquired { Bound: true })
+        {
+            _boundLines.Add((ev.Time, Unbound(ev is RewardReceived bl ? bl.Name : _items.NameOf(((ItemAcquired)ev).ItemId))));
+            if (_boundLines.Count > 50) _boundLines.RemoveRange(0, _boundLines.Count - 50);
+        }
         // a gathering result or failure line for the attempt tally (GatherAttempts)
         bool gathered = GatherSeen(ev);
         // a chat line for a gathering material claims the gathering bar's success, so the loot list can't count it again
@@ -2896,9 +2913,10 @@ public sealed partial class TrackerSession
             Instances.Loot(ev, _batch);
             Landed?.Invoke(ev, where);
             // kept a while, so the reward table read after it doesn't count the same items again
-            if (ev is ItemAcquired ra) _runPickups.Add((ev.Time, Unbound(_items.NameOf(ra.ItemId)), ra.Count, IsAssumed(ev), IsCountSettle(ev)));
-            else if (ev is RewardReceived rr) _runPickups.Add((ev.Time, Unbound(rr.Name), rr.Count, IsAssumed(ev), IsCountSettle(ev)));
-            else if (ev is KinahChanged { Delta: > 0 } rk) _runPickups.Add((ev.Time, "Kina", (int)Math.Min(rk.Delta, int.MaxValue), false, false));
+            if (ev is ItemAcquired ra) _runPickups.Add((ev.Time, Unbound(_items.NameOf(ra.ItemId)), ra.Count, IsAssumed(ev), IsCountSettle(ev), ra.Bound));
+            // a reward line is an item line whose "(Bound)" made it a reward (ChatParser): bound, whatever the name reads
+            else if (ev is RewardReceived rr) _runPickups.Add((ev.Time, Unbound(rr.Name), rr.Count, IsAssumed(ev), IsCountSettle(ev), true));
+            else if (ev is KinahChanged { Delta: > 0 } rk) _runPickups.Add((ev.Time, "Kina", (int)Math.Min(rk.Delta, int.MaxValue), false, false, rk.Bound));
             if (_runPickups.Count > 60) _runPickups.RemoveAt(0);
             return where;
         }
@@ -3430,6 +3448,9 @@ public sealed partial class TrackerSession
                 PanelPopups(lines, now);
                 return;
             }
+            // the scene still says Crafting but neither sign is fresh (the window left open past CraftHoldSeconds): nothing in
+            // its band is a pickup, as the gate's skip had it before the list ran while crafting (0.9.17)
+            if (Scene.Current == KinahLedger.Session.Scene.Crafting) { _rows.Reset(); return; }
             // the gathering panel ("Orichalcum · Proficiency · Orichalcum Ore x1 · Success") sits at the bottom of the band:
             // its lines are what is being gathered, never a pickup (Steven, 2026-10-23 11:28)
             var uncut = lines;
@@ -3887,6 +3908,9 @@ public sealed partial class TrackerSession
             var s = CraftPanel.Measure(bmp, region, g);
             if (!s.Visible)
             {
+                // a gathering bar waiting for its bars to stop when the panel went: scored as it stood (the crafting panel's is
+                // flushed in PanelLook)
+                if (!_panelIsCraft && Runs("gather_bar") && _gatherBar.Flush(now) is { } gf) GatherBarRace(now, gf.Ok, gf.Combo, "the panel went with a bar full");
                 // a loading screen, a reward, shop or event window, death or a cutscene ends a queue at once
                 PanelLook(now, false, false, null, sceneLeft: Scene.Current is KinahLedger.Session.Scene.Loading or KinahLedger.Session.Scene.Reward or KinahLedger.Session.Scene.Market
                     or KinahLedger.Session.Scene.EventCards or KinahLedger.Session.Scene.Death or KinahLedger.Session.Scene.Cutscene);

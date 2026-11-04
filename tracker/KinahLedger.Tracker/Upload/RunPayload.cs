@@ -218,7 +218,9 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, int>? unknown = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? notes = null,
     // since 2026-10-24: how much of the run the game's own numbers backed up (AccuracyScore.ForRun); absent with nothing judged
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RunAccuracy? acc = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RunAccuracy? acc = null,
+    // 2026-11-04 (Steven): the bound ones among items, so the site shows them and never values them; items keeps every reward as before
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, int>? items_bound = null)
 {
     /// <summary>Most notes per run, as sent.</summary>
     public const int MaxNotes = 20;
@@ -247,11 +249,13 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
                 // a correction is no new run: it goes with 0 seconds, which a site from before corrections refuses, so there
                 // it can never count twice; the run stays marked and is sent again later
                 var fix = RunCorrection.Of(r, key, off);
+                var bound = new Dictionary<string, int>();
+                foreach (var (id, n) in r.BoundItems) { if (off?.Invoke(id) == true) continue; var k = key(id); bound[k] = bound.GetValueOrDefault(k) + n; }
                 return new InstanceRunPayload(r.Zone, KindOf(r)!, fix != null ? 0 : (int)Math.Round(r.Seconds), r.Kinah, r.Kills, d,
                     r.Event.Length > 0 && r.Event != r.Zone ? r.Event : null, r.Family.Length > 0 ? r.Family : null, fix,
                     // a count in doubt (InstanceRun.SlotDoubts) keeps the run out of the site's averages the same way
                     r.PartlyRead || r.SlotDoubts.Count > 0 ? true : null, r.SlotsUnread > 0 ? r.SlotsUnread : null, unknown.Count > 0 ? unknown : null,
-                    r.GearNotes.Count > 0 ? r.GearNotes.Take(MaxNotes).ToList() : null, r.Acc);
+                    r.GearNotes.Count > 0 ? r.GearNotes.Take(MaxNotes).ToList() : null, r.Acc, items_bound: bound.Count > 0 ? bound : null);
             }).ToList();
         return list.Count > 0 ? list : null;
     }
