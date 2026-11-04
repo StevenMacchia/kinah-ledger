@@ -1870,6 +1870,11 @@ public sealed partial class TrackerSession
             _eventScreenUp = false;
             FlushEventCards(now, "the screen closed");
             if (rc == null) { if ((now - _gridSeenAt).TotalSeconds > 5) _gridDone = false; return; }
+            // "Reward collected." heads the Daeva Pass level reward too (2026-11-04 11:25:00, two Odyle Energy slots inside
+            // Ferocious Horn Den: read as the run's table, the run closed, a phantom run opened, the Odyle filed as its loot).
+            // The band's title says whose screen it is, and it is read now, not at the target reader's once-a-second pace:
+            // at 11:33:33 the grid was counted 0.2 s before the title landed
+            if (!_gridDone && await ScreenOverTable(g, now)) { _gridSeenAt = now; _gridDone = true; return; }
             _gridSeenAt = now;
             RewardScreenSeen(now);
             if (_gridDone) return;
@@ -1920,6 +1925,26 @@ public sealed partial class TrackerSession
             ApplyGrid(slots, now);
         }
         catch (Exception ex) { CrashLog.Write("reward table", ex); }
+    }
+
+    DateTime _overTableNoteAt = DateTime.MinValue;
+
+    /// <summary>
+    /// The top band read now (past the target reader's once-a-second pace; the same pixels cost nothing), and whether a
+    /// screen that isn't the run's (<see cref="NotTheRunsScreen"/>: the Daeva Pass's level reward, an achievement's, a shop)
+    /// is up over a "Reward collected." table. True: its slots are that screen's rewards, and the run is left as it was.
+    /// </summary>
+    async Task<bool> ScreenOverTable(Rectangle g, DateTime now)
+    {
+        try
+        {
+            var cover = Cover(TargetReader.Strip(g));
+            if (cover == null || cover.StartsWith("Kinah Ledger")) await Target.TickAsync(g);
+        }
+        catch (Exception ex) { CrashLog.Write("target bar", ex); }
+        if (!OtherRewardScreenUp(DateTime.UtcNow)) return false;
+        if ((now - _overTableNoteAt).TotalSeconds > 10) { _overTableNoteAt = now; CrashLog.Note($"reward table under the {Target.RewardTitle} screen: its rewards, not the run's; nothing read from it"); }
+        return true;
     }
 
     /// <summary>The reward table's slots into the run: each named item once, skipping what the chat already counted.</summary>
@@ -2074,6 +2099,13 @@ public sealed partial class TrackerSession
             CrashLog.Note($"reward table refused: the {Target.RewardTitle} screen is up, so these {slots.Count} slot(s) are that screen's, not the run's table");
             return;
         }
+        // the Daeva Pass level reward with its title not read in time (2026-11-04 11:25:00, Ferocious Horn Den): a small table
+        // showing Odyle Energy is the pass's. The pass pays Odyle Energy; no expedition's or event's table does
+        if (what == "reward table" && slots.Count <= 6 && slots.Any(s => s.Icons.Count > 0 && s.Icons[0].Key != null && s.Icons[0].Key.Contains("Odenergy", StringComparison.OrdinalIgnoreCase)))
+        {
+            CrashLog.Note($"reward table refused: {slots.Count} slot(s) with Odyle Energy among them, the Daeva Pass's level reward, not the run's table");
+            return;
+        }
         // a read of one slot or none, with nothing on it surely matched, is no reward table (2026-10-23 21:12:30: a Daeva Pass
         // screen read 11 times, 0 to 1 slot): it can't start, split or pay a run. A lone coin (a K or M count) still counts
         if (slots.Count <= 1 && !slots.Any(s => (s.Icons.Count > 0 && s.Icons[0].Distance <= GridSureDistance)
@@ -2151,12 +2183,18 @@ public sealed partial class TrackerSession
                 long amt = Math.Min(sl.Count, 1_000_000_000);
                 int kseen = _runPickups.FindIndex(p => (now - p.At).TotalSeconds <= 20 && p.Name == "Kina" && p.Count == amt);
                 if (kseen >= 0) { _runPickups.RemoveAt(kseen); known++; fromGrid.Add(new KinahChanged(now, amt, false) { Via = "reward table" }); continue; }
-                // a clear match to the coin as the game draws it is sure on its own; a closer call needs the counter to agree
-                bool clearCoin = best.Distance <= GridSureDistance && (sl.Icons.Count < 2 || sl.Icons[1].Distance >= best.Distance * 1.25);
+                // a clear match to the coin as the game draws it is sure on its own; a closer call needs the counter to agree.
+                // The next icon that is a coin too (the bound coin beside the plain one) is no lookalike: an Exploration's Kina
+                // is bound since the Nov 4 patch, so its coin (closest 51, 2026-11-04 Ferocious Horn Den) never moves the Kinah
+                // counter, and every run read "not confirmed", 0 Kinah, not sent
+                bool IsCoin((string Key, double Distance) ic) => ic.Key != null && _byIcon.TryGetValue(ic.Key, out var oth) && oth.Any(i => string.Equals(Unbound(i.Name), "Kina", StringComparison.OrdinalIgnoreCase));
+                var nextOther = sl.Icons.Skip(1).FirstOrDefault(ic => !IsCoin(ic));
+                bool clearCoin = best.Distance <= GridSureDistance && (nextOther.Key == null || nextOther.Distance >= best.Distance * 1.25);
                 // the counter's rise within 1% of the slot is the amount (a 600.0K coin read as 605.0K, 2026-10-23)
                 long? rise = BalanceRoseNear(amt, now);
                 bool counterRose = rise != null || BalanceRose(amt, now);
                 if (!clearCoin && !counterRose) { unnamed++; NotRead(sl); CrashLog.Note($"reward table: a coin slot x{sl.CountText} (closest {best.Distance:0}) the Kinah counter didn't confirm; not counted"); continue; }
+                if (clearCoin && !counterRose) CrashLog.Note($"reward table: the coin slot x{sl.CountText} (closest {best.Distance:0}) counted from its picture; the Kinah counter didn't move, so it is bound Kina (an Exploration's since Nov 4)");
                 if (rise is long r1 && r1 != amt) { CrashLog.Note($"reward table: the coin slot read {amt:N0}, the Kinah counter rose {r1:N0}: the counter's amount counts"); amt = r1; }
                 Instances.Loot(new KinahChanged(now, amt, false) { Via = "reward table" }); _gridKina.Add((now, amt));
                 FeedWitnessed(new KinahChanged(now, amt, false) { Via = "reward table" }, RunWhere(), counterRose ? "counter" : "picture");
