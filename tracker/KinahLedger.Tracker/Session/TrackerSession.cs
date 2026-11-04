@@ -4121,6 +4121,13 @@ public sealed partial class TrackerSession
     void QueueEnd(DateTime now, string why)
     {
         if (!_queueOpen) return;
+        // the queue's last craft finished in an instant: the count read past the crafts counted, a quick success since the last race
+        if (_raceCount > _queueCrafts && _quickRaces.Count > 0)
+        {
+            int left = CreditQuick(_lastBarRaceAt, now, _raceCount - _queueCrafts, why);
+            _queueCrafts = _raceCount - left;
+        }
+        _quickRaces.Clear();
         if (_heldRaces.Count > 0)
         {
             if (_switchTo.Length > 0) SwitchQueue(now, $"{why}, the crafts after it held");
@@ -4431,9 +4438,39 @@ public sealed partial class TrackerSession
     internal void PanelSample(DateTime now, CraftPanel.Sample s)
     {
         var o = _panel.Feed(now, s);
-        if (_panel.Dropped is { } why) CrashLog.Note($"crafting panel: {why} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
+        if (_panel.Dropped is { } why)
+        {
+            CrashLog.Note($"crafting panel: {why} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
+            // kept: the queue's count passing a craft says it was one (CreditQuick)
+            if (_panel.DroppedOk) { _quickRaces.Add(now); if (_quickRaces.Count > 8) _quickRaces.RemoveAt(0); }
+        }
         if (o == null) return;
         CraftBarRace(now, o.Ok, o.Combo, $"success bar {s.Success:P0}, fail bar {s.Fail:P0}");
+    }
+
+    // ---- crafts that finish in an instant (Steven, 2026-11-04: "if it's a crit success and completes instantly it's not
+    // shown in the tracker") ----
+    // A critical success fills the Success bar at once: 1.6 to 1.9 s from both bars empty on the 14:13 Orichalcum Guard
+    // queue, under MinRaceSeconds, so each was dropped as the flicker a panel opening shows, and the next race read "1 craft
+    // before it not seen". The flicker and the instant craft tell apart by the queue's count: it passes a craft, never a
+    // flicker. A quick success is kept, and when the count jumps past a craft since the last race (RaceKind's unseen, or the
+    // count read past the crafts counted when the queue ends), it was that craft, a success, counted at its own time.
+    readonly List<DateTime> _quickRaces = new();
+
+    /// <summary>Quick successes since <paramref name="prevRace"/>, up to <paramref name="unseen"/>, counted as crafts that worked; the unseen left over.</summary>
+    int CreditQuick(DateTime prevRace, DateTime now, int unseen, string why)
+    {
+        _quickRaces.RemoveAll(q => q <= prevRace);
+        int used = 0;
+        foreach (var q in _quickRaces.Where(q => q < now).OrderBy(q => q).ToList())
+        {
+            if (used >= unseen) break;
+            _quickRaces.Remove(q); used++;
+            CrashLog.Note($"crafting panel: the success bar full in an instant at {q.ToLocalTime():HH:mm:ss.f} was a craft (a critical success): counted, the queue's count passed it ({why})");
+            if (QueueHolds) _heldRaces.Add((q, true, false, 0));
+            else PanelRace(_panelRecipe, true, false, q, _panelLevel, _queueId);
+        }
+        return unseen - used;
     }
 
     /// <summary>A pass with the panel up while crafting, behind the gate (also what replay's "panel" reads feed while crafting).</summary>
@@ -4462,10 +4499,13 @@ public sealed partial class TrackerSession
     // combo: the panel's blue tint, the third sign of an upgrade roll (RaceKind)
     void CraftBarRace(DateTime now, bool ok, bool tint, string bars)
     {
+        var prevRace = _lastBarRaceAt;
         _lastBarRaceAt = now;
         QueueTick(now);
         if (!_queueOpen) QueueStart(now);
         var (combo, unseen, why) = RaceKind(now, tint);
+        // a craft the count passed that finished in an instant (a critical success) is counted before this one
+        if (unseen > 0) { int left = CreditQuick(prevRace, now, unseen, why); if (left != unseen) { why = $"{why}; {unseen - left} of them a critical success, counted"; unseen = left; } }
         if (why.Length > 0) bars += "; " + why;
         if (QueueHolds)
         {

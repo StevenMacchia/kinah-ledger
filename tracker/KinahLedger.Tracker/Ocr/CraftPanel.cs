@@ -594,6 +594,8 @@ public sealed class CraftPanelTracker
 
     /// <summary>A race the last <see cref="Feed"/> dropped as too quick, for the reads log; null when it dropped none.</summary>
     public string? Dropped { get; private set; }
+    /// <summary>With <see cref="Dropped"/>: the bar that filled was the success bar (a craft that finished in an instant, if the queue's count then passes one).</summary>
+    public bool DroppedOk { get; private set; }
 
     /// <summary>A colour this far from the queue's first craft, in blue and in green over red, is the upgrade roll's tint (about 70 and 40 on 2026-11-03).</summary>
     public const double TintBlue = 30, TintGreen = 20;
@@ -644,7 +646,8 @@ public sealed class CraftPanelTracker
             {
                 _done = true;
                 bool quick = s.Success >= Full && s.Success >= s.Fail;
-                Dropped = $"{(quick ? "success" : "fail")} bar full {took:0.0} s after both were empty, quicker than any real race ({MinSeconds:0.0} s): not a craft";
+                DroppedOk = quick;
+                Dropped = $"{(quick ? "success" : "fail")} bar full {took:0.0} s after both were empty, quicker than any real race ({MinSeconds:0.0} s): not a craft on its own";
                 return null;
             }
             _lastS = s.Success; _lastF = s.Fail;
