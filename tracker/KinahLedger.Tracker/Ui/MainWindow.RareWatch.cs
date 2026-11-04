@@ -64,10 +64,32 @@ public partial class MainWindow
     /* ---------------- the chime ---------------- */
 
     static MediaPlayer? _chimePlayer;
-    static string ChimeWav => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Media", "Windows Notify System Generic.wav");
+    static string? _chimePath;
 
     /// <summary>
-    /// The chime at a volume, 0 to 1 (a drop, a price alert, Options' Play). Windows' notify sound through a MediaPlayer,
+    /// The tracker's own chime, two rising notes (chime.wav, made by tools/make-chime.js and embedded): not Windows' notify
+    /// sound, which made a blue drop sound like an error in the app (Steven, 2026-11-04). MediaPlayer opens a path, so the
+    /// file is written beside the logs once (again when a build changes it); "" when it can't be.
+    /// </summary>
+    static string ChimeWav
+    {
+        get
+        {
+            if (_chimePath != null) return _chimePath;
+            try
+            {
+                var p = System.IO.Path.Combine(CrashLog.Dir, "chime.wav");
+                using var s = typeof(MainWindow).Assembly.GetManifestResourceStream("chime.wav");
+                if (s == null) return _chimePath = "";
+                if (!System.IO.File.Exists(p) || new System.IO.FileInfo(p).Length != s.Length) { using var f = System.IO.File.Create(p); s.CopyTo(f); }
+                return _chimePath = p;
+            }
+            catch (Exception ex) { CrashLog.Write("chime", ex); return _chimePath = ""; }
+        }
+    }
+
+    /// <summary>
+    /// The chime at a volume, 0 to 1 (a drop, a price alert, Options' Play). The tracker's chime through a MediaPlayer,
     /// which has a volume; the plain sound player (full volume) if that can't play, the system's asterisk with no file.
     /// </summary>
     public void PlayChime(double volume)
@@ -75,7 +97,7 @@ public partial class MainWindow
         if (volume <= 0) return;
         try
         {
-            if (!System.IO.File.Exists(ChimeWav)) { System.Media.SystemSounds.Asterisk.Play(); return; }
+            if (ChimeWav.Length == 0 || !System.IO.File.Exists(ChimeWav)) { System.Media.SystemSounds.Asterisk.Play(); return; }
             if (_chimePlayer == null) { _chimePlayer = new MediaPlayer(); _chimePlayer.MediaFailed += (_, _) => PlainChime(); }
             _chimePlayer.Open(new Uri(ChimeWav));
             _chimePlayer.Volume = Math.Clamp(volume, 0, 1);
@@ -86,7 +108,7 @@ public partial class MainWindow
 
     static void PlainChime()
     {
-        try { new System.Media.SoundPlayer(ChimeWav).Play(); } catch (Exception) { }
+        try { if (ChimeWav.Length > 0) new System.Media.SoundPlayer(ChimeWav).Play(); } catch (Exception) { }
     }
 
     /* ---------------- for Options ---------------- */

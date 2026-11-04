@@ -2093,12 +2093,13 @@ options: --process aion[,other]");
         Check("first frame: World seen once (Unknown before it holds nothing)", Pass("world"), "Unknown: list Run read, craft Skip");
         Check("second: World settles", Pass("world"), "World: list Run read, craft Skip");
         var seq = new[] { "crafting", "crafting", "world", "world" }.Select(n => Pass(n)).ToList();
-        Check("World→Crafting: seen once, the list already off", seq[0], "World: list Skip, craft Skip");
-        Check("Crafting settles: list off, craft panel on", seq[1], "Crafting: list Skip, craft Run");
-        Check("→World once: list still off until World settles", seq[2], "Crafting: list Skip, craft Skip");
+        // the list runs while crafting too since 0.9.17 (the queue's own pop-ups, PanelPopups); the craft panel runs only once Crafting settles
+        Check("World→Crafting: seen once, the craft panel not yet", seq[0], "World: list Run read, craft Skip");
+        Check("Crafting settles: list on for the queue's pop-ups, craft panel on", seq[1], "Crafting: list Run read, craft Run");
+        Check("→World once: the craft panel off at once", seq[2], "Crafting: list Run read, craft Skip");
         Check("World again: list back, craft panel off", seq[3], "World: list Run read, craft Skip");
         var since = ts.Scene.Since;
-        Check("a one-pass flicker into Crafting", Pass("crafting"), "World: list Skip, craft Skip");
+        Check("a one-pass flicker into Crafting", Pass("crafting"), "World: list Run read, craft Skip");
         Check("...doesn't change the state", Pass("world") + $" since unchanged {ts.Scene.Since == since}", "World: list Run read, craft Skip since unchanged True");
         Check("the log line on a change", ts.Scene.ChangeLine().StartsWith("scene World since ") && ts.Scene.ChangeLine().Contains("; skipped craft_panel") ? "scene World since <t>; skipped craft_panel..." : ts.Scene.ChangeLine(), "scene World since <t>; skipped craft_panel...");
         // Unknown holds only after a gating state (Crafting, Market, Reward, EventCards); after World it gates nothing
@@ -2109,12 +2110,12 @@ options: --process aion[,other]");
         ts.ChatGated(new List<string> { "[Player] hello" }, tt, ts.Verdict("chat"));
         int rel = ts.SceneReleased;
         Pass("world"); Pass("world");
-        Check("World settles: the held chat read released", $"{ts.Scene.Current} held {ts.HeldNow} released {ts.SceneReleased - rel}", "World held 0 released 1");
+        Check("World settles: the held chat and list reads released", $"{ts.Scene.Current} held {ts.HeldNow} released {ts.SceneReleased - rel}", "World held 0 released 2");
         Pass("crafting"); Pass("crafting"); Pass("blank"); Pass("blank");
-        Check("Unknown settles after Crafting: list reads held", $"{ts.Scene.Current} list {ts.Verdict("loot_list")} held {ts.HeldNow}", "Unknown list Hold held 1");
+        Check("Unknown settles after Crafting: list reads held", $"{ts.Scene.Current} list {ts.Verdict("loot_list")} held {ts.HeldNow}", "Unknown list Hold held 2");
         rel = ts.SceneReleased;
         Pass("loading");
-        Check("Loading (log-only) settles: both held reads released", Pass("loading") + $" released {ts.SceneReleased - rel}", "Loading: list Run read, craft Run released 2");
+        Check("Loading (log-only) settles: the held reads released", Pass("loading") + $" released {ts.SceneReleased - rel}", "Loading: list Run read, craft Run released 3");
         Check("a Loading frame with the default list skips nothing", Skipped(ts), "nothing");
         Check("...and logs itself log-only", ts.Scene.ChangeLine().StartsWith("scene Loading (log-only) since ") ? "scene Loading (log-only) since <t>..." : ts.Scene.ChangeLine(), "scene Loading (log-only) since <t>...");
         Check("Explain says which features decided", ts.Scene.Explain().StartsWith("Loading: near-black") ? "Loading: near-black ..." : ts.Scene.Explain(), "Loading: near-black ...");
@@ -2127,11 +2128,11 @@ options: --process aion[,other]");
         foreach (var n in new[] { "world", "world", "crafting", "crafting", "blank", "blank" }) Pass(n, ld);
         int dropped = ld.SceneDropped;
         Pass("loading", ld);
-        Check("...and Unknown's held reads dropped when Loading settles", Pass("loading", ld) + $" held {ld.HeldNow} dropped {ld.SceneDropped - dropped}", "Loading: list Skip, craft Skip held 0 dropped 1");
+        Check("...and Unknown's held reads dropped when Loading settles", Pass("loading", ld) + $" held {ld.HeldNow} dropped {ld.SceneDropped - dropped}", "Loading: list Skip, craft Skip held 0 dropped 2");
         Update.RemoteConfig.Current = Update.RemoteConfig.BuiltIn;
         var wcw = new TrackerSession(null, settings, items, "Test") { Vote = false };
         Check("World, Crafting, World with the default list gates as before", string.Join(" | ", new[] { "world", "world", "crafting", "crafting", "world", "world" }.Select(n => Pass(n, wcw)).ToList().Skip(1)),   // ToList: Skip on a Select over an array never runs the skipped pass
-            "World: list Run read, craft Skip | World: list Skip, craft Skip | Crafting: list Skip, craft Run | Crafting: list Skip, craft Skip | World: list Run read, craft Skip");
+            "World: list Run read, craft Skip | World: list Run read, craft Skip | Crafting: list Run read, craft Run | Crafting: list Run read, craft Skip | World: list Run read, craft Skip");
         Check("scene.gate.states: built-in list, unknown names ignored", $"{string.Join(",", Update.RemoteConfig.BuiltIn.SceneGateStates.OrderBy(x => x))} / {string.Join(",", Update.RemoteConfig.Parse("""{"scene": {"gate": {"states": ["loading", "Nowhere"]}}}""").SceneGateStates)}", "Crafting,EventCards,Market,Reward / Loading");
 
         // scene.gate off: the state is still worked out and logged, nothing gated
@@ -2140,7 +2141,7 @@ options: --process aion[,other]");
         tt = t0;
         foreach (var n in new[] { "world", "world", "crafting", "crafting" }) { tt = tt.AddMilliseconds(300); off.ScenePass(all[n].Stats, all[n].Signs, tt); }
         Check("scene.gate off: Crafting worked out, nothing gated", $"{off.Scene.Current}: list {off.Verdict("loot_list")}, craft {off.Verdict("craft_panel")}, chat {off.Verdict("chat")}", "Crafting: list Run, craft Run, chat Run");
-        Check("...and the log says what it would skip", off.Scene.ChangeLine().Contains("scene.gate off; would skip loot_list") ? "would skip loot_list..." : off.Scene.ChangeLine(), "would skip loot_list...");
+        Check("...and the log says what it would skip", off.Scene.ChangeLine().Contains("scene.gate off; would skip gather_bar") ? "would skip gather_bar..." : off.Scene.ChangeLine(), "would skip gather_bar...");
         Check("scene.gate: on by default, on with an empty config", $"{Update.RemoteConfig.BuiltIn.SceneGate} {Update.RemoteConfig.Parse("{}").SceneGate} {Update.RemoteConfig.Current.SceneGate}", "True True False");
         Update.RemoteConfig.Current = keepCfg;
 
@@ -4546,9 +4547,22 @@ options: --process aion[,other]");
                 var cpt = new CraftPanelTracker(); var cp0 = new DateTime(2026, 10, 22, 17, 0, 13);
                 var races = new (double S, double F, bool C, bool Up)[] { (0, 0, false, true), (.32, .42, false, true), (.32, .70, false, true), (.99, .70, false, true), (1, .70, false, true),
                     (0, 0, false, false), (0, 0, false, true), (.71, .28, false, true), (1, .28, false, true), (1, .28, false, true),
-                    (0, 0, true, true), (.32, .42, true, true), (1, .42, true, true), (1, .42, true, true), (0, 0, false, true), (.1, .98, false, true) };
+                    (0, 0, true, true), (.32, .42, true, true), (1, .42, true, true), (1, .42, true, true), (0, 0, false, true), (.1, .98, false, true), (.1, .98, false, true) };
                 var outs = races.Select((r, i) => cpt.Feed(cp0.AddSeconds(i), new CraftPanel.Sample(r.Up, r.S, r.F, r.C))).Where(o => o != null).Select(o => (o!.Ok ? "ok" : "fail") + (o.Combo ? "+combo" : ""));
                 Check("crafting panel: one outcome per race, the full bar decides", string.Join(" ", outs), "ok ok ok+combo fail");
+                // 2026-11-04 09:41:54, Steven's Artisan's Steamed Cypri: "fail (success bar 83%, fail bar 98%)", and it worked. The
+                // loser stops just short of full while the winner is still climbing, so a race is scored once the bars stop
+                // (or the panel goes, or the next race starts), by the bar that got full
+                var ct = new CraftPanelTracker(); var ct0 = new DateTime(2026, 11, 4, 14, 41, 50, DateTimeKind.Utc);
+                var close = new (double At, double S, double F, bool Up)[]
+                {
+                    (0, 0, 0, true), (2, .4, .5, true), (4, .83, .98, true), (4.5, 1, .98, true), (5, 1, .98, true),
+                    (10, 0, 0, true), (12, .31, .98, true), (12.5, .31, .98, true),
+                    (20, 0, 0, true), (22, .83, .98, true), (22.5, 0, 0, false),
+                    (30, 0, 0, true), (32, .83, .98, true), (32.5, 1, .98, true), (33, 0, 0, true), (35, .2, 1, true), (35.5, .2, 1, true),
+                };
+                var closeOuts = close.Select(x => ct.Feed(ct0.AddSeconds(x.At), new CraftPanel.Sample(x.Up, x.S, x.F, false))).Select((o, i) => o == null ? null : $"{(o.Ok ? "ok" : "fail")}@{close[i].At}").Where(x => x != null);
+                Check("crafting panel: a close race is scored once the bars stop, by the bar that got full (the fail bar at 98% can be the loser)", string.Join(" ", closeOuts), "ok@5 fail@12.5 fail@22.5 ok@33 fail@35.5");
                 Check("crafting panel: the recipe's item", CraftPanel.ItemOf("Life Serum (Bound) (Novice Lv. 1)"), "Life Serum (Bound)");
                 // 2026-10-25 07:22:39: the close button read with the title on a great success
                 Check("...with the close button's X after the level", $"{CraftPanel.ItemOf("Fine Durable Balaur Horn (Professional Lv. 30) X")} | {CraftPanel.ItemOf("Fine Durable Balaur Horn (Professional Lv. 30) ×")} | {CraftPanel.ItemOf("Orichalcum Ingot (Novice Lv. 25) ~")}", "Fine Durable Balaur Horn | Fine Durable Balaur Horn | Orichalcum Ingot");
@@ -4889,7 +4903,7 @@ options: --process aion[,other]");
                 var lb = new TrackerSession(null, new Settings(), items, "Test"); lb.Engine.SetZone("Eastern Cantas Valley");
                 static DateTime B(double s) => new DateTime(2026, 11, 3, 18, 23, 0, DateTimeKind.Utc).AddSeconds(s);
                 lb.PanelLook(B(7.6), true, false, new[] { "Crafting in Progress 1 / 1", "Orichalcum Ingot (Novice Lv. 25)" });
-                foreach (var (at, sb, fb) in new[] { (8.0, 0.0, 0.0), (9.8, 1.0, 0.0), (15.2, 0.0, 0.0), (17.9, 0.5, 0.1), (20.5, 0.99, 0.14) })
+                foreach (var (at, sb, fb) in new[] { (8.0, 0.0, 0.0), (9.8, 1.0, 0.0), (15.2, 0.0, 0.0), (17.9, 0.5, 0.1), (20.5, 0.99, 0.14), (21.0, 0.99, 0.14) })
                 {
                     lb.CraftingPass(B(at));
                     lb.PanelSample(B(at), new CraftPanel.Sample(true, sb, fb, false));
@@ -4899,6 +4913,28 @@ options: --process aion[,other]");
                     string.Join(" | ", lb.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts}, made {string.Join(", ", r.Made.Select(m => $"{m.Key} x{m.Value}"))}")),
                     "1/1, made Orichalcum Ingot x10");
                 Check("...its feed line says what it made", string.Join(" | ", lb.Live.Recent(FeedTab.Crafting).Select(l => $"{l.Text} (amount {l.Amount})")), "Orichalcum Ingot ×10 worked (amount 10)");
+            }
+            {
+                // Steven's 2026-11-04 09:48 Artisan's Inina Pasta: the combo's "x2" pop-up beside the character while the panel is
+                // up ("it says x2 when I'm doing it and it shows up as 2 in the icon"), its blue race dropped as too quick: the
+                // pop-up's count is the second dish, credited once however often the row is read
+                var pp = new TrackerSession(null, new Settings(), items, "Test"); pp.Engine.SetZone("Eastern Cantas Valley");
+                static DateTime P(double s) => new DateTime(2026, 11, 4, 14, 48, 0, DateTimeKind.Utc).AddSeconds(s);
+                pp.PanelLook(P(0), true, false, new[] { "Crafting in Progress 1 / 10", "Artisan's Inina Pasta (Novice Lv. 35)" });
+                foreach (var (at, sb, fb) in new[] { (1.0, 0.0, 0.0), (4.0, 0.5, 0.2), (7.0, 1.0, 0.3), (7.5, 1.0, 0.3) }) { pp.CraftingPass(P(at)); pp.PanelSample(P(at), new CraftPanel.Sample(true, sb, fb, false)); }
+                static string Rolls(TrackerSession s) => string.Join(" | ", s.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts}, rolls {r.Upgraded}/{r.Upgraded + r.NotUpgraded}, made {string.Join(", ", r.Made.Select(m => $"{m.Key} x{m.Value}"))}"));
+                Check("crafting: the pasta counted from its bars, one made", Rolls(pp), "1/1, rolls 0/0, made Artisan's Inina Pasta x1");
+                // the pop-up read pass after pass (a row is up about 2.5 s), the panel's own lines in the band with it
+                foreach (var at in new[] { 8.0, 8.5, 9.0, 9.5, 10.0 }) pp.ProcessList(new List<(int, string)> { (1197, "Artisan's Inina Pasta x2"), (1622, "Artisan's Inina Pasta (Novice Lv. 35)"), (1687, "Success x1") }, P(at));
+                Check("crafting: the x2 pop-up beside the character is the craft's combo, credited once", Rolls(pp), "1/1, rolls 1/1, made Artisan's Inina Pasta x2");
+                Check("...and the feed says so", string.Join(" | ", pp.Live.Recent(FeedTab.Crafting).Select(l => l.Text)), "Artisan's Inina Pasta combo won | Artisan's Inina Pasta worked");
+                // the roll read as lost off the panel, then the pop-up says x2: the pop-up wins, the tally follows
+                var pl = new TrackerSession(null, new Settings(), items, "Test"); pl.Engine.SetZone("Eastern Cantas Valley");
+                pl.PanelLook(P(0), true, false, new[] { "Crafting in Progress 1 / 1", "Artisan's Inina Pasta (Novice Lv. 35)" });
+                foreach (var (at, sb, fb, tint) in new[] { (1.0, 0.0, 0.0, false), (4.0, 0.5, 0.2, false), (7.0, 1.0, 0.3, false), (7.5, 1.0, 0.3, false), (9.0, 0.0, 0.0, true), (12.0, 0.3, 1.0, true), (12.5, 0.3, 1.0, true) }) { pl.CraftingPass(P(at)); pl.PanelSample(P(at), new CraftPanel.Sample(true, sb, fb, tint)); }
+                Check("crafting: a roll read as lost", Rolls(pl), "1/1, rolls 0/1, made Artisan's Inina Pasta x1");
+                foreach (var at in new[] { 13.0, 13.5, 14.0, 14.5, 15.0 }) pl.ProcessList(new List<(int, string)> { (1197, "Artisan's Inina Pasta x2") }, P(at));
+                Check("...the x2 pop-up says it was won: the second dish credited, the roll won not lost", Rolls(pl), "1/1, rolls 1/1, made Artisan's Inina Pasta x2");
             }
             {
                 // a world boss with a Force (Steven, 2026-10-22): other players' shares are never the player's; the player's own share is

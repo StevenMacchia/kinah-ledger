@@ -3383,12 +3383,13 @@ public sealed partial class TrackerSession
             // a queue crafting under the crafting window: the list is read for its recipe's own pop-ups alone (HiddenCraftRows)
             if (HiddenCraftRows(lines, now)) return;
             // the crafting panel or window covers the place the loot list shows (its title read as a row, "Expert's Orichalcum
-            // Cloak", 2026-10-23 21:17:53), and a craft's output is the panel's alone: the list isn't read while either is up,
-            // nor for the panel's tail after it goes
+            // Cloak", 2026-10-23 21:17:53), and a craft's output is the panel's alone: nothing on the list is a pickup while
+            // either is up, nor for the panel's tail after it goes. The queue's own pop-up with its count is read, for the
+            // combo that makes two (PanelPopups)
             if (CraftView.CraftPanelActive(now) || TargetReader.CraftOpen(Target.CraftAt, now))
             {
-                if (LootPopup.Rows(lines.Select(l => (l.Top, l.Text))).Count > 0 && (now - _craftListNoteAt).TotalSeconds > 30) { _craftListNoteAt = now; CrashLog.Note("loot list not read: the crafting panel or window is up"); }
-                _rows.Reset();
+                if (LootPopup.Rows(lines.Select(l => (l.Top, l.Text))).Count > 0 && (now - _craftListNoteAt).TotalSeconds > 30) { _craftListNoteAt = now; CrashLog.Note("loot list: no pickups while the crafting panel or window is up; the queue's own pop-ups alone are read, for their count"); }
+                PanelPopups(lines, now);
                 return;
             }
             // the gathering panel ("Orichalcum · Proficiency · Orichalcum Ore x1 · Success") sits at the bottom of the band:
@@ -3894,7 +3895,12 @@ public sealed partial class TrackerSession
             _panelGonePasses++;
             // a pass or two without the panel between two crafts is the same queue
             if (_panelIsCraft && !sceneLeft && (_panelGonePasses < PanelGonePasses || (now - _panelSeenAt).TotalSeconds < PanelGoneSeconds)) return;
-            if (_panelIsCraft) { CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); QueueEnd(now, "the panel went"); }
+            if (_panelIsCraft)
+            {
+                // a race waiting for its bars to stop when the panel went: scored as it stood
+                if (_panel.Flush(now) is { } fo) CraftBarRace(now, fo.Ok, fo.Combo, "the panel went with a bar full");
+                CrashLog.NoteBurst("crafting panel gone"); Accuracy.Add("craft_batches"); QueueEnd(now, "the panel went");
+            }
             _panelUp = false; _panelIsCraft = false; _panelGonePasses = 0;
             return;
         }
@@ -4285,6 +4291,41 @@ public sealed partial class TrackerSession
             PanelRace(_hiddenRecipe, true, false, at, _hiddenLevel, _hiddenQueue, makes);
         }
         return true;
+    }
+
+    /// <summary>
+    /// The loot list while the crafting panel or window is up: nothing on it is a pickup, but a pop-up of the queue's own
+    /// item with its count is the game's word on what the craft just counted made (Steven, 2026-11-04: "it says x2 when I'm
+    /// doing it and it shows up as 2 in the icon with the number"). Twice the craft's yield is its combo, credited once
+    /// (CraftLedger.PopupSays), whether or not the roll's blue race was seen: that day a Cypri combo's race read as lost,
+    /// and a pasta combo's was dropped as too quick, and the second dish went uncounted both times.
+    /// </summary>
+    void PanelPopups(List<LootLine> lines, DateTime now)
+    {
+        var recipe = _queueName.Length >= 2 && (_queueSure || _queueGuessed) ? _queueName : QueueBest()?.Name ?? _panelRecipe;
+        if (recipe.Length < 2) { _rows.Reset(); return; }
+        // the list's own checks first: the panel's text in the band (its recipe's name with the level, no icon, static) is no row
+        NoteScreenNames(now);
+        var rows = _rows.Feed(NotRow.Filter(lines, now), now);
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        var own = Unbound(recipe);
+        foreach (var r in rows)
+        {
+            if (r.IsKinah || r.Obj <= 0 || r.NoCount || r.Count <= 1 || _hiddenObjs.Contains(r.Obj)) continue;
+            var name = Unbound(_items.Find(r.Name) is long fid ? _items.NameOf(fid) : r.Name);
+            if (!cmp.Equals(name, own)) continue;
+            var at = r.First ?? now;
+            if (!CraftView.CraftPopupSays(recipe, r.Count, at)) continue;
+            _hiddenObjs.Add(r.Obj); if (_hiddenObjs.Count > 200) _hiddenObjs.Remove(_hiddenObjs.Min());
+            CrashLog.Note($"crafting panel: {name} x{r.Count} beside the character at {at.ToLocalTime():HH:mm:ss.f}: the craft just counted made two, its combo, credited");
+            var ev = new CraftResult(at, recipe, true, true) { Via = SessionEngine.CraftPanelVia, Popup = r.Count, Queue = _queueId };
+            Count(ev);
+            CraftView.Apply(ev);
+            Accuracy.Add("craft_panel");
+            Report.Counted(at, $"craft combo (the pop-up's count): {recipe} x{r.Count}", ev.Via);
+            Live.Add(new FeedLine(at, FeedTab.Crafting, "craft", recipe, 1, Ok: true, Via: ev.Via, Where: "Crafting", Combo: true));
+            try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
+        }
     }
 
     /// <summary>Passes and seconds the crafting panel must be away before its queue is over (between two crafts it goes for about a second).</summary>

@@ -350,6 +350,8 @@ public sealed partial class SessionEngine
     /// <summary>The crafting panel is on screen, crafting this recipe ("" when its text wasn't read).</summary>
     public void CraftPanelSeen(string recipe, DateTime at) { lock (_lock) _craft.PanelSeen(recipe, at); }
     public bool CraftPanelActive(DateTime at) { lock (_lock) return _craft.PanelActive(at); }
+    /// <summary>Whether a pop-up's count for the recipe's last craft that worked is its combo not yet credited (CraftLedger.PopupSays, without applying it).</summary>
+    public bool CraftPopupSays(string recipe, int count, DateTime at) { lock (_lock) return _craft.PopupSays(recipe, count, at, apply: false); }
     /// <summary>A crafting queue's crafts, filed under a guess, moved to the recipe a later read named (CraftLedger.Move).</summary>
     public bool CraftMove(int queue, string to, int? makes) { lock (_lock) return _craft.Move(queue, to, makes); }
     bool CraftWindowOpen(DateTime t) => KinahLedger.Ocr.TargetReader.CraftOpen(_craftWindowAt, t);
