@@ -27,6 +27,8 @@ public sealed class CraftLedger
         /// </summary>
         public Dictionary<int, int> Tries = new();
         public int Attempts => Ok + Fail;
+        /// <summary>What came out, counted: every item in Made (a ×10 craft adds ten; a won upgrade roll puts its upgrade in place of the base).</summary>
+        public int MadeCount => Made.Values.Sum();
         public Recipe Copy() => new() { Name = Name, Ok = Ok, Fail = Fail, Upgraded = Upgraded, NotUpgraded = NotUpgraded, MadeUnknown = MadeUnknown, Unseen = Unseen, Made = new Dictionary<string, int>(Made, StringComparer.OrdinalIgnoreCase), Tries = new Dictionary<int, int>(Tries) };
     }
 
@@ -156,6 +158,18 @@ public sealed class CraftLedger
         _byQueue.Remove(queue);
         foreach (var cr in races) OnPanel(cr with { Item = to, Makes = makes });
         return true;
+    }
+
+    /// <summary>
+    /// Under a recipe's name on the Crafting tab: what came out, when that isn't one item a craft that worked. "15 made · 1
+    /// craft of ×10" for one craft of the ×10 Orichalcum Ingot and five of the ×1 (Steven, 2026-11-05: the tab said 6 crafts
+    /// and the ten showed only on the feed line). Empty for a recipe that makes one a craft with no combo doubling.
+    /// </summary>
+    public static string MadeLine(Recipe r)
+    {
+        var multi = r.Tries.Where(kv => kv.Key > 1).OrderBy(kv => kv.Key).Select(kv => $"{kv.Value} craft{(kv.Value == 1 ? "" : "s")} of ×{kv.Key}").ToList();
+        if (multi.Count == 0 && r.MadeCount <= r.Ok) return "";
+        return string.Join(" · ", new[] { $"{r.MadeCount:N0} made" }.Concat(multi));
     }
 
     /// <summary>The last craft of a recipe that worked: when, and what it was credited as, so a won upgrade roll can swap that for the upgrade.</summary>
