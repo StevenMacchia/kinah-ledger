@@ -1,9 +1,9 @@
 {
   "131029": {
     "events": 71,
-    "missed": 1,
-    "extra": 4,
-    "version": "0.10.3",
+    "missed": 0,
+    "extra": 1,
+    "version": "0.10.4",
     "recorded": "2026-11-05"
   },
   "110231": {

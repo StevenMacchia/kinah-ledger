@@ -47,7 +47,8 @@ beside the frames, the same lines the live tracker writes to `reads.log`: a miss
 ## The score
 
 For each truth event the replay must land the same thing (the same Kina amount, the same item and count; souls and
-gather fails by kind) between 2 s before and 20 s after the footage shows it. Anything that landed and matches no
+gather fails by kind) between 15 s before and 20 s after the footage shows it (before, because the chat settle dates a
+line back to when the garbled reads began; after, for the vote and a second witness). Anything that landed and matches no
 truth event is an extra: a double when the same thing was matched within 20 s, a phantom otherwise. The run's score
 is its `missed` and `extra` counts; latency is reported, not scored.
 

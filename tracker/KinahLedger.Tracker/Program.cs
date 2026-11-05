@@ -1209,6 +1209,17 @@ options: --process aion[,other]");
             Ov("unaligned but overlapping: the lines after the last shared one", string.Join(" | ", ovGot), "Spiritstone acquired. | Obtained 3 Cogni Soul Crystals. | Obtained 1 Kerubian Soul Points. | Acquired 1,192 Kina.");
             Ov("unaligned, nothing new below the shared line: nothing", Reread.AfterOverlap(now2, now2.Take(8).ToArray()).Count.ToString(), "0");
             Ov("a new Kinah amount is never taken for an old one", string.Join(" | ", Reread.AfterOverlap(new[] { "Acquired 431 Kina.", "Raw Leather acquired." }, new[] { "Raw Leather acquired.", "Acquired 413 Kina." })), "Acquired 413 Kina.");
+            // a line read garbled while fading in, below the overlap, for one counted moments before (bench 131029, 13:11:48)
+            static string K(string s) => new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+            Ov("a fading soul line is the counted one (letters apart, count lost)", Reread.GarbleOf(K("Obtained 1 Cogni Soul Crystals."), K("•Obtained*l CognieSöül C/ysta€:•••., --")).ToString(), "True");
+            Ov("a fading Kina line with a stray digit on the end is the counted one", Reread.GarbleOf(K("Acquired 236 Kina."), K("Acquired 2362 Kinar-••-•••")).ToString(), "True");
+            Ov("a different amount is never a garble of the counted one", Reread.GarbleOf(K("Acquired 431 Kina."), K("Acquired 413 Kina•")).ToString(), "False");
+            Ov("a different item is never a garble of the counted one", Reread.GarbleOf(K("Obtained 1 Cogni Soul Crystals."), K("Obtained 1 Kerubian Soul Points•")).ToString(), "False");
+            Ov("a count where the counted line had none is a new line", Reread.GarbleOf(K("Acquired Odyle."), K("Acquired Odyle x60•")).ToString(), "False");
+            Ov("a shorter amount is a new line, not a garble", Reread.GarbleOf(K("Acquired 236 Kina."), K("Acquired 23 Kina•")).ToString(), "False");
+            Ov("two digits more is a new line, not one stray glyph", Reread.GarbleOf(K("Acquired Odyle x1."), K("Acquired Odyle x120•")).ToString(), "False");
+            Ov("a different verb is never a garble", Reread.GarbleOf(K("Acquired 236 Kina."), K("Obtained 236 Kina•")).ToString(), "False");
+            Ov("only a line with glyphs the chat never prints is a fading read", $"{Reread.Junky("Acquired 2362 Kinar-••-•••")} {Reread.Junky("Acquired 2,362 Kina.")} {Reread.Junky("[Qinghe] did you get the statue yet?")}", "True False False");
             // the chat came back from a fade with a whole event reward at once (Accursed Sword, 2026-10-22 14:35): the loot lines
             // not seen in the last ten minutes are new, from the bottom up; history shown by a hover ends with a seen line
             {

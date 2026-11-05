@@ -237,17 +237,22 @@ public static class BenchReplay
     static readonly Regex NotName = new(@"[^a-z0-9]", RegexOptions.Compiled);
     static string Norm(string name) => NotName.Replace(name.ToLowerInvariant().Replace("(bound)", ""), "");
 
-    static Landed? Classify(GameEvent ev, ItemDictionary items) => ev switch
+    static Landed? Classify(GameEvent ev, ItemDictionary items)
     {
-        KinahChanged { Delta: > 0 } k => new Landed(ev.Time, "kina", $"kina|{k.Delta}", $"{k.Delta:N0} Kina" + (k.Bound ? " (bound)" : "")),
-        ItemAcquired a => new Landed(ev.Time, "item", $"item|{Norm(items.NameOf(a.ItemId))}|{a.Count}", $"{items.NameOf(a.ItemId)} x{a.Count}" + (a.Bound ? " (bound)" : "")),
-        RewardReceived rr => new Landed(ev.Time, "item", $"item|{Norm(rr.Name)}|{rr.Count}", $"{rr.Name} x{rr.Count} (reward)"),
-        PetCrystal p => new Landed(ev.Time, "soul", "soul", $"{p.Name} x{p.Count}"),
-        // an EnemySoul is the loot list's "Soul: ..." row marking a kill, not a pickup of its own: the crystal line is the pickup
-        CurrencyGained c when c.Name.Contains("Soul", StringComparison.OrdinalIgnoreCase) => new Landed(ev.Time, "soul", "soul", $"{c.Amount} {c.Name}"),
-        GatherFailed g => new Landed(ev.Time, "gatherfail", "gatherfail", $"{g.Skill} failed"),
-        _ => null,
-    };
+        // how it was read ("chat", "loot list", "chat · recovered"), so a double or a phantom says which path made it
+        string via = ev.Via.Length > 0 ? $"  [{ev.Via}]" : "";
+        return ev switch
+        {
+            KinahChanged { Delta: > 0 } k => new Landed(ev.Time, "kina", $"kina|{k.Delta}", $"{k.Delta:N0} Kina" + (k.Bound ? " (bound)" : "") + via),
+            ItemAcquired a => new Landed(ev.Time, "item", $"item|{Norm(items.NameOf(a.ItemId))}|{a.Count}", $"{items.NameOf(a.ItemId)} x{a.Count}" + (a.Bound ? " (bound)" : "") + via),
+            RewardReceived rr => new Landed(ev.Time, "item", $"item|{Norm(rr.Name)}|{rr.Count}", $"{rr.Name} x{rr.Count} (reward)" + via),
+            PetCrystal p => new Landed(ev.Time, "soul", "soul", $"{p.Name} x{p.Count}" + via),
+            // an EnemySoul is the loot list's "Soul: ..." row marking a kill, not a pickup of its own: the crystal line is the pickup
+            CurrencyGained c when c.Name.Contains("Soul", StringComparison.OrdinalIgnoreCase) => new Landed(ev.Time, "soul", "soul", $"{c.Amount} {c.Name}" + via),
+            GatherFailed g => new Landed(ev.Time, "gatherfail", "gatherfail", $"{g.Skill} failed" + via),
+            _ => null,
+        };
+    }
 
     // ---- the truth list ------------------------------------------------------------------------------------------------
 
@@ -305,7 +310,9 @@ public static class BenchReplay
 
     // ---- the score -----------------------------------------------------------------------------------------------------
 
-    const double Before = 2, After = 20;
+    // a line the chat settle counts is dated back to when the garbled reads began, up to the settle's bound (TrackerSession,
+    // "dated 13 s back"), so a landed event may sit well before the footage shows its line; after it, the vote and a second witness
+    const double Before = 15, After = 20;
 
     static int Score(string run, List<Landed> landed, List<Truth> truth, DateTime start, Dictionary<string, string> o)
     {

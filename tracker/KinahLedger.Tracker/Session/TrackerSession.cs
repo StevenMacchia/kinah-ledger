@@ -1306,10 +1306,13 @@ public sealed partial class TrackerSession
                         var recentCounted = _countedLines.Where(x => (now - x.At).TotalSeconds <= RecountSeconds).Select(x => ChatKey(x.Line)).ToList();
                         after = after.Where(l =>
                         {
-                            int c = recentCounted.FindIndex(x => Reread.Same(x, ChatKey(l)));
+                            // a line read with glyphs the chat never prints was read while fading in: a looser likeness to a
+                            // counted line is enough (bench 131029 at 13:11:48: "Acquired 2362 Kinar-••-•••" for 236 Kina)
+                            bool junky = Reread.Junky(l);
+                            int c = recentCounted.FindIndex(x => junky ? Reread.GarbleOf(x, ChatKey(l)) : Reread.Same(x, ChatKey(l)));
                             if (c < 0) return true;
                             recentCounted.RemoveAt(c);
-                            CrashLog.Note($"{l}: below the overlap of a read that didn't line up, but counted {RecountSeconds:0} s ago or less: the same line, not again");
+                            CrashLog.Note($"{l}: below the overlap of a read that didn't line up, but counted {RecountSeconds:0} s ago or less{(junky ? " (a garble of it)" : "")}: the same line, not again");
                             return false;
                         }).ToList();
                     }
