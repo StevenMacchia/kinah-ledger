@@ -755,6 +755,15 @@ public static class WpfApp
         {
             w.ShowDemo("Events"); DoEvents();
             bool stripOpen = w.TodayOpenForTest;
+            // the strip's box (Steven, 2026-11-05): a run at a time with its own slots, newest first, under a heading with the
+            // view's dropdown; Together puts every run's rewards in one set of slots; the box scrolls past 360 px
+            w.OpenTodaySample(); w.SetRunsEachForTest(true); DoEvents();
+            var each = w.TodayRunsForTest();
+            w.SetRunsEachForTest(false); DoEvents();
+            var together = w.TodayRunsForTest();
+            Check(each.Groups >= 2 && each.Pick == "Each run" && each.Slots > together.Slots && together.Groups == 0 && together.Slots >= 5 && together.Pick.StartsWith("Together, by ") && w.TodayScroll.MaxHeight == 360,
+                $"Events, TODAY: {each.Groups} runs each with its slots ({each.Slots}), \"{each.Pick}\"; together {together.Slots} slots, \"{together.Pick}\"; the box scrolls past {w.TodayScroll.MaxHeight} px");
+            w.SetRunsEachForTest(true); DoEvents();
             w.PickRunsWeekForTest(true); DoEvents();
             var rw = w.WeekForTest(runs: true);
             Check(w.TodayStrip.Visibility == Visibility.Visible && rw.Bars == 7 && rw.Picked == "Today" && rw.Line.StartsWith("TODAY") && w.TodayTitle.Text == "WEEK" && MainWindow.InlineText(w.TodayNote).Contains(" to "),

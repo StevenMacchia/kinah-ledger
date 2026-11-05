@@ -59,30 +59,30 @@ public partial class MainWindow
     internal void SetLootSortForTest(string mode) { _prefs.LootSort = mode; _drawnSig.Remove("loot"); _drawnSig.Remove("today"); FillToday(); }
 
     /// <summary>
-    /// "Sort  worth · amount · quality", the one picked gold: a click keeps it (ui.json) and draws the slots again. Over
-    /// LOOT's slots on Farming and in the TODAY strip's heading on Events; shown once there are two slots to order.
+    /// A small dropdown in the chips' look: the choice and a chevron; a click opens the menu of choices under it (Steven,
+    /// 2026-11-05: "a menu at the top where you could drop down and choose to sort by it"). Over LOOT's slots on Farming
+    /// and in the TODAY strip's heading on Events.
     /// </summary>
-    FrameworkElement SortLinks(string sigKey, Action redraw)
+    Border PickButton(string text, Func<List<MenuEntry>> entries, string tip)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var label = PT("Sort", "Muted", 11.5); label.Margin = new Thickness(0, 0, 7, 0); sp.Children.Add(label);
-        for (int i = 0; i < LootOrder.Modes.Length; i++)
-        {
-            var mode = LootOrder.Modes[i];
-            bool on = mode == LootSortMode;
-            if (i > 0) { var dot = PT("·", "Muted", 11.5); dot.Margin = new Thickness(5, 0, 5, 0); sp.Children.Add(dot); }
-            var t = PT(mode, on ? "Gold" : "Muted", 11.5, on ? FontWeights.SemiBold : null);
-            t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = LootOrder.Tip(mode); ToolTipService.SetInitialShowDelay(t, 400);
-            t.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (mode == LootSortMode) return; _prefs.LootSort = mode; SavePrefs(); _drawnSig.Remove(sigKey); redraw(); };
-            sp.Children.Add(t);
-        }
-        return sp;
+        sp.Children.Add(PT(text, "Ink", 12));
+        var chev = PT("⌄", "Muted", 13); chev.Margin = new Thickness(6, -4, 0, 0); sp.Children.Add(chev);
+        var b = new Border { Child = sp, Height = 26, Padding = new Thickness(11, 0, 9, 0), CornerRadius = new CornerRadius(13), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, ToolTip = tip, VerticalAlignment = VerticalAlignment.Center };
+        b.SetResourceReference(Border.BackgroundProperty, "ChipOff"); b.SetResourceReference(Border.BorderBrushProperty, "ChipOffLine");
+        ToolTipService.SetInitialShowDelay(b, 400);
+        b.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowMenu(b, entries()); };
+        return b;
     }
 
-    /// <summary>The sort links on their own right-aligned row over LOOT's slots.</summary>
+    /// <summary>The dropdown's choices for the order of the slots: worth, amount or quality, the one on with a tick; a pick keeps it (ui.json) and draws the slots again.</summary>
+    List<MenuEntry> SortEntries(string sigKey, Action redraw)
+        => LootOrder.Modes.Select(mode => new MenuEntry("By " + mode, () => { _prefs.LootSort = mode; SavePrefs(); _drawnSig.Remove(sigKey); redraw(); }, LootOrder.Tip(mode), Key: mode == LootSortMode ? "✓" : "")).ToList();
+
+    /// <summary>The sort dropdown on its own right-aligned row over LOOT's slots.</summary>
     void LootSortRow()
     {
-        var e = SortLinks("loot", FillLoot);
+        var e = PickButton("Sort: " + LootSortMode, () => SortEntries("loot", FillLoot), "The order of the slots: by worth, amount or quality.");
         e.HorizontalAlignment = HorizontalAlignment.Right; e.Margin = new Thickness(0, 0, 0, 8);
         LootHost.Children.Add(e);
     }

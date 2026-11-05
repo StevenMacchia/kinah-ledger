@@ -376,8 +376,16 @@
             </Border>
             <TextBlock x:Name="TodaySum" Grid.Column="4" FontSize="15" FontFamily="{DynamicResource MonoFont}" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
           </Grid>
+          <!-- the heading (the group, its places, the view's dropdown, the worth) over a box that scrolls instead of growing
+               (Steven, 2026-11-05: "I would rather this be scrollable and tell you what you got on every single run ... rather
+               than it be so gigantic"): a run at a time, or every run's rewards together -->
           <Border x:Name="TodayBody" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource GoldLine}" Padding="16,0,16,12" Visibility="Collapsed">
-            <StackPanel x:Name="TodayHost"/>
+            <StackPanel>
+              <StackPanel x:Name="TodayTop"/>
+              <ScrollViewer x:Name="TodayScroll" MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <StackPanel x:Name="TodayHost"/>
+              </ScrollViewer>
+            </StackPanel>
           </Border>
         </StackPanel>
       </Border>

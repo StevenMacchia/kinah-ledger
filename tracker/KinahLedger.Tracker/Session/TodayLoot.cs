@@ -129,9 +129,10 @@ public static class TodayLoot
 
     /// <param name="today">The runs since midnight (<see cref="IsToday"/>).</param>
     /// <param name="isCurrency">Currencies (Abyss Points, tokens) are amounts, not pieces: their own slots at the end.</param>
-    public static TodayRuns Runs(IReadOnlyList<InstanceRun> today, ItemDictionary items, Func<long, bool> isCurrency)
+    /// <param name="all">Every run, the ones left out of the averages too: one run's own slots (the strip's Each run view).</param>
+    public static TodayRuns Runs(IReadOnlyList<InstanceRun> today, ItemDictionary items, Func<long, bool> isCurrency, bool all = false)
     {
-        var counted = today.Where(r => !r.OutOfAverages).ToList();
+        var counted = (all ? today : today.Where(r => !r.OutOfAverages)).ToList();
         var count = new Dictionary<long, long>(); var bound = new Dictionary<long, long>(); var where = new Dictionary<long, Dictionary<string, long>>();
         var kinahWhere = new Dictionary<string, long>();
         long kinah = 0;

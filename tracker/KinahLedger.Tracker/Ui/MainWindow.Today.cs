@@ -62,7 +62,8 @@ public partial class MainWindow
     void FillToday()
     {
         if (_part == "Farming" && !_welcome) { TodayStrip.Visibility = Visibility.Collapsed; _drawnSig.Remove("today"); FillLoot(); return; }
-        TodayRuns? r = _part == "Events" && !_welcome ? TodayLoot.Runs(TodayRunList(), _items, IsCurrency) : null;
+        var runs = _part == "Events" && !_welcome ? TodayRunList() : null;
+        TodayRuns? r = runs != null ? TodayLoot.Runs(runs, _items, IsCurrency) : null;
         // the runs' Week side (0.9, Ui/MainWindow.Week.cs): the strip shows too when only the last days had runs
         var week = r != null ? RunsWeekDays() : null;
         bool any = r?.Runs > 0 || week?.Any(d => d.Runs.Runs > 0) == true;
@@ -71,7 +72,9 @@ public partial class MainWindow
         TodayDayBtn.Style = (Style)FindResource(_runsWeek ? "SegOff" : "SegOn");
         TodayWeekBtn.Style = (Style)FindResource(_runsWeek ? "SegOn" : "SegOff");
         TodayTitle.Text = _runsWeek ? "WEEK" : "TODAY";
-        if (_runsWeek) { FillRunsWeek(week); return; }
+        // the week's bars never scroll; the day's runs do, in a box of their own height
+        TodayScroll.MaxHeight = _runsWeek ? double.PositiveInfinity : 360;
+        if (_runsWeek) { TodayTop.Children.Clear(); FillRunsWeek(week); return; }
 
         // the line: today's runs, the figures in the data face, and what they made
         var note = TodayLoot.RunsLine(r);
@@ -99,60 +102,120 @@ public partial class MainWindow
 
         // the slots, drawn again only when something in them changed
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
-        var sig = $"{_part}|{HeadStack.Width}|{LootSortMode}|{string.Join(",", _todayAll)}|{Skins.Current}|{r.Runs}:{r.Places}:{r.Kinah}:{Slots(r.Items)}";
+        string RunSig(InstanceRun x) => $"{x.Start.Ticks}:{x.Items.Count}:{x.BoundItems.Count}:{x.Kinah}:{x.OutOfAverages}";
+        var sig = $"{_part}|{HeadStack.Width}|{_prefs.RunsEach}|{LootSortMode}|{Skins.Current}|{r.Runs}:{r.Places}:{r.Kinah}:{Slots(r.Items)}|{string.Join(",", runs!.Select(RunSig))}";
         if (!Changed("today", sig)) return;
-        TodayHost.Children.Clear();
-        int perRow = Math.Max(4, (int)((HeadStack.Width - 2 - 32 + TodayGap) / (TodaySlotSize + TodayGap)));
+        TodayTop.Children.Clear(); TodayHost.Children.Clear();
         if (r.Runs == 0) TodayHost.Children.Add(TodayEmpty("No runs yet today. Week has the last 7 days."));
-        else FillTodayRuns(r, perRow);
+        else FillTodayRuns(r, runs!);
     }
 
-    /// <summary>The Events page's slots: the rewards of today's expeditions and events, and their Kinah.</summary>
-    void FillTodayRuns(TodayRuns r, int perRow)
+    /// <summary>
+    /// The Events page's rewards: the heading (the group, its places, the view's dropdown, the day's worth) over the box.
+    /// A run at a time, newest first, each with its own slots (Steven, 2026-11-05: "tell you what you got on every single
+    /// run"); or every run's rewards together, as one set of slots in the order picked.
+    /// </summary>
+    void FillTodayRuns(TodayRuns r, List<InstanceRun> runs)
     {
+        var pick = PickButton(_prefs.RunsEach ? "Each run" : "Together, by " + LootSortMode, RunsViewEntries, "Each run on its own, or every run's rewards together, by worth, amount or quality.");
+        TodayTop.Children.Add(TodayHeading("FROM EXPEDITIONS AND EVENTS", $"{r.Places} place{(r.Places == 1 ? "" : "s")}", r.Value, pick));
+        LootOrderForTest.Clear();
+        if (_prefs.RunsEach)
+        {
+            foreach (var run in runs.OrderByDescending(x => x.LastLoot ?? x.Start)) TodayHost.Children.Add(RunGroup(run));
+            return;
+        }
         var slots = new List<FrameworkElement>();
         if (r.Kinah > 0) slots.Add(KinahSlot(r.Kinah, r.KinahWhere, ""));
         var items = SortSlots(r.Items);
-        LootOrderForTest.Clear(); LootOrderForTest.AddRange(items.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", false)));
+        LootOrderForTest.AddRange(items.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", false)));
         foreach (var s in items) slots.Add(ItemSlot(s, ("", ""), true, runs: true));
-        var g = TodayGroup("runs", "FROM EXPEDITIONS AND EVENTS", $"{r.Places} place{(r.Places == 1 ? "" : "s")}", r.Value, slots, perRow, items.Count >= 2);
-        if (slots.Count == 0) ((StackPanel)g).Children.Add(TodayEmpty("Nothing read from the reward screens yet."));
-        TodayHost.Children.Add(g);
+        if (slots.Count == 0) TodayHost.Children.Add(TodayEmpty("Nothing read from the reward screens yet."));
+        else TodayHost.Children.Add(SlotWrap(slots));
+    }
+
+    /// <summary>The dropdown's choices for the strip: a run at a time, or all together in one of the three orders; the one on carries a tick.</summary>
+    List<MenuEntry> RunsViewEntries()
+    {
+        var l = new List<MenuEntry>();
+        void Add(string text, string sub, bool on, Action set) => l.Add(new MenuEntry(text, () => { set(); SavePrefs(); _drawnSig.Remove("today"); FillToday(); }, sub, Key: on ? "✓" : ""));
+        Add("Each run", "What every run gave, newest first.", _prefs.RunsEach, () => _prefs.RunsEach = true);
+        l.Add(MenuEntry.Line);
+        foreach (var mode in LootOrder.Modes)
+            Add("Together, by " + mode, LootOrder.Tip(mode), !_prefs.RunsEach && mode == LootSortMode, () => { _prefs.RunsEach = false; _prefs.LootSort = mode; });
+        return l;
+    }
+
+    /// <summary>The number of run groups the strip shows and the dropdown's words, for options-test.</summary>
+    internal (int Groups, int Slots, string Pick) TodayRunsForTest()
+        => (TodayHost.Children.OfType<StackPanel>().Count(p => p.Tag is InstanceRun), TodayHost.Children.OfType<Panel>().Sum(p => p.Children.OfType<WrapPanel>().Sum(w => w.Children.Count)) + TodayHost.Children.OfType<WrapPanel>().Sum(w => w.Children.Count),
+            TodayTop.Children.OfType<Grid>().SelectMany(g => g.Children.OfType<Border>()).Select(b => InlineText(((StackPanel)b.Child).Children.OfType<TextBlock>().First())).FirstOrDefault() ?? "");
+
+    /// <summary>For options-test: the view picked, as the dropdown's row.</summary>
+    internal void SetRunsEachForTest(bool each) { _prefs.RunsEach = each; _drawnSig.Remove("today"); FillToday(); }
+
+    /// <summary>
+    /// One run of the day: when it started, its name, how long it took and what it made on one line, its Kinah and every
+    /// reward as slots under it (each with its card on hover). A run left out of the figures says so.
+    /// </summary>
+    FrameworkElement RunGroup(InstanceRun run)
+    {
+        var one = TodayLoot.Runs(new[] { run }, _items, IsCurrency, all: true);
+        var sp = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Tag = run };
+        var head = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        for (int i = 0; i < 4; i++) head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition());
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bool out_ = run.OutOfAverages;
+        var local = run.Start.ToLocalTime();
+        var when = PT(local.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), "Faint", 12, null, "MonoFont"); when.VerticalAlignment = VerticalAlignment.Center; head.Children.Add(when);
+        var name = PT(run.Label, out_ ? "Faint" : "Ink", 12.5, FontWeights.SemiBold); name.Margin = new Thickness(10, 0, 0, 0); name.VerticalAlignment = VerticalAlignment.Center; name.MaxWidth = 300; Grid.SetColumn(name, 1); head.Children.Add(name);
+        if (run.Seconds > 0) { var took = PT(Clock(TimeSpan.FromSeconds(run.Seconds)), "Faint", 12, null, "MonoFont"); took.Margin = new Thickness(10, 0, 0, 0); took.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(took, 2); head.Children.Add(took); }
+        if (out_) { var n = PT("left out of the figures", "Faint", 11.5); n.Margin = new Thickness(10, 0, 0, 0); n.VerticalAlignment = VerticalAlignment.Center; n.ToolTip = "This run's Kinah or rewards weren't read in full, so it isn't in the day's figures. The Runs list below has the fix."; Grid.SetColumn(n, 3); head.Children.Add(n); }
+        if (one.Value > 0)
+        {
+            var v = PT(Fk(one.Value), out_ ? "Faint" : "Gold", 12.5, null, "MonoFont"); v.VerticalAlignment = VerticalAlignment.Center; v.Margin = new Thickness(12, 0, 0, 0);
+            v.ToolTip = "This run's Kinah plus its loot at the lowest Market price, " + PriceBook.Cut + ". Gear, currencies and items with no price yet add nothing.";
+            Grid.SetColumn(v, 5); head.Children.Add(v);
+        }
+        sp.Children.Add(head);
+        var slots = new List<FrameworkElement>();
+        if (one.Kinah > 0) slots.Add(KinahSlot(one.Kinah, one.KinahWhere, "", "Picked up this run"));
+        var items = SortSlots(one.Items);
+        LootOrderForTest.AddRange(items.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", false)));
+        foreach (var s in items) slots.Add(ItemSlot(s, ("", ""), false, runs: true, when: "this run"));
+        if (slots.Count == 0) { var t = TodayEmpty(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen."); t.Margin = new Thickness(0, 0, 0, 6); sp.Children.Add(t); }
+        else sp.Children.Add(SlotWrap(slots));
+        return sp;
     }
 
     TextBlock TodayEmpty(string text) { var t = PT(text, "Faint", 12.5); t.Margin = new Thickness(0, 12, 0, 4); return t; }
 
-    /// <summary>A group under the line: its name in the heading gold, a faint word, the sort links and its worth on the right, then two rows of slots and "Show all".</summary>
-    FrameworkElement TodayGroup(string key, string title, string note, long worth, List<FrameworkElement> slots, int perRow, bool sort = false)
+    /// <summary>The slots, wrapped, each with the strip's gap.</summary>
+    static WrapPanel SlotWrap(List<FrameworkElement> slots)
     {
-        var sp = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
-        var head = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        var wrap = new WrapPanel();
+        foreach (var s in slots) { s.Margin = new Thickness(0, 0, TodayGap, 8); wrap.Children.Add(s); }
+        return wrap;
+    }
+
+    /// <summary>The heading over the strip's box: the group's name in the heading gold, a faint word, the view's dropdown and the worth on the right.</summary>
+    FrameworkElement TodayHeading(string title, string note, long worth, FrameworkElement? pick)
+    {
+        var head = new Grid { Margin = new Thickness(0, 12, 0, 4) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        if (sort) { var links = SortLinks("today", FillToday); Grid.SetColumn(links, 1); head.Children.Add(links); }
         var t = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         t.Inlines.Add(PR(title, "SecGold", FontWeights.Bold));
         if (note.Length > 0) { var n = PR("   " + note, "Muted"); n.FontSize = 12; t.Inlines.Add(n); }
         head.Children.Add(t);
+        if (pick != null) { Grid.SetColumn(pick, 1); head.Children.Add(pick); }
         if (worth > 0)
         {
-            var v = PT(Fk(worth), "Gold", 13, null, "MonoFont"); v.Margin = new Thickness(12, 0, 0, 0);
+            var v = PT(Fk(worth), "Gold", 13, null, "MonoFont"); v.Margin = new Thickness(12, 0, 0, 0); v.VerticalAlignment = VerticalAlignment.Center;
             v.ToolTip = "Kinah plus loot at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
             Grid.SetColumn(v, 2); head.Children.Add(v);
         }
-        sp.Children.Add(head);
-        bool all = _todayAll.Contains(key);
-        int max = perRow * TodayRows;
-        var wrap = new WrapPanel();
-        foreach (var s in all ? slots : slots.Take(max)) { s.Margin = new Thickness(0, 0, TodayGap, 8); wrap.Children.Add(s); }
-        sp.Children.Add(wrap);
-        if (slots.Count > max)
-        {
-            var m = PT(all ? "Show fewer" : $"Show all {slots.Count}", "Gold", 12, FontWeights.SemiBold);
-            m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
-            m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); FillToday(); };
-            sp.Children.Add(m);
-        }
-        return sp;
+        return head;
     }
 
     /// <summary>A zone chip: the name and its farming time; the pinned one gold with a pin.</summary>
