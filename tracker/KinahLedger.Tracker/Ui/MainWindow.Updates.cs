@@ -185,6 +185,9 @@ public partial class MainWindow
         _updateNotice = ready ? UpdateReadyNotice : $"Kinah Ledger {v} is out · Update on the tracker window";
         _updateNoticeUntil = DateTime.MaxValue;   // its minute starts when the panel is first in view
         UpdateHud();
+        // its own sound, three soft rising notes (ready.wav; Steven, 2026-11-04), once per version like the notice, with
+        // the chime switch and volume; never in a farming run or an expedition, where a sound means a drop
+        if (!_demo && _hudPrefs.Chime && !Farming && _watcher.Chat?.Instances.InProgress == null) PlaySound("ready", _hudPrefs.ChimeVolume);
         bool hidden = !IsVisible || WindowState == WindowState.Minimized;
         CrashLog.Note($"update {v}: on the banner and the panel{(hidden ? ", and in a tray notice (the window is hidden)" : "")}; nothing asks");
         if (!hidden || _demo) return;

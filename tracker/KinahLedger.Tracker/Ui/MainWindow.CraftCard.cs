@@ -176,6 +176,18 @@ public partial class MainWindow
                 else if (RecipeBook.CostOfTries(output, elsewhere, out int eu, out int ev, out _) is long ec && eu + ev == 0) body.Children.Add(CkTip(CkKv("Spent on materials", Amounts.Short(spentMats + ec), CkInk), Amounts.Full(spentMats + ec) + " kinah"));
             }
         }
+        // the last tries with why each was counted (Steven, 2026-11-04: the reasons were only in reads.log), newest first
+        var tries = CraftTries(output, 5);
+        if (tries.Count > 0)
+        {
+            body.Children.Add(CkSection("LAST TRIES"));
+            foreach (var l in tries)
+            {
+                var what = l.Combo ? (l.Ok ? "combo won" : "combo lost") : (l.Ok ? (l.Makes > 1 ? $"worked ×{l.Makes}" : "worked") : "failed");
+                body.Children.Add(CkKv(l.At.ToLocalTime().ToString("HH:mm:ss"), what, l.Ok ? CkGood : CkBad, rightSize: 12.5));
+                if (l.Why.Length > 0) { var n = CkNote(Capital(l.Why)); n.Margin = new Thickness(20, 0, 20, 4); body.Children.Add(n); }
+            }
+        }
         long Sells(string item, int qty) => Price(item) is long p ? (long)Math.Round(p * qty * PriceBook.SellerKeeps) : -1;
         long outValue = Sells(recipe.Output, recipe.OutputQty);
         body.Children.Add(SellsLine(recipe, outValue, Redo));

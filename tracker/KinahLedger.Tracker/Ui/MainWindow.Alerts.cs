@@ -89,6 +89,12 @@ public partial class MainWindow
         return true;
     }
 
-    /// <summary>A price alert, or a drop with the chime on: at the volume chosen in Options › In game › Rare drops.</summary>
+    /// <summary>A drop with the chime on: at the volume chosen in Options › In game › Rare drops.</summary>
     void Chime() => PlayChime(_hudPrefs.ChimeVolume);
+
+    /// <summary>
+    /// A price alert's knock ("alert", the same note twice), at the same volume: its own sound so a price crossing and a
+    /// drop don't sound alike (Steven, 2026-11-04).
+    /// </summary>
+    void AlertSound() => PlaySound("alert", _hudPrefs.ChimeVolume);
 }

@@ -4981,7 +4981,11 @@ options: --process aion[,other]");
                 // the pop-up read pass after pass (a row is up about 2.5 s), the panel's own lines in the band with it
                 foreach (var at in new[] { 8.0, 8.5, 9.0, 9.5, 10.0 }) pp.ProcessList(new List<(int, string)> { (1197, "Artisan's Inina Pasta x2"), (1622, "Artisan's Inina Pasta (Novice Lv. 35)"), (1687, "Success x1") }, P(at));
                 Check("crafting: the x2 pop-up beside the character is the craft's combo, credited once", Rolls(pp), "1/1, rolls 1/1, made Artisan's Inina Pasta x2");
-                Check("...and the feed says so", string.Join(" | ", pp.Live.Recent(FeedTab.Crafting).Select(l => l.Text)), "Artisan's Inina Pasta combo won | Artisan's Inina Pasta worked");
+                // the craft's own line is corrected to the two dishes, with the pop-up as its reason (2026-11-04: the line says why),
+                // and the combo's line still lands after it (gold on the panel, 0.9.17)
+                Check("...and the feed says so: the craft's line turns ×2, the combo's line follows", string.Join(" | ", pp.Live.Recent(FeedTab.Crafting).Select(l => l.Text)), "Artisan's Inina Pasta combo won | Artisan's Inina Pasta ×2 worked");
+                var ppCraft = pp.Live.Recent(FeedTab.Crafting).FirstOrDefault(l => !l.Combo);
+                Check("...its reason names the pop-up", ppCraft?.Why.Contains("the x2 pop-up said the combo was won: the second dish credited") == true ? "yes" : ppCraft?.Why ?? "(no line)", "yes");
                 // the roll read as lost off the panel, then the pop-up says x2: the pop-up wins, the tally follows
                 var pl = new TrackerSession(null, new Settings(), items, "Test"); pl.Engine.SetZone("Eastern Cantas Valley");
                 pl.PanelLook(P(0), true, false, new[] { "Crafting in Progress 1 / 1", "Artisan's Inina Pasta (Novice Lv. 35)" });
@@ -4989,6 +4993,10 @@ options: --process aion[,other]");
                 Check("crafting: a roll read as lost", Rolls(pl), "1/1, rolls 0/1, made Artisan's Inina Pasta x1");
                 foreach (var at in new[] { 13.0, 13.5, 14.0, 14.5, 15.0 }) pl.ProcessList(new List<(int, string)> { (1197, "Artisan's Inina Pasta x2") }, P(at));
                 Check("...the x2 pop-up says it was won: the second dish credited, the roll won not lost", Rolls(pl), "1/1, rolls 1/1, made Artisan's Inina Pasta x2");
+                // the roll's line turns won, not joined by another, and says why
+                var plNew = pl.Live.Recent(FeedTab.Crafting, 1).FirstOrDefault();
+                Check("...the feed's lost roll turns won, the pop-up its reason", string.Join(" | ", pl.Live.Recent(FeedTab.Crafting).Select(l => l.Text)) + (plNew?.Why.Contains("x2 pop-up") == true ? " (the pop-up)" : $" (why: {plNew?.Why})"),
+                    "Artisan's Inina Pasta combo won | Artisan's Inina Pasta worked (the pop-up)");
             }
             {
                 // Steven's 2026-11-04 14:13 Orichalcum Guard queue of 10: three crafts finished in an instant (a critical success, the
@@ -5002,11 +5010,23 @@ options: --process aion[,other]");
                 Count(0, 1); Race(1, 8, 0.4);          // craft 1, a race
                 Count(12, 2); Race(13, 1.7, 0);        // craft 2 in an instant: dropped for now
                 Count(17, 3); Race(18, 8, 0.3);        // craft 3: its count says one was passed
+                // the queue as the HUD shows it (2026-11-04): three finished, all three worked (the second, an instant one, credited now)
+                Check("crafting: the queue under way, as the HUD shows it", cs.CraftQueue?.Text ?? "(none)", "3 of 4 · 3 worked");
+                // each line says why it was counted: the race's bars, the instant one a critical success
+                Check("...the newest craft's reason is its bars", cs.Live.Recent(FeedTab.Crafting, 1).FirstOrDefault()?.Why is { } w3 && w3.Contains("success bar") ? "yes" : cs.Live.Recent(FeedTab.Crafting, 1).FirstOrDefault()?.Why ?? "(no line)", "yes");
+                Check("...the instant one's reason is a critical success", cs.Live.Recent(FeedTab.Crafting, 10).Count(l => l.Why.StartsWith("the success bar filled in an instant (a critical success)")).ToString(), "1");
                 Count(29, 4); Race(30, 1.8, 0);        // craft 4, the last, in an instant
                 Count(34, 4);
                 for (int qi = 0; qi < 14; qi++) cs.PanelLook(Q(36 + qi * 0.4), false, false, null);
                 Check("crafting: a craft that finished in an instant is counted once the queue's count passes it, the last one when the queue ends",
                     string.Join(" | ", cs.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts} unseen {r.Unseen} made {string.Join(", ", r.Made.Select(m => $"{m.Key} x{m.Value}"))}")), "4/4 unseen 0 made Orichalcum Longsword x4");
+                Check("...the queue over keeps its last figures", cs.CraftQueue is { } cq ? $"open {cq.Open}, done {cq.Done}, ended {cq.EndedAt != null}: {cq.Text}" : "(none)", "open False, done 4, ended True: Done: 4 of 4 · 4 worked");
+                // a line with no reason of its own: the card offers the notes written around it, the ones that place the tracker left out
+                var nnAt = CrashLog.Clock?.Invoke() ?? CrashLog.Wall();
+                CrashLog.Note("crafting panel: a note for NotesNear's check");
+                CrashLog.Note("audit: a note NotesNear leaves out");
+                var nn = CrashLog.NotesNear(nnAt, 3).Select(n => n.Text).ToList();
+                Check("a note just written is offered as a line's reason, an audit: one not", $"{nn.Contains("crafting panel: a note for NotesNear's check")} {nn.Any(n => n.StartsWith("audit:"))}", "True False");
             }
             {
                 // a world boss with a Force (Steven, 2026-10-22): other players' shares are never the player's; the player's own share is

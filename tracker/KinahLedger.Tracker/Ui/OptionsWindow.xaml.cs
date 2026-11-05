@@ -17,12 +17,12 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class OptionsWindow : Window
 {
-    public enum Page { General, Server, Sharing, Reading, InGame, Updates, About }
+    public enum Page { General, Server, Sharing, Reading, InGame, Tips, Updates, About }
 
     static readonly (Page Page, string Name)[] Pages =
     {
         (Page.General, "General"), (Page.Server, "Server"), (Page.Sharing, "Sharing"), (Page.Reading, "Game reading"),
-        (Page.InGame, "In game"), (Page.Updates, "Updates"), (Page.About, "About"),
+        (Page.InGame, "In game"), (Page.Tips, "Shortcuts & tips"), (Page.Updates, "Updates"), (Page.About, "About"),
     };
     static readonly string[] GameStartChoices = { "Open the window", "Stay in the tray" };
 
@@ -79,10 +79,11 @@ public partial class OptionsWindow : Window
     {
         _page = page;
         foreach (var (p, el) in new (Page, FrameworkElement)[] { (Page.General, PageGeneral), (Page.Server, PageServer), (Page.Sharing, PageSharing),
-                     (Page.Reading, PageReading), (Page.InGame, PageInGame), (Page.Updates, PageUpdates), (Page.About, PageAbout) })
+                     (Page.Reading, PageReading), (Page.InGame, PageInGame), (Page.Tips, PageTips), (Page.Updates, PageUpdates), (Page.About, PageAbout) })
             el.Visibility = p == page ? Visibility.Visible : Visibility.Collapsed;
         // the style's trigger matches the text "True" (Tag holds an object, so a bool would not match it)
         for (int i = 0; i < Nav.Children.Count; i++) ((Button)Nav.Children[i]).Tag = Pages[i].Page == page ? "True" : "False";
+        if (page == Page.Tips) FillTips();   // the keys as they are now (Ui/OptionsWindow.Tips.cs)
         Scroller.ScrollToTop();
         RefreshLive();
         RefreshPreview();
@@ -107,6 +108,7 @@ public partial class OptionsWindow : Window
         FollowChk.IsChecked = c.FollowActivity;
         CompareChk.IsChecked = c.Compare;
         GrossChk.IsChecked = c.ShowGross;
+        RecapChk.IsChecked = c.RunRecap;
         GrossHint.Text = $"Values and profit show after the Market's {Data.PriceBook.FeeRate:P0} fee and tax by default. Turn this on to see what things sell for before it.";
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
@@ -235,6 +237,7 @@ public partial class OptionsWindow : Window
         FollowChk.Click += (_, _) => Edit(_edit with { FollowActivity = FollowChk.IsChecked == true });
         CompareChk.Click += (_, _) => Edit(_edit with { Compare = CompareChk.IsChecked == true });
         GrossChk.Click += (_, _) => Edit(_edit with { ShowGross = GrossChk.IsChecked == true });
+        RecapChk.Click += (_, _) => Edit(_edit with { RunRecap = RecapChk.IsChecked == true });
         RegionPick.SelectionChanged += (_, _) =>
         {
             if (_loading || RegionPick.SelectedItem is not GameRegion r) return;

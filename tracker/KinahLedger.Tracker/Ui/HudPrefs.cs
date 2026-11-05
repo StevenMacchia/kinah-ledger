@@ -31,6 +31,11 @@ public sealed class HudPrefs
     public string MarkWrongKey { get; set; } = "";
     /// <summary>The placement guide is owed: set when the first run's setup check closes, cleared once it has opened over the game.</summary>
     public bool PlaceGuideDue { get; set; }
+    /// <summary>
+    /// The player has put the panel somewhere on purpose: the placement guide kept with Enter, "Move the panel" ended with a
+    /// move, or the panel locked in Options. The first-session checklist's "Panel placed" (2026-11-04, Ui/MainWindow.Onboard.cs).
+    /// </summary>
+    public bool Placed { get; set; }
 
     public const double MinScale = 0.7, MaxScale = 2;
 

@@ -4035,7 +4035,52 @@ public sealed partial class TrackerSession
     string _queueName = ""; int _queueLevel;
     string _switchTo = ""; int _switchLevel;
     readonly List<(string Name, int Level, bool Sure, DateTime At)> _queueReads = new();
-    readonly List<(DateTime At, bool Ok, bool Combo, int Unseen)> _heldRaces = new();
+    readonly List<(DateTime At, bool Ok, bool Combo, int Unseen, string Why)> _heldRaces = new();
+
+    // ---- the queue as it runs, for the HUD and the Crafting page (Steven, 2026-11-04: he found the day's misses by reading
+    // reads.log afterwards; a queue's count beside what was counted shows a miss while it happens) ----
+
+    /// <summary>
+    /// One queue as the window shows it: open or over, its recipe, its size as the panel's count reads it (0 unread), the
+    /// crafts the count says have finished, the crafts counted, how many worked and won a combo, and the crafts not settled
+    /// yet (held for the recipe, or passed by the count and not counted).
+    /// </summary>
+    public sealed record CraftQueueView(bool Open, string Recipe, int Of, int Done, int Counted, int Worked, int Combos, int Unsure, DateTime Since, DateTime? EndedAt)
+    {
+        /// <summary>"3 of 10 · 2 worked · 1 combo · 1 unsure" while it runs, "Done: 10 of 10 · 8 worked · 2 combos" after; parts at zero left out.</summary>
+        public string Text
+        {
+            get
+            {
+                var parts = new List<string> { Of > 0 ? $"{Done} of {Of}" : $"{Done} done" };
+                if (Worked > 0) parts.Add($"{Worked} worked");
+                if (Combos > 0) parts.Add($"{Combos} combo{(Combos == 1 ? "" : "s")}");
+                if (Unsure > 0) parts.Add($"{Unsure} unsure");
+                var t = string.Join(" · ", parts);
+                return !Open && EndedAt != null ? "Done: " + t : t;
+            }
+        }
+    }
+
+    int _queueOk, _queueCombo;
+    DateTime _queueSince;
+    DateTime? _queueEndedAt;
+    volatile CraftQueueView? _queueView;
+
+    /// <summary>The queue under way, or the last one (EndedAt set) once it is over; null before any this session. Safe from any thread: a snapshot swapped whole.</summary>
+    public CraftQueueView? CraftQueue => _queueView;
+
+    void QueueViewNow()
+    {
+        if (_queueId == 0) return;
+        // the count reads the craft under way ("Crafting in Progress 3 / 10" while the third runs), so two have finished
+        // while the queue runs; once it is over the last count read has finished too (QueueEnd's own reading)
+        int read = _queueOpen ? Math.Max(0, _raceCount - 1) : _raceCount;
+        int done = Math.Max(read, _queueCrafts);
+        var recipe = _queueName.Length >= 2 ? _queueName : PanelShows;
+        _queueView = new CraftQueueView(_queueOpen, recipe, _queueOf, done, _queueCrafts, _queueOk, _queueCombo,
+            _heldRaces.Count + Math.Max(0, read - _queueCrafts), _queueSince, _queueOpen ? null : _queueEndedAt);
+    }
 
     void QueueStart(DateTime now)
     {
@@ -4045,7 +4090,9 @@ public sealed partial class TrackerSession
         _queueName = ""; _queueLevel = 0; _switchTo = ""; _switchLevel = 0;
         _queueReads.Clear(); _heldRaces.Clear();
         _queueOf = 0; _queueCrafts = 0; _ofReads.Clear(); _raceReadsFrom = now; _raceCount = 0; _raceUpgradeTitle = _raceBaseTitle = false;
+        _queueOk = 0; _queueCombo = 0; _queueSince = now; _queueEndedAt = null;
         _panel.NewQueue();
+        QueueViewNow();
     }
 
     // ---- which race is an upgrade roll (Steven's 2026-11-03 13:23 queue of ten Orichalcum Longswords: 13 races, three of
@@ -4078,6 +4125,7 @@ public sealed partial class TrackerSession
             if (_queueOf > 0 && of != _queueOf) { CrashLog.Note($"crafting panel: the queue's count reads {t.Done} / {t.Of} after {_queueOf}: a queue of {of}"); _queueCrafts = 0; }
             _queueOf = of;
             if (t.Of == of) _raceCount = t.Done;
+            QueueViewNow();
         }
         var cur = _queueName.Length >= 2 ? _queueName : PanelShows;
         if (t.Recipe.Length < 3 || cur.Length < 2) return;
@@ -4134,6 +4182,8 @@ public sealed partial class TrackerSession
             else if (!_queueSure) QueueGuess(now, why);
         }
         _queueOpen = false; _switchTo = "";
+        _queueEndedAt = now;
+        QueueViewNow();
     }
 
     /// <summary>Crafts held past <see cref="QueueHoldSeconds"/>: filed under the best guess (or the recipe read whole that was taking over), so the window keeps up.</summary>
@@ -4167,6 +4217,7 @@ public sealed partial class TrackerSession
         _panelRecipe = _queueName; _panelLevel = _queueLevel;
         CrashLog.Note($"crafting panel: {(_queueName.Length > 0 ? _queueName : "an unread recipe")}, this queue's best guess ({why}; reads: {string.Join(" | ", _queueReads.Select(r => r.Name + (r.Sure ? "" : "?")))})");
         FileHeld(now);
+        QueueViewNow();
     }
 
     void Confirm(DateTime now, string name, int level, string why)
@@ -4186,6 +4237,7 @@ public sealed partial class TrackerSession
         _panelRecipe = name; _panelLevel = level;
         CrashLog.Note($"crafting panel: {name}, this queue's recipe ({why})");
         FileHeld(now);
+        QueueViewNow();
     }
 
     /// <summary>Another recipe read whole twice in a row while the queue's was settled: a new queue from the first of those reads.</summary>
@@ -4260,7 +4312,7 @@ public sealed partial class TrackerSession
         if (_heldRaces.Count == 0) return;
         var held = _heldRaces.ToList(); _heldRaces.Clear();
         CrashLog.Note($"crafting panel: {held.Count} craft{(held.Count == 1 ? "" : "s")} held for this queue's recipe filed under {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")}");
-        foreach (var (at, ok, combo, unseen) in held) PanelRace(_panelRecipe, ok, combo, at, _panelLevel, _queueId, unseen: unseen);
+        foreach (var (at, ok, combo, unseen, why) in held) PanelRace(_panelRecipe, ok, combo, at, _panelLevel, _queueId, unseen: unseen, why: "held until the queue's recipe was read; " + why);
     }
 
     /// <summary>Whether this queue's crafts wait for its recipe: not settled yet, or another recipe read whole that may be taking over.</summary>
@@ -4357,7 +4409,8 @@ public sealed partial class TrackerSession
             int? yield = RecipeBook.YieldFor(_hiddenRecipe, _hiddenLevel);
             int? makes = up ? null : yield is int y && y != r.Count ? y : r.Count;
             CrashLog.Note($"crafting window over the queue: {name} x{r.Count} beside the character at {at.ToLocalTime():HH:mm:ss.f}: a craft of {_hiddenRecipe} that worked, its bars out of sight{(up ? " (its upgrade)" : makes != r.Count ? $" (the recipe makes {makes})" : "")}");
-            PanelRace(_hiddenRecipe, true, false, at, _hiddenLevel, _hiddenQueue, makes);
+            PanelRace(_hiddenRecipe, true, false, at, _hiddenLevel, _hiddenQueue, makes,
+                why: $"{name} x{r.Count} beside the character while the crafting window hid the queue: a craft that worked, its bars out of sight{(up ? " (its upgrade)" : makes != r.Count ? $" (the recipe makes {makes})" : "")}");
         }
         return true;
     }
@@ -4392,7 +4445,21 @@ public sealed partial class TrackerSession
             CraftView.Apply(ev);
             Accuracy.Add("craft_panel");
             Report.Counted(at, $"craft combo (the pop-up's count): {recipe} x{r.Count}", ev.Via);
-            Live.Add(new FeedLine(at, FeedTab.Crafting, "craft", recipe, 1, Ok: true, Via: ev.Via, Where: "Crafting", Combo: true));
+            if (_queueOpen && _queueId > 0) { _queueCombo++; QueueViewNow(); }
+            // the line already drawn for that craft is corrected as well (Steven, 2026-11-04: the feed should say why): a roll
+            // read as lost turns won, and is the combo line already; a craft whose roll wasn't seen shows the two dishes it
+            // made, and the combo's own line still lands after it, gold on the panel (0.9.17, "it didn't tell me I got 2x").
+            // Same window as CraftLedger.PopupSays.
+            const string said = "the x2 pop-up said the combo was won";
+            bool Mine(FeedLine l) => l.Tab == FeedTab.Crafting && l.Kind == "craft" && cmp.Equals(l.Name, recipe)
+                && at >= l.At.AddSeconds(-CraftLedger.PopupLeadSeconds) && (at - l.At).TotalSeconds <= CraftLedger.PanelSeconds;
+            var newest = Live.Recent(FeedTab.Crafting, LiveFeed.Keep).FirstOrDefault(Mine);
+            bool flipped = newest is { Combo: true, Ok: false }
+                && Live.Amend(Mine, l => l with { Ok = true, Why = Join(l.Why, $"{said}, not lost: the roll's tally follows") });
+            if (newest is { Combo: false, Ok: true })
+                Live.Amend(Mine, l => l with { Amount = r.Count, Makes = r.Count, Why = Join(l.Why, $"{said}: the second dish credited") });
+            if (!flipped) Live.Add(new FeedLine(at, FeedTab.Crafting, "craft", recipe, 1, Ok: true, Via: ev.Via, Where: "Crafting", Combo: true, Why: $"{name} x{r.Count} beside the character: {said}"));
+            static string Join(string a, string b) => a.Length > 0 ? $"{a}; {b}" : b;
             try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
         }
     }
@@ -4467,8 +4534,9 @@ public sealed partial class TrackerSession
             if (used >= unseen) break;
             _quickRaces.Remove(q); used++;
             CrashLog.Note($"crafting panel: the success bar full in an instant at {q.ToLocalTime():HH:mm:ss.f} was a craft (a critical success): counted, the queue's count passed it ({why})");
-            if (QueueHolds) _heldRaces.Add((q, true, false, 0));
-            else PanelRace(_panelRecipe, true, false, q, _panelLevel, _queueId);
+            var qwhy = $"the success bar filled in an instant (a critical success); the queue's count passed it, so it was a craft ({why})";
+            if (QueueHolds) _heldRaces.Add((q, true, false, 0, qwhy));
+            else PanelRace(_panelRecipe, true, false, q, _panelLevel, _queueId, why: qwhy);
         }
         return unseen - used;
     }
@@ -4510,12 +4578,13 @@ public sealed partial class TrackerSession
         if (QueueHolds)
         {
             // the queue's recipe isn't settled yet: the craft waits for it (one queue, one recipe)
-            _heldRaces.Add((now, ok, combo, unseen));
+            _heldRaces.Add((now, ok, combo, unseen, bars));
             CrashLog.Note($"crafting panel: {(combo ? "combo roll " : "")}{(ok ? "success" : "fail")}, held until this queue's recipe is read ({bars})");
+            QueueViewNow();
             return;
         }
         CrashLog.Note($"crafting panel: {(combo ? "combo roll " : "")}{(ok ? "success" : "fail")} for {(_panelRecipe.Length > 0 ? _panelRecipe : "an unread recipe")} ({bars})");
-        PanelRace(_panelRecipe, ok, combo, now, _panelLevel, _queueId, unseen: unseen);
+        PanelRace(_panelRecipe, ok, combo, now, _panelLevel, _queueId, unseen: unseen, why: bars);
     }
 
     /// <summary>
@@ -4556,9 +4625,12 @@ public sealed partial class TrackerSession
     /// One finished race of the panel's Success and Fail bars: the only way a craft is counted (Steven, 2026-10-23: "if u
     /// dont see the crafting bars why the fuck are u adding it to a craft window"). Also what replay and the tests feed.
     /// </summary>
-    // makes: what the craft made when something other than the recipe book says it (a hidden craft's pop-up, HiddenCraftRows)
-    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0, int? makes = null, int unseen = 0)
+    // makes: what the craft made when something other than the recipe book says it (a hidden craft's pop-up, HiddenCraftRows);
+    // why: the reads log's reason, carried on the feed line so its card can say it (Steven, 2026-11-04)
+    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0, int? makes = null, int unseen = 0, string why = "")
     {
+        // this queue's tallies for the live line on the HUD and the Crafting page (CraftQueue)
+        if (queue > 0 && queue == _queueId && _queueOpen) { if (ok && !combo) _queueOk++; if (ok && combo) _queueCombo++; QueueViewNow(); }
         PanelUp(recipe, now);
         var ev = new CraftResult(now, recipe, ok, combo) { Via = SessionEngine.CraftPanelVia, Makes = makes ?? (recipe.Length >= 2 ? RecipeBook.YieldFor(recipe, level) : null), Queue = queue, Unseen = unseen };
         Count(ev);
@@ -4566,7 +4638,7 @@ public sealed partial class TrackerSession
         Accuracy.Add("craft_panel");
         Report.Counted(now, $"craft {(ok ? "success" : "fail")}{(combo ? " (combo)" : "")}: {(recipe.Length > 0 ? recipe : "?")}", ev.Via);
         // the line's amount is what the craft made (10 for a ×10 Orichalcum Ingot), as its Makes says; never a flat 1
-        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, ok && !combo && ev.Makes is int mk && mk > 0 ? mk : 1, Ok: ok, Via: ev.Via, Where: "Crafting", Makes: ev.Makes ?? 0, Combo: combo));
+        Live.Add(new FeedLine(now, FeedTab.Crafting, "craft", recipe, ok && !combo && ev.Makes is int mk && mk > 0 ? mk : 1, Ok: ok, Via: ev.Via, Where: "Crafting", Makes: ev.Makes ?? 0, Combo: combo, Why: why));
         try { Parsed?.Invoke(ev); } catch (Exception ex) { CrashLog.Write("parsed event", ex); }
     }
 
@@ -4956,6 +5028,18 @@ public sealed class UserPrefs
     public bool CompareZones { get; set; }
     /// <summary>Options › General › Show amounts before the Market fee (0.9.9): every figure is the sale's gross, not what the seller keeps. Off by default.</summary>
     public bool ShowGross { get; set; }
+    /// <summary>
+    /// Options › General › Show a recap when a run ends (Steven, 2026-11-04): a card with the run's time, Kinah, loot and
+    /// best drop when a farming run stops or an expedition or event closes (Ui/MainWindow.Recap.cs). On by default.
+    /// </summary>
+    public bool RunRecap { get; set; } = true;
+    /// <summary>
+    /// The first-session checklist on the Farming feed is done or skipped (Steven, 2026-11-04, Ui/MainWindow.Onboard.cs).
+    /// Set at once for a player with saved runs, so nobody who already farms sees it.
+    /// </summary>
+    public bool OnboardDone { get; set; }
+    /// <summary>The checklist's "Market read once": kept, since the Market's own counts start over with each start.</summary>
+    public bool OnboardMarketRead { get; set; }
     /// <summary>Where to farm now (0.9.9): false (the default) pools every region, true is the player's own server only.</summary>
     public bool WhereYourServer { get; set; }
     /// <summary>Market prices: read and share the listings while the Market is open. On by default; off keeps everything else working.</summary>

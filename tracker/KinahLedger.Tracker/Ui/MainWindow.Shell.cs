@@ -26,6 +26,8 @@ public sealed record OptionsChoice(
     public bool Compare { get; init; }
     /// <summary>Options › General › Show amounts before the Market fee (0.9.9). Off by default.</summary>
     public bool ShowGross { get; init; }
+    /// <summary>Options › General › Show a recap when a run ends (2026-11-04, Ui/MainWindow.Recap.cs). On by default.</summary>
+    public bool RunRecap { get; init; } = true;
 }
 
 /// <summary>
@@ -257,7 +259,7 @@ public partial class MainWindow
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
-        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross };
+        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -282,7 +284,7 @@ public partial class MainWindow
             _hud?.SetFields(Ui.HudFields.Parse(c.HudFields));
             UpdateHud();
         }
-        if (c.HudLocked != was.HudLocked) { _hudPrefs.Locked = c.HudLocked; UpdateHud(); }
+        if (c.HudLocked != was.HudLocked) { _hudPrefs.Locked = c.HudLocked; if (c.HudLocked) MarkPanelPlaced(); UpdateHud(); }
         if (c.HudLook != was.HudLook) ApplyHudLook(c.HudLook);   // the panel is made again in the new look
         _prefs.HudOpacity = c.HudOpacity; _hudPrefs.Scale = c.HudScale;
         PreviewHud(c.HudOpacity, c.HudScale);
@@ -308,6 +310,8 @@ public partial class MainWindow
         _prefs.FollowActivity = c.FollowActivity;   // on again: it follows from the next change, never jumping to an old one
         if (c.Compare != was.Compare) SetCompare(c.Compare);   // Ui/MainWindow.Compare.cs
         if (c.ShowGross != was.ShowGross) SetGross(c.ShowGross);
+        _prefs.RunRecap = c.RunRecap;
+        if (!c.RunRecap) _recapWaiting = null;   // off: a recap waiting for the window is dropped too
         _prefs.ReportFrames = ReportBuffer.KeepFrames = c.ReportFrames;
         if (c.GearScore != was.GearScore) SetGearScore(c.GearScore);
         _prefs.SendReportFrames = ReportBuffer.KeepUiFrames = c.SendFrames;

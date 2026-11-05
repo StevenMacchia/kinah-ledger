@@ -92,10 +92,46 @@ public static class CrashLog
     /// </summary>
     public static void NoteBurst(string text) => NoteCore(text, 1);
 
+    // ---- the last notes in memory, for "Why it was counted" (Steven, 2026-11-04: he spent the day reading reads.log for
+    // the reason a line was counted; the window shows it beside the line now). Filled before the burst filter, so a note
+    // held back from the file still explains its line. ----
+
+    /// <summary>How many notes are kept in memory.</summary>
+    public const int NotesKept = 300;
+    static readonly object NotesLock = new();
+    static readonly Queue<(DateTime AtUtc, string Text)> Recent = new();
+
+    /// <summary>Notes that place the tracker rather than explain a count: never offered as a line's reason ("reward screen" is kept, it explains tables).</summary>
+    static bool NotAReason(string text) =>
+        text.StartsWith("audit:", StringComparison.Ordinal) || text.StartsWith("zone:", StringComparison.Ordinal) ||
+        text.StartsWith("event header:", StringComparison.Ordinal) || text.StartsWith("activity:", StringComparison.Ordinal) ||
+        text.StartsWith("anchor", StringComparison.Ordinal) || text.StartsWith("reads.log turned over", StringComparison.Ordinal);
+
+    /// <summary>The notes written within <paramref name="seconds"/> of <paramref name="at"/>, oldest first, the ones that place the tracker left out: the fallback reason for a line with none of its own.</summary>
+    public static IReadOnlyList<(DateTime At, string Text)> NotesNear(DateTime at, double seconds)
+    {
+        var u = at.Kind == DateTimeKind.Local ? at.ToUniversalTime() : at;
+        lock (NotesLock)
+            return Recent.Where(n => Math.Abs((n.AtUtc - u).TotalSeconds) <= seconds && !NotAReason(n.Text)).OrderBy(n => n.AtUtc).ToList();
+    }
+
+    static void Remember(string text)
+    {
+        // a replay's notes carry the replayed read's time, so its lines find theirs
+        var t = Clock?.Invoke() ?? Wall();
+        var u = t.Kind == DateTimeKind.Utc ? t : t.ToUniversalTime();
+        lock (NotesLock)
+        {
+            Recent.Enqueue((u, text));
+            while (Recent.Count > NotesKept) Recent.Dequeue();
+        }
+    }
+
     static void NoteCore(string text, int free)
     {
         try
         {
+            Remember(text);
             lock (ReadsLock)
             {
                 if (Clock == null)

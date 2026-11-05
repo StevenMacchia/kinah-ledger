@@ -128,6 +128,8 @@ public partial class MainWindow : Window
         _watcher.Market.Region = RegionKey; _watcher.Market.Server = Server?.Label ?? "";
 
         InitShare();   // Share: the sheet with the picture to paste (Ui/MainWindow.Share.cs)
+        InitRecap();   // the card when a run ends (Ui/MainWindow.Recap.cs)
+        if (watch) OnboardAtStart();   // a player with saved runs never sees the first-session checklist (Ui/MainWindow.Onboard.cs)
         InitShortcuts();   // Ctrl+, Ctrl+N (Clear everything), Ctrl+Shift+C and the buttons' tooltips (Ui/MainWindow.Shortcuts.cs)
         // the miscount report keeps pictures only once the player said yes (Options › Sharing, or the question on its first use)
         ReportBuffer.KeepFrames = _prefs.ReportFrames;
@@ -555,6 +557,8 @@ public partial class MainWindow : Window
         StartBtn.IsEnabled = false; Say("Stopping…", "Faint");
         long worth = BestRuns.Value(e);
         KeepShareRun(e);   // Share's Last run
+        // the zone's best as it was before this run is offered to it, for the recap's "Your best here"
+        var bestBefore = BestRuns.For(Server?.Label ?? "", e.Zone);
         FlashHud(worth > 0 ? $"Run stopped · {Fk(worth)} this run" : "Run stopped");
         if (fromWindow)
         {
@@ -582,6 +586,7 @@ public partial class MainWindow : Window
         SayOnLine(msg, tone);   // a result to read, so on the line for 15 s, not a passing toast
         _statusHoldUntil = DateTime.UtcNow.AddSeconds(15);
         Tick();
+        RecapFarm(e, worth, bestBefore);   // the run-end card (Ui/MainWindow.Recap.cs)
     }
 
     /// <summary>A message the live status line mustn't overwrite yet (a stopped run's result).</summary>
@@ -646,6 +651,7 @@ public partial class MainWindow : Window
         if (_demo || _moving) return;
         WatchGame();
         var chat = _watcher.Chat; var farm = RunEngine;
+        HookRunClosed(chat);   // an expedition's recap (Ui/MainWindow.Recap.cs)
         var show = Shown();
         if (show != null && (farm != null || show != _lastRun))
         {
@@ -1281,6 +1287,10 @@ public partial class MainWindow : Window
         FillBestCrafts();
         // the feed: the last five crafts, worked or failed, with what each made or cost
         DrawFeed(CraftFeedHost, CraftEmpty, FeedFor(FeedTab.Crafting), FeedTab.Crafting, CraftValue);
+        // the queue under way above it, as the HUD shows it, and its final figures for a moment after (MainWindow.HudCraft.cs)
+        var queue = _demo ? "" : _watcher.Chat?.CraftQueue is { } q && (q.Open || q.EndedAt is DateTime end && (DateTime.UtcNow - end).TotalSeconds <= Session.CraftLedger.PanelSeconds) ? q.Text : "";
+        if (CraftQueueNow.Text != queue) CraftQueueNow.Text = queue;
+        CraftQueueNow.Visibility = queue.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         FillHealth(CraftHealthText, CraftHealthMark);
         // with nothing crafted yet, the feed's one sentence and Best crafts: no empty table, nothing to start over
         var some = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1677,15 +1687,17 @@ public partial class MainWindow : Window
         var open = new WF.ToolStripMenuItem("Open Kinah Ledger") { Font = new System.Drawing.Font("Segoe UI", 9.75f, System.Drawing.FontStyle.Bold) };
         open.Click += (_, _) => Restore();
         _trayToggle.Click += async (_, _) => await Toggle();
-        var options = new WF.ToolStripMenuItem("Options…") { ShortcutKeyDisplayString = OptionsKey }; options.Click += (_, _) => OpenOptions();
+        // no key beside Options, Clear everything or Copy share picture: theirs work only in the window, so from the tray they
+        // did nothing (Steven, 2026-11-04); Start run keeps the in-game one, which works anywhere. They're listed in Options › Shortcuts & tips
+        var options = new WF.ToolStripMenuItem("Options…"); options.Click += (_, _) => OpenOptions();
         var movePanel = new WF.ToolStripMenuItem("Move the panel"); movePanel.Click += (_, _) => MoveHudForAWhile();
         var placePanel = new WF.ToolStripMenuItem("Place the panel…"); placePanel.Click += (_, _) => { if (OpenPlacementGuide() is { } why) _tray.ShowBalloonTip(4000, "Place the panel", why, WF.ToolTipIcon.Info); };
         var updates = new WF.ToolStripMenuItem("Check for updates"); updates.Click += async (_, _) => { OpenOptions(OptionsWindow.Page.Updates); await CheckForUpdate(manual: true); };
         // Clear everything and the share picture (0.9.10; New session until 0.9.13): Clear everything brings the window up, so
         // its Undo bar is seen; the picture is copied where the window is, and said by the tray when the window is out of sight
-        var clearAll = new WF.ToolStripMenuItem(ClearAllText) { ShortcutKeyDisplayString = NewSessionKey };
+        var clearAll = new WF.ToolStripMenuItem(ClearAllText);
         clearAll.Click += async (_, _) => { Restore(); await ClearAllFromKey(); };
-        var copyPic = new WF.ToolStripMenuItem("Copy share picture") { ShortcutKeyDisplayString = CopyPictureKey };
+        var copyPic = new WF.ToolStripMenuItem("Copy share picture");
         copyPic.Click += (_, _) =>
         {
             bool away = !IsVisible || WindowState == WindowState.Minimized;

@@ -14,7 +14,7 @@ public partial class MainWindow
 {
     /// <summary>How many crafts the looks get ("craft0" newest to "craft3"): the Card shows three as tiles, the Ticker four toasts.</summary>
     const int HudCrafts = 4;
-    static readonly string[] CraftHeadKeys = { "craft", "craftTime", "craftRecipe", "craftRecipeId", "craftIcon", "craftTries", "craftOk", "craftFail", "craftProfit", "craftSells", "craftPer", "craftPerHr", "craftCombos", "craftCombosKind" };
+    static readonly string[] CraftHeadKeys = { "craft", "craftTime", "craftRecipe", "craftRecipeId", "craftIcon", "craftTries", "craftOk", "craftFail", "craftProfit", "craftSells", "craftPer", "craftPerHr", "craftCombos", "craftCombosKind", "craftQueue", "craftQueueText", "craftQueueDone", "craftQueueOf" };
     static readonly string[] CraftLineKeys = { "", "Id", "Item", "Ok", "Worth", "Icon", "At", "Combo" };
 
     /// <summary>Time with the crafting window open this session, added up tick by tick; the tick it was last added at; the tries then.</summary>
@@ -62,7 +62,7 @@ public partial class MainWindow
         // crafting started over (the part's Start over): the clock starts over with it
         if (tries < _craftTriesSeen) _craftTime = TimeSpan.Zero;
         _craftTriesSeen = tries;
-        foreach (var (k, v) in HudCraftValuesFor(e, crafts, _craftTime)) _hudValues[k] = v;
+        foreach (var (k, v) in HudCraftValuesFor(e, crafts, _craftTime, chat?.CraftQueue)) _hudValues[k] = v;
     }
 
     static Dictionary<string, string> HudCraftBlank()
@@ -109,9 +109,18 @@ public partial class MainWindow
     /// (name, item id, icon), tries, worked, failed, the session's profit ("+1.12M", "≤ +1.12M" with a price missing), what
     /// one of the recipe sells for after the Market's cut ("176K"), and the last crafts newest first with what each made or cost.
     /// </summary>
-    internal Dictionary<string, string> HudCraftValuesFor(SessionEngine? e, IReadOnlyList<FeedLine> lines, TimeSpan time)
+    internal Dictionary<string, string> HudCraftValuesFor(SessionEngine? e, IReadOnlyList<FeedLine> lines, TimeSpan time, TrackerSession.CraftQueueView? queue = null)
     {
         var d = HudCraftBlank();
+        // the queue under way, as its count and what was counted say ("3 of 10 · 2 worked · 1 unsure"), and its final
+        // figures for CraftLedger.PanelSeconds after it ends (Steven, 2026-11-04: a miss should show while it happens)
+        if (queue is { } q && (q.Open || q.EndedAt is DateTime end && (DateTime.UtcNow - end).TotalSeconds <= CraftLedger.PanelSeconds))
+        {
+            d["craftQueue"] = "1";
+            d["craftQueueText"] = q.Text;
+            d["craftQueueDone"] = q.Done.ToString();
+            d["craftQueueOf"] = q.Of > 0 ? q.Of.ToString() : "";
+        }
         var s = SumCrafts(e);
         // the tiles are crafts; a combo roll is the line after the craft it credits, never a craft of its own. A won roll
         // is still a line of its own here, "combo ×2" or "combo: Splendent ...", so the panel says what the craft before
@@ -196,12 +205,16 @@ public partial class MainWindow
         return (e, lines, new TimeSpan(0, 18, 5));
     }
 
+    /// <summary>The sample session's queue under way, for the renders and the self-test: the 10th of 12, nine worked, one combo, one unsure.</summary>
+    internal static TrackerSession.CraftQueueView HudCraftSampleQueue() =>
+        new(true, "Orichalcum Greaves", 12, 10, 9, 8, 1, 1, DateTime.UtcNow.AddMinutes(-18), null);
+
     /// <summary>The Card and the Ticker while crafting, from the sample session, for layout renders (the Crafting render, with its prices).</summary>
     internal List<(string File, string Look, Dictionary<string, string> Values)> HudCraftLookStates()
     {
         var (e, lines, time) = HudCraftSample();
         var v = HudSample();
-        foreach (var (k, x) in HudCraftValuesFor(e, lines, time)) v[k] = x;
+        foreach (var (k, x) in HudCraftValuesFor(e, lines, time, HudCraftSampleQueue())) v[k] = x;
         return new() { ("ui-hud-card-crafting.png", HudLooks.Card, v), ("ui-hud-ticker-crafting.png", HudLooks.Ticker, v) };
     }
 
@@ -213,7 +226,7 @@ public partial class MainWindow
     internal (Dictionary<string, string> Values, CraftSums Sums, string WindowProfit) HudCraftCheck()
     {
         var (e, lines, time) = HudCraftSample();
-        var v = HudCraftValuesFor(e, lines, time);
+        var v = HudCraftValuesFor(e, lines, time, HudCraftSampleQueue());
         FillCraft(e);
         return (v, SumCrafts(e), _craftNet);
     }

@@ -165,6 +165,7 @@ public partial class MainWindow
         if (_demo) return;
         if (HudLook == HudLooks.Ticker) { _hudPrefs.TickerX = x; _hudPrefs.TickerY = y; }
         else { _prefs.HudX = x; _prefs.HudY = y; }
+        MarkPanelPlaced();   // dragged there on purpose (Move the panel, or unlocked): the checklist's "Panel placed"
     }
 
     /// <summary>Options' Save with a new look: the panel is made again in it, where that look was last left.</summary>
