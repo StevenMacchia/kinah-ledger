@@ -99,7 +99,8 @@ public partial class MainWindow
     {
         var now = DateTime.UtcNow;
         bool justNow = lines.Count > 0 && (now - lines[0].At).TotalSeconds < 60;
-        var sig = string.Join("|", lines.Select(l => $"{l.At.Ticks}:{l.Text}:{value(l).Text}{(IsMarked(l) ? ":marked" : "")}")) + (justNow ? "*" : "");
+        // Explain each count in the signature: flipping it in Options redraws the rows with their other hover
+        var sig = string.Join("|", lines.Select(l => $"{l.At.Ticks}:{l.Text}:{value(l).Text}{(IsMarked(l) ? ":marked" : "")}")) + (justNow ? "*" : "") + (_prefs.ExplainCounts ? "?" : "");
         if (_feedDrawn.TryGetValue(host, out var was) && was.Sig == sig) return;
         bool fresh = lines.Count > 0 && (!_feedDrawn.ContainsKey(host) || was.Newest != lines[0].At) && _feedDrawn.ContainsKey(host);
         _feedDrawn[host] = (sig, lines.Count > 0 ? lines[0].At : default);
@@ -149,7 +150,9 @@ public partial class MainWindow
         Grid.SetColumn(v, 3); g.Children.Add(v);
         var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
         b.SetResourceReference(Border.BorderBrushProperty, "Line");
-        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Click to see why, or to report it." : "Click to see why, or to report it.";
+        // the why is behind Options › Game reading › Explain each count (Steven, 2026-11-04), so the hover offers it only then
+        var click = _prefs.ExplainCounts ? "Click to see why, or to report it." : "Click if it's wrong.";
+        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " " + click : click;
         ToolTipService.SetInitialShowDelay(b, 400);
         if (newest)
         {
@@ -766,8 +769,13 @@ public partial class MainWindow
             if (ViaTip(line.Via) is { Length: > 0 } how) { var n = CkNote(how); n.Margin = new Thickness(20, 6, 20, 0); body.Children.Add(n); }
             // why it was counted, in the reads log's own words (Steven, 2026-11-04: he found the day's miscounts by reading
             // reads.log for these; the line says it now). A line with no reason of its own offers the notes written around it.
-            body.Children.Add(CkSection("WHY IT WAS COUNTED"));
-            foreach (var w in WhyLines(line)) body.Children.Add(CkNote(w));
+            // Only with Options › Game reading › Explain each count on (Steven, 2026-11-04: "Explain this should be an option
+            // you can turn on, in dev mode or something"): it is for checking the reading, not for every player.
+            if (_prefs.ExplainCounts)
+            {
+                body.Children.Add(CkSection("WHY IT WAS COUNTED"));
+                foreach (var w in WhyLines(line)) body.Children.Add(CkNote(w));
+            }
         }
         // the choices: one is picked; Missing a pickup sits apart at the bottom
         var picks = new WrapPanel { Margin = new Thickness(20, 12, 20, 0) };
@@ -923,6 +931,16 @@ public partial class MainWindow
         var lines = FeedFor(FeedTab.Farming);
         if (lines.Count < 2) return;
         SaveCard(BuildLineReport(lines[1], FeedTab.Farming, "wrong_amount"), path);
+    }
+
+    /// <summary>For the options self-test: whether the second sample line's card has its WHY IT WAS COUNTED section (Explain each count).</summary>
+    internal bool SampleLineReportExplains()
+    {
+        var lines = FeedFor(FeedTab.Farming);
+        if (lines.Count < 2) return false;
+        static IEnumerable<TextBlock> Texts(DependencyObject o) =>
+            (o is TextBlock tb ? new[] { tb } : Enumerable.Empty<TextBlock>()).Concat(LogicalTreeHelper.GetChildren(o).OfType<DependencyObject>().SelectMany(Texts));
+        return Texts(BuildLineReport(lines[1], FeedTab.Farming, "wrong_amount")).Any(t => t.Text == "WHY IT WAS COUNTED");
     }
 
     /// <summary>Sample feed lines for a layout render: the shipped screens' three newest lines and the mock's others. Never the player's.</summary>

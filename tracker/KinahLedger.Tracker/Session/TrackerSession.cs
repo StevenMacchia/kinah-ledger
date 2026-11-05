@@ -5034,6 +5034,12 @@ public sealed class UserPrefs
     /// </summary>
     public bool RunRecap { get; set; } = true;
     /// <summary>
+    /// Options › Game reading › Explain each count (Steven, 2026-11-04: "Explain this should be an option you can turn on, in
+    /// dev mode or something"): a counted line's card says why it was counted and a recipe's last tries carry their reasons
+    /// (FeedLine.Why). Off by default: it is for checking the reading. The reasons are kept either way.
+    /// </summary>
+    public bool ExplainCounts { get; set; }
+    /// <summary>
     /// The first-session checklist on the Farming feed is done or skipped (Steven, 2026-11-04, Ui/MainWindow.Onboard.cs).
     /// Set at once for a player with saved runs, so nobody who already farms sees it.
     /// </summary>

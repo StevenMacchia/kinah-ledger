@@ -54,7 +54,7 @@ public partial class OptionsWindow
         }
 
         // did you know: one line each, a link where a page has it
-        Tip("Click any counted line to see why it was counted, or to report it.");
+        Tip("Click any counted line to report it. With Explain each count on (Game reading), its card says why it was counted.", "Turn it on in Game reading", () => Go(Page.Reading));
         Tip("Click a recipe row for its last tries.");
         Tip("Set a goal from an item's card: the ring on the Farming page follows it.");
         Tip("Compare zones and runs side by side; it's off by default.", "Turn it on in General", () => Go(Page.General));

@@ -185,7 +185,8 @@ public partial class MainWindow
             {
                 var what = l.Combo ? (l.Ok ? "combo won" : "combo lost") : (l.Ok ? (l.Makes > 1 ? $"worked ×{l.Makes}" : "worked") : "failed");
                 body.Children.Add(CkKv(l.At.ToLocalTime().ToString("HH:mm:ss"), what, l.Ok ? CkGood : CkBad, rightSize: 12.5));
-                if (l.Why.Length > 0) { var n = CkNote(Capital(l.Why)); n.Margin = new Thickness(20, 0, 20, 4); body.Children.Add(n); }
+                // the why under each try only with Explain each count on (Steven, 2026-11-04); the tries themselves always show
+                if (_prefs.ExplainCounts && l.Why.Length > 0) { var n = CkNote(Capital(l.Why)); n.Margin = new Thickness(20, 0, 20, 4); body.Children.Add(n); }
             }
         }
         long Sells(string item, int qty) => Price(item) is long p ? (long)Math.Round(p * qty * PriceBook.SellerKeeps) : -1;

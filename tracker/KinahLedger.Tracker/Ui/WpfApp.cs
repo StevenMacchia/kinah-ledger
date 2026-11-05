@@ -246,6 +246,24 @@ public static class WpfApp
         Check(p.RunRecap, "recap back on");
         Check(w.SampleRecapCard() is System.Windows.Controls.Border, "the recap card builds");
 
+        // Options › Game reading › Explain each count (Steven, 2026-11-04: "an option you can turn on"): off by default, the
+        // line card's WHY IT WAS COUNTED only while it is on, kept on Save, off again
+        o = Open();
+        o.Go(OptionsWindow.Page.Reading);
+        Check(o.PageReading.Visibility == Visibility.Visible && o.ExplainChk.IsChecked == false && !p.ExplainCounts, "Explain each count: on Game reading, off by default");
+        Check(!w.SampleLineReportExplains(), "a line's card has no WHY IT WAS COUNTED with it off");
+        Flip(o.ExplainChk);
+        Check(o.SaveBtn.IsEnabled && !p.ExplainCounts, "the explain switch waits for Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(p.ExplainCounts && w.SampleLineReportExplains(), "explain turned on and saved; the line's card says why");
+        o = Open();
+        Check(o.ExplainChk.IsChecked == true, "Options opens with explain on");
+        Flip(o.ExplainChk);
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(!p.ExplainCounts && !w.SampleLineReportExplains(), "explain back off");
+
         // Options › Shortcuts & tips (2026-11-04): the three groups, the tips, the start/stop key as it is now
         OptionsWindow.SelfTestTips(w, Open, Check);
 
