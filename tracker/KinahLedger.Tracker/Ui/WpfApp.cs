@@ -352,6 +352,8 @@ public static class WpfApp
         Check(!chips.Any(c => c.Contains("Drana")) && chips.Skip(1).All(c => c.EndsWith(" min") || c.EndsWith(" h")), "no chip for a zone under a minute; each says its minutes");
         // Sort  worth · amount · quality over the slots (Steven, 2026-11-05): by amount the counts fall along the slots, by
         // quality the grades do; the slots are the same ones, and worth puts them back as they were
+        // worth first by name: the test runs with this PC's ui.json, where the player may have picked another order
+        w.SetLootSortForTest(Session.LootOrder.Worth); DoEvents();
         var byWorth = w.LootOrderForTest.ToList();
         w.SetLootSortForTest(Session.LootOrder.Amount); DoEvents();
         var byAmount = w.LootOrderForTest.ToList();
