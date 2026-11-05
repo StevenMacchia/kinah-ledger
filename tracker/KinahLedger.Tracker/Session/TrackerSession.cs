@@ -5020,6 +5020,8 @@ public sealed class UserPrefs
     public bool TodayOpen { get; set; }
     /// <summary>The Odds column as a percentage ("4.9%") instead of "1 in 21"; a click on its header switches.</summary>
     public bool OddsAsPercent { get; set; }
+    /// <summary>How the loot slots are ordered, on LOOT and the Events page's TODAY strip: "worth" (the default), "amount" or "quality" (Session/TodayLoot.cs, LootOrder).</summary>
+    public string LootSort { get; set; } = LootOrder.Worth;
     /// <summary>No longer read since 0.8.55: the window always opens on Farming. Kept so older ui.json files load.</summary>
     public string Part { get; set; } = "Farming";
     /// <summary>Options › General › Switch pages to what I'm doing (0.8.55): the window shows Farming, Crafting or Events as the activity changes (Session/PageFollow.cs). Off: it stays on the page the player picks.</summary>

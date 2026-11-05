@@ -99,7 +99,7 @@ public partial class MainWindow
 
         // the slots, drawn again only when something in them changed
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
-        var sig = $"{_part}|{HeadStack.Width}|{string.Join(",", _todayAll)}|{Skins.Current}|{r.Runs}:{r.Places}:{r.Kinah}:{Slots(r.Items)}";
+        var sig = $"{_part}|{HeadStack.Width}|{LootSortMode}|{string.Join(",", _todayAll)}|{Skins.Current}|{r.Runs}:{r.Places}:{r.Kinah}:{Slots(r.Items)}";
         if (!Changed("today", sig)) return;
         TodayHost.Children.Clear();
         int perRow = Math.Max(4, (int)((HeadStack.Width - 2 - 32 + TodayGap) / (TodaySlotSize + TodayGap)));
@@ -112,20 +112,23 @@ public partial class MainWindow
     {
         var slots = new List<FrameworkElement>();
         if (r.Kinah > 0) slots.Add(KinahSlot(r.Kinah, r.KinahWhere, ""));
-        foreach (var s in r.Items) slots.Add(ItemSlot(s, ("", ""), true, runs: true));
-        var g = TodayGroup("runs", "FROM EXPEDITIONS AND EVENTS", $"{r.Places} place{(r.Places == 1 ? "" : "s")}", r.Value, slots, perRow);
+        var items = SortSlots(r.Items);
+        LootOrderForTest.Clear(); LootOrderForTest.AddRange(items.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", false)));
+        foreach (var s in items) slots.Add(ItemSlot(s, ("", ""), true, runs: true));
+        var g = TodayGroup("runs", "FROM EXPEDITIONS AND EVENTS", $"{r.Places} place{(r.Places == 1 ? "" : "s")}", r.Value, slots, perRow, items.Count >= 2);
         if (slots.Count == 0) ((StackPanel)g).Children.Add(TodayEmpty("Nothing read from the reward screens yet."));
         TodayHost.Children.Add(g);
     }
 
     TextBlock TodayEmpty(string text) { var t = PT(text, "Faint", 12.5); t.Margin = new Thickness(0, 12, 0, 4); return t; }
 
-    /// <summary>A group under the line: its name in the heading gold, a faint word, its worth on the right, then two rows of slots and "Show all".</summary>
-    FrameworkElement TodayGroup(string key, string title, string note, long worth, List<FrameworkElement> slots, int perRow)
+    /// <summary>A group under the line: its name in the heading gold, a faint word, the sort links and its worth on the right, then two rows of slots and "Show all".</summary>
+    FrameworkElement TodayGroup(string key, string title, string note, long worth, List<FrameworkElement> slots, int perRow, bool sort = false)
     {
         var sp = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
         var head = new Grid { Margin = new Thickness(0, 0, 0, 10) };
-        head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        if (sort) { var links = SortLinks("today", FillToday); Grid.SetColumn(links, 1); head.Children.Add(links); }
         var t = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         t.Inlines.Add(PR(title, "SecGold", FontWeights.Bold));
         if (note.Length > 0) { var n = PR("   " + note, "Muted"); n.FontSize = 12; t.Inlines.Add(n); }
@@ -134,7 +137,7 @@ public partial class MainWindow
         {
             var v = PT(Fk(worth), "Gold", 13, null, "MonoFont"); v.Margin = new Thickness(12, 0, 0, 0);
             v.ToolTip = "Kinah plus loot at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
-            Grid.SetColumn(v, 1); head.Children.Add(v);
+            Grid.SetColumn(v, 2); head.Children.Add(v);
         }
         sp.Children.Add(head);
         bool all = _todayAll.Contains(key);

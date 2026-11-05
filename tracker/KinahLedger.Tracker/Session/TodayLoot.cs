@@ -2,6 +2,43 @@ using KinahLedger.Data;
 
 namespace KinahLedger.Session;
 
+/// <summary>
+/// How the loot slots are ordered, on LOOT's This zone and Today sides (Farming) and the TODAY strip (Events): by worth
+/// (the default, the most valuable first, as each side ranked them already), by amount (the most picked up first) or by
+/// quality (the best grade first). One choice for every side, kept in ui.json (UserPrefs.LootSort). Steven, 2026-11-05:
+/// "todays loot should be organized and u should be able to choose if organize by amount or quality".
+/// </summary>
+public static class LootOrder
+{
+    public const string Worth = "worth", Amount = "amount", Quality = "quality";
+    public static readonly string[] Modes = { Worth, Amount, Quality };
+
+    /// <summary>A saved choice, or worth for one that isn't a mode (an older ui.json, a typo by hand).</summary>
+    public static string Of(string? saved) => Modes.Contains(saved ?? "") ? saved! : Worth;
+
+    public static string Tip(string mode) => mode switch
+    {
+        Amount => "The most picked up first.",
+        Quality => "The best grade first: Epic, Unique, Legend, Rare, then the rest.",
+        _ => "The most valuable first, at the lowest Market price.",
+    };
+
+    /// <summary>The game's grades, best first; an item the list doesn't know (no grade) ranks under Common.</summary>
+    public static int GradeRank(string g) => g switch { "Epic" => 5, "Unique" => 4, "Legend" => 3, "Rare" => 2, "Common" => 1, _ => 0 };
+
+    /// <summary>
+    /// The slots in the order picked. By worth, they stay as they came (each side ranks them by worth already, the Events
+    /// strip with its materials, gear and currencies grouped); by amount or quality, worth breaks the ties, then the
+    /// other of the two, then the name.
+    /// </summary>
+    public static List<T> Sorted<T>(IEnumerable<T> slots, string mode, Func<T, long> count, Func<T, long> worth, Func<T, string> grade, Func<T, string> name) => mode switch
+    {
+        Amount => slots.OrderByDescending(count).ThenByDescending(worth).ThenByDescending(x => GradeRank(grade(x))).ThenBy(name, StringComparer.OrdinalIgnoreCase).ToList(),
+        Quality => slots.OrderByDescending(x => GradeRank(grade(x))).ThenByDescending(worth).ThenByDescending(count).ThenBy(name, StringComparer.OrdinalIgnoreCase).ToList(),
+        _ => slots.ToList(),
+    };
+}
+
 /// <summary>One slot of the Today strip: an item, how many came today, what the sellable copies are worth after the Market's cut, and where they came from.</summary>
 public sealed record TodaySlot(long Id, string Name, long Count, long Bound, long Worth, bool Priced, bool Gear, bool Currency, List<(string Where, long Count)> Where);
 
@@ -125,7 +162,7 @@ public static class TodayLoot
         }
         // as the Events page's loot row: the most valuable materials, then the gear best grade first, then the currencies
         static int Rank(TodaySlot s) => s.Currency ? 2 : s.Gear ? 1 : 0;
-        slots = slots.OrderBy(Rank).ThenByDescending(s => s.Worth).ThenByDescending(s => s.Gear ? GradeRank(items.Get(s.Id)?.Grade ?? "") : 0).ThenByDescending(s => s.Count).ToList();
+        slots = slots.OrderBy(Rank).ThenByDescending(s => s.Worth).ThenByDescending(s => s.Gear ? LootOrder.GradeRank(items.Get(s.Id)?.Grade ?? "") : 0).ThenByDescending(s => s.Count).ToList();
         long value = kinah + slots.Sum(s => s.Worth);
         int places = today.Select(r => r.Zone).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         int exp = today.Count(r => string.Equals(r.Kind, "Expedition", StringComparison.OrdinalIgnoreCase));
@@ -168,6 +205,4 @@ public static class TodayLoot
         Add(r.Runs - r.Expeditions - r.Events, " run", " runs");
         return note;
     }
-
-    static int GradeRank(string g) => g switch { "Epic" => 4, "Unique" => 3, "Legend" => 2, "Rare" => 1, _ => 0 };
 }

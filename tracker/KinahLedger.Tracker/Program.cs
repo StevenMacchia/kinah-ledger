@@ -3312,6 +3312,14 @@ options: --process aion[,other]");
             "6/0 made 15, 0 unknown · 15 · tries ×1:5,×10:1 · \"15 made · 1 craft of ×10\"");
         Check("...and the feed carries the ten on its line", tnFeed, "Orichalcum Ingot worked | Orichalcum Ingot worked | Orichalcum Ingot worked | Orichalcum Ingot worked | Orichalcum Ingot worked | Orichalcum Ingot ×10 worked");
         Check("a recipe that makes one a craft has no made line", CraftLedger.MadeLine(new CraftLedger.Recipe { Name = "Orichalcum Guard", Ok = 4, Tries = { [1] = 4 }, Made = { ["Orichalcum Guard"] = 3, ["Splendent Orichalcum Guard"] = 1 } }), "");
+        // the loot slots' order (Steven, 2026-11-05: "u should be able to choose if organize by amount or quality"): by worth
+        // they stay as the side ranked them; by amount the most picked up first; by quality the best grade first, worth then
+        // amount breaking the ties; a saved choice that isn't a mode is worth
+        var lo = new[] { ("Fine Hide", 12L, 9000L, "Common"), ("Epic Blade", 1L, 0L, "Epic"), ("Rare Orb", 3L, 9000L, "Rare"), ("Greater Mana", 40L, 2000L, "") };
+        string Lo(string mode) => string.Join(",", LootOrder.Sorted(lo, mode, x => x.Item2, x => x.Item3, x => x.Item4, x => x.Item1).Select(x => x.Item1));
+        Check("loot order: worth as it came, amount most first, quality best grade first (worth, then amount, break ties)",
+            $"{Lo(LootOrder.Worth)} · {Lo(LootOrder.Amount)} · {Lo(LootOrder.Quality)} · {LootOrder.Of("by size")},{LootOrder.Of(null)},{LootOrder.Of("quality")}",
+            "Fine Hide,Epic Blade,Rare Orb,Greater Mana · Greater Mana,Fine Hide,Rare Orb,Epic Blade · Epic Blade,Rare Orb,Fine Hide,Greater Mana · worth,worth,quality");
         // a row refused for no second witness, then its chat line late: the line counts, once (Steven's Kukuru, 2026-10-24:
         // the cross-check took the late line for the refused row's duplicate and the pickup counted zero times)
         var sl = new TrackerSession(null, settings, items, "Test");
