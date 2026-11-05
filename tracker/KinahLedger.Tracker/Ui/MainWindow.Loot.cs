@@ -46,6 +46,47 @@ public partial class MainWindow
 
     void PickLoot(bool day) { _lootDay = day; _lootWeek = false; _drawnSig.Remove("loot"); FillLoot(); }
 
+    /// <summary>The order picked for the loot slots (LootOrder): worth unless the player chose amount or quality.</summary>
+    string LootSortMode => LootOrder.Of(_prefs.LootSort);
+
+    List<TodaySlot> SortSlots(IEnumerable<TodaySlot> l) => LootOrder.Sorted(l, LootSortMode, s => s.Count, s => s.Worth, s => _items.Get(s.Id)?.Grade ?? "", s => s.Name);
+    List<DropRow> SortRows(IEnumerable<DropRow> l) => LootOrder.Sorted(l, LootSortMode, r => Qty(r.Drops), r => r.Worth, r => r.Grade, r => r.Name);
+
+    /// <summary>The item slots as they were last drawn, in order, for options-test: a name, its count, its grade, and whether it is in the gathered group (ordered on its own).</summary>
+    internal List<(string Name, long Count, string Grade, bool Gathered)> LootOrderForTest { get; } = new();
+
+    /// <summary>For options-test: the order picked, as a click on its link.</summary>
+    internal void SetLootSortForTest(string mode) { _prefs.LootSort = mode; _drawnSig.Remove("loot"); _drawnSig.Remove("today"); FillToday(); }
+
+    /// <summary>
+    /// "Sort  worth · amount · quality", the one picked gold: a click keeps it (ui.json) and draws the slots again. Over
+    /// LOOT's slots on Farming and in the TODAY strip's heading on Events; shown once there are two slots to order.
+    /// </summary>
+    FrameworkElement SortLinks(string sigKey, Action redraw)
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var label = PT("Sort", "Muted", 11.5); label.Margin = new Thickness(0, 0, 7, 0); sp.Children.Add(label);
+        for (int i = 0; i < LootOrder.Modes.Length; i++)
+        {
+            var mode = LootOrder.Modes[i];
+            bool on = mode == LootSortMode;
+            if (i > 0) { var dot = PT("·", "Muted", 11.5); dot.Margin = new Thickness(5, 0, 5, 0); sp.Children.Add(dot); }
+            var t = PT(mode, on ? "Gold" : "Muted", 11.5, on ? FontWeights.SemiBold : null);
+            t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = LootOrder.Tip(mode); ToolTipService.SetInitialShowDelay(t, 400);
+            t.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (mode == LootSortMode) return; _prefs.LootSort = mode; SavePrefs(); _drawnSig.Remove(sigKey); redraw(); };
+            sp.Children.Add(t);
+        }
+        return sp;
+    }
+
+    /// <summary>The sort links on their own right-aligned row over LOOT's slots.</summary>
+    void LootSortRow()
+    {
+        var e = SortLinks("loot", FillLoot);
+        e.HorizontalAlignment = HorizontalAlignment.Right; e.Margin = new Thickness(0, 0, 0, 8);
+        LootHost.Children.Add(e);
+    }
+
     /// <summary>For options-test and the layout renders: LOOT on Today or on its first side.</summary>
     internal void PickLootForTest(bool day) => PickLoot(day);
 
@@ -77,8 +118,8 @@ public partial class MainWindow
             if (Changed("loot", "here-empty")) { LootHost.Children.Clear(); LootEmpty("Loot shows here as it's picked up. Today has what came in other zones."); }
             return;
         }
-        var drops = h.S.Drops.Where(r => !r.Header).ToList();
-        var gathered = h.S.Gathered.Where(r => !r.Header).ToList();
+        var drops = SortRows(h.S.Drops.Where(r => !r.Header));
+        var gathered = SortRows(h.S.Gathered.Where(r => !r.Header));
         var pets = h.S.Pets ?? new();
         long crystals = pets.Sum(r => Qty(r.Drops));
         int kinds = drops.Count + gathered.Count + (crystals > 0 ? 1 : 0);
@@ -86,10 +127,12 @@ public partial class MainWindow
         FootTotal.Text = h.Total > 0 ? Fk(h.Total) : " ";
         FootTotal.ToolTip = h.TotalTip;
         string Row(DropRow r) => $"{r.Name}:{r.Drops}:{r.DropPct}:{r.PerHour}:{r.Value}:{r.Reported}:{r.Grade}:{r.Sub}";
-        var sig = $"here|{LootHereName}|{h.Kinah}|{h.Abyss}|{h.Kills}|{crystals}|{string.Join(";", drops.Select(Row))}|{string.Join(";", gathered.Select(Row))}|"
+        var sig = $"here|{LootHereName}|{LootSortMode}|{h.Kinah}|{h.Abyss}|{h.Kills}|{crystals}|{string.Join(";", drops.Select(Row))}|{string.Join(";", gathered.Select(Row))}|"
             + $"{string.Join(",", h.ByEnemy.Take(6).Select(x => x.Where + x.Count))}|{string.Join(",", _todayAll)}|{Skins.Current}";
         if (!Changed("loot", sig)) return;
         LootHost.Children.Clear();
+        LootOrderForTest.Clear(); LootOrderForTest.AddRange(drops.Select(r => (r.Name, Qty(r.Drops), r.Grade, false)).Concat(gathered.Select(r => (r.Name, Qty(r.Drops), r.Grade, true))));
+        if (drops.Count + gathered.Count >= 2) LootSortRow();
         string where = _prefs.AllZones ? "since the tracker started" : RunShown ? "this run" : "here";
         var slots = new List<FrameworkElement>();
         if (h.Kinah > 0) slots.Add(KinahSlot(h.Kinah, h.ByEnemy, h.Kills > 0 ? $"{h.Kills:N0} kills · {Fk(h.Kinah / (double)h.Kills)} a kill" : "", "Picked up " + where, "BY ENEMY"));
@@ -119,7 +162,7 @@ public partial class MainWindow
         FootTotal.Text = made > 0 ? Fk(made) : " ";
         FootTotal.ToolTip = made <= 0 ? null : $"Made farming today{(_todayZone != null ? " in " + ZoneName(_todayZone) : ", every zone")}: Kinah plus drops and gathering at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
-        var sig = $"day|{_todayZone}|{string.Join(";", zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))}|{farm.Kinah}:{farm.Abyss}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|"
+        var sig = $"day|{_todayZone}|{LootSortMode}|{string.Join(";", zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))}|{farm.Kinah}:{farm.Abyss}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|"
             + $"{Slots(farm.Drops)}|{Slots(farm.Gathered)}|{string.Join(",", _todayAll)}|{Skins.Current}";
         if (!Changed("loot", sig)) return;
         LootHost.Children.Clear();
@@ -136,11 +179,14 @@ public partial class MainWindow
             LootHost.Children.Add(chips);
         }
         bool showWhere = _todayZone == null && whole.Zones.Count > 1;
+        var dayDrops = SortSlots(farm.Drops); var dayGathered = SortSlots(farm.Gathered);
+        LootOrderForTest.Clear(); LootOrderForTest.AddRange(dayDrops.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", false)).Concat(dayGathered.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", true))));
+        if (dayDrops.Count + dayGathered.Count >= 2) LootSortRow();
         var kills = new List<FrameworkElement>();
         if (farm.Kinah > 0) kills.Add(KinahSlot(farm.Kinah, farm.KinahWhere, farm.Kills > 0 ? $"{farm.Kills:N0} kills · {Fk(farm.Kinah / (double)farm.Kills)} a kill" : ""));
         if (farm.Abyss > 0) kills.Add(AbyssSlot(farm.Abyss, farm.Active, "today"));
-        foreach (var s in farm.Drops) kills.Add(ItemSlot(s, FarmOdds(s, farm.Kills, farm.Active), showWhere));
-        var gather = farm.Gathered.Select(s => ItemSlot(s, farm.Attempts > 0 ? ($"{s.Count / (double)farm.Attempts:0.00} a try", HourText(s.Count, farm.Active)) : ("", HourText(s.Count, farm.Active)), showWhere)).ToList();
+        foreach (var s in dayDrops) kills.Add(ItemSlot(s, FarmOdds(s, farm.Kills, farm.Active), showWhere));
+        var gather = dayGathered.Select(s => ItemSlot(s, farm.Attempts > 0 ? ($"{s.Count / (double)farm.Attempts:0.00} a try", HourText(s.Count, farm.Active)) : ("", HourText(s.Count, farm.Active)), showWhere)).ToList();
         // one group needs no heading; with both, each says what it is
         bool both = kills.Count > 0 && gather.Count > 0;
         if (kills.Count > 0) LootGroup("farm", kills, both ? "FROM KILLS" : "");

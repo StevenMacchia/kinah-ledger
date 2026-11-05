@@ -350,6 +350,21 @@ public static class WpfApp
         Check(day.Note.Contains("h") && day.Note.Contains("farming") && !day.Note.Contains(':') && day.Slots >= 10 && chips.Count == 4 && chips[0] == "All zones",
             $"LOOT, Today: \"{day.Note}\" {day.Total}, {day.Slots} slots, chips {string.Join(" / ", chips)}");
         Check(!chips.Any(c => c.Contains("Drana")) && chips.Skip(1).All(c => c.EndsWith(" min") || c.EndsWith(" h")), "no chip for a zone under a minute; each says its minutes");
+        // Sort  worth · amount · quality over the slots (Steven, 2026-11-05): by amount the counts fall along the slots, by
+        // quality the grades do; the slots are the same ones, and worth puts them back as they were
+        var byWorth = w.LootOrderForTest.ToList();
+        w.SetLootSortForTest(Session.LootOrder.Amount); DoEvents();
+        var byAmount = w.LootOrderForTest.ToList();
+        w.SetLootSortForTest(Session.LootOrder.Quality); DoEvents();
+        var byQuality = w.LootOrderForTest.ToList();
+        w.SetLootSortForTest(Session.LootOrder.Worth); DoEvents();
+        // the drops and the gathered items are two groups (FROM KILLS, GATHERED), each in order on its own
+        static bool Falls(List<(string Name, long Count, string Grade, bool Gathered)> l, Func<(string Name, long Count, string Grade, bool Gathered), long> f)
+            => l.GroupBy(x => x.Gathered).All(g => g.Zip(g.Skip(1)).All(p => f(p.First) >= f(p.Second)));
+        Check(byWorth.Count >= 10 && w.LootForTest().Slots == day.Slots && w.LootOrderForTest.SequenceEqual(byWorth)
+            && byAmount.Count == byWorth.Count && Falls(byAmount, x => x.Count) && !byAmount.SequenceEqual(byWorth)
+            && byQuality.Count == byWorth.Count && Falls(byQuality, x => Session.LootOrder.GradeRank(x.Grade)) && byQuality.Any(x => x.Grade.Length > 0),
+            $"LOOT, Today sorted: by amount {string.Join(" ", byAmount.Where(x => !x.Gathered).Select(x => x.Count))} then gathered {string.Join(" ", byAmount.Where(x => x.Gathered).Select(x => x.Count))}, by quality {string.Join(" ", byQuality.Where(x => !x.Gathered).Select(x => x.Grade.Length > 0 ? x.Grade : "-"))}, by worth as before");
         // History (0.9, Ui/MainWindow.Week.cs): LOOT's Week side draws the last seven days with today picked, today's bar the
         // Today side's total; a click on a past bar picks that day, its line and its zones
         w.PickLootWeekForTest(); DoEvents();
