@@ -1250,11 +1250,11 @@ public partial class MainWindow : Window
     void FillCraft(SessionEngine? e)
     {
         var rows = new List<DropRow>();
-        long spent = 0, worth = 0; int noBook = 0, noPrice = 0, tries = 0, ok = 0, recipes = 0;
+        long spent = 0, worth = 0; int noBook = 0, noPrice = 0, tries = 0, ok = 0, recipes = 0, itemsMade = 0;
         var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var r in e?.CraftSnapshot() ?? new())
         {
-            tries += r.Attempts; ok += r.Ok;
+            tries += r.Attempts; ok += r.Ok; itemsMade += r.MadeCount;
             long? cost = RecipeBook.CostOfTries(r.Name, r.Tries, out int unpricedMats, out int vendorMats, out int farmedMats, missing);
             // vendor materials with no NPC price are unpriced too: the cost is then the least a try costs
             int gaps = unpricedMats + vendorMats;
@@ -1272,12 +1272,13 @@ public partial class MainWindow : Window
             var book = RecipeBook.ForOutput(r.Name);
             var tip = "Click for the materials, what a craft costs and what it makes."
                 + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
+                + (r.MadeCount > 0 ? $"\n{r.MadeCount:N0} made." : "")
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
                 + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{Session.CraftLedger.ComboRollsLabel(r.Name)}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
                 + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "")
                 + (r.Unseen > 0 ? "\n" + Session.CraftLedger.UnseenNote(r) + "." : "");
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Ok.ToString("N0"), spentCell,
-                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip,
+                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip, Sub: Session.CraftLedger.MadeLine(r),
                 Price: madeKnown && made > 0 ? Fk(made) : "", PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : ""));
             recipes++;
             rows.AddRange(UpgradeRows(r, book));
@@ -1305,6 +1306,8 @@ public partial class MainWindow : Window
         if (tries > 0)
         {
             Fig(tries.ToString("N0")); CraftWhat.Inlines.Add(new Run($" craft{(tries == 1 ? "" : "s")} · ")); Fig(ok.ToString("N0")); CraftWhat.Inlines.Add(new Run(" worked"));
+            // what came out, when it isn't one item a craft (a ×10 craft is one craft, ten made)
+            if (itemsMade > ok) { CraftWhat.Inlines.Add(new Run(" · ")); Fig(itemsMade.ToString("N0")); CraftWhat.Inlines.Add(new Run(" made")); }
             if (spent > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(spent)); CraftWhat.Inlines.Add(new Run(" spent")); }
             if (worth > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(worth)); CraftWhat.Inlines.Add(new Run(" sells for")); }
         }

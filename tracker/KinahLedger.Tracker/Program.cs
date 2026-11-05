@@ -3287,6 +3287,31 @@ options: --process aion[,other]");
         for (int i = 0; i < 6; i++) hn.ProcessList(new List<(int, string)> { (1100, "Orichalcum Ingot x10") }, hw0.AddSeconds(2 + i * 0.4));
         Check("a craft finished under the crafting window counts from its pop-up, once; the first craft's pop-up isn't another; nothing after the next panel or with no queue",
             $"{hwa} · after the next panel {Ingots(hw)} · no queue {Ingots(hn)}", "2/0 made 20, 0 unknown · after the next panel 2/0 made 20, 0 unknown · no queue none");
+        // the ×10 recipe and the ×1 under one name (reads.log 2026-11-05 08:09, Steven: "the counter missed a ton of orichalcum
+        // crafts and the x10 didnt show up in the tracker for this session at all.. just in the feed"): one craft of
+        // "Orichalcum Ingot (Novice Lv. 25)" in a queue of 1, then a queue of five of "Orichalcum Ingot (Novice Lv. 1)". The
+        // ledger had 15 made under 6 crafts, and the Crafting tab showed the 6: the made count is a figure of its own now
+        var tn = new TrackerSession(null, settings, items, "Test");
+        tn.Engine.SetZone("Dawn Legion Base");
+        var tn0 = new DateTime(2026, 11, 5, 13, 9, 5, DateTimeKind.Utc);
+        tn.PanelLook(tn0, true, false, new[] { "Crafting in Progress 1 / 1", "Orichalcum Ingot (Novice Lv. 25)" });
+        for (int i = 1; i <= 10; i++) tn.PanelLook(tn0.AddSeconds(i * 0.4), true, false, new[] { "Crafting in Progress 1 / 1", "Orichalcum Ingot (Novice Lv. 25)" });
+        tn.PanelBars(tn0.AddSeconds(4.0), true, false);
+        for (int i = 0; i < 15; i++) tn.PanelLook(tn0.AddSeconds(6.0 + i * 0.4), false, false, null);
+        tn.PanelLook(tn0.AddSeconds(12.4), true, false, new[] { "Crafting in Progress O / 5", "Orichalcum Ingot (Novice Lv. 1)" });
+        for (int k = 1; k <= 5; k++)
+        {
+            double t = 12.4 + k * 7.0;
+            for (int i = 0; i < 8; i++) tn.PanelLook(tn0.AddSeconds(t - 4 + i * 0.4), true, false, new[] { $"Crafting in Progress {k} / 5", "Orichalcum Ingot (Novice Lv. 1)" });
+            tn.PanelBars(tn0.AddSeconds(t), true, false);
+        }
+        var tnRow = tn.CraftView.CraftSnapshot().FirstOrDefault(r => r.Name == "Orichalcum Ingot");
+        var tnFeed = string.Join(" | ", tn.Live.Recent(FeedTab.Crafting, 10).Select(l => l.Text));
+        Check("one craft of the ×10 ingot and five of the ×1: 6 crafts, 15 made, the tab's line says so",
+            $"{Ingots(tn)} · {tnRow?.MadeCount} · tries {string.Join(",", (tnRow?.Tries ?? new()).OrderBy(kv => kv.Key).Select(kv => $"×{kv.Key}:{kv.Value}"))} · \"{(tnRow == null ? "" : CraftLedger.MadeLine(tnRow))}\"",
+            "6/0 made 15, 0 unknown · 15 · tries ×1:5,×10:1 · \"15 made · 1 craft of ×10\"");
+        Check("...and the feed carries the ten on its line", tnFeed, "Orichalcum Ingot worked | Orichalcum Ingot worked | Orichalcum Ingot worked | Orichalcum Ingot worked | Orichalcum Ingot worked | Orichalcum Ingot ×10 worked");
+        Check("a recipe that makes one a craft has no made line", CraftLedger.MadeLine(new CraftLedger.Recipe { Name = "Orichalcum Guard", Ok = 4, Tries = { [1] = 4 }, Made = { ["Orichalcum Guard"] = 3, ["Splendent Orichalcum Guard"] = 1 } }), "");
         // a row refused for no second witness, then its chat line late: the line counts, once (Steven's Kukuru, 2026-10-24:
         // the cross-check took the late line for the refused row's duplicate and the pickup counted zero times)
         var sl = new TrackerSession(null, settings, items, "Test");
