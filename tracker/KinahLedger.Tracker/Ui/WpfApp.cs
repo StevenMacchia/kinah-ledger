@@ -755,6 +755,27 @@ public static class WpfApp
         {
             w.ShowDemo("Events"); DoEvents();
             bool stripOpen = w.TodayOpenForTest;
+            // the page's runs one at a time (Steven, 2026-11-05: "tell you what you got on every single run ... a menu at the
+            // top where you could drop down and choose to sort by it rather than it be so gigantic"): ALL RUNS over the places'
+            // cards, the first open and the rest folded; Best first falls by what each made; a click on a run opens its place
+            var rl = w.RunListForTest();
+            w.SetRunsSortForTest(Session.RunsOrder.Best); DoEvents();
+            var best = w.RunListForTest();
+            w.SetRunsSortForTest(Session.RunsOrder.Newest); DoEvents();
+            Check(rl.Runs >= 5 && rl.Pick == "Newest first" && rl.Open.Count == 1 && rl.Folded.Count >= 1 && best.Pick == "Best first" && best.Values.Zip(best.Values.Skip(1)).All(p => p.First >= p.Second) && !best.Values.SequenceEqual(rl.Values),
+                $"Events, ALL RUNS: {rl.Runs} runs, \"{rl.Pick}\", {rl.Open.Count} place open ({string.Join(",", rl.Open)}), {rl.Folded.Count} folded; best first {string.Join(" ", best.Values.Take(4).Select(v => v.ToString()))}");
+            var fold = rl.Folded[0];
+            w.TogglePlaceForTest(fold); DoEvents();
+            var rl2 = w.RunListForTest();
+            w.TogglePlaceForTest(fold); w.TogglePlaceForTest(rl.Open[0]); DoEvents();
+            var rl3 = w.RunListForTest();
+            Check(rl2.Open.Count == 2 && rl2.Open.Contains(fold) && rl3.Open.Count == 0 && rl3.Folded.Count == rl.Open.Count + rl.Folded.Count,
+                $"...a folded place opens on a click ({string.Join(",", rl2.Open)}) and the open one folds ({rl3.Folded.Count} folded)");
+            w.TogglePlaceForTest(rl.Open[0]); DoEvents();
+            w.ClickRunForTest(rl.Runs - 1); DoEvents();
+            var rl4 = w.RunListForTest();
+            Check(w.FixOpenForTest != null && rl4.Open.Count >= 1, $"...a click on the last run opens its place with the run's sheet: open {string.Join(",", rl4.Open)}, sheet {w.FixOpenForTest?.Split('|').Last()}");
+            w.SetRunsSortForTest(Session.RunsOrder.Newest); DoEvents();
             w.PickRunsWeekForTest(true); DoEvents();
             var rw = w.WeekForTest(runs: true);
             Check(w.TodayStrip.Visibility == Visibility.Visible && rw.Bars == 7 && rw.Picked == "Today" && rw.Line.StartsWith("TODAY") && w.TodayTitle.Text == "WEEK" && MainWindow.InlineText(w.TodayNote).Contains(" to "),
