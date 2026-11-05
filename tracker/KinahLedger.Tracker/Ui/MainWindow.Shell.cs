@@ -28,6 +28,8 @@ public sealed record OptionsChoice(
     public bool ShowGross { get; init; }
     /// <summary>Options › General › Show a recap when a run ends (2026-11-04, Ui/MainWindow.Recap.cs). On by default.</summary>
     public bool RunRecap { get; init; } = true;
+    /// <summary>Options › Game reading › Explain each count (2026-11-04): a counted line's card says why. Off by default.</summary>
+    public bool ExplainCounts { get; init; }
 }
 
 /// <summary>
@@ -259,7 +261,7 @@ public partial class MainWindow
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
-        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap };
+        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap, ExplainCounts = _prefs.ExplainCounts };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -312,6 +314,7 @@ public partial class MainWindow
         if (c.ShowGross != was.ShowGross) SetGross(c.ShowGross);
         _prefs.RunRecap = c.RunRecap;
         if (!c.RunRecap) _recapWaiting = null;   // off: a recap waiting for the window is dropped too
+        _prefs.ExplainCounts = c.ExplainCounts;   // the feeds redraw on the next tick: the switch is in DrawFeed's signature
         _prefs.ReportFrames = ReportBuffer.KeepFrames = c.ReportFrames;
         if (c.GearScore != was.GearScore) SetGearScore(c.GearScore);
         _prefs.SendReportFrames = ReportBuffer.KeepUiFrames = c.SendFrames;

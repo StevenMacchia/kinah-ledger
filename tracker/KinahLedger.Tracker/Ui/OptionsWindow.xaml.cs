@@ -109,6 +109,7 @@ public partial class OptionsWindow : Window
         CompareChk.IsChecked = c.Compare;
         GrossChk.IsChecked = c.ShowGross;
         RecapChk.IsChecked = c.RunRecap;
+        ExplainChk.IsChecked = c.ExplainCounts;
         GrossHint.Text = $"Values and profit show after the Market's {Data.PriceBook.FeeRate:P0} fee and tax by default. Turn this on to see what things sell for before it.";
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
@@ -238,6 +239,7 @@ public partial class OptionsWindow : Window
         CompareChk.Click += (_, _) => Edit(_edit with { Compare = CompareChk.IsChecked == true });
         GrossChk.Click += (_, _) => Edit(_edit with { ShowGross = GrossChk.IsChecked == true });
         RecapChk.Click += (_, _) => Edit(_edit with { RunRecap = RecapChk.IsChecked == true });
+        ExplainChk.Click += (_, _) => Edit(_edit with { ExplainCounts = ExplainChk.IsChecked == true });
         RegionPick.SelectionChanged += (_, _) =>
         {
             if (_loading || RegionPick.SelectedItem is not GameRegion r) return;
