@@ -42,6 +42,7 @@ public sealed class RowItem : INotifyPropertyChanged
     public string Price => _row.Price;
     public string Value => _row.Value;
     public string Sub => _row.Sub;
+    public string Under => _row.Under;
     public string SubShown => _row.SubShown;
     public string Tone => _row.Tone;
     public string Key => _row.Key;

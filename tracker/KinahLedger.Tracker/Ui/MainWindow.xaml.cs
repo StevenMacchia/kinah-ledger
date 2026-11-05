@@ -18,7 +18,7 @@ namespace KinahLedger.Ui;
 /// <summary>One table row. Icon is the item's icon slot (filled as the file arrives) and Initial the letter shown until then; both empty on a header row.</summary>
 /// <param name="Tip">How the row was read or worked out, shown on hover only; the line under the name gets a ⓘ when there is one.</param>
 /// <param name="Worth">The row's tradeable copies at the lowest Market price, before the fee: what Top drops and the Discord card rank by.</param>
-public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false, string Report = "", bool Reported = false, string Tip = "", long Worth = 0, string PriceTone = "", string PriceTip = "", bool Mat = false)
+public sealed record DropRow(string Name, string Drops, string DropPct, string PerHour, bool Header = false, string Grade = "", IconSlot? Icon = null, string Initial = "", string Price = "", string Value = "", string Sub = "", string Tone = "", string Key = "", bool Child = false, string Report = "", bool Reported = false, string Tip = "", long Worth = 0, string PriceTone = "", string PriceTip = "", bool Mat = false, string Under = "")
 {
     /// <summary>The row's report link: "Report" flags the drop so the site never gets it; "Undo" takes the flag off.</summary>
     public string ReportText => Reported ? "Undo" : "Report";
@@ -1270,15 +1270,17 @@ public partial class MainWindow : Window
             var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
             var book = RecipeBook.ForOutput(r.Name);
+            // what came out and what it sells for, so a loss reads against the whole yield (Steven, 2026-11-05: 40 ingots from
+            // 4 crafts of the ×10 recipe, "shows as if only 4 were made with a loss of 151k")
             var tip = "Click for the materials, what a craft costs and what it makes."
                 + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
-                + (r.MadeCount > 0 ? $"\n{r.MadeCount:N0} made." : "")
+                + (r.MadeCount > 0 ? $"\n{r.MadeCount:N0} made" + (madeKnown && made > 0 ? $", selling for {Fk(made)} at the lowest Market ask, {PriceBook.Cut}." : ".") : "")
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
                 + (r.Upgraded + r.NotUpgraded > 0 ? $"\n{Session.CraftLedger.ComboRollsLabel(r.Name)}: {r.Upgraded} of {r.Upgraded + r.NotUpgraded} won." : "")
                 + (r.MadeUnknown > 0 ? $"\n{r.MadeUnknown} success{(r.MadeUnknown == 1 ? "" : "es")} whose yield the panel didn't show." : "")
                 + (r.Unseen > 0 ? "\n" + Session.CraftLedger.UnseenNote(r) + "." : "");
             rows.Add(new DropRow(r.Name, r.Attempts.ToString("N0"), r.Ok.ToString("N0"), spentCell,
-                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip, Sub: Session.CraftLedger.MadeLine(r),
+                Initial: InitialOf(r.Name), Icon: Slot(_items.IdOf(r.Name)), Grade: _items.Get(_items.IdOf(r.Name))?.Grade ?? "", Key: "craft:" + r.Name, Tip: tip, Under: Session.CraftLedger.MadeLine(r),
                 Price: madeKnown && made > 0 ? Fk(made) : "", PriceTone: sellsCell.Tone, PriceTip: sellsCell.Tip, Value: profitCell, Tone: profit is long t ? (t >= 0 ? "Good" : "Bad") : ""));
             recipes++;
             rows.AddRange(UpgradeRows(r, book));
