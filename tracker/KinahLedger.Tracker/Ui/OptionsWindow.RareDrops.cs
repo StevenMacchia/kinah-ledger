@@ -13,7 +13,8 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// Options › In game › Rare drops (2026-10-26, kinah-bench/mock-hud-next f1-options): the watch list ("These always
 /// alert, whatever their grade") as item tiles with a × each, an "Add item…" box that completes names from the item
-/// list, and the chime: on or off, its volume and Play to hear it. Built here and added as the page's last group, on
+/// list, and the chime: on or off, its volume and a Play for each of the tracker's three sounds (a drop, a price alert,
+/// an update ready; 2026-11-04). Built here and added as the page's last group, on
 /// the page's preview-then-Save model: nothing changes until Save, Cancel drops the edits (Play is only a preview).
 /// </summary>
 public partial class OptionsWindow
@@ -26,7 +27,13 @@ public partial class OptionsWindow
     StackPanel _watchSuggest = null!;
     CheckBox _chimeChk = null!;
     Slider _chimeVol = null!;
-    Button _chimePlay = null!;
+    readonly List<Button> _soundPlays = new();
+
+    /// <summary>The Play buttons under the volume: their label, the sound's name (MainWindow.PlaySound) and what it is.</summary>
+    static readonly (string Label, string Sound, string What)[] SoundPlays =
+    {
+        ("Drop", "chime", "the drop chime"), ("Price alert", "alert", "the price alert"), ("Update ready", "ready", "the update-ready sound"),
+    };
     readonly Dictionary<string, Button> _watchRemove = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Load: the saved watch list and chime into the group (built the first time).</summary>
@@ -77,10 +84,23 @@ public partial class OptionsWindow
         AutomationProperties.SetName(_chimeVol, "Chime volume");
         _chimeVolLbl = new TextBlock { FontSize = 12.5, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Width = 40, VerticalAlignment = VerticalAlignment.Center };
         _chimeVolLbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
-        _chimePlay = new Button { Content = "Play", Height = 30, Padding = new Thickness(14, 0, 14, 0), Margin = new Thickness(6, 0, 0, 0), ToolTip = "Hear the chime at this volume" };
-        AutomationProperties.SetName(_chimePlay, "Play the chime");
-        var volRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0), Children = { SpeakerIcon(), _chimeVol, _chimeVolLbl, _chimePlay } };
+        var volRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0), Children = { SpeakerIcon(), _chimeVol, _chimeVolLbl } };
         chime.Children.Add(volRow);
+        // three sounds now, one each for a drop, a price alert and an update ready (Steven, 2026-11-04): a Play for each
+        // on one row under the slider, at its volume
+        var plays = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(26, 10, 0, 0) };
+        var playsLbl = new TextBlock { Text = "Play", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        playsLbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        plays.Children.Add(playsLbl);
+        foreach (var (label, sound, what) in SoundPlays)
+        {
+            var b = new Button { Content = label, Height = 28, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 6, 0), ToolTip = $"Hear {what} at this volume", Tag = sound };
+            AutomationProperties.SetName(b, $"Play {what}");
+            b.Click += (_, _) => _host.PlaySound(sound, _chimeVol.Value);   // a preview: nothing is kept
+            _soundPlays.Add(b);
+            plays.Children.Add(b);
+        }
+        chime.Children.Add(plays);
         stack.Children.Add(chime);
 
         var group = Styled(new Border { Child = stack }, "Group");
@@ -98,7 +118,6 @@ public partial class OptionsWindow
             if (_loading) return;
             Edit(_edit with { RareVolume = Math.Round(_chimeVol.Value, 2) });
         };
-        _chimePlay.Click += (_, _) => _host.PlayChime(_chimeVol.Value);   // a preview: nothing is kept
     }
 
     /// <summary>The volume follows the switch: greyed while the chime is off (Play still plays it).</summary>
@@ -304,6 +323,10 @@ public partial class OptionsWindow
         o.Go(Page.InGame);
         check(o._rareLabel != null && o.PageInGame.Children.IndexOf(o._rareLabel) == o.PageInGame.Children.Count - 2, "Rare drops is the In game page's last group");
         check(o._chimeChk.IsChecked == chimeBefore && Math.Abs(o._chimeVol.Value - volBefore) < 0.01, "the chime opens as saved");
+        check(o._soundPlays.Select(b => b.Content as string).SequenceEqual(new[] { "Drop", "Price alert", "Update ready" })
+              && o._soundPlays.Select(b => b.Tag as string).SequenceEqual(new[] { "chime", "alert", "ready" }) && o._soundPlays.All(b => b.Parent == o._soundPlays[0].Parent),
+            "three Play buttons on one row: Drop, Price alert, Update ready");
+        check(new[] { "chime", "alert", "ready" }.All(MainWindow.SoundEmbedded), "the three sounds are in the build");
         int tiles = o._watchHost.Children.Count;
         o._watchBox.Text = "spiritst";
         check(o._watchSuggest.Children.OfType<Button>().FirstOrDefault()?.Tag as string == item, "a typed name is offered from the item list: " + string.Join(", ", o._watchSuggest.Children.OfType<Button>().Select(b => b.Tag)));

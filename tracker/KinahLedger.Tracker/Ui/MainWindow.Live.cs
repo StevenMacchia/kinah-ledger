@@ -83,6 +83,11 @@ public partial class MainWindow
         ? _demoFeed.Where(l => l.Tab == tab).OrderByDescending(l => l.At).Take(LiveFeed.Shown).ToList()
         : _watcher.Chat?.Live.Recent(tab) ?? new();
 
+    /// <summary>The newest Crafting lines of one recipe (its card's Last tries), from the whole feed kept, not just the five shown.</summary>
+    List<FeedLine> CraftTries(string recipe, int n) =>
+        (_demo ? _demoFeed.Where(l => l.Tab == FeedTab.Crafting).OrderByDescending(l => l.At).ToList() : _watcher.Chat?.Live.Recent(FeedTab.Crafting, LiveFeed.Keep) ?? new())
+            .Where(l => l.Kind == "craft" && string.Equals(l.Name, recipe, StringComparison.OrdinalIgnoreCase)).Take(n).ToList();
+
     /// <summary>What each feed host drew last, so a tick that changes nothing redraws nothing (and the newest line fades in only when it is new).</summary>
     readonly Dictionary<Panel, (string Sig, DateTime Newest)> _feedDrawn = new();
 
@@ -144,7 +149,7 @@ public partial class MainWindow
         Grid.SetColumn(v, 3); g.Children.Add(v);
         var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
         b.SetResourceReference(Border.BorderBrushProperty, "Line");
-        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Click if it's wrong." : "Click if it's wrong.";
+        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " Click to see why, or to report it." : "Click to see why, or to report it.";
         ToolTipService.SetInitialShowDelay(b, 400);
         if (newest)
         {
@@ -430,9 +435,15 @@ public partial class MainWindow
         else if (c.LastError.Length > 0) { text = "The game can't be read right now: " + c.LastError + " "; link = true; }
         else if (c.Paused.Length > 0) text = "Paused: the chat is out of view. Counting picks up when it shows again.";
         else text = "Ready. Pick something up and it shows here, newest first.";
-        var sig = text + (link ? "|link" : "");
+        // a new player's checklist (Ui/MainWindow.Onboard.cs) says the game and the chat itself, so only a read problem or a
+        // pause stays above it: reading problems must stay in view
+        var steps = OnboardSteps();
+        if (steps != null && !(c != null && c.ChatFound && (c.LastError.Length > 0 || c.Paused.Length > 0))) { text = ""; link = false; }
+        var sig = text + (link ? "|link" : "") + "|" + OnboardSig(steps);
         if (sig == _feedEmptySig) return;
         _feedEmptySig = sig;
+        DrawOnboard(steps);
+        FeedEmpty.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         FeedEmpty.Inlines.Clear();
         FeedEmpty.Inlines.Add(new Run(text));
         if (link)
@@ -477,7 +488,7 @@ public partial class MainWindow
     /// <summary>The Farming feed: pickups with their worth, Kinah with the enemy it was credited to, gathers.</summary>
     void FillLive()
     {
-        DrawFeed(FeedHost, FeedEmpty, FeedFor(FeedTab.Farming), FeedTab.Farming, PickupValue);
+        DrawFeed(FeedHost, FeedEmptyBox, FeedFor(FeedTab.Farming), FeedTab.Farming, PickupValue);
         FillFeedEmpty();
         // the hint under the feed stays hidden (2026-10-28): its words are the feed's hover, its action ⋯ › A pickup is missing;
         // the line a marked row's Undo takes still goes where it stood (ShowMarkLine)
@@ -729,6 +740,16 @@ public partial class MainWindow
         _card.IsOpen = true;
     }
 
+    /// <summary>A line's reason as the card shows it: its own, else up to four notes from within 3 s of it (time stripped), else where the full trail is.</summary>
+    internal static List<string> WhyLines(FeedLine line)
+    {
+        if (line.Why.Length > 0) return new() { Capital(line.Why) };
+        var near = CrashLog.NotesNear(line.At, 3).TakeLast(4).Select(n => Capital(n.Text)).ToList();
+        return near.Count > 0 ? near : new() { "No note for this one. The reads log has the full trail: Options › About › Open logs." };
+    }
+
+    static string Capital(string s) => s.Length > 0 && char.IsLower(s[0]) ? char.ToUpperInvariant(s[0]) + s[1..] : s;
+
     internal Border BuildLineReport(FeedLine? line, FeedTab tab, string label, string note = "")
     {
         var (card, body) = CkShell(420);
@@ -743,6 +764,10 @@ public partial class MainWindow
             var v = CkText(val.Text, val.Muted ? CkFaint : CkGold, 12.5, mono: true); Grid.SetColumn(v, 2); g.Children.Add(v);
             body.Children.Add(CkBox(g, new Thickness(20, 0, 20, 0)));
             if (ViaTip(line.Via) is { Length: > 0 } how) { var n = CkNote(how); n.Margin = new Thickness(20, 6, 20, 0); body.Children.Add(n); }
+            // why it was counted, in the reads log's own words (Steven, 2026-11-04: he found the day's miscounts by reading
+            // reads.log for these; the line says it now). A line with no reason of its own offers the notes written around it.
+            body.Children.Add(CkSection("WHY IT WAS COUNTED"));
+            foreach (var w in WhyLines(line)) body.Children.Add(CkNote(w));
         }
         // the choices: one is picked; Missing a pickup sits apart at the bottom
         var picks = new WrapPanel { Margin = new Thickness(20, 12, 20, 0) };
@@ -853,6 +878,10 @@ public partial class MainWindow
         HudCraftValues();  // the Card's and the Ticker's crafting line while the crafting window is open (MainWindow.HudCraft.cs)
     }
 
+    /// <summary>A queue's count against its size, "3/10", while it runs or for CraftLedger.PanelSeconds after; "" otherwise or with its size unread.</summary>
+    internal static string QueueShort(TrackerSession.CraftQueueView? q) =>
+        q is { Of: > 0 } && (q.Open || q.EndedAt is DateTime end && (DateTime.UtcNow - end).TotalSeconds <= CraftLedger.PanelSeconds) ? $"{q.Done}/{q.Of}" : "";
+
     Dictionary<string, string> HudFeedValues(FeedLine? l, string flag)
     {
         var d = new Dictionary<string, string> { ["flag"] = flag, ["feedText"] = "", ["feedValue"] = "", ["feedRate"] = "", ["feedUnit"] = "" };
@@ -862,6 +891,8 @@ public partial class MainWindow
         if (l == null) { d["feedRate"] = hour; d["feedUnit"] = hourUnit; return d; }
         var (bold, plain, small) = FeedWords(l);
         d["feedText"] = l.Kind == "craft" ? $"{bold}{plain} {small}" : l.Kind == "kinah" ? bold : $"{bold}{(l.Amount > 1 ? plain : "")}";
+        // the queue under way beside a craft: "· 3/10" (Steven, 2026-11-04: a miss should show while it happens)
+        if (l.Tab == FeedTab.Crafting && !_demo && QueueShort(_watcher.Chat?.CraftQueue) is { Length: > 0 } qs) d["feedText"] += " · " + qs;
         d["feedValue"] = (l.Tab == FeedTab.Crafting ? CraftValue(l) : PickupValue(l)).Text;
         (d["feedRate"], d["feedUnit"]) = l.Tab switch
         {

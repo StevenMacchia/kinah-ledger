@@ -12,7 +12,7 @@ namespace KinahLedger.Ui;
 /// Price alerts on the cards (0.8.12): a "Price alert" section on every drop and recipe card sets one alert per item on
 /// the player's server, below or above a price. Every ten seconds the window checks the prices it already has (the
 /// server's board, refreshed every 15 minutes, and asks read on the Market on this PC) and a crossing shows a Windows
-/// notice from the tray icon, with the chime the rare-drop alert uses, and (since Focus Assist and Game Mode hold tray
+/// notice from the tray icon, with its own knock (alert.wav, at the rare-drop chime's volume; 2026-11-04), and (since Focus Assist and Game Mode hold tray
 /// notices back during a game) the panel's notice line and the window's status line for 8 s. The list is in Options › Server.
 /// </summary>
 public partial class MainWindow
@@ -31,7 +31,7 @@ public partial class MainWindow
             var title = $"{a.Item} is {price:N0} on {s.Name}";
             var text = $"{(a.Above ? "Above" : "Below")} your {a.Price:N0} alert. Lowest ask{(PriceBook.SourceOf(a.Item) == PriceBook.From.Market ? ", read on this PC" : " on the server's board")}.";
             try { _tray.ShowBalloonTip(8000, title, text, WF.ToolTipIcon.Info); } catch (Exception ex) { CrashLog.Write("price alert", ex); }
-            if (fired.Count == 0) Chime();
+            if (fired.Count == 0) AlertSound();
             fired.Add(title);
             CrashLog.Note($"price alert: {title} ({text})");
         }

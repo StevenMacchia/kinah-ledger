@@ -17,7 +17,9 @@ public enum FeedTab { Farming, Crafting, Events }
 /// <param name="Via">How it was read (GameEvent.Via): "chat", "loot list", "reward table", "crafting panel".</param>
 /// <param name="Where">The activity it landed in (Activity.Label): "Farming · Western Cantas Valley", "Expedition · Urugugu Canyon".</param>
 /// <param name="Combo">For a craft: the line is the combo roll after a craft (won when Ok), not a craft of its own.</param>
-public sealed record FeedLine(DateTime At, FeedTab Tab, string Kind, string Name, long Amount, string Enemy = "", bool Ok = true, string Via = "", string Where = "", long ItemId = 0, bool Bound = false, int Makes = 0, bool Combo = false)
+/// <param name="Why">Why it was counted, in the reads log's words ("success bar 99%, fail bar 84%; the queue's count at 3 / 10"), "" when
+/// the place that counted it had none (the line's card then offers the notes written around its time, CrashLog.NotesNear).</param>
+public sealed record FeedLine(DateTime At, FeedTab Tab, string Kind, string Name, long Amount, string Enemy = "", bool Ok = true, string Via = "", string Where = "", long ItemId = 0, bool Bound = false, int Makes = 0, bool Combo = false, string Why = "")
 {
     /// <summary>The line in plain words, as a miscount report files it: "1,192 Kinah · Cantas Raider", "Spiritstone ×1", "Orichalcum Greaves failed".</summary>
     public string Text => Kind switch
@@ -70,6 +72,24 @@ public sealed class LiveFeed
     }
 
     public void Clear() { lock (_lock) _lines.Clear(); }
+
+    /// <summary>
+    /// Replaces the newest line that <paramref name="match"/> picks with what <paramref name="change"/> makes of it (a line
+    /// is a record: the list's entry is swapped, never changed in place), for a count corrected after its line was drawn: the
+    /// x2 pop-up that says a pasta's combo was won. False when no line matched. The sink isn't told: it keeps what was added.
+    /// </summary>
+    public bool Amend(Func<FeedLine, bool> match, Func<FeedLine, FeedLine> change)
+    {
+        lock (_lock)
+        {
+            int best = -1;
+            for (int i = 0; i < _lines.Count; i++)
+                if (match(_lines[i]) && (best < 0 || _lines[i].At >= _lines[best].At)) best = i;
+            if (best < 0) return false;
+            _lines[best] = change(_lines[best]);
+            return true;
+        }
+    }
 
     /// <summary>
     /// The tab an activity label belongs to: a run's (event, expedition, arena, legion, world boss) is Events, the

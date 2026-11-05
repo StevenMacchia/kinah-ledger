@@ -449,8 +449,12 @@
                 <Grid>
                   <StackPanel x:Name="FeedHost"/>
                   <!-- what the empty feed waits for, from the reader (FillFeedEmpty): the game, the chat, or the first pickup -->
-                  <TextBlock x:Name="FeedEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="12,10,12,10" TextWrapping="Wrap"
-                             Text="Ready. Pick something up and it shows here, newest first."/>
+                  <!-- and while a new player sets up, the first-session checklist under it (Ui/MainWindow.Onboard.cs, 2026-11-04) -->
+                  <StackPanel x:Name="FeedEmptyBox">
+                    <TextBlock x:Name="FeedEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="12,10,12,10" TextWrapping="Wrap"
+                               Text="Ready. Pick something up and it shows here, newest first."/>
+                    <StackPanel x:Name="FeedOnboard" Margin="12,8,12,8" Visibility="Collapsed"/>
+                  </StackPanel>
                 </Grid>
               </Border>
               <!-- kept as the place a marked line's Undo goes; the hint itself moved to the feed's hover and ⋯ (2026-10-28) -->
@@ -802,6 +806,8 @@
           <Grid Margin="20,16,20,16">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="200"/></Grid.ColumnDefinitions>
             <StackPanel>
+              <!-- the queue under way: "3 of 10 · 2 worked · 1 unsure" (Steven, 2026-11-04: a miss should show while it happens) -->
+              <TextBlock x:Name="CraftQueueNow" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
               <Border CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource Line}" Background="{DynamicResource Slot}" Padding="0,4" ClipToBounds="True">
                 <Grid>
                   <StackPanel x:Name="CraftFeedHost"/>

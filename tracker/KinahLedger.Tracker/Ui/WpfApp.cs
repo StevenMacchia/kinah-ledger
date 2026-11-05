@@ -230,6 +230,25 @@ public static class WpfApp
         // Options › In game › Rare drops (2026-10-26): the watch list and the chime wait for Save, and a watched Common item alerts
         OptionsWindow.SelfTestRareDrops(w, Open, Check);
 
+        // Options › General › Show a recap when a run ends (2026-11-04): on by default, kept on Save, back on again
+        o = Open();
+        Check(o.RecapChk.IsChecked == true && p.RunRecap, "Show a recap when a run ends: on by default");
+        Flip(o.RecapChk);
+        Check(o.SaveBtn.IsEnabled && p.RunRecap, "the recap switch waits for Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(!p.RunRecap, "recap turned off and saved");
+        o = Open();
+        Check(o.RecapChk.IsChecked == false, "Options opens with the recap off");
+        Flip(o.RecapChk);
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(p.RunRecap, "recap back on");
+        Check(w.SampleRecapCard() is System.Windows.Controls.Border, "the recap card builds");
+
+        // Options › Shortcuts & tips (2026-11-04): the three groups, the tips, the start/stop key as it is now
+        OptionsWindow.SelfTestTips(w, Open, Check);
+
         // the panel's opacity and size: shown on the panel as the sliders move, kept on Save, put back by Cancel
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
@@ -577,6 +596,16 @@ public static class WpfApp
             var cpicks = CraftKit.Crafts(cv);
             Check(cpicks.Count == 4 && CraftKit.IsCombo(cpicks[2]) && CraftKit.Worked(cpicks[2]) && cpicks[2].Note == comboWord && !CraftKit.IsCombo(cpicks[0]) && cpicks.Count(CraftKit.IsCombo) == 1,
                 $"panel crafting: the looks read the roll as worked, noted \"{cpicks.ElementAtOrDefault(2)?.Note}\"");
+            // the queue under way (2026-11-04): its line under the recipe on the Card, "10 of 12 · ..." from the sample queue
+            var qtext = MainWindow.HudCraftSampleQueue().Text;
+            var cardVals = w.HudCraftLookStates().First(s => s.Look == HudLooks.Card).Values;
+            var qcard = new HudCard { Still = true };
+            qcard.Update(cardVals);
+            static IEnumerable<System.Windows.Controls.TextBlock> Texts(DependencyObject o) =>
+                (o is System.Windows.Controls.TextBlock tb ? new[] { tb } : Enumerable.Empty<System.Windows.Controls.TextBlock>()).Concat(LogicalTreeHelper.GetChildren(o).OfType<DependencyObject>().SelectMany(Texts));
+            var shown = Texts(qcard.Root).FirstOrDefault(t => t.Text == qtext);
+            Check(C("craftQueue") == "1" && C("craftQueueText") == qtext && shown is { Visibility: Visibility.Visible },
+                $"panel crafting: the Card shows the queue under way, \"{C("craftQueueText")}\"{(shown == null ? " (not drawn)" : shown.Visibility != Visibility.Visible ? " (hidden)" : "")}");
         }
 
         // the Ticker's top drop (2026-10-26): the most valuable one of an item wins over a stack of cheap ones; blank with nothing priced
@@ -883,7 +912,7 @@ public static class WpfApp
         if (compact) w.ShowCompact();
         if (full) w.ShowFull();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
-        // KL_SHOT_STATE=run|paused|stopped|empty (2026-10-28): the Farming page's other states, each its own "-<state>" render
+        // KL_SHOT_STATE=run|paused|stopped|empty|onboard (2026-10-28; onboard 2026-11-04): the Farming page's other states, each its own "-<state>" render
         // and KL_SHOT_STATE=week|week-new (0.9): LOOT's Week side; with --events, week is the Events strip's Week side
         var shotState = demo && kind is "Open world" or "Events" ? Environment.GetEnvironmentVariable("KL_SHOT_STATE") ?? "" : "";
         // and KL_SHOT_STATE=share-session|share-run|share-week|share-picture (0.9.3): the Share sheet open; with --events, share-run
@@ -942,6 +971,8 @@ public static class WpfApp
         if (demo) w.ShotPlayerCards(dir, kind);
         // a tapped feed line's report sheet (direction C), for a farming render
         if (demo && kind == "Open world") w.ShotLineReport(Path.Combine(dir, "ui-line-report.png"));
+        // the run-end recap (2026-11-04, Ui/MainWindow.Recap.cs), for a sample run
+        if (demo && kind == "Open world") w.ShotRecapCard(Path.Combine(dir, "ui-recap.png"));
         // the Today strip's hover cards (0.8.50): a farming drop's and the Kinah's
         if (demo && kind == "Open world") w.ShotTodayCards(dir);
         // and on the Events page, a run reward's (0.8.51: each page's strip shows its own day)

@@ -271,7 +271,9 @@ public partial class MainWindow
             case "stopped":
                 SayOnLine("Run stopped (00:42:17 · 632K Kinah · 161 kills) and shared anonymously. Saved to your history (12 runs). Still counting.", "Good");
                 break;
+            // "onboard" (2026-11-04): the empty feed with a new player's checklist, halfway through (Ui/MainWindow.Onboard.cs)
             case "empty":
+            case "onboard":
                 _demoEngine = new SessionEngine(_items); _demoElapsed = TimeSpan.FromSeconds(40);
                 _demoFeed.RemoveAll(l => l.Tab == FeedTab.Farming);
                 _demoDay = null; _demoScore = null; _rateLine.Clear(); _demoDays = null;
@@ -303,6 +305,7 @@ public partial class MainWindow
         }
         _drawnSig.Remove("loot");
         Redraw();
+        if (state == "onboard") ShowOnboardSample(true);
         if (state == "paused" && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
         // Share (0.9.3): the sheet open on This session, Last run or This week; share-picture also draws the pictures themselves
         if (state.StartsWith("share-")) OpenShareSample(state);

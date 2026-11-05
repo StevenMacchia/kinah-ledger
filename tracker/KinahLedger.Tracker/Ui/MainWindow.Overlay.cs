@@ -160,6 +160,7 @@ public partial class MainWindow
         if (look == HudLooks.Ticker) { _hudPrefs.TickerX = x; _hudPrefs.TickerY = y; if (!_demo) _hudPrefs.Save(); }
         else { _prefs.HudX = x; _prefs.HudY = y; if (!_demo) _prefs.Save(); }
         _hudSpotPreview = false;
+        MarkPanelPlaced();   // the first-session checklist's "Panel placed"
         if (_hud != null && look == HudLook) { _hud.Left = x; _hud.Top = y; }
         Say("Panel placed. Place it again any time from the tray menu or Options › In game.", "Good");
     }

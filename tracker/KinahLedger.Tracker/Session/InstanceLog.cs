@@ -1072,6 +1072,13 @@ public sealed class InstanceLog
     /// <summary>The world boss's loot window is over: its run closes. Any other open run is left alone.</summary>
     public void EndBoss() { lock (_lock) if (_cur?.Kind == WorldBoss) CloseLocked("its loot window is over"); }
 
+    /// <summary>
+    /// A kept run has just closed (never a false run or one with no loot): the window's recap card (Steven, 2026-11-04,
+    /// Ui/MainWindow.Recap.cs). Called under the log's lock on the reader's thread, so a handler only queues its work
+    /// (Dispatcher.BeginInvoke) and never calls back into the log from there.
+    /// </summary>
+    public Action<InstanceRun>? RunClosed { get; set; }
+
     void CloseLocked(string why)
     {
         ResetEdgesLocked();
@@ -1105,6 +1112,7 @@ public sealed class InstanceLog
             _unshared.Add(_cur);
             try { File.AppendAllText(PathOf, JsonSerializer.Serialize(_cur) + "\n"); } catch (Exception) { /* a read-only profile keeps it for this session */ }
             CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run done: {_cur.Label}, {TimeSpan.FromSeconds(_cur.Seconds):m\\:ss}, {_cur.Kinah:N0} Kinah, {PiecesNote(_cur)}{(_cur.PartlyRead ? $", partly read: {_cur.SlotsUnread} slot(s) not read" : "")} ({why}; {_cur.Witnesses})");
+            try { RunClosed?.Invoke(_cur); } catch (Exception ex) { CrashLog.Write("run closed", ex); }
         }
         else if (_cur != null) CrashLog.Note($"{_cur.Kind.ToLowerInvariant()} run closed with no loot, not kept: {_cur.Label} ({why})");
         _cur = null; _byMinimap = false;

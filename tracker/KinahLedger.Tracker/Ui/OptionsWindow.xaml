@@ -109,6 +109,15 @@
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Show a recap when a run ends"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="A card with the run's time, Kinah, loot and best drop when you stop a run or an expedition ends. Never over the game: it waits until you open the window."/>
+                </StackPanel>
+                <CheckBox x:Name="RecapChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Close button keeps it running"/>
                   <TextBlock Style="{StaticResource RowHint}" Text="Closing the window sends Kinah Ledger to the tray, so it can open with the game. Quit from the tray icon's menu."/>
                 </StackPanel>
@@ -461,6 +470,27 @@
                 </StackPanel>
               </Grid>
             </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Shortcuts & tips (2026-11-04): the keys, where they work, and things a new player doesn't find on their own; rows built in OptionsWindow.Tips.cs -->
+        <StackPanel x:Name="PageTips" Visibility="Collapsed">
+          <TextBlock Style="{StaticResource PageTitle}" Text="Shortcuts &amp; tips"/>
+          <TextBlock Style="{StaticResource PageLead}" Text="The keys, where they work, and a few things that are easy to miss."/>
+
+          <TextBlock x:Name="TipsGameLabel" Style="{StaticResource GroupLabel}" Text="IN GAME (ANYWHERE)"/>
+          <Border Style="{StaticResource Group}">
+            <StackPanel x:Name="TipsGame"/>
+          </Border>
+
+          <TextBlock x:Name="TipsWindowLabel" Style="{StaticResource GroupLabel}" Text="IN THIS WINDOW"/>
+          <Border Style="{StaticResource Group}">
+            <StackPanel x:Name="TipsWindow"/>
+          </Border>
+
+          <TextBlock x:Name="TipsKnowLabel" Style="{StaticResource GroupLabel}" Text="DID YOU KNOW"/>
+          <Border Style="{StaticResource Group}">
+            <StackPanel x:Name="TipsKnow"/>
           </Border>
         </StackPanel>
 

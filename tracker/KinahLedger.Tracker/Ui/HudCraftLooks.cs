@@ -102,7 +102,7 @@ public sealed partial class HudCard
     Ellipse _cDot = null!;
     TextBlock _cTime = null!, _cRecipe = null!, _cNewest = null!, _cFigs = null!, _cSells = null!;
     StackPanel _cLine2 = null!, _cTiles = null!;
-    TextBlock _cCombos = null!;
+    TextBlock _cCombos = null!, _cQueue = null!;
     string _craftLitId = "";
 
     /// <summary>The crafting head and body, laid over the farming ones in the card's stack; only one of each shows.</summary>
@@ -124,7 +124,9 @@ public sealed partial class HudCard
         _cSells = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         _cLine2 = new StackPanel { Orientation = Orientation.Horizontal, Height = 16, Margin = new Thickness(0, 3, 0, 0), Children = { _cBar, _cSells } };
         _cCombos = new TextBlock { Margin = new Thickness(0, 1, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed };
-        var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _cFigs, _cLine2, _cCombos } };
+        // the queue under way, under the recipe's name: "3 of 10 · 2 worked · 1 unsure" (Steven, 2026-11-04)
+        _cQueue = T("", 11.5, Faint); _cQueue.TextTrimming = TextTrimming.CharacterEllipsis; _cQueue.Visibility = Visibility.Collapsed;
+        var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _cQueue, _cFigs, _cLine2, _cCombos } };
         _cTiles = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) };
         _craftBody = new Grid { Visibility = Visibility.Collapsed };
         _craftBody.ColumnDefinitions.Add(new ColumnDefinition());
@@ -156,9 +158,12 @@ public sealed partial class HudCard
         bool live = V("paused").Length == 0 && V("show") != "dim";
         var crafts = CraftKit.Crafts(values);
         var newest = crafts.FirstOrDefault();
-        if (Changed("craftHead", $"{live}|{V("craftTime")}|{V("craftRecipe")}|{newest?.Id}|{newest?.Worth}"))
+        if (Changed("craftHead", $"{live}|{V("craftTime")}|{V("craftRecipe")}|{newest?.Id}|{newest?.Worth}|{V("craftQueue")}|{V("craftQueueText")}"))
         {
             SetDot(_cDot, live);
+            var queue = V("craftQueue") == "1" ? V("craftQueueText") : "";
+            _cQueue.Text = queue;
+            _cQueue.Visibility = queue.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _cTime.Text = V("craftTime"); _cTime.Foreground = live ? Ink : Faint;
             _cRecipe.Text = V("craftRecipe");
             _cNewest.Inlines.Clear();
@@ -286,7 +291,7 @@ public sealed partial class HudTicker
         if (Changed("craftOn", on ? "1" : "")) _pill.Child = on ? _craftRow : _farmRow;
         if (!on) return false;
         bool live = V("paused").Length == 0 && V("show") != "dim";
-        if (Changed("craftPill", $"{live}|{V("craftProfit")}|{V("craftTries")}|{V("craftOk")}|{V("craftFail")}"))
+        if (Changed("craftPill", $"{live}|{V("craftProfit")}|{V("craftTries")}|{V("craftOk")}|{V("craftFail")}|{V("craftQueue")}|{V("craftQueueDone")}|{V("craftQueueOf")}"))
         {
             SetDot(_cDot, live);
             var profit = V("craftProfit");
@@ -302,6 +307,12 @@ public sealed partial class HudTicker
                 _cCount.Inlines.Add(R(" · ", 12, Muted));
                 _cCount.Inlines.Add(R(V("craftFail"), 12, Muted, mono: true));
                 _cCount.Inlines.Add(R(" failed", 12, Muted));
+            }
+            // the queue under way, its count against its size: " · 3/10"
+            if (V("craftQueue") == "1" && V("craftQueueDone").Length > 0 && V("craftQueueOf").Length > 0)
+            {
+                _cCount.Inlines.Add(R(" · ", 12, Muted));
+                _cCount.Inlines.Add(R($"{V("craftQueueDone")}/{V("craftQueueOf")}", 12, Muted, mono: true));
             }
             CraftKit.SetBar(_cBar, ok, fail);
         }
