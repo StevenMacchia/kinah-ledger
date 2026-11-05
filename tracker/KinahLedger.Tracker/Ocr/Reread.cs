@@ -284,23 +284,26 @@ public sealed class Reread
     /// <summary>
     /// A line read garbled while it faded in, standing for one counted moments before (2026-10-24 13:11:48, replayed on
     /// the bench: "•Obtained*l CognieSöül C/ysta€:•••., --" for "Obtained 1 Cogni Soul Crystals.", "Acquired 2362
-    /// Kinar-••-•••" for "Acquired 236 Kina."). Keys as <see cref="Same"/> takes them. The letters are a few misreads apart
-    /// (a quarter of them at most, accents dropped), and the digits are the counted line's, lost whole, or with a stray
-    /// glyph read on the end: never a different amount.
+    /// Kinar-••-•••" for "Acquired 236 Kina."). Keys as <see cref="Same"/> takes them. The verb reads the same, the letters
+    /// are a few misreads apart (a quarter of them, six at most, accents dropped), and the digits are the counted line's:
+    /// the same, lost whole, or with one stray digit read on the end. A line with a different amount, or a count where the
+    /// counted line had none, is never a garble (a genuine 415 after a 41 reads as one stray digit and is lost: accepted).
     /// </summary>
     internal static bool GarbleOf(string counted, string garbled)
     {
         if (Same(counted, garbled)) return true;
         string la = Plain(counted), lb = Plain(garbled);
         if (la.Length < 8 || lb.Length < 6) return false;
+        if (!string.Equals(la[..6], lb.Length >= 6 ? lb[..6] : "", StringComparison.Ordinal)) return false;
         string da = Digits(counted), db = Digits(garbled);
-        if (db.Length > 0 && !db.StartsWith(da) && !da.StartsWith(db)) return false;
-        int max = Math.Max(2, Math.Min(la.Length, lb.Length) / 4);
+        if (da.Length == 0 && db.Length > 0) return false;
+        if (db.Length > 0 && !(string.Equals(db, da, StringComparison.Ordinal) || (db.Length == da.Length + 1 && db.StartsWith(da, StringComparison.Ordinal)))) return false;
+        int max = Math.Min(6, Math.Max(2, Math.Min(la.Length, lb.Length) / 4));
         return Math.Abs(la.Length - lb.Length) <= max && Lev(la, lb) <= max;
     }
 
     /// <summary>A line with glyphs the chat never prints (•, *, €, @ …): read while fading in, not a clean line.</summary>
-    internal static bool Junky(string line) => line.Any(c => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c) && "'.,:;!?()[]-_/x×\"".IndexOf(c) < 0);
+    internal static bool Junky(string line) => line.Any(c => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c) && "'’.,:;!?()[]-–_/x×\"+%&".IndexOf(c) < 0);
 
     /// <summary>The letters of a key, accents dropped (ö → o), for a garble's distance to a clean line.</summary>
     static string Plain(string key)

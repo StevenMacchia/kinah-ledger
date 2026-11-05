@@ -1215,6 +1215,10 @@ options: --process aion[,other]");
             Ov("a fading Kina line with a stray digit on the end is the counted one", Reread.GarbleOf(K("Acquired 236 Kina."), K("Acquired 2362 Kinar-••-•••")).ToString(), "True");
             Ov("a different amount is never a garble of the counted one", Reread.GarbleOf(K("Acquired 431 Kina."), K("Acquired 413 Kina•")).ToString(), "False");
             Ov("a different item is never a garble of the counted one", Reread.GarbleOf(K("Obtained 1 Cogni Soul Crystals."), K("Obtained 1 Kerubian Soul Points•")).ToString(), "False");
+            Ov("a count where the counted line had none is a new line", Reread.GarbleOf(K("Acquired Odyle."), K("Acquired Odyle x60•")).ToString(), "False");
+            Ov("a shorter amount is a new line, not a garble", Reread.GarbleOf(K("Acquired 236 Kina."), K("Acquired 23 Kina•")).ToString(), "False");
+            Ov("two digits more is a new line, not one stray glyph", Reread.GarbleOf(K("Acquired Odyle x1."), K("Acquired Odyle x120•")).ToString(), "False");
+            Ov("a different verb is never a garble", Reread.GarbleOf(K("Acquired 236 Kina."), K("Obtained 236 Kina•")).ToString(), "False");
             Ov("only a line with glyphs the chat never prints is a fading read", $"{Reread.Junky("Acquired 2362 Kinar-••-•••")} {Reread.Junky("Acquired 2,362 Kina.")} {Reread.Junky("[Qinghe] did you get the statue yet?")}", "True False False");
             // the chat came back from a fade with a whole event reward at once (Accursed Sword, 2026-10-22 14:35): the loot lines
             // not seen in the last ten minutes are new, from the bottom up; history shown by a hover ends with a seen line
