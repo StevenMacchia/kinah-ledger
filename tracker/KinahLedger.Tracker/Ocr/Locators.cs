@@ -151,12 +151,19 @@ public static class ChatLocator
 
     /// <param name="area">Where to look: the bottom-left quarter (null), or the area around the chat's anchor once it has
     /// held still (Anchors.ChatCrop, layout.anchor.chat), a quarter of the pixels on a 5120x2160 window.</param>
-    public static async Task<(Rectangle? region, string note)> DetectAsync(Rectangle game, Rectangle? area = null)
+    public static Task<(Rectangle? region, string note)> DetectAsync(Rectangle game, Rectangle? area = null)
+        => DetectAsync(game, area, (r, scale, boost) => ScreenReader.ReadBoxesAsync(r, scale, boost));
+
+    /// <summary>Reads the text boxes of a part of the window: the screen live, or a saved picture of the window (the bench).</summary>
+    public delegate Task<List<OcrLineBox>> BoxReader(Rectangle area, int scale, bool boost);
+
+    /// <summary>The same detection with the reads taken from <paramref name="read"/>, so a recording can be located offline (BenchReplay).</summary>
+    public static async Task<(Rectangle? region, string note)> DetectAsync(Rectangle game, Rectangle? area, BoxReader read)
     {
         var corner = area ?? Corner(game);
-        var lines = await ScreenReader.ReadBoxesAsync(corner, 1);
+        var lines = await read(corner, 1, false);
         var input = lines.FirstOrDefault(l => Input.IsMatch(l.Text));
-        if (input == null) return await FromLines(game, lines, corner);
+        if (input == null) return await FromLines(game, lines, corner, read);
 
         // the input row starts with the channel tab ("Common"); the chat's left edge is there, not where the placeholder text starts
         int rowMid = input.Box.Top + input.Box.Height / 2;
@@ -184,14 +191,14 @@ public static class ChatLocator
     /// when idle, so there is no input row to anchor on. The lines are left-aligned, so two or more chat-shaped lines that
     /// share a left edge give the position; the box is sized the way the input-row path sizes it.
     /// </summary>
-    static async Task<(Rectangle? region, string note)> FromLines(Rectangle game, List<OcrLineBox> lines, Rectangle area)
+    static async Task<(Rectangle? region, string note)> FromLines(Rectangle game, List<OcrLineBox> lines, Rectangle area, BoxReader read)
     {
         var chat = ChatLines(lines);
         bool boosted = false;
         if (chat.Count < 2)
         {
             // floating text over the world is faint: read the corner again with the contrast boost the live reader uses
-            lines = await ScreenReader.ReadBoxesAsync(area, 2, boost: true);
+            lines = await read(area, 2, true);
             chat = ChatLines(lines);
             boosted = true;
         }

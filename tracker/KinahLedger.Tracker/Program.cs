@@ -155,6 +155,7 @@ internal static class Program
                 }
                 case "replay": return Replay(settings, pos, opts);
                 case "report-replay": return ReportReplay(settings, pos);
+                case "bench-replay": return Session.BenchReplay.Run(settings, pos, opts);
                 case "icon-index":
                 {
                     // every distinct item icon, fingerprinted for the reward grid: icon-index [tw-items.json] [out.bin] [cache dir]
@@ -321,6 +322,8 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   popup-test --image shot.png   read the loot list beside the character in a game picture, with each row's icon match (--crop, --save, --scale n)
   replay [trace.log]            count a recorded fight's reads again (a miscount report's trace.jsonl too; --from/--to HH:mm, --novote)
   report-replay <folder>        read a miscount report's pictures again with this version's reader, beside what was counted then
+  bench-replay <frames folder>  read a recording's frames once (cached), count them as live, score them against its truth CSV (tracker/tests/bench)
+        --start ""yyyy-MM-dd HH:mm:ss.f"" [--truth f.csv] [--reads reads.log] [--baseline b.json --run name [--record]] [--fresh] [--scale-to WxH]
   ocr-file <image> [--scale 2]  run recognition on a screenshot, plain and boosted
   watch [--activity name]       a farming run in the console, with the Market reader beside it; Ctrl+C to stop
         [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]

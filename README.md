@@ -234,6 +234,7 @@ KinahLedger ocr-test --scales            read the chat at each enlarging factor 
 KinahLedger popup-test --image shot.png  read the loot list beside the character in a game picture, with each row's icon match
 KinahLedger replay [trace.log]           count recorded reads again (a miscount report's trace.jsonl too)
 KinahLedger report-replay <folder>       read a miscount report's pictures again with this version's reader
+KinahLedger bench-replay <frames folder> read a recording's frames once (cached), count them as live, score against its truth list (tracker/tests/bench)
 KinahLedger watch --activity "name"      a farming run in the console, Market reader beside it (--server "Siel (Elyos)", --no-market)
 KinahLedger market-watch                 only the Market reader, as the window runs it in the background
 KinahLedger parse-test                   self-test of the chat-line parser
