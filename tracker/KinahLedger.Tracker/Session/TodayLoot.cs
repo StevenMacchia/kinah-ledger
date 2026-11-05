@@ -39,6 +39,40 @@ public static class LootOrder
     };
 }
 
+/// <summary>
+/// The order of the runs on the Expeditions and events page (Ui/MainWindow.RunList.cs): newest first (the default), the
+/// best first (what each made), by place (then newest), or the longest first. Kept in ui.json (UserPrefs.RunsSort).
+/// </summary>
+public static class RunsOrder
+{
+    public const string Newest = "newest", Best = "best", Place = "place", Longest = "longest";
+    public static readonly string[] Modes = { Newest, Best, Place, Longest };
+
+    public static string Of(string? saved) => Modes.Contains(saved ?? "") ? saved! : Newest;
+
+    public static string Label(string mode) => mode switch { Best => "Best first", Place => "By place", Longest => "Longest first", _ => "Newest first" };
+
+    public static string Tip(string mode) => mode switch
+    {
+        Best => "The run that made the most first: Kinah plus its loot at the lowest Market price.",
+        Place => "Grouped by place, each place's newest run first.",
+        Longest => "The run that took longest first.",
+        _ => "The last run first.",
+    };
+
+    public static List<InstanceRun> Sorted(IEnumerable<InstanceRun> runs, string mode, Func<InstanceRun, long> value)
+    {
+        static DateTime When(InstanceRun r) => r.LastLoot ?? r.Start;
+        return mode switch
+        {
+            Best => runs.OrderByDescending(value).ThenByDescending(When).ToList(),
+            Place => runs.OrderBy(r => r.Zone, StringComparer.OrdinalIgnoreCase).ThenByDescending(When).ToList(),
+            Longest => runs.OrderByDescending(r => r.Seconds).ThenByDescending(When).ToList(),
+            _ => runs.OrderByDescending(When).ToList(),
+        };
+    }
+}
+
 /// <summary>One slot of the Today strip: an item, how many came today, what the sellable copies are worth after the Market's cut, and where they came from.</summary>
 public sealed record TodaySlot(long Id, string Name, long Count, long Bound, long Worth, bool Priced, bool Gear, bool Currency, List<(string Where, long Count)> Where);
 
@@ -129,9 +163,10 @@ public static class TodayLoot
 
     /// <param name="today">The runs since midnight (<see cref="IsToday"/>).</param>
     /// <param name="isCurrency">Currencies (Abyss Points, tokens) are amounts, not pieces: their own slots at the end.</param>
-    public static TodayRuns Runs(IReadOnlyList<InstanceRun> today, ItemDictionary items, Func<long, bool> isCurrency)
+    /// <param name="all">Every run, the ones left out of the averages too: one run's own slots (the run list, Ui/MainWindow.RunList.cs).</param>
+    public static TodayRuns Runs(IReadOnlyList<InstanceRun> today, ItemDictionary items, Func<long, bool> isCurrency, bool all = false)
     {
-        var counted = today.Where(r => !r.OutOfAverages).ToList();
+        var counted = (all ? today : today.Where(r => !r.OutOfAverages)).ToList();
         var count = new Dictionary<long, long>(); var bound = new Dictionary<long, long>(); var where = new Dictionary<long, Dictionary<string, long>>();
         var kinahWhere = new Dictionary<string, long>();
         long kinah = 0;
