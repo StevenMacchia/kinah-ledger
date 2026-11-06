@@ -44,6 +44,12 @@ jobs:
         continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
         run: node tools/data/aliases.js --check
 
+      # every list the way the tracker reads it: ids and names unique, the loaders' fields present, recipes naming known items
+      - name: Check the game-data lists
+        id: datacheck
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
+        run: node tools/data-check.js
+
       - name: Publish the single-file exe
         id: publish
         continue-on-error: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
