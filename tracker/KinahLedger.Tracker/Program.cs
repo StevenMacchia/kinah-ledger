@@ -4455,6 +4455,12 @@ options: --process aion[,other]");
             Buy("Odyle acquired.");
             Check("the read after that counts again", $"drops {pe.Items.Values.Sum()}", "drops 1");
             Check("parse-test writes to a scratch log", CrashLog.Dir.Contains("parse-test") ? "scratch" : CrashLog.Dir, "scratch");
+            // the panel over the game never takes focus, locked or not (2026-11-06: an unlocked Ticker, clicked, brought the tracker's
+            // window up over the game); locked it is click-through as well, and either way it stays out of Alt+Tab
+            string Ex(long ex) => $"{((ex & KinahLedger.Ui.Native.ExNoActivate) != 0 ? "noactivate" : "activates")} {((ex & KinahLedger.Ui.Native.ExTransparent) != 0 ? "through" : "clicks")} {((ex & KinahLedger.Ui.Native.ExToolWindow) != 0 ? "tool" : "alt-tab")}";
+            Check("the panel's window style: locked", Ex(KinahLedger.Ui.Native.PanelExStyle(0, true)), "noactivate through tool");
+            Check("...unlocked: draggable, still never focused", Ex(KinahLedger.Ui.Native.PanelExStyle(0, false)), "noactivate clicks tool");
+            Check("...locking again from unlocked, and back", Ex(KinahLedger.Ui.Native.PanelExStyle(KinahLedger.Ui.Native.PanelExStyle(0, false), true)) + " | " + Ex(KinahLedger.Ui.Native.PanelExStyle(KinahLedger.Ui.Native.PanelExStyle(0, true), false)), "noactivate through tool | noactivate clicks tool");
             Check("not an enemy: a quest step", TargetReader.Match("Pass through the narrow gap") ?? "none", "none");
         }
 
