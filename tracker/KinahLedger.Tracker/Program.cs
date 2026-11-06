@@ -49,7 +49,7 @@ internal static class Program
             settings.ProcessHints = hints.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         // test and measuring commands log to a temp folder, never into the player's own reads.log
-        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank")
+        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         try
         {
@@ -156,6 +156,7 @@ internal static class Program
                 case "replay": return Replay(settings, pos, opts);
                 case "report-replay": return ReportReplay(settings, pos);
                 case "bench-replay": return Session.BenchReplay.Run(settings, pos, opts);
+                case "log-mine": return Session.LogMine.Run(settings, pos, opts);
                 case "icon-index":
                 {
                     // every distinct item icon, fingerprinted for the reward grid: icon-index [tw-items.json] [out.bin] [cache dir]
@@ -324,6 +325,9 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   report-replay <folder>        read a miscount report's pictures again with this version's reader, beside what was counted then
   bench-replay <frames folder>  read a recording's frames once (cached), count them as live, score them against its truth CSV (tracker/tests/bench)
         --start ""yyyy-MM-dd HH:mm:ss.f"" [--truth f.csv] [--reads reads.log] [--baseline b.json --run name [--record]] [--fresh] [--scale-to WxH]
+  log-mine [folder|reads.log]   the places a day's reads.log shows the tracker unsure (votes, rescues, garbles, lines set aside, lines
+        with no event, repeats, reads that didn't line up), each with trace.log's chat reads around it as a LineTracker test (tools/log-mine.md)
+        [--kinds vote,rescue,...] [--max 20 | --all] [--from HH:mm --to HH:mm] [--at HH:mm:ss] [--before 4 --after 2] [--date yyyy-MM-dd] [--out report.md]
   ocr-file <image> [--scale 2]  run recognition on a screenshot, plain and boosted
   watch [--activity name]       a farming run in the console, with the Market reader beside it; Ctrl+C to stop
         [--region x,y,w,h] [--interval 700] [--server ""Siel (Elyos)""] [--no-market]
@@ -334,8 +338,9 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
-  ui-shot [dir] [--demo] [--gathering|--market|--crafting [--empty|--upgrades]|--events] [--compact|--full] [--tall] [--welcome] [--skin night|abyss|daylight]
-                                render the window to PNG files for layout review (--options: every Options page)
+  ui-shot [dir] [--demo] [--gathering|--market|--crafting [--empty|--upgrades]|--events [--mine]] [--compact|--full] [--tall] [--welcome] [--skin night|abyss|daylight]
+                                render the window to PNG files for layout review (--options: every Options page;
+                                --events --mine: the Events page from this PC's own runs, read from a copy)
   market-shot [dir]             the window with the Market card in its tracking state
   replay-event-shots [--since 2026-10-24] [--send] [--dir folder] [--verbose]
                                 event runs whose rewards were not read, read again from their kept reward pictures; prints
@@ -1031,7 +1036,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall"));
+        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall"), o.ContainsKey("mine"));
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         return 0;
     }
@@ -1312,6 +1317,7 @@ options: --process aion[,other]");
         ok &= EventRewardsTest(items, s);
         ok &= EventActivityTest(items, s);
         ok &= Ocr.ChatCountTests.Run(items, s);
+        ok &= Session.LogMine.SelfTest();
         ok &= UnsentRunsTest(items, s);
         ok &= Session.RunDataTests.Run(items, s);
         ok &= Session.TodayTests.Run(items, s);

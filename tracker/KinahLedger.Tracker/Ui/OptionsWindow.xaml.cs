@@ -272,7 +272,7 @@ public partial class OptionsWindow : Window
             _host.PreviewHud(_edit.HudOpacity, _edit.HudScale);
         };
         AutoUpdateChk.Click += (_, _) => Edit(_edit with { AutoUpdate = AutoUpdateChk.IsChecked == true });
-        // the window's size shows on the window as the slider moves (0.10.9); Save keeps it, Cancel puts the saved one back
+        // the window's size shows on the window as the slider moves (0.10.11); Save keeps it, Cancel puts the saved one back
         WindowScale.ValueChanged += (_, _) =>
         {
             WindowScaleLbl.Text = $"{WindowScale.Value:P0}";

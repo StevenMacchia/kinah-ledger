@@ -17,19 +17,18 @@ namespace KinahLedger.Ui;
 /// The Events part (0.8.31, kinah-bench/mock-events-v2.html, Steven 2026-10-25: "build it as shown"): one card per place,
 /// drawn in the window's own look (Daylight is white cards on a light page; the old cards were fixed dark and sat as navy
 /// slabs on white, "awful, especially in light mode"). The band names the place and its kind and where its run stands;
-/// four labelled figures (an hour, a run, how long a run takes, the best run); the place
-/// being run opens with Now (the last five lines and the run's steps); then the runs as a table with column names, a
-/// wrong run flagged in place with its fix sheet under it; then the loot of the counted runs as an inventory row and three
-/// folded groups. Only the item icons keep the game's dark slots.
+/// four labelled figures (an hour, a run, how long a run takes, the best run); a run's sheet when one was clicked in ALL
+/// RUNS (a flagged run's fix, any other's details and Remove); then the loot of the counted runs as an inventory row and
+/// three folded groups. Only the item icons keep the game's dark slots. Until 0.10.10 the card also carried Now (the last
+/// five feed lines and the run's steps) and a table of the runs behind "Show all N runs": both said again what ALL RUNS
+/// over the cards and the band's pill already say (Steven, 2026-11-06: "far too much information").
 /// </summary>
 public partial class MainWindow
 {
-    /// <summary>Places whose earlier runs are all shown, and the groups open ("place|Materials", "place|loot").</summary>
-    readonly HashSet<string> _runsAll = new(StringComparer.OrdinalIgnoreCase), _runsOpen = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The groups open ("place|Materials", "place|loot").</summary>
+    readonly HashSet<string> _runsOpen = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>The place a layout render shows as in progress.</summary>
     string? _demoLive;
-    /// <summary>Runs shown before "Show all N runs".</summary>
-    const int RunsShown = 4;
     /// <summary>The card's width (the window's ledger column).</summary>
     const double PlaceCardWidth = 660;
 
@@ -43,7 +42,7 @@ public partial class MainWindow
         RunFixes.ApplyKept(all);
         EventsShareBtn.IsEnabled = all.Any(r => r.LastLoot != null);   // Share: the last run finished (Ui/MainWindow.Share.cs)
         _screenLines = null;
-        if (_demoInst != null && _demoScreens == null) DemoScreens(all);
+        if (_demo && _demoInst != null && _demoScreens == null) DemoScreens(all);
         // this session's runs; earlier ones kept on this PC only on request, so yesterday's trip doesn't sit there all day
         // (Steven, 2026-10-22: "it says last run 14 hr ago")
         var since = _watcher.ChatSince == default ? DateTime.UtcNow : _watcher.ChatSince;
@@ -61,10 +60,9 @@ public partial class MainWindow
         var flagged = runs.Where(r => r.OutOfAverages && r.LastLoot is { } l && (DateTime.UtcNow - l).TotalMinutes < 2).OrderByDescending(r => r.LastLoot).FirstOrDefault();
         _hudFlag = flagged == null ? "" : flagged.Suspect == "looks like several runs" ? $"{flagged.Zone} record looks like several runs" : $"{flagged.Zone} run: {FlagReason(flagged, 0).ToLowerInvariant()}";
         // the cards are built again only when what they show has changed: the runs themselves, which is live, what is
-        // folded open, the Events feed lines (each card draws its place's), or the view. Between changes a tick only moves
-        // the open run's clock (2026-10-25: rebuilding every card, shadows and all, twice a second was most of the UI thread)
-        var feed = FeedFor(FeedTab.Events);
-        var sig = $"{live}|{allShown}|{since:O}|{PlaceCardWidth}|{string.Join(",", _runsOpen)}|{string.Join(",", _placesToggled)}|{RunsSortMode}|{_runListAll}|{_fixOpen}|{JsonSerializer.Serialize(runs)}|{string.Join(";", feed.Select(l => $"{l.At.Ticks}:{l.Text}"))}";
+        // folded open, or the view. Between changes a tick only moves the open run's clock (2026-10-25: rebuilding every
+        // card, shadows and all, twice a second was most of the UI thread)
+        var sig = $"{live}|{allShown}|{since:O}|{PlaceCardWidth}|{string.Join(",", _runsOpen)}|{string.Join(",", _placesToggled)}|{RunsSortMode}|{_runListAll}|{_fixOpen}|{JsonSerializer.Serialize(runs)}";
         if (!Changed("runs", sig))
         {
             if (_livePill != null && _liveOpen is { LastLoot: null } o) _livePill.Text = $"{RunSteps[Math.Max(0, StepOf(o))]} · {Clock(DateTime.UtcNow - o.Start)} in";
@@ -90,7 +88,7 @@ public partial class MainWindow
             Border card;
             if (PlaceOpen(zone, first))
             {
-                card = BuildRunsCard(zone, list, here, PlaceCardWidth, ShowInstances, withNow: first, allRuns: runs, foldCard: () => { TogglePlace(zone); ShowInstances(); });
+                card = BuildRunsCard(zone, list, here, PlaceCardWidth, ShowInstances, withNow: first, foldCard: () => { TogglePlace(zone); ShowInstances(); });
                 card.Tag = "open"; card.Margin = new Thickness(0, 0, 0, 16);
             }
             else { card = FoldedPlace(zone, list, here, () => { TogglePlace(zone); ShowInstances(); }); card.Margin = new Thickness(0, 0, 0, 8); }
@@ -190,32 +188,15 @@ public partial class MainWindow
         return b;
     }
 
-    /// <summary>A flag in a run's row: the flag glyph, the reason in three words, a faint detail ("Partly read · 4 slots").</summary>
-    static Border PFlag(string reason, string detail)
-    {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        var glyph = new Path { Data = Geometry.Parse("M3.5,14 V2.5 M3.5,3 H11.5 L9.9,5.8 L11.5,8.6 H3.5"), StrokeThickness = 1.5, StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = 12, Height = 12, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
-        glyph.SetResourceReference(Shape.StrokeProperty, "FlagInk");
-        sp.Children.Add(glyph);
-        var t = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-        t.Inlines.Add(PR(reason, "FlagInk", FontWeights.SemiBold));
-        if (detail.Length > 0) { var d = PR(" · " + detail, "FlagInk"); d.FontWeight = FontWeights.Normal; t.Inlines.Add(d); }
-        sp.Children.Add(t);
-        var b = new Border { Child = sp, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), Padding = new Thickness(9, 3, 10, 4), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        b.SetResourceReference(Border.BackgroundProperty, "FlagBg");
-        b.SetResourceReference(Border.BorderBrushProperty, "FlagLine");
-        return b;
-    }
-
     /* ---------------- a place's card ---------------- */
 
     /// <summary>
     /// One place's card. Figures count only the runs not flagged (<see cref="InstanceRun.OutOfAverages"/>). With
-    /// <paramref name="withNow"/> (the place being run, or the last one run) it opens with Now and shows its loot; the others
-    /// fold their loot behind one line. <paramref name="allRuns"/> feeds Now's lines (every place's steps).
+    /// <paramref name="withNow"/> (the place being run, or the last one run) it shows its loot open; the others fold their
+    /// loot behind one line.
     /// </summary>
     /// <param name="foldCard">On the page, a click on the band folds the card to one line (Ui/MainWindow.RunList.cs); a render of the card alone has none.</param>
-    Border BuildRunsCard(string zone, List<InstanceRun> runs, bool live, double width, Action redraw, bool withNow = false, List<InstanceRun>? allRuns = null, Action? foldCard = null)
+    Border BuildRunsCard(string zone, List<InstanceRun> runs, bool live, double width, Action redraw, bool withNow = false, Action? foldCard = null)
     {
         var body = new StackPanel { Width = width - 2 };
         var card = new Border { Child = body, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
@@ -280,46 +261,18 @@ public partial class MainWindow
         // Compare (0.9.3, Ui/MainWindow.Compare.cs): the last closed run against your runs there, with Compare on
         if (withNow && open == null && newest != null && _prefs.CompareZones && RunVsCard(zone, newest, runs) is { } vs) body.Children.Add(vs);
 
-        // Now: the place being run (or the last one run), its last five lines and where the open run stands
-        if (withNow)
+        // the run clicked in ALL RUNS, when it is one of this place's: its sheet (a flagged run's fix, or any other run's
+        // details and Remove) under a line that names it
+        if (_fixOpen != null && runs.FirstOrDefault(r => _fixOpen == RunKey(r)) is { } picked)
         {
-            var now = new StackPanel { Margin = new Thickness(20, 16, 20, 4) };
-            now.Children.Add(PSection("NOW", open != null ? $"run {runs.OrderBy(r => r.Start).ToList().IndexOf(open) + 1}" : "the last lines"));
-            var box = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(0, 4, 0, 4), ClipToBounds = true };
-            box.SetResourceReference(Border.BorderBrushProperty, "Line"); box.SetResourceReference(Border.BackgroundProperty, "Card2");
-            var host = new StackPanel(); var empty = PT("Each run step and reward line shows here as it is counted.", "Faint", 12.5); empty.Margin = new Thickness(12, 10, 12, 10);
-            var g0 = new Grid(); g0.Children.Add(host); g0.Children.Add(empty); box.Child = g0;
-            now.Children.Add(box);
-            _feedDrawn.Remove(host);
-            // this place's lines only: another place's steps inside this card read as this place's (the first render had
-            // "Entered Shugo Festival" in the Urugugu card)
-            DrawFeed(host, empty, EventsFeed(runs, zone), FeedTab.Events, PickupValue);
-            now.Children.Add(StepTrack(open));
-            body.Children.Add(now);
+            var sec = new StackPanel { Margin = new Thickness(20, 14, 20, 6) };
+            var local = picked.Start.ToLocalTime();
+            var when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
+            sec.Children.Add(PSection("RUN", $"{when} · {Clock(TimeSpan.FromSeconds(picked.Seconds))}"));
+            double med = Median(counted.Select(r => r.Seconds));
+            sec.Children.Add(FlagReason(picked, med).Length > 0 ? FixSheet(picked, med, redraw) : RunSheet(picked, redraw));
+            body.Children.Add(sec);
         }
-
-        // the runs, newest first, with column names; the rest behind "Show all N runs"
-        var sec = new StackPanel { Margin = new Thickness(20, 14, 20, 6) };
-        sec.Children.Add(PSection("RUNS"));
-        bool showAll = _runsAll.Contains(zone);
-        double med = Median(counted.Select(r => r.Seconds));
-        bool anyOld = order.Any(r => r.Start.ToLocalTime().Date != DateTime.Today);
-        double startW = anyOld ? 104 : 66;
-        sec.Children.Add(RunHead(startW));
-        foreach (var r in showAll ? order : order.Take(RunsShown))
-        {
-            sec.Children.Add(RunRow(r, med, redraw, startW));
-            // the run's sheet, open in place under it: a flagged run's fix, or any other run's details and Remove
-            if (_fixOpen == RunKey(r)) sec.Children.Add(FlagReason(r, med).Length > 0 ? FixSheet(r, med, redraw) : RunSheet(r, redraw));
-        }
-        if (order.Count > RunsShown)
-        {
-            var m = PT(showAll ? "Show fewer" : $"Show all {order.Count} runs", "Gold", 12.5, FontWeights.SemiBold);
-            m.Margin = new Thickness(8, 10, 0, 2); m.Cursor = Cursors.Hand; m.HorizontalAlignment = HorizontalAlignment.Left; m.Background = Brushes.Transparent;
-            m.MouseLeftButtonUp += (_, _) => { if (!_runsAll.Remove(zone)) _runsAll.Add(zone); redraw(); };
-            sec.Children.Add(m);
-        }
-        body.Children.Add(sec);
 
         // what the counted runs brought: open on the first card, one line to open it on the others
         var lootKey = zone + "|loot";
@@ -402,91 +355,6 @@ public partial class MainWindow
         return box;
     }
 
-    /// <summary>The runs table's column names.</summary>
-    static FrameworkElement RunHead(double startW)
-    {
-        var g = RunGrid(startW);
-        void H(string text, int col, bool right = false)
-        {
-            var t = PT(text.ToUpperInvariant(), "Faint", 10.5, FontWeights.SemiBold);
-            if (right) t.HorizontalAlignment = HorizontalAlignment.Right;
-            Grid.SetColumn(t, col); g.Children.Add(t);
-        }
-        H("Started", 0); H("Took", 1); H("Kinah", 2, true); H("Loot", 3, true);
-        var b = new Border { Child = g, Padding = new Thickness(8, 0, 8, 8), BorderThickness = new Thickness(0, 0, 0, 1) };
-        b.SetResourceReference(Border.BorderBrushProperty, "Line");
-        return b;
-    }
-
-    static Grid RunGrid(double startW)
-    {
-        var g = new Grid();
-        foreach (var w in new[] { startW, 62.0, 78 }) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(w) });
-        g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
-        return g;
-    }
-
-    /// <summary>
-    /// One run: when (today "14:07", earlier "Oct 23 19:45"), how long, its Kinah ("none", or "not read" when its coin
-    /// wasn't), and its loot ("21 gear · 5 items · 18 unnamed"); a run left out of the figures carries its flag instead. A
-    /// click opens its sheet under it: the fix for a flagged run, the details and Remove for any other.
-    /// </summary>
-    FrameworkElement RunRow(InstanceRun r, double medianSecs, Action redraw, double startW = 66)
-    {
-        var why = FlagReason(r, medianSecs);
-        bool flag = why.Length > 0, out_ = r.OutOfAverages, isOpen = _fixOpen == RunKey(r);
-        var g = RunGrid(startW);
-        var local = r.Start.ToLocalTime();
-        g.Children.Add(PT(local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture), "Faint", 12.5, null, "MonoFont"));
-        var len = PT(Clock(TimeSpan.FromSeconds(r.Seconds)), out_ ? "Faint" : "Ink", 12.5, null, "MonoFont"); Grid.SetColumn(len, 1); g.Children.Add(len);
-        var kin = r.KinahUnknown || r.OldUnread ? PT("not read", "Faint", 12.5, null, "MonoFont") : r.Kinah == 0 ? PT("none", "Faint", 12.5, null, "MonoFont") : PT(Fk(r.Kinah), out_ ? "Faint" : "Ink", 12.5, null, "MonoFont");
-        kin.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(kin, 2); g.Children.Add(kin);
-        FrameworkElement loot;
-        if (flag)
-        {
-            var (reason, detail) = FlagParts(r, why);
-            loot = PFlag(reason, detail);
-        }
-        else
-        {
-            var t = new TextBlock { FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            t.Inlines.Add(PR(LootText(r), "Muted"));
-            if (r.SlotsUnread > 0) t.Inlines.Add(PR($" · {r.SlotsUnread} unnamed", "Faint"));
-            loot = t;
-        }
-        loot.Margin = new Thickness(12, 0, 0, 0);
-        Grid.SetColumn(loot, 3); g.Children.Add(loot);
-        var chev = PT(isOpen ? "⌄" : "›", "Faint", 15); chev.HorizontalAlignment = HorizontalAlignment.Right;
-        Grid.SetColumn(chev, 4); g.Children.Add(chev);
-        var row = new Border
-        {
-            Child = g, Height = 42, Padding = new Thickness(8, 0, 8, 0), BorderThickness = new Thickness(0, 0, 0, 1), Background = Brushes.Transparent, Cursor = Cursors.Hand,
-            ToolTip = flag ? FlagTip(r, medianSecs) + " Left out of the figures. Click to fix it." : "Click for this run's details, or to remove it if it's wrong.",
-        };
-        row.SetResourceReference(Border.BorderBrushProperty, "Line");
-        ToolTipService.SetInitialShowDelay(row, 350);
-        row.MouseEnter += (_, _) => { row.SetResourceReference(Border.BackgroundProperty, "HoverTint"); chev.SetResourceReference(TextBlock.ForegroundProperty, "Gold"); };
-        row.MouseLeave += (_, _) => { row.Background = Brushes.Transparent; chev.SetResourceReference(TextBlock.ForegroundProperty, "Faint"); };
-        row.MouseLeftButtonUp += (_, _) => { _fixOpen = isOpen ? null : RunKey(r); redraw(); };
-        return row;
-    }
-
-    /// <summary>"21 gear · 5 items" (each piece of gear, each other item once, currencies never), or "Kinah only".</summary>
-    string LootText(InstanceRun r)
-    {
-        var (gearN, other) = r.Pieces(_items.IsGear, IsCurrency, withUnknown: true);
-        if (gearN + other == 0) return r.RewardsNotRead ? "rewards not read" : r.Kinah > 0 ? "Kinah only" : "nothing named";
-        var parts = new List<string>();
-        if (gearN > 0) parts.Add($"{gearN} gear");
-        if (other > 0) parts.Add($"{other} item{(other == 1 ? "" : "s")}");
-        return string.Join(" · ", parts);
-    }
-
-    /// <summary>The flag's words split for the row: ("Partly read", "4 slots"), ("Not a run", ""), ("5 runs merged", "").</summary>
-    static (string Reason, string Detail) FlagParts(InstanceRun r, string why) =>
-        r.PartlyRead && why.StartsWith("Partly read", StringComparison.Ordinal) ? ("Partly read", $"{r.SlotsUnread} slot{(r.SlotsUnread == 1 ? "" : "s")}") : (why, "");
-
     /// <summary>"31 pieces · 2 gear" (InstanceRun.Pieces: each piece of gear, each other item once), or "Kinah only". For logs and sheets.</summary>
     string PiecesText(InstanceRun r)
     {
@@ -515,15 +383,6 @@ public partial class MainWindow
 
     /// <summary>A currency (Abyss Points, Enhance Stone, a token): an amount, never a piece.</summary>
     bool IsCurrency(long id) => _items.Get(id)?.Category == "Currency";
-
-    /// <summary>The flag's reason in a sentence, on hover.</summary>
-    static string FlagTip(InstanceRun r, double medianSecs) =>
-        r.Suspect == "looks like several runs" ? $"Looks like several runs saved as one: {Clock(TimeSpan.FromSeconds(r.Seconds))} against a usual {(medianSecs > 0 ? Clock(TimeSpan.FromSeconds(medianSecs)) : "run")}."
-        : r.Suspect == "not a run" ? "Not a run: no Kinah, and its reward screen named nothing or came moments after entering (another window read as one)."
-        : r.RewardsNotRead ? "Its reward screen wasn't read, so what it paid isn't known."
-        : r.KinahNotRead || r.OldUnread ? "The Kinah on its reward screen wasn't read, so it isn't counted as 0."
-        : r.PartlyRead ? $"Partly read: {r.SlotsUnread} slot{(r.SlotsUnread == 1 ? "" : "s")} on its reward cards weren't read (cut by a card's window, or below what the screen showed). What was read was sent, marked partly read."
-        : r.Suspect;
 
     /* ---------------- loot ---------------- */
 
@@ -817,7 +676,31 @@ public partial class MainWindow
         finally { CrashLog.DirOverride = keep; }
     }
 
-    /// <summary>The Runs card alone for a layout render: folded, and with Materials open (ui-runs-card.png, ui-runs-card-materials.png).</summary>
+    /// <summary>
+    /// ui-shot --events --mine: the Events page drawn from this PC's own runs, so a layout can be checked against real data
+    /// without driving the window. The run log is read from a copy in a scratch folder: the loading pass can note and repair
+    /// records, and the tracker running beside this render owns the real file. Nothing is tracked, saved or sent.
+    /// </summary>
+    public void ShowMineRuns()
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "KinahLedger-mine-runs");
+        Directory.CreateDirectory(dir);
+        var src = System.IO.Path.Combine(CrashLog.Dir, "instances.jsonl");
+        if (File.Exists(src)) File.Copy(src, System.IO.Path.Combine(dir, "instances.jsonl"), overwrite: true);
+        var keep = CrashLog.DirOverride;
+        InstanceLog log;
+        try
+        {
+            CrashLog.DirOverride = dir;
+            log = new InstanceLog();
+            log.UseNames(_items);
+        }
+        finally { CrashLog.DirOverride = keep; }
+        _demoInst = log; _demoLive = log.InProgress;
+        ShowPart("Events", byHand: false); SetTrackingUi(false);
+    }
+
+    /// <summary>The Runs card alone for a layout render: as it opens, and with Materials open (ui-runs-card.png, ui-runs-card-materials.png).</summary>
     internal void ShotRunsCards(string dir)
     {
         var log = _demoInst ?? DemoRuns();
@@ -826,7 +709,7 @@ public partial class MainWindow
         if (runs.Count == 0) return;
         void Save(string file)
         {
-            var card = BuildRunsCard("Urugugu Canyon", runs, true, PlaceCardWidth, () => { }, withNow: true, allRuns: all);
+            var card = BuildRunsCard("Urugugu Canyon", runs, true, PlaceCardWidth, () => { }, withNow: true);
             card.Margin = new Thickness(10);
             var frame = new Border { Child = card, Padding = new Thickness(12) };   // the page under the card, in the look
             frame.SetResourceReference(Border.BackgroundProperty, "Bg");
@@ -843,12 +726,12 @@ public partial class MainWindow
         // the merged record's fix sheet open: Split at the reward screens, Keep as one, Remove
         _fixOpen = fix;
         if (_fixOpen != null) Save("ui-runs-card-fix.png");
-        // a place not being run: no Now, its loot folded to one line (ui-runs-card-event.png, the Shugo Festival sample)
+        // a place not being run: its loot folded to one line (ui-runs-card-event.png, the Shugo Festival sample)
         var ev = all.Where(r => r.Zone == "Shugo Festival").ToList();
         if (ev.Count > 0)
         {
             var keepFix = _fixOpen; _fixOpen = null;
-            var card = BuildRunsCard("Shugo Festival", ev, false, PlaceCardWidth, () => { }, withNow: false, allRuns: all);
+            var card = BuildRunsCard("Shugo Festival", ev, false, PlaceCardWidth, () => { }, withNow: false);
             card.Margin = new Thickness(10);
             var frame = new Border { Child = card, Padding = new Thickness(12) };
             frame.SetResourceReference(Border.BackgroundProperty, "Bg");

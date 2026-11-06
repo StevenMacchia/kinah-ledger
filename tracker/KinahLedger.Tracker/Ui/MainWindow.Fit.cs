@@ -16,7 +16,7 @@ public partial class MainWindow
     /// <summary>The smallest Full view is drawn at: below this its 12.5 px figures would be under 10 px, so Compact instead.</summary>
     const double MinFitScale = 0.75;
     /// <summary>
-    /// Window size (0.10.9, Options › General and Ctrl+= / Ctrl+-): the window drawn bigger or smaller than its 662 DIP
+    /// Window size (0.10.11, Options › General and Ctrl+= / Ctrl+-): the window drawn bigger or smaller than its 662 DIP
     /// columns, 80% to 150% in steps of 10%, for a large or high-resolution screen. The screen still caps it: the
     /// window never grows past the width or the height of the screen it is on.
     /// </summary>
@@ -135,7 +135,7 @@ public partial class MainWindow
         RefitScale();
     }
 
-    /// <summary>Ctrl+= and Ctrl+- (0.10.9): one step bigger or smaller, kept; Ctrl+0 is back to 100%. The status line says the size, and when the screen holds it back.</summary>
+    /// <summary>Ctrl+= and Ctrl+- (0.10.11): one step bigger or smaller, kept; Ctrl+0 is back to 100%. The status line says the size, and when the screen holds it back.</summary>
     void StepWindowScale(int steps)
     {
         double next = steps == 0 ? 1 : Math.Round(Math.Clamp(WindowScaleWanted + steps * WindowScaleStep, MinWindowScale, MaxWindowScale), 2);

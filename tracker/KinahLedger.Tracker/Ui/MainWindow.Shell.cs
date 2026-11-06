@@ -30,7 +30,7 @@ public sealed record OptionsChoice(
     public bool RunRecap { get; init; } = true;
     /// <summary>Options › Game reading › Explain each count (2026-11-04): a counted line's card says why. Off by default.</summary>
     public bool ExplainCounts { get; init; }
-    /// <summary>Options › General › Window size (0.10.9, Ui/MainWindow.Fit.cs): 0.8 to 1.5, 1 is the designed size. Shown as the slider moves, kept on Save.</summary>
+    /// <summary>Options › General › Window size (0.10.11, Ui/MainWindow.Fit.cs): 0.8 to 1.5, 1 is the designed size. Shown as the slider moves, kept on Save.</summary>
     public double WindowScale { get; init; } = 1;
 }
 

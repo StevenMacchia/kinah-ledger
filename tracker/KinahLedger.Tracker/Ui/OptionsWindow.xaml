@@ -78,7 +78,7 @@
           <TextBlock Style="{StaticResource GroupLabel}" Text="WINDOW"/>
           <Border Style="{StaticResource Group}">
             <StackPanel>
-              <!-- Window size (0.10.9, Ui/MainWindow.Fit.cs): shown on the window as the slider moves, kept on Save -->
+              <!-- Window size (0.10.11, Ui/MainWindow.Fit.cs): shown on the window as the slider moves, kept on Save -->
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>

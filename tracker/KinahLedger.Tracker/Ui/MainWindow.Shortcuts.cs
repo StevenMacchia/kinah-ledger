@@ -14,7 +14,7 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     public const string OptionsKey = "Ctrl+,", NewSessionKey = "Ctrl+N", CopyPictureKey = "Ctrl+Shift+C";
-    /// <summary>Window size (0.10.9, Ui/MainWindow.Fit.cs): a step bigger, a step smaller, back to 100%. The numeric keypad's + - 0 work too.</summary>
+    /// <summary>Window size (0.10.11, Ui/MainWindow.Fit.cs): a step bigger, a step smaller, back to 100%. The numeric keypad's + - 0 work too.</summary>
     public const string WindowBiggerKey = "Ctrl+=", WindowSmallerKey = "Ctrl+-", WindowResetKey = "Ctrl+0";
     /// <summary>New session's name since it left the card (0.9.13), in the ⋯ menu and the tray.</summary>
     public const string ClearAllText = "Clear everything";

@@ -138,14 +138,14 @@ public partial class MainWindow
         icon.VerticalAlignment = VerticalAlignment.Center; icon.HorizontalAlignment = HorizontalAlignment.Left;
         Grid.SetColumn(icon, 1); g.Children.Add(icon);
         var x = new TextBlock { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        x.SetResourceReference(TextBlock.ForegroundProperty, l.Kind == "flag" ? "Gold" : "Ink");
+        x.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         var (bold, rest, small) = FeedWords(l);
         if (bold.Length > 0) x.Inlines.Add(new Run(bold) { FontWeight = FontWeights.SemiBold });
         if (rest.Length > 0) x.Inlines.Add(new Run(rest));
         if (small.Length > 0) { var s = new Run("  " + small) { FontSize = 12 }; s.SetResourceReference(TextElement.ForegroundProperty, "Faint"); x.Inlines.Add(s); }
         Grid.SetColumn(x, 2); g.Children.Add(x);
         var v = new TextBlock { Text = value.Text, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-        v.SetResourceReference(TextBlock.FontFamilyProperty, l.Kind == "flag" ? "BodyFont" : "MonoFont");
+        v.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
         v.SetResourceReference(TextBlock.ForegroundProperty, value.Muted ? "Faint" : "Gold");
         Grid.SetColumn(v, 3); g.Children.Add(v);
         var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
@@ -181,8 +181,6 @@ public partial class MainWindow
             }
             case "craft" when l.Combo: return (l.Name.Length > 0 ? l.Name : "A craft", "", l.Ok ? ComboWon(l.Name) : "combo lost");
             case "craft": return (l.Name.Length > 0 ? l.Name : "A craft", CraftMakes(l) is int m && m > 1 && l.Ok ? $" ×{m}" : "", l.Ok ? "worked" : "failed");
-            case "step": return (l.Name, "", l.Enemy);
-            case "flag": return (l.Name, "", "");
             default:
                 var small = l.Bound ? "bound" : GatheringCatalog.Find(l.Name) != null ? "gathered" : l.Tab == FeedTab.Events && l.Via.Contains("reward table") ? "reward screen" : "";
                 return (l.Name, $" ×{l.Amount:N0}", small);
@@ -192,12 +190,10 @@ public partial class MainWindow
     /// <summary>How many a craft line's success made: the yield the panel's level told, else the recipe's when the book has one count for the item.</summary>
     static int? CraftMakes(FeedLine l) => l.Makes > 0 ? l.Makes : l.Name.Length >= 2 ? RecipeBook.YieldFor(l.Name, 0) : null;
 
-    /// <summary>A line's tile: the item's own icon (the tracker's icon cache, as the drops table), a coin for Kinah, a drawn glyph for a run step.</summary>
+    /// <summary>A line's tile: the item's own icon (the tracker's icon cache, as the drops table), a coin for Kinah.</summary>
     FrameworkElement FeedIcon(FeedLine l)
     {
         if (l.Kind == "kinah") return CoinTile(22);
-        if (l.Kind == "step") return GlyphTile(22, l.Name.StartsWith("Entered") ? "M5,20 V6 L12,3 L19,6 V20 Z M10,20 V14 H14 V20" : "M12,3 A9,9 0 1 0 12,21 A9,9 0 1 0 12,3 Z M8,12 L11,15 L16,9");
-        if (l.Kind == "flag") return GlyphTile(22, "M5,21 V4 M5,4 H17 L14.5,8 L17,12 H5", gold: true);
         var name = l.Name; long id = l.ItemId != 0 ? l.ItemId : _items.IdOf(name);
         return ItemTile(name, id, 22, GradeOf(name));
     }
@@ -278,8 +274,6 @@ public partial class MainWindow
     (string Text, bool Muted) PickupValue(FeedLine l)
     {
         if (l.Kind == "kinah") return (FeedK(l.Amount), false);
-        if (l.Kind == "flag") return ("fix below", false);
-        if (l.Kind == "step") return (l.Amount > 0 ? FeedK(l.Amount) : "", false);
         if (l.Bound) return ("", true);
         return PriceBook.Price(l.Name) is long p ? (FeedK((long)Math.Round(p * l.Amount * PriceBook.SellerKeeps)), false) : ("", true);
     }

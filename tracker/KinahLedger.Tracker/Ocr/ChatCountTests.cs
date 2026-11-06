@@ -160,6 +160,58 @@ static class ChatCountTests
             Check("vote: \"3 Kina.\" then \"Acquired 293 Kina.\" in its place", string.Join(" | ", got), "Acquired 293 Kina.");
         }
 
+        // ---- the live-log loop's first run (2026-11-06, tools/log-mine.md): spots mined from reads.old.log and trace.old.log of
+        // 2026-11-05, each test built from the reads the log kept ----
+        Console.WriteLine("\nLive-log spots of 2026-11-05 (log-mine): a count cut off is the same line; another player's clipped line; a wrapped soul points line:");
+        {
+            string D2(GameEvent e) => e is CurrencyGained c ? $"{c.Amount} {(c.Enemy.Length > 0 ? c.Enemy + " " : "")}{c.Name}" : D(e);
+            // the same line read with its count and without it (Reread.CountLost)
+            Check("count lost: \"Acquired Fine Odyle x4.\" and \"Acquired Fine Odyle\"", Reread.CountLost("Acquired Fine Odyle x4.", "Acquired Fine Odyle").ToString(), "True");
+            Check("count lost: \"Acquired Ulmus Oil (Bound) x201.\" and \"... (Bound)\"", Reread.CountLost("Acquired Ulmus Oil (Bound) x201.", "Acquired Ulmus Oil (Bound)").ToString(), "True");
+            Check("count lost: never two Kina amounts, never two counts, never another item", $"{Reread.CountLost("Acquired 463 Kina.", "Acquired 46 Kina.")} {Reread.CountLost("Acquired Odyle x12.", "Acquired Odyle x1")} {Reread.CountLost("Acquired Fine Odyle x4.", "Acquired Pure Odyle")}", "False False False");
+            // 18:31:29 to :31: "Acquired Fresh Raw Meat" cut at the chat's edge in one read, whole in the next two: the vote takes the whole line
+            var vc = new ChatVoter(); var pc = new ChatParser(items);
+            var c1 = new List<string> { "[Tryphon] Wb train aullamu", "Acquired Fresh Raw Meat" };
+            var c2 = new List<string> { "[Tryphon] Wb train aullamu", "Acquired Fresh Raw Meat x 100." };
+            var voted = vc.Push(new List<string> { "Acquired Fresh Raw Meat" }, c1, t0, pc.Meaning).Concat(vc.Push(new List<string>(), c2, t0.AddSeconds(0.4), pc.Meaning)).Concat(vc.Push(new List<string>(), c2, t0.AddSeconds(0.8), pc.Meaning)).ToList();
+            Check("vote: a count cut off, then the whole line twice: the whole line", string.Join(" | ", voted), "Acquired Fresh Raw Meat x 100.");
+            // 14:35:13 to :15 (Incursion of the Spirits' rewards): the chat covered, then a read of 11 lines that lined up with nothing; its
+            // "Acquired Fine Odyle x4." counted from the burst, then the reads after cut the line to "Acquired Fine Odyle" at the chat's
+            // edge, read the same three times: the unaligned watch counted a fifth Fine Odyle
+            {
+                var s = new TrackerSession(null, settings, items, "Test");
+                var ta = new DateTime(2026, 11, 5, 19, 35, 0, DateTimeKind.Utc);
+                s.ProcessChat(new List<string> { "[Pa] hello there all", "[Pb] who wants a group", "[Pc] selling stuff cheap" }, ta);
+                for (int i = 1; i <= 3; i++) s.ProcessChat(new List<string>(), ta.AddSeconds(i));
+                var f1 = new List<string> { "Radiant Odyle acquired.", "Pure Odyle acquired.", "Acquired Fine Odyle x4.", "Acquired Odyle x5.", "Expert's Refining Stone acquired.", "Acquired Refining Stone x5.", "Acquired Soul Codex (Bound) x3.", "super whale", "[Malenia[NEZ]] detected", "[Malenia[NEZ]] enchantedd", "z'" };
+                var f2 = new List<string> { "Pure Odyle acquired.", "Acquired Fine Odyle", "Acquired Odyle x5.", "Expert's Refining Stone acquired.", "Acquired Refining Stone x5.", "Acquired Soul Codex (Bound) x3.", "[Malenia[NEZ]] super whale", "detected", "enchantedd", "[zMochi] [Force Recruitment] WB Ansas" };
+                s.ProcessChat(f1, ta.AddSeconds(13.7));
+                foreach (var at in new[] { 14.1, 14.4, 15.0, 15.4 }) s.ProcessChat(new List<string>(f2), ta.AddSeconds(at));
+                s.FlushVotes(ta.AddSeconds(17));
+                Check("14:35:13: \"Acquired Fine Odyle x4.\" from the burst, then cut to \"Acquired Fine Odyle\": four", $"Fine Odyle {N(s, "Fine Odyle")} · Odyle {N(s, "Odyle")} · Refining Stone {N(s, "Refining Stone")}", "Fine Odyle 4 · Odyle 5 · Refining Stone 5");
+            }
+            // 14:40:15: another player's line wrapped, its name cut off at the chat's edge ("Psymonator[NEM] acquired Soul: Intermediate" /
+            // "Fire Spirit (Bound) through party distribution."): counted for the run as an item named "Soul: Intermediate"
+            Check("\"acquired Soul: Intermediate\" (another player's head, clipped): nothing", P(p, "acquired Soul: Intermediate") + " · " + p.Meaning("acquired Soul: Intermediate").Key + " · " + P(p, "Acquired 463 Kina."), "(nothing) ·  · Kina 463");
+            // 17:13:28: an enemy's name long enough to wrap its soul points line; the five single-line soul lines around it counted, this one not
+            var pw = new ChatParser(items);
+            var wrapped = new List<string> { "Obtained 5 Mudthorn Soul Points.", "Obtained 10 Spirit King's Bodyguard Warrior", "Soul Points.", "Obtained 5 Furious Feruk Soul Points." };
+            Check("\"Obtained 10 Spirit King's Bodyguard Warrior\" / \"Soul Points.\": one soul points line", string.Join(" | ", pw.ParseBatch(wrapped, t0).Select(b => b.Events.Count == 0 ? (ReferenceEquals(b.Line, ChatParser.JoinedMark) ? "(joined)" : "(nothing)") : string.Join("; ", b.Events.Select(D2)))), "5 Mudthorn Soul Points | (joined) | 10 Spirit King's Bodyguard Warrior Soul Points | 5 Furious Feruk Soul Points");
+            var tails = pw.JoinWrappedTails(new List<string> { "Obtained 10 Spirit King's Bodyguard Warrior" }, wrapped, t0);
+            Check("...and from a burst read, parsed one line at a time (JoinWrappedTails)", string.Join(" | ", tails.Select(x => x.Text)), "Obtained 10 Spirit King's Bodyguard Warrior Soul Points.");
+            {
+                var s = new TrackerSession(null, settings, items, "Test");
+                var tw = new DateTime(2026, 11, 5, 22, 13, 0, DateTimeKind.Utc);
+                s.ProcessChat(new List<string> { "[Pa] hello there all", "[Pb] who wants a group", "[Pc] selling stuff cheap" }, tw);
+                for (int i = 1; i <= 3; i++) s.ProcessChat(new List<string>(), tw.AddSeconds(i));
+                var b1 = new List<string> { "Obtained 10 Forest Monster Soul Points?", "Obtained 5 Parasite Swarm Soul Points.", "Obtained 5 Superior EarthSpirit Soul Points.", "Obtained 5 Mudthorn Soul Points.", "Obtained 10 Spirit King's Bodyguard Warrior", "Soul Points.", "Obtained 5 Furious Feruk Soul Points.", "Increased Pet Insight Level Krao Test Subject.", "[Lur] meow", "Increased Pet Insight Level Forest Monster." };
+                s.ProcessChat(b1, tw.AddSeconds(28.2));
+                s.ProcessChat(new List<string>(b1), tw.AddSeconds(29.0));
+                s.FlushVotes(tw.AddSeconds(31));
+                Check("17:13:28: six soul points lines in a burst read, one of them wrapped: six", s.Engine.CurrencyLines.ToString(), "6");
+            }
+        }
+
         // the Kinah counter as the deciding witness for Kina
         {
             var w = new KinaWitness();
@@ -313,6 +365,17 @@ static class ChatCountTests
             gg.Kill(r0.AddSeconds(104));
             var fight2 = new List<string> { "Acquired 521 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points.", "Spiritstone acquired.", "Acquired 253 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points.", "Acquired 441 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points." };
             Check("...under lines the read shows three times each: the kills decide", gg.Judge("Spiritstone", 1, r0.AddSeconds(105.3), r0.AddSeconds(105.3), new ItemRepeatGuard.Place(6, 10, "Points.", "Obtained 1 Enhanced Krall Combatant Soul"), new(1, DateTime.MinValue, fight2), false).V.ToString(), "Count");
+        }
+
+        // 2026-11-06, the data-fill loop (tools/data-fill.js): an item it drafts into data/extra-items.json from its MetaBot page
+        // is one a chat line resolves to by name, bound or not. Content Usage Ticket Selection Chest (Bound) is the fill's own
+        // draft of that entry (its proof run reproduced the committed entry field for field): a Special Reward Chest, not
+        // tradable, so the verb-first line counts inside a run and the name-first line counts anywhere.
+        {
+            var pf = new ChatParser(items) { InRun = () => true };
+            Check("fill: \"Acquired Content Usage Ticket Selection Chest (Bound) x1.\" in a run", P(pf, "Acquired Content Usage Ticket Selection Chest (Bound) x1."), "Content Usage Ticket Selection Chest (Bound) x1");
+            Check("fill: \"Content Usage Ticket Selection Chest (Bound) acquired.\"", P(p, "Content Usage Ticket Selection Chest (Bound) acquired."), "Content Usage Ticket Selection Chest (Bound) x1");
+            Check("fill: the entry's grade and category as the page said", items.Get(items.IdOf("Content Usage Ticket Selection Chest (Bound)")) is { } fi ? $"{fi.Grade} {fi.Category}, tradable {fi.Tradable}" : "missing", "Special Reward Chest, tradable False");
         }
         return ok;
     }

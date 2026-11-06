@@ -137,7 +137,7 @@
   </Style>
 
   <!-- buttons -->
-  <!-- keyboard focus (0.10.9): a gold ring just outside the control, in place of Windows's dotted rectangle. Drawn only when
+  <!-- keyboard focus (0.10.11): a gold ring just outside the control, in place of Windows's dotted rectangle. Drawn only when
        focus moved by keyboard (Tab, the arrows), as the dotted one was: a click never shows it. Two corner radii, for the
        pills and buttons and for the small boxes. -->
   <Style x:Key="FocusRing">
