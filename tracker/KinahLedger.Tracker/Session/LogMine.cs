@@ -393,8 +393,8 @@ public static class LogMine
         Check("rescue: the row of the unaligned watch", K("ok", "Vagabond Boots acquired.    (unaligned: first shown by a read that didn't line up, read the same 3 times, never counted)"), "rescue");
         Check("rescue: the row of a count the first read lost", K("ok", "Acquired Refining Stone x4.    (the count the first read of \"Acquired Refining Stone\" lost: x4, 3 more counted)"), "rescue");
         Check("garble: read again while fading in", K("ok", "Corrupted Judicator Necklace acquired.    (read again: it was garbled while fading in)"), "garble");
-        Check("garble: read again, still garbled with digits (0.10.14)", K("--", "? quired 756 Kina    (read again, still garbled with digits in it: not counted until a read shows it clean)"), "garble");
-        Check("rescue: the unaligned watch with a row waiting (0.10.14)", K("ok", "Acquired 165 Kina.    (unaligned: first shown by a read that didn't line up, read the same 2 times, never counted; the loot list's row for it waiting)"), "rescue");
+        Check("garble: read again, still garbled with digits (0.10.17)", K("--", "? quired 756 Kina    (read again, still garbled with digits in it: not counted until a read shows it clean)"), "garble");
+        Check("rescue: the unaligned watch with a row waiting (0.10.17)", K("ok", "Acquired 165 Kina.    (unaligned: first shown by a read that didn't line up, read the same 2 times, never counted; the loot list's row for it waiting)"), "rescue");
         Check("garble: a digit slip", K("??", "\"Enhance Stone x2,750\": its count read through the recognizer's digit slips as x2750"), "garble");
         Check("garble: a guessed name", K("??", "guessed \"Balaurls Essence\" as Balaur's Essence (closest match)"), "garble");
         Check("garble: the row's count from the list", K("??", "Orichalcum Ore: the chat line lost its count; the loot list's row says x2"), "garble");

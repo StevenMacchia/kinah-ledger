@@ -4584,8 +4584,9 @@ public sealed partial class TrackerSession
         if (_panel.Dropped is { } why)
         {
             CrashLog.Note($"crafting panel: {why} (success bar {s.Success:P0}, fail bar {s.Fail:P0})");
-            // kept: the queue's count passing a craft says it was one (CreditQuick)
-            if (_panel.DroppedOk) { _quickRaces.Add(now); if (_quickRaces.Count > 8) _quickRaces.RemoveAt(0); }
+            // kept: the queue's count passing a craft says it was one (CreditQuick). A race the panel caught at first sight
+            // once only: the queue starting after the panel's first sample asks the tracker to look again
+            if (_panel.DroppedOk && !_quickRaces.Any(q => Math.Abs((now - q.At).TotalSeconds) < 2)) { _quickRaces.Add((now, _panel.Caught)); if (_quickRaces.Count > 8) _quickRaces.RemoveAt(0); }
         }
         if (o == null) return;
         CraftBarRace(now, o.Ok, o.Combo, $"success bar {s.Success:P0}, fail bar {s.Fail:P0}");
@@ -4598,19 +4599,24 @@ public sealed partial class TrackerSession
     // before it not seen". The flicker and the instant craft tell apart by the queue's count: it passes a craft, never a
     // flicker. A quick success is kept, and when the count jumps past a craft since the last race (RaceKind's unseen, or the
     // count read past the crafts counted when the queue ends), it was that craft, a success, counted at its own time.
-    readonly List<DateTime> _quickRaces = new();
+    // Caught: the panel found with the race already run or under way (CraftPanelTracker, 2026-11-06 12:40), kept the same way.
+    readonly List<(DateTime At, bool Caught)> _quickRaces = new();
 
     /// <summary>Quick successes since <paramref name="prevRace"/>, up to <paramref name="unseen"/>, counted as crafts that worked; the unseen left over.</summary>
     int CreditQuick(DateTime prevRace, DateTime now, int unseen, string why)
     {
-        _quickRaces.RemoveAll(q => q <= prevRace);
+        _quickRaces.RemoveAll(q => q.At <= prevRace);
         int used = 0;
-        foreach (var q in _quickRaces.Where(q => q < now).OrderBy(q => q).ToList())
+        foreach (var (q, caught) in _quickRaces.Where(q => q.At < now).OrderBy(q => q.At).ToList())
         {
             if (used >= unseen) break;
-            _quickRaces.Remove(q); used++;
-            CrashLog.Note($"crafting panel: the success bar full in an instant at {q.ToLocalTime():HH:mm:ss.f} was a craft (a critical success): counted, the queue's count passed it ({why})");
-            var qwhy = $"the success bar filled in an instant (a critical success); the queue's count passed it, so it was a craft ({why})";
+            _quickRaces.Remove((q, caught)); used++;
+            CrashLog.Note(caught
+                ? $"crafting panel: the success bar full as the panel came into view at {q.ToLocalTime():HH:mm:ss.f} was a craft that ran before the panel was found: counted, the queue's count passed it ({why})"
+                : $"crafting panel: the success bar full in an instant at {q.ToLocalTime():HH:mm:ss.f} was a craft (a critical success): counted, the queue's count passed it ({why})");
+            var qwhy = caught
+                ? $"the success bar was full as the panel came into view (a craft that ran before the panel was found); the queue's count passed it, so it was a craft ({why})"
+                : $"the success bar filled in an instant (a critical success); the queue's count passed it, so it was a craft ({why})";
             if (QueueHolds) _heldRaces.Add((q, true, false, 0, qwhy));
             else PanelRace(_panelRecipe, true, false, q, _panelLevel, _queueId, why: qwhy);
         }
