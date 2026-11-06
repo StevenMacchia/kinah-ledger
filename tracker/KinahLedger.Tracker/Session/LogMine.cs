@@ -41,6 +41,9 @@ public static class LogMine
         {
             readsFiles = new[] { "reads.old.log", "reads.log" }.Select(f => Path.Combine(where, f)).Where(File.Exists).ToList();
             traceFiles = new[] { "trace.old.log", "trace.log" }.Select(f => Path.Combine(where, f)).Where(File.Exists).ToList();
+            // a miscount report's folder keeps its logs as reads-log.txt and trace.jsonl (TrackerSession.SaveReport)
+            if (readsFiles.Count == 0 && File.Exists(Path.Combine(where, "reads-log.txt"))) readsFiles.Add(Path.Combine(where, "reads-log.txt"));
+            if (traceFiles.Count == 0 && File.Exists(Path.Combine(where, "trace.jsonl"))) traceFiles.Add(Path.Combine(where, "trace.jsonl"));
         }
         else if (File.Exists(where))
         {
@@ -249,13 +252,14 @@ public static class LogMine
     static readonly (string Kind, string Tail)[] RowTails =
     {
         ("garble", "(read again: it was garbled while fading in)"),
+        ("garble", "(read again, still garbled with digits in it: not counted until a read shows it clean)"),
         ("garble", "(after a fade)"),
         ("rescue", "(counted once the chat settled)"),
         ("rescue", "(read whole but taken by no path; the loot list's row for it is the second witness)"),
         ("rescue", "(between lines already seen: no read had shown it)"),
         ("repeat", "(counted already in this read, not again)"),
     };
-    static readonly Regex UnalignedTail = new(@"    \(unaligned: first shown by a read that didn't line up, read the same \d+ times, never counted\)$", RegexOptions.Compiled);
+    static readonly Regex UnalignedTail = new(@"    \(unaligned: first shown by a read that didn't line up, read the same \d+ times, never counted(?:; the loot list's row for it waiting)?\)$", RegexOptions.Compiled);
     static readonly Regex CountTail = new(@"    \(the count the first read of "".*"" lost: x\d+, \d+ more counted\)$", RegexOptions.Compiled);
     /// <summary>The item an aside note names: "Enhance Stone x2750: the inventory at work ..." or the line quoted in "the inventory at work ("...")".</summary>
     static readonly Regex AsideItem = new(@"^(?:the inventory at work|a box) \(""(?<line>.*)""\)|^(?<name>[^:""]+?) x[\d,]+: ", RegexOptions.Compiled);
@@ -389,6 +393,8 @@ public static class LogMine
         Check("rescue: the row of the unaligned watch", K("ok", "Vagabond Boots acquired.    (unaligned: first shown by a read that didn't line up, read the same 3 times, never counted)"), "rescue");
         Check("rescue: the row of a count the first read lost", K("ok", "Acquired Refining Stone x4.    (the count the first read of \"Acquired Refining Stone\" lost: x4, 3 more counted)"), "rescue");
         Check("garble: read again while fading in", K("ok", "Corrupted Judicator Necklace acquired.    (read again: it was garbled while fading in)"), "garble");
+        Check("garble: read again, still garbled with digits (0.10.14)", K("--", "? quired 756 Kina    (read again, still garbled with digits in it: not counted until a read shows it clean)"), "garble");
+        Check("rescue: the unaligned watch with a row waiting (0.10.14)", K("ok", "Acquired 165 Kina.    (unaligned: first shown by a read that didn't line up, read the same 2 times, never counted; the loot list's row for it waiting)"), "rescue");
         Check("garble: a digit slip", K("??", "\"Enhance Stone x2,750\": its count read through the recognizer's digit slips as x2750"), "garble");
         Check("garble: a guessed name", K("??", "guessed \"Balaurls Essence\" as Balaur's Essence (closest match)"), "garble");
         Check("garble: the row's count from the list", K("??", "Orichalcum Ore: the chat line lost its count; the loot list's row says x2"), "garble");

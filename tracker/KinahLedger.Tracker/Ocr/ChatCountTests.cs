@@ -212,6 +212,153 @@ static class ChatCountTests
             }
         }
 
+        // ---- the live-log loop's second run (2026-11-06, tools/log-mine.md): spots mined from reads.log and trace.log of
+        // 2026-11-06 09:00 to 11:44 (tracker 0.10.6 live), and Steven's miscount report of 11:00:58 ----
+        Console.WriteLine("\nLive-log spots of 2026-11-06 (log-mine): a garbled copy is its line; a wrapped count tail; a fading read's digits; a kill's payout in the Abyss Corridor:");
+        {
+            string D2(GameEvent e) => e is CurrencyGained c ? $"{c.Amount} {(c.Enemy.Length > 0 ? c.Enemy + " " : "")}{c.Name}" : D(e);
+            // 09:09:47.8: a chat of ten Kukuru lines, read once with "Acquired Kukuru x3." cut to "Acquired Kukuru" at the chat's
+            // edge: lining up on its tail found an earlier copy of the lines around it and took seven lines for new (nine Kukuru
+            // and two Pure Orichalcum Ore counted again)
+            {
+                var kk = new List<string> { "Acquired Kukuru x3.", "Kukuru acquired.", "Kukuru acquired.", "Acquired Kukuru x3.", "Acquired Kukuru x3.", "Kukuru acquired.", "Acquired Pure Orichalcum Ore x2.", "Acquired Kukuru x3.", "Kukuru acquired.", "Kukuru acquired." };
+                var lt = new LineTracker();
+                lt.NewLines(new List<string>(kk));
+                lt.NewLines(new List<string>(kk));
+                var cut = new List<string>(kk); cut[7] = "Acquired Kukuru";
+                Check("09:09:47 a count cut off in a chat full of one line: the same screen, nothing new", string.Join(" | ", lt.NewLines(cut)), "");
+                Check("...and the clean read after it: nothing new", string.Join(" | ", lt.NewLines(new List<string>(kk))), "");
+                var ore = new List<string>(kk.Skip(1)) { "Orichalcum Ore acquired." };
+                Check("...a line that did arrive under them is new", string.Join(" | ", lt.NewLines(ore)), "Orichalcum Ore acquired.");
+            }
+            // 09:03:01.4: the chat covered for 20 s (the world behind it, a window's labels), then a read lined up with the last
+            // full read: "Kulsuru-acquired." under "Kukuru acquired." (two letters off) lined up one line short, so the garbled
+            // copy counted as a third Kukuru ("the read shows 3 such lines")
+            {
+                var lt = new LineTracker();
+                lt.NewLines(new List<string> { "[Bfirblocked", "[MrGaines] English Legion <Grace> Recruiting", "friendly active members!", "Orichalcum Ore acquired.", "Kukuru acquired.", "[uSubs4Heals] friendly rgbtq.:kekekee", "Acquired Kukuru x2.", "Acquired Kukuru x6.", "Kukuru acquired.", "Kukuru acquired." });   // 09:02:38.5
+                lt.NewLines(new List<string> { "ltle Papis" });                       // 09:02:41, the world behind the chat
+                lt.NewLines(new List<string> { "iff", "Wraith Evasion", "Open" });    // 09:02:49, a window's labels
+                Check("09:03:01 lined up with the last full read: a garbled copy of a line is that line, the joined lines are new", string.Join(" | ", lt.NewLines(new List<string> { "Acquired KukurXl", "Kukuru acquired.", "Kulsuru-acquired.", "Rav joined event.", "ImRumi joined event.", "Cailia joined event.", "Teemo joined event.", "Astraeus joined event.", "ikarus joined event.", "Ylva joined event." })), "Rav joined event. | ImRumi joined event. | Cailia joined event. | Teemo joined event. | Astraeus joined event. | ikarus joined event. | Ylva joined event.");
+            }
+            // 09:29:28.4 to 29.2 (the Abyss Corridor): a read of seven lines garbled as they faded in ("c quired 787 Rank Point(s)"
+            // for 181, "quired 790 Abyss Point(s)" for 190), then the clean read: the kill's 181 Rank, 80 Kina and 190 Abyss Points,
+            // counted from the read before, came up as new a second time (181 Rank and 80 Kina counted again)
+            {
+                var lt = new LineTracker();
+                lt.NewLines(new List<string> { "Acquired GI 89", "Acquired\" 245 Ra", "Acquired!214 Kina.", "Acq�ir�d 257", "Acquired 203", "Acquired 180 Kina.", "Acquired 213 Abyss Point(s).", "Acquired 181 Rank Point(s).", "Acquired 80 Kina.", "Acquired 190 Abyss Point(s)." });   // 09:29:27.9
+                Check("09:29:28 a read garbled as it faded in: nothing new", string.Join(" | ", lt.NewLines(new List<string> { "quired 245 Rank�point(s)", "Acquire d 277 Kina", "1_4fguihed 257 Abyss Point(s)", "Acquire d 203 Rank Point(s)", "cguired 213 Abyss Point(s)", "c quired 787 Rank Point(s)", "quired 790 Abyss Point(s)" })), "");
+                Check("09:29:29 the clean read after it: the lines the garbled read misread are not new", string.Join(" | ", lt.NewLines(new List<string> { "Acquired 213 Abyss Point(s).", "Acquired 181 Rank Point(s).", "Acquired 80 Kina.", "Acquired 190 Abyss Point(s).", "Point(s).", "Acquired )182 Kina.", "Acquired 248Abyss Point(s).", "Acquired 207 Rank Point(s).", "Acquired 84 Kina.", "Acquired 217 Abyss Point(s)." })), "Point(s). | Acquired )182 Kina. | Acquired 248Abyss Point(s). | Acquired 207 Rank Point(s). | Acquired 84 Kina. | Acquired 217 Abyss Point(s).");
+            }
+            // 11:05:37.6 to 41.6: a gather's two "Aria acquired." after a fade, then a read the recognizer missed (the chat faint)
+            // and the same two lines once more, the second half gone: "Aria acquired." counted a third time (the loot list showed two)
+            {
+                var lt = new LineTracker();
+                lt.NewLines(new List<string> { "[Pa] hello there all", "[Pb] who wants a group", "[Pc] selling stuff cheap" });
+                lt.NewLines(new List<string>());
+                Check("11:05:37 after a fade, two Aria lines: both new", string.Join(" | ", lt.NewLines(new List<string> { "Aria acquired.", "Aria acquired." })), "Aria acquired. | Aria acquired.");
+                lt.NewLines(new List<string> { "Aria acquired.", "Aria acquired." });
+                lt.NewLines(new List<string>());
+                Check("11:05:41 the same two lines after a missed read, one half gone: fading out, not a third", string.Join(" | ", lt.NewLines(new List<string> { "Aria acquired.", "A u. • eauired." })), "");
+                lt.NewLines(new List<string>());
+                Check("...a clean line after a fade is still what arrived", string.Join(" | ", lt.NewLines(new List<string> { "Aria acquired." })), "Aria acquired.");
+            }
+            // 11:34:24.5: "Acquired Artwork Scrap: Field Boss I (Elyos)" with its "(Bound) x 10." wrapped onto the next line: the item
+            // only comes bound, so the first half read as a reward, and the tail rule joined item lines only: x1, "quantity unsure"
+            var pt = new ChatParser(items);
+            Check("wrapped tail: \"Acquired Artwork Scrap: Field Boss I (Elyos)\" / \"(Bound) x 10.\"", string.Join(" | ", pt.ParseBatch(new List<string> { "Acquired 202 Kina.", "Acquired Artwork Scrap: Field Boss I (Elyos)", "(Bound) x 10." }, t0).Select(b => b.Events.Count == 0 ? (ReferenceEquals(b.Line, ChatParser.JoinedMark) ? "(joined)" : "(nothing)") : string.Join("; ", b.Events.Select(D)))), "Kina 202 | reward Artwork Scrap: Field Boss I (Elyos) x10 | (joined)");
+            // 09:36:10.3 to 11.5: three readings of "Acquired Instant Clear Ticket: Daily Dungeon", the third clean but for "AQquired":
+            // the vote let the guessed "D9ilY>Dungeofi" stand for the group, refused as on no table nearby; the x14 never counted
+            Check("\"AQquired Instant Clear Ticket: Daily Dungeon\" is the verb", ChatParser.CleanSystemLine("AQquired Instant Clear Ticket: Daily Dungeon"), "Acquired Instant Clear Ticket: Daily Dungeon");
+            {
+                var v = new ChatVoter(); var pv = new ChatParser(items);
+                var h = new List<string> { "[Vamp] need force", "[Vamp] for Wb" };
+                var r1 = new List<string>(h) { "Aqquiced�lnstant Cl�ar'Ticket: Daily Dungeon", "(Bound) x 14." };
+                var r2 = new List<string>(h) { "Acquired Instant Clear Ticket: D9ilY>Dungeofi", "(Bound) x 14." };
+                var r3 = new List<string>(h) { "AQquired Instant Clear Ticket: Daily Dungeon", "(Bound) x 14." };
+                var got = v.Push(r1.Skip(2).ToList(), r1, t0, pv.Meaning).Concat(v.Push(new List<string>(), r2, t0.AddSeconds(0.6), pv.Meaning)).Concat(v.Push(new List<string>(), r3, t0.AddSeconds(1.2), pv.Meaning)).ToList();
+                Check("vote: the reading read exactly stands for its group, not the guessed one", string.Join(" | ", got), "AQquired Instant Clear Ticket: Daily Dungeon | (Bound) x 14.");
+                Check("...and parsed with its tail: x14", string.Join(" | ", pv.ParseBatch(got, t0).Where(b => b.Events.Count > 0).Select(b => string.Join("; ", b.Events.Select(D)))), "reward Instant Clear Ticket: Daily Dungeon x14");
+            }
+            // Steven's miscount report of 11:00:58 (reads.log 10:56:20.8): "Acquired-wrathfuVMind¯x2." read so in three reads, a dash
+            // where the space after the verb was: nothing counted, while the two "Wrathful Mind acquired." beside it counted: 2 of 4
+            Check("\"Acquired-wrathfuVMind¯x2.\" (a dash after the verb, the name a letter off): Wrathful Mind x2", P(p, "Acquired-wrathfuVMind¯x2.") + " · " + P(p, "Acquired-WrathfuleMind x2."), "Wrathful Mind x2 · Wrathful Mind x2");
+            // 09:30:06.8 to 10.0 (the Abyss Corridor): a read of fifteen lines garbled as they faded in; "? quired 756 Kina" (156 Kina)
+            // read again at its place and counted as 756, then "Acquired 156 Kina." from the clean read: a kill's Kina twice, 912 for 156
+            {
+                var s = new TrackerSession(null, settings, items, "Test");
+                var t4 = new DateTime(2026, 11, 6, 14, 30, 0, DateTimeKind.Utc);
+                s.ProcessChat(new List<string> { "Acquired 221 Abyss Point(s).", "Acquired 208 Rane", "Acquired 228 Kina.", "Acquired 218 Abyss Point(s).", "Acquired 252 Rank Point(s).", "Acquired 92 Kina.", "Acquired 264 Abyss Point(s)." }, t4);   // 09:30:06.8, the history
+                s.ProcessChat(new List<string> { "Acquired 221 Abyss Point(s).", "Acquired*208 RanksPoint(s).", "Acquired 228 Kiha.", "Acquired 218 Abyss Doings).", "Acquired 252 Rank Point(s).", "Acquired 92 Kina.", "Acquired 264 Abyss Point(s).", "Acquired 235 Rank Point(s).", "Acquired 107 Kina.", "Acquired 246 Abyss Point(s)." }, t4.AddSeconds(0.6));   // 07.4
+                s.ProcessChat(new List<string> { "2S \" \"UJYSsrp-", "A c quired 92 Rina", "Acquire d 264 A4bRyssi�..", "Qin�s)�", "A c quired 235 R�nk-p", "4 c quired�07 Kina", "�031ht(k�", "c quired 246 Abyss p", "t(sF�", "c quired 776 Rank p", "? quired 756 Kina", "oint(s)", "oint(s)", "70ired 784 Abyss P", "oint(s)" }, t4.AddSeconds(1.2));   // 08.0
+                s.ProcessChat(new List<string> { "Acquired 21 &", "Acqui red952", "Acquired-92 Kina:", "Acquired", "Acquired235 Rank Point(S).", "Acquired 107 Kina.", "Acquired 246 Abyss Point(s).", "Acquired 176 Rank Point(s).", "Acquired 156 Kina.", "Acquired 184 Abyss Point(s)." }, t4.AddSeconds(1.9));   // 08.7
+                s.ProcessChat(new List<string> { "Acquired 264 Abyss Point(s).", "Acqbired 235 Rank Point(s).", "AcquiredM07 Kina.", "Acquired 246 Abyss Point(s).", "Acquired 176\\Rank Point(s).", "Acquired 156' Kina.", "Acquired 184 Abyss Point(s).", "Acquired 184 Rank Point(s).", "Acquired 178 Kina.", "Acquired 193 Abyss Point(s)." }, t4.AddSeconds(2.6));   // 09.4
+                s.ProcessChat(new List<string> { ":quired 264", "cquired 235 Rank point(s).", "cquired 107 Kina.", "Acquired 246 Abyss point(s)", "hi_s", "Acquired 176 Rank point(s),", "Acquired 156 Kipa.", "Acquired 184 Abyss point(s).", "Acquired 184 Rank", "Acquired 178 Kina.", "Abyss Pont(s)." }, t4.AddSeconds(3.2));   // 10.0
+                s.FlushVotes(t4.AddSeconds(5));
+                Check("09:30:08 a line read again still garbled, digits in it: not counted; the clean read counts once (107, 156, 178)", s.Engine.Totals().Kinah.ToString(), "441");
+            }
+            // 09:31:08.8 to 09.5: "cquired 137 Kina." read as the line faded in, then "Acquired 131 Kina." clean in its place: the
+            // vote kept 137 (two readings a digit apart are two lines) and the loot list's 131 row waited for nothing
+            {
+                var v = new ChatVoter(); var pv = new ChatParser(items);
+                var r1 = new List<string> { "Acquired 204 Kina.", "cquired 137 Kina." };
+                var r2 = new List<string> { "Acquired 204 Kina.", "Acquired 131 Kina.", "Acquired 214 Abyss Point(s)." };
+                var got = v.Push(new List<string> { "cquired 137 Kina." }, r1, t0, pv.Meaning).Concat(v.Push(new List<string> { "Acquired 214 Abyss Point(s)." }, r2, t0.AddSeconds(0.7), pv.Meaning)).Concat(v.Push(new List<string>(), r2, t0.AddSeconds(1.4), pv.Meaning)).Concat(v.Flush(pv.Meaning)).ToList();
+                Check("vote: a fading first reading, then a clean one a digit apart in its place: the clean one", string.Join(" | ", got), "Acquired 131 Kina. | Acquired 214 Abyss Point(s).");
+            }
+            // 09:27 to 09:30 (the Abyss Corridor): Rank and Abyss Point lines read garbled or cut at the chat's edge were counted
+            // for the run as items named "Rank' Points", "RankiPoints", "Pointe)" and "Abyss" (eight lines)
+            var pr = new ChatParser(items) { InRun = () => true };
+            string R6(string l) => string.Join("; ", pr.Parse(l, t0).Select(e => e is ItemAcquired a ? $"{items.NameOf(a.ItemId)} x{a.Count}" : D2(e))) is { Length: > 0 } s6 ? s6 : "(nothing)";
+            Check("in a run: \"Acquired 207 Rank' Point(S).\", \"Acquired 213 RankiPoints.\", \"Acquired 189 Abyss\"", R6("Acquired 207 Rank' Point(S).") + " · " + R6("Acquired 213 RankiPoints.") + " · " + R6("Acquired 189 Abyss"), "Rank Points x207 · Rank Points x213 · Abyss Points x189");
+            Check("...and with a stray mark around the amount: \"Acquired 179. Rane Point(s):\", \"Acquired -187 Abyss Point(s).\", \": quired 220 Kinö.\"", R6("Acquired 179. Rane Point(s):") + " · " + R6("Acquired -187 Abyss Point(s).") + " · " + P(p, ": quired 220 Kinö."), "Rank Points x179 · Abyss Points x187 · Kina 220");
+            Check("...\"Acquired 213 Pointe)\" names no currency: nothing; \"Abyss Doings)\" is Abyss Points", R6("Acquired 213 Pointe)") + " · " + R6("Acquired 218 Abyss Doings)."), "(nothing) · Abyss Points x218");
+            Check("out of a run the same lines are the kill's points", string.Join(" · ", new[] { "Acquired 207 Rank' Point(S).", "Acquired 189 Abyss" }.Select(l => string.Join("; ", p.Parse(l, t0).Select(D2)))), "207 Rank Points · 189 Abyss Points");
+            Check("meaning: \"Acquired 181 Abyss Point(s).\" is exactly Abyss Points x181", p.Meaning("Acquired 181 Abyss Point(s).").ToString(), "(i:abyss pointsx181, True)");
+            Check("a kill's payout lines are no reward batch", $"{p.IsKillPay("Acquired 181 Rank Point(s).")} {p.IsKillPay("Acquired 80 Kina.")} {p.IsKillPay("Acquired 190 Abyss Point(s).")} {p.IsKillPay("Acquired 17T Rank, Point(s).")} {p.IsKillPay("c quired 223 Abyss P")} {p.IsKillPay("Acquired 1,000 Abyss Point(s).")} {p.IsKillPay("Acquired Odyle x5.")} {p.IsKillPay("Vagabond Cloak acquired.")}", "True True True True True False False False");
+            Check("Rank and Abyss Points are never \"more than one pickup gives\"", $"{PickupCheck.IsKillPoints("Rank Points")} {PickupCheck.IsKillPoints("Abyss Points")} {PickupCheck.IsKillPoints("Enhance Stone")}", "True True False");
+            // 09:26 to 09:32: the Abyss Corridor is an event on the list, so a kill's three lines (Rank Points, Kina, Abyss Points)
+            // were "its rewards coming in", the next kill's Kina "the open world's" and each 10 s run closed with its chat set aside
+            // for a reward picture that never comes: ten runs, 440 chat items and the kills' Kina marked not read
+            {
+                var s = new TrackerSession(null, settings, items, "Test");
+                var tc = new DateTime(2026, 11, 6, 14, 26, 0, DateTimeKind.Utc);
+                s.ApplyZone("Abyss Corridor", tc);
+                var chat = new List<string> { "[Pa] hello there all", "[Pb] who wants a group", "[Pc] selling stuff cheap" };
+                s.ProcessChat(new List<string>(chat), tc.AddSeconds(1));
+                var kills = new[] { (233, 183, 244), (252, 214, 264), (211, 126, 221), (198, 220, 207) };
+                double at = 2;
+                foreach (var (rank, kina, ap) in kills)
+                {
+                    chat.Add($"Acquired {rank} Rank Point(s)."); chat.Add($"Acquired {kina} Kina."); chat.Add($"Acquired {ap} Abyss Point(s).");
+                    while (chat.Count > 10) chat.RemoveAt(0);
+                    for (int i = 0; i < 3; i++) s.ProcessChat(new List<string>(chat), tc.AddSeconds(at + i * 0.5));
+                    s.ApplyZone("Abyss Corridor", tc.AddSeconds(at + 1.5));
+                    at += 8;
+                }
+                s.FlushVotes(tc.AddSeconds(at));
+                var run = s.Instances.CurrentRun;
+                Check("Abyss Corridor: one run, still open, counted from the chat (its Kina, its kills)", run == null ? "no run" : $"{run.Kind} {run.Zone} Kinah {run.Kinah} kills {run.Kills} paid {run.PaidAt != null}", "Event Abyss Corridor Kinah 743 kills 4 paid False");
+                Check("...and a kill's three lines are no \"rewards came in\"", Log().Contains("Abyss Corridor: its rewards came in").ToString(), "False");
+            }
+            // 09:30:51.8: a read that couldn't be lined up (its neighbours garbled differently) held "Acquired 165 Kina." in its
+            // middle; the loot list's 165 Kina row waited for a chat line and expired. The line read exactly and the row are two
+            // witnesses of one pickup (as an item line and its row have been since 2026-10-27)
+            {
+                var s = new TrackerSession(null, settings, items, "Test") { Vote = false };
+                var t8 = new DateTime(2026, 11, 6, 14, 30, 50, DateTimeKind.Utc);
+                s.ProcessChat(new List<string> { "[P1] hello there all", "[P2] who wants a group", "Acquired 200 Kina.", "[P3] selling stuff cheap", "[P4] looking for group now" }, t8);
+                s.ProcessList(new List<LootLine> { new(1197, "Kina x165", 0.62, 0xF0F0F0F0F0F0F0F0UL, 0.14, 0.12, 1920) }, t8.AddSeconds(0.6));
+                s.ProcessList(new List<LootLine> { new(1197, "Kina x165", 0.62, 0xF0F0F0F0F0F0F0F0UL, 0.14, 0.12, 1920) }, t8.AddSeconds(1.0));
+                s.ProcessChat(new List<string> { "[P2] wh0 wamts a gr0up", "Acqu1red 200 K1na.", "Acquired 165 Kina.", "[P3] se11ing stuf cheep", "[P4] l00king f0r gr0up n0w" }, t8.AddSeconds(1.2));
+                s.FlushVotes(t8.AddSeconds(3));
+                Check("09:30:51 a Kina line in a read that didn't line up, its loot list row waiting: counted, two witnesses", s.Engine.Totals().Kinah.ToString(), "165");
+            }
+            // 08:55:07.4: "Successfully obtained Drops Reward Item." printed with its Odyle Energy x6 and a Content Usage Ticket
+            // Selection Chest: the inventory at work, like the mail's "Obtained items attached to mail." (08:54:08.6)
+            Check("\"Successfully obtained Drops Reward Item.\" is the inventory at work, like the mail's line", $"{PickupCheck.IsInventoryLine("Successfully obtained Drops Reward Item.")} {PickupCheck.IsInventoryLine("Obtained items attached to mail.")}", "True True");
+        }
+
         // the Kinah counter as the deciding witness for Kina
         {
             var w = new KinaWitness();

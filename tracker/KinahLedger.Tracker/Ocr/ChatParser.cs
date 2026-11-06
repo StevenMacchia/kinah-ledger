@@ -19,7 +19,8 @@ public sealed partial class ChatParser
     private static partial Regex Timestamp();
 
     /// <summary>"Acquired 520 Kina." The recognizer sometimes glues the verb to the number ("Acquiredn521 Kina?"), so the gap is loose.</summary>
-    [GeneratedRegex(@"\bacquired[\sn]{0,2}[.,\-'`]?\s?(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kinah?\b(?<rest>.*)$", RegexOptions.IgnoreCase)]
+    // "Kino" is Kina with its a misread (": quired 220 Kinö.", 2026-11-06 09:28:12, an accent on the o)
+    [GeneratedRegex(@"\bacquired[\sn]{0,2}[.,\-'`]?\s?(?<amt>[0-9OoIl][0-9OoIl,\. ]*?)\s*kin[ao]h?\b(?<rest>.*)$", RegexOptions.IgnoreCase)]
     private static partial Regex Kina();
 
     /// <summary>"A total payment of 34,916 Kina has been completed." The game prints it before the "Acquired 34,916 Kina." of a quest or payment reward.</summary>
@@ -238,7 +239,9 @@ public sealed partial class ChatParser
         for (int i = 0; i + 1 < res.Count; i++)
         {
             if (!WrappedTail.IsMatch(res[i + 1].Text) || res[i + 1].Events.Count > 0 || ReferenceEquals(res[i].Text, JoinedMark)) continue;
-            if (res[i].Events.Count != 1 || res[i].Events[0] is not ItemAcquired || Regex.IsMatch(res[i].Text, @"\(\s*b[o0]und\s*\)", RegexOptions.IgnoreCase)) continue;
+            // ...a reward line too: an item that only comes bound reads as a reward with its "(Bound)" still on the next line
+            // (reads.log 2026-11-06 11:34:25.7: "Acquired Artwork Scrap: Field Boss I (Elyos)" / "(Bound) x 10." counted as one)
+            if (res[i].Events.Count != 1 || res[i].Events[0] is not (ItemAcquired or RewardReceived) || Regex.IsMatch(res[i].Text, @"\(\s*b[o0]und\s*\)", RegexOptions.IgnoreCase)) continue;
             var joined = res[i].Text.Trim() + " " + res[i + 1].Text.Trim();
             var j = Trial(joined, time);
             if (j.Count != 1 || j[0] is not (ItemAcquired or RewardReceived)) continue;
@@ -454,14 +457,20 @@ public sealed partial class ChatParser
         // accents the recognizer adds to plain letters ("Acquiréd 169 Kina.", "AcquireÖ"): the game's English text has none
         var s = StripAccents(line);
         // marks that never belong to a chat line; a * only stays when it is a count ("*2" for ×2)
-        s = Regex.Replace(s, @"[«»•·¤~^`´¨""“”|¦]", " ");
+        s = Regex.Replace(s, @"[«»•·¤~^`´¨""“”|¦¯�]", " ");
         s = Regex.Replace(s, @"\*(?!\s?\d)", " ");
         // the verb's r read as a t ("Riverside Pauldronsacquited,", 2026-10-24 13:07): one letter, still the verb
         s = Regex.Replace(s, @"(acqu[il1])t(?=[eé]+[dao]?(?:\W|$))", "$1r", RegexOptions.IgnoreCase);
+        // its c read as a q ("AQquired Instant Clear Ticket: Daily Dungeon", reads.log 2026-11-06 09:36:11.5: the one clean
+        // reading of the name, and the vote took a garbled one instead)
+        s = Regex.Replace(s, @"^(\W*)a[qg](?=qu[il1]r)", "$1Ac", RegexOptions.IgnoreCase);
         // a dash, underscore, colon or no space at all between the name and the verb: "SpiritStone—acquired",
         // "Leatheracquired", "Riverside Pauldröns:acquired." (the second of two Pauldrons lost to it, 2026-10-24 13:07)
         s = Regex.Replace(s, @"(?<=\w)[\-—–_:;,]+(?=acqu)", " ", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"(?<=[a-z\)])(?=acqu[il1]r)", " ");
+        // ...or between the verb and the name: "Acquired-wrathfuVMind x2." (Steven's miscount report of 2026-11-06 11:00:58:
+        // two Wrathful Mind of four counted; this line, read so in every read, counted nothing)
+        s = Regex.Replace(s, @"^(\W*acqu[il1]r[eé]+[dao]?)[\-—–_:;,]+(?=\w)", "$1 ", RegexOptions.IgnoreCase);
         // the first letter or two of "Acquired" lost while the line faded in, before an amount of Kina
         s = Regex.Replace(s, @"^\W*(?:a?c|c?q)?quired(?=\s*[0-9OoIl])", "Acquired", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"^\W*cquired\b", "Acquired", RegexOptions.IgnoreCase);
@@ -619,14 +628,18 @@ public sealed partial class ChatParser
         if (!it.Success) return ("", false);
         var name = it.Groups["name"].Value.Trim().TrimEnd('.', ',', ';', ':', '\'', '"', '`', '-', ' ');
         int n = it.Groups["n"].Success && int.TryParse(it.Groups["n"].Value, out var nn) ? nn : 1;
-        var lead = Regex.Match(name, @"^(\d{1,4})[\s\-]+(.+)$");
+        var lead = Regex.Match(name, @"^[\-–—:.\s]*(\d{1,4})[\s\-.:]+(.+)$");
         if (lead.Success) { n = int.Parse(lead.Groups[1].Value); name = lead.Groups[2].Value; }
         name = Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
+        name = Regex.Replace(name, @"\(s\)$", "s");
+        if (CurrencyNear(name) is { } cn) name = cn; else if (PointsFragment(name)) return ("", false);
         // a count the recognizer garbled ("Odyle xT", "Refining StonevxT"): read through its digit slips
         if (!it.Groups["n"].Success && !lead.Success && !_items.IsExact(name) && QuantityTail(name) is { } qt && KnowsQuiet(qt.Head)) { name = qt.Head; n = qt.Count; }
         if (name.Length < 2 || !_items.Knows(name)) return ("", false);
         var canon = _items.NameOf(_items.IdOf(name));
-        return ("i:" + canon.ToLowerInvariant() + "x" + n, string.Equals(canon, name, StringComparison.OrdinalIgnoreCase));
+        // an item that only comes bound is listed with its "(Bound)"; the line's name, read whole, is exact without it
+        bool exact = string.Equals(canon, name, StringComparison.OrdinalIgnoreCase) || string.Equals(Regex.Replace(canon, @"\s*\(bound\)\s*$", "", RegexOptions.IgnoreCase), name, StringComparison.OrdinalIgnoreCase);
+        return ("i:" + canon.ToLowerInvariant() + "x" + n, exact);
     }
 
     /// <summary>
@@ -741,10 +754,17 @@ public sealed partial class ChatParser
             if (name.Length < 2) yield break;
             // "Acquired 3 Iron Ore" puts the count first; keep the name clean and the count right
             // ...and a big one with its thousands mark ("Acquired 1,000 Abyss Point(s)."): the count, not part of the name
-            var lead = System.Text.RegularExpressions.Regex.Match(name, @"^(\d{1,3}(?:,\d{3})+|\d{1,6})[\s\-]+(.+)$");
+            // ...read with a stray mark around it ("Acquired 179. Rane Point(s):", "Acquired -187 Abyss Point(s).", 2026-11-06 09:29:56)
+            var lead = System.Text.RegularExpressions.Regex.Match(name, @"^[\-–—:.\s]*(\d{1,3}(?:,\d{3})+|\d{1,6})[\s\-.:]+(.+)$");
             int lead_n = 0;
             if (lead.Success) { lead_n = (int)Math.Min(int.MaxValue, long.Parse(lead.Groups[1].Value.Replace(",", ""))); name = lead.Groups[2].Value; }
             name = System.Text.RegularExpressions.Regex.Replace(name, @"\(s\)$", "s");   // "Abyss Point(s)" is "Abyss Points"
+            // a currency's name read garbled ("Rank' Point(S)", "RankiPoints", "Abyss Doings)") or cut at the chat's edge
+            // ("Acquired 189 Abyss") is that currency; a fragment with only "Point(s)" left names none and counts as nothing.
+            // Neither is an item counted for the run by its name (reads.log 2026-11-06 09:27 to 09:30: eight such lines in
+            // the Abyss Corridor, items named "Rank' Points", "Pointe)" and "Abyss")
+            if (CurrencyNear(name) is { } currency) name = currency;
+            else if (PointsFragment(name)) yield break;
             bool bound = name.Contains("(bound)", StringComparison.OrdinalIgnoreCase);
             // bound and tradeable copies count as the same drop; the flag is kept, the name isn't split
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
@@ -781,7 +801,7 @@ public sealed partial class ChatParser
             if (skin.Success && !Update.RemoteConfig.Current.SkinsCount) yield break;
             if (skin.Success) name = $"{skin.Groups["set"].Value.Trim()} (Skin: {skin.Groups["slot"].Value.Trim()})";
             // "Acquired .107 Kina" with a mark the Kina rule didn't expect: Kina is never an item, and a garbled amount isn't counted
-            if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\bk[i1l]nah?\s*$", RegexOptions.IgnoreCase)) yield break;
+            if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\bk[i1l]n[ao]h?\s*$", RegexOptions.IgnoreCase)) yield break;
             // "Obtained 1 Natura Soul Crystals.": a pet crystal, kept apart from drops and rated by zone, not by kill.
             // The recognizer garbles these often ("Varian SouI Crystals", "Papis Soul poin!s"), so the match is loose:
             // anything with "soul" followed by "cryst" or "poin" is one of the two, never a drop.
@@ -921,6 +941,46 @@ public sealed partial class ChatParser
     private static partial Regex ObtainedLine();
 
     static string Letters(string w) { var sb = new StringBuilder(); foreach (var c in w) if (char.IsLetter(c)) sb.Append(char.ToLowerInvariant(c)); return sb.ToString(); }
+
+    /// <summary>
+    /// A kill's own payout line: Kina under a thousand, or Rank or Abyss Points under a thousand ("Acquired 181 Rank Point(s).",
+    /// "Acquired 190 Abyss Point(s)."). Three such lines land at once per kill in the Abyss Corridor, and are no reward coming in.
+    /// </summary>
+    public bool IsKillPay(string raw)
+    {
+        var line = Timestamp().Replace(raw.Trim(), "");
+        if (line.Length == 0 || line.StartsWith('[') || !line.Any(char.IsDigit) || !Regex.IsMatch(line, @"kin|poin|abys|ran", RegexOptions.IgnoreCase)) return false;
+        // the verb broken while the line faded in ("c quired 223 Abyss P", ": quired 220 Kino."): mended for this look alone;
+        // the line counts, or not, on its own parse
+        line = Regex.Replace(line, @"^\W*(?:[a-z]\s*)?quired\b", "Acquired", RegexOptions.IgnoreCase);
+        var evs = Trial(line, DateTime.UtcNow);
+        return evs.Count > 0 && evs.All(e => e is KinahChanged { Bound: false, Delta: > 0 and < 1000 }
+            || e is CurrencyGained { Amount: < 1000 } c && PickupCheck.IsKillPoints(c.Name)
+            || e is ItemAcquired { Count: < 1000 } a && PickupCheck.IsKillPoints(_items.NameOf(a.ItemId)));
+    }
+
+    /// <summary>The currencies a kill pays out in the Abyss Corridor, three lines at a time with its Kina.</summary>
+    public static readonly string[] KillCurrencies = { "Rank Points", "Abyss Points" };
+
+    /// <summary>The currency a read name is, within two letters of it or a cut-off head of it ("Abyss", "Rank Poi"); null for any other name.</summary>
+    internal static string? CurrencyNear(string name)
+    {
+        var k = Letters(name);
+        if (k.Length < 4) return null;
+        foreach (var c in KillCurrencies)
+        {
+            var ck = Letters(c);
+            if (k == ck || Dist(k, ck) <= 2 || (ck.StartsWith(k, StringComparison.Ordinal) && !k.StartsWith("point", StringComparison.Ordinal))) return c;
+        }
+        return null;
+    }
+
+    /// <summary>"Point(s)", "Pointe)": the tail of a currency line whose head was lost, naming no currency.</summary>
+    internal static bool PointsFragment(string name)
+    {
+        var k = Letters(name);
+        return k.Length >= 4 && (Dist(k, "points") <= 2 || Dist(k, "point") <= 1);
+    }
 
     /// <summary>Levenshtein distance, for words a few letters long.</summary>
     static int Dist(string a, string b)
@@ -1064,6 +1124,10 @@ public sealed class LineTracker
             // after a fade, one or two lines are what arrived since: count them even when they repeat the last ones seen
             // ("Orichalcum Ore acquired." twice in a row). More at once means the history came back (a hover), so align as usual.
             _faded = false;
+            // ...unless they are the last lines seen, read once more as they fade out, one of them already half gone: a read
+            // the recognizer missed between (the chat faint) made the next one look like a return from a fade (reads.log
+            // 2026-11-06 11:05:41.6: "Aria acquired." | "A u. • eauired." after "Aria acquired." twice: a third Aria)
+            if (keys.Count <= 2 && FadingOut(cur, keys)) return new List<string>();
             if (keys.Count <= 2) { _prev = keys; LastAfterFade = true; return Returned(keys, new List<string>(cur)); }
         }
         if (_prev.Count == 0)
@@ -1073,6 +1137,11 @@ public sealed class LineTracker
             return new List<string>();
         }
         if (keys.Count == _prev.Count && Enumerable.Range(0, keys.Count).All(i => Similar(keys[i], _prev[i]))) { Anchor(keys); return new List<string>(); }
+        // the same screen read again with a line or two garbled (a count cut off at the chat's edge, a name a few letters
+        // off): nothing new. Lining up on such a read's tail found an earlier copy of the lines around the garbled one and
+        // took the whole bottom of a chat full of one line for new (reads.log 2026-11-06 09:09:47.8: "Acquired Kukuru" for
+        // "Acquired Kukuru x3." in a chat of ten Kukuru lines; nine Kukuru and two ore counted again)
+        if (keys.Count == _prev.Count && SameScreen(keys, _prev)) return new List<string>();
 
         // The chat grew and the last read is exactly its top: nothing scrolled off, so the lines below are new, even when
         // they repeat the line above them ("Raw Leather acquired." twice in a row). Lining up on the last line alone took
@@ -1127,12 +1196,20 @@ public sealed class LineTracker
         lost = new List<string>();
         for (int j = prev.Count - 1; j >= Math.Max(0, prev.Count - 4); j--)
         {
-            for (int k = Math.Min(3, j + 1); k >= 1; k--)
+            // the longest run of lines that matches, at its last occurrence (fewest new lines, never a double count)
+            (int I, int K)? clean = null;
+            for (int k = Math.Min(3, j + 1); k >= 1 && clean == null; k--)
             {
                 var tail = prev.GetRange(j - k + 1, k);
-                for (int i = keys.Count - k; i >= 0; i--)        // last occurrence: fewest new lines, never a double count
+                for (int i = keys.Count - k; i >= 0; i--)
+                    if (Enumerable.Range(0, k).All(x => Similar(keys[i + x], tail[x]))) { clean = (i, k); break; }
+            }
+            if (clean is { } found)
+            {
+                var (i, k) = found;
+                var tail = prev.GetRange(j - k + 1, k);
+                int end = i + k;   // the first line after the matched run
                 {
-                    if (!Enumerable.Range(0, k).All(x => Similar(keys[i + x], tail[x]))) continue;
                     // the anchor is a run of one line repeated ("Riverside Pauldrons acquired." twice): lined up on its last
                     // copy, a new copy below the old ones would be taken for an old one. The run is as long now as it was
                     // unless new copies came: the copies past the last read's run are new (the same screen place, the same line)
@@ -1142,9 +1219,14 @@ public sealed class LineTracker
                         // (world text read between two "Kukuru acquired." is no new copy)
                         int runCur = 0; for (int x = i + k - 1; x >= 0 && Similar(keys[x], prev[j]); x--) runCur++;
                         int runPrev = 0; for (int x = j; x >= 0 && x >= j - runCur; x--) if (Similar(prev[x], prev[j])) runPrev++;
-                        if (runPrev >= k && runCur > runPrev) i = Math.Max(0, i - (runCur - runPrev));
+                        if (runPrev >= k && runCur > runPrev) { i = Math.Max(0, i - (runCur - runPrev)); end = i + k; }
+                        // ...and a copy of the run read garbled right under the matched ones ("Kulsuru-acquired." under "Kukuru
+                        // acquired." twice), while the last read's run was longer than the match: the run's own copy, not a new
+                        // one (reads.log 2026-11-06 09:03:01.4: lined up on the clean copy alone, the garbled one counted as a third Kukuru)
+                        int runAll = 0; for (int x = j; x >= 0 && Similar(prev[x], prev[j]); x--) runAll++;
+                        for (int x = end; x < keys.Count && end - i < runAll && !Similar(keys[x], prev[j]) && Garbled(keys[x], prev[j]); x++) end = x + 1;
                     }
-                    var fresh = cur.GetRange(i + k, keys.Count - i - k);
+                    var fresh = cur.GetRange(end, keys.Count - end);
                     // The last read's lines after the anchor are still on screen in this one, in the same order, even when
                     // either read garbled them ("mria acquired."): skip one line here for each. Only world text (short,
                     // nothing chat-like) can really be gone, so it holds nothing back. Comparing the text instead re-counted
@@ -1163,8 +1245,14 @@ public sealed class LineTracker
                             // ...unless that line is this loot line read garbled as it faded in, its verb lost (bench 131029,
                             // 13:11:43: ")btained 1 cogni soul cwslals", then "Obtained 1 Cogni-Soul Crystals." clean, counted
                             // a second time): the same digits and letters a quarter apart at most are the same line
-                            if (!Similar(fk, pl) && LootKey(fk) && !LootKey(pl) && !FadedGarble(fk, pl)) continue;
-                            skip++;
+                            if (Similar(fk, pl) || !LootKey(fk) || LootKey(pl) || FadedGarble(fk, pl)) { skip++; continue; }
+                            // a loot line of the last read, read garbled as it faded in (its verb broken, a digit or two misread:
+                            // "c quired 787 Rank Point(s)" for "Acquired 181 Rank Point(s)."), is still on screen a line or two
+                            // down in this read, which may show a line the garbled read lost between (reads.log 2026-11-06
+                            // 09:29:29.2: a kill's 181 Rank, 80 Kina and 190 Abyss Points counted a second time)
+                            int at = -1;
+                            if (LootShaped(pl)) for (int x = skip; x < fresh.Count && x <= skip + 2 && at < 0; x++) if (Garbled(Key(fresh[x]), pl)) at = x;
+                            if (at >= 0) skip = at + 1;
                         }
                         fresh = fresh.Skip(skip).ToList();
                         // the last read's loot lines below the anchor this read doesn't show: lost at its bottom, due back
@@ -1230,6 +1318,66 @@ public sealed class LineTracker
         if (dp.Length > 0 && dp != dl) return false;
         int max = Math.Min(6, Math.Max(2, Math.Min(loot.Length, prev.Length) / 4));
         return Math.Abs(loot.Length - prev.Length) <= max && Lev(loot, prev, max) <= max;
+    }
+
+    /// <summary>
+    /// A line and a reading of it garbled while it faded in or out, where <see cref="Similar"/> is too strict to see one
+    /// line: the letters a quarter apart at most (six at most), and the digits the same, or, when either reading's verb is
+    /// broken ("cquired", "quired", "c quired"), only as many: a fading read misreads digits too ("787" for 181, "790" for 190,
+    /// reads.log 2026-11-06 09:29:28.4). Two clean readings never meet on different digits: "Acquired 213 Abyss Point(s)."
+    /// and "Acquired 218 Abyss Point(s)." are two kills.
+    /// </summary>
+    static bool Garbled(string a, string b)
+    {
+        if (a.Length < 8 || b.Length < 8) return false;
+        var da = DigitsOf(a); var db = DigitsOf(b);
+        if (CleanVerbKey(a) && CleanVerbKey(b) ? da != db : da.Length != db.Length) return false;
+        var la = Letters(a); var lb = Letters(b);
+        int max = Math.Min(6, Math.Max(2, Math.Min(la.Length, lb.Length) / 4));
+        return Math.Abs(la.Length - lb.Length) <= max && Lev(la, lb, max) <= max;
+    }
+
+    /// <summary>The verb read whole ("acquired", "obtained"), as a key holds it.</summary>
+    static bool CleanVerbKey(string key) => key.Contains("acquired") || key.Contains("obtained");
+
+    /// <summary>A loot line, clean or read garbled ("cquired 787 Rank Point(s)", "quired 790 Abyss Point(s)").</summary>
+    static bool LootShaped(string key) => LootKey(key) || key.Contains("quired") || key.Contains("btained") || key.EndsWith("kinah") || key.EndsWith("points");
+
+    static string Letters(string key) => new(key.Where(char.IsLetter).ToArray());
+
+    /// <summary>
+    /// The same screen as the last read, with one or two lines garbled this time or last time (a count cut off at the
+    /// chat's edge, a name a few letters off), the rest the same line for line: nothing new.
+    /// </summary>
+    static bool SameScreen(List<string> keys, List<string> prev)
+    {
+        int off = 0;
+        for (int i = 0; i < keys.Count; i++)
+        {
+            if (Similar(keys[i], prev[i])) continue;
+            if (++off > 2) return false;
+            if (!Garbled(keys[i], prev[i]) && !Reread.CountLost(keys[i], prev[i]) && !Reread.CountLost(prev[i], keys[i])) return false;
+        }
+        return off > 0;
+    }
+
+    /// <summary>
+    /// After a fade, a read no longer than the last one whose lines are the last read's bottom lines read once more, one
+    /// of them garbled (half gone, or with glyphs the chat never prints): the chat fading out, not lines that arrived.
+    /// Lines that all read clean are what arrived (a second gather printing the same line), as before.
+    /// </summary>
+    bool FadingOut(List<string> cur, List<string> keys)
+    {
+        if (keys.Count == 0 || keys.Count > _prev.Count) return false;
+        bool garbled = false;
+        for (int i = 0; i < keys.Count; i++)
+        {
+            string k = keys[keys.Count - 1 - i], p = _prev[_prev.Count - 1 - i];
+            if (Similar(k, p)) continue;
+            if (!(Garbled(k, p) || (Reread.Junky(cur[keys.Count - 1 - i]) && k.Length >= 4 && p.EndsWith(k[^4..], StringComparison.Ordinal)))) return false;
+            garbled = true;
+        }
+        return garbled;
     }
 
     static bool LootKey(string key) => key.Contains("acqui") || key.Contains("obtain") || key.EndsWith("kina");

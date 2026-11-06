@@ -317,6 +317,14 @@ public sealed class Reread
         return m.Success && Same(m.Groups["head"].Value, kc);
     }
 
+    /// <summary>
+    /// "Acquired" or "Obtained" read whole in the line as read (accents aside; glued to the next word is still whole:
+    /// "AcquiredFine Odyle x2.", "AcquiredM07 Kina."), as against a line read while it faded in ("cquired 137 Kina.",
+    /// "? quired 756 Kina", "Acquire d 203 Rank Point(s)"): such a line's digits were read fading too.
+    /// </summary>
+    internal static bool VerbWhole(string raw) =>
+        System.Text.RegularExpressions.Regex.IsMatch(ChatParser.StripAccents(raw), @"acquired|obtained", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     /// <summary>A line with glyphs the chat never prints (•, *, €, @ …): read while fading in, not a clean line.</summary>
     internal static bool Junky(string line) => line.Any(c => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c) && "'’.,:;!?()[]-–_/x×\"+%&".IndexOf(c) < 0);
 

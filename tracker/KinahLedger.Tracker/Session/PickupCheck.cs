@@ -51,7 +51,9 @@ public static class PickupCheck
     // taking out, dismantling, an exchange or a purchase, or the mail's attachments claimed ("Obtained items attached to
     // mail.", 2026-11-06 10:49, with its "Acquired Odyle Energy (Bound) x4." just before it; not "mail" alone, which a
     // sale's notice says while farming). Not "extract": a failed gather prints "Essence Extraction failed".
-    static readonly Regex InventoryRx = new(@"\bstor(?:ed|age)|storage|quick\s*\S{0,2}\s*regi|\bregist|retriev|withdr[ae]w|dismantl|salvag|exchang|purchas|wardrobe|\battach",
+    // ...and a Drops reward claimed ("Successfully obtained Drops Reward Item.", 2026-11-06 08:55:07: its Odyle Energy x6 and
+    // Content Usage Ticket Selection Chest printed with it)
+    static readonly Regex InventoryRx = new(@"\bstor(?:ed|age)|storage|quick\s*\S{0,2}\s*regi|\bregist|retriev|withdr[ae]w|dismantl|salvag|exchang|purchas|wardrobe|\battach|drops\s+reward|successfully\s+obtained",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>The player's own inventory at work: what prints with it, and just after, moved, it didn't drop.</summary>
@@ -82,6 +84,12 @@ public static class PickupCheck
 
     /// <summary>The Market's purchase dialog's own words, read where the loot list shows: the Market is open, listings seen or not.</summary>
     public static bool IsMarketDialog(string text) => MarketDialogRx.IsMatch(text);
+
+    /// <summary>
+    /// Rank Points or Abyss Points, as the chat names them: a kill's payout in the Abyss Corridor, 150 to 260 at a time, so
+    /// never "more than one pickup gives" (reads.log 2026-11-06 09:28 to 09:31: set aside as rewards at the edges of each run).
+    /// </summary>
+    public static bool IsKillPoints(string name) => Regex.IsMatch(name, @"^\s*(?:rank|abyss)\s*po[i1l]nts?\s*$", RegexOptions.IgnoreCase);
 
     /// <summary>Kina is money, never an item: a loot list row named Kina by its icon, with its amount cut off, is not a drop.</summary>
     public static bool IsKina(string name) => Regex.IsMatch(name, @"^\s*k[i1l]nah?\s*(?:\([^()]{0,10}\))?\s*$", RegexOptions.IgnoreCase);   // "Kina (Bognd)" too
