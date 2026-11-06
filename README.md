@@ -64,6 +64,10 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
    view, the drop tables beside them. On a screen narrower than Full view (a 1080p screen at 150% scaling, say) both columns are drawn smaller
    to fit, down to 75%; on a narrower one still the window shows Compact and says so.
 
+   **Window size.** Options › General › Window size draws the whole window bigger or smaller, 80% to 150%, for a large or
+   high-resolution screen; Ctrl+= and Ctrl+- step it in the window and Ctrl+0 is back to 100%. The screen caps it: the
+   window never grows past the width or the height of the screen it is on.
+
    **Undo.** Clear the tables (the … menu), Clear on Events, Start over on Crafting, Remove on a run and Stop run in the
    window happen at once, with an Undo bar at the bottom of the window for eight seconds (Ctrl+Z works too). They become
    final when the bar goes: only then is what was counted shared and started over, a run removed or a stopped run saved.
@@ -98,7 +102,7 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
      starts (open the window, or stay in the tray; reading starts either way), hide when Aion 2 closes, the close
      button keeping it in the tray, minimize to the tray, switching pages to what you're doing (on by default: the
      window shows Farming, Crafting or Events once a change has held 5 seconds, and a page you click stays until you
-     start something else; the window always opens on Farming), and the look.
+     start something else; the window always opens on Farming), the window size (80 to 150%), and the look.
    - **Server**: region and server; everything shared is filed under it.
    - **Sharing**: the one **Share** switch (runs and Market prices together), linking this PC to your profile on the
      site (the link code is a short form of the random install ID; without it runs stay anonymous), replacing the

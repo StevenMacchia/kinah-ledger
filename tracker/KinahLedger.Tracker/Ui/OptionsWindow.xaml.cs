@@ -124,6 +124,7 @@ public partial class OptionsWindow : Window
         HudLockChk.IsChecked = c.HudLocked;
         HudOpacity.Value = c.HudOpacity; HudOpacityLbl.Text = $"{c.HudOpacity:P0}";
         HudScale.Value = c.HudScale; HudScaleLbl.Text = $"{c.HudScale:P0}";
+        WindowScale.Value = c.WindowScale; WindowScaleLbl.Text = $"{c.WindowScale:P0}";
         AutoUpdateChk.IsChecked = c.AutoUpdate;
         AutoUpdateChk.IsEnabled = _host.AppSettings.Update.Check;
         BuildSkins(c.Skin);
@@ -271,6 +272,14 @@ public partial class OptionsWindow : Window
             _host.PreviewHud(_edit.HudOpacity, _edit.HudScale);
         };
         AutoUpdateChk.Click += (_, _) => Edit(_edit with { AutoUpdate = AutoUpdateChk.IsChecked == true });
+        // the window's size shows on the window as the slider moves (0.10.9); Save keeps it, Cancel puts the saved one back
+        WindowScale.ValueChanged += (_, _) =>
+        {
+            WindowScaleLbl.Text = $"{WindowScale.Value:P0}";
+            if (_loading) return;
+            Edit(_edit with { WindowScale = Math.Round(WindowScale.Value, 2) });
+            _host.PreviewWindowScale(_edit.WindowScale);
+        };
 
         WhatsSentLink.Click += (_, _) => _host.WhatsSent(this);
         WhatsReadLink.Click += (_, _) => _host.WhatsRead(this);
@@ -376,6 +385,13 @@ public partial class OptionsWindow : Window
         Close();
     }
 
+    /// <summary>Ctrl+= or Ctrl+- pressed in the window while Options is open: the slider here moves to <paramref name="scale"/>, so Save keeps it.</summary>
+    public void SetWindowScale(double scale)
+    {
+        WindowScale.Value = Math.Round(Math.Clamp(scale, MainWindow.MinWindowScale, MainWindow.MaxWindowScale), 2);
+        Go(Page.General);
+    }
+
     /// <summary>The tracker is quitting: close without asking, unsaved edits dropped and a theme being tried put back.</summary>
     public void Discard()
     {
@@ -399,6 +415,7 @@ public partial class OptionsWindow : Window
         }
         if (_edit.Skin != _saved.Skin || Skins.Current != _saved.Skin) _host.ApplySkin(_saved.Skin);   // a theme being tried goes back
         _host.EndHudPreview();   // and the panel as it was saved: switch, figures, lock, opacity, size and spot
+        _host.EndWindowScalePreview();   // and the window at its saved size
     }
 
     /* ---------------- live state from the main window ---------------- */

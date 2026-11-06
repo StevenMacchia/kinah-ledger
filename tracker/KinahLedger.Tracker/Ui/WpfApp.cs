@@ -284,6 +284,38 @@ public static class WpfApp
         DoEvents();
         Check(Math.Abs(p.HudOpacity - 0.5) < 0.001 && Math.Abs(w.HudScale - 1.5) < 0.001, $"panel opacity and size saved: {p.HudOpacity:P0}, {w.HudScale:P0}");
 
+        // Window size (0.10.9): shown on the window as the slider moves, kept on Save, put back by Cancel; the keys step it
+        o = Open();
+        Check(Math.Abs(o.WindowScale.Value - 1) < 0.001 && w.FitState.Scale == 1, "window size: 100% to start, drawn at full size");
+        o.WindowScale.Value = 1.25;
+        Check(o.SaveBtn.IsEnabled && Math.Abs(w.WindowScaleShownForTest - 1.25) < 0.001 && Math.Abs(w.FitState.Scale - 1.25) < 0.001 && p.WindowScale == 1, $"window size tried at once, saved later: drawn at {w.FitState.Scale:P0}");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(p.WindowScale == 1 && w.FitState.Scale == 1, "Cancel draws the window at the saved size again");
+        o = Open();
+        o.WindowScale.Value = 1.25;
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(Math.Abs(p.WindowScale - 1.25) < 0.001 && Math.Abs(w.FitState.Scale - 1.25) < 0.001, $"window size saved: {p.WindowScale:P0}, drawn at {w.FitState.Scale:P0}");
+        w.StepWindowScaleForTest(1);
+        Check(Math.Abs(p.WindowScale - 1.35) < 0.001 && Math.Abs(w.FitState.Scale - 1.35) < 0.001, "Ctrl+= is a step bigger, kept");
+        w.StepWindowScaleForTest(0);
+        Check(p.WindowScale == 1 && w.FitState.Scale == 1, "Ctrl+0 is back to 100%");
+        for (int i = 0; i < 9; i++) w.StepWindowScaleForTest(1);
+        Check(Math.Abs(p.WindowScale - MainWindow.MaxWindowScale) < 0.001, $"the size stops at {MainWindow.MaxWindowScale:P0}");
+        for (int i = 0; i < 12; i++) w.StepWindowScaleForTest(-1);
+        Check(Math.Abs(p.WindowScale - MainWindow.MinWindowScale) < 0.001, $"and at {MainWindow.MinWindowScale:P0}");
+        w.StepWindowScaleForTest(0);
+        // the screen caps it: a 1,000 DIP screen holds Compact at about 140%, never less than 100%
+        Environment.SetEnvironmentVariable("KL_SCREEN_W", "1000");
+        o = Open();
+        o.WindowScale.Value = 1.5;
+        Check(w.FitState.Scale < 1.5 && w.FitState.Scale >= 1.3, $"a narrow screen caps the size: {w.FitState.Scale:P0} of 150%");
+        Click(o.CancelBtn);
+        DoEvents();
+        Environment.SetEnvironmentVariable("KL_SCREEN_W", null);
+        Check(w.FitState.Scale == 1, "and back to 100% on Cancel");
+
         // the panel's switch and figures are tried on the panel at once too (2026-10-25), and Cancel puts them back
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
@@ -964,6 +996,8 @@ public static class WpfApp
         if (double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_H"), out var screenH) && screenH > 300) w.MaxHeight = screenH;
         // --tall: the whole window, however tall, so a render shows every block of a view (named "-tall")
         if (tall) w.MaxHeight = 4000;
+        // KL_WINDOW_SCALE=1.25 (0.10.9): the window at that size, as Options › General › Window size would draw it
+        if (double.TryParse(Environment.GetEnvironmentVariable("KL_WINDOW_SCALE"), out var winScale) && winScale > 0) w.PreviewWindowScale(winScale);
         if (demo) w.ShowDemo(kind);
         if (compact) w.ShowCompact();
         if (full) w.ShowFull();

@@ -137,7 +137,30 @@
   </Style>
 
   <!-- buttons -->
+  <!-- keyboard focus (0.10.9): a gold ring just outside the control, in place of Windows's dotted rectangle. Drawn only when
+       focus moved by keyboard (Tab, the arrows), as the dotted one was: a click never shows it. Two corner radii, for the
+       pills and buttons and for the small boxes. -->
+  <Style x:Key="FocusRing">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Rectangle Margin="-3" RadiusX="12" RadiusY="12" Stroke="{DynamicResource Accent}" StrokeThickness="1.5" SnapsToDevicePixels="True"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="FocusRingSmall">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Rectangle Margin="-3" RadiusX="7" RadiusY="7" Stroke="{DynamicResource Accent}" StrokeThickness="1.5" SnapsToDevicePixels="True"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style TargetType="Button">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="Background" Value="{DynamicResource Card2}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
@@ -212,6 +235,7 @@
 
   <!-- check boxes -->
   <Style TargetType="CheckBox">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingSmall}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="FontSize" Value="13"/>
     <Setter Property="Cursor" Value="Hand"/>
@@ -289,6 +313,7 @@
   </Style>
 
   <Style TargetType="ComboBox">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="FontSize" Value="14"/>
     <Setter Property="Height" Value="38"/>
@@ -386,6 +411,7 @@
 
   <!-- an on/off switch, for settings rows -->
   <Style x:Key="Switch" TargetType="CheckBox">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
     <Setter Property="Template">
@@ -412,6 +438,7 @@
 
   <!-- a side-navigation entry; Tag="True" marks the page on show -->
   <Style x:Key="NavItem" TargetType="Button">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
     <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
     <Setter Property="FontSize" Value="13.5"/>
     <Setter Property="Height" Value="38"/>

@@ -78,6 +78,19 @@
           <TextBlock Style="{StaticResource GroupLabel}" Text="WINDOW"/>
           <Border Style="{StaticResource Group}">
             <StackPanel>
+              <!-- Window size (0.10.9, Ui/MainWindow.Fit.cs): shown on the window as the slider moves, kept on Save -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Window size"/>
+                  <TextBlock x:Name="WindowScaleHint" Style="{StaticResource RowHint}" Text="Bigger for a large or high-resolution screen; the screen caps it. In the window: Ctrl+= and Ctrl+‑, Ctrl+0 for 100%."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Slider x:Name="WindowScale" Width="140" Minimum="0.8" Maximum="1.5" TickFrequency="0.05" IsSnapToTickEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Window size"/>
+                  <TextBlock x:Name="WindowScaleLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
+                </StackPanel>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>

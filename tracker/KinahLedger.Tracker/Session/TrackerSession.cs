@@ -5094,6 +5094,8 @@ public sealed class UserPrefs
     public string HudFields { get; set; } = Ui.HudFields.Default;
     /// <summary>Full view: the window doubles in width with every table beside the summary. Off (Compact, the default since 0.7.6): the run card and the summary only.</summary>
     public bool FullView { get; set; }
+    /// <summary>Window size (0.10.9, Options › General, Ctrl+= and Ctrl+-): the window drawn at this scale, 0.8 to 1.5; 1 is its designed size. The screen caps it (Ui/MainWindow.Fit.cs).</summary>
+    public double WindowScale { get; set; } = 1;
     /// <summary>The player's gear score, typed on the first-run screen or in Options; 0 is not set. Runs are compared with players at the same bracket (Data.GearScore).</summary>
     public int GearScore { get; set; }
     /// <summary>The start/stop shortcut, as "Ctrl+Shift+K"; empty is off.</summary>

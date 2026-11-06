@@ -35,7 +35,8 @@ public partial class MainWindow
         _welcome = on;
         WelcomeCard.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (on) WelcomeShareChk.IsChecked = _prefs.Share;
-        foreach (var fe in new FrameworkElement[] { StatusRow, OptionsBtn, ServerChip })
+        // the page tabs and the site button wait too (0.10.9): nothing to switch to before a server is chosen
+        foreach (var fe in new FrameworkElement[] { StatusRow, OptionsBtn, ServerChip, PartTabs, SiteBtn })
             fe.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         ApplyView();   // the run card, the summary and the tables follow the first-run screen
         Tagline.Visibility = on ? Visibility.Visible : Visibility.Collapsed;

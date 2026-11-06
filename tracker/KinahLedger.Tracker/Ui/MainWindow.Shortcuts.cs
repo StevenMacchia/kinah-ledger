@@ -14,6 +14,8 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     public const string OptionsKey = "Ctrl+,", NewSessionKey = "Ctrl+N", CopyPictureKey = "Ctrl+Shift+C";
+    /// <summary>Window size (0.10.9, Ui/MainWindow.Fit.cs): a step bigger, a step smaller, back to 100%. The numeric keypad's + - 0 work too.</summary>
+    public const string WindowBiggerKey = "Ctrl+=", WindowSmallerKey = "Ctrl+-", WindowResetKey = "Ctrl+0";
     /// <summary>New session's name since it left the card (0.9.13), in the ⋯ menu and the tray.</summary>
     public const string ClearAllText = "Clear everything";
 
@@ -24,6 +26,13 @@ public partial class MainWindow
         InputBindings.Add(new KeyBinding(new KeyAct(() => OpenOptions()), Key.OemComma, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new KeyAct(() => _ = ClearAllFromKey()), Key.N, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new KeyAct(() => CopySharePictureNow()), Key.C, ModifierKeys.Control | ModifierKeys.Shift));
+        // window size: Ctrl with = (the + key), - and 0, on the main keys and the keypad; Shift+= (a real +) too
+        foreach (var (key, steps) in new[] { (Key.OemPlus, 1), (Key.Add, 1), (Key.OemMinus, -1), (Key.Subtract, -1), (Key.D0, 0), (Key.NumPad0, 0) })
+        {
+            int s = steps;
+            InputBindings.Add(new KeyBinding(new KeyAct(() => StepWindowScale(s)), key, ModifierKeys.Control));
+            if (key == Key.OemPlus) InputBindings.Add(new KeyBinding(new KeyAct(() => StepWindowScale(1)), key, ModifierKeys.Control | ModifierKeys.Shift));
+        }
         OptionsBtn.ToolTip = $"{OptionsBtn.ToolTip}\n{OptionsKey} opens it.";
         _shareTip = $"{ShareCardBtn.ToolTip}\n{CopyPictureKey} copies the picture without opening it.";
         // a button that is off says why: Start until a server is chosen, Share until the game is being read
