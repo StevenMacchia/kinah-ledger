@@ -137,7 +137,30 @@
   </Style>
 
   <!-- buttons -->
+  <!-- keyboard focus (0.10.11): a gold ring just outside the control, in place of Windows's dotted rectangle. Drawn only when
+       focus moved by keyboard (Tab, the arrows), as the dotted one was: a click never shows it. Two corner radii, for the
+       pills and buttons and for the small boxes. -->
+  <Style x:Key="FocusRing">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Rectangle Margin="-3" RadiusX="12" RadiusY="12" Stroke="{DynamicResource Accent}" StrokeThickness="1.5" SnapsToDevicePixels="True"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="FocusRingSmall">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Rectangle Margin="-3" RadiusX="7" RadiusY="7" Stroke="{DynamicResource Accent}" StrokeThickness="1.5" SnapsToDevicePixels="True"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style TargetType="Button">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="Background" Value="{DynamicResource Card2}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
@@ -212,6 +235,7 @@
 
   <!-- check boxes -->
   <Style TargetType="CheckBox">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingSmall}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="FontSize" Value="13"/>
     <Setter Property="Cursor" Value="Hand"/>
@@ -289,6 +313,7 @@
   </Style>
 
   <Style TargetType="ComboBox">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="FontSize" Value="14"/>
     <Setter Property="Height" Value="38"/>
@@ -316,6 +341,53 @@
                 <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
               </Border>
             </Popup>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- a slider in the window's look (0.10.11): a thin track, the part before the thumb in the accent, a round thumb -->
+  <Style TargetType="Slider">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+    <Setter Property="Height" Value="22"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Slider">
+          <Grid Background="Transparent">
+            <Border Height="4" CornerRadius="2" Background="{DynamicResource LineStrong}" VerticalAlignment="Center"/>
+            <Track x:Name="PART_Track" VerticalAlignment="Center">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Focusable="False" IsTabStop="False" Cursor="Hand">
+                  <RepeatButton.Template>
+                    <ControlTemplate TargetType="RepeatButton">
+                      <Border Height="22" Background="Transparent"><Border Height="4" CornerRadius="2,0,0,2" Background="{DynamicResource Accent}" VerticalAlignment="Center"/></Border>
+                    </ControlTemplate>
+                  </RepeatButton.Template>
+                </RepeatButton>
+              </Track.DecreaseRepeatButton>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Focusable="False" IsTabStop="False" Cursor="Hand">
+                  <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="22" Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                </RepeatButton>
+              </Track.IncreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb Width="16" Height="16" Cursor="Hand" Focusable="False">
+                  <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                      <Ellipse x:Name="knob" Fill="{DynamicResource Ink}" Stroke="{DynamicResource Accent}" StrokeThickness="1.5"/>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="knob" Property="Fill" Value="{DynamicResource Accent}"/></Trigger>
+                        <Trigger Property="IsDragging" Value="True"><Setter TargetName="knob" Property="Fill" Value="{DynamicResource Accent}"/></Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+            </Track>
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
@@ -386,6 +458,7 @@
 
   <!-- an on/off switch, for settings rows -->
   <Style x:Key="Switch" TargetType="CheckBox">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
     <Setter Property="Template">
@@ -412,6 +485,7 @@
 
   <!-- a side-navigation entry; Tag="True" marks the page on show -->
   <Style x:Key="NavItem" TargetType="Button">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
     <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
     <Setter Property="FontSize" Value="13.5"/>
     <Setter Property="Height" Value="38"/>

@@ -284,6 +284,59 @@ public static class WpfApp
         DoEvents();
         Check(Math.Abs(p.HudOpacity - 0.5) < 0.001 && Math.Abs(w.HudScale - 1.5) < 0.001, $"panel opacity and size saved: {p.HudOpacity:P0}, {w.HudScale:P0}");
 
+        // Window size (0.10.11): shown on the window as the slider moves, kept on Save, put back by Cancel; the keys step it
+        o = Open();
+        Check(Math.Abs(o.WindowScale.Value - 1) < 0.001 && w.FitState.Scale == 1, "window size: 100% to start, drawn at full size");
+        o.WindowScale.Value = 1.25;
+        Check(o.SaveBtn.IsEnabled && Math.Abs(w.WindowScaleShownForTest - 1.25) < 0.001 && Math.Abs(w.FitState.Scale - 1.25) < 0.001 && p.WindowScale == 1, $"window size tried at once, saved later: drawn at {w.FitState.Scale:P0}");
+        Click(o.CancelBtn);
+        DoEvents();
+        Check(p.WindowScale == 1 && w.FitState.Scale == 1, "Cancel draws the window at the saved size again");
+        o = Open();
+        o.WindowScale.Value = 1.25;
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(Math.Abs(p.WindowScale - 1.25) < 0.001 && Math.Abs(w.FitState.Scale - 1.25) < 0.001, $"window size saved: {p.WindowScale:P0}, drawn at {w.FitState.Scale:P0}");
+        w.StepWindowScaleForTest(1);
+        Check(Math.Abs(p.WindowScale - 1.35) < 0.001 && Math.Abs(w.FitState.Scale - 1.35) < 0.001, "Ctrl+= is a step bigger, kept");
+        w.StepWindowScaleForTest(0);
+        Check(p.WindowScale == 1 && w.FitState.Scale == 1, "Ctrl+0 is back to 100%");
+        for (int i = 0; i < 9; i++) w.StepWindowScaleForTest(1);
+        Check(Math.Abs(p.WindowScale - MainWindow.MaxWindowScale) < 0.001, $"the size stops at {MainWindow.MaxWindowScale:P0}");
+        for (int i = 0; i < 12; i++) w.StepWindowScaleForTest(-1);
+        Check(Math.Abs(p.WindowScale - MainWindow.MinWindowScale) < 0.001, $"and at {MainWindow.MinWindowScale:P0}");
+        w.StepWindowScaleForTest(0);
+        // the screen caps it: a 1,000 DIP screen holds Compact at about 140%, never less than 100%
+        Environment.SetEnvironmentVariable("KL_SCREEN_W", "1000");
+        o = Open();
+        o.WindowScale.Value = 1.5;
+        Check(w.FitState.Scale < 1.5 && w.FitState.Scale >= 1.3, $"a narrow screen caps the size: {w.FitState.Scale:P0} of 150%");
+        Click(o.CancelBtn);
+        DoEvents();
+        Environment.SetEnvironmentVariable("KL_SCREEN_W", null);
+        Check(w.FitState.Scale == 1, "and back to 100% on Cancel");
+
+        // Save as CSV (0.10.11): the ⋯ menu's entry, today's loot as the file holds it, and the runs the Events page shows
+        Check(w.MoreEntries().Any(e => e.Text == MainWindow.SaveLootText), "the ⋯ menu has Save today's loot as CSV…");
+        var lootCsv = w.LootCsvForTest() ?? "";
+        var lootLines = lootCsv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Check(lootLines.Length > 3 && lootLines[0].TrimEnd('\r') == Session.CsvExport.LootHeader && lootLines[1].StartsWith("kinah,Kinah,"), $"today's loot as CSV: {lootLines.Length} lines, the Kinah first");
+        Check(lootLines.Any(l => l.StartsWith("drop,Spiritstone,")) && lootLines.Any(l => l.StartsWith("gathered,")), "...with the sample day's drops and gathered items");
+        var csvDir = TestTemp.Path("KinahLedger-options-test-csv"); Directory.CreateDirectory(csvDir);
+        string? askedName = null;
+        MainWindow.SaveCsvForTest = name => { askedName = name; return Path.Combine(csvDir, name); };
+        w.ShowDemo("Events");
+        DoEvents();
+        w.SaveRunsCsvForTest();
+        var runsPath = Path.Combine(csvDir, Session.CsvExport.FileName("runs", DateTime.Now));
+        Check(askedName == Path.GetFileName(runsPath) && File.Exists(runsPath), $"the runs saved as {askedName}");
+        var runsLines = File.Exists(runsPath) ? File.ReadAllLines(runsPath) : Array.Empty<string>();
+        Check(runsLines.Length == w.ShownRunsForTest().Count + 1 && runsLines[0].TrimStart('\uFEFF') == Session.CsvExport.RunsHeader, $"...one line a run: {runsLines.Length - 1} runs, after the header");
+        Check(runsLines.Skip(1).All(l => l.Split(',')[1] is "Expedition" or "Event"), "...each an expedition or an event");
+        MainWindow.SaveCsvForTest = null;
+        w.ShowDemo();
+        DoEvents();
+
         // the panel's switch and figures are tried on the panel at once too (2026-10-25), and Cancel puts them back
         o = Open();
         o.Go(OptionsWindow.Page.InGame);
@@ -964,6 +1017,8 @@ public static class WpfApp
         if (double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_H"), out var screenH) && screenH > 300) w.MaxHeight = screenH;
         // --tall: the whole window, however tall, so a render shows every block of a view (named "-tall")
         if (tall) w.MaxHeight = 4000;
+        // KL_WINDOW_SCALE=1.25 (0.10.11): the window at that size, as Options › General › Window size would draw it
+        if (double.TryParse(Environment.GetEnvironmentVariable("KL_WINDOW_SCALE"), out var winScale) && winScale > 0) w.PreviewWindowScale(winScale);
         if (demo) w.ShowDemo(kind);
         // --events --mine (0.10.10): the page as this PC's own runs fill it, from a copy of the run log; nothing is tracked, saved or sent
         else if (mine && kind == "Events") w.ShowMineRuns();
