@@ -663,7 +663,7 @@ options: --process aion[,other]");
             }
             catch (Exception ex) { Console.Error.WriteLine("skipped a trace line: " + ex.Message); }
         }
-        var signals = records.Where(x => x.K is "zone" or "reward" or "header").Select(x => new ReplaySignal(x.T, x.K, x.L.FirstOrDefault() ?? "")).ToList();
+        var signals = records.Where(x => x.K is "zone" or "reward" or "header" or "market").Select(x => new ReplaySignal(x.T, x.K, x.L.FirstOrDefault() ?? "")).ToList();
         var readsPath = opts.GetValueOrDefault("reads") ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "reads.log");
         if (!opts.ContainsKey("noreads") && File.Exists(readsPath))
         {
@@ -671,7 +671,9 @@ options: --process aion[,other]");
             var firstTraced = signals.Count > 0 ? signals.Min(x => x.At) : DateTime.MaxValue;
             // beside it, reads.old.log when reads.log has been turned over (not with an explicit --reads: that file stands alone)
             var olderReads = opts.ContainsKey("reads") ? null : Path.Combine(Path.GetDirectoryName(readsPath)!, "reads.old.log");
-            var fromLog = ReplaySignals.FromReadsLog(readsPath, ReplaySignals.Date(opts.GetValueOrDefault("reads-date")), olderReads).Where(x => x.At < firstTraced).ToList();
+            // and the Market's openings, which traces before 0.10.12 never recorded, from the scene notes
+            bool tracedMarket = signals.Any(x => x.Kind == "market");
+            var fromLog = ReplaySignals.FromReadsLog(readsPath, ReplaySignals.Date(opts.GetValueOrDefault("reads-date")), olderReads).Where(x => x.At < firstTraced || (x.Kind == "market" && !tracedMarket)).ToList();
             signals.AddRange(fromLog.Select(x => x.Kind == "reward" ? x with { Kind = "reward-once" } : x));
             Console.WriteLine($"Zone and reward screen reads: {signals.Count(x => x.Kind == "zone")} zone changes, {signals.Count(x => x.Kind.StartsWith("reward"))} reward screens ({fromLog.Count} from {Path.GetFileName(readsPath)}).");
         }
@@ -706,6 +708,7 @@ options: --process aion[,other]");
                     case "reward": rewardNow = sg.Value; if (sg.Value.Length > 0) s.Target.MarkReward(sg.At, sg.Value); break;
                     case "reward-once": s.Target.MarkReward(sg.At, sg.Value); rewardUntil = sg.At.AddSeconds(10); break;
                     case "header": s.EventHeaderSeen(sg.Value, sg.At); break;
+                    case "market": s.MarketSeen(sg.At); break;
                 }
             }
         }
@@ -3237,6 +3240,36 @@ options: --process aion[,other]");
             iw.FlushVotes(i0.AddSeconds(30));
             Check("the inventory's window runs from its line's first sight: a drop 23 s on counts, the move with it doesn't",
                 $"{n(iw.Engine, "Riverside Boots")} {n(iw.Engine, "Comet Cloak")}", "0 1");
+        }
+        // a Market buy prints only the item's own "acquired" line, and the Market's window covers the chat (Steven, 2026-11-06
+        // 10:56: "I bought Wrathful from the Market and it appeared as loot in the open world": Wrathful Mind x2, two more and
+        // Fine Thick Balaur Horn x22, first read three minutes after the Market closed, once the crafting window after it had
+        // left the chat; Wrathful Mind is a rare, so no kill was asked for)
+        {
+            var mb = new TrackerSession(null, settings, items, "Test");
+            mb.Engine.SetZone("Garden of the Illusion God"); mb.ZoneView.SetZone("Garden of the Illusion God");
+            var m0 = new DateTime(2026, 11, 6, 15, 49, 48, DateTimeKind.Utc);
+            var mChat = new List<string> { "[Player1] hi", "Obtained items attached to mail." };
+            mb.ProcessChat(mChat, m0);
+            mb.MarketSeen(m0.AddSeconds(150));   // 10:52:14 to 10:53:09, the chat under its window
+            mChat.AddRange(new[] { "Acquired Wrathful Mind x2.", "Wrathful Mind acquired.", "Wrathful Mind acquired.", "[Yogi] they changed it", "Acquired Fine Thick Balaur Horn x22." });
+            for (int i = 0; i < 4; i++) mb.ProcessChat(mChat, m0.AddSeconds(391 + i * 0.4));   // 10:56:19, the first read that lined up since
+            mb.FlushVotes(m0.AddSeconds(394));
+            Check("the Market open since the chat last lined up: what lands was bought, the rare too",
+                $"{n(mb.Engine, "Wrathful Mind")} {n(mb.Engine, "Fine Thick Balaur Horn")} skipped {mb.Engine.RewardsSkipped}", "0 0 skipped 4");
+            mChat.AddRange(new[] { "Obtained 1 Agrint Soul Points.", "Comet Cloak acquired." });   // a kill and its drop a minute on
+            for (int i = 0; i < 4; i++) mb.ProcessChat(mChat, m0.AddSeconds(455 + i * 0.4));
+            mb.FlushVotes(m0.AddSeconds(458));
+            Check("...a kill's drop a minute later counts", $"{n(mb.Engine, "Comet Cloak")}", "1");
+            // the Market open while the chat stays in view: the buy in that read, and a drop 20 s on
+            mb.MarketSeen(m0.AddSeconds(500));
+            mChat.Add("Wrathful Mind acquired.");
+            for (int i = 0; i < 4; i++) mb.ProcessChat(mChat, m0.AddSeconds(501 + i * 0.4));
+            mb.FlushVotes(m0.AddSeconds(504));
+            mChat.AddRange(new[] { "Obtained 1 Agrint Soul Points.", "Riverside Boots acquired." });
+            for (int i = 0; i < 4; i++) mb.ProcessChat(mChat, m0.AddSeconds(521 + i * 0.4));
+            mb.FlushVotes(m0.AddSeconds(524));
+            Check("the Market open as the chat is read: bought; a kill's drop 20 s on counts", $"{n(mb.Engine, "Wrathful Mind")} {n(mb.Engine, "Riverside Boots")}", "0 1");
         }
         // the gathering bar as the second witness for a gather the chat missed (step 1)
         var sg = new TrackerSession(null, settings, items, "Test");
