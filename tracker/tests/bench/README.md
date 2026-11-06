@@ -49,8 +49,12 @@ beside the frames, the same lines the live tracker writes to `reads.log`: a miss
 For each truth event the replay must land the same thing (the same Kina amount, the same item and count; souls and
 gather fails by kind) between 15 s before and 20 s after the footage shows it (before, because the chat settle dates a
 line back to when the garbled reads began; after, for the vote and a second witness). Anything that landed and matches no
-truth event is an extra: a double when the same thing was matched within 20 s, a phantom otherwise. The run's score
-is its `missed` and `extra` counts; latency is reported, not scored.
+truth event is an extra: a double when the same thing was matched within 20 s, a phantom otherwise. Each truth event
+takes the counted event nearest it in time (not the earliest in its window, which handed a kill's soul to an earlier
+soul the tracker had missed), and a soul line for two crystals stands for two events. What the tracker set aside (a
+reward, the inventory at work) that matches no truth event is listed as `aside`, not scored: it is off the count, as
+it should be, and the list shows a wrong one. The run's score is its `missed` and `extra` counts; latency is reported,
+not scored.
 
 `baseline.json` keeps each run's last accepted score. A run fails when either count goes above its baseline. A run
 that does better passes and says so; `-Record` then writes the new numbers, in the same change as the fix. The loop's

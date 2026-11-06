@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using KinahLedger.Data;
@@ -1403,6 +1403,10 @@ public sealed partial class TrackerSession
                 var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0, Reread.FirstSeen(raw, _firstSeen), parsed is PetCrystal pcr ? pcr.Name : null, inRun)) : null;
                 // ...except a gather the panel or its bar just produced (GatherAttempts)
                 if (parsed is ItemAcquired gx) why = NotForGather(why, gx.ItemId, gx.Count, parsed.Time);
+                // the loot list beside the character shows a row of it: a pickup off the ground, whatever the player's inventory
+                // printed around it (bench 110725 at 11:08:23: Riverside Gloves set aside as the wardrobe's, 3 s after five skins
+                // unlocked; the skins and the Enhance Stone x863 printed with them had no row)
+                if (why != null && why.StartsWith("the inventory at work", StringComparison.Ordinal) && parsed is ItemAcquired rowed && _cross.RowWaiting(rowed, now)) { CrashLog.NoteBurst($"{_items.NameOf(rowed.ItemId)} x{rowed.Count}: {why}, but the loot list shows a row of it: a pickup"); why = null; }
                 // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
                 if (why == null && !made && parsed is ItemAcquired big && !inRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
                 if (why == null && parsed is PetCrystal bigc && !inRun) why = PickupCheck.TooManyCrystals(bigc.Count) ?? (batchCrystals ? "printed with a reward's Soul Crystals (a chest, a quest)" : null);
@@ -1624,6 +1628,9 @@ public sealed partial class TrackerSession
                 // a gathering material has its own second witness, the gathering bar's race, and while gathering the chat is
                 // only a cross-check that adds nothing (LootCrossCheck.Chat): never this path (the bank's Kukuru and Odyle cases)
                 if (!batches.SelectMany(b => b.Events).OfType<ItemAcquired>().Any(a => !IsGatherMaterial(a.ItemId) && _cross.RowWaiting(a, now))) continue;
+                // its vote is still open: it counts when the vote is over, not here as well (bench 110725 at 11:08:23: "Riverside
+                // Gloves acquired." taken here with the list's row, then once more by its vote a read later)
+                if (Vote && _voter.Holds(m.Key, _parser.Meaning)) { CrashLog.Note($"{l}: read whole, the loot list's row waiting, but its vote is still open: it counts there"); continue; }
                 bool any = false;
                 foreach (var (_, events) in batches) any |= Apply(events, l, "chat · with the loot list's row");
                 CrashLog.Read(l + "    (read whole but taken by no path; the loot list's row for it is the second witness)", any);

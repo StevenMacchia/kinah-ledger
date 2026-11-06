@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -18,7 +18,8 @@ public static class BenchReplay
 {
     const int CacheVersion = 1;
 
-    sealed record Landed(DateTime At, string Class, string Key, string What);
+    /// <summary>What the replay counted: when, its class and key for the score, a label; Units for a soul line standing for several crystals; Aside for what the tracker kept off the count (a reward, the inventory's).</summary>
+    sealed record Landed(DateTime At, string Class, string Key, string What, int Units = 1, bool Aside = false);
     sealed record Truth(string Id, double Clip, string Class, string Key, string What, string Note);
 
     public static int Run(Settings settings, List<string> pos, Dictionary<string, string> o)
@@ -245,8 +246,10 @@ public static class BenchReplay
         {
             KinahChanged { Delta: > 0 } k => new Landed(ev.Time, "kina", $"kina|{k.Delta}", $"{k.Delta:N0} Kina" + (k.Bound ? " (bound)" : "") + via),
             ItemAcquired a => new Landed(ev.Time, "item", $"item|{Norm(items.NameOf(a.ItemId))}|{a.Count}", $"{items.NameOf(a.ItemId)} x{a.Count}" + (a.Bound ? " (bound)" : "") + via),
-            RewardReceived rr => new Landed(ev.Time, "item", $"item|{Norm(rr.Name)}|{rr.Count}", $"{rr.Name} x{rr.Count} (reward)" + via),
-            PetCrystal p => new Landed(ev.Time, "soul", "soul", $"{p.Name} x{p.Count}" + via),
+            // a reward, or the inventory at work: the tracker set it aside from the count. It may still be a pickup the footage shows (then it matches, as the item); unmatched, it is not a phantom
+            RewardReceived rr => new Landed(ev.Time, "item", $"item|{Norm(rr.Name)}|{rr.Count}", $"{rr.Name} x{rr.Count} (reward)" + via, Aside: true),
+            // one line for two crystals ("Obtained 2 Fera Soul Crystals.", two kills' souls picked up together) stands for two of the footage's events
+            PetCrystal p => new Landed(ev.Time, "soul", "soul", $"{p.Name} x{p.Count}" + via, Units: Math.Max(1, p.Count)),
             // an EnemySoul is the loot list's "Soul: ..." row marking a kill, not a pickup of its own: the crystal line is the pickup
             CurrencyGained c when c.Name.Contains("Soul", StringComparison.OrdinalIgnoreCase) => new Landed(ev.Time, "soul", "soul", $"{c.Amount} {c.Name}" + via),
             GatherFailed g => new Landed(ev.Time, "gatherfail", "gatherfail", $"{g.Skill} failed" + via),
@@ -317,20 +320,32 @@ public static class BenchReplay
     static int Score(string run, List<Landed> landed, List<Truth> truth, DateTime start, Dictionary<string, string> o)
     {
         double Clip(DateTime at) => (at.ToLocalTime() - start).TotalSeconds;
-        var open = landed.Select(l => (L: l, Clip: Clip(l.At))).OrderBy(x => x.Clip).ToList();
-        var taken = new bool[open.Count];
+        var open = landed.SelectMany(l => Enumerable.Repeat((L: l, Clip: Clip(l.At)), l.Units)).OrderBy(x => x.Clip).ToList();
+        var taken = new bool[open.Count]; var got = new bool[truth.Count];
         var matched = new List<(Truth T, int I)>(); var missed = new List<Truth>();
-        foreach (var t in truth)
-        {
-            int best = -1;
+        // each of the footage's events to the counted one nearest it in time, nearest pairs first over the whole run (taking
+        // the earliest counted one in the window handed a kill's soul to an earlier soul the tracker had missed, and the
+        // miss walked down the run: 110725's E24, E26 and E72); one the tracker counted before one it set aside
+        var pairs = new List<(double D, int T, int I)>();
+        for (int t = 0; t < truth.Count; t++)
             for (int i = 0; i < open.Count; i++)
-                if (!taken[i] && open[i].L.Key == t.Key && open[i].Clip >= t.Clip - Before && open[i].Clip <= t.Clip + After) { best = i; break; }
-            if (best < 0) missed.Add(t); else { taken[best] = true; matched.Add((t, best)); }
+                if (open[i].L.Key == truth[t].Key && open[i].Clip >= truth[t].Clip - Before && open[i].Clip <= truth[t].Clip + After)
+                    pairs.Add((Math.Abs(open[i].Clip - truth[t].Clip) + (open[i].L.Aside ? After : 0), t, i));
+        foreach (var p in pairs.OrderBy(p => p.D).ThenBy(p => p.T))
+        {
+            if (got[p.T] || taken[p.I]) continue;
+            got[p.T] = true; taken[p.I] = true; matched.Add((truth[p.T], p.I));
         }
-        var extra = new List<(Landed L, double Clip, string Why)>();
+        for (int t = 0; t < truth.Count; t++) if (!got[t]) missed.Add(truth[t]);
+        matched = matched.OrderBy(m => m.T.Clip).ToList();
+        var extra = new List<(Landed L, double Clip, string Why)>(); var aside = new List<(Landed L, double Clip)>();
         for (int i = 0; i < open.Count; i++)
         {
             if (taken[i]) continue;
+            // set aside by the tracker (a reward, the inventory at work) and not a pickup the footage shows: off the count, as
+            // it should be, so not a phantom; listed so a wrong one can be seen (110725 at 54.5 s: Enhance Stone x863 drawn
+            // from storage with five skins)
+            if (open[i].L.Aside) { aside.Add((open[i].L, open[i].Clip)); continue; }
             var twin = matched.FirstOrDefault(m => open[m.I].L.Key == open[i].L.Key && Math.Abs(open[m.I].Clip - open[i].Clip) <= After);
             extra.Add((open[i].L, open[i].Clip, twin.T != null ? $"double of {twin.T.Id} {twin.T.What} at {twin.T.Clip:0.0} s" : "nothing in the footage"));
         }
@@ -345,6 +360,7 @@ public static class BenchReplay
             Console.WriteLine($"    {cls,-10} {matched.Count(m => m.T.Class == cls),3} of {truth.Count(t => t.Class == cls),3} matched");
         foreach (var t in missed) Console.WriteLine($"  missed  {t.Id,-4} {t.Clip,6:0.0} s  {t.What}" + (t.Note.Length > 0 ? $"   ({t.Note})" : ""));
         foreach (var e in extra) Console.WriteLine($"  extra        {e.Clip,6:0.0} s  {e.L.What}   ({e.Why})");
+        foreach (var a in aside) Console.WriteLine($"  aside        {a.Clip,6:0.0} s  {a.L.What}   (set aside by the tracker, no pickup in the footage: not scored)");
 
         // the baseline: a build must not miss or add more than the last recorded one did
         if (!o.TryGetValue("baseline", out var basePath)) { Console.WriteLine("  no --baseline given: scored only"); return 0; }
