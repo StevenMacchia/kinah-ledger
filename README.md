@@ -240,7 +240,7 @@ KinahLedger market-watch                 only the Market reader, as the window r
 KinahLedger parse-test                   self-test of the chat-line parser
 KinahLedger market-test                  self-test of the Market row parser
 KinahLedger market-test --image shot.png find the Market in a screenshot and read its rows
-KinahLedger ui-shot captures/ui --demo   render the window to PNG (--pets, --gathering, --market, --compact, --welcome, --skin night|abyss|daylight)
+KinahLedger ui-shot captures/ui --demo   render the window to PNG (--pets, --gathering, --market, --events [--mine: this PC's own runs], --compact, --welcome, --skin night|abyss|daylight)
 KinahLedger market-shot captures/ui      the window with the Market reader in its tracking state
 KinahLedger reset-id                     new random install ID
 ```

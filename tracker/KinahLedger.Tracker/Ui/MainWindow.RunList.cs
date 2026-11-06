@@ -102,7 +102,7 @@ public partial class MainWindow
         ToolTipService.SetInitialShowDelay(line, 500);
         line.MouseEnter += (_, _) => { line.SetResourceReference(Border.BackgroundProperty, "HoverTint"); name.SetResourceReference(TextBlock.ForegroundProperty, "Gold"); };
         line.MouseLeave += (_, _) => { line.Background = Brushes.Transparent; name.SetResourceReference(TextBlock.ForegroundProperty, out_ ? "Faint" : "Ink"); };
-        line.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenPlace(run.Zone); _runsAll.Add(run.Zone); _fixOpen = RunKey(run); _drawnSig.Remove("runs"); redraw(); };
+        line.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenPlace(run.Zone); _fixOpen = RunKey(run); _drawnSig.Remove("runs"); redraw(); };
         sp.Children.Add(line);
         var slots = new List<FrameworkElement>();
         if (one.Kinah > 0) slots.Add(KinahSlot(one.Kinah, one.KinahWhere, "", "Picked up this run"));
@@ -193,6 +193,6 @@ public partial class MainWindow
     {
         var list = InstHost.Children.OfType<Border>().First(b => b.Tag is "list");
         var run = (InstanceRun)((StackPanel)list.Child).Children.OfType<ScrollViewer>().SelectMany(s => ((StackPanel)s.Content).Children.OfType<StackPanel>()).Where(p => p.Tag is InstanceRun).ElementAt(k).Tag!;
-        OpenPlace(run.Zone); _runsAll.Add(run.Zone); _fixOpen = RunKey(run); _drawnSig.Remove("runs"); ShowInstances();
+        OpenPlace(run.Zone); _fixOpen = RunKey(run); _drawnSig.Remove("runs"); ShowInstances();
     }
 }

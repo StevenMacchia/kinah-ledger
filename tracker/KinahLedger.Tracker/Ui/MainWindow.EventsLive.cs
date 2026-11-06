@@ -13,11 +13,10 @@ using Path = System.Windows.Shapes.Path;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// The Events part's live pieces and sheets (0.8.31): the steps of the open run (Entered, In the run, Reward screen,
-/// Paid) and the feed lines Now shows inside the place's card (MainWindow.RunsCard.cs); the sheet that opens under a
-/// run: for a flagged run its fix ("Looks like 5 runs. Split at the reward screens · Keep as one · Remove", a box to type
-/// Kinah that wasn't read, "This wasn't a run · It was a run"), for any other its details and Remove. Every sheet is drawn
-/// in the window's look; Remove needs no Windows dialog, the sheet is the second step.
+/// The Events part's sheets (0.8.31): the sheet a place's card shows for the run clicked in ALL RUNS
+/// (MainWindow.RunsCard.cs): for a flagged run its fix ("Looks like 5 runs. Split at the reward screens · Keep as one ·
+/// Remove", a box to type Kinah that wasn't read, "This wasn't a run · It was a run"), for any other its details and
+/// Remove. Every sheet is drawn in the window's look; Remove needs no Windows dialog, the sheet is the second step.
 /// </summary>
 public partial class MainWindow
 {
@@ -29,54 +28,6 @@ public partial class MainWindow
     List<RunFixes.ScreenLine>? _screenLines;
 
     static string RunKey(InstanceRun r) => $"{r.Start.Ticks}|{r.Zone}";
-
-    /// <summary>Entered · In the run · Reward screen · Paid, with where the open run stands lit; all grey with no run open.</summary>
-    FrameworkElement StepTrack(InstanceRun? open)
-    {
-        int at = open == null ? -1 : StepOf(open);
-        var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 6) };
-        var steps = new[] { "Entered", "In the run", "Reward screen", "Paid" };
-        for (int i = 0; i < steps.Length; i++)
-        {
-            bool done = i < at, cur = i == at;
-            var dot = new Ellipse { Width = 9, Height = 9, StrokeThickness = 1.5, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
-            dot.SetResourceReference(Shape.StrokeProperty, cur ? "Gold" : done ? "Muted" : "LineStrong");
-            if (cur) dot.SetResourceReference(Shape.FillProperty, "Gold"); else if (done) dot.SetResourceReference(Shape.FillProperty, "Muted");
-            sp.Children.Add(dot);
-            sp.Children.Add(PT(steps[i], cur ? "Gold" : done ? "Muted" : "Faint", 12, cur ? FontWeights.SemiBold : null));
-            if (i < steps.Length - 1) { var r = new Border { Width = 22, Height = 1.5, Margin = new Thickness(8, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center }; r.SetResourceReference(Border.BackgroundProperty, done ? "Muted" : "Line"); sp.Children.Add(r); }
-        }
-        return sp;
-    }
-
-    /// <summary>
-    /// The Events feed: the reward lines counted into runs (the live feed), with each run's steps drawn from the run log
-    /// (entered, paid) and a flagged record's line ("An older record looks like 5 runs · fix below"); the newest five.
-    /// </summary>
-    List<FeedLine> EventsFeed(List<InstanceRun> runs, string? zone = null)
-    {
-        var live = _demo ? _demoFeed.Where(l => l.Tab == FeedTab.Events) : _watcher.Chat?.Live.Recent(FeedTab.Events, 10) ?? new();
-        // with a place, its own reward lines only (a line that names no place is kept: it is the open run's)
-        var lines = new List<FeedLine>(zone == null ? live : live.Where(l => l.Where.Length == 0 || l.Where.EndsWith(zone, StringComparison.OrdinalIgnoreCase)));
-        foreach (var g in runs.GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase))
-        {
-            var list = g.OrderBy(r => r.Start).ToList();
-            double med = Median(list.Where(r => !r.OutOfAverages).Select(r => r.Seconds));
-            for (int i = 0; i < list.Count; i++)
-            {
-                var r = list[i];
-                // a run that wasn't one never gets steps of its own in the feed ("Run 23 paid 0" was the open bag)
-                if (r.Suspect == "not a run") continue;
-                var where = $"{r.Kind} · {r.Zone}";
-                lines.Add(new FeedLine(r.Start, FeedTab.Events, "step", $"Entered {r.Zone}", 0, $"run {i + 1}", Where: where));
-                if (r.PaidAt is { } paid && !r.KinahUnknown)
-                    lines.Add(new FeedLine(paid, FeedTab.Events, "step", r.Kinah > 0 ? $"Run {i + 1} paid {Fk(r.Kinah)}" : $"Run {i + 1}: rewards in", r.Kinah, r.FromPicture ? "reward screen read" : "", Where: where));
-                if (FlagReason(r, med) is { Length: > 0 } why && r.Suspect == "looks like several runs")
-                    lines.Add(new FeedLine(r.Start, FeedTab.Events, "flag", $"An older record looks like {why.Split(' ')[0]} runs", 0, Where: where));
-            }
-        }
-        return lines.OrderByDescending(l => l.At).Take(LiveFeed.Shown).ToList();
-    }
 
     /* ---------------- the sheets ---------------- */
 
@@ -107,16 +58,21 @@ public partial class MainWindow
         return b;
     }
 
-    /// <summary>The actions row: the run's own actions on the left, Remove on the right.</summary>
+    /// <summary>The actions row: the run's own actions on the left, Close and Remove on the right.</summary>
     (Grid Row, StackPanel Left) SheetActions(InstanceRun r, Action redraw, string removeText = "Remove")
     {
         var acts = new Grid { Margin = new Thickness(0, 12, 0, 0) };
         acts.ColumnDefinitions.Add(new ColumnDefinition()); acts.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { Orientation = Orientation.Horizontal }; acts.Children.Add(left);
+        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        var close = SheetBtn("Close", quiet: true);
+        close.Click += (_, _) => { _fixOpen = null; redraw(); };
+        right.Children.Add(close);
         var remove = SheetBtn(removeText, quiet: true); remove.Margin = new Thickness(0);
         remove.ToolTip = "It leaves the list and the figures; a copy is kept aside in instances.removed.jsonl.";
-        Grid.SetColumn(remove, 1); acts.Children.Add(remove);
         remove.Click += (_, _) => RemoveRun(r, redraw);
+        right.Children.Add(remove);
+        Grid.SetColumn(right, 1); acts.Children.Add(right);
         return (acts, left);
     }
 

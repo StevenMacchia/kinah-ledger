@@ -953,7 +953,7 @@ public static class WpfApp
         }
     }
 
-    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false, bool tall = false)
+    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false, bool tall = false, bool mine = false)
     {
         Ensure();
         Directory.CreateDirectory(dir);
@@ -965,6 +965,8 @@ public static class WpfApp
         // --tall: the whole window, however tall, so a render shows every block of a view (named "-tall")
         if (tall) w.MaxHeight = 4000;
         if (demo) w.ShowDemo(kind);
+        // --events --mine (0.10.10): the page as this PC's own runs fill it, from a copy of the run log; nothing is tracked, saved or sent
+        else if (mine && kind == "Events") w.ShowMineRuns();
         if (compact) w.ShowCompact();
         if (full) w.ShowFull();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
@@ -993,7 +995,7 @@ public static class WpfApp
             }
             Console.WriteLine($"window {w.ActualWidth:0}"); Dump(w, 0);
         }
-        var name = welcome ? "ui-welcome" : !demo ? "ui-main" : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
+        var name = welcome ? "ui-welcome" : !demo ? (mine && kind == "Events" ? "ui-main-events-mine" : "ui-main") : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)
