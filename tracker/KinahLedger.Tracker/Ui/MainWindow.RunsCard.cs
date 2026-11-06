@@ -62,7 +62,7 @@ public partial class MainWindow
         // the cards are built again only when what they show has changed: the runs themselves, which is live, what is
         // folded open, or the view. Between changes a tick only moves the open run's clock (2026-10-25: rebuilding every
         // card, shadows and all, twice a second was most of the UI thread)
-        var sig = $"{live}|{allShown}|{since:O}|{PlaceCardWidth}|{string.Join(",", _runsOpen)}|{string.Join(",", _placesToggled)}|{RunsSortMode}|{_runListAll}|{_fixOpen}|{JsonSerializer.Serialize(runs)}";
+        var sig = $"{live}|{allShown}|{since:O}|{PlaceCardWidth}|{string.Join(",", _runsOpen)}|{_placePick}|{RunsSortMode}|{_runListAll}|{_fixOpen}|{JsonSerializer.Serialize(runs)}";
         if (!Changed("runs", sig))
         {
             if (_livePill != null && _liveOpen is { LastLoot: null } o) _livePill.Text = $"{RunSteps[Math.Max(0, StepOf(o))]} · {Clock(DateTime.UtcNow - o.Start)} in";
@@ -72,31 +72,28 @@ public partial class MainWindow
         _eventsRate = "";
         _livePill = null; _liveOpen = null;
         long made = 0; int counted = 0;
-        bool first = true;
-        // every run on its line in a box that scrolls, over the places' cards (Ui/MainWindow.RunList.cs)
+        // every run on its line in a box that scrolls, over one place's card (Ui/MainWindow.RunList.cs)
         if (runs.Count > 0) InstHost.Children.Add(BuildRunList(runs, ShowInstances));
-        _firstPlace = "";
-        // the place being run first, then the others by their last run; the first open, the others folded to one line
-        foreach (var g in runs.GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase)
-                     .OrderByDescending(g => string.Equals(g.Key, live, StringComparison.OrdinalIgnoreCase))
-                     .ThenByDescending(g => g.Max(r => r.LastLoot ?? r.Start)))
+        // the places with runs, the one being run first, then by their last run: one card, its band a dropdown of them all
+        // (Steven, 2026-11-06: the others folded to a line each under it were "way too long")
+        var groups = runs.GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => string.Equals(g.Key, live, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(g => g.Max(r => r.LastLoot ?? r.Start))
+            .Select(g => (Zone: g.Key, Runs: g.ToList())).ToList();
+        _placesShown = groups.Select(g => g.Zone).ToList();
+        if (groups.Count > 0)
         {
-            var list = g.ToList();
-            var zone = g.Key;
-            bool here = string.Equals(live, zone, StringComparison.OrdinalIgnoreCase);
-            if (first) _firstPlace = zone;
-            Border card;
-            if (PlaceOpen(zone, first))
-            {
-                card = BuildRunsCard(zone, list, here, PlaceCardWidth, ShowInstances, withNow: first, foldCard: () => { TogglePlace(zone); ShowInstances(); });
-                card.Tag = "open"; card.Margin = new Thickness(0, 0, 0, 16);
-            }
-            else { card = FoldedPlace(zone, list, here, () => { TogglePlace(zone); ShowInstances(); }); card.Margin = new Thickness(0, 0, 0, 8); }
-            _placeOfCard[card] = zone;
+            var picked = PickedPlace(_placesShown, live);
+            var list = groups.First(g => string.Equals(g.Zone, picked, StringComparison.OrdinalIgnoreCase)).Runs;
+            bool here = string.Equals(live, picked, StringComparison.OrdinalIgnoreCase);
+            // the first place's rate is the page's (the place being run, or the last run), whichever card is up
+            var card = BuildRunsCard(picked, list, here, PlaceCardWidth, ShowInstances, withNow: string.Equals(picked, groups[0].Zone, StringComparison.OrdinalIgnoreCase),
+                pickPlace: groups.Count > 1 ? () => PlaceEntries(groups, picked, live, ShowInstances) : null);
+            card.Tag = "open"; card.Margin = new Thickness(0, 0, 0, 16);
+            _placeOfCard[card] = picked;
             InstHost.Children.Add(card);
-            foreach (var r in list.Where(r => !r.OutOfAverages)) { counted++; made += RunValue(r); }
-            first = false;
         }
+        foreach (var r in runs.Where(r => !r.OutOfAverages)) { counted++; made += RunValue(r); }
         InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · {Fk(made)} made" : "";
         InstWhat.ToolTip = InstHost.Children.Count > 0 ? "Made: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ", over the counted runs. Gear is bound and not in it." : null;
         InstEmpty.Visibility = InstHost.Children.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -196,7 +193,7 @@ public partial class MainWindow
     /// loot behind one line.
     /// </summary>
     /// <param name="foldCard">On the page, a click on the band folds the card to one line (Ui/MainWindow.RunList.cs); a render of the card alone has none.</param>
-    Border BuildRunsCard(string zone, List<InstanceRun> runs, bool live, double width, Action redraw, bool withNow = false, Action? foldCard = null)
+    Border BuildRunsCard(string zone, List<InstanceRun> runs, bool live, double width, Action redraw, bool withNow = false, Func<List<MenuEntry>>? pickPlace = null)
     {
         var body = new StackPanel { Width = width - 2 };
         var card = new Border { Child = body, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
@@ -246,12 +243,12 @@ public partial class MainWindow
         var bandBox = new Border { Child = band, Padding = new Thickness(20, 16, 20, 14), BorderThickness = new Thickness(0, 0, 0, 1), CornerRadius = new CornerRadius(9, 9, 0, 0) };
         bandBox.SetResourceReference(Border.BackgroundProperty, "PlaceBand");
         bandBox.SetResourceReference(Border.BorderBrushProperty, "PlaceBandLine");
-        if (foldCard != null)
+        // the band as a dropdown of the places (pickPlace): a chevron after the name, a click opens the menu under the band
+        if (pickPlace != null)
         {
-            band.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var chev = PT("⌄", "Faint", 18); chev.Margin = new Thickness(14, -4, 0, 0); chev.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(chev, 3); band.Children.Add(chev);
-            bandBox.Cursor = Cursors.Hand; bandBox.ToolTip = "Click to fold this place to one line."; ToolTipService.SetInitialShowDelay(bandBox, 500);
-            bandBox.MouseLeftButtonUp += (_, _) => foldCard();
+            title.Inlines.Add(PR("  ⌄", "Muted", FontWeights.Normal));
+            bandBox.Cursor = Cursors.Hand; bandBox.ToolTip = "Click to pick another place: its figures, its runs and their loot."; ToolTipService.SetInitialShowDelay(bandBox, 500);
+            bandBox.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowMenu(bandBox, pickPlace()); };
         }
         body.Children.Add(bandBox);
 

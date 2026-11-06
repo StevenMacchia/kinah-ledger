@@ -15,14 +15,17 @@ namespace KinahLedger.Ui;
 /// every single run and then have a menu at the top where you could drop down and choose to sort by it"). ALL RUNS is one
 /// box that scrolls: every run on its line (started, place, took, what it made) with its Kinah and rewards as slots under
 /// it, each with its card on hover; a dropdown picks the order (newest, best, by place, longest). The places' cards sit
-/// under the box folded to one line each, the place being run (or the last one run) open; a click on a run opens its
-/// place's card with that run's sheet, where the details, a fix and Remove are.
+/// under the box one place's card, whose band is a dropdown of every place with runs (the place being run, or the last
+/// one run, until another is picked; Steven, 2026-11-06, of the places folded to a line each under it: "way too long,
+/// should be a dropdown menu to choose what you want to view and then change it"); a click on a run picks its place and
+/// opens its card with that run's sheet, where the details, a fix and Remove are.
 /// </summary>
 public partial class MainWindow
 {
-    /// <summary>The places whose card is the other way from its default: the first place (being run, or the last run) opens on its own, the others fold.</summary>
-    readonly HashSet<string> _placesToggled = new(StringComparer.OrdinalIgnoreCase);
-    string _firstPlace = "";
+    /// <summary>The place picked from the card's band (or by a click on a run); "" until one is, and the place being run (or the last run) while it has no runs on the page.</summary>
+    string _placePick = "";
+    /// <summary>The places with runs on the page as last drawn, in the band's order (the options self-test).</summary>
+    List<string> _placesShown = new();
     /// <summary>Past the first RunListFirst runs only on request: Earlier can hold hundreds, each with its slots.</summary>
     bool _runListAll;
 
@@ -34,9 +37,31 @@ public partial class MainWindow
     List<InstanceRun> _shownRuns = new();
     internal List<InstanceRun> ShownRunsForTest() => _shownRuns;
 
-    bool PlaceOpen(string zone, bool first) => _placesToggled.Contains(zone) ? !first : first;
-    void TogglePlace(string zone) { if (!_placesToggled.Remove(zone)) _placesToggled.Add(zone); }
-    void OpenPlace(string zone) { if (!PlaceOpen(zone, string.Equals(zone, _firstPlace, StringComparison.OrdinalIgnoreCase))) TogglePlace(zone); }
+    /// <summary>The place whose card is under the box: the one picked while it has runs on the page, else the place being run, else the last one run (the first of <paramref name="places"/>).</summary>
+    string PickedPlace(List<string> places, string? live) =>
+        places.FirstOrDefault(p => _placePick.Length > 0 && string.Equals(p, _placePick, StringComparison.OrdinalIgnoreCase))
+        ?? places.FirstOrDefault(p => string.Equals(p, live, StringComparison.OrdinalIgnoreCase)) ?? places[0];
+    void OpenPlace(string zone) => _placePick = zone;
+
+    /// <summary>The band's dropdown: every place with runs on the page, each with its kind, its runs, what they made and when it was last run; the picked one ticked.</summary>
+    List<MenuEntry> PlaceEntries(List<(string Zone, List<InstanceRun> Runs)> groups, string picked, string? live, Action redraw)
+    {
+        var list = new List<MenuEntry>();
+        foreach (var (zone, runs) in groups)
+        {
+            var counted = runs.Where(r => !r.OutOfAverages).ToList();
+            long value = counted.Sum(RunValue);
+            var newest = runs.OrderByDescending(r => r.LastLoot ?? r.Start).First();
+            var last = (newest.LastLoot ?? newest.Start).ToLocalTime();
+            var parts = new List<string>();
+            if (newest.Kind.Length > 0) parts.Add(newest.Kind);
+            parts.Add($"{runs.Count} run{(runs.Count == 1 ? "" : "s")}");
+            if (value > 0) parts.Add($"{Fk(value)} made");
+            parts.Add(string.Equals(zone, live, StringComparison.OrdinalIgnoreCase) ? "open now" : last.Date == DateTime.Today ? $"last {last:HH:mm}" : $"last {last.ToString("MMM d", CultureInfo.InvariantCulture)}");
+            list.Add(new MenuEntry(zone, () => { OpenPlace(zone); _drawnSig.Remove("runs"); redraw(); }, string.Join(" · ", parts), Key: string.Equals(zone, picked, StringComparison.OrdinalIgnoreCase) ? "✓" : ""));
+        }
+        return list;
+    }
 
     /// <summary>The box: its heading (ALL RUNS, how many, the order's dropdown) over the runs, which scroll past RunListHeight.</summary>
     Border BuildRunList(List<InstanceRun> runs, Action redraw)
@@ -129,39 +154,6 @@ public partial class MainWindow
         return wrap;
     }
 
-    /// <summary>A place's card folded to one line: its tile, name and kind, its runs and what they made, when it was last run; a click opens the card.</summary>
-    Border FoldedPlace(string zone, List<InstanceRun> runs, bool live, Action open)
-    {
-        var counted = runs.Where(r => !r.OutOfAverages).ToList();
-        long value = counted.Sum(RunValue), best = counted.Count > 0 ? counted.Max(RunValue) : 0;
-        var newest = runs.OrderByDescending(r => r.LastLoot ?? r.Start).First();
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.Children.Add(PlaceTile(newest.Kind, 36));
-        var titles = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var title = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-        title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
-        title.Inlines.Add(PR(zone, "Gold"));
-        if (newest.Kind.Length > 0) title.Inlines.Add(PR(" · " + newest.Kind, "Faint", FontWeights.Normal));
-        titles.Children.Add(title);
-        var meta = $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}" + (value > 0 ? $" · {Fk(value)} made" : "") + (best > 0 && counted.Count > 1 ? $" · best {Fk(best)}" : "");
-        var ml = PT(meta, "Muted", 12); ml.Margin = new Thickness(0, 2, 0, 0); titles.Children.Add(ml);
-        Grid.SetColumn(titles, 1); g.Children.Add(titles);
-        var last = (newest.LastLoot ?? newest.Start).ToLocalTime();
-        var pill = live ? PPill("open now", true) : PPill(last.Date == DateTime.Today ? $"last {last:HH:mm}" : $"last {last.ToString("MMM d", CultureInfo.InvariantCulture)}", false);
-        pill.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(pill, 2); g.Children.Add(pill);
-        var chev = PT("›", "Faint", 16); chev.Margin = new Thickness(12, 0, 0, 0); chev.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(chev, 3); g.Children.Add(chev);
-        var card = new Border { Child = g, Tag = "folded", CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(16, 10, 18, 10), Cursor = Cursors.Hand, Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 },
-            ToolTip = "Click to open this place: its figures, its runs and their loot." };
-        card.SetResourceReference(Border.BackgroundProperty, "Card"); card.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
-        ToolTipService.SetInitialShowDelay(card, 500);
-        card.MouseEnter += (_, _) => chev.SetResourceReference(TextBlock.ForegroundProperty, "Gold");
-        card.MouseLeave += (_, _) => chev.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
-        card.MouseLeftButtonUp += (_, _) => open();
-        return card;
-    }
-
     /// <summary>
     /// A small dropdown in the chips' look: the choice and a chevron; a click opens the menu of choices under it (Steven,
     /// 2026-11-05: "a menu at the top where you could drop down and choose to sort by it").
@@ -180,15 +172,14 @@ public partial class MainWindow
 
     /* ---------------- for options-test ---------------- */
 
-    /// <summary>The run list and the places' cards as drawn: the runs shown, their values in order, the dropdown's words, the open and folded places.</summary>
-    internal (int Runs, List<long> Values, string Pick, List<string> Open, List<string> Folded) RunListForTest()
+    /// <summary>The run list and the place's card as drawn: the runs shown, their values in order, the order dropdown's words, the place open, and the places the band's dropdown offers.</summary>
+    internal (int Runs, List<long> Values, string Pick, List<string> Open, List<string> Places) RunListForTest()
     {
         var list = InstHost.Children.OfType<Border>().FirstOrDefault(b => b.Tag is "list");
         var groups = list == null ? new List<StackPanel>() : ((StackPanel)list.Child).Children.OfType<ScrollViewer>().SelectMany(s => ((StackPanel)s.Content).Children.OfType<StackPanel>()).Where(p => p.Tag is InstanceRun).ToList();
         var pick = list == null ? "" : ((StackPanel)list.Child).Children.OfType<Grid>().SelectMany(g => g.Children.OfType<StackPanel>()).SelectMany(p => p.Children.OfType<Border>()).Where(b => b.Child is StackPanel).Select(b => ((TextBlock)((StackPanel)b.Child).Children[0]).Text).FirstOrDefault() ?? "";
         var open = InstHost.Children.OfType<Border>().Where(b => b.Tag is "open").Select(b => _placeOfCard.GetValueOrDefault(b, "")).ToList();
-        var folded = InstHost.Children.OfType<Border>().Where(b => b.Tag is "folded").Select(b => _placeOfCard.GetValueOrDefault(b, "")).ToList();
-        return (groups.Count, groups.Select(p => RunValue((InstanceRun)p.Tag!)).ToList(), pick, open, folded);
+        return (groups.Count, groups.Select(p => RunValue((InstanceRun)p.Tag!)).ToList(), pick, open, new List<string>(_placesShown));
     }
 
     /// <summary>Which place each card on the page is, for the test above.</summary>
@@ -196,7 +187,7 @@ public partial class MainWindow
 
     internal string? FixOpenForTest => _fixOpen;
     internal void SetRunsSortForTest(string mode) { _prefs.RunsSort = mode; _drawnSig.Remove("runs"); ShowInstances(); }
-    internal void TogglePlaceForTest(string zone) { TogglePlace(zone); _drawnSig.Remove("runs"); ShowInstances(); }
+    internal void PickPlaceForTest(string zone) { OpenPlace(zone); _drawnSig.Remove("runs"); ShowInstances(); }
     /// <summary>A click on the run list's k-th line.</summary>
     internal void ClickRunForTest(int k)
     {
