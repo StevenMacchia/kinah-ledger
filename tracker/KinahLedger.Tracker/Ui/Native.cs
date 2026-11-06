@@ -45,16 +45,26 @@ internal static class Native
     const long WS_EX_TRANSPARENT = 0x20, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000;
 
     /// <summary>
-    /// A locked panel: clicks pass through it to the game and it never takes focus (WS_EX_TRANSPARENT, WS_EX_NOACTIVATE).
-    /// Off, it can be clicked and dragged again. Either way it stays out of Alt+Tab (WS_EX_TOOLWINDOW). The readers let
+    /// A locked panel: clicks pass through it to the game (WS_EX_TRANSPARENT). Off, it can be clicked and dragged again.
+    /// Either way it never takes focus (WS_EX_NOACTIVATE) and stays out of Alt+Tab (WS_EX_TOOLWINDOW). The readers let
     /// our own click-through window through (GameWindow.Covered).
+    /// Never focused, unlocked too (Steven, 2026-11-06: "when the tracker is behind the game and you click on the game,
+    /// sometimes it pops a window up in front of the game and you can't close it without tabbing out"): his Ticker was
+    /// unlocked (the default a panel got on an install that was there before the lock), so a click that landed on it
+    /// activated it, and an owned window's activation brings its owner, the tracker's window, up over the game. A drag
+    /// needs no focus: the window gets the mouse under the pointer as it moves with it.
     /// </summary>
-    public static void SetClickThrough(IntPtr hwnd, bool on)
+    public static void SetClickThrough(IntPtr hwnd, bool on) =>
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(PanelExStyle(GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64(), on)));
+
+    /// <summary>The panel's extended style from the one it has: a tool window that never activates, click-through when locked.</summary>
+    public static long PanelExStyle(long ex, bool clickThrough)
     {
-        long ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64() | WS_EX_TOOLWINDOW;
-        ex = on ? ex | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE : ex & ~(WS_EX_TRANSPARENT | WS_EX_NOACTIVATE);
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
+        ex |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+        return clickThrough ? ex | WS_EX_TRANSPARENT : ex & ~WS_EX_TRANSPARENT;
     }
+    /// <summary>For the self-test: the bits <see cref="PanelExStyle"/> sets.</summary>
+    public const long ExTransparent = WS_EX_TRANSPARENT, ExToolWindow = WS_EX_TOOLWINDOW, ExNoActivate = WS_EX_NOACTIVATE;
 
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     const uint SWP_NOSIZE = 0x1, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10;
