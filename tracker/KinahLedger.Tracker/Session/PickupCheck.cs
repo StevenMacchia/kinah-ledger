@@ -76,6 +76,13 @@ public static class PickupCheck
     public static bool IsBoxLine(string line) =>
         !PlayerChat(line) && BoxLineRx.IsMatch(line) && !line.Contains("loot chest", StringComparison.OrdinalIgnoreCase);
 
+    // the Market's purchase dialog: "Total Amount Due" over its price (read whole at 10:50:14 and 11:32:20 on 2026-11-06, and
+    // "total amount due" by the decoder); "Funds" and "Cancel" come with it but show on other windows too
+    static readonly Regex MarketDialogRx = new(@"t[o0]tal\s*am[o0]unt\s*due", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>The Market's purchase dialog's own words, read where the loot list shows: the Market is open, listings seen or not.</summary>
+    public static bool IsMarketDialog(string text) => MarketDialogRx.IsMatch(text);
+
     /// <summary>Kina is money, never an item: a loot list row named Kina by its icon, with its amount cut off, is not a drop.</summary>
     public static bool IsKina(string name) => Regex.IsMatch(name, @"^\s*k[i1l]nah?\s*(?:\([^()]{0,10}\))?\s*$", RegexOptions.IgnoreCase);   // "Kina (Bognd)" too
 

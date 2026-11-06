@@ -20,8 +20,9 @@ public static class ReplaySignals
     static readonly Regex Unlisted = new(@"^zone: "".+"" is on no list", RegexOptions.Compiled);
     static readonly Regex Reward = new(@"^reward screen open \((.+?)\):", RegexOptions.Compiled);
     static readonly Regex Header = new(@"^event header: (.+?)(?: \(|$)", RegexOptions.Compiled);
-    // the Market's listings seen (traces before 0.10.12 never recorded it; the scene note has since 0.10.0)
-    static readonly Regex Market = new(@"^scene Market since", RegexOptions.Compiled);
+    // the Market's listings seen, or its purchase dialog over the loot list (traces before 0.10.12 never recorded either;
+    // the scene note has since 0.10.0, the dialog's row is in the list reads since 2026-10-24)
+    static readonly Regex Market = new(@"^scene Market since|^loot list: ""Total Amount Due""", RegexOptions.Compiled);
 
     /// <summary>
     /// The signals in reads.log, in order, with local times turned into UTC. <paramref name="olderPath"/> is reads.old.log, the

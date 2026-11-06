@@ -1238,7 +1238,8 @@ public sealed partial class TrackerSession
         // Market open now, or open at any time since the chat last lined up, what lands in this read was bought, and in the
         // next few seconds (the vote) too
         bool marketNow = MarketOpen?.Invoke(now) == true;
-        if (marketNow || _marketAt > _chatLinedAt)
+        // (not before the chat was first read: what is on screen then is history, and a replay's cut starts the same way)
+        if (marketNow || (_chatLinedAt != DateTime.MinValue && _marketAt > _chatLinedAt))
         {
             if (now > _boughtUntil) CrashLog.Note($"the Market was open ({(marketNow ? "now" : "since the chat was last read")}): what lands with it was bought, not dropped");
             _boughtUntil = now.AddSeconds(RewardWindowSeconds);
@@ -1727,7 +1728,7 @@ public sealed partial class TrackerSession
         // comes (2026-10-30: 31 idle minutes as "rewards landing" after Defend Shugo Merchants)
         Instances.RewardsOver(now);
         // the Market open: what the chat shows next was bought (MarketSeen), whatever activity wins below
-        if (MarketOpen?.Invoke(now) == true) MarketSeen(now, trace: true);
+        if (MarketOpen?.Invoke(now) == true) MarketSeen(now, "its listings");
         if (_boss != null) { next = new Activity(ActivityKind.WorldBoss, _boss); why = _bossDeadAt == DateTime.MinValue ? "on the target bar" : "its loot window"; }
         else if (Instances.Current is { } run && run.Kind != InstanceLog.WorldBoss && !(run.Leaving && Target.RewardOpen(now) && Target.RewardTitle.Length > 0))
         {
@@ -2545,10 +2546,18 @@ public sealed partial class TrackerSession
     DateTime _inventoryUntil = DateTime.MinValue;
     // the Market's listings last seen open; the last chat read that lined up; until when what lands was bought (ProcessChatCore)
     DateTime _marketAt = DateTime.MinValue, _chatLinedAt = DateTime.MinValue, _boughtUntil = DateTime.MinValue;
-    /// <summary>The Market's listings seen open at <paramref name="t"/> (each pass; replay and tests). The live pass writes it to the trace once per opening.</summary>
-    internal void MarketSeen(DateTime t, bool trace = false)
+    /// <summary>
+    /// The Market seen open at <paramref name="t"/>: its listings (each pass), or its purchase dialog over the loot list
+    /// (ProcessList); replay and tests. The live read (<paramref name="why"/> given) notes it and writes it to the trace once
+    /// per opening.
+    /// </summary>
+    internal void MarketSeen(DateTime t, string? why = null)
     {
-        if (trace && (_marketAt == DateTime.MinValue || (t - _marketAt).TotalSeconds > 15)) ReadTrace.Signal(t, "market", "open");
+        if (why != null && (_marketAt == DateTime.MinValue || (t - _marketAt).TotalSeconds > 15))
+        {
+            ReadTrace.Signal(t, "market", "open");
+            CrashLog.Note($"the Market is open ({why}): what lands while it is, and in the first read of the chat after it, was bought");
+        }
         if (t > _marketAt) _marketAt = t;
     }
 
@@ -3470,6 +3479,10 @@ public sealed partial class TrackerSession
         ListReadsCounted++;
         _ctxNow = now;
         GatherTick(now);
+        // the Market's purchase dialog over the band ("Total Amount Due", with "Funds" and "Cancel"): the Market is open, even
+        // when its listings never showed (Steven, 2026-11-06 11:32: Pure Odyle x7, x2 and x5 bought from the dialog came in a
+        // burst two seconds after it and counted as rare drops; no Market scene that whole stretch)
+        if (lines.Any(l => PickupCheck.IsMarketDialog(l.Text))) MarketSeen(now, "its purchase dialog over the loot list");
         try
         {
             CommitHeld();   // anything a step without a picture left waiting (a replay) counts as read first
