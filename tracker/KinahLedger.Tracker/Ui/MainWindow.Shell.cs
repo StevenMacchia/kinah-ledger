@@ -32,6 +32,8 @@ public sealed record OptionsChoice(
     public bool ExplainCounts { get; init; }
     /// <summary>Options › General › Window size (0.10.11, Ui/MainWindow.Fit.cs): 0.8 to 1.5, 1 is the designed size. Shown as the slider moves, kept on Save.</summary>
     public double WindowScale { get; init; } = 1;
+    /// <summary>Options › General › Keep above other windows (0.10.11). Off by default.</summary>
+    public bool AlwaysOnTop { get; init; }
 }
 
 /// <summary>
@@ -199,6 +201,17 @@ public partial class MainWindow
     public UserPrefs Prefs => _prefs;
 
     /// <summary>
+    /// Keep above other windows (0.10.11): the window stays over the game and everything else, for a windowed game on one
+    /// screen; the panel over the game is on top either way. Set from Options › General and the ⋯ menu, applied at start.
+    /// </summary>
+    public void SetAlwaysOnTop(bool on)
+    {
+        _prefs.AlwaysOnTop = on;
+        Topmost = on;
+    }
+    public const string AlwaysOnTopText = "Keep above other windows";
+
+    /// <summary>
     /// The panel's opacity and size while Options is open: shown on the panel at once, remembered only on Save (Cancel
     /// shows the saved ones again), like every other setting there.
     /// </summary>
@@ -264,7 +277,7 @@ public partial class MainWindow
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
         { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap, ExplainCounts = _prefs.ExplainCounts,
-          WindowScale = Math.Round(Math.Clamp(_prefs.WindowScale, MinWindowScale, MaxWindowScale), 2) };
+          WindowScale = Math.Round(Math.Clamp(_prefs.WindowScale, MinWindowScale, MaxWindowScale), 2), AlwaysOnTop = _prefs.AlwaysOnTop };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
     public string? ApplyOptions(OptionsChoice c)
@@ -312,6 +325,7 @@ public partial class MainWindow
         _prefs.HideWhenGameCloses = c.HideWhenGameCloses;
         _prefs.CloseToTray = c.CloseToTray;
         _prefs.MinimizeToTray = c.MinimizeToTray;
+        if (c.AlwaysOnTop != was.AlwaysOnTop) SetAlwaysOnTop(c.AlwaysOnTop);
         _prefs.FollowActivity = c.FollowActivity;   // on again: it follows from the next change, never jumping to an old one
         if (c.Compare != was.Compare) SetCompare(c.Compare);   // Ui/MainWindow.Compare.cs
         if (c.ShowGross != was.ShowGross) SetGross(c.ShowGross);

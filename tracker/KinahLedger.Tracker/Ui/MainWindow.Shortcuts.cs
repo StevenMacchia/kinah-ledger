@@ -16,6 +16,8 @@ public partial class MainWindow
     public const string OptionsKey = "Ctrl+,", NewSessionKey = "Ctrl+N", CopyPictureKey = "Ctrl+Shift+C";
     /// <summary>Window size (0.10.11, Ui/MainWindow.Fit.cs): a step bigger, a step smaller, back to 100%. The numeric keypad's + - 0 work too.</summary>
     public const string WindowBiggerKey = "Ctrl+=", WindowSmallerKey = "Ctrl+-", WindowResetKey = "Ctrl+0";
+    /// <summary>The pages (0.10.11): Ctrl+1 Farming, Ctrl+2 Crafting, Ctrl+3 Events; the keypad's 1 2 3 too. Nothing before a server is chosen.</summary>
+    public const string PageKeys = "Ctrl+1 · 2 · 3";
     /// <summary>New session's name since it left the card (0.9.13), in the ⋯ menu and the tray.</summary>
     public const string ClearAllText = "Clear everything";
 
@@ -32,6 +34,12 @@ public partial class MainWindow
             int s = steps;
             InputBindings.Add(new KeyBinding(new KeyAct(() => StepWindowScale(s)), key, ModifierKeys.Control));
             if (key == Key.OemPlus) InputBindings.Add(new KeyBinding(new KeyAct(() => StepWindowScale(1)), key, ModifierKeys.Control | ModifierKeys.Shift));
+        }
+        // the pages: Ctrl+1, 2, 3 as the tabs sit, a click by hand (the page then stays until something else starts)
+        foreach (var (key, part) in new[] { (Key.D1, "Farming"), (Key.NumPad1, "Farming"), (Key.D2, "Crafting"), (Key.NumPad2, "Crafting"), (Key.D3, "Events"), (Key.NumPad3, "Events") })
+        {
+            var p = part;
+            InputBindings.Add(new KeyBinding(new KeyAct(() => { if (!_welcome && _part != p) ShowPart(p); }), key, ModifierKeys.Control));
         }
         OptionsBtn.ToolTip = $"{OptionsBtn.ToolTip}\n{OptionsKey} opens it.";
         _shareTip = $"{ShareCardBtn.ToolTip}\n{CopyPictureKey} copies the picture without opening it.";
@@ -74,6 +82,13 @@ public partial class MainWindow
             return false;
         }
         return CopySharePicture();
+    }
+
+    /// <summary>For the options self-test: a key with its modifiers, as the window's bindings see it.</summary>
+    internal void PressForTest(Key key, ModifierKeys mods)
+    {
+        foreach (var kb in InputBindings.OfType<KeyBinding>())
+            if (kb.Key == key && kb.Modifiers == mods) { kb.Command.Execute(null); return; }
     }
 
     /// <summary>A key binding's action.</summary>

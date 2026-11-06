@@ -277,7 +277,7 @@
         <!-- the site and Options: everything that can be set is in the Options window, so the ledger never moves -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
           <!-- the site as a globe, so the three parts always fit beside the name (Steven, 2026-10-22: the tabs ran into the name) -->
-          <Button x:Name="SiteBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="kinahledger.com: community drop rates, prices and your profile">
+          <Button x:Name="SiteBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="kinahledger.com: community drop rates, prices and your profile" AutomationProperties.Name="Open kinahledger.com">
             <Grid Width="16" Height="16">
               <Ellipse Width="16" Height="16" Stroke="{DynamicResource Muted}" StrokeThickness="1.4"/>
               <Ellipse Width="7" Height="16" Stroke="{DynamicResource Muted}" StrokeThickness="1.2"/>
@@ -287,7 +287,7 @@
             </Grid>
           </Button>
           <!-- Compact / Full view: two panels drawn, the right one filled in Full view -->
-          <Button x:Name="ViewBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="Full view: every table beside the summary">
+          <Button x:Name="ViewBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="Full view: every table beside the summary" AutomationProperties.Name="Compact or Full view">
             <Grid Width="16" Height="12">
               <Rectangle Width="16" Height="12" RadiusX="2" RadiusY="2" Stroke="{DynamicResource Muted}" StrokeThickness="1.4"/>
               <Rectangle Width="1.4" Height="12" Fill="{DynamicResource Muted}" HorizontalAlignment="Left" Margin="7,0,0,0"/>

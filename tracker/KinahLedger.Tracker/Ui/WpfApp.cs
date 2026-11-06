@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DRect = System.Drawing.Rectangle;
@@ -315,6 +316,27 @@ public static class WpfApp
         DoEvents();
         Environment.SetEnvironmentVariable("KL_SCREEN_W", null);
         Check(w.FitState.Scale == 1, "and back to 100% on Cancel");
+
+        // Keep above other windows (0.10.11): off to start, a switch in Options that waits for Save, and the same one in the ⋯ menu
+        Check(!w.Topmost && !p.AlwaysOnTop, "keep above other windows: off to start");
+        o = Open();
+        Flip(o.TopmostChk);
+        Check(o.SaveBtn.IsEnabled && !w.Topmost, "the switch waits for Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.Topmost && p.AlwaysOnTop, "saved: the window is on top");
+        var onTop = w.MoreEntries().First(e => e.Text == MainWindow.AlwaysOnTopText);
+        Check(onTop.On == true, "the ⋯ menu shows the switch on");
+        onTop.Do!();
+        Check(!w.Topmost && !p.AlwaysOnTop && w.MoreEntries().First(e => e.Text == MainWindow.AlwaysOnTopText).On == false, "the ⋯ menu's switch turns it off at once");
+        o = Open();
+        Check(o.TopmostChk.IsChecked == false, "Options opens with it off again");
+        Click(o.CancelBtn);
+        DoEvents();
+        // the pages by key (0.10.11): Ctrl+2 Crafting, Ctrl+3 Events, Ctrl+1 Farming
+        w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+2 shows Crafting");
+        w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+3 shows Events");
+        w.PressForTest(Key.NumPad1, ModifierKeys.Control); Check(w.PartForTest == "Farming", "Ctrl+1 (the keypad's too) shows Farming");
 
         // Save as CSV (0.10.11): the ⋯ menu's entry, today's loot as the file holds it, and the runs the Events page shows
         Check(w.MoreEntries().Any(e => e.Text == MainWindow.SaveLootText), "the ⋯ menu has Save today's loot as CSV…");

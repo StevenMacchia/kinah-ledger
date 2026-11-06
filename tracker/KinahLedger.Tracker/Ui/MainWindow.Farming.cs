@@ -66,6 +66,10 @@ public partial class MainWindow
             new("All zones", () => { _prefs.AllZones = !_prefs.AllZones; if (!_demo) _prefs.Save(); Redraw(); Tick(); }, On: _prefs.AllZones,
                 Sub: "Keep counting across every zone",
                 Tip: "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
+            // Keep above other windows (0.10.11): the same switch as Options › General, for a windowed game on one screen
+            new(AlwaysOnTopText, () => { SetAlwaysOnTop(!_prefs.AlwaysOnTop); if (!_demo) _prefs.Save(); }, On: _prefs.AlwaysOnTop,
+                Sub: "Stays over the game and other windows",
+                Tip: "On: this window stays above the game and every other window, for a windowed game on one screen. The panel over the game is on top either way."),
             // New session's way back into the menu (0.9.13): Start run is the card's fresh start; this clears without a run
             new(ClearAllText, () => _ = ClearFarmTables(), Sub: "The tables start over, no run", Key: NewSessionKey,
                 Tip: "Start the farming tables over without starting a run. What was counted is shared first, Undo brings the tables back, and the Today strip keeps the day."),
