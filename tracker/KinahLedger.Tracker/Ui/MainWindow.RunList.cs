@@ -30,6 +30,9 @@ public partial class MainWindow
     const int RunListFirst = 40;
 
     string RunsSortMode => RunsOrder.Of(_prefs.RunsSort);
+    /// <summary>The runs the ALL RUNS box was last drawn with (Save as CSV, and the options self-test).</summary>
+    List<InstanceRun> _shownRuns = new();
+    internal List<InstanceRun> ShownRunsForTest() => _shownRuns;
 
     bool PlaceOpen(string zone, bool first) => _placesToggled.Contains(zone) ? !first : first;
     void TogglePlace(string zone) { if (!_placesToggled.Remove(zone)) _placesToggled.Add(zone); }
@@ -49,7 +52,13 @@ public partial class MainWindow
         var n = PR($"   {runs.Count} run{(runs.Count == 1 ? "" : "s")} · what each one gave", "Muted"); n.FontSize = 12; t.Inlines.Add(n);
         head.Children.Add(t);
         var pick = PickButton(RunsOrder.Label(RunsSortMode), () => RunsSortEntries(redraw), "The order of the runs: newest first, the best first, by place, or the longest first.");
-        Grid.SetColumn(pick, 1); head.Children.Add(pick);
+        // Save as CSV (0.10.11, Ui/MainWindow.Export.cs): the runs shown, in this order, for a spreadsheet
+        var save = PillButton(SaveRunsText, () => SaveRunsCsv(runs), "One file for a spreadsheet: these runs in this order, each with when it started, the place, how long it took, its Kinah, kills, worth and items. Nothing is uploaded.");
+        save.Margin = new Thickness(0, 0, 8, 0);
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        tools.Children.Add(save); tools.Children.Add(pick);
+        Grid.SetColumn(tools, 1); head.Children.Add(tools);
+        _shownRuns = runs;
         body.Children.Add(head);
         var host = new StackPanel();
         var order = RunsOrder.Sorted(runs, RunsSortMode, RunValue);
@@ -176,7 +185,7 @@ public partial class MainWindow
     {
         var list = InstHost.Children.OfType<Border>().FirstOrDefault(b => b.Tag is "list");
         var groups = list == null ? new List<StackPanel>() : ((StackPanel)list.Child).Children.OfType<ScrollViewer>().SelectMany(s => ((StackPanel)s.Content).Children.OfType<StackPanel>()).Where(p => p.Tag is InstanceRun).ToList();
-        var pick = list == null ? "" : ((StackPanel)list.Child).Children.OfType<Grid>().SelectMany(g => g.Children.OfType<Border>()).Select(b => ((TextBlock)((StackPanel)b.Child).Children[0]).Text).FirstOrDefault() ?? "";
+        var pick = list == null ? "" : ((StackPanel)list.Child).Children.OfType<Grid>().SelectMany(g => g.Children.OfType<StackPanel>()).SelectMany(p => p.Children.OfType<Border>()).Where(b => b.Child is StackPanel).Select(b => ((TextBlock)((StackPanel)b.Child).Children[0]).Text).FirstOrDefault() ?? "";
         var open = InstHost.Children.OfType<Border>().Where(b => b.Tag is "open").Select(b => _placeOfCard.GetValueOrDefault(b, "")).ToList();
         var folded = InstHost.Children.OfType<Border>().Where(b => b.Tag is "folded").Select(b => _placeOfCard.GetValueOrDefault(b, "")).ToList();
         return (groups.Count, groups.Select(p => RunValue((InstanceRun)p.Tag!)).ToList(), pick, open, folded);

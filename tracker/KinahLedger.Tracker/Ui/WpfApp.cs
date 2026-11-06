@@ -316,6 +316,27 @@ public static class WpfApp
         Environment.SetEnvironmentVariable("KL_SCREEN_W", null);
         Check(w.FitState.Scale == 1, "and back to 100% on Cancel");
 
+        // Save as CSV (0.10.11): the ⋯ menu's entry, today's loot as the file holds it, and the runs the Events page shows
+        Check(w.MoreEntries().Any(e => e.Text == MainWindow.SaveLootText), "the ⋯ menu has Save today's loot as CSV…");
+        var lootCsv = w.LootCsvForTest() ?? "";
+        var lootLines = lootCsv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Check(lootLines.Length > 3 && lootLines[0].TrimEnd('\r') == Session.CsvExport.LootHeader && lootLines[1].StartsWith("kinah,Kinah,"), $"today's loot as CSV: {lootLines.Length} lines, the Kinah first");
+        Check(lootLines.Any(l => l.StartsWith("drop,Spiritstone,")) && lootLines.Any(l => l.StartsWith("gathered,")), "...with the sample day's drops and gathered items");
+        var csvDir = TestTemp.Path("KinahLedger-options-test-csv"); Directory.CreateDirectory(csvDir);
+        string? askedName = null;
+        MainWindow.SaveCsvForTest = name => { askedName = name; return Path.Combine(csvDir, name); };
+        w.ShowDemo("Events");
+        DoEvents();
+        w.SaveRunsCsvForTest();
+        var runsPath = Path.Combine(csvDir, Session.CsvExport.FileName("runs", DateTime.Now));
+        Check(askedName == Path.GetFileName(runsPath) && File.Exists(runsPath), $"the runs saved as {askedName}");
+        var runsLines = File.Exists(runsPath) ? File.ReadAllLines(runsPath) : Array.Empty<string>();
+        Check(runsLines.Length == w.ShownRunsForTest().Count + 1 && runsLines[0].TrimStart('\uFEFF') == Session.CsvExport.RunsHeader, $"...one line a run: {runsLines.Length - 1} runs, after the header");
+        Check(runsLines.Skip(1).All(l => l.Split(',')[1] is "Expedition" or "Event"), "...each an expedition or an event");
+        MainWindow.SaveCsvForTest = null;
+        w.ShowDemo();
+        DoEvents();
+
         // the panel's switch and figures are tried on the panel at once too (2026-10-25), and Cancel puts them back
         o = Open();
         o.Go(OptionsWindow.Page.InGame);

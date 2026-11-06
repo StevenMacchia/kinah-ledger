@@ -193,6 +193,13 @@ public partial class MainWindow : Window
                 ev.Handled = true;
                 LowerScroll.RaiseEvent(new MouseWheelEventArgs(ev.MouseDevice, ev.Timestamp, ev.Delta) { RoutedEvent = MouseWheelEvent, Source = LowerScroll });
             };
+        // Ctrl+wheel steps the window size (0.10.11, Ui/MainWindow.Fit.cs), as Ctrl+= and Ctrl+- do; a plain wheel scrolls as before
+        PreviewMouseWheel += (_, ev) =>
+        {
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == 0 || ev.Delta == 0) return;
+            ev.Handled = true;
+            StepWindowScale(ev.Delta > 0 ? 1 : -1);
+        };
         ShowPart(PageFollow.Farming, byHand: false);   // always Farming at the start, whatever page it closed on (0.8.55)
         SizeChanged += (_, _) => KeepOnScreen();
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(RefitIfNeeded);   // the screen's scaling changed, or a screen with another one

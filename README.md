@@ -65,8 +65,12 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
    to fit, down to 75%; on a narrower one still the window shows Compact and says so.
 
    **Window size.** Options › General › Window size draws the whole window bigger or smaller, 80% to 150%, for a large or
-   high-resolution screen; Ctrl+= and Ctrl+- step it in the window and Ctrl+0 is back to 100%. The screen caps it: the
-   window never grows past the width or the height of the screen it is on.
+   high-resolution screen; Ctrl+= and Ctrl+- (or Ctrl+wheel) step it in the window and Ctrl+0 is back to 100%. The screen
+   caps it: the window never grows past the width or the height of the screen it is on.
+
+   **Save as CSV.** The ⋯ menu's **Save today's loot as CSV…** writes the day's Kinah, drops and gathered items (counts,
+   bound copies, worth after the Market's cut, zones) to a file for a spreadsheet; **Save as CSV** on the Events page's
+   ALL RUNS box does the same for the runs shown. A dialog asks where; nothing is uploaded.
 
    **Undo.** Clear the tables (the … menu), Clear on Events, Start over on Crafting, Remove on a run and Stop run in the
    window happen at once, with an Undo bar at the bottom of the window for eight seconds (Ctrl+Z works too). They become
