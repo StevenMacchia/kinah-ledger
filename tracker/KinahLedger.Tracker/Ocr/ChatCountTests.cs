@@ -366,6 +366,17 @@ static class ChatCountTests
             var fight2 = new List<string> { "Acquired 521 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points.", "Spiritstone acquired.", "Acquired 253 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points.", "Acquired 441 Kina.", "Obtained 1 Enhanced Krall Combatant Soul", "Points." };
             Check("...under lines the read shows three times each: the kills decide", gg.Judge("Spiritstone", 1, r0.AddSeconds(105.3), r0.AddSeconds(105.3), new ItemRepeatGuard.Place(6, 10, "Points.", "Obtained 1 Enhanced Krall Combatant Soul"), new(1, DateTime.MinValue, fight2), false).V.ToString(), "Count");
         }
+
+        // 2026-11-06, the data-fill loop (tools/data-fill.js): an item it drafts into data/extra-items.json from its MetaBot page
+        // is one a chat line resolves to by name, bound or not. Content Usage Ticket Selection Chest (Bound) is the fill's own
+        // draft of that entry (its proof run reproduced the committed entry field for field): a Special Reward Chest, not
+        // tradable, so the verb-first line counts inside a run and the name-first line counts anywhere.
+        {
+            var pf = new ChatParser(items) { InRun = () => true };
+            Check("fill: \"Acquired Content Usage Ticket Selection Chest (Bound) x1.\" in a run", P(pf, "Acquired Content Usage Ticket Selection Chest (Bound) x1."), "Content Usage Ticket Selection Chest (Bound) x1");
+            Check("fill: \"Content Usage Ticket Selection Chest (Bound) acquired.\"", P(p, "Content Usage Ticket Selection Chest (Bound) acquired."), "Content Usage Ticket Selection Chest (Bound) x1");
+            Check("fill: the entry's grade and category as the page said", items.Get(items.IdOf("Content Usage Ticket Selection Chest (Bound)")) is { } fi ? $"{fi.Grade} {fi.Category}, tradable {fi.Tradable}" : "missing", "Special Reward Chest, tradable False");
+        }
         return ok;
     }
 }
