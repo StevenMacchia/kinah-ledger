@@ -1,4 +1,4 @@
-using KinahLedger.Data;
+﻿using KinahLedger.Data;
 using KinahLedger.Session;
 
 namespace KinahLedger.Ocr;
@@ -137,6 +137,13 @@ static class ChatCountTests
             lt4.NewLines(new List<string> { "Acquired 492 Kina.", "came out", "Acquired 140 Kina.", "Acquired 513 Kina.", "Acquired 214 Kina.", "Acquired 318 Kina.", "Acquired 344 Kina." });
             lt4.NewLines(new List<string> { "came out", "Acquired 140 Kina.", "Acquired 513 Kina.", "Acquired 214 Kina.", "Acquired 318 Kina." });
             Check("a line a read lost at its bottom comes back: the same line", string.Join(" | ", lt4.NewLines(new List<string> { "came out", "Acquired 140 Kina.", "Acquired 513 Kina.", "Acquired 214 Kina.", "Acquired 318 Kina.", "Acquired 344 Kina.", "Acquired 244 Kina." })), "Acquired 244 Kina.");
+            // a soul line read garbled as it faded in, its verb lost, then clean a read later (bench 131029, 13:11:42 to :43): the
+            // same line, not new; and the Kina line the garbled read lost at its bottom comes back as itself
+            var lt5 = new LineTracker();
+            lt5.NewLines(new List<string> { "['Xin] but vakropldoesn:t for", "cosmetic purpose'!", "Sapphire Gemstonejacquired.", "Acquired 665 Kina.", "Acquired 213 Kina.\"", "Obtained 1' Cogni Soyl Crystals.-", "Acquired 54 Kina." });
+            lt5.NewLines(new List<string> { "'lmgh", "cosmetic ave * .", ".Sapphire Gemstone acquire'", "Zike&gs fer", "Acquired 665 Kina.", "cquired 213 Kina:", ")btained 1 cogni soul cwslals" });
+            Check("a soul line read garbled while fading, then clean: not new", string.Join(" | ", lt5.NewLines(new List<string> { "zikel g'fpr", "cosmetic", "Sapphire Gemstone acquirsd.", "Acquired 665 Kina.", "Acquired 213 Kinae", "Obtained 1 Cogni-Soul Crystals.", "Acquired 54 Kina." })), "");
+            Check("a soul line read garbled while fading: a new Kina line after it is new", string.Join(" | ", lt5.NewLines(new List<string> { "cosmetic purposes!", "-sapphire Gemst&ne acquired", "Acquired 665 Kina.", "Acquired* 213 Kina.", "Obtained 1 Cognisoul Crysta!s:", "Acquired 54 Kina.", "Rr uired 236 Kina." })), "Rr uired 236 Kina.");
             // the read again below the overlap: the last read's own line, garbled differently (13:12:08, 408)
             Check("below the overlap: \"cquihed 408 Kina\" is still \"Acquired 408 Kina.\"", string.Join(" | ", Reread.AfterOverlap(new[] { "Acquired 54 Kina.", "cquired 293 Kina", "cquihed 408 Kina", "squired 368 Kina." }, new[] { "Acquired 54 Kina.", "Acquired 293 Kina.", "Acquired 408 Kina.", "Acquired 368 Kina.", "Acquired 189 Kina." })), "Acquired 189 Kina.");
             // the settle: each counted line stands for one line on screen

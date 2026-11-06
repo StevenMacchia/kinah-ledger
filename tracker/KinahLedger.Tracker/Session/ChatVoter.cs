@@ -1,4 +1,4 @@
-namespace KinahLedger.Session;
+﻿namespace KinahLedger.Session;
 
 /// <summary>
 /// Multi-frame voting on new chat lines (Steven, 2026-10-22). A new loot line stays on screen for several reads, and the
@@ -27,6 +27,9 @@ public sealed class ChatVoter
 
     /// <summary>Lines still waiting for their vote.</summary>
     public int Waiting => _pending.Count;
+
+    /// <summary>Whether a line still waiting for its vote means this (a key as <paramref name="meaning"/> gives it): it counts when its vote is over, through no other path.</summary>
+    public bool Holds(string key, Func<string, (string Key, bool Exact)> meaning) => key.Length > 0 && _pending.Any(p => p.Readings.Any(r => meaning(r).Key == key));
 
     /// <summary>
     /// Set by the session (2026-10-24): whether the loot list beside the character shows, with its icon, a row that means
