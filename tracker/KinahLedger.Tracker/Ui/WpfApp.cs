@@ -809,25 +809,26 @@ public static class WpfApp
             w.ShowDemo("Events"); DoEvents();
             bool stripOpen = w.TodayOpenForTest;
             // the page's runs one at a time (Steven, 2026-11-05: "tell you what you got on every single run ... a menu at the
-            // top where you could drop down and choose to sort by it rather than it be so gigantic"): ALL RUNS over the places'
-            // cards, the first open and the rest folded; Best first falls by what each made; a click on a run opens its place
+            // top where you could drop down and choose to sort by it rather than it be so gigantic"): ALL RUNS over one place's
+            // card, its band a dropdown of the places (2026-11-06: the others folded under it were "way too long, should be a
+            // dropdown menu to choose what you want to view and then change it"); Best first falls by what each made; a click
+            // on a run picks its place
             var rl = w.RunListForTest();
             w.SetRunsSortForTest(Session.RunsOrder.Best); DoEvents();
             var best = w.RunListForTest();
             w.SetRunsSortForTest(Session.RunsOrder.Newest); DoEvents();
-            Check(rl.Runs >= 5 && rl.Pick == "Newest first" && rl.Open.Count == 1 && rl.Folded.Count >= 1 && best.Pick == "Best first" && best.Values.Zip(best.Values.Skip(1)).All(p => p.First >= p.Second) && !best.Values.SequenceEqual(rl.Values),
-                $"Events, ALL RUNS: {rl.Runs} runs, \"{rl.Pick}\", {rl.Open.Count} place open ({string.Join(",", rl.Open)}), {rl.Folded.Count} folded; best first {string.Join(" ", best.Values.Take(4).Select(v => v.ToString()))}");
-            var fold = rl.Folded[0];
-            w.TogglePlaceForTest(fold); DoEvents();
+            int cards = w.InstHost.Children.Count;
+            Check(rl.Runs >= 5 && rl.Pick == "Newest first" && rl.Open.Count == 1 && rl.Places.Count >= 2 && rl.Places[0] == rl.Open[0] && cards == 2 && best.Pick == "Best first" && best.Values.Zip(best.Values.Skip(1)).All(p => p.First >= p.Second) && !best.Values.SequenceEqual(rl.Values),
+                $"Events, ALL RUNS: {rl.Runs} runs, \"{rl.Pick}\", {rl.Open.Count} place open ({string.Join(",", rl.Open)}) of {rl.Places.Count} in the dropdown, {cards} boxes on the page; best first {string.Join(" ", best.Values.Take(4).Select(v => v.ToString()))}");
+            var otherPlace = rl.Places.First(p => p != rl.Open[0]);
+            w.PickPlaceForTest(otherPlace); DoEvents();
             var rl2 = w.RunListForTest();
-            w.TogglePlaceForTest(fold); w.TogglePlaceForTest(rl.Open[0]); DoEvents();
-            var rl3 = w.RunListForTest();
-            Check(rl2.Open.Count == 2 && rl2.Open.Contains(fold) && rl3.Open.Count == 0 && rl3.Folded.Count == rl.Open.Count + rl.Folded.Count,
-                $"...a folded place opens on a click ({string.Join(",", rl2.Open)}) and the open one folds ({rl3.Folded.Count} folded)");
-            w.TogglePlaceForTest(rl.Open[0]); DoEvents();
+            Check(rl2.Open.Count == 1 && rl2.Open[0] == otherPlace && w.InstHost.Children.Count == 2 && rl2.Places.SequenceEqual(rl.Places),
+                $"...a place picked from the band's dropdown takes the card ({string.Join(",", rl2.Open)}), still one card, the same {rl2.Places.Count} places offered");
             w.ClickRunForTest(rl.Runs - 1); DoEvents();
             var rl4 = w.RunListForTest();
-            Check(w.FixOpenForTest != null && rl4.Open.Count >= 1, $"...a click on the last run opens its place with the run's sheet: open {string.Join(",", rl4.Open)}, sheet {w.FixOpenForTest?.Split('|').Last()}");
+            Check(w.FixOpenForTest != null && rl4.Open.Count == 1 && w.FixOpenForTest.Contains(rl4.Open[0]), $"...a click on the last run picks its place with the run's sheet: open {string.Join(",", rl4.Open)}, sheet {w.FixOpenForTest?.Split('|').Last()}");
+            w.PickPlaceForTest(rl.Open[0]); DoEvents();
             w.SetRunsSortForTest(Session.RunsOrder.Newest); DoEvents();
             w.PickRunsWeekForTest(true); DoEvents();
             var rw = w.WeekForTest(runs: true);
