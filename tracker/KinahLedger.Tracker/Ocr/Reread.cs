@@ -302,6 +302,21 @@ public sealed class Reread
         return Math.Abs(la.Length - lb.Length) <= max && Lev(la, lb) <= max;
     }
 
+    /// <summary>
+    /// The same line read twice, once with its count cut off at the chat's edge or lost to a garble ("Acquired Fine Odyle x4."
+    /// and "Acquired Fine Odyle", "Acquired Ulmus Oil (Bound) x201." and "Acquired Ulmus Oil (Bound)"): <paramref name="full"/>
+    /// less its trailing count is <paramref name="cut"/>, as <see cref="Same"/> takes them. Never two Kina lines (an amount is
+    /// no trailing count), never two counts ("x1" and "x12" are two lines). The live logs of 2026-11-05 (14:35:15, 18:31:30):
+    /// the cut reading was counted as one more pickup, once by the unaligned watch and once by the vote.
+    /// </summary>
+    internal static bool CountLost(string full, string cut)
+    {
+        var kf = Key(full); var kc = Key(cut);
+        if (kc.Length < 8 || kf.Length <= kc.Length || kc.Any(char.IsDigit)) return false;
+        var m = System.Text.RegularExpressions.Regex.Match(kf, @"^(?<head>[a-z].*?[a-z])x?\d{1,6}$");
+        return m.Success && Same(m.Groups["head"].Value, kc);
+    }
+
     /// <summary>A line with glyphs the chat never prints (•, *, €, @ …): read while fading in, not a clean line.</summary>
     internal static bool Junky(string line) => line.Any(c => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c) && "'’.,:;!?()[]-–_/x×\"+%&".IndexOf(c) < 0);
 

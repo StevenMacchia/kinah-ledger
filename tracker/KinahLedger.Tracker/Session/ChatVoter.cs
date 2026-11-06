@@ -67,6 +67,10 @@ public sealed class ChatVoter
             int found = -1;
             for (int i = cursor; i >= 0 && i >= cursor - 3; i--) if (Key(w.First) == Key(read[i])) { found = i; break; }
             if (found < 0 && cursor >= 0 && Close(w.First, read[cursor])) found = cursor;
+            // the same line with its count cut off in one reading ("Acquired Ulmus Oil (Bound)" at the chat's edge, then
+            // "Acquired Ulmus Oil (Bound) x201."): one line, and the vote takes the reading with the count (reads.log
+            // 2026-11-05 18:31:30: the settle counted x201, then the cut reading counted once more as x1)
+            if (found < 0 && cursor >= 0 && (Ocr.Reread.CountLost(read[cursor], w.First) || Ocr.Reread.CountLost(w.First, read[cursor]))) found = cursor;
             // a fragment read while the line faded in ("3 Kina.", "d 382 Kina.", "508 Kina.": nothing to count) and now the
             // whole line in its place, ending the same way: the same line, read better (2026-10-24, 293, 382 and 508 lost)
             if (found < 0 && cursor >= 0 && Key(w.First) is { Length: >= 4 } fk && meaning(w.First).Key.Length == 0
