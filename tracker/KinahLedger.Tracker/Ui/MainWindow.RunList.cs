@@ -15,10 +15,10 @@ namespace KinahLedger.Ui;
 /// every single run and then have a menu at the top where you could drop down and choose to sort by it"). ALL RUNS is one
 /// box that scrolls: every run on its line (started, place, took, what it made) with its Kinah and rewards as slots under
 /// it, each with its card on hover; a dropdown picks the order (newest, best, by place, longest). The places' cards sit
-/// under the box one place's card, whose band is a dropdown of every place with runs (the place being run, or the last
-/// one run, until another is picked; Steven, 2026-11-06, of the places folded to a line each under it: "way too long,
-/// should be a dropdown menu to choose what you want to view and then change it"); a click on a run picks its place and
-/// opens its card with that run's sheet, where the details, a fix and Remove are.
+/// a second box under the place's (Steven, 2026-11-06, of the page with it on top: "look at how much info is on the
+/// screen"), from the ⋯ menu's Show every run; a click on a run picks its place and opens that run's sheet in the place's
+/// box, where the details, a fix and Remove are. The place's box, its band a dropdown of every place with runs, is
+/// BuildPlaceBox (Ui/MainWindow.RunsCard.cs).
 /// </summary>
 public partial class MainWindow
 {
@@ -26,8 +26,22 @@ public partial class MainWindow
     string _placePick = "";
     /// <summary>The places with runs on the page as last drawn, in the band's order (the options self-test).</summary>
     List<string> _placesShown = new();
-    /// <summary>Past the first RunListFirst runs only on request: Earlier can hold hundreds, each with its slots.</summary>
+    /// <summary>Past the first RunListFirst runs only on request: All time can hold hundreds, each with its slots.</summary>
     bool _runListAll;
+    /// <summary>The runs box under the place's box, from the ⋯ menu's Show every run; off as the page opens.</summary>
+    bool _runListShown;
+
+    /// <summary>The page's ⋯ menu: Share the last run, every run on its line, Save as CSV, Clear.</summary>
+    List<MenuEntry> EventsMoreEntries()
+    {
+        var list = new List<MenuEntry>();
+        if (EventsShareBtn.IsEnabled) list.Add(new MenuEntry("Share the last run", () => ToggleShare("Events"), "A picture of the last run, to paste in Discord or anywhere. Nothing is uploaded."));
+        list.Add(new MenuEntry(_runListShown ? "Hide every run" : "Show every run", () => { _runListShown = !_runListShown; _drawnSig.Remove("runs"); ShowInstances(); }, "Each run on its line with what it gave, in a box under the place's. A click on a run opens it in the place's box."));
+        list.Add(new MenuEntry(SaveRunsText + "…", () => SaveRunsCsv(_shownRuns), "The runs shown, one line each, for a spreadsheet. A dialog asks where; nothing is uploaded."));
+        list.Add(new MenuEntry("", Rule: true));
+        list.Add(new MenuEntry("Clear the runs shown", () => _ = ClearRuns(), "Clears the runs on this page. Undo is on the status line for a while."));
+        return list;
+    }
 
     const double RunListHeight = 440;
     const int RunListFirst = 40;
@@ -172,14 +186,16 @@ public partial class MainWindow
 
     /* ---------------- for options-test ---------------- */
 
-    /// <summary>The run list and the place's card as drawn: the runs shown, their values in order, the order dropdown's words, the place open, and the places the band's dropdown offers.</summary>
-    internal (int Runs, List<long> Values, string Pick, List<string> Open, List<string> Places) RunListForTest()
+    /// <summary>The place's box and the runs box as drawn: the runs box's runs (0 with it off), their values in order, the order dropdown's words, the place open, the places the band's dropdown offers, and the place's loot slots.</summary>
+    internal (int Runs, List<long> Values, string Pick, List<string> Open, List<string> Places, int Slots) RunListForTest()
     {
         var list = InstHost.Children.OfType<Border>().FirstOrDefault(b => b.Tag is "list");
         var groups = list == null ? new List<StackPanel>() : ((StackPanel)list.Child).Children.OfType<ScrollViewer>().SelectMany(s => ((StackPanel)s.Content).Children.OfType<StackPanel>()).Where(p => p.Tag is InstanceRun).ToList();
         var pick = list == null ? "" : ((StackPanel)list.Child).Children.OfType<Grid>().SelectMany(g => g.Children.OfType<StackPanel>()).SelectMany(p => p.Children.OfType<Border>()).Where(b => b.Child is StackPanel).Select(b => ((TextBlock)((StackPanel)b.Child).Children[0]).Text).FirstOrDefault() ?? "";
         var open = InstHost.Children.OfType<Border>().Where(b => b.Tag is "open").Select(b => _placeOfCard.GetValueOrDefault(b, "")).ToList();
-        return (groups.Count, groups.Select(p => RunValue((InstanceRun)p.Tag!)).ToList(), pick, open, new List<string>(_placesShown));
+        var box = InstHost.Children.OfType<Border>().FirstOrDefault(b => b.Tag is "open");
+        int slots = box?.Child is StackPanel sp ? sp.Children.OfType<Border>().Select(b => b.Child).OfType<StackPanel>().SelectMany(g => g.Children.OfType<WrapPanel>()).Sum(w => w.Children.Count) : 0;
+        return (groups.Count, groups.Select(p => RunValue((InstanceRun)p.Tag!)).ToList(), pick, open, new List<string>(_placesShown), slots);
     }
 
     /// <summary>Which place each card on the page is, for the test above.</summary>
@@ -188,6 +204,7 @@ public partial class MainWindow
     internal string? FixOpenForTest => _fixOpen;
     internal void SetRunsSortForTest(string mode) { _prefs.RunsSort = mode; _drawnSig.Remove("runs"); ShowInstances(); }
     internal void PickPlaceForTest(string zone) { OpenPlace(zone); _drawnSig.Remove("runs"); ShowInstances(); }
+    internal void ShowRunListForTest(bool on) { _runListShown = on; _drawnSig.Remove("runs"); ShowInstances(); }
     /// <summary>A click on the run list's k-th line.</summary>
     internal void ClickRunForTest(int k)
     {

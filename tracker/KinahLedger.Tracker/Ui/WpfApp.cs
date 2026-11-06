@@ -813,22 +813,26 @@ public static class WpfApp
             // card, its band a dropdown of the places (2026-11-06: the others folded under it were "way too long, should be a
             // dropdown menu to choose what you want to view and then change it"); Best first falls by what each made; a click
             // on a run picks its place
+            // (2026-11-06, "1 box ... similar to Today's tab"): one box as the page opens, its loot in slots; every run is a second box from ⋯
+            var one = w.RunListForTest(); int boxes0 = w.InstHost.Children.Count;
+            w.ShowRunListForTest(true); DoEvents();
             var rl = w.RunListForTest();
             w.SetRunsSortForTest(Session.RunsOrder.Best); DoEvents();
             var best = w.RunListForTest();
             w.SetRunsSortForTest(Session.RunsOrder.Newest); DoEvents();
             int cards = w.InstHost.Children.Count;
-            Check(rl.Runs >= 5 && rl.Pick == "Newest first" && rl.Open.Count == 1 && rl.Places.Count >= 2 && rl.Places[0] == rl.Open[0] && cards == 2 && best.Pick == "Best first" && best.Values.Zip(best.Values.Skip(1)).All(p => p.First >= p.Second) && !best.Values.SequenceEqual(rl.Values),
-                $"Events, ALL RUNS: {rl.Runs} runs, \"{rl.Pick}\", {rl.Open.Count} place open ({string.Join(",", rl.Open)}) of {rl.Places.Count} in the dropdown, {cards} boxes on the page; best first {string.Join(" ", best.Values.Take(4).Select(v => v.ToString()))}");
-            var otherPlace = rl.Places.First(p => p != rl.Open[0]);
+            Check(boxes0 == 1 && one.Runs == 0 && one.Open.Count == 1 && one.Places.Count >= 2 && one.Places[0] == one.Open[0] && one.Slots >= 3 && rl.Runs >= 5 && rl.Pick == "Newest first" && cards == 2 && best.Pick == "Best first" && best.Values.Zip(best.Values.Skip(1)).All(p => p.First >= p.Second) && !best.Values.SequenceEqual(rl.Values),
+                $"Events: {boxes0} box ({string.Join(",", one.Open)} of {one.Places.Count} places, {one.Slots} slots); with every run: {rl.Runs} runs, \"{rl.Pick}\", {cards} boxes; best first {string.Join(" ", best.Values.Take(4).Select(v => v.ToString()))}");
+            var otherPlace = one.Places.First(p => p != one.Open[0]);
             w.PickPlaceForTest(otherPlace); DoEvents();
             var rl2 = w.RunListForTest();
-            Check(rl2.Open.Count == 1 && rl2.Open[0] == otherPlace && w.InstHost.Children.Count == 2 && rl2.Places.SequenceEqual(rl.Places),
-                $"...a place picked from the band's dropdown takes the card ({string.Join(",", rl2.Open)}), still one card, the same {rl2.Places.Count} places offered");
+            Check(rl2.Open.Count == 1 && rl2.Open[0] == otherPlace && rl2.Places.SequenceEqual(one.Places) && rl2.Slots >= 1,
+                $"...a place picked from the band's dropdown takes the box ({string.Join(",", rl2.Open)}, {rl2.Slots} slots), the same {rl2.Places.Count} places offered");
             w.ClickRunForTest(rl.Runs - 1); DoEvents();
             var rl4 = w.RunListForTest();
             Check(w.FixOpenForTest != null && rl4.Open.Count == 1 && w.FixOpenForTest.Contains(rl4.Open[0]), $"...a click on the last run picks its place with the run's sheet: open {string.Join(",", rl4.Open)}, sheet {w.FixOpenForTest?.Split('|').Last()}");
-            w.PickPlaceForTest(rl.Open[0]); DoEvents();
+            w.ShowRunListForTest(false); w.PickPlaceForTest(one.Open[0]); DoEvents();
+            Check(w.InstHost.Children.Count == 1 && w.InstEarlierBtn.Content as string == "All time", $"...every run hidden again: {w.InstHost.Children.Count} box; the scope reads \"{w.InstEarlierBtn.Content}\"");
             w.SetRunsSortForTest(Session.RunsOrder.Newest); DoEvents();
             w.PickRunsWeekForTest(true); DoEvents();
             var rw = w.WeekForTest(runs: true);
