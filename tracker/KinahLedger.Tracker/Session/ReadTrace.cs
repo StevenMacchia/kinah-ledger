@@ -47,7 +47,7 @@ public static class ReadTrace
     /// <summary>
     /// What else the tracker read that decides where a pickup lands, as it changes (since 2026-10-23): "zone" (the minimap's
     /// zone, or Unknown zone), "reward" (a reward screen's title as it opens, "" as it closes), "header" (the event named under
-    /// the minimap). Names from the game's lists only, never a player's.
+    /// the minimap), "market" (the Market's listings seen open, once per opening; 0.10.12). Names from the game's lists only, never a player's.
     /// </summary>
     public static void Signal(DateTime at, string kind, string value) => Write(at, kind, new[] { value });
 

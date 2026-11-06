@@ -48,8 +48,10 @@ public static class PickupCheck
     }
 
     // storage ("Stored item(s) in Storage.", read "inStorage"), Quick Register ("QuickCRegister", "Quicb Registeritetns"),
-    // taking out, dismantling, an exchange or a purchase. Not "extract": a failed gather prints "Essence Extraction failed".
-    static readonly Regex InventoryRx = new(@"\bstor(?:ed|age)|storage|quick\s*\S{0,2}\s*regi|\bregist|retriev|withdr[ae]w|dismantl|salvag|exchang|purchas|wardrobe",
+    // taking out, dismantling, an exchange or a purchase, or the mail's attachments claimed ("Obtained items attached to
+    // mail.", 2026-11-06 10:49, with its "Acquired Odyle Energy (Bound) x4." just before it; not "mail" alone, which a
+    // sale's notice says while farming). Not "extract": a failed gather prints "Essence Extraction failed".
+    static readonly Regex InventoryRx = new(@"\bstor(?:ed|age)|storage|quick\s*\S{0,2}\s*regi|\bregist|retriev|withdr[ae]w|dismantl|salvag|exchang|purchas|wardrobe|\battach",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>The player's own inventory at work: what prints with it, and just after, moved, it didn't drop.</summary>

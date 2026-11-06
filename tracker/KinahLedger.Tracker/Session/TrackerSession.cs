@@ -1205,7 +1205,7 @@ public sealed partial class TrackerSession
     {
         // Kina lines waiting for the counter: judged when old enough, released as read when the counter went quiet
         if (_kina.Readings > 0) SettleKina(_kina.Tick(now), now);
-        int unaligned = _tracker.Unaligned;
+        int unaligned = _tracker.Unaligned, emptyBefore = _tracker.Empty;
         var fresh = _tracker.NewLines(lines);
         // the chat's own word on an event: "joined event" in its lobby, its NPC's lines (EventWitness). A lobby filling up
         // scrolls the chat faster than reads line up (11:33:16 today, ten "joined event" lines at once): from such a read, the
@@ -1231,6 +1231,20 @@ public sealed partial class TrackerSession
             CrashLog.Note("   now:    " + string.Join("  |  ", lines));
         }
         _prevRead = lines;
+        // ---- a Market buy (Steven, 2026-11-06 10:56: "I bought Wrathful from the Market and it appeared as loot in the open world") ----
+        // The Market prints only the item's own "acquired" line for a buy, no "Purchase complete.", and its window covers the
+        // chat: Wrathful Mind x2, two more and Fine Thick Balaur Horn x22 were first read three minutes after it closed, once
+        // the crafting window after it had left the chat, and Wrathful Mind is a rare, so no kill was asked for. So with the
+        // Market open now, or open at any time since the chat last lined up, what lands in this read was bought, and in the
+        // next few seconds (the vote) too
+        bool marketNow = MarketOpen?.Invoke(now) == true;
+        if (marketNow || _marketAt > _chatLinedAt)
+        {
+            if (now > _boughtUntil) CrashLog.Note($"the Market was open ({(marketNow ? "now" : "since the chat was last read")}): what lands with it was bought, not dropped");
+            _boughtUntil = now.AddSeconds(RewardWindowSeconds);
+        }
+        // a read that lined up (or the first, or the same again): the chat is read up to here
+        if (_tracker.Unaligned == unaligned && _tracker.Empty == emptyBefore && !_tracker.LastPanel) _chatLinedAt = now;
         // the enemy on the target bar, as last read, goes with this read's events (Kinah by enemy, a best guess)
         if (fresh.Count > 0) { Engine.SetTarget(Target.Name, Target.NameAt); Secondary?.SetTarget(Target.Name, Target.NameAt); foreach (var v in Views()) v.SetTarget(Target.Name, Target.NameAt); }
         // parsed as one batch: a payment line claims the Kinah lines just before it in the same read
@@ -1712,6 +1726,8 @@ public sealed partial class TrackerSession
         // a left run whose time for rewards is over closes here, every pass, not only when the next pickup or zone change
         // comes (2026-10-30: 31 idle minutes as "rewards landing" after Defend Shugo Merchants)
         Instances.RewardsOver(now);
+        // the Market open: what the chat shows next was bought (MarketSeen), whatever activity wins below
+        if (MarketOpen?.Invoke(now) == true) MarketSeen(now, trace: true);
         if (_boss != null) { next = new Activity(ActivityKind.WorldBoss, _boss); why = _bossDeadAt == DateTime.MinValue ? "on the target bar" : "its loot window"; }
         else if (Instances.Current is { } run && run.Kind != InstanceLog.WorldBoss && !(run.Leaving && Target.RewardOpen(now) && Target.RewardTitle.Length > 0))
         {
@@ -2460,6 +2476,8 @@ public sealed partial class TrackerSession
         RewardWhyIn(inRun ?? InRun, t, isBox, itemId, firstSeen, crystal);
     string? RewardWhyIn(bool inRun, DateTime t, bool isBox, long itemId, DateTime? firstSeen, string? crystal) =>
         t <= _achieveUntil ? "an achievement's reward"
+        // the Market was open, now or since the chat last lined up: what landed was bought (2026-11-06, Wrathful Mind)
+        : t <= _boughtUntil ? "bought at the Market (its window was open)"
         // an event's or expedition's reward screen was up: what lands for a minute after is its rewards, from the picture,
         // never farming or gathering, even once its run is closed or removed (Steven, 2026-10-24 10:07: "2 odyle just randomly
         // entered my gathering" from Hidden Lugi's rewards, read again 40 s later). A gather under way is still a gather, and
@@ -2525,6 +2543,14 @@ public sealed partial class TrackerSession
 
     /// <summary>Until when what lands is the player's own inventory at work (PickupCheck.IsInventoryLine, IsSkinUnlock).</summary>
     DateTime _inventoryUntil = DateTime.MinValue;
+    // the Market's listings last seen open; the last chat read that lined up; until when what lands was bought (ProcessChatCore)
+    DateTime _marketAt = DateTime.MinValue, _chatLinedAt = DateTime.MinValue, _boughtUntil = DateTime.MinValue;
+    /// <summary>The Market's listings seen open at <paramref name="t"/> (each pass; replay and tests). The live pass writes it to the trace once per opening.</summary>
+    internal void MarketSeen(DateTime t, bool trace = false)
+    {
+        if (trace && (_marketAt == DateTime.MinValue || (t - _marketAt).TotalSeconds > 15)) ReadTrace.Signal(t, "market", "open");
+        if (t > _marketAt) _marketAt = t;
+    }
 
     /// <summary>A reward line, or an item that is a box ("Growth Pet Chest"), out in the world opens the window for what comes out of it.</summary>
     void NoteReward(GameEvent ev, DateTime now)

@@ -10,7 +10,7 @@ public sealed record ReplaySignal(DateTime At, string Kind, string Value);
 /// The zone and reward screen reads a replay needs to put each pickup where the live tracker would have (2026-10-23).
 /// Traces written since then carry them as "zone", "reward" and "header" lines; older ones only have chat and loot list
 /// reads, so for those the same facts are taken from reads.log's notes ("zone: Hidden Lugi (Event)", "reward screen open
-/// (Trade Shop)"). reads.log keeps the time of day only: its days are told apart where the clock runs backwards, and the
+/// (Trade Shop)", "scene Market since 10:52:14"). reads.log keeps the time of day only: its days are told apart where the clock runs backwards, and the
 /// last day is the day the file was last written (or <c>--reads-date</c>).
 /// </summary>
 public static class ReplaySignals
@@ -20,6 +20,8 @@ public static class ReplaySignals
     static readonly Regex Unlisted = new(@"^zone: "".+"" is on no list", RegexOptions.Compiled);
     static readonly Regex Reward = new(@"^reward screen open \((.+?)\):", RegexOptions.Compiled);
     static readonly Regex Header = new(@"^event header: (.+?)(?: \(|$)", RegexOptions.Compiled);
+    // the Market's listings seen (traces before 0.10.12 never recorded it; the scene note has since 0.10.0)
+    static readonly Regex Market = new(@"^scene Market since", RegexOptions.Compiled);
 
     /// <summary>
     /// The signals in reads.log, in order, with local times turned into UTC. <paramref name="olderPath"/> is reads.old.log, the
@@ -44,6 +46,7 @@ public static class ReplaySignals
             else if (ZoneNote.Match(text) is { Success: true } z) { raw.Add((t, "zone", z.Groups[1].Value.Trim())); days.Add(day); }
             else if (Reward.Match(text) is { Success: true } r) { raw.Add((t, "reward", r.Groups[1].Value.Trim())); days.Add(day); }
             else if (Header.Match(text) is { Success: true } h) { raw.Add((t, "header", h.Groups[1].Value.Trim())); days.Add(day); }
+            else if (Market.IsMatch(text)) { raw.Add((t, "market", "open")); days.Add(day); }
         }
         var last = (lastDay ?? File.GetLastWriteTime(path)).Date;
         var list = new List<ReplaySignal>();
