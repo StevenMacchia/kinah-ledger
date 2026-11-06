@@ -1528,7 +1528,8 @@ public sealed partial class TrackerSession
             if (_settledCounted.Count > 0)
                 voted = voted.Where(l =>
                 {
-                    int i = _settledCounted.FindIndex(x => Reread.Same(x.Line, l.Trim()));
+                    // ...or the settled line with its count cut off ("Acquired Ulmus Oil (Bound)" for "... x201.", 2026-11-05 18:31:30)
+                    int i = _settledCounted.FindIndex(x => Reread.Same(x.Line, l.Trim()) || Reread.CountLost(x.Line, l.Trim()));
                     if (i < 0) return true;
                     _settledCounted.RemoveAt(i);
                     CrashLog.Note($"{l}: counted already when the chat settled, not again");
@@ -1596,7 +1597,9 @@ public sealed partial class TrackerSession
                 if (!present.Contains(key)) continue;
                 int reads = v.Reads + 1;
                 bool counted;
-                lock (_countedLines) counted = _countedLines.Any(x => (now - x.At).TotalSeconds <= 60 && x.At >= v.First.AddSeconds(-10) && _parser.Meaning(x.Line).Key == key);
+                // counted already as this meaning, or as this line with its count ("Acquired Fine Odyle x4." counted from the
+                // burst, then "Acquired Fine Odyle" cut at the chat's edge in the reads after: 2026-11-05 14:35:15, one more Fine Odyle)
+                lock (_countedLines) counted = _countedLines.Any(x => (now - x.At).TotalSeconds <= 60 && x.At >= v.First.AddSeconds(-10) && (_parser.Meaning(x.Line).Key == key || Reread.CountLost(x.Line, v.Line)));
                 if (counted) { _unalignedSeen.Remove(key); continue; }
                 if (reads < UnalignedReads) { _unalignedSeen[key] = (v.First, reads, v.Line); continue; }
                 _unalignedSeen.Remove(key);

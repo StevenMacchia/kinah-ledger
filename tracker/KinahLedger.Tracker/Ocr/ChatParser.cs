@@ -212,16 +212,19 @@ public sealed partial class ChatParser
         for (int i = carry != null ? -1 : 0; i + 1 < res.Count; i++)
         {
             string a = i < 0 ? carry! : res[i].Text;
-            bool aEmpty = i < 0 || res[i].Events.Count == 0;
             var b = res[i + 1];
+            // a first half that parsed to nothing; or, inside a run, to an item no list knows while the line under it is
+            // "Soul Points.": an enemy's name long enough to wrap its soul points line ("Obtained 10 Spirit King's Bodyguard Warrior")
+            bool aEmpty = i < 0 || res[i].Events.Count == 0 || (res[i].Events.Count == 1 && res[i].Events[0].Via.Length > 0 && SoulTail.IsMatch(b.Text));
             if (!aEmpty || !Joinable(a) || !Joinable(b.Text)) continue;
             var bItem = b.Events.Count == 1 && b.Events[0] is ItemAcquired bi ? bi : null;
             if (b.Events.Count > 0 && bItem == null) continue;
             var joined = a.Trim() + " " + b.Text.Trim();
-            var j = Parse(joined, time).ToList();
+            var j = Trial(joined, time);
             if (j.Count != 1 || j[0].Via.Length > 0) continue;   // a guessed name is no proof two lines belong together
+            // a soul points line wrapped after its enemy's name counts too (2026-11-05 17:13:28: five single-line soul lines counted, the wrapped one not)
             bool take = bItem == null
-                ? j[0] is ItemAcquired || j[0] is KinahChanged
+                ? j[0] is ItemAcquired || j[0] is KinahChanged || j[0] is CurrencyGained
                 : j[0] is ItemAcquired ji && ji.ItemId != bItem.ItemId
                   && _items.NameOf(ji.ItemId).EndsWith(_items.NameOf(bItem.ItemId), StringComparison.OrdinalIgnoreCase);
             if (!take) continue;
@@ -237,7 +240,7 @@ public sealed partial class ChatParser
             if (!WrappedTail.IsMatch(res[i + 1].Text) || res[i + 1].Events.Count > 0 || ReferenceEquals(res[i].Text, JoinedMark)) continue;
             if (res[i].Events.Count != 1 || res[i].Events[0] is not ItemAcquired || Regex.IsMatch(res[i].Text, @"\(\s*b[o0]und\s*\)", RegexOptions.IgnoreCase)) continue;
             var joined = res[i].Text.Trim() + " " + res[i + 1].Text.Trim();
-            var j = Parse(joined, time).ToList();
+            var j = Trial(joined, time);
             if (j.Count != 1 || j[0] is not (ItemAcquired or RewardReceived)) continue;
             res[i] = (joined, j);
             res[i + 1] = (JoinedMark, new List<GameEvent>());
@@ -264,11 +267,11 @@ public sealed partial class ChatParser
         {
             if (TailUnder(read, lines[i]) is { } tail && !Regex.IsMatch(lines[i], @"\(\s*b[o0]und\s*\)", RegexOptions.IgnoreCase))
             {
-                var first = Parse(lines[i], time).ToList();
+                var first = Trial(lines[i], time);
                 if (first.Count == 1 && first[0] is ItemAcquired or RewardReceived)
                 {
                     var joined = lines[i].Trim() + " " + tail.Trim();
-                    var j = Parse(joined, time).ToList();
+                    var j = Trial(joined, time);
                     if (j.Count == 1 && j[0] is ItemAcquired or RewardReceived)
                     {
                         res.Add((joined, new[] { lines[i], tail }));
@@ -277,18 +280,52 @@ public sealed partial class ChatParser
                     }
                 }
             }
+            // "Obtained 10 Spirit King's Bodyguard Warrior" then "Soul Points.": an enemy's name long enough to wrap its soul
+            // points line, which neither half says on its own (reads.log 2026-11-05 17:13:28: the burst and the settle counted
+            // the five single-line soul lines around it and let this one go)
+            if (SoulHead.IsMatch(lines[i]) && TailUnder(read, lines[i], SoulTail) is { } soul)
+            {
+                var joined = lines[i].Trim() + " " + soul.Trim();
+                var j = Trial(joined, time);
+                if (j.Count == 1 && j[0] is CurrencyGained)
+                {
+                    res.Add((joined, new[] { lines[i], soul }));
+                    if (i + 1 < lines.Count && lines[i + 1].Trim() == soul.Trim()) i++;
+                    continue;
+                }
+            }
             res.Add((lines[i], new[] { lines[i] }));
         }
         return res;
     }
 
     /// <summary>The wrapped tail ("(Bound) x9.") right under <paramref name="a"/> in the read, or null.</summary>
-    static string? TailUnder(IReadOnlyList<string> read, string a)
+    static string? TailUnder(IReadOnlyList<string> read, string a, Regex? tail = null)
     {
         for (int k = 0; k + 1 < read.Count; k++)
-            if (read[k].Trim() == a.Trim() && WrappedTail.IsMatch(read[k + 1])) return read[k + 1];
+            if (read[k].Trim() == a.Trim() && (tail ?? WrappedTail).IsMatch(read[k + 1])) return read[k + 1];
         return null;
     }
+
+    /// <summary>"Soul Points." alone on a line: the end of a soul points line whose enemy name filled the line above (the recognizer's l/1/i and o/0 slips allowed).</summary>
+    static readonly Regex SoulTail = new(@"^\s*sou[l1iu]{1,2}\s*po[i1l]nts?\s*[.,:;]?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    /// <summary>"Obtained 10 Spirit King's Bodyguard Warrior": a soul points line's first half, its "Soul Points" on the next line.</summary>
+    static readonly Regex SoulHead = new(@"^\s*Obtained\s+\d[\d,]*\s+(?![^a-z]*$)(?!.*sou[l1iu]{1,2})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// A line parsed only to see whether two halves belong together (Unwrap, JoinWrappedTails): its notes are not written,
+    /// since a trial's name is nobody's pickup. reads.log 2026-11-05 16:42:17: "not in the item list, counted for the run by
+    /// its name: mode Odyle" from trying "mode" (a wrapped chat tail) with "Odyle acquired." under it, a join never taken.
+    /// </summary>
+    List<GameEvent> Trial(string line, DateTime time)
+    {
+        _trial = true;
+        try { return Parse(line, time).ToList(); }
+        finally { _trial = false; }
+    }
+    bool _trial;
+    void Note(string text) { if (!_trial) CrashLog.Note(text); }
+    void NoteBurst(string text) { if (!_trial) CrashLog.NoteBurst(text); }
 
     /// <summary>The text returned in place of the first half of a line joined to the one after it.</summary>
     public const string JoinedMark = "(wrapped: joined to the next line)";
@@ -543,7 +580,7 @@ public sealed partial class ChatParser
         if (pick != snap && why.Length > 0)
         {
             if (why == "its colour") ColourPicks++; else TablePicks++;
-            CrashLog.Note($"\"{name}\" is {_items.NameOf(pick)}, not {_items.NameOf(snap)}: {why} says so");
+            Note($"\"{name}\" is {_items.NameOf(pick)}, not {_items.NameOf(snap)}: {why} says so");
         }
         return pick;
     }
@@ -599,7 +636,11 @@ public sealed partial class ChatParser
     /// counted as killed once per Force member who got its soul).
     /// </summary>
     internal static bool SomeoneElses(string line) =>
-        Regex.IsMatch(line, @"^\W*(?!acqu)\S+.*?acqu\w*\s+\S{3}", RegexOptions.IgnoreCase);
+        Regex.IsMatch(line, @"^\W*(?!acqu)\S+.*?acqu\w*\s+\S{3}", RegexOptions.IgnoreCase)
+        // the head of another player's wrapped line with the name cut off at the chat's edge ("acquired Soul: Intermediate",
+        // then "Fire Spirit (Bound) through party distribution."): the player's own lines print "Acquired" with its capital
+        // (reads.log 2026-11-05 14:40:15: counted for the run as an item named "Soul: Intermediate")
+        || Regex.IsMatch(line, @"^\W*acquired\s");
 
     /// <summary>
     /// The player's own share of a Force's loot ("Acquired Artwork: Furious Saursus through Force distribution."): the
@@ -709,7 +750,7 @@ public sealed partial class ChatParser
             if (bound) name = System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*", " ", RegexOptions.IgnoreCase).Trim();
             // an item that only comes bound, read without its "(Bound)": the tail wrapped onto the next line or was cut off, so
             // the line is bound all the same, a reward where a bound line is one (0.8.60)
-            else if (_items.BoundOnly(name)) { bound = true; CrashLog.NoteBurst($"\"{name}\" only comes bound: its \"(Bound)\" was lost from the line"); }
+            else if (_items.BoundOnly(name)) { bound = true; NoteBurst($"\"{name}\" only comes bound: its \"(Bound)\" was lost from the line"); }
             int n = it.Groups["n"].Success ? int.Parse(it.Groups["n"].Value) : lead_n > 0 ? lead_n : 1;
             // the count lost or garbled (2026-10-24 13:07: "Acquired Odyle" for x7; "Refining StonevxT"): the line's own tail
             // read through the digit slips first; a verb-first line with no count left is unsure (a name-first line is one)
@@ -719,7 +760,7 @@ public sealed partial class ChatParser
                 if (!_items.IsExact(name) && QuantityTail(name) is { } qt && KnowsQuiet(qt.Head))
                 {
                     CountsFromTail++;
-                    CrashLog.Note($"\"{name}\": its count read through the recognizer's digit slips as x{qt.Count}");
+                    Note($"\"{name}\": its count read through the recognizer's digit slips as x{qt.Count}");
                     name = qt.Head; n = qt.Count;
                 }
                 else countUnsure = !nameFirst;
@@ -730,7 +771,7 @@ public sealed partial class ChatParser
                 if (!countUnsure || ListCount?.Invoke(id, time) is not int ln || ln < 1) return n;
                 countUnsure = false; CountsFromList++;
                 Session.Accuracy.Add("qty_from_list");
-                CrashLog.Note($"{_items.NameOf(id)}: the chat line lost its count; the loot list's row says x{ln}");
+                Note($"{_items.NameOf(id)}: the chat line lost its count; the loot list's row says x{ln}");
                 return ln;
             }
             // the chat names a skin "Dawn Frost (Cloak) Skin"; the item list as "Dawn Frost (Skin: Cloak)"
@@ -802,10 +843,10 @@ public sealed partial class ChatParser
                     {
                         HeldUnlisted++;
                         Session.Accuracy.Add("held");
-                        CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)}, but {string.Join(", ", fought)} doesn't drop it: not counted from the chat, left for the loot list");
+                        Note($"guessed \"{name}\" as {_items.NameOf(gid)}, but {string.Join(", ", fought)} doesn't drop it: not counted from the chat, left for the loot list");
                         yield break;
                     }
-                    CrashLog.Note($"guessed \"{name}\" as {_items.NameOf(gid)} (closest match{(fromLikely ? ", on this run or the enemy's loot table" : "")})");
+                    Note($"guessed \"{name}\" as {_items.NameOf(gid)} (closest match{(fromLikely ? ", on this run or the enemy's loot table" : "")})");
                     // a guessed name isn't settled: its count isn't taken from the loot list, but a lost one is still watched for
                     NoteCount(rawLine, countUnsure);
                     yield return new ItemAcquired(time, gid, Math.Clamp(n, 1, 9999), bound) { Via = "guessed" };
@@ -814,12 +855,12 @@ public sealed partial class ChatParser
                 // inside a run a reward the item list lacks (an event's own token, a voucher) is still the run's, by its name
                 if (InRun?.Invoke() == true && System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z][A-Za-z0-9'’:\-\s\(\)]{2,60}$"))
                 {
-                    CrashLog.Note($"not in the item list, counted for the run by its name: {name}");
+                    Note($"not in the item list, counted for the run by its name: {name}");
                     NoteCount(rawLine, countUnsure);
                     yield return new ItemAcquired(time, _items.IdOf(name), Math.Clamp(n, 1, 99999), bound) { Via = "unlisted" };
                     yield break;
                 }
-                CrashLog.NoteBurst($"not in the item list, not counted: {name}");   // 46 of one name in 36 minutes (2026-10-24): once a minute, then counted
+                NoteBurst($"not in the item list, not counted: {name}");   // 46 of one name in 36 minutes (2026-10-24): once a minute, then counted
                 Session.Accuracy.Add("unknown");
                 // reported only when it reads like a garbled item name (some item is near it), never other text
                 if (_items.Near(name, Math.Max(2, name.Length / 3)).Count > 0 || _items.Fragment(name, 3).Count > 0) Session.Accuracy.Name(name, null, "unknown");
@@ -836,7 +877,7 @@ public sealed partial class ChatParser
                     Refused++;
                     Session.Accuracy.Add("refused");
                     Session.Accuracy.Name(name, null, "unknown", Data.NameMatch.Refused);
-                    CrashLog.Note($"\"{name}\" is nearest {_items.NameOf(rid)} ({m.Cost / (double)Data.NameMatch.Unit:0.#} edits), which no loot table, gathering or recipe nearby has: unsure, not counted");
+                    Note($"\"{name}\" is nearest {_items.NameOf(rid)} ({m.Cost / (double)Data.NameMatch.Unit:0.#} edits), which no loot table, gathering or recipe nearby has: unsure, not counted");
                     yield break;
                 }
                 if (m.Id is long cid && Data.NameMatch.IsContext(m.Source) && (GradeFilter(accent)?.Invoke(cid) ?? true))
@@ -846,7 +887,7 @@ public sealed partial class ChatParser
                     if (m.FullId is long fid && fid != cid)
                     {
                         ContextPicks++;
-                        CrashLog.Note($"\"{name}\" is {_items.NameOf(cid)}, not {_items.NameOf(fid)}: {m.Source} has it");
+                        Note($"\"{name}\" is {_items.NameOf(cid)}, not {_items.NameOf(fid)}: {m.Source} has it");
                     }
                     n = Filled(cid);
                     NoteCount(rawLine, countUnsure);
