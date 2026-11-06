@@ -106,7 +106,8 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
      starts (open the window, or stay in the tray; reading starts either way), hide when Aion 2 closes, the close
      button keeping it in the tray, minimize to the tray, switching pages to what you're doing (on by default: the
      window shows Farming, Crafting or Events once a change has held 5 seconds, and a page you click stays until you
-     start something else; the window always opens on Farming), the window size (80 to 150%), and the look.
+     start something else; the window always opens on Farming), the window size (80 to 150%), keeping the window above
+     other windows, and the look.
    - **Server**: region and server; everything shared is filed under it.
    - **Sharing**: the one **Share** switch (runs and Market prices together), linking this PC to your profile on the
      site (the link code is a short form of the random install ID; without it runs stay anonymous), replacing the
