@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
 using KinahLedger.Data;
 using KinahLedger.Session;
@@ -1119,7 +1119,10 @@ public sealed class LineTracker
                             if (skip >= fresh.Count) break;
                             used++;
                             var fk = Key(fresh[skip]);
-                            if (!Similar(fk, pl) && LootKey(fk) && !LootKey(pl)) continue;
+                            // ...unless that line is this loot line read garbled as it faded in, its verb lost (bench 131029,
+                            // 13:11:43: ")btained 1 cogni soul cwslals", then "Obtained 1 Cogni-Soul Crystals." clean, counted
+                            // a second time): the same digits and letters a quarter apart at most are the same line
+                            if (!Similar(fk, pl) && LootKey(fk) && !LootKey(pl) && !FadedGarble(fk, pl)) continue;
                             skip++;
                         }
                         fresh = fresh.Skip(skip).ToList();
@@ -1174,6 +1177,20 @@ public sealed class LineTracker
     }
 
     /// <summary>A chat line, as opposed to text from the world behind the frameless chat ("Targena", "Cairn Tc"): long, or with a word the chat's own lines use.</summary>
+    /// <summary>
+    /// A loot line and a line of the read before that looks like chat: one line read garbled as it faded in (its verb lost,
+    /// so <see cref="LootKey"/> doesn't know it) when the digits are the same (or lost whole) and the letters a quarter apart
+    /// at most, six at most. Only where <see cref="Similar"/> already failed, so a clean line never meets it.
+    /// </summary>
+    static bool FadedGarble(string loot, string prev)
+    {
+        if (loot.Length < 10 || prev.Length < 8) return false;
+        var dl = DigitsOf(loot); var dp = DigitsOf(prev);
+        if (dp.Length > 0 && dp != dl) return false;
+        int max = Math.Min(6, Math.Max(2, Math.Min(loot.Length, prev.Length) / 4));
+        return Math.Abs(loot.Length - prev.Length) <= max && Lev(loot, prev, max) <= max;
+    }
+
     static bool LootKey(string key) => key.Contains("acqui") || key.Contains("obtain") || key.EndsWith("kina");
 
     static bool Persists(string key) => key.Length >= 10 || key.Contains("acqui") || key.Contains("obtain") || key.Contains("kina") || key.Contains("fail");

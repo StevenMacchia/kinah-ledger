@@ -2990,7 +2990,7 @@ options: --process aion[,other]");
         var ro = System.Text.Json.JsonSerializer.Serialize(RunPayload.RunsOnly("na_e", "Siel (Elyos)", null, InstanceRunPayload.From(new[] { urug }, id => id.ToString())!));
         Check("a run sent on its own: runs only, no farming", $"{ro.Contains("\"runs_only\":true")} {ro.Contains("\"minutes\":0,\"kills\":0")} {ro.Contains("\"zone\":\"Urugugu Canyon\",\"kind\":\"Expedition\",\"seconds\":480,\"kinah\":600000")}", "True True True");
         Check("shared: an expedition sends no event or family", json.Contains("\"zone\":\"Urugugu Canyon\",\"kind\":\"Expedition\",\"seconds\":480,\"kinah\":600000,\"kills\":0,\"items\":{}}") ? "yes" : json, "yes");
-        // a Transcendence is the expedition's own area at a stage: the list says Expedition, the run's kind is what goes (0.10.7)
+        // a Transcendence is the expedition's own area at a stage: the list says Expedition, the run's kind is what goes (0.10.8)
         var trans = new InstanceRun { Zone = "Shattered Arkanis", Kind = InstanceLog.Transcendence, Start = p0, LastLoot = p0.AddMinutes(8), Kinah = 720_000 };
         var tj = System.Text.Json.JsonSerializer.Serialize(InstanceRunPayload.From(new[] { trans }, id => id.ToString()));
         Check("shared: a Transcendence run goes as a Transcendence, not its area's expedition", tj.Contains("\"zone\":\"Shattered Arkanis\",\"kind\":\"Transcendence\",\"seconds\":480,\"kinah\":720000") ? "yes" : tj, "yes");

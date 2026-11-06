@@ -265,7 +265,7 @@ public sealed record InstanceRunPayload(string zone, string kind, int seconds, l
     /// on no area list; the site keeps it as its own loot table, never Kinah/hr or an event). Null: not sent.
     /// </summary>
     static string? KindOf(InstanceRun r) => r.Kind == InstanceLog.WorldBoss ? InstanceLog.WorldBoss
-        // a Transcendence (0.10.7): the same area as its expedition at a higher stage, so the list alone can't tell them
+        // a Transcendence (0.10.8): the same area as its expedition at a higher stage, so the list alone can't tell them
         // apart (Steven, 2026-11-05: "Transcendence didn't even sync"); the run's own kind goes, for a listed expedition only
         : r.Kind == InstanceLog.Transcendence && KinahLedger.Ocr.ZoneLocator.KindOf(r.Zone) == "Expedition" ? InstanceLog.Transcendence
         : KinahLedger.Ocr.ZoneLocator.KindOf(r.Zone);
