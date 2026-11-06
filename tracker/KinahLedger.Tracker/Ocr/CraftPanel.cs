@@ -596,6 +596,8 @@ public sealed class CraftPanelTracker
     public string? Dropped { get; private set; }
     /// <summary>With <see cref="Dropped"/>: the bar that filled was the success bar (a craft that finished in an instant, if the queue's count then passes one).</summary>
     public bool DroppedOk { get; private set; }
+    /// <summary>With <see cref="Dropped"/>: the race ran before the panel was found (its bar full or climbing at the panel's first sight), not a flicker.</summary>
+    public bool Caught { get; private set; }
 
     /// <summary>A colour this far from the queue's first craft, in blue and in green over red, is the upgrade roll's tint (about 70 and 40 on 2026-11-03).</summary>
     public const double TintBlue = 30, TintGreen = 20;
@@ -614,19 +616,34 @@ public sealed class CraftPanelTracker
     // climbing (2026-11-04 09:41:54, Steven's Artisan's Steamed Cypri read "fail" at success 83%, fail 98%, and worked; an
     // Inina Pasta the same at 88%). The highest each bar got decides once both have stopped, or the panel has gone.
     bool _pending; double _peakS, _peakF, _lastS, _lastF;
+    // the panel found with its queue's first craft already under way or just over (Steven, 2026-11-06 12:40:29: "1 / 3" read as
+    // the panel came up, its success bar full, "2 / 3" seven seconds later and no race seen, so the craft was "not seen" and
+    // counted as nothing: "it missed 1 of my x10 Orichalcum crafts cause it went so fast"). A race starts only from both bars
+    // empty, so one the panel caught mid-way or at its end was never scored. Now, until the first race starts from empty, a
+    // bar full at first sight, or seen climbing to full, is kept like a quick success (Dropped, Caught): the queue's count
+    // passing a craft no race was seen for credits it (CreditQuick), and the count never passing one leaves it out
+    bool _fresh = true, _catching;
 
-    /// <summary>A new queue: the panel's own colour is taken again from its first craft (the world behind the see-through panel has changed).</summary>
-    public void NewQueue() => _base = null;
+    /// <summary>A new queue: the panel's own colour is taken again from its first craft (the world behind the see-through panel has changed), and a race caught at first sight is one of its.</summary>
+    public void NewQueue() { _base = null; _fresh = true; _catching = false; }
 
     public Outcome? Feed(DateTime t, CraftPanel.Sample s)
     {
-        Dropped = null;
+        Dropped = null; Caught = false;
         // the panel gone with a race waiting: scored as it stood
         if (!s.Visible) return _pending ? Finish(t) : null;
         if (_done)
         {
             // a new race: both bars back near empty
-            if (s.Success < Low && s.Fail < Low) Start(t, s);
+            if (s.Success < Low && s.Fail < Low) { Start(t, s); return null; }
+            // the queue's first sight with a race under way or over: kept for the count to credit (see _fresh)
+            if (_fresh)
+            {
+                _fresh = false;
+                if (s.Success >= Full || s.Fail >= Full) CaughtRace(s, "already full");
+                else _catching = true;
+            }
+            else if (_catching && (s.Success >= Full || s.Fail >= Full)) { _catching = false; CaughtRace(s, "climbing to full"); }
             return null;
         }
         // the next race started under a race waiting: that one is scored as it stood, this sample is the new one's first
@@ -664,9 +681,16 @@ public sealed class CraftPanelTracker
     /// <summary>The race waiting to be scored, scored now (the crafting panel went): null when none waits.</summary>
     public Outcome? Flush(DateTime t) => _pending ? Finish(t) : null;
 
+    void CaughtRace(CraftPanel.Sample s, string how)
+    {
+        bool ok = s.Success >= Full && s.Success >= s.Fail;
+        DroppedOk = ok; Caught = true;
+        Dropped = $"{(ok ? "success" : "fail")} bar {how} as the panel came into view: a race that began before the panel was found (a craft, if the queue's count then passes one)";
+    }
+
     void Start(DateTime t, CraftPanel.Sample s)
     {
-        _done = false; _pending = false; _start = t;
+        _done = false; _pending = false; _start = t; _fresh = false; _catching = false;
         _samples = _tinted = _sn = 0; _sr = _sg = _sb = 0; _peakS = _peakF = _lastS = _lastF = 0;
         Look(s);
     }

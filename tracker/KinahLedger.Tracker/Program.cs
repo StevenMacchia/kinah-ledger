@@ -4714,6 +4714,19 @@ options: --process aion[,other]");
                 };
                 var closeOuts = close.Select(x => ct.Feed(ct0.AddSeconds(x.At), new CraftPanel.Sample(x.Up, x.S, x.F, false))).Select((o, i) => o == null ? null : $"{(o.Ok ? "ok" : "fail")}@{close[i].At}").Where(x => x != null);
                 Check("crafting panel: a close race is scored once the bars stop, by the bar that got full (the fail bar at 98% can be the loser); a clear one at once", string.Join(" ", closeOuts), "ok@5 fail@12 fail@22.5 ok@33 fail@35");
+                // 2026-11-06 12:40:29: the panel found with its queue's first craft already over, the success bar full ("1 / 3" as it came
+                // up, "2 / 3" seven seconds later, no race seen: the craft counted as nothing). The bar full at first sight is kept as a
+                // race that ran before the panel was found, once; a bar seen climbing from the first sight the same once full; after
+                // both bars were seen empty, a quick fill is the flicker it always was, and a real race is scored as before
+                string Seen(CraftPanelTracker tr, CraftPanelTracker.Outcome? o, double at) => o != null ? $"{(o.Ok ? "ok" : "fail")}@{at}" : tr.Dropped != null ? $"{(tr.Caught ? "caught" : "quick")}-{(tr.DroppedOk ? "ok" : "fail")}@{at}" : "";
+                var cf = new CraftPanelTracker { MinSeconds = CraftPanelTracker.MinRaceSeconds }; cf.NewQueue(); var cf0 = new DateTime(2026, 11, 6, 17, 40, 29, DateTimeKind.Utc);
+                var fullFirst = new (double At, double S, double F)[] { (0, 1, 0), (0.5, 1, 0), (1, 1, 0), (6, 0, 0), (8, .5, .2), (12, 1, .3), (12.5, 1, .3), (14, 0, 0), (15.5, 1, 0) };
+                var fullOuts = fullFirst.Select(x => Seen(cf, cf.Feed(cf0.AddSeconds(x.At), new CraftPanel.Sample(true, x.S, x.F, false)), x.At)).Where(x => x.Length > 0);
+                Check("crafting panel: a bar full at the queue's first sight is a race that ran before the panel was found, once; then races as before", string.Join(" ", fullOuts), "caught-ok@0 ok@12 quick-ok@15.5");
+                var cc = new CraftPanelTracker { MinSeconds = CraftPanelTracker.MinRaceSeconds }; cc.NewQueue();
+                var climbing = new (double At, double S, double F)[] { (0, .4, .1), (1, .8, .1), (1.5, 1, .1), (2, 1, .1), (5, 0, 0), (6, .3, 1), (6.5, .3, 1) };
+                var climbOuts = climbing.Select(x => Seen(cc, cc.Feed(cf0.AddSeconds(x.At), new CraftPanel.Sample(true, x.S, x.F, false)), x.At)).Where(x => x.Length > 0);
+                Check("...a bar climbing at first sight the same once full; a fail bar full at first sight is kept as a fail (never credited)", string.Join(" ", climbOuts), "caught-ok@1.5 quick-fail@6");
                 Check("crafting panel: the recipe's item", CraftPanel.ItemOf("Life Serum (Bound) (Novice Lv. 1)"), "Life Serum (Bound)");
                 // 2026-10-25 07:22:39: the close button read with the title on a great success
                 Check("...with the close button's X after the level", $"{CraftPanel.ItemOf("Fine Durable Balaur Horn (Professional Lv. 30) X")} | {CraftPanel.ItemOf("Fine Durable Balaur Horn (Professional Lv. 30) ×")} | {CraftPanel.ItemOf("Orichalcum Ingot (Novice Lv. 25) ~")}", "Fine Durable Balaur Horn | Fine Durable Balaur Horn | Orichalcum Ingot");
@@ -5118,6 +5131,20 @@ options: --process aion[,other]");
                 Check("crafting: a craft that finished in an instant is counted once the queue's count passes it, the last one when the queue ends",
                     string.Join(" | ", cs.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts} unseen {r.Unseen} made {string.Join(", ", r.Made.Select(m => $"{m.Key} x{m.Value}"))}")), "4/4 unseen 0 made Orichalcum Longsword x4");
                 Check("...the queue over keeps its last figures", cs.CraftQueue is { } cq ? $"open {cq.Open}, done {cq.Done}, ended {cq.EndedAt != null}: {cq.Text}" : "(none)", "open False, done 4, ended True: Done: 4 of 4 · 4 worked");
+                // Steven's 2026-11-06 12:40 Orichalcum Ingot queue of 3 ("it missed 1 of my x10 Orichalcum crafts cause it went so fast"):
+                // the panel found at "1 / 3" with craft 1's success bar already full, "2 / 3" seven seconds on, and craft 2's race at
+                // +13 s said "1 craft before it not seen". The full bar at first sight is that craft, counted once the count passes it
+                var cg = new TrackerSession(null, new Settings(), items, "Test"); cg.Engine.SetZone("Eternal Isle");
+                static DateTime G(double s) => new DateTime(2026, 11, 6, 17, 40, 29, DateTimeKind.Utc).AddSeconds(s);
+                void GCount(double at, int done) => cg.PanelLook(G(at), true, false, new[] { $"Crafting in Progress {done} / 3", "Orichalcum Ingot (Novice Lv. 25)" });
+                void GRace(double from, double length, double fail) { foreach (var (dt, sb, fb) in new[] { (0.0, 0.0, 0.0), (length * 0.5, 0.5, fail * 0.5), (length, 1.0, fail) }) { cg.CraftingPass(G(from + dt)); cg.PanelSample(G(from + dt), new CraftPanel.Sample(true, sb, fb, false)); } }
+                GCount(0, 1);
+                foreach (var dt in new[] { 0.3, 0.8, 1.3 }) { cg.CraftingPass(G(dt)); cg.PanelSample(G(dt), new CraftPanel.Sample(true, 1.0, 0.0, false)); }   // craft 1's bar full as the panel came up
+                GCount(6.7, 2); GRace(7, 6, 0.21);     // craft 2: its count says one was passed
+                GCount(13.5, 3); GRace(14, 5, 0);      // craft 3
+                Check("crafting: a craft over as the panel came up, its bar full, is counted once the queue's count passes it", cg.CraftQueue?.Text ?? "(none)", "3 of 3 · 3 worked");
+                Check("...its reason says the panel found it so", cg.Live.Recent(FeedTab.Crafting, 10).Count(l => l.Why.StartsWith("the success bar was full as the panel came into view")).ToString(), "1");
+                Check("...nothing left unseen", string.Join(" | ", cg.CraftView.CraftSnapshot().Select(r => $"{r.Ok}/{r.Attempts} unseen {r.Unseen}")), "3/3 unseen 0");
                 // a line with no reason of its own: the card offers the notes written around it, the ones that place the tracker left out
                 var nnAt = CrashLog.Clock?.Invoke() ?? CrashLog.Wall();
                 CrashLog.Note("crafting panel: a note for NotesNear's check");
