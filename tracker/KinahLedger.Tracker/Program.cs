@@ -3270,6 +3270,12 @@ options: --process aion[,other]");
             for (int i = 0; i < 4; i++) mb.ProcessChat(mChat, m0.AddSeconds(521 + i * 0.4));
             mb.FlushVotes(m0.AddSeconds(524));
             Check("the Market open as the chat is read: bought; a kill's drop 20 s on counts", $"{n(mb.Engine, "Wrathful Mind")} {n(mb.Engine, "Riverside Boots")}", "0 1");
+            // the purchase dialog over the loot list, its listings never seen (11:32: Pure Odyle x7, x2, x5 in a burst two seconds on)
+            mb.ProcessList(new List<(int Top, string Text)> { (1240, "Total Amount Due") }, m0.AddSeconds(600));
+            mChat.AddRange(new[] { "Acquired Pure Odyle x7.", "Acquired Pure Odyle x2.", "Acquired Pure Odyle x5." });
+            for (int i = 0; i < 4; i++) mb.ProcessChat(mChat, m0.AddSeconds(602 + i * 0.4));
+            mb.FlushVotes(m0.AddSeconds(605));
+            Check("the Market's purchase dialog over the loot list, no listings seen: bought", $"{n(mb.Engine, "Pure Odyle")}", "0");
         }
         // the gathering bar as the second witness for a gather the chat missed (step 1)
         var sg = new TrackerSession(null, settings, items, "Test");
