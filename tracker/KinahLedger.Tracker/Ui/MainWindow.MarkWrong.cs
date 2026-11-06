@@ -81,12 +81,12 @@ public partial class MainWindow
 
     /* ---------------- the key pressed ---------------- */
 
-    /// <summary>The newest counted line on any tab from the last 2 minutes: a pickup, Kinah or a craft (not a run step or a flagged run).</summary>
+    /// <summary>The newest counted line on any tab from the last 2 minutes: a pickup, Kinah or a craft.</summary>
     FeedLine? NewestCounted()
     {
         var since = DateTime.UtcNow.AddMinutes(-MarkWindowMinutes);
         return new[] { FeedTab.Farming, FeedTab.Crafting, FeedTab.Events }.SelectMany(FeedFor)
-            .Where(l => l.Kind is not ("flag" or "step") && l.At >= since).OrderByDescending(l => l.At).FirstOrDefault();
+            .Where(l => l.At >= since).OrderByDescending(l => l.At).FirstOrDefault();
     }
 
     /// <summary>The That was wrong key: the newest counted line marked and its report saved, or the panel saying there was none.</summary>
