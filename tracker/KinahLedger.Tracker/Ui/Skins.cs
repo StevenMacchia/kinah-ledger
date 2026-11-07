@@ -89,9 +89,9 @@ public static class Skins
         switch (key)
         {
             case "abyss":
-                Quest("#7FC4FF", "#C8A8FF", "#FF7A86", "#BFE86A", "#2B1B00", "#F2C97D", "#0DFFFFFF", "#29FFFFFF", 0x29);
+                Quest("#7FC4FF", "#C8A8FF", "#FF7A86", "#BFE86A", "#2B1B00", "#2B1B00", "#14FFFFFF", "#33FFFFFF", 0x29);
                 S("MintTint", "#298EE3D6"); S("GoldIcTint", "#29F2C97D");
-                Controls("#221D3D", "#5A4E8C", "#241F40", "#2D2752", "#08FFFFFF", "#24F2C97D", "#E9B45A", "#1A8EE3D6", "#738EE3D6", "#B3100E1E", "#2A2546",
+                Controls("#221D3D", "#5A4E8C", "#241F40", "#2D2752", "#08FFFFFF", "#F2C97D", "#E9B45A", "#1A8EE3D6", "#738EE3D6", "#B3100E1E", "#2A2546",
                     "#FFFFFF", "#47D9D4EE", "#4A4570", "#08FFFFFF", "#14F2C97D", "#80F2C97D", "#29F2C97D", "#0DF2C97D", "#47E9B45A", "#14F2C97D", "#F2C97D", "#4DF2C97D");
                 S("Bg", "#0B0A14"); S("Card", "#151326"); S("Card2", "#1D1A33"); S("Line", "#2A2546"); S("LineStrong", "#443C6E");
                 S("Ink", "#EEEAFF"); S("Muted", "#A99FC9"); S("Faint", "#8A81AC");
@@ -103,9 +103,9 @@ public static class Skins
                 G("BtnPrimary", "#7E5BEF", "#5A3DC2"); G("BtnPrimaryHover", "#8F6EFF", "#6648D6"); G("BtnStop", "#C44E4E", "#8E3434");
                 break;
             case "daylight":
-                Quest("#1F8FCB", "#5C46C9", "#C2463A", "#5B8A1E", "#261702", "#9A6B10", "#14000000", "#33000000", 0x24);
+                Quest("#1F8FCB", "#5C46C9", "#C2463A", "#5B8A1E", "#261702", "#261702", "#14000000", "#33000000", 0x24);
                 S("MintTint", "#241F8A6B"); S("GoldIcTint", "#29D9952F");
-                Controls("#E6ECF4", "#9FB0C6", "#E8EEF6", "#DCE6F3", "#E9EEF5", "#FFFFFF", "#9A6B10", "#141F8A6B", "#661F8A6B", "#F1F4F9", "#D9E0EA",
+                Controls("#E6ECF4", "#9FB0C6", "#E8EEF6", "#DCE6F3", "#E9EEF5", "#F6CB72", "#9A6B10", "#141F8A6B", "#661F8A6B", "#F1F4F9", "#D9E0EA",
                     "#14202F", "#8FA3BC", "#B9C5D6", "#0A14202F", "#1AD9952F", "#99B07A1A", "#FFF3DA", "#FFFAF0", "#4DB07A1A", "#FFF2DC", "#8A4F00", "#59B86A14");
                 S("Bg", "#F3F5F9"); S("Card", "#FFFFFF"); S("Card2", "#EDF1F7"); S("Line", "#D9E0EA"); S("LineStrong", "#B9C5D6");
                 S("Ink", "#14202F"); S("Muted", "#5B6B82"); S("Faint", "#637287");

@@ -1070,7 +1070,7 @@ public partial class MainWindow : Window
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
         var byEnemy = e.MobSnapshot().Where(m => m.Kinah > 0).GroupBy(m => m.Name).Select(g => (Where: g.Key, Count: g.Sum(m => m.Kinah))).OrderByDescending(x => x.Count).ToList();
         _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy, e.AbyssPoints);
-        FillChips(e, kinah, s, t.Kills, elapsed, totalNow);   // the three chips under the hero (Ui/MainWindow.QuestFarm.cs)
+        FillChips(e, kinah, s, t.Kills, elapsed, totalNow, t.Nodes);   // the three chips under the hero (Ui/MainWindow.QuestFarm.cs)
         FillLoot();
         var top = s.Drops.Concat(s.Gathered).Where(r => !r.Header && r.Worth > 0).OrderByDescending(r => r.Worth).ToList();
         _topRows = top;

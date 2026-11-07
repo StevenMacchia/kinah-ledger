@@ -75,7 +75,7 @@ public partial class MainWindow
     /* ---------------- the chips ---------------- */
 
     /// <summary>The three chips under the hero: Kinah, loot at Market prices, kills; and the Just dropped head's note.</summary>
-    void FillChips(SessionEngine e, long kinah, Tables s, int kills, TimeSpan elapsed, long totalNow)
+    void FillChips(SessionEngine e, long kinah, Tables s, int kills, TimeSpan elapsed, long totalNow, int nodes = 0)
     {
         bool farm = _part == "Farming" && !_welcome && _hasSummary;
         ChipsRow.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
@@ -83,8 +83,26 @@ public partial class MainWindow
         if (!farm) { ChipPanel.Visibility = Visibility.Collapsed; return; }
         _qMobs = e.MobSnapshot(); _qKinah = kinah; _qKills = kills; _qElapsed = elapsed;
         int kinds = s.Drops.Count(r => !r.Header) + s.Gathered.Count(r => !r.Header) + (s.Pets is { Count: > 0 } ? 1 : 0);
-        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{_qChip}|{Skins.Current}";
+        bool gather = _mode == Mode.Gather;
+        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{Skins.Current}";
         if (!Changed("chips", sig)) return;
+        if (gather)
+        {
+            // a gathering stretch (the Gathering mode): attempts and what they gave, in place of Kinah and kills, which would read 0
+            double perTry = nodes > 0 ? s.GatherCount / (double)nodes : 0;
+            QChipFill(ChipKinah, QIconBox("Pick", "Lime"), nodes.ToString("N0"), $"gathering attempt{(nodes == 1 ? "" : "s")}");
+            ChipKinah.ToolTip = $"{nodes:N0} gathering attempts {CountWhere()}" + (elapsed.TotalMinutes >= 1 ? $", {Fk(nodes / elapsed.TotalHours)} an hour" : "") + ".";
+            QChipFill(ChipLoot, QIconBox("Bag", "Mint"), s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", kinds > 0 ? $"gathered · {kinds} kind{(kinds == 1 ? "" : "s")}" : "gathered");
+            ChipLoot.ToolTip = kinds == 0 ? "Nothing gathered yet. Click for the bag." : $"{kinds} kind{(kinds == 1 ? "" : "s")} {CountWhere()}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + ". Click for the bag.";
+            QChipFill(ChipKills, QIconBox("Leaf", "Lime"), Fk(s.GatherCount), nodes > 0 ? $"items · {perTry:0.0} a try" : "items");
+            ChipKills.ToolTip = nodes > 0 ? $"{s.GatherCount:N0} items from {nodes:N0} attempts, {perTry:0.0} a try." : "Items show here as nodes are gathered.";
+            foreach (var chip in new[] { ChipKinah, ChipKills }) { chip.Cursor = Cursors.Arrow; chip.ClearValue(Border.BorderBrushProperty); }
+            ChipLoot.Cursor = Cursors.Hand;
+            if (_qChip == "bag") ChipLoot.SetResourceReference(Border.BorderBrushProperty, "Mint"); else ChipLoot.ClearValue(Border.BorderBrushProperty);
+            FillChipPanel();
+            return;
+        }
+        foreach (var chip in new[] { ChipKinah, ChipLoot, ChipKills }) chip.Cursor = Cursors.Hand;
         QChipFill(ChipKinah, QCoin(30), Fk(kinah), "Kinah picked up");
         ChipKinah.ToolTip = $"{kinah:N0} Kinah {CountWhere()}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + ". Quest rewards and bound Kinah are left out. Click for Kinah by enemy.";
         QChipFill(ChipLoot, QIconBox("Bag", "Mint"), s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", kinds > 0 ? $"loot · {kinds} kind{(kinds == 1 ? "" : "s")}" : "loot");
@@ -107,6 +125,7 @@ public partial class MainWindow
 
     void ToggleChip(string key)
     {
+        if (_mode == Mode.Gather && key != "bag") return;   // a gathering stretch has no enemies behind its chips
         _qChip = _qChip == key ? null : key;
         _drawnSig.Remove("chips"); _drawnSig.Remove("loot");
         Redraw();
@@ -115,7 +134,7 @@ public partial class MainWindow
     /// <summary>What a chip opens under the row: Kinah by enemy or kills by enemy as rows with bars; the bag is LOOT's card (FillLoot shows it).</summary>
     void FillChipPanel()
     {
-        bool panel = _qChip is "who" or "kills";
+        bool panel = _qChip is "who" or "kills" && _mode != Mode.Gather;
         ChipPanel.Visibility = panel ? Visibility.Visible : Visibility.Collapsed;
         if (!panel) return;
         ChipPanelHost.Children.Clear();
