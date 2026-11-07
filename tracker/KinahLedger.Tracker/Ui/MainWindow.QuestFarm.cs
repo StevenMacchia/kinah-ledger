@@ -31,6 +31,7 @@ public partial class MainWindow
     {
         ChartToggle.MouseLeftButtonUp += (_, _) => { _qOpen["chart"] = !QOpen("chart"); ChartBox.Visibility = QOpen("chart") && ChartToggle.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed; QSetChev(ChartChev, QOpen("chart")); };
         ChaseTrack.SizeChanged += (_, _) => LayoutChase();
+        CraftChaseTrack.SizeChanged += (_, _) => LayoutCraftChase();
         ChipKinah.MouseLeftButtonUp += (_, _) => ToggleChip("who");
         ChipLoot.MouseLeftButtonUp += (_, _) => ToggleChip("bag");
         ChipKills.MouseLeftButtonUp += (_, _) => ToggleChip("kills");

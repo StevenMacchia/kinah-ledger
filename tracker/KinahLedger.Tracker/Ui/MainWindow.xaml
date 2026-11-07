@@ -849,96 +849,125 @@
       <!-- Crafting (direction C, 2026-10-24): the last five crafts beside the session's profit, then This session (every recipe
            crafted since the tracker started: tries, worked, spent, sells for, profit) and Best crafts today. Crafted items never
            count as drops, and crafting is never farming time. -->
-      <Border x:Name="CraftCard" Margin="0,16,0,0" BorderThickness="1" CornerRadius="6,6,0,0" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource Card}" Visibility="Collapsed">
+      <!-- the Crafting page (Quest, 2026-11-07, step 3, Ui/MainWindow.QuestCraft.cs): profit as the hero in mint with the ring of
+           crafts that worked; three chips; Next up (the next round profit and the recipe that pays most today); Just crafted with
+           a worked or failed dot on each item; the recipes this session as small cards; Best crafts today behind its head -->
+      <Border x:Name="CraftCard" Margin="0,10,0,0" Background="Transparent" BorderThickness="0" Visibility="Collapsed">
         <StackPanel>
-          <Grid Margin="20,16,20,0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Border Width="40" Height="40" CornerRadius="7" BorderThickness="1" BorderBrush="{DynamicResource Gold}" VerticalAlignment="Center">
-              <Border.Background>
-                <RadialGradientBrush Center="0.5,0.38" GradientOrigin="0.5,0.38" RadiusX="0.75" RadiusY="0.75"><GradientStop Color="#4DF8D598" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush>
-              </Border.Background>
-              <!-- an anvil, drawn -->
-              <Viewbox Width="22" Height="22">
-                <Canvas Width="24" Height="24">
-                  <Path Stroke="{DynamicResource Muted}" StrokeThickness="1.6" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                        Data="M3,7 H15 C15,10 17,11 21,11 V13 C17,13 15,14 14,16 H9 C8,14 6,12.5 3,12 Z M8,16 L6.5,20 H16.5 L15,16"/>
-                </Canvas>
-              </Viewbox>
-            </Border>
-            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-              <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Text="Crafting"/>
-              <TextBlock FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,2,0,0" Text="Since the tracker started"/>
-            </StackPanel>
-            <TextBlock x:Name="CraftResetText" Grid.Column="2" FontSize="12" VerticalAlignment="Top"><Hyperlink x:Name="CraftResetLink" Style="{StaticResource LinkStyle}">Start over</Hyperlink></TextBlock>
-          </Grid>
-          <Grid Margin="20,16,20,16">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="200"/></Grid.ColumnDefinitions>
+          <Border x:Name="CraftHero" Style="{StaticResource QCard}" Background="{DynamicResource HeroBg}" Padding="16,12,16,12">
             <StackPanel>
-              <!-- the queue under way: "3 of 10 · 2 worked · 1 unsure" (Steven, 2026-11-04: a miss should show while it happens) -->
-              <TextBlock x:Name="CraftQueueNow" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
-              <Border CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource Line}" Background="{DynamicResource Slot}" Padding="0,4" ClipToBounds="True">
-                <Grid>
-                  <StackPanel x:Name="CraftFeedHost"/>
-                  <TextBlock x:Name="CraftEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="12,10,12,10" TextWrapping="Wrap"
-                             Text="Open the crafting window and queue a craft.&#x0A;Profit shows with the first one."/>
-                </Grid>
-              </Border>
-              <TextBlock x:Name="CraftHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left"
-                         Text="A craft wrong or missing? Click it." ToolTip="Click a wrong craft to report it, or here for one that never showed. The report is saved on this PC."/>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="14"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock x:Name="CraftWhere" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" Text="Crafting · since the tracker started" TextTrimming="CharacterEllipsis"/>
+                  <!-- the queue under way: "3 of 10 · 2 worked · 1 unsure" (Steven, 2026-11-04: a miss should show while it happens) -->
+                  <TextBlock x:Name="CraftQueueNow" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+                  <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <TextBlock x:Name="CraftProfit" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Black" Foreground="{DynamicResource Mint}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                    <TextBlock x:Name="CraftProfitNote" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="profit this session"/>
+                  </StackPanel>
+                  <!-- the chase: how many crafts worked, spent against sells for -->
+                  <StackPanel x:Name="CraftChaseBox" Margin="0,8,0,0" Visibility="Collapsed">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <TextBlock x:Name="CraftChaseLbl" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcCheck}" Width="13" Height="13" StrokeThickness="2.4" Stroke="{DynamicResource Mint}"/>
+                        <TextBlock x:Name="CraftChaseBest" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Mint}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Grid>
+                    <Grid Margin="0,6,0,0">
+                      <Border x:Name="CraftChaseTrack" Height="12" CornerRadius="6" Background="{DynamicResource Bg}"/>
+                      <Border x:Name="CraftChaseFill" Height="12" HorizontalAlignment="Left" Width="0" CornerRadius="6" Background="{DynamicResource Mint}">
+                        <Border CornerRadius="6" Margin="1"><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#55FFFFFF" Offset="0"/><GradientStop Color="#00FFFFFF" Offset="0.6"/></LinearGradientBrush></Border.Background></Border>
+                      </Border>
+                    </Grid>
+                  </StackPanel>
+                  <!-- the figures the code still writes (crafts, worked, made, spent, sells for): the chips say them -->
+                  <TextBlock x:Name="CraftWhat" Visibility="Collapsed"/>
+                  <StackPanel x:Name="CraftHealth" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
+                    <Path x:Name="CraftHealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="CraftHealthText" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
+                  </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" MinWidth="120">
+                  <Grid x:Name="CraftRingHost" Width="76" Height="76" HorizontalAlignment="Center"/>
+                  <TextBlock x:Name="CraftResetText" FontSize="11.5" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,10,0,0"><Hyperlink x:Name="CraftResetLink" Style="{StaticResource LinkStyle}">Start over</Hyperlink></TextBlock>
+                </StackPanel>
+              </Grid>
             </StackPanel>
-            <StackPanel Grid.Column="2">
-              <TextBlock x:Name="CraftProfit" FontFamily="{DynamicResource DisplayFont}" FontSize="34" FontWeight="Light" Foreground="{DynamicResource Ink}" Text=" "/>
-              <TextBlock x:Name="CraftProfitNote" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" Text="profit this session"/>
-              <TextBlock x:Name="CraftWhat" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" LineHeight="21" TextWrapping="Wrap"/>
-              <StackPanel x:Name="CraftHealth" Orientation="Horizontal" Margin="0,12,0,0">
-                <Path x:Name="CraftHealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="CraftHealthText" FontSize="12" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
-              </StackPanel>
-            </StackPanel>
+          </Border>
+
+          <Grid x:Name="CraftChips" Margin="0,8,0,0" Visibility="Collapsed">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <Border x:Name="ChipCrafts" Style="{StaticResource QChip}" Cursor="Arrow"/>
+            <Border x:Name="ChipSpent" Grid.Column="2" Style="{StaticResource QChip}" Cursor="Arrow"/>
+            <Border x:Name="ChipSells" Grid.Column="4" Style="{StaticResource QChip}" Cursor="Arrow"/>
           </Grid>
 
-          <!-- This session: every recipe crafted, in the drops table's grammar; a row opens its recipe card -->
-          <Border x:Name="CraftHead" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+          <Border x:Name="CraftNextCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
+            <StackPanel x:Name="CraftNextHost"/>
+          </Border>
+
+          <!-- Just crafted: the last five crafts, worked or failed, with what each made or cost; a line that looks wrong is clicked and reported -->
+          <Border x:Name="CraftFeedCard" Style="{StaticResource QCard}" Margin="0,8,0,0">
             <StackPanel>
-              <Grid x:Name="CraftSessionHead" Height="48" Background="Transparent" Cursor="Hand">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <Path x:Name="CraftSessionChev" Style="{StaticResource SecChev}" Margin="20,0,10,0"/>
-                <TextBlock Grid.Column="1" Style="{StaticResource SecTitle}" Text="THIS SESSION"/>
-                <TextBlock x:Name="CraftSpentNote" Grid.Column="2" Style="{StaticResource SecNote}"/>
-                <TextBlock x:Name="CraftSpent" Grid.Column="3" Style="{StaticResource SecSum}" FontSize="14" Margin="12,0,20,0"/>
+              <Grid Margin="0,0,0,2">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcHammer}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="1" Text="Just crafted" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="CraftFeedNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="last five · click a line that is wrong"/>
               </Grid>
-              <StackPanel x:Name="CraftBody" Margin="20,0,20,16">
-                <Grid Height="24">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/><ColumnDefinition Width="58"/><ColumnDefinition Width="64"/><ColumnDefinition Width="72"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
-                  <TextBlock Grid.Column="2" Style="{StaticResource FTh}" Text="Crafts"/>
-                  <TextBlock Grid.Column="3" Style="{StaticResource FTh}" Text="Worked"/>
-                  <TextBlock Grid.Column="4" Style="{StaticResource FTh}" Text="Spent" ToolTip="Every craft's materials at the lowest Market prices on your server. A failed craft uses them too."/>
-                  <TextBlock Grid.Column="5" Style="{StaticResource FTh}" Text="Sells for" ToolTip="What came out, at the lowest Market price, less the Market's fee and tax (Options › General can show amounts before it)."/>
-                  <TextBlock Grid.Column="6" Style="{StaticResource FTh}" Text="Profit" ToolTip="What came out, less the Market's cut, minus the cost of every craft."/>
-                </Grid>
-                <ScrollViewer x:Name="CraftScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                  <ItemsControl x:Name="CraftRows" ItemTemplate="{StaticResource CraftRowTemplate}"/>
-                </ScrollViewer>
-                <TextBlock x:Name="CraftMadeNote" FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+              <Grid>
+                <StackPanel x:Name="CraftFeedHost"/>
+                <TextBlock x:Name="CraftEmpty" Style="{StaticResource BodyStyle}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,8,0,4" TextWrapping="Wrap"
+                           Text="Open the crafting window and queue a craft.&#x0A;Profit shows with the first one."/>
+              </Grid>
+              <TextBlock x:Name="CraftHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left" Visibility="Collapsed"
+                         Text="A craft wrong or missing? Click it." ToolTip="Click a wrong craft to report it, or here for one that never showed. The report is saved on this PC."/>
+            </StackPanel>
+          </Border>
+
+          <!-- Recipes this session: a small card per recipe (crafts, worked, profit); a card opens its recipe's breakdown -->
+          <Border x:Name="CraftHead" Style="{StaticResource QCard}" Margin="0,8,0,0">
+            <StackPanel>
+              <Grid x:Name="CraftSessionHead" Background="Transparent" Cursor="Hand">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcPotion}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="1" Text="Recipes this session" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="CraftSpentNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="CraftSpent" Grid.Column="3" FontSize="13" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <Path x:Name="CraftSessionChev" Grid.Column="4" Style="{StaticResource QChev}"/>
+              </Grid>
+              <StackPanel x:Name="CraftBody" Margin="0,8,0,0">
+                <WrapPanel x:Name="CraftRecipeHost" Margin="0,0,-8,-8"/>
+                <!-- the table the code fills (its rows feed the recipe cards and the panel over the game); not drawn since the Quest look -->
+                <StackPanel Visibility="Collapsed">
+                  <ScrollViewer x:Name="CraftScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="CraftRows" ItemTemplate="{StaticResource CraftRowTemplate}"/>
+                  </ScrollViewer>
+                </StackPanel>
+                <TextBlock x:Name="CraftMadeNote" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
               </StackPanel>
             </StackPanel>
           </Border>
 
-          <!-- the server's most profitable recipes today (kinahledger.com /crafts), folded to the top three (Steven, 2026-10-24) -->
-          <Border x:Name="BestCraftsCard" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Visibility="Collapsed">
+          <!-- the server's most profitable recipes today (kinahledger.com /crafts), behind its head and Next up's "all N" -->
+          <Border x:Name="BestCraftsCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
             <StackPanel>
-              <Grid x:Name="BestHead" Height="48" Background="Transparent" Cursor="Hand">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <Path x:Name="BestChev" Style="{StaticResource SecChev}" Margin="20,0,10,0"/>
-                <TextBlock Grid.Column="1" Style="{StaticResource SecTitle}" Text="BEST CRAFTS TODAY"/>
-                <TextBlock x:Name="BestNote" Grid.Column="2" Style="{StaticResource SecNote}"/>
+              <Grid x:Name="BestHead" Background="Transparent" Cursor="Hand">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="1" Text="Best crafts today" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="BestNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                <Path x:Name="BestChev" Grid.Column="3" Style="{StaticResource QChev}"/>
               </Grid>
-              <StackPanel x:Name="BestCraftsHost" Margin="20,0,20,16"/>
+              <StackPanel x:Name="BestCraftsHost" Margin="0,8,0,0"/>
             </StackPanel>
           </Border>
 
           <!-- the recipes come from MetaBot.GG, whose terms ask for a link to the page they came from -->
-          <TextBlock x:Name="CraftCredit" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="20,0,20,12" TextWrapping="Wrap">
+          <TextBlock x:Name="CraftCredit" Foreground="{DynamicResource Faint}" FontSize="11" FontWeight="Bold" Margin="4,8,4,0" TextWrapping="Wrap">
             <Run x:Name="CraftNote" Text="Lowest Market price on your server"/><Run Text="  ·  recipes from "/><Hyperlink x:Name="CraftCreditLink" Style="{StaticResource LinkStyle}">MetaBot.GG</Hyperlink>
           </TextBlock>
         </StackPanel>

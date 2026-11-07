@@ -27,7 +27,7 @@ public partial class MainWindow
     /// <summary>Sections the player opened or folded, by name; the rest follow the view (Session and Where to farm open in Full view only).</summary>
     readonly Dictionary<string, bool> _secUser = new();
 
-    bool SecOpen(string key) => _secUser.TryGetValue(key, out var v) ? v : key is "Session" or "Where" ? FullShown : true;
+    bool SecOpen(string key) => _secUser.TryGetValue(key, out var v) ? v : key is "Session" or "Where" ? FullShown : key != "Best";
 
     void ToggleSec(string key)
     {
@@ -125,7 +125,7 @@ public partial class MainWindow
         var (bold, rest, small) = FeedWords(l);
         var local = l.At.ToLocalTime();
         var when = justNow ? "just now" : local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : local.ToString("MMM d HH:mm");
-        var row = QRow(icon, bold + rest, small.Length > 0 ? when + " · " + small : when, value.Text, value.Muted ? "Faint" : "Mint", rule: rule, inline: true);
+        var row = QRow(icon, bold + rest, small.Length > 0 ? when + " · " + small : when, value.Text, value.Text.StartsWith("−") || value.Text.StartsWith("≤ −") ? "Coral" : value.Muted ? "Faint" : "Mint", rule: rule, inline: true);
         // the why is behind Options › Game reading › Explain each count (Steven, 2026-11-04), so the hover offers it only then
         var click = _prefs.ExplainCounts ? "Click to see why, or to report it." : "Click if it's wrong.";
         row.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " " + click : click;

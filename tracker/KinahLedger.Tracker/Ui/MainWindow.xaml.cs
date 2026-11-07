@@ -1285,6 +1285,7 @@ public partial class MainWindow : Window
         var rows = new List<DropRow>();
         long spent = 0, worth = 0; int noBook = 0, noPrice = 0, tries = 0, ok = 0, recipes = 0, itemsMade = 0;
         var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _craftPerRecipe.Clear();
         foreach (var r in e?.CraftSnapshot() ?? new())
         {
             tries += r.Attempts; ok += r.Ok; itemsMade += r.MadeCount;
@@ -1299,6 +1300,7 @@ public partial class MainWindow : Window
             if (cost != null) spent += cost.Value; else noBook++;
             if (madeKnown) worth += made; else noPrice++;
             long? profit = cost != null && madeKnown ? made - cost.Value : null;
+            if (profit is long pr) _craftPerRecipe.Add((r.Name, pr, r.Ok));
             var spentCell = cost is not long cv ? "" : gaps == 0 ? Fk(cv) : cv == 0 && farmedMats == 0 ? "" : "≥ " + Fk(cv);
             var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
@@ -1322,19 +1324,19 @@ public partial class MainWindow : Window
         _crafted = e?.CraftSnapshot() ?? new();
         FillBestCrafts();
         // the feed: the last five crafts, worked or failed, with what each made or cost
-        DrawFeed(CraftFeedHost, CraftEmpty, FeedFor(FeedTab.Crafting), FeedTab.Crafting, CraftValue);
+        DrawFeed(CraftFeedHost, CraftEmpty, FeedFor(FeedTab.Crafting), FeedTab.Crafting, CraftValue, QCraftIcon);
         // the queue under way above it, as the HUD shows it, and its final figures for a moment after (MainWindow.HudCraft.cs)
         var queue = _demo ? "" : _watcher.Chat?.CraftQueue is { } q && (q.Open || q.EndedAt is DateTime end && (DateTime.UtcNow - end).TotalSeconds <= Session.CraftLedger.PanelSeconds) ? q.Text : "";
         if (CraftQueueNow.Text != queue) CraftQueueNow.Text = queue;
         CraftQueueNow.Visibility = queue.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        FillHealth(CraftHealthText, CraftHealthMark);
+        FillHealth(CraftHealthText, CraftHealthMark, hideOk: true);
         // with nothing crafted yet, the feed's one sentence and Best crafts: no empty table, nothing to start over
         var some = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftHead.Visibility = CraftResetText.Visibility = some;
         long net = worth - spent;
         CraftProfit.Text = spent > 0 || worth > 0 ? Signed(net) : " ";
         _craftNet = spent > 0 || worth > 0 ? Signed(net) : "";
-        CraftProfit.Foreground = B(spent > 0 || worth > 0 ? (net >= 0 ? "Ink" : "Bad") : "Ink");
+        // the colour is the Quest hero's (FillCraftQuest): mint for a profit, coral for a loss
         CraftProfitNote.Text = spent > 0 || worth > 0 ? (missing.Count + noBook > 0 ? "profit this session, at most" : "profit this session") : "profit shows with the first craft";
         CraftWhat.Inlines.Clear();
         void Fig(string text) { var run = new Run(text); run.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); run.SetResourceReference(TextElement.ForegroundProperty, "Ink"); CraftWhat.Inlines.Add(run); }
@@ -1346,7 +1348,7 @@ public partial class MainWindow : Window
             if (spent > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(spent)); CraftWhat.Inlines.Add(new Run(" spent")); }
             if (worth > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(worth)); CraftWhat.Inlines.Add(new Run(" sells for")); }
         }
-        CraftWhat.Visibility = CraftWhat.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        CraftWhat.Visibility = Visibility.Collapsed;   // the chips say it (Quest)
         // This session's line: the recipes, the cut, and the gaps said once
         var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? " has" : "s have")} no price yet" : "";
         var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
@@ -1356,6 +1358,7 @@ public partial class MainWindow : Window
         CraftMadeNote.Text = string.Join(" · ", new[] { gapNote, noBookNote, noPrice > 0 ? $"{noPrice} with no Market price for what came out" : "" }.Where(x => x.Length > 0));
         CraftMadeNote.Visibility = CraftMadeNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftNote.Text = $"Lowest Market price on {Server?.Name ?? "your server"}";
+        FillCraftQuest(tries, ok, itemsMade, spent, worth, net, rows.Count > 0, missing.Count + noBook > 0, rows);   // Ui/MainWindow.QuestCraft.cs
         ApplySections();
     }
 

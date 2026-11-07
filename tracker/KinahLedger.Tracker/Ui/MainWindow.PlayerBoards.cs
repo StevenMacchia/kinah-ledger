@@ -76,6 +76,7 @@ public partial class MainWindow
         BestNote.Text = $"{server} · profit a craft";
         if (PlayerBoards.CraftsAt == null)
         {
+            _bestTop = null;
             var note = HasServer && _prefs.Share ? "Loads with the price board, every 15 minutes." : "Shows once a server is picked and sharing is on (Options).";
             if (!Changed("best", note)) return;
             host.Children.Clear();
@@ -90,6 +91,7 @@ public partial class MainWindow
             var f = CraftMath.WithFarmed(c, id => PriceBook.Farmed(_items.NameOf(id)));
             return (c, f.Farmed, cost: f.Craft.Cost, adj: CraftMath.WithVendor(f.Craft with { Profit = OwnProfit(f.Craft) }, id => PriceBook.VendorPrice(_items.NameOf(id))));
         }).OrderByDescending(x => x.adj.Profit).ToList();
+        _bestTop = rows.Count > 0 && rows[0].adj.Profit > 0 ? (_items.NameOf(rows[0].c.Id) is { Length: > 1 } tn ? tn : rows[0].c.Name, rows[0].c.Id, rows[0].adj.Profit, rows[0].c.Success, rows[0].c.Makes, rows[0].cost, rows.Count) : null;
         // drawn only when the rows' words change (a price board load, a tick on "I have these", Show all)
         if (!Changed("best", $"{server}|{_bestAll}|" + string.Join(";", rows.Select(x => $"{x.c.Id}|{x.adj.Profit}|{x.adj.Unpriced}|{x.Farmed}|{x.cost}")))) return;
         host.Children.Clear();
@@ -135,7 +137,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
-        var icon = ItemTile(name, c.Id, 30, GradeOf(name)); icon.VerticalAlignment = VerticalAlignment.Top; icon.Margin = new Thickness(0, 2, 0, 0); icon.HorizontalAlignment = HorizontalAlignment.Left;
+        var icon = QItemIcon(name, c.Id, 30, round: false, grade: GradeOf(name)); icon.VerticalAlignment = VerticalAlignment.Top; icon.Margin = new Thickness(0, 2, 0, 0); icon.HorizontalAlignment = HorizontalAlignment.Left;
         g.Children.Add(icon);
         var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         // the name in the page's own ink (0.10.22): it was the dark cards' grade colour, white for a common item, which vanished on

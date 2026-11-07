@@ -30,9 +30,6 @@ public partial class MainWindow
         TablesCard.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         TablesCard.Margin = new Thickness(0, full ? 12 : 0, 0, 0);
         TablesCard.Padding = new Thickness(0, 4, 0, 4);
-        CraftCard.CornerRadius = new CornerRadius(16);
-        CraftCard.BorderThickness = new Thickness(1);
-        CraftCard.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         StatusBar.Margin = new Thickness(0, 8, 0, 0);
         StatusBar.CornerRadius = new CornerRadius(0);
         StatusBar.BorderThickness = new Thickness(0);
