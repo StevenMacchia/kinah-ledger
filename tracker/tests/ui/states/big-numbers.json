@@ -1,0 +1,12 @@
+{
+  "note": "Billions of Kinah and stacks of 9,999: the B suffix, four-figure badges, the heading, the place figures and the Kinah slots at their widest.",
+  "live": "Urugugu Canyon",
+  "prices": { "Spiritstone Powder": 333000, "Sapphire Powder": 508000, "Magic Crystal": 455000, "Artisan's Ultimate Refining Stone": 33000000 },
+  "runs": [
+    { "zone": "Urugugu Canyon", "kind": "Expedition", "day": 0, "time": "10:00", "repeat": 3, "step": 40, "secs": 2210, "kinah": 2400000000, "vary": 0.05,
+      "items": { "Spiritstone Powder": 9999, "Sapphire Powder": 4800, "Magic Crystal": 1250, "Artisan's Ultimate Refining Stone": 120 },
+      "gear": ["Elder Breastplate", "Defender Breastplate"] },
+    { "zone": "Shugo Festival", "kind": "Event", "day": -1, "time": "12:00", "repeat": 2, "step": 60, "secs": 290, "kinah": 999500000,
+      "items": { "Refining Stone": 9999, "Odyle": 9999 } }
+  ]
+}

@@ -1853,9 +1853,10 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Fills the window with a sample session (open world, gathering, pets, or open world with the Market open) so its layout can be reviewed without the game.</summary>
-    public void ShowDemo(string kind = "Open world")
+    /// <param name="state">A review sweep's state (Ui/MainWindow.UiStates.cs): its own runs on the Events page, its strip; null for the plain sample.</param>
+    public void ShowDemo(string kind = "Open world", UiState? state = null)
     {
-        _demo = true;
+        _demo = true; _uiState = state;
         bool market = kind == "Market";
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false;
         ZoneLbl.Text = "Western Cantas Valley";
@@ -1868,11 +1869,12 @@ public partial class MainWindow : Window
         if (kind == "Events")
         {
             // sample runs (never the player's own, Ui/MainWindow.RunsCard.cs), for a layout render
-            _demoInst = DemoRuns();
-            _demoWeekRuns = DemoWeekRuns(_demoInst);   // and four days more for the strip's Week side
+            _demoInst = state?.Runs != null ? StateRuns(state) : DemoRuns();
+            // and four days more for the strip's Week side; a state's week is its own runs, so an empty state is empty
+            _demoWeekRuns = state?.Runs != null ? _demoInst.Snapshot() : DemoWeekRuns(_demoInst);
             ShowPart("Events", byHand: false); SetTrackingUi(false);
             Say("Reading the chat", "Faint");
-            if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1") OpenTodaySample();
+            if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1" || (state != null && state.Strip != "closed")) OpenTodaySample();
             return;
         }
         if (kind == "CraftingEmpty")

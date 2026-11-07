@@ -1044,8 +1044,11 @@ public static class WpfApp
         }
     }
 
-    public static void Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false, bool tall = false, bool mine = false)
+    /// <param name="state">A review sweep's state (tools/ui-review.md): the render is named "<page>-<state>.png", and on the Events page its figures check goes beside it.</param>
+    /// <returns>What the figures check found wrong (a state render of the Events page); empty otherwise.</returns>
+    public static List<string> Shot(Settings settings, string dir, bool demo, string kind = "Open world", bool compact = false, bool welcome = false, string? skin = null, bool full = false, bool tall = false, bool mine = false, UiState? state = null)
     {
+        var problems = new List<string>();
         Ensure();
         Directory.CreateDirectory(dir);
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
@@ -1057,11 +1060,13 @@ public static class WpfApp
         if (tall) w.MaxHeight = 4000;
         // KL_WINDOW_SCALE=1.25 (0.10.11): the window at that size, as Options › General › Window size would draw it
         if (double.TryParse(Environment.GetEnvironmentVariable("KL_WINDOW_SCALE"), out var winScale) && winScale > 0) w.PreviewWindowScale(winScale);
-        if (demo) w.ShowDemo(kind);
+        // a state's own window size (scale-80, scale-150) and view (compact, full)
+        if (state?.Scale is { } stScale) w.PreviewWindowScale(stScale);
+        if (demo) w.ShowDemo(kind, state);
         // --events --mine (0.10.10): the page as this PC's own runs fill it, from a copy of the run log; nothing is tracked, saved or sent
         else if (mine && kind == "Events") w.ShowMineRuns();
-        if (compact) w.ShowCompact();
-        if (full) w.ShowFull();
+        if (compact || state?.View == "compact") w.ShowCompact();
+        if (full || state?.View == "full") w.ShowFull();
         if (welcome) w.ShowWelcomeDemo(skin ?? "night");
         // KL_SHOT_STATE=run|paused|stopped|empty|onboard (2026-10-28; onboard 2026-11-04): the Farming page's other states, each its own "-<state>" render
         // and KL_SHOT_STATE=week|week-new (0.9): LOOT's Week side; with --events, week is the Events strip's Week side
@@ -1088,6 +1093,23 @@ public static class WpfApp
             }
             Console.WriteLine($"window {w.ActualWidth:0}"); Dump(w, 0);
         }
+        // a state render (tools/ui-review.md): the page and the state in the file name, the figures check beside an Events render, nothing else
+        if (state != null)
+        {
+            var file = Path.Combine(dir, UiState.PageName(kind) + "-" + state.Name + (skin != null ? "-" + skin : "") + ".png");
+            Save((FrameworkElement)w.Content, file, (compact ? 640 : 800) - 16);
+            if (kind == "Events")
+            {
+                var fig = w.EventsFigures(state);
+                fig = new Dictionary<string, object?> { ["page"] = "events", ["state"] = state.Name, ["note"] = state.Note, ["file"] = Path.GetFileName(file) }.Concat(fig).ToDictionary(kv => kv.Key, kv => kv.Value);
+                File.WriteAllText(Path.ChangeExtension(file, ".figures.json"), System.Text.Json.JsonSerializer.Serialize(fig, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+                var check = (Dictionary<string, object?>)fig["check"]!;
+                foreach (var key in new[] { "missing", "trimmed", "pastWindowEdge" })
+                    foreach (var p in (List<string>)check[key]!) problems.Add($"{key}: {p}");
+            }
+            w.Close();
+            return problems;
+        }
         var name = welcome ? "ui-welcome" : !demo ? (mine && kind == "Events" ? "ui-main-events-mine" : "ui-main") : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
@@ -1106,7 +1128,7 @@ public static class WpfApp
         if (shotState is "week-zones" or "week-places" or "run-vs-average")
             w.ShotCompareParts(dir, shotState, (compact ? "-compact" : full ? "-full" : "") + (skin != null ? "-" + skin : ""));
         // a state render is the window only: the cards and the panel come from the plain farming renders
-        if (shotState.Length > 0) { w.Close(); return; }
+        if (shotState.Length > 0) { w.Close(); return problems; }
         // the Events part's card on its own: folded, and with Materials open
         if (demo && kind == "Events") w.ShotRunsCards(dir);
         // KL_CARD_ZONE=<zone>: also draw the card a click on the first drop opens, with the live site's data for that zone
@@ -1149,11 +1171,11 @@ public static class WpfApp
         }
         w.Close();
 
-        foreach (var (file, state) in states)
+        foreach (var (file, hudState) in states)
         {
             var h = new HudWindow(new[] { "feed" }) { Left = -12000, Top = -12000, ShowActivated = false };
             h.Show();
-            h.Update(state);
+            h.Update(hudState);
             DoEvents();
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
@@ -1186,7 +1208,7 @@ public static class WpfApp
         }
 
         // the overlay's own states (tracker/overlay-behaviour), each from the same figures with the keys MainWindow sets
-        if (!demo || kind != "Open world") return;
+        if (!demo || kind != "Open world") return problems;
         foreach (var (file, fields, extra) in new (string, List<string>, Dictionary<string, string>)[]
         {
             ("ui-hud-notice.png", HudFields.Parse(null), new() { ["notice"] = "Update ready · installs when you leave the game" }),
@@ -1212,6 +1234,51 @@ public static class WpfApp
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }
+        return problems;
+    }
+
+    /// <summary>
+    /// The review sweep (tools/ui-review.md): every state under tracker/tests/ui/states rendered on the Events page
+    /// ("events"), or on every page ("all"; a state with runs of its own is an Events state). Each render is whole (tall),
+    /// named "<page>-<state>.png", with the figures check beside an Events render. A state that fails to render is reported
+    /// and the sweep goes on; the exit code says whether every render came out and every figures check passed. The Market
+    /// prices come from each state, never from this PC's own price files.
+    /// </summary>
+    public static int Sweep(Settings settings, string dir, string which, string statesDir, string? skin)
+    {
+        var files = Directory.GetFiles(statesDir, "*.json").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+        if (files.Count == 0) { Console.WriteLine($"no states in {statesDir}"); return 2; }
+        var pages = which == "all" ? new[] { "Open world", "Gathering", "Market", "Crafting", "CraftingEmpty", "CraftingUpgrades", "Events" } : new[] { "Events" };
+        Directory.CreateDirectory(dir);
+        Ensure();
+        Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;   // one window per state: the first one's close must not end the application
+        KinahLedger.Data.PriceBook.PathOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-state-runs", "prices.json");
+        KinahLedger.Data.PriceBook.Reset();
+        var report = new List<string>();
+        int renders = 0, failed = 0, wrong = 0;
+        foreach (var f in files)
+        {
+            UiState st;
+            try { st = UiState.Load(f); }
+            catch (Exception ex) { failed++; report.Add($"{Path.GetFileName(f)}: FAILED to read: {ex.Message}"); continue; }
+            foreach (var kind in pages)
+            {
+                if (st.EventsOnly && kind != "Events") continue;
+                var name = UiState.PageName(kind) + "-" + st.Name + (skin != null ? "-" + skin : "");
+                try
+                {
+                    var problems = Shot(settings, dir, demo: true, kind, skin: skin, tall: true, state: st);
+                    renders++;
+                    if (problems.Count == 0) report.Add($"{name}.png  ok");
+                    else { wrong++; report.Add($"{name}.png  FIGURES: " + string.Join(" | ", problems)); }
+                }
+                catch (Exception ex) { failed++; report.Add($"{name}.png  FAILED: {ex.GetType().Name}: {ex.Message}"); }
+            }
+        }
+        report.Add($"{renders} renders written to {Path.GetFullPath(dir)}, {failed} failed, {wrong} with a figure wrong or missing");
+        File.WriteAllLines(Path.Combine(dir, "sweep.txt"), report);
+        foreach (var l in report) Console.WriteLine(l);
+        return failed == 0 && wrong == 0 ? 0 : 1;
     }
 
     /// <summary>Lets pending layout and render work run, since no message loop is running in this mode.</summary>

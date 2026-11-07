@@ -1,0 +1,12 @@
+{
+  "note": "No Market prices at all (a fresh server, or the site unreachable): the value figures can only come from Kinah, and an event's loot is worth nothing the page can say. Where does the page say so, and does any figure pretend?",
+  "live": "Shugo Festival",
+  "prices": {},
+  "runs": [
+    { "zone": "Shugo Festival", "kind": "Event", "day": 0, "time": "11:02", "repeat": 3, "step": 60, "secs": 291, "kinah": 0,
+      "items": { "Refining Stone": 6, "Odyle": 8, "Fine Odyle": 1 } },
+    { "zone": "Urugugu Canyon", "kind": "Expedition", "day": -1, "time": "18:02", "repeat": 4, "step": 12, "secs": 461, "kinah": 512000, "vary": 0.1,
+      "items": { "Spiritstone Powder": 18, "Sapphire Powder": 9, "Magic Crystal": 6 },
+      "gear": ["Elder Breastplate"] }
+  ]
+}

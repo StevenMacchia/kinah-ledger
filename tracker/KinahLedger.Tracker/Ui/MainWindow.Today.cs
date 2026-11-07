@@ -56,8 +56,8 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Draws the Events page's strip: always its line (cheap, every tick), the slots only when the day's runs, the pin or the
-    /// width changed. On Farming the day is LOOT's Today side since 2026-10-28 (Ui/MainWindow.Loot.cs), so no strip there.
+    /// Draws the Events page's strip: its line (cheap, every tick); on Week, its body (Ui/MainWindow.Week.cs). On Farming the
+    /// day is LOOT's Today side since 2026-10-28 (Ui/MainWindow.Loot.cs), so no strip there.
     /// </summary>
     void FillToday()
     {
@@ -91,33 +91,13 @@ public partial class MainWindow
             TodaySum.Text = made > 0 ? Fk(made) : "";
             TodaySum.ToolTip = made <= 0 ? null
                 : "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, " + PriceBook.Cut + ". Gear, currencies, items with no price yet and runs left out of the averages add nothing.";
-            TodayHead.ToolTip = "Today's expeditions and events since midnight on this PC. Click to see the rewards.";
+            TodayHead.ToolTip = "Today's expeditions and events since midnight on this PC. Week has the last 7 days.";
         }
-        bool open = _prefs.TodayOpen;
-        SetSec(TodayChev, TodayBody, open);
-        if (!open) { _drawnSig.Remove("today"); return; }
-
-        // the slots, drawn again only when something in them changed
-        string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
-        var sig = $"{_part}|{HeadStack.Width}|{LootSortMode}|{string.Join(",", _todayAll)}|{Skins.Current}|{r.Runs}:{r.Places}:{r.Kinah}:{Slots(r.Items)}";
-        if (!Changed("today", sig)) return;
-        TodayHost.Children.Clear();
-        int perRow = Math.Max(4, (int)((HeadStack.Width - 2 - 32 + TodayGap) / (TodaySlotSize + TodayGap)));
-        if (r.Runs == 0) TodayHost.Children.Add(TodayEmpty("No runs yet today. Week has the last 7 days."));
-        else FillTodayRuns(r, perRow);
-    }
-
-    /// <summary>The Events page's slots: the rewards of today's expeditions and events, and their Kinah.</summary>
-    void FillTodayRuns(TodayRuns r, int perRow)
-    {
-        var slots = new List<FrameworkElement>();
-        if (r.Kinah > 0) slots.Add(KinahSlot(r.Kinah, r.KinahWhere, ""));
-        var items = SortSlots(r.Items);
-        LootOrderForTest.Clear(); LootOrderForTest.AddRange(items.Select(s => (s.Name, s.Count, _items.Get(s.Id)?.Grade ?? "", false)));
-        foreach (var s in items) slots.Add(ItemSlot(s, ("", ""), true, runs: true));
-        var g = TodayGroup("runs", "FROM EXPEDITIONS AND EVENTS", $"{r.Places} place{(r.Places == 1 ? "" : "s")}", r.Value, slots, perRow, items.Count >= 2);
-        if (slots.Count == 0) ((StackPanel)g).Children.Add(TodayEmpty("Nothing read from the reward screens yet."));
-        TodayHost.Children.Add(g);
+        // the day's rewards are the place box's LOOT under the strip (one box, Steven 2026-11-06); the strip's own row of
+        // them, with its sort links and its sum, said the same again (0.10.21, tools/ui-review.md), so the Today side is
+        // its line alone: folded, no chevron. The body is the Week side's (the bars and the picked day).
+        SetSec(TodayChev, TodayBody, false); TodayChev.Visibility = Visibility.Collapsed; TodayHead.Cursor = Cursors.Arrow;
+        _drawnSig.Remove("today");
     }
 
     TextBlock TodayEmpty(string text) { var t = PT(text, "Faint", 12.5); t.Margin = new Thickness(0, 12, 0, 4); return t; }

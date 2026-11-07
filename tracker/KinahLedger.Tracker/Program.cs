@@ -345,6 +345,10 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   ui-shot [dir] [--demo] [--gathering|--market|--crafting [--empty|--upgrades]|--events [--mine]] [--compact|--full] [--tall] [--welcome] [--skin night|abyss|daylight]
                                 render the window to PNG files for layout review (--options: every Options page;
                                 --events --mine: the Events page from this PC's own runs, read from a copy)
+        --state <name>          one review state (tracker/tests/ui/states/<name>.json): ""<page>-<state>.png"", whole, with
+                                the figures check beside an Events render (tools/ui-review.md)
+        --sweep [events|all]    every state on the Events page, or on every page; exit 1 if a render fails or a figure is off
+        [--states-dir folder]   the states folder, when it isn't found from here
   market-shot [dir]             the window with the Market card in its tracking state
   replay-event-shots [--since 2026-10-24] [--send] [--dir folder] [--verbose]
                                 event runs whose rewards were not read, read again from their kept reward pictures; prints
@@ -1043,8 +1047,26 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
-        WpfApp.Shot(s, dir, o.ContainsKey("demo"), o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world", o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall"), o.ContainsKey("mine"));
+        // the review loop's states (tools/ui-review.md): one state, or the sweep over every state file
+        var statesDir = Ui.UiState.FindDir(o.GetValueOrDefault("states-dir"));
+        if (o.TryGetValue("sweep", out var sweep))
+        {
+            if (statesDir == null) { Console.WriteLine("states folder not found (tracker/tests/ui/states); pass --states-dir <folder>"); return 2; }
+            return WpfApp.Sweep(s, dir, sweep == "true" ? "events" : sweep.ToLowerInvariant(), statesDir, o.GetValueOrDefault("skin"));
+        }
+        Ui.UiState? state = null;
+        if (o.TryGetValue("state", out var stateName))
+        {
+            var f = Path.Combine(statesDir ?? ".", stateName + ".json");
+            if (!File.Exists(f)) { Console.WriteLine($"no state file {f}"); return 2; }
+            state = Ui.UiState.Load(f);
+            KinahLedger.Data.PriceBook.PathOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-state-runs", "prices.json");   // the state's prices, never this PC's
+            KinahLedger.Data.PriceBook.Reset();
+        }
+        var kind = o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world";
+        var problems = WpfApp.Shot(s, dir, o.ContainsKey("demo") || state != null, kind, o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall") || state != null, o.ContainsKey("mine"), state);
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
+        if (problems.Count > 0) { Console.WriteLine("figures check: " + string.Join(" | ", problems)); return 1; }
         return 0;
     }
 

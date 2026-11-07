@@ -1,0 +1,12 @@
+{
+  "note": "Runs of about three hours (a long Transcendence sitting): the hours in the clocks (2:58:40, 3:04:12), an hour's figure far under a run's.",
+  "live": "Vakron Sky Island",
+  "runs": [
+    { "zone": "Vakron Sky Island", "kind": "Transcendence", "day": -1, "time": "19:00", "secs": 10720, "kinah": 2180000,
+      "items": { "Diamond Powder": 41, "Magic Crystal": 38, "Artisan's Ultimate Refining Stone": 3 },
+      "gear": ["Destruction Breastplate", "Elder Breastplate"] },
+    { "zone": "Vakron Sky Island", "kind": "Transcendence", "day": 0, "time": "09:30", "secs": 11052, "kinah": 2305000,
+      "items": { "Diamond Powder": 44, "Magic Crystal": 40, "Artisan's Ultimate Refining Stone": 2 },
+      "gear": ["Destruction Breastplate"] }
+  ]
+}

@@ -169,6 +169,7 @@ public partial class MainWindow
             TodayHead.ToolTip = "The last 7 days of expeditions and events on this PC. Click to fold or open.";
         }
         bool open = _prefs.TodayOpen;
+        TodayChev.Visibility = Visibility.Visible; TodayHead.Cursor = Cursors.Hand;   // the Today side has no body (0.10.21), the Week side folds and opens
         SetSec(TodayChev, TodayBody, open);
         if (!open) { _drawnSig.Remove("today"); return; }
         // Compare (0.9.3, Ui/MainWindow.Compare.cs): with it on, Days | Places over the bars; Places ranks the week's places
