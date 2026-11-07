@@ -75,6 +75,18 @@ public partial class MainWindow : Window
     public MainWindow(Settings settings, bool watch = true)
     {
         InitializeComponent();
+        // the layer the click cards are drawn on, over the window's content and never past its edges (InCard, 2026-11-06)
+        var layer = new System.Windows.Controls.Canvas { ClipToBounds = true };
+        var host = new System.Windows.Controls.Grid();
+        Content = null;
+        host.Children.Add(Root); host.Children.Add(layer);
+        Content = host;
+        InCard.Layer = layer;
+        PreviewMouseDown += (_, e) => InCard.Outside(e.OriginalSource);
+        PreviewMouseWheel += (_, e) => InCard.Outside(e.OriginalSource);
+        Deactivated += (_, _) => InCard.Away();
+        SizeChanged += (_, _) => InCard.Away();
+        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && !e.Handled && InCard.Current != null && InCard.Escape()) e.Handled = true; };
         _settings = settings;
         _items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
         IconCache.Enabled = settings.Ui.Icons;

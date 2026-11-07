@@ -32,7 +32,7 @@ public partial class MainWindow
         if (_card != null) _card.IsOpen = false;
         var card = BuildMenu(entries);
         // the card's own margin (10, for its shadow) and border sit outside MenuWidth
-        _card = new Popup
+        _card = new InCard
         {
             Child = card, StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Bottom, PlacementTarget = at,
             HorizontalOffset = at.ActualWidth - MenuWidth - 12, VerticalOffset = -4,
@@ -160,7 +160,7 @@ public partial class MainWindow
         {
             if (tile.ToolTip is ToolTip tt) tt.IsOpen = false;
             if (_card != null) _card.IsOpen = false;
-            _card = new Popup { Child = PinnedCard(build, actions), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = tile };
+            _card = new InCard { Child = PinnedCard(build, actions), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = tile };
             _card.IsOpen = true;
         };
     }
@@ -174,6 +174,9 @@ public partial class MainWindow
     }
 
     /* ---------------- self-tests and layout renders ---------------- */
+
+    /// <summary>For options-test: a menu of <paramref name="rows"/> entries under <paramref name="at"/>, opened as a click opens one.</summary>
+    internal void OpenMenuForTest(FrameworkElement at, int rows) => ShowMenu(at, Enumerable.Range(1, rows).Select(i => new MenuEntry($"Entry {i}", () => { })).ToList());
 
     /// <summary>For options-test: every element in the window with a right-click menu (there should be none).</summary>
     internal List<string> RightClickMenusForTest()

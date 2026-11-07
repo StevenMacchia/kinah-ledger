@@ -24,7 +24,7 @@ public partial class MainWindow
     /// <summary>A layout render's sample score (never the player's own).</summary>
     AccuracyScore? _demoScore;
     /// <summary>The Accuracy card while it is open over the window (it is the window's one open card, _card, then).</summary>
-    Popup? _accPopup;
+    InCard? _accPopup;
     /// <summary>Most things to look at the card lists; the rest are counted under it.</summary>
     const int AccRowsShown = 8;
 
@@ -64,7 +64,7 @@ public partial class MainWindow
     {
         if (_accView == null) return;
         if (_card != null) _card.IsOpen = false;
-        _accPopup = _card = new Popup { Child = BuildAccuracyCard(_accView), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Bottom, PlacementTarget = AccuracyChip };
+        _accPopup = _card = new InCard { Child = BuildAccuracyCard(_accView), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Bottom, PlacementTarget = AccuracyChip };
         _card.IsOpen = true;
     }
 

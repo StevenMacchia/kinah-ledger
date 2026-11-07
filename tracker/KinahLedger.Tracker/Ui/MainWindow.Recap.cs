@@ -100,7 +100,7 @@ public partial class MainWindow
     void OpenRecap(FrameworkElement card)
     {
         if (_card != null) _card.IsOpen = false;
-        _card = new Popup
+        _card = new InCard
         {
             Child = card, StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade,
             Placement = PlacementMode.Center, PlacementTarget = Content as UIElement ?? this,

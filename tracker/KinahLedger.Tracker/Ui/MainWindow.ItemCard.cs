@@ -15,12 +15,12 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class MainWindow
 {
-    Popup? _card;
+    InCard? _card;
 
     void ShowItemCard(DropRow r, FrameworkElement at)
     {
         if (_card != null) _card.IsOpen = false;
-        _card = new Popup { Child = BuildItemCard(r, _watcher.Chat?.Zone), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = at };
+        _card = new InCard { Child = BuildItemCard(r, _watcher.Chat?.Zone), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = at };
         _card.IsOpen = true;
     }
 

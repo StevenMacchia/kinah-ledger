@@ -833,6 +833,17 @@ public static class WpfApp
             Check(w.FixOpenForTest != null && rl4.Open.Count == 1 && w.FixOpenForTest.Contains(rl4.Open[0]), $"...a click on the last run picks its place with the run's sheet: open {string.Join(",", rl4.Open)}, sheet {w.FixOpenForTest?.Split('|').Last()}");
             w.ShowRunListForTest(false); w.PickPlaceForTest(one.Open[0]); DoEvents();
             Check(w.InstHost.Children.Count == 1 && w.InstEarlierBtn.Content as string == "All time", $"...every run hidden again: {w.InstHost.Children.Count} box; the scope reads \"{w.InstEarlierBtn.Content}\"");
+            // a click's card opens inside the window and never past its edges, so never over the game (Steven, 2026-11-06); one
+            // taller than the window fits by scrolling; a press outside it closes it
+            static bool Within((Rect Card, Size Layer)? s) => s is { } v && v.Card.Width > 0 && v.Card.Height > 0 && v.Card.Left >= 0 && v.Card.Top >= 0 && v.Card.Right <= v.Layer.Width + 0.5 && v.Card.Bottom <= v.Layer.Height + 0.5;
+            static string Where((Rect Card, Size Layer)? s) => s is { } v ? $"{v.Card.Left:0},{v.Card.Top:0} {v.Card.Width:0}x{v.Card.Height:0} in {v.Layer.Width:0}x{v.Layer.Height:0}" : "none";
+            w.OpenMenuForTest(w.EventsMoreBtn, 4); DoEvents();
+            var shortMenu = InCard.Shown();
+            w.OpenMenuForTest(w.EventsMoreBtn, 40); DoEvents();
+            var tallMenu = InCard.Shown();
+            InCard.Outside(w.Root); DoEvents();
+            Check(Within(shortMenu) && Within(tallMenu) && InCard.Current == null,
+                $"cards open inside the window: a menu {Where(shortMenu)}, one of 40 rows {Where(tallMenu)}; a press outside closes it ({(InCard.Current == null ? "closed" : "still open")})");
             w.SetRunsSortForTest(Session.RunsOrder.Newest); DoEvents();
             w.PickRunsWeekForTest(true); DoEvents();
             var rw = w.WeekForTest(runs: true);

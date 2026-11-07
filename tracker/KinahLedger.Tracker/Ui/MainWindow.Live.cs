@@ -733,7 +733,7 @@ public partial class MainWindow
     void ShowLineReport(FeedLine? line, FeedTab tab, FrameworkElement at)
     {
         if (_card != null) _card.IsOpen = false;
-        _card = new Popup { Child = BuildLineReport(line, tab, line == null ? "missing" : "wrong_amount"), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = at };
+        _card = new InCard { Child = BuildLineReport(line, tab, line == null ? "missing" : "wrong_amount"), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = at };
         _card.IsOpen = true;
     }
 
