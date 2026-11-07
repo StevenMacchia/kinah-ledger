@@ -842,6 +842,28 @@ public static class WpfApp
             w.OpenMenuForTest(w.EventsMoreBtn, 40); DoEvents();
             var tallMenu = InCard.Shown();
             InCard.Outside(w.Root); DoEvents();
+            // a hover tip too (2026-11-07): drawn on the layer, inside the window, for the button at the window's right edge
+            HoverTip.Show(w.EventsMoreBtn); DoEvents();
+            var tip = HoverTip.Shown();
+            bool tipOwned = ReferenceEquals(HoverTip.Owner, w.EventsMoreBtn);
+            HoverTip.Hide(); DoEvents();
+            // and an item's card, built the first time it shows
+            static IEnumerable<FrameworkElement> Tree(DependencyObject d)
+            {
+                for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(d); i++)
+                {
+                    var c = System.Windows.Media.VisualTreeHelper.GetChild(d, i);
+                    if (c is FrameworkElement f) yield return f;
+                    foreach (var g in Tree(c)) yield return g;
+                }
+            }
+            var cardSlot = Tree(w.Root).FirstOrDefault(f => f.ToolTip is LazyTip && f.IsVisible);
+            if (cardSlot != null) HoverTip.Show(cardSlot);
+            DoEvents();
+            var slotTip = HoverTip.Shown();
+            HoverTip.Hide(); DoEvents();
+            Check(Within(tip) && tipOwned && HoverTip.Shown() == null && cardSlot != null && Within(slotTip) && slotTip!.Value.Card.Height > 60,
+                $"hover tips show inside the window: ⋯'s tip {Where(tip)}, an item's card {Where(slotTip)}; gone when hidden");
             Check(Within(shortMenu) && Within(tallMenu) && InCard.Current == null,
                 $"cards open inside the window: a menu {Where(shortMenu)}, one of 40 rows {Where(tallMenu)}; a press outside closes it ({(InCard.Current == null ? "closed" : "still open")})");
             w.SetRunsSortForTest(Session.RunsOrder.Newest); DoEvents();
