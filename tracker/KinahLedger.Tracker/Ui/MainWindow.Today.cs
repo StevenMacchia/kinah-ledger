@@ -123,12 +123,14 @@ public partial class MainWindow
     TextBlock TodayEmpty(string text) { var t = PT(text, "Faint", 12.5); t.Margin = new Thickness(0, 12, 0, 4); return t; }
 
     /// <summary>A group under the line: its name in the heading gold, a faint word, the sort links and its worth on the right, then two rows of slots and "Show all".</summary>
-    FrameworkElement TodayGroup(string key, string title, string note, long worth, List<FrameworkElement> slots, int perRow, bool sort = false)
+    // sigKey and redraw: the strip's own ("today", FillToday), or the Events page's place box ("runs", ShowInstances), which lays its loot out the same way
+    FrameworkElement TodayGroup(string key, string title, string note, long worth, List<FrameworkElement> slots, int perRow, bool sort = false, string sigKey = "today", Action? redraw = null)
     {
+        var again = redraw ?? FillToday;
         var sp = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
         var head = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        if (sort) { var links = SortLinks("today", FillToday); Grid.SetColumn(links, 1); head.Children.Add(links); }
+        if (sort) { var links = SortLinks(sigKey, again); Grid.SetColumn(links, 1); head.Children.Add(links); }
         var t = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         t.Inlines.Add(PR(title, "SecGold", FontWeights.Bold));
         if (note.Length > 0) { var n = PR("   " + note, "Muted"); n.FontSize = 12; t.Inlines.Add(n); }
@@ -149,7 +151,7 @@ public partial class MainWindow
         {
             var m = PT(all ? "Show fewer" : $"Show all {slots.Count}", "Gold", 12, FontWeights.SemiBold);
             m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
-            m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); FillToday(); };
+            m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); again(); };
             sp.Children.Add(m);
         }
         return sp;

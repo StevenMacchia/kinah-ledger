@@ -55,14 +55,14 @@ public partial class MainWindow
         bool allShown = _eventsAll || _demoInst != null;
         InstSessionBtn.Style = (Style)FindResource(allShown ? "SegOff" : "SegOn");
         InstEarlierBtn.Style = (Style)FindResource(allShown ? "SegOn" : "SegOff");
-        InstEarlierBtn.Content = $"Earlier ({(_demoInst != null ? all.Count : earlier)})";
+        InstEarlierBtn.Content = "All time";
         // the panel over the game says so when a run of this session just closed flagged
         var flagged = runs.Where(r => r.OutOfAverages && r.LastLoot is { } l && (DateTime.UtcNow - l).TotalMinutes < 2).OrderByDescending(r => r.LastLoot).FirstOrDefault();
         _hudFlag = flagged == null ? "" : flagged.Suspect == "looks like several runs" ? $"{flagged.Zone} record looks like several runs" : $"{flagged.Zone} run: {FlagReason(flagged, 0).ToLowerInvariant()}";
         // the cards are built again only when what they show has changed: the runs themselves, which is live, what is
         // folded open, or the view. Between changes a tick only moves the open run's clock (2026-10-25: rebuilding every
         // card, shadows and all, twice a second was most of the UI thread)
-        var sig = $"{live}|{allShown}|{since:O}|{PlaceCardWidth}|{string.Join(",", _runsOpen)}|{_placePick}|{RunsSortMode}|{_runListAll}|{_fixOpen}|{JsonSerializer.Serialize(runs)}";
+        var sig = $"{live}|{allShown}|{since:O}|{PlaceCardWidth}|{string.Join(",", _runsOpen)}|{_placePick}|{RunsSortMode}|{_runListAll}|{_runListShown}|{LootSortMode}|{string.Join(",", _todayAll)}|{_fixOpen}|{JsonSerializer.Serialize(runs)}";
         if (!Changed("runs", sig))
         {
             if (_livePill != null && _liveOpen is { LastLoot: null } o) _livePill.Text = $"{RunSteps[Math.Max(0, StepOf(o))]} · {Clock(DateTime.UtcNow - o.Start)} in";
@@ -72,10 +72,11 @@ public partial class MainWindow
         _eventsRate = "";
         _livePill = null; _liveOpen = null;
         long made = 0; int counted = 0;
-        // every run on its line in a box that scrolls, over one place's card (Ui/MainWindow.RunList.cs)
-        if (runs.Count > 0) InstHost.Children.Add(BuildRunList(runs, ShowInstances));
-        // the places with runs, the one being run first, then by their last run: one card, its band a dropdown of them all
-        // (Steven, 2026-11-06: the others folded to a line each under it were "way too long")
+        _shownRuns = RunsOrder.Sorted(runs, RunsSortMode, RunValue);   // Save as CSV, in the runs box's order
+        // one box (Steven, 2026-11-06: "1 box for expeditions and events where you can select which event or expedition you
+        // want from a dropdown and it shows you, similar to Today's tab, what you got, but you can sort it by this session and
+        // all time"): the place picked from its band's dropdown, the place being run (or the last run) until one is, its loot
+        // laid out as the TODAY strip's. Every run on its line is a second box, from the ⋯ menu (Ui/MainWindow.RunList.cs)
         var groups = runs.GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase)
             .OrderByDescending(g => string.Equals(g.Key, live, StringComparison.OrdinalIgnoreCase))
             .ThenByDescending(g => g.Max(r => r.LastLoot ?? r.Start))
@@ -86,12 +87,13 @@ public partial class MainWindow
             var picked = PickedPlace(_placesShown, live);
             var list = groups.First(g => string.Equals(g.Zone, picked, StringComparison.OrdinalIgnoreCase)).Runs;
             bool here = string.Equals(live, picked, StringComparison.OrdinalIgnoreCase);
-            // the first place's rate is the page's (the place being run, or the last run), whichever card is up
-            var card = BuildRunsCard(picked, list, here, PlaceCardWidth, ShowInstances, withNow: string.Equals(picked, groups[0].Zone, StringComparison.OrdinalIgnoreCase),
+            // the first place's rate is the page's (the place being run, or the last run), whichever place is up
+            var card = BuildPlaceBox(picked, list, here, PlaceCardWidth, ShowInstances, withNow: string.Equals(picked, groups[0].Zone, StringComparison.OrdinalIgnoreCase),
                 pickPlace: groups.Count > 1 ? () => PlaceEntries(groups, picked, live, ShowInstances) : null);
-            card.Tag = "open"; card.Margin = new Thickness(0, 0, 0, 16);
+            card.Tag = "open";
             _placeOfCard[card] = picked;
             InstHost.Children.Add(card);
+            if (_runListShown) { var every = BuildRunList(runs, ShowInstances); every.Margin = new Thickness(0, 16, 0, 0); InstHost.Children.Add(every); }
         }
         foreach (var r in runs.Where(r => !r.OutOfAverages)) { counted++; made += RunValue(r); }
         InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · {Fk(made)} made" : "";
@@ -193,22 +195,13 @@ public partial class MainWindow
     /// loot behind one line.
     /// </summary>
     /// <param name="foldCard">On the page, a click on the band folds the card to one line (Ui/MainWindow.RunList.cs); a render of the card alone has none.</param>
-    Border BuildRunsCard(string zone, List<InstanceRun> runs, bool live, double width, Action redraw, bool withNow = false, Func<List<MenuEntry>>? pickPlace = null)
+    /// <summary>
+    /// A place's band: its tile, "Urugugu Canyon · Expedition", its runs under it, and where its run stands (the open run's
+    /// clock, or when it was last run). With <paramref name="pickPlace"/>, a dropdown of the places: a chevron after the name
+    /// and a click opens the menu under it.
+    /// </summary>
+    Border PlaceBand(string zone, List<InstanceRun> runs, bool live, string kind, InstanceRun? open, InstanceRun? newest, Func<List<MenuEntry>>? pickPlace)
     {
-        var body = new StackPanel { Width = width - 2 };
-        var card = new Border { Child = body, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
-        card.SetResourceReference(Border.BackgroundProperty, "Card");
-        card.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
-        var counted = runs.Where(r => !r.OutOfAverages).ToList();
-        int n = counted.Count;
-        double secs = counted.Sum(r => r.Seconds);
-        long value = counted.Sum(RunValue);
-        var order = runs.OrderByDescending(r => r.LastLoot ?? r.Start).ToList();
-        var newest = order.FirstOrDefault();
-        var kind = newest?.Kind ?? "";
-        // the open run is the place's last one while the place is in progress (as the live card had it)
-        var open = live ? runs.OrderBy(r => r.Start).LastOrDefault() : null;
-
         // the band: the place's tile, "Urugugu Canyon · Expedition", a line under it, and where its run stands
         var band = new Grid();
         band.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -250,7 +243,106 @@ public partial class MainWindow
             bandBox.Cursor = Cursors.Hand; bandBox.ToolTip = "Click to pick another place: its figures, its runs and their loot."; ToolTipService.SetInitialShowDelay(bandBox, 500);
             bandBox.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowMenu(bandBox, pickPlace()); };
         }
-        body.Children.Add(bandBox);
+        return bandBox;
+    }
+
+    /// <summary>
+    /// The one box of the Expeditions and events page (Steven, 2026-11-06: "1 box for expeditions and events where you can
+    /// select which event or expedition you want from a dropdown and it shows you, similar to Today's tab, what you got, but
+    /// you can sort it by this session and all time"; of the page before it: "look at how much info is on the screen"). The
+    /// place's band as a dropdown of the places, one line of figures, a run's sheet when one is open (or a line to the runs
+    /// to look at), then LOOT laid out as the TODAY strip lays its slots out. Every run on its line is a box of its own,
+    /// from the ⋯ menu (BuildRunList).
+    /// </summary>
+    Border BuildPlaceBox(string zone, List<InstanceRun> runs, bool live, double width, Action redraw, bool withNow, Func<List<MenuEntry>>? pickPlace)
+    {
+        var body = new StackPanel { Width = width - 2 };
+        var card = new Border { Child = body, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
+        card.SetResourceReference(Border.BackgroundProperty, "Card");
+        card.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
+        var counted = runs.Where(r => !r.OutOfAverages).ToList();
+        int n = counted.Count;
+        double secs = counted.Sum(r => r.Seconds);
+        long value = counted.Sum(RunValue);
+        var newest = runs.OrderByDescending(r => r.LastLoot ?? r.Start).FirstOrDefault();
+        var kind = newest?.Kind ?? "";
+        var open = live ? runs.OrderBy(r => r.Start).LastOrDefault() : null;
+        body.Children.Add(PlaceBand(zone, runs, live, kind, open, newest, pickPlace));
+
+        // the figures on one line, where the four boxes were: an hour, a run, how long a run, the best run
+        if (n > 0)
+        {
+            bool known = value > 0 || counted.Any(r => r.Kinah > 0);
+            var figs = new List<(string Fig, string Word)>();
+            if (known && secs > 10) figs.Add((Fk(value / secs * 3600), "an hour"));
+            if (known) figs.Add((Fk(value / (double)n), "a run"));
+            figs.Add((Clock(TimeSpan.FromSeconds(secs / n)), "a run"));
+            if (known && n > 1) figs.Add((Fk(counted.Max(RunValue)), "best run"));
+            if (!known) figs.Add(("no prices yet", ""));
+            var fl = new TextBlock { FontSize = 13, Margin = new Thickness(20, 12, 20, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+            for (int i = 0; i < figs.Count; i++)
+            {
+                if (i > 0) fl.Inlines.Add(PR("   ·   ", "Faint"));
+                var f = PR(figs[i].Fig, "Ink"); f.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); fl.Inlines.Add(f);
+                if (figs[i].Word.Length > 0) fl.Inlines.Add(PR(" " + figs[i].Word, "Muted"));
+            }
+            fl.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in the value. Flagged runs are left out.";
+            body.Children.Add(fl);
+            if (withNow && known && secs > 10) _eventsRate = Fk(value / secs * 3600);
+        }
+        else { var t = PT(runs.Count == 0 ? "No run here yet." : "No run counted yet.", "Muted", 13); t.Margin = new Thickness(20, 12, 20, 0); body.Children.Add(t); }
+
+        // a run's sheet (a click on a run in the ⋯ menu's list, or on the line below): the details, a fix if it needs one, Remove
+        double med = Median(counted.Select(r => r.Seconds));
+        if (_fixOpen != null && runs.FirstOrDefault(r => _fixOpen == RunKey(r)) is { } picked)
+        {
+            var sec = new StackPanel { Margin = new Thickness(20, 14, 20, 6) };
+            var local = picked.Start.ToLocalTime();
+            var when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
+            sec.Children.Add(PSection("RUN", $"{when} · {Clock(TimeSpan.FromSeconds(picked.Seconds))}"));
+            sec.Children.Add(FlagReason(picked, med).Length > 0 ? FixSheet(picked, med, redraw) : RunSheet(picked, redraw));
+            body.Children.Add(sec);
+        }
+        else if (runs.Where(r => FlagReason(r, med).Length > 0).OrderByDescending(r => r.LastLoot ?? r.Start).ToList() is { Count: > 0 } flagged)
+        {
+            // runs with something to look at, out of the figures until fixed: one line, a click opens the newest one's sheet
+            var fx = PT($"{flagged.Count} run{(flagged.Count == 1 ? "" : "s")} to look at  ›", "Gold", 12.5, FontWeights.SemiBold);
+            fx.Margin = new Thickness(20, 10, 20, 0); fx.Cursor = Cursors.Hand; fx.Background = Brushes.Transparent; fx.HorizontalAlignment = HorizontalAlignment.Left;
+            fx.ToolTip = FlagReason(flagged[0], med) + " Click for the fix.";
+            fx.MouseLeftButtonUp += (_, e) => { e.Handled = true; _fixOpen = RunKey(flagged[0]); _drawnSig.Remove("runs"); redraw(); };
+            body.Children.Add(fx);
+        }
+
+        // LOOT as the TODAY strip lays it out: the Kinah's slot, then the rewards in the picked order, two rows and Show all
+        var tr = TodayLoot.Runs(counted, _items, IsCurrency);
+        var slots = new List<FrameworkElement>();
+        if (tr.Kinah > 0) slots.Add(KinahSlot(tr.Kinah, tr.KinahWhere, "", n == 1 ? "Picked up in the run here" : "Picked up in the runs here"));
+        var items = SortSlots(tr.Items);
+        foreach (var s in items) slots.Add(ItemSlot(s, ("", ""), false, runs: true, when: "here"));
+        int perRow = Math.Max(4, (int)((width - 2 - 40 + TodayGap) / (TodaySlotSize + TodayGap)));
+        var g = TodayGroup("place:" + zone, "LOOT", n == 0 ? "" : n == 1 ? "from the run here" : $"from the {n} runs here", tr.Value, slots, perRow, items.Count >= 2, sigKey: "runs", redraw: redraw);
+        if (slots.Count == 0) ((StackPanel)g).Children.Add(TodayEmpty(n == 0 ? "The rewards show here once a run is counted." : "Nothing read from the reward screens yet."));
+        body.Children.Add(new Border { Child = g, Padding = new Thickness(20, 0, 20, 14) });
+        return card;
+    }
+
+    Border BuildRunsCard(string zone, List<InstanceRun> runs, bool live, double width, Action redraw, bool withNow = false, Func<List<MenuEntry>>? pickPlace = null)
+    {
+        var body = new StackPanel { Width = width - 2 };
+        var card = new Border { Child = body, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
+        card.SetResourceReference(Border.BackgroundProperty, "Card");
+        card.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
+        var counted = runs.Where(r => !r.OutOfAverages).ToList();
+        int n = counted.Count;
+        double secs = counted.Sum(r => r.Seconds);
+        long value = counted.Sum(RunValue);
+        var order = runs.OrderByDescending(r => r.LastLoot ?? r.Start).ToList();
+        var newest = order.FirstOrDefault();
+        var kind = newest?.Kind ?? "";
+        // the open run is the place's last one while the place is in progress (as the live card had it)
+        var open = live ? runs.OrderBy(r => r.Start).LastOrDefault() : null;
+
+        body.Children.Add(PlaceBand(zone, runs, live, kind, open, newest, pickPlace));
 
         // the four figures, each with its label under it
         body.Children.Add(Figures(zone, runs, counted, secs, value, redraw));

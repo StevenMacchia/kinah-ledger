@@ -746,8 +746,9 @@
           <TextBlock x:Name="TableNote" Style="{StaticResource BodyStyle}" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="20,0,20,12" TextWrapping="Wrap" Visibility="Collapsed"/>
         </StackPanel>
       </Border>
-      <!-- Expeditions and events: their own part of the window, never on the Farming page (Steven, 2026-10-22). One card per
-           place (Ui/MainWindow.RunsCard.cs, the approved mock of 2026-10-24): its runs and what they paid; the runs stay until cleared. -->
+      <!-- Expeditions and events: their own part of the window, never on the Farming page (Steven, 2026-10-22). One box
+           (Ui/MainWindow.RunsCard.cs BuildPlaceBox, 2026-11-06): the place picked from its band's dropdown and its loot laid out as the
+           TODAY strip's, This session or All time; the runs stay until cleared. Share, every run, Save as CSV and Clear are under ⋯. -->
       <Border x:Name="EventsCard" Margin="0,16,0,0" Visibility="Collapsed">
         <StackPanel>
           <Grid Margin="2,0,0,14">
@@ -759,7 +760,7 @@
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
               <!-- Share (0.9.3): the last run as a picture, the same sheet as Farming's (Ui/MainWindow.Share.cs) -->
-              <Button x:Name="EventsShareBtn" Content="Share" Height="30" FontSize="12.5" Padding="12,0" Margin="0,0,8,0" VerticalAlignment="Center" IsEnabled="False"
+              <Button x:Name="EventsShareBtn" Content="Share" Height="30" FontSize="12.5" Padding="12,0" Margin="0,0,8,0" VerticalAlignment="Center" IsEnabled="False" Visibility="Collapsed"
                       BorderBrush="{DynamicResource GoldLine}" Foreground="{DynamicResource Gold}" AutomationProperties.Name="Share the last run"
                       ToolTip="A picture of the last run, to paste in Discord or anywhere. Nothing is uploaded."/>
               <!-- this session's runs by default, or with the ones kept on this PC from earlier (Steven, 2026-10-22); a switch
@@ -767,10 +768,14 @@
               <Border x:Name="InstScope" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Visibility="Collapsed">
                 <StackPanel Orientation="Horizontal">
                   <Button x:Name="InstSessionBtn" Style="{StaticResource SegOn}" Content="This session" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Only the runs since the tracker started"/>
-                  <Button x:Name="InstEarlierBtn" Style="{StaticResource SegOff}" Content="Earlier" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Every run kept on this PC, earlier ones too"/>
+                  <Button x:Name="InstEarlierBtn" Style="{StaticResource SegOff}" Content="All time" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Every run kept on this PC, earlier sessions too"/>
                 </StackPanel>
               </Border>
-              <Button x:Name="InstClearBtn" Content="Clear" Height="30" FontSize="12.5" Padding="10,0" Margin="6,0,0,0" VerticalAlignment="Center" Background="Transparent" BorderBrush="Transparent" Foreground="{DynamicResource Faint}" FontWeight="Normal" ToolTip="Clear the runs shown here"/>
+              <Button x:Name="InstClearBtn" Content="Clear" Height="30" FontSize="12.5" Padding="10,0" Margin="6,0,0,0" VerticalAlignment="Center" Background="Transparent" BorderBrush="Transparent" Foreground="{DynamicResource Faint}" FontWeight="Normal" ToolTip="Clear the runs shown here" Visibility="Collapsed"/>
+              <!-- the rest, out of the way (2026-11-06): Share the last run, every run on its line, Save as CSV, Clear -->
+              <Button x:Name="EventsMoreBtn" Width="32" Height="30" Padding="0" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="More: share the last run, every run on its line, Save as CSV, clear" AutomationProperties.Name="More">
+                <TextBlock Text="⋯" FontSize="17" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
+              </Button>
             </StackPanel>
           </Grid>
           <!-- the Share sheet while it is open from this page (0.9.3) -->

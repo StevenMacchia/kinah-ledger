@@ -154,6 +154,7 @@ public partial class MainWindow : Window
         CraftRows.MouseLeftButtonUp += CraftRowClick;
         InstSessionBtn.Click += (_, _) => { _eventsAll = false; ShowInstances(); };
         InstEarlierBtn.Click += (_, _) => { _eventsAll = true; ShowInstances(); };
+        EventsMoreBtn.Click += (_, _) => ShowMenu(EventsMoreBtn, EventsMoreEntries());
         // a click on an enemy opens or closes its loot table
         MobRows.MouseLeftButtonUp += (_, ev) =>
         {
