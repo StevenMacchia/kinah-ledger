@@ -42,7 +42,7 @@ public partial class MainWindow
         RunFixes.ApplyKept(all);
         EventsShareBtn.IsEnabled = all.Any(r => r.LastLoot != null);   // Share: the last run finished (Ui/MainWindow.Share.cs)
         _screenLines = null;
-        if (_demo && _demoInst != null && _demoScreens == null) DemoScreens(all);
+        if (_demo && _demoInst != null && _demoScreens == null && _uiState?.Runs == null) DemoScreens(all);   // the merged record's screens belong to the demo's own runs, not a state's
         // this session's runs; earlier ones kept on this PC only on request, so yesterday's trip doesn't sit there all day
         // (Steven, 2026-10-22: "it says last run 14 hr ago")
         var since = _watcher.ChatSince == default ? DateTime.UtcNow : _watcher.ChatSince;
@@ -716,25 +716,12 @@ public partial class MainWindow
     /// </summary>
     InstanceLog DemoRuns()
     {
-        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "KinahLedger-demo-runs");
-        Directory.CreateDirectory(dir);
-        foreach (var f in Directory.GetFiles(dir)) { try { File.Delete(f); } catch (Exception) { } }
-        PriceBook.SetBoard(new() { ["Spiritstone Powder"] = 3_330, ["Artisan's Ultimate Refining Stone"] = 330_000, ["Sapphire Powder"] = 5_080, ["Magic Crystal"] = 4_550, ["Diamond Powder"] = 5_780 });
+        PriceBook.SetBoard(DemoBoard());
         var today = DateTime.Today; var yday = today.AddDays(-1); var before = today.AddDays(-2);
         var runs = new List<InstanceRun>();
+        // the runs themselves are SampleRun's (Ui/MainWindow.UiStates.cs), shared with the states a review sweep renders
         void Run(DateTime startLocal, int secs, long kinah, (string Name, int N)[] items, string[]? gearNames = null, bool kinahNotRead = false, int unread = 0, string zone = "Urugugu Canyon", string kind = "Expedition", bool partly = false)
-        {
-            var start = startLocal.ToUniversalTime();
-            var r = new InstanceRun
-            {
-                Zone = zone, Kind = kind, Start = start, LastLoot = start.AddSeconds(secs), PaidAt = start.AddSeconds(secs - 20), Kinah = kinah, KinahNotRead = kinahNotRead,
-                FromPicture = true, SlotsUnread = unread, PartlyRead = partly, Tables = 1, TableAt = start.AddSeconds(secs - 20), Ended = "left; rewards in",
-                Witnesses = $"minimap {startLocal:HH:mm:ss} · header {startLocal.AddSeconds(4):HH:mm:ss}",
-            };
-            foreach (var (name, c) in items) r.Items[_items.IdOf(name)] = c;
-            foreach (var gname in gearNames ?? Array.Empty<string>()) { var id = _items.IdOf(gname); r.BoundItems[id] = r.BoundItems.GetValueOrDefault(id) + 1; r.Bound++; }
-            runs.Add(r);
-        }
+            => runs.Add(SampleRun(startLocal, secs, kinah, items, gearNames, kinahNotRead, unread, zone, kind, partly));
         const string A = "Amplify Stone Fragment (Unique)", S = "Spiritstone Powder", R = "Artisan's Ultimate Refining Stone", P = "Sapphire Powder", M = "Magic Crystal", D = "Diamond Powder";
         Run(before.AddHours(18).AddMinutes(2), 7 * 60 + 41, 512_000, new[] { (S, 18), (P, 9), (M, 6) }, new[] { "Elder Breastplate", "Defender Breastplate" });
         Run(before.AddHours(18).AddMinutes(14), 6 * 60 + 55, 548_300, new[] { (A, 6), (S, 21), (M, 5) }, new[] { "Illusion Breastplate" }, unread: 1);
@@ -752,17 +739,8 @@ public partial class MainWindow
         Run(today.AddHours(11).AddMinutes(2), 4 * 60 + 51, 0, new[] { (Rs, 6), (Od, 8), (Fo, 1) }, zone: "Shugo Festival", kind: "Event");
         Run(today.AddHours(12).AddMinutes(2), 3 * 60 + 58, 0, new[] { (Rs, 6), (Od, 5), (Fo, 2) }, zone: "Shugo Festival", kind: "Event", unread: 4, partly: true);
         Run(today.AddHours(13).AddMinutes(2), 5 * 60 + 4, 0, new[] { (Rs, 6), (Od, 8), (Fo, 1) }, zone: "Shugo Festival", kind: "Event");
-        var keep = CrashLog.DirOverride;
-        try
-        {
-            CrashLog.DirOverride = dir;   // the sample's file and notes, never the player's
-            File.WriteAllLines(System.IO.Path.Combine(dir, "instances.jsonl"), runs.Select(r => JsonSerializer.Serialize(r)));
-            var log = new InstanceLog();
-            log.UseNames(_items);
-            _demoLive = "Urugugu Canyon";
-            return log;
-        }
-        finally { CrashLog.DirOverride = keep; }
+        _demoLive = "Urugugu Canyon";
+        return LoadSampleRuns(runs, "KinahLedger-demo-runs");
     }
 
     /// <summary>

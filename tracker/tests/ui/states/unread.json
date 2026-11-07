@@ -1,0 +1,12 @@
+{
+  "note": "Runs whose reward screen was never read (the tracker was minimised, or the screen went by too fast): nothing counted, every run flagged. Plus one partly read and one with its Kinah unread, so the three kinds of 'to look at' sit together.",
+  "live": "Urugugu Canyon",
+  "runs": [
+    { "zone": "Urugugu Canyon", "kind": "Expedition", "day": 0, "time": "15:00", "repeat": 3, "step": 12, "secs": 455, "kinah": 0, "rewardsNotRead": true },
+    { "zone": "Urugugu Canyon", "kind": "Expedition", "day": 0, "time": "15:40", "secs": 470, "kinah": 0, "kinahNotRead": true,
+      "items": { "Spiritstone Powder": 17, "Sapphire Powder": 6 } },
+    { "zone": "Shugo Festival", "kind": "Event", "day": 0, "time": "12:02", "secs": 238, "kinah": 0, "unread": 4, "partly": true,
+      "items": { "Refining Stone": 6, "Odyle": 5 } },
+    { "zone": "Shugo Festival", "kind": "Event", "day": 0, "time": "13:02", "secs": 250, "kinah": 0, "rewardsNotRead": true }
+  ]
+}

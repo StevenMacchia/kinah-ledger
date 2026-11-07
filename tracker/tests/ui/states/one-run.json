@@ -1,0 +1,8 @@
+{
+  "note": "One expedition, finished this afternoon, nothing open. The singular forms (1 run, a run) and a page with one place and no dropdown.",
+  "runs": [
+    { "zone": "Urugugu Canyon", "kind": "Expedition", "day": 0, "time": "14:07", "secs": 348, "kinah": 603500,
+      "items": { "Amplify Stone Fragment (Unique)": 7, "Sapphire Powder": 10, "Magic Crystal": 7 },
+      "gear": ["Temple Guardian Breastplate", "Defender Breastplate"] }
+  ]
+}

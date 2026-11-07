@@ -1,0 +1,17 @@
+{
+  "note": "Three weeks of play: 329 runs over four places (expeditions, Transcendence, events, a world boss), eight expeditions today, one open. Every figure in the hundreds and millions, the Show all links, the place dropdown.",
+  "live": "Urugugu Canyon",
+  "runs": [
+    { "zone": "Urugugu Canyon", "kind": "Expedition", "day": -20, "days": 21, "time": "17:30", "repeat": 8, "step": 9, "secs": 446, "kinah": 566000, "vary": 0.12,
+      "items": { "Spiritstone Powder": 19, "Sapphire Powder": 9, "Magic Crystal": 6, "Amplify Stone Fragment (Unique)": 5 },
+      "gear": ["Elder Breastplate"] },
+    { "zone": "Vakron Sky Island", "kind": "Transcendence", "day": -20, "days": 21, "time": "20:10", "repeat": 4, "step": 11, "secs": 512, "kinah": 598000, "vary": 0.1,
+      "items": { "Diamond Powder": 7, "Magic Crystal": 8, "Artisan's Ultimate Refining Stone": 1 },
+      "gear": ["Destruction Breastplate"] },
+    { "zone": "Shugo Festival", "kind": "Event", "day": -20, "days": 21, "time": "12:02", "repeat": 3, "step": 60, "secs": 291, "kinah": 0, "vary": 0.08,
+      "items": { "Refining Stone": 6, "Odyle": 8, "Fine Odyle": 1 } },
+    { "zone": "Kashapa", "kind": "World Boss", "day": -13, "days": 14, "time": "22:00", "repeat": 1, "secs": 380, "kinah": 140000, "vary": 0.15,
+      "items": { "Spiritstone Powder": 4 },
+      "gear": ["Relic Collector Breastplate"] }
+  ]
+}

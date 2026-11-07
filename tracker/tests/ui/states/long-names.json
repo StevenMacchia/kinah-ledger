@@ -1,0 +1,14 @@
+{
+  "note": "A 41-character place name and a 62-character item name, with Traditional Chinese and Korean item names beside them. The item dictionary (data/tw-items.json) is en-US only, so the long and the CJK names are made up here and get no icon; the point is the band, the dropdown, the hover card and the slot badges with names that long.",
+  "live": "The Forgotten Sanctuary of the Silvermoon",
+  "prices": { "Spiritstone Powder": 3330, "Grand Master's Everlasting Orichalcum Breastplate of the Abyss": 4120000, "精煉石碎片 (綁定)": 2200, "정제석 조각": 1800 },
+  "runs": [
+    { "zone": "The Forgotten Sanctuary of the Silvermoon", "kind": "Expedition", "day": 0, "time": "13:10", "secs": 1265, "kinah": 1402000,
+      "items": { "Grand Master's Everlasting Orichalcum Breastplate of the Abyss": 2, "Spiritstone Powder": 24, "精煉石碎片 (綁定)": 12, "정제석 조각": 9, "Artisan's Ultimate Refining Stone": 1 },
+      "gear": ["Whispering Oblivion Breastplate"] },
+    { "zone": "The Forgotten Sanctuary of the Silvermoon", "kind": "Expedition", "day": 0, "time": "13:40", "secs": 1198, "kinah": 1380000,
+      "items": { "Grand Master's Everlasting Orichalcum Breastplate of the Abyss": 1, "Spiritstone Powder": 22, "精煉石碎片 (綁定)": 10, "정제석 조각": 11 } },
+    { "zone": "Urugugu Canyon", "kind": "Expedition", "day": -1, "time": "18:02", "secs": 461, "kinah": 512000,
+      "items": { "Spiritstone Powder": 18, "Sapphire Powder": 9 } }
+  ]
+}
