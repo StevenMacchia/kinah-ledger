@@ -72,25 +72,36 @@ public partial class MainWindow
     /// </summary>
     void FillGoals()
     {
-        bool farm = _part == "Farming" && !_welcome, show = farm && _goals.Count > 0;
+        // Next up (Quest, 2026-11-07): today's goals first, then the milestones the pace puts minutes away (Ui/MainWindow.QuestFarm.cs);
+        // two rows at rest, the rest and Set a goal behind the head's chevron; the slim row only with nothing to count down to
+        bool farm = _part == "Farming" && !_welcome;
+        var today = TodayGoalCounts();
+        var prog = _goals.Select(g => ProgressOf(g, today)).ToList();
+        var miles = farm ? Milestones() : new();
+        bool show = farm && (_goals.Count > 0 || miles.Count > 0);
         GoalsCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         GoalsSlim.Visibility = farm && !show ? Visibility.Visible : Visibility.Collapsed;
         GoalsBox.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _drawnSig.Remove("goals"); return; }
-        var today = TodayGoalCounts();
-        var prog = _goals.Select(g => ProgressOf(g, today)).ToList();
-        var sig = string.Join(";", _goals.Select((g, i) => $"{g.Kind}:{g.Target}:{g.Name}:{g.Which}:{prog[i].Have}")) + "|" + Skins.Current;
+        bool open = QOpen("goals");
+        var sig = string.Join(";", _goals.Select((g, i) => $"{g.Kind}:{g.Target}:{g.Name}:{g.Which}:{prog[i].Have}:{Math.Round((prog[i].SecondsToGo ?? 0) / 60)}"))
+            + "|" + string.Join(";", miles.Select(m => m.Sig + ":" + m.Sub)) + "|" + open + "|" + Skins.Current;
         if (!Changed("goals", sig)) return;
         int done = prog.Count(p => p.Done);
-        GoalsNote.Inlines.Clear();
-        GoalsNote.Inlines.Add(PR("today · ", "Faint"));
-        var d = PR(done.ToString(), "Ink"); d.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont");
-        GoalsNote.Inlines.Add(d);
-        GoalsNote.Inlines.Add(PR($" of {_goals.Count} done", "Faint"));
-        GoalsNote.ToolTip = "Today's goals, from midnight on this PC. Click one to change or remove it.";
-        GoalsHost.Children.Clear();
-        for (int i = 0; i < _goals.Count; i++) GoalsHost.Children.Add(GoalSlot(_goals[i], prog[i]));
-        if (_goals.Count < Goals.Max) GoalsHost.Children.Add(AddGoalSlot());
+        var rows = new List<FrameworkElement>();
+        for (int i = 0; i < _goals.Count; i++) rows.Add(GoalRow(_goals[i], prog[i], rows.Count > 0));
+        foreach (var m in miles) rows.Add(MileRow(m, rows.Count > 0));
+        if (_goals.Count < Goals.Max) rows.Add(AddGoalRow(rows.Count > 0));
+        const int AtRest = 2;
+        int rest = Math.Max(0, rows.Count - AtRest);
+        GoalsHost.Children.Clear(); GoalsMore.Children.Clear();
+        for (int i = 0; i < rows.Count; i++) (i < AtRest ? GoalsHost : GoalsMore).Children.Add(rows[i]);
+        GoalsMore.Visibility = open && rest > 0 ? Visibility.Visible : Visibility.Collapsed;
+        GoalsChev.Visibility = rest > 0 ? Visibility.Visible : Visibility.Collapsed;
+        QSetChev(GoalsChev, open && rest > 0);
+        GoalsNote.Text = (_goals.Count > 0 ? $"today · {done} of {_goals.Count} done" : "at this pace") + (rest > 0 && !open ? $" · {rest} more" : "");
+        GoalsNote.ToolTip = _goals.Count > 0 ? "Today's goals, from midnight on this PC. Click one to change or remove it." : "Milestones worked out from this count's pace. They turn over by themselves.";
+        GoalsHead.ToolTip = rest > 0 ? (open ? "Fold the rest" : $"{rest} more") : null;
     }
 
     /// <summary>The count under a slot: "137K / 300K", "9 / 20", "8 / 8 ✓".</summary>
@@ -597,9 +608,10 @@ public partial class MainWindow
     /// </summary>
     internal (bool Shown, int Slots, bool Add, string Note, bool Placed, bool Slim) GoalsForTest()
     {
+        // Quest (2026-11-07): Next up sits after the bag and before Just dropped; its rows at rest and the rest behind the chevron count alike
         int at = LeftCol.Children.IndexOf(GoalsCard);
-        bool placed = at > 0 && LeftCol.Children.IndexOf(SessionCard) == at - 1 && LeftCol.Children.IndexOf(SummaryCard) == at + 1;
-        var slots = GoalsHost.Children.OfType<FrameworkElement>().ToList();
+        bool placed = at > 0 && LeftCol.Children.IndexOf(SummaryCard) == at - 1 && LeftCol.Children.IndexOf(FeedCard) == at + 1;
+        var slots = GoalsHost.Children.OfType<FrameworkElement>().Concat(GoalsMore.Children.OfType<FrameworkElement>()).ToList();
         var note = string.Concat(GoalsNote.Inlines.OfType<Run>().Select(r => r.Text));
         bool card = GoalsCard.Visibility == Visibility.Visible;
         return (card && GoalsBox.Visibility == Visibility.Visible, slots.Count(s => s.Tag as string == "goal"), slots.Any(s => s.Tag as string == "add"), note, placed,

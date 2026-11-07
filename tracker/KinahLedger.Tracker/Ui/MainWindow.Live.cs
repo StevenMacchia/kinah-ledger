@@ -72,6 +72,7 @@ public partial class MainWindow
             hint.MouseLeave += (_, _) => hint.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         }
         InPlaceMoreLink.Click += (_, _) => { var k = "x:" + (_extraOpen ?? ""); if (!_allRows.Remove(k)) _allRows.Add(k); Redraw(); };
+        InitQuest();   // the hero's chart, the chips and Next up (Ui/MainWindow.QuestFarm.cs)
     }
 
     /* ---------------- the feed ---------------- */
@@ -118,55 +119,34 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>One feed line: time, a 22 px tile, what (the name in bold, a faint word after it), and its worth on the right.</summary>
+    /// <summary>One feed line (Quest): the item's own icon at 30 px, what in bold over when and from whom, and its worth in mint on the right.</summary>
     Border FeedRow(FeedLine l, bool newest, bool justNow, bool oldest, bool rule, (string Text, bool Muted) value, FrameworkElement icon)
     {
-        var g = new Grid { Height = 36, Margin = new Thickness(12, 0, 12, 0) };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
-        g.ColumnDefinitions.Add(new ColumnDefinition());
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var t = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
-        if (justNow) { t.Text = "just now"; t.FontSize = 12; t.SetResourceReference(TextBlock.ForegroundProperty, "Gold"); }
-        else
-        {
-            var local = l.At.ToLocalTime();
-            t.Text = local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : local.ToString("MMM d");
-            t.FontSize = 11.5; t.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); t.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
-        }
-        g.Children.Add(t);
-        icon.VerticalAlignment = VerticalAlignment.Center; icon.HorizontalAlignment = HorizontalAlignment.Left;
-        Grid.SetColumn(icon, 1); g.Children.Add(icon);
-        var x = new TextBlock { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        x.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         var (bold, rest, small) = FeedWords(l);
-        if (bold.Length > 0) x.Inlines.Add(new Run(bold) { FontWeight = FontWeights.SemiBold });
-        if (rest.Length > 0) x.Inlines.Add(new Run(rest));
-        if (small.Length > 0) { var s = new Run("  " + small) { FontSize = 12 }; s.SetResourceReference(TextElement.ForegroundProperty, "Faint"); x.Inlines.Add(s); }
-        Grid.SetColumn(x, 2); g.Children.Add(x);
-        var v = new TextBlock { Text = value.Text, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-        v.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-        v.SetResourceReference(TextBlock.ForegroundProperty, value.Muted ? "Faint" : "Gold");
-        Grid.SetColumn(v, 3); g.Children.Add(v);
-        var b = new Border { Child = g, Cursor = Cursors.Hand, Background = Brushes.Transparent, BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0) };
-        b.SetResourceReference(Border.BorderBrushProperty, "Line");
+        var local = l.At.ToLocalTime();
+        var when = justNow ? "just now" : local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : local.ToString("MMM d HH:mm");
+        var row = QRow(icon, bold + rest, small.Length > 0 ? when + " · " + small : when, value.Text, value.Muted ? "Faint" : "Mint", rule: rule, inline: true);
         // the why is behind Options › Game reading › Explain each count (Steven, 2026-11-04), so the hover offers it only then
         var click = _prefs.ExplainCounts ? "Click to see why, or to report it." : "Click if it's wrong.";
-        b.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " " + click : click;
-        ToolTipService.SetInitialShowDelay(b, 400);
-        if (newest)
+        row.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " " + click : click;
+        ToolTipService.SetInitialShowDelay(row, 400);
+        // the big card on hover (Steven, 2026-11-07: the item cards stay), the report on a click, as LOOT's slots do
+        if (_lootHere is { } lh && _part == "Farming" && tabOf(l) == FeedTab.Farming)
         {
-            // the newest line: a gold tint fading to the right, and a gold rule on its left
-            b.Background = new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(0x1F, 0xF8, 0xD5, 0x98), 0), new(Color.FromArgb(0x05, 0xF8, 0xD5, 0x98), 0.7) }, 0);
-            var edge = new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-12, 0, 0, 0) };
-            edge.SetResourceReference(Border.BackgroundProperty, "Gold");
-            g.Children.Add(edge);
+            if (l.Kind == "kinah" && lh.Kinah > 0)
+                CardTip(row, () => KinahTodayCard(lh.Kinah, lh.ByEnemy, lh.Kills > 0 ? $"{lh.Kills:N0} kills · {Fk(lh.Kinah / (double)lh.Kills)} a kill" : "", "Picked up " + CountWhere(), "BY ENEMY"));
+            else if (l.Kind == "item")
+            {
+                var r = lh.S.Drops.FirstOrDefault(x => !x.Header && string.Equals(x.Name, l.Name, StringComparison.OrdinalIgnoreCase));
+                bool gathered = r == null;
+                r ??= lh.S.Gathered.FirstOrDefault(x => !x.Header && string.Equals(x.Name, l.Name, StringComparison.OrdinalIgnoreCase));
+                if (r != null) CardTip(row, () => ItemHereCard(r, gathered, CountWhere()));
+            }
         }
-        if (oldest) b.Opacity = 0.62;
-        var keep = b.Background;
-        b.MouseEnter += (_, _) => { if (newest) b.Background = keep; else b.SetResourceReference(Border.BackgroundProperty, "HoverTint"); };
-        b.MouseLeave += (_, _) => b.Background = keep;
-        return b;
+        if (oldest) row.Opacity = 0.7;
+        return row;
+
+        static FeedTab tabOf(FeedLine x) => x.Tab;
     }
 
     /// <summary>A line's words: the bold part, the plain rest, and a faint word after ("Cantas Raider", "gathered", "worked").</summary>
@@ -190,12 +170,12 @@ public partial class MainWindow
     /// <summary>How many a craft line's success made: the yield the panel's level told, else the recipe's when the book has one count for the item.</summary>
     static int? CraftMakes(FeedLine l) => l.Makes > 0 ? l.Makes : l.Name.Length >= 2 ? RecipeBook.YieldFor(l.Name, 0) : null;
 
-    /// <summary>A line's tile: the item's own icon (the tracker's icon cache, as the drops table), a coin for Kinah.</summary>
+    /// <summary>A line's tile: the item's own icon (the tracker's icon cache) in a round box, a coin for Kinah.</summary>
     FrameworkElement FeedIcon(FeedLine l)
     {
-        if (l.Kind == "kinah") return CoinTile(22);
+        if (l.Kind == "kinah") return QCoin(26);
         var name = l.Name; long id = l.ItemId != 0 ? l.ItemId : _items.IdOf(name);
-        return ItemTile(name, id, 22, GradeOf(name));
+        return QItemIcon(name, id, 26, round: true, grade: GradeOf(name));
     }
 
     /// <summary>An item's icon in a slot framed (and lit) in its grade colour; its initial while the icon loads. <paramref name="badge"/> draws the stack count on it.</summary>
@@ -345,34 +325,56 @@ public partial class MainWindow
             if (!ReferenceEquals(_rateOf, e)) { _rateOf = e; _rateLine.Clear(); }
             if (total > 0 && !_rateWarming) _rateLine.Add(DateTime.UtcNow, total / h);
         }
-        DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine,_demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now");
         KvLine.Inlines.Clear();
         void Fig(string text) { var r = new Run(text); r.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); r.SetResourceReference(TextElement.ForegroundProperty, "Ink"); KvLine.Inlines.Add(r); }
         if (_mode == Mode.Gather) { Fig($"{nodes:N0}"); KvLine.Inlines.Add(new Run(" attempts · ")); Fig(itemsPerTry > 0 ? itemsPerTry.ToString("0.0") : "0"); KvLine.Inlines.Add(new Run(" a try")); }
         else if (kills > 0) { Fig($"{kills:N0}"); KvLine.Inlines.Add(new Run($" kill{(kills == 1 ? "" : "s")} · ")); Fig(Fk(kinah / (double)kills)); KvLine.Inlines.Add(new Run(" a kill")); }
         var best = _demo ? new BestRuns.Best(1_400_000, 48, "2026-10-19") : BestRuns.For(Server?.Label ?? "", _watcher.Chat?.ZoneView?.Zone ?? e.Zone);
+        double bestHr = best?.PerHr ?? 0, nowHr = total > 0 ? total / h : 0;
+        _lastRateHr = nowHr;
         // Compare (0.9.3, Ui/MainWindow.Compare.cs): your usual and best here under the hour; it says "best here" itself, so this line doesn't
         // and it shows the same best as this line, so switching Compare on never changes what "best here" means
         if (FillUsual(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone, total > 0 ? (long)Math.Round(total / h) : 0, h * 3600, best?.PerHr)) best = null;
         if (best != null) { if (KvLine.Inlines.Count > 0) KvLine.Inlines.Add(new LineBreak()); KvLine.Inlines.Add(new Run("best here ")); Fig(Fk(best.PerHr)); }
-        KvLine.Visibility = KvLine.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // the chase (Quest): this hour against your best here, as the bar toward the flag and the ring
+        FillChase(nowHr, bestHr, warm);
+        DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now", bestHr);
+        KvLine.Visibility = Visibility.Collapsed;   // the chips and the chase say it (Quest)
         FillHealth(HealthText, HealthMark, hideOk: true);
     }
 
     static string AgoMinutes(DateTime minuteUtc) => TodayLoot.Dur((DateTime.UtcNow - minuteUtc).TotalSeconds) + " ago";
 
-    void DrawRateLine(RateLine line, string from, string to)
+    /// <summary>The hour this count is at, for the Where next line's "43% more than here".</summary>
+    double _lastRateHr;
+
+    /// <summary>
+    /// The rate line (Quest: behind "chart" on the hero): the samples under a gold line in a 628 by 84 box, your best here
+    /// as a dashed lilac line at its height on the same scale, clamped to the box when it is above every sample.
+    /// </summary>
+    void DrawRateLine(RateLine line, string from, string to, double best = 0)
     {
-        var pts = line.Points(200, 40);
+        const double W = 628, H = 84;
+        var pts = line.Points(W, H);
         bool show = pts.Count >= 2;
-        RateCanvas.Visibility = RateAxis.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        ChartToggle.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        ChartBox.Visibility = show && QOpen("chart") ? Visibility.Visible : Visibility.Collapsed;
+        QSetChev(ChartChev, QOpen("chart"));
         if (!show) return;
         RateLinePath.Points = new PointCollection(pts.Select(p => new Point(p.X, p.Y)));
-        var fig = new PathFigure { StartPoint = new Point(0, 40), IsClosed = true };
+        var fig = new PathFigure { StartPoint = new Point(0, H), IsClosed = true };
         foreach (var p in pts) fig.Segments.Add(new LineSegment(new Point(p.X, p.Y), false));
-        fig.Segments.Add(new LineSegment(new Point(200, 40), false));
+        fig.Segments.Add(new LineSegment(new Point(W, H), false));
         RateFill.Data = new PathGeometry(new[] { fig });
         RateFrom.Text = from; RateTo.Text = to;
+        double lo = line.Samples.Min(x => x.Rate), hi = line.Samples.Max(x => x.Rate);
+        bool hasBest = best > 0 && hi - lo > 1e-9;
+        BestLinePath.Visibility = BestLineLbl.Visibility = hasBest ? Visibility.Visible : Visibility.Collapsed;
+        if (!hasBest) return;
+        double y = Math.Clamp(H - 2 - (H - 4) * (best - lo) / (hi - lo), 8, H - 8);
+        BestLinePath.Y1 = BestLinePath.Y2 = y;
+        BestLineLbl.Text = "best here " + Fk(best);
+        Canvas.SetTop(BestLineLbl, y < 22 ? y + 3 : y - 15);
     }
 
     /// <summary>
@@ -501,7 +503,8 @@ public partial class MainWindow
         => PlayerBoards.Here(GearBracket, zone) is { } h && h.Row.ValueHr is long v ? $"{(h.AtGear ? "Players at your gear" : "Players")} make {Fk(v)} an hour here{(h.Everywhere ? ", everywhere" : "")}." : "";
 
     /// <summary>
-    /// Where to farm now: folded, the best zone and its hour; opened, the best zones for the player's gear, over every region
+    /// Where next (Quest): at rest one line, the zone that pays more than here (or that you are in the one that pays most)
+    /// with its hour in mint and who it is from; opened, the best zones for the player's gear as bars, over every region
     /// by default (0.9.9) or on the player's own server, one click apart. A scope with nothing published yet still shows,
     /// saying so, as long as the other has something, so the switch is always there to go back.
     /// </summary>
@@ -516,14 +519,24 @@ public partial class MainWindow
         bool open = SecOpen("Where");
         var server = Server?.Name ?? "your server";
         var scope = all ? "every region" : server;
-        WhereNote.Text = zones.Count == 0 ? $"nothing published for {scope} yet"
-            : open ? (atGear ? $"gear {GearBracket!.Replace("-", "–")} · {scope}, last 7 days" : $"all players · {scope}, last 7 days") : $"best: {zones[0].Zone} · {(all ? "all regions" : "your server")}";
-        WhereSum.Text = open || zones.Count == 0 ? "" : Fk(zones[0].ValueHr ?? 0);
+        int hereAt = zone == null ? -1 : zones.FindIndex(z => string.Equals(zone, z.Zone, StringComparison.OrdinalIgnoreCase));
+        var top = zones.Count > 0 ? zones[0] : null;
+        long topHr = top?.ValueHr ?? 0;
+        string more = top != null && _lastRateHr > 0 && topHr > _lastRateHr * 1.05 ? $", {Math.Round(100 * (topHr / _lastRateHr - 1)):0}% more than here" : "";
+        WhereTitle.Text = zones.Count == 0 ? "Where to farm" : hereAt == 0 ? "You are in the zone that pays most" : $"{top!.Zone} pays more";
+        WhereNote.Inlines.Clear();
+        if (zones.Count == 0) WhereNote.Inlines.Add(PR($"nothing published for {scope} yet", "Muted"));
+        else if (open) WhereNote.Inlines.Add(PR((atGear ? $"gear {GearBracket!.Replace("-", "–")}" : "all players") + $" · {(all ? "all regions" : server)} · last 7 days", "Muted"));
+        else
+        {
+            WhereNote.Inlines.Add(PR(Fk(topHr) + " an hour", "Mint", FontWeights.ExtraBold));
+            WhereNote.Inlines.Add(PR($"{more} · {top!.Runs} runs from {top.Players} players at {(atGear ? "your gear" : "any gear")}", "Muted"));
+        }
+        WhereSum.Text = open || zones.Count <= 1 ? "" : $"{zones.Count - 1} more";
         // your own best hour in each zone on your server (Session/BestRuns.cs, the card's "best here"), beside the players' figure (0.9.11)
         var bests = zones.Select(z => YourBestHour(z.Zone)).ToList();
-        bool anyBest = bests.Any(x => x != null);
         bool cmp = _prefs.CompareZones;
-        if (!Changed("where", $"{zone}|{all}|{server}|{cmp}|" + string.Join(";", zones.Select((z, i) => $"{z.Zone}|{z.Runs}|{z.Players}|{z.ValueHr}|{bests[i]}")))) return;
+        if (!Changed("where", $"{zone}|{all}|{server}|{cmp}|{Skins.Current}|" + string.Join(";", zones.Select((z, i) => $"{z.Zone}|{z.Runs}|{z.Players}|{z.ValueHr}|{bests[i]}")))) return;
         WhereBody.Children.Clear();
         WhereBody.Children.Add(WhereScopeSwitch(all));
         if (zones.Count == 0) WhereBody.Children.Add(Faint(all ? "No zone has enough runs across the regions yet." : $"No zone has enough runs on {server} yet. Every region has some."));
@@ -531,49 +544,30 @@ public partial class MainWindow
         {
             var z = zones[i];
             var key = z.Zone;
-            bool isHere = zone != null && string.Equals(zone, z.Zone, StringComparison.OrdinalIgnoreCase);
-            // the whole row is the click target, as Compare's rows: a faint tint on hover (0.9.11)
-            var g = new Grid { Height = 36, Background = Brushes.Transparent, Cursor = Cursors.Hand };
-            g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(anyBest ? 112 : 0) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
-            var name = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            name.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
-            name.Inlines.Add(new Run(z.Zone));
-            if (isHere) { var here = new Run("  you are here") { FontSize = 11.5, FontWeight = FontWeights.Normal }; here.SetResourceReference(TextElement.ForegroundProperty, "Gold"); name.Inlines.Add(here); }
-            g.Children.Add(name);
-            var who = new TextBlock { Text = $"{z.Runs} runs, {z.Players} players", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-            who.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
-            Grid.SetColumn(who, 1); g.Children.Add(who);
+            bool isHere = i == hereAt;
+            var sub = $"{z.Runs} runs · {z.Players} players" + (isHere ? " · you are here" : "");
+            var row = QRow(isHere ? QIconBox("Flag", "Gold", 30, round: true) : QIconBox("Pin", "Sky", 30, round: true), z.Zone, sub, Fk(z.ValueHr ?? 0), "Ink",
+                topHr > 0 ? (z.ValueHr ?? 0) / (double)topHr : null, isHere ? "Gold" : "Sky", rule: i > 0);
+            var g = (Grid)row.Child;
+            g.Background = Brushes.Transparent; g.Cursor = Cursors.Hand;
             if (bests[i] is long yb)
             {
-                var y = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Tag = "where-best" };
-                y.Inlines.Add(PR("your best ", "Faint"));
-                var yf = PR(Fk(yb), "Muted"); yf.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); y.Inlines.Add(yf);
+                // "your best 1.4M" under the figure (options-test reads it by its tag)
+                var y = new TextBlock { FontSize = 10.5, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Tag = "where-best", Margin = new Thickness(0, 0, 0, -1) };
+                y.Inlines.Add(PR("your best ", "Faint")); y.Inlines.Add(PR(Fk(yb), "Muted"));
+                foreach (var v in g.Children.OfType<TextBlock>().Where(t => Grid.GetColumn(t) == 2 && Grid.GetRow(t) == 0)) { v.VerticalAlignment = VerticalAlignment.Top; v.Margin = new Thickness(0, -2, 0, 0); }
                 Grid.SetColumn(y, 2); g.Children.Add(y);
             }
-            var v = new TextBlock { Text = Fk(z.ValueHr ?? 0), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-            v.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); v.SetResourceReference(TextBlock.ForegroundProperty, "Gold");
-            Grid.SetColumn(v, 3); g.Children.Add(v);
-            g.MouseEnter += (_, _) => g.SetResourceReference(Panel.BackgroundProperty, "HoverTint");
-            g.MouseLeave += (_, _) => g.Background = Brushes.Transparent;
             g.MouseLeftButtonUp += (_, _) => CompareZone(key);
             g.MouseRightButtonUp += (_, e) => { e.Handled = true; Open(ZonePageUrl(key)); };
-            // the zone you are in: the look's gold tint and a short gold bar in the margin, as the side menu marks its page (0.9.11)
-            var tint = new Border { Child = g, Background = Brushes.Transparent };
-            if (isHere)
-            {
-                tint.SetResourceReference(Border.BackgroundProperty, "GoldTint");
-                var bar = new Border { Width = 3, Height = 18, CornerRadius = new CornerRadius(1.5), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-9, 0, 0, 0), IsHitTestVisible = false };
-                bar.SetResourceReference(Border.BackgroundProperty, "Gold");
-                Grid.SetColumnSpan(bar, 4); g.Children.Add(bar);
-            }
+            // the zone you are in: the look's gold tint stays under the mouse
+            if (isHere) { row.SetResourceReference(Border.BackgroundProperty, "GoldTint"); row.MouseLeave += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "GoldTint"); }
             var tip = $"{(isHere ? "You are here. " : "")}{z.Runs} runs from {z.Players} players {(all ? "across every region" : "on " + server)} in the last 7 days · Kinah plus loot {PriceBook.Cut}, an hour."
                 + (bests[i] is long tb ? $"\nYour best hour here on {server}: {Fk(tb)}." : "")
                 + (cmp ? "\nClick to compare it with your zones this week (LOOT › Week › Zones). Right-click for its page on kinahledger.com."
                        : "\nClick for its page on kinahledger.com. Turn on Compare zones and runs in Options › General to compare zones here.");
-            var b = new Border { Child = tint, BorderThickness = new Thickness(0, 1, 0, 0), ToolTip = tip, Tag = "where-row|" + key + (isHere ? "|here" : "") };
+            var b = new Border { Child = row, ToolTip = tip, Tag = "where-row|" + key + (isHere ? "|here" : "") };
             ToolTipService.SetInitialShowDelay(b, 500);
-            b.SetResourceReference(Border.BorderBrushProperty, "Line");
             WhereBody.Children.Add(b);
         }
     }

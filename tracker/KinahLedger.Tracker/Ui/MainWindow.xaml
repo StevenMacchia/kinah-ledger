@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Kinah Ledger" SizeToContent="WidthAndHeight" ResizeMode="CanMinimize"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}"
-        FontFamily="{DynamicResource BodyFont}" FontSize="13.5"
+        FontFamily="{DynamicResource BodyFont}" FontSize="13" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
         WindowStartupLocation="CenterScreen">
 
@@ -238,7 +238,7 @@
 
   </Window.Resources>
 
-  <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="22,16,22,14">
+  <Border x:Name="Root" Background="{DynamicResource Bg}" Padding="22,10,22,10">
     <!-- FitHost: scaled down as one piece when Full view is wider than the screen (Ui/MainWindow.Fit.cs) -->
     <Grid x:Name="FitHost">
     <!-- the ledger: always the same width, wherever the settings are -->
@@ -252,55 +252,54 @@
     <!-- across both columns; its width is set with the view (ApplyView) so long text never widens the window -->
     <StackPanel x:Name="HeadStack" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left">
 
-      <!-- header: the gold mark and the name, the Farming / Crafting switch, the project page and Settings -->
-      <Grid>
+      <!-- header, the Quest look (2026-11-07, docs/ui/mockups/directions-2026-11-07): the mark and the name with the server
+           under it; Farm / Craft / Runs as icon pills, the lit one gold; then round icon buttons: Compact/Full, the site,
+           Share (its sheet opens in the hero card) and Options -->
+      <Grid Height="44">
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <!-- the app mark, the K tile (tools/brand/logo.svg) -->
           <Image Source="{StaticResource AppMark}" Width="32" Height="32" Margin="0,0,10,0" VerticalAlignment="Center"/>
           <StackPanel VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
-              <TextBlock x:Name="Version" Text="v0.7.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="10,2,0,0" FontSize="11.5"/>
+              <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="14" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+              <TextBlock x:Name="Version" Text="v0.7.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="8,1,0,0" FontSize="11" FontWeight="Bold"/>
             </StackPanel>
-            <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11.5" Margin="0,1,0,0" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
+            <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="Bold" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
           </StackPanel>
         </StackPanel>
-        <!-- two parts that never mix: Farming (the run, the stats, the loot) and Crafting (recipes, cost, success, profit) -->
-        <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,10,0" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center">
+        <!-- three pages that never mix: Farm (the run, the rate, the loot), Craft (recipes, cost, profit), Runs (expeditions and events) -->
+        <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,8,0" Padding="4" CornerRadius="999" Background="{DynamicResource Card}" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal">
-            <Button x:Name="FarmTab" Style="{StaticResource SegOn}" Content="Farming" Padding="10,0"/>
-            <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Content="Crafting" Margin="2,0,0,0" Padding="10,0"/>
-            <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Content="Events" Margin="2,0,0,0" Padding="10,0" ToolTip="Expeditions and events: each trip, from entering to the last loot. Never on the Farming page."/>
+            <Button x:Name="FarmTab" Style="{StaticResource SegOn}">
+              <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcSword}"/><TextBlock Text="Farm" VerticalAlignment="Center"/></StackPanel>
+            </Button>
+            <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Margin="2,0,0,0">
+              <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcHammer}"/><TextBlock Text="Craft" VerticalAlignment="Center"/></StackPanel>
+            </Button>
+            <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Expeditions and events: each trip, from entering to the last loot. Never on the Farming page.">
+              <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcFlag}"/><TextBlock Text="Runs" VerticalAlignment="Center"/></StackPanel>
+            </Button>
           </StackPanel>
         </Border>
-        <!-- the site and Options: everything that can be set is in the Options window, so the ledger never moves -->
+        <!-- round buttons: Compact / Full view (Farming only), the site, Share and Options -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-          <!-- the site as a globe, so the three parts always fit beside the name (Steven, 2026-10-22: the tabs ran into the name) -->
-          <Button x:Name="SiteBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="kinahledger.com: community drop rates, prices and your profile">
-            <Grid Width="16" Height="16">
-              <Ellipse Width="16" Height="16" Stroke="{DynamicResource Muted}" StrokeThickness="1.4"/>
-              <Ellipse Width="7" Height="16" Stroke="{DynamicResource Muted}" StrokeThickness="1.2"/>
-              <Rectangle Height="1.2" Width="15" Fill="{DynamicResource Muted}" VerticalAlignment="Center"/>
-              <Rectangle Height="1.1" Width="12" Fill="{DynamicResource Muted}" VerticalAlignment="Top" Margin="0,4,0,0"/>
-              <Rectangle Height="1.1" Width="12" Fill="{DynamicResource Muted}" VerticalAlignment="Bottom" Margin="0,0,0,4"/>
-            </Grid>
-          </Button>
-          <!-- Compact / Full view: two panels drawn, the right one filled in Full view -->
-          <Button x:Name="ViewBtn" Width="36" Height="32" Padding="0" Margin="0,0,8,0" ToolTip="Full view: every table beside the summary">
+          <Button x:Name="ViewBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" ToolTip="Full view: every table beside the summary">
             <Grid Width="16" Height="12">
-              <Rectangle Width="16" Height="12" RadiusX="2" RadiusY="2" Stroke="{DynamicResource Muted}" StrokeThickness="1.4"/>
-              <Rectangle Width="1.4" Height="12" Fill="{DynamicResource Muted}" HorizontalAlignment="Left" Margin="7,0,0,0"/>
+              <Rectangle Width="16" Height="12" RadiusX="3" RadiusY="3" Stroke="{DynamicResource Muted}" StrokeThickness="1.6"/>
+              <Rectangle Width="1.6" Height="12" Fill="{DynamicResource Muted}" HorizontalAlignment="Left" Margin="7,0,0,0"/>
               <Rectangle x:Name="ViewFill" Width="6" Height="9" Fill="{DynamicResource Muted}" HorizontalAlignment="Right" Margin="0,0,1.5,0" Opacity="0.25"/>
             </Grid>
           </Button>
-          <Button x:Name="OptionsBtn" Height="32" Padding="12,0" FontSize="12.5" ToolTip="Startup and look, server and price alerts, sharing and your data, game reading, the shortcut and the panel over the game, updates.">
-            <StackPanel Orientation="Horizontal">
-              <!-- a gear, drawn so no image ships -->
-              <Path Width="14" Height="14" Stretch="Uniform" Fill="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,7,0"
-                    Data="M10.3,1 L13.7,1 L14.2,3.6 C15,3.9 15.7,4.3 16.4,4.8 L18.9,3.9 L20.6,6.8 L18.6,8.6 C18.7,9.4 18.7,10.2 18.6,11 L20.6,12.8 L18.9,15.7 L16.4,14.8 C15.7,15.3 15,15.7 14.2,16 L13.7,18.6 L10.3,18.6 L9.8,16 C9,15.7 8.3,15.3 7.6,14.8 L5.1,15.7 L3.4,12.8 L5.4,11 C5.3,10.2 5.3,9.4 5.4,8.6 L3.4,6.8 L5.1,3.9 L7.6,4.8 C8.3,4.3 9,3.9 9.8,3.6 Z M12,6.6 A3.2,3.2 0 1 0 12,13 A3.2,3.2 0 1 0 12,6.6 Z"/>
-              <TextBlock Text="Options" VerticalAlignment="Center"/>
-            </StackPanel>
+          <Button x:Name="SiteBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" ToolTip="kinahledger.com: community drop rates, prices and your profile">
+            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcGlobe}"/>
+          </Button>
+          <Button x:Name="ShareCardBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" IsEnabled="False" AutomationProperties.Name="Share"
+                  ToolTip="A picture of this session, the last run or the week, to paste in Discord or anywhere. Nothing is uploaded.">
+            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcShare}"/>
+          </Button>
+          <Button x:Name="OptionsBtn" Style="{StaticResource RoundBtn}" ToolTip="Startup and look, server and price alerts, sharing and your data, game reading, the shortcut and the panel over the game, updates.">
+            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcGear}"/>
           </Button>
         </StackPanel>
       </Grid>
@@ -389,7 +388,7 @@
     <StackPanel x:Name="LeftCol" Grid.Row="1" Width="662" VerticalAlignment="Top">
       <!-- What's new (0.9.12): after an update, this version's release notes as bold leads and the rest, once; Got it puts
            it away until the next version (Ui/MainWindow.WhatsNew.cs, the notes built in by Platform/WhatsNew.cs) -->
-      <Border x:Name="WhatsNewCard" Margin="0,16,0,0" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
+      <Border x:Name="WhatsNewCard" Margin="0,12,0,0" CornerRadius="16" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
         <StackPanel Margin="20,14,20,14">
           <TextBlock x:Name="WhatsNewTitle" Text="WHAT'S NEW" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SecGold}"/>
           <StackPanel x:Name="WhatsNewList" Margin="0,8,0,0"/>
@@ -401,119 +400,105 @@
         </StackPanel>
       </Border>
 
-      <!-- the farming card (Steven, 2026-10-24, direction C "Live"): the zone and whether it is live; the last five things
-           counted beside the rate and its line since the start; the actions. Sections fold under it (Session, Drops from
-           kills, Also this session, Where to farm now) and join it as one card (JoinCards). -->
-      <Border x:Name="SessionCard" Margin="0,16,0,0" BorderThickness="1" CornerRadius="6,6,0,0" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource Card}">
+      <!-- the hero (Quest, 2026-11-07): where you are and for how long, the hour as the big figure, the chase against your
+           best here as a bar toward the flag and as a ring, Start run and the three dots under the ring; "chart" opens
+           the rate line. Filled by Ui/MainWindow.Live.cs (FillRate) -->
+      <Border x:Name="SessionCard" Style="{StaticResource QCard}" Margin="0,10,0,0" Background="{DynamicResource HeroBg}" Padding="16,12,16,12">
         <StackPanel>
-          <Grid Margin="20,16,20,0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <!-- the zone's tile: a map pin in a gold-framed slot -->
-            <Border Width="40" Height="40" CornerRadius="7" BorderThickness="1" BorderBrush="{DynamicResource Gold}" VerticalAlignment="Center">
-              <Border.Background>
-                <RadialGradientBrush Center="0.5,0.38" GradientOrigin="0.5,0.38" RadiusX="0.75" RadiusY="0.75"><GradientStop Color="#4DF8D598" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush>
-              </Border.Background>
-              <Viewbox Width="22" Height="22">
-                <Canvas Width="24" Height="24">
-                  <Path Stroke="{DynamicResource Muted}" StrokeThickness="1.6" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                        Data="M12,21 C12,21 19,14.8 19,9.5 A7,7 0 0 0 5,9.5 C5,14.8 12,21 12,21 Z M12,7.1 A2.4,2.4 0 1 0 12,11.9 A2.4,2.4 0 1 0 12,7.1 Z"/>
-                </Canvas>
-              </Viewbox>
-            </Border>
-            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-              <TextBlock x:Name="ZoneLbl" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Text="Waiting for the game" TextTrimming="CharacterEllipsis"/>
-              <!-- what and how long, then live ("Open world · 42 min · ● live", the calm Farming mock C, 2026-10-28) -->
-              <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                <TextBlock x:Name="TableTitle" Foreground="{DynamicResource Muted}" FontSize="12.5" Text="Not reading yet" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                <!-- live: the game is being read now -->
-                <StackPanel x:Name="LiveMark" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="The game is being read now." Background="Transparent">
-                  <TextBlock Text=" · " Foreground="{DynamicResource Muted}" FontSize="12.5" VerticalAlignment="Center"/>
-                  <Ellipse x:Name="RecDot" Width="6" Height="6" Fill="{DynamicResource Gold}" Margin="0,1,5,0" VerticalAlignment="Center">
-                    <Ellipse.Effect><DropShadowEffect Color="#F8D598" BlurRadius="8" ShadowDepth="0" Opacity="0.7"/></Ellipse.Effect>
-                  </Ellipse>
-                  <TextBlock Text="live" Foreground="{DynamicResource Gold}" FontSize="12.5" VerticalAlignment="Center"/>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="14"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal">
+                  <!-- live: the game is being read now -->
+                  <StackPanel x:Name="LiveMark" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="The game is being read now." Background="Transparent">
+                    <Ellipse x:Name="RecDot" Width="8" Height="8" Fill="{DynamicResource Mint}" Margin="0,0,8,0" VerticalAlignment="Center">
+                      <Ellipse.Effect><DropShadowEffect Color="#5CE1B5" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/></Ellipse.Effect>
+                    </Ellipse>
+                  </StackPanel>
+                  <TextBlock x:Name="ZoneLbl" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" Text="Waiting for the game" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="260"/>
+                  <TextBlock x:Name="ZoneSep" Text=" · " FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                  <!-- what and how long ("Open world · 42 min"), in minutes -->
+                  <TextBlock x:Name="TableTitle" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Text="Not reading yet" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 </StackPanel>
-              </StackPanel>
+                <StackPanel x:Name="ChartToggle" Grid.Column="1" Orientation="Horizontal" Cursor="Hand" Background="Transparent" VerticalAlignment="Center" Margin="8,0,0,0" Visibility="Collapsed"
+                            ToolTip="The hour since the session started, one sample a minute; the dashed line is your best here.">
+                  <TextBlock Text="chart" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Faint}" VerticalAlignment="Center"/>
+                  <Path x:Name="ChartChev" Style="{StaticResource QChev}" Margin="3,0,0,0"/>
+                </StackPanel>
+              </Grid>
               <!-- is it working: "Reading · last pickup 4s ago", or a nudge when nothing has been read for a while; a dot says how
                    reading goes at a glance (green reading, gold looking or paused, red a read problem), and a click opens
-                   Options › Game reading, like the footer's link (0.9.10) -->
-              <StackPanel x:Name="ReadingLine" Orientation="Horizontal" Margin="0,1,0,0" Visibility="Collapsed" Background="Transparent" Cursor="Hand"
+                   Options › Game reading (FillReading) -->
+              <StackPanel x:Name="ReadingLine" Orientation="Horizontal" Margin="0,3,0,0" Visibility="Collapsed" Background="Transparent" Cursor="Hand"
                           ToolTipService.InitialShowDelay="600" AutomationProperties.Name="Game reading options">
                 <Ellipse x:Name="ReadingDot" Width="6" Height="6" Fill="{DynamicResource Good}" Margin="0,1,6,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="ReadingLbl" Foreground="{DynamicResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="420"/>
+                <TextBlock x:Name="ReadingLbl" Foreground="{DynamicResource Faint}" FontSize="11.5" FontWeight="Bold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="420"/>
               </StackPanel>
-            </StackPanel>
-          </Grid>
-
-          <!-- the live strip: the last five things counted on this tab, and the rate beside it (Ui/MainWindow.Live.cs) -->
-          <Grid Margin="20,16,20,0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="200"/></Grid.ColumnDefinitions>
-            <StackPanel>
-              <Border x:Name="FeedBox" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource Line}" Background="{DynamicResource Slot}" Padding="0,4" ClipToBounds="True"
-                      ToolTip="A line wrong? Click it to report it. A pickup that never showed: ⋯ › A pickup is missing." ToolTipService.InitialShowDelay="900">
+              <!-- the hour, big, and its unit -->
+              <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Black" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
+              </StackPanel>
+              <!-- the chase: this hour against your best here, a bar toward the flag (mint once it is beaten) -->
+              <StackPanel x:Name="ChaseBox" Margin="0,8,0,0" Visibility="Collapsed">
                 <Grid>
-                  <StackPanel x:Name="FeedHost"/>
-                  <!-- what the empty feed waits for, from the reader (FillFeedEmpty): the game, the chat, or the first pickup -->
-                  <!-- and while a new player sets up, the first-session checklist under it (Ui/MainWindow.Onboard.cs, 2026-11-04) -->
-                  <StackPanel x:Name="FeedEmptyBox">
-                    <TextBlock x:Name="FeedEmpty" Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" Margin="12,10,12,10" TextWrapping="Wrap"
-                               Text="Ready. Pick something up and it shows here, newest first."/>
-                    <StackPanel x:Name="FeedOnboard" Margin="12,8,12,8" Visibility="Collapsed"/>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock x:Name="ChaseLbl" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                    <Path x:Name="ChaseFlag" Style="{StaticResource QIconStyle}" Data="{StaticResource IcFlag}" Width="13" Height="13" StrokeThickness="2" Stroke="{DynamicResource Gold}"/>
+                    <TextBlock x:Name="ChaseBest" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Gold}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                   </StackPanel>
                 </Grid>
-              </Border>
-              <!-- kept as the place a marked line's Undo goes; the hint itself moved to the feed's hover and ⋯ (2026-10-28) -->
-              <TextBlock x:Name="FeedHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left" Visibility="Collapsed"
-                         Text="A line wrong or missing? Click it." ToolTip="Click a wrong line to report it, or here for a pickup that never showed. The report is saved on this PC."/>
-            </StackPanel>
-            <StackPanel Grid.Column="2">
-              <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="34" FontWeight="Light" Foreground="{DynamicResource Ink}" Text=" "/>
-              <TextBlock x:Name="HeadRateLbl" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" Text="Kinah and loot an hour, once something is counted"/>
+                <Border x:Name="ChaseTrack" Height="10" CornerRadius="5" Background="{DynamicResource Bg}" Margin="0,5,0,0" ClipToBounds="True">
+                  <Border x:Name="ChaseFill" HorizontalAlignment="Left" Width="0" CornerRadius="5" Background="{DynamicResource Gold}"/>
+                </Border>
+              </StackPanel>
               <!-- your usual and best here (Compare B, 0.9.3, Ui/MainWindow.Compare.cs): only with Options › Compare zones and runs on -->
-              <Border x:Name="UsualBox" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Line}" Margin="0,10,0,0" Padding="0,10,0,0" Background="Transparent" Visibility="Collapsed">
-                <TextBlock x:Name="UsualLine" FontSize="12.5" Foreground="{DynamicResource Muted}" LineHeight="21" TextWrapping="Wrap"/>
+              <Border x:Name="UsualBox" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Line}" Margin="0,10,0,0" Padding="0,8,0,0" Background="Transparent" Visibility="Collapsed">
+                <TextBlock x:Name="UsualLine" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" LineHeight="19" TextWrapping="Wrap"/>
               </Border>
-              <!-- the rate since the start, one sample a minute -->
-              <Canvas x:Name="RateCanvas" Width="200" Height="40" Margin="0,12,0,4" HorizontalAlignment="Left" ClipToBounds="True">
-                <Path x:Name="RateFill" StrokeThickness="0">
-                  <Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#42F8D598" Offset="0"/><GradientStop Color="#00F8D598" Offset="1"/></LinearGradientBrush></Path.Fill>
-                </Path>
-                <Polyline x:Name="RateLinePath" Stroke="{DynamicResource Gold}" StrokeThickness="1.5" StrokeLineJoin="Round"/>
-              </Canvas>
-              <Grid x:Name="RateAxis">
-                <TextBlock x:Name="RateFrom" FontSize="11" Foreground="{DynamicResource Faint}" HorizontalAlignment="Left"/>
-                <TextBlock x:Name="RateTo" FontSize="11" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right" Text="now"/>
-              </Grid>
-              <!-- "161 kills · 3.9K a kill" and "best here 1.40M" -->
-              <TextBlock x:Name="KvLine" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,12,0,0" LineHeight="21" TextWrapping="Wrap"/>
-              <!-- "Reading the chat" with a steady green tick; the read count, the Market and the Kinah counter on hover -->
-              <!-- shown only when something is wrong (2026-10-28); FillHealth -->
-              <StackPanel x:Name="HealthLine" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
+              <!-- "161 kills · 3.9K a kill" and "best here 1.40M": said by the chips and the chase now; kept for the figures the code reads -->
+              <TextBlock x:Name="KvLine" Visibility="Collapsed"/>
+              <!-- shown only when something is wrong (FillHealth) -->
+              <StackPanel x:Name="HealthLine" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
                 <Path x:Name="HealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="HealthText" FontSize="12" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
+                <TextBlock x:Name="HealthText" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
+              </StackPanel>
+            </StackPanel>
+            <!-- the ring (QRing, filled by FillRate), Start run and the three dots under it -->
+            <StackPanel Grid.Column="2" VerticalAlignment="Center" MinWidth="140">
+              <Grid x:Name="RingHost" Width="76" Height="76" HorizontalAlignment="Center"/>
+              <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Center">
+                <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start run" Height="30" MinWidth="96" Padding="14,0" FontSize="12.5" VerticalAlignment="Center"
+                        ToolTip="Times a run. Counting happens anyway; a run is what gets saved and shared."/>
+                <!-- the rest, out of the way: All zones, Clear everything, a missing pickup, the shortcut -->
+                <Button x:Name="MoreBtn" Style="{StaticResource RoundBtn}" Width="30" Height="30" Margin="6,0,0,0" Background="{DynamicResource Inset}" ToolTip="More: goals, all zones, clear everything, report a missing pickup" AutomationProperties.Name="More">
+                  <TextBlock Text="⋯" FontSize="16" FontWeight="Black" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
+                </Button>
               </StackPanel>
             </StackPanel>
           </Grid>
-
-          <Grid Margin="20,16,20,16">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Button x:Name="StartBtn" Style="{StaticResource PrimaryButton}" Content="Start run" MinWidth="112" Height="34" Padding="24,0" FontSize="13" VerticalAlignment="Center"
-                    ToolTip="Times a run. Counting happens anyway; a run is what gets saved and shared."/>
-            <!-- Share (0.9.3, ShareA): opens the Share sheet under the actions, in this card (Ui/MainWindow.Share.cs) -->
-            <Button x:Name="ShareCardBtn" Grid.Column="1" Margin="8,0,0,0" IsEnabled="False" Height="34" Padding="16,0" FontSize="13" Content="Share"
-                    BorderBrush="{DynamicResource GoldLine}" Foreground="{DynamicResource Gold}" AutomationProperties.Name="Share"
-                    ToolTip="A picture of this session, the last run or the week, to paste in Discord or anywhere. Nothing is uploaded."/>
-            <!-- the shortcut that starts and stops a run, read from the setting (UpdateStartHint) -->
-            <TextBlock x:Name="StartHint" Grid.Column="2" Margin="12,0,8,0" FontSize="12" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-            <!-- the rest, out of the way: All zones, Clear everything (New session, on the card from 0.9.9 to 0.9.12), the shortcut -->
-            <Button x:Name="MoreBtn" Grid.Column="3" Width="34" Height="34" Padding="0" ToolTip="More: goals, all zones, clear everything, report a missing pickup" AutomationProperties.Name="More">
-              <TextBlock Text="⋯" FontSize="17" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
-            </Button>
-          </Grid>
-
+          <!-- the rate since the start (click "chart"): one sample a minute under a gold line, the dashed lilac line your best here -->
+          <StackPanel x:Name="ChartBox" Margin="0,12,0,0" Visibility="Collapsed">
+            <Canvas x:Name="RateCanvas" Width="628" Height="84" HorizontalAlignment="Left" ClipToBounds="True">
+              <Path x:Name="RateFill" StrokeThickness="0">
+                <Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#59FFC857" Offset="0"/><GradientStop Color="#00FFC857" Offset="1"/></LinearGradientBrush></Path.Fill>
+              </Path>
+              <Polyline x:Name="RateLinePath" Stroke="{DynamicResource Gold}" StrokeThickness="2.2" StrokeLineJoin="Round"/>
+              <Line x:Name="BestLinePath" X1="0" X2="628" Stroke="{DynamicResource Lilac}" StrokeThickness="1.2" StrokeDashArray="4,4" Visibility="Collapsed"/>
+              <TextBlock x:Name="BestLineLbl" FontSize="10" FontWeight="ExtraBold" Foreground="{DynamicResource Lilac}" Canvas.Left="4" Visibility="Collapsed"/>
+            </Canvas>
+            <Grid x:Name="RateAxis" Margin="0,2,0,0">
+              <TextBlock x:Name="RateFrom" FontSize="10.5" FontWeight="ExtraBold" Foreground="{DynamicResource Faint}" HorizontalAlignment="Left"/>
+              <TextBlock x:Name="RateTo" FontSize="10.5" FontWeight="ExtraBold" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right" Text="now"/>
+            </Grid>
+          </StackPanel>
+          <!-- the shortcut that starts and stops a run (UpdateStartHint): in Start run's tooltip and the three dots now -->
+          <TextBlock x:Name="StartHint" Visibility="Collapsed"/>
           <!-- the Share sheet while it is open (0.9.3): a dark panel inside the card, never a window of its own -->
-          <Border x:Name="ShareHost" Margin="12,0,12,16" Visibility="Collapsed"/>
-
+          <Border x:Name="ShareHost" Margin="0,12,0,0" Visibility="Collapsed"/>
           <!-- figures the code still works out for the Discord card and the panel over the game; not drawn since the feed (0.8.30) -->
           <StackPanel Visibility="Collapsed">
             <TextBlock x:Name="HeadRateUnit" Text="an hour"/>
@@ -531,25 +516,60 @@
         </StackPanel>
       </Border>
 
-      <!-- GOALS (0.9, Goals B of kinah-bench/mock-goals-history, Steven's pick 2026-10-29): up to three of today's goals as
-           slots, a gold ring round each item tile, between the actions and LOOT. With no goal (2026-10-30, the "Slim GOALS
-           row" Steven picked after "Goals in a ⋯ is so out of the way no one will ever see it"): one line in its place,
-           GOALS and "⊕ Set a goal for today", always there on Farming so the way in is seen before the first kill. Drawn in
-           Ui/MainWindow.Goals.cs. -->
-      <Border x:Name="GoalsCard" Background="{DynamicResource Card}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1,0,1,0" Visibility="Collapsed">
+      <!-- three chips (Quest): Kinah, loot, kills; a click opens what is behind it under the row: Kinah by enemy, the bag,
+           kills by enemy (Ui/MainWindow.QuestFarm.cs) -->
+      <Grid x:Name="ChipsRow" Margin="0,8,0,0" Visibility="Collapsed">
+        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
+        <Border x:Name="ChipKinah" Style="{StaticResource QChip}"/>
+        <Border x:Name="ChipLoot" Grid.Column="2" Style="{StaticResource QChip}"/>
+        <Border x:Name="ChipKills" Grid.Column="4" Style="{StaticResource QChip}"/>
+      </Grid>
+      <Border x:Name="ChipPanel" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
+        <StackPanel x:Name="ChipPanelHost"/>
+      </Border>
+
+      <!-- the bag (LOOT since 2026-10-28, Ui/MainWindow.Loot.cs): what was picked up, as slots with the game-tooltip card on
+           hover, for one period at a time: this zone since you arrived (or the run, or every zone), Today, or the Week. It
+           opens from the loot chip in Compact; in Full view it is a column of its own -->
+      <Border x:Name="SummaryCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
         <StackPanel>
-          <!-- no goal yet: the whole row is one button (keyboard focus, a name for screen readers) that opens Set a goal,
-               the same sheet as ⋯ › Set a goal. The link sits in the faint note colour and brightens on hover or focus;
-               38 px against the box header's 50, as the window sits small beside the game. -->
-          <Button x:Name="GoalsSlim" Cursor="Hand" Visibility="Collapsed" AutomationProperties.Name="Set a goal for today"
-                  ToolTip="Kinah, an item or runs to reach today. Up to three, shown here.">
+          <Grid x:Name="SessionHead" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcBag}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+            <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+            <TextBlock x:Name="FootTotalNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
+            <!-- one period at a time: this zone (or the run, or All zones), today, or the week -->
+            <Border x:Name="LootScope" Grid.Column="3" Padding="3" CornerRadius="999" Background="{DynamicResource Bg}" VerticalAlignment="Center" Margin="12,0,0,0">
+              <StackPanel Orientation="Horizontal">
+                <Button x:Name="LootHereBtn" Style="{StaticResource SegOn}" Content="This zone" Height="24" FontSize="11.5" Padding="10,0" ToolTip="Since you came to this zone. It starts over when you change zone."/>
+                <Button x:Name="LootTodayBtn" Style="{StaticResource SegOff}" Content="Today" Height="24" FontSize="11.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Today's farming since midnight on this PC, every zone."/>
+                <!-- the last 7 days (0.9, History A of kinah-bench/mock-goals-history): Ui/MainWindow.Week.cs -->
+                <Button x:Name="LootWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="24" FontSize="11.5" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of farming on this PC, a bar a day."/>
+              </StackPanel>
+            </Border>
+            <TextBlock x:Name="FootTotal" Grid.Column="4" FontSize="14" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,0,0" Text=" " MinWidth="40" TextAlignment="Right" Background="Transparent" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000"/>
+          </Grid>
+          <StackPanel x:Name="SessionBody">
+            <StackPanel x:Name="LootHost"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Next up (Quest): today's goals and the milestones the pace puts minutes away, as rows with a thin bar; two at rest,
+           the rest on a click. With nothing to count down to, one line: "Set a goal for today" (Ui/MainWindow.Goals.cs) -->
+      <Border x:Name="GoalsCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
+        <StackPanel>
+          <!-- no goal and nothing counted yet: the whole row is one button (keyboard focus, a name for screen readers) that
+               opens Set a goal, the same sheet as the three dots' Set a goal -->
+          <Button x:Name="GoalsSlim" Cursor="Hand" Visibility="Collapsed" AutomationProperties.Name="Set a goal for today" ToolTip="Kinah, an item or runs to reach today. Up to three, shown here.">
             <Button.Template>
               <ControlTemplate TargetType="Button">
-                <Border Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-                  <Grid Height="38">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource SecTitle}" Text="GOALS" FontWeight="Bold" Margin="20,0,10,0"/>
-                    <TextBlock x:Name="SlimLink" Grid.Column="1" Style="{StaticResource SecNote}" Text="⊕ Set a goal for today"/>
+                <Border Background="Transparent">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+                    <TextBlock Grid.Column="1" Text="Next up" FontSize="12" FontWeight="ExtraBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SlimLink" Grid.Column="2" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="⊕ Set a goal for today"/>
                   </Grid>
                 </Border>
                 <ControlTemplate.Triggers>
@@ -560,61 +580,68 @@
             </Button.Template>
           </Button>
           <StackPanel x:Name="GoalsBox">
-          <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-            <Grid Height="50">
-              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-              <TextBlock Style="{StaticResource SecTitle}" Text="GOALS" FontWeight="Bold" Margin="20,0,10,0"/>
-              <!-- "today · 1 of 3 done" -->
-              <TextBlock x:Name="GoalsNote" Grid.Column="1" Style="{StaticResource SecNote}"/>
-            </Grid>
-          </Border>
-          <WrapPanel x:Name="GoalsHost" Margin="20,2,20,16"/>
-          </StackPanel>
-        </StackPanel>
-      </Border>
-
-      <!-- LOOT (2026-10-28, option C of kinah-bench/mock-calm-farming, Steven's pick): what was picked up, as inventory
-           slots with the game-tooltip card on hover, for one period at a time: this zone since you arrived (or the run, or
-           every zone with All zones on) or Today; one total. It replaced the SESSION line (the same count as the card above
-           it) and, on this page, the Today strip. Drawn in Ui/MainWindow.Loot.cs. -->
-      <Border x:Name="SummaryCard" Background="{DynamicResource Card}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1,0,1,0" Visibility="Collapsed">
-        <StackPanel>
-          <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-            <Grid x:Name="SessionHead" Height="50">
-              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <TextBlock Style="{StaticResource SecTitle}" Text="LOOT" FontWeight="Bold" Margin="20,0,10,0"/>
-              <TextBlock x:Name="FootTotalNote" Grid.Column="1" Style="{StaticResource SecNote}"/>
-              <!-- one period at a time: this zone (or the run, or All zones) or today -->
-              <Border x:Name="LootScope" Grid.Column="2" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Margin="12,0,0,0">
-                <StackPanel Orientation="Horizontal">
-                  <Button x:Name="LootHereBtn" Style="{StaticResource SegOn}" Content="This zone" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Since you came to this zone. It starts over when you change zone."/>
-                  <Button x:Name="LootTodayBtn" Style="{StaticResource SegOff}" Content="Today" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Today's farming since midnight on this PC, every zone."/>
-                  <!-- the last 7 days (0.9, History A of kinah-bench/mock-goals-history): Ui/MainWindow.Week.cs -->
-                  <Button x:Name="LootWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of farming on this PC, a bar a day."/>
-                </StackPanel>
-              </Border>
-              <TextBlock x:Name="FootTotal" Grid.Column="3" Style="{StaticResource SecSum}" Foreground="{DynamicResource Gold}" FontSize="14" Text=" " MinWidth="40" TextAlignment="Right" Background="Transparent" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000"/>
-            </Grid>
-          </Border>
-          <StackPanel x:Name="SessionBody" Margin="20,0,20,14">
-            <StackPanel x:Name="LootHost"/>
-          </StackPanel>
-        </StackPanel>
-      </Border>
-
-      <!-- Where to farm now, folded to its best zone; opened, the best zones for the player's gear. Under the tables in Compact, under Session in Full view (ApplyView moves it) -->
-      <Border x:Name="WhereSection" Background="{DynamicResource Card}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1,0,1,0" Visibility="Collapsed">
-        <StackPanel>
-          <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-            <Grid x:Name="WhereHead" Height="48" Background="Transparent" Cursor="Hand">
+            <Grid x:Name="GoalsHead" Background="Transparent" Cursor="Hand">
               <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <Path x:Name="WhereChev" Style="{StaticResource SecChev}" Margin="20,0,10,0"/>
-              <TextBlock Grid.Column="1" Style="{StaticResource SecTitle}" Text="WHERE TO FARM NOW"/>
-              <TextBlock x:Name="WhereNote" Grid.Column="2" Style="{StaticResource SecNote}"/>
-              <TextBlock x:Name="WhereSum" Grid.Column="3" Style="{StaticResource SecSum}"/>
+              <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+              <TextBlock Grid.Column="1" Text="Next up" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+              <!-- "at this pace · 3 more" -->
+              <TextBlock x:Name="GoalsNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+              <Path x:Name="GoalsChev" Grid.Column="3" Style="{StaticResource QChev}"/>
+            </Grid>
+            <StackPanel x:Name="GoalsHost" Margin="0,2,0,0"/>
+            <StackPanel x:Name="GoalsMore" Visibility="Collapsed"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Just dropped (Quest): the last five things counted, newest first, each with the game's icon and its worth in mint;
+           a line that looks wrong is clicked and filed as a miscount report (Ui/MainWindow.Live.cs) -->
+      <Border x:Name="FeedCard" Style="{StaticResource QCard}" Margin="0,8,0,0">
+        <StackPanel>
+          <Grid Margin="0,0,0,2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcSpark}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+            <TextBlock Grid.Column="1" Text="Just dropped" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+            <TextBlock x:Name="FeedNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+          </Grid>
+          <Border x:Name="FeedBox" Background="Transparent" ClipToBounds="True"
+                  ToolTip="A line wrong? Click it to report it. A pickup that never showed: ⋯ › A pickup is missing." ToolTipService.InitialShowDelay="900">
+            <Grid>
+              <StackPanel x:Name="FeedHost"/>
+              <!-- what the empty feed waits for, from the reader (FillFeedEmpty): the game, the chat, or the first pickup -->
+              <!-- and while a new player sets up, the first-session checklist under it (Ui/MainWindow.Onboard.cs, 2026-11-04) -->
+              <StackPanel x:Name="FeedEmptyBox">
+                <TextBlock x:Name="FeedEmpty" Style="{StaticResource BodyStyle}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,8,0,4" TextWrapping="Wrap"
+                           Text="Ready. Pick something up and it shows here, newest first."/>
+                <StackPanel x:Name="FeedOnboard" Margin="0,6,0,4" Visibility="Collapsed"/>
+              </StackPanel>
             </Grid>
           </Border>
-          <StackPanel x:Name="WhereBody" Margin="20,0,20,16" Visibility="Collapsed"/>
+          <!-- kept as the place a marked line's Undo goes; the hint itself moved to the feed's hover and the three dots (2026-10-28) -->
+          <TextBlock x:Name="FeedHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left" Visibility="Collapsed"
+                     Text="A line wrong or missing? Click it." ToolTip="Click a wrong line to report it, or here for a pickup that never showed. The report is saved on this PC."/>
+        </StackPanel>
+      </Border>
+
+      <!-- Where next (Quest): the zone that pays more than here as one line with a pin; a click opens the board, the best zones
+           for the player's gear as bars (FillWhere) -->
+      <Border x:Name="WhereSection" Style="{StaticResource QCard}" Margin="0,8,0,0" Padding="14,10,14,10" Visibility="Collapsed">
+        <StackPanel>
+          <Grid x:Name="WhereHead" Background="Transparent" Cursor="Hand">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Border x:Name="WhereIcon" Width="30" Height="30" CornerRadius="10" Background="{DynamicResource SkyTint}" VerticalAlignment="Center">
+              <Path x:Name="WhereIconPath" Style="{StaticResource QIconStyle}" Data="{StaticResource IcPin}" Stroke="{DynamicResource Sky}" StrokeThickness="2"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+              <TextBlock x:Name="WhereTitle" FontSize="14" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="WhereNote" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock x:Name="WhereSum" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+              <Path x:Name="WhereChev" Style="{StaticResource QChev}"/>
+            </StackPanel>
+          </Grid>
+          <StackPanel x:Name="WhereBody" Margin="0,10,0,0" Visibility="Collapsed"/>
         </StackPanel>
       </Border>
     </StackPanel>

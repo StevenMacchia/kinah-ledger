@@ -378,8 +378,13 @@ public static class WpfApp
         // the layout's own width, not the window's: a small screen (the CI runner's) squeezes the window but not the layout
         double compactW = w.ActualWidth, compactLayout = w.HeadStack.Width;
         // Compact since 2026-10-28 (the calm Farming page, mock C): the live card and LOOT's slots, no tables; Full view adds them
-        Check(w.TablesCard.Visibility != Visibility.Visible && w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
-            "Compact: run card and LOOT's slots, no tables, Where to farm now folded");
+        // Compact in the Quest look (2026-11-07): the hero, the chips, Next up and Just dropped; the bag opens from the loot chip, no tables
+        Check(w.TablesCard.Visibility != Visibility.Visible && w.SummaryCard.Visibility != Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
+            "Compact: the hero and the chips, the bag behind its chip, no tables, Where next folded");
+        w.ToggleChipForTest("bag"); DoEvents();
+        Check(w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.LootForTest().Slots >= 10, "...the loot chip opens the bag with its slots");
+        w.ToggleChipForTest("bag"); DoEvents();
+        Check(w.SummaryCard.Visibility != Visibility.Visible, "...and closes it again");
         w.ShowFull(); DoEvents();
         Check(w.TablesCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.HeadStack.Width > compactLayout * 1.8,
             $"Full view: LOOT, Where to farm now open, the tables with more rows, {compactW:0} -> {w.ActualWidth:0} px wide");
@@ -544,7 +549,7 @@ public static class WpfApp
         {
             var keep = w.SharePrefsForTest;
             w.SharePrefsForTest = (false, "");
-            Check(w.ShareCardBtn.Content as string == "Share" && w.ShareCardBtn.IsEnabled, "the Farming card's button says Share");
+            Check(System.Windows.Automation.AutomationProperties.GetName(w.ShareCardBtn) == "Share" && w.ShareCardBtn.IsEnabled, "the header's round Share button is named Share");
             w.ToggleShareForTest("Farming"); DoEvents();
             var sh = w.ShareForTest();
             Check(sh.Open && sh.Host == "ShareHost" && sh.Scope == KinahLedger.Session.SharePicture.Session && !sh.Switch, $"Share opens inside the farming card on This session, name off ({sh.Host} {sh.Scope})");
@@ -568,18 +573,19 @@ public static class WpfApp
         // actions and LOOT; the "+" slot while fewer than three; a goal reached said once; the box gone with the last goal
         {
             // no goal: the slim "Set a goal for today" row in the box's place (2026-10-30), between the actions and LOOT
+            // Next up in the Quest look (2026-11-07): with no goal the sample's milestones fill the box, so the slim row waits for an empty count
             var none = w.GoalsForTest();
-            Check(!none.Shown && none.Slots == 0 && none.Slim && none.Placed, "GOALS: no goal, the slim Set a goal row, no box");
+            Check(none.Shown && none.Slots == 0 && !none.Slim && none.Placed && none.Add, "Next up: no goal, the pace's milestones and Set a goal, the slim row away");
             Check(w.GoalsSlim.Focusable && System.Windows.Automation.AutomationProperties.GetName(w.GoalsSlim) == "Set a goal for today",
                 "the slim GOALS row: keyboard focusable, named Set a goal for today");
             w.ShowGoalsSample(3); DoEvents();
             var three = w.GoalsForTest();
-            Check(three.Shown && !three.Slim && three.Slots == 3 && !three.Add && three.Placed && three.Note == "today · 1 of 3 done",
-                $"GOALS: three slots between the actions and LOOT, no + slot, \"{three.Note}\"");
+            Check(three.Shown && !three.Slim && three.Slots == 3 && !three.Add && three.Placed && three.Note.StartsWith("today · 1 of 3 done"),
+                $"Next up: three goal rows under the chips, no Set a goal row, \"{three.Note}\"");
             w.ShowGoalsSample(2); DoEvents();
             var two = w.GoalsForTest();
-            Check(two.Shown && two.Slots == 2 && two.Add && two.Note == "today · 0 of 2 done", $"GOALS: two slots and Add a goal, \"{two.Note}\"");
-            Check(w.SummaryCard.Visibility == Visibility.Visible && w.LootForTest().Slots >= 10, "LOOT still shows under GOALS");
+            Check(two.Shown && two.Slots == 2 && two.Add && two.Note.StartsWith("today · 0 of 2 done"), $"Next up: two goal rows and Set a goal, \"{two.Note}\"");
+            Check(w.LootForTest().Slots >= 10, "the bag still fills under Next up");
             // reached between two looks: said once on the status line (and the panel), never again that day
             w.SetGoalsForTest(new[] { new Session.Goal { Kind = Session.Goal.KindRuns, Which = Session.Goal.Expeditions, Target = 3 } });
             var said = w.GoalTickForTest(); var again = w.GoalTickForTest();
@@ -606,7 +612,7 @@ public static class WpfApp
             Check(w.GoalsForTest() is { Shown: false, Slim: false }, "GOALS (and the slim row) only on the Farming page");
             w.ShowPartForTest("Farming"); DoEvents();
             w.SetGoalsForTest(null); DoEvents();
-            Check(w.GoalsForTest() is { Shown: false, Slim: true }, "the last goal removed: the box goes, the slim row is back");
+            Check(w.GoalsForTest() is { Shown: true, Slim: false, Slots: 0 }, "the last goal removed: Next up keeps the pace's milestones, no goal rows (Quest)");
         }
 
         // What's new (0.9.12, Ui/MainWindow.WhatsNew.cs): the notes' bullets as bold lead and rest; once per version, never on

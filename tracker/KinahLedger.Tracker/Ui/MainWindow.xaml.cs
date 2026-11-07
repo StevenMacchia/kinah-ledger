@@ -1070,6 +1070,7 @@ public partial class MainWindow : Window
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
         var byEnemy = e.MobSnapshot().Where(m => m.Kinah > 0).GroupBy(m => m.Name).Select(g => (Where: g.Key, Count: g.Sum(m => m.Kinah))).OrderByDescending(x => x.Count).ToList();
         _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy, e.AbyssPoints);
+        FillChips(e, kinah, s, t.Kills, elapsed, totalNow);   // the three chips under the hero (Ui/MainWindow.QuestFarm.cs)
         FillLoot();
         var top = s.Drops.Concat(s.Gathered).Where(r => !r.Header && r.Worth > 0).OrderByDescending(r => r.Worth).ToList();
         _topRows = top;
@@ -1233,8 +1234,11 @@ public partial class MainWindow : Window
         RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
         // the feed and the rate with LOOT and Where to farm now under them and the footer closing that card, in both views;
         // Full view adds the drops and the chips on the right
-        MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(SummaryCard) + 1);
+        MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1);
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
+        // Share's round button in the header goes with the Farming page, as the card's button did (Quest, 2026-11-07)
+        ShareCardBtn.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
+        if (!farm) { ChipsRow.Visibility = Visibility.Collapsed; ChipPanel.Visibility = Visibility.Collapsed; }
         System.Windows.Controls.Grid.SetRow(StatusBar, 3); System.Windows.Controls.Grid.SetColumnSpan(StatusBar, 2);
         HeadStack.Width = full ? 662 * 2 + 16 : 662;
         StatusBar.Width = 662;
@@ -1937,6 +1941,13 @@ public partial class MainWindow : Window
             return;
         }
         ShowPart("Farming", byHand: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
+        // KL_QUEST_OPEN=chart,who|bag|kills,goals,where (Quest, 2026-11-07): a render with those panels open, for a look at the depth
+        if (Environment.GetEnvironmentVariable("KL_QUEST_OPEN") is { Length: > 0 } qo)
+        {
+            foreach (var k in qo.Split(',')) { if (k is "who" or "bag" or "kills") _qChip = k; else if (k == "where") _secUser["Where"] = true; else _qOpen[k] = true; }
+            foreach (var k in new[] { "chips", "loot", "goals", "where", "ring" }) _drawnSig.Remove(k);
+            Redraw();
+        }
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
         PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });

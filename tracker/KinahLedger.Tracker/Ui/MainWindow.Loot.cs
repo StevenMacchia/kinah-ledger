@@ -98,7 +98,8 @@ public partial class MainWindow
         TodayFarm? whole = farm && TodayEngine is { } day ? TodayLoot.Farm(day, _items) : null;
         // shown too when only the last days had farming, so the Week side is there before the day's first kill
         bool show = farm && (_hasSummary || whole?.Any == true || FarmedThisWeek());
-        SummaryCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        // Quest (2026-11-07): the bag opens from the loot chip in Compact; Full view has it as a column of its own
+        SummaryCard.Visibility = show && (FullShown || _qChip == "bag") ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         LootHereBtn.Content = LootHereName;
         LootHereBtn.ToolTip = _prefs.AllZones ? "Every zone since the tracker started (All zones is on, in ⋯)." : RunShown ? "This run, in this zone." : "Since you came to this zone. It starts over when you change zone.";

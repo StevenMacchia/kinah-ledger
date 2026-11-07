@@ -14,7 +14,7 @@ public static class Skins
 
     public static readonly Skin[] All =
     {
-        new("night", "Night", true, "the site's palette: indigo night, Kinah gold and aether teal"),
+        new("night", "Night", true, "deep plum, Kinah gold and candy accents: the Quest look"),
         new("abyss", "Abyss", true, "violet and teal on near-black"),
         new("daylight", "Daylight", false, "light, for a bright room"),
     };
@@ -76,9 +76,21 @@ public static class Skins
             d["PlaceBand"] = Frozen(band);
             S("PlaceBandLine", bandLine); S("FlagBg", flagBg); S("FlagInk", flagInk); S("FlagLine", flagLine);
         }
+        // the Quest look's roles (2026-11-07, docs/ui/mockups/directions-2026-11-07): gold is the chase, mint anything that pays,
+        // sky a place, lilac a milestone, coral a miss, lime gathering; each with the tint its icon box sits on. SegOnInk is the
+        // text on a lit pill, CardLine the one-pixel edge every card has, brighter under the mouse.
+        void Quest(string sky, string lilac, string coral, string lime, string goldInk, string segOnInk, string cardLine, string cardLineHover, byte tint)
+        {
+            S("Sky", sky); S("Lilac", lilac); S("Coral", coral); S("Lime", lime); S("GoldInk", goldInk); S("SegOnInk", segOnInk);
+            S("CardLine", cardLine); S("CardLineHover", cardLineHover);
+            string T(string hex) => "#" + tint.ToString("X2") + hex.TrimStart('#');
+            S("SkyTint", T(sky)); S("LilacTint", T(lilac)); S("CoralTint", T(coral)); S("LimeTint", T(lime));
+        }
         switch (key)
         {
             case "abyss":
+                Quest("#7FC4FF", "#C8A8FF", "#FF7A86", "#BFE86A", "#2B1B00", "#F2C97D", "#0DFFFFFF", "#29FFFFFF", 0x29);
+                S("MintTint", "#298EE3D6"); S("GoldIcTint", "#29F2C97D");
                 Controls("#221D3D", "#5A4E8C", "#241F40", "#2D2752", "#08FFFFFF", "#24F2C97D", "#E9B45A", "#1A8EE3D6", "#738EE3D6", "#B3100E1E", "#2A2546",
                     "#FFFFFF", "#47D9D4EE", "#4A4570", "#08FFFFFF", "#14F2C97D", "#80F2C97D", "#29F2C97D", "#0DF2C97D", "#47E9B45A", "#14F2C97D", "#F2C97D", "#4DF2C97D");
                 S("Bg", "#0B0A14"); S("Card", "#151326"); S("Card2", "#1D1A33"); S("Line", "#2A2546"); S("LineStrong", "#443C6E");
@@ -91,6 +103,8 @@ public static class Skins
                 G("BtnPrimary", "#7E5BEF", "#5A3DC2"); G("BtnPrimaryHover", "#8F6EFF", "#6648D6"); G("BtnStop", "#C44E4E", "#8E3434");
                 break;
             case "daylight":
+                Quest("#1F8FCB", "#5C46C9", "#C2463A", "#5B8A1E", "#261702", "#9A6B10", "#14000000", "#33000000", 0x24);
+                S("MintTint", "#241F8A6B"); S("GoldIcTint", "#29D9952F");
                 Controls("#E6ECF4", "#9FB0C6", "#E8EEF6", "#DCE6F3", "#E9EEF5", "#FFFFFF", "#9A6B10", "#141F8A6B", "#661F8A6B", "#F1F4F9", "#D9E0EA",
                     "#14202F", "#8FA3BC", "#B9C5D6", "#0A14202F", "#1AD9952F", "#99B07A1A", "#FFF3DA", "#FFFAF0", "#4DB07A1A", "#FFF2DC", "#8A4F00", "#59B86A14");
                 S("Bg", "#F3F5F9"); S("Card", "#FFFFFF"); S("Card2", "#EDF1F7"); S("Line", "#D9E0EA"); S("LineStrong", "#B9C5D6");
@@ -102,17 +116,19 @@ public static class Skins
                 R("HeroBg", "#FFF0D2", "#FFFFFF", "#FFFFFF"); S("HeroLine", "#66D9952F"); S("Inset", "#F4F6FA"); C("SlotColor", "#F1F4F9");
                 S("CommonInk", "#2A3444"); S("GradeRare", "#1E8E57"); S("GradeLegend", "#1F6FCB"); S("GradeUnique", "#8F6F06"); S("GradeEpic", "#6E46C9"); S("BtnPrimaryInk", "#261702");
                 break;
-            default:   // night: the base theme's own values, listed so a switch back is complete
-                Controls("#1D2346", "#4A548F", "#1E2D45", "#24375A", "#08FFFFFF", "#24EBAE4C", "#E9B45A", "#1A5ED8CB", "#735ED8CB", "#B30B0E1E", "#2A3154",
-                    "#FFFFFF", "#47CDD3E2", "#4A5277", "#08FFFFFF", "#14F8D598", "#80F8D598", "#29F8D598", "#0DF8D598", "#47E9B45A", "#14F8D598", "#F8D598", "#4DF8D598");
-                S("Bg", "#090B15"); S("Card", "#12162D"); S("Card2", "#171C38"); S("Line", "#22284A"); S("LineStrong", "#323A66");
-                S("Ink", "#EEECF6"); S("Muted", "#B3B7D3"); S("Faint", "#7D84A8");
-                S("Gold", "#F8D598"); S("Violet", "#B48BFF"); S("Mint", "#5ED8CB"); S("Accent", "#5ED8CB"); S("AccentDim", "#11303A");
-                S("Good", "#62D98B"); S("Warn", "#F2A35E"); S("Bad", "#FF8A7A"); S("Slot", "#0B0E1E");
-                S("RowHead", "#0E1124"); S("RowHover", "#171C38"); S("Mark", "#1A1F3D");
-                R("HeroBg", "#3A3323", "#171C38", "#12162D"); S("HeroLine", "#52EBAE4C"); S("Inset", "#38000000"); C("SlotColor", "#0B0E1E");
-                S("CommonInk", "#CDD3E2"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B48BFF"); S("BtnPrimaryInk", "#261702");
-                G("BtnPrimary", "#F8D598", "#D9952F"); G("BtnPrimaryHover", "#FBE0AE", "#E0A03C"); G("BtnStop", "#F8D598", "#D9952F");
+            default:   // night, the Quest palette since 2026-11-07: deep plum, Kinah gold, mint, sky, lilac, coral
+                Quest("#6EC1FF", "#B692FF", "#FF7D6E", "#C6F26B", "#2B1B00", "#2B1B00", "#0DFFFFFF", "#29FFFFFF", 0x29);
+                S("MintTint", "#295CE1B5"); S("GoldIcTint", "#29FFC857");
+                Controls("#2C2552", "#4A4180", "#2C2552", "#352C64", "#221C3D", "#FFC857", "#FFC857", "#1A5CE1B5", "#735CE1B5", "#2C2552", "#362E5E",
+                    "#FFFFFF", "#4A4180", "#4A4180", "#09FFFFFF", "#14FFC857", "#80FFC857", "#29FFC857", "#0DFFC857", "#47FFC857", "#14FFC857", "#FFC857", "#4DFFC857");
+                S("Bg", "#17132B"); S("Card", "#221C3D"); S("Card2", "#2C2552"); S("Line", "#362E5E"); S("LineStrong", "#4A4180");
+                S("Ink", "#F6F2FF"); S("Muted", "#B3ABD2"); S("Faint", "#7F78A3");
+                S("Gold", "#FFC857"); S("Violet", "#B692FF"); S("Mint", "#5CE1B5"); S("Accent", "#6EC1FF"); S("AccentDim", "#1F2D4F");
+                S("Good", "#5CE1B5"); S("Warn", "#F7A072"); S("Bad", "#FF7D6E"); S("Slot", "#17132B");
+                S("RowHead", "#1C1735"); S("RowHover", "#2C2552"); S("Mark", "#2A2352");
+                R("HeroBg", "#3D2E72", "#221C3D", "#221C3D"); S("HeroLine", "#33FFC857"); S("Inset", "#38000000"); C("SlotColor", "#17132B");
+                S("CommonInk", "#E8E2FF"); S("GradeRare", "#62D98B"); S("GradeLegend", "#6EC1FF"); S("GradeUnique", "#FFC857"); S("GradeEpic", "#B692FF"); S("BtnPrimaryInk", "#2B1B00");
+                G("BtnPrimary", "#FFC857", "#E59F2B"); G("BtnPrimaryHover", "#FFD97A", "#F0AE3C"); G("BtnStop", "#FF7D6E", "#D9524A");
                 break;
         }
         return d;

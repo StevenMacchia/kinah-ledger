@@ -23,30 +23,22 @@ public partial class MainWindow
     /// </summary>
     void JoinCards()
     {
-        bool farm = _part == "Farming" && !_welcome, full = farm && FullShown;
-        bool foot = farm;
-        SessionCard.CornerRadius = new CornerRadius(6, 6, 0, 0);
-        SessionCard.BorderThickness = new Thickness(1, 1, 1, 0);
-        SummaryCard.CornerRadius = new CornerRadius(0);
-        SummaryCard.BorderThickness = new Thickness(1, 0, 1, 0);
-        GoalsCard.CornerRadius = new CornerRadius(0);   // GOALS, between the actions and LOOT: the card's sides, square
-        GoalsCard.BorderThickness = new Thickness(1, 0, 1, 0);
-        TablesCard.CornerRadius = new CornerRadius(full ? 6 : 0);
-        TablesCard.BorderThickness = new Thickness(1, full ? 1 : 0, 1, full ? 1 : 0);
-        TablesCard.Margin = new Thickness(0, full ? 16 : 0, 0, 0);
-        TablesCard.Padding = new Thickness(0, full ? 4 : 0, 0, full ? 4 : 0);
-        // Where to farm now: under LOOT on the left in both views since 2026-10-28, with the card's sides
-        WhereSection.BorderThickness = new Thickness(1, 0, 1, 0);
-        WhereSection.SetResourceReference(Border.BackgroundProperty, "Card");
-        CraftCard.CornerRadius = new CornerRadius(6);
+        // the Quest look (2026-11-07): every card its own rounded surface with the one-pixel edge; the status a plain line under the column
+        bool full = _part == "Farming" && !_welcome && FullShown;
+        TablesCard.CornerRadius = new CornerRadius(16);
+        TablesCard.BorderThickness = new Thickness(1);
+        TablesCard.SetResourceReference(Border.BorderBrushProperty, "CardLine");
+        TablesCard.Margin = new Thickness(0, full ? 12 : 0, 0, 0);
+        TablesCard.Padding = new Thickness(0, 4, 0, 4);
+        CraftCard.CornerRadius = new CornerRadius(16);
         CraftCard.BorderThickness = new Thickness(1);
-        StatusBar.Margin = new Thickness(0, foot ? 0 : 14, 0, 0);
-        StatusBar.CornerRadius = new CornerRadius(0, 0, foot ? 6 : 0, foot ? 6 : 0);
-        StatusBar.BorderThickness = foot ? new Thickness(1, 0, 1, 1) : new Thickness(0);
-        StatusInner.BorderThickness = new Thickness(0, foot ? 1 : 0, 0, 0);
-        StatusInner.Padding = foot ? new Thickness(20, 12, 20, 12) : new Thickness(0);
-        if (foot) { StatusBar.SetResourceReference(Border.BackgroundProperty, "Card"); StatusBar.SetResourceReference(Border.BorderBrushProperty, "LineStrong"); }
-        else { StatusBar.Background = null; StatusBar.BorderBrush = null; }
+        CraftCard.SetResourceReference(Border.BorderBrushProperty, "CardLine");
+        StatusBar.Margin = new Thickness(0, 8, 0, 0);
+        StatusBar.CornerRadius = new CornerRadius(0);
+        StatusBar.BorderThickness = new Thickness(0);
+        StatusBar.Background = null; StatusBar.BorderBrush = null;
+        StatusInner.BorderThickness = new Thickness(0);
+        StatusInner.Padding = new Thickness(4, 0, 4, 0);
     }
 
     /// <summary>
