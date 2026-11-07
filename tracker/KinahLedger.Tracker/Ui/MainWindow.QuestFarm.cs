@@ -35,12 +35,68 @@ public partial class MainWindow
         ChipLoot.MouseLeftButtonUp += (_, _) => ToggleChip("bag");
         ChipKills.MouseLeftButtonUp += (_, _) => ToggleChip("kills");
         GoalsHead.MouseLeftButtonUp += (_, _) => { _qOpen["goals"] = !QOpen("goals"); RedrawGoals(); };
+        BagStripHead.MouseLeftButtonUp += (_, _) => ToggleChip("bag");
     }
 
     /* ---------------- the chase ---------------- */
 
     double _chaseShare;
     void LayoutChase() => ChaseFill.Width = Math.Max(0, ChaseTrack.ActualWidth * _chaseShare);
+
+    /* ---------------- the bag at a glance ---------------- */
+
+    /// <summary>
+    /// The Compact page's bag strip (Steven, 2026-11-07): what you have got this session as inventory slots with their counts,
+    /// Kinah first, then the drops and gathered items by worth, the Soul Crystals last; eleven slots and a "+N" for the rest;
+    /// the total on the right. The hover card and the click are the bag's; the head opens the bag card under the chips.
+    /// </summary>
+    void FillBagStrip()
+    {
+        var h = _lootHere;
+        bool show = _part == "Farming" && !_welcome && !FullShown && _hasSummary && h != null;
+        BagStrip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show) return;
+        var drops = h!.S.Drops.Where(r => !r.Header).Select(r => (Row: r, Gathered: false)).Concat(h.S.Gathered.Where(r => !r.Header).Select(r => (Row: r, Gathered: true)))
+            .OrderByDescending(x => x.Row.Worth).ThenByDescending(x => Qty(x.Row.Drops)).ToList();
+        var pets = h.S.Pets ?? new();
+        long crystals = pets.Sum(r => Qty(r.Drops));
+        int kinds = drops.Count + (crystals > 0 ? 1 : 0);
+        BagStripNote.Text = kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")}" : "";
+        BagStripTotal.Text = h.Total > 0 ? Fk(h.Total) : "";
+        BagStripTotal.ToolTip = h.TotalTip;
+        QSetChev(BagStripChev, _qChip == "bag");
+        var sig = $"{h.Kinah}|{h.Total}|{crystals}|{string.Join(";", drops.Select(d => $"{d.Row.Name}:{d.Row.Drops}:{d.Row.Grade}:{d.Row.Reported}"))}|{Skins.Current}";
+        if (!Changed("bag-strip", sig)) return;
+        BagStripHost.Children.Clear();
+        const int Max = 11;
+        var where = CountWhere();
+        var slots = new List<FrameworkElement>();
+        if (h.Kinah > 0)
+        {
+            var k = QSlot(QCoin(42), CountBadge(h.Kinah));
+            CardTip(k, () => KinahTodayCard(h.Kinah, h.ByEnemy, h.Kills > 0 ? $"{h.Kills:N0} kills · {Fk(h.Kinah / (double)h.Kills)} a kill" : "", "Picked up " + where, "BY ENEMY"));
+            slots.Add(k);
+        }
+        foreach (var (r, gathered) in drops)
+        {
+            var name = r.Report.Length > 0 ? r.Report : r.Name;
+            var s = QSlot(QItemIcon(name, _items.IdOf(name), 42, round: false, grade: r.Grade), CountBadge(Qty(r.Drops)));
+            if (r.Reported) s.Opacity = 0.55;
+            CardTip(s, () => ItemHereCard(r, gathered, where));
+            if (r.Report.Length > 0) s.MouseLeftButtonUp += (_, _) => ShowItemCard(r, s);
+            slots.Add(s);
+        }
+        if (crystals > 0) slots.Add(QSlot(QIconBox("Gem", "Lime", 42), CountBadge(crystals)));
+        foreach (var s in slots.Take(slots.Count > Max + 1 ? Max : slots.Count)) BagStripHost.Children.Add(s);
+        if (slots.Count > Max + 1)
+        {
+            var more = new Border { Width = 42, Height = 42, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, ToolTip = "The rest of the bag" };
+            more.SetResourceReference(Border.BackgroundProperty, "Card2");
+            more.Child = QT($"+{slots.Count - Max}", 12, FontWeights.Black, "Muted");
+            more.MouseLeftButtonUp += (_, _) => { if (_qChip != "bag") ToggleChip("bag"); };
+            BagStripHost.Children.Add(more);
+        }
+    }
 
     /// <summary>
     /// The chase: this hour against your best here (Session/BestRuns.cs), as the bar toward the flag and the ring beside the
@@ -59,6 +115,7 @@ public partial class MainWindow
             ChaseLbl.Text = beat ? "Past your best here · a new best if it holds" : $"{Fk(bestHr - nowHr)} an hour to your best here";
             ChaseBest.Text = Fk(bestHr);
             ChaseFill.SetResourceReference(Border.BackgroundProperty, tone);
+            ChaseFill.Effect = QGlow(tone, 10, 0.6);
             ChaseFlag.SetResourceReference(Shape.StrokeProperty, tone);
             ChaseBest.SetResourceReference(TextBlock.ForegroundProperty, tone);
             ChaseBox.ToolTip = $"Your best hour in this zone on this server: {Amounts.Full(bestHr)}. This hour: {Amounts.Full(nowHr)}.";
@@ -79,7 +136,7 @@ public partial class MainWindow
     {
         bool farm = _part == "Farming" && !_welcome && _hasSummary;
         ChipsRow.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
-        FeedNote.Text = farm && totalNow > 0 && !FullShown ? $"last five · {Fk(totalNow)} in the bag" : farm ? "last five" : "";   // Full has the bag beside it
+        FeedNote.Text = farm ? "last five" : "";   // the bag strip and the bag card carry the total
         if (!farm) { ChipPanel.Visibility = Visibility.Collapsed; return; }
         _qMobs = e.MobSnapshot(); _qKinah = kinah; _qKills = kills; _qElapsed = elapsed;
         int kinds = s.Drops.Count(r => !r.Header) + s.Gathered.Count(r => !r.Header) + (s.Pets is { Count: > 0 } ? 1 : 0);

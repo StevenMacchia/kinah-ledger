@@ -354,7 +354,7 @@ public partial class MainWindow
     /// </summary>
     void DrawRateLine(RateLine line, string from, string to, double best = 0)
     {
-        const double W = 628, H = 84;
+        const double W = 628, H = 96;
         var pts = line.Points(W, H);
         bool show = pts.Count >= 2;
         ChartToggle.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
@@ -362,6 +362,10 @@ public partial class MainWindow
         QSetChev(ChartChev, QOpen("chart"));
         if (!show) return;
         RateLinePath.Points = new PointCollection(pts.Select(p => new Point(p.X, p.Y)));
+        RateLinePath.Effect ??= QGlow("Gold", 12, 0.7);
+        var last = pts[^1];
+        RateDot.Visibility = Visibility.Visible; RateDot.Effect ??= QGlow("Gold", 10, 0.9);
+        Canvas.SetLeft(RateDot, Math.Min(last.X, W - 5) - 5); Canvas.SetTop(RateDot, last.Y - 5);
         var fig = new PathFigure { StartPoint = new Point(0, H), IsClosed = true };
         foreach (var p in pts) fig.Segments.Add(new LineSegment(new Point(p.X, p.Y), false));
         fig.Segments.Add(new LineSegment(new Point(W, H), false));

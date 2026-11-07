@@ -107,6 +107,7 @@ public partial class MainWindow
         LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
         LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");
         if (_lootWeek) FillLootWeek(); else if (_lootDay) FillLootDay(whole); else FillLootHere();
+        FillBagStrip();   // the Compact page's slots with counts (Ui/MainWindow.QuestFarm.cs)
     }
 
     /// <summary>LOOT's first side: the Kinah, every drop and gathered item, and the Soul Crystals of the count on screen.</summary>

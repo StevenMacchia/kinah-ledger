@@ -94,16 +94,40 @@ public partial class MainWindow
         return t;
     }
 
-    /// <summary>A thin bar: the share filled in the role's colour on the window's background.</summary>
-    static Border QBar(double share, string tone, double height = 6)
+    /// <summary>A skin brush's colour, for a glow the effect system needs as a Color (it keeps the colour of the look it was built in).</summary>
+    static Color QColor(string key) => (Application.Current.TryFindResource(key) as SolidColorBrush)?.Color ?? Colors.White;
+
+    /// <summary>A soft glow in a role's colour, so a bar or an arc lifts off the surface (Steven, 2026-11-07: "make the progress bars pop").</summary>
+    static System.Windows.Media.Effects.DropShadowEffect QGlow(string tone, double blur = 10, double opacity = 0.55)
+        => new() { Color = QColor(tone), BlurRadius = blur, ShadowDepth = 0, Opacity = opacity };
+
+    /// <summary>A bar: the share filled in the role's colour with a light edge and a glow, on the window's background.</summary>
+    static Grid QBar(double share, string tone, double height = 7)
     {
-        var track = new Border { Height = height, CornerRadius = new CornerRadius(height / 2), ClipToBounds = true };
+        var g = new Grid { Height = height };
+        var track = new Border { CornerRadius = new CornerRadius(height / 2) };
         track.SetResourceReference(Border.BackgroundProperty, "Bg");
-        var fill = new Border { CornerRadius = new CornerRadius(height / 2), HorizontalAlignment = HorizontalAlignment.Left };
+        g.Children.Add(track);
+        var fill = new Border { CornerRadius = new CornerRadius(height / 2), HorizontalAlignment = HorizontalAlignment.Left, Effect = QGlow(tone, 8, 0.6) };
         fill.SetResourceReference(Border.BackgroundProperty, tone);
-        track.Child = fill;
-        track.SizeChanged += (_, _) => fill.Width = Math.Max(0, track.ActualWidth * Math.Clamp(share, 0, 1));
-        return track;
+        fill.Child = new Border { CornerRadius = new CornerRadius(height / 2), Margin = new Thickness(1, 1, 1, 0),
+            Background = new LinearGradientBrush(Color.FromArgb(0x55, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90) };
+        g.Children.Add(fill);
+        g.SizeChanged += (_, _) => fill.Width = Math.Max(0, g.ActualWidth * Math.Clamp(share, 0, 1));
+        return g;
+    }
+
+    /// <summary>An inventory slot: the item's icon at 42 px with its count in a badge at the corner (the old LOOT grid's grammar, kept for the Compact bag strip).</summary>
+    FrameworkElement QSlot(FrameworkElement icon, string badge)
+    {
+        var g = new Grid { Width = 46, Height = 46, Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, Background = Brushes.Transparent };
+        icon.HorizontalAlignment = HorizontalAlignment.Left; icon.VerticalAlignment = VerticalAlignment.Top;
+        g.Children.Add(icon);
+        var b = new Border { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, MinWidth = 18, Height = 16, CornerRadius = new CornerRadius(8), Padding = new Thickness(4, 0, 4, 0), BorderThickness = new Thickness(1) };
+        b.SetResourceReference(Border.BackgroundProperty, "Bg"); b.SetResourceReference(Border.BorderBrushProperty, "CardLineHover");
+        b.Child = QT(badge, 10.5, FontWeights.Black, "Ink");
+        g.Children.Add(b);
+        return g;
     }
 
     /// <summary>
@@ -143,7 +167,7 @@ public partial class MainWindow
         }
         if (bar is { } share)
         {
-            var b = QBar(share, barTone, inline ? 5 : 6); b.Margin = new Thickness(10, inline ? 3 : 5, 0, 0);
+            var b = QBar(share, barTone, 7); b.Margin = new Thickness(10, inline ? 3 : 5, 0, 0);
             Grid.SetRow(b, 1); Grid.SetColumn(b, 1); Grid.SetColumnSpan(b, 2); g.Children.Add(b);
         }
         var row = new Border { Child = g, Padding = new Thickness(6, inline ? 4 : 7, 6, inline ? 4 : 7), Margin = new Thickness(-6, 0, -6, 0), CornerRadius = new CornerRadius(9), Background = Brushes.Transparent, Cursor = Cursors.Hand };
@@ -235,7 +259,7 @@ public partial class MainWindow
         double s = Math.Clamp(share, 0, 1);
         if (s >= 0.999)
         {
-            var full = new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var full = new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Effect = QGlow(tone, 10, 0.5) };
             full.SetResourceReference(Shape.StrokeProperty, tone); g.Children.Add(full);
         }
         else if (s > 0.004)
@@ -244,7 +268,7 @@ public partial class MainWindow
             var fig = new PathFigure { StartPoint = new Point(c, c - r), IsClosed = false, IsFilled = false };
             fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a), c - r * Math.Cos(a)), new Size(r, r), 0, a > Math.PI, SweepDirection.Clockwise, true));
             var geo = new PathGeometry(); geo.Figures.Add(fig);
-            var arc = new Path { Data = geo, StrokeThickness = stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = size, Height = size };
+            var arc = new Path { Data = geo, StrokeThickness = stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = size, Height = size, Effect = QGlow(tone, 10, 0.5) };
             arc.SetResourceReference(Shape.StrokeProperty, tone);
             g.Children.Add(arc);
         }

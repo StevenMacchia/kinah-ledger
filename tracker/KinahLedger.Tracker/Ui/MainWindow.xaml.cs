@@ -618,6 +618,8 @@ public partial class MainWindow : Window
     void SetTrackingUi(bool on)
     {
         StartBtn.Content = on ? "Stop run" : "Start run";
+        StartBtn.SetResourceReference(ForegroundProperty, on ? "Coral" : "Ink");   // coral while a run is on (the quiet pill, 2026-11-07)
+        StartBtn.SetResourceReference(BorderBrushProperty, on ? "Coral" : "CardLineHover");
         StartBtn.IsEnabled = on || HasServer;
         _trayToggle.Text = on ? "Stop run" : "Start run";
         UpdateStartHint(on);
@@ -1238,6 +1240,7 @@ public partial class MainWindow : Window
         // Full view adds the drops and the chips on the right
         if (full) { MoveTo(SummaryCard, QuestRight, 0); MoveTo(WhereSection, QuestRight, 3); }
         else { MoveTo(SummaryCard, LeftCol, LeftCol.Children.IndexOf(ChipPanel) + 1); MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1); }
+        if (!farm || full) BagStrip.Visibility = Visibility.Collapsed;
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
         // Share's round button in the header goes with the Farming page, as the card's button did (Quest, 2026-11-07)
         ShareCardBtn.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;

@@ -287,6 +287,30 @@
     <Setter Property="Background" Value="{DynamicResource SegOnBg}"/>
     <Setter Property="Foreground" Value="{DynamicResource SegOnInk}"/>
   </Style>
+  <!-- a quiet pill: Start run under the ring (coral while a run is on), Share's sheet buttons -->
+  <Style x:Key="PillBtn" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Background" Value="{DynamicResource Inset}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource CardLineHover}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontWeight" Value="ExtraBold"/>
+    <Setter Property="Height" Value="30"/>
+    <Setter Property="Padding" Value="14,0"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="999" Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource Card2}"/><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Gold}"/></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.85"/></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
   <!-- a round icon button: the site, Share, Options, Compact/Full and the card's three dots -->
   <Style x:Key="RoundBtn" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Width" Value="32"/>
