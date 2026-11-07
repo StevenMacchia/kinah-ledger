@@ -647,6 +647,8 @@ public sealed class InstanceLog
                 case KinahChanged k when k.Delta > 0:
                     _cur.Kinah += k.Delta; _cur.LastLoot = k.Time;
                     if (batch >= 3 || k.Via.Contains("reward table")) Paid(k.Time);
+                    // where the loot prints kill by kill (the Abyss Corridor), each kill's Kina line is its kill
+                    if (!k.Bound && k.Delta < 1000 && ZoneLocator.ChatLoot.Contains(_cur.Zone)) _cur.Kills++;
                     break;
                 // a world boss run is one kill, the boss's: the enemies dying around it are not
                 case MobKilled when _cur.Kind != WorldBoss:
@@ -943,7 +945,10 @@ public sealed class InstanceLog
     /// Runs counted from the reward picture alone: expeditions and Transcendence (the reward table) and events (their reward
     /// cards, Ocr/EventCards.cs, since 2026-10-24). A run whose picture wasn't read keeps its rewards marked not read.
     /// </summary>
-    static bool PictureOnly(InstanceRun r) => r.Kind is "Expedition" or Transcendence or "Event";
+    // ...except an area whose loot prints in the chat kill by kill and shows no picture (ZoneLocator.ChatLoot: the Abyss
+    // Corridor, 2026-11-06 09:26 to 09:32: ten "runs" of 10 s, each closed by "its rewards came in" on a kill's three lines,
+    // 440 chat items and the kills' Kina marked not read): counted from the chat, like an arena
+    static bool PictureOnly(InstanceRun r) => r.Kind is "Expedition" or Transcendence or "Event" && !ZoneLocator.ChatLoot.Contains(r.Zone);
 
     /// <summary>An event's reward screen is up: its rewards are in (read from its cards, Ocr/EventCards.cs).</summary>
     public void EventRewardScreen(DateTime t) { lock (_lock) { if (_cur?.Kind == "Event") Paid(t); } }

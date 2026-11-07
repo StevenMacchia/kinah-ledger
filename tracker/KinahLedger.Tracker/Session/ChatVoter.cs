@@ -71,6 +71,11 @@ public sealed class ChatVoter
             // "Acquired Ulmus Oil (Bound) x201."): one line, and the vote takes the reading with the count (reads.log
             // 2026-11-05 18:31:30: the settle counted x201, then the cut reading counted once more as x1)
             if (found < 0 && cursor >= 0 && (Ocr.Reread.CountLost(read[cursor], w.First) || Ocr.Reread.CountLost(w.First, read[cursor]))) found = cursor;
+            // a first reading with its verb broken, read while the line faded in ("cquired 137 Kina."), and now in its place
+            // a clean reading a digit apart ("Acquired 131 Kina."): the same line, its digits misread as it faded (reads.log
+            // 2026-11-06 09:31:09.5: 137 counted, then 134 for the next kill; the loot list showed 131 and 134). Two clean
+            // readings a digit apart stay two lines, as above
+            if (found < 0 && cursor >= 0 && !Ocr.Reread.VerbWhole(w.First) && Ocr.Reread.VerbWhole(read[cursor]) && DigitApart(w.First, read[cursor])) found = cursor;
             // a fragment read while the line faded in ("3 Kina.", "d 382 Kina.", "508 Kina.": nothing to count) and now the
             // whole line in its place, ending the same way: the same line, read better (2026-10-24, 293, 382 and 508 lost)
             if (found < 0 && cursor >= 0 && Key(w.First) is { Length: >= 4 } fk && meaning(w.First).Key.Length == 0
@@ -122,14 +127,19 @@ public sealed class ChatVoter
         if (w.Readings.Count == 1) return w.First;
         var read = w.Readings.Select(r => (Text: r, M: meaning(r))).Where(x => x.M.Key.Length > 0).ToList();
         if (read.Count == 0) return w.First;
+        // the reading that stands for its group: one read exactly before one guessed (reads.log 2026-11-06 09:36:11.5: the
+        // guessed "D9ilY>Dungeofi" stood for the group and was refused as no table's, though the group held the exact name),
+        // and one with its verb whole before one read while the line faded in; a tie between groups the same way
         var best = read.GroupBy(x => x.M.Key)
-            .Select(g => (Key: g.Key, Count: g.Count(), Exact: g.Any(x => x.M.Exact), Text: g.First().Text))
-            .OrderByDescending(g => g.Count).ThenByDescending(g => g.Exact).First();
+            .Select(g => (Key: g.Key, Count: g.Count(), Exact: g.Any(x => x.M.Exact), Whole: g.Any(x => Ocr.Reread.VerbWhole(x.Text)),
+                Text: (g.FirstOrDefault(x => x.M.Exact && Ocr.Reread.VerbWhole(x.Text)).Text ?? g.FirstOrDefault(x => x.M.Exact).Text ?? g.FirstOrDefault(x => Ocr.Reread.VerbWhole(x.Text)).Text ?? g.First().Text)))
+            .OrderByDescending(g => g.Count).ThenByDescending(g => g.Exact).ThenByDescending(g => g.Whole).First();
         if (best.Key != meaning(w.First).Key)
         {
             Changed++;
             CrashLog.Note($"voted over {w.Readings.Count} reads: \"{w.First}\" is \"{best.Text}\"");
         }
+        else if (best.Text != w.First) CrashLog.Note($"voted over {w.Readings.Count} reads: \"{w.First}\" is \"{best.Text}\" (read so exactly)");
         return best.Text;
     }
 
@@ -151,6 +161,16 @@ public sealed class ChatVoter
         int max = Math.Max(2, Math.Min(x.Length, y.Length) / 4);
         if (Math.Abs(x.Length - y.Length) > max) return false;
         return Lev(x, y) <= max;
+    }
+
+    /// <summary>Two readings with the same letters (two apart at most) whose digits, as many in each, differ in one place.</summary>
+    static bool DigitApart(string a, string b)
+    {
+        var x = Key(a); var y = Key(b);
+        string nx = new(x.Where(char.IsDigit).ToArray()), ny = new(y.Where(char.IsDigit).ToArray());
+        if (nx.Length == 0 || nx.Length != ny.Length || nx == ny || nx.Where((c, i) => c != ny[i]).Count() != 1) return false;
+        string lx = new(x.Where(char.IsLetter).ToArray()), ly = new(y.Where(char.IsLetter).ToArray());
+        return lx.Length >= 6 && Math.Abs(lx.Length - ly.Length) <= 2 && Lev(lx, ly) <= 2;
     }
 
     static int Lev(string x, string y)

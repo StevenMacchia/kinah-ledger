@@ -332,6 +332,33 @@ public static class ZoneLocator
 
     public static string? KindOf(string? zone) => zone != null && Instances.TryGetValue(zone, out var k) ? k : null;
 
+    /// <summary>
+    /// Instanced areas whose loot prints in the chat kill by kill and that show no reward picture (instances.txt "Name|Kind||chat":
+    /// the Abyss Corridor, where every kill pays Rank Points, Kina and Abyss Points in three lines). A run there is counted
+    /// from the chat, like an arena; in every other event or expedition the chat's lines are set aside for the reward picture.
+    /// </summary>
+    public static readonly HashSet<string> ChatLoot = LoadChatLoot();
+
+    static HashSet<string> LoadChatLoot()
+    {
+        var d = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var stream = KinahLedger.Data.DataFiles.Open("instances.txt");
+            if (stream == null) return d;
+            using var r = new StreamReader(stream);
+            while (r.ReadLine() is { } line)
+            {
+                var t = line.Trim();
+                if (t.Length == 0 || t.StartsWith('#')) continue;
+                var parts = t.Split('|');
+                if (parts.Length >= 4 && string.Equals(parts[3].Trim(), "chat", StringComparison.OrdinalIgnoreCase)) d.Add(parts[0].Trim());
+            }
+        }
+        catch (Exception) { /* without the flag such a run is picture-only, as before */ }
+        return d;
+    }
+
     static Dictionary<string, string> LoadInstances()
     {
         var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

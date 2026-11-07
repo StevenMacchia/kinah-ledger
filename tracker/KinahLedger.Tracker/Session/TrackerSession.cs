@@ -1423,7 +1423,7 @@ public sealed partial class TrackerSession
                 // unlocked; the skins and the Enhance Stone x863 printed with them had no row)
                 if (why != null && why.StartsWith("the inventory at work", StringComparison.Ordinal) && parsed is ItemAcquired rowed && _cross.RowWaiting(rowed, now)) { CrashLog.NoteBurst($"{_items.NameOf(rowed.ItemId)} x{rowed.Count}: {why}, but the loot list shows a row of it: a pickup"); why = null; }
                 // a stack no enemy drops, out in the world (a gathering material is a gather, an event's grid is the run's)
-                if (why == null && !made && parsed is ItemAcquired big && !inRun && !IsGatherMaterial(big.ItemId)) why = PickupCheck.TooMany(big.Count);
+                if (why == null && !made && parsed is ItemAcquired big && !inRun && !IsGatherMaterial(big.ItemId) && !PickupCheck.IsKillPoints(_items.NameOf(big.ItemId))) why = PickupCheck.TooMany(big.Count);
                 if (why == null && parsed is PetCrystal bigc && !inRun) why = PickupCheck.TooManyCrystals(bigc.Count) ?? (batchCrystals ? "printed with a reward's Soul Crystals (a chest, a quest)" : null);
                 // a kill's own crystal (one or two, a kill counted just before it) is the kill's, whatever achievement, box or
                 // reward window is open: quests complete every few kills while farming and each one's window set aside the
@@ -1478,8 +1478,10 @@ public sealed partial class TrackerSession
         // each new line is voted on across the next reads before it counts (ChatVoter); lines come out in order
         var voted = Vote ? _voter.Push(fresh, lines, now, _parser.Meaning) : fresh;
         var voteMeta = Vote ? _voter.LastOut.ToList() : new List<ChatVoter.Out>();
-        // how many loot lines land at once: three or more are a run's rewards coming in (InstanceLog.Route, Loot)
-        _batch = voted.Count(Reread.LooksLikeLoot) + reread.Count + settled.Count;
+        // how many loot lines land at once: three or more are a run's rewards coming in (InstanceLog.Route, Loot). A kill's own
+        // payout (Kina under a thousand, Rank or Abyss Points under a thousand: three lines per kill in the Abyss Corridor) is
+        // never rewards coming in (reads.log 2026-11-06 09:26 to 09:32: "its rewards came in" on every kill, ten runs of 10 s)
+        _batch = voted.Count(l => Reread.LooksLikeLoot(l) && !_parser.IsKillPay(l)) + reread.Count(l => Reread.LooksLikeLoot(l) && !_parser.IsKillPay(l)) + settled.Count(l => !_parser.IsKillPay(l));
         // an achievement line among them: the items printed with it are its reward, and those in the next few seconds too
         // only an achievement line that is new: one that stays on screen is read a little differently each time
         batchAchievement = voted.Any(l => Reread.IsAchievement(l) && NewLine(l, now));
@@ -1569,6 +1571,10 @@ public sealed partial class TrackerSession
         foreach (var (l, parts) in _parser.JoinWrappedTails(reread, lines, now))
         {
             bool any = false;
+            // still garbled where it was read again, its verb broken and digits in it ("? quired 756 Kina" for 156 Kina,
+            // reads.log 2026-11-06 09:30:08.0: 756 counted, then 156 from the clean read): a fading read misreads digits too,
+            // so it waits for a clean read of its line, which counts as itself
+            if (!Reread.VerbWhole(l) && l.Any(char.IsDigit)) { CrashLog.Read(l + "    (read again, still garbled with digits in it: not counted until a read shows it clean)", false); continue; }
             foreach (var (_, events) in _parser.ParseBatch(new List<string> { l }, now, wrap: false)) { bool a1 = Apply(events, l, "chat · recovered"); any |= a1; if (a1) WatchCount(l, events); }
             CrashLog.Read(l + "    (read again: it was garbled while fading in)", any && !_lastRepeatOnly);
             // still nothing, and loot-shaped: look at its place once more in the next read (Reread.Take); the vote can't,
@@ -1616,11 +1622,14 @@ public sealed partial class TrackerSession
                 // burst, then "Acquired Fine Odyle" cut at the chat's edge in the reads after: 2026-11-05 14:35:15, one more Fine Odyle)
                 lock (_countedLines) counted = _countedLines.Any(x => (now - x.At).TotalSeconds <= 60 && x.At >= v.First.AddSeconds(-10) && (_parser.Meaning(x.Line).Key == key || Reread.CountLost(x.Line, v.Line)));
                 if (counted) { _unalignedSeen.Remove(key); continue; }
-                if (reads < UnalignedReads) { _unalignedSeen[key] = (v.First, reads, v.Line); continue; }
+                // two reads are enough while the loot list holds a row of it waiting for its line: the row is the third
+                // witness (reads.log 2026-11-06 09:30:51.8: 165 Kina's row waited and expired while its line was read twice)
+                bool rowWaits = RowWaitsFor(key, now);
+                if (reads < (rowWaits ? 2 : UnalignedReads)) { _unalignedSeen[key] = (v.First, reads, v.Line); continue; }
                 _unalignedSeen.Remove(key);
                 bool any = false;
                 foreach (var (_, events) in _parser.ParseBatch(new List<string> { v.Line }, v.First, wrap: false)) any |= Apply(events, v.Line, "chat · unaligned");
-                CrashLog.Read(v.Line + $"    (unaligned: first shown by a read that didn't line up, read the same {reads} times, never counted)", any);
+                CrashLog.Read(v.Line + $"    (unaligned: first shown by a read that didn't line up, read the same {reads} times, never counted{(rowWaits ? "; the loot list's row for it waiting" : "")})", any);
                 if (any) { LastLine = v.Line; LootLine?.Invoke(v.Line); NoteCounted(v.Line, now); }
             }
         }
@@ -1644,8 +1653,15 @@ public sealed partial class TrackerSession
                 if (taken >= shownNow[m.Key]) continue;
                 var batches = _parser.ParseBatch(new List<string> { l }, now, wrap: false).ToList();
                 // a gathering material has its own second witness, the gathering bar's race, and while gathering the chat is
-                // only a cross-check that adds nothing (LootCrossCheck.Chat): never this path (the bank's Kukuru and Odyle cases)
-                if (!batches.SelectMany(b => b.Events).OfType<ItemAcquired>().Any(a => !IsGatherMaterial(a.ItemId) && _cross.RowWaiting(a, now))) continue;
+                // only a cross-check that adds nothing (LootCrossCheck.Chat): never this path (the bank's Kukuru and Odyle cases).
+                // A Kina line with its row waiting the same way (reads.log 2026-11-06 09:30:51.8: 165 Kina, and three kills'
+                // Kina at 09:29:56, each in a read that couldn't be lined up, their rows waiting unmatched)
+                var parsedHere = batches.SelectMany(b => b.Events).ToList();
+                // ...only a Kina line this read is the first to show: one on screen since before the row came is history (the
+                // bank's kinah-counter-lag: "Acquired 52 Kina." on screen at the start, its row still up, counted)
+                bool firstShownNow = _firstSeen.TryGetValue(ChatKey(l), out var fsn) && fsn.First >= now.AddSeconds(-0.5);
+                if (!parsedHere.OfType<ItemAcquired>().Any(a => !IsGatherMaterial(a.ItemId) && _cross.RowWaiting(a, now))
+                    && !(firstShownNow && parsedHere.OfType<KinahChanged>().Any(k => !k.Bound && _cross.RowWaiting(k, now)))) continue;
                 // its vote is still open: it counts when the vote is over, not here as well (bench 110725 at 11:08:23: "Riverside
                 // Gloves acquired." taken here with the list's row, then once more by its vote a read later)
                 if (Vote && _voter.Holds(m.Key, _parser.Meaning)) { CrashLog.Note($"{l}: read whole, the loot list's row waiting, but its vote is still open: it counts there"); continue; }
@@ -1791,6 +1807,14 @@ public sealed partial class TrackerSession
     readonly Dictionary<string, (DateTime First, int Reads, string Line)> _unalignedSeen = new();
     /// <summary>Reads that must show such a line the same way before it counts, and how long it is watched.</summary>
     public const int UnalignedReads = 3;
+
+    /// <summary>Whether the loot list holds a row waiting for a line that means this (a ChatParser.Meaning key: "k:165", "i:abyss pointsx183").</summary>
+    bool RowWaitsFor(string key, DateTime now)
+    {
+        if (key.StartsWith("k:")) return long.TryParse(key[2..], out var amt) && _cross.RowWaiting(new KinahChanged(now, amt, false), now);
+        var item = CountWatch.ItemOf(key); int n = CountWatch.CountOf(key);
+        return item.Length > 2 && n > 0 && _cross.RowWaiting(new ItemAcquired(now, _items.IdOf(item[2..]), n, false), now);
+    }
     /// <summary>A chat line and a waiting loot list row count as two witnesses while no more lines of the item than the read shows were taken in this long (a line stays on screen about this long when kills are fast).</summary>
     public const double TwoWitnessSeconds = 30;
     public const double UnalignedWatchSeconds = 20;
@@ -3602,7 +3626,7 @@ public sealed partial class TrackerSession
                     _gatherNames ??= GatheringCatalog.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                     bool gathered = _gatherNames.Contains(_items.NameOf(lr.ItemId));
                     if (why == null && !gathered && !InRun && (now - _lastKillAt).TotalSeconds > NoKillSeconds && (now - _lastGatherAt).TotalSeconds > NoKillSeconds) why = $"no kill or gather in the last {NoKillSeconds:0} s, so a box or a reward";
-                    if (why == null && !gathered && !InRun) why = PickupCheck.TooMany(lr.Count);
+                    if (why == null && !gathered && !InRun && !PickupCheck.IsKillPoints(_items.NameOf(lr.ItemId))) why = PickupCheck.TooMany(lr.Count);
                     if (why != null) { CrashLog.Note($"loot list: {_items.NameOf(lr.ItemId)} x{lr.Count} set aside: {why}"); continue; }
                 }
                 var ev = reward && !made ? _parser.AsReward(parsed) : parsed;

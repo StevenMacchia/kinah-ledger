@@ -51,6 +51,10 @@ internal static class Program
         // test and measuring commands log to a temp folder, never into the player's own reads.log
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
+        // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
+        // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
+        if (cmd is "parse-test" or "replay" or "replay-bank" or "bench" or "log-mine")
+            KinahLedger.Data.DataFiles.DirOverride ??= TestTemp.Path("KinahLedger-test-data");
         try
         {
             switch (cmd)

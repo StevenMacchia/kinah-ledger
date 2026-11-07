@@ -2,6 +2,7 @@
 # "Area|Kind|Expedition" for an area inside an expedition: a run through its areas is one run under the expedition's name. They are zones
 # like the ones in zones.txt (the whitelist covers both), and a run spent mostly in one is filed under its kind instead
 # of Open world. Kinds: Expedition (party, raid, trial, daily and ascension instances), Arena, Legion, Event, Ignored.
+# A fourth field "chat" (Name|Kind||chat) marks an area whose loot prints in the chat kill by kill with no reward picture (the Abyss Corridor): a run there is counted from the chat, like an arena.
 # Sources: https://metabot.gg/en/aion-2/dungeons (2026-10-21; its sealed-dungeon list is partly collapsed, so some are
 # missing), plus names read in play. Kind "Ignored": known, never counted, no run and no farming (Nightmare: the same rewards every time; Sealed Dungeons: open-world quest areas). A new one goes here, then rebuild the tracker and run the site's gen-zones.mjs.
 # Seen in play, 2026-10-21 (inside an expedition, and the Shugo Festival event):
@@ -251,7 +252,7 @@ Beritra Air Raid|Event|Dimensional Invasion
 Accursed Sword|Event|Dimensional Invasion
 Spacetime Rift|Event
 Artifact Siege|Event
-Abyss Corridor|Event
+Abyss Corridor|Event||chat
 Arena of Tactics|Arena
 Arena of Solitude|Arena
 Arena of Cooperation|Arena
