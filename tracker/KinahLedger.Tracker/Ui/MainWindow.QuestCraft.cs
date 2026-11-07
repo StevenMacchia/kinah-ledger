@@ -29,12 +29,13 @@ public partial class MainWindow
         // the hero
         double share = tries > 0 ? ok / (double)tries : 0;
         CraftChaseBox.Visibility = tries > 0 ? Visibility.Visible : Visibility.Collapsed;
-        CraftChaseLbl.Text = known ? $"spent {Fk(spent)} · sells for {Fk(worth)} {PriceBook.Cut}" : "";
+        CraftChaseLbl.Text = tries > 0 ? (tries - ok > 0 ? $"{tries - ok:N0} failed" : "none failed") + (known ? $" · profit {PriceBook.Cut}" : "") : "";
         CraftChaseBest.Text = tries > 0 ? $"{ok:N0} of {tries:N0} worked" : "";
         _craftShare = share; LayoutCraftChase();
         CraftChaseFill.Effect ??= QGlow("Mint", 10, 0.6);
         CraftProfit.SetResourceReference(TextBlock.ForegroundProperty, known ? (net >= 0 ? "Mint" : "Coral") : "Ink");
         CraftProfit.Visibility = known ? Visibility.Visible : Visibility.Collapsed;   // before the first craft the note stands alone
+        CraftProfitNote.Margin = known ? new Thickness(8, 0, 0, 7) : new Thickness(0, 0, 0, 2);
         if (Changed("craft-ring", $"{tries}|{ok}|{Skins.Current}"))
         {
             CraftRingHost.Children.Clear();
@@ -63,6 +64,12 @@ public partial class MainWindow
             row.Cursor = Cursors.Arrow; row.ToolTip = $"{Signed(net)} so far, {PriceBook.Cut}. The next round figure turns over by itself.";
             next.Add(row);
         }
+        else if (known && net < 0 && spent > 0)
+        {
+            var row = QRow(QIconBox("Sack", "Coral", 28, round: true), "Back to even", $"{Fk(-net)} away · a worked craft that sells for more than its materials", $"{Math.Round(100.0 * worth / spent):0}%", "Coral", worth / (double)spent, "Coral", rule: false, inline: true);
+            row.Cursor = Cursors.Arrow; row.ToolTip = $"{Signed(net)} so far: {Fk(worth)} back from {Fk(spent)} spent.";
+            next.Add(row);
+        }
         if (_bestTop is { } bt)
         {
             var sub = $"+{Fk(bt.Profit)} a craft at {bt.Success:P0}" + (bt.Makes > 1 ? $" · makes ×{bt.Makes}" : "") + $" · costs {Fk(bt.Cost)}";
@@ -79,7 +86,7 @@ public partial class MainWindow
         if (next.Count > 0)
         {
             CraftNextHost.Children.Clear();
-            CraftNextHost.Children.Add(QHead("Trophy", "Next up", _bestTop != null ? $"{Server?.Name ?? "your server"} · today's prices" : "at this pace"));
+            CraftNextHost.Children.Add(QHead("Trophy", "Next up", _bestTop != null ? "today's prices" : "at this pace"));
             foreach (var r in next) CraftNextHost.Children.Add(r);
         }
         // the recipes this session as small cards, three a row
@@ -109,7 +116,7 @@ public partial class MainWindow
     {
         var sp = new StackPanel();
         icon.HorizontalAlignment = HorizontalAlignment.Left; sp.Children.Add(icon);
-        var n = QT(name, 12.5, FontWeights.ExtraBold, "Ink", trim: true); n.Margin = new Thickness(0, 6, 0, 0); sp.Children.Add(n);
+        var n = QT(name, 12.5, FontWeights.ExtraBold, "Ink"); n.Margin = new Thickness(0, 6, 0, 0); n.TextWrapping = TextWrapping.Wrap; n.MaxHeight = 34; n.LineHeight = 16; n.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sp.Children.Add(n);
         sp.Children.Add(QT(sub, 11, FontWeights.Bold, "Muted", trim: true));
         var p = QT(profit.Length > 0 ? profit : "no price yet", 15, FontWeights.Black, tone); p.Margin = new Thickness(0, 4, 0, 0); sp.Children.Add(p);
         var card = new Border { Width = 205, Padding = new Thickness(10), CornerRadius = new CornerRadius(14), Child = sp, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 8, 8) };
@@ -131,7 +138,7 @@ public partial class MainWindow
             var dot = new Border { Width = 15, Height = 15, CornerRadius = new CornerRadius(7.5), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, BorderThickness = new Thickness(2) };
             dot.SetResourceReference(Border.BackgroundProperty, l.Ok ? "Mint" : "Coral");
             dot.SetResourceReference(Border.BorderBrushProperty, "Card");
-            dot.Child = QIcon(l.Ok ? "Check" : "X", 7, "GoldInk", 3);
+            dot.Child = QIcon(l.Ok ? "Check" : "X", 7, "Card", 3);
             g.Children.Add(dot);
         }
         return g;

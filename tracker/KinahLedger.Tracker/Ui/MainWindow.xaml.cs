@@ -1353,7 +1353,7 @@ public partial class MainWindow : Window
         var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? " has" : "s have")} no price yet" : "";
         var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
         CraftSpentNote.Text = $"{recipes} recipe{(recipes == 1 ? "" : "s")} · {PriceBook.Fee}";
-        CraftSpent.Text = spent > 0 || worth > 0 ? Signed(net) : "";
+        CraftSpent.Text = "";   // the hero says the profit (Quest)
         CraftSpent.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, net >= 0 ? "Gold" : "Faint");
         CraftMadeNote.Text = string.Join(" · ", new[] { gapNote, noBookNote, noPrice > 0 ? $"{noPrice} with no Market price for what came out" : "" }.Where(x => x.Length > 0));
         CraftMadeNote.Visibility = CraftMadeNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;

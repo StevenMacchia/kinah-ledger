@@ -99,7 +99,7 @@ public partial class MainWindow
 
     /// <summary>A soft glow in a role's colour, so a bar or an arc lifts off the surface (Steven, 2026-11-07: "make the progress bars pop").</summary>
     static System.Windows.Media.Effects.DropShadowEffect QGlow(string tone, double blur = 10, double opacity = 0.55)
-        => new() { Color = QColor(tone), BlurRadius = blur, ShadowDepth = 0, Opacity = opacity };
+        => new() { Color = QColor(tone), BlurRadius = blur, ShadowDepth = 0, Opacity = Skins.IsDark(Skins.Current) ? opacity : opacity * 0.3 };
 
     /// <summary>A bar: the share filled in the role's colour with a light edge and a glow, on the window's background.</summary>
     static Grid QBar(double share, string tone, double height = 7)

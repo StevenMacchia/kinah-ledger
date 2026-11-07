@@ -921,7 +921,7 @@
               <Grid>
                 <StackPanel x:Name="CraftFeedHost"/>
                 <TextBlock x:Name="CraftEmpty" Style="{StaticResource BodyStyle}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,8,0,4" TextWrapping="Wrap"
-                           Text="Open the crafting window and queue a craft.&#x0A;Profit shows with the first one."/>
+                           Text="Open the crafting window and queue a craft. It shows here, newest first."/>
               </Grid>
               <TextBlock x:Name="CraftHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left" Visibility="Collapsed"
                          Text="A craft wrong or missing? Click it." ToolTip="Click a wrong craft to report it, or here for one that never showed. The report is saved on this PC."/>
