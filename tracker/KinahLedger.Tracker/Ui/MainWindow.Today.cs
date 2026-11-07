@@ -218,16 +218,9 @@ public partial class MainWindow
     /// <summary>A hover that shows a game-tooltip card (Ui/MainWindow.CardKit.cs), built the first time it opens.</summary>
     static void CardTip(FrameworkElement el, Func<FrameworkElement> build)
     {
-        var tt = new ToolTip { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HasDropShadow = false, Placement = PlacementMode.Bottom };
-        el.ToolTip = tt;
+        el.ToolTip = new LazyTip(build);   // shown inside the window by HoverTip
         ToolTipService.SetInitialShowDelay(el, 200);
         ToolTipService.SetShowDuration(el, 60_000);
-        el.ToolTipOpening += (_, _) =>
-        {
-            if (tt.Content != null) return;
-            try { tt.Content = build(); }
-            catch (Exception ex) { CrashLog.Write("today card", ex); tt.Content = new TextBlock { Text = "Couldn't draw this card." }; }
-        };
     }
 
     /// <summary>The item's card: its band, where it came from today, its odds and pace (farming), and what it is worth.</summary>

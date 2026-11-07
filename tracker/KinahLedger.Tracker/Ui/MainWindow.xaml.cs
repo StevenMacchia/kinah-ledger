@@ -82,10 +82,13 @@ public partial class MainWindow : Window
         host.Children.Add(Root); host.Children.Add(layer);
         Content = host;
         InCard.Layer = layer;
-        PreviewMouseDown += (_, e) => InCard.Outside(e.OriginalSource);
-        PreviewMouseWheel += (_, e) => InCard.Outside(e.OriginalSource);
-        Deactivated += (_, _) => InCard.Away();
-        SizeChanged += (_, _) => InCard.Away();
+        // the hover tips too, on the same layer (HoverTip, 2026-11-07)
+        HoverTip.Host = this;
+        HoverTip.Hook();
+        PreviewMouseDown += (_, e) => { HoverTip.Hide(); InCard.Outside(e.OriginalSource); };
+        PreviewMouseWheel += (_, e) => { HoverTip.Hide(); InCard.Outside(e.OriginalSource); };
+        Deactivated += (_, _) => { HoverTip.Hide(); InCard.Away(); };
+        SizeChanged += (_, _) => { HoverTip.Hide(); InCard.Away(); };
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && !e.Handled && InCard.Current != null && InCard.Escape()) e.Handled = true; };
         _settings = settings;
         _items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);

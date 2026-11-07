@@ -38,7 +38,7 @@ public partial class MainWindow
         // a button that is off says why: Start until a server is chosen, Share until the game is being read
         foreach (var b in new[] { StartBtn, ShareCardBtn }) { ToolTipService.SetShowOnDisabled(b, true); b.IsEnabledChanged += (_, _) => ButtonTips(); }
         // whether a run would clear counts changes with every pickup: said as the tooltip opens (0.9.13)
-        StartBtn.ToolTipOpening += (_, _) => ButtonTips();
+        HoverTip.Opening += el => { if (ReferenceEquals(el, StartBtn)) ButtonTips(); };
         ButtonTips();
     }
 
