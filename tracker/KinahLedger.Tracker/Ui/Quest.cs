@@ -153,6 +153,43 @@ public partial class MainWindow
         return row;
     }
 
+    /// <summary>
+    /// A bag tile (Full view's inventory feel, with names on): the item's icon, the count big, the name, and its worth in gold
+    /// (or "no price yet", "bound", faint). Four to a row at 149 px; lit under the mouse.
+    /// </summary>
+    static Border QTile(FrameworkElement icon, string big, string name, string value, string valueTone = "Gold", double width = 149)
+    {
+        var sp = new StackPanel();
+        icon.HorizontalAlignment = HorizontalAlignment.Left;
+        sp.Children.Add(icon);
+        var b = QT(big, 16, FontWeights.Black, "Ink", trim: true); b.Margin = new Thickness(0, 5, 0, 0); b.LineHeight = 18; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        sp.Children.Add(b);
+        sp.Children.Add(QT(name, 11, FontWeights.Bold, "Muted", trim: true));
+        if (value.Length > 0) { var v = QT(value, 11, FontWeights.ExtraBold, valueTone, trim: true); sp.Children.Add(v); }
+        var tile = new Border { Width = width, Padding = new Thickness(10, 9, 10, 9), CornerRadius = new CornerRadius(14), Child = sp, Cursor = Cursors.Hand };
+        tile.SetResourceReference(Border.BackgroundProperty, "Card2");
+        tile.MouseEnter += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "ItemSel");
+        tile.MouseLeave += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "Card2");
+        return tile;
+    }
+
+    /// <summary>An odds badge: the item's icon, "1 in 4" big, the name small, centred in a small rounded box.</summary>
+    static Border QBadge(FrameworkElement icon, string odds, string name)
+    {
+        var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        icon.HorizontalAlignment = HorizontalAlignment.Center;
+        sp.Children.Add(icon);
+        var b = QT(odds, 12, FontWeights.Black, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.Margin = new Thickness(0, 4, 0, 0);
+        sp.Children.Add(b);
+        var n = QT(name, 10.5, FontWeights.Bold, "Muted", trim: true); n.HorizontalAlignment = HorizontalAlignment.Center; n.TextAlignment = TextAlignment.Center;
+        sp.Children.Add(n);
+        var badge = new Border { Padding = new Thickness(6, 8, 6, 8), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand };
+        badge.SetResourceReference(Border.BackgroundProperty, "Card2");
+        badge.MouseEnter += (_, _) => badge.SetResourceReference(Border.BackgroundProperty, "ItemSel");
+        badge.MouseLeave += (_, _) => badge.SetResourceReference(Border.BackgroundProperty, "Card2");
+        return badge;
+    }
+
     /// <summary>A centred faint line under a list: "7 more kinds have no Market price yet".</summary>
     static TextBlock QMore(string text)
     {

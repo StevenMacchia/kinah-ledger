@@ -1071,6 +1071,7 @@ public partial class MainWindow : Window
         var byEnemy = e.MobSnapshot().Where(m => m.Kinah > 0).GroupBy(m => m.Name).Select(g => (Where: g.Key, Count: g.Sum(m => m.Kinah))).OrderByDescending(x => x.Count).ToList();
         _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy, e.AbyssPoints);
         FillChips(e, kinah, s, t.Kills, elapsed, totalNow, t.Nodes);   // the three chips under the hero (Ui/MainWindow.QuestFarm.cs)
+        FillQuestRight(s, kinah, t.Kills, elapsed);   // Full view's second column (Ui/MainWindow.QuestFull.cs)
         FillLoot();
         var top = s.Drops.Concat(s.Gathered).Where(r => !r.Header && r.Worth > 0).OrderByDescending(r => r.Worth).ToList();
         _topRows = top;
@@ -1218,7 +1219,8 @@ public partial class MainWindow : Window
         if (!farm) SummaryCard.Visibility = Visibility.Collapsed;   // LOOT shows itself on Farming (FillLoot)
         if (!farm) GoalsCard.Visibility = Visibility.Collapsed;     // GOALS too (FillGoals)
         // the tables only in Full view since 2026-10-28 (the calm Farming page, mock C): Compact is the live card and LOOT
-        TablesCard.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
+        TablesCard.Visibility = Visibility.Collapsed;   // its rows still fill (ShowTable); the Quest right column shows the bag, Who pays and the odds (2026-11-07)
+        QuestRight.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
         PlaceWhatsNew();   // What's new on Farming only, in both views (0.9.12)
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1234,7 +1236,8 @@ public partial class MainWindow : Window
         RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
         // the feed and the rate with LOOT and Where to farm now under them and the footer closing that card, in both views;
         // Full view adds the drops and the chips on the right
-        MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1);
+        if (full) { MoveTo(SummaryCard, QuestRight, 0); MoveTo(WhereSection, QuestRight, 3); }
+        else { MoveTo(SummaryCard, LeftCol, LeftCol.Children.IndexOf(ChipPanel) + 1); MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1); }
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
         // Share's round button in the header goes with the Farming page, as the card's button did (Quest, 2026-11-07)
         ShareCardBtn.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;

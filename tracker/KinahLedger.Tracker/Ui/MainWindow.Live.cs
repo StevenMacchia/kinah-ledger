@@ -523,10 +523,10 @@ public partial class MainWindow
         var top = zones.Count > 0 ? zones[0] : null;
         long topHr = top?.ValueHr ?? 0;
         string more = top != null && _lastRateHr > 0 && topHr > _lastRateHr * 1.05 ? $", {Math.Round(100 * (topHr / _lastRateHr - 1)):0}% more than here" : "";
-        WhereTitle.Text = zones.Count == 0 ? "Where to farm" : hereAt == 0 ? "You are in the zone that pays most" : $"{top!.Zone} pays more";
+        WhereTitle.Text = zones.Count == 0 || open ? "Where to farm" : hereAt == 0 ? "You are in the zone that pays most" : $"{top!.Zone} pays more";
         WhereNote.Inlines.Clear();
         if (zones.Count == 0) WhereNote.Inlines.Add(PR($"nothing published for {scope} yet", "Muted"));
-        else if (open) WhereNote.Inlines.Add(PR((atGear ? $"gear {GearBracket!.Replace("-", "–")}" : "all players") + $" · {(all ? "all regions" : server)} · last 7 days", "Muted"));
+        else if (open) WhereNote.Inlines.Add(PR("Kinah and loot an hour · " + (atGear ? $"gear {GearBracket!.Replace("-", "–")}" : "all players") + $" · {(all ? "all regions" : server)} · last 7 days", "Muted"));
         else
         {
             WhereNote.Inlines.Add(PR(Fk(topHr) + " an hour", "Mint", FontWeights.ExtraBold));

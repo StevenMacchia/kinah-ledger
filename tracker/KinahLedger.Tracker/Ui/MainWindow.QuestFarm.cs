@@ -79,12 +79,12 @@ public partial class MainWindow
     {
         bool farm = _part == "Farming" && !_welcome && _hasSummary;
         ChipsRow.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
-        FeedNote.Text = farm && totalNow > 0 ? $"last five · {Fk(totalNow)} in the bag" : "";
+        FeedNote.Text = farm && totalNow > 0 && !FullShown ? $"last five · {Fk(totalNow)} in the bag" : farm ? "last five" : "";   // Full has the bag beside it
         if (!farm) { ChipPanel.Visibility = Visibility.Collapsed; return; }
         _qMobs = e.MobSnapshot(); _qKinah = kinah; _qKills = kills; _qElapsed = elapsed;
         int kinds = s.Drops.Count(r => !r.Header) + s.Gathered.Count(r => !r.Header) + (s.Pets is { Count: > 0 } ? 1 : 0);
         bool gather = _mode == Mode.Gather;
-        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{Skins.Current}";
+        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}";
         if (!Changed("chips", sig)) return;
         if (gather)
         {
@@ -102,7 +102,7 @@ public partial class MainWindow
             FillChipPanel();
             return;
         }
-        foreach (var chip in new[] { ChipKinah, ChipLoot, ChipKills }) chip.Cursor = Cursors.Hand;
+        foreach (var chip in new[] { ChipKinah, ChipLoot, ChipKills }) chip.Cursor = FullShown ? Cursors.Arrow : Cursors.Hand;
         QChipFill(ChipKinah, QCoin(30), Fk(kinah), "Kinah picked up");
         ChipKinah.ToolTip = $"{kinah:N0} Kinah {CountWhere()}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + ". Quest rewards and bound Kinah are left out. Click for Kinah by enemy.";
         QChipFill(ChipLoot, QIconBox("Bag", "Mint"), s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", kinds > 0 ? $"loot · {kinds} kind{(kinds == 1 ? "" : "s")}" : "loot");
@@ -126,6 +126,7 @@ public partial class MainWindow
     void ToggleChip(string key)
     {
         if (_mode == Mode.Gather && key != "bag") return;   // a gathering stretch has no enemies behind its chips
+        if (FullShown) return;   // Full view has the bag, Who pays and the odds in its second column already
         _qChip = _qChip == key ? null : key;
         _drawnSig.Remove("chips"); _drawnSig.Remove("loot");
         Redraw();
@@ -134,41 +135,10 @@ public partial class MainWindow
     /// <summary>What a chip opens under the row: Kinah by enemy or kills by enemy as rows with bars; the bag is LOOT's card (FillLoot shows it).</summary>
     void FillChipPanel()
     {
-        bool panel = _qChip is "who" or "kills" && _mode != Mode.Gather;
+        bool panel = _qChip is "who" or "kills" && _mode != Mode.Gather && !FullShown;
         ChipPanel.Visibility = panel ? Visibility.Visible : Visibility.Collapsed;
         if (!panel) return;
-        ChipPanelHost.Children.Clear();
-        var mobs = _qMobs.Where(m => m.Kills > 0 || m.Kinah > 0).ToList();
-        if (_qChip == "who")
-        {
-            long named = mobs.Sum(m => m.Kinah);
-            ChipPanelHost.Children.Add(QHead("Sword", "Who pays", named > 0 && _qKinah > 0 ? $"{Fk(named)} of {Fk(_qKinah)} Kinah came with a name" : ""));
-            var top = mobs.Where(m => m.Kinah > 0).OrderByDescending(m => m.Kinah).Take(6).ToList();
-            long max = top.Count > 0 ? top[0].Kinah : 0;
-            for (int i = 0; i < top.Count; i++)
-            {
-                var m = top[i];
-                ChipPanelHost.Children.Add(QRow(QIconBox("Sword", "Coral", 30, round: true), m.Name, m.Kills > 0 ? $"{m.Kills:N0} kill{(m.Kills == 1 ? "" : "s")} · {Fk(m.Kinah / (double)m.Kills)} a kill" : "", Fk(m.Kinah), "Ink", max > 0 ? m.Kinah / (double)max : null, "Gold", rule: i > 0));
-            }
-            if (top.Count == 0) ChipPanelHost.Children.Add(QMore("No enemy named yet: Kinah lines name the enemy once the target bar is read."));
-            else if (_qKinah - named > 0) ChipPanelHost.Children.Add(QMore($"{_qKinah - named:N0} came with no enemy named"));
-        }
-        else
-        {
-            double perMin = _qElapsed.TotalMinutes >= 1 ? _qKills / _qElapsed.TotalMinutes : 0;
-            ChipPanelHost.Children.Add(QHead("Sword", "Kills", _qKills > 0 ? $"{_qKills:N0} in {TodayLoot.Dur(_qElapsed.TotalSeconds)}" + (perMin > 0 ? $" · {perMin:0.0} a minute" : "") : ""));
-            var top = mobs.Where(m => m.Kills > 0).OrderByDescending(m => m.Kills).Take(6).ToList();
-            int named = 0;
-            for (int i = 0; i < top.Count; i++)
-            {
-                var m = top[i]; named += m.Kills;
-                var drops = m.Drops.OrderByDescending(d => d.Value).Take(1).Select(d => (Name: _items.Get(d.Key)?.Name ?? "", d.Value)).FirstOrDefault(d => d.Name.Length > 0);
-                var sub = $"{Fk(m.Kinah / (double)m.Kills)} Kinah a kill" + (drops.Name.Length > 0 && m.Kills >= drops.Value ? $" · drops {drops.Name} 1 in {Math.Round(m.Kills / (double)drops.Value):0}" : "");
-                ChipPanelHost.Children.Add(QRow(QIconBox("Sword", "Coral", 30, round: true), m.Name, sub, m.Kills.ToString("N0"), "Ink", rule: i > 0));
-            }
-            if (top.Count == 0) ChipPanelHost.Children.Add(QMore("No enemy named yet."));
-            else if (_qKills - named > 0) ChipPanelHost.Children.Add(QMore($"{_qKills - named:N0} kills came with no enemy named"));
-        }
+        if (_qChip == "who") BuildWho(ChipPanelHost); else BuildKills(ChipPanelHost);   // Ui/MainWindow.QuestFull.cs
     }
 
     /* ---------------- Next up's milestones ---------------- */

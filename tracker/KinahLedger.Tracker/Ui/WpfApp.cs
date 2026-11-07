@@ -382,12 +382,12 @@ public static class WpfApp
         Check(w.TablesCard.Visibility != Visibility.Visible && w.SummaryCard.Visibility != Visibility.Visible && w.TopDropsBox.Visibility != Visibility.Visible && w.Rows.Items.Count <= 3,
             "Compact: the hero and the chips, the bag behind its chip, no tables, Where next folded");
         w.ToggleChipForTest("bag"); DoEvents();
-        Check(w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.LootForTest().Slots >= 10, "...the loot chip opens the bag with its slots");
+        Check(w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.LootForTest().Slots >= 8, "...the loot chip opens the bag with its slots (two rows of four tiles)");
         w.ToggleChipForTest("bag"); DoEvents();
         Check(w.SummaryCard.Visibility != Visibility.Visible, "...and closes it again");
         w.ShowFull(); DoEvents();
-        Check(w.TablesCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.HeadStack.Width > compactLayout * 1.8,
-            $"Full view: LOOT, Where to farm now open, the tables with more rows, {compactW:0} -> {w.ActualWidth:0} px wide");
+        Check(w.QuestRight.Visibility == Visibility.Visible && w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.HeadStack.Width > compactLayout * 1.8,
+            $"Full view: the bag and the zone board in the second column, open, {compactW:0} -> {w.ActualWidth:0} px wide");
         w.ShowCompact(); DoEvents();
         Check(Math.Abs(w.HeadStack.Width - compactLayout) < 1, "back to Compact: the width it had");
 
@@ -395,7 +395,7 @@ public static class WpfApp
         // way to write time, no zone chip under a minute, nothing said while all is well, no section with nothing in it
         w.ShowDemo(); w.ShowCompact(); DoEvents();   // the sample again, after the Options round above changed the server and said things
         var here = w.LootForTest();
-        Check(here.Here == "This zone" && here.Slots >= 10 && here.Note.Contains("kinds · 42 min") && "KMB".Contains(here.Total[^1]) && !here.Total.Contains(','),
+        Check(here.Here == "This zone" && here.Slots >= 8 && here.Note.Contains("kinds · 42 min") && "KMB".Contains(here.Total[^1]) && !here.Total.Contains(','),
             $"LOOT, This zone: {here.Slots} slots, \"{here.Note}\", {here.Total}");
         Check(w.FootTotal.ToolTip is string tt && tt.Contains("Kinah picked up") && tt.Contains("Total, " + Data.PriceBook.Fee), "LOOT's total says how it adds up on hover");
         Check(w.TableTitle.Text == "Open world · 42 min" && !w.TableTitle.Text.Contains(':'), $"the card says how long in minutes: \"{w.TableTitle.Text}\"");
@@ -405,7 +405,7 @@ public static class WpfApp
         Check(w.MoreInfo().Any(i => i.Text == "Reading the chat") && w.MoreInfo().Any(i => i.Text.StartsWith("Last: ")), "...they are in ⋯: " + string.Join(" | ", w.MoreInfo().Select(i => i.Text)));
         w.PickLootForTest(true); DoEvents();
         var day = w.LootForTest(); var chips = w.LootChipsForTest();
-        Check(day.Note.Contains("h") && day.Note.Contains("farming") && !day.Note.Contains(':') && day.Slots >= 10 && chips.Count == 4 && chips[0] == "All zones",
+        Check(day.Note.Contains("h") && day.Note.Contains("farming") && !day.Note.Contains(':') && day.Slots >= 8 && chips.Count == 4 && chips[0] == "All zones",
             $"LOOT, Today: \"{day.Note}\" {day.Total}, {day.Slots} slots, chips {string.Join(" / ", chips)}");
         Check(!chips.Any(c => c.Contains("Drana")) && chips.Skip(1).All(c => c.EndsWith(" min") || c.EndsWith(" h")), "no chip for a zone under a minute; each says its minutes");
         // Sort  worth · amount · quality over the slots (Steven, 2026-11-05): by amount the counts fall along the slots, by
@@ -476,21 +476,21 @@ public static class WpfApp
         // rows update in place (2026-10-25): a redraw keeps the row controls and only hands them new words, so a tick with a
         // farming session on screen no longer rebuilds the tables (which is what made clicks and drags wait)
         var rowItems = w.Rows.ItemsSource as System.Collections.ObjectModel.ObservableCollection<RowItem>;
-        var box0 = w.Rows.ItemContainerGenerator.ContainerFromIndex(0);
+        // the table itself is not drawn since the Quest look (2026-11-07: the bag's tiles and the odds badges show its figures), so no container to ask for
         var item0 = rowItems is { Count: > 1 } ? rowItems[0] : null;
-        Check(rowItems != null && box0 != null && item0 != null, $"the drops table holds row items with controls ({rowItems?.Count} rows)");
+        Check(rowItems != null && item0 != null, $"the drops table holds row items ({rowItems?.Count} rows)");
         w.ShowFull(); DoEvents();
-        Check(ReferenceEquals(w.Rows.ItemContainerGenerator.ContainerFromIndex(0), box0) && rowItems != null && ReferenceEquals(rowItems[0], item0) && w.Rows.Items.Count > 3,
-            "Full view adds rows under the ones already there, keeping their controls");
+        Check(rowItems != null && ReferenceEquals(rowItems[0], item0) && w.Rows.Items.Count > 3,
+            "Full view adds rows under the ones already there, keeping the first");
         var was = item0!.Row;
         MainWindow.SyncRows(w.Rows, new[] { was with { Drops = "999" }, rowItems![1].Row });
         DoEvents();
-        Check(ReferenceEquals(w.Rows.ItemContainerGenerator.ContainerFromIndex(0), box0) && item0.Drops == "999" && w.Rows.Items.Count == 2,
-            "new words land on the same row control; extra rows come off the end");
+        Check(ReferenceEquals(rowItems[0], item0) && item0.Drops == "999" && w.Rows.Items.Count == 2,
+            "new words land on the same row item; extra rows come off the end");
         Check(!item0.Set(was with { Drops = "999" }), "the same words again change nothing");
         w.ShowCompact(); DoEvents();
-        Check(ReferenceEquals(w.Rows.ItemContainerGenerator.ContainerFromIndex(0), box0) && item0.Drops == was.Drops && w.Rows.Items.Count <= 3,
-            "a redraw puts the count's words back on the same control");
+        Check(ReferenceEquals(rowItems[0], item0) && item0.Drops == was.Drops && w.Rows.Items.Count <= 3,
+            "a redraw puts the count's words back on the same item");
         // an icon whose download failed asks again after RetrySeconds, not at the next start (2026-10-25: Expert's gear rows lettered all session)
         var badUrl = "http://127.0.0.1:9/no-such-icon-" + Guid.NewGuid().ToString("N") + ".png";
         int fetchesBefore = IconCache.Fetches;
@@ -585,7 +585,7 @@ public static class WpfApp
             w.ShowGoalsSample(2); DoEvents();
             var two = w.GoalsForTest();
             Check(two.Shown && two.Slots == 2 && two.Add && two.Note.StartsWith("today · 0 of 2 done"), $"Next up: two goal rows and Set a goal, \"{two.Note}\"");
-            Check(w.LootForTest().Slots >= 10, "the bag still fills under Next up");
+            Check(w.LootForTest().Slots >= 8, "the bag still fills under Next up");
             // reached between two looks: said once on the status line (and the panel), never again that day
             w.SetGoalsForTest(new[] { new Session.Goal { Kind = Session.Goal.KindRuns, Which = Session.Goal.Expeditions, Target = 3 } });
             var said = w.GoalTickForTest(); var again = w.GoalTickForTest();

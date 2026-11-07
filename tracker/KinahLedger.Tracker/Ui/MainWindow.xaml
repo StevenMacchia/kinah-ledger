@@ -686,6 +686,18 @@
     <ScrollViewer x:Name="LowerScroll" Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="16,0,-20,0" Focusable="False" Visibility="Collapsed">
       <StackPanel Width="662" HorizontalAlignment="Left">
 
+      <!-- the Quest right column (Full view, 2026-11-07, Ui/MainWindow.QuestFull.cs): the bag as tiles (LOOT's card, moved in by
+           ApplyView), Kinah by enemy as bars, drop odds as badges, the zone board as bars (Where next, moved in too), gathering as two chips -->
+      <StackPanel x:Name="QuestRight" Margin="0,2,0,0" Visibility="Collapsed">
+        <Border x:Name="QuestWho" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed"><StackPanel x:Name="QuestWhoHost"/></Border>
+        <Border x:Name="QuestOdds" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed"><StackPanel x:Name="QuestOddsHost"/></Border>
+        <Grid x:Name="QuestGather" Margin="0,8,0,0" Visibility="Collapsed">
+          <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
+          <Border x:Name="GatherChip1" Style="{StaticResource QChip}" Cursor="Arrow"/>
+          <Border x:Name="GatherChip2" Grid.Column="2" Style="{StaticResource QChip}" Cursor="Arrow"/>
+        </Grid>
+      </StackPanel>
+
       <Border x:Name="TablesCard" Background="{DynamicResource Card}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1,0,1,0">
         <StackPanel x:Name="TableStack">
           <!-- idle time and skipped reward lines; each shown only once there is something to say -->

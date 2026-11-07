@@ -169,7 +169,8 @@ public partial class MainWindow
     /// <summary>An item's slot: its icon in its grade frame with the stack count, the game-tooltip card on hover, pinned with Set a goal on a click.</summary>
     FrameworkElement ItemSlot(TodaySlot s, (string Odds, string Hour) rate, bool showWhere, bool runs = false, string when = "today")
     {
-        var tile = CkIcon(s.Name, 46, FrameOf(s.Id), badge: CountBadge(s.Count));
+        var tile = QTile(QItemIcon(s.Name, s.Id, 34, round: false, grade: _items.Get(s.Id)?.Grade ?? ""), s.Count.ToString("N0"), s.Name,
+            s.Worth > 0 ? Fk(s.Worth) : s.Gear || (s.Bound > 0 && s.Bound >= s.Count) ? "bound" : s.Currency ? "a currency" : "no price yet", s.Worth > 0 ? "Gold" : "Faint");
         CardTip(tile, () => ItemTodayCard(s, rate, showWhere, runs, when));
         // a click pins the card with Set a goal at its foot (0.9; a right-click until 2026-10-31); a currency is an amount, not something picked up
         if (!s.Currency) PinOnClick(tile, () => ItemTodayCard(s, rate, showWhere, runs, when), ("Set a goal for this", () => OpenGoalSheet(null, GoalDraft.ForItem(s.Name), tile)));
@@ -187,7 +188,7 @@ public partial class MainWindow
     /// <param name="whereTitle">The heading over <paramref name="where"/>: zones for the day, enemies for LOOT's first side.</param>
     FrameworkElement KinahSlot(long kinah, List<(string Where, long Count)> where, string line, string foot = "Picked up today", string whereTitle = "WHERE")
     {
-        var tile = WithBadge(CoinTile(46), CountBadge(kinah), "");
+        var tile = QTile(QCoin(34), Fk(kinah), "Kinah", line.Length > 0 ? line.Split(" · ").Last() : "", "Muted");
         tile.ToolTip = null;
         CardTip(tile, () => KinahTodayCard(kinah, where, line, foot, whereTitle));
         // a click on farming's Kinah pins its card with Set a Kinah goal (0.9); a run's Kinah isn't farming's, so not on the Events page
