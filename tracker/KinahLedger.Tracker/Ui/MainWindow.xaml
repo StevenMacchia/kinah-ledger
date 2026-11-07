@@ -269,7 +269,7 @@
           </StackPanel>
         </StackPanel>
         <!-- three pages that never mix: Farm (the run, the rate, the loot), Craft (recipes, cost, profit), Runs (expeditions and events) -->
-        <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,8,0" Padding="4" CornerRadius="999" Background="{DynamicResource Card}" VerticalAlignment="Center">
+        <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,8,0" Padding="4" CornerRadius="12" Background="{DynamicResource Card}" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal">
             <Button x:Name="FarmTab" Style="{StaticResource SegOn}">
               <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcSword}"/><TextBlock Text="Farm" VerticalAlignment="Center"/></StackPanel>
@@ -558,7 +558,7 @@
             <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
             <TextBlock x:Name="FootTotalNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
             <!-- one period at a time: this zone (or the run, or All zones), today, or the week -->
-            <Border x:Name="LootScope" Grid.Column="3" Padding="3" CornerRadius="999" Background="{DynamicResource Bg}" VerticalAlignment="Center" Margin="12,0,0,0">
+            <Border x:Name="LootScope" Grid.Column="3" Padding="3" CornerRadius="10" Background="{DynamicResource Bg}" VerticalAlignment="Center" Margin="12,0,0,0">
               <StackPanel Orientation="Horizontal">
                 <Button x:Name="LootHereBtn" Style="{StaticResource SegOn}" Content="This zone" Height="24" FontSize="11.5" Padding="10,0" ToolTip="Since you came to this zone. It starts over when you change zone."/>
                 <Button x:Name="LootTodayBtn" Style="{StaticResource SegOff}" Content="Today" Height="24" FontSize="11.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Today's farming since midnight on this PC, every zone."/>
