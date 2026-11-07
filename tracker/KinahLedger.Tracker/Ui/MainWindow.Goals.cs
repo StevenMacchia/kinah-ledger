@@ -301,7 +301,7 @@ public partial class MainWindow
     {
         if (editing == null && _goals.Count >= Goals.Max) { Say("Three goals are set. Click one to change or remove it.", "Warn"); return; }
         if (_card != null) _card.IsOpen = false;
-        _card = new Popup { Child = BuildGoalSheet(d, editing), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = at ?? (UIElement)Content };
+        _card = new InCard { Child = BuildGoalSheet(d, editing), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = at ?? (UIElement)Content };
         _card.IsOpen = true;
     }
 

@@ -27,7 +27,7 @@ public partial class MainWindow
         if (_card != null) _card.IsOpen = false;
         // an upgrade's row (under its recipe) opens its recipe's card
         var recipe = r.Child && r.Key.StartsWith("craft:", StringComparison.Ordinal) ? r.Key["craft:".Length..] : r.Name;
-        _card = new Popup { Child = BuildCraftCard(recipe), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = fe };
+        _card = new InCard { Child = BuildCraftCard(recipe), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = fe };
         _card.IsOpen = true;
     }
 

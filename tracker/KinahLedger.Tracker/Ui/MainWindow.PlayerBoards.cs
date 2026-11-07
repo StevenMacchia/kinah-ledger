@@ -161,7 +161,7 @@ public partial class MainWindow
             card.Click += (_, _) =>
             {
                 if (_card != null) _card.IsOpen = false;
-                _card = new Popup { Child = BuildCraftCard(name, c, rank), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = g };
+                _card = new InCard { Child = BuildCraftCard(name, c, rank), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = g };
                 _card.IsOpen = true;
             };
             detail.Inlines.Add(card);
