@@ -1054,6 +1054,8 @@ public static class WpfApp
         var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
         if (skin != null) Skins.Apply(skin);
+        // a state's own look (the daylight and abyss states, 0.10.22); a state without one renders in Night, so a sweep reads the same on every PC
+        else if (state != null) Skins.Apply(state.Skin ?? Skins.Default);
         // KL_SCREEN_H=1040: render as a screen of that height would show it (the window never grows past the work area)
         if (double.TryParse(Environment.GetEnvironmentVariable("KL_SCREEN_H"), out var screenH) && screenH > 300) w.MaxHeight = screenH;
         // --tall: the whole window, however tall, so a render shows every block of a view (named "-tall")
