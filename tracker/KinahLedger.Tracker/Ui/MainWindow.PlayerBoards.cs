@@ -138,7 +138,10 @@ public partial class MainWindow
         var icon = ItemTile(name, c.Id, 30, GradeOf(name)); icon.VerticalAlignment = VerticalAlignment.Top; icon.Margin = new Thickness(0, 2, 0, 0); icon.HorizontalAlignment = HorizontalAlignment.Left;
         g.Children.Add(icon);
         var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-        var nt = new TextBlock { Text = name, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = new SolidColorBrush(GradeColor(GradeOf(name))) };
+        // the name in the page's own ink (0.10.22): it was the dark cards' grade colour, white for a common item, which vanished on
+        // the Daylight look; the tile beside it carries the grade, as on every other row of the page
+        var nt = new TextBlock { Text = name, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        nt.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         var oq = PriceBook.QuoteOf(name);
         var bits = new List<string>();
         if (c.Makes > 1) bits.Add($"makes ×{c.Makes}");

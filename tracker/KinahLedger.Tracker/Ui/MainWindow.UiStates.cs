@@ -28,6 +28,8 @@ public sealed class UiState
     public double? Scale { get; set; }
     /// <summary>"compact" or "full".</summary>
     public string? View { get; set; }
+    /// <summary>The look (Options › General › Look): "night" (the default), "abyss" or "daylight". A sweep renders a state without one in Night, whatever this PC's own look is.</summary>
+    public string? Skin { get; set; }
     /// <summary>The TODAY strip: "open" (the default, so its rows can be reviewed) or "closed".</summary>
     public string Strip { get; set; } = "open";
     /// <summary>The runs; absent, the plain demo's (DemoRuns). An empty list is no runs at all.</summary>
@@ -43,6 +45,7 @@ public sealed class UiState
         var s = JsonSerializer.Deserialize<UiState>(File.ReadAllText(path), Json) ?? new UiState();
         s.Name = System.IO.Path.GetFileNameWithoutExtension(path);
         if (s.Scale is { } sc && (sc < 0.5 || sc > 2)) throw new InvalidOperationException($"{s.Name}: scale {sc} is outside 0.5..2");
+        if (s.Skin != null && Skins.All.All(k => k.Key != s.Skin)) throw new InvalidOperationException($"{s.Name}: no look named '{s.Skin}' (night, abyss, daylight)");
         return s;
     }
 

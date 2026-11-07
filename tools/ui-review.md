@@ -6,7 +6,7 @@ The accuracy loops have a verifier that is not the agent's opinion (the bench sc
 KinahLedger.exe ui-shot <dir> --sweep events        every state on the Events page: events-<state>.png (the whole page), events-<state>.figures.json, sweep.txt
 KinahLedger.exe ui-shot <dir> --sweep all           every page: a state with runs of its own is an Events state; the others (demo, scale-80, scale-150, compact, full) go on every page
 KinahLedger.exe ui-shot <dir> --events --state many-runs     one state (--state implies --demo and the whole page)
-    --skin daylight|abyss                            the other skins (night is the default); the file name carries the skin
+    --skin daylight|abyss                            every render in that skin (the file name carries it). The sweep already has the `daylight` and `abyss` states (below), so `--sweep all` covers the skins without it
     --states-dir <folder>                            when tracker/tests/ui/states isn't found from the working folder or above the exe
 python -I tools/ui-diff.py <before> <after> --only events-   which renders changed between two sweeps and where; exit 1 if any file outside the prefix differs
 ```
@@ -26,10 +26,11 @@ python -I tools/ui-diff.py <before> <after> --only events-   which renders chang
 | `scale` | The window size slider, 0.8 to 1.5. |
 | `view` | `compact` or `full`. |
 | `strip` | The TODAY strip's body: `open` (the default) or `closed`. Since 0.10.21 the Today side is its line alone; the body is the Week side's. |
+| `skin` | The look: `night` (the default), `abyss` or `daylight`. A state without one renders in Night whatever this PC's own look is, so a sweep reads the same on every PC (0.10.22). |
 
 A run line: `zone`, `kind` (`Expedition`, `Event`, `Transcendence`, `World Boss`), `day` (0 today, -1 yesterday), `time` (the first run's start, `HH:mm`), `secs`, `kinah`, `items` (name to count; a name the dictionary doesn't know is made up, with no icon and no price), `gear` (names, bound), `unread` (reward slots not read), `kinahNotRead`, `rewardsNotRead` (the run is flagged and out of the figures), `partly`. One line can stand for many runs: `repeat` runs a day, `step` minutes apart, over `days` days in a row from `day` on, with `vary` (0.1 is ±10%) spreading Kinah and seconds by index, the same every render. The runs are written to `instances.jsonl` and loaded the way the tracker loads its own, so a run that looks like several, or a Kinah not read, is flagged by the same rules as a real one.
 
-The states now: `demo` (the sample as `--demo` has it), `empty` (first day, nothing), `one-run`, `many-runs` (329 runs over three weeks and four places), `long-run` (three-hour runs), `long-names` (a 41-character place, a 62-character item, Traditional Chinese and Korean names; the item dictionary is en-US only, so these are made up), `big-numbers` (billions, stacks of 9,999), `unpriced` (no Market prices), `unread` (every run flagged), `scale-80`, `scale-150`, `compact`, `full`. Add a state when a report names a case none of them shows; a state is cheap, a finding missed is not.
+The states now: `demo` (the sample as `--demo` has it), `empty` (first day, nothing), `one-run`, `many-runs` (329 runs over three weeks and four places), `long-run` (three-hour runs), `long-names` (a 41-character place, a 62-character item, Traditional Chinese and Korean names; the item dictionary is en-US only, so these are made up), `big-numbers` (billions, stacks of 9,999), `unpriced` (no Market prices), `unread` (every run flagged), `scale-80`, `scale-150`, `compact`, `full`, `daylight` and `abyss` (the sample runs in the other two looks, on every page). Add a state when a report names a case none of them shows; a state is cheap, a finding missed is not.
 
 ## The figures check
 
@@ -48,7 +49,7 @@ The reviewer answers every item for every render, yes or no, with what it saw an
 7. **A control with no visible purpose.** A switch, a chevron, a link or a dropdown that does nothing in this state (a scope switch with one scope, a sort with one slot, a dropdown with one choice).
 8. **Anything a first-time player could not name.** A label or an abbreviation that needs the code to explain it, a figure whose source is not on the page.
 9. **A panel whose height is spent on chrome rather than content.** Headings, bands, padding and separators taller than what they frame.
-10. **Dark skin and the other skins.** On `--skin daylight` and `--skin abyss`: anything that reads on one skin and not on another (a frame lost, text the colour of its box).
+10. **Dark skin and the other skins.** On the `daylight` and `abyss` renders against the Night one of the same page: anything that reads on one skin and not on another (a frame lost, text the colour of its box). A colour fixed in code is the usual cause: `GradeColor` (MainWindow.Card.cs) is the dark cards' palette, white for a common item, and a text painted with it on the page vanishes on Daylight (the Best crafts names, cut in 0.10.22); on the page, text takes a skin brush (`Ink`, `Muted`, `Faint`, `GradeRare`…) by `SetResourceReference`.
 11. **Nothing wider than the window at 80%.** On `scale-80`: every row and pill inside the window; `pastWindowEdge` empty.
 12. **The figures check.** `check.pass` true, and every number read off the PNG is in `found`. A number on the page that the file doesn't know is a finding too.
 
@@ -80,6 +81,8 @@ One line per finding: page, how many states (and pages, skins) it touches, the r
 5. Verify: `options-test` (three failures are known: two "panel look: the Strip", "LOOT, This zone"; nothing new may fail), `parse-test` green, the sweep's exit code 0, nothing under `Ocr/` or the chat-reading parts of `Session/` touched.
 6. Before and after renders of the affected states into `docs/ui/` as `before-<page>-<state>.png` and `after-<page>-<state>.png`; the PR body carries them, the ranked findings with the verdicts, the diff's list and the verifiers' lines.
 7. The next iteration starts from the new `after` as its `before`. A finding judged "later" stays in the last report until a PR takes it.
+
+Gotchas the loop has met: the `market-*` renders are the Farming page in its Market mode (the same card, the Market's feed), not a page of their own, and a render can catch the feed's newest row mid-fade; both look like findings and are not. The reviewer's crops are estimates from the image's proportions (it reads the PNG whole), so look a little around each box.
 
 ## The pass rule
 
