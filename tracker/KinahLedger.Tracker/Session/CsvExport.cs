@@ -14,6 +14,8 @@ public static class CsvExport
 {
     public static readonly string LootHeader = "kind,item,count,bound,worth_after_cut,priced,where";
     public static readonly string RunsHeader = "started,kind,place,event,family,took_seconds,kinah,kinah_known,kills,worth_after_cut,left_out,items,bound_items,notes";
+    public static readonly string CraftsHeader = "recipe,crafts,worked,failed,made,made_items,spent,spent_known,sells_for_after_cut,profit,upgrade_rolls_won,upgrade_rolls_lost,not_seen";
+    public static readonly string WeekHeader = "day,made_after_cut,kinah,farming_seconds,kills,gather_attempts,zones,runs,runs_counted,runs_kinah,run_places";
 
     /// <summary>The file's name: kinah-ledger-loot-2026-11-06.csv, kinah-ledger-runs-2026-11-06.csv.</summary>
     public static string FileName(string what, DateTime dayLocal) => $"kinah-ledger-{what}-{dayLocal.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.csv";
@@ -73,6 +75,53 @@ public static class CsvExport
                 r.KinahUnknown ? "" : N(r.Kinah), r.KinahUnknown ? "no" : "yes",
                 N(r.Kills), N(value(r)), r.OutOfAverages ? "yes" : "no",
                 Items(r.Items, items), Items(r.BoundItems, items), string.Join("; ", notes)));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The Crafting page's This session table (0.10.12), a row a recipe: tries, how many worked and failed, what came out,
+    /// what the tries cost at Market prices (<paramref name="cost"/>: the figure and whether every material was priced, as
+    /// the page's "≥" says) and what the output sells for after the Market's cut (<paramref name="price"/> each,
+    /// <paramref name="keeps"/> the seller's share), the profit when both are known, the upgrade rolls, and crafts not seen.
+    /// </summary>
+    public static string Crafts(IEnumerable<CraftLedger.Recipe> recipes, Func<CraftLedger.Recipe, (long? Cost, bool Exact)> cost, Func<string, long?> price, double keeps)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(CraftsHeader);
+        foreach (var r in recipes)
+        {
+            var (c, exact) = cost(r);
+            long made = 0; bool madeKnown = r.MadeUnknown == 0;
+            foreach (var (item, n) in r.Made)
+                if (price(item) is long p) made += (long)Math.Round(p * n * keeps); else madeKnown = false;
+            long? profit = c != null && madeKnown ? made - c.Value : null;
+            sb.AppendLine(Row(r.Name, N(r.Attempts), N(r.Ok), N(r.Fail), N(r.MadeCount),
+                string.Join("; ", r.Made.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} ×{N(kv.Value)}")),
+                c is long cv ? N(cv) : "", c == null ? "no" : exact ? "yes" : "at least",
+                madeKnown && r.MadeCount > 0 ? N(made) : "", profit is long pv ? N(pv) : "",
+                N(r.Upgraded), N(r.NotUpgraded), N(r.Unseen)));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The Week side's seven days (0.10.12), oldest first, a row a day: farming (made after the Market's cut, Kinah, seconds
+    /// spent farming, kills, gathering attempts, the zones with what each made) and the runs (how many, how many counted,
+    /// their Kinah, the places with a count each). A day before the history began is a row with its date only.
+    /// </summary>
+    public static string Week(IEnumerable<HistoryDay> days)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(WeekHeader);
+        foreach (var d in days)
+        {
+            var day = d.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (d.BeforeHistory) { sb.AppendLine(Row(day, "", "", "", "", "", "", "", "", "", "")); continue; }
+            var f = d.Farm; var r = d.Runs;
+            sb.AppendLine(Row(day, N(f.Made), N(f.Kinah), N((long)Math.Round(f.Active)), N(f.Kills), N(f.Attempts),
+                string.Join("; ", f.Zones.Select(z => $"{z.Zone} {N(z.Made)}")),
+                N(r.Runs), N(r.Counted), N(r.Kinah), string.Join("; ", r.Names.Select(n => $"{n.Name} {N(n.Count)}"))));
         }
         return sb.ToString();
     }

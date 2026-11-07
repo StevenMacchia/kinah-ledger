@@ -77,6 +77,7 @@ public partial class MainWindow
             new("A pickup is missing…", () => ShowLineReport(null, Session.FeedTab.Farming, FeedBox), Tip: "Report a pickup the feed never showed."),
             // Save as CSV (0.10.11, Ui/MainWindow.Export.cs): the day's loot for a spreadsheet
             new(SaveLootText, SaveLootCsv, Sub: "Every item today, with counts, worth and zones", Tip: "One file for a spreadsheet: today's Kinah, every drop and gathered item, how many, what they are worth after the Market's cut, and the zones each came from. Nothing is uploaded."),
+            new(SaveWeekText, SaveWeekCsv, Sub: "Seven days: made, time, kills, zones and runs", Tip: "One file for a spreadsheet, a row a day: what farming made after the Market's cut, the Kinah, the time spent farming, kills, gathering attempts and the zones; the day's runs, how many counted, their Kinah and the places. Nothing is uploaded."),
         };
         // what the page stopped saying while all is well (2026-10-28): how reading goes, the last line read, what was left out, idle time
         var info = MoreInfo();

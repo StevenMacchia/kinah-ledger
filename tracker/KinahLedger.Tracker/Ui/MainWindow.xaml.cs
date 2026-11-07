@@ -172,6 +172,7 @@ public partial class MainWindow : Window
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
         CraftResetLink.Click += async (_, _) => await StartCraftOver();
+        CraftCsvLink.Click += (_, _) => SaveCraftsCsv();
         InstClearBtn.Click += async (_, _) => await ClearRuns();
         WireUndo();
         _mode = Mode.Open;

@@ -806,7 +806,8 @@
               <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Text="Crafting"/>
               <TextBlock FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,2,0,0" Text="Since the tracker started"/>
             </StackPanel>
-            <TextBlock x:Name="CraftResetText" Grid.Column="2" FontSize="12" VerticalAlignment="Top"><Hyperlink x:Name="CraftResetLink" Style="{StaticResource LinkStyle}">Start over</Hyperlink></TextBlock>
+            <!-- Save as CSV (0.10.12, Ui/MainWindow.Export.cs) beside Start over; both show once something was crafted -->
+            <TextBlock x:Name="CraftResetText" Grid.Column="2" FontSize="12" VerticalAlignment="Top"><Hyperlink x:Name="CraftCsvLink" Style="{StaticResource LinkStyle}" ToolTip="This session's recipes as a file for a spreadsheet: tries, worked, what came out, cost, what it sells for, profit. Nothing is uploaded.">Save as CSV</Hyperlink><Run Text="   ·   " Foreground="{DynamicResource Faint}"/><Hyperlink x:Name="CraftResetLink" Style="{StaticResource LinkStyle}">Start over</Hyperlink></TextBlock>
           </Grid>
           <Grid Margin="20,16,20,16">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="200"/></Grid.ColumnDefinitions>
