@@ -145,6 +145,16 @@
                 </StackPanel>
                 <CheckBox x:Name="MinToTrayChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- Keep above other windows (0.10.12, Ui/MainWindow.Shell.cs); the ⋯ menu has the same switch -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Keep above other windows"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="The window stays over the game and everything else, for a windowed game on one screen. The panel over the game is on top either way."/>
+                </StackPanel>
+                <CheckBox x:Name="TopmostChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
             </StackPanel>
           </Border>
 

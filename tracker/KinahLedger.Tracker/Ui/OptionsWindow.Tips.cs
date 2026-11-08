@@ -24,6 +24,7 @@ public partial class OptionsWindow
         (MainWindow.OptionsKey, "Options"), (MainWindow.NewSessionKey, MainWindow.ClearAllText), (MainWindow.CopyPictureKey, "Copy the share picture"),
         ("Ctrl+Z", "Undo, while its bar shows (8 s)"),
         (MainWindow.WindowBiggerKey + " / " + MainWindow.WindowSmallerKey, "Window size, a step bigger or smaller (Ctrl+wheel too)"), (MainWindow.WindowResetKey, "Window size back to 100%"),
+        (MainWindow.PageKeys, "Farming, Crafting, Events"),
     };
 
     void FillTips()

@@ -188,6 +188,7 @@ public partial class MainWindow : Window
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
         CraftResetLink.Click += async (_, _) => await StartCraftOver();
+        CraftCsvLink.Click += (_, _) => SaveCraftsCsv();
         InstClearBtn.Click += async (_, _) => await ClearRuns();
         WireUndo();
         _mode = Mode.Open;
@@ -216,6 +217,7 @@ public partial class MainWindow : Window
             ev.Handled = true;
             StepWindowScale(ev.Delta > 0 ? 1 : -1);
         };
+        Topmost = _prefs.AlwaysOnTop;   // Keep above other windows (0.10.12, Ui/MainWindow.Shell.cs)
         ShowPart(PageFollow.Farming, byHand: false);   // always Farming at the start, whatever page it closed on (0.8.55)
         SizeChanged += (_, _) => KeepOnScreen();
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(RefitIfNeeded);   // the screen's scaling changed, or a screen with another one
