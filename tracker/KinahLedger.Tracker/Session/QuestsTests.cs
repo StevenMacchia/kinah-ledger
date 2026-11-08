@@ -31,6 +31,7 @@ public static class QuestsTests
             Check("stack chain: 0, 4, 5, 99, 100, 999, 1000, 12345", string.Join(",", new long[] { 0, 4, 5, 99, 100, 999, 1000, 12345 }.Select(n => Quests.NextStep(Quests.StackChain, n))), "5,5,10,100,150,1000,2000,20000");
             Check("Kinah this session: 0, 100K, 999K, 20M, 23M", string.Join(",", new long[] { 0, 100_000, 999_000, 20_000_000, 23_000_000 }.Select(n => Fk(Quests.NextStep(Quests.KinahSession, n)))), "100K,250K,1M,30M,30M");
             Check("Kinah this week: 0, 5M, 500M", string.Join(",", new long[] { 0, 5_000_000, 500_000_000 }.Select(n => Fk(Quests.NextStep(Quests.KinahWeek, n)))), "5M,10M,600M");
+            Check("past a short chain's end: runs 50 → 100 → 150, stacks and gathers 1000 → 2000", $"{Quests.NextStep(Quests.RunsChain, 50)} {Quests.NextStep(Quests.RunsChain, 100)} {Quests.NextStep(Quests.StackChain, 1000)} {Quests.NextStep(Quests.GatherChain, 1000)}", "100 150 2000 2000");
             Check("step index: 5 is 0, 100 is 5, 1000 is 10, 3000 is 12", string.Join(",", new long[] { 5, 100, 1000, 3000 }.Select(t => Quests.StepIndex(Quests.StackChain, t))), "0,5,10,12");
 
             // b. tiers from the odds and the grade
@@ -114,6 +115,10 @@ public static class QuestsTests
             Check("quests.json keeps the log", $"{back.Done.Count == log.Done.Count} {back.AllTimePoints == log.AllTimePoints} {back.Done[0].Scope == log.Done[0].Scope}", "True True True");
             File.WriteAllText(Quests.PathFor(), "not json");
             Check("a broken file is a fresh log", $"{Quests.Load().Done.Count} {Quests.Load().AllTimePoints}", "0 0");
+            Check("...and is kept beside it as quests.json.bad", File.Exists(Quests.PathFor() + ".bad") && File.ReadAllText(Quests.PathFor() + ".bad") == "not json" ? "kept" : "lost", "kept");
+            File.WriteAllText(Quests.PathFor(), "{\"AllTimePoints\": 77, \"Done\": [null, {\"Key\": null, \"Scope\": \"d:2026-11-08\"}, {\"Key\": \"k\", \"Scope\": null}, {\"Key\": \"good\", \"Scope\": \"d:2026-11-08\"}]}");
+            var holey = Quests.Load();
+            Check("a null entry or a null key or scope is dropped, the rest kept", $"{holey.Done.Count} {holey.Done[0].Key} {holey.AllTimePoints}", "1 good 77");
             back.Done[0].DoneAtUtc = now.AddDays(-90);
             long allTime = back.AllTimePoints;
             Quests.Advance(back, next with { NowUtc = now.AddDays(1) }, now.AddDays(1).ToLocalTime());
