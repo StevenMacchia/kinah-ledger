@@ -111,6 +111,15 @@ public static class QuestsTests
             var ore = goldDone.Where(d => d.Kind == QuestKind.Material).ToList();
             Check("5 Radiant (gold) with the hour's cap spent on Kinah: gold in full, the rest capped, the cap still spent",
                 $"{string.Join(",", ore.Select(d => d.Target))}: {ore.Sum(d => d.Points)} of {ore.Sum(d => d.Worth)}; the rest {goldDone.Except(ore).Sum(d => d.Points)}; left {Quests.CapLeft(goldLog, gold)}", "1,2,3,5: 110 of 110; the rest 60; left 0");
+            // ...once per item per day (Steven, 2026-11-08: a restart re-paid 110 outside the cap every session): a second session that day climbs it under the cap
+            var day1 = now.ToLocalTime();
+            var gold2 = gold with { SessionStartUtc = start.AddHours(2), NowUtc = start.AddHours(2).AddMinutes(42), Session = gold.Session with { Kinah = 0, Gathers = 0 } };
+            var second = Quests.Advance(goldLog, gold2, day1).Where(d => d.Kind == QuestKind.Material && d.Horizon == Horizon.Session).ToList();
+            Check("...a second session the same day: 5 Radiant again, under the cap this time",
+                $"first free {ore.All(d => d.FreeDay.Length > 0)}; second {second.Sum(d => d.Points)} of {second.Sum(d => d.Worth)}, free {second.Any(d => d.FreeDay.Length > 0)}, left {Quests.CapLeft(goldLog, gold2)}", "first free True; second 60 of 110, free False, left 0");
+            var gold4 = gold2 with { SessionStartUtc = start.AddDays(1), NowUtc = start.AddDays(1).AddMinutes(42) };
+            var nextDay = Quests.Advance(goldLog, gold4, day1.AddDays(1)).Where(d => d.Kind == QuestKind.Material && d.Horizon == Horizon.Session).ToList();
+            Check("...and the next day it is free again", $"{nextDay.Sum(d => d.Points)} of {nextDay.Sum(d => d.Worth)} free {nextDay.All(d => d.FreeDay.Length > 0)}", "110 of 110 free True");
             var gold3 = gold with { Session = gold.Session with { Items = new Dictionary<string, long> { ["Radiant Orichalcum Ore"] = 3 } } };
             var goldRow = Quests.Live(gold3).FirstOrDefault(q => q.Kind == QuestKind.Material);
             Check("3 Radiant: the row is 5 for 50, nothing above it this session", goldRow == null ? "none" : $"{Row(goldRow)} up {Quests.Tree(goldRow, gold3).Up.Count}", "5 Radiant Orichalcum Ore 3/5 50 pts up 0");

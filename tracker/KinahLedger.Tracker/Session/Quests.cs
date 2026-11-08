@@ -116,6 +116,8 @@ public sealed class QuestDone
     public string Scope { get; set; } = "";
     /// <summary>Carried to the site in an upload batch (phase 2); an all-time quest is the site's own and is never sent.</summary>
     public bool Sent { get; set; }
+    /// <summary>"2026-11-08": a gold or Epic session step credited outside the hour's cap, on that local day ("" for every other); a later session that day climbs the same item under the cap (<see cref="Quests.FreeToday"/>).</summary>
+    public string FreeDay { get; set; } = "";
 }
 
 /// <summary>The all-time tally this PC keeps (quests.json): the days folded so far, and today's counts as last seen, so the total is the sum of both.</summary>
@@ -191,6 +193,20 @@ public static class Quests
 
     /// <summary>Gold and above earn outside the hour's cap: a rare drop is luck, not grinding. Legend stays under it (blue is farmed in volume and its steps are small).</summary>
     public static bool CapFree(string kind, int tier) => kind == QuestKind.Material && tier >= TierUnique;
+
+    /// <summary>
+    /// Whether this session's step of a gold or Epic item is credited outside the cap: only in the first session that day to
+    /// climb that item's ladder (Steven, 2026-11-08: Wrathful Ego is gold and drops by the hundreds, so every restart paid
+    /// 1, 2, 3, 5 again for 110 points). A later session that day still has the quests; their points go under the cap.
+    /// </summary>
+    public static bool FreeToday(QuestLog log, Quest q, string scope, DateTime nowLocal)
+    {
+        if (q.Horizon != Horizon.Session || !CapFree(q.Kind, q.Tier)) return false;
+        var day = DayKey(nowLocal);
+        return !log.Done.Any(d => d.FreeDay == day && d.Scope != scope && d.Kind == q.Kind && string.Equals(d.Subject, q.Subject, StringComparison.OrdinalIgnoreCase));
+    }
+
+    static string DayKey(DateTime local) => local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     /// <summary>How many steps of a chain a tree shows above the live one.</summary>
     public const int UpSteps = 3;
@@ -505,8 +521,9 @@ public static class Quests
         {
             var scope = ScopeOf(q.Horizon, x.SessionStartUtc, nowLocal);
             if (log.Done.Any(d => d.Key == q.Key && d.Scope == scope)) continue;
-            int credit = q.Horizon == Horizon.Session && !CapFree(q.Kind, q.Tier) ? Math.Clamp(Math.Min(q.Points, CapLeft(log, x)), 0, q.Points) : q.Points;
-            var d = new QuestDone { Key = q.Key, Kind = q.Kind, Horizon = q.Horizon, Subject = q.Subject, Target = q.Target, Tier = q.Tier, Points = credit, Worth = q.Points, Have = q.Have, DoneAtUtc = x.NowUtc, Scope = scope, Sent = q.Horizon == Horizon.AllTime };
+            bool free = FreeToday(log, q, scope, nowLocal);
+            int credit = q.Horizon == Horizon.Session && !free ? Math.Clamp(Math.Min(q.Points, CapLeft(log, x)), 0, q.Points) : q.Points;
+            var d = new QuestDone { Key = q.Key, Kind = q.Kind, Horizon = q.Horizon, Subject = q.Subject, Target = q.Target, Tier = q.Tier, Points = credit, Worth = q.Points, Have = q.Have, DoneAtUtc = x.NowUtc, Scope = scope, Sent = q.Horizon == Horizon.AllTime, FreeDay = free ? DayKey(nowLocal) : "" };
             log.Done.Add(d); log.AllTimePoints += credit;
             done.Add(d);
         }
@@ -518,7 +535,7 @@ public static class Quests
     public static int CapLeft(QuestLog log, QuestInputs x)
     {
         int hours = Math.Max(1, (int)Math.Ceiling(x.Session.Seconds / 3600.0));
-        long earned = log.Done.Where(d => d.Horizon == Horizon.Session && d.DoneAtUtc >= x.SessionStartUtc && !CapFree(d.Kind, d.Tier)).Sum(d => (long)d.Points);
+        long earned = log.Done.Where(d => d.Horizon == Horizon.Session && d.DoneAtUtc >= x.SessionStartUtc && d.FreeDay.Length == 0).Sum(d => (long)d.Points);
         return (int)Math.Clamp(hours * (long)CapPerHour - earned, 0, int.MaxValue);
     }
 
@@ -694,7 +711,7 @@ public static class Quests
             log.AllTime.Items ??= new(StringComparer.OrdinalIgnoreCase); log.AllTime.Runs ??= new(StringComparer.OrdinalIgnoreCase);
             log.AllTime.DayItems ??= new(StringComparer.OrdinalIgnoreCase); log.AllTime.DayRuns ??= new(StringComparer.OrdinalIgnoreCase);
             log.Done.RemoveAll(d => d == null || string.IsNullOrEmpty(d.Key) || string.IsNullOrEmpty(d.Scope));
-            foreach (var d in log.Done) { d.Kind ??= ""; d.Horizon ??= ""; d.Subject ??= ""; }
+            foreach (var d in log.Done) { d.Kind ??= ""; d.Horizon ??= ""; d.Subject ??= ""; d.FreeDay ??= ""; }
             // a version 1 log (0.10.25) was worth about ten times today's points (Steven, 2026-11-08: "way too many"); its history keeps its figures, the score starts over
             if (log.Version < 2) { log.AllTimePoints = 0; foreach (var d in log.Done) { d.Points = 0; d.Sent = true; } log.Version = 2; }
             return log;

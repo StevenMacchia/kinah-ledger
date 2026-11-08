@@ -340,7 +340,7 @@ public partial class MainWindow
         body.Children.Add(CkKv("Today", Quests.Pts(s.Today), CkInk));
         body.Children.Add(CkKv("This week", Quests.Pts(s.Week), CkInk));
         body.Children.Add(CkKv("All time", Quests.Pts(s.AllTime), CkGold));
-        var n = CkNote($"Capped at {Quests.CapPerHour} points an hour of play; a gold or rarer drop counts in full. Once your tracker is linked, the score will go to your profile on kinahledger.com.");
+        var n = CkNote($"Capped at {Quests.CapPerHour} points an hour of play; a gold or rarer item counts in full in its first session of the day. Once your tracker is linked, the score will go to your profile on kinahledger.com.");
         n.Margin = new Thickness(20, 10, 20, 14); body.Children.Add(n);
         return card;
     }
