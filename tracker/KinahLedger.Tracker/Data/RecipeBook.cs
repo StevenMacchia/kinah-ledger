@@ -34,6 +34,7 @@ public static class RecipeBook
             {
                 var cmp = StringComparison.OrdinalIgnoreCase;
                 if (GreatOutcomes.FirstOrDefault(g => !string.Equals(g.Item, Output, cmp)) is { } g1) return g1;
+                if (NextGrade(Output) is { } next) return new Great(next, 1, ComboChance);
                 if (Output.Contains("Splendent", cmp)) return null;
                 // "Artisan's Truth Orb" → "Artisan's Splendent Truth Orb"; "Truth Orb" → "Splendent Truth Orb"
                 int cut = Output.IndexOf("'s ", cmp);
@@ -45,7 +46,8 @@ public static class RecipeBook
         /// <summary>
         /// What a won combo makes of this craft: the upgrade item the book names (gear), the craft twice over as the Cooking
         /// window shows it ("x2 COMBO", 2026-11-03: an Artisan's Steamed Cypri combo made 2 and was counted as 1) for every
-        /// dish, potion, serum, stone, powder and material, or nothing the book can say: gear it has no upgrade for (the
+        /// dish, potion, serum, powder and material (manastones and soulstones go up a grade instead, <see cref="NextGrade"/>),
+        /// or nothing the book can say: gear it has no upgrade for (the
         /// Chaser, Dawn, Liberator and Pilgrim bracelets, the Splendent Dragon Lord pieces), which a won combo must not double.
         /// </summary>
         public ComboMakes Combo => Upgrade != null ? ComboMakes.Upgrade : IsGear ? ComboMakes.Unknown : ComboMakes.Double;
@@ -57,6 +59,25 @@ public static class RecipeBook
         public bool IsGear => Output.Contains("Splendent", StringComparison.OrdinalIgnoreCase) || GearWords.Any(w => Output.EndsWith(" " + w, StringComparison.OrdinalIgnoreCase));
         static readonly string[] GearWords = { "Bow", "Bracelet", "Earrings", "Necklace", "Ring", "Staff", "Dagger", "Greatsword", "Guard", "Longsword", "Mace", "Boots", "Breastplate", "Cloak", "Gloves", "Greaves", "Helm", "Pauldrons", "Orb", "Spellbook", "Shield", "Tome", "Harp", "Pistol", "Cannon", "Polearm", "Leggings", "Shoes", "Jacket", "Belt", "Plume", "Wings", "Sword", "Hammer", "Scythe" };
     }
+
+    /// <summary>
+    /// The next grade of a manastone or soulstone ("Intermediate Soulstone" → "Superior Soulstone", "Intermediate Abyssal
+    /// Manastone" → "Superior Abyssal Manastone"): what a won combo on its craft makes. The game shows it on the panel's
+    /// title for the combo roll and gives one of it (Steven, 2026-11-08: an Intermediate Soulstone combo made a Superior
+    /// Soulstone, and manastones do the same; the tracker had doubled it). The book's source names no combo item for
+    /// these, and has no recipe for the Superior Abyssal stones, so the ladder is by name. Null for anything else: a
+    /// serum or potion with a "Superior" recipe of its own still doubles (Wind Serum, 2026-10-25).
+    /// </summary>
+    public static string? NextGrade(string output)
+    {
+        var cmp = StringComparison.OrdinalIgnoreCase;
+        if (!StoneLadders.Any(w => output.EndsWith(w, cmp))) return null;
+        for (int i = 0; i + 1 < Grades.Length; i++)
+            if (output.StartsWith(Grades[i] + " ", cmp)) return Grades[i + 1] + output[Grades[i].Length..];
+        return null;
+    }
+    static readonly string[] Grades = { "Lesser", "Intermediate", "Superior" };
+    static readonly string[] StoneLadders = { "Manastone", "Soulstone" };
 
     /// <summary>The player's faction ('E' or 'A', from the chosen server), so a recipe's materials are the ones they craft with.</summary>
     public static char PreferFaction { get; set; }
