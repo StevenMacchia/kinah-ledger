@@ -55,6 +55,10 @@ public partial class MainWindow
             new("All zones", () => { _prefs.AllZones = !_prefs.AllZones; if (!_demo) _prefs.Save(); Redraw(); Tick(); }, On: _prefs.AllZones,
                 Sub: "Keep counting across every zone",
                 Tip: "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
+            // Keep above other windows (0.10.26): the same switch as Options › General, for a windowed game on one screen
+            new(AlwaysOnTopText, () => { SetAlwaysOnTop(!_prefs.AlwaysOnTop); if (!_demo) _prefs.Save(); }, On: _prefs.AlwaysOnTop,
+                Sub: "Stays over the game and other windows",
+                Tip: "On: this window stays above the game and every other window, for a windowed game on one screen. The panel over the game is on top either way."),
             // New session's way back into the menu (0.9.13): Start run is the card's fresh start; this clears without a run
             new(ClearAllText, () => _ = ClearFarmTables(), Sub: "The tables start over, no run", Key: NewSessionKey,
                 Tip: "Start the farming tables over without starting a run. What was counted is shared first, Undo brings the tables back, and the Today strip keeps the day."),
@@ -62,6 +66,7 @@ public partial class MainWindow
             new("A pickup is missing…", () => ShowLineReport(null, Session.FeedTab.Farming, FeedBox), Tip: "Report a pickup the feed never showed."),
             // Save as CSV (0.10.11, Ui/MainWindow.Export.cs): the day's loot for a spreadsheet
             new(SaveLootText, SaveLootCsv, Sub: "Every item today, with counts, worth and zones", Tip: "One file for a spreadsheet: today's Kinah, every drop and gathered item, how many, what they are worth after the Market's cut, and the zones each came from. Nothing is uploaded."),
+            new(SaveWeekText, SaveWeekCsv, Sub: "Seven days: made, time, kills, zones and runs", Tip: "One file for a spreadsheet, a row a day: what farming made after the Market's cut, the Kinah, the time spent farming, kills, gathering attempts and the zones; the day's runs, how many counted, their Kinah and the places. Nothing is uploaded."),
         };
         // what the page stopped saying while all is well (2026-10-28): how reading goes, the last line read, what was left out, idle time
         var info = MoreInfo();

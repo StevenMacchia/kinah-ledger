@@ -105,6 +105,7 @@ public partial class OptionsWindow : Window
         HideOnCloseChk.IsChecked = c.HideWhenGameCloses;
         CloseToTrayChk.IsChecked = c.CloseToTray;
         MinToTrayChk.IsChecked = c.MinimizeToTray;
+        TopmostChk.IsChecked = c.AlwaysOnTop;
         FollowChk.IsChecked = c.FollowActivity;
         CompareChk.IsChecked = c.Compare;
         GrossChk.IsChecked = c.ShowGross;
@@ -236,6 +237,7 @@ public partial class OptionsWindow : Window
         HideOnCloseChk.Click += (_, _) => Edit(_edit with { HideWhenGameCloses = HideOnCloseChk.IsChecked == true });
         CloseToTrayChk.Click += (_, _) => Edit(_edit with { CloseToTray = CloseToTrayChk.IsChecked == true });
         MinToTrayChk.Click += (_, _) => Edit(_edit with { MinimizeToTray = MinToTrayChk.IsChecked == true });
+        TopmostChk.Click += (_, _) => Edit(_edit with { AlwaysOnTop = TopmostChk.IsChecked == true });
         FollowChk.Click += (_, _) => Edit(_edit with { FollowActivity = FollowChk.IsChecked == true });
         CompareChk.Click += (_, _) => Edit(_edit with { Compare = CompareChk.IsChecked == true });
         GrossChk.Click += (_, _) => Edit(_edit with { ShowGross = GrossChk.IsChecked == true });

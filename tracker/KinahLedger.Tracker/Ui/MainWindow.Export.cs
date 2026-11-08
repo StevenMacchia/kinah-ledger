@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using KinahLedger.Data;
 using KinahLedger.Session;
 
 namespace KinahLedger.Ui;
@@ -14,7 +15,7 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class MainWindow
 {
-    public const string SaveLootText = "Save today's loot as CSV…", SaveRunsText = "Save as CSV";
+    public const string SaveLootText = "Save today's loot as CSV…", SaveRunsText = "Save as CSV", SaveWeekText = "Save this week as CSV…";
 
     /// <summary>Today's loot (every zone, the day the Today strip shows) as CSV text, or null with nothing picked up yet.</summary>
     string? LootCsv()
@@ -37,6 +38,27 @@ public partial class MainWindow
         if (runs.Count == 0) { Say("No runs to save yet.", "Warn"); return; }
         SaveCsv(CsvExport.FileName("runs", DateTime.Now), CsvExport.Runs(RunsOrder.Sorted(runs, RunsSortMode, RunValue), _items, RunValue), $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}");
     }
+
+    /// <summary>The Crafting page's Save as CSV (0.10.26): This session's recipes as the table prices them.</summary>
+    string? CraftsCsv()
+    {
+        if (_crafted.Count == 0) return null;
+        var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return CsvExport.Crafts(_crafted,
+            r => { var c = RecipeBook.CostOfTries(r.Name, r.Tries, out int unpriced, out int vendor, out _, missing); return (c, unpriced + vendor == 0); },
+            PriceBook.Price, PriceBook.SellerKeeps);
+    }
+
+    void SaveCraftsCsv()
+    {
+        if (CraftsCsv() is not { } text) { Say("Nothing crafted yet: the file would be empty.", "Warn"); return; }
+        SaveCsv(CsvExport.FileName("crafts", DateTime.Now), text, $"{_crafted.Count} recipe{(_crafted.Count == 1 ? "" : "s")}");
+    }
+
+    /// <summary>The ⋯ menu's Save this week as CSV… (0.10.26): the Week side's seven days, farming and runs together.</summary>
+    string WeekCsv() => CsvExport.Week(DayHistory.Days(7, TodayEngine, _items, WeekRunList(), WeekFile()));
+
+    void SaveWeekCsv() => SaveCsv(CsvExport.FileName("week", DateTime.Now), WeekCsv(), "this week");
 
     /// <summary>Asks where to put the file (Documents by default), writes it with a UTF-8 mark for Excel, and says so.</summary>
     void SaveCsv(string fileName, string text, string what)
@@ -79,6 +101,10 @@ public partial class MainWindow
     internal static Func<string, string?>? SaveCsvForTest;
     /// <summary>For the options self-test: today's loot as the file would hold it.</summary>
     internal string? LootCsvForTest() => LootCsv();
+    /// <summary>For the options self-test: This session's crafts, and the week, as their files would hold them.</summary>
+    internal string? CraftsCsvForTest() => CraftsCsv();
+    internal string WeekCsvForTest() => WeekCsv();
+    internal FrameworkElement CraftResetTextForTest => CraftResetText;
     /// <summary>For the options self-test: the ALL RUNS box's Save as CSV, on the runs the Events page shows now.</summary>
     internal void SaveRunsCsvForTest() => SaveRunsCsv(ShownRunsForTest());
 }
