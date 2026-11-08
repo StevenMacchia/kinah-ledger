@@ -3,9 +3,9 @@
 
   <!-- the Quest look (2026-11-07, docs/ui/mockups/directions-2026-11-07): deep plum, Kinah gold for the chase, mint for what pays,
        sky for places, lilac for milestones, coral for a miss. These are Night's values; Ui/Skins.cs sets every key per look -->
-  <SolidColorBrush x:Key="Bg" Color="#17132B"/>
-  <SolidColorBrush x:Key="Card" Color="#221C3D"/>
-  <SolidColorBrush x:Key="Card2" Color="#2C2552"/>
+  <SolidColorBrush x:Key="Bg" Color="#110D21"/>
+  <SolidColorBrush x:Key="Card" Color="#251E45"/>
+  <SolidColorBrush x:Key="Card2" Color="#312960"/>
   <SolidColorBrush x:Key="Line" Color="#362E5E"/>
   <SolidColorBrush x:Key="LineStrong" Color="#4A4180"/>
   <SolidColorBrush x:Key="Ink" Color="#F6F2FF"/>
@@ -27,8 +27,8 @@
   <SolidColorBrush x:Key="Lime" Color="#C6F26B"/>
   <SolidColorBrush x:Key="GoldInk" Color="#2B1B00"/>
   <SolidColorBrush x:Key="SegOnInk" Color="#2B1B00"/>
-  <SolidColorBrush x:Key="CardLine" Color="#0DFFFFFF"/>
-  <SolidColorBrush x:Key="CardLineHover" Color="#29FFFFFF"/>
+  <SolidColorBrush x:Key="CardLine" Color="#21FFFFFF"/>
+  <SolidColorBrush x:Key="CardLineHover" Color="#45FFFFFF"/>
   <SolidColorBrush x:Key="SkyTint" Color="#296EC1FF"/>
   <SolidColorBrush x:Key="LilacTint" Color="#29B692FF"/>
   <SolidColorBrush x:Key="CoralTint" Color="#29FF7D6E"/>

@@ -359,23 +359,23 @@
            the day so far ("2:41 farming · 412 kills · 4 runs" and what it made); opened, the day's loot as inventory slots,
            farming and the runs apart, zone chips to pin one zone, and the game-tooltip card on each slot (Ui/MainWindow.Today.cs).
            Since midnight on this PC, carried across restarts in today.json. -->
-      <Border x:Name="TodayStrip" Margin="0,16,0,0" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource GoldTint}" Visibility="Collapsed">
+      <Border x:Name="TodayStrip" Margin="0,12,0,0" CornerRadius="16" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
         <StackPanel>
           <Grid x:Name="TodayHead" Height="46" Background="Transparent" Cursor="Hand" ToolTip="Today since midnight on this PC. Click to see the loot.">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Path x:Name="TodayChev" Style="{StaticResource SecChev}" Margin="16,0,10,0"/>
-            <TextBlock x:Name="TodayTitle" Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SecGold}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-            <TextBlock x:Name="TodayNote" Grid.Column="2" FontSize="12.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Path x:Name="TodayChev" Style="{StaticResource SecChev}" Margin="16,0,-6,0"/>
+            <TextBlock x:Name="TodayTitle" Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="16,0,10,0"/>
+            <TextBlock x:Name="TodayNote" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
             <!-- today or the last 7 days (0.9, History A): the runs' Week side, Ui/MainWindow.Week.cs -->
-            <Border x:Name="TodayScope" Grid.Column="3" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Margin="12,0,0,0">
+            <Border x:Name="TodayScope" Grid.Column="3" Padding="3" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Margin="12,0,0,0">
               <StackPanel Orientation="Horizontal">
                 <Button x:Name="TodayDayBtn" Style="{StaticResource SegOn}" Content="Today" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Today's expeditions and events since midnight on this PC."/>
                 <Button x:Name="TodayWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of expeditions and events on this PC, a bar a day."/>
               </StackPanel>
             </Border>
-            <TextBlock x:Name="TodaySum" Grid.Column="4" FontSize="15" FontFamily="{DynamicResource MonoFont}" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
+            <TextBlock x:Name="TodaySum" Grid.Column="4" FontSize="16" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
           </Grid>
-          <Border x:Name="TodayBody" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource GoldLine}" Padding="16,0,16,12" Visibility="Collapsed">
+          <Border x:Name="TodayBody" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource CardLine}" Padding="16,0,16,12" Visibility="Collapsed">
             <StackPanel x:Name="TodayHost"/>
           </Border>
         </StackPanel>
@@ -809,12 +809,12 @@
            TODAY strip's, This session or All time; the runs stay until cleared. Share, every run, Save as CSV and Clear are under ⋯. -->
       <Border x:Name="EventsCard" Margin="0,16,0,0" Visibility="Collapsed">
         <StackPanel>
-          <Grid Margin="2,0,0,14">
+          <Grid Margin="2,0,0,12">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <!-- the title with what the runs shown made under it: "20 runs · 14 counted · 7.46M made" (0.8.31, the mock) -->
             <StackPanel VerticalAlignment="Bottom">
-              <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Text="Expeditions and events"/>
-              <TextBlock x:Name="InstWhat" Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+              <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="ExtraBold" Foreground="{DynamicResource Ink}" Text="Expeditions and events"/>
+              <TextBlock x:Name="InstWhat" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
               <!-- Share (0.9.3): the last run as a picture, the same sheet as Farming's (Ui/MainWindow.Share.cs) -->
@@ -823,7 +823,7 @@
                       ToolTip="A picture of the last run, to paste in Discord or anywhere. Nothing is uploaded."/>
               <!-- this session's runs by default, or with the ones kept on this PC from earlier (Steven, 2026-10-22); a switch
                    and a button, not small links (Steven, 2026-10-23: "more prevalent") -->
-              <Border x:Name="InstScope" Padding="3" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Visibility="Collapsed">
+              <Border x:Name="InstScope" Padding="3" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Visibility="Collapsed">
                 <StackPanel Orientation="Horizontal">
                   <Button x:Name="InstSessionBtn" Style="{StaticResource SegOn}" Content="This session" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Only the runs since the tracker started"/>
                   <Button x:Name="InstEarlierBtn" Style="{StaticResource SegOff}" Content="All time" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="Every run kept on this PC, earlier sessions too"/>
@@ -831,15 +831,15 @@
               </Border>
               <Button x:Name="InstClearBtn" Content="Clear" Height="30" FontSize="12.5" Padding="10,0" Margin="6,0,0,0" VerticalAlignment="Center" Background="Transparent" BorderBrush="Transparent" Foreground="{DynamicResource Faint}" FontWeight="Normal" ToolTip="Clear the runs shown here" Visibility="Collapsed"/>
               <!-- the rest, out of the way (2026-11-06): Share the last run, every run on its line, Save as CSV, Clear -->
-              <Button x:Name="EventsMoreBtn" Width="32" Height="30" Padding="0" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="More: share the last run, every run on its line, Save as CSV, clear" AutomationProperties.Name="More">
-                <TextBlock Text="⋯" FontSize="17" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
+              <Button x:Name="EventsMoreBtn" Style="{StaticResource RoundBtn}" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="More: share the last run, every run on its line, Save as CSV, clear" AutomationProperties.Name="More">
+                <TextBlock Text="⋯" FontSize="17" FontWeight="Black" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
               </Button>
             </StackPanel>
           </Grid>
           <!-- the Share sheet while it is open from this page (0.9.3) -->
           <Border x:Name="EventsShareHost" Margin="0,0,0,16" Visibility="Collapsed"/>
           <StackPanel x:Name="InstHost"/>
-          <Border x:Name="InstEmpty" Style="{StaticResource CardStyle}" Padding="20,22,20,22">
+          <Border x:Name="InstEmpty" Style="{StaticResource QCard}" Padding="20,22,20,22">
             <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440"
                        Text="Run an expedition or join an event. Each one shows here with how long it took and what it paid."/>
           </Border>

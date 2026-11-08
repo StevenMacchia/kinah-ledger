@@ -84,8 +84,7 @@ public partial class MainWindow
             for (int i = 0; i < note.Count; i++)
             {
                 if (i > 0) TodayNote.Inlines.Add(PR(" · ", "Faint"));
-                var f = PR(note[i].Fig, "Ink"); f.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont");
-                TodayNote.Inlines.Add(f);
+                TodayNote.Inlines.Add(PR(note[i].Fig, "Ink", FontWeights.Black));
                 TodayNote.Inlines.Add(PR(note[i].Word, "Muted"));
             }
             TodaySum.Text = made > 0 ? Fk(made) : "";
