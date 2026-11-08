@@ -67,6 +67,7 @@ public partial class MainWindow
         var b = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(8), Margin = new Thickness(6, 0, 0, 0), Background = Brushes.Transparent, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center,
             ToolTip = on ? "Pinned to Next up. Click to unpin." : "Pin to Next up: it takes one of the two material rows on the Farming page." };
         var ic = QIcon("Pin", 13, on ? "Gold" : "Faint", 2); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center;
+        if (on) ic.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Gold");   // filled when pinned, so the two states read apart
         b.Child = ic;
         if (on) b.SetResourceReference(Border.BackgroundProperty, "GoldTint");
         b.MouseEnter += (_, _) => b.SetResourceReference(Border.BackgroundProperty, "HoverTint");
@@ -134,10 +135,13 @@ public partial class MainWindow
         QuestsDailyHost.Children.Add(QHead("Timer", "Daily", "the same quests every day, from midnight"));
         i = 0;
         var nowLocal = DateTime.Now;
+        double toMidnight = (nowLocal.Date.AddDays(1) - nowLocal).TotalSeconds;
         foreach (var q in daily)
         {
             int streak = Quests.Streak(_questLog, q.Kind, q.Subject, nowLocal);
-            var note = QuestSub(q) + (streak > 1 ? $" · {streak} days running" : streak == 1 ? " · done yesterday or today" : "");
+            // the pace's "about 47 h" means nothing on a quest that resets at midnight: it says so instead (2026-11-08 review)
+            var eta = q.SecondsToGo is double sec ? (sec <= toMidnight ? " · " + Eta(sec) : " · not today at this pace") : "";
+            var note = $"{Quests.Amount(q, q.Have, Fk)} so far · {Quests.Amount(q, q.ToGo, Fk)} to go{eta}" + (streak > 1 ? $" · {streak} days running" : "");
             QuestsDailyHost.Children.Add(QuestRow(q, i > 0, note: note, toggled: RedrawQuestsPage));
             i++;
         }
@@ -165,7 +169,7 @@ public partial class MainWindow
         var byDay = Quests.DoneByDay(_questLog, nowLocal);
         long total = _questLog.Done.Sum(d => (long)d.Points);
         QuestsDoneHost.Children.Add(QHead("Check", "Done", _questLog.Done.Count == 0 ? "" : $"{_questLog.Done.Count} quest{(_questLog.Done.Count == 1 ? "" : "s")} · {Quests.Pts(total)} in {Quests.KeepDays} days"));
-        if (byDay.Count == 0) QuestsDoneHost.Children.Add(PageNote("Nothing reached yet. A quest reached shows on the panel over the game for a few seconds and lands here."));
+        if (byDay.Count == 0) QuestsDoneHost.Children.Add(PageNote("Nothing reached yet. A quest you reach shows on the panel over the game for a few seconds, then lands here."));
         int days = 0; bool earlierOpen = QOpen("quests-earlier"); int hidden = 0, hiddenPts = 0;
         foreach (var (day, done) in byDay)
         {
