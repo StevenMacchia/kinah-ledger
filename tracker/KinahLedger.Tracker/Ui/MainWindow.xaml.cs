@@ -164,6 +164,8 @@ public partial class MainWindow : Window
         InitLoot();   // LOOT's This zone / Today switch (Ui/MainWindow.Loot.cs)
         InitGoals(watch);   // the player's goals, from goals.json (Ui/MainWindow.Goals.cs); a render or a self-test has none
         InitQuests(watch);   // the completed quests and the points, from quests.json (Ui/MainWindow.Quests.cs)
+        InitQuestUpload();   // the completed quests ride the upload batch (Ui/MainWindow.QuestsPage.cs)
+        QuestsTab.Visibility = _prefs.Quests ? Visibility.Visible : Visibility.Collapsed;
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
@@ -185,6 +187,7 @@ public partial class MainWindow : Window
         FarmTab.Click += (_, _) => ShowPart("Farming");
         CraftTab.Click += (_, _) => ShowPart("Crafting");
         EventsTab.Click += (_, _) => ShowPart("Events");
+        QuestsTab.Click += (_, _) => ShowPart("Quests");
         CraftCreditLink.Click += (_, _) => Open("https://metabot.gg/en/aion-2/crafting");
         MobCreditLink.Click += (_, _) => Open(MobImages.CreditUrl);
         // no "Are you sure?": they happen at once with an Undo bar, and become final when it goes (Ui/MainWindow.Undo.cs)
@@ -738,6 +741,7 @@ public partial class MainWindow : Window
         ShareTick();   // the Share sheet's preview follows the count (Ui/MainWindow.Share.cs)
         GoalTick();   // a goal reached is said once, on the panel and in the status line (Ui/MainWindow.Goals.cs)
         QuestTick();   // a quest reached is credited and said once (Ui/MainWindow.Quests.cs)
+        if (_part == "Quests") FillQuestsPage();   // the page follows the counts (Ui/MainWindow.QuestsPage.cs)
         PriceAlertTick();
         UpdateHud();
     }
@@ -1173,13 +1177,15 @@ public partial class MainWindow : Window
     /// </summary>
     void ShowPart(string part, bool byHand = true)
     {
-        _part = part is "Crafting" or "Events" ? part : "Farming";
+        _part = part is "Crafting" or "Events" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
         bool craft = _part == "Crafting";
         ApplyView();
         FarmTab.Style = (Style)FindResource(_part == "Farming" ? "SegOn" : "SegOff");
         CraftTab.Style = (Style)FindResource(craft ? "SegOn" : "SegOff");
         EventsTab.Style = (Style)FindResource(_part == "Events" ? "SegOn" : "SegOff");
+        QuestsTab.Style = (Style)FindResource(_part == "Quests" ? "SegOn" : "SegOff");
         if (_part == "Events") ShowInstances();
+        if (_part == "Quests") RedrawQuestsPage();
         if (byHand) _follow.Picked();
         if (craft && !_demo) FillCraft(CraftShown);
     }
@@ -1216,11 +1222,12 @@ public partial class MainWindow : Window
     /// </summary>
     void ApplyView()
     {
-        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, farm = !craft && !events && !_welcome;
+        bool craft = _part == "Crafting" && !_welcome, events = _part == "Events" && !_welcome, quests = _part == "Quests" && !_welcome, farm = !craft && !events && !quests && !_welcome;
         // Full view scaled to the screen it is on, or Compact when even scaled it can't fit (Ui/MainWindow.Fit.cs)
         FitFull(farm && _prefs.FullView, _fullAsked);
         bool full = farm && FullShown;
-        LeftCol.Visibility = craft || events ? Visibility.Collapsed : Visibility.Visible;
+        LeftCol.Visibility = craft || events || quests ? Visibility.Collapsed : Visibility.Visible;
+        QuestsPage.Visibility = quests ? Visibility.Visible : Visibility.Collapsed;   // in the ledger column, as the Crafting and Events pages are
         SessionCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         if (!farm) SummaryCard.Visibility = Visibility.Collapsed;   // LOOT shows itself on Farming (FillLoot)
         if (!farm) GoalsCard.Visibility = Visibility.Collapsed;     // GOALS too (FillGoals)
@@ -1231,7 +1238,7 @@ public partial class MainWindow : Window
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
 
         EventsCard.Visibility = events ? Visibility.Visible : Visibility.Collapsed;
-        LowerScroll.Visibility = full || craft || events ? Visibility.Visible : Visibility.Collapsed;
+        LowerScroll.Visibility = full || craft || events || quests ? Visibility.Visible : Visibility.Collapsed;
         // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
         System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
         System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
@@ -1254,7 +1261,7 @@ public partial class MainWindow : Window
         StatusBar.Width = 662;
         ViewFill.Opacity = full ? 1 : 0.25;
         ViewBtn.ToolTip = full ? "Compact view: one column" : _fullTooWide ? "Full view needs a wider screen than this one" : "Full view: twice as wide, with the drop tables beside the loot";
-        ViewBtn.Visibility = craft || events || _welcome ? Visibility.Collapsed : Visibility.Visible;
+        ViewBtn.Visibility = craft || events || quests || _welcome ? Visibility.Collapsed : Visibility.Visible;
         // Session and Where to farm now open in Full view, folded in Compact, until the player opens or folds them
         _secUser.Remove("Session"); _secUser.Remove("Where");
         ApplyPlayerView(craft, farm, full);
@@ -1892,6 +1899,13 @@ public partial class MainWindow : Window
             ShowPart("Events", byHand: false); SetTrackingUi(false);
             Say("Reading the chat", "Faint");
             if (Environment.GetEnvironmentVariable("KL_SHOT_TODAY") == "1" || (state != null && state.Strip != "closed")) OpenTodaySample();
+            return;
+        }
+        if (kind == "Quests")
+        {
+            // the Quests page from the farming sample's counts (Ui/MainWindow.QuestsPage.cs), for a layout render
+            ShowDemo("Open world", state);
+            ShowPart("Quests", byHand: false);
             return;
         }
         if (kind == "CraftingEmpty")

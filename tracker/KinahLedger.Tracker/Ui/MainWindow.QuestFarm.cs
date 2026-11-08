@@ -35,7 +35,7 @@ public partial class MainWindow
         ChipKinah.MouseLeftButtonUp += (_, _) => ToggleChip("who");
         ChipLoot.MouseLeftButtonUp += (_, _) => ToggleChip("bag");
         ChipKills.MouseLeftButtonUp += (_, _) => ToggleChip("kills");
-        GoalsHead.MouseLeftButtonUp += (_, _) => { _qOpen["goals"] = !QOpen("goals"); RedrawGoals(); };
+        GoalsHead.MouseLeftButtonUp += (_, _) => { if (QuestsOn) ShowPart("Quests"); };   // the rest of the quests live on their page (2026-11-08)
         BagStripHead.MouseLeftButtonUp += (_, _) => ToggleChip("bag");
     }
 

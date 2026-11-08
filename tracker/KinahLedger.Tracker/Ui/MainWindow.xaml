@@ -280,6 +280,10 @@
             <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Expeditions and events: each trip, from entering to the last loot. Never on the Farming page.">
               <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcFlag}"/><TextBlock Text="Runs" VerticalAlignment="Center"/></StackPanel>
             </Button>
+            <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): every quest, pins, daily and all time, done, your score -->
+            <Button x:Name="QuestsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Quests: every quest with its tree, pins for Next up, today's and all time, what you have done, your score.">
+              <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcTrophy}"/><TextBlock Text="Quests" VerticalAlignment="Center"/></StackPanel>
+            </Button>
           </StackPanel>
         </Border>
         <!-- round buttons: Compact / Full view (Farming only), the site, Share and Options -->
@@ -607,10 +611,8 @@
               <TextBlock x:Name="GoalsNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
               <Path x:Name="GoalsChev" Grid.Column="3" Style="{StaticResource QChev}"/>
             </Grid>
+            <!-- three bars and no more (Steven, 2026-11-08): the rest is the Quests page -->
             <StackPanel x:Name="GoalsHost" Margin="0,2,0,0"/>
-            <StackPanel x:Name="GoalsMore" Visibility="Collapsed"/>
-            <!-- the Done fold (quests, 2026-11-08): one row at the foot, the completed quests under it on a click -->
-            <StackPanel x:Name="GoalsDone"/>
           </StackPanel>
         </StackPanel>
       </Border>
@@ -847,6 +849,26 @@
           </Border>
         </StackPanel>
       </Border>
+
+      <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): Your score, Active, Daily, All time, Your goals, Done -->
+      <StackPanel x:Name="QuestsPage" Margin="0,12,0,0" Visibility="Collapsed">
+        <Grid Margin="2,0,0,12">
+          <StackPanel>
+            <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="ExtraBold" Foreground="{DynamicResource Ink}" Text="Quests"/>
+            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Margin="0,3,0,0" Text="Goals set from what you farm. Three are on Next up; pin one to put it there."/>
+          </StackPanel>
+        </Grid>
+        <Border x:Name="QuestsOffCard" Style="{StaticResource QCard}" Padding="20,22,20,22" Visibility="Collapsed">
+          <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440"
+                     Text="Quests are off. Turn them on in Options › General to get goals from what you farm, points for reaching them, and a score on your profile."/>
+        </Border>
+        <Border x:Name="QuestsScoreCard" Style="{StaticResource QCard}" Background="{DynamicResource HeroBg}"><StackPanel x:Name="QuestsScoreHost"/></Border>
+        <Border x:Name="QuestsActiveCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsActiveHost"/></Border>
+        <Border x:Name="QuestsDailyCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsDailyHost"/></Border>
+        <Border x:Name="QuestsAllTimeCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsAllTimeHost"/></Border>
+        <Border x:Name="QuestsGoalsCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsGoalsHost"/></Border>
+        <Border x:Name="QuestsDoneCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsDoneHost"/></Border>
+      </StackPanel>
 
       <!-- Crafting (direction C, 2026-10-24): the last five crafts beside the session's profit, then This session (every recipe
            crafted since the tracker started: tries, worked, spent, sells for, profit) and Best crafts today. Crafted items never

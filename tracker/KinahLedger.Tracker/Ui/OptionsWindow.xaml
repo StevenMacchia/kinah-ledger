@@ -100,6 +100,16 @@
                 <CheckBox x:Name="FollowChk" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
               <Border Style="{StaticResource Divider}"/>
+              <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): on by default -->
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Quests"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Goals set from what you farm, with points when you reach them: three on Next up, the rest on the Quests page. Off: no quests, no points, nothing sent."/>
+                </StackPanel>
+                <CheckBox x:Name="QuestsChk" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+              <Border Style="{StaticResource Divider}"/>
               <!-- Compare (0.9.3, Ui/MainWindow.Compare.cs): off by default, so the base app stays light -->
               <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

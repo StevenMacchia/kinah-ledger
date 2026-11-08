@@ -67,7 +67,7 @@ public sealed class UiState
     public static string PageName(string kind) => kind switch
     {
         "Open world" => "farming", "Gathering" => "gathering", "Pets" => "pets", "Market" => "market", "Mixed" => "mixed",
-        "Crafting" => "crafting", "CraftingEmpty" => "crafting-empty", "CraftingUpgrades" => "crafting-upgrades", "Events" => "events", _ => kind.ToLowerInvariant()
+        "Crafting" => "crafting", "CraftingEmpty" => "crafting-empty", "CraftingUpgrades" => "crafting-upgrades", "Events" => "events", "Quests" => "quests", _ => kind.ToLowerInvariant()
     };
 }
 

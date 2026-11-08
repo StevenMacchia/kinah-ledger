@@ -342,7 +342,7 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
   market-test                   self-test of the Market row parser
   market-test --image shot.png  find the Market in a screenshot and read its rows
         [--game x,y,w,h] [--region x,y,w,h]
-  ui-shot [dir] [--demo] [--gathering|--market|--crafting [--empty|--upgrades]|--events [--mine]] [--compact|--full] [--tall] [--welcome] [--skin night|abyss|daylight]
+  ui-shot [dir] [--demo] [--gathering|--market|--crafting [--empty|--upgrades]|--events [--mine]|--quests] [--compact|--full] [--tall] [--welcome] [--skin night|abyss|daylight]
                                 render the window to PNG files for layout review (--options: every Options page;
                                 --events --mine: the Events page from this PC's own runs, read from a copy)
         --state <name>          one review state (tracker/tests/ui/states/<name>.json): ""<page>-<state>.png"", whole, with
@@ -1063,7 +1063,7 @@ options: --process aion[,other]");
             KinahLedger.Data.PriceBook.PathOverride = Path.Combine(Path.GetTempPath(), "KinahLedger-state-runs", "prices.json");   // the state's prices, never this PC's
             KinahLedger.Data.PriceBook.Reset();
         }
-        var kind = o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world";
+        var kind = o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("quests") ? "Quests" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world";
         var problems = WpfApp.Shot(s, dir, o.ContainsKey("demo") || state != null, kind, o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall") || state != null, o.ContainsKey("mine"), state);
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         if (problems.Count > 0) { Console.WriteLine("figures check: " + string.Join(" | ", problems)); return 1; }

@@ -5056,8 +5056,10 @@ public sealed partial class TrackerSession
     {
         if (e.Elapsed.TotalMinutes < 5 || e.Events == 0) return false;
         var runs = KeepUnread(Instances.TakeUnshared(e.Started));
-        bool ok = await Uploader.SendAsync(RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, runs), s.Upload);
+        var payload = RunPayload.Build(e, s, kind, activity, RegionKey.Length > 0 ? RegionKey : s.Region, Server, _items, runs);
+        bool ok = await Uploader.SendAsync(payload, s.Upload);
         if (!ok && s.Upload.Enabled && !string.IsNullOrWhiteSpace(s.Upload.Endpoint)) Instances.Restore(runs);
+        if (ok && payload.quests is { Count: > 0 } sentQuests) RunPayload.QuestsCarried?.Invoke(sentQuests);   // the completed quests the batch carried (phase 2)
         // the reading health since the last report goes with the run (numbers, item names as read, the layout)
         try { await AccuracyClient.SendAsync(s.Upload); } catch (Exception ex) { CrashLog.Write("accuracy report", ex); }
         return ok;
@@ -5110,6 +5112,8 @@ public sealed class UserPrefs
     public string Part { get; set; } = "Farming";
     /// <summary>Options › General › Switch pages to what I'm doing (0.8.55): the window shows Farming, Crafting or Events as the activity changes (Session/PageFollow.cs). Off: it stays on the page the player picks.</summary>
     public bool FollowActivity { get; set; } = true;
+    /// <summary>Options › General › Quests (2026-11-08): the quest rows on Next up, the Quests page, the points and their upload. On by default.</summary>
+    public bool Quests { get; set; } = true;
     /// <summary>Options › General › Compare zones and runs (0.9.3, Session/Compare.cs): Days | Zones and Days | Places on the Week sides, your usual here, a run against your runs there. Off by default: the base app stays light.</summary>
     public bool CompareZones { get; set; }
     /// <summary>Options › General › Show amounts before the Market fee (0.9.9): every figure is the sale's gross, not what the seller keeps. Off by default.</summary>
