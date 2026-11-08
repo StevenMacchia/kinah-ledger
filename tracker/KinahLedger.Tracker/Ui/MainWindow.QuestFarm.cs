@@ -199,51 +199,9 @@ public partial class MainWindow
         if (_qChip == "who") BuildWho(ChipPanelHost); else BuildKills(ChipPanelHost);   // Ui/MainWindow.QuestFull.cs
     }
 
-    /* ---------------- Next up's milestones ---------------- */
-
-    /// <summary>A milestone minutes away at this pace: the round figure the bag is about to pass, the stack of the thing collected most, the next round kill count.</summary>
-    sealed record Milestone(string Sig, FrameworkElement Icon, string Title, string Sub, double Share, string Tone, string Tip);
-
-    /// <summary>The milestones from the count on screen (none until there is one and two minutes have passed).</summary>
-    List<Milestone> Milestones()
-    {
-        var list = new List<Milestone>();
-        var h = _lootHere;
-        if (h == null || !_hasSummary || _part != "Farming") return list;
-        double mins = h.Elapsed.TotalMinutes;
-        if (mins < 2) return list;
-        if (h.Total > 0)
-        {
-            long target = NextRound(h.Total), togo = target - h.Total;
-            double eta = togo / (h.Total / mins) * 60;
-            list.Add(new($"k{target}", QIconBox("Sack", "Lilac", 28, round: true), $"{Fk(target)} this session", $"{Fk(togo)} away · {Eta(eta)}", h.Total / (double)target, "Lilac",
-                $"{Amounts.Full(h.Total)} so far, Kinah and loot {PriceBook.Cut}, at {Fk(h.Total / mins)} a minute. The next round figure turns over by itself."));
-        }
-        // two materials under the Kinah (Steven, 2026-11-08): crafting materials only, never gear or a currency; the kind last
-        // picked up first (what you are farming now), then the most valuable other stack
-        var mats = h.S.Drops.Concat(h.S.Gathered).Where(r => !r.Header).Select(r => (Row: r, N: Qty(r.Drops), Id: _items.IdOf(r.Name)))
-            .Where(x => x.N >= 3 && !_items.IsGear(x.Id) && !IsCurrency(x.Id)).ToList();
-        var lastNames = FeedFor(FeedTab.Farming).Where(l => l.Kind == "item").Select(l => l.Name).ToList();
-        var last = mats.FirstOrDefault(x => lastNames.Count > 0 && string.Equals(x.Row.Name, lastNames.FirstOrDefault(n => mats.Any(m => string.Equals(m.Row.Name, n, StringComparison.OrdinalIgnoreCase))), StringComparison.OrdinalIgnoreCase));
-        var picked = new List<(DropRow Row, long N, long Id)>();
-        if (last.Row != null) picked.Add(last);
-        foreach (var x in mats.OrderByDescending(x => x.Row.Worth).ThenByDescending(x => x.N)) { if (picked.Count >= 2) break; if (!picked.Any(p => p.Row.Name == x.Row.Name)) picked.Add(x); }
-        foreach (var top in picked)
-        {
-            long target = NextStack(top.N), togo = target - top.N;
-            double eta = togo / (top.N / mins) * 60;
-            list.Add(new($"i{top.Row.Name}{target}", QItemIcon(top.Row.Name, top.Id, 28, round: true, grade: top.Row.Grade), $"{target:N0} {top.Row.Name}", $"{top.N:N0} so far · {togo:N0} to go · {Eta(eta)}", top.N / (double)target, "Mint",
-                $"{top.N:N0} picked up in {TodayLoot.Dur(h.Elapsed.TotalSeconds)}, one every {TodayLoot.Dur(h.Elapsed.TotalSeconds / top.N)}."));
-        }
-        if (h.Kills >= 10)
-        {
-            long target = NextStack(h.Kills), togo = target - h.Kills;
-            double eta = togo / (h.Kills / mins) * 60;
-            list.Add(new($"x{target}", QIconBox("Sword", "Coral", 28, round: true), $"{target:N0} kills", $"{h.Kills:N0} so far · {togo:N0} to go · {Eta(eta)}", h.Kills / (double)target, "Coral",
-                $"{h.Kills:N0} kills at {h.Kills / mins:0.0} a minute."));
-        }
-        return list;
-    }
+    /* ---------------- Next up's figures ---------------- */
+    // The milestones' own arithmetic (0.10.23) moved into the quest engine (Session/Quests.cs, 2026-11-08); the rows are
+    // Ui/MainWindow.Quests.cs. NextRound stays for the Crafting page's profit row, NextStack for the slots' round counts.
 
     /// <summary>The next round Kinah figure above <paramref name="v"/>: 50K steps to 250K, 250K to 1M, 500K to 5M, then 1M.</summary>
     static long NextRound(long v)
@@ -261,15 +219,6 @@ public partial class MainWindow
     }
 
     static string Eta(double secs) => secs < 60 ? "under a minute" : "about " + TodayLoot.Dur(secs);
-
-    /// <summary>A milestone as a Next up row: its icon, the target, how far, the share as the percentage and the bar.</summary>
-    FrameworkElement MileRow(Milestone m, bool rule)
-    {
-        var row = QRow(m.Icon, m.Title, m.Sub, $"{Math.Round(m.Share * 100):0}%", m.Tone, m.Share, m.Tone, rule, inline: true);
-        row.Tag = "mile"; row.ToolTip = m.Tip; row.Cursor = Cursors.Arrow;
-        ToolTipService.SetInitialShowDelay(row, 400);
-        return row;
-    }
 
     /// <summary>A goal as a Next up row: the item, coin or door, the goal, have and to go with the pace, the share; the card on hover, the sheet on a click.</summary>
     FrameworkElement GoalRow(Goal g, GoalProgress p, bool rule)

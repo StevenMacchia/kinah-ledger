@@ -163,6 +163,7 @@ public partial class MainWindow : Window
         InitToday();
         InitLoot();   // LOOT's This zone / Today switch (Ui/MainWindow.Loot.cs)
         InitGoals(watch);   // the player's goals, from goals.json (Ui/MainWindow.Goals.cs); a render or a self-test has none
+        InitQuests(watch);   // the completed quests and the points, from quests.json (Ui/MainWindow.Quests.cs)
         // a click on a drop or gathered row opens its card: this run, the price, the site, the listed chances
         Rows.MouseLeftButtonUp += ItemRowClick; MatRows.MouseLeftButtonUp += ItemRowClick; GatherRows.MouseLeftButtonUp += ItemRowClick;
         // a click on a recipe opens its breakdown: materials, what a craft costs, what it makes (Ui/MainWindow.CraftCard.cs)
@@ -736,6 +737,7 @@ public partial class MainWindow : Window
         AlertTick();
         ShareTick();   // the Share sheet's preview follows the count (Ui/MainWindow.Share.cs)
         GoalTick();   // a goal reached is said once, on the panel and in the status line (Ui/MainWindow.Goals.cs)
+        QuestTick();   // a quest reached is credited and said once (Ui/MainWindow.Quests.cs)
         PriceAlertTick();
         UpdateHud();
     }
@@ -1952,10 +1954,11 @@ public partial class MainWindow : Window
             return;
         }
         ShowPart("Farming", byHand: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
-        // KL_QUEST_OPEN=chart,who|bag|kills,goals,where (Quest, 2026-11-07): a render with those panels open, for a look at the depth
+        // KL_QUEST_OPEN=chart,who|bag|kills,goals,where,tree,done (Quest, 2026-11-07): a render with those panels open, for a look at the depth
         if (Environment.GetEnvironmentVariable("KL_QUEST_OPEN") is { Length: > 0 } qo)
         {
-            foreach (var k in qo.Split(',')) { if (k is "who" or "bag" or "kills") _qChip = k; else if (k == "where") _secUser["Where"] = true; else _qOpen[k] = true; }
+            // tree (quests, 2026-11-08): the first material quest's tree open; done: the Done fold open
+            foreach (var k in qo.Split(',')) { if (k is "who" or "bag" or "kills") _qChip = k; else if (k == "where") _secUser["Where"] = true; else if (k == "tree") _qTreeWanted = true; else if (k == "done") _qOpen["quests-done"] = true; else _qOpen[k] = true; }
             foreach (var k in new[] { "chips", "loot", "goals", "where", "ring" }) _drawnSig.Remove(k);
             Redraw();
         }

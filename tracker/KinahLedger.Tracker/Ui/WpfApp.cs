@@ -648,6 +648,36 @@ public static class WpfApp
             Check(w.GoalsForTest() is { Shown: true, Slim: false, Slots: 0 }, "the last goal removed: Next up keeps the pace's milestones, no goal rows (Quest)");
         }
 
+        // Quests (phase 1, 2026-11-08, Ui/MainWindow.Quests.cs): three rows at rest (Kinah this session, then two crafting materials),
+        // the rest behind the chevron; a click opens a quest's tree; the first look credits the steps passed without a word; the
+        // Done fold at the foot; the score on the head and in Options > Sharing
+        {
+            var q = w.QuestsForTest();
+            Check(q.Rows >= 3 && q.AtRest == 3 && q.Kinds.StartsWith("kinah,material,material") && q.Tree == 0, $"Next up: {q.Rows} quest rows, {q.AtRest} at rest, kinds {q.Kinds}");
+            Check(w.QuestsNowForTest.Count >= 3 && w.QuestsNowForTest.Take(3).All(x => x.Horizon == Session.Horizon.Session), "the three at rest are this session's");
+            w.ToggleQuestTreeForTest(1); DoEvents();
+            var t = w.QuestsForTest();
+            Check(t.Tree >= 3 && t.AtRest == 3, $"a click on the second row opens its tree: {t.Tree} tree rows, still {t.AtRest} at rest");
+            w.ToggleQuestTreeForTest(1); DoEvents();
+            Check(w.QuestsForTest().Tree == 0, "a second click folds the tree");
+            w.QuestTickForTest(); DoEvents();
+            var again = w.QuestTickForTest(); DoEvents();
+            var d = w.QuestsForTest();
+            Check(again.Count == 0 && d.DoneFold && d.DoneRows == 0 && d.Note.Contains("pts this session"), $"the first look credited the steps passed before it; a look with nothing new says nothing ({again.Count} said); the Done fold {(d.DoneFold ? "there" : "missing")}, {d.DoneRows} rows; the head says the score: \"{d.Note}\"; done: {w.QuestsDoneForTest()}");
+            w.ToggleDoneFoldForTest(); DoEvents();
+            Check(w.QuestsForTest().DoneRows > 0, $"the Done fold opens: {w.QuestsForTest().DoneRows} done rows");
+            w.ToggleDoneFoldForTest(); DoEvents();
+            Check(w.QuestScoreLine().Contains("this session") && w.QuestScoreLine().Contains("this week"), "the score line: this session, today, this week");
+            var so = Open(); so.Go(OptionsWindow.Page.Sharing); DoEvents();
+            Check(so.ScoreText.Text == w.QuestScoreLine() && so.ScoreText.Text.Contains("pts"), $"Options > Sharing: Your score under the profile link card: \"{so.ScoreText.Text}\"");
+            so.Close();
+            Check(w.QuestCard(w.QuestsNowForTest[1]) is { } qc && qc.Child is System.Windows.Controls.StackPanel qb && qb.Children.Count >= 8, "a quest's hover card: band, bar, the horizon, Have, To go, pace, POINTS, Worth, Tier, unlocks");
+            // the Crafting page's Next up carries the two materials' quests while the farming count is on
+            w.ShowDemo("Crafting"); DoEvents();
+            Check(w.CraftNextForTest().Split(',').Count(x => x == "quest") == 2, $"Crafting's Next up: the two materials' quest rows: {w.CraftNextForTest()}");
+            w.ShowDemo(); DoEvents();
+        }
+
         // What's new (0.9.12, Ui/MainWindow.WhatsNew.cs): the notes' bullets as bold lead and rest; once per version, never on
         // a fresh install; Got it stores the version; Farming only; six bullets, then "and N more"; the link to the release
         {
