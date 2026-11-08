@@ -92,7 +92,7 @@ public partial class MainWindow
         for (int i = 0; i < _goals.Count; i++) rows.Add(GoalRow(_goals[i], prog[i], rows.Count > 0));
         foreach (var m in miles) rows.Add(MileRow(m, rows.Count > 0));
         if (_goals.Count < Goals.Max) rows.Add(AddGoalRow(rows.Count > 0));
-        const int AtRest = 2;
+        const int AtRest = 3;   // Kinah this session, then two materials (Steven, 2026-11-08: "2 or 3 tiers always showing")
         int rest = Math.Max(0, rows.Count - AtRest);
         GoalsHost.Children.Clear(); GoalsMore.Children.Clear();
         for (int i = 0; i < rows.Count; i++) (i < AtRest ? GoalsHost : GoalsMore).Children.Add(rows[i]);
