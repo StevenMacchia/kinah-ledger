@@ -234,8 +234,9 @@ public partial class MainWindow
     FrameworkElement QuestRow(Quest q, bool rule, int depth = 0, string? note = null, Action? toggled = null, bool pinnable = false)
     {
         var tone = QuestTone(q);
-        // an all-time chain's bar is a sliver for most of its life: no bar under 5%, the figures say it (2026-11-08 review)
-        double? share = q.Horizon == Horizon.AllTime && q.Share < 0.05 ? null : q.Share;
+        // every row has its track, so rows keep one height; under 5% the fill would be a sliver, so the track stays empty and
+        // the figures say it (2026-11-08 reviews: no sliver bars, then rows jumping in height where the bar was left out)
+        double share = q.Share < 0.05 ? 0 : q.Share;
         var row = QRow(QuestIcon(q), Quests.Title(q, Fk), note ?? QuestSub(q), Quests.Pts(q.Points), "Lilac", share, tone, rule, inline: true);
         row.Tag = depth == 0 ? "quest" : "tree";
         AutomationProperties.SetName(row, $"Quest: {Quests.Title(q, Fk)}, {Quests.Pts(q.Points)}");
