@@ -41,9 +41,14 @@ public partial class MainWindow
     const int DoneShown = 10;
 
     /// <summary>The log at the start; a layout render or a self-test (no watching) starts empty and never saves.</summary>
-    void InitQuests(bool watch) { if (watch) _questLog = Quests.Load(); }
+    void InitQuests(bool watch) { if (watch) { _questLog = Quests.Load(); _questLoaded = true; } }
+    bool _questLoaded;
 
-    void SaveQuests() { if (!_demo) Quests.Save(_questLog); }
+    void SaveQuests() { if (!_demo && _questLoaded) Quests.Save(_questLog); }
+    /// <summary>When the inputs were last read: a look is reused for a second, so the pages' ticks do not rebuild the counts twice a second each.</summary>
+    DateTime _questInAt = DateTime.MinValue;
+    /// <summary>The materials that have had a live quest: a material that joins the list credits what today already passed without a word (it is not "just" done).</summary>
+    readonly HashSet<string> _questMatsSeen = new(StringComparer.OrdinalIgnoreCase);
 
     /* ---------------- what the engine reads ---------------- */
 
@@ -74,7 +79,7 @@ public partial class MainWindow
                     if (_items.IsGear(id) || IsCurrency(id)) continue;
                     sItems[r.Name] = sItems.GetValueOrDefault(r.Name) + n;
                     if (mats.All(m => !string.Equals(m.Name, r.Name, StringComparison.OrdinalIgnoreCase)))
-                        mats.Add(new QuestMaterial(r.Name, Quests.TierOf(drops && h.Kills > 0 ? h.Kills / (double)n : null, r.Grade), r.Worth > 0 ? r.Worth / Math.Max(1, n) : 0));
+                        mats.Add(new QuestMaterial(r.Name, Quests.TierOf(drops && h.Kills >= 100 && n >= 10 ? h.Kills / (double)n : null, r.Grade), r.Worth > 0 ? r.Worth / Math.Max(1, n) : 0));
                 }
             }
             Take(h.S.Drops, drops: true);
@@ -93,12 +98,12 @@ public partial class MainWindow
         var todayRuns = GoalRunsToday();
         var today = new QuestCounts(tc.Kinah, tc.FarmSeconds, tItems, RunsByPlace(todayRuns), TodayEngine?.Nodes ?? 0);
         // the week: the day history's Kinah and farming time (no item counts there), the run log's runs since Monday
-        long wk = 0; double ws = 0;
-        try { foreach (var d in FarmWeekDays()) { wk += d.Farm.Kinah; ws += d.Farm.Active; } } catch (Exception) { }
-        var log = _watcher.Chat?.Instances ?? _demoInst;
-        var all = log?.Snapshot() ?? new List<InstanceRun>();
         var midnight = DateTime.Today;
         var monday = midnight.AddDays(-(((int)midnight.DayOfWeek + 6) % 7));
+        long wk = 0; double ws = 0;
+        try { foreach (var d in FarmWeekDays().Where(d => d.Date.Date >= monday)) { wk += d.Farm.Kinah; ws += d.Farm.Active; } } catch (Exception) { }
+        var log = _watcher.Chat?.Instances ?? _demoInst;
+        var all = log?.Snapshot() ?? new List<InstanceRun>();
         var weekRuns = all.Where(r => r.Start.ToLocalTime() >= monday && !_hiddenRuns.Contains(RunKey(r.Start, r.Zone))).ToList();
         var week = new QuestCounts(wk, ws, new Dictionary<string, long>(), RunsByPlace(weekRuns), 0);
         // beat your best run here: the best before today against today's best, for the places run today
@@ -119,9 +124,10 @@ public partial class MainWindow
     /// <summary>One look: the inputs and the live list, kept for the tick and the other pages.</summary>
     List<Quest> RefreshQuests()
     {
+        if (_questIn != null && (DateTime.UtcNow - _questInAt).TotalMilliseconds < 900) return _questsNow;
         try
         {
-            _questIn = QuestInputsNow(); _questsNow = Quests.Live(_questIn);
+            _questIn = QuestInputsNow(); _questInAt = DateTime.UtcNow; _questsNow = Quests.Live(_questIn);
             // the first look (here, so a render and the first draw have the score and the Done fold without waiting for a tick):
             // what was passed before it is credited without a word
             if (_questLookedSession != _questIn.SessionStartUtc && _questsNow.Count > 0) QuestAdvance(redraw: false);
@@ -151,12 +157,19 @@ public partial class MainWindow
     List<string> QuestAdvance(bool redraw = true)
     {
         var x = _questIn ??= QuestInputsNow();
-        var done = Quests.Advance(_questLog, x, DateTime.Now);
+        var nowLocal = x.NowUtc.ToLocalTime();
+        // around midnight the Today count rolls on the watcher's own tick: a look that straddles it would credit yesterday's totals under today
+        if (!_demo && DayStore.DayOf(nowLocal) != DayStore.Today) return new();
+        var newMats = Quests.PickMaterials(x).Select(m => m.Name).Where(n => !_questMatsSeen.Contains(n)).ToList();
+        var done = Quests.Advance(_questLog, x, nowLocal);
         bool first = _questLookedSession != x.SessionStartUtc; _questLookedSession = x.SessionStartUtc;
+        foreach (var n in newMats) _questMatsSeen.Add(n);
         if (done.Count == 0) return new();
         SaveQuests();
         var said = new List<string>();
-        if (!first)
+        // a material that just joined the list: what today had already passed for it is credited quietly, like a first look
+        done = done.Where(d => !(d.Kind == QuestKind.Material && d.Horizon == Horizon.Today && newMats.Contains(d.Subject, StringComparer.OrdinalIgnoreCase))).ToList();
+        if (!first && done.Count > 0)
         {
             foreach (var d in done) _questFresh[d.Key + "|" + d.Scope] = DateTime.UtcNow;
             var line = done.Count == 1 ? $"Quest done · {Quests.Title(done[0], Fk)} · {Quests.Pts(done[0].Points, plus: true)}"

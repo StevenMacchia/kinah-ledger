@@ -168,7 +168,7 @@ public static class Quests
         foreach (var m in chain) if (m > have) return m;
         if (chain.Length == 0) return 0;
         long last = chain[^1];
-        long step = last < 100_000 ? (have < 10_000 ? 1_000 : 10_000) : last >= 100_000_000 ? 100_000_000 : last >= 10_000_000 ? 10_000_000 : 1_000_000;
+        long step = last < 100 ? 25 : last < 100_000 ? (have < 10_000 ? 1_000 : 10_000) : last >= 100_000_000 ? 100_000_000 : last >= 10_000_000 ? 10_000_000 : 1_000_000;
         return (have / step + 1) * step;
     }
 
@@ -234,7 +234,7 @@ public static class Quests
         // runs at a place today (this week's are the branch); beat your best run here
         foreach (var (place, n) in x.Today.Runs.OrderByDescending(kv => kv.Value))
             if (n > 0) rest.Add(Make(QuestKind.Runs, Horizon.Today, place, NextStep(RunsChain, n), 1, n, x.Today.Seconds));
-        foreach (var b in x.BestRuns.Where(b => b.Best > 0))
+        foreach (var b in x.BestRuns.Where(b => b.Best > 0 && b.Latest <= b.Best))
             rest.Add(BestQuest(b));
         // gathering attempts this session (today's is the branch)
         if (session && x.Session.Gathers > 0) rest.Add(Make(QuestKind.Gather, Horizon.Session, "", NextStep(GatherChain, x.Session.Gathers), 1, x.Session.Gathers, x.Session.Seconds));
@@ -417,10 +417,17 @@ public static class Quests
             if (!File.Exists(p)) return new QuestLog();
             var log = JsonSerializer.Deserialize<QuestLog>(File.ReadAllText(p), Json) ?? new QuestLog();
             log.Done ??= new();
-            log.Done.RemoveAll(d => d == null || d.Key.Length == 0 || d.Scope.Length == 0);
+            log.Done.RemoveAll(d => d == null || string.IsNullOrEmpty(d.Key) || string.IsNullOrEmpty(d.Scope));
+            foreach (var d in log.Done) { d.Kind ??= ""; d.Horizon ??= ""; d.Subject ??= ""; }
             return log;
         }
-        catch (Exception ex) { CrashLog.Write("quests load", ex); return new QuestLog(); }
+        catch (Exception ex)
+        {
+            CrashLog.Write("quests load", ex);
+            // the file is kept as quests.bad.json for a look, so the next save does not write an empty log over the history
+            try { var p = path ?? PathFor(); if (File.Exists(p)) File.Move(p, Path.ChangeExtension(p, ".bad.json"), overwrite: true); } catch (Exception) { }
+            return new QuestLog();
+        }
     }
 
     /// <summary>Writes the log (to a temporary file first, so a crash mid-write never leaves half a file).</summary>
