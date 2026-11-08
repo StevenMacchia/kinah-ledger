@@ -278,6 +278,9 @@ public partial class MainWindow
         if (withNow && known && secs > 10) _eventsRate = Fk(value / secs * 3600);
         // the chips: what the counted runs paid out
         if (n > 0 && known) body.Children.Add(QRunChips(counted, value));   // nothing priced: a row of dashes says nothing
+        // Next up (quests, phase 1, Ui/MainWindow.Quests.cs): the runs here today and this week, beating the best run here, with their trees
+        RefreshQuests();
+        if (QuestNextCard(q => q.Kind is QuestKind.Runs or QuestKind.BestRun && string.Equals(q.Subject, zone, StringComparison.OrdinalIgnoreCase), redraw) is { } nextUp) body.Children.Add(nextUp);
 
         // a run's sheet (a click on a run, or on the line below): the details, a fix if it needs one, Remove; a flagged run's question is a lilac card
         double med = Median(counted.Select(r => r.Seconds));

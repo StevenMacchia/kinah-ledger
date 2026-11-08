@@ -423,6 +423,7 @@ public partial class OptionsWindow : Window
     void RefreshLive()
     {
         LinkCodeText.Text = _host.LinkCode();
+        ScoreText.Text = _host.QuestScoreLine();   // the quests' points (Ui/MainWindow.Quests.cs)
         ChatStatus.Text = _host.ChatAreaText();
         MarketStatus.Text = _host.MarketLine();
         AutoChatBtn.IsEnabled = _host.ChatManual;

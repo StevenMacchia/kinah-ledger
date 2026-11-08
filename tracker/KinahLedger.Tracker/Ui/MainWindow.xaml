@@ -609,6 +609,8 @@
             </Grid>
             <StackPanel x:Name="GoalsHost" Margin="0,2,0,0"/>
             <StackPanel x:Name="GoalsMore" Visibility="Collapsed"/>
+            <!-- the Done fold (quests, 2026-11-08): one row at the foot, the completed quests under it on a click -->
+            <StackPanel x:Name="GoalsDone"/>
           </StackPanel>
         </StackPanel>
       </Border>

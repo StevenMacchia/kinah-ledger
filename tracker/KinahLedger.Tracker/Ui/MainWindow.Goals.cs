@@ -72,35 +72,50 @@ public partial class MainWindow
     /// </summary>
     void FillGoals()
     {
-        // Next up (Quest, 2026-11-07): today's goals first, then the milestones the pace puts minutes away (Ui/MainWindow.QuestFarm.cs);
-        // two rows at rest, the rest and Set a goal behind the head's chevron; the slim row only with nothing to count down to
+        // Next up (Quest, 2026-11-07; quests, 2026-11-08): today's goals first, then the engine's quests (Ui/MainWindow.Quests.cs):
+        // three rows at rest (Kinah this session, then two crafting materials), the rest and Set a goal behind the head's chevron,
+        // a quest's tree under it on a click, the Done fold at the foot; the slim row only with nothing to count down to
         bool farm = _part == "Farming" && !_welcome;
         var today = TodayGoalCounts();
         var prog = _goals.Select(g => ProgressOf(g, today)).ToList();
-        var miles = farm ? Milestones() : new();
-        bool show = farm && (_goals.Count > 0 || miles.Count > 0);
+        var quests = RefreshQuests();
+        bool show = farm && (_goals.Count > 0 || quests.Count > 0);
         GoalsCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         GoalsSlim.Visibility = farm && !show ? Visibility.Visible : Visibility.Collapsed;
         GoalsBox.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _drawnSig.Remove("goals"); return; }
         bool open = QOpen("goals");
+        var score = ScoreNow();
+        var doneNow = DoneNow();
         var sig = string.Join(";", _goals.Select((g, i) => $"{g.Kind}:{g.Target}:{g.Name}:{g.Which}:{prog[i].Have}:{Math.Round((prog[i].SecondsToGo ?? 0) / 60)}"))
-            + "|" + string.Join(";", miles.Select(m => m.Sig + ":" + m.Sub)) + "|" + open + "|" + Skins.Current;
+            + "|" + string.Join(";", quests.Select(q => $"{q.Key}:{q.Have}:{Math.Round((q.SecondsToGo ?? 0) / 60)}"))
+            + $"|{open}|{_qTree}|{QOpen("quests-done")}|{doneNow.Count}:{doneNow.Count(IsFresh)}|{score.Session}|{Skins.Current}";
         if (!Changed("goals", sig)) return;
         int done = prog.Count(p => p.Done);
-        var rows = new List<FrameworkElement>();
-        for (int i = 0; i < _goals.Count; i++) rows.Add(GoalRow(_goals[i], prog[i], rows.Count > 0));
-        foreach (var m in miles) rows.Add(MileRow(m, rows.Count > 0));
-        if (_goals.Count < Goals.Max) rows.Add(AddGoalRow(rows.Count > 0));
-        const int AtRest = 3;   // Kinah this session, then two materials (Steven, 2026-11-08: "2 or 3 tiers always showing")
-        int rest = Math.Max(0, rows.Count - AtRest);
-        GoalsHost.Children.Clear(); GoalsMore.Children.Clear();
-        for (int i = 0; i < rows.Count; i++) (i < AtRest ? GoalsHost : GoalsMore).Children.Add(rows[i]);
+        var rows = new List<(FrameworkElement El, bool Primary)>();
+        for (int i = 0; i < _goals.Count; i++) rows.Add((GoalRow(_goals[i], prog[i], rows.Count > 0), true));
+        rows.AddRange(QuestRows(null, rows.Count > 0));
+        if (_goals.Count < Goals.Max) rows.Add((AddGoalRow(rows.Count > 0), true));
+        // the first three rows (and the tree or the fresh completion under one) on the page, the rest behind the chevron
+        GoalsHost.Children.Clear(); GoalsMore.Children.Clear(); GoalsDone.Children.Clear();
+        int primaries = 0, rest = 0;
+        foreach (var (el, primary) in rows)
+        {
+            if (primary) primaries++;
+            bool atRest = primaries <= QuestsAtRest;
+            if (primary && !atRest) rest++;
+            (atRest ? GoalsHost : GoalsMore).Children.Add(el);
+        }
+        foreach (var r in DoneFoldRows()) GoalsDone.Children.Add(r);
         GoalsMore.Visibility = open && rest > 0 ? Visibility.Visible : Visibility.Collapsed;
         GoalsChev.Visibility = rest > 0 ? Visibility.Visible : Visibility.Collapsed;
         QSetChev(GoalsChev, open && rest > 0);
-        GoalsNote.Text = (_goals.Count > 0 ? $"today · {done} of {_goals.Count} done" : "at this pace") + (rest > 0 && !open ? $" · {rest} more" : "");
-        GoalsNote.ToolTip = _goals.Count > 0 ? "Today's goals, from midnight on this PC. Click one to change or remove it." : "Milestones worked out from this count's pace. They turn over by themselves.";
+        var parts = new List<string>();
+        if (_goals.Count > 0) parts.Add($"today · {done} of {_goals.Count} done");
+        if (score.Session > 0) parts.Add(Quests.Pts(score.Session) + " this session"); else if (_goals.Count == 0) parts.Add("at this pace");
+        if (rest > 0 && !open) parts.Add($"{rest} more");
+        GoalsNote.Text = string.Join(" · ", parts);
+        CardTip(GoalsNote, ScoreCard);   // Your score: this session, today, this week, all time
         GoalsHead.ToolTip = rest > 0 ? (open ? "Fold the rest" : $"{rest} more") : null;
     }
 
