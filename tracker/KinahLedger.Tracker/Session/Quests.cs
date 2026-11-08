@@ -165,6 +165,33 @@ public static class Quests
     public static readonly long[] RunsAllTime = { 100, 250, 500, 1_000 };
     public static readonly long[] GatherAllTime = { 1_000, 2_500, 5_000, 10_000 };
 
+    // a rarer material needs fewer and pays more (Steven, 2026-11-08: "more rare items should require less to complete but
+    // give more points -- 5 being the max per session for gold but rewarding like 50"). Common climbs the stack chains above;
+    // each rarer grade has its own, shorter and lower, over the session, today and all time. Only gold was anchored by
+    // Steven (1, 2, 3, 5 this session, 5 worth about 50); the green, blue and violet ladders are a first cut to tune.
+    public const int TierCommon = 1, TierRare = 2, TierLegend = 3, TierUnique = 4, TierEpic = 5;
+    static readonly long[][] SessionByTier = { StackChain, new long[] { 3, 5, 10, 20, 30, 50, 100 }, new long[] { 1, 2, 3, 5, 10, 20 }, new long[] { 1, 2, 3, 5 }, new long[] { 1, 2, 3 } };
+    static readonly long[][] TodayByTier = { StackChain, new long[] { 5, 10, 20, 50, 100, 200 }, new long[] { 2, 5, 10, 20, 50 }, new long[] { 1, 3, 5, 10 }, new long[] { 1, 2, 3, 5 } };
+    static readonly long[][] AllTimeByTier = { StackAllTime, new long[] { 100, 250, 500, 1_000, 2_500, 5_000 }, new long[] { 25, 50, 100, 250, 500 }, new long[] { 10, 25, 50, 100 }, new long[] { 5, 10, 25, 50 } };
+    /// <summary>A rarer grade's points by step, before the horizon (common keeps <see cref="StepPts"/> × the kind): gold's 1, 2, 3, 5 are 10, 20, 30, 50, so a gold step always beats the same count of a lower grade.</summary>
+    static readonly int[][] PtsByTier = { Array.Empty<int>(), new[] { 2, 3, 4, 6, 8, 10, 15 }, new[] { 4, 6, 8, 12, 18, 25 }, new[] { 10, 20, 30, 50 }, new[] { 20, 35, 50 } };
+
+    /// <summary>The session's ladder stops at its last step for gold and above (5 gold is the session's most); the others, and every today and all-time ladder, go on past their end.</summary>
+    public static bool Capped(string kind, string horizon, int tier) => kind == QuestKind.Material && horizon == Horizon.Session && tier >= TierUnique;
+
+    /// <summary>The next step of a chain above <paramref name="have"/> for this kind, horizon and tier; 0 when a capped ladder is finished (no quest left on it).</summary>
+    public static long Next(string kind, string horizon, int tier, long have)
+    {
+        var chain = ChainOf(kind, horizon, tier);
+        return Capped(kind, horizon, tier) && have >= chain[^1] ? 0 : NextStep(chain, have);
+    }
+
+    /// <summary>How many of a material the session needs before it gets a quest: one of a Legend or rarer (one drop is the event), else <see cref="MaterialMin"/>.</summary>
+    public static int MinFor(int tier) => tier >= TierLegend ? 1 : MaterialMin;
+
+    /// <summary>Gold and above earn outside the hour's cap: a rare drop is luck, not grinding. Legend stays under it (blue is farmed in volume and its steps are small).</summary>
+    public static bool CapFree(string kind, int tier) => kind == QuestKind.Material && tier >= TierUnique;
+
     /// <summary>How many steps of a chain a tree shows above the live one.</summary>
     public const int UpSteps = 3;
     /// <summary>Points an hour of play can earn from the session's quests at most, so grinding one trivial quest never outscores real farming; today's and the week's quests are few and coarse and are not capped.</summary>
@@ -185,14 +212,14 @@ public static class Quests
     public static string KeyOf(string kind, string horizon, string subject, long target) => $"{kind}:{horizon}:{subject}:{target}";
     public static string ChainKey(string kind, string subject) => $"{kind}:{subject}";
 
-    /// <summary>The chain a kind climbs over a horizon.</summary>
-    public static long[] ChainOf(string kind, string horizon) => kind switch
+    /// <summary>The chain a kind climbs over a horizon; a material's by its tier (<see cref="SessionByTier"/>).</summary>
+    public static long[] ChainOf(string kind, string horizon, int tier = TierCommon) => kind switch
     {
         QuestKind.Kinah => horizon switch { Horizon.AllTime => KinahAllTime, Horizon.Week => KinahWeek, Horizon.Today => KinahToday, _ => KinahSession },
         QuestKind.Runs => horizon == Horizon.AllTime ? RunsAllTime : RunsChain,
         QuestKind.Gather => horizon == Horizon.AllTime ? GatherAllTime : GatherChain,
         QuestKind.BestRun => Array.Empty<long>(),
-        _ => horizon == Horizon.AllTime ? StackAllTime : StackChain,
+        _ => (horizon switch { Horizon.AllTime => AllTimeByTier, Horizon.Session => SessionByTier, _ => TodayByTier })[Math.Clamp(tier, TierCommon, TierEpic) - 1],
     };
 
     /// <summary>The next step of a chain above <paramref name="have"/>; past the chain's end, a step of its own size (25 runs, round thousands, the last Kinah step's size again).</summary>
@@ -217,16 +244,25 @@ public static class Quests
 
     /* ---------------- tiers and points ---------------- */
 
+    /// <summary>The tier a grade is: Common 1, Rare (green) 2, Legend (blue) 3, Unique (gold) 4, Epic and above 5.</summary>
+    public static int GradeTier(string grade) => grade switch
+    {
+        "Epic" or "Mythic" or "Ultimate" => TierEpic,
+        "Unique" or "Heroic" => TierUnique,
+        "Legend" or "Legendary" => TierLegend,
+        "Rare" => TierRare,
+        _ => TierCommon,
+    };
+
     /// <summary>
-    /// A material's tier from its rarity: the drop odds the app has ("1 in 54" is <paramref name="oneIn"/> 54) and its grade.
-    /// Tier 1 drops better than 1 in 10, tier 2 up to 1 in 50, tier 3 rarer than that, or Legend and better whatever the odds.
-    /// With no odds, the grade alone: Common 1, Rare 2.
+    /// A material's tier: its grade leads (<see cref="GradeTier"/>); the drop odds the app has ("1 in 54" is
+    /// <paramref name="oneIn"/> 54) lift a Common or Rare one step when rarer than 1 in 50, never more, and never into gold,
+    /// whose points are the grade's own (0.10.30; before, odds alone could make a Common item the top tier).
     /// </summary>
     public static int TierOf(double? oneIn, string grade)
     {
-        if (grade is "Legend" or "Legendary" or "Unique" or "Epic" or "Mythic" or "Ultimate" or "Heroic") return 3;
-        if (oneIn is double o && o > 0) return o < 10 ? 1 : o <= 50 ? 2 : 3;
-        return grade is "" or "Common" or "Normal" ? 1 : 2;
+        int t = GradeTier(grade);
+        return t <= TierRare && oneIn is double o && o > 50 ? t + 1 : t;
     }
 
     /// <summary>
@@ -245,7 +281,13 @@ public static class Quests
     public static int PointsFor(string kind, string horizon, long target, int tier)
     {
         if (kind == QuestKind.BestRun) return BestRunPoints;
-        int step = StepIndex(ChainOf(kind, horizon), target);
+        int step = StepIndex(ChainOf(kind, horizon, tier), target);
+        if (kind == QuestKind.Material && tier > TierCommon)
+        {
+            var t = PtsByTier[Math.Min(tier, TierEpic) - 1];
+            double p = step < t.Length ? t[step] : t[^1] + 5 * (step - t.Length + 1);
+            return Math.Max(1, (int)Math.Round(p * Horizon.Mult(horizon)));
+        }
         double basePts = step < StepPts.Length ? StepPts[step] : StepPts[^1] + 5 * (step - StepPts.Length + 1);
         return Math.Max(1, (int)Math.Round(basePts * KindScale(kind) * TierMult(tier) * Horizon.Mult(horizon)));
     }
@@ -276,7 +318,9 @@ public static class Quests
             if (q != null && pinned.All(p => p.Key != q.Key)) pinned.Add(q);
         }
         var picked = PickMaterials(x);
-        var matRows = session ? picked.Select(m => Make(QuestKind.Material, Horizon.Session, m.Name, NextStep(StackChain, x.Session.Item(m.Name)), m.Tier, x.Session.Item(m.Name), x.Session.Seconds)).ToList() : new();
+        // a gold ladder done (5 this session) has no row left: the next material takes it
+        var matRows = session ? picked.Select(m => (m, t: Next(QuestKind.Material, Horizon.Session, m.Tier, x.Session.Item(m.Name)))).Where(p => p.t > 0)
+            .Select(p => Make(QuestKind.Material, Horizon.Session, p.m.Name, p.t, p.m.Tier, x.Session.Item(p.m.Name), x.Session.Seconds)).ToList() : new();
         var rows = new List<Quest>();
         rows.AddRange(pinned);
         foreach (var m in matRows) if (rows.All(r => r.Chain != m.Chain)) rows.Add(m);
@@ -304,7 +348,9 @@ public static class Quests
                 var m = x.Materials.FirstOrDefault(m => string.Equals(m.Name, subject, StringComparison.OrdinalIgnoreCase));
                 long have = x.Session.Item(subject);
                 if (x.Session.Seconds < MinSeconds) return null;
-                return Make(QuestKind.Material, Horizon.Session, m?.Name ?? subject, NextStep(StackChain, have), m?.Tier ?? 1, have, x.Session.Seconds);
+                int tier = m?.Tier ?? TierCommon;
+                long next = Next(QuestKind.Material, Horizon.Session, tier, have);
+                return next <= 0 ? null : Make(QuestKind.Material, Horizon.Session, m?.Name ?? subject, next, tier, have, x.Session.Seconds);
             }
             case QuestKind.Gather:
                 return x.Session.Seconds < MinSeconds ? null : Make(QuestKind.Gather, Horizon.Session, "", NextStep(GatherChain, x.Session.Gathers), 1, x.Session.Gathers, x.Session.Seconds);
@@ -329,15 +375,16 @@ public static class Quests
     }
 
     /// <summary>
-    /// The materials with a quest (at most <see cref="MaterialMax"/>), in the rows' order: the kinds last farmed first (the
+    /// The materials with a quest (at most <see cref="MaterialMax"/>), in the rows' order: gold and rarer first, then the kinds last farmed (the
     /// feed's order, newest first), then by the stack's worth. Rarity counts (Steven, 2026-11-08: "Radiant vs regular"): of
     /// two variants of one kind, the higher tier takes the row and the plain one steps back, whichever was farmed last.
     /// </summary>
     public static List<QuestMaterial> PickMaterials(QuestInputs x)
     {
-        var mats = x.Materials.Where(m => x.Session.Item(m.Name) >= MaterialMin).ToList();
+        var mats = x.Materials.Where(m => x.Session.Item(m.Name) >= MinFor(m.Tier)).ToList();
         int Recency(QuestMaterial m) { for (int i = 0; i < x.LastFarmed.Count; i++) if (string.Equals(x.LastFarmed[i], m.Name, StringComparison.OrdinalIgnoreCase)) return i; return int.MaxValue; }
-        var ordered = mats.OrderBy(Recency).ThenByDescending(m => m.Worth * x.Session.Item(m.Name)).ThenByDescending(m => x.Session.Item(m.Name)).ThenBy(m => m.Name, StringComparer.Ordinal).ToList();
+        // gold and rarer first: only a listed material earns, and a rare drop is the one worth showing (0.10.30)
+        var ordered = mats.OrderByDescending(m => m.Tier >= TierUnique).ThenBy(Recency).ThenByDescending(m => m.Worth * x.Session.Item(m.Name)).ThenByDescending(m => x.Session.Item(m.Name)).ThenBy(m => m.Name, StringComparer.Ordinal).ToList();
         var picked = new List<QuestMaterial>();
         foreach (var m in ordered)
         {
@@ -371,10 +418,11 @@ public static class Quests
     public static QuestTree Tree(Quest q, QuestInputs x)
     {
         var up = new List<Quest>();
-        var chain = ChainOf(q.Kind, q.Horizon);
+        var chain = ChainOf(q.Kind, q.Horizon, q.Tier);
         for (long t = q.Target, i = 0; i < UpSteps && chain.Length > 0; i++)
         {
-            t = NextStep(chain, t);
+            t = Next(q.Kind, q.Horizon, q.Tier, t);
+            if (t <= 0) break;   // a capped ladder ends: nothing above gold's 5 this session
             up.Add(new Quest(q.Kind, q.Horizon, q.Subject, t, q.Tier, PointsFor(q.Kind, q.Horizon, t, q.Tier), q.Have, null));
         }
         var branches = new List<Quest>();
@@ -387,7 +435,7 @@ public static class Quests
                 if (h == Horizon.AllTime && x.AllTime == null) continue;
                 var hc = x.Of(h);
                 long have = q.Kind switch { QuestKind.Kinah => hc.Kinah, QuestKind.Material => hc.Item(q.Subject), QuestKind.Gather => hc.Gathers, _ => hc.RunsAt(q.Subject) };
-                branches.Add(Make(q.Kind, h, q.Subject, NextStep(ChainOf(q.Kind, h), have), q.Tier, have, hc.Seconds));
+                branches.Add(Make(q.Kind, h, q.Subject, Next(q.Kind, h, q.Tier, have), q.Tier, have, hc.Seconds));
             }
         return new QuestTree(q, up, branches);
     }
@@ -397,7 +445,7 @@ public static class Quests
     {
         var list = new List<Quest>();
         list.Add(Make(QuestKind.Kinah, Horizon.Today, "", NextStep(KinahToday, x.Today.Kinah), 1, x.Today.Kinah, x.Today.Seconds));
-        foreach (var m in ShownMaterials(x, pins)) list.Add(Make(QuestKind.Material, Horizon.Today, m.Name, NextStep(StackChain, x.Today.Item(m.Name)), m.Tier, x.Today.Item(m.Name), x.Today.Seconds));
+        foreach (var m in ShownMaterials(x, pins)) list.Add(Make(QuestKind.Material, Horizon.Today, m.Name, Next(QuestKind.Material, Horizon.Today, m.Tier, x.Today.Item(m.Name)), m.Tier, x.Today.Item(m.Name), x.Today.Seconds));
         foreach (var (place, n) in x.Today.Runs.OrderByDescending(kv => kv.Value)) list.Add(Make(QuestKind.Runs, Horizon.Today, place, NextStep(RunsChain, n), 1, n, x.Today.Seconds));
         if (x.Today.Gathers > 0) list.Add(Make(QuestKind.Gather, Horizon.Today, "", NextStep(GatherChain, x.Today.Gathers), 1, x.Today.Gathers, x.Today.Seconds));
         return list;
@@ -416,7 +464,7 @@ public static class Quests
         foreach (var (name, n) in shown)
         {
             int tier = known.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase))?.Tier ?? 1;
-            list.Add(Make(QuestKind.Material, Horizon.AllTime, name, NextStep(StackAllTime, n), tier, n, 0));
+            list.Add(Make(QuestKind.Material, Horizon.AllTime, name, Next(QuestKind.Material, Horizon.AllTime, tier, n), tier, n, 0));
         }
         foreach (var (place, n) in a.Runs.OrderByDescending(kv => kv.Value).Take(5)) list.Add(Make(QuestKind.Runs, Horizon.AllTime, place, NextStep(RunsAllTime, n), 1, n, 0));
         if (a.Gathers > 0) list.Add(Make(QuestKind.Gather, Horizon.AllTime, "", NextStep(GatherAllTime, a.Gathers), 1, a.Gathers, 0));
@@ -457,7 +505,7 @@ public static class Quests
         {
             var scope = ScopeOf(q.Horizon, x.SessionStartUtc, nowLocal);
             if (log.Done.Any(d => d.Key == q.Key && d.Scope == scope)) continue;
-            int credit = q.Horizon == Horizon.Session ? Math.Clamp(Math.Min(q.Points, CapLeft(log, x)), 0, q.Points) : q.Points;
+            int credit = q.Horizon == Horizon.Session && !CapFree(q.Kind, q.Tier) ? Math.Clamp(Math.Min(q.Points, CapLeft(log, x)), 0, q.Points) : q.Points;
             var d = new QuestDone { Key = q.Key, Kind = q.Kind, Horizon = q.Horizon, Subject = q.Subject, Target = q.Target, Tier = q.Tier, Points = credit, Worth = q.Points, Have = q.Have, DoneAtUtc = x.NowUtc, Scope = scope, Sent = q.Horizon == Horizon.AllTime };
             log.Done.Add(d); log.AllTimePoints += credit;
             done.Add(d);
@@ -470,7 +518,7 @@ public static class Quests
     public static int CapLeft(QuestLog log, QuestInputs x)
     {
         int hours = Math.Max(1, (int)Math.Ceiling(x.Session.Seconds / 3600.0));
-        long earned = log.Done.Where(d => d.Horizon == Horizon.Session && d.DoneAtUtc >= x.SessionStartUtc).Sum(d => (long)d.Points);
+        long earned = log.Done.Where(d => d.Horizon == Horizon.Session && d.DoneAtUtc >= x.SessionStartUtc && !CapFree(d.Kind, d.Tier)).Sum(d => (long)d.Points);
         return (int)Math.Clamp(hours * (long)CapPerHour - earned, 0, int.MaxValue);
     }
 
@@ -481,8 +529,7 @@ public static class Quests
         {
             if (horizon == Horizon.Session && x.Session.Seconds < MinSeconds) yield break;
             if (horizon == Horizon.AllTime && x.AllTime == null) yield break;
-            var chain = ChainOf(kind, horizon);
-            for (long t = NextStep(chain, 0); t > 0 && t <= have; t = NextStep(chain, t))
+            for (long t = Next(kind, horizon, tier, 0); t > 0 && t <= have; t = Next(kind, horizon, tier, t))
                 yield return new Quest(kind, horizon, subject, t, tier, PointsFor(kind, horizon, t, tier), have, null);
         }
         foreach (var h in Horizon.All) foreach (var q in Steps(QuestKind.Kinah, h, "", 1, x.Of(h).Kinah)) yield return q;
@@ -622,7 +669,8 @@ public static class Quests
     /// <summary>"12 pts", "+12 pts".</summary>
     public static string Pts(long n, bool plus = false) => (plus && n > 0 ? "+" : "") + n.ToString("N0", CultureInfo.InvariantCulture) + " pts";
 
-    public static string TierWord(int tier) => tier switch { >= 3 => "rare", 2 => "uncommon", _ => "common" };
+    /// <summary>The tier in the game's grade words: common, rare (green), legend (blue), unique (gold), epic.</summary>
+    public static string TierWord(int tier) => tier switch { >= TierEpic => "epic", TierUnique => "unique", TierLegend => "legend", TierRare => "rare", _ => "common" };
 
     static string N(long n) => n.ToString("N0", CultureInfo.InvariantCulture);
 
