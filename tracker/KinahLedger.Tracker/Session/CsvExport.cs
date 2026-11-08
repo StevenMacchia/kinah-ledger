@@ -80,7 +80,7 @@ public static class CsvExport
     }
 
     /// <summary>
-    /// The Crafting page's This session table (0.10.12), a row a recipe: tries, how many worked and failed, what came out,
+    /// The Crafting page's This session table (0.10.26), a row a recipe: tries, how many worked and failed, what came out,
     /// what the tries cost at Market prices (<paramref name="cost"/>: the figure and whether every material was priced, as
     /// the page's "≥" says) and what the output sells for after the Market's cut (<paramref name="price"/> each,
     /// <paramref name="keeps"/> the seller's share), the profit when both are known, the upgrade rolls, and crafts not seen.
@@ -106,7 +106,7 @@ public static class CsvExport
     }
 
     /// <summary>
-    /// The Week side's seven days (0.10.12), oldest first, a row a day: farming (made after the Market's cut, Kinah, seconds
+    /// The Week side's seven days (0.10.26), oldest first, a row a day: farming (made after the Market's cut, Kinah, seconds
     /// spent farming, kills, gathering attempts, the zones with what each made) and the runs (how many, how many counted,
     /// their Kinah, the places with a count each). A day before the history began is a row with its date only.
     /// </summary>

@@ -317,7 +317,7 @@ public static class WpfApp
         Environment.SetEnvironmentVariable("KL_SCREEN_W", null);
         Check(w.FitState.Scale == 1, "and back to 100% on Cancel");
 
-        // Keep above other windows (0.10.12): off to start, a switch in Options that waits for Save, and the same one in the ⋯ menu
+        // Keep above other windows (0.10.26): off to start, a switch in Options that waits for Save, and the same one in the ⋯ menu
         Check(!w.Topmost && !p.AlwaysOnTop, "keep above other windows: off to start");
         o = Open();
         Flip(o.TopmostChk);
@@ -333,7 +333,7 @@ public static class WpfApp
         Check(o.TopmostChk.IsChecked == false, "Options opens with it off again");
         Click(o.CancelBtn);
         DoEvents();
-        // the pages by key (0.10.12): Ctrl+2 Crafting, Ctrl+3 Events, Ctrl+1 Farming
+        // the pages by key (0.10.26): Ctrl+2 Crafting, Ctrl+3 Events, Ctrl+1 Farming
         w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+2 shows Crafting");
         w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+3 shows Events");
         w.PressForTest(Key.NumPad1, ModifierKeys.Control); Check(w.PartForTest == "Farming", "Ctrl+1 (the keypad's too) shows Farming");
@@ -356,11 +356,11 @@ public static class WpfApp
         Check(runsLines.Length == w.ShownRunsForTest().Count + 1 && runsLines[0].TrimStart('\uFEFF') == Session.CsvExport.RunsHeader, $"...one line a run: {runsLines.Length - 1} runs, after the header");
         Check(runsLines.Skip(1).All(l => l.Split(',')[1] is "Expedition" or "Event"), "...each an expedition or an event");
         MainWindow.SaveCsvForTest = null;
-        // the week (0.10.12): a row a day, seven days
+        // the week (0.10.26): a row a day, seven days
         var weekLines = w.WeekCsvForTest().Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Check(weekLines.Length == 8 && weekLines[0].TrimEnd('\r') == Session.CsvExport.WeekHeader, $"the week as CSV: {weekLines.Length - 1} days after the header");
         Check(w.MoreEntries().Any(e => e.Text == MainWindow.SaveWeekText), "the ⋯ menu has Save this week as CSV…");
-        // crafts (0.10.12): This session's recipes, priced as the table is
+        // crafts (0.10.26): This session's recipes, priced as the table is
         w.ShowDemo("Crafting");
         DoEvents();
         var craftLines = (w.CraftsCsvForTest() ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries);

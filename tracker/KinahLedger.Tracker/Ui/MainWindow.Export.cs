@@ -39,7 +39,7 @@ public partial class MainWindow
         SaveCsv(CsvExport.FileName("runs", DateTime.Now), CsvExport.Runs(RunsOrder.Sorted(runs, RunsSortMode, RunValue), _items, RunValue), $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}");
     }
 
-    /// <summary>The Crafting page's Save as CSV (0.10.12): This session's recipes as the table prices them.</summary>
+    /// <summary>The Crafting page's Save as CSV (0.10.26): This session's recipes as the table prices them.</summary>
     string? CraftsCsv()
     {
         if (_crafted.Count == 0) return null;
@@ -55,7 +55,7 @@ public partial class MainWindow
         SaveCsv(CsvExport.FileName("crafts", DateTime.Now), text, $"{_crafted.Count} recipe{(_crafted.Count == 1 ? "" : "s")}");
     }
 
-    /// <summary>The ⋯ menu's Save this week as CSV… (0.10.12): the Week side's seven days, farming and runs together.</summary>
+    /// <summary>The ⋯ menu's Save this week as CSV… (0.10.26): the Week side's seven days, farming and runs together.</summary>
     string WeekCsv() => CsvExport.Week(DayHistory.Days(7, TodayEngine, _items, WeekRunList(), WeekFile()));
 
     void SaveWeekCsv() => SaveCsv(CsvExport.FileName("week", DateTime.Now), WeekCsv(), "this week");

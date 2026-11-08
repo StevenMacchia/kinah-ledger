@@ -45,7 +45,7 @@ public static class CsvExportTests
         Check("runs: a paid run, items by count then name", runs[1], "2026-11-06 19:45:00,Expedition,Urugugu Canyon,,,542,702000,yes,40,703000,no,item 900001 ×6; item 900002 ×1,item 900003 ×2,");
         Check("runs: a run whose Kinah wasn't read: blank Kinah, left out, a note", runs[2], "2026-11-06 20:45:00,Event,Shugo Festival,Hidden Lugi,Shugo Festival,300,,no,3,1000,yes,,,Kinah not read; 2 slots not read");
 
-        // crafts (0.10.12): a priced recipe, one whose cost is only a floor, one with an unpriced output
+        // crafts (0.10.26): a priced recipe, one whose cost is only a floor, one with an unpriced output
         var powder = new CraftLedger.Recipe { Name = "Sapphire Powder", Ok = 2, Fail = 0, Made = { ["Sapphire Powder"] = 6 }, Tries = { [3] = 2 } };
         var greaves = new CraftLedger.Recipe { Name = "Orichalcum Greaves", Ok = 1, Fail = 1, Upgraded = 0, NotUpgraded = 1, Made = { ["Orichalcum Greaves"] = 1 }, Tries = { [1] = 2 } };
         var ring = new CraftLedger.Recipe { Name = "Diamond Ring", Ok = 1, Fail = 0, Unseen = 1, Made = { ["Diamond Ring"] = 1 } };
@@ -58,7 +58,7 @@ public static class CsvExportTests
         Check("crafts: a cost that is only a floor says at least; a lost roll", crafts[2], "Orichalcum Greaves,2,1,1,1,Orichalcum Greaves ×1,78130,at least,176000,97870,0,1,0");
         Check("crafts: no recipe book, no price: blanks, and a craft not seen", crafts[3], "Diamond Ring,1,1,0,1,Diamond Ring ×1,,no,,,0,0,1");
 
-        // the week (0.10.12): a day before the history, a farming day with zones, a day of runs
+        // the week (0.10.26): a day before the history, a farming day with zones, a day of runs
         var mon = new DateTime(2026, 11, 2);
         var days = new List<HistoryDay>
         {

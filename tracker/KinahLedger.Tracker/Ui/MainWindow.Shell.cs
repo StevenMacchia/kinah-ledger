@@ -32,7 +32,7 @@ public sealed record OptionsChoice(
     public bool ExplainCounts { get; init; }
     /// <summary>Options › General › Window size (0.10.11, Ui/MainWindow.Fit.cs): 0.8 to 1.5, 1 is the designed size. Shown as the slider moves, kept on Save.</summary>
     public double WindowScale { get; init; } = 1;
-    /// <summary>Options › General › Keep above other windows (0.10.12). Off by default.</summary>
+    /// <summary>Options › General › Keep above other windows (0.10.26). Off by default.</summary>
     public bool AlwaysOnTop { get; init; }
 }
 
@@ -201,7 +201,7 @@ public partial class MainWindow
     public UserPrefs Prefs => _prefs;
 
     /// <summary>
-    /// Keep above other windows (0.10.12): the window stays over the game and everything else, for a windowed game on one
+    /// Keep above other windows (0.10.26): the window stays over the game and everything else, for a windowed game on one
     /// screen; the panel over the game is on top either way. Set from Options › General and the ⋯ menu, applied at start.
     /// </summary>
     public void SetAlwaysOnTop(bool on)
