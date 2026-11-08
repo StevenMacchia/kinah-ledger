@@ -204,7 +204,8 @@ public partial class MainWindow
         };
         // the expected texts: each must be on the page whole, in a visible text that isn't trimmed; "whole" texts equal a text, the rest are part of one
         var expect = new List<(string What, string Text, bool Whole)>();
-        if (all.Count > 0) expect.Add(("heading", $"{all.Count} run{(all.Count == 1 ? "" : "s")} · {Fk(counted.Sum(RunValue))} made", false));
+        bool severalPlaces = all.Select(r => r.Zone).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+        if (all.Count > 0) expect.Add(("heading", $"{all.Count} run{(all.Count == 1 ? "" : "s")}" + (severalPlaces ? $" · {Fk(counted.Sum(RunValue))} made" : ""), !severalPlaces));
         else expect.Add(("empty", "Run an expedition or join an event.", false));
         var live = _demoLive;
         var places = all.GroupBy(r => r.Zone, StringComparer.OrdinalIgnoreCase)
@@ -221,13 +222,12 @@ public partial class MainWindow
             expect.Add(("place name", picked, false));
             // the band's line and pill, as PlaceBand writes them: the runs, the open run's number and start, its step and clock (or when the place was last run)
             var open = string.Equals(live, picked, StringComparison.OrdinalIgnoreCase) ? runs.OrderBy(r => r.Start).LastOrDefault() : null;
-            var meta = $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}";
-            if (open != null) meta += $" · run {runs.OrderBy(r => r.Start).ToList().IndexOf(open) + 1} open since {open.Start.ToLocalTime():HH:mm}";
+            var meta = RunBandLine(runs, open);
             place["band"] = meta;
             expect.Add(("band line", meta, true));
             var newest = runs.OrderByDescending(r => r.LastLoot ?? r.Start).First();
             var lastAt = (newest.LastLoot ?? newest.Start).ToLocalTime();
-            var pill = open != null ? $"{RunSteps[Math.Max(0, StepOf(open))]} · {Clock((open.LastLoot ?? DateTime.UtcNow) - open.Start)} in"
+            var pill = open != null ? RunPillText(open)
                 : lastAt.Date == DateTime.Today ? $"last {lastAt:HH:mm}" : $"last {lastAt.ToString("MMM d", CultureInfo.InvariantCulture)}";
             place["pill"] = pill;
             expect.Add(("band pill", pill, true));

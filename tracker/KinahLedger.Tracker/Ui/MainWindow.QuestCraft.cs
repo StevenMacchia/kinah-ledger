@@ -29,7 +29,8 @@ public partial class MainWindow
         // the hero
         double share = tries > 0 ? ok / (double)tries : 0;
         CraftChaseBox.Visibility = tries > 0 ? Visibility.Visible : Visibility.Collapsed;
-        CraftChaseLbl.Text = tries > 0 ? (tries - ok > 0 ? $"{tries - ok:N0} failed" : "none failed") + (known ? $" · profit {PriceBook.Cut}" : "") : "";
+        // the failed count is the ring's and "4 of 5 worked"'s already (UI audit 2026-11-08: one fact three times)
+        CraftChaseLbl.Text = tries > 0 && known ? $"profit {PriceBook.Cut}" : "";
         CraftChaseBest.Text = tries > 0 ? $"{ok:N0} of {tries:N0} worked" : "";
         _craftShare = share; LayoutCraftChase();
         CraftChaseFill.Effect ??= QGlow("Mint", 10, 0.6);

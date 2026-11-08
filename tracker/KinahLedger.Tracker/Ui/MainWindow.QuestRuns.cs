@@ -126,14 +126,13 @@ public partial class MainWindow
         }
         titles.Children.Add(nameRow);
         titles.SizeChanged += (_, _) => name.MaxWidth = Math.Max(60, titles.ActualWidth - (pickPlace != null ? 26 : 2));
-        var meta = $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}";
-        if (open != null) meta += $" · run {runs.OrderBy(r => r.Start).ToList().IndexOf(open) + 1} open since {open.Start.ToLocalTime():HH:mm}";
+        var meta = RunBandLine(runs, open);
         var ml = QT(meta, 11.5, FontWeights.Bold, "Muted", trim: true); ml.Margin = new Thickness(0, 1, 0, 0); titles.Children.Add(ml);
         Grid.SetColumn(titles, 1); kick.Children.Add(titles);
         if (open != null)
         {
-            var pill = QPill($"{RunSteps[Math.Max(0, StepOf(open))]} · {Clock((open.LastLoot ?? DateTime.UtcNow) - open.Start)} in", true);
-            pill.ToolTip = "A run is open here now."; pill.Margin = new Thickness(10, 0, 0, 0);
+            var pill = QPill(RunPillText(open), true);
+            pill.ToolTip = "A run is open here. Where it is: Entered, In the run, Reward screen, Paid. Its clock is the ring."; pill.Margin = new Thickness(10, 0, 0, 0);
             Grid.SetColumn(pill, 2); kick.Children.Add(pill);
             if (live && pill.Child is StackPanel ps && ps.Children.Count > 1 && ps.Children[1] is TextBlock pt) { _livePill = pt; _liveOpen = open; }
         }

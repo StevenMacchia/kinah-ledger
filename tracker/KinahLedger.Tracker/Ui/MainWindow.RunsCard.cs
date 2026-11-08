@@ -68,7 +68,7 @@ public partial class MainWindow
             if (_liveOpen is { LastLoot: null } o)
             {
                 var el = DateTime.UtcNow - o.Start;
-                if (_livePill != null) _livePill.Text = $"{RunSteps[Math.Max(0, StepOf(o))]} · {Clock(el)} in";
+                if (_livePill != null) _livePill.Text = RunPillText(o);
                 TickRun(o, el.TotalSeconds);   // the ring, the chase bar and the Runs row (Ui/MainWindow.QuestRuns.cs)
             }
             return;
@@ -101,7 +101,8 @@ public partial class MainWindow
             if (_runListShown) { var every = BuildRunList(runs, ShowInstances); every.Margin = new Thickness(0, 16, 0, 0); InstHost.Children.Add(every); }
         }
         foreach (var r in runs.Where(r => !r.OutOfAverages)) { counted++; made += RunValue(r); }
-        InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · {Fk(made)} made" : "";
+        // with one place, Paid out here's head says what was made (UI audit 2026-11-08: the same total twice); with several, this is their sum
+        InstWhat.Text = InstHost.Children.Count > 0 ? $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}" + (_placesShown.Count > 1 ? $" · {Fk(made)} made" : "") : "";
         InstWhat.ToolTip = InstHost.Children.Count > 0 ? "Made: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ", over the counted runs. Gear is bound and not in it." : null;
         InstEmpty.Visibility = InstHost.Children.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -364,6 +365,16 @@ public partial class MainWindow
 
     /// <summary>Where an open run stands: 0 entered, 1 in the run (loot came), 2 its reward screen, 3 paid.</summary>
     static readonly string[] RunSteps = { "Entered", "In the run", "Reward screen", "Paid" };
+
+    /// <summary>
+    /// The hero band's line: the runs here, and when the open run started. The run's number and its clock are the ring's
+    /// (UI audit 2026-11-08: the clock was drawn three times, in the pill, the ring and here).
+    /// </summary>
+    static string RunBandLine(List<InstanceRun> runs, InstanceRun? open) =>
+        $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}" + (open != null ? $" · open since {open.Start.ToLocalTime():HH:mm}" : "");
+
+    /// <summary>The open run's pill: its step alone; the ring beside it carries the clock.</summary>
+    static string RunPillText(InstanceRun open) => RunSteps[Math.Max(0, StepOf(open))];
 
     /// <summary>The open run's clock pill and the run it times, from the last card build; a tick moves the clock in place.</summary>
     TextBlock? _livePill; InstanceRun? _liveOpen;

@@ -255,8 +255,10 @@
       <!-- header, the Quest look (2026-11-07, docs/ui/mockups/directions-2026-11-07): the mark and the name with the server
            under it; Farm / Craft / Runs as icon pills, the lit one gold; then round icon buttons: Compact/Full, the site,
            Share (its sheet opens in the hero card) and Options -->
+      <!-- the round buttons' column is as wide as all four (4 x 32 + 3 x 6), so the page tabs stand still when a page hides
+           Compact/Full and Share (UI audit 2026-11-08: the tabs slid about 75 px between Farm and the other pages) -->
       <Grid Height="44">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="146"/></Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <!-- the app mark, the K tile (tools/brand/logo.svg) -->
           <Image Source="{StaticResource AppMark}" Width="32" Height="32" Margin="0,0,10,0" VerticalAlignment="Center"/>
@@ -287,7 +289,7 @@
           </StackPanel>
         </Border>
         <!-- round buttons: Compact / Full view (Farming only), the site, Share and Options -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
           <Button x:Name="ViewBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" ToolTip="Full view: every table beside the summary" AutomationProperties.Name="Compact or Full view">
             <Grid Width="16" Height="12">
               <Rectangle Width="16" Height="12" RadiusX="3" RadiusY="3" Stroke="{DynamicResource Muted}" StrokeThickness="1.6"/>
@@ -883,7 +885,7 @@
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="14"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
-                  <TextBlock x:Name="CraftWhere" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" Text="Crafting · since the tracker started" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock x:Name="CraftWhere" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" Text="Crafting" TextTrimming="CharacterEllipsis"/>
                   <!-- the queue under way: "3 of 10 · 2 worked · 1 unsure" (Steven, 2026-11-04: a miss should show while it happens) -->
                   <TextBlock x:Name="CraftQueueNow" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
                   <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
