@@ -65,7 +65,12 @@ public partial class MainWindow
         var sig = $"{live}|{allShown}|{since:O}|{PlaceCardWidth}|{string.Join(",", _runsOpen)}|{_placePick}|{RunsSortMode}|{_runListAll}|{_runListShown}|{LootSortMode}|{string.Join(",", _todayAll)}|{_fixOpen}|{JsonSerializer.Serialize(runs)}";
         if (!Changed("runs", sig))
         {
-            if (_livePill != null && _liveOpen is { LastLoot: null } o) _livePill.Text = $"{RunSteps[Math.Max(0, StepOf(o))]} · {Clock(DateTime.UtcNow - o.Start)} in";
+            if (_liveOpen is { LastLoot: null } o)
+            {
+                var el = DateTime.UtcNow - o.Start;
+                if (_livePill != null) _livePill.Text = $"{RunSteps[Math.Max(0, StepOf(o))]} · {Clock(el)} in";
+                TickRun(o, el.TotalSeconds);   // the ring, the chase bar and the Runs row (Ui/MainWindow.QuestRuns.cs)
+            }
             return;
         }
         InstHost.Children.Clear(); _placeOfCard.Clear();
@@ -256,10 +261,9 @@ public partial class MainWindow
     /// </summary>
     Border BuildPlaceBox(string zone, List<InstanceRun> runs, bool live, double width, Action redraw, bool withNow, Func<List<MenuEntry>>? pickPlace)
     {
-        var body = new StackPanel { Width = width - 2 };
-        var card = new Border { Child = body, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
-        card.SetResourceReference(Border.BackgroundProperty, "Card");
-        card.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
+        // the Quest look (2026-11-07, Ui/MainWindow.QuestRuns.cs): the box is a transparent column of cards, so the page is the cards
+        var body = new StackPanel { Width = width };
+        var card = new Border { Child = body, Background = Brushes.Transparent };
         var counted = runs.Where(r => !r.OutOfAverages).ToList();
         int n = counted.Count;
         double secs = counted.Sum(r => r.Seconds);
@@ -267,62 +271,32 @@ public partial class MainWindow
         var newest = runs.OrderByDescending(r => r.LastLoot ?? r.Start).FirstOrDefault();
         var kind = newest?.Kind ?? "";
         var open = live ? runs.OrderBy(r => r.Start).LastOrDefault() : null;
-        body.Children.Add(PlaceBand(zone, runs, live, kind, open, newest, pickPlace));
+        bool known = n > 0 && (value > 0 || counted.Any(r => r.Kinah > 0));
 
-        // the figures on one line, where the four boxes were: an hour, a run, how long a run, the best run
-        if (n > 0)
-        {
-            bool known = value > 0 || counted.Any(r => r.Kinah > 0);
-            var figs = new List<(string Fig, string Word)>();
-            if (known && secs > 10) figs.Add((Fk(value / secs * 3600), "an hour"));
-            if (known) figs.Add((Fk(value / (double)n), "a run"));
-            figs.Add((Clock(TimeSpan.FromSeconds(secs / n)), "a run"));
-            if (known && n > 1) figs.Add((Fk(counted.Max(RunValue)), "best run"));
-            if (!known) figs.Add(("no prices yet", ""));
-            var fl = new TextBlock { FontSize = 13, Margin = new Thickness(20, 12, 20, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-            for (int i = 0; i < figs.Count; i++)
-            {
-                if (i > 0) fl.Inlines.Add(PR("   ·   ", "Faint"));
-                var f = PR(figs[i].Fig, "Ink"); f.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); fl.Inlines.Add(f);
-                if (figs[i].Word.Length > 0) fl.Inlines.Add(PR(" " + figs[i].Word, "Muted"));
-            }
-            fl.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in the value. Flagged runs are left out.";
-            body.Children.Add(fl);
-            if (withNow && known && secs > 10) _eventsRate = Fk(value / secs * 3600);
-        }
-        else { var t = PT(runs.Count == 0 ? "No run here yet." : "No run counted yet.", "Muted", 13); t.Margin = new Thickness(20, 12, 20, 0); body.Children.Add(t); }
+        // the hero: the place (the band's dropdown), the hour, the open run as a timer against the average run (or the last run against the best), the ring
+        body.Children.Add(QRunHero(zone, runs, counted, live, kind, open, newest, pickPlace, redraw));
+        if (withNow && known && secs > 10) _eventsRate = Fk(value / secs * 3600);
+        // the chips: what the counted runs paid out
+        if (n > 0 && known) body.Children.Add(QRunChips(counted, value));   // nothing priced: a row of dashes says nothing
 
-        // a run's sheet (a click on a run in the ⋯ menu's list, or on the line below): the details, a fix if it needs one, Remove
+        // a run's sheet (a click on a run, or on the line below): the details, a fix if it needs one, Remove; a flagged run's question is a lilac card
         double med = Median(counted.Select(r => r.Seconds));
         if (_fixOpen != null && runs.FirstOrDefault(r => _fixOpen == RunKey(r)) is { } picked)
         {
-            var sec = new StackPanel { Margin = new Thickness(20, 14, 20, 6) };
-            var local = picked.Start.ToLocalTime();
-            var when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
-            sec.Children.Add(PSection("RUN", $"{when} · {Clock(TimeSpan.FromSeconds(picked.Seconds))}"));
-            sec.Children.Add(FlagReason(picked, med).Length > 0 ? FixSheet(picked, med, redraw) : RunSheet(picked, redraw));
-            body.Children.Add(sec);
+            var why = FlagReason(picked, med);
+            var sheet = why.Length > 0 ? FixSheet(picked, med, redraw) : RunSheet(picked, redraw);
+            sheet.Margin = new Thickness(0, 8, 0, 0);
+            body.Children.Add(sheet);
         }
         else if (runs.Where(r => FlagReason(r, med).Length > 0).OrderByDescending(r => r.LastLoot ?? r.Start).ToList() is { Count: > 0 } flagged)
-        {
-            // runs with something to look at, out of the figures until fixed: one line, a click opens the newest one's sheet
-            var fx = PT($"{flagged.Count} run{(flagged.Count == 1 ? "" : "s")} to look at  ›", "Gold", 12.5, FontWeights.SemiBold);
-            fx.Margin = new Thickness(20, 10, 20, 0); fx.Cursor = Cursors.Hand; fx.Background = Brushes.Transparent; fx.HorizontalAlignment = HorizontalAlignment.Left;
-            fx.ToolTip = FlagReason(flagged[0], med) + " Click for the fix.";
-            fx.MouseLeftButtonUp += (_, e) => { e.Handled = true; _fixOpen = RunKey(flagged[0]); _drawnSig.Remove("runs"); redraw(); };
-            body.Children.Add(fx);
-        }
+            body.Children.Add(QFlaggedLine(flagged, med, redraw));
 
-        // LOOT as the TODAY strip lays it out: the Kinah's slot, then the rewards in the picked order, two rows and Show all
+        // the last three runs on their lines; every run is the box under this one (the ⋯ menu, or "earlier runs")
+        if (runs.Count > 0 && !_runListShown) body.Children.Add(QRunsCard(runs, open, med, redraw));
+
+        // Paid out here: the Kinah's slot, then the rewards in the picked order, two rows and Show all
         var tr = TodayLoot.Runs(counted, _items, IsCurrency);
-        var slots = new List<FrameworkElement>();
-        if (tr.Kinah > 0) slots.Add(KinahSlot(tr.Kinah, tr.KinahWhere, "", n == 1 ? "Picked up in the run here" : "Picked up in the runs here"));
-        var items = SortSlots(tr.Items);
-        foreach (var s in items) slots.Add(ItemSlot(s, ("", ""), false, runs: true, when: "here"));
-        int perRow = Math.Max(4, (int)((width - 2 - 40 + TodayGap) / (TodaySlotSize + TodayGap)));
-        var g = TodayGroup("place:" + zone, "LOOT", n == 0 ? "" : n == 1 ? "from the run here" : $"from the {n} runs here", tr.Value, slots, perRow, items.Count >= 2, sigKey: "runs", redraw: redraw);
-        if (slots.Count == 0) ((StackPanel)g).Children.Add(TodayEmpty(n == 0 ? "The rewards show here once a run is counted." : "Nothing read from the reward screens yet."));
-        body.Children.Add(new Border { Child = g, Padding = new Thickness(20, 0, 20, 14) });
+        body.Children.Add(QPaidOut(zone, n, tr, SortSlots(tr.Items), redraw));
         return card;
     }
 

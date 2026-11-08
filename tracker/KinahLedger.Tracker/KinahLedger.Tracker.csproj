@@ -66,6 +66,13 @@
          refuses a tag without its notes file; a build with none has no card -->
     <EmbeddedResource Include="..\..\release-notes\v$(Version).md" LogicalName="whats-new.md" Condition="Exists('..\..\release-notes\v$(Version).md')" />
 
+    <!-- the Quest look's type (2026-11-07): Nunito at 600 to 900, SIL Open Font License (Fonts/OFL.txt), as pack resources
+         the theme's font keys name; Segoe UI stands in where a glyph is missing -->
+    <Resource Include="Fonts\Nunito-SemiBold.ttf" />
+    <Resource Include="Fonts\Nunito-Bold.ttf" />
+    <Resource Include="Fonts\Nunito-ExtraBold.ttf" />
+    <Resource Include="Fonts\Nunito-Black.ttf" />
+
     <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- the 46 gathering materials' icon file names (8 KB), so their icons work before any item list is downloaded -->
     <EmbeddedResource Include="..\..\data\gathering-items.json" LogicalName="gathering-items.json" />

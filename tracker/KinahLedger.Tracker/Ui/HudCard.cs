@@ -22,11 +22,13 @@ public sealed partial class HudCard : IHudLook
 
     public FrameworkElement Root { get; }
     public Thickness Inset { get; } = new(10);
-    public double Corner => 10;
+    public double Corner => 14;
 
     readonly Border _card, _ring, _notice, _acc;
     readonly Ellipse _dot;
-    readonly TextBlock _run, _time, _zone, _newest, _rate, _total, _noticeText, _accText;
+    readonly TextBlock _run, _time, _zone, _newest, _rate, _total, _noticeText, _accText, _chase;
+    /// <summary>The ring of your best here (Buddy, the Quest look), left of the figures; empty with no best yet.</summary>
+    readonly Grid _ringHost = new() { Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
     readonly Image _noticeIcon, _noticeClock;
     /// <summary>The That was wrong notice's gold line, running down its 3 s (HudClockNotice).</summary>
     readonly Border _drain;
@@ -48,9 +50,9 @@ public sealed partial class HudCard : IHudLook
     public HudCard()
     {
         _dot = Dot(7);
-        _run = T("RUN", 11, Faint, weight: FontWeights.SemiBold); _run.Margin = new Thickness(6, 0, 0, 0);
+        _run = T("RUN", 10.5, Gold, weight: FontWeights.Black); _run.Margin = new Thickness(6, 0, 0, 0);
         _time = T("", 13, Ink, mono: true); _time.Margin = new Thickness(6, 0, 0, 0);
-        _zone = T("", 12, Faint); _zone.Margin = new Thickness(10, 0, 0, 0);
+        _zone = T("", 12, Muted, weight: FontWeights.Bold); _zone.Margin = new Thickness(10, 0, 0, 0);
         _newest = T("", 13, Ink); _newest.Margin = new Thickness(6, 0, 0, 0); _newest.TextTrimming = TextTrimming.None;
         var head = new Grid { Height = 18 };
         foreach (var w in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto }) head.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
@@ -68,12 +70,15 @@ public sealed partial class HudCard : IHudLook
         // the figures: the hour big in gold, the session under it
         _rate = new TextBlock { LineHeight = 26, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
         _total = new TextBlock { LineHeight = 18, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
-        var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _rate, _total } };
+        _chase = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.ExtraBold, Foreground = Gold, FontFamily = Text, LineHeight = 16, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed };
+        var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _rate, _total, _chase } };
         var body = new Grid();
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition());
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        body.Children.Add(figs);
-        Grid.SetColumn(_tiles, 1); body.Children.Add(_tiles);
+        body.Children.Add(_ringHost);
+        Grid.SetColumn(figs, 1); body.Children.Add(figs);
+        Grid.SetColumn(_tiles, 2); body.Children.Add(_tiles);
 
         _noticeIcon = WarnIcon(); _noticeIcon.Margin = new Thickness(0, 0, 7, 0);
         _noticeText = T("", 13, Warn, weight: FontWeights.SemiBold);
@@ -89,7 +94,7 @@ public sealed partial class HudCard : IHudLook
 
         _card = new Border
         {
-            Width = 360, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), BorderBrush = FrameLine, Padding = new Thickness(12, 8, 12, 9),
+            Width = 360, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), BorderBrush = FrameLine, Padding = new Thickness(12, 8, 12, 9),
             Child = new StackPanel { Children = { head, new Border { Height = 1, Margin = new Thickness(0, 6, 0, 7), Background = rule }, body, _drop.Body, _notice, _acc } },
         };
         _drop.Swap = new UIElement[] { _zone, _newest, body };
@@ -102,10 +107,11 @@ public sealed partial class HudCard : IHudLook
     /// <summary>The card's background (the mock's tooltip wash: warm in the top-right corner to the frame's navy), at the chosen opacity.</summary>
     void Paint()
     {
-        var b = new RadialGradientBrush { Center = new Point(1, 0), GradientOrigin = new Point(1, 0), RadiusX = 1.2, RadiusY = 1.4 };
-        b.GradientStops.Add(new GradientStop(Rgb(0x3A3323, .92 * _alpha), 0));
-        b.GradientStops.Add(new GradientStop(Rgb(0x171C38, .94 * _alpha), .55));
-        b.GradientStops.Add(new GradientStop(Rgb(PanelC, .95 * _alpha), 1));
+        // the hero's wash (Ui/Skins.cs HeroBg): a lift of violet at the top-right corner over the plum
+        var b = new RadialGradientBrush { Center = new Point(1, 0), GradientOrigin = new Point(1, 0), RadiusX = 1.1, RadiusY = 1.4 };
+        b.GradientStops.Add(new GradientStop(Rgb(0x42327A, .94 * _alpha), 0));
+        b.GradientStops.Add(new GradientStop(Rgb(Panel2C, .95 * _alpha), .55));
+        b.GradientStops.Add(new GradientStop(Rgb(PanelC, .96 * _alpha), 1));
         b.Freeze();
         _card.Background = b;
     }
@@ -120,7 +126,7 @@ public sealed partial class HudCard : IHudLook
     public void SetAccuracy(string? text, bool toCheck)
     {
         _accText.Text = text ?? "";
-        _accText.Foreground = toCheck ? Warn : B(0x62D98B);
+        _accText.Foreground = toCheck ? Warn : Mint;
         _acc.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -146,16 +152,26 @@ public sealed partial class HudCard : IHudLook
 
         // the hour and the session: "1.27M an hour", "894K session, after the Market's cut"; warming up says so, dimmed
         bool warm = V("warm") == "1";
-        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}"))
+        var (share, words, beat) = Chase(values);
+        if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}"))
         {
             _rate.Inlines.Clear();
             if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R("Waiting for the first count", 13, Faint));
-            else if (warm) _rate.Inlines.Add(R(V("rate"), 16, Gold, mono: true));
-            else { _rate.Inlines.Add(R(V("rate"), 20, Gold, mono: true)); _rate.Inlines.Add(R(" an hour", 12, Faint)); }
+            else if (warm) _rate.Inlines.Add(R(V("rate"), 16, Gold, weight: FontWeights.Black));
+            else { _rate.Inlines.Add(R(V("rate"), 22, Gold, weight: FontWeights.Black)); _rate.Inlines.Add(R(" an hour", 12, Muted, weight: FontWeights.Bold)); }
             _rate.Opacity = warm ? .55 : 1;
             _total.Inlines.Clear();
-            if (V("total").Length > 0 && counted) { _total.Inlines.Add(R(V("total"), 13, Muted, mono: true)); _total.Inlines.Add(R(" session, " + PriceBook.Fee, 12, Faint)); }
+            // "session" alone: the ring took the room the fee's words had (the window says the cut everywhere the figure is)
+            if (V("total").Length > 0 && counted) { _total.Inlines.Add(R(V("total"), 13, Ink, weight: FontWeights.ExtraBold)); _total.Inlines.Add(R(" session", 11.5, Muted, weight: FontWeights.Bold)); }
             _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
+            // the ring and the chase (Buddy): this hour against your best here, mint with a star once it is beaten
+            _ringHost.Children.Clear();
+            bool ring = share >= 0 && counted && !warm;
+            if (ring) _ringHost.Children.Add(Ring(44, 4.5, share, Rgb(beat ? MintC : GoldC), beat ? "★" : $"{Math.Round(share * 100):0}", beat ? "best" : "of best"));
+            _ringHost.Visibility = ring ? Visibility.Visible : Visibility.Collapsed;
+            _chase.Text = words.Length > 0 && counted && !warm ? (beat ? "★ " : "⚑ ") + words : "";
+            _chase.Foreground = beat ? Mint : Gold;
+            _chase.Visibility = _chase.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // the notice row: the reader paused (orange, with the sign), else a start or stop's flash, an update waiting, a flagged run
@@ -169,7 +185,7 @@ public sealed partial class HudCard : IHudLook
         {
             _noticeText.Text = note; _noticeText.Foreground = tone;
             _noticeIcon.Visibility = sign ? Visibility.Visible : Visibility.Collapsed;
-            _notice.BorderBrush = sign ? B(WarnC, .28) : B(LineC);
+            _notice.BorderBrush = sign ? B(WarnC, .28) : B(0xFFFFFF, .14);
             _notice.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             // the That was wrong key's answer: a gold clock, the words in two tones, and the gold line running down its 3 s
             var ck = HudClockNotice.Parse(clockV);
@@ -213,8 +229,8 @@ public sealed partial class HudCard : IHudLook
             }
             else if (first != null)
             {
-                _newest.Inlines.Add(R(first.Name, 13, Ink));
-                if (first.Worth.Length > 0) { _newest.Inlines.Add(R("  ", 13, Ink)); _newest.Inlines.Add(R(first.Worth, 13, Gold, mono: true)); }
+                _newest.Inlines.Add(R(first.Name, 13, Ink, weight: FontWeights.ExtraBold));
+                if (first.Worth.Length > 0) { _newest.Inlines.Add(R("  ", 13, Ink)); _newest.Inlines.Add(R(first.Worth, 13, first.Kinah ? Gold : Mint, weight: FontWeights.ExtraBold)); }
             }
             // a long name gives way to the zone, never the other way: the zone trims first
             _newest.MaxWidth = 200;

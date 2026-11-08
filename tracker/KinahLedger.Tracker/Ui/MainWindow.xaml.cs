@@ -618,6 +618,8 @@ public partial class MainWindow : Window
     void SetTrackingUi(bool on)
     {
         StartBtn.Content = on ? "Stop run" : "Start run";
+        StartBtn.SetResourceReference(ForegroundProperty, on ? "Coral" : "Ink");   // coral while a run is on (the quiet pill, 2026-11-07)
+        StartBtn.SetResourceReference(BorderBrushProperty, on ? "Coral" : "CardLineHover");
         StartBtn.IsEnabled = on || HasServer;
         _trayToggle.Text = on ? "Stop run" : "Start run";
         UpdateStartHint(on);
@@ -1070,6 +1072,8 @@ public partial class MainWindow : Window
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
         var byEnemy = e.MobSnapshot().Where(m => m.Kinah > 0).GroupBy(m => m.Name).Select(g => (Where: g.Key, Count: g.Sum(m => m.Kinah))).OrderByDescending(x => x.Count).ToList();
         _lootHere = new LootHere(s, kinah, t.Kills, elapsed, totalNow, string.Join("\n", sums), byEnemy, e.AbyssPoints);
+        FillChips(e, kinah, s, t.Kills, elapsed, totalNow, t.Nodes);   // the three chips under the hero (Ui/MainWindow.QuestFarm.cs)
+        FillQuestRight(s, kinah, t.Kills, elapsed);   // Full view's second column (Ui/MainWindow.QuestFull.cs)
         FillLoot();
         var top = s.Drops.Concat(s.Gathered).Where(r => !r.Header && r.Worth > 0).OrderByDescending(r => r.Worth).ToList();
         _topRows = top;
@@ -1217,7 +1221,8 @@ public partial class MainWindow : Window
         if (!farm) SummaryCard.Visibility = Visibility.Collapsed;   // LOOT shows itself on Farming (FillLoot)
         if (!farm) GoalsCard.Visibility = Visibility.Collapsed;     // GOALS too (FillGoals)
         // the tables only in Full view since 2026-10-28 (the calm Farming page, mock C): Compact is the live card and LOOT
-        TablesCard.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
+        TablesCard.Visibility = Visibility.Collapsed;   // its rows still fill (ShowTable); the Quest right column shows the bag, Who pays and the odds (2026-11-07)
+        QuestRight.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
         PlaceWhatsNew();   // What's new on Farming only, in both views (0.9.12)
         CraftCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1233,8 +1238,13 @@ public partial class MainWindow : Window
         RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
         // the feed and the rate with LOOT and Where to farm now under them and the footer closing that card, in both views;
         // Full view adds the drops and the chips on the right
-        MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(SummaryCard) + 1);
+        if (full) { MoveTo(SummaryCard, QuestRight, 0); MoveTo(WhereSection, QuestRight, 3); }
+        else { MoveTo(SummaryCard, LeftCol, LeftCol.Children.IndexOf(ChipPanel) + 1); MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1); }
+        if (!farm || full) BagStrip.Visibility = Visibility.Collapsed;
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
+        // Share's round button in the header goes with the Farming page, as the card's button did (Quest, 2026-11-07)
+        ShareCardBtn.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
+        if (!farm) { ChipsRow.Visibility = Visibility.Collapsed; ChipPanel.Visibility = Visibility.Collapsed; }
         System.Windows.Controls.Grid.SetRow(StatusBar, 3); System.Windows.Controls.Grid.SetColumnSpan(StatusBar, 2);
         HeadStack.Width = full ? 662 * 2 + 16 : 662;
         StatusBar.Width = 662;
@@ -1275,6 +1285,7 @@ public partial class MainWindow : Window
         var rows = new List<DropRow>();
         long spent = 0, worth = 0; int noBook = 0, noPrice = 0, tries = 0, ok = 0, recipes = 0, itemsMade = 0;
         var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _craftPerRecipe.Clear();
         foreach (var r in e?.CraftSnapshot() ?? new())
         {
             tries += r.Attempts; ok += r.Ok; itemsMade += r.MadeCount;
@@ -1289,6 +1300,7 @@ public partial class MainWindow : Window
             if (cost != null) spent += cost.Value; else noBook++;
             if (madeKnown) worth += made; else noPrice++;
             long? profit = cost != null && madeKnown ? made - cost.Value : null;
+            if (profit is long pr) _craftPerRecipe.Add((r.Name, pr, r.Ok));
             var spentCell = cost is not long cv ? "" : gaps == 0 ? Fk(cv) : cv == 0 && farmedMats == 0 ? "" : "≥ " + Fk(cv);
             var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
@@ -1312,19 +1324,19 @@ public partial class MainWindow : Window
         _crafted = e?.CraftSnapshot() ?? new();
         FillBestCrafts();
         // the feed: the last five crafts, worked or failed, with what each made or cost
-        DrawFeed(CraftFeedHost, CraftEmpty, FeedFor(FeedTab.Crafting), FeedTab.Crafting, CraftValue);
+        DrawFeed(CraftFeedHost, CraftEmpty, FeedFor(FeedTab.Crafting), FeedTab.Crafting, CraftValue, QCraftIcon);
         // the queue under way above it, as the HUD shows it, and its final figures for a moment after (MainWindow.HudCraft.cs)
         var queue = _demo ? "" : _watcher.Chat?.CraftQueue is { } q && (q.Open || q.EndedAt is DateTime end && (DateTime.UtcNow - end).TotalSeconds <= Session.CraftLedger.PanelSeconds) ? q.Text : "";
         if (CraftQueueNow.Text != queue) CraftQueueNow.Text = queue;
         CraftQueueNow.Visibility = queue.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        FillHealth(CraftHealthText, CraftHealthMark);
+        FillHealth(CraftHealthText, CraftHealthMark, hideOk: true);
         // with nothing crafted yet, the feed's one sentence and Best crafts: no empty table, nothing to start over
         var some = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftHead.Visibility = CraftResetText.Visibility = some;
         long net = worth - spent;
         CraftProfit.Text = spent > 0 || worth > 0 ? Signed(net) : " ";
         _craftNet = spent > 0 || worth > 0 ? Signed(net) : "";
-        CraftProfit.Foreground = B(spent > 0 || worth > 0 ? (net >= 0 ? "Ink" : "Bad") : "Ink");
+        // the colour is the Quest hero's (FillCraftQuest): mint for a profit, coral for a loss
         CraftProfitNote.Text = spent > 0 || worth > 0 ? (missing.Count + noBook > 0 ? "profit this session, at most" : "profit this session") : "profit shows with the first craft";
         CraftWhat.Inlines.Clear();
         void Fig(string text) { var run = new Run(text); run.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); run.SetResourceReference(TextElement.ForegroundProperty, "Ink"); CraftWhat.Inlines.Add(run); }
@@ -1336,16 +1348,17 @@ public partial class MainWindow : Window
             if (spent > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(spent)); CraftWhat.Inlines.Add(new Run(" spent")); }
             if (worth > 0) { CraftWhat.Inlines.Add(new LineBreak()); Fig(Fk(worth)); CraftWhat.Inlines.Add(new Run(" sells for")); }
         }
-        CraftWhat.Visibility = CraftWhat.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        CraftWhat.Visibility = Visibility.Collapsed;   // the chips say it (Quest)
         // This session's line: the recipes, the cut, and the gaps said once
         var gapNote = missing.Count > 0 ? $"{missing.Count} material{(missing.Count == 1 ? " has" : "s have")} no price yet" : "";
         var noBookNote = noBook > 0 ? $"{noBook} recipe{(noBook == 1 ? "" : "s")} not in the recipe book" : "";
         CraftSpentNote.Text = $"{recipes} recipe{(recipes == 1 ? "" : "s")} · {PriceBook.Fee}";
-        CraftSpent.Text = spent > 0 || worth > 0 ? Signed(net) : "";
+        CraftSpent.Text = "";   // the hero says the profit (Quest)
         CraftSpent.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, net >= 0 ? "Gold" : "Faint");
         CraftMadeNote.Text = string.Join(" · ", new[] { gapNote, noBookNote, noPrice > 0 ? $"{noPrice} with no Market price for what came out" : "" }.Where(x => x.Length > 0));
         CraftMadeNote.Visibility = CraftMadeNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         CraftNote.Text = $"Lowest Market price on {Server?.Name ?? "your server"}";
+        FillCraftQuest(tries, ok, itemsMade, spent, worth, net, rows.Count > 0, missing.Count + noBook > 0, rows);   // Ui/MainWindow.QuestCraft.cs
         ApplySections();
     }
 
@@ -1937,6 +1950,13 @@ public partial class MainWindow : Window
             return;
         }
         ShowPart("Farming", byHand: false);   // a farming render, whichever part the player left open (options-test checks the views on it)
+        // KL_QUEST_OPEN=chart,who|bag|kills,goals,where (Quest, 2026-11-07): a render with those panels open, for a look at the depth
+        if (Environment.GetEnvironmentVariable("KL_QUEST_OPEN") is { Length: > 0 } qo)
+        {
+            foreach (var k in qo.Split(',')) { if (k is "who" or "bag" or "kills") _qChip = k; else if (k == "where") _secUser["Where"] = true; else _qOpen[k] = true; }
+            foreach (var k in new[] { "chips", "loot", "goals", "where", "ring" }) _drawnSig.Remove(k);
+            Redraw();
+        }
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
         PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });

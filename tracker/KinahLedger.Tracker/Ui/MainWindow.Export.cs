@@ -68,8 +68,8 @@ public partial class MainWindow
     /// <summary>A small pill with a plain action, the look of the run list's order dropdown without its chevron.</summary>
     Border PillButton(string text, Action click, string tip)
     {
-        var b = new Border { Child = PT(text, "Ink", 12), Height = 26, Padding = new Thickness(11, 0, 11, 0), CornerRadius = new CornerRadius(13), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, ToolTip = tip, VerticalAlignment = VerticalAlignment.Center };
-        b.SetResourceReference(Border.BackgroundProperty, "ChipOff"); b.SetResourceReference(Border.BorderBrushProperty, "ChipOffLine");
+        var b = new Border { Child = QT(text, 11.5, FontWeights.ExtraBold, "Ink"), Height = 26, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, ToolTip = tip, VerticalAlignment = VerticalAlignment.Center };
+        b.SetResourceReference(Border.BackgroundProperty, "Card2"); b.SetResourceReference(Border.BorderBrushProperty, "CardLineHover");
         ToolTipService.SetInitialShowDelay(b, 400);
         b.MouseLeftButtonUp += (_, e) => { e.Handled = true; click(); };
         return b;

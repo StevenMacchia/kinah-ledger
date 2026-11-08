@@ -180,14 +180,14 @@ static class HudRare
         Grid.SetColumn(text, 1); row.Children.Add(text);
         var wash = new RadialGradientBrush { Center = new Point(0, .5), GradientOrigin = new Point(0, .5), RadiusX = .9, RadiusY = 1.6 };
         wash.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(.32 * 255), c.R, c.G, c.B), 0));
-        wash.GradientStops.Add(new GradientStop(Rgb(0x0C1228, .95 * Math.Min(1, alpha)), .7));
+        wash.GradientStops.Add(new GradientStop(Rgb(PanelC, .95 * Math.Min(1, alpha)), .7));
         wash.Freeze();
         var body = new Border
         {
-            Width = 270, Height = 66, Padding = new Thickness(8, 0, 10, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(3, 1, 1, 1),
+            Width = 270, Height = 66, Padding = new Thickness(8, 0, 10, 0), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(3, 1, 1, 1),
             BorderBrush = Frozen(c), Background = wash, Child = row,
         };
         // the glow sits under the toast in its own ring, so the words stay sharp
-        return new Border { Child = new Grid { Children = { Glow(c, 6, 16, .5), body } } };
+        return new Border { Child = new Grid { Children = { Glow(c, 10, 16, .5), body } } };
     }
 }

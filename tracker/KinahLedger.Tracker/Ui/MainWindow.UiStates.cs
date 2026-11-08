@@ -240,13 +240,12 @@ public partial class MainWindow
                 if (!known) { place["noPrices"] = true; expect.Add(("no prices", "no prices yet", false)); }
                 var tr = TodayLoot.Runs(pc, _items, IsCurrency);
                 place["kinah"] = tr.Kinah > 0 ? Fk(tr.Kinah) : null;
-                if (tr.Kinah > 0) expect.Add(("loot Kinah slot", CountBadge(tr.Kinah), true));
+                if (tr.Kinah > 0) expect.Add(("Kinah chip", Fk(tr.Kinah), true));
                 place["lootWorth"] = tr.Value > 0 ? Fk(tr.Value) : null;
                 if (tr.Value > 0) expect.Add(("loot worth", Fk(tr.Value), true));
                 place["loot"] = tr.Items.ToDictionary(s => s.Name, s => s.Count);
                 // the slot badges: the first two rows are drawn, the rest sit behind Show all
-                int perRow = Math.Max(4, (int)((PlaceCardWidth - 2 - 40 + TodayGap) / (TodaySlotSize + TodayGap)));
-                int shown = perRow * TodayRows - (tr.Kinah > 0 ? 1 : 0);
+                int shown = RunSlotsPerRow * TodayRows;   // Paid out here (Ui/MainWindow.QuestRuns.cs): two rows of slots, then Show all
                 foreach (var s in tr.Items.Take(_todayAll.Contains("place:" + picked) ? int.MaxValue : shown)) expect.Add(($"loot {s.Name}", CountBadge(s.Count), true));
                 expect.Add(("loot line", n == 1 ? "from the run here" : $"from the {n} runs here", false));
             }

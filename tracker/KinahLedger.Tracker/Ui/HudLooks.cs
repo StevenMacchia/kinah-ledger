@@ -20,9 +20,10 @@ public static class HudLooks
 
     public static readonly Look[] All =
     {
-        new(Strip, "Strip", "One line, with the figures you pick"),
-        new(Card, "Card", "Run, rate, session and the last three pickups"),
-        new(Ticker, "Ticker", "Pickups slide in like the game's loot"),
+        // the Quest look's names (2026-11-07): Badge is the strip, Buddy the card, Pop the ticker; the keys stay, so hud.json keeps its choice
+        new(Strip, "Badge", "One line with the figures you pick, and the ring of your best here"),
+        new(Card, "Buddy", "The ring, the hour, your best here and the last three pickups"),
+        new(Ticker, "Pop", "Pickups pop in like the game's loot, the top drop pinned"),
     };
 
     /// <summary>A saved look, or the Strip for anything unknown (an older or edited hud.json).</summary>
@@ -63,17 +64,18 @@ static class HudKit
     public static Color Rgb(uint rgb, double alpha = 1) => Color.FromArgb((byte)Math.Round(255 * Math.Clamp(alpha, 0, 1)), (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
     public static SolidColorBrush B(uint rgb, double alpha = 1) => Frozen(Rgb(rgb, alpha));
 
-    public const uint InkC = 0xEEECF6, MutedC = 0xB3B7D3, FaintC = 0x7D84A8, GoldC = 0xF8D598, SecGoldC = 0xE9B45A, WarnC = 0xF2A35E,
-        RecC = 0xFF6B5E, SlotC = 0x0B0E1E, LineC = 0x323A66, BadgeLineC = 0x4A5277, CommonC = 0xCDD3E2, PanelC = 0x0A0C18;
+    // the Quest palette (2026-11-07, Ui/Skins.cs night): deep plum under Kinah gold, mint for what pays, coral for a run
+    public const uint InkC = 0xF6F2FF, MutedC = 0xB3ABD2, FaintC = 0x7F78A3, GoldC = 0xFFC857, SecGoldC = 0xE59F2B, WarnC = 0xF7A072, MintC = 0x5CE1B5,
+        RecC = 0xFF7D6E, SlotC = 0x110D21, LineC = 0x3B3366, BadgeLineC = 0x4A4180, CommonC = 0xE8E2FF, PanelC = 0x1A1433, Panel2C = 0x251E45;
 
-    public static readonly SolidColorBrush Ink = B(InkC), Muted = B(MutedC), Faint = B(FaintC), Gold = B(GoldC), Warn = B(WarnC),
-        Rec = B(RecC), DotOff = B(0x5B6285), Slot = B(SlotC), FrameLine = B(LineC), BadgeLine = B(BadgeLineC), White = B(0xFFFFFF),
+    public static readonly SolidColorBrush Ink = B(InkC), Muted = B(MutedC), Faint = B(FaintC), Gold = B(GoldC), Warn = B(WarnC), Mint = B(MintC),
+        Rec = B(RecC), DotOff = B(0x5B5485), Slot = B(SlotC), FrameLine = B(LineC), BadgeLine = B(BadgeLineC), White = B(0xFFFFFF),
         SlotFrame = B(CommonC, .28), Sep = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
 
-    public static readonly FontFamily Text = new("Segoe UI Variable Text, Segoe UI");
-    public static readonly FontFamily Mono = new("Cascadia Mono, Consolas");
-    /// <summary>The mock's mono weight (350): Cascadia's semi-light; Consolas has only one and ignores it.</summary>
-    public static readonly FontWeight MonoWeight = FontWeight.FromOpenTypeWeight(350);
+    /// <summary>Nunito (the window's face since the Quest look), heavy: figures were in a mono face, now the same face in a heavier weight.</summary>
+    public static readonly FontFamily Text = new("pack://application:,,,/Fonts/#Nunito, Segoe UI Variable Text, Segoe UI");
+    public static readonly FontFamily Mono = Text;
+    public static readonly FontWeight MonoWeight = FontWeights.ExtraBold;
 
     /// <summary>The game's grade colours, as the window's (MainWindow.GradeColor): Rare green, Legend blue, Unique yellow, Epic violet.</summary>
     public static Color GradeColor(string grade) => grade switch
@@ -93,14 +95,52 @@ static class HudKit
 
     public static TextBlock T(string text, double size, Brush fg, bool mono = false, FontWeight? weight = null) => new()
     {
-        Text = text, FontSize = size, Foreground = fg, FontFamily = mono ? Mono : Text, FontWeight = weight ?? (mono ? MonoWeight : FontWeights.Normal),
+        Text = text, FontSize = size, Foreground = fg, FontFamily = mono ? Mono : Text, FontWeight = weight ?? (mono ? MonoWeight : FontWeights.SemiBold),
         VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
     };
 
     public static System.Windows.Documents.Run R(string text, double size, Brush fg, bool mono = false, FontWeight? weight = null) => new(text)
     {
-        FontSize = size, Foreground = fg, FontFamily = mono ? Mono : Text, FontWeight = weight ?? (mono ? MonoWeight : FontWeights.Normal),
+        FontSize = size, Foreground = fg, FontFamily = mono ? Mono : Text, FontWeight = weight ?? (mono ? MonoWeight : FontWeights.SemiBold),
     };
+
+    /// <summary>
+    /// The ring (the window's QRing, with frozen brushes): the share round a dark track, clockwise from the top, a figure in
+    /// the middle. One meter everywhere: this hour against your best here, in the window, on Badge and on Buddy.
+    /// </summary>
+    public static Grid Ring(double size, double stroke, double share, Color tone, string big, string small = "")
+    {
+        var g = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        g.Children.Add(new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, Stroke = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+        double s = Math.Clamp(share, 0, 1);
+        var brush = Frozen(tone);
+        if (s >= 0.999)
+            g.Children.Add(new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, Stroke = brush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Effect = new DropShadowEffect { Color = tone, BlurRadius = 8, ShadowDepth = 0, Opacity = .5 } });
+        else if (s > 0.004)
+        {
+            double c = size / 2, r = (size - stroke) / 2, a = 2 * Math.PI * s;
+            var fig = new PathFigure { StartPoint = new Point(c, c - r), IsClosed = false, IsFilled = false };
+            fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a), c - r * Math.Cos(a)), new Size(r, r), 0, a > Math.PI, SweepDirection.Clockwise, true));
+            var geo = new PathGeometry(); geo.Figures.Add(fig); geo.Freeze();
+            g.Children.Add(new System.Windows.Shapes.Path { Data = geo, Stroke = brush, StrokeThickness = stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = size, Height = size, Effect = new DropShadowEffect { Color = tone, BlurRadius = 8, ShadowDepth = 0, Opacity = .5 } });
+        }
+        var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var b = T(big, size >= 40 ? 12.5 : 9.5, Ink, weight: FontWeights.Black); b.HorizontalAlignment = HorizontalAlignment.Center; b.TextTrimming = TextTrimming.None;
+        b.LineHeight = size >= 40 ? 13 : 10; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        text.Children.Add(b);
+        if (small.Length > 0) { var sm = T(small.ToUpperInvariant(), 7, Muted, weight: FontWeights.ExtraBold); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.TextTrimming = TextTrimming.None; text.Children.Add(sm); }
+        g.Children.Add(text);
+        return g;
+    }
+
+    /// <summary>The chase from the window's values: the share of your best here (-1 when there is none) and the words ("130K to your best here", "New best here").</summary>
+    public static (double Share, string Words, bool Beat) Chase(IReadOnlyDictionary<string, string> v)
+    {
+        string V(string k) => v.TryGetValue(k, out var s) ? s : "";
+        double share = double.TryParse(V("chase"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sh) ? sh : -1;
+        var words = V("toBest");
+        return (share, words, words.StartsWith("New", StringComparison.Ordinal));
+    }
 
     /// <summary>The run dot: red with a soft glow during a run, grey otherwise.</summary>
     public static Ellipse Dot(double size) => new()
@@ -216,7 +256,7 @@ static class HudKit
             var badge = new Border
             {
                 Padding = new Thickness(3, 0, 3, 0), CornerRadius = new CornerRadius(4), Background = Slot, BorderBrush = BadgeLine, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = p.Count, FontFamily = Mono, FontSize = 9.5, Foreground = White, LineHeight = 11, LineStackingStrategy = LineStackingStrategy.BlockLineHeight },
+                Child = new TextBlock { Text = p.Count, FontFamily = Mono, FontWeight = FontWeights.Black, FontSize = 9.5, Foreground = White, LineHeight = 11, LineStackingStrategy = LineStackingStrategy.BlockLineHeight },
             };
             Canvas.SetRight(badge, -4); Canvas.SetBottom(badge, -4);
             g.Children.Add(new Canvas { Width = size, Height = size, IsHitTestVisible = false, Children = { badge } });

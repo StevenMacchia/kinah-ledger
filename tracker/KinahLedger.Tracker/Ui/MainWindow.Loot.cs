@@ -98,7 +98,8 @@ public partial class MainWindow
         TodayFarm? whole = farm && TodayEngine is { } day ? TodayLoot.Farm(day, _items) : null;
         // shown too when only the last days had farming, so the Week side is there before the day's first kill
         bool show = farm && (_hasSummary || whole?.Any == true || FarmedThisWeek());
-        SummaryCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        // Quest (2026-11-07): the bag opens from the loot chip in Compact; Full view has it as a column of its own
+        SummaryCard.Visibility = show && (FullShown || _qChip == "bag") ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         LootHereBtn.Content = LootHereName;
         LootHereBtn.ToolTip = _prefs.AllZones ? "Every zone since the tracker started (All zones is on, in ⋯)." : RunShown ? "This run, in this zone." : "Since you came to this zone. It starts over when you change zone.";
@@ -106,6 +107,7 @@ public partial class MainWindow
         LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
         LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");
         if (_lootWeek) FillLootWeek(); else if (_lootDay) FillLootDay(whole); else FillLootHere();
+        FillBagStrip();   // the Compact page's slots with counts (Ui/MainWindow.QuestFarm.cs)
     }
 
     /// <summary>LOOT's first side: the Kinah, every drop and gathered item, and the Soul Crystals of the count on screen.</summary>
@@ -128,7 +130,7 @@ public partial class MainWindow
         FootTotal.ToolTip = h.TotalTip;
         string Row(DropRow r) => $"{r.Name}:{r.Drops}:{r.DropPct}:{r.PerHour}:{r.Value}:{r.Reported}:{r.Grade}:{r.Sub}";
         var sig = $"here|{LootHereName}|{LootSortMode}|{h.Kinah}|{h.Abyss}|{h.Kills}|{crystals}|{string.Join(";", drops.Select(Row))}|{string.Join(";", gathered.Select(Row))}|"
-            + $"{string.Join(",", h.ByEnemy.Take(6).Select(x => x.Where + x.Count))}|{string.Join(",", _todayAll)}|{Skins.Current}";
+            + $"{string.Join(",", h.ByEnemy.Take(6).Select(x => x.Where + x.Count))}|{string.Join(",", _todayAll)}|{FullShown}|{Skins.Current}";
         if (!Changed("loot", sig)) return;
         LootHost.Children.Clear();
         LootOrderForTest.Clear(); LootOrderForTest.AddRange(drops.Select(r => (r.Name, Qty(r.Drops), r.Grade, false)).Concat(gathered.Select(r => (r.Name, Qty(r.Drops), r.Grade, true))));
@@ -163,7 +165,7 @@ public partial class MainWindow
         FootTotal.ToolTip = made <= 0 ? null : $"Made farming today{(_todayZone != null ? " in " + ZoneName(_todayZone) : ", every zone")}: Kinah plus drops and gathering at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
         var sig = $"day|{_todayZone}|{LootSortMode}|{string.Join(";", zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))}|{farm.Kinah}:{farm.Abyss}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|"
-            + $"{Slots(farm.Drops)}|{Slots(farm.Gathered)}|{string.Join(",", _todayAll)}|{Skins.Current}";
+            + $"{Slots(farm.Drops)}|{Slots(farm.Gathered)}|{string.Join(",", _todayAll)}|{FullShown}|{Skins.Current}";
         if (!Changed("loot", sig)) return;
         LootHost.Children.Clear();
         if (zones.Count >= 2)
@@ -208,17 +210,17 @@ public partial class MainWindow
     /// <summary>A group of slots: an optional heading, two rows, then "Show all" (the Today strip's grammar).</summary>
     void LootGroup(string key, List<FrameworkElement> slots, string title = "")
     {
-        int perRow = Math.Max(4, (int)((LootWidth + TodayGap) / (TodaySlotSize + TodayGap)));
+        const int perRow = 4;   // Quest tiles, 149 px each with 8 px between, in the 632 px card
         var sp = new StackPanel { Margin = new Thickness(0, LootHost.Children.Count > 0 && title.Length > 0 ? 6 : 0, 0, 0) };
-        if (title.Length > 0) { var t = PT(title, "SecGold", 11, FontWeights.Bold); t.Margin = new Thickness(0, 0, 0, 10); sp.Children.Add(t); }
+        if (title.Length > 0) { var t = QT(title, 11, FontWeights.ExtraBold, "Muted"); t.Margin = new Thickness(0, 0, 0, 8); sp.Children.Add(t); }
         bool all = _todayAll.Contains(key);
-        int max = perRow * TodayRows;
+        int max = perRow * (FullShown ? 3 : TodayRows);
         var wrap = new WrapPanel();
-        foreach (var s in all ? slots : slots.Take(max)) { s.Margin = new Thickness(0, 0, TodayGap, 8); wrap.Children.Add(s); }
+        foreach (var s in all ? slots : slots.Take(max)) { s.Margin = new Thickness(0, 0, 8, 8); wrap.Children.Add(s); }
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = PT(all ? "Show fewer" : $"Show all {slots.Count}", "Gold", 12, FontWeights.SemiBold);
+            var m = PT(all ? "Show fewer" : $"{slots.Count - max} more", "Gold", 12, FontWeights.ExtraBold);   // tiles, not kinds: Kinah has one too
             m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); _drawnSig.Remove("loot"); FillLoot(); };
             sp.Children.Add(m);
@@ -230,7 +232,9 @@ public partial class MainWindow
     FrameworkElement HereSlot(DropRow r, bool gathered, string where)
     {
         var name = r.Report.Length > 0 ? r.Report : r.Name;
-        var tile = CkIcon(name, 46, FrameOf(_items.IdOf(name)), badge: CountBadge(Qty(r.Drops)));
+        // the Quest tile (2026-11-07): the game's icon, the count, the name, the worth or why there is none
+        var tile = QTile(QItemIcon(name, _items.IdOf(name), 34, round: false, grade: r.Grade), Qty(r.Drops).ToString("N0"), name,
+            r.Worth > 0 ? r.Value : r.Sub.Contains("bound", StringComparison.OrdinalIgnoreCase) ? "bound" : "no price yet", r.Worth > 0 ? "Gold" : "Faint");
         if (r.Reported) tile.Opacity = 0.55;
         CardTip(tile, () => ItemHereCard(r, gathered, where));
         if (r.Report.Length == 0) return tile;
@@ -266,7 +270,7 @@ public partial class MainWindow
     /// <summary>The Soul Crystals of the count on screen as one slot, each kind on its card.</summary>
     FrameworkElement SoulSlot(List<DropRow> pets, long crystals, string where)
     {
-        var tile = WithBadge(GlyphTile(46, "M12,2 L18,9 L12,22 L6,9 Z M6,9 H18", tint: Color.FromRgb(0x3E, 0x9E, 0x62)), CountBadge(crystals), "");
+        var tile = QTile(QIconBox("Gem", "Lime", 34), crystals.ToString("N0"), "Soul Crystals", "pet food", "Faint");
         CardTip(tile, () =>
         {
             var (card, body) = CkShell(300);

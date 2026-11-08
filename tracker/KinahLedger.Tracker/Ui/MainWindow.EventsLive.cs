@@ -35,9 +35,9 @@ public partial class MainWindow
     static (Border Sheet, StackPanel Body) SheetShell(bool flagged)
     {
         var sp = new StackPanel();
-        var sheet = new Border { Child = sp, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 6, 0, 10) };
-        sheet.SetResourceReference(Border.BorderBrushProperty, flagged ? "FlagLine" : "LineStrong");
-        sheet.SetResourceReference(Border.BackgroundProperty, flagged ? "FlagBg" : "Card2");
+        var sheet = new Border { Child = sp, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 6, 0, 10) };
+        sheet.SetResourceReference(Border.BorderBrushProperty, flagged ? "CardLineHover" : "CardLine");
+        sheet.SetResourceReference(Border.BackgroundProperty, flagged ? "NoticeTint" : "Card");
         return (sheet, sp);
     }
 
@@ -54,7 +54,7 @@ public partial class MainWindow
     {
         var b = new Button { Content = text, Height = 32, Padding = new Thickness(primary ? 18 : 14, 0, primary ? 18 : 14, 0), FontSize = 12.5, Margin = new Thickness(0, 0, 8, 0) };
         if (primary) b.SetResourceReference(StyleProperty, "PrimaryButton");
-        if (quiet) { b.Background = Brushes.Transparent; b.BorderBrush = Brushes.Transparent; b.SetResourceReference(Control.ForegroundProperty, "Faint"); }
+        if (quiet) { b.Background = Brushes.Transparent; b.BorderBrush = Brushes.Transparent; b.SetResourceReference(Control.ForegroundProperty, "Muted"); }
         return b;
     }
 
@@ -112,10 +112,10 @@ public partial class MainWindow
                 foreach (var p in parts)
                 {
                     var c = new StackPanel();
-                    c.Children.Add(PT(Fk(p.Kinah), "Gold", 12.5, null, "MonoFont"));
-                    c.Children.Add(PT($"{p.Start.ToLocalTime():HH:mm} · {Clock(TimeSpan.FromSeconds(p.Seconds))}", "Faint", 11, null, "MonoFont"));
-                    var cell = new Border { Child = c, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 4, 4) };
-                    cell.SetResourceReference(Border.BorderBrushProperty, "FlagLine"); cell.SetResourceReference(Border.BackgroundProperty, "Card");
+                    c.Children.Add(QT(Fk(p.Kinah), 13, FontWeights.Black, "Gold"));
+                    c.Children.Add(QT($"{p.Start.ToLocalTime():HH:mm} · {Clock(TimeSpan.FromSeconds(p.Seconds))}", 11, FontWeights.Bold, "Muted"));
+                    var cell = new Border { Child = c, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 6, 6) };
+                    cell.SetResourceReference(Border.BorderBrushProperty, "CardLine"); cell.SetResourceReference(Border.BackgroundProperty, "Card2");
                     mini.Children.Add(cell);
                 }
                 sp.Children.Add(mini);

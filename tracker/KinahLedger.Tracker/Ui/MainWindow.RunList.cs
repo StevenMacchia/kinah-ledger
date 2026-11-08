@@ -81,22 +81,19 @@ public partial class MainWindow
     Border BuildRunList(List<InstanceRun> runs, Action redraw)
     {
         var body = new StackPanel { Width = PlaceCardWidth - 2 };
-        var card = new Border { Child = body, Tag = "list", CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.14, Direction = 270 } };
-        card.SetResourceReference(Border.BackgroundProperty, "Card");
-        card.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
-        var head = new Grid { Margin = new Thickness(20, 14, 20, 8) };
-        head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var t = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        t.Inlines.Add(PR("ALL RUNS", "SecGold", FontWeights.Bold));
-        var n = PR($"   {runs.Count} run{(runs.Count == 1 ? "" : "s")} · what each one gave", "Muted"); n.FontSize = 12; t.Inlines.Add(n);
-        head.Children.Add(t);
+        var card = new Border { Child = body, Tag = "list" };
+        card.SetResourceReference(StyleProperty, "QCard");
+        card.Padding = new Thickness(0);
+        // the head (the Quest look, 2026-11-07): the icon and the title, the count, the order's dropdown and Save as CSV on the right
+        var head = QHead("Timer", "Every run", $"{runs.Count} run{(runs.Count == 1 ? "" : "s")} · what each one gave");
+        head.Margin = new Thickness(14, 12, 14, 6);
         var pick = PickButton(RunsOrder.Label(RunsSortMode), () => RunsSortEntries(redraw), "The order of the runs: newest first, the best first, by place, or the longest first.");
         // Save as CSV (0.10.11, Ui/MainWindow.Export.cs): the runs shown, in this order, for a spreadsheet
         var save = PillButton(SaveRunsText, () => SaveRunsCsv(runs), "One file for a spreadsheet: these runs in this order, each with when it started, the place, how long it took, its Kinah, kills, worth and items. Nothing is uploaded.");
         save.Margin = new Thickness(0, 0, 8, 0);
         var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         tools.Children.Add(save); tools.Children.Add(pick);
-        Grid.SetColumn(tools, 1); head.Children.Add(tools);
+        tools.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(tools, 3); head.Children.Add(tools);
         _shownRuns = runs;
         body.Children.Add(head);
         var host = new StackPanel();
@@ -104,12 +101,12 @@ public partial class MainWindow
         foreach (var run in _runListAll ? order : order.Take(RunListFirst)) host.Children.Add(RunGroup(run, redraw));
         if (order.Count > RunListFirst)
         {
-            var m = PT(_runListAll ? "Show fewer" : $"Show all {order.Count} runs", "Gold", 12.5, FontWeights.SemiBold);
+            var m = QT(_runListAll ? "Show fewer" : $"Show all {order.Count} runs", 11.5, FontWeights.ExtraBold, "Gold");
             m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.Margin = new Thickness(0, 6, 0, 8);
             m.MouseLeftButtonUp += (_, _) => { _runListAll = !_runListAll; redraw(); };
             host.Children.Add(m);
         }
-        var scroll = new ScrollViewer { Content = host, MaxHeight = RunListHeight, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, Padding = new Thickness(20, 0, 12, 10) };
+        var scroll = new ScrollViewer { Content = host, MaxHeight = RunListHeight, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, Padding = new Thickness(14, 0, 10, 10) };
         body.Children.Add(scroll);
         return card;
     }
@@ -124,6 +121,29 @@ public partial class MainWindow
     /// sheet (the details, a fix if it needs one, Remove).
     /// </summary>
     FrameworkElement RunGroup(InstanceRun run, Action redraw)
+    {
+        var one = TodayLoot.Runs(new[] { run }, _items, IsCurrency, all: true);
+        var sp = new StackPanel { Margin = new Thickness(0, 2, 0, 2), Tag = run };
+        bool out_ = run.OutOfAverages;
+        var local = run.Start.ToLocalTime();
+        var whenQ = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
+        long valueQ = RunValue(run);
+        var subQ = whenQ + (run.Seconds > 0 ? " · took " + Clock(TimeSpan.FromSeconds(run.Seconds)) : "") + " · " + RunSub(run, out_ ? FlagReason(run, 0) : "") + (out_ ? " · left out of the figures" : "");
+        var iconQ = out_ ? QIconBox("Q", "Coral", 28, round: true) : QIconBox(KindIcon(run.Kind), "Sky", 28, round: true);
+        var line = QRow(iconQ, run.Label, subQ, out_ || valueQ <= 0 ? "–" : Fk(valueQ), out_ || valueQ <= 0 ? "Faint" : "Gold", rule: false);
+        line.ToolTip = out_ ? "This run's Kinah or rewards weren't read in full, so it isn't in the figures. Click for the fix, in its place's card." : "Click for this run in its place's card: the details, or Remove if it's wrong.";
+        ToolTipService.SetInitialShowDelay(line, 500);
+        line.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenPlace(run.Zone); _fixOpen = RunKey(run); _drawnSig.Remove("runs"); redraw(); };
+        sp.Children.Add(line);
+        var slotsQ = new List<FrameworkElement>();
+        if (one.Kinah > 0) slotsQ.Add(RunKinahSlot(one.Kinah, one.KinahWhere, "Picked up this run"));
+        foreach (var s in SortSlots(one.Items)) slotsQ.Add(RunItemSlot(s, "this run"));
+        if (slotsQ.Count == 0) { var t = QT(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen.", 11.5, FontWeights.Bold, "Faint"); t.Margin = new Thickness(38, 0, 0, 6); sp.Children.Add(t); }
+        else { var wrap = new WrapPanel { Margin = new Thickness(38, 2, 0, 2) }; foreach (var s in slotsQ) wrap.Children.Add(s); sp.Children.Add(wrap); }
+        return sp;
+    }
+
+    FrameworkElement RunGroupOld(InstanceRun run, Action redraw)
     {
         var one = TodayLoot.Runs(new[] { run }, _items, IsCurrency, all: true);
         var sp = new StackPanel { Margin = new Thickness(0, 4, 0, 4), Tag = run };
@@ -175,10 +195,10 @@ public partial class MainWindow
     Border PickButton(string text, Func<List<MenuEntry>> entries, string tip)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        sp.Children.Add(PT(text, "Ink", 12));
-        var chev = PT("⌄", "Muted", 13); chev.Margin = new Thickness(6, -4, 0, 0); sp.Children.Add(chev);
-        var b = new Border { Child = sp, Height = 26, Padding = new Thickness(11, 0, 9, 0), CornerRadius = new CornerRadius(13), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, ToolTip = tip, VerticalAlignment = VerticalAlignment.Center };
-        b.SetResourceReference(Border.BackgroundProperty, "ChipOff"); b.SetResourceReference(Border.BorderBrushProperty, "ChipOffLine");
+        sp.Children.Add(QT(text, 11.5, FontWeights.ExtraBold, "Ink"));
+        var chev = QIcon("Chev", 11, "Faint", 2); chev.Margin = new Thickness(6, 1, 0, 0); chev.VerticalAlignment = VerticalAlignment.Center; chev.RenderTransformOrigin = new Point(0.5, 0.5); chev.RenderTransform = new RotateTransform(90); sp.Children.Add(chev);
+        var b = new Border { Child = sp, Height = 26, Padding = new Thickness(10, 0, 9, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, ToolTip = tip, VerticalAlignment = VerticalAlignment.Center };
+        b.SetResourceReference(Border.BackgroundProperty, "Card2"); b.SetResourceReference(Border.BorderBrushProperty, "CardLineHover");
         ToolTipService.SetInitialShowDelay(b, 400);
         b.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowMenu(b, entries()); };
         return b;

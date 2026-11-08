@@ -113,6 +113,7 @@ public partial class MainWindow
             ["show"] = "", ["unlocked"] = "", ["run"] = "1", ["time"] = "RUN 42:17", ["warm"] = "", ["rate"] = "1.27M", ["kinah"] = "512K", ["loot"] = "758K",
             ["total"] = "894K", ["best"] = "1.40M", ["last"] = "Spiritstone ×1", ["zone"] = "Western Cantas Valley", ["paused"] = "", ["notice"] = "", ["flash"] = "", ["flag"] = "",
             ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["feedRate"] = "1.27M", ["feedUnit"] = "an hour",
+            ["chase"] = "0.907", ["toBest"] = "130K to your best here",   // the ring (Badge, Buddy): 1.27M against the 1.40M best
         };
         var t = DateTime.UtcNow;
         var picks = new (string Name, string Count, string Worth, string Kind, string Note, string Icon)[]
@@ -146,7 +147,7 @@ public partial class MainWindow
             ["rare"] = "Shade Gloves", ["rareId"] = "sample", ["rareCount"] = "×1", ["rareGrade"] = "Legend",
             ["rareIcon"] = _items.IconUrl(_items.IdOf("Shade Gloves")), ["rareColor"] = "#5AA6FF",
         };
-        var idle = new Dictionary<string, string>(normal) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["kinah"] = "", ["loot"] = "", ["total"] = "0", ["zone"] = "", ["last"] = "", ["feedText"] = "", ["feedValue"] = "" };
+        var idle = new Dictionary<string, string>(normal) { ["run"] = "", ["time"] = "0:00", ["rate"] = "", ["kinah"] = "", ["loot"] = "", ["total"] = "0", ["zone"] = "", ["last"] = "", ["feedText"] = "", ["feedValue"] = "", ["chase"] = "", ["toBest"] = "" };
         foreach (var k in normal.Keys.Where(k => k.StartsWith("pick") || k.StartsWith("top"))) idle[k] = "";
         var list = new List<(string, string, Dictionary<string, string>)>();
         foreach (var look in new[] { HudLooks.Card, HudLooks.Ticker })
