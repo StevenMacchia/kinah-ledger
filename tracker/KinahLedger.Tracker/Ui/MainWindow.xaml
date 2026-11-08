@@ -284,14 +284,14 @@
         </Border>
         <!-- round buttons: Compact / Full view (Farming only), the site, Share and Options -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button x:Name="ViewBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" ToolTip="Full view: every table beside the summary">
+          <Button x:Name="ViewBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" ToolTip="Full view: every table beside the summary" AutomationProperties.Name="Compact or Full view">
             <Grid Width="16" Height="12">
               <Rectangle Width="16" Height="12" RadiusX="3" RadiusY="3" Stroke="{DynamicResource Muted}" StrokeThickness="1.6"/>
               <Rectangle Width="1.6" Height="12" Fill="{DynamicResource Muted}" HorizontalAlignment="Left" Margin="7,0,0,0"/>
               <Rectangle x:Name="ViewFill" Width="6" Height="9" Fill="{DynamicResource Muted}" HorizontalAlignment="Right" Margin="0,0,1.5,0" Opacity="0.25"/>
             </Grid>
           </Button>
-          <Button x:Name="SiteBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" ToolTip="kinahledger.com: community drop rates, prices and your profile">
+          <Button x:Name="SiteBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" ToolTip="kinahledger.com: community drop rates, prices and your profile" AutomationProperties.Name="Open kinahledger.com">
             <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcGlobe}"/>
           </Button>
           <Button x:Name="ShareCardBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" IsEnabled="False" AutomationProperties.Name="Share"
@@ -894,7 +894,8 @@
                 </StackPanel>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center" MinWidth="120">
                   <Grid x:Name="CraftRingHost" Width="76" Height="76" HorizontalAlignment="Center"/>
-                  <TextBlock x:Name="CraftResetText" FontSize="11.5" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,10,0,0"><Hyperlink x:Name="CraftResetLink" Style="{StaticResource LinkStyle}">Start over</Hyperlink></TextBlock>
+                  <!-- Save as CSV (0.10.26, Ui/MainWindow.Export.cs) beside Start over; both show once something was crafted -->
+                  <TextBlock x:Name="CraftResetText" FontSize="11.5" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,10,0,0"><Hyperlink x:Name="CraftCsvLink" Style="{StaticResource LinkStyle}" ToolTip="This session's recipes as a file for a spreadsheet: tries, worked, what came out, cost, what it sells for, profit. Nothing is uploaded.">Save as CSV</Hyperlink><Run Text="  ·  " Foreground="{DynamicResource Faint}"/><Hyperlink x:Name="CraftResetLink" Style="{StaticResource LinkStyle}">Start over</Hyperlink></TextBlock>
                 </StackPanel>
               </Grid>
             </StackPanel>

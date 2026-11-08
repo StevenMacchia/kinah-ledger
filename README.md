@@ -69,8 +69,9 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
    caps it: the window never grows past the width or the height of the screen it is on.
 
    **Save as CSV.** The ⋯ menu's **Save today's loot as CSV…** writes the day's Kinah, drops and gathered items (counts,
-   bound copies, worth after the Market's cut, zones) to a file for a spreadsheet; **Save as CSV** on the Events page's
-   ALL RUNS box does the same for the runs shown. A dialog asks where; nothing is uploaded.
+   bound copies, worth after the Market's cut, zones) to a file for a spreadsheet, and **Save this week as CSV…** a row a
+   day for seven days (farming and runs); **Save as CSV** on the Events page's ALL RUNS box does the same for the runs
+   shown, and on the Crafting page for This session's recipes. A dialog asks where; nothing is uploaded.
 
    **Undo.** Clear the tables (the … menu), Clear on Events, Start over on Crafting, Remove on a run and Stop run in the
    window happen at once, with an Undo bar at the bottom of the window for eight seconds (Ctrl+Z works too). They become
@@ -106,7 +107,8 @@ count with Kinah and loot per hour in the panel, a small always-on-top strip ove
      starts (open the window, or stay in the tray; reading starts either way), hide when Aion 2 closes, the close
      button keeping it in the tray, minimize to the tray, switching pages to what you're doing (on by default: the
      window shows Farming, Crafting or Events once a change has held 5 seconds, and a page you click stays until you
-     start something else; the window always opens on Farming), the window size (80 to 150%), and the look.
+     start something else; the window always opens on Farming), the window size (80 to 150%), keeping the window above
+     other windows, and the look.
    - **Server**: region and server; everything shared is filed under it.
    - **Sharing**: the one **Share** switch (runs and Market prices together), linking this PC to your profile on the
      site (the link code is a short form of the random install ID; without it runs stay anonymous), replacing the

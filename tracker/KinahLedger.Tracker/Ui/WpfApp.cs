@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DRect = System.Drawing.Rectangle;
@@ -316,6 +317,27 @@ public static class WpfApp
         Environment.SetEnvironmentVariable("KL_SCREEN_W", null);
         Check(w.FitState.Scale == 1, "and back to 100% on Cancel");
 
+        // Keep above other windows (0.10.26): off to start, a switch in Options that waits for Save, and the same one in the ⋯ menu
+        Check(!w.Topmost && !p.AlwaysOnTop, "keep above other windows: off to start");
+        o = Open();
+        Flip(o.TopmostChk);
+        Check(o.SaveBtn.IsEnabled && !w.Topmost, "the switch waits for Save");
+        Click(o.SaveBtn);
+        DoEvents();
+        Check(w.Topmost && p.AlwaysOnTop, "saved: the window is on top");
+        var onTop = w.MoreEntries().First(e => e.Text == MainWindow.AlwaysOnTopText);
+        Check(onTop.On == true, "the ⋯ menu shows the switch on");
+        onTop.Do!();
+        Check(!w.Topmost && !p.AlwaysOnTop && w.MoreEntries().First(e => e.Text == MainWindow.AlwaysOnTopText).On == false, "the ⋯ menu's switch turns it off at once");
+        o = Open();
+        Check(o.TopmostChk.IsChecked == false, "Options opens with it off again");
+        Click(o.CancelBtn);
+        DoEvents();
+        // the pages by key (0.10.26): Ctrl+2 Crafting, Ctrl+3 Events, Ctrl+1 Farming
+        w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+2 shows Crafting");
+        w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+3 shows Events");
+        w.PressForTest(Key.NumPad1, ModifierKeys.Control); Check(w.PartForTest == "Farming", "Ctrl+1 (the keypad's too) shows Farming");
+
         // Save as CSV (0.10.11): the ⋯ menu's entry, today's loot as the file holds it, and the runs the Events page shows
         Check(w.MoreEntries().Any(e => e.Text == MainWindow.SaveLootText), "the ⋯ menu has Save today's loot as CSV…");
         var lootCsv = w.LootCsvForTest() ?? "";
@@ -334,6 +356,17 @@ public static class WpfApp
         Check(runsLines.Length == w.ShownRunsForTest().Count + 1 && runsLines[0].TrimStart('\uFEFF') == Session.CsvExport.RunsHeader, $"...one line a run: {runsLines.Length - 1} runs, after the header");
         Check(runsLines.Skip(1).All(l => l.Split(',')[1] is "Expedition" or "Event"), "...each an expedition or an event");
         MainWindow.SaveCsvForTest = null;
+        // the week (0.10.26): a row a day, seven days
+        var weekLines = w.WeekCsvForTest().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Check(weekLines.Length == 8 && weekLines[0].TrimEnd('\r') == Session.CsvExport.WeekHeader, $"the week as CSV: {weekLines.Length - 1} days after the header");
+        Check(w.MoreEntries().Any(e => e.Text == MainWindow.SaveWeekText), "the ⋯ menu has Save this week as CSV…");
+        // crafts (0.10.26): This session's recipes, priced as the table is
+        w.ShowDemo("Crafting");
+        DoEvents();
+        var craftLines = (w.CraftsCsvForTest() ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Check(craftLines.Length == 4 && craftLines[0].TrimEnd('\r') == Session.CsvExport.CraftsHeader, $"the crafts as CSV: {Math.Max(0, craftLines.Length - 1)} recipes after the header");
+        Check(craftLines.Skip(1).Any(l => l.StartsWith("Orichalcum Greaves,2,1,1,")) && craftLines.Skip(1).All(l => l.Split(',')[7] is "yes" or "at least" or "no"), "...the sample's recipes with their cost known or not");
+        Check(w.CraftResetTextForTest.Visibility == Visibility.Visible, "Save as CSV shows beside Start over once something was crafted");
         w.ShowDemo();
         DoEvents();
 
