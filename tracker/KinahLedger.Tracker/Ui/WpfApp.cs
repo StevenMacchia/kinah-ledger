@@ -577,6 +577,19 @@ public static class WpfApp
         }
         Check(System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.StartBtn) && System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.ShareCardBtn), "Start run and Share say why while they are off");
 
+        // the scope switch beside Start run (2026-11-08): the lit side is the ⋯ menu's All zones, and a click moves both
+        {
+            bool AllOn() => w.MoreEntries().First(e => e.Text == "All zones").On == true;
+            bool allWas = AllOn();
+            var click = new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent);
+            w.ZoneAllBtn.RaiseEvent(click); DoEvents();
+            Check(AllOn() && ReferenceEquals(w.ZoneAllBtn.Style, w.FindResource("SegOn")) && ReferenceEquals(w.ZoneHereBtn.Style, w.FindResource("SegOff")),
+                "All zones beside Start run lights up and turns the ⋯ menu's switch on");
+            w.ZoneHereBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents();
+            Check(!AllOn() && ReferenceEquals(w.ZoneHereBtn.Style, w.FindResource("SegOn")), "This zone lights up and turns it off");
+            if (allWas) { w.ZoneAllBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); DoEvents(); }
+        }
+
         // Share (0.9.3, ShareA): the Farming card's button says Share and opens the sheet inside the card (never a window or a
         // menu) on This session, the character name off by default; typed but off it is nowhere, on it is in the head line
         {

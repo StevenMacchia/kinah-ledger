@@ -124,8 +124,10 @@ public partial class MainWindow : Window
         // every start: the drops table open; Gathered, each gathering skill, Kinah by enemy and Soul Crystals folded into one line
         // each under it (Steven, 2026-10-24, the approved farming mock)
         _prefs.DropsOpen = true; _prefs.GatherOpen = _prefs.MobsOpen = _prefs.PetsOpen = false;
-        // All zones, clearing the tables and the shortcut live in the "…" menu beside the run's buttons
+        // All zones is the switch beside Start run and in the "…" menu; clearing the tables and the shortcut live in the menu
         MoreBtn.Click += (_, _) => ShowMoreMenu();
+        ZoneHereBtn.Click += (_, _) => SetAllZones(false);
+        ZoneAllBtn.Click += (_, _) => SetAllZones(true);
         if (_prefs.WinX is int x && _prefs.WinY is int y && x > SystemParameters.VirtualScreenLeft - 50 && y > SystemParameters.VirtualScreenTop - 50
             && x < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 200 && y < SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 200)
         { WindowStartupLocation = WindowStartupLocation.Manual; Left = x; Top = y; }
@@ -379,6 +381,7 @@ public partial class MainWindow : Window
 
     void Redraw()
     {
+        FillZoneScope();
         var e = Shown();
         if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); FillToday(); return; }   // a layout render keeps its sample
         if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; _lootHere = null; FillLoot(); }
@@ -627,6 +630,7 @@ public partial class MainWindow : Window
         _trayToggle.Text = on ? "Stop run" : "Start run";
         UpdateStartHint(on);
         UpdateTrayTip();
+        FillZoneScope();   // the switch's hover text says "this run" while one is on
     }
 
     /// <summary>The tray icon's hover text: what the tracker is doing now (a notify icon's text is at most 63 characters).</summary>

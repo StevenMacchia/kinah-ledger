@@ -401,8 +401,8 @@
       </Border>
 
       <!-- the hero (Quest, 2026-11-07): where you are and for how long, the hour as the big figure, the chase against your
-           best here as a bar toward the flag and as a ring, Start run and the three dots under the ring; "chart" opens
-           the rate line. Filled by Ui/MainWindow.Live.cs (FillRate) -->
+           best here as a bar toward the flag and as a ring; under them Start run, the scope switch (this zone or all zones)
+           and the three dots in one row; "chart" opens the rate line. Filled by Ui/MainWindow.Live.cs (FillRate) -->
       <Border x:Name="SessionCard" Style="{StaticResource QCard}" Margin="0,10,0,0" Background="{DynamicResource HeroBg}" Padding="16,12,16,12">
         <StackPanel>
           <Grid>
@@ -470,18 +470,28 @@
                 <TextBlock x:Name="HealthText" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
               </StackPanel>
             </StackPanel>
-            <!-- the ring (QRing, filled by FillRate), Start run and the three dots under it -->
+            <!-- the ring (QRing, filled by FillRate); Start run, the scope switch and the three dots are the row under this grid -->
             <StackPanel Grid.Column="2" VerticalAlignment="Center" MinWidth="140">
               <Grid x:Name="RingHost" Width="76" Height="76" HorizontalAlignment="Center"/>
-              <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Center">
-                <Button x:Name="StartBtn" Style="{StaticResource PillBtn}" Content="Start run" MinWidth="96" VerticalAlignment="Center"
-                        ToolTip="Times a run. Counting happens anyway; a run is what gets saved and shared."/>
-                <!-- the rest, out of the way: All zones, Clear everything, a missing pickup, the shortcut -->
-                <Button x:Name="MoreBtn" Style="{StaticResource RoundBtn}" Width="30" Height="30" Margin="6,0,0,0" Background="Transparent" BorderBrush="{DynamicResource CardLineHover}" ToolTip="More: goals, all zones, clear everything, report a missing pickup" AutomationProperties.Name="More">
-                  <TextBlock Text="⋯" FontSize="16" FontWeight="Black" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
-                </Button>
-              </StackPanel>
             </StackPanel>
+          </Grid>
+          <!-- the run's row (2026-11-08): Start run at the left; beside it the scope switch, this zone since you came or every zone
+               since the tracker started (UserPrefs.AllZones, the same switch as All zones in ⋯: it moves the big figure, the chips
+               and the bag together; FillZoneScope lights the side that is on); the three dots at the right -->
+          <Grid Margin="0,10,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Button x:Name="StartBtn" Style="{StaticResource PillBtn}" Content="Start run" MinWidth="96" VerticalAlignment="Center"
+                    ToolTip="Times a run. Counting happens anyway; a run is what gets saved and shared."/>
+            <Border x:Name="ZoneScope" Grid.Column="1" Padding="3" CornerRadius="10" Background="{DynamicResource Bg}" VerticalAlignment="Center" Margin="10,0,0,0">
+              <StackPanel Orientation="Horizontal">
+                <Button x:Name="ZoneHereBtn" Style="{StaticResource SegOn}" Content="This zone" Height="24" FontSize="11.5" Padding="10,0" AutomationProperties.Name="This zone"/>
+                <Button x:Name="ZoneAllBtn" Style="{StaticResource SegOff}" Content="All zones" Height="24" FontSize="11.5" Padding="10,0" Margin="2,0,0,0" AutomationProperties.Name="All zones"/>
+              </StackPanel>
+            </Border>
+            <!-- the rest, out of the way: goals, All zones, Clear everything, a missing pickup, the shortcut -->
+            <Button x:Name="MoreBtn" Grid.Column="3" Style="{StaticResource RoundBtn}" Width="30" Height="30" Background="Transparent" BorderBrush="{DynamicResource CardLineHover}" ToolTip="More: goals, all zones, clear everything, report a missing pickup" AutomationProperties.Name="More">
+              <TextBlock Text="⋯" FontSize="16" FontWeight="Black" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
+            </Button>
           </Grid>
           <!-- the rate since the start (click "chart"): one sample a minute under a gold line, the dashed lilac line your best here -->
           <StackPanel x:Name="ChartBox" Margin="0,12,0,0" Visibility="Collapsed">

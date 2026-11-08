@@ -102,7 +102,7 @@ public partial class MainWindow
         SummaryCard.Visibility = show && (FullShown || _qChip == "bag") ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         LootHereBtn.Content = LootHereName;
-        LootHereBtn.ToolTip = _prefs.AllZones ? "Every zone since the tracker started (All zones is on, in ⋯)." : RunShown ? "This run, in this zone." : "Since you came to this zone. It starts over when you change zone.";
+        LootHereBtn.ToolTip = _prefs.AllZones ? "Every zone since the tracker started (All zones is on, beside Start run)." : RunShown ? "This run, in this zone." : "Since you came to this zone. It starts over when you change zone.";
         LootHereBtn.Style = (Style)FindResource(_lootDay || _lootWeek ? "SegOff" : "SegOn");
         LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
         LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");

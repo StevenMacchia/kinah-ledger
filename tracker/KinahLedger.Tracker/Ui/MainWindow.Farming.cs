@@ -39,6 +39,34 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// The scope switch beside Start run (2026-11-08) and the ⋯ menu's All zones are one switch, UserPrefs.AllZones. Off: the
+    /// big figure, the chips and the bag count this zone since you came (or the run, here). On: every zone since the tracker
+    /// started (or the whole run). Shown() picks the engine; the rate line starts over with it.
+    /// </summary>
+    void SetAllZones(bool on)
+    {
+        if (_prefs.AllZones == on) return;
+        _prefs.AllZones = on; if (!_demo) _prefs.Save();
+        _drawnSig.Clear();   // the chips, the bag and LOOT say where they count on hover: redraw them even when the figures match
+        Redraw(); Tick();
+    }
+
+    /// <summary>Which side of the scope switch is lit, and what each side covers on hover (from Redraw and SetTrackingUi).</summary>
+    bool? _zoneScopeLit;
+    void FillZoneScope()
+    {
+        bool on = _prefs.AllZones;
+        if (_zoneScopeLit != on)
+        {
+            _zoneScopeLit = on;
+            ZoneHereBtn.Style = (Style)FindResource(on ? "SegOff" : "SegOn");
+            ZoneAllBtn.Style = (Style)FindResource(on ? "SegOn" : "SegOff");
+        }
+        ZoneHereBtn.ToolTip = RunShown ? "This run, in this zone. The count starts over when you change zone." : "Since you came to this zone. The count starts over when you change zone.";
+        ZoneAllBtn.ToolTip = RunShown ? "The whole run, every zone in it." : "Every zone since the tracker started, together.";
+    }
+
+    /// <summary>
     /// The ⋯ menu beside the run's buttons, in the card's own look (Ui/MainWindow.Menus.cs, 2026-10-31): Set a goal, All
     /// zones as a switch, Clear everything, a missing pickup; then the page's quiet lines and the shortcut that works in the game.
     /// </summary>
@@ -52,9 +80,9 @@ public partial class MainWindow
         {
             room ? new MenuEntry("Set a goal…", () => OpenGoalSheet(null, new GoalDraft(), MoreBtn), Tip: "Kinah, an item or runs to reach today. Up to three, shown over LOOT.")
                  : new MenuEntry("Set a goal…", Sub: "Three goals are set. Click one to change or remove it."),
-            new("All zones", () => { _prefs.AllZones = !_prefs.AllZones; if (!_demo) _prefs.Save(); Redraw(); Tick(); }, On: _prefs.AllZones,
+            new("All zones", () => SetAllZones(!_prefs.AllZones), On: _prefs.AllZones,
                 Sub: "Keep counting across every zone",
-                Tip: "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
+                Tip: "The same switch as the one beside Start run. Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
             // Keep above other windows (0.10.26): the same switch as Options › General, for a windowed game on one screen
             new(AlwaysOnTopText, () => { SetAlwaysOnTop(!_prefs.AlwaysOnTop); if (!_demo) _prefs.Save(); }, On: _prefs.AlwaysOnTop,
                 Sub: "Stays over the game and other windows",
