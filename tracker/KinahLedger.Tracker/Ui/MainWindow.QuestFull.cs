@@ -101,7 +101,9 @@ public partial class MainWindow
             var parts = (s.Skills ?? new()).Select(k => $"{k.Name.Split(" · ")[0]} {Fk(k.Value)}").ToList();   // "Mining", not "Mining · ore and gemstones"
             if (crystals > 0) parts.Add($"Soul Crystals {crystals:N0}");
             int kinds = gKinds + (crystals > 0 ? 1 : 0);
-            QChipFill(GatherChip2, QIconBox("Leaf", "Lime"), $"{kinds:N0} kind{(kinds == 1 ? "" : "s")} gathered", parts.Count > 0 ? string.Join(" · ", parts) : "");
+            // the chip has room for two skills; the rest is "+N" and the tooltip names them all (2026-11-08 release check: "Cook…" cut)
+            var shown = parts.Count > 2 ? parts.Take(2).Append($"+{parts.Count - 2} more").ToList() : parts;
+            QChipFill(GatherChip2, QIconBox("Leaf", "Lime"), $"{kinds:N0} kind{(kinds == 1 ? "" : "s")} gathered", shown.Count > 0 ? string.Join(" · ", shown) : "");
             GatherChip2.ToolTip = parts.Count > 0 ? "Gathered " + CountWhere() + ": " + string.Join(", ", parts) + ". Each skill's value is at the lowest Market price, " + PriceBook.Cut + "." : null;
         }
     }

@@ -219,12 +219,20 @@ public partial class MainWindow
             list.Add(new($"k{target}", QIconBox("Sack", "Lilac", 28, round: true), $"{Fk(target)} this session", $"{Fk(togo)} away · {Eta(eta)}", h.Total / (double)target, "Lilac",
                 $"{Amounts.Full(h.Total)} so far, Kinah and loot {PriceBook.Cut}, at {Fk(h.Total / mins)} a minute. The next round figure turns over by itself."));
         }
-        var top = h.S.Drops.Concat(h.S.Gathered).Where(r => !r.Header).Select(r => (Row: r, N: Qty(r.Drops))).Where(x => x.N >= 3).OrderByDescending(x => x.Row.Worth).ThenByDescending(x => x.N).FirstOrDefault();
-        if (top.Row != null)
+        // two materials under the Kinah (Steven, 2026-11-08): crafting materials only, never gear or a currency; the kind last
+        // picked up first (what you are farming now), then the most valuable other stack
+        var mats = h.S.Drops.Concat(h.S.Gathered).Where(r => !r.Header).Select(r => (Row: r, N: Qty(r.Drops), Id: _items.IdOf(r.Name)))
+            .Where(x => x.N >= 3 && !_items.IsGear(x.Id) && !IsCurrency(x.Id)).ToList();
+        var lastNames = FeedFor(FeedTab.Farming).Where(l => l.Kind == "item").Select(l => l.Name).ToList();
+        var last = mats.FirstOrDefault(x => lastNames.Count > 0 && string.Equals(x.Row.Name, lastNames.FirstOrDefault(n => mats.Any(m => string.Equals(m.Row.Name, n, StringComparison.OrdinalIgnoreCase))), StringComparison.OrdinalIgnoreCase));
+        var picked = new List<(DropRow Row, long N, long Id)>();
+        if (last.Row != null) picked.Add(last);
+        foreach (var x in mats.OrderByDescending(x => x.Row.Worth).ThenByDescending(x => x.N)) { if (picked.Count >= 2) break; if (!picked.Any(p => p.Row.Name == x.Row.Name)) picked.Add(x); }
+        foreach (var top in picked)
         {
             long target = NextStack(top.N), togo = target - top.N;
             double eta = togo / (top.N / mins) * 60;
-            list.Add(new($"i{top.Row.Name}{target}", QItemIcon(top.Row.Name, _items.IdOf(top.Row.Name), 28, round: true, grade: top.Row.Grade), $"{target:N0} {top.Row.Name}", $"{top.N:N0} so far · {togo:N0} to go · {Eta(eta)}", top.N / (double)target, "Mint",
+            list.Add(new($"i{top.Row.Name}{target}", QItemIcon(top.Row.Name, top.Id, 28, round: true, grade: top.Row.Grade), $"{target:N0} {top.Row.Name}", $"{top.N:N0} so far · {togo:N0} to go · {Eta(eta)}", top.N / (double)target, "Mint",
                 $"{top.N:N0} picked up in {TodayLoot.Dur(h.Elapsed.TotalSeconds)}, one every {TodayLoot.Dur(h.Elapsed.TotalSeconds / top.N)}."));
         }
         if (h.Kills >= 10)
