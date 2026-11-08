@@ -54,7 +54,7 @@ public partial class MainWindow
     {
         var b = new Button { Content = text, Height = 32, Padding = new Thickness(primary ? 18 : 14, 0, primary ? 18 : 14, 0), FontSize = 12.5, Margin = new Thickness(0, 0, 8, 0) };
         if (primary) b.SetResourceReference(StyleProperty, "PrimaryButton");
-        if (quiet) { b.Background = Brushes.Transparent; b.BorderBrush = Brushes.Transparent; b.SetResourceReference(Control.ForegroundProperty, "Faint"); }
+        if (quiet) { b.Background = Brushes.Transparent; b.BorderBrush = Brushes.Transparent; b.SetResourceReference(Control.ForegroundProperty, "Muted"); }
         return b;
     }
 

@@ -273,7 +273,7 @@ public partial class MainWindow
             g.Children.Add(arc);
         }
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = QT(big, size >= 60 ? 17 : 10, FontWeights.Black, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.LineHeight = size >= 60 ? 18 : 11; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        var b = QT(big, size >= 60 ? (big.Length > 5 ? 12.5 : 17) : 10, FontWeights.Black, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.LineHeight = size >= 60 ? 18 : 11; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         text.Children.Add(b);
         if (small.Length > 0) { var sm = QT(small.ToUpperInvariant(), 9, FontWeights.ExtraBold, "Muted"); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.Margin = new Thickness(0, 1, 0, 0); text.Children.Add(sm); }
         g.Children.Add(text);

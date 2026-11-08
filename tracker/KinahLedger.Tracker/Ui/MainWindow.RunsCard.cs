@@ -277,7 +277,7 @@ public partial class MainWindow
         body.Children.Add(QRunHero(zone, runs, counted, live, kind, open, newest, pickPlace, redraw));
         if (withNow && known && secs > 10) _eventsRate = Fk(value / secs * 3600);
         // the chips: what the counted runs paid out
-        if (n > 0) body.Children.Add(QRunChips(counted, value));
+        if (n > 0 && known) body.Children.Add(QRunChips(counted, value));   // nothing priced: a row of dashes says nothing
 
         // a run's sheet (a click on a run, or on the line below): the details, a fix if it needs one, Remove; a flagged run's question is a lilac card
         double med = Median(counted.Select(r => r.Seconds));
@@ -286,13 +286,6 @@ public partial class MainWindow
             var why = FlagReason(picked, med);
             var sheet = why.Length > 0 ? FixSheet(picked, med, redraw) : RunSheet(picked, redraw);
             sheet.Margin = new Thickness(0, 8, 0, 0);
-            var local = picked.Start.ToLocalTime();
-            var when = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
-            if (sheet is Border sb && sb.Child is StackPanel ssp)
-            {
-                var head = QHead(why.Length > 0 ? "Q" : "Pin", why.Length > 0 ? why : "This run", $"{when} · {Clock(TimeSpan.FromSeconds(picked.Seconds))}" + (RunValue(picked) > 0 && !picked.OutOfAverages ? $" · {Fk(RunValue(picked))}" : ""));
-                head.Margin = new Thickness(0, 0, 0, 8); ssp.Children.Insert(0, head);
-            }
             body.Children.Add(sheet);
         }
         else if (runs.Where(r => FlagReason(r, med).Length > 0).OrderByDescending(r => r.LastLoot ?? r.Start).ToList() is { Count: > 0 } flagged)
