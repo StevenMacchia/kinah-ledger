@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 /// </summary>
 static class CraftKit
 {
-    public const uint OkC = 0x8C93A8, Ok2C = 0xCDD3E2, FailC = 0xE5534B, MarkC = 0x3A4060;
+    public const uint OkC = 0x8C86A8, Ok2C = 0xE8E2FF, FailC = 0xFF7D6E, MarkC = 0x3B3366;
     public static readonly SolidColorBrush Ok2 = B(Ok2C, .8), Fail = B(FailC), Label = Faint, FailBar = B(FailC, .85), OkEdge = B(CommonC, .55);
     public static readonly Brush OkBar = MakeOkBar();
     static Brush MakeOkBar()

@@ -118,7 +118,7 @@ public sealed class HudWindow : Window
 
     // frozen: the readers touch this class from their own threads (HiddenIfOver) before the panel exists, and an unfrozen
     // brush made there can't be drawn on the window's thread (2026-10-22: every window refresh failed, crafts never showed)
-    static readonly Brush Muted = Frozen(Color.FromRgb(0x7D, 0x84, 0xA8));
+    static readonly Brush Muted = Frozen(Color.FromRgb(0xB3, 0xAB, 0xD2));
     static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
     /// <summary>The look the panel is drawn in (HudLooks: the strip, the Card or the Ticker); set when it is made.</summary>
@@ -150,23 +150,32 @@ public sealed class HudWindow : Window
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
+        FontFamily = HudKit.Text;   // Nunito, the window's face (the Quest look)
+        FontWeight = FontWeights.SemiBold;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         // top-centre by default: the top-right belongs to the minimap and its zone title, the bottom-left to the chat
         Left = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2 - 260; Top = SystemParameters.WorkArea.Top + 12;
 
         Build();
 
-        _acc = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
-        _note = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Gold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
-        _alert = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
+        _acc = new TextBlock { FontSize = 12, FontWeight = FontWeights.ExtraBold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
+        _note = new TextBlock { FontSize = 12, FontWeight = FontWeights.ExtraBold, Foreground = Gold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
+        _alert = new TextBlock { FontSize = 13, FontWeight = FontWeights.ExtraBold, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
+        // Badge (the Quest look, 2026-11-07): the ring of your best here at the left, the chase's words under the figures
+        _ringHost = new Grid { Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        _chaseLine = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.ExtraBold, Foreground = Gold, Margin = new Thickness(0, 2, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
+        var lines = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _row, _chaseLine, _note, _acc, _alert } };
+        if (_look == null) lines.Children.Add(_dragHint);   // a look's "drag me" sits under it instead
+        var badge = new Grid();
+        badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        badge.Children.Add(_ringHost); Grid.SetColumn(lines, 1); badge.Children.Add(lines);
         _frame = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0A, 0x0C, 0x18)),
+            Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x1A, 0x14, 0x33)),
             BorderBrush = FrameBrush,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_fields.Count == 1 && _fields[0] == "feed" ? 8 : 12),
-            Padding = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(16, 10, 20, 10),
-            Child = _look == null ? new StackPanel { Children = { _row, _note, _acc, _alert, _dragHint } } : null
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_fields.Count == 1 && _fields[0] == "feed" ? 10 : 12),
+            Padding = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(14, 9, 18, 9),
+            Child = _look == null ? badge : null
         };
         _content = _look?.Root ?? _frame;
         // unlocked: a faint dashed outline on the frame's edge says it can be moved
@@ -180,7 +189,7 @@ public sealed class HudWindow : Window
             // the looks' "drag me" sits under them, in a small dark pill
             _dragHint.Margin = new Thickness(0);
             _dragHint.Padding = new Thickness(8, 2, 8, 3);
-            _dragHint.Background = Frozen(Color.FromArgb(0xE0, 0x0A, 0x0C, 0x18));
+            _dragHint.Background = Frozen(Color.FromArgb(0xE0, 0x1A, 0x14, 0x33));
             _dragHint.HorizontalAlignment = HorizontalAlignment.Left;
             var hintRow = new Border { Child = _dragHint, Margin = new Thickness(_look.Inset.Left, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
             Content = new StackPanel { Children = { face, hintRow } };
@@ -235,7 +244,10 @@ public sealed class HudWindow : Window
         if (_look != null) { var i = _look.Inset; _outline.Margin = new Thickness(i.Left * s, i.Top * s, i.Right * s, i.Bottom * s); }
     }
 
-    static readonly SolidColorBrush OutlineBrush = Frozen(Color.FromArgb(0x8C, 0xC9, 0xCF, 0xE6));
+    static readonly SolidColorBrush OutlineBrush = Frozen(Color.FromArgb(0x8C, 0xD9, 0xD2, 0xF2));
+    readonly Grid _ringHost;
+    readonly TextBlock _chaseLine;
+    string _ringSig = "";
     readonly Rectangle _outline;
     readonly TextBlock _dragHint = new() { Text = "drag me", FontSize = 11.5, Foreground = Muted, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
     /// <summary>The "unlocked" value: "" locked (clicks go through to the game), "1" unlocked, "move" unlocked for a while from the tray.</summary>
@@ -255,13 +267,13 @@ public sealed class HudWindow : Window
     /// <summary>"drag me" while it is being moved from the tray, and under the pointer while it is unlocked.</summary>
     void ShowDragHint() => _dragHint.Visibility = _unlock == "move" || (_unlock.Length > 0 && IsMouseOver) ? Visibility.Visible : Visibility.Collapsed;
 
-    static readonly SolidColorBrush FrameBrush = Frozen(Color.FromRgb(0x32, 0x3A, 0x66));   // frozen, like Muted
+    static readonly SolidColorBrush FrameBrush = Frozen(Color.FromRgb(0x3B, 0x33, 0x66));   // frozen, like Muted
     readonly Border _frame;
     readonly TextBlock _alert;
     readonly TextBlock _acc;
     /// <summary>One line under the figures from the "notice" value ("Update ready · installs when you close the tracker").</summary>
     readonly TextBlock _note;
-    static readonly Brush AccGood = Frozen(Color.FromRgb(0x62, 0xD9, 0x8B)), AccCheck = Frozen(Color.FromRgb(0xF2, 0xA3, 0x5E));
+    static readonly Brush AccGood = Frozen(Color.FromRgb(0x5C, 0xE1, 0xB5)), AccCheck = Frozen(Color.FromRgb(0xF7, 0xA0, 0x72));
 
     /// <summary>
     /// The accuracy line under the figures ("✓ Nothing looked wrong", "2 to look at"), as the window's Accuracy chip
@@ -298,7 +310,7 @@ public sealed class HudWindow : Window
     public void SetOpacity(double opacity)
     {
         var a = (byte)Math.Round(255 * Math.Clamp(opacity, 0.3, 1));
-        _frame.Background = Frozen(Color.FromArgb(a, 0x0A, 0x0C, 0x18));
+        _frame.Background = Frozen(Color.FromArgb(a, 0x1A, 0x14, 0x33));
         _look?.SetOpacity(opacity);
     }
 
@@ -325,7 +337,7 @@ public sealed class HudWindow : Window
                     // the recording dot (red only during a run, the "run" value) and the clock
                     _timeDot = new Ellipse { Width = 8, Height = 8, Fill = Muted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
                     cell.Children.Add(_timeDot);
-                    number.FontFamily = new FontFamily("Cascadia Mono, Consolas"); number.FontSize = 14; number.Foreground = new SolidColorBrush(Color.FromRgb(0xE9, 0xEF, 0xF7)); number.VerticalAlignment = VerticalAlignment.Center;
+                    number.FontWeight = FontWeights.ExtraBold; number.FontSize = 14; number.Foreground = Ink; number.VerticalAlignment = VerticalAlignment.Center;
                     number.Text = "0:00";
                     break;
                 case "feed":
@@ -334,23 +346,22 @@ public sealed class HudWindow : Window
                     _row.Children.Add(cell);
                     continue;
                 case "last":
-                    number.FontSize = 13.5; number.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCF, 0xE6)); number.MaxWidth = 240; number.TextTrimming = TextTrimming.CharacterEllipsis; number.VerticalAlignment = VerticalAlignment.Center;
+                    number.FontSize = 13; number.Foreground = Ink; number.MaxWidth = 240; number.TextTrimming = TextTrimming.CharacterEllipsis; number.VerticalAlignment = VerticalAlignment.Center;
                     number.Text = "";
                     break;
                 default:
                     var color = key switch
                     {
-                        "rate" => Color.FromRgb(0xF8, 0xD5, 0x98), "kinah" => Color.FromRgb(0xF8, 0xD5, 0x98), "total" => Color.FromRgb(0x5E, 0xD8, 0xCB),
-                        "best" => Color.FromRgb(0xB9, 0xBF, 0xDA), _ => Color.FromRgb(0xEE, 0xEC, 0xF6),
+                        "rate" => Color.FromRgb(0xFF, 0xC8, 0x57), "kinah" => Color.FromRgb(0xFF, 0xC8, 0x57), "total" => Color.FromRgb(0x5C, 0xE1, 0xB5),
+                        "best" => Color.FromRgb(0xB3, 0xAB, 0xD2), _ => Color.FromRgb(0xF6, 0xF2, 0xFF),
                     };
-                    number.FontSize = key == "rate" ? 18 : 16; number.FontWeight = FontWeights.SemiBold; number.Foreground = new SolidColorBrush(color);
-                    number.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI");
+                    number.FontSize = key == "rate" ? 19 : 16; number.FontWeight = FontWeights.Black; number.Foreground = new SolidColorBrush(color);
                     break;
             }
             cell.Children.Add(number);
             if (f.Label.Length > 0)
             {
-                var label = new TextBlock { Text = f.Label, FontSize = 12.5, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, key == "rate" ? 2 : 1) };
+                var label = new TextBlock { Text = f.Label, FontSize = 12, FontWeight = FontWeights.Bold, Foreground = Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 0, key == "rate" ? 3 : 2) };
                 cell.Children.Add(label);
                 _labels[key] = label;
             }
@@ -363,34 +374,33 @@ public sealed class HudWindow : Window
     const double WarmOpacity = 0.55;
     /// <summary>The timer cell's dot: red during a run, grey otherwise.</summary>
     Ellipse? _timeDot;
-    static readonly SolidColorBrush RunRed = Frozen(Color.FromRgb(0xFF, 0x6B, 0x5E));
+    static readonly SolidColorBrush RunRed = Frozen(Color.FromRgb(0xFF, 0x7D, 0x6E));
     TextBlock? _feedText, _feedValue, _feedRate, _feedUnit, _flagText;
     FrameworkElement? _feedLine, _flagLine, _feedSep;
 
-    static readonly SolidColorBrush Gold = Frozen(Color.FromRgb(0xF8, 0xD5, 0x98)), Ink = Frozen(Color.FromRgb(0xEE, 0xEC, 0xF6));
+    static readonly SolidColorBrush Gold = Frozen(Color.FromRgb(0xFF, 0xC8, 0x57)), Ink = Frozen(Color.FromRgb(0xF6, 0xF2, 0xFF)), Mint = Frozen(Color.FromRgb(0x5C, 0xE1, 0xB5));
 
     /// <summary>The feed cell: a live dot, the newest line and its worth, a rule, the rate and its unit; and the flagged-run line it swaps to.</summary>
     void BuildFeed(StackPanel cell)
     {
-        var dot = new Ellipse { Width = 6, Height = 6, Fill = Gold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
-            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Color.FromRgb(0xF8, 0xD5, 0x98), BlurRadius = 8, ShadowDepth = 0, Opacity = 0.7 } };
+        var dot = new Ellipse { Width = 6, Height = 6, Fill = Mint, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Color.FromRgb(0x5C, 0xE1, 0xB5), BlurRadius = 8, ShadowDepth = 0, Opacity = 0.7 } };
         cell.Children.Add(dot);
-        var mono = new FontFamily("Cascadia Mono, Consolas");
         var line = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        _feedText = new TextBlock { FontSize = 12.5, Foreground = Ink, MaxWidth = 220, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        _feedValue = new TextBlock { FontSize = 12.5, FontFamily = mono, Foreground = Gold, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        _feedText = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.ExtraBold, Foreground = Ink, MaxWidth = 220, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        _feedValue = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.ExtraBold, Foreground = Mint, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         line.Children.Add(_feedText); line.Children.Add(_feedValue);
         _feedSep = new Border { Width = 1, Height = 16, Background = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(10, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         line.Children.Add(_feedSep);
-        _feedRate = new TextBlock { FontSize = 12.5, FontFamily = mono, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center };
-        _feedUnit = new TextBlock { FontSize = 12, Foreground = Muted, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        _feedRate = new TextBlock { FontSize = 13, FontWeight = FontWeights.Black, Foreground = Gold, VerticalAlignment = VerticalAlignment.Center };
+        _feedUnit = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = Muted, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         line.Children.Add(_feedRate); line.Children.Add(_feedUnit);
         _feedLine = line; cell.Children.Add(line);
         var flag = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         flag.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse("M3.5,14 V2.5 M3.5,3 H11.5 L9.9,5.8 L11.5,8.6 H3.5"), Stroke = Gold, StrokeThickness = 1.4, Width = 13, Height = 13, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
-        _flagText = new TextBlock { FontSize = 12.5, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextTrimming = TextTrimming.CharacterEllipsis };
+        _flagText = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.ExtraBold, Foreground = Ink, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 260, TextTrimming = TextTrimming.CharacterEllipsis };
         flag.Children.Add(_flagText);
-        flag.Children.Add(new TextBlock { Text = "fix in tracker", FontSize = 12.5, Foreground = Gold, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        flag.Children.Add(new TextBlock { Text = "fix in tracker", FontSize = 12.5, FontWeight = FontWeights.ExtraBold, Foreground = Gold, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         _flagLine = flag; cell.Children.Add(flag);
         // the dot goes with the line, not with a flag
         cell.Tag = dot;
@@ -413,6 +423,18 @@ public sealed class HudWindow : Window
         _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_timeDot != null) _timeDot.Fill = V("run") == "1" ? RunRed : Muted;
         bool warm = V("warm") == "1";
+        // the ring of your best here and the chase's words (the "chase" and "toBest" values, Ui/MainWindow.Live.cs FillRate)
+        var (share, words, beat) = HudKit.Chase(values);
+        var ringSig = $"{Math.Round(share, 2)}|{words}";
+        if (ringSig != _ringSig)
+        {
+            _ringSig = ringSig;
+            _ringHost.Children.Clear();
+            if (share >= 0) _ringHost.Children.Add(HudKit.Ring(30, 3.5, share, HudKit.Rgb(beat ? HudKit.MintC : HudKit.GoldC), beat ? "★" : $"{Math.Round(share * 100):0}"));
+            _ringHost.Visibility = share >= 0 ? Visibility.Visible : Visibility.Collapsed;
+            _chaseLine.Text = words; _chaseLine.Foreground = beat ? Mint : Gold;
+            _chaseLine.Visibility = words.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
         if (_feedLine != null)
         {
             bool flagged = V("flag").Length > 0;

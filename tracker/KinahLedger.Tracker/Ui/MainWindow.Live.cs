@@ -336,8 +336,12 @@ public partial class MainWindow
         // and it shows the same best as this line, so switching Compare on never changes what "best here" means
         if (FillUsual(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone, total > 0 ? (long)Math.Round(total / h) : 0, h * 3600, best?.PerHr)) best = null;
         if (best != null) { if (KvLine.Inlines.Count > 0) KvLine.Inlines.Add(new LineBreak()); KvLine.Inlines.Add(new Run("best here ")); Fig(Fk(best.PerHr)); }
-        // the chase (Quest): this hour against your best here, as the bar toward the flag and the ring
+        // the chase (Quest): this hour against your best here, as the bar toward the flag and the ring; the panel's Badge and
+        // Buddy draw the same ring from "chase" (the share) and "toBest" (the words)
         FillChase(nowHr, bestHr, warm);
+        bool chase = nowHr > 0 && bestHr > 0 && !warm;
+        _hudValues["chase"] = chase ? QShare(nowHr, bestHr).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) : "";
+        _hudValues["toBest"] = !chase ? "" : nowHr >= bestHr ? "New best here" : $"{Fk(bestHr - nowHr)} to your best here";
         DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now", bestHr);
         KvLine.Visibility = Visibility.Collapsed;   // the chips and the chase say it (Quest)
         FillHealth(HealthText, HealthMark, hideOk: true);
