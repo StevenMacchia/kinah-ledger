@@ -242,7 +242,10 @@ public partial class MainWindow
             var fill = new Grid();
             fill.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share, GridUnitType.Star) });
             fill.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.0001, 1 - share), GridUnitType.Star) });
-            fill.Children.Add(new Border { CornerRadius = new CornerRadius(4), Background = new LinearGradientBrush(CkGoldRule, CkGold, 0) });
+            // the fill glows and carries a light edge, as the window's bars do (Steven, 2026-11-07: "make the progress bars pop")
+            var f = new Border { CornerRadius = new CornerRadius(4), Background = new LinearGradientBrush(CkGoldRule, CkGold, 0), Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = CkGold, BlurRadius = 8, ShadowDepth = 0, Opacity = .55 } };
+            f.Child = new Border { CornerRadius = new CornerRadius(4), Margin = new Thickness(1, 1, 1, 0), Background = new LinearGradientBrush(Color.FromArgb(0x55, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90) };
+            fill.Children.Add(f);
             bar.Children.Add(fill);
         }
         return bar;
@@ -512,11 +515,11 @@ public partial class MainWindow
         return g;
     }
 
-    /// <summary>A small round pill (a preset, a kind of run): gold when picked.</summary>
+    /// <summary>A small chip (a preset, a kind of run): gold when picked; a rounded rectangle, as every button (Steven, 2026-11-07: no ovals).</summary>
     static Border SheetPill(string text, bool on, bool mono)
     {
         var t = CkText(text, CkMuted, 12, mono: mono);
-        var b = new Border { Child = t, Height = 26, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(0, 0, 6, 6), CornerRadius = new CornerRadius(13), BorderThickness = new Thickness(1), Cursor = Cursors.Hand };
+        var b = new Border { Child = t, Height = 26, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(0, 0, 6, 6), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand };
         StylePill(b, on);
         return b;
     }

@@ -37,7 +37,7 @@ public partial class MainWindow
         var body = new StackPanel { Width = width };
         var card = new Border
         {
-            Child = body, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x4A, 0x41, 0x80)), Margin = new Thickness(10),
+            Child = body, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x4A, 0x41, 0x80)), Margin = new Thickness(10),
             Background = new LinearGradientBrush(Color.FromRgb(0x2C, 0x25, 0x52), Color.FromRgb(0x1C, 0x17, 0x35), 90),
             Effect = new DropShadowEffect { BlurRadius = 26, ShadowDepth = 5, Opacity = 0.6 }, ClipToBounds = false,
         };
