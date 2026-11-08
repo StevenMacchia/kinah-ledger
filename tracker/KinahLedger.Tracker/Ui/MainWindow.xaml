@@ -855,7 +855,7 @@
         <Grid Margin="2,0,0,12">
           <StackPanel>
             <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="ExtraBold" Foreground="{DynamicResource Ink}" Text="Quests"/>
-            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Margin="0,3,0,0" Text="Goals set from what you farm. Three are on Next up; pin one to put it there."/>
+            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Margin="0,3,0,0" Text="Goals set from what you farm. Two are on Next up; pin one to put it there."/>
           </StackPanel>
         </Grid>
         <Border x:Name="QuestsOffCard" Style="{StaticResource QCard}" Padding="20,22,20,22" Visibility="Collapsed">

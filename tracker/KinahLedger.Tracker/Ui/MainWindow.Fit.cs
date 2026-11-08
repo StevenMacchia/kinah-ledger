@@ -184,7 +184,7 @@ public partial class MainWindow
         if (dpi <= 0) dpi = 1;
         var wa = WF.Screen.FromHandle(h).WorkingArea;
         if (wa.Height <= 0) return;
-        MaxHeight = wa.Height / dpi;
+        _screenMax = wa.Height / dpi; ApplyMaxHeight();
         if (WindowState == WindowState.Normal && ActualHeight > 0 && Top + ActualHeight > wa.Bottom / dpi) Top = Math.Max(wa.Top / dpi, wa.Bottom / dpi - ActualHeight);
     }
 

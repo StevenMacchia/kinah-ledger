@@ -11,7 +11,7 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The Quests page (2026-11-08, Steven: "a quest tab people can get to within the app, to track their progress or pin
-/// goals"): Next up on Farming stays three bars, and everything else lives here. Your score (this session, today, this
+/// goals"): Next up on Farming stays two bars (0.10.28; three before), and everything else lives here. Your score (this session, today, this
 /// week, all time); Active, the full list with trees and a pin on each row (a pinned chain takes a Next up row); Daily,
 /// today's repeatable quests with how many days running; All time, the long chains from this PC's tally; Your goals (the
 /// Set a goal sheet moved here from Next up); Done, by day. Quests can be turned off in Options › General (default on):
