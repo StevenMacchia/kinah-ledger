@@ -173,12 +173,12 @@ public static class Quests
     public const int KeepDays = 60;
     /// <summary>A material needs this many picked up in the session before it gets a quest (a stray drop is not something you are farming).</summary>
     public const int MaterialMin = 3;
-    /// <summary>How many materials have a live quest at once: the two rows at rest and three more on the Quests page, so the list is never a wall (a demo session had 13).</summary>
+    /// <summary>How many materials have a live quest at once: the row at rest and four more on the Quests page, so the list is never a wall (a demo session had 13).</summary>
     public const int MaterialMax = 5;
-    /// <summary>How many of them also have a today quest (the two shown at rest).</summary>
+    /// <summary>How many of them also have a today quest (the one at rest and the next).</summary>
     public const int MaterialToday = 2;
-    /// <summary>Next up shows this many bars and no more (Steven, 2026-11-08: "maximum of 3 total bars"): Kinah this session, then two materials (or pins).</summary>
-    public const int NextUpRows = 3;
+    /// <summary>Next up shows this many bars and no more (Steven, 2026-11-08, after "maximum of 3": "have 2 quests on the main page"): Kinah this session, then the material last farmed (or a pin).</summary>
+    public const int NextUpRows = 2;
     /// <summary>Nothing before this much play: the first two minutes have no pace.</summary>
     public const int MinSeconds = 120;
 

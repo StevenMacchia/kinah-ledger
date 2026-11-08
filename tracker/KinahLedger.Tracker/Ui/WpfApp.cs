@@ -613,11 +613,11 @@ public static class WpfApp
                 "the slim GOALS row: keyboard focusable, named Set a goal for today");
             w.ShowGoalsSample(3); DoEvents();
             var three = w.GoalsForTest();
-            Check(three.Shown && !three.Slim && three.Slots == 3 && !three.Add && three.Placed && three.Note.StartsWith("today · 1 of 3 done"),
-                $"Next up: three goal rows under the chips, no Set a goal row, \"{three.Note}\"");
+            Check(three.Shown && !three.Slim && three.Slots == 2 && !three.Add && three.Placed && three.Note.StartsWith("today · 1 of 3 done") && three.Note.Contains(" more"),
+                $"Next up: three goals, two rows under the chips (two bars at most), the third behind the head, no Set a goal row, \"{three.Note}\"");
             w.ShowGoalsSample(2); DoEvents();
             var two = w.GoalsForTest();
-            Check(two.Shown && two.Slots == 2 && !two.Add && two.Note.StartsWith("today · 0 of 2 done"), $"Next up: two goal rows, a quest row fills the third (Set a goal on the Quests page), \"{two.Note}\"");
+            Check(two.Shown && two.Slots == 2 && !two.Add && two.Note.StartsWith("today · 0 of 2 done"), $"Next up: two goal rows fill the card, the quests wait behind the head (Set a goal on the Quests page), \"{two.Note}\"");
             Check(w.LootForTest().Slots >= 8, "the bag still fills under Next up");
             // reached between two looks: said once on the status line (and the panel), never again that day
             w.SetGoalsForTest(new[] { new Session.Goal { Kind = Session.Goal.KindRuns, Which = Session.Goal.Expeditions, Target = 3 } });
@@ -648,31 +648,35 @@ public static class WpfApp
             Check(w.GoalsForTest() is { Shown: true, Slim: false, Slots: 0 }, "the last goal removed: Next up keeps the pace's milestones, no goal rows (Quest)");
         }
 
-        // Quests (phase 1, 2026-11-08; the Quests page and three bars later that day, Ui/MainWindow.QuestsPage.cs): Next up holds
-        // three bars at most (Kinah this session, then two crafting materials or pins); a click opens a quest's tree; the first look
+        // Quests (phase 1, 2026-11-08; the Quests page and three bars later that day, two bars in 0.10.28, Ui/MainWindow.QuestsPage.cs):
+        // Next up holds two bars at most (Kinah this session, then the crafting material farmed last, or a pin); a click opens a quest's tree; the first look
         // credits the steps passed without a word; the rest, Daily, All time, Your goals and Done are the Quests page; a pin takes a
         // Next up row; Options > General > Quests off takes it all away; the score on the head and in Options > Sharing
         {
             var q = w.QuestsForTest();
-            Check(q.Rows >= 1 && q.AtRest <= 3 && q.Kinds.StartsWith("kinah,material,material") && q.Tree == 0, $"Next up: {q.Rows} quest rows, {q.AtRest} on the card (three at most), kinds {q.Kinds}");
-            Check(w.QuestsNowForTest.Count >= 3 && w.QuestsNowForTest.Take(3).All(x => x.Horizon == Session.Horizon.Session), "the three on the card are this session's");
+            Check(q.Rows >= 1 && q.AtRest <= 2 && q.Kinds.StartsWith("kinah,material") && q.Tree == 0, $"Next up: {q.Rows} quest rows, {q.AtRest} on the card (two at most), kinds {q.Kinds}");
+            Check(w.QuestsNowForTest.Count >= 2 && w.QuestsNowForTest.Take(2).All(x => x.Horizon == Session.Horizon.Session), "the two on the card are this session's");
             w.ToggleQuestTreeForTest(1); DoEvents();
             var t = w.QuestsForTest();
-            Check(t.Tree >= 3 && t.AtRest <= 3, $"a click on the second row opens its tree: {t.Tree} tree rows, still {t.AtRest} on the card");
+            Check(t.Tree >= 3 && t.AtRest <= 2, $"a click on the second row opens its tree: {t.Tree} tree rows, still {t.AtRest} on the card");
             w.ToggleQuestTreeForTest(1); DoEvents();
             Check(w.QuestsForTest().Tree == 0, "a second click folds the tree");
             w.QuestTickForTest(); DoEvents();
             var again = w.QuestTickForTest(); DoEvents();
             var d = w.QuestsForTest();
-            Check(again.Count == 0 && d.Note.Contains("pts this session") && d.AtRest <= 3, $"the first look credited the steps passed before it quietly; a look with nothing new says nothing ({again.Count} said); the head says the score: \"{d.Note}\"; done: {w.QuestsDoneForTest()}");
+            Check(again.Count == 0 && d.Note.Contains("pts this session") && d.AtRest <= 2, $"the first look credited the steps passed before it quietly; a look with nothing new says nothing ({again.Count} said); the head says the score: \"{d.Note}\"; done: {w.QuestsDoneForTest()}");
+            double farmHeight = w.ActualHeight;
             w.ShowPartForTest("Quests"); DoEvents();
             var pg = w.QuestsPageForTest();
             Check(!pg.Off && pg.Active >= 3 && pg.Daily >= 1 && pg.AllTime >= 1 && pg.Done > 0, $"the Quests page: {pg.Active} active, {pg.Daily} daily, {pg.AllTime} all time, {pg.Done} done");
+            // 0.10.28 (Steven): the page scrolls inside the window instead of growing it down the screen
+            Check(farmHeight >= 500 && w.MaxHeight <= farmHeight && w.ActualHeight <= farmHeight + 1 && w.LowerScroll.ScrollableHeight > 0,
+                $"the Quests page keeps the Farming page's height and scrolls inside it: window {w.ActualHeight:0} (Farming was {farmHeight:0}), {w.LowerScroll.ScrollableHeight:0} to scroll");
             var pinChain = w.QuestsNowForTest[3].Chain;
             w.TogglePinForTest(3); DoEvents();
             var pinned = w.QuestsPageForTest();
             w.ShowPartForTest("Farming"); DoEvents();
-            Check(pinned.Pins == 1 && w.QuestsNowForTest[1].Chain == pinChain && w.QuestsForTest().AtRest <= 3, $"a pin takes a Next up row: {pinChain} is row 2 ({w.QuestsForTest().AtRest} on the card)");
+            Check(pinned.Pins == 1 && w.QuestsNowForTest[1].Chain == pinChain && w.QuestsForTest().AtRest <= 2, $"a pin takes a Next up row: {pinChain} is row 2 ({w.QuestsForTest().AtRest} on the card)");
             w.TogglePinForTest(1); DoEvents();
             Check(w.QuestsPageForTest().Pins == 0, "...and unpins");
             Check(w.QuestScoreLine().Contains("this session") && w.QuestScoreLine().Contains("this week"), "the score line: this session, today, this week");

@@ -207,7 +207,7 @@ public partial class MainWindow : Window
         // the tables grow with what's farmed and the window with them, never scrolling while it fits; 0.7.6 (Steven): the
         // window is never taller than the screen, so past that, one scroll area below the summary holds the pickups and
         // every table (they no longer scroll on their own). A wheel over a table scrolls the whole area.
-        MaxHeight = SystemParameters.WorkArea.Height;
+        _screenMax = SystemParameters.WorkArea.Height; ApplyMaxHeight();
         foreach (var inner in new[] { DropsScroll, CraftScroll })
             inner.PreviewMouseWheel += (_, ev) =>
             {
@@ -1175,8 +1175,20 @@ public partial class MainWindow : Window
     /// Expeditions and events (each trip, never on the Farming page). <paramref name="byHand"/>: the player clicked it, so
     /// the page stays until the activity moves on. Since 0.8.55 the page isn't remembered: the window opens on Farming.
     /// </summary>
+    /// <summary>The working area's height on the window's screen (set at start and by FitMaxHeight): the window is never taller.</summary>
+    double _screenMax = double.PositiveInfinity;
+    /// <summary>The Farming page's window height, taken when leaving it once it has been laid out, so the Quests page can keep it (0.10.28).</summary>
+    double _farmHeight;
+    /// <summary>The Quests page's scroll area is capped at this before the Farming page has been measured (a demo render).</summary>
+    const double QuestsScrollFallback = 720;
+
+    /// <summary>The window's height cap: the screen, or on the Quests page the Farming page's height, so that page scrolls instead of growing the window.</summary>
+    void ApplyMaxHeight() => MaxHeight = _part == "Quests" && !_welcome && _farmHeight > 0 ? Math.Min(_screenMax, _farmHeight) : _screenMax;
+
     void ShowPart(string part, bool byHand = true)
     {
+        // a Farming page that has been laid out (the demo's first switch happens before any layout, when the window is still small)
+        if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = ActualHeight;
         _part = part is "Crafting" or "Events" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
         bool craft = _part == "Crafting";
         ApplyView();
@@ -1239,6 +1251,11 @@ public partial class MainWindow : Window
 
         EventsCard.Visibility = events ? Visibility.Visible : Visibility.Collapsed;
         LowerScroll.Visibility = full || craft || events || quests ? Visibility.Visible : Visibility.Collapsed;
+        // the Quests page never grows the window (Steven, 2026-11-08: "it shouldn't expand the thing to the size of my screen"):
+        // the window keeps the Farming page's height and the page scrolls inside it; before Farming has been measured (a demo
+        // render), the scroll area is capped instead
+        ApplyMaxHeight();
+        LowerScroll.MaxHeight = quests && _farmHeight <= 0 ? QuestsScrollFallback : double.PositiveInfinity;
         // rows: 1 the left column in Compact, 2 (the one that fills, and scrolls) for the tables, and for both columns in Full
         System.Windows.Controls.Grid.SetRow(LeftCol, full ? 2 : 1);
         System.Windows.Controls.Grid.SetRow(LowerScroll, 2);
