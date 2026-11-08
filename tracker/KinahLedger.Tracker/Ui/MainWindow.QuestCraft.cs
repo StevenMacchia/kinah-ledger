@@ -82,6 +82,10 @@ public partial class MainWindow
             row.MouseLeftButtonUp += (_, _) => ToggleSec("Best");
             next.Add(row);
         }
+        // the quests (phase 1, Ui/MainWindow.Quests.cs): the two crafting materials you are farming, as Next up on Farming has them, with their trees
+        RefreshQuests();
+        var matKeys = _questsNow.Where(q => q.Kind == QuestKind.Material && q.Horizon == Horizon.Session).Take(2).Select(q => q.Key).ToHashSet();
+        foreach (var (el, _) in QuestRows(q => matKeys.Contains(q.Key), rule: next.Count > 0, toggled: () => FillCraft(CraftShown))) next.Add(el);
         CraftNextCard.Visibility = next.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (next.Count > 0)
         {

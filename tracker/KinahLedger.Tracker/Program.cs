@@ -1352,6 +1352,7 @@ options: --process aion[,other]");
         ok &= Session.TodayTests.Run(items, s);
         ok &= Session.CsvExportTests.Run(items, s);
         ok &= Session.GoalsTests.Run(items, s);
+        ok &= Session.QuestsTests.Run(items, s);
         ok &= Session.HistoryTests.Run(items, s);
         ok &= Session.CompareTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);
