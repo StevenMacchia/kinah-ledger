@@ -11,9 +11,11 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The Quests page (2026-11-08, Steven: "a quest tab people can get to within the app, to track their progress or pin
-/// goals"): Next up on Farming stays two bars (0.10.28; three before), and everything else lives here. Your score (this session, today, this
-/// week, all time); Active, the full list with trees and a pin on each row (a pinned chain takes a Next up row); Daily,
-/// today's repeatable quests with how many days running; All time, the long chains from this PC's tally; Your goals (the
+/// goals"): Next up on Farming stays two bars (0.10.28; three before), and everything else lives here. The score, one line
+/// on the head once there are points (the breakdown on hover); This session, the full list with trees and a pin on each row
+/// (a pinned chain takes a Next up row); Daily, today's repeatable quests with how many days running; All time, the long
+/// chains from this PC's tally, two at rest. A counter shows once: a longer horizon's row with the same count as a shorter
+/// one's is a branch in that row's tree (0.10.30, after the 2026-11-08 review); Your goals (the
 /// Set a goal sheet moved here from Next up); Done, by day. Quests can be turned off in Options › General (default on):
 /// the tab, the rows, the credit and the upload all go. Completed quests ride the next upload batch to the site
 /// (Upload/RunPayload.cs, phase 2); the site keeps the profile's score and the leaderboard.
@@ -88,8 +90,9 @@ public partial class MainWindow
         QuestsPage.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _drawnSig.Remove("questspage"); return; }
         QuestsOffCard.Visibility = QuestsOn ? Visibility.Collapsed : Visibility.Visible;
-        foreach (var c in new[] { QuestsScoreCard, QuestsActiveCard, QuestsDailyCard, QuestsAllTimeCard, QuestsGoalsCard, QuestsDoneCard }) c.Visibility = QuestsOn ? Visibility.Visible : Visibility.Collapsed;
-        if (!QuestsOn) return;
+        var cards = new[] { QuestsActiveCard, QuestsDailyCard, QuestsAllTimeCard, QuestsGoalsCard, QuestsDoneCard };
+        foreach (var c in cards) c.Visibility = QuestsOn ? Visibility.Visible : Visibility.Collapsed;
+        if (!QuestsOn) { QuestsScoreLine.Visibility = Visibility.Collapsed; return; }
         var quests = RefreshQuests();
         var x = _questIn;
         var score = ScoreNow();
@@ -98,37 +101,32 @@ public partial class MainWindow
         var daily = x != null ? Quests.Daily(x, _questLog.Pins) : new();
         var allTime = x != null ? Quests.AllTimeQuests(x, x.Materials) : new();
         var sig = string.Join(";", quests.Select(q => $"{q.Key}:{q.Have}:{Math.Round((q.SecondsToGo ?? 0) / 60)}")) + "|" + string.Join(";", daily.Select(q => $"{q.Key}:{q.Have}")) + "|" + string.Join(";", allTime.Select(q => $"{q.Key}:{q.Have}"))
-            + $"|{_qTree}|{string.Join(",", _questLog.Pins)}|{score.Session}:{score.Today}:{score.Week}:{score.AllTime}|{_questLog.Done.Count}|{string.Join(";", _goals.Select((g, i) => $"{g.Kind}:{g.Target}:{prog[i].Have}"))}|{QOpen("quests-earlier")}|{Skins.Current}";
+            + $"|{_qTree}|{string.Join(",", _questLog.Pins)}|{score.Session}:{score.Today}:{score.Week}:{score.AllTime}|{_questLog.Done.Count}|{string.Join(";", _goals.Select((g, i) => $"{g.Kind}:{g.Target}:{prog[i].Have}"))}|{QOpen("quests-earlier")}:{QOpen("quests-alltime")}|{Skins.Current}";
         if (!Changed("questspage", sig)) return;
 
-        // Your score
-        QuestsScoreHost.Children.Clear();
-        QuestsScoreHost.Children.Add(QHead("Trophy", "Your score", QuestScoreNote()));
-        var chips = new UniformGrid { Columns = 4, Margin = new Thickness(-4, 8, -4, 0) };
-        void Chip(string icon, string tone, string big, string small, string tip)
-        {
-            var b = new Border { Margin = new Thickness(4, 0, 4, 0), ToolTip = tip, Cursor = Cursors.Arrow };
-            b.SetResourceReference(StyleProperty, "QChip"); b.SetResourceReference(Border.BackgroundProperty, "Card2");
-            QChipFill(b, QIconBox(icon, tone), big, small);
-            chips.Children.Add(b);
-        }
-        Chip("Spark", "Lilac", Quests.Pts(score.Session), "this session", "Points from the quests reached since this count started.");
-        Chip("Timer", "Sky", Quests.Pts(score.Today), "today", "Points from the quests reached today, from midnight on this PC.");
-        Chip("Flag", "Mint", Quests.Pts(score.Week), "this week", "Points from the quests reached since Monday.");
-        Chip("Globe", "Gold", Quests.Pts(score.AllTime), "all time", "Every point this PC has earned. The site keeps the profile's own score from the uploads.");
-        QuestsScoreHost.Children.Add(chips);
+        // the score: one line on the page's head once there are points, the breakdown on hover (2026-11-08 review: four
+        // "0 pts" tiles were the page's first third; this session's points are on Next up's head already)
+        QuestsScoreLine.Text = QuestScoreHead(score);
+        QuestsScoreLine.Visibility = score.AllTime > 0 ? Visibility.Visible : Visibility.Collapsed;
+        CardTip(QuestsScoreLine, ScoreCard);
 
-        // Active: the full list with trees and pins; the first three are Next up's
+        // a counter shows once (2026-11-08 review): a row whose count a shorter horizon's row of the same chain already shows
+        // ("300 gathers · 211 so far" today and "1,000 gathers · 211 so far" all time) is that row's branch, in its tree
+        var shown = new List<Quest>();
+        bool Repeats(Quest q) => shown.Any(s => s.Chain == q.Chain && s.Have == q.Have);
+
+        // This session: the full list with trees and pins, the first two on Next up; no card before the first quest
         QuestsActiveHost.Children.Clear();
-        QuestsActiveHost.Children.Add(QHead("Spark", "Active", quests.Count == 0 ? "" : $"{quests.Count} quest{(quests.Count == 1 ? "" : "s")} · the first {Math.Min(quests.Count, Quests.NextUpRows)} are on Next up"));
-        if (quests.Count == 0) QuestsActiveHost.Children.Add(PageNote(x == null || x.Session.Seconds < Quests.MinSeconds ? "Quests appear a couple of minutes into farming, from what you pick up." : "Nothing to count yet."));
+        QuestsActiveHost.Children.Add(QHead("Spark", "This session", quests.Count <= Quests.NextUpRows ? "on Next up" : $"the first {Quests.NextUpRows} are on Next up"));
         int i = 0;
         foreach (var q in quests)
         {
             QuestsActiveHost.Children.Add(QuestRow(q, i > 0, toggled: RedrawQuestsPage, pinnable: true));
             if (_qTree == q.Key) foreach (var r in QuestTreeRows(q)) QuestsActiveHost.Children.Add(r);
+            shown.Add(q);
             i++;
         }
+        if (quests.Count == 0) QuestsActiveCard.Visibility = Visibility.Collapsed;
 
         // Daily: today's repeatable quests and the streak
         QuestsDailyHost.Children.Clear();
@@ -136,7 +134,10 @@ public partial class MainWindow
         i = 0;
         var nowLocal = DateTime.Now;
         double toMidnight = (nowLocal.Date.AddDays(1) - nowLocal).TotalSeconds;
-        foreach (var q in daily)
+        var dailyRows = daily.Where(q => !Repeats(q)).ToList();
+        shown.AddRange(dailyRows);
+        if (daily.Count > 0 && dailyRows.Count == 0) QuestsDailyCard.Visibility = Visibility.Collapsed;
+        foreach (var q in dailyRows)
         {
             int streak = Quests.Streak(_questLog, q.Kind, q.Subject, nowLocal);
             // the pace's "about 47 h" means nothing on a quest that resets at midnight: it says so instead (2026-11-08 review)
@@ -147,16 +148,23 @@ public partial class MainWindow
         }
         if (daily.Count == 0) QuestsDailyHost.Children.Add(PageNote("Today's quests appear with the first count of the day."));
 
-        // All time: the long chains from this PC's tally
+        // All time: the long chains from this PC's tally, the nearest to done first; two at rest, the rest behind "N more"
+        // (2026-11-08 review: seven "1,000 X · 5 pts" rows read as one)
         QuestsAllTimeHost.Children.Clear();
         QuestsAllTimeHost.Children.Add(QHead("Globe", "All time", "this PC's tally since quests began"));
+        var atRows = allTime.Where(q => !Repeats(q)).OrderByDescending(q => q.Share).ToList();
+        bool atOpen = QOpen("quests-alltime");
+        int atShow = atOpen || atRows.Count <= AllTimeAtRest + 1 ? atRows.Count : AllTimeAtRest;
         i = 0;
-        foreach (var q in allTime)
+        foreach (var q in atRows.Take(atShow))
         {
             QuestsAllTimeHost.Children.Add(QuestRow(q, i > 0, note: $"{Quests.Amount(q, q.Have, Fk)} so far · {Quests.Amount(q, q.ToGo, Fk)} to go", toggled: RedrawQuestsPage));
             i++;
         }
+        if (atRows.Count > AllTimeAtRest + 1)
+            QuestsAllTimeHost.Children.Add(FoldLink(atOpen ? "Fewer" : $"{atRows.Count - atShow} more  ›", () => { _qOpen["quests-alltime"] = !atOpen; RedrawQuestsPage(); }));
         if (allTime.Count == 0) QuestsAllTimeHost.Children.Add(PageNote("The all-time chains start counting with your first day of quests."));
+        else if (atRows.Count == 0) QuestsAllTimeCard.Visibility = Visibility.Collapsed;
 
         // Your goals: the player's own (the Set a goal sheet lived on Next up until today)
         QuestsGoalsHost.Children.Clear();
@@ -167,8 +175,8 @@ public partial class MainWindow
         // Done: by day, the last seven days, newest first
         QuestsDoneHost.Children.Clear();
         var byDay = Quests.DoneByDay(_questLog, nowLocal);
-        long total = _questLog.Done.Sum(d => (long)d.Points);
-        QuestsDoneHost.Children.Add(QHead("Check", "Done", _questLog.Done.Count == 0 ? "" : $"{_questLog.Done.Count} quest{(_questLog.Done.Count == 1 ? "" : "s")} · {Quests.Pts(total)} in {Quests.KeepDays} days"));
+        // the points are on the page's head and each day's label, so the head counts the quests alone
+        QuestsDoneHost.Children.Add(QHead("Check", "Done", _questLog.Done.Count == 0 ? "" : $"{_questLog.Done.Count} quest{(_questLog.Done.Count == 1 ? "" : "s")} in the last {Quests.KeepDays} days"));
         if (byDay.Count == 0) QuestsDoneHost.Children.Add(PageNote("Nothing reached yet. A quest you reach shows on the panel over the game for a few seconds, then lands here."));
         int days = 0; bool earlierOpen = QOpen("quests-earlier"); int hidden = 0, hiddenPts = 0;
         foreach (var (day, done) in byDay)
@@ -186,18 +194,36 @@ public partial class MainWindow
             days++;
         }
         if (hidden > 0 || (earlierOpen && byDay.Count > 2))
-        {
-            var more = QT(earlierOpen ? "Fewer days" : $"{byDay.Count - 2} earlier day{(byDay.Count - 2 == 1 ? "" : "s")} · {hidden} quests · {Quests.Pts(hiddenPts)}  ›", 11.5, FontWeights.ExtraBold, "Gold");
-            more.Cursor = Cursors.Hand; more.Background = Brushes.Transparent; more.Margin = new Thickness(0, 8, 0, 0);
-            more.MouseLeftButtonUp += (_, _) => { _qOpen["quests-earlier"] = !earlierOpen; RedrawQuestsPage(); };
-            QuestsDoneHost.Children.Add(more);
-        }
+            QuestsDoneHost.Children.Add(FoldLink(earlierOpen ? "Fewer days" : $"{byDay.Count - 2} earlier day{(byDay.Count - 2 == 1 ? "" : "s")} · {hidden} quests · {Quests.Pts(hiddenPts)}  ›", () => { _qOpen["quests-earlier"] = !earlierOpen; RedrawQuestsPage(); }));
+
+        // the first card shown sits under the head without the gap the others keep between them
+        bool first = true;
+        foreach (var c in cards) if (c.Visibility == Visibility.Visible) { c.Margin = new Thickness(0, first ? 0 : 8, 0, 0); first = false; }
     }
+
+    /// <summary>All time's rows at rest; a fold of one is not worth its row, so three show as three.</summary>
+    const int AllTimeAtRest = 2;
+
+    /// <summary>A card's fold at its foot: "5 more  ›" in gold, a click opens or closes it.</summary>
+    static TextBlock FoldLink(string text, Action click)
+    {
+        var t = QT(text, 11.5, FontWeights.ExtraBold, "Gold");
+        t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent; t.Margin = new Thickness(0, 8, 0, 0);
+        t.MouseLeftButtonUp += (_, _) => click();
+        return t;
+    }
+
+    /// <summary>The page head's score: "56 pts today · 1,220 all time"; one figure when the two are the same.</summary>
+    static string QuestScoreHead(QuestScore s) =>
+        s.Today <= 0 ? Quests.Pts(s.AllTime) + " all time"
+        : s.AllTime > s.Today ? $"{Quests.Pts(s.Today)} today · {s.AllTime.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} all time"
+        : Quests.Pts(s.Today) + " today";
 
     /// <summary>A completed quest on the Done list: the mint check, its title, when, "+N pts" in mint.</summary>
     FrameworkElement DoneRow(QuestDone d, bool rule)
     {
-        var sub = $"{d.DoneAtUtc.ToLocalTime():HH:mm} · {Horizon.Word(d.Horizon)}" + (d.Points < d.Worth ? $" · worth {Quests.Pts(d.Worth)}, capped" : "");
+        // Kinah's title carries its horizon already ("500K today")
+        var sub = $"{d.DoneAtUtc.ToLocalTime():HH:mm}" + (d.Kind == QuestKind.Kinah ? "" : " · " + Horizon.Word(d.Horizon)) + (d.Points < d.Worth ? $" · worth {Quests.Pts(d.Worth)}, capped" : "");
         var row = QRow(QIconBox("Check", "Mint", 28, round: true), Quests.Title(d, Fk), sub, Quests.Pts(d.Points, plus: true), "Mint", rule: rule, inline: true);
         row.Tag = "done"; row.Cursor = Cursors.Arrow;
         row.ToolTip = $"{Quests.Title(d, Fk)} reached at {d.DoneAtUtc.ToLocalTime():HH:mm}, {Quests.Pts(d.Points, plus: true)}" + (d.Points < d.Worth ? $" of {Quests.Pts(d.Worth)}: the hour's cap ({Quests.CapPerHour} an hour of play)." : ".") + (d.Sent ? " Sent to your profile." : " Goes to your profile with the next upload.");
@@ -210,9 +236,6 @@ public partial class MainWindow
         var t = QT(text, 12, FontWeights.Bold, "Faint"); t.TextWrapping = TextWrapping.Wrap; t.Margin = new Thickness(0, 8, 0, 2);
         return t;
     }
-
-    /// <summary>The score head's note: where the points go.</summary>
-    string QuestScoreNote() => _prefs.Share ? "sent to your profile with each upload" : "sharing is off, so the score stays on this PC";
 
     /* ---------------- the upload (phase 2) ---------------- */
 
@@ -236,6 +259,8 @@ public partial class MainWindow
     void RefreshQuestPending()
     {
         if (_demo || !QuestsOn || !_questLoaded) { _questPending = null; return; }
+        // the tier is the grade, 1 to 5 (0.10.30): the site reads it so for a batch from 0.10.30 on (kinah-ledger-site PR #153, which
+        // must be live before this ships: an older site drops a tier above 3, and the batch would still mark it sent)
         var list = Quests.Unsent(_questLog).Take(200).Select(d => new QuestDonePayload(d.Key, d.Kind, d.Horizon, d.Subject, d.Target, d.Tier, d.Points, d.Worth, d.Have,
             d.DoneAtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture), d.Scope)).ToList();
         _questPending = list.Count > 0 ? list : null;

@@ -852,20 +852,22 @@
         </StackPanel>
       </Border>
 
-      <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): Your score, Active, Daily, All time, Your goals, Done -->
+      <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): the score on the head, This session, Daily, All time, Your goals, Done -->
       <StackPanel x:Name="QuestsPage" Margin="0,12,0,0" Visibility="Collapsed">
         <Grid Margin="2,0,0,12">
           <StackPanel>
             <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="ExtraBold" Foreground="{DynamicResource Ink}" Text="Quests"/>
-            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Margin="0,3,0,0" Text="Goals set from what you farm. Two are on Next up; pin one to put it there."/>
+            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Margin="0,3,0,0" TextWrapping="Wrap"
+                       Text="Each quest is the next step of something you farm. Reach one to earn points (pts): bigger steps and rarer materials earn more."/>
           </StackPanel>
+          <!-- the score, one line once there are points; the breakdown on hover -->
+          <TextBlock x:Name="QuestsScoreLine" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,0,0" FontSize="13" FontWeight="ExtraBold" Foreground="{DynamicResource Gold}" Visibility="Collapsed"/>
         </Grid>
         <Border x:Name="QuestsOffCard" Style="{StaticResource QCard}" Padding="20,22,20,22" Visibility="Collapsed">
           <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440"
                      Text="Quests are off. Turn them on in Options › General to get goals from what you farm, points for reaching them, and a score on your profile."/>
         </Border>
-        <Border x:Name="QuestsScoreCard" Style="{StaticResource QCard}" Background="{DynamicResource HeroBg}"><StackPanel x:Name="QuestsScoreHost"/></Border>
-        <Border x:Name="QuestsActiveCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsActiveHost"/></Border>
+        <Border x:Name="QuestsActiveCard" Style="{StaticResource QCard}"><StackPanel x:Name="QuestsActiveHost"/></Border>
         <Border x:Name="QuestsDailyCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsDailyHost"/></Border>
         <Border x:Name="QuestsAllTimeCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsAllTimeHost"/></Border>
         <Border x:Name="QuestsGoalsCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsGoalsHost"/></Border>

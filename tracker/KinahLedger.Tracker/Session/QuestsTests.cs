@@ -33,21 +33,34 @@ public static class QuestsTests
             Check("Kinah this week: 0, 5M, 500M", string.Join(",", new long[] { 0, 5_000_000, 500_000_000 }.Select(n => Fk(Quests.NextStep(Quests.KinahWeek, n)))), "5M,10M,600M");
             Check("step index: 5 is 0, 100 is 5, 1000 is 10, 3000 is 12", string.Join(",", new long[] { 5, 100, 1000, 3000 }.Select(t => Quests.StepIndex(Quests.StackChain, t))), "0,5,10,12");
 
-            // b. tiers from the odds and the grade
-            Check("tier: 1 in 4 common, 1 in 12, 1 in 50, 1 in 54, Legend 1 in 3", string.Join(",", new[] { Quests.TierOf(4, "Common"), Quests.TierOf(12, "Common"), Quests.TierOf(50, "Rare"), Quests.TierOf(54, ""), Quests.TierOf(3, "Legend") }), "1,2,2,3,3");
-            Check("tier with no odds: Common, Rare, Epic", string.Join(",", new[] { Quests.TierOf(null, "Common"), Quests.TierOf(null, "Rare"), Quests.TierOf(null, "Epic") }), "1,2,3");
+            // b. tiers: the grade leads; odds rarer than 1 in 50 lift a Common or Rare one step, never more (0.10.30)
+            Check("tier: 1 in 4 common, 1 in 12, 1 in 50 Rare, 1 in 54 no grade, Legend 1 in 3", string.Join(",", new[] { Quests.TierOf(4, "Common"), Quests.TierOf(12, "Common"), Quests.TierOf(50, "Rare"), Quests.TierOf(54, ""), Quests.TierOf(3, "Legend") }), "1,1,2,2,3");
+            Check("tier: the odds' step: Rare 1 in 60, Legend 1 in 80, Unique 1 in 1000", string.Join(",", new[] { Quests.TierOf(60, "Rare"), Quests.TierOf(80, "Legend"), Quests.TierOf(1000, "Unique") }), "3,3,4");
+            Check("tier with no odds: Common, Rare, Legend, Unique, Epic", string.Join(",", new[] { Quests.TierOf(null, "Common"), Quests.TierOf(null, "Rare"), Quests.TierOf(null, "Legend"), Quests.TierOf(null, "Unique"), Quests.TierOf(null, "Epic") }), "1,2,3,4,5");
+
+            // b2. a rarer grade needs fewer and pays more (Steven, 2026-11-08: "5 being the max per session for gold but rewarding like 50")
+            string First(string h) => string.Join(", ", Enumerable.Range(1, 5).Select(t => { long f = Quests.Next(QuestKind.Material, h, t, 0); return $"{Quests.TierWord(t)} {f} ({Quests.PointsFor(QuestKind.Material, h, f, t)})"; }));
+            Check("first step this session by grade (count, points)", First(Horizon.Session), "common 5 (1), rare 3 (2), legend 1 (4), unique 1 (10), epic 1 (20)");
+            Check("first step today by grade", First(Horizon.Today), "common 5 (1), rare 5 (4), legend 2 (8), unique 1 (20), epic 1 (40)");
+            Check("first step all time by grade", First(Horizon.AllTime), "common 1000 (5), rare 100 (16), legend 25 (32), unique 10 (80), epic 5 (160)");
+            string Ladder(int tier) { var l = new List<string>(); for (long t = Quests.Next(QuestKind.Material, Horizon.Session, tier, 0); t > 0 && l.Count < 12; t = Quests.Next(QuestKind.Material, Horizon.Session, tier, t)) l.Add($"{t} ({Quests.PointsFor(QuestKind.Material, Horizon.Session, t, tier)})"); return string.Join(" → ", l); }
+            Check("gold's session ladder ends at 5, worth 50", Ladder(Quests.TierUnique), "1 (10) → 2 (20) → 3 (30) → 5 (50)");
+            Check("epic's ends at 3", Ladder(Quests.TierEpic), "1 (20) → 2 (35) → 3 (50)");
+            Check("blue's and green's go on", $"{Ladder(Quests.TierLegend).Split(" → ").Length > 6} {Ladder(Quests.TierRare).Split(" → ")[0]}", "True 3 (2)");
+            Check("the same count is worth more the rarer: 5 this session common, rare, legend, unique", string.Join(" ", Enumerable.Range(1, 4).Select(t => Quests.PointsFor(QuestKind.Material, Horizon.Session, 5, t))), "1 3 12 50");
+            Check("a quest from one piece for legend and above, three below", string.Join(",", Enumerable.Range(1, 5).Select(Quests.MinFor)), "3,3,1,1,1");
 
             // c. points: base × step × tier × horizon
             Check("points: 5 Spiritstone tier 1 session", Quests.PointsFor(QuestKind.Material, Horizon.Session, 5, 1).ToString(), "1");
             Check("points: 100 Spiritstone tier 1 session (step 6)", Quests.PointsFor(QuestKind.Material, Horizon.Session, 100, 1).ToString(), "4");
-            Check("points: 100 of a tier 3 material today", Quests.PointsFor(QuestKind.Material, Horizon.Today, 100, 3).ToString(), "14");
+            Check("points: 100 of a common material today", Quests.PointsFor(QuestKind.Material, Horizon.Today, 100, 1).ToString(), "7");
             Check("points: 100K this session, 500K today, 5M this week", $"{Quests.PointsFor(QuestKind.Kinah, Horizon.Session, 100_000, 1)} {Quests.PointsFor(QuestKind.Kinah, Horizon.Today, 500_000, 1)} {Quests.PointsFor(QuestKind.Kinah, Horizon.Week, 5_000_000, 1)}", "2 4 8");
             Check("points: 3 runs today, a best run, 50 gathers", $"{Quests.PointsFor(QuestKind.Runs, Horizon.Today, 3, 1)} {Quests.PointsFor(QuestKind.BestRun, Horizon.Today, 1, 2)} {Quests.PointsFor(QuestKind.Gather, Horizon.Session, 50, 1)}", "2 10 1");
 
             // d. the live list: a 42-minute session, 1.3M Kinah, Spiritstone 26 (last picked up, worth 7.5K), Thick hide 41 (1.1K), Odyle 12 (2.3K), two Urugugu runs today, 30 gathers
             var start = new DateTime(2026, 11, 8, 14, 0, 0, DateTimeKind.Utc);
             var now = start.AddMinutes(42);
-            var mats = new List<QuestMaterial> { new("Thick hide", 1, 1_100), new("Spiritstone", 2, 7_499), new("Odyle", 1, 2_300), new("Rare Dust", 3, 50_000) };
+            var mats = new List<QuestMaterial> { new("Thick hide", 1, 1_100), new("Spiritstone", 1, 7_499), new("Odyle", 1, 2_300), new("Rare Dust", Quests.TierRare, 50_000) };   // tiers are grades since 0.10.30: Rare Dust is green, so one is a stray drop
             QuestCounts Counts(long kinah, double secs, Dictionary<string, long>? items = null, Dictionary<string, int>? runs = null, int gathers = 0)
                 => new(kinah, secs, items ?? new(), runs ?? new(), gathers);
             var session = Counts(1_300_000, 42 * 60, new() { ["Thick hide"] = 41, ["Spiritstone"] = 26, ["Odyle"] = 13, ["Rare Dust"] = 1 }, gathers: 30);
@@ -57,7 +70,7 @@ public static class QuestsTests
             var live = Quests.Live(x);
             string Row(Quest q) => Quests.Title(q, Fk) + $" {q.Have}/{q.Target} {Quests.Pts(q.Points)}";
             Check("row 1: Kinah this session", Row(live[0]), "2M this session 1300000/2000000 10 pts");
-            Check("row 2: the material last picked up", Row(live[1]), "30 Spiritstone 26/30 3 pts");
+            Check("row 2: the material last picked up", Row(live[1]), "30 Spiritstone 26/30 2 pts");
             Check("row 3: the most valuable other stack", Row(live[2]), "50 Thick hide 41/50 3 pts");
             Check("a stray drop (1) has no quest; the longer horizons are not on the list (they are the trees' branches)", $"{live.Any(q => q.Subject == "Rare Dust")} {live.Any(q => q.Horizon == Horizon.Week || (q.Horizon == Horizon.Today && q.Kind != QuestKind.Runs && q.Kind != QuestKind.BestRun))}", "False False");
             Check("the rest by time to go, nearest first", string.Join(" | ", live.Skip(3).Select(q => Quests.Title(q, Fk))),
@@ -72,8 +85,8 @@ public static class QuestsTests
 
             // e. a quest's tree: the chain upward and the branches over the longer horizons
             var tree = Quests.Tree(live[1], x);
-            Check("Spiritstone's chain upward", string.Join(" → ", tree.Up.Select(q => $"{q.Target} ({q.Points})")), "50 (4) → 100 (5) → 150 (7)");
-            Check("Spiritstone's branches: today only (the week counts no items)", string.Join(" | ", tree.Branches.Select(Row)), "100 Spiritstone 61/100 11 pts");
+            Check("Spiritstone's chain upward", string.Join(" → ", tree.Up.Select(q => $"{q.Target} ({q.Points})")), "50 (3) → 100 (4) → 150 (5)");
+            Check("Spiritstone's branches: today only (the week counts no items)", string.Join(" | ", tree.Branches.Select(Row)), "100 Spiritstone 61/100 7 pts");
             var ktree = Quests.Tree(live[0], x);
             Check("Kinah's branches: today and the week", string.Join(" | ", ktree.Branches.Select(q => Quests.Title(q, Fk))), "5M today | 25M this week");
             Check("a runs quest branches to the week, not the session", string.Join(" | ", Quests.Tree(live.First(q => q.Kind == QuestKind.Runs), x).Branches.Select(q => Quests.Title(q, Fk))), "10 Urugugu Canyon runs");
@@ -90,7 +103,27 @@ public static class QuestsTests
             Check("the cap: an hour of play earns 60 from the session's quests at most", $"{credited} of {worth} {credited <= Quests.CapPerHour}", $"{Math.Min(worth, Quests.CapPerHour)} of {worth} True");
             var heavy = x with { Session = session with { Kinah = 20_000_000 } };
             var heavyDone = Quests.Advance(new QuestLog(), heavy, now.ToLocalTime());
-            Check("...a count that jumped to 20M at once: 60 credited, the rest logged as worth", $"{heavyDone.Where(d => d.Horizon == Horizon.Session).Sum(d => d.Points)} of {heavyDone.Where(d => d.Horizon == Horizon.Session).Sum(d => d.Worth)}", "60 of 245");
+            Check("...a count that jumped to 20M at once: 60 credited, the rest logged as worth", $"{heavyDone.Where(d => d.Horizon == Horizon.Session).Sum(d => d.Points)} of {heavyDone.Where(d => d.Horizon == Horizon.Session).Sum(d => d.Worth)}", "60 of 244");
+            // gold and above earn outside the cap (a rare drop is luck, not grinding); a finished gold ladder leaves the list
+            var gold = x with { Materials = new List<QuestMaterial> { new("Radiant Orichalcum Ore", Quests.TierUnique, 0) }, LastFarmed = Array.Empty<string>(), Session = session with { Kinah = 20_000_000, Items = new Dictionary<string, long> { ["Radiant Orichalcum Ore"] = 5 } } };
+            var goldLog = new QuestLog();
+            var goldDone = Quests.Advance(goldLog, gold, now.ToLocalTime()).Where(d => d.Horizon == Horizon.Session).ToList();
+            var ore = goldDone.Where(d => d.Kind == QuestKind.Material).ToList();
+            Check("5 Radiant (gold) with the hour's cap spent on Kinah: gold in full, the rest capped, the cap still spent",
+                $"{string.Join(",", ore.Select(d => d.Target))}: {ore.Sum(d => d.Points)} of {ore.Sum(d => d.Worth)}; the rest {goldDone.Except(ore).Sum(d => d.Points)}; left {Quests.CapLeft(goldLog, gold)}", "1,2,3,5: 110 of 110; the rest 60; left 0");
+            // ...once per item per day (Steven, 2026-11-08: a restart re-paid 110 outside the cap every session): a second session that day climbs it under the cap
+            var day1 = now.ToLocalTime();
+            var gold2 = gold with { SessionStartUtc = start.AddHours(2), NowUtc = start.AddHours(2).AddMinutes(42), Session = gold.Session with { Kinah = 0, Gathers = 0 } };
+            var second = Quests.Advance(goldLog, gold2, day1).Where(d => d.Kind == QuestKind.Material && d.Horizon == Horizon.Session).ToList();
+            Check("...a second session the same day: 5 Radiant again, under the cap this time",
+                $"first free {ore.All(d => d.FreeDay.Length > 0)}; second {second.Sum(d => d.Points)} of {second.Sum(d => d.Worth)}, free {second.Any(d => d.FreeDay.Length > 0)}, left {Quests.CapLeft(goldLog, gold2)}", "first free True; second 60 of 110, free False, left 0");
+            var gold4 = gold2 with { SessionStartUtc = start.AddDays(1), NowUtc = start.AddDays(1).AddMinutes(42) };
+            var nextDay = Quests.Advance(goldLog, gold4, day1.AddDays(1)).Where(d => d.Kind == QuestKind.Material && d.Horizon == Horizon.Session).ToList();
+            Check("...and the next day it is free again", $"{nextDay.Sum(d => d.Points)} of {nextDay.Sum(d => d.Worth)} free {nextDay.All(d => d.FreeDay.Length > 0)}", "110 of 110 free True");
+            var gold3 = gold with { Session = gold.Session with { Items = new Dictionary<string, long> { ["Radiant Orichalcum Ore"] = 3 } } };
+            var goldRow = Quests.Live(gold3).FirstOrDefault(q => q.Kind == QuestKind.Material);
+            Check("3 Radiant: the row is 5 for 50, nothing above it this session", goldRow == null ? "none" : $"{Row(goldRow)} up {Quests.Tree(goldRow, gold3).Up.Count}", "5 Radiant Orichalcum Ore 3/5 50 pts up 0");
+            Check("5 Radiant: no gold row left, no pin either", $"{Quests.Live(gold).Any(q => q.Kind == QuestKind.Material)} {Quests.PinnedLive("material:Radiant Orichalcum Ore", gold) == null}", "False True");
             Check("today's and the week's quests are not capped", done.Where(d => d.Horizon != Horizon.Session).All(d => d.Points == d.Worth).ToString(), "True");
             Check("the same look again credits nothing", Quests.Advance(log, x, now.ToLocalTime()).Count.ToString(), "0");
             var later = x with { Session = session with { Kinah = 2_100_000, Seconds = 70 * 60 }, Today = today with { Kinah = 5_000_000 }, NowUtc = now.AddMinutes(28), BestRuns = new[] { new BestHere("Urugugu Canyon", 700_000, 720_000) } };
@@ -120,7 +153,7 @@ public static class QuestsTests
             Check("an entry older than 60 days leaves; the all-time total keeps its points", $"{back.Done.Any(d => d.DoneAtUtc == now.AddDays(-90))} {back.AllTimePoints >= allTime}", "False True");
 
             // i. words
-            Check("titles and points", $"{Quests.Title(live[0], Fk)} / {Quests.Pts(12)} / {Quests.Pts(12, plus: true)} / {Quests.TierWord(3)}", "2M this session / 12 pts / +12 pts / rare");
+            Check("titles and points", $"{Quests.Title(live[0], Fk)} / {Quests.Pts(12)} / {Quests.Pts(12, plus: true)} / {Quests.TierWord(3)}", "2M this session / 12 pts / +12 pts / legend");
         }
         catch (Exception ex) { Console.WriteLine("  quests tests threw: " + ex); ok = false; }
         finally

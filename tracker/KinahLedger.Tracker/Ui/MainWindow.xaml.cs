@@ -1923,6 +1923,8 @@ public partial class MainWindow : Window
             // the Quests page from the farming sample's counts (Ui/MainWindow.QuestsPage.cs), for a layout render
             ShowDemo("Open world", state);
             ShowPart("Quests", byHand: false);
+            // KL_QUESTS_TALL=1: the whole page without its scroll cap, for a look below the fold (Your goals, Done)
+            if (Environment.GetEnvironmentVariable("KL_QUESTS_TALL") == "1") LowerScroll.MaxHeight = double.PositiveInfinity;
             return;
         }
         if (kind == "CraftingEmpty")
@@ -2034,10 +2036,15 @@ public partial class MainWindow : Window
                 e.Apply(new MarketSold(t, "Spiritstone", 10, 75_200));
                 break;
         }
+        // KL_DEMO_DROP=Radiant Orichalcum Ore:3 (0.10.30): drops added to the sample, to render a rarer grade's quest row
+        if (Environment.GetEnvironmentVariable("KL_DEMO_DROP") is { Length: > 0 } dd)
+            foreach (var kv in dd.Split(',').Select(p => p.Split(':')).Where(kv => kv.Length == 2)) if (int.TryParse(kv[1], out var c)) Drop(kv[0].Trim(), c);
         ApplyModeLabels();
         _tableWhat = "this zone";   // no run on, as a player mostly has it (KL_SHOT_STATE=run draws one)
         if (_mode == Mode.Open) _extraOpen = "Mob";   // the mock opens Kinah by enemy in place
         _demoEngine = e; _demoElapsed = TimeSpan.FromMinutes(42) + TimeSpan.FromSeconds(17);
+        // the quests' look from ShowPart above saw no counts and is kept for a second: drop it, so Next up and the Quests page read the sample
+        _questIn = null;
         LoadAccuracyDemo();
         FillNumbers(e, _demoElapsed);
         FillLive();
