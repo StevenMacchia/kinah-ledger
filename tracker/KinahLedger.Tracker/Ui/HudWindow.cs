@@ -425,6 +425,7 @@ public sealed class HudWindow : Window
         bool warm = V("warm") == "1";
         // the ring of your best here and the chase's words (the "chase" and "toBest" values, Ui/MainWindow.Live.cs FillRate)
         var (share, words, beat) = HudKit.Chase(values);
+        if (warm) { share = -1; words = ""; }   // no measured hour yet, so nothing to hold against the best (2026-11-07 review)
         var ringSig = $"{Math.Round(share, 2)}|{words}";
         if (ringSig != _ringSig)
         {

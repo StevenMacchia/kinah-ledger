@@ -328,15 +328,21 @@ public sealed partial class HudTicker
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.Children.Add(CraftKit.Tile(p, 24));
-        var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(9, 0, 0, 0) };
-        name.Inlines.Add(R(p.Name, 13, Ink));
-        name.Inlines.Add(R(" · " + p.Note, 12, combo ? Gold : ok ? Faint : CraftKit.Fail));
+        // the name trims before the outcome does (2026-11-07 review: "work", "combo: Splen" cut at the edge); a craft that
+        // worked says so with the tile's check alone, a failed one and a won roll in words
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var name = T(p.Name, 13, Ink, weight: FontWeights.ExtraBold); name.Margin = new Thickness(9, 0, 0, 0);
         Grid.SetColumn(name, 1); g.Children.Add(name);
-        var worth = T(p.Worth, 13, ok ? Gold : CraftKit.Fail, mono: true); worth.Margin = new Thickness(9, 0, 0, 0);
-        Grid.SetColumn(worth, 2); g.Children.Add(worth);
+        if (!ok || combo)
+        {
+            var note = T(p.Note, 11.5, combo ? Gold : CraftKit.Fail, weight: FontWeights.Bold); note.Margin = new Thickness(6, 0, 0, 0); note.MaxWidth = 120;
+            Grid.SetColumn(note, 2); g.Children.Add(note);
+        }
+        var worth = T(p.Worth, 13, ok ? Mint : CraftKit.Fail, weight: FontWeights.Black); worth.Margin = new Thickness(9, 0, 0, 0);
+        Grid.SetColumn(worth, 3); g.Children.Add(worth);
         return new Border
         {
-            Width = 270, Height = 34, Padding = new Thickness(6, 0, 10, 0), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2, 0, 0, 0),
+            Width = 270, Height = 34, Padding = new Thickness(6, 0, 10, 0), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(2, 1, 1, 1),
             BorderBrush = ok ? CraftKit.OkEdge : CraftKit.Fail, Background = Wash("pick", false), Child = g,
         };
     }
