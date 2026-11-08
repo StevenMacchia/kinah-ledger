@@ -259,9 +259,9 @@ public partial class MainWindow
     void RefreshQuestPending()
     {
         if (_demo || !QuestsOn || !_questLoaded) { _questPending = null; return; }
-        // the site takes tiers 1 to 3 and checks the worth by its own formula (kinah-ledger-site backend/src/quests.ts): until it knows
-        // the grade ladders (0.10.30), gold and violet go up as 3, so they are stored and credited at the site's worth, not dropped
-        var list = Quests.Unsent(_questLog).Take(200).Select(d => new QuestDonePayload(d.Key, d.Kind, d.Horizon, d.Subject, d.Target, Math.Min(d.Tier, Quests.TierLegend), d.Points, d.Worth, d.Have,
+        // the tier is the grade, 1 to 5 (0.10.30): the site reads it so for a batch from 0.10.30 on (kinah-ledger-site PR #153, which
+        // must be live before this ships: an older site drops a tier above 3, and the batch would still mark it sent)
+        var list = Quests.Unsent(_questLog).Take(200).Select(d => new QuestDonePayload(d.Key, d.Kind, d.Horizon, d.Subject, d.Target, d.Tier, d.Points, d.Worth, d.Have,
             d.DoneAtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture), d.Scope)).ToList();
         _questPending = list.Count > 0 ? list : null;
     }
