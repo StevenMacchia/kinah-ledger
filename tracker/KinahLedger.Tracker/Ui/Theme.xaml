@@ -31,6 +31,7 @@
   <SolidColorBrush x:Key="CardLineHover" Color="#45FFFFFF"/>
   <SolidColorBrush x:Key="SkyTint" Color="#296EC1FF"/>
   <SolidColorBrush x:Key="LilacTint" Color="#29B692FF"/>
+  <SolidColorBrush x:Key="NoticeTint" Color="#29B692FF"/>
   <SolidColorBrush x:Key="CoralTint" Color="#29FF7D6E"/>
   <SolidColorBrush x:Key="LimeTint" Color="#29C6F26B"/>
   <SolidColorBrush x:Key="MintTint" Color="#295CE1B5"/>

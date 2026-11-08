@@ -37,7 +37,7 @@ public partial class MainWindow
         var sp = new StackPanel();
         var sheet = new Border { Child = sp, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 6, 0, 10) };
         sheet.SetResourceReference(Border.BorderBrushProperty, flagged ? "CardLineHover" : "CardLine");
-        sheet.SetResourceReference(Border.BackgroundProperty, flagged ? "LilacTint" : "Card");
+        sheet.SetResourceReference(Border.BackgroundProperty, flagged ? "NoticeTint" : "Card");
         return (sheet, sp);
     }
 

@@ -131,7 +131,7 @@ public partial class MainWindow
     /// <summary>A note in the card's faint ink, wrapped.</summary>
     static FrameworkElement CkNote(string text)
     {
-        var t = CkText(text, CkFaint, 12.5); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None; t.Margin = new Thickness(20, 2, 20, 2);
+        var t = CkText(text, CkMuted, 12.5); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None; t.Margin = new Thickness(20, 2, 20, 2);
         return t;
     }
 

@@ -125,6 +125,7 @@ public partial class MainWindow
             kick.MouseLeftButtonUp += (_, e) => { e.Handled = true; ShowMenu(kick, pickPlace()); };
         }
         titles.Children.Add(nameRow);
+        titles.SizeChanged += (_, _) => name.MaxWidth = Math.Max(60, titles.ActualWidth - (pickPlace != null ? 26 : 2));
         var meta = $"{runs.Count} run{(runs.Count == 1 ? "" : "s")}";
         if (open != null) meta += $" · run {runs.OrderBy(r => r.Start).ToList().IndexOf(open) + 1} open since {open.Start.ToLocalTime():HH:mm}";
         var ml = QT(meta, 11.5, FontWeights.Bold, "Muted", trim: true); ml.Margin = new Thickness(0, 1, 0, 0); titles.Children.Add(ml);
@@ -389,7 +390,7 @@ public partial class MainWindow
     Border QFlaggedLine(List<InstanceRun> flagged, double med, Action redraw)
     {
         var card = new Border { Margin = new Thickness(0, 8, 0, 0), Padding = new Thickness(10, 6, 10, 6) };
-        card.SetResourceReference(StyleProperty, "QCard"); card.SetResourceReference(Border.BackgroundProperty, "LilacTint");
+        card.SetResourceReference(StyleProperty, "QCard"); card.SetResourceReference(Border.BackgroundProperty, "NoticeTint");
         var row = QRow(QIconBox("Q", "Lilac", 28, round: true), $"{flagged.Count} run{(flagged.Count == 1 ? "" : "s")} to look at", FlagReason(flagged[0], med) + " · out of the figures until fixed", "fix  ›", "Lilac", rule: false, inline: true);
         row.ToolTip = FlagReason(flagged[0], med) + " Click for the fix.";
         row.MouseLeftButtonUp += (_, e) => { e.Handled = true; _fixOpen = RunKey(flagged[0]); _drawnSig.Remove("runs"); redraw(); };

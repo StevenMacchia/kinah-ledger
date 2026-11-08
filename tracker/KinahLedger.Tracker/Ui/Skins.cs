@@ -91,7 +91,7 @@ public static class Skins
             case "abyss":
                 // navy (2026-11-07, step 6 of the Quest look): the Abyss's own night, blue where Night is plum
                 Quest("#7FC4FF", "#C8A8FF", "#FF7A86", "#BFE86A", "#2B1B00", "#2B1B00", "#24FFFFFF", "#47FFFFFF", 0x29);
-                S("MintTint", "#298EE3D6"); S("GoldIcTint", "#29F2C97D");
+                S("MintTint", "#298EE3D6"); S("GoldIcTint", "#29F2C97D"); S("NoticeTint", "#1F7FC4FF");
                 Controls("#1A2240", "#3E4C7A", "#172038", "#1E2A4A", "#08FFFFFF", "#F2C97D", "#E9B45A", "#1A8EE3D6", "#738EE3D6", "#B30A0E1E", "#263056",
                     "#FFFFFF", "#47D9DEF0", "#3E4C7A", "#08FFFFFF", "#14F2C97D", "#80F2C97D", "#29F2C97D", "#0DF2C97D", "#47E9B45A", "#14F2C97D", "#F2C97D", "#4DF2C97D");
                 S("Bg", "#05070F"); S("Card", "#0E1328"); S("Card2", "#161C3A"); S("Line", "#242D52"); S("LineStrong", "#3A4878");
@@ -105,7 +105,7 @@ public static class Skins
                 break;
             case "daylight":
                 Quest("#1F8FCB", "#5C46C9", "#C2463A", "#5B8A1E", "#261702", "#261702", "#24000000", "#4A000000", 0x24);
-                S("MintTint", "#241F8A6B"); S("GoldIcTint", "#29D9952F");
+                S("MintTint", "#241F8A6B"); S("GoldIcTint", "#29D9952F"); S("NoticeTint", "#125C46C9");
                 Controls("#E6ECF4", "#9FB0C6", "#E8EEF6", "#DCE6F3", "#E9EEF5", "#F6CB72", "#9A6B10", "#141F8A6B", "#661F8A6B", "#F1F4F9", "#D9E0EA",
                     "#14202F", "#8FA3BC", "#B9C5D6", "#0A14202F", "#1AD9952F", "#99B07A1A", "#FFF3DA", "#FFFAF0", "#4DB07A1A", "#FFF2DC", "#8A4F00", "#59B86A14");
                 S("Bg", "#E7EAF2"); S("Card", "#FFFFFF"); S("Card2", "#EEF1F7"); S("Line", "#D4DBE6"); S("LineStrong", "#B9C5D6");
@@ -119,7 +119,7 @@ public static class Skins
                 break;
             default:   // night, the Quest palette since 2026-11-07: deep plum, Kinah gold, mint, sky, lilac, coral
                 Quest("#6EC1FF", "#B692FF", "#FF7D6E", "#C6F26B", "#2B1B00", "#2B1B00", "#21FFFFFF", "#45FFFFFF", 0x29);
-                S("MintTint", "#295CE1B5"); S("GoldIcTint", "#29FFC857");
+                S("MintTint", "#295CE1B5"); S("GoldIcTint", "#29FFC857"); S("NoticeTint", "#29B692FF");
                 Controls("#2C2552", "#4A4180", "#2C2552", "#352C64", "#221C3D", "#FFC857", "#FFC857", "#1A5CE1B5", "#735CE1B5", "#2C2552", "#362E5E",
                     "#FFFFFF", "#4A4180", "#4A4180", "#09FFFFFF", "#14FFC857", "#80FFC857", "#29FFC857", "#0DFFC857", "#47FFC857", "#14FFC857", "#FFC857", "#4DFFC857");
                 S("Bg", "#110D21"); S("Card", "#251E45"); S("Card2", "#312960"); S("Line", "#3B3366"); S("LineStrong", "#4A4180");

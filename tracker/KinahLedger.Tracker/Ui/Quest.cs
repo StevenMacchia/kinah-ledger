@@ -250,7 +250,7 @@ public partial class MainWindow
     }
 
     /// <summary>The ring meter: the share round a dark track, clockwise from the top, with a big figure and a small word inside.</summary>
-    static Grid QRing(double size, double stroke, double share, string tone, string big, string small, string track = "Bg")
+    static Grid QRing(double size, double stroke, double share, string tone, string big, string small, string track = "Line")
     {
         var g = new Grid { Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var bk = new Ellipse { Width = size - stroke, Height = size - stroke, StrokeThickness = stroke, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
