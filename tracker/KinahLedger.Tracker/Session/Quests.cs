@@ -162,13 +162,13 @@ public static class Quests
         _ => StackChain,
     };
 
-    /// <summary>The next step of a chain above <paramref name="have"/>; past the chain's end, round thousands (counts) or the last step's size again (Kinah).</summary>
+    /// <summary>The next step of a chain above <paramref name="have"/>; past the chain's end, the last step's size again for a chain that ends under 1,000 (runs go 50, 100, 150), round thousands for the other counts, the last step's size again for Kinah.</summary>
     public static long NextStep(long[] chain, long have)
     {
         foreach (var m in chain) if (m > have) return m;
         if (chain.Length == 0) return 0;
         long last = chain[^1];
-        long step = last < 100 ? 25 : last < 100_000 ? (have < 10_000 ? 1_000 : 10_000) : last >= 100_000_000 ? 100_000_000 : last >= 10_000_000 ? 10_000_000 : 1_000_000;
+        long step = last < 1_000 ? last : last < 100_000 ? (have < 10_000 ? 1_000 : 10_000) : last >= 100_000_000 ? 100_000_000 : last >= 10_000_000 ? 10_000_000 : 1_000_000;
         return (have / step + 1) * step;
     }
 
@@ -408,14 +408,15 @@ public static class Quests
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
-    /// <summary>The log as quests.json holds it; a fresh one with no file or a broken one.</summary>
+    /// <summary>The log as quests.json holds it; a fresh one with no file, or with a broken one (which is first copied aside as quests.json.bad, so nothing is lost silently).</summary>
     public static QuestLog Load(string? path = null)
     {
         try
         {
             var p = path ?? PathFor();
             if (!File.Exists(p)) return new QuestLog();
-            var log = JsonSerializer.Deserialize<QuestLog>(File.ReadAllText(p), Json) ?? new QuestLog();
+            var log = JsonSerializer.Deserialize<QuestLog>(File.ReadAllText(p), Json);
+            if (log == null) { KeepBad(p); return new QuestLog(); }
             log.Done ??= new();
             log.Done.RemoveAll(d => d == null || string.IsNullOrEmpty(d.Key) || string.IsNullOrEmpty(d.Scope));
             foreach (var d in log.Done) { d.Kind ??= ""; d.Horizon ??= ""; d.Subject ??= ""; }
@@ -424,10 +425,15 @@ public static class Quests
         catch (Exception ex)
         {
             CrashLog.Write("quests load", ex);
-            // the file is kept as quests.bad.json for a look, so the next save does not write an empty log over the history
-            try { var p = path ?? PathFor(); if (File.Exists(p)) File.Move(p, Path.ChangeExtension(p, ".bad.json"), overwrite: true); } catch (Exception) { }
+            KeepBad(path ?? PathFor());
             return new QuestLog();
         }
+    }
+
+    /// <summary>Copies a file that cannot be read as a log to quests.json.bad (over an older one); if even that fails, nothing more is done.</summary>
+    static void KeepBad(string p)
+    {
+        try { File.Copy(p, p + ".bad", overwrite: true); } catch (Exception) { }
     }
 
     /// <summary>Writes the log (to a temporary file first, so a crash mid-write never leaves half a file).</summary>
