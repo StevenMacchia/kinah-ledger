@@ -72,51 +72,49 @@ public partial class MainWindow
     /// </summary>
     void FillGoals()
     {
-        // Next up (Quest, 2026-11-07; quests, 2026-11-08): today's goals first, then the engine's quests (Ui/MainWindow.Quests.cs):
-        // three rows at rest (Kinah this session, then two crafting materials), the rest and Set a goal behind the head's chevron,
-        // a quest's tree under it on a click, the Done fold at the foot; the slim row only with nothing to count down to
+        // Next up (Quest, 2026-11-07; quests, 2026-11-08): three bars and no more (Steven: "maximum of 3 total bars"): the
+        // player's goals and pins first, then the engine's quests (Kinah this session, the materials last farmed); a quest's
+        // tree under it on a click; the head opens the Quests page, where the rest, Daily, All time, Your goals and Done
+        // live. With quests off, the card is the goals alone, as before them.
         bool farm = _part == "Farming" && !_welcome;
         var today = TodayGoalCounts();
         var prog = _goals.Select(g => ProgressOf(g, today)).ToList();
-        var quests = RefreshQuests();
+        var quests = QuestsOn ? RefreshQuests() : new();
         bool show = farm && (_goals.Count > 0 || quests.Count > 0);
         GoalsCard.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
-        GoalsSlim.Visibility = farm && !show ? Visibility.Visible : Visibility.Collapsed;
+        GoalsSlim.Visibility = farm && !show && !QuestsOn ? Visibility.Visible : Visibility.Collapsed;
         GoalsBox.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        if (!show) { _drawnSig.Remove("goals"); return; }
-        bool open = QOpen("goals");
+        if (farm && !show && QuestsOn) GoalsCard.Visibility = Visibility.Collapsed;   // quests on, nothing yet: no empty card
+        if (!show) { GoalsHost.Children.Clear(); _drawnSig.Remove("goals"); return; }
         var score = ScoreNow();
-        var doneNow = DoneNow();
         var sig = string.Join(";", _goals.Select((g, i) => $"{g.Kind}:{g.Target}:{g.Name}:{g.Which}:{prog[i].Have}:{Math.Round((prog[i].SecondsToGo ?? 0) / 60)}"))
             + "|" + string.Join(";", quests.Select(q => $"{q.Key}:{q.Have}:{Math.Round((q.SecondsToGo ?? 0) / 60)}"))
-            + $"|{open}|{_qTree}|{QOpen("quests-done")}|{doneNow.Count}:{doneNow.Count(IsFresh)}|{score.Session}|{Skins.Current}";
+            + $"|{_qTree}|{score.Session}|{QuestsOn}|{Skins.Current}";
         if (!Changed("goals", sig)) return;
         int done = prog.Count(p => p.Done);
         var rows = new List<(FrameworkElement El, bool Primary)>();
-        for (int i = 0; i < _goals.Count; i++) rows.Add((GoalRow(_goals[i], prog[i], rows.Count > 0), true));
-        rows.AddRange(QuestRows(null, rows.Count > 0));
-        if (_goals.Count < Goals.Max) rows.Add((AddGoalRow(rows.Count > 0), true));
-        // the first three rows (and the tree or the fresh completion under one) on the page, the rest behind the chevron
-        GoalsHost.Children.Clear(); GoalsMore.Children.Clear(); GoalsDone.Children.Clear();
-        int primaries = 0, rest = 0;
-        foreach (var (el, primary) in rows)
+        for (int i = 0; i < _goals.Count && i < Quests.NextUpRows; i++) rows.Add((GoalRow(_goals[i], prog[i], rows.Count > 0), true));
+        int primaries = rows.Count;
+        foreach (var (el, primary) in QuestRows(null, rows.Count > 0))
         {
+            if (primary && primaries >= Quests.NextUpRows) break;
             if (primary) primaries++;
-            bool atRest = primaries <= QuestsAtRest;
-            if (primary && !atRest) rest++;
-            (atRest ? GoalsHost : GoalsMore).Children.Add(el);
+            rows.Add((el, primary));
         }
-        foreach (var r in DoneFoldRows()) GoalsDone.Children.Add(r);
-        GoalsMore.Visibility = open && rest > 0 ? Visibility.Visible : Visibility.Collapsed;
-        GoalsChev.Visibility = rest > 0 ? Visibility.Visible : Visibility.Collapsed;
-        QSetChev(GoalsChev, open && rest > 0);
+        if (!QuestsOn && _goals.Count < Goals.Max) rows.Add((AddGoalRow(rows.Count > 0), true));
+        GoalsHost.Children.Clear();
+        foreach (var (el, _) in rows) GoalsHost.Children.Add(el);
+        GoalsChev.Visibility = QuestsOn ? Visibility.Visible : Visibility.Collapsed;
+        QSetChev(GoalsChev, false);
         var parts = new List<string>();
         if (_goals.Count > 0) parts.Add($"today · {done} of {_goals.Count} done");
-        if (score.Session > 0) parts.Add(Quests.Pts(score.Session) + " this session"); else if (_goals.Count == 0) parts.Add("at this pace");
-        if (rest > 0 && !open) parts.Add($"{rest} more");
+        if (QuestsOn) parts.Add(score.Session > 0 ? Quests.Pts(score.Session) + " this session" : "at this pace");
+        int more = Math.Max(0, quests.Count + _goals.Count - primaries);
+        if (QuestsOn && more > 0) parts.Add($"{more} more");
         GoalsNote.Text = string.Join(" · ", parts);
-        CardTip(GoalsNote, ScoreCard);   // Your score: this session, today, this week, all time
-        GoalsHead.ToolTip = rest > 0 ? (open ? "Fold the rest" : $"{rest} more") : null;
+        if (QuestsOn) CardTip(GoalsNote, ScoreCard); else GoalsNote.ToolTip = null;
+        GoalsHead.Cursor = QuestsOn ? Cursors.Hand : Cursors.Arrow;
+        GoalsHead.ToolTip = QuestsOn ? "Every quest, pins, today's and all time, what you have done: the Quests page." : null;
     }
 
     /// <summary>The count under a slot: "137K / 300K", "9 / 20", "8 / 8 ✓".</summary>
@@ -629,7 +627,7 @@ public partial class MainWindow
         // Quest (2026-11-07): Next up sits after the bag and before Just dropped; its rows at rest and the rest behind the chevron count alike
         int at = LeftCol.Children.IndexOf(GoalsCard);
         bool placed = at > 0 && LeftCol.Children.IndexOf(SummaryCard) == at - 1 && LeftCol.Children.IndexOf(FeedCard) == at + 1;
-        var slots = GoalsHost.Children.OfType<FrameworkElement>().Concat(GoalsMore.Children.OfType<FrameworkElement>()).ToList();
+        var slots = GoalsHost.Children.OfType<FrameworkElement>().ToList();
         var note = string.Concat(GoalsNote.Inlines.OfType<Run>().Select(r => r.Text));
         bool card = GoalsCard.Visibility == Visibility.Visible;
         return (card && GoalsBox.Visibility == Visibility.Visible, slots.Count(s => s.Tag as string == "goal"), slots.Any(s => s.Tag as string == "add"), note, placed,

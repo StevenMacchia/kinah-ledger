@@ -24,8 +24,6 @@ public partial class MainWindow
     QuestInputs? _questIn;
     /// <summary>The live quests at the last look, in the surface's order.</summary>
     List<Quest> _questsNow = new();
-    /// <summary>A completed quest's key|scope and when it was done: it keeps its check and points on the list for <see cref="FreshFor"/>.</summary>
-    readonly Dictionary<string, DateTime> _questFresh = new();
     /// <summary>The quest whose tree is open (its key), or null.</summary>
     string? _qTree;
     /// <summary>A render asked for a tree open (KL_QUEST_OPEN=tree): the first material's, else the first row's.</summary>
@@ -35,16 +33,17 @@ public partial class MainWindow
     /// <summary>The session's start while no count is on screen yet (the chat not found, a render before its sample): the window's own start, so the scope holds still.</summary>
     readonly DateTime _questWindowStart = DateTime.UtcNow;
     int _questTicks;
-    static readonly TimeSpan FreshFor = TimeSpan.FromMinutes(3);
-    const int QuestsAtRest = 3;
-    /// <summary>How many completed quests the open Done fold lists before "and N earlier".</summary>
-    const int DoneShown = 10;
 
     /// <summary>The log at the start; a layout render or a self-test (no watching) starts empty and never saves.</summary>
     void InitQuests(bool watch) { if (watch) { _questLog = Quests.Load(); _questLoaded = true; } }
     bool _questLoaded;
 
-    void SaveQuests() { if (!_demo && _questLoaded) Quests.Save(_questLog); }
+    void SaveQuests()
+    {
+        if (!_demo && _questLoaded) Quests.Save(_questLog);
+        _questTallySaved = DateTime.UtcNow; _questTallyDirty = false;
+        RefreshQuestPending();   // the next batch carries what is not sent yet (Ui/MainWindow.QuestsPage.cs)
+    }
     /// <summary>When the inputs were last read: a look is reused for a second, so the pages' ticks do not rebuild the counts twice a second each.</summary>
     DateTime _questInAt = DateTime.MinValue;
     /// <summary>The materials that have had a live quest: a material that joins the list credits what today already passed without a word (it is not "just" done).</summary>
@@ -115,7 +114,9 @@ public partial class MainWindow
         }
         var last = FeedFor(FeedTab.Farming).Where(l => l.Kind == "item").Select(l => l.Name).Distinct().ToList();
         var started = (_demo ? _demoEngine?.Started : Shown()?.Started) ?? _questWindowStart;
-        return new QuestInputs(session, today, week, mats, last, best, started, now);
+        // the all-time tally: today's counts folded in (a new day moves yesterday's into the totals); saved with the next completion or within five minutes
+        if (Quests.FoldToday(_questLog, today, DayStore.Today)) _questTallyDirty = true;
+        return new QuestInputs(session, today, week, mats, last, best, started, now, Quests.AllTimeCounts(_questLog));
     }
 
     static Dictionary<string, int> RunsByPlace(IEnumerable<InstanceRun> runs) =>
@@ -124,10 +125,12 @@ public partial class MainWindow
     /// <summary>One look: the inputs and the live list, kept for the tick and the other pages.</summary>
     List<Quest> RefreshQuests()
     {
+        if (!QuestsOn) { _questsNow = new(); return _questsNow; }
         if (_questIn != null && (DateTime.UtcNow - _questInAt).TotalMilliseconds < 900) return _questsNow;
         try
         {
-            _questIn = QuestInputsNow(); _questInAt = DateTime.UtcNow; _questsNow = Quests.Live(_questIn);
+            _questIn = QuestInputsNow(); _questInAt = DateTime.UtcNow; _questsNow = Quests.Live(_questIn, _questLog.Pins);
+            if (_questTallyDirty && (DateTime.UtcNow - _questTallySaved).TotalMinutes >= 5) SaveQuests();
             // the first look (here, so a render and the first draw have the score and the Done fold without waiting for a tick):
             // what was passed before it is credited without a word
             if (_questLookedSession != _questIn.SessionStartUtc && _questsNow.Count > 0) QuestAdvance(redraw: false);
@@ -143,7 +146,7 @@ public partial class MainWindow
     /// <summary>From the window's tick, about every two seconds: quests reached are credited and said once.</summary>
     void QuestTick()
     {
-        if (_welcome || ++_questTicks % 2 != 0) return;
+        if (_welcome || !QuestsOn || ++_questTicks % 2 != 0) return;
         try { QuestAdvance(); }
         catch (Exception ex) { CrashLog.Write("quests", ex); }
     }
@@ -171,7 +174,6 @@ public partial class MainWindow
         done = done.Where(d => !(d.Kind == QuestKind.Material && d.Horizon == Horizon.Today && newMats.Contains(d.Subject, StringComparer.OrdinalIgnoreCase))).ToList();
         if (!first && done.Count > 0)
         {
-            foreach (var d in done) _questFresh[d.Key + "|" + d.Scope] = DateTime.UtcNow;
             var line = done.Count == 1 ? $"Quest done · {Quests.Title(done[0], Fk)} · {Quests.Pts(done[0].Points, plus: true)}"
                 : $"Quests done · {string.Join(" · ", done.Select(d => Quests.Title(d, Fk)))} · {Quests.Pts(done.Sum(d => d.Points), plus: true)}";
             said.Add(line);
@@ -187,10 +189,6 @@ public partial class MainWindow
 
     /// <summary>The completed quests of this session, the fresh ones first.</summary>
     List<QuestDone> DoneNow() => Quests.DoneThisSession(_questLog, _questIn?.SessionStartUtc ?? DateTime.UtcNow);
-
-    bool IsFresh(QuestDone d) => _questFresh.TryGetValue(d.Key + "|" + d.Scope, out var at) && DateTime.UtcNow - at < FreshFor;
-
-    void DropStaleFresh() { foreach (var k in _questFresh.Where(kv => DateTime.UtcNow - kv.Value >= FreshFor).Select(kv => kv.Key).ToList()) _questFresh.Remove(k); }
 
     /// <summary>"143 pts this session · 310 today · 1,220 this week"; a sentence before the first point.</summary>
     public string QuestScoreLine()
@@ -233,10 +231,12 @@ public partial class MainWindow
     /// A quest as a Next up row: its icon, the target, how far with the pace, the points in lilac and the bar; the card on
     /// hover; a click opens its tree under it. Depth 1 rows are the tree's: indented, a chevron before the icon.
     /// </summary>
-    FrameworkElement QuestRow(Quest q, bool rule, int depth = 0, string? note = null, Action? toggled = null)
+    FrameworkElement QuestRow(Quest q, bool rule, int depth = 0, string? note = null, Action? toggled = null, bool pinnable = false)
     {
         var tone = QuestTone(q);
-        var row = QRow(QuestIcon(q), Quests.Title(q, Fk), note ?? QuestSub(q), Quests.Pts(q.Points), "Lilac", q.Share, tone, rule, inline: true);
+        // an all-time chain's bar is a sliver for most of its life: no bar under 5%, the figures say it (2026-11-08 review)
+        double? share = q.Horizon == Horizon.AllTime && q.Share < 0.05 ? null : q.Share;
+        var row = QRow(QuestIcon(q), Quests.Title(q, Fk), note ?? QuestSub(q), Quests.Pts(q.Points), "Lilac", share, tone, rule, inline: true);
         row.Tag = depth == 0 ? "quest" : "tree";
         AutomationProperties.SetName(row, $"Quest: {Quests.Title(q, Fk)}, {Quests.Pts(q.Points)}");
         if (depth > 0)
@@ -252,7 +252,16 @@ public partial class MainWindow
             var g = (Grid)row.Child;
             var chev = QIcon("Chev", 12, "Faint", 2); chev.Margin = new Thickness(6, 0, 0, 0); chev.RenderTransformOrigin = new Point(0.5, 0.5); QSetChev(chev, _qTree == q.Key);
             var right = g.Children.OfType<TextBlock>().FirstOrDefault(t => Grid.GetColumn(t) == 2);
-            if (right != null) { g.Children.Remove(right); var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }; sp.Children.Add(right); sp.Children.Add(chev); Grid.SetColumn(sp, 2); g.Children.Add(sp); }
+            if (right != null)
+            {
+                g.Children.Remove(right);
+                var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                sp.Children.Add(right);
+                if (pinnable && q.Kind is not (QuestKind.Kinah or QuestKind.BestRun) && q.Horizon is Horizon.Session or Horizon.Today) sp.Children.Add(PinButton(q));
+                sp.Children.Add(chev);
+                Grid.SetColumn(sp, 2); g.Children.Add(sp);
+            }
+            if (IsPinned(q) && depth == 0) { var pinMark = QIcon("Pin", 11, "Gold", 2); pinMark.Margin = new Thickness(0, 0, 0, 0); pinMark.HorizontalAlignment = HorizontalAlignment.Left; pinMark.VerticalAlignment = VerticalAlignment.Top; g.Children.Add(pinMark); }
             row.MouseLeftButtonUp += (_, _) => { _qTree = _qTree == q.Key ? null : q.Key; if (toggled != null) toggled(); else RedrawGoals(); };
         }
         CardTip(row, () => QuestCard(q));
@@ -271,17 +280,6 @@ public partial class MainWindow
         return rows;
     }
 
-    /// <summary>A quest just done: the mint check, its title, "+51 pts" in mint, the bar full.</summary>
-    FrameworkElement DoneRow(QuestDone d, bool rule, bool fresh)
-    {
-        var sub = fresh ? $"done · {Horizon.Word(d.Horizon)}" : $"{d.DoneAtUtc.ToLocalTime():HH:mm} · {Horizon.Word(d.Horizon)}" + (d.Points < d.Worth ? $" · worth {Quests.Pts(d.Worth)}, capped" : "");
-        var row = QRow(QIconBox("Check", "Mint", 28, round: true), Quests.Title(d, Fk), sub, Quests.Pts(d.Points, plus: true), "Mint", fresh ? 1 : null, "Mint", rule, inline: true);
-        row.Tag = fresh ? "fresh" : "done"; row.Cursor = Cursors.Arrow;
-        row.ToolTip = $"{Quests.Title(d, Fk)} reached at {d.DoneAtUtc.ToLocalTime():HH:mm}, {Quests.Pts(d.Points, plus: true)}" + (d.Points < d.Worth ? $" of {Quests.Pts(d.Worth)}: the hour's cap ({Quests.CapPerHour} an hour of play)." : ".");
-        ToolTipService.SetInitialShowDelay(row, 400);
-        return row;
-    }
-
     /// <summary>
     /// Next up's quest rows for a page: the live quests <paramref name="pick"/> keeps, each with its tree when open, the fresh
     /// completions beside the step that followed them. <paramref name="primary"/> is true for a row that counts towards the
@@ -289,44 +287,11 @@ public partial class MainWindow
     /// </summary>
     List<(FrameworkElement El, bool Primary)> QuestRows(Func<Quest, bool>? pick, bool rule, Action? toggled = null)
     {
-        DropStaleFresh();
         var rows = new List<(FrameworkElement, bool)>();
-        var fresh = DoneNow().Where(IsFresh).ToList();
         foreach (var q in _questsNow.Where(q => pick == null || pick(q)))
         {
             rows.Add((QuestRow(q, rule || rows.Count > 0, toggled: toggled), true));
             if (_qTree == q.Key) foreach (var r in QuestTreeRows(q)) rows.Add((r, false));
-            foreach (var d in fresh.Where(d => d.Kind == q.Kind && d.Horizon == q.Horizon && d.Subject == q.Subject).ToList())
-            {
-                rows.Add((DoneRow(d, rule: false, fresh: true), false)); fresh.Remove(d);
-            }
-        }
-        foreach (var d in fresh.Where(d => pick == null || pick(Quests.AsQuest(d)))) rows.Add((DoneRow(d, rule: true, fresh: true), true));
-        return rows;
-    }
-
-    /// <summary>The Done fold: one row at the card's foot ("Done · 12 quests · +143 pts this session"), its rows under it on a click.</summary>
-    List<FrameworkElement> DoneFoldRows()
-    {
-        var rows = new List<FrameworkElement>();
-        var done = DoneNow();
-        if (done.Count == 0) return rows;
-        bool open = QOpen("quests-done");
-        var s = ScoreNow();
-        var head = QRow(QIconBox("Check", "Dim", 28, round: true), $"Done · {done.Count} quest{(done.Count == 1 ? "" : "s")}", $"{Quests.Pts(s.Today)} today · {Quests.Pts(s.Week)} this week", "", "Mint", rule: true, inline: true);
-        head.Tag = "donefold";
-        var g = (Grid)head.Child;
-        var chev = QIcon("Chev", 12, "Faint", 2); chev.Margin = new Thickness(6, 0, 0, 0); chev.RenderTransformOrigin = new Point(0.5, 0.5); QSetChev(chev, open); chev.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(chev, 2); g.Children.Add(chev);
-        AutomationProperties.SetName(head, $"Done: {done.Count} quests, {Quests.Pts(s.Session)} this session");
-        CardTip(head, ScoreCard);
-        head.MouseLeftButtonUp += (_, _) => { _qOpen["quests-done"] = !open; RedrawGoals(); };
-        rows.Add(head);
-        // open: the newest DoneShown, then a line for the rest (a session's first look can credit a couple of dozen at once)
-        if (open)
-        {
-            foreach (var d in done.Take(DoneShown)) rows.Add(DoneRow(d, rule: false, fresh: false));
-            if (done.Count > DoneShown) { var more = QMore($"and {done.Count - DoneShown} earlier · {Quests.Pts(done.Skip(DoneShown).Sum(d => (long)d.Points))}"); more.Margin = new Thickness(0, 6, 0, 4); rows.Add(more); }
         }
         return rows;
     }
@@ -395,24 +360,16 @@ public partial class MainWindow
 
     /* ---------------- self-tests and layout renders ---------------- */
 
-    /// <summary>
-    /// For options-test: Next up's quest rows (on the page and behind the chevron), how many sit at rest, their kinds in
-    /// order, the tree rows open, whether the Done fold is there and how many done rows show, and the head's note.
-    /// </summary>
-    internal (int Rows, int AtRest, string Kinds, int Tree, bool DoneFold, int DoneRows, string Note) QuestsForTest()
+    /// <summary>For options-test: Next up's quest rows, how many rows sit on the card, the live kinds in order, the tree rows open, and the head's note.</summary>
+    internal (int Rows, int AtRest, string Kinds, int Tree, string Note) QuestsForTest()
     {
         var host = GoalsHost.Children.OfType<FrameworkElement>().ToList();
-        var all = host.Concat(GoalsMore.Children.OfType<FrameworkElement>()).Concat(GoalsDone.Children.OfType<FrameworkElement>()).ToList();
         string Tag(FrameworkElement e) => e.Tag as string ?? "";
-        return (all.Count(e => Tag(e) == "quest"), host.Count(e => Tag(e) is "quest" or "goal"), string.Join(",", _questsNow.Select(q => q.Kind)),
-            all.Count(e => Tag(e) == "tree"), all.Any(e => Tag(e) == "donefold"), GoalsDone.Children.OfType<FrameworkElement>().Count(e => Tag(e) == "done"), GoalsNote.Text);
+        return (host.Count(e => Tag(e) == "quest"), host.Count(e => Tag(e) is "quest" or "goal"), string.Join(",", _questsNow.Select(q => q.Kind)), host.Count(e => Tag(e) == "tree"), GoalsNote.Text);
     }
 
     /// <summary>For options-test: a click on the n-th quest row (its tree opens, or closes).</summary>
     internal void ToggleQuestTreeForTest(int row) { if (row < _questsNow.Count) { var k = _questsNow[row].Key; _qTree = _qTree == k ? null : k; RedrawGoals(); } }
-
-    /// <summary>For options-test: the Done fold's click.</summary>
-    internal void ToggleDoneFoldForTest() { _qOpen["quests-done"] = !QOpen("quests-done"); RedrawGoals(); }
 
     /// <summary>For options-test: one look of the engine, as the tick does; the lines said (none on the first look).</summary>
     internal List<string> QuestTickForTest() => QuestAdvance();

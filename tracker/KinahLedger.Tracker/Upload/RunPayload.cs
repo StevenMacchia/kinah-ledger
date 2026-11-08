@@ -68,8 +68,14 @@ public sealed record RunPayload(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? focus = null,
     // since 0.8.24: true on a send that carries only finished expedition, Transcendence and event runs, sent the moment
     // each ends; it holds no farming (no minutes, zones, kills or Kinah), so the site files only the runs
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? runs_only = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? runs_only = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<QuestDonePayload>? quests = null)
 {
+    /// <summary>The completed quests the next batch should carry (the window keeps them, Ui/MainWindow.QuestsPage.cs); null for none or with quests off.</summary>
+    public static Func<List<QuestDonePayload>?>? QuestsPending { get; set; }
+    /// <summary>A batch the site took, with the quests it carried: the window marks them sent.</summary>
+    public static Action<List<QuestDonePayload>>? QuestsCarried { get; set; }
+
     /// <summary>A send of finished runs alone, with no farming in it (RunSync).</summary>
     public static RunPayload RunsOnly(string region, string server, ItemDictionary? dict, List<InstanceRunPayload> runs) =>
         new(AppVersion, region, ServerKeys.Build(region, server), "Runs", runs.Count > 0 ? runs[0].kind : "Expedition", null, Gear,
@@ -97,6 +103,7 @@ public sealed record RunPayload(
         // a drop the player flagged "Something looks wrong" never leaves this PC, in any list
         bool Off(long id) => KinahLedger.Session.ReportedDrops.Has(s.ItemName(id));
         int Flagged(SessionEngine.ZoneStats z) => z.Items.Where(x => Off(x.Key)).Sum(x => x.Value) + z.ItemsBound.Where(x => Off(x.Key)).Sum(x => x.Value);
+        var quests = QuestsPending?.Invoke();
         return new(
             AppVersion,
             region,
@@ -123,7 +130,8 @@ public sealed record RunPayload(
             OddsPayload.From(s),
             MobRun.From(s, Key, Off),
             InstanceRunPayload.From(instances, Key, Off),
-            s.Focus);
+            s.Focus,
+            quests: quests is { Count: > 0 } ? quests : null);
     }
 
     /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>
@@ -208,6 +216,9 @@ public sealed record MobRun(string name, string zone, int kills, long kinah, Dic
 /// ver, since 2026-10-25 checked, matched and not_checked, and note when it applies), left out when nothing in the run
 /// was judged.
 /// </summary>
+/// <summary>A quest completed, as the site reads it (the contract in the design note quest-score-design.md, v1): the tracker's key and once-per-scope key, the points after the cap and the worth before it, when it was reached.</summary>
+public sealed record QuestDonePayload(string key, string kind, string horizon, string subject, long target, int tier, int points, int worth, long have, string done_at, string scope);
+
 public sealed record InstanceRunPayload(string zone, string kind, int seconds, long kinah, int kills, Dictionary<string, int> items,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? @event = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? family = null,

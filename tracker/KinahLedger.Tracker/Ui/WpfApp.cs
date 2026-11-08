@@ -608,7 +608,7 @@ public static class WpfApp
             // no goal: the slim "Set a goal for today" row in the box's place (2026-10-30), between the actions and LOOT
             // Next up in the Quest look (2026-11-07): with no goal the sample's milestones fill the box, so the slim row waits for an empty count
             var none = w.GoalsForTest();
-            Check(none.Shown && none.Slots == 0 && !none.Slim && none.Placed && none.Add, "Next up: no goal, the pace's milestones and Set a goal, the slim row away");
+            Check(none.Shown && none.Slots == 0 && !none.Slim && none.Placed && !none.Add, "Next up: no goal, the quests fill the card, Set a goal lives on the Quests page, the slim row away");
             Check(w.GoalsSlim.Focusable && System.Windows.Automation.AutomationProperties.GetName(w.GoalsSlim) == "Set a goal for today",
                 "the slim GOALS row: keyboard focusable, named Set a goal for today");
             w.ShowGoalsSample(3); DoEvents();
@@ -617,7 +617,7 @@ public static class WpfApp
                 $"Next up: three goal rows under the chips, no Set a goal row, \"{three.Note}\"");
             w.ShowGoalsSample(2); DoEvents();
             var two = w.GoalsForTest();
-            Check(two.Shown && two.Slots == 2 && two.Add && two.Note.StartsWith("today · 0 of 2 done"), $"Next up: two goal rows and Set a goal, \"{two.Note}\"");
+            Check(two.Shown && two.Slots == 2 && !two.Add && two.Note.StartsWith("today · 0 of 2 done"), $"Next up: two goal rows, a quest row fills the third (Set a goal on the Quests page), \"{two.Note}\"");
             Check(w.LootForTest().Slots >= 8, "the bag still fills under Next up");
             // reached between two looks: said once on the status line (and the panel), never again that day
             w.SetGoalsForTest(new[] { new Session.Goal { Kind = Session.Goal.KindRuns, Which = Session.Goal.Expeditions, Target = 3 } });
@@ -648,30 +648,43 @@ public static class WpfApp
             Check(w.GoalsForTest() is { Shown: true, Slim: false, Slots: 0 }, "the last goal removed: Next up keeps the pace's milestones, no goal rows (Quest)");
         }
 
-        // Quests (phase 1, 2026-11-08, Ui/MainWindow.Quests.cs): three rows at rest (Kinah this session, then two crafting materials),
-        // the rest behind the chevron; a click opens a quest's tree; the first look credits the steps passed without a word; the
-        // Done fold at the foot; the score on the head and in Options > Sharing
+        // Quests (phase 1, 2026-11-08; the Quests page and three bars later that day, Ui/MainWindow.QuestsPage.cs): Next up holds
+        // three bars at most (Kinah this session, then two crafting materials or pins); a click opens a quest's tree; the first look
+        // credits the steps passed without a word; the rest, Daily, All time, Your goals and Done are the Quests page; a pin takes a
+        // Next up row; Options > General > Quests off takes it all away; the score on the head and in Options > Sharing
         {
             var q = w.QuestsForTest();
-            Check(q.Rows >= 3 && q.AtRest == 3 && q.Kinds.StartsWith("kinah,material,material") && q.Tree == 0, $"Next up: {q.Rows} quest rows, {q.AtRest} at rest, kinds {q.Kinds}");
-            Check(w.QuestsNowForTest.Count >= 3 && w.QuestsNowForTest.Take(3).All(x => x.Horizon == Session.Horizon.Session), "the three at rest are this session's");
+            Check(q.Rows >= 1 && q.AtRest <= 3 && q.Kinds.StartsWith("kinah,material,material") && q.Tree == 0, $"Next up: {q.Rows} quest rows, {q.AtRest} on the card (three at most), kinds {q.Kinds}");
+            Check(w.QuestsNowForTest.Count >= 3 && w.QuestsNowForTest.Take(3).All(x => x.Horizon == Session.Horizon.Session), "the three on the card are this session's");
             w.ToggleQuestTreeForTest(1); DoEvents();
             var t = w.QuestsForTest();
-            Check(t.Tree >= 3 && t.AtRest == 3, $"a click on the second row opens its tree: {t.Tree} tree rows, still {t.AtRest} at rest");
+            Check(t.Tree >= 3 && t.AtRest <= 3, $"a click on the second row opens its tree: {t.Tree} tree rows, still {t.AtRest} on the card");
             w.ToggleQuestTreeForTest(1); DoEvents();
             Check(w.QuestsForTest().Tree == 0, "a second click folds the tree");
             w.QuestTickForTest(); DoEvents();
             var again = w.QuestTickForTest(); DoEvents();
             var d = w.QuestsForTest();
-            Check(again.Count == 0 && d.DoneFold && d.DoneRows == 0 && d.Note.Contains("pts this session"), $"the first look credited the steps passed before it; a look with nothing new says nothing ({again.Count} said); the Done fold {(d.DoneFold ? "there" : "missing")}, {d.DoneRows} rows; the head says the score: \"{d.Note}\"; done: {w.QuestsDoneForTest()}");
-            w.ToggleDoneFoldForTest(); DoEvents();
-            Check(w.QuestsForTest().DoneRows > 0, $"the Done fold opens: {w.QuestsForTest().DoneRows} done rows");
-            w.ToggleDoneFoldForTest(); DoEvents();
+            Check(again.Count == 0 && d.Note.Contains("pts this session") && d.AtRest <= 3, $"the first look credited the steps passed before it quietly; a look with nothing new says nothing ({again.Count} said); the head says the score: \"{d.Note}\"; done: {w.QuestsDoneForTest()}");
+            w.ShowPartForTest("Quests"); DoEvents();
+            var pg = w.QuestsPageForTest();
+            Check(!pg.Off && pg.Active >= 3 && pg.Daily >= 1 && pg.AllTime >= 1 && pg.Done > 0, $"the Quests page: {pg.Active} active, {pg.Daily} daily, {pg.AllTime} all time, {pg.Done} done");
+            var pinChain = w.QuestsNowForTest[3].Chain;
+            w.TogglePinForTest(3); DoEvents();
+            var pinned = w.QuestsPageForTest();
+            w.ShowPartForTest("Farming"); DoEvents();
+            Check(pinned.Pins == 1 && w.QuestsNowForTest[1].Chain == pinChain && w.QuestsForTest().AtRest <= 3, $"a pin takes a Next up row: {pinChain} is row 2 ({w.QuestsForTest().AtRest} on the card)");
+            w.TogglePinForTest(1); DoEvents();
+            Check(w.QuestsPageForTest().Pins == 0, "...and unpins");
             Check(w.QuestScoreLine().Contains("this session") && w.QuestScoreLine().Contains("this week"), "the score line: this session, today, this week");
             var so = Open(); so.Go(OptionsWindow.Page.Sharing); DoEvents();
             Check(so.ScoreText.Text == w.QuestScoreLine() && so.ScoreText.Text.Contains("pts"), $"Options > Sharing: Your score under the profile link card: \"{so.ScoreText.Text}\"");
             so.Close();
             Check(w.QuestCard(w.QuestsNowForTest[1]) is { } qc && qc.Child is System.Windows.Controls.StackPanel qb && qb.Children.Count >= 8, "a quest's hover card: band, bar, the horizon, Have, To go, pace, POINTS, Worth, Tier, unlocks");
+            // Options > General > Quests off: the tab and the rows go; on again brings them back
+            var og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); Click(og.SaveBtn); DoEvents();
+            Check(w.QuestsTab.Visibility != Visibility.Visible && w.QuestsForTest().Rows == 0, "Options > General > Quests off: no tab, no quest rows on Next up");
+            og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); Click(og.SaveBtn); DoEvents();
+            Check(w.QuestsTab.Visibility == Visibility.Visible && w.QuestsForTest().Rows > 0, "...and on again");
             // the Crafting page's Next up carries the two materials' quests while the farming count is on
             w.ShowDemo("Crafting"); DoEvents();
             Check(w.CraftNextForTest().Split(',').Count(x => x == "quest") == 2, $"Crafting's Next up: the two materials' quest rows: {w.CraftNextForTest()}");
@@ -1181,7 +1194,7 @@ public static class WpfApp
             w.Close();
             return problems;
         }
-        var name = welcome ? "ui-welcome" : !demo ? (mine && kind == "Events" ? "ui-main-events-mine" : "ui-main") : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", _ => "ui-main-tracking" };
+        var name = welcome ? "ui-welcome" : !demo ? (mine && kind == "Events" ? "ui-main-events-mine" : "ui-main") : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", "Quests" => "ui-main-quests", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)
@@ -1210,7 +1223,7 @@ public static class WpfApp
             w.ShotItemCard(Path.Combine(dir, "ui-card.png"), cardZone);
         }
         // the Discord card for the same count, and the panel over the game with the window's own figures (every field, then the default set)
-        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "CraftingUpgrades" or "Events")) w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
+        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "CraftingUpgrades" or "Events" or "Quests")) w.SaveShareCard(Path.Combine(dir, "ui-card-discord.png"));
         if (demo && kind == "Crafting") w.ShotCraftCard(Path.Combine(dir, "ui-craft-card.png"));
         if (demo) w.ShotPlayerCards(dir, kind);
         // a tapped feed line's report sheet (direction C), for a farming render
@@ -1222,7 +1235,7 @@ public static class WpfApp
         // and on the Events page, a run reward's (0.8.51: each page's strip shows its own day)
         if (demo && kind == "Events") w.ShotTodayRunCard(dir);
         // the Accuracy card on its own (the card the Farming page's chip opens), with its things to look at
-        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "CraftingUpgrades" or "Events" or "Market")) w.ShotAccuracyCard(Path.Combine(dir, "ui-accuracy-card.png"));
+        if (demo && kind is not ("Crafting" or "CraftingEmpty" or "CraftingUpgrades" or "Events" or "Market" or "Quests")) w.ShotAccuracyCard(Path.Combine(dir, "ui-accuracy-card.png"));
         var values = w.HudValues.ToDictionary(kv => kv.Key, kv => kv.Value);
         var hudAcc = w.HudAccuracy; bool hudToLook = w.HudAccuracyToLook;
         // the panel's three states (direction C): the newest feed line and the rate, farming and crafting, and a flagged run
@@ -1319,7 +1332,7 @@ public static class WpfApp
     {
         var files = Directory.GetFiles(statesDir, "*.json").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
         if (files.Count == 0) { Console.WriteLine($"no states in {statesDir}"); return 2; }
-        var pages = which == "all" ? new[] { "Open world", "Gathering", "Market", "Crafting", "CraftingEmpty", "CraftingUpgrades", "Events" } : new[] { "Events" };
+        var pages = which == "all" ? new[] { "Open world", "Gathering", "Market", "Crafting", "CraftingEmpty", "CraftingUpgrades", "Events", "Quests" } : new[] { "Events" };
         Directory.CreateDirectory(dir);
         Ensure();
         Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;   // one window per state: the first one's close must not end the application
