@@ -235,6 +235,37 @@ public static class CraftMath
         return new Verdict(profit, combo, doubles, unpriced, even);
     }
 
+    /// <summary>Listings under which a board price is a thin market: a few asks, any of them someone's guess.</summary>
+    public const int ThinListings = 10;
+
+    /// <summary>
+    /// The bought materials whose price is a thin market that a craft can't be judged on: the server's board prices it on
+    /// fewer than <see cref="ThinListings"/> listings and the craft's share of it alone costs more than what the craft makes
+    /// (2026-11-08: Siel's Lesser Manastone at 53,333 from 6 asks, so 5 of them cost 267K for one Intermediate Manastone
+    /// at 80K; Steven: "u gotta get the prices at least CLOSE to right always"). The price is kept, as the server's market
+    /// as it is; the card and the HUD mark the profit unsure. A player's own price (typed or read) and a ticked "I have
+    /// these" material are never thin. On the board's materials alone, one costing more than the output is common (an
+    /// Artisan's sword takes an Expert's Splendent one): it is the few listings that make it suspect.
+    /// </summary>
+    public static List<(string Item, int Listings)> Thin(RecipeBook.Recipe recipe, Func<string, PriceBook.Quote?> quote, Func<string, bool> farmed)
+    {
+        var thin = new List<(string, int)>();
+        if (quote(recipe.Output) is not { Sure: true } oq) return thin;
+        double makes = (double)oq.Price * recipe.OutputQty;
+        foreach (var m in recipe.Materials)
+        {
+            if (m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase) || farmed(m.Item)) continue;
+            // an unsure price (one listing, or a day old) is already left out of the cost; this is for one that counts
+            if (quote(m.Item) is not { Sure: true, Mine: false } q || q.Readings >= ThinListings) continue;
+            if ((double)q.Price * m.Qty > makes) thin.Add((m.Item, q.Readings));
+        }
+        return thin;
+    }
+
+    /// <summary>"Lesser Manastone on 6 listings", "A on 3 listings and B on 1 listing": the thin materials, for the card's notes.</summary>
+    public static string ThinWords(IReadOnlyList<(string Item, int Listings)> thin) =>
+        string.Join(" and ", thin.Select(t => $"{t.Item} on {t.Listings} listing{(t.Listings == 1 ? "" : "s")}"));
+
     /// <summary>
     /// A best craft's profit at this player's own prices where they have one (typed, or read on their PC: they win over the
     /// board), the site's for the rest. With no own price at all it is the site's profit unchanged.

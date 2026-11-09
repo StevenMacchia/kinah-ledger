@@ -3597,18 +3597,58 @@ options: --process aion[,other]");
             PriceBook.PathOverride = Path.Combine(tmp, "prices.json"); BestRuns.DirOverride = tmp; BestRuns.Reset();
             PriceBook.SetBoard(new() { ["Spiritstone"] = 7_000 });
             PriceBook.SetRegionBoards(new[] { new Dictionary<string, long> { ["Thick hide"] = 1_000, ["Spiritstone"] = 9_000 }, new Dictionary<string, long> { ["Thick hide"] = 1_400 }, new Dictionary<string, long> { ["Thick hide"] = 1_100 } });
-            Check("server board first, the region's middle price second", $"{PriceBook.Price("Spiritstone")} {PriceBook.SourceOf("Spiritstone")} {PriceBook.Price("thick hide")} {PriceBook.SourceOf("Thick hide")} {PriceBook.SourceOf("Manastone")}", "7000 Server 1100 Region None");
+            // 2026-11-09 (Steven: "they should be based on ur charcters server in real time"): the other servers' middle is never the price
+            Check("only the server's own board prices an item", $"{PriceBook.Price("Spiritstone")} {PriceBook.SourceOf("Spiritstone")} {PriceBook.Price("thick hide")?.ToString() ?? "none"} {PriceBook.SourceOf("Thick hide")} {PriceBook.SourceOf("Manastone")}", "7000 Server none None None");
             {
                 // 2026-11-03: Siel's Artisan's Steamed Cypri, 44,994 with 57 listings, was dropped as 3x a region middle two lone
                 // asks (14,000 and 1,000) had sunk to 14,000, and the card said 12.3K. The site's pick stands (it was judged against
                 // the region already); an older board's lowest ask 3x the region still gives way; lone asks never make the middle
                 PriceBook.SetBoardQuotes(new() { ["Artisan's Steamed Cypri"] = new PriceBook.BoardQuote(44_994, PriceBook.From.Feed, 57, true, null, Picked: true), ["Odd Sword"] = new PriceBook.BoardQuote(45_000, PriceBook.From.Feed, 1, false, null) });
                 PriceBook.SetRegionBoards(new long[] { 1_000, 14_000, 14_000, 19_975, 26_000, 52_000 }.Select(p => new Dictionary<string, long> { ["Artisan's Steamed Cypri"] = p, ["Odd Sword"] = p }));
-                Check("the site's pick is never an outlier here; an older board's lone ask still is", $"{PriceBook.Price("Artisan's Steamed Cypri")} {PriceBook.SourceOf("Artisan's Steamed Cypri")} · {PriceBook.QuoteOf("Odd Sword")?.Price} {PriceBook.SourceOf("Odd Sword")}", "44994 Feed · 14000 Region");
+                Check("the site's pick is never an outlier here; an older board's lone ask still is", $"{PriceBook.Price("Artisan's Steamed Cypri")} {PriceBook.SourceOf("Artisan's Steamed Cypri")} · {PriceBook.QuoteOf("Odd Sword")?.Price.ToString() ?? "none"} {PriceBook.SourceOf("Odd Sword")}", "44994 Feed · none None");
                 var sure = PriceBook.ParseBoard("""{"items":[{"item":"Artisan's Steamed Cypri","price":14000,"price_from":"feed","readings":1,"sure":false},{"item":"Cypri","price":6499,"price_from":"feed","readings":23,"sure":true}]}""", null, sureOnly: true);
                 Check("the region middle takes only sure prices from a board", string.Join(",", sure.Select(kv => kv.Key + "=" + kv.Value)), "Cypri=6499");
-                PriceBook.SetBoard(new() { ["Spiritstone"] = 7_000 });
-                PriceBook.SetRegionBoards(new[] { new Dictionary<string, long> { ["Thick hide"] = 1_000, ["Spiritstone"] = 9_000 }, new Dictionary<string, long> { ["Thick hide"] = 1_400 }, new Dictionary<string, long> { ["Thick hide"] = 1_100 } });
+            }
+            {
+                // 2026-11-08: the Crafting card showed Intermediate Manastone costing 269,905 a craft: 5 Lesser Manastone at Siel's
+                // 53,333 (6 listings) + 3 Spiritstone Powder at 280 + 2 Professional Ink (Bound) at the NPC's 1,200, for one stone
+                // that sells for 80,000. The price stands (it is Siel's market) but the profit is unsure; with Siel showing none,
+                // the other servers' 80,000 middle no longer prices it; a day-old board price is unsure (real time)
+                var now = DateTime.UtcNow;
+                Dictionary<string, PriceBook.BoardQuote> Siel(int lesserListings, DateTime? lesserAt = null) => new()
+                {
+                    ["Lesser Manastone"] = new(53_333, PriceBook.From.Feed, lesserListings, true, lesserAt ?? now, Picked: true),
+                    ["Spiritstone Powder"] = new(280, PriceBook.From.Feed, 9, true, now, Picked: true),
+                    ["Intermediate Manastone"] = new(80_000, PriceBook.From.Feed, 40, true, now, Picked: true),
+                    ["Superior Manastone"] = new(720_000, PriceBook.From.Feed, 69, true, now, Picked: true),
+                };
+                var im = RecipeBook.For("Intermediate Manastone", 0)!;
+                string Thin() => CraftMath.ThinWords(CraftMath.Thin(im, PriceBook.QuoteOf, PriceBook.Farmed)) is { Length: > 0 } w ? w : "not thin";
+                PriceBook.SetBoardQuotes(Siel(6));
+                Check("Intermediate Manastone: Siel's cost, Lesser flagged thin", $"{RecipeBook.CostPerTry("Intermediate Manastone", out int u1):N0} unpriced {u1} · {Thin()}", "269,905 unpriced 0 · Lesser Manastone on 6 listings");
+                PriceBook.SetBoardQuotes(Siel(12));
+                Check("on 12 listings it is the market: not thin", Thin(), "not thin");
+                PriceBook.SetBoardQuotes(Siel(6));
+                PriceBook.SetFarmed("Lesser Manastone", true);
+                Check("ticked I have these: free, never thin", $"{RecipeBook.CostPerTry("Intermediate Manastone", out _):N0} · {Thin()}", "3,240 · not thin");
+                PriceBook.SetFarmed("Lesser Manastone", false);
+                PriceBook.SetTyped("Lesser Manastone", 9_000, now);
+                Check("a typed price is the player's own: never thin", $"{RecipeBook.CostPerTry("Intermediate Manastone", out _):N0} · {Thin()}", "48,240 · not thin");
+                PriceBook.SetTyped("Lesser Manastone", 0, now);
+                var noLesser = Siel(6); noLesser.Remove("Lesser Manastone");
+                PriceBook.SetBoardQuotes(noLesser);
+                PriceBook.SetRegionBoards(Enumerable.Range(0, 7).Select(_ => new Dictionary<string, long> { ["Lesser Manastone"] = 80_000 }));
+                Check("none on Siel: the other servers' 80,000 is not the price", $"{PriceBook.QuoteOf("Lesser Manastone")?.Price.ToString() ?? "none"} · cost {RecipeBook.CostPerTry("Intermediate Manastone", out int u2):N0} unpriced {u2}", "none · cost 3,240 unpriced 1");
+                PriceBook.SetBoardQuotes(Siel(40, now.AddHours(-30)));
+                Check("a Siel price last seen 30 h ago is unsure, out of the cost", $"{PriceBook.QuoteOf("Lesser Manastone")?.Sure} · unpriced {(RecipeBook.CostPerTry("Intermediate Manastone", out int u3) is not null ? u3 : -1)}", "False · unpriced 1");
+                // a gear recipe's Splendent input on plenty of listings costs more than the output by design: never thin
+                PriceBook.SetBoardQuotes(new() { ["Expert's Splendent Orichalcum Greatsword"] = new(1_749_998, PriceBook.From.Feed, 24, true, now, Picked: true), ["Artisan's Orichalcum Greatsword"] = new(199_960, PriceBook.From.Feed, 43, true, now, Picked: true) });
+                var gs = RecipeBook.For("Artisan's Orichalcum Greatsword", 0);
+                Check("an Expert's Splendent input on 24 listings is not thin", gs == null ? "no recipe" : CraftMath.Thin(gs, PriceBook.QuoteOf, PriceBook.Farmed).Count.ToString(), "0");
+                PriceBook.SetRegionBoards(Array.Empty<Dictionary<string, long>>());
+            }
+            {
+                PriceBook.SetBoard(new() { ["Spiritstone"] = 7_000, ["Thick hide"] = 1_100 });
             }
 
             var t0 = DateTime.UtcNow;

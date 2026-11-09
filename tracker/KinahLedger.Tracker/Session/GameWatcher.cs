@@ -204,8 +204,8 @@ public sealed class GameWatcher
 
     DateTime _regionAt = DateTime.MinValue; string _regionFor = "";
     /// <summary>
-    /// Once an hour (or when the server changes), the boards of the other servers in the player's region and faction, so an
-    /// item the server's own board has no price for can still be valued; the window marks those prices as the region's.
+    /// Once an hour (or when the server changes), the boards of the other servers in the player's region and faction, for
+    /// the item card's "Other servers" line. Never a price: only the player's own server values anything (2026-11-09).
     /// About 20 KB each, compressed.
     /// </summary>
     async Task FetchRegionBoardsAsync(HttpClient http, string site)
