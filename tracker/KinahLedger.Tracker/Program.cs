@@ -4868,6 +4868,28 @@ options: --process aion[,other]");
                     Check("recipe book: a combo's outcome by recipe", string.Join(" | ", new[] { "Artisan's Steamed Cypri", "Mana Potion", "Orichalcum Ingot", "Orichalcum Longsword", "Dark Dragon Lord Orb", "Splendent Dark Dragon Lord Orb", "Chaser Bracelet", "Sapphire Powder" }
                         .Select(n => $"{n}: {(RecipeBook.ForOutput(n)?.Upgrade?.Item ?? (Session.CraftLedger.DoublesOnCombo(n) ? "x2" : "?"))}")),
                         "Artisan's Steamed Cypri: x2 | Mana Potion: x2 | Orichalcum Ingot: x2 | Orichalcum Longsword: Splendent Orichalcum Longsword | Dark Dragon Lord Orb: Splendent Dark Dragon Lord Orb | Splendent Dark Dragon Lord Orb: ? | Chaser Bracelet: ? | Sapphire Powder: x2");
+                    // Steven, 2026-11-08: a won combo on Intermediate Soulstone made a Superior Soulstone (the panel's title read
+                    // "Superior Soulstone (Novice Lv. 25)" for the roll), manastones the same; the tracker had made it two Intermediate.
+                    // A serum with a Superior recipe of its own still doubles (Wind Serum, 2026-10-25).
+                    Check("recipe book: a manastone or soulstone combo goes up a grade, Abyssal ones too; a serum still doubles",
+                        string.Join(" | ", new[] { "Intermediate Soulstone", "Intermediate Manastone", "Intermediate Abyssal Soulstone", "Intermediate Abyssal Manastone", "Wind Serum", "Life Serum (Bound)" }
+                            .Select(n => $"{n}: {(RecipeBook.ForOutput(n)?.Upgrade?.Item ?? (Session.CraftLedger.DoublesOnCombo(n) ? "x2" : "?"))}")),
+                        "Intermediate Soulstone: Superior Soulstone | Intermediate Manastone: Superior Manastone | Intermediate Abyssal Soulstone: Superior Abyssal Soulstone | Intermediate Abyssal Manastone: Superior Abyssal Manastone | Wind Serum: x2 | Life Serum (Bound): x2");
+                    // 17:32:40 to 17:32:51 in Steven's reads.log: a success, the title naming Superior Soulstone, the won roll
+                    var se = new SessionEngine(items); var s0 = DateTime.UtcNow;
+                    const string ims = "Intermediate Soulstone";
+                    se.CraftPanelSeen(ims, s0);
+                    se.Apply(new CraftResult(s0, ims, false) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                    se.Apply(new CraftResult(s0.AddSeconds(7), ims, true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                    se.Apply(new CraftResult(s0.AddSeconds(16), ims, true, Combo: true) { Via = SessionEngine.CraftPanelVia });
+                    se.Apply(new CraftResult(s0.AddSeconds(23), ims, true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                    se.Apply(new CraftResult(s0.AddSeconds(30), ims, true, Combo: true) { Via = SessionEngine.CraftPanelVia });
+                    se.Apply(new CraftResult(s0.AddSeconds(37), ims, true) { Via = SessionEngine.CraftPanelVia, Makes = 1 });
+                    var sr = se.CraftSnapshot().First(x => x.Name == ims);
+                    Check("crafting: a won Intermediate Soulstone combo makes one Superior Soulstone, not two Intermediate; the title naming it is the roll's",
+                        $"{sr.Ok}/{sr.Attempts} up {sr.Upgraded}/{sr.Upgraded + sr.NotUpgraded} made " + string.Join(", ", sr.Made.OrderBy(m => m.Key, StringComparer.Ordinal).Select(m => $"{m.Key} x{m.Value}"))
+                            + $" · {CraftPanel.NamesUpgrade("Superior Soulstone (Novice Lv. 25)", ims)} {CraftPanel.NamesUpgrade("Intermediate Soulstone (Novice Lv. 25)", ims)} {CraftPanel.NamesUpgrade("Superior Manastone (Novice Lv. 20)", "Intermediate Manastone")} {CraftPanel.NamesUpgrade("Superior Wind Serum (Novice Lv. 55)", "Wind Serum")}",
+                        "3/4 up 2/2 made Intermediate Soulstone x1, Superior Soulstone x2 · True False True False");
                 }
                 // 2026-10-25: a won upgrade roll (the blue combo race after a craft) makes the recipe's upgrade, not its base item;
                 // the loot list naming the upgrade right after a craft says the same when the blue race was missed. Neither is a drop.
