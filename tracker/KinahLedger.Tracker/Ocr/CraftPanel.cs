@@ -477,7 +477,9 @@ public static class CraftPanel
         if (item.Length < 3) return false;
         var cmp = StringComparison.OrdinalIgnoreCase;
         if (string.Equals(item, crafting, cmp) || crafting.StartsWith(item, cmp)) return false;
-        foreach (var g in book.GreatOutcomes)
+        // the book's great outcomes and the upgrade inferred from it (a Splendent piece, a stone's next grade)
+        var greats = book.Upgrade is { } up && !book.GreatOutcomes.Any(g => string.Equals(g.Item, up.Item, cmp)) ? book.GreatOutcomes.Append(up) : book.GreatOutcomes;
+        foreach (var g in greats)
         {
             if (string.Equals(g.Item, crafting, cmp)) continue;
             if (string.Equals(g.Item, item, cmp)) return true;
