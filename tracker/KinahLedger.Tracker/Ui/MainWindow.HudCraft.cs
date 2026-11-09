@@ -149,7 +149,8 @@ public partial class MainWindow
             var (rate, kind) = CraftMath.SuccessUsed(book.SuccessRate, mine?.Attempts ?? 0, mine?.Ok ?? 0);
             if (CraftMath.Judge(book, PriceBook.Price, cost, rate, PriceBook.SellerKeeps) is { } v)
             {
-                var upTo = kind == CraftMath.RateKind.Unknown ? "≤ " : "";
+                // "~" when a material's price is a thin market that alone costs more than the craft makes (the card says which)
+                var upTo = (kind == CraftMath.RateKind.Unknown ? "≤ " : "") + (CraftMath.Thin(book, PriceBook.QuoteOf, PriceBook.Farmed).Count > 0 ? "~" : "");
                 d["craftPer"] = upTo + Signed(v.Profit);
                 if (mine is { Attempts: >= 3 } && CraftsPerHourOf(ledger.Sum(r => r.Attempts), time) is double cph) d["craftPerHr"] = upTo + Signed(v.Profit * cph);
             }

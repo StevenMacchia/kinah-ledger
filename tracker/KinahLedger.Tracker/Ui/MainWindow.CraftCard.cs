@@ -95,6 +95,8 @@ public partial class MainWindow
         long total = recipe.Kinah ?? 0; int unpriced = 0;
         // the ticked materials, for what selling them instead would bring (vendor ones can't be sold on the Market)
         var farmed = new List<(string Item, int Qty, long? Price)>();
+        // a material on a few listings that alone costs more than the craft makes: its price stands, the profit is marked unsure
+        var thin = CraftMath.Thin(recipe, PriceBook.QuoteOf, PriceBook.Farmed);
         foreach (var m in recipe.Materials)
         {
             bool vendor = m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase);
@@ -125,7 +127,13 @@ public partial class MainWindow
                 ed.HorizontalAlignment = HorizontalAlignment.Left;
                 info.Children.Add(ed);
                 if (CardSourceOnLine && mq != null) info.Children.Add(CkText(PriceBook.Describe(mq), mq.Mine ? Color.FromRgb(0x5E, 0xD8, 0xCB) : mq.Sure ? CkFaint : CkWarn, 11));
-                else if (mq == null && each == null) info.Children.Add(CkText("no Market price yet", CkFaint, 11.5));
+                else if (mq == null && each == null) info.Children.Add(CkText($"none on {Server?.Name ?? "your server"}'s Market now", CkFaint, 11.5));
+                if (thin.FirstOrDefault(t => t.Item == m.Item) is { Item: not null } th)
+                {
+                    var w = CkText($"~ only {th.Listings} listings, costs more than the craft makes", CkWarn, 11);
+                    w.ToolTip = $"{m.Qty} × {each:N0} = {m.Qty * (each ?? 0):N0}, more than the {recipe.Output} a craft makes sells for. Few listings: type what you'd pay, or tick I have these if you farmed them.";
+                    info.Children.Add(w);
+                }
             }
             info.Children.Add(HaveTick(m.Item, have, Redo));
             // the cash cost: a ticked material adds nothing
@@ -228,8 +236,9 @@ public partial class MainWindow
                 CraftMath.RateKind.Unknown => "success chance unknown",
                 _ => $"at {rate:P0} success",
             };
-            top.Children.Add(CraftVerdictBand(kind == CraftMath.RateKind.Unknown ? "Profit per craft, at most" : "Profit per craft",
+            top.Children.Add(CraftVerdictBand((kind == CraftMath.RateKind.Unknown ? "Profit per craft, at most" : "Profit per craft") + (thin.Count > 0 ? ", unsure" : ""),
                 $"{chance}{(v.Combo > 0 ? (v.Doubles ? $" · {v.Combo:P0} combo ×2" : $" · {v.Combo:P0} upgrade chance") : "")} · {PriceBook.Fee}", per, upTo: kind == CraftMath.RateKind.Unknown));
+            if (thin.Count > 0) top.Children.Add(CkNote($"Unsure: on {Server?.Name ?? "your server"}, {CraftMath.ThinWords(thin)} costs more than the craft makes by itself. Type what you'd pay, or tick I have these if you farmed them."));
             if (v.UpgradeUnpriced) top.Children.Add(CkNote($"{recipe.Upgrade?.Item ?? "The upgrade"} has no price: upgrade unpriced, counted as the base item."));
             if (mine is { Attempts: >= 3 } && CraftsPerHour() is double cph)
                 top.Children.Add(CkKv(kind == CraftMath.RateKind.Unknown ? "Profit per hour, at most" : "Profit per hour", (kind == CraftMath.RateKind.Unknown ? "up to " : "") + Signed(per * cph), per >= 0 ? CkGood : CkBad, $"{cph:0.#} crafts an hour this session", rightSize: 15));

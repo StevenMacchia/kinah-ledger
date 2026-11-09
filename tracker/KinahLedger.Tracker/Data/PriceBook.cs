@@ -9,10 +9,13 @@ namespace KinahLedger.Data;
 ///   1. yours: a price the player typed on a card (typed-prices.json) or the lowest ask this PC read on the Market in
 ///      the last day (prices.json), whichever is newer. Read with sharing off too; nothing leaves the PC then.
 ///   2. the server's board on kinahledger.com, as the site picked it: players' reads, what it sold for, or the
-///      aion2.exchange listing, with its readings and age. Dropped when it is over 3x the other servers' middle.
-///   3. the other servers of the region and faction: their middle, marked ≈.
-/// A price with fewer than 2 readings is "unsure": it is shown (dimmed) but <see cref="Price"/> leaves it out, so no
-/// total, value per hour or profit leans on one listing. Nothing is valued with made-up numbers.
+///      aion2.exchange listing, with its readings and age, fetched every 15 minutes.
+/// Only the player's own server prices anything (Steven, 2026-11-09: "they should be based on ur charcters server in
+/// real time"). The other servers' middle is shown on the item card for reference, never used as the price: on
+/// 2026-11-08 Siel had no Lesser Manastone listed and the other servers' middle (80,000, more than the Intermediate
+/// Manastone five of them make) set the craft's cost. A price with fewer than 2 readings, or last seen over a day ago,
+/// is "unsure": it is shown (dimmed) but <see cref="Price"/> leaves it out, so no total, value per hour or profit leans
+/// on one listing or on yesterday's market. Nothing is valued with made-up numbers.
 /// </summary>
 public static class PriceBook
 {
@@ -53,13 +56,12 @@ public static class PriceBook
     /// <summary>Readings a price needs to count in totals and profit; an ask this many times the other servers' middle is dropped.</summary>
     public const int SureReadings = 2;
     public const double OutlierX = 3;
-    /// <summary>A board price last seen longer ago than this is unsure (2026-11-03: a price weeks old stood as sure); over <see cref="OldAfter"/> it is shown dimmed as old.</summary>
-    public static readonly TimeSpan BoardMaxAge = TimeSpan.FromHours(72);
+    /// <summary>A board price last seen longer ago than this is unsure (2026-11-03: a price weeks old stood as sure; 2026-11-09:
+    /// a day, so a price is the server's market as it is now); over <see cref="OldAfter"/> it is shown dimmed as old.</summary>
+    public static readonly TimeSpan BoardMaxAge = TimeSpan.FromHours(24);
     public static readonly TimeSpan OldAfter = TimeSpan.FromHours(24);
     /// <summary>A typed price older than this gives way to a sure board price (2026-11-03: a typed price had no age limit).</summary>
     public static readonly TimeSpan TypedFor = TimeSpan.FromDays(7);
-    /// <summary>When the other servers' boards were fetched: the age of a region price.</summary>
-    static DateTime? _regionAt;
     public static DateTime? BoardAt { get; private set; }
     static ItemDictionary? _items;
     static bool _purgeLogged;
@@ -105,23 +107,19 @@ public static class PriceBook
         }
     }
 
-    /// <summary>The best price that is not the player's own: the board's, else the other servers' middle; null when there is none. Call with the lock held.</summary>
+    /// <summary>The best price that is not the player's own: the server's board, sure or not; null when it has none. Call with the lock held.</summary>
     static Quote? SharedQuote(string k)
     {
-        var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
+        if (!_board.TryGetValue(k, out var b)) return null;
         // 2026-11-03: Siel's Artisan's Steamed Cypri at 44,994 (57 listings) was thrown out as 3x a 14,000 region middle
         // that two lone asks had pulled down, and the card said 12.3K. The site's pick was already judged against the
-        // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask.
-        if (_board.TryGetValue(k, out var b) && !(reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price))
-        {
-            // a sure board price; an unsure one gives way to a sure region middle, else it is shown as unsure.
-            // One last seen over 72 h ago is unsure however many readings it had.
-            bool sure = b.Sure && !(b.At is DateTime seenAt && DateTime.UtcNow - seenAt > BoardMaxAge);
-            if (sure || reg == null) return new Quote(b.Price, b.From, b.Readings, sure, b.At);
-        }
-        if (reg is { } rr) return new Quote(rr.Price, From.Region, rr.Servers, true, _regionAt);
-        if (_region.TryGetValue(k, out var one)) return new Quote(one.Price, From.Region, one.Servers, false, _regionAt);
-        return null;
+        // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask,
+        // which is then no price at all: the other servers' middle never stands in for the server's own.
+        var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
+        if (reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price) return null;
+        // one last seen over a day ago is unsure however many readings it had
+        bool sure = b.Sure && !(b.At is DateTime seenAt && DateTime.UtcNow - seenAt > BoardMaxAge);
+        return new Quote(b.Price, b.From, b.Readings, sure, b.At);
     }
 
     /// <summary>Where an item's price comes from (what <see cref="QuoteOf"/> would give), or None.</summary>
@@ -175,7 +173,7 @@ public static class PriceBook
 
     /// <summary>
     /// The other servers' boards (same region and faction): per item, the middle of their prices and how many servers.
-    /// Used where the server's own board has no price or an outlier, and marked ≈.
+    /// Shown on the item card for reference and used to spot an older board's joke ask; never the price itself.
     /// </summary>
     public static void SetRegionBoards(IEnumerable<Dictionary<string, long>> boards)
     {
@@ -185,7 +183,7 @@ public static class PriceBook
                 if (p > 0) { var k = Norm(name); if (!all.TryGetValue(k, out var l)) all[k] = l = new(); l.Add(p); }
         // the lower middle for an even count, so one joke ask never lifts it (as the site's regionMiddles)
         var med = all.ToDictionary(kv => kv.Key, kv => { var l = kv.Value; l.Sort(); return (l[(l.Count - 1) / 2], l.Count); });
-        lock (Lock) { _region = med; _regionAt = DateTime.UtcNow; }
+        lock (Lock) _region = med;
     }
 
     /// <summary>An ask read on the Market: kept when it is the lowest of the last day for that item.</summary>
