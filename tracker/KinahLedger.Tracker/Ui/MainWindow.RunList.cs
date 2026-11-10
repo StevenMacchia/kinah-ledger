@@ -138,8 +138,9 @@ public partial class MainWindow
         var slotsQ = new List<FrameworkElement>();
         if (one.Kinah > 0) slotsQ.Add(RunKinahSlot(one.Kinah, one.KinahWhere, "Picked up this run"));
         foreach (var s in SortSlots(one.Items)) slotsQ.Add(RunItemSlot(s, "this run"));
-        if (slotsQ.Count == 0) { var t = QT(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen.", 11.5, FontWeights.Medium, "Faint"); t.Margin = new Thickness(38, 0, 0, 6); sp.Children.Add(t); }
-        else { var wrap = new WrapPanel { Margin = new Thickness(38, 2, 0, 2) }; foreach (var s in slotsQ) wrap.Children.Add(s); sp.Children.Add(wrap); }
+        if (slotsQ.Count == 0 && one.Gear == 0) { var t = QT(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen.", 11.5, FontWeights.Medium, "Faint"); t.Margin = new Thickness(38, 0, 0, 6); sp.Children.Add(t); }
+        else if (slotsQ.Count > 0) { var wrap = new WrapPanel { Margin = new Thickness(38, 2, 0, 2) }; foreach (var s in slotsQ) wrap.Children.Add(s); sp.Children.Add(wrap); }
+        if (GearRow(one, "this run") is FrameworkElement gn) { gn.Margin = new Thickness(38, 2, 0, 6); sp.Children.Add(gn); }
         return sp;
     }
 

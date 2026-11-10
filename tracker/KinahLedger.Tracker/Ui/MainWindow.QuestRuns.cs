@@ -312,6 +312,29 @@ public partial class MainWindow
     }
 
     /// <summary>Paid out here: the head with the runs it covers and the worth, the sort links, the slots two rows deep, Show all.</summary>
+    /// <summary>
+    /// The runs' gear apart from the loot: "19 gear · bound, no value", then a slot per piece with its count. Gear from an
+    /// expedition, dungeon or event is bound to the character, so it is worth nothing and sits outside the paid-out slots
+    /// (Steven, 2026-11-10: "gear from dungeons is of no value"; "keep the gear but no value i want to see how many of X
+    /// type of gear i got").
+    /// </summary>
+    FrameworkElement? GearRow(TodayRuns tr, string when, bool slots = true)
+    {
+        if (tr.Gear <= 0) return null;
+        var sp = new StackPanel();
+        var t = QT($"{tr.Gear:N0} gear · bound, no value", 11.5, FontWeights.Medium, "Faint");
+        t.ToolTip = "Gear from an expedition, dungeon or event is bound to you: it can't be sold, so it isn't in the value. Each piece shows how many you got.";
+        ToolTipService.SetInitialShowDelay(t, 300);
+        sp.Children.Add(t);
+        if (slots && tr.GearSlots.Count > 0)
+        {
+            var wrap = new WrapPanel { Margin = new Thickness(0, 6, -6, 0) };
+            foreach (var s in tr.GearSlots) wrap.Children.Add(RunItemSlot(s, when));
+            sp.Children.Add(wrap);
+        }
+        return sp;
+    }
+
     Border QPaidOut(string zone, int n, TodayRuns tr, List<TodaySlot> items, Action redraw)
     {
         var sp = new StackPanel();
@@ -341,7 +364,8 @@ public partial class MainWindow
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); redraw(); };
             sp.Children.Add(m);
         }
-        if (slots.Count == 0) { var t = QT(n == 0 ? "The rewards show here once a run is counted." : tr.Kinah > 0 ? "Kinah only: nothing else read from the reward screens yet." : "Nothing read from the reward screens yet.", 12, FontWeights.Medium, "Faint"); t.Margin = new Thickness(0, 8, 0, 2); sp.Children.Add(t); }
+        if (slots.Count == 0 && tr.Gear == 0) { var t = QT(n == 0 ? "The rewards show here once a run is counted." : tr.Kinah > 0 ? "Kinah only: nothing else read from the reward screens yet." : "Nothing read from the reward screens yet.", 12, FontWeights.Medium, "Faint"); t.Margin = new Thickness(0, 8, 0, 2); sp.Children.Add(t); }
+        if (GearRow(tr, "here") is FrameworkElement gn) { gn.Margin = new Thickness(0, slots.Count == 0 ? 8 : 6, 0, 2); sp.Children.Add(gn); }
         return card;
     }
 

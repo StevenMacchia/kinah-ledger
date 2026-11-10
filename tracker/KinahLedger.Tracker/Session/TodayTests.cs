@@ -104,6 +104,18 @@ public static class TodayTests
             Check("today's runs: count, places, Kinah", $"{rt.Runs} {rt.Places} {rt.Kinah}", "2 2 600000");
             var rs = rt.Items.First(x => x.Id == stone);
             Check("a run item: summed, with its places", $"{rs.Count} " + string.Join(",", rs.Where.Select(w => $"{w.Where} {w.Count}")), "9 Urugugu Canyon 7,Shugo Festival 2");
+            // gear from a run is bound, worth nothing: never a loot slot, only counted for the quiet note (Steven, 2026-11-10,
+            // Fire Temple: 19 pieces showed as its loot; "gear from dungeons is of no value")
+            if (items.Find("Corrupted Judicator Gloves") is long gloves && items.Find("Murute Earrings") is long ears && items.IsGear(gloves))
+            {
+                var fire = new InstanceRun { Zone = "Fire Temple", Kind = "Expedition", Start = midnight.AddHours(16).ToUniversalTime(), LastLoot = midnight.AddHours(16.1).ToUniversalTime(), Kinah = 800_000, UnknownGear = 1 };
+                fire.Items[gloves] = 2; fire.BoundItems[ears] = 1; fire.Items[stone] = 3;
+                var fr = TodayLoot.Runs(new[] { fire }, items, _ => false);
+                Check("a run's gear: no loot slot, a row of its own with each piece's count, nothing in the value",
+                    $"{string.Join(",", fr.Items.Select(x => items.NameOf(x.Id)))} | gear {fr.Gear}: {string.Join(", ", fr.GearSlots.Select(s => $"{s.Name} x{s.Count} worth {s.Worth}").OrderBy(x => x))} | {fr.Value - fr.Kinah == fr.Items.Sum(x => x.Worth)}",
+                    "Qzx Todaytest Stone | gear 4: Corrupted Judicator Gloves x2 worth 0, Murute Earrings x1 worth 0 | True");
+            }
+            else Check("a run's gear: the test's gear names are in the item list", "missing", "found");
 
             // e. each page's strip is its own day (0.8.51): Farming says only farming, Events only the runs
             string Line(List<(string Fig, string Word)> l) => string.Join(" ·", l.Select(n => n.Fig + n.Word));

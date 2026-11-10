@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -432,14 +432,16 @@ public partial class MainWindow
         return box;
     }
 
-    /// <summary>"31 pieces · 2 gear" (InstanceRun.Pieces: each piece of gear, each other item once), or "Kinah only". For logs and sheets.</summary>
+    /// <summary>"6 pieces · 19 gear" (InstanceRun.Pieces: gear apart, each other item once), or "Kinah only". For logs and sheets.</summary>
     string PiecesText(InstanceRun r)
     {
-        // currencies are amounts, never pieces (the 16:02 Hidden Lugi run read as "3,740 items": its Abyss Points and stones)
+        // currencies are amounts, never pieces (the 16:02 Hidden Lugi run read as "3,740 items": its Abyss Points and stones);
+        // gear is bound and worth nothing, so it is counted apart from the loot's pieces (GearRow; 2026-11-10, Fire Temple's 19)
         var (gearN, other) = r.Pieces(_items.IsGear, IsCurrency, withUnknown: true);
-        int pcs = gearN + other + r.UnknownItems;
-        if (pcs == 0) return r.RewardsNotRead ? "rewards not read" : "Kinah only";
-        return $"{pcs} piece{(pcs == 1 ? "" : "s")}" + (gearN > 0 ? $" · {gearN} gear" : "");
+        int pcs = other + r.UnknownItems;
+        var gearText = gearN > 0 ? $"{gearN} gear" : "";
+        if (pcs == 0) return gearN > 0 ? gearText : r.RewardsNotRead ? "rewards not read" : "Kinah only";
+        return $"{pcs} piece{(pcs == 1 ? "" : "s")}" + (gearN > 0 ? " · " + gearText : "");
     }
 
     /// <summary>Why a run is left out, in three words: "5 runs merged", "Kinah not read", "Rewards not read", "Not a run"; "" when it counts.</summary>
@@ -509,13 +511,10 @@ public partial class MainWindow
         if (kinah > 0) pick.Add(WithBadge(CoinTile(46), CountBadge(kinah), $"Kinah: {Fk(kinah)} ({Amounts.Full(kinah)})"));
         var matSlots = mats.OrderByDescending(x => x.Value.Value).ThenByDescending(x => x.Value.Count)
             .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value.Count)), _items.NameOf(x.Key) + (x.Value.Value > 0 ? $": {Fk(x.Value.Value)} {PriceBook.Cut}" : ""))).ToList();
-        var gearSlots = gear.OrderByDescending(x => GradeRank(_items.Get(x.Key)?.Grade ?? "")).ThenByDescending(x => x.Value)
-            .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value)), _items.NameOf(x.Key) + " (bound)")).ToList();
         var currSlots = curr.OrderByDescending(x => x.Value)
             .Select(x => Tip(CkIcon(_items.NameOf(x.Key), 46, FrameOf(x.Key), badge: CountBadge(x.Value)), _items.NameOf(x.Key))).ToList();
-        pick.AddRange(matSlots.Take(5));
-        pick.AddRange(gearSlots.Take(Math.Max(0, 9 - pick.Count)));
-        pick.AddRange(matSlots.Skip(5).Concat(currSlots).Take(Math.Max(0, 9 - pick.Count)));
+        // gear is bound and worth nothing: no slot of its own, only the quiet line below (GearNote)
+        pick.AddRange(matSlots.Concat(currSlots).Take(Math.Max(0, 9 - pick.Count)));
         if (pick.Count > 0)
         {
             var inv = new WrapPanel { Margin = new Thickness(0, 2, 0, 12) };
@@ -550,11 +549,10 @@ public partial class MainWindow
         }
         if (gear.Count > 0 || unknownGear > 0)
         {
+            // apart from the loot, a count per piece and no value (GearRow)
             int pieces = gear.Values.Sum() + unknownGear;
-            int fine = gear.Where(x => GradeRank(_items.Get(x.Key)?.Grade ?? "") >= 2).Sum(x => x.Value);
-            var sum = new List<Inline> { PR($"{pieces} piece{(pieces == 1 ? "" : "s")}", "Muted") };
-            if (fine > 0) { sum.Add(PR(" · ", "Faint")); sum.Add(PR($"{fine} Legend or better", "Muted")); }
-            sec.Children.Add(RunsGroup(zone, "Gear, bound", sum, () =>
+            var sum = new List<Inline> { PR($"{pieces} piece{(pieces == 1 ? "" : "s")}", "Muted"), PR(" · ", "Faint"), PR("bound, no value", "Faint") };
+            sec.Children.Add(RunsGroup(zone, "Gear", sum, () =>
             {
                 var sp = new StackPanel();
                 foreach (var (id, c) in gear.OrderByDescending(x => GradeRank(_items.Get(x.Key)?.Grade ?? "")).ThenByDescending(x => x.Value))
