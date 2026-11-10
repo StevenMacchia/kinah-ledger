@@ -218,7 +218,7 @@ public static class RecipeBook
         {
             if (PriceBook.Farmed(m.Item)) farmed++;
             else if (m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase)) { if (PriceBook.VendorPrice(m.Item) is long vp) cost += vp * m.Qty; else { vendor++; missing?.Add(m.Item); } }
-            else if (PriceBook.Price(m.Item) is long p) cost += p * m.Qty;
+            else if (PriceBook.CostPrice(m.Item) is long p) cost += p * m.Qty;
             else { unpriced++; missing?.Add(m.Item); }
         }
         return cost;

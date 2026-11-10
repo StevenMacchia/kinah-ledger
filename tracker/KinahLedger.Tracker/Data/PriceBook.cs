@@ -14,8 +14,10 @@ namespace KinahLedger.Data;
 /// real time"). The other servers' middle is shown on the item card for reference, never used as the price: on
 /// 2026-11-08 Siel had no Lesser Manastone listed and the other servers' middle (80,000, more than the Intermediate
 /// Manastone five of them make) set the craft's cost. A price with fewer than 2 readings, or last seen over a day ago,
-/// is "unsure": it is shown (dimmed) but <see cref="Price"/> leaves it out, so no total, value per hour or profit leans
-/// on one listing or on yesterday's market. Nothing is valued with made-up numbers.
+/// is "unsure": it is marked (~, dimmed) but it counts. Every item gets some price (Steven, 2026-11-09: "everything need
+/// SOME type of price", after Siel's Inina, one listing at 5,550, added nothing to a gathering session): the server's own
+/// price first, sure or not; then the asks the site set aside; only when the server has nothing at all, the other
+/// servers' middle, marked ≈.
 /// </summary>
 public static class PriceBook
 {
@@ -81,10 +83,17 @@ public static class PriceBook
     public static bool Any { get { lock (Lock) return Local().Count > 0 || Typed().Count > 0 || _board.Count > 0; } }
 
     /// <summary>
-    /// The price of one for totals, values and profit: the player's own, else the board's or the region's, and only when
-    /// it is sure. An unsure price (one listing) gives null here; <see cref="QuoteOf"/> still shows it.
+    /// The price of one for totals, values and profit: the best there is (<see cref="QuoteOf"/>), sure or not. An unsure
+    /// one counts; the window marks it. Null only when no server has the item at all.
     /// </summary>
-    public static long? Price(string name) => QuoteOf(name) is { Sure: true } q ? q.Price : null;
+    public static long? Price(string name) => QuoteOf(name) is { Price: > 0 } q ? q.Price : null;
+
+    /// <summary>
+    /// What a bought material costs a craft: <see cref="Price"/>, but never the other servers' middle. A thin price on the
+    /// server counts (the card flags it); with none on the server the material is unpriced and the cost a floor (2026-11-08:
+    /// with no Lesser Manastone on Siel, the other servers' 80,000 made an Intermediate Manastone craft cost 400K).
+    /// </summary>
+    public static long? CostPrice(string name) => QuoteOf(name) is { Price: > 0, From: not From.Region } q ? q.Price : null;
 
     /// <summary>The best price there is for an item, sure or not, with where it is from; null when there is none.</summary>
     public static Quote? QuoteOf(string name)
@@ -107,16 +116,18 @@ public static class PriceBook
         }
     }
 
-    /// <summary>The best price that is not the player's own: the server's board, sure or not; null when it has none. Call with the lock held.</summary>
+    /// <summary>The best price that is not the player's own: the server's board, sure or not, else the other servers' middle
+    /// (unsure, ≈); null when neither has the item. Call with the lock held.</summary>
     static Quote? SharedQuote(string k)
     {
-        if (!_board.TryGetValue(k, out var b)) return null;
+        Quote? region = _region.TryGetValue(k, out var g) && g.Price > 0 ? new Quote(g.Price, From.Region, g.Servers, false, null) : null;
+        if (!_board.TryGetValue(k, out var b)) return region;
         // 2026-11-03: Siel's Artisan's Steamed Cypri at 44,994 (57 listings) was thrown out as 3x a 14,000 region middle
         // that two lone asks had pulled down, and the card said 12.3K. The site's pick was already judged against the
         // region with every listing in hand (price-pick.ts): it stands. The 3x rule is for an older board's lowest ask,
         // which is then no price at all: the other servers' middle never stands in for the server's own.
         var reg = _region.TryGetValue(k, out var r) && r.Servers >= SureReadings ? r : ((long Price, int Servers)?)null;
-        if (reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price) return null;
+        if (reg is { } rg && !b.Picked && b.Price > OutlierX * rg.Price) return region;
         // one last seen over a day ago is unsure however many readings it had
         bool sure = b.Sure && !(b.At is DateTime seenAt && DateTime.UtcNow - seenAt > BoardMaxAge);
         return new Quote(b.Price, b.From, b.Readings, sure, b.At);
@@ -349,8 +360,15 @@ public static class PriceBook
             long? region = Num(e, "region_price"); int regionN = (int)(Num(e, "region_servers") ?? 0);
             if (e.TryGetProperty("price_from", out var pf))
             {
-                // the site's pick (price-pick.ts); a null price means every ask was an outlier
-                if (Num(e, "price") is not long p || p <= 0) continue;
+                // the site's pick (price-pick.ts); a null price means it set every ask aside (against the other servers, or as
+                // too few). They are still the server's market as it is, so the lowest of them stands, unsure (2026-11-09:
+                // Siel's Inina Pasta, 2 asks at 8,500 against a 2,221 middle on 3 servers, had no price at all)
+                if (Num(e, "price") is not long p || p <= 0)
+                {
+                    if (e.TryGetProperty("dropped", out var dr) && dr.ValueKind == JsonValueKind.Object && Num(dr, "price") is long dp && dp > 0)
+                        d[name] = new BoardQuote(dp, From.Feed, (int)(Num(e, "listings") ?? 0), false, Time(e, "lowest_seen_at"), region, regionN, Picked: true);
+                    continue;
+                }
                 var from = pf.ValueKind == JsonValueKind.String ? pf.GetString() switch { "player" => From.Server, "sold" => From.Sold, _ => From.Feed } : From.Feed;
                 bool sure = e.TryGetProperty("sure", out var su) && su.ValueKind == JsonValueKind.True;
                 d[name] = new BoardQuote(p, from, (int)(Num(e, "readings") ?? 0), sure, Time(e, "price_seen_at"), region, regionN, Picked: true);

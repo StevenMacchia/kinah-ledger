@@ -151,10 +151,10 @@ static class PlayerTests
 
             string Q(string n) => PriceBook.QuoteOf(n) is { } q ? $"{q.Price:N0} {q.From} {(q.Sure ? "sure" : "unsure")}" : "none";
             Check("the sword on the board: the lowest of 42 listings, sure", Q(sword) + " · " + PriceBook.Describe(PriceBook.QuoteOf(sword)!, now), "43,500 Feed sure · aion2.exchange · lowest of 42 listings · 40 min ago");
-            Check("a lone listing is shown, unsure, and out of totals", $"{Q("Chaos Longsword")} · Price {PriceBook.Price("Chaos Longsword")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Chaos Longsword")!, now)}", "5,000,000 Feed unsure · Price null · aion2.exchange · 1 listing · board checked just now · unsure");
+            Check("a lone listing is shown, unsure, and counts (0.10.33: every item has some price)", $"{Q("Chaos Longsword")} · Price {PriceBook.Price("Chaos Longsword")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Chaos Longsword")!, now)}", "5,000,000 Feed unsure · Price 5000000 · aion2.exchange · 1 listing · board checked just now · unsure");
             Check("an older board's single listing is unsure too", Q("Old Board Item"), "777 Feed unsure");
             // 2026-11-03: a board price last seen 4 days ago is unsure; a sold average says when the board was checked
-            Check("a 4-day-old board price is unsure and out of totals", $"{Q("Four Day Item")} · Price {PriceBook.Price("Four Day Item")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Four Day Item")!, now)}", "6,000 Feed unsure · Price null · aion2.exchange · lowest of 20 listings · 4 days ago · unsure");
+            Check("a 4-day-old board price is unsure and still counts", $"{Q("Four Day Item")} · Price {PriceBook.Price("Four Day Item")?.ToString() ?? "null"} · {PriceBook.Describe(PriceBook.QuoteOf("Four Day Item")!, now)}", "6,000 Feed unsure · Price 6000 · aion2.exchange · lowest of 20 listings · 4 days ago · unsure");
             Check("a sold average with no time says when the board was checked", $"{Q("Sold Item")} · {PriceBook.Describe(PriceBook.QuoteOf("Sold Item")!, now)}", "7,000 Sold sure · sold average · 9 sold · board checked just now");
             // 2026-11-03: a typed price over 7 days old loses to a sure board price; with no board price it stands
             PriceBook.SetTyped("Typed Old Item", 9_000, now.AddDays(-8)); PriceBook.SetTyped("Typed Only Item", 7_000, now.AddDays(-8)); PriceBook.SetTyped("Typed New Item", 9_000, now.AddDays(-6));

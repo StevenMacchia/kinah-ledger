@@ -84,8 +84,10 @@ public partial class MainWindow
             if (q.From != PriceBook.From.Region && PriceBook.RegionOf(name) is { Servers: >= 2 } rg)
                 body.Children.Add(CkKv($"Other {Server?.Region.Name ?? ""} {Server?.Faction ?? ""} servers".Replace("  ", " "), rg.Price.ToString("N0"), CkMuted, $"middle of {rg.Servers} servers"));
         }
-        if (q is { Sure: true } && sell > 0) body.Children.Add(CkKv("Yours are worth", (q.Price * sell).ToString("N0"), CkGold, $"{sell} × {q.Price:N0}, before the Market's cut"));
-        else if (q is { Sure: false }) body.Children.Add(CkNote("One listing isn't a price: it stays out of the session total and the value per hour until a second reading backs it. Click it to type what you see."));
+        if (q != null && sell > 0) body.Children.Add(CkKv("Yours are worth", (q.Price * sell).ToString("N0"), q.Sure ? CkGold : CkWarn, $"{sell} × {q.Price:N0}, before the Market's cut"));
+        if (q is { Sure: false }) body.Children.Add(CkNote(q.From == PriceBook.From.Region
+            ? "Your server has none listed, so the other servers' middle prices it (≈) until it does. Click it to type what you see."
+            : "A thin price (one listing, or not seen for a day): it counts, marked ~, until more listings back it. Click it to type what you see."));
 
         // the site's figures for this zone, last seven days: only when it has them (an empty section is hidden)
         var ze = SiteData.Zone(zone);

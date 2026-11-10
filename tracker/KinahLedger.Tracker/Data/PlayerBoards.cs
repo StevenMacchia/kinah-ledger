@@ -250,13 +250,13 @@ public static class CraftMath
     public static List<(string Item, int Listings)> Thin(RecipeBook.Recipe recipe, Func<string, PriceBook.Quote?> quote, Func<string, bool> farmed)
     {
         var thin = new List<(string, int)>();
-        if (quote(recipe.Output) is not { Sure: true } oq) return thin;
+        if (quote(recipe.Output) is not { } oq) return thin;
         double makes = (double)oq.Price * recipe.OutputQty;
         foreach (var m in recipe.Materials)
         {
             if (m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase) || farmed(m.Item)) continue;
-            // an unsure price (one listing, or a day old) is already left out of the cost; this is for one that counts
-            if (quote(m.Item) is not { Sure: true, Mine: false } q || q.Readings >= ThinListings) continue;
+            // every server price counts in the cost (0.10.33), a one-listing ask too; the other servers' middle never does
+            if (quote(m.Item) is not { Mine: false } q || q.From == PriceBook.From.Region || q.Readings >= ThinListings) continue;
             if ((double)q.Price * m.Qty > makes) thin.Add((m.Item, q.Readings));
         }
         return thin;

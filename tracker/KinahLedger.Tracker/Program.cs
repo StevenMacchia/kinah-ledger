@@ -3597,15 +3597,17 @@ options: --process aion[,other]");
             PriceBook.PathOverride = Path.Combine(tmp, "prices.json"); BestRuns.DirOverride = tmp; BestRuns.Reset();
             PriceBook.SetBoard(new() { ["Spiritstone"] = 7_000 });
             PriceBook.SetRegionBoards(new[] { new Dictionary<string, long> { ["Thick hide"] = 1_000, ["Spiritstone"] = 9_000 }, new Dictionary<string, long> { ["Thick hide"] = 1_400 }, new Dictionary<string, long> { ["Thick hide"] = 1_100 } });
-            // 2026-11-09 (Steven: "they should be based on ur charcters server in real time"): the other servers' middle is never the price
-            Check("only the server's own board prices an item", $"{PriceBook.Price("Spiritstone")} {PriceBook.SourceOf("Spiritstone")} {PriceBook.Price("thick hide")?.ToString() ?? "none"} {PriceBook.SourceOf("Thick hide")} {PriceBook.SourceOf("Manastone")}", "7000 Server none None None");
+            // 2026-11-09 (Steven: "they should be based on ur charcters server in real time"): the server's own board first, sure or
+            // not; then (Steven, later that day: "everything need SOME type of price") the other servers' middle, unsure, for
+            // an item the server has none of; it never costs a craft
+            Check("the server's own board first; the other servers' middle only for what it lacks, unsure, never a craft cost", $"{PriceBook.Price("Spiritstone")} {PriceBook.SourceOf("Spiritstone")} {PriceBook.Price("thick hide")?.ToString() ?? "none"} {PriceBook.SourceOf("Thick hide")} {PriceBook.QuoteOf("Thick hide")?.Sure} {PriceBook.CostPrice("Thick hide")?.ToString() ?? "none"} {PriceBook.SourceOf("Manastone")}", "7000 Server 1100 Region False none None");
             {
                 // 2026-11-03: Siel's Artisan's Steamed Cypri, 44,994 with 57 listings, was dropped as 3x a region middle two lone
                 // asks (14,000 and 1,000) had sunk to 14,000, and the card said 12.3K. The site's pick stands (it was judged against
                 // the region already); an older board's lowest ask 3x the region still gives way; lone asks never make the middle
                 PriceBook.SetBoardQuotes(new() { ["Artisan's Steamed Cypri"] = new PriceBook.BoardQuote(44_994, PriceBook.From.Feed, 57, true, null, Picked: true), ["Odd Sword"] = new PriceBook.BoardQuote(45_000, PriceBook.From.Feed, 1, false, null) });
                 PriceBook.SetRegionBoards(new long[] { 1_000, 14_000, 14_000, 19_975, 26_000, 52_000 }.Select(p => new Dictionary<string, long> { ["Artisan's Steamed Cypri"] = p, ["Odd Sword"] = p }));
-                Check("the site's pick is never an outlier here; an older board's lone ask still is", $"{PriceBook.Price("Artisan's Steamed Cypri")} {PriceBook.SourceOf("Artisan's Steamed Cypri")} · {PriceBook.QuoteOf("Odd Sword")?.Price.ToString() ?? "none"} {PriceBook.SourceOf("Odd Sword")}", "44994 Feed · none None");
+                Check("the site's pick is never an outlier here; an older board's lone ask 3x the region gives way to it", $"{PriceBook.Price("Artisan's Steamed Cypri")} {PriceBook.SourceOf("Artisan's Steamed Cypri")} · {PriceBook.QuoteOf("Odd Sword")?.Price.ToString() ?? "none"} {PriceBook.SourceOf("Odd Sword")}", "44994 Feed · 14000 Region");
                 var sure = PriceBook.ParseBoard("""{"items":[{"item":"Artisan's Steamed Cypri","price":14000,"price_from":"feed","readings":1,"sure":false},{"item":"Cypri","price":6499,"price_from":"feed","readings":23,"sure":true}]}""", null, sureOnly: true);
                 Check("the region middle takes only sure prices from a board", string.Join(",", sure.Select(kv => kv.Key + "=" + kv.Value)), "Cypri=6499");
             }
@@ -3638,9 +3640,12 @@ options: --process aion[,other]");
                 var noLesser = Siel(6); noLesser.Remove("Lesser Manastone");
                 PriceBook.SetBoardQuotes(noLesser);
                 PriceBook.SetRegionBoards(Enumerable.Range(0, 7).Select(_ => new Dictionary<string, long> { ["Lesser Manastone"] = 80_000 }));
-                Check("none on Siel: the other servers' 80,000 is not the price", $"{PriceBook.QuoteOf("Lesser Manastone")?.Price.ToString() ?? "none"} · cost {RecipeBook.CostPerTry("Intermediate Manastone", out int u2):N0} unpriced {u2}", "none · cost 3,240 unpriced 1");
+                Check("none on Siel: the other servers' 80,000 shows (≈) but is not the cost", $"{PriceBook.QuoteOf("Lesser Manastone")?.Price.ToString() ?? "none"} {PriceBook.SourceOf("Lesser Manastone")} · cost {RecipeBook.CostPerTry("Intermediate Manastone", out int u2):N0} unpriced {u2} · {Thin()}", "80000 Region · cost 3,240 unpriced 1 · not thin");
                 PriceBook.SetBoardQuotes(Siel(40, now.AddHours(-30)));
-                Check("a Siel price last seen 30 h ago is unsure, out of the cost", $"{PriceBook.QuoteOf("Lesser Manastone")?.Sure} · unpriced {(RecipeBook.CostPerTry("Intermediate Manastone", out int u3) is not null ? u3 : -1)}", "False · unpriced 1");
+                Check("a Siel price last seen 30 h ago is unsure but still the cost", $"{PriceBook.QuoteOf("Lesser Manastone")?.Sure} · unpriced {(RecipeBook.CostPerTry("Intermediate Manastone", out int u3) is not null ? u3 : -1)}", "False · unpriced 0");
+                // 2026-11-09: Siel's Inina Pasta, 2 asks at 8,500 the site set aside against a 2,221 middle: the server's asks stand, unsure
+                var inina = PriceBook.ParseQuotes("""{"items":[{"item":"Inina Pasta","price":null,"price_from":null,"readings":0,"sure":false,"listings":2,"lowest_seen_at":"2026-11-09T23:07:58Z","region_price":2221,"region_servers":3,"dropped":{"price":8500,"why":"region"}},{"item":"Inina","price":5550,"price_from":"feed","readings":1,"sure":false}]}""", null);
+                Check("an ask the site set aside is still the server's price, unsure; a lone listing stands too", string.Join(", ", inina.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key} {kv.Value.Price} {kv.Value.Readings} {(kv.Value.Sure ? "sure" : "unsure")}")), "Inina 5550 1 unsure, Inina Pasta 8500 2 unsure");
                 // a gear recipe's Splendent input on plenty of listings costs more than the output by design: never thin
                 PriceBook.SetBoardQuotes(new() { ["Expert's Splendent Orichalcum Greatsword"] = new(1_749_998, PriceBook.From.Feed, 24, true, now, Picked: true), ["Artisan's Orichalcum Greatsword"] = new(199_960, PriceBook.From.Feed, 43, true, now, Picked: true) });
                 var gs = RecipeBook.For("Artisan's Orichalcum Greatsword", 0);
