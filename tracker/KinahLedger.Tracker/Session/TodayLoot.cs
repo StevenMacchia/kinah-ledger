@@ -89,7 +89,11 @@ public sealed record TodayFarm(long Kinah, int Kills, int Attempts, double Activ
 }
 
 /// <summary>Today's expeditions and events: every run since midnight (expeditions and events apart), and the loot of the counted ones.</summary>
-public sealed record TodayRuns(int Runs, int Counted, int Places, int Expeditions, int Events, long Kinah, long Value, List<TodaySlot> Items, List<(string Where, long Count)> KinahWhere);
+public sealed record TodayRuns(int Runs, int Counted, int Places, int Expeditions, int Events, long Kinah, long Value, List<TodaySlot> Items, List<(string Where, long Count)> KinahWhere, int Gear = 0, List<TodaySlot>? GearItems = null)
+{
+    /// <summary>The run's gear, one slot per piece kind with its count, best grade first: bound, worth nothing, never in <see cref="Items"/>.</summary>
+    public List<TodaySlot> GearSlots => GearItems ?? new();
+}
 
 /// <summary>
 /// The Today strip's figures (0.8.50), apart from the window so a self-test can check them. Farming is what the Farming
@@ -186,10 +190,21 @@ public static class TodayLoot
             foreach (var (id, c) in r.BoundItems) Add(id, c, true);
         }
         var slots = new List<TodaySlot>();
+        // gear from a run is bound to the character: worth nothing, so it is kept apart from the loot, a row of its own with
+        // each piece's count (Steven, 2026-11-10 after Fire Temple: "gear from dungeons is of no value", then "keep the gear
+        // but no value i want to see how many of X type of gear i got")
+        int gearPieces = counted.Sum(r => r.UnknownGear);
+        var gearSlots = new List<TodaySlot>();
         foreach (var (id, c) in count)
         {
+            if (items.IsGear(id))
+            {
+                gearPieces += (int)Math.Min(c, int.MaxValue);
+                gearSlots.Add(new TodaySlot(id, items.NameOf(id), c, c, 0, false, true, false, where[id].Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList()));
+                continue;
+            }
             var name = items.NameOf(id);
-            bool gear = items.IsGear(id), curr = isCurrency(id);
+            bool gear = false, curr = isCurrency(id);
             long b = bound.GetValueOrDefault(id);
             // gear from a run is bound to the character, and currencies aren't sold: neither is in the value (as RunValue)
             long? w = gear || curr ? null : Worth(name, c - b);
@@ -202,7 +217,8 @@ public static class TodayLoot
         int places = today.Select(r => r.Zone).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         int exp = today.Count(r => string.Equals(r.Kind, "Expedition", StringComparison.OrdinalIgnoreCase));
         int ev = today.Count(r => string.Equals(r.Kind, "Event", StringComparison.OrdinalIgnoreCase));
-        return new TodayRuns(today.Count, counted.Count, places, exp, ev, kinah, value, slots, kinahWhere.Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList());
+        return new TodayRuns(today.Count, counted.Count, places, exp, ev, kinah, value, slots, kinahWhere.Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList(), gearPieces,
+            gearSlots.OrderByDescending(s => LootOrder.GradeRank(items.Get(s.Id)?.Grade ?? "")).ThenByDescending(s => s.Count).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList());
     }
 
     /// <summary>"2:41": hours and minutes.</summary>
