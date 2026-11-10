@@ -338,10 +338,21 @@
           <TextBlock x:Name="WelcomeHint" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,2,0,0"/>
           <!-- gear score (0.8.12): the run card compares the player with players at the same gear; empty is every player -->
           <TextBlock Style="{StaticResource LabelStyle}" Text="GEAR SCORE" Margin="0,12,0,8"/>
-          <StackPanel Orientation="Horizontal">
+          <!-- the box says what goes in it and the hint gives the scale (2026-11-08 audit: an empty box with no unit or range) -->
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <TextBox x:Name="WelcomeGear" Width="120" MaxLength="5" VerticalAlignment="Center" AutomationProperties.Name="Gear score"/>
-            <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center" Text="Optional. Compares your runs with players at your gear. Change it in Options."/>
-          </StackPanel>
+            <TextBlock Text="e.g. 1450" IsHitTestVisible="False" Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource Faint}">
+              <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Visibility" Value="Collapsed"/>
+                  <Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=WelcomeGear}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                </Style>
+              </TextBlock.Style>
+            </TextBlock>
+            <TextBlock Grid.Column="1" Style="{StaticResource BodyStyle}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Text="Optional. The gear score on your character window. Your runs are compared with players in the same band of 200 (1450 sits in 1400–1599). Change it in Options."/>
+          </Grid>
           <TextBlock Style="{StaticResource LabelStyle}" Text="LOOK" Margin="0,12,0,8"/>
           <WrapPanel x:Name="SkinChips"/>
           <!-- sharing, chosen here before anything is read or sent (the same switch as Options › Sharing) -->
@@ -358,6 +369,9 @@
             <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" VerticalAlignment="Center" MaxWidth="300" HorizontalAlignment="Left" Text="Nothing is read or sent until you continue. The chat and the zone are found on their own."/>
             <Button x:Name="WelcomeGo" Style="{StaticResource PrimaryButton}" Content="Continue" Width="160" Height="44" HorizontalAlignment="Right" VerticalAlignment="Center"/>
           </Grid>
+          <!-- what to do once Continue is pressed (2026-11-08 audit: nothing said it); the key is filled in by InitWelcome -->
+          <TextBlock x:Name="WelcomeNext" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Ink}"
+                     Text="Then: open Aion 2, keep the chat on screen, and press Start run."/>
         </StackPanel>
       </Border>
 

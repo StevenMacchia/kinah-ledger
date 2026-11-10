@@ -158,13 +158,15 @@ public sealed class HudWindow : Window
 
         Build();
 
-        _acc = new TextBlock { FontSize = 12, FontWeight = FontWeights.ExtraBold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
-        _note = new TextBlock { FontSize = 12, FontWeight = FontWeights.ExtraBold, Foreground = Gold, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
-        _alert = new TextBlock { FontSize = 13, FontWeight = FontWeights.ExtraBold, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
+        _acc = new TextBlock { FontSize = 12, FontWeight = FontWeights.ExtraBold, Visibility = Visibility.Collapsed };
+        _note = new TextBlock { FontSize = 12, FontWeight = FontWeights.ExtraBold, Foreground = Gold, Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 400 };
+        _alert = new TextBlock { FontSize = 13, FontWeight = FontWeights.ExtraBold, Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 400 };
         // Badge (the Quest look, 2026-11-07): the ring of your best here at the left, the chase's words under the figures
         _ringHost = new Grid { Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         _chaseLine = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.ExtraBold, Foreground = Gold, Margin = new Thickness(0, 2, 0, 0), Visibility = Visibility.Collapsed, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 420 };
-        var lines = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _row, _chaseLine, _note, _acc, _alert } };
+        // each state line starts with its own 14 px sign (the 2026-11-08 audit: the notice, the drop, the stop and the accuracy
+        // differed by text colour alone, where Pop and Buddy show a sign or a frame), so a glance tells them apart unread
+        var lines = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _row, _chaseLine, SignLine(_noteSign, _note, 4), SignLine(_accSign, _acc, 4), SignLine(_alertSign, _alert, 6) } };
         if (_look == null) lines.Children.Add(_dragHint);   // a look's "drag me" sits under it instead
         var badge = new Grid();
         badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -274,6 +276,18 @@ public sealed class HudWindow : Window
     /// <summary>One line under the figures from the "notice" value ("Update ready · installs when you close the tracker").</summary>
     readonly TextBlock _note;
     static readonly Brush AccGood = Frozen(Color.FromRgb(0x5C, 0xE1, 0xB5)), AccCheck = Frozen(Color.FromRgb(0xF7, 0xA0, 0x72));
+    /// <summary>The 14 px signs the notice, accuracy and alert lines start with (HudKit's NoticeSign and the rest).</summary>
+    readonly Image _noteSign = Sign(), _accSign = Sign(), _alertSign = Sign();
+
+    static Image Sign() => new() { Width = 14, Height = 14, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>A sign and its line side by side; the pair shows and hides with the line.</summary>
+    static StackPanel SignLine(Image sign, TextBlock text, double top)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, top, 0, 0), Children = { sign, text } };
+        row.SetBinding(VisibilityProperty, new System.Windows.Data.Binding(nameof(Visibility)) { Source = text });
+        return row;
+    }
 
     /// <summary>
     /// The accuracy line under the figures ("✓ Nothing looked wrong", "2 to look at"), as the window's Accuracy chip
@@ -282,8 +296,10 @@ public sealed class HudWindow : Window
     public void SetAccuracy(string? text, bool toCheck)
     {
         _look?.SetAccuracy(text, toCheck);
-        _acc.Text = text ?? "";
+        // the sign carries the tick now, so the words don't repeat it ("✓ Nothing looked wrong")
+        _acc.Text = (text ?? "").TrimStart('✓', ' ');
         _acc.Foreground = toCheck ? AccCheck : AccGood;
+        _accSign.Source = toCheck ? HudKit.WarnSign : HudKit.GoodSign;
         _acc.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
     }
     System.Windows.Threading.DispatcherTimer? _alertTimer;
@@ -296,6 +312,7 @@ public sealed class HudWindow : Window
     {
         if (_look != null) return;   // the Card and the Ticker draw the drop from the window's "rare" values, held as long
         _alert.Text = text; _alert.Foreground = new SolidColorBrush(color); _alert.Visibility = Visibility.Visible;
+        _alertSign.Source = HudKit.DropSign(color);
         _frame.BorderBrush = new SolidColorBrush(color); _frame.BorderThickness = new Thickness(2);
         _alertTimer?.Stop();
         _alertTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
@@ -418,9 +435,20 @@ public sealed class HudWindow : Window
         if (_look != null) { _look.Update(values); return; }
         // a start or stop's flash ("Run started") over a waiting notice, for its few seconds
         bool flash = V("flash").Length > 0;
-        _note.Text = flash ? V("flash") : V("notice");
+        var noteText = flash ? V("flash") : V("notice");
+        // a stop's flash reads as an ending (2026-11-08 audit): the stop sign, then "Run stopped" in ink and what the run made in gold
+        bool stopped = flash && V("run") != "1";
+        if (stopped && noteText.IndexOf(" · ", StringComparison.Ordinal) is var cut and > 0)
+        {
+            _note.Text = "";
+            _note.Inlines.Add(new System.Windows.Documents.Run(noteText[..cut]) { Foreground = Ink });
+            _note.Inlines.Add(new System.Windows.Documents.Run(" · ") { Foreground = Muted });
+            _note.Inlines.Add(new System.Windows.Documents.Run(noteText[(cut + 3)..]) { Foreground = Gold });
+        }
+        else _note.Text = noteText;
         _note.Foreground = flash ? Ink : Gold;
-        _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _note.Visibility = noteText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _noteSign.Source = !flash ? (V("noticeClock").Length > 0 ? HudClockNotice.Clock : HudKit.NoticeSign) : stopped ? HudKit.StopSign : HudKit.StartSign;
         if (_timeDot != null) _timeDot.Fill = V("run") == "1" ? RunRed : Muted;
         bool warm = V("warm") == "1";
         // the ring of your best here and the chase's words (the "chase" and "toBest" values, Ui/MainWindow.Live.cs FillRate)

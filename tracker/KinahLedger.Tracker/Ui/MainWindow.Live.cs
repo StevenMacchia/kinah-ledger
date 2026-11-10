@@ -192,7 +192,8 @@ public partial class MainWindow
         };
         var pic = new Image { Source = slot.Image, Stretch = Stretch.Uniform, Margin = new Thickness(Math.Max(1, size * 0.06)) };
         RenderOptions.SetBitmapScalingMode(pic, BitmapScalingMode.HighQuality);
-        var letter = new TextBlock { Text = InitialOf(name), FontSize = size * 0.42, FontWeight = FontWeights.SemiBold, Foreground = Ck(CkMuted), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed };
+        var letter = KindGlyph(name, id, size);   // the item's kind, not its initial (2026-11-08, Ui/Quest.cs)
+        letter.Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed;
         if (slot.Image == null && !ReferenceEquals(slot, IconCache.None))
         {
             System.ComponentModel.PropertyChangedEventHandler? on = null;

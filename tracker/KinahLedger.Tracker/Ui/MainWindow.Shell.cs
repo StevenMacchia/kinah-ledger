@@ -168,12 +168,12 @@ public partial class MainWindow
         // one saved before the shortcut rules (Ctrl+K, say) is off, and says why (Platform/Hotkey.cs Refusal)
         if (Hotkey.Explain(_prefs.Hotkey) is { } why)
         {
-            _hotkeyProblem = ($"The shortcut {_prefs.Hotkey.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › In game.", $"Shortcut {_prefs.Hotkey.Trim()} is off · pick another in Options");
+            _hotkeyProblem = ($"The shortcut {_prefs.Hotkey.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › Shortcuts & tips.", $"Shortcut {_prefs.Hotkey.Trim()} is off · pick another in Options");
             return _hotkeyProblem.Value.Long;
         }
         if (Hotkey.Parse(_prefs.Hotkey) is not { } key) { _hotkeyProblem = null; return null; }
         _hotkeyProblem = Native.RegisterHotKey(h, HotkeyId, key.NativeModifiers, key.VirtualKey) ? null
-            : ($"{key} is already used by another app, so the shortcut is off. Pick another in Options › In game.", $"{key} is taken by another app · pick another in Options");
+            : ($"{key} is already used by another app, so the shortcut is off. Pick another in Options › Shortcuts & tips.", $"{key} is taken by another app · pick another in Options");
         return _hotkeyProblem?.Long;
     }
 

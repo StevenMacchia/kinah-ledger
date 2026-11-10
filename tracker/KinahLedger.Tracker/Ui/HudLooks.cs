@@ -174,6 +174,53 @@ static class HudKit
 
     public static Image WarnIcon() => new() { Source = WarnSign, Width = 15, Height = 15, VerticalAlignment = VerticalAlignment.Center };
 
+    // Badge's state signs (2026-11-08 audit: its notice, rare drop, stop and accuracy lines differed by text colour alone).
+    // Each is a 16-unit drawing in the warning sign's manner: a tinted body under a 1.4 px line.
+
+    /// <summary>A waiting notice (an update ready, a price alert): an "i" in a gold ring.</summary>
+    public static readonly DrawingImage NoticeSign = Sign(g =>
+    {
+        var gold = Frozen(Rgb(GoldC));
+        g.Children.Add(new GeometryDrawing(Frozen(Rgb(GoldC, .14)), new Pen(gold, 1.4), new EllipseGeometry(new Point(8, 8), 6.3, 6.3)));
+        g.Children.Add(new GeometryDrawing(null, new Pen(gold, 1.6) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, Geometry.Parse("M8,7.3 L8,11.2")));
+        g.Children.Add(new GeometryDrawing(gold, null, new EllipseGeometry(new Point(8, 4.9), .95, .95)));
+    });
+
+    /// <summary>A run started or resumed: the run dot, coral as the panel's run dot is.</summary>
+    public static readonly DrawingImage StartSign = Sign(g =>
+    {
+        g.Children.Add(new GeometryDrawing(Frozen(Rgb(RecC, .18)), null, new EllipseGeometry(new Point(8, 8), 6.5, 6.5)));
+        g.Children.Add(new GeometryDrawing(Rec, null, new EllipseGeometry(new Point(8, 8), 3.6, 3.6)));
+    });
+
+    /// <summary>A run stopped: a recorder's stop square in a ring, so the line reads as an ending, not one more sentence.</summary>
+    public static readonly DrawingImage StopSign = Sign(g =>
+    {
+        g.Children.Add(new GeometryDrawing(Frozen(Rgb(InkC, .08)), new Pen(Muted, 1.4), new EllipseGeometry(new Point(8, 8), 6.3, 6.3)));
+        g.Children.Add(new GeometryDrawing(Ink, null, new RectangleGeometry(new Rect(5.4, 5.4, 5.2, 5.2), .8, .8)));
+    });
+
+    /// <summary>Nothing looked wrong: a mint tick in a ring.</summary>
+    public static readonly DrawingImage GoodSign = Sign(g =>
+    {
+        g.Children.Add(new GeometryDrawing(Frozen(Rgb(MintC, .14)), new Pen(Mint, 1.4), new EllipseGeometry(new Point(8, 8), 6.3, 6.3)));
+        g.Children.Add(new GeometryDrawing(null, new Pen(Mint, 1.6) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round }, Geometry.Parse("M5.2,8.3 L7.2,10.3 L10.9,6.2")));
+    });
+
+    /// <summary>A rare drop or a goal reached: the window's four-point spark (Theme.xaml IcSpark), filled in the alert's colour.</summary>
+    public static DrawingImage DropSign(Color c) => Sign(g =>
+        g.Children.Add(new GeometryDrawing(Frozen(Color.FromArgb(0x55, c.R, c.G, c.B)), new Pen(Frozen(c), 1.3) { LineJoin = PenLineJoin.Round },
+            Geometry.Parse("M8,1.5 L9.3,6.4 L14.2,7.7 L9.3,9 L8,13.9 L6.7,9 L1.8,7.7 L6.7,6.4 Z"))));
+
+    static DrawingImage Sign(Action<DrawingGroup> draw)
+    {
+        var g = new DrawingGroup();
+        g.Children.Add(new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 16, 16))));
+        draw(g);
+        var img = new DrawingImage(g); img.Freeze();
+        return img;
+    }
+
     /// <summary>A glow around a rounded shape: a ring in the colour, blurred, drawn under the shape (the shape itself stays sharp).</summary>
     public static Border Glow(Color c, double radius, double blur, double opacity, double thickness = 1) => new()
     {
@@ -236,10 +283,13 @@ static class HudKit
         double inner = size - 4;
         var pic = new Image { Source = slot.Image, Stretch = Stretch.UniformToFill, Margin = new Thickness(1), Clip = new RectangleGeometry(new Rect(0, 0, inner, inner), 3, 3) };
         RenderOptions.SetBitmapScalingMode(pic, BitmapScalingMode.HighQuality);
-        var letter = new TextBlock
+        // no picture: the kind's line icon from the window's set (2026-11-08, as Ui/Quest.cs KindGlyph), the coin for Kinah and
+        // the loot sack for an item, where the name's first letter read as a broken picture
+        var letter = new System.Windows.Shapes.Path
         {
-            Text = Initial(p.Kinah ? "Kinah" : p.Name), FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Muted, HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 3), Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed,
+            Data = KindGeo(p.Kinah ? "Coin" : "Sack"), Width = Math.Round(size * 0.5), Height = Math.Round(size * 0.5), Stretch = Stretch.Uniform, Stroke = Muted, StrokeThickness = 1.8,
+            StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed,
         };
         if (slot.Image == null && !ReferenceEquals(slot, IconCache.None))
         {
@@ -275,7 +325,14 @@ static class HudKit
         return b;
     }
 
-    static string Initial(string name) { foreach (var ch in name) if (char.IsLetter(ch)) return char.ToUpperInvariant(ch).ToString(); return "·"; }
+    /// <summary>
+    /// Theme.xaml's IcSack and IcCoin, parsed here and frozen: the panel is drawn where the application's resources may
+    /// not be in reach (its layout renders found none), and its drawing is frozen throughout.
+    /// </summary>
+    static readonly Geometry SackGeo = FrozenGeo("M9,4 H15 L14,7 H10 Z M10,7 C5,9 4,14 5,18 C6,20.5 18,20.5 19,18 C20,14 19,9 14,7"),
+        CoinGeo = FrozenGeo("M12,3 A9,9 0 1 0 12,21 A9,9 0 1 0 12,3 Z M9.5,8 V16 M9.5,12 L14.5,8 M9.5,12 L14.5,16");
+    static Geometry FrozenGeo(string data) { var g = Geometry.Parse(data); g.Freeze(); return g; }
+    static Geometry KindGeo(string name) => name == "Coin" ? CoinGeo : SackGeo;
 
     /// <summary>"RUN 42:17" during a run: the word and the clock apart. The session clock alone otherwise.</summary>
     public static (bool Run, string Clock) Time(string time) => time.StartsWith("RUN ") ? (true, time[4..]) : (false, time);

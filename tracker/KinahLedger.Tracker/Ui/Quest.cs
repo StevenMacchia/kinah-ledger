@@ -62,8 +62,8 @@ public partial class MainWindow
         if (grade is not ("" or "Common")) { box.BorderThickness = new Thickness(2); box.SetResourceReference(Border.BorderBrushProperty, "Grade" + grade); }
         var pic = new Image { Source = slot.Image, Stretch = Stretch.UniformToFill };
         RenderOptions.SetBitmapScalingMode(pic, BitmapScalingMode.HighQuality);
-        var letter = new TextBlock { Text = InitialOf(name), FontSize = Math.Round(size * 0.42), FontWeight = FontWeights.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed };
-        letter.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        var letter = KindGlyph(name, id, size);
+        letter.Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed;
         if (slot.Image == null && !ReferenceEquals(slot, IconCache.None))
         {
             System.ComponentModel.PropertyChangedEventHandler? on = null;
@@ -73,6 +73,22 @@ public partial class MainWindow
         var face = new Grid(); face.Children.Add(letter); face.Children.Add(pic);
         box.Child = face;
         return box;
+    }
+
+    /// <summary>
+    /// What an item's slot shows when it has no picture (a name the list doesn't know, or the icon still on its way): the
+    /// line icon of its kind, from the kit's own set: a shield for gear, a coin for a currency, a leaf for a gathered
+    /// material, the loot sack for anything else. Until 2026-11-08 it was the name's first letter, which read as a broken
+    /// picture (the audit's "letter tiles").
+    /// </summary>
+    Path KindGlyph(string name, long id, double size)
+    {
+        var info = _items.Get(id);
+        var kind = _items.IsGear(id) || name.EndsWith("(bound)", StringComparison.OrdinalIgnoreCase) ? "Shield"
+            : info?.Category is "Currency" or "Special Points" ? "Coin"
+            : info?.Category == "Gathering Material" || Data.GatheringCatalog.Find(name) != null ? "Leaf"
+            : "Sack";
+        return QIcon(kind, Math.Round(size * 0.5), "Muted", size >= 40 ? 2 : 1.8);
     }
 
     /// <summary>Kinah's coin: a gold disc with the K, the game having no item icon for its money.</summary>

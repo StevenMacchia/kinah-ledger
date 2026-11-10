@@ -220,6 +220,15 @@ public static class WpfApp
         Click(o.SaveBtn);
         DoEvents();
         Check(w.HudLook == HudLooks.Strip, "back to the Strip");
+        // Badge's state lines each start with a sign (2026-11-08 audit: they differed by text colour alone): the stop's flash
+        // the stop square, a waiting notice the gold "i", a start the run dot
+        static IEnumerable<DependencyObject> BadgeTree(DependencyObject d) { yield return d; foreach (var c in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) foreach (var x in BadgeTree(c)) yield return x; }
+        bool BadgeSign(Dictionary<string, string> v, System.Windows.Media.ImageSource sign) =>
+            BadgeTree(HudWindow.Preview(HudLooks.Strip, null, v)).OfType<System.Windows.Controls.Image>().Any(i => i.Source == sign && i.Parent is FrameworkElement row && row.Visibility == Visibility.Visible);
+        Check(BadgeSign(new() { ["flash"] = "Run stopped · 1.27M this run", ["run"] = "" }, HudKit.StopSign)
+              && BadgeSign(new() { ["notice"] = "Update ready · installs when you leave the game" }, HudKit.NoticeSign)
+              && BadgeSign(new() { ["flash"] = "Run started", ["run"] = "1" }, HudKit.StartSign),
+            "Badge: a stop, a notice and a start each show their own sign");
         // the looks' pickups come from the feed: newest first, with the count, worth, grade and icon
         var picks = w.HudPickValuesNow();
         string Pk(int i, string k = "") => picks.GetValueOrDefault("pick" + i + k, "");
@@ -1304,7 +1313,7 @@ public static class WpfApp
             ("ui-hud-unlocked.png", HudFields.Parse(null), new() { ["unlocked"] = "move" }),
             // a run on: the red dot, the run's clock, and the shortcut's confirmation; then the stop's line on the default panel
             ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = "Run started" }),
-            ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["flash"] = "Run stopped · 1.27M this run" }),
+            ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["run"] = "", ["flash"] = "Run stopped · 1.27M this run" }),
             // Options at its far ends: 30% background (the figures stay solid) at 150%
             ("ui-hud-scaled.png", HudFields.Parse("time,rate,total"), new()),
             // the first two minutes: the hour says it is warming up instead of a wild figure, on the feed and on the classic set
