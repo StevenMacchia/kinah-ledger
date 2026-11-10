@@ -60,6 +60,40 @@ public static class PickupCheck
     public static bool IsInventoryLine(string line) =>
         !PlayerChat(line) && (InventoryRx.IsMatch(line) || RemoteConfig.HasAny(line, RemoteConfig.Current.InventoryWords));
 
+    // the inventory's verbs, letters only, earliest first decides ("Added Quick Register items" is Quick Register)
+    static readonly Regex InventoryVerbRx = new(@"retriev|withdr|stor|quick|regist|dismantl|salvag|exchang|purchas|wardrobe|attach|dropsreward|obtain",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// Which of the inventory's own lines this is, by its first verb ("retriev" for "Retrieved item(s) from Storage.",
+    /// "stor" for "Stored item(s) in Storage."), or null. Two lines of different kinds are never one line read twice: the
+    /// read-twice check allows 40% of the letters to differ, and a withdrawal 44 s after a deposit was taken for the
+    /// deposit's line still on screen, so it opened no window (Steven, 2026-11-10 15:06: White Dragon Lord Longsword and
+    /// 32,914,369 Kina taken out of storage counted as farmed).
+    /// </summary>
+    public static string? InventoryKind(string text)
+    {
+        var k = new string(text.ToLowerInvariant().Where(char.IsLetter).ToArray());
+        var m = InventoryVerbRx.Match(k);
+        return m.Success ? m.Value : null;
+    }
+
+    /// <summary>
+    /// The line at <paramref name="at"/> was taken out of storage: the next line the game printed under it (other players'
+    /// messages skipped) is the withdrawal's own ("Acquired 32,914,369 Kina." / "Retrieved item(s) from Storage.", as every
+    /// withdrawal in the logs prints).
+    /// </summary>
+    public static bool TakenOut(IReadOnlyList<string> read, int at)
+    {
+        var player = PlayerText(read);
+        for (int i = at + 1; i < read.Count; i++)
+        {
+            if (player[i]) continue;
+            return InventoryKind(read[i]) is "retriev" or "withdr";
+        }
+        return false;
+    }
+
     // "Dawn Frost (Gloves) Skin acquired.", read "Skimacquired", "Skih acquired", "(Breastplate)'Skin"
     static readonly Regex SkinUnlockRx = new(@"\([^()]{2,24}\)\s*['’]?\s*sk[il1][mnh]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
