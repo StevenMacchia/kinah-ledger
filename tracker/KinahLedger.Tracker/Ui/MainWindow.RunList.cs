@@ -129,7 +129,7 @@ public partial class MainWindow
         var whenQ = local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture);
         long valueQ = RunValue(run);
         var subQ = whenQ + (run.Seconds > 0 ? " · took " + Clock(TimeSpan.FromSeconds(run.Seconds)) : "") + " · " + RunSub(run, out_ ? FlagReason(run, 0) : "") + (out_ ? " · left out of the figures" : "");
-        var iconQ = out_ ? QIconBox("Q", "Coral", 28, round: true) : QIconBox(KindIcon(run.Kind), "Sky", 28, round: true);
+        var iconQ = out_ ? QIconBox("Q", "Coral", 28, round: true) : QIconBox(PlaceIcon(run.Zone, run.Kind), "Sky", 28, round: true);
         var line = QRow(iconQ, run.Label, subQ, out_ || valueQ <= 0 ? "–" : Fk(valueQ), out_ || valueQ <= 0 ? "Faint" : "Gold", rule: false);
         line.ToolTip = out_ ? "This run's Kinah or rewards weren't read in full, so it isn't in the figures. Click for the fix, in its place's card." : "Click for this run in its place's card: the details, or Remove if it's wrong.";
         ToolTipService.SetInitialShowDelay(line, 500);

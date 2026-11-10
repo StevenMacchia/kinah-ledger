@@ -20,7 +20,7 @@ static class GameArt
         ["Coin"] = "kinah", ["Sword"] = "greatsword", ["Hammer"] = "scroll", ["Potion"] = "scroll", ["Flag"] = "medal",
         ["Trophy"] = "medalgold", ["Star"] = "daily", ["Door"] = "dungeon", ["Timer"] = "dungeon", ["Bolt"] = "rift",
         ["Pin"] = "rift", ["Map"] = "rift", ["Bag"] = "attendance", ["Sack"] = "attendance", ["Spark"] = "attendance",
-        ["Q"] = "checklist", ["Shield"] = "profile", ["Pick"] = "ore", ["Leaf"] = "ore", ["Hide"] = "ore", ["Gem"] = "morph",
+        ["Key"] = "key", ["Q"] = "checklist", ["Shield"] = "profile", ["Pick"] = "ore", ["Leaf"] = "ore", ["Hide"] = "ore", ["Gem"] = "morph",
     };
 
     static readonly Dictionary<string, ImageSource?> Loaded = new(StringComparer.Ordinal);

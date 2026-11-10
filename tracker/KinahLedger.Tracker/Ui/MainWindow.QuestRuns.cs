@@ -29,6 +29,12 @@ public partial class MainWindow
     double _liveAvg; int _liveK;
 
     /// <summary>The icon for a place's kind: a door for an expedition, a star for an event, a bolt for Transcendence, swords for the arena.</summary>
+    /// <summary>
+    /// A place's icon: the kind's, except where the game has a picture of the place's own. Shugo Festival is the key that
+    /// opens the run's chest at the end (Steven, 2026-11-10: not the dungeon ticket); its games all file under that name.
+    /// </summary>
+    static string PlaceIcon(string place, string kind) => place.Equals("Shugo Festival", StringComparison.OrdinalIgnoreCase) ? "Key" : KindIcon(kind);
+
     static string KindIcon(string kind) => kind switch { "Event" => "Star", InstanceLog.Transcendence => "Bolt", "Arena" => "Sword", _ => "Door" };
 
     /// <summary>A small rounded label: a dot and the words, gold while a run is open, faint after ("Paid · 5:48 in", "last 18:02"). Its text is the figures check's.</summary>
@@ -109,7 +115,7 @@ public partial class MainWindow
         // the kicker: the place's icon, its name with its kind, the band's line; the pill on the right
         var kick = new Grid { Background = Brushes.Transparent };
         kick.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); kick.ColumnDefinitions.Add(new ColumnDefinition()); kick.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var ic = QIconBox(KindIcon(kind), "Sky", 36, round: false, iconSize: 19); ic.VerticalAlignment = VerticalAlignment.Center; kick.Children.Add(ic);
+        var ic = QIconBox(PlaceIcon(zone, kind), "Sky", 36, round: false, iconSize: 19); ic.VerticalAlignment = VerticalAlignment.Center; kick.Children.Add(ic);
         var titles = new StackPanel { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameRow = new Grid();
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MaxWidth = 400 }); nameRow.ColumnDefinitions.Add(new ColumnDefinition());
@@ -348,7 +354,9 @@ public partial class MainWindow
         var sp = new StackPanel();
         var card = new Border { Child = sp, Margin = new Thickness(0, 8, 0, 0) };
         card.SetResourceReference(StyleProperty, "QCard");
-        sp.Children.Add(QHead("Timer", "Runs", "newest first"));
+        // the place's own icon on its list (Shugo Festival's key), the kind's otherwise
+        var placeIcon = runs.FirstOrDefault() is { } r0 ? PlaceIcon(r0.Zone, r0.Kind) : "Timer";
+        sp.Children.Add(QHead(placeIcon, "Runs", "newest first"));
         var order = runs.OrderByDescending(r => ReferenceEquals(r, open)).ThenByDescending(r => r.LastLoot ?? r.Start).ToList();
         int i = 0;
         foreach (var r in order.Take(3))
@@ -360,7 +368,7 @@ public partial class MainWindow
             string title = isOpen ? $"Run {_liveK} · open" : $"{when} · took {Clock(TimeSpan.FromSeconds(r.Seconds))}";
             string sub = isOpen ? $"since {when} · {PiecesText(r)}" : RunSub(r, why);
             long v = RunValue(r);
-            var icon = isOpen ? QIconBox("Timer", "Gold", 28, round: true) : why.Length > 0 ? QIconBox("Q", "Coral", 28, round: true) : QIconBox(KindIcon(r.Kind), "Sky", 28, round: true);
+            var icon = isOpen ? QIconBox(PlaceIcon(r.Zone, r.Kind), "Gold", 28, round: true) : why.Length > 0 ? QIconBox("Q", "Coral", 28, round: true) : QIconBox(PlaceIcon(r.Zone, r.Kind), "Sky", 28, round: true);
             var row = QRow(icon, title, sub, r.OutOfAverages || v <= 0 ? "–" : Fk(v), r.OutOfAverages || v <= 0 ? "Faint" : "Gold", rule: i > 0);
             row.ToolTip = why.Length > 0 ? why + " Click for the fix." : "Click for this run's details, or Remove if it's wrong.";
             ToolTipService.SetInitialShowDelay(row, 500);

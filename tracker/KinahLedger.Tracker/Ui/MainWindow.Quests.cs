@@ -212,7 +212,7 @@ public partial class MainWindow
     FrameworkElement QuestIcon(Quest q, double size = 28) => q.Kind switch
     {
         QuestKind.Material => QItemIcon(q.Subject, _items.IdOf(q.Subject), size, round: true, grade: GradeOf(q.Subject)),
-        QuestKind.Runs => QIconBox("Door", "Sky", size, round: true),
+        QuestKind.Runs => QIconBox(PlaceIcon(q.Subject, ""), "Sky", size, round: true),
         QuestKind.BestRun => QIconBox("Trophy", "Gold", size, round: true),
         QuestKind.Gather => QIconBox("Leaf", "Lime", size, round: true),
         QuestKind.Kinah => QIconBox("Sack", "Gold", size, round: true),
