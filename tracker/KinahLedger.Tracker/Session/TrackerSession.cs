@@ -1437,6 +1437,18 @@ public sealed partial class TrackerSession
                 // Soul Crystals from a quest or a reward are not crystals from kills: left out, so the per hour stays the kills'
                 if (why != null && parsed is PetCrystal wp) { CrashLog.Note($"{wp.Name} x{wp.Count}: {why}, not counted with the kills"); any = true; continue; }
                 if (why != null && parsed is ItemAcquired wa) CrashLog.Note($"{_items.NameOf(wa.ItemId)} x{wa.Count}: {why}, not a drop");
+                // Kinah taken out of storage is the player's own, never income (2026-11-10 15:06: "Acquired 32,914,369 Kina." over
+                // its "Retrieved item(s) from Storage.", filed as a reward's bound Kinah; a smaller sum would have counted as
+                // farmed). Told by its place, the withdrawal's line right under it (PickupCheck.TakenOut), not by the inventory's
+                // window: a kill's Kina 4 s after the wardrobe's skins is a kill's (bench 110725 at 58.9 s). The Kinah counter
+                // is told, so its rise isn't counted from the counter instead
+                if (!made && parsed is KinahChanged { Delta: > 0 } ik && (meta is { } km ? km.Read : lines) is { } kread
+                    && kread.ToList().FindLastIndex(x => x.Trim() == raw.Trim()) is int kat and >= 0 && PickupCheck.TakenOut(kread, kat))
+                {
+                    CrashLog.Note($"{ik.Delta:N0} Kina: taken out of storage (the withdrawal's line under it), not income");
+                    if (KinaWitnessOn(now)) SettleKina(_kina.Offer(new KinaWitness.Candidate(ik.Delta, now, raw.Trim(), null), now), now);
+                    any = true; continue;
+                }
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
                 bool baseKina = InBaseKina(parsed);
                 if (baseKina) CrashLog.Note($"{((KinahChanged)parsed).Delta:N0} Kina in a base ({Zone}): a reward, a sale or the mail, never farming");
@@ -3661,9 +3673,19 @@ public sealed partial class TrackerSession
     // when each line was first on screen: an achievement line that stays up is read a little differently each time, and
     // only a new one makes the items with it its reward
     readonly Dictionary<string, (DateTime First, DateTime Last)> _firstSeen = new();
-    bool NewLine(string line, DateTime now) => Reread.FirstSeen(line, _firstSeen) is not DateTime f || (now - f).TotalSeconds <= 20;
+    bool NewLine(string line, DateTime now) => SeenFirst(line, now) is not DateTime f || (now - f).TotalSeconds <= 20;
     /// <summary>The end of a window a line opens (an inventory line, a box): <see cref="RewardWindowSeconds"/> after the line first showed (now when it shows for the first time).</summary>
-    DateTime WindowFrom(string line, DateTime now) => (Reread.FirstSeen(line, _firstSeen) is DateTime f && f <= now ? f : now).AddSeconds(RewardWindowSeconds);
+    DateTime WindowFrom(string line, DateTime now) => (SeenFirst(line, now) is DateTime f && f <= now ? f : now).AddSeconds(RewardWindowSeconds);
+    /// <summary>
+    /// When this line was first on screen, for NewLine and WindowFrom: not counting a line off screen for ten minutes, nor
+    /// another of the inventory's lines ("Retrieved item(s) from Storage." is not "Stored item(s) in Storage." read again;
+    /// 2026-11-10 15:06, PickupCheck.InventoryKind). A line whose verb didn't read matches any.
+    /// </summary>
+    DateTime? SeenFirst(string line, DateTime now)
+    {
+        var kind = PickupCheck.InventoryKind(line);
+        return Reread.FirstSeen(line, _firstSeen, now, kind == null ? null : key => PickupCheck.InventoryKind(key) is not { } k2 || k2 == kind);
+    }
     // reads that couldn't be lined up, in a row: since when, the lines seen before them, what was counted meanwhile
     DateTime? _garbledSince; HashSet<string> _beforeGarbled = new(); readonly List<string> _countedGarbled = new();
     /// <summary>Every chat line counted in the last minute, by any path, for the settle not to count it again.</summary>

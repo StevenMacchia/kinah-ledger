@@ -1,4 +1,4 @@
-using KinahLedger.Data;
+﻿using KinahLedger.Data;
 using KinahLedger.Ocr;
 using KinahLedger.Session;
 using KinahLedger.Ui;
@@ -3267,6 +3267,56 @@ options: --process aion[,other]");
             iw.FlushVotes(i0.AddSeconds(30));
             Check("the inventory's window runs from its line's first sight: a drop 23 s on counts, the move with it doesn't",
                 $"{n(iw.Engine, "Riverside Boots")} {n(iw.Engine, "Comet Cloak")}", "0 1");
+        }
+        // a withdrawal is not the deposit before it read again (Steven, 2026-11-10 15:06: "pulling things out of storage chests
+        // should never trigger something ... happened with my dragon sword"). reads.log: "Stored item(s) in Storage." at
+        // 15:05:58, the Storage window over the chat for 44 s, then one read with the sword and 32,914,369 Kina above their
+        // "Retrieved item(s) from Storage." lines. The read-twice check took the withdrawal's line for the deposit's (10
+        // letters apart in 25, its limit 10), first seen 44 s before: no window opened, and both counted (the Kinah as a
+        // reward's bound Kinah, being so big; a small sum counted as farmed, and the window never covered Kinah). And an older
+        // withdrawal 15 minutes before, still in the table of lines seen, must not make this one an old line either (the table
+        // forgets a line off screen for ten minutes only once it holds 800)
+        foreach (var wdOlder in new double?[] { null, -15 * 60 })
+        {
+            var wdS = new TrackerSession(null, settings, items, "Test");
+            wdS.Engine.SetZone("Verteron Fortress Ruins"); wdS.ZoneView.SetZone("Verteron Fortress Ruins");
+            var wd0 = new DateTime(2026, 11, 10, 20, 5, 58, DateTimeKind.Utc);
+            if (wdOlder is double o)
+            {
+                var wdChat = new List<string> { "[Player1] hi", "Acquired Wrathful Mind x6.", "Retrieved item(s) from Storage." };
+                for (int i = 0; i < 3; i++) wdS.ProcessChat(wdChat, wd0.AddSeconds(o + i * 0.5));
+                // the chat goes on: a player line every 30 s scrolls the withdrawal off screen
+                for (double t = o + 30; t < 0; t += 30)
+                {
+                    wdChat.Add($"[Player2] still here {t:0}");
+                    if (wdChat.Count > 10) wdChat.RemoveAt(0);
+                    for (int i = 0; i < 2; i++) wdS.ProcessChat(wdChat, wd0.AddSeconds(t + i * 0.5));
+                }
+            }
+            var wdDeposit = new List<string> { "Acquired Enhance Stone x454.", "Added Quick Register items to the list.", "Stored item(s) in Storage.", "No registered items.", "Added Quick Register items to the list.", "Stored item(s) in Storage." };
+            if (wdOlder == null) for (int i = 0; i < 3; i++) wdS.ProcessChat(wdDeposit, wd0.AddSeconds(i * 0.5));
+            var wdOut = new List<string> { "x104.", "Acquired Kukuru Fried Meat x31.", "Forgotten Cloak acquired.", "White Dragon Lord Longsword acquired.", "Retrieved item(s) from Storage.", "[Nobleborz] [Map Pin-18] cube", "Acquired 32,914,369 Kina.", "Retrieved item(s) from Storage.", "Acquired 4,200 Kina.", "Retrieved item(s) from Storage.", "[Baaaan] [+15 Splendent Wise Dragon Lord", "Spellbook] finally rolled everything right" };
+            long wdKinah = wdS.Engine.Kinah, wdBound = wdS.Engine.KinahBound;
+            for (int i = 0; i < 6; i++) wdS.ProcessChat(wdOut, wd0.AddSeconds(44 + i * 0.5));
+            wdS.FlushVotes(wd0.AddSeconds(48));
+            var wdLabel = wdOlder == null ? " (a deposit 44 s before, the chat covered between)" : " (another withdrawal 15 min before)";
+            Check($"taken out of storage: not a drop, nor Kinah earned, big or small{wdLabel}",
+                $"{n(wdS.Engine, "White Dragon Lord Longsword")} {wdS.Engine.Kinah - wdKinah} {wdS.Engine.KinahBound - wdBound}", "0 0 0");
+            wdOut.Add("[Player3] ok");   // the chat goes on, read as usual
+            for (int i = 0; i < 3; i++) wdS.ProcessChat(wdOut, wd0.AddSeconds(55 + i * 0.5));
+            wdOut.AddRange(new[] { "Obtained 1 Agrint Soul Points.", "Comet Cloak acquired." });   // a kill and its drop, 30 s on
+            for (int i = 0; i < 4; i++) wdS.ProcessChat(wdOut, wd0.AddSeconds(74 + i * 0.4));
+            wdS.FlushVotes(wd0.AddSeconds(78));
+            Check($"...and a kill's drop 30 s later counts{wdLabel}", $"{n(wdS.Engine, "Comet Cloak")}", "1");
+        }
+        Check("the inventory's lines by kind: a withdrawal, a deposit, Quick Register, none",
+            $"{PickupCheck.InventoryKind("Retrieved item(s) from Storage.")} {PickupCheck.InventoryKind("Stored item(s) in Storage.")} {PickupCheck.InventoryKind("Added Quick Register items to the list.")} {PickupCheck.InventoryKind("White Dragon Lord Longsword acquired.") ?? "-"}",
+            "retriev stor quick -");
+        {
+            var tr = new List<string> { "White Dragon Lord Longsword acquired.", "Retrieved item(s) from Storage.", "[Nobleborz] [Map Pin-18] cube", "Acquired 32,914,369 Kina.", "[Baaaan] hi", "Retrieved item(s) from Storage.", "Acquired 344 Kina.", "Obtained 2 Poison Blood Soul Points.", "Acquired 425 Kina." };
+            Check("taken out of storage by its place: the withdrawal's line under it (players' lines skipped); a kill's Kina, the last line, a deposit's: not",
+                $"{PickupCheck.TakenOut(tr, 0)} {PickupCheck.TakenOut(tr, 3)} {PickupCheck.TakenOut(tr, 6)} {PickupCheck.TakenOut(tr, 8)} {PickupCheck.TakenOut(new List<string> { "Acquired 500 Kina.", "Stored item(s) in Storage." }, 0)}",
+                "True True False False False");
         }
         // a Market buy prints only the item's own "acquired" line, and the Market's window covers the chat (Steven, 2026-11-06
         // 10:56: "I bought Wrathful from the Market and it appeared as loot in the open world": Wrathful Mind x2, two more and

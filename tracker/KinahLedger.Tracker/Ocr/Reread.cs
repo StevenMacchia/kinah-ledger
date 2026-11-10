@@ -261,6 +261,25 @@ public sealed class Reread
         return best;
     }
 
+    /// <summary>
+    /// <see cref="FirstSeen(string, Dictionary{string, ValueTuple{DateTime, DateTime}})"/> as of <paramref name="now"/>: a line
+    /// off screen for over ten minutes is a new one when it shows again (as <see cref="NoteFirstSeen"/> files it), and a line
+    /// <paramref name="same"/> says is another one doesn't count (a storage withdrawal is not the deposit before it).
+    /// </summary>
+    public static DateTime? FirstSeen(string line, Dictionary<string, (DateTime First, DateTime Last)> seen, DateTime now, Func<string, bool>? same = null)
+    {
+        var k = Key(line);
+        if (k.Length == 0) return null;
+        DateTime? best = null;
+        foreach (var (key, v) in seen)
+        {
+            if (key != k && !Near(k, key)) continue;
+            if ((now - v.Last).TotalMinutes > 10 || (same != null && !same(key))) continue;
+            if (best == null || v.First < best) best = v.First;
+        }
+        return best;
+    }
+
     /// <summary>An achievement line ("Fortress Guardian Notun III achieved."), never a player's message.</summary>
     // A quest done ("Protect the Odyle Collector completed.") is the same: what prints with it is the quest's reward
     // (Steven, 2026-10-23 16:22: its 200 Natura Soul Crystals landed in Soul Crystals from kills). Not a craft or a gather.
