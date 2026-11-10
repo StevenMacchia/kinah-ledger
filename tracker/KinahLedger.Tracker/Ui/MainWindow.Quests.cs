@@ -206,7 +206,7 @@ public partial class MainWindow
 
     static string QuestTone(Quest q) => q.Kind switch
     {
-        QuestKind.Material => "Mint", QuestKind.Runs => "Sky", QuestKind.BestRun => "Gold", QuestKind.Gather => "Lime", _ => "Lilac",
+        QuestKind.Material => "Mint", QuestKind.Runs => "Sky", QuestKind.BestRun => "Gold", QuestKind.Kinah => "Gold", QuestKind.Gather => "Lime", _ => "Lilac",   // Kinah in gold, as the v2 look (2026-11-10)
     };
 
     FrameworkElement QuestIcon(Quest q, double size = 28) => q.Kind switch
@@ -215,6 +215,7 @@ public partial class MainWindow
         QuestKind.Runs => QIconBox("Door", "Sky", size, round: true),
         QuestKind.BestRun => QIconBox("Trophy", "Gold", size, round: true),
         QuestKind.Gather => QIconBox("Leaf", "Lime", size, round: true),
+        QuestKind.Kinah => QIconBox("Sack", "Gold", size, round: true),
         _ => QIconBox("Sack", "Lilac", size, round: true),
     };
 
@@ -332,7 +333,7 @@ public partial class MainWindow
     {
         var s = ScoreNow();
         var (card, body) = CkShell(300);
-        var title = CkText("Your score", CkGold, 16, FontWeights.SemiBold, display: true); title.Margin = new Thickness(20, 16, 20, 2);
+        var title = CkText("Your score", CkGold, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 16, 20, 2);
         body.Children.Add(title);
         var lead = CkText("Points from the quests in Next up, at completion.", CkMuted, 12.5); lead.Margin = new Thickness(20, 0, 20, 8);
         body.Children.Add(lead);

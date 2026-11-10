@@ -538,7 +538,7 @@ public partial class MainWindow
         else if (open) WhereNote.Inlines.Add(PR("Kinah and loot an hour · " + (atGear ? $"gear {GearBracket!.Replace("-", "–")}" : "all players") + $" · {(all ? "all regions" : server)} · last 7 days", "Muted"));
         else
         {
-            WhereNote.Inlines.Add(PR(Fk(topHr) + " an hour", "Mint", FontWeights.ExtraBold));
+            WhereNote.Inlines.Add(PR(Fk(topHr) + " an hour", "Mint", FontWeights.SemiBold));
             WhereNote.Inlines.Add(PR($"{more} · {top!.Runs} runs from {top.Players} players at {(atGear ? "your gear" : "any gear")}", "Muted"));
         }
         WhereSum.Text = open || zones.Count <= 1 ? "" : $"{zones.Count - 1} more";
@@ -562,7 +562,7 @@ public partial class MainWindow
             if (bests[i] is long yb)
             {
                 // "your best 1.4M" under the figure (options-test reads it by its tag)
-                var y = new TextBlock { FontSize = 10.5, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Tag = "where-best", Margin = new Thickness(0, 0, 0, -1) };
+                var y = new TextBlock { FontSize = 10.5, FontWeight = FontWeights.Medium, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Tag = "where-best", Margin = new Thickness(0, 0, 0, -1) };
                 y.Inlines.Add(PR("your best ", "Faint")); y.Inlines.Add(PR(Fk(yb), "Muted"));
                 foreach (var v in g.Children.OfType<TextBlock>().Where(t => Grid.GetColumn(t) == 2 && Grid.GetRow(t) == 0)) { v.VerticalAlignment = VerticalAlignment.Top; v.Margin = new Thickness(0, -2, 0, 0); }
                 Grid.SetColumn(y, 2); g.Children.Add(y);
@@ -646,7 +646,7 @@ public partial class MainWindow
             sp.Children.Add(t);
             var b = new Border
             {
-                Child = sp, Height = 34, CornerRadius = new CornerRadius(17), Padding = new Thickness(5, 0, 12, 0), Margin = new Thickness(0, 0, 8, 8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
+                Child = sp, Height = 34, CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 12, 0), Margin = new Thickness(0, 0, 8, 8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
             };
             // each look's own chip colours (Daylight had dark chips with dark text)
             b.SetResourceReference(Border.BackgroundProperty, on ? "GoldTint" : "ChipOff");
@@ -759,7 +759,7 @@ public partial class MainWindow
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             g.Children.Add(CkText(line.At.ToLocalTime().ToString("HH:mm:ss"), CkFaint, 12, mono: true));
-            var what = CkText(line.Text, CkInk, 13, FontWeights.SemiBold); what.Margin = new Thickness(12, 0, 12, 0); Grid.SetColumn(what, 1); g.Children.Add(what);
+            var what = CkText(line.Text, CkInk, 13, FontWeights.Normal); what.Margin = new Thickness(12, 0, 12, 0); Grid.SetColumn(what, 1); g.Children.Add(what);
             var val = tab == FeedTab.Crafting ? CraftValue(line) : PickupValue(line);
             var v = CkText(val.Text, val.Muted ? CkFaint : CkGold, 12.5, mono: true); Grid.SetColumn(v, 2); g.Children.Add(v);
             body.Children.Add(CkBox(g, new Thickness(20, 0, 20, 0)));
@@ -785,7 +785,7 @@ public partial class MainWindow
                 bool on = key == chosen;
                 var pill = new Border
                 {
-                    Child = CkText(text, on ? CkGold : CkMuted, 12.5), Padding = new Thickness(12, 5, 12, 6), Margin = new Thickness(0, 0, 8, 8), CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
+                    Child = CkText(text, on ? CkGold : CkMuted, 12.5), Padding = new Thickness(12, 5, 12, 6), Margin = new Thickness(0, 0, 8, 8), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
                     BorderBrush = on ? Ck(CkGold, 0x99) : Ck(CkSlotLine), Background = on ? Ck(CkGold, 0x14) : Brushes.Transparent,
                 };
                 pill.MouseLeftButtonUp += (_, _) => Redo(key);

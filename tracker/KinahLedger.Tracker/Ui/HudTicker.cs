@@ -60,10 +60,10 @@ public sealed partial class HudTicker : IHudLook
     public HudTicker()
     {
         _dot = Dot(8); _dot.Margin = new Thickness(0, 0, 7, 0);
-        _run = T("RUN", 10.5, Gold, weight: FontWeights.Black); _run.Margin = new Thickness(0, 0, 7, 0);
+        _run = T("RUN", 10.5, Gold, weight: FontWeights.Bold); _run.Margin = new Thickness(0, 0, 7, 0);
         _time = T("", 13, Ink, mono: true);
-        _rate = T("", 15, Gold, weight: FontWeights.Black);
-        _unit = T("/h", 11.5, Muted, weight: FontWeights.Bold); _unit.Margin = new Thickness(5, 0, 0, 0);
+        _rate = T("", 15, Gold, weight: FontWeights.Bold);
+        _unit = T("/h", 11.5, Muted, weight: FontWeights.SemiBold); _unit.Margin = new Thickness(5, 0, 0, 0);
         _total = T("", 13, Ink, mono: true);
         _sep1 = Rule(14, 9); _sep2 = Rule(14, 9);
         _idle = T("Waiting for the first count", 12, Faint); _idle.Visibility = Visibility.Collapsed;
@@ -224,9 +224,9 @@ public sealed partial class HudTicker : IHudLook
     Brush Wash(string kind, bool newest)
     {
         // plum washes (the Quest look): the newest pickup lifts to violet at its start, a notice to amber
-        var (a, b, c) = kind == "notice" ? ((0x4A2C1A, .95), (0x261826, .92), (0x1A1433, .78))
-            : newest ? ((0x3A2E6A, .95), (0x201A3C, .92), (0x1A1433, .75))
-            : ((0x1A1433, .94), (0x1E1838, .90), (0x1A1433, .72));
+        var (a, b, c) = kind == "notice" ? ((0x4A2C1A, .95), (0x16181F, .92), (0x0B0C10, .78))
+            : newest ? ((0x363A4B, .95), (0x1F212A, .92), (0x0B0C10, .75))
+            : ((0x0B0C10, .94), (0x1D1F27, .90), (0x0B0C10, .72));
         var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         g.GradientStops.Add(new GradientStop(Rgb((uint)a.Item1, a.Item2 * _alpha), 0));
         g.GradientStops.Add(new GradientStop(Rgb((uint)b.Item1, b.Item2 * _alpha), newest && kind == "pick" ? .6 : .65));
@@ -245,11 +245,11 @@ public sealed partial class HudTicker : IHudLook
         var tile = Tile(p, 24);
         g.Children.Add(tile);
         var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(9, 0, 0, 0) };
-        name.Inlines.Add(R(p.Name, 13, Ink, weight: FontWeights.ExtraBold));
-        if (p.Note.Length > 0) name.Inlines.Add(R(" " + p.Note, 11.5, Faint, weight: FontWeights.Bold));
+        name.Inlines.Add(R(p.Name, 13, Ink, weight: FontWeights.SemiBold));
+        if (p.Note.Length > 0) name.Inlines.Add(R(" " + p.Note, 11.5, Faint, weight: FontWeights.SemiBold));
         Grid.SetColumn(name, 1); g.Children.Add(name);
         // Kinah pops gold, loot pops mint (the mock's Pop)
-        var worth = T(p.Worth, 13, p.Kinah ? Gold : Mint, weight: FontWeights.Black); worth.Margin = new Thickness(9, 0, 0, 0);
+        var worth = T(p.Worth, 13, p.Kinah ? Gold : Mint, weight: FontWeights.Bold); worth.Margin = new Thickness(9, 0, 0, 0);
         Grid.SetColumn(worth, 2); g.Children.Add(worth);
         return new Border
         {
@@ -263,8 +263,8 @@ public sealed partial class HudTicker : IHudLook
     {
         var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         g.GradientStops.Add(new GradientStop(Rgb(0x3A2E14, .95 * _alpha), 0));
-        g.GradientStops.Add(new GradientStop(Rgb(0x201A3C, .92 * _alpha), .55));
-        g.GradientStops.Add(new GradientStop(Rgb(0x1A1433, .78 * _alpha), 1));
+        g.GradientStops.Add(new GradientStop(Rgb(0x1F212A, .92 * _alpha), .55));
+        g.GradientStops.Add(new GradientStop(Rgb(0x0B0C10, .78 * _alpha), 1));
         g.Freeze();
         return g;
     }
@@ -280,12 +280,12 @@ public sealed partial class HudTicker : IHudLook
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.Children.Add(Tile(p, 24));
-        var label = T("TOP DROP", 8.5, Gold, weight: FontWeights.Black);
+        var label = T("TOP DROP", 8.5, Gold, weight: FontWeights.Bold);
         var name = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis };
-        name.Inlines.Add(R(p.Name, 12.5, p.Grade is "" or "Common" ? Ink : Frozen(GradeColor(p.Grade)), weight: FontWeights.ExtraBold));
+        name.Inlines.Add(R(p.Name, 12.5, p.Grade is "" or "Common" ? Ink : Frozen(GradeColor(p.Grade)), weight: FontWeights.SemiBold));
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0), Children = { label, name } };
         Grid.SetColumn(words, 1); g.Children.Add(words);
-        var worth = T(p.Worth, 13, Gold, weight: FontWeights.Black); worth.Margin = new Thickness(9, 0, 0, 0);
+        var worth = T(p.Worth, 13, Gold, weight: FontWeights.Bold); worth.Margin = new Thickness(9, 0, 0, 0);
         Grid.SetColumn(worth, 2); g.Children.Add(worth);
         return new Border
         {
@@ -299,7 +299,7 @@ public sealed partial class HudTicker : IHudLook
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         if (sign) { var i = WarnIcon(); i.Margin = new Thickness(0, 0, 8, 0); row.Children.Add(i); }
-        var t = T(text, 13, tone, weight: FontWeights.SemiBold); t.MaxWidth = sign ? 230 : 250;
+        var t = T(text, 13, tone, weight: FontWeights.Medium); t.MaxWidth = sign ? 230 : 250;
         if (clock is { } c)
         {
             // the That was wrong key's answer: a gold clock, the words in two tones, a gold wash and the line running down its 3 s
@@ -311,8 +311,8 @@ public sealed partial class HudTicker : IHudLook
             HudClockNotice.Run(drain, c, Still);
             var wash = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
             wash.GradientStops.Add(new GradientStop(Rgb(0x3A2E14, .96 * _alpha), 0));
-            wash.GradientStops.Add(new GradientStop(Rgb(0x201A3C, .92 * _alpha), .65));
-            wash.GradientStops.Add(new GradientStop(Rgb(0x1A1433, .80 * _alpha), 1));
+            wash.GradientStops.Add(new GradientStop(Rgb(0x1F212A, .92 * _alpha), .65));
+            wash.GradientStops.Add(new GradientStop(Rgb(0x0B0C10, .80 * _alpha), 1));
             wash.Freeze();
             return new Border
             {

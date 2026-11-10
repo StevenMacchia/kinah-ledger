@@ -93,7 +93,7 @@ public partial class MainWindow
         {
             var more = new Border { Width = 42, Height = 42, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, ToolTip = "The rest of the bag" };
             more.SetResourceReference(Border.BackgroundProperty, "Card2");
-            more.Child = QT($"+{slots.Count - Max}", 12, FontWeights.Black, "Muted");
+            more.Child = QT($"+{slots.Count - Max}", 12, FontWeights.Bold, "Muted");
             more.MouseLeftButtonUp += (_, _) => { if (_qChip != "bag") ToggleChip("bag"); };
             BagStripHost.Children.Add(more);
         }

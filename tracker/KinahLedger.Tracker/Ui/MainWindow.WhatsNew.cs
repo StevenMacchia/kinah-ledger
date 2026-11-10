@@ -61,7 +61,7 @@ public partial class MainWindow
         var t = new TextBlock { FontSize = 12.5, LineHeight = 18, TextWrapping = TextWrapping.Wrap };
         if (n.Lead.Length > 0)
         {
-            var lead = new Run(n.Lead) { FontWeight = FontWeights.SemiBold };
+            var lead = new Run(n.Lead) { FontWeight = FontWeights.Normal };
             lead.SetResourceReference(TextElement.ForegroundProperty, "Ink");
             t.Inlines.Add(lead);
         }

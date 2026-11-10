@@ -95,7 +95,7 @@ public partial class MainWindow
     static FrameworkElement QCoin(double size = 30)
     {
         var b = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        b.Background = new LinearGradientBrush(Color.FromRgb(0xFF, 0xD9, 0x7A), Color.FromRgb(0xE5, 0x9F, 0x2B), 160);
+        b.Background = new LinearGradientBrush(Color.FromRgb(0xFF, 0xD2, 0x7A), Color.FromRgb(0xD9, 0x9A, 0x24), 160);
         b.Child = QIcon("Coin", Math.Round(size * 0.6), "GoldInk", 2.2);
         return b;
     }
@@ -141,7 +141,7 @@ public partial class MainWindow
         g.Children.Add(icon);
         var b = new Border { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, MinWidth = 18, Height = 16, CornerRadius = new CornerRadius(8), Padding = new Thickness(4, 0, 4, 0), BorderThickness = new Thickness(1) };
         b.SetResourceReference(Border.BackgroundProperty, "Bg"); b.SetResourceReference(Border.BorderBrushProperty, "CardLineHover");
-        b.Child = QT(badge, 10.5, FontWeights.Black, "Ink");
+        b.Child = QT(badge, 10.5, FontWeights.Bold, "Ink");
         g.Children.Add(b);
         return g;
     }
@@ -164,21 +164,21 @@ public partial class MainWindow
         if (inline)
         {
             // one line: the name in bold, the small print after it in the muted tone
-            var t = QT(title, 13, FontWeights.ExtraBold, "Ink", trim: true); t.Margin = new Thickness(10, 0, 8, 0);
-            if (sub.Length > 0) { var r = new System.Windows.Documents.Run("  " + sub) { FontSize = 11, FontWeight = FontWeights.Bold }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Muted"); t.Inlines.Add(r); }
+            var t = QT(title, 13, FontWeights.SemiBold, "Ink", trim: true); t.Margin = new Thickness(10, 0, 8, 0);
+            if (sub.Length > 0) { var r = new System.Windows.Documents.Run("  " + sub) { FontSize = 11, FontWeight = FontWeights.Medium }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Muted"); t.Inlines.Add(r); }
             text = t;
         }
         else
         {
             var st = new StackPanel { Margin = new Thickness(10, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
-            st.Children.Add(QT(title, 13, FontWeights.ExtraBold, "Ink", trim: true));
-            if (sub.Length > 0) st.Children.Add(QT(sub, 11, FontWeights.Bold, "Muted", trim: true));
+            st.Children.Add(QT(title, 13, FontWeights.SemiBold, "Ink", trim: true));
+            if (sub.Length > 0) st.Children.Add(QT(sub, 11, FontWeights.Medium, "Muted", trim: true));
             text = st;
         }
         Grid.SetColumn(text, 1); g.Children.Add(text);
         if (value.Length > 0)
         {
-            var v = QT(value, 13, FontWeights.ExtraBold, valueTone); v.HorizontalAlignment = HorizontalAlignment.Right;
+            var v = QT(value, 13, FontWeights.SemiBold, valueTone); v.HorizontalAlignment = HorizontalAlignment.Right;
             Grid.SetColumn(v, 2); g.Children.Add(v);
         }
         if (bar is { } share)
@@ -202,11 +202,11 @@ public partial class MainWindow
         var sp = new StackPanel();
         icon.HorizontalAlignment = HorizontalAlignment.Left;
         sp.Children.Add(icon);
-        var b = QT(big, 16, FontWeights.Black, "Ink", trim: true); b.Margin = new Thickness(0, 5, 0, 0); b.LineHeight = 18; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        var b = QT(big, 16, FontWeights.Bold, "Ink", trim: true); b.Margin = new Thickness(0, 5, 0, 0); b.LineHeight = 18; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         sp.Children.Add(b);
-        sp.Children.Add(QT(name, 11, FontWeights.Bold, "Muted", trim: true));
-        if (value.Length > 0) { var v = QT(value, 11, FontWeights.ExtraBold, valueTone, trim: true); sp.Children.Add(v); }
-        var tile = new Border { Width = width, Padding = new Thickness(10, 9, 10, 9), CornerRadius = new CornerRadius(14), Child = sp, Cursor = Cursors.Hand };
+        sp.Children.Add(QT(name, 11, FontWeights.Medium, "Muted", trim: true));
+        if (value.Length > 0) { var v = QT(value, 11, FontWeights.SemiBold, valueTone, trim: true); sp.Children.Add(v); }
+        var tile = new Border { Width = width, Padding = new Thickness(10, 9, 10, 9), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand };
         tile.SetResourceReference(Border.BackgroundProperty, "Card2");
         tile.MouseEnter += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         tile.MouseLeave += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "Card2");
@@ -219,9 +219,9 @@ public partial class MainWindow
         var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         sp.Children.Add(icon);
-        var b = QT(odds, 12, FontWeights.Black, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.Margin = new Thickness(0, 4, 0, 0);
+        var b = QT(odds, 12, FontWeights.Bold, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.Margin = new Thickness(0, 4, 0, 0);
         sp.Children.Add(b);
-        var n = QT(name, 10.5, FontWeights.Bold, "Muted", trim: true); n.HorizontalAlignment = HorizontalAlignment.Center; n.TextAlignment = TextAlignment.Center;
+        var n = QT(name, 10.5, FontWeights.Medium, "Muted", trim: true); n.HorizontalAlignment = HorizontalAlignment.Center; n.TextAlignment = TextAlignment.Center;
         sp.Children.Add(n);
         var badge = new Border { Padding = new Thickness(6, 8, 6, 8), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand };
         badge.SetResourceReference(Border.BackgroundProperty, "Card2");
@@ -233,7 +233,7 @@ public partial class MainWindow
     /// <summary>A centred faint line under a list: "7 more kinds have no Market price yet".</summary>
     static TextBlock QMore(string text)
     {
-        var t = QT(text, 11, FontWeights.ExtraBold, "Muted"); t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; t.Margin = new Thickness(0, 6, 0, 0); t.TextWrapping = TextWrapping.Wrap;
+        var t = QT(text, 11, FontWeights.SemiBold, "Muted"); t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; t.Margin = new Thickness(0, 6, 0, 0); t.TextWrapping = TextWrapping.Wrap;
         return t;
     }
 
@@ -244,8 +244,8 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
         icon.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(icon);
         var text = new StackPanel { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var b = QT(big, 15, FontWeights.ExtraBold, "Ink", trim: true); b.LineHeight = 17; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
-        var sm = QT(small, 11, FontWeights.Bold, "Muted", trim: true); sm.LineHeight = 14; sm.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sm.Margin = new Thickness(0, 1, 0, 0);
+        var b = QT(big, 15, FontWeights.SemiBold, "Ink", trim: true); b.LineHeight = 17; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        var sm = QT(small, 11, FontWeights.Medium, "Muted", trim: true); sm.LineHeight = 14; sm.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sm.Margin = new Thickness(0, 1, 0, 0);
         text.Children.Add(b); text.Children.Add(sm);
         Grid.SetColumn(text, 1); g.Children.Add(text);
         chip.Child = g;
@@ -258,8 +258,8 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var ic = QIcon(icon, 16, "Lilac", 2); ic.Margin = new Thickness(0, 0, 8, 0); g.Children.Add(ic);
-        var t = QT(title, 12, FontWeights.ExtraBold, "Ink"); Grid.SetColumn(t, 1); g.Children.Add(t);
-        var r = QT(right, 11, FontWeights.Bold, "Muted", trim: true); r.HorizontalAlignment = HorizontalAlignment.Right; r.Margin = new Thickness(10, 0, 0, 0); r.Tag = "right";
+        var t = QT(title, 12, FontWeights.SemiBold, "Ink"); Grid.SetColumn(t, 1); g.Children.Add(t);
+        var r = QT(right, 11, FontWeights.Medium, "Muted", trim: true); r.HorizontalAlignment = HorizontalAlignment.Right; r.Margin = new Thickness(10, 0, 0, 0); r.Tag = "right";
         Grid.SetColumn(r, 2); g.Children.Add(r);
         if (chev != null) { Grid.SetColumn(chev, 3); g.Children.Add(chev); g.Cursor = Cursors.Hand; }
         return g;
@@ -289,9 +289,9 @@ public partial class MainWindow
             g.Children.Add(arc);
         }
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = QT(big, size >= 60 ? (big.Length > 5 ? 12.5 : 17) : 10, FontWeights.Black, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.LineHeight = size >= 60 ? 18 : 11; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        var b = QT(big, size >= 60 ? (big.Length > 5 ? 12.5 : 17) : 10, FontWeights.Bold, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.LineHeight = size >= 60 ? 18 : 11; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         text.Children.Add(b);
-        if (small.Length > 0) { var sm = QT(small.ToUpperInvariant(), 9, FontWeights.ExtraBold, "Muted"); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.Margin = new Thickness(0, 1, 0, 0); text.Children.Add(sm); }
+        if (small.Length > 0) { var sm = QT(small.ToUpperInvariant(), 9, FontWeights.SemiBold, "Muted"); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.Margin = new Thickness(0, 1, 0, 0); text.Children.Add(sm); }
         g.Children.Add(text);
         return g;
     }

@@ -84,7 +84,7 @@ public partial class MainWindow
             for (int i = 0; i < note.Count; i++)
             {
                 if (i > 0) TodayNote.Inlines.Add(PR(" · ", "Faint"));
-                TodayNote.Inlines.Add(PR(note[i].Fig, "Ink", FontWeights.Black));
+                TodayNote.Inlines.Add(PR(note[i].Fig, "Ink", FontWeights.Bold));
                 TodayNote.Inlines.Add(PR(note[i].Word, "Muted"));
             }
             TodaySum.Text = made > 0 ? Fk(made) : "";
@@ -111,7 +111,7 @@ public partial class MainWindow
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (sort) { var links = SortLinks(sigKey, again); Grid.SetColumn(links, 1); head.Children.Add(links); }
         var t = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        t.Inlines.Add(PR(title, "SecGold", FontWeights.Bold));
+        t.Inlines.Add(PR(title, "SecGold", FontWeights.Medium));
         if (note.Length > 0) { var n = PR("   " + note, "Muted"); n.FontSize = 12; t.Inlines.Add(n); }
         head.Children.Add(t);
         if (worth > 0)
@@ -128,7 +128,7 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = PT(all ? "Show fewer" : $"Show all {slots.Count}", "Gold", 12, FontWeights.SemiBold);
+            var m = PT(all ? "Show fewer" : $"Show all {slots.Count}", "Gold", 12, FontWeights.Normal);
             m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); again(); };
             sp.Children.Add(m);
@@ -146,9 +146,9 @@ public partial class MainWindow
             pin.SetResourceReference(Shape.StrokeProperty, "Gold");
             sp.Children.Add(pin);
         }
-        sp.Children.Add(PT(text, on ? "Gold" : "Ink", 12.5, on ? FontWeights.SemiBold : null));
+        sp.Children.Add(PT(text, on ? "Gold" : "Ink", 12.5, on ? FontWeights.Normal : null));
         if (time.Length > 0) { var tm = PT(time, on ? "Gold" : "Muted", 12, null, "MonoFont"); tm.Margin = new Thickness(7, 0, 0, 0); sp.Children.Add(tm); }
-        var b = new Border { Child = sp, Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 8, 6), Cursor = Cursors.Hand, ToolTip = tip };
+        var b = new Border { Child = sp, Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 8, 6), Cursor = Cursors.Hand, ToolTip = tip };
         b.SetResourceReference(Border.BackgroundProperty, on ? "SegOnBg" : "ChipOff");
         b.SetResourceReference(Border.BorderBrushProperty, on ? "GoldLine" : "ChipOffLine");
         ToolTipService.SetInitialShowDelay(b, 400);
@@ -238,7 +238,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
         var coin = CoinTile(64); coin.Margin = new Thickness(0, 0, 16, 0); g.Children.Add(coin);
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(CkText("Kinah", CkGold, 20, FontWeights.SemiBold, display: true));
+        names.Children.Add(CkText("Kinah", CkGold, 20, FontWeights.Normal, display: true));
         if (line.Length > 0) { var l = CkText(line, CkMuted, 13); l.Margin = new Thickness(0, 3, 0, 0); names.Children.Add(l); }
         Grid.SetColumn(names, 1); g.Children.Add(names);
         body.Children.Add(new Border
@@ -262,7 +262,7 @@ public partial class MainWindow
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.Children.Add(CkText(label, CkMuted, 13));
-        var v = CkText(value, muted ? CkFaint : CkGold, muted ? 13 : 18, FontWeights.SemiBold, mono: !muted); v.Margin = new Thickness(12, 0, 0, 0);
+        var v = CkText(value, muted ? CkFaint : CkGold, muted ? 13 : 18, FontWeights.Normal, mono: !muted); v.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(v, 1); g.Children.Add(v);
         if (tip != null) v.ToolTip = tip;
         return new Border

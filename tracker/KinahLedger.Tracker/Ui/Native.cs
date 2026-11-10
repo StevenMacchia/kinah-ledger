@@ -141,7 +141,7 @@ internal static class Native
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             float d = bmp.Width * 0.46f, x = bmp.Width - d - 0.5f, y = bmp.Height - d - 0.5f;
-            using var ring = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(235, 12, 15, 30));
+            using var ring = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(235, 15, 16, 21));
             using var fill = new System.Drawing.SolidBrush(dot);
             g.FillEllipse(ring, x - 1.2f, y - 1.2f, d + 2.4f, d + 2.4f);
             g.FillEllipse(fill, x, y, d, d);

@@ -78,7 +78,7 @@ public partial class MainWindow
         b.Background = B(on ? "AccentDim" : "Card2");
         b.BorderBrush = B(on ? "Accent" : "Line");
         b.Foreground = B(on ? "Ink" : "Muted");
-        b.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+        b.FontWeight = on ? FontWeights.Normal : FontWeights.Normal;
         b.Tag = on;
     }
 

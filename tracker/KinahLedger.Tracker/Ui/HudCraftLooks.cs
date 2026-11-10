@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 /// </summary>
 static class CraftKit
 {
-    public const uint OkC = 0x8C86A8, Ok2C = 0xE8E2FF, FailC = 0xFF7D6E, MarkC = 0x3B3366;
+    public const uint OkC = 0x7A8094, Ok2C = 0xD9DDE8, FailC = 0xF26D6D, MarkC = 0x232736;
     public static readonly SolidColorBrush Ok2 = B(Ok2C, .8), Fail = B(FailC), Label = Faint, FailBar = B(FailC, .85), OkEdge = B(CommonC, .55);
     public static readonly Brush OkBar = MakeOkBar();
     static Brush MakeOkBar()
@@ -79,7 +79,7 @@ static class CraftKit
                 new Ellipse { Fill = ok ? B(MarkC) : Fail, Stroke = Slot, StrokeThickness = 1 },
                 new TextBlock
                 {
-                    Text = ok ? "✓" : "✕", FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = White, FontFamily = new FontFamily("Segoe UI Symbol, Segoe UI"),
+                    Text = ok ? "✓" : "✕", FontSize = 8.5, FontWeight = FontWeights.SemiBold, Foreground = White, FontFamily = new FontFamily("Segoe UI Symbol, Segoe UI"),
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 1),
                 },
             },
@@ -110,7 +110,7 @@ public sealed partial class HudCard
     {
         _farmHead = head; _farmBody = body;
         _cDot = Dot(7);
-        var label = T("CRAFT", 11, CraftKit.Label, weight: FontWeights.SemiBold); label.Margin = new Thickness(6, 0, 0, 0);
+        var label = T("CRAFT", 11, CraftKit.Label, weight: FontWeights.Medium); label.Margin = new Thickness(6, 0, 0, 0);
         _cTime = T("", 13, Ink, mono: true); _cTime.Margin = new Thickness(6, 0, 0, 0);
         _cRecipe = T("", 13, Ink); _cRecipe.Margin = new Thickness(10, 0, 0, 0);
         _cNewest = T("", 13, Ink); _cNewest.Margin = new Thickness(8, 0, 0, 0); _cNewest.TextTrimming = TextTrimming.None;
@@ -276,7 +276,7 @@ public sealed partial class HudTicker
     {
         _farmRow = _pill.Child;
         _cDot = Dot(8); _cDot.Margin = new Thickness(0, 0, 7, 0);
-        var label = T("CRAFT", 11, CraftKit.Label, weight: FontWeights.SemiBold); label.Margin = new Thickness(0, 0, 7, 0);
+        var label = T("CRAFT", 11, CraftKit.Label, weight: FontWeights.Medium); label.Margin = new Thickness(0, 0, 7, 0);
         _cProfit = T("", 15, Gold, mono: true);
         _cCount = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         _cBar = CraftKit.Bar(40, 5); _cBar.Margin = new Thickness(8, 0, 0, 0);
@@ -331,14 +331,14 @@ public sealed partial class HudTicker
         // the name trims before the outcome does (2026-11-07 review: "work", "combo: Splen" cut at the edge); a craft that
         // worked says so with the tile's check alone, a failed one and a won roll in words
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var name = T(p.Name, 13, Ink, weight: FontWeights.ExtraBold); name.Margin = new Thickness(9, 0, 0, 0);
+        var name = T(p.Name, 13, Ink, weight: FontWeights.SemiBold); name.Margin = new Thickness(9, 0, 0, 0);
         Grid.SetColumn(name, 1); g.Children.Add(name);
         if (!ok || combo)
         {
-            var note = T(p.Note, 11.5, combo ? Gold : CraftKit.Fail, weight: FontWeights.Bold); note.Margin = new Thickness(6, 0, 0, 0); note.MaxWidth = 120;
+            var note = T(p.Note, 11.5, combo ? Gold : CraftKit.Fail, weight: FontWeights.SemiBold); note.Margin = new Thickness(6, 0, 0, 0); note.MaxWidth = 120;
             Grid.SetColumn(note, 2); g.Children.Add(note);
         }
-        var worth = T(p.Worth, 13, ok ? Mint : CraftKit.Fail, weight: FontWeights.Black); worth.Margin = new Thickness(9, 0, 0, 0);
+        var worth = T(p.Worth, 13, ok ? Mint : CraftKit.Fail, weight: FontWeights.Bold); worth.Margin = new Thickness(9, 0, 0, 0);
         Grid.SetColumn(worth, 3); g.Children.Add(worth);
         return new Border
         {

@@ -646,7 +646,7 @@ public partial class MainWindow : Window
         if (tip != _trayTip) { _trayTip = tip; try { _tray.Text = tip; } catch (Exception) { /* a text over the limit must not stop the tick */ } }
         // the icon says it too, with a dot: red for a read problem, amber for paused, teal for an update ready; none while all is well
         var dot = what == "read problem" ? System.Drawing.Color.FromArgb(0xFF, 0x6B, 0x5E) : what == "paused" ? System.Drawing.Color.FromArgb(0xF3, 0xB4, 0x5E)
-            : UpdateReady ? System.Drawing.Color.FromArgb(0x5E, 0xD8, 0xCB) : System.Drawing.Color.Empty;
+            : UpdateReady ? System.Drawing.Color.FromArgb(0x3D, 0xD6, 0x8C) : System.Drawing.Color.Empty;
         if (dot != _trayDot)
         {
             _trayDot = dot;
@@ -2064,7 +2064,7 @@ public partial class MainWindow : Window
             if (market)
             {
                 // the Market panel in the middle of the frame, its table outlined like the live preview does
-                using var panel = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(14, 20, 32));
+                using var panel = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(16, 18, 23));
                 using var marketPen = new System.Drawing.Pen(MarketCapture.MarkColor, 2);
                 g.FillRectangle(panel, 120, 30, 240, 120);
                 g.DrawString("Market", f, System.Drawing.Brushes.White, 126, 34);

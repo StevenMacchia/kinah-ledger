@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.10.34</Version>
+    <Version>0.10.35</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
@@ -66,12 +66,13 @@
          refuses a tag without its notes file; a build with none has no card -->
     <EmbeddedResource Include="..\..\release-notes\v$(Version).md" LogicalName="whats-new.md" Condition="Exists('..\..\release-notes\v$(Version).md')" />
 
-    <!-- the Quest look's type (2026-11-07): Nunito at 600 to 900, SIL Open Font License (Fonts/OFL.txt), as pack resources
-         the theme's font keys name; Segoe UI stands in where a glyph is missing -->
-    <Resource Include="Fonts\Nunito-SemiBold.ttf" />
-    <Resource Include="Fonts\Nunito-Bold.ttf" />
-    <Resource Include="Fonts\Nunito-ExtraBold.ttf" />
-    <Resource Include="Fonts\Nunito-Black.ttf" />
+    <!-- the v2 type (2026-11-10, as the site): Inter 400 to 700, the latin cut of fontsource Inter 5.1.0 the site self-hosts,
+         as TTF (WPF can't read woff2); SIL Open Font License (Fonts/OFL.txt). Pack resources the theme's font keys name;
+         Segoe UI stands in where a glyph is missing -->
+    <Resource Include="Fonts\Inter-Regular.ttf" />
+    <Resource Include="Fonts\Inter-Medium.ttf" />
+    <Resource Include="Fonts\Inter-SemiBold.ttf" />
+    <Resource Include="Fonts\Inter-Bold.ttf" />
 
     <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- the 46 gathering materials' icon file names (8 KB), so their icons work before any item list is downloaded -->

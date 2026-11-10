@@ -48,7 +48,7 @@ public partial class MainWindow
         if (chipSig != _accChipSig)
         {
             _accChipSig = chipSig;
-            var t = new TextBlock { Text = v.Chip, FontSize = 12.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            var t = new TextBlock { Text = v.Chip, FontSize = 12.5, FontWeight = FontWeights.Normal, VerticalAlignment = VerticalAlignment.Center };
             t.SetResourceReference(TextBlock.ForegroundProperty, v.Tone == "warn" ? "Warn" : "Good");
             AccuracyChip.Child = t;
         }
@@ -72,7 +72,7 @@ public partial class MainWindow
     Border BuildAccuracyCard(AccuracyCardView v)
     {
         var (card, body) = CkShell(460);
-        var title = CkText(AccuracyCardView.Title, CkGold, 16, FontWeights.SemiBold, display: true); title.Margin = new Thickness(20, 14, 20, 0);
+        var title = CkText(AccuracyCardView.Title, CkGold, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 14, 20, 0);
         body.Children.Add(title);
         var line = CkText(v.Line, CkInk, 14); line.Margin = new Thickness(20, 6, 20, 0); line.TextWrapping = TextWrapping.Wrap; line.TextTrimming = TextTrimming.None;
         if (v.Line.Length > 0) body.Children.Add(line);

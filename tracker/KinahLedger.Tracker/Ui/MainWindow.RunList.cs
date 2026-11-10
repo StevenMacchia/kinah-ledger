@@ -101,7 +101,7 @@ public partial class MainWindow
         foreach (var run in _runListAll ? order : order.Take(RunListFirst)) host.Children.Add(RunGroup(run, redraw));
         if (order.Count > RunListFirst)
         {
-            var m = QT(_runListAll ? "Show fewer" : $"Show all {order.Count} runs", 11.5, FontWeights.ExtraBold, "Gold");
+            var m = QT(_runListAll ? "Show fewer" : $"Show all {order.Count} runs", 11.5, FontWeights.SemiBold, "Gold");
             m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.Margin = new Thickness(0, 6, 0, 8);
             m.MouseLeftButtonUp += (_, _) => { _runListAll = !_runListAll; redraw(); };
             host.Children.Add(m);
@@ -138,7 +138,7 @@ public partial class MainWindow
         var slotsQ = new List<FrameworkElement>();
         if (one.Kinah > 0) slotsQ.Add(RunKinahSlot(one.Kinah, one.KinahWhere, "Picked up this run"));
         foreach (var s in SortSlots(one.Items)) slotsQ.Add(RunItemSlot(s, "this run"));
-        if (slotsQ.Count == 0) { var t = QT(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen.", 11.5, FontWeights.Bold, "Faint"); t.Margin = new Thickness(38, 0, 0, 6); sp.Children.Add(t); }
+        if (slotsQ.Count == 0) { var t = QT(run.RewardsNotRead ? "Its reward screen wasn't read." : "Nothing read from its reward screen.", 11.5, FontWeights.Medium, "Faint"); t.Margin = new Thickness(38, 0, 0, 6); sp.Children.Add(t); }
         else { var wrap = new WrapPanel { Margin = new Thickness(38, 2, 0, 2) }; foreach (var s in slotsQ) wrap.Children.Add(s); sp.Children.Add(wrap); }
         return sp;
     }
@@ -155,7 +155,7 @@ public partial class MainWindow
         var local = run.Start.ToLocalTime();
         var when = PT(local.Date == DateTime.Today ? local.ToString("HH:mm", CultureInfo.InvariantCulture) : local.ToString("MMM d HH:mm", CultureInfo.InvariantCulture), "Faint", 12, null, "MonoFont");
         when.VerticalAlignment = VerticalAlignment.Center; head.Children.Add(when);
-        var name = PT(run.Label, out_ ? "Faint" : "Ink", 12.5, FontWeights.SemiBold); name.Margin = new Thickness(10, 0, 0, 0); name.VerticalAlignment = VerticalAlignment.Center; name.MaxWidth = 280; Grid.SetColumn(name, 1); head.Children.Add(name);
+        var name = PT(run.Label, out_ ? "Faint" : "Ink", 12.5, FontWeights.Normal); name.Margin = new Thickness(10, 0, 0, 0); name.VerticalAlignment = VerticalAlignment.Center; name.MaxWidth = 280; Grid.SetColumn(name, 1); head.Children.Add(name);
         if (run.Seconds > 0) { var took = PT(Clock(TimeSpan.FromSeconds(run.Seconds)), "Faint", 12, null, "MonoFont"); took.Margin = new Thickness(10, 0, 0, 0); took.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(took, 2); head.Children.Add(took); }
         if (out_) { var o = PT("left out of the figures", "Faint", 11.5); o.Margin = new Thickness(10, 0, 0, 0); o.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(o, 3); head.Children.Add(o); }
         long value = RunValue(run);
@@ -195,7 +195,7 @@ public partial class MainWindow
     Border PickButton(string text, Func<List<MenuEntry>> entries, string tip)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        sp.Children.Add(QT(text, 11.5, FontWeights.ExtraBold, "Ink"));
+        sp.Children.Add(QT(text, 11.5, FontWeights.SemiBold, "Ink"));
         var chev = QIcon("Chev", 11, "Faint", 2); chev.Margin = new Thickness(6, 1, 0, 0); chev.VerticalAlignment = VerticalAlignment.Center; chev.RenderTransformOrigin = new Point(0.5, 0.5); chev.RenderTransform = new RotateTransform(90); sp.Children.Add(chev);
         var b = new Border { Child = sp, Height = 26, Padding = new Thickness(10, 0, 9, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand, ToolTip = tip, VerticalAlignment = VerticalAlignment.Center };
         b.SetResourceReference(Border.BackgroundProperty, "Card2"); b.SetResourceReference(Border.BorderBrushProperty, "CardLineHover");

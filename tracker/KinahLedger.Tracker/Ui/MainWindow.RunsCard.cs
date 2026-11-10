@@ -147,7 +147,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition());
         var t = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-        t.Inlines.Add(PR(text, "SecGold", FontWeights.Bold));
+        t.Inlines.Add(PR(text, "SecGold", FontWeights.Medium));
         if (note.Length > 0) { var n = PR("  " + note, "Faint"); n.FontSize = 12; t.Inlines.Add(n); }
         g.Children.Add(t);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, OpacityMask = new LinearGradientBrush(Colors.Black, Colors.Transparent, 0) };
@@ -186,7 +186,7 @@ public partial class MainWindow
         var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 1, 7, 0), VerticalAlignment = VerticalAlignment.Center };
         dot.SetResourceReference(Shape.FillProperty, on ? "Gold" : "Faint");
         sp.Children.Add(dot);
-        sp.Children.Add(PT(text, on ? "Gold" : "Faint", 12, on ? FontWeights.SemiBold : null));
+        sp.Children.Add(PT(text, on ? "Gold" : "Faint", 12, on ? FontWeights.Normal : null));
         var b = new Border { Child = sp, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 3, 11, 4), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 4, 0, 0) };
         b.SetResourceReference(Border.BorderBrushProperty, on ? "FlagLine" : "Line");
         if (on) b.SetResourceReference(Border.BackgroundProperty, "GoldTint");
@@ -215,7 +215,7 @@ public partial class MainWindow
         band.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         band.Children.Add(PlaceTile(kind));
         var titles = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var title = new TextBlock { FontSize = 19, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        var title = new TextBlock { FontSize = 19, FontWeight = FontWeights.Normal, TextTrimming = TextTrimming.CharacterEllipsis };
         title.SetResourceReference(TextBlock.FontFamilyProperty, "DisplayFont");
         title.Inlines.Add(PR(zone, "Gold"));
         if (kind.Length > 0) title.Inlines.Add(PR(" · " + kind, "Faint", FontWeights.Normal));
@@ -351,7 +351,7 @@ public partial class MainWindow
             var chev = new Path { Data = Geometry.Parse("M0,0 L4,4 L0,8"), StrokeThickness = 1.5, Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 10, 0) };
             chev.SetResourceReference(Shape.StrokeProperty, "Faint");
             fold.Children.Add(chev);
-            var ft = PT("Loot", "Ink", 13.5, FontWeights.SemiBold); Grid.SetColumn(ft, 1); fold.Children.Add(ft);
+            var ft = PT("Loot", "Ink", 13.5, FontWeights.Normal); Grid.SetColumn(ft, 1); fold.Children.Add(ft);
             var fs = PT(n == 1 ? "from the run here" : "from the runs here", "Muted", 12.5); fs.Margin = new Thickness(0, 0, 14, 0); Grid.SetColumn(fs, 2); fold.Children.Add(fs);
             var fb = new Border { Child = fold, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(20, 4, 20, 18) };
             fold.Margin = new Thickness(0);
@@ -599,7 +599,7 @@ public partial class MainWindow
         {
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 5, 1),
             Background = Ck(CkSlot), BorderBrush = Ck(CkFrame), BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = badge, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Brushes.White },
+            Child = new TextBlock { Text = badge, FontSize = 11, FontWeight = FontWeights.Medium, Foreground = Brushes.White },
         });
         return g;
     }
@@ -624,7 +624,7 @@ public partial class MainWindow
         };
         chev.SetResourceReference(Shape.StrokeProperty, open ? "Gold" : "Faint");
         head.Children.Add(chev);
-        var nm = PT(name, "Ink", 13.5, FontWeights.SemiBold); nm.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(nm, 1); head.Children.Add(nm);
+        var nm = PT(name, "Ink", 13.5, FontWeights.Normal); nm.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(nm, 1); head.Children.Add(nm);
         var sum = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }; sum.Inlines.AddRange(summary); Grid.SetColumn(sum, 2); head.Children.Add(sum);
         head.MouseEnter += (_, _) => head.SetResourceReference(Panel.BackgroundProperty, "HoverTint");
         head.MouseLeave += (_, _) => head.Background = Brushes.Transparent;
@@ -649,18 +649,18 @@ public partial class MainWindow
         FrameworkElement icon;
         if (unknown)
         {
-            var box = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1), BorderBrush = Ck(CkFrame, 200), Background = Ck(Color.FromRgb(0x15, 0x1A, 0x30)),
-                Child = new TextBlock { Text = "?", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Ck(CkMuted), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+            var box = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1), BorderBrush = Ck(CkFrame, 200), Background = Ck(Color.FromRgb(0x19, 0x1B, 0x22)),
+                Child = new TextBlock { Text = "?", FontSize = 13, FontWeight = FontWeights.Medium, Foreground = Ck(CkMuted), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
             var wrap = new Grid { Width = 40, Height = 40 }; box.HorizontalAlignment = HorizontalAlignment.Left; box.VerticalAlignment = VerticalAlignment.Top; wrap.Children.Add(box);
             wrap.Children.Add(new Border { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 5, 1),
-                Background = Ck(CkSlot), BorderBrush = Ck(CkFrame), BorderThickness = new Thickness(1), Child = new TextBlock { Text = count.ToString("N0"), FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White } });
+                Background = Ck(CkSlot), BorderBrush = Ck(CkFrame), BorderThickness = new Thickness(1), Child = new TextBlock { Text = count.ToString("N0"), FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = Brushes.White } });
             icon = wrap;
         }
         else icon = CkIcon(name, 34, FrameOf(_items.IdOf(name)), badge: count.ToString("N0"));
         icon.VerticalAlignment = VerticalAlignment.Center;
         g.Children.Add(icon);
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-        names.Children.Add(PT(name, "Ink", 13.5, FontWeights.SemiBold));
+        names.Children.Add(PT(name, "Ink", 13.5, FontWeights.Normal));
         if (sub.Length > 0) { var s = PT(sub, "Faint", 11.5); s.Margin = new Thickness(0, 1, 0, 0); names.Children.Add(s); }
         Grid.SetColumn(names, 1); g.Children.Add(names);
         var v = value.Length > 0 ? PT(value, "Gold", 13, null, "MonoFont") : PT(noValue, "Faint", 12.5);

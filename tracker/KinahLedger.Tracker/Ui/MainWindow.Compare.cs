@@ -275,7 +275,7 @@ public partial class MainWindow
         Color Res(string key, Color fallback) => TryFindResource(key) is SolidColorBrush b ? b.Color : fallback;
         Color from, to;
         if (runs) { to = Res("GradeLegend", Color.FromRgb(0x5A, 0xA6, 0xFF)); from = Color.FromRgb((byte)(to.R * 0.7), (byte)(to.G * 0.72), (byte)(to.B * 0.78)); }
-        else { from = Res("SecGold", Color.FromRgb(0xE9, 0xB4, 0x5A)); to = Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98)); }
+        else { from = Res("SecGold", Color.FromRgb(0xF5, 0xB9, 0x42)); to = Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A)); }
         var g = new LinearGradientBrush(from, to, new Point(0, 0), new Point(1, 0));
         g.Freeze();
         return g;
@@ -298,7 +298,7 @@ public partial class MainWindow
         Border Side(string name, string sub, bool left, bool ring)
         {
             var sp = new StackPanel();
-            var h = PT(name, "Ink", 13, FontWeights.SemiBold); sp.Children.Add(h);
+            var h = PT(name, "Ink", 13, FontWeights.Normal); sp.Children.Add(h);
             var s = PT(sub, "Faint", 11.5); s.Margin = new Thickness(0, 2, 0, 8); sp.Children.Add(s);
             foreach (var (label, a, b, win) in rows)
             {
@@ -327,7 +327,7 @@ public partial class MainWindow
     {
         var t = new TextBlock { FontSize = 13, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap, Tag = "cmp-verdict" };
         t.Inlines.Add(PR(v.Lead, "Muted"));
-        if (v.Bold.Length > 0) t.Inlines.Add(PR(v.Bold, "Gold", FontWeights.SemiBold));
+        if (v.Bold.Length > 0) t.Inlines.Add(PR(v.Bold, "Gold", FontWeights.Normal));
         if (v.Tail.Length > 0) t.Inlines.Add(PR(v.Tail, "Muted"));
         return t;
     }
@@ -389,7 +389,7 @@ public partial class MainWindow
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var t = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var k = PR("LAST RUN", "SecGold", FontWeights.Bold); k.FontSize = 11; t.Inlines.Add(k);
+        var k = PR("LAST RUN", "SecGold", FontWeights.Medium); k.FontSize = 11; t.Inlines.Add(k);
         var when = (last.LastLoot ?? last.Start).ToLocalTime();
         var w = PR($"   {(when.Date == DateTime.Today ? when.ToString("HH:mm", CultureInfo.InvariantCulture) : when.ToString("MMM d", CultureInfo.InvariantCulture))} · {TodayLoot.Dur(last.Seconds)}", "Faint"); w.FontSize = 12; t.Inlines.Add(w);
         head.Children.Add(t);
@@ -417,7 +417,7 @@ public partial class MainWindow
         sp.Children.Add(rule);
         var line = new TextBlock { FontSize = 13, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap, Tag = "cmp-rank" };
         line.Inlines.Add(PR("Your ", "Muted"));
-        line.Inlines.Add(PR(v.Rank == 1 ? "best run" : Cmp.Nth(v.Rank) + " best", "Gold", FontWeights.SemiBold));
+        line.Inlines.Add(PR(v.Rank == 1 ? "best run" : Cmp.Nth(v.Rank) + " best", "Gold", FontWeights.Normal));
         line.Inlines.Add(PR(v.Rank == 1 ? " here yet." : " run here.", "Muted"));
         sp.Children.Add(line);
         var card = new Border { Child = sp, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(20, 16, 20, 0),

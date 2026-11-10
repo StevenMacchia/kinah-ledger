@@ -11,7 +11,7 @@ namespace KinahLedger.Ui;
 public sealed class RegionPickerWindow : Window
 {
     readonly Canvas _canvas = new();
-    readonly Rectangle _box = new() { Stroke = new SolidColorBrush(Color.FromRgb(0x4C, 0xC3, 0xF5)), StrokeThickness = 2, Fill = new SolidColorBrush(Color.FromArgb(0x30, 0x4C, 0xC3, 0xF5)), Visibility = Visibility.Collapsed };
+    readonly Rectangle _box = new() { Stroke = new SolidColorBrush(Color.FromRgb(0xF5, 0xB9, 0x42)), StrokeThickness = 2, Fill = new SolidColorBrush(Color.FromArgb(0x24, 0xF5, 0xB9, 0x42)), Visibility = Visibility.Collapsed };
     readonly TextBlock _size = new() { Foreground = Brushes.White, FontSize = 13, Visibility = Visibility.Collapsed };
     Point _start; bool _drag;
 
@@ -32,7 +32,7 @@ public sealed class RegionPickerWindow : Window
 
         var hintBox = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x0A, 0x0F, 0x18)), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 10, 16, 10),
+            Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x0C, 0x0D, 0x11)), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 10, 16, 10),
             Child = new TextBlock { Text = (hint ?? "Drag a box around the chat lines that show loot and Kinah.") + "   Esc to cancel", Foreground = Brushes.White, FontSize = 15, FontFamily = new FontFamily("Segoe UI") }
         };
         Canvas.SetLeft(hintBox, 28); Canvas.SetTop(hintBox, 28);

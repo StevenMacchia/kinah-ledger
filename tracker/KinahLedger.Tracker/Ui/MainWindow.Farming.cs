@@ -25,7 +25,7 @@ public partial class MainWindow
     {
         // the Quest look (2026-11-07): every card its own rounded surface with the one-pixel edge; the status a plain line under the column
         bool full = _part == "Farming" && !_welcome && FullShown;
-        TablesCard.CornerRadius = new CornerRadius(16);
+        TablesCard.CornerRadius = new CornerRadius(12);
         TablesCard.BorderThickness = new Thickness(1);
         TablesCard.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         TablesCard.Margin = new Thickness(0, full ? 12 : 0, 0, 0);

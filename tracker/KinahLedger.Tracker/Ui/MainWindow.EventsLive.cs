@@ -35,7 +35,7 @@ public partial class MainWindow
     static (Border Sheet, StackPanel Body) SheetShell(bool flagged)
     {
         var sp = new StackPanel();
-        var sheet = new Border { Child = sp, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 6, 0, 10) };
+        var sheet = new Border { Child = sp, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 6, 0, 10) };
         sheet.SetResourceReference(Border.BorderBrushProperty, flagged ? "CardLineHover" : "CardLine");
         sheet.SetResourceReference(Border.BackgroundProperty, flagged ? "NoticeTint" : "Card");
         return (sheet, sp);
@@ -45,7 +45,7 @@ public partial class MainWindow
     static TextBlock SheetText(string lead, string rest)
     {
         var t = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap, LineHeight = 19 };
-        t.Inlines.Add(PR(lead, "Ink", FontWeights.SemiBold));
+        t.Inlines.Add(PR(lead, "Ink", FontWeights.Normal));
         if (rest.Length > 0) t.Inlines.Add(PR(" " + rest, "Muted", FontWeights.Normal));
         return t;
     }
@@ -112,8 +112,8 @@ public partial class MainWindow
                 foreach (var p in parts)
                 {
                     var c = new StackPanel();
-                    c.Children.Add(QT(Fk(p.Kinah), 13, FontWeights.Black, "Gold"));
-                    c.Children.Add(QT($"{p.Start.ToLocalTime():HH:mm} · {Clock(TimeSpan.FromSeconds(p.Seconds))}", 11, FontWeights.Bold, "Muted"));
+                    c.Children.Add(QT(Fk(p.Kinah), 13, FontWeights.Bold, "Gold"));
+                    c.Children.Add(QT($"{p.Start.ToLocalTime():HH:mm} · {Clock(TimeSpan.FromSeconds(p.Seconds))}", 11, FontWeights.Medium, "Muted"));
                     var cell = new Border { Child = c, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 6, 6) };
                     cell.SetResourceReference(Border.BorderBrushProperty, "CardLine"); cell.SetResourceReference(Border.BackgroundProperty, "Card2");
                     mini.Children.Add(cell);

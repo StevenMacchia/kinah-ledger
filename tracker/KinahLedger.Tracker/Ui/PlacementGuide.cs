@@ -58,9 +58,9 @@ public sealed class PlacementGuide : Window
     /// <summary>A drop this close to a snap spot (DIPs) lands on it.</summary>
     const double Magnet = 18;
 
-    static readonly SolidColorBrush VeilBrush = B(0x070914, .50), PartLine = B(CommonC, .55), PartFill = B(CommonC, .04), LabelInk = B(0xDCE0F0),
-        LabelBg = B(0x090B15, .78), GhostLine = B(GoldC, .55), GhostFill = B(GoldC, .05), GhostLabelBg = B(0x090B15, .65), EdgeBg = B(0x090B15, .82),
-        EdgeLine = B(CommonC, .5), PanelBg = B(PanelC, .94), SegOn = B(0xEBAE4C, .14), SegOnLine = B(GoldC, .4), TagInk = B(0x261702),
+    static readonly SolidColorBrush VeilBrush = B(0x0A0A0D, .50), PartLine = B(CommonC, .55), PartFill = B(CommonC, .04), LabelInk = B(0xDCE0F0),
+        LabelBg = B(0x0B0C0F, .78), GhostLine = B(GoldC, .55), GhostFill = B(GoldC, .05), GhostLabelBg = B(0x0B0C0F, .65), EdgeBg = B(0x0B0C0F, .82),
+        EdgeLine = B(CommonC, .5), PanelBg = B(PanelC, .94), SegOn = B(0xF5B942, .14), SegOnLine = B(GoldC, .4), TagInk = B(0x261702),
         KbdOnTag = B(0x261702, .14), KbdOnTagLine = B(0x261702, .35), Grab = Frozen(Color.FromArgb(1, 0, 0, 0));
     static readonly LinearGradientBrush TagFill = MakeTagFill();
     static LinearGradientBrush MakeTagFill() { var b = new LinearGradientBrush(Rgb(GoldC), Rgb(SecGoldC), 90); b.Freeze(); return b; }
@@ -364,7 +364,7 @@ public sealed class PlacementGuide : Window
     static Border PartLabel(string name, Brush? fg = null, Brush? bg = null) => new()
     {
         Background = bg ?? LabelBg, CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 2, 8, 2),
-        Child = Label(name, 12, fg ?? LabelInk, FontWeights.SemiBold),
+        Child = Label(name, 12, fg ?? LabelInk, FontWeights.Medium),
     };
 
     /// <summary>
@@ -429,7 +429,7 @@ public sealed class PlacementGuide : Window
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         var arrowText = Label(arrow, 15, Gold); arrowText.Margin = new Thickness(side == "right" ? 6 : 0, 0, side == "right" ? 0 : 6, 0);
         if (side != "right") row.Children.Add(arrowText);
-        row.Children.Add(Label("Game · " + name, 12.5, LabelInk, FontWeights.SemiBold));
+        row.Children.Add(Label("Game · " + name, 12.5, LabelInk, FontWeights.Medium));
         var detail = Label(how + ", " + WhereIn(box), 12.5, Faint); detail.Margin = new Thickness(6, 0, 0, 0);
         row.Children.Add(detail);
         if (side == "right") row.Children.Add(arrowText);
@@ -473,11 +473,11 @@ public sealed class PlacementGuide : Window
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         void Add(FrameworkElement e, double gap) { e.Margin = new Thickness(gap, 0, 0, 0); row.Children.Add(e); }
-        Add(Label("Place your panel", 13, Ink, FontWeights.SemiBold), 0);
+        Add(Label("Place your panel", 13, Ink, FontWeights.Medium), 0);
         Add(Label("Drag it, or pick a snap spot", 13, Muted), 14);
-        Add(Kbd("Enter", Ink, Slot, BadgeLine, FontWeights.SemiBold), 14);
+        Add(Kbd("Enter", Ink, Slot, BadgeLine, FontWeights.Medium), 14);
         Add(Label("save", 13, Muted), 6);
-        Add(Kbd("Esc", Ink, Slot, BadgeLine, FontWeights.SemiBold), 14);
+        Add(Kbd("Esc", Ink, Slot, BadgeLine, FontWeights.Medium), 14);
         Add(Label("put it back", 13, Muted), 6);
         var bar = new Border { Background = PanelBg, BorderBrush = FrameLine, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 0, 16, 0), Height = 36, Child = row };
         bar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -489,12 +489,12 @@ public sealed class PlacementGuide : Window
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new System.Windows.Shapes.Path { Data = DragIcon, Stroke = TagInk, StrokeThickness = 1.5, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, Width = 15, Height = 15, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center });
-        var words = Label("Drag me, then press", 13, TagInk, FontWeights.Bold); words.Margin = new Thickness(7, 0, 7, 0);
+        var words = Label("Drag me, then press", 13, TagInk, FontWeights.SemiBold); words.Margin = new Thickness(7, 0, 7, 0);
         row.Children.Add(words);
-        row.Children.Add(Kbd("Enter", TagInk, KbdOnTag, KbdOnTagLine, FontWeights.Bold));
+        row.Children.Add(Kbd("Enter", TagInk, KbdOnTag, KbdOnTagLine, FontWeights.SemiBold));
         return new Border
         {
-            Height = 28, Padding = new Thickness(9, 0, 12, 0), CornerRadius = new CornerRadius(14), Background = TagFill, Child = row, IsHitTestVisible = false,
+            Height = 28, Padding = new Thickness(9, 0, 12, 0), CornerRadius = new CornerRadius(8), Background = TagFill, Child = row, IsHitTestVisible = false,
             Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 10, ShadowDepth = 2, Direction = 270, Opacity = .45 },
         };
     }
@@ -503,14 +503,14 @@ public sealed class PlacementGuide : Window
     Border MakeChooser()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var k = Label("SNAP TO", 11, Faint, FontWeights.SemiBold); k.Margin = new Thickness(0, 0, 10, 0);
+        var k = Label("SNAP TO", 11, Faint, FontWeights.Medium); k.Margin = new Thickness(0, 0, 10, 0);
         row.Children.Add(k);
         for (int i = 0; i < HudSpots.All.Length; i++)
         {
             var s = HudSpots.All[i];
             if (i > 0) { var dot = Label("·", 13, Faint); dot.Margin = new Thickness(4, 0, 4, 0); row.Children.Add(dot); }
             var text = Label(s.Name, 13, Muted);
-            var seg = new Border { CornerRadius = new CornerRadius(13), Padding = new Thickness(11, 5, 11, 5), Background = Brushes.Transparent, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Child = text, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center };
+            var seg = new Border { CornerRadius = new CornerRadius(7), Padding = new Thickness(11, 5, 11, 5), Background = Brushes.Transparent, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Child = text, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center };
             AutomationPropertiesName(seg, "Snap to " + s.Name);
             seg.MouseLeftButtonUp += (_, e) => { Snap(s.Key); e.Handled = true; };
             seg.MouseEnter += (_, _) => { if (_chosen != s.Key) text.Foreground = Ink; };
@@ -520,7 +520,7 @@ public sealed class PlacementGuide : Window
         }
         return new Border
         {
-            Height = 34, Padding = new Thickness(14, 0, 5, 0), CornerRadius = new CornerRadius(17), Background = PanelBg, BorderBrush = FrameLine, BorderThickness = new Thickness(1), Child = row,
+            Height = 34, Padding = new Thickness(14, 0, 5, 0), CornerRadius = new CornerRadius(8), Background = PanelBg, BorderBrush = FrameLine, BorderThickness = new Thickness(1), Child = row,
             Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 12, ShadowDepth = 2, Direction = 270, Opacity = .45 },
         };
     }
@@ -533,7 +533,7 @@ public sealed class PlacementGuide : Window
             seg.Background = on ? SegOn : Brushes.Transparent;
             seg.BorderBrush = on ? SegOnLine : Brushes.Transparent;
             text.Foreground = on ? Gold : Muted;
-            text.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+            text.FontWeight = on ? FontWeights.Medium : FontWeights.Normal;
         }
     }
 }

@@ -416,8 +416,8 @@ readonly record struct TrayPalette(System.Drawing.Color Bg, System.Drawing.Color
         static System.Drawing.Color Of(string key, System.Drawing.Color fallback) =>
             System.Windows.Application.Current?.TryFindResource(key) is System.Windows.Media.SolidColorBrush b ? System.Drawing.Color.FromArgb(b.Color.R, b.Color.G, b.Color.B) : fallback;
         // the card's colour for the menu, the look's own hover and line, its ink; Night's colours when there is no application yet
-        return new(Of("Card", System.Drawing.Color.FromArgb(17, 26, 40)), Of("ItemHover", System.Drawing.Color.FromArgb(30, 45, 69)),
-            Of("Line", System.Drawing.Color.FromArgb(35, 47, 69)), Of("Ink", System.Drawing.Color.FromArgb(233, 239, 247)));
+        return new(Of("Card", System.Drawing.Color.FromArgb(20, 22, 28)), Of("ItemHover", System.Drawing.Color.FromArgb(35, 38, 49)),
+            Of("Line", System.Drawing.Color.FromArgb(37, 40, 51)), Of("Ink", System.Drawing.Color.FromArgb(233, 239, 247)));
     }
 }
 
