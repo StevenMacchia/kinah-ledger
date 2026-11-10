@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -10,12 +9,12 @@ namespace KinahLedger.Ui;
 /// Options › Shortcuts &amp; tips (Steven, 2026-11-04). The tray menu used to show Ctrl+N and Ctrl+Shift+C beside Clear
 /// everything and Copy share picture, but those keys only work in the window, so from the tray they did nothing; they are
 /// said here instead, apart from the two keys that work in the game. Then eight things a player doesn't find on their own,
-/// each with a link where a page has it. The rows are built the first time the page shows; the keys are read from the
-/// edited choices each time, so a key just recorded on In game shows here before Save.
+/// each with a link where a page has it. The rows are built the first time the page shows. The two game keys are set on
+/// this page since 2026-11-08 (the audit found them on In game and again here); In game keeps a pointer.
 /// </summary>
 public partial class OptionsWindow
 {
-    TextBlock? _tipsHotkey, _tipsMarkKey;
+    bool _tipsBuilt;
     readonly List<FrameworkElement> _tipRows = new();
 
     /// <summary>The window's own keys (MainWindow.Shortcuts.cs and the Undo bar).</summary>
@@ -29,20 +28,13 @@ public partial class OptionsWindow
 
     void FillTips()
     {
-        if (_tipsHotkey == null) BuildTips();
-        _tipsHotkey!.Text = _edit.Hotkey.Length > 0 ? _edit.Hotkey : "off";
-        _tipsMarkKey!.Text = _edit.MarkWrongKey.Length > 0 ? _edit.MarkWrongKey : "not set";
+        if (!_tipsBuilt) BuildTips();
+        _tipsBuilt = true;
     }
 
     void BuildTips()
     {
-        // in the game: the two global keys, each with Change (the keys are recorded on In game)
-        _tipsHotkey = KeyText("");
-        _tipsMarkKey = KeyText("");
-        TipsGame.Children.Add(GameKeyRow("Start or stop a run", "Works while the game is in front.", _tipsHotkey));
-        TipsGame.Children.Add(Styled(new Border(), "Divider"));
-        TipsGame.Children.Add(GameKeyRow("That was wrong", "Marks the newest counted line as wrong and keeps the last minute for a report.", _tipsMarkKey));
-
+        // in the game: the two global keys are the page's own rows in the XAML (HotkeyBox, MarkKeyBox), recorded here
         // in this window: what Shortcuts.cs binds, and Undo
         for (int i = 0; i < WindowKeys.Length; i++)
         {
@@ -64,23 +56,6 @@ public partial class OptionsWindow
         Tip("Right-click a Where to farm row for that zone's page on kinahledger.com.");
         Tip("An event run that was really two runs: Split it from its card.");
         Tip("Link this PC to your profile once and your week shows on the site.", "Sharing", () => Go(Page.Sharing));
-    }
-
-    FrameworkElement GameKeyRow(string title, string hint, TextBlock key)
-    {
-        var g = new Grid { Margin = new Thickness(18, 12, 18, 12) };
-        g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(Styled(new TextBlock { Text = title }, "RowTitle"));
-        words.Children.Add(Styled(new TextBlock { Text = hint, TextWrapping = TextWrapping.Wrap }, "RowHint"));
-        g.Children.Add(words);
-        key.Margin = new Thickness(12, 0, 12, 0);
-        Grid.SetColumn(key, 1); g.Children.Add(key);
-        var change = new Button { Content = "Change", VerticalAlignment = VerticalAlignment.Center, ToolTip = "Pick the key on the In game page" };
-        AutomationProperties.SetName(change, "Change the " + title + " key");
-        change.Click += (_, _) => Go(Page.InGame);
-        Grid.SetColumn(change, 2); g.Children.Add(change);
-        return g;
     }
 
     static TextBlock KeyText(string text)
@@ -108,8 +83,8 @@ public partial class OptionsWindow
     }
 
     /// <summary>
-    /// The options self-test's part (WpfApp.OptionsSelfTest): the page has its three groups, eight tips or more, and the
-    /// start/stop row says the key as it is now ("off" with none).
+    /// The options self-test's part (WpfApp.OptionsSelfTest): the page has its three groups, eight tips or more, the two
+    /// game keys are set here and only here (In game points to them), and the start/stop row says the key as it is now.
     /// </summary>
     internal static void SelfTestTips(MainWindow w, Func<OptionsWindow> open, Action<bool, string> check)
     {
@@ -118,9 +93,16 @@ public partial class OptionsWindow
         check(o.PageTips.Visibility == Visibility.Visible && o.TipsGame.Children.Count >= 3 && o.TipsWindow.Children.Count >= 7 && o.TipsKnow.Children.Count > 0,
             "Shortcuts & tips: In game, In this window and Did you know");
         check(o._tipRows.Count >= 8, $"Shortcuts & tips: {o._tipRows.Count} tips (8 or more)");
-        var want = w.HotkeyText.Length > 0 ? w.HotkeyText : "off";
-        check(o._tipsHotkey?.Text == want, $"Shortcuts & tips: Start or stop a run shows its key ({o._tipsHotkey?.Text}, saved {want})");
-        check(o._tipsMarkKey?.Text == (w.MarkWrongText.Length > 0 ? w.MarkWrongText : "not set"), "Shortcuts & tips: That was wrong shows its key or \"not set\"");
+        var want = w.HotkeyText.Length > 0 ? w.HotkeyText : "Off";
+        check(o.HotkeyBox.Text == want, $"Shortcuts & tips: Start and stop a run shows its key ({o.HotkeyBox.Text}, saved {want})");
+        check(o.MarkKeyBox.Text == (w.MarkWrongText.Length > 0 ? w.MarkWrongText : "Off"), "Shortcuts & tips: That was wrong shows its key or \"Off\"");
+        // one place for each key (2026-11-08 audit): the boxes sit on this page, In game has only the pointer to it
+        bool OnPage(FrameworkElement e, FrameworkElement page) { for (DependencyObject? d = e; d != null; d = LogicalTreeHelper.GetParent(d)) if (d == page) return true; return false; }
+        check(OnPage(o.HotkeyBox, o.PageTips) && OnPage(o.MarkKeyBox, o.PageTips) && !OnPage(o.HotkeyBox, o.PageInGame) && !OnPage(o.MarkKeyBox, o.PageInGame),
+            "Shortcuts & tips: the two game keys are set here, not on In game");
+        o.Go(Page.InGame);
+        o.InGameKeysBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        check(o.PageTips.Visibility == Visibility.Visible, "In game's Shortcuts & tips button opens the page with the keys");
         o.Close();
     }
 }

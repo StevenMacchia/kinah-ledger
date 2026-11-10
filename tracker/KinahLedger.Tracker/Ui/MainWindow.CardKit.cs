@@ -57,8 +57,8 @@ public partial class MainWindow
         // the icon, or the item's initial only while the icon is still downloading: a card drawn before the file is on
         // disk fills in when it lands (every item in the game has one; a letter that stayed read as a missing picture)
         var pic = new Image { Source = slot.Image, Stretch = Stretch.Uniform, Margin = new Thickness(2) };
-        var letter = new TextBlock { Text = InitialOf(item), FontSize = size * 0.38, FontWeight = FontWeights.Bold, Foreground = Ck(CkMuted), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed };
+        var letter = KindGlyph(item, _items.IdOf(item), size);   // the item's kind, not its initial (2026-11-08, Ui/Quest.cs)
+        letter.Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed;
         if (slot.Image == null && !ReferenceEquals(slot, IconCache.None))
         {
             System.ComponentModel.PropertyChangedEventHandler? on = null;

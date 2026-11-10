@@ -26,6 +26,7 @@ public partial class MainWindow
         WelcomeGo.Click += (_, _) => FinishWelcome();
         WelcomeSentLink.Click += (_, _) => WhatsSent();
         WelcomePrivacyLink.Click += (_, _) => Open(PrivacyUrl);
+        WelcomeNext.Text = WelcomeNextLine(HotkeyText);
         SetWelcome(!_prefs.Welcomed || !HasServer);
     }
 
@@ -42,6 +43,10 @@ public partial class MainWindow
         Tagline.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (on) WelcomeHint.Text = HasServer ? "" : "Pick your server to continue.";
     }
+
+    /// <summary>The welcome card's last line: what to do once Continue is pressed, with the in-game key when one is set.</summary>
+    internal static string WelcomeNextLine(string hotkey) =>
+        "Then: open Aion 2, keep the chat on screen, and press Start run" + (hotkey.Length > 0 ? $" (or {hotkey} in the game)." : ".");
 
     void FinishWelcome()
     {

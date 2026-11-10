@@ -65,17 +65,17 @@ public partial class MainWindow
         var text = _hudPrefs.MarkWrongKey;
         if (Hotkey.Explain(text) is { } why)
         {
-            _markKeyProblem = ($"The That was wrong shortcut {text.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › In game.", $"That was wrong key {text.Trim()} is off · pick another in Options");
+            _markKeyProblem = ($"The That was wrong shortcut {text.Trim()} is off: {char.ToLowerInvariant(why[0])}{why[1..]} Pick another in Options › Shortcuts & tips.", $"That was wrong key {text.Trim()} is off · pick another in Options");
             return _markKeyProblem.Value.Long;
         }
         if (Hotkey.Parse(text) is not { } key) { _markKeyProblem = null; return null; }
         if (Hotkey.Same(text, _prefs.Hotkey))
         {
-            _markKeyProblem = ($"{key} is already the start/stop shortcut, so That was wrong is off. Pick another in Options › In game.", $"{key} is the start/stop key · pick another in Options");
+            _markKeyProblem = ($"{key} is already the start/stop shortcut, so That was wrong is off. Pick another in Options › Shortcuts & tips.", $"{key} is the start/stop key · pick another in Options");
             return _markKeyProblem.Value.Long;
         }
         _markKeyProblem = Native.RegisterHotKey(h, Hotkey.MarkWrongId, key.NativeModifiers, key.VirtualKey) ? null
-            : ($"{key} is already used by another app, so That was wrong is off. Pick another in Options › In game.", $"{key} is taken by another app · pick another in Options");
+            : ($"{key} is already used by another app, so That was wrong is off. Pick another in Options › Shortcuts & tips.", $"{key} is taken by another app · pick another in Options");
         return _markKeyProblem?.Long;
     }
 

@@ -420,34 +420,19 @@
         <!-- In game: the shortcut and the panel over the game -->
         <StackPanel x:Name="PageInGame" Visibility="Collapsed">
           <TextBlock Style="{StaticResource PageTitle}" Text="In game"/>
-          <TextBlock Style="{StaticResource PageLead}" Text="The keyboard shortcut, and the panel: a small strip over the game that shows whenever the chat is being read, run or no run. It shows while the game is in front, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
+          <TextBlock Style="{StaticResource PageLead}" Text="The panel: a small strip over the game that shows whenever the chat is being read, run or no run. It shows while the game is in front, in borderless or windowed mode: Windows can't draw over exclusive fullscreen."/>
 
-          <TextBlock Style="{StaticResource GroupLabel}" Text="SHORTCUT"/>
+          <TextBlock Style="{StaticResource GroupLabel}" Text="SHORTCUTS"/>
+          <!-- the two keys moved to Shortcuts &amp; tips (2026-11-08 audit: they were set here and shown again there); a pointer stays -->
           <Border Style="{StaticResource Group}">
-            <StackPanel>
-              <StackPanel Margin="18,13,18,15">
-                <TextBlock Style="{StaticResource RowTitle}" Text="Start and stop a run"/>
-                <TextBlock x:Name="HotkeyHint" Style="{StaticResource RowHint}" Text="Works while the game has focus. Click Change, then press the keys."/>
-                <WrapPanel Margin="0,12,0,0">
-                  <TextBox x:Name="HotkeyBox" Width="190" IsReadOnly="True" HorizontalContentAlignment="Center" FontFamily="Consolas" FontSize="14" Cursor="Arrow" Margin="0,0,8,0"/>
-                  <Button x:Name="HotkeyChangeBtn" Content="Change" Margin="0,0,8,0"/>
-                  <Button x:Name="HotkeyOffBtn" Content="Turn off" Margin="0,0,8,0"/>
-                  <Button x:Name="HotkeyResetBtn" Content="Default"/>
-                </WrapPanel>
+            <Grid Style="{StaticResource Row}">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Start and stop a run, That was wrong"/>
+                <TextBlock Style="{StaticResource RowHint}" Text="The two keys that work in the game are set on Shortcuts &amp; tips."/>
               </StackPanel>
-              <Border Style="{StaticResource Divider}"/>
-              <!-- That was wrong (Ui/MainWindow.MarkWrong.cs): off until a key is picked, recorded the same way -->
-              <StackPanel Margin="18,13,18,15">
-                <TextBlock Style="{StaticResource RowTitle}" Text="That was wrong"/>
-                <TextBlock x:Name="MarkKeyHint" Style="{StaticResource RowHint}" Text="Marks the newest counted line as wrong and saves the last minute for a report. Off until you pick a key."/>
-                <WrapPanel Margin="0,12,0,0">
-                  <TextBox x:Name="MarkKeyBox" Width="190" IsReadOnly="True" HorizontalContentAlignment="Center" FontFamily="Consolas" FontSize="14" Cursor="Arrow" Margin="0,0,8,0"
-                           AutomationProperties.Name="That was wrong shortcut"/>
-                  <Button x:Name="MarkKeyChangeBtn" Content="Change" Margin="0,0,8,0"/>
-                  <Button x:Name="MarkKeyOffBtn" Content="Turn off"/>
-                </WrapPanel>
-              </StackPanel>
-            </StackPanel>
+              <Button x:Name="InGameKeysBtn" Grid.Column="1" Content="Shortcuts &amp; tips" VerticalAlignment="Center"/>
+            </Grid>
           </Border>
 
           <TextBlock Style="{StaticResource GroupLabel}" Text="THE PANEL"/>
@@ -535,7 +520,30 @@
 
           <TextBlock x:Name="TipsGameLabel" Style="{StaticResource GroupLabel}" Text="IN GAME (ANYWHERE)"/>
           <Border Style="{StaticResource Group}">
-            <StackPanel x:Name="TipsGame"/>
+            <StackPanel x:Name="TipsGame">
+              <StackPanel Margin="18,13,18,15">
+                <TextBlock Style="{StaticResource RowTitle}" Text="Start and stop a run"/>
+                <TextBlock x:Name="HotkeyHint" Style="{StaticResource RowHint}" Text="Works while the game has focus. Click Change, then press the keys."/>
+                <WrapPanel Margin="0,12,0,0">
+                  <TextBox x:Name="HotkeyBox" Width="190" IsReadOnly="True" HorizontalContentAlignment="Center" FontFamily="Consolas" FontSize="14" Cursor="Arrow" Margin="0,0,8,0"/>
+                  <Button x:Name="HotkeyChangeBtn" Content="Change" Margin="0,0,8,0"/>
+                  <Button x:Name="HotkeyOffBtn" Content="Turn off" Margin="0,0,8,0"/>
+                  <Button x:Name="HotkeyResetBtn" Content="Default"/>
+                </WrapPanel>
+              </StackPanel>
+              <Border Style="{StaticResource Divider}"/>
+              <!-- That was wrong (Ui/MainWindow.MarkWrong.cs): off until a key is picked, recorded the same way -->
+              <StackPanel Margin="18,13,18,15">
+                <TextBlock Style="{StaticResource RowTitle}" Text="That was wrong"/>
+                <TextBlock x:Name="MarkKeyHint" Style="{StaticResource RowHint}" Text="Marks the newest counted line as wrong and saves the last minute for a report. Off until you pick a key."/>
+                <WrapPanel Margin="0,12,0,0">
+                  <TextBox x:Name="MarkKeyBox" Width="190" IsReadOnly="True" HorizontalContentAlignment="Center" FontFamily="Consolas" FontSize="14" Cursor="Arrow" Margin="0,0,8,0"
+                           AutomationProperties.Name="That was wrong shortcut"/>
+                  <Button x:Name="MarkKeyChangeBtn" Content="Change" Margin="0,0,8,0"/>
+                  <Button x:Name="MarkKeyOffBtn" Content="Turn off"/>
+                </WrapPanel>
+              </StackPanel>
+            </StackPanel>
           </Border>
 
           <TextBlock x:Name="TipsWindowLabel" Style="{StaticResource GroupLabel}" Text="IN THIS WINDOW"/>
