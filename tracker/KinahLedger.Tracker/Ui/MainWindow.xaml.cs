@@ -1186,19 +1186,40 @@ public partial class MainWindow : Window
 
     void ShowPart(string part, bool byHand = true)
     {
+        var was = _part;
         // a Farming page that has been laid out (the demo's first switch happens before any layout, when the window is still small)
         if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = ActualHeight;
         _part = part is "Crafting" or "Events" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
         bool craft = _part == "Crafting";
         ApplyView();
-        FarmTab.Style = (Style)FindResource(_part == "Farming" ? "SegOn" : "SegOff");
-        CraftTab.Style = (Style)FindResource(craft ? "SegOn" : "SegOff");
-        EventsTab.Style = (Style)FindResource(_part == "Events" ? "SegOn" : "SegOff");
-        QuestsTab.Style = (Style)FindResource(_part == "Quests" ? "SegOn" : "SegOff");
+        FarmTab.Style = (Style)FindResource(_part == "Farming" ? "NavOn" : "SegOff");
+        CraftTab.Style = (Style)FindResource(craft ? "NavOn" : "SegOff");
+        EventsTab.Style = (Style)FindResource(_part == "Events" ? "NavOn" : "SegOff");
+        QuestsTab.Style = (Style)FindResource(_part == "Quests" ? "NavOn" : "SegOff");
         if (_part == "Events") ShowInstances();
         if (_part == "Quests") RedrawQuestsPage();
         if (byHand) _follow.Picked();
         if (craft && !_demo) FillCraft(CraftShown);
+        if (byHand && was != _part) RiseIn();
+    }
+
+    /// <summary>
+    /// v2 motion (2026-11-10, as the site's views): a page the player opens fades up 8 px in 0.26 s. Never in a render
+    /// (the demo) or with Windows's animations off, so the review loop's PNGs and a player who turned motion off see it still.
+    /// </summary>
+    void RiseIn()
+    {
+        if (_demo || !SystemParameters.ClientAreaAnimation) return;
+        var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+        var parts = HeadStack.Children.OfType<FrameworkElement>().Skip(1).Append(LeftCol).Append(LowerScroll).Where(e => e.Visibility == Visibility.Visible);
+        foreach (var el in parts)
+        {
+            var move = new TranslateTransform(0, 8);
+            el.RenderTransform = move;
+            var t = TimeSpan.FromMilliseconds(260);
+            el.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, t) { EasingFunction = ease, FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop });
+            move.BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(8, 0, t) { EasingFunction = ease });
+        }
     }
 
     /// <summary>

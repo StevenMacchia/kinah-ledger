@@ -111,7 +111,10 @@ public partial class MainWindow
         {
             var l = lines[i];
             var row = FeedRow(l, i == 0, i == 0 && justNow, i == LiveFeed.Shown - 1, i > 0, value(l), icon?.Invoke(l) ?? FeedIcon(l));
-            row.MouseLeftButtonUp += (_, _) => ShowLineReport(l, tab, row);
+            // a Just crafted line opens its recipe in the craft window, with the line's report a link in it (2026-11-10, Steven:
+            // anything on the Crafting page opens how to craft it); a pickup's line opens its report, as before
+            if (tab == FeedTab.Crafting && l.Name.Length > 0) { row.MouseLeftButtonUp += (_, _) => OpenCraftWindow(l.Name, report: () => ShowLineReport(l, tab, row)); row.ToolTip = "Click for its recipe, prices and market. A line counted wrong is reported from there."; }
+            else row.MouseLeftButtonUp += (_, _) => ShowLineReport(l, tab, row);
             if (IsMarked(l)) MarkRow(row, l);   // marked with the That was wrong key: a gold edge and a flag (Ui/MainWindow.MarkWrong.cs)
             host.Children.Add(row);
             if (i == 0 && fresh)

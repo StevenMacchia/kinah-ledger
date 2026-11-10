@@ -285,14 +285,11 @@ static class HudKit
         double inner = size - 4;
         var pic = new Image { Source = slot.Image, Stretch = Stretch.UniformToFill, Margin = new Thickness(1), Clip = new RectangleGeometry(new Rect(0, 0, inner, inner), 3, 3) };
         RenderOptions.SetBitmapScalingMode(pic, BitmapScalingMode.HighQuality);
-        // no picture: the kind's line icon from the window's set (2026-11-08, as Ui/Quest.cs KindGlyph), the coin for Kinah and
-        // the loot sack for an item, where the name's first letter read as a broken picture
-        var letter = new System.Windows.Shapes.Path
-        {
-            Data = KindGeo(p.Kinah ? "Coin" : "Sack"), Width = Math.Round(size * 0.5), Height = Math.Round(size * 0.5), Stretch = Stretch.Uniform, Stroke = Muted, StrokeThickness = 1.8,
-            StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed,
-        };
+        // no picture: the game's art for its kind (2026-11-10, as Ui/Quest.cs KindGlyph), Kinah's coin for Kinah and
+        // the loot chest for an item, where the name's first letter read as a broken picture
+        var letter = GameArt.Element(p.Kinah ? "kinah" : "attendance", Math.Round(size * (p.Kinah ? 0.66 : 0.55)));
+        if (!p.Kinah) letter.Opacity = 0.35;   // a picture still to come, faint (as Ui/Quest.cs KindGlyph)
+        letter.Visibility = slot.Image == null ? Visibility.Visible : Visibility.Collapsed;
         if (slot.Image == null && !ReferenceEquals(slot, IconCache.None))
         {
             System.ComponentModel.PropertyChangedEventHandler? on = null;
@@ -327,14 +324,6 @@ static class HudKit
         return b;
     }
 
-    /// <summary>
-    /// Theme.xaml's IcSack and IcCoin, parsed here and frozen: the panel is drawn where the application's resources may
-    /// not be in reach (its layout renders found none), and its drawing is frozen throughout.
-    /// </summary>
-    static readonly Geometry SackGeo = FrozenGeo("M9,4 H15 L14,7 H10 Z M10,7 C5,9 4,14 5,18 C6,20.5 18,20.5 19,18 C20,14 19,9 14,7"),
-        CoinGeo = FrozenGeo("M12,3 A9,9 0 1 0 12,21 A9,9 0 1 0 12,3 Z M9.5,8 V16 M9.5,12 L14.5,8 M9.5,12 L14.5,16");
-    static Geometry FrozenGeo(string data) { var g = Geometry.Parse(data); g.Freeze(); return g; }
-    static Geometry KindGeo(string name) => name == "Coin" ? CoinGeo : SackGeo;
 
     /// <summary>"RUN 42:17" during a run: the word and the clock apart. The session clock alone otherwise.</summary>
     public static (bool Run, string Clock) Time(string time) => time.StartsWith("RUN ") ? (true, time[4..]) : (false, time);

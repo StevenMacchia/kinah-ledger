@@ -40,6 +40,27 @@ public partial class MainWindow
         {
             if (PlayerBoards.Crafts.Count > 2) { var c = PlayerBoards.Crafts[2]; Save(BuildCraftCard(_items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name, c, 3), "ui-craft-card.png"); }
             Save(BuildCraftCard("Artisan's Orichalcum Longsword"), "ui-craft-card-longsword.png");
+            // the craft window (Ui/CraftWindow.cs) as a Best crafts row opens it: the card with MARKET, the site link and the close cross
+            if (PlayerBoards.Crafts.Count > 0)
+            {
+                var c0 = PlayerBoards.Crafts[0];
+                var n0 = _items.NameOf(c0.Id) is { Length: > 1 } nn ? nn : c0.Name;
+                var card0 = BuildCraftCard(n0, c0, 1, market: true, report: () => { });
+                IconCache.Drain(TimeSpan.FromSeconds(8));
+                Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+                var win = new CraftWindow(this);
+                win.ShowCard(n0, card0, offscreen: true);
+                win.UpdateLayout();
+                Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+                if (win.Content is FrameworkElement root)
+                {
+                    var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth), (int)Math.Ceiling(root.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                    bmp.Render(root);
+                    var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                    using var f = File.Create(Path.Combine(dir, "ui-craft-window.png")); enc.Save(f);
+                }
+                win.Close();
+            }
         }
         else if (kind == "Open world") ShotItemCard(Path.Combine(dir, "ui-drop-card.png"), _demoZone ?? "Western Cantas Valley");
     }
@@ -55,7 +76,7 @@ public partial class MainWindow
     /// <summary>Best crafts on the Crafting part, Where to farm now on the Farming part (called from ApplyView).</summary>
     void ApplyPlayerView(bool craft, bool farm, bool full)
     {
-        if (!craft) { _bestAll = false; _bestOpen.Clear(); }   // folded again the next time the Crafting part opens
+        if (!craft) _bestAll = false;   // folded again the next time the Crafting part opens
         BestCraftsCard.Visibility = craft ? Visibility.Visible : Visibility.Collapsed;
         if (craft) FillBestCrafts();
         if (!farm) WhereSection.Visibility = Visibility.Collapsed;
@@ -66,8 +87,6 @@ public partial class MainWindow
 
     /* ---------------- best crafts today ---------------- */
 
-    /// <summary>Best crafts rows tapped open to show the skill, where the price is from and its readings, by recipe.</summary>
-    readonly HashSet<string> _bestOpen = new(StringComparer.OrdinalIgnoreCase);
 
     void FillBestCrafts()
     {
@@ -125,14 +144,13 @@ public partial class MainWindow
 
     /// <summary>
     /// A best craft (direction C): its icon, name and one quiet line (makes, costs, sells each), the success and the profit a
-    /// craft in columns. A tap opens the detail (skill and level, where the sell price is from, its readings and age) with the
-    /// recipe card a link away.
+    /// craft in columns. A click opens the recipe in the craft window (Ui/CraftWindow.cs: how to craft it, the prices, the
+    /// market); until 2026-11-10 it opened a line of detail under the row with the card a link away.
     /// </summary>
     FrameworkElement BestCraftRow(int rank, PlayerBoards.BestCraft c, long profit, int vendorUnpriced, int farmed = 0, long? cost = null)
     {
         var name = _items.NameOf(c.Id) is { Length: > 1 } n ? n : c.Name;
-        bool open = _bestOpen.Contains(name);
-        var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = open ? null : "Click for the skill, where the price is from and its readings." };
+        var g = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = "Click for how to craft it, its prices and the market." };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
@@ -153,25 +171,6 @@ public partial class MainWindow
         var sub = new TextBlock { Text = string.Join(" · ", bits), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) };
         sub.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         mid.Children.Add(nt); mid.Children.Add(sub);
-        if (open)
-        {
-            // behind the tap: the skill, the price's source and its readings, and the recipe card
-            var detail = new TextBlock { FontSize = 12, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
-            detail.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
-            var src = oq != null ? PriceBook.Describe(oq, withAge: false) : $"price from kinahledger.com · {c.NObs} readings";
-            var skill = c.Profession + (c.Level is int lv && lv > 0 ? $" {lv}" : "");
-            var age = PriceBook.Ago(PlayerBoards.CraftsBoardAt ?? PlayerBoards.CraftsAt ?? DateTime.UtcNow, DateTime.UtcNow);
-            detail.Inlines.Add(new Run(string.Join(" · ", new[] { skill, src, age }.Where(x => x.Trim().Length > 0)) + "   "));
-            var card = new Hyperlink(new Run("Recipe card")); card.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
-            card.Click += (_, _) =>
-            {
-                if (_card != null) _card.IsOpen = false;
-                _card = new InCard { Child = BuildCraftCard(name, c, rank), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = g };
-                _card.IsOpen = true;
-            };
-            detail.Inlines.Add(card);
-            mid.Children.Add(detail);
-        }
         Grid.SetColumn(mid, 1); g.Children.Add(mid);
         var sc = new TextBlock { Text = $"{c.Success:P0}", FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 9, 0, 0) };
         sc.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); sc.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
@@ -185,7 +184,7 @@ public partial class MainWindow
         Grid.SetColumn(pt, 3); g.Children.Add(pt);
         var b = new Border { Child = g, Padding = new Thickness(0, 8, 0, 8), BorderThickness = new Thickness(0, 1, 0, 0) };
         b.SetResourceReference(Border.BorderBrushProperty, "Line");
-        b.MouseLeftButtonUp += (_, ev) => { if (ev.OriginalSource is FrameworkContentElement) return; if (!_bestOpen.Remove(name)) _bestOpen.Add(name); FillBestCrafts(); };
+        b.MouseLeftButtonUp += (_, _) => OpenCraftWindow(name, c, rank);
         return b;
     }
 

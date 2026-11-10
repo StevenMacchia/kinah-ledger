@@ -12,6 +12,8 @@
   <SolidColorBrush x:Key="LineStrong" Color="#2E3346"/>
   <SolidColorBrush x:Key="Ink" Color="#EDEFF5"/>
   <SolidColorBrush x:Key="Muted" Color="#A2A8BA"/>
+  <!-- sentences (a card's text, a page's lead, a setting's hint): the site's card paragraph tone, a step above Muted -->
+  <SolidColorBrush x:Key="Text2" Color="#C9CDDA"/>
   <SolidColorBrush x:Key="Faint" Color="#6D7387"/>
   <SolidColorBrush x:Key="Gold" Color="#F5B942"/>
   <SolidColorBrush x:Key="Violet" Color="#B39BFF"/>
@@ -29,8 +31,8 @@
   <SolidColorBrush x:Key="Lime" Color="#AEB5C7"/>
   <SolidColorBrush x:Key="GoldInk" Color="#1D1300"/>
   <SolidColorBrush x:Key="SegOnInk" Color="#0A0B10"/>
-  <SolidColorBrush x:Key="CardLine" Color="#232736"/>
-  <SolidColorBrush x:Key="CardLineHover" Color="#3A4058"/>
+  <LinearGradientBrush x:Key="CardLine" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#30354A" Offset="0"/><GradientStop Color="#1F2330" Offset="1"/></LinearGradientBrush>
+  <LinearGradientBrush x:Key="CardLineHover" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#474D66" Offset="0"/><GradientStop Color="#30354A" Offset="1"/></LinearGradientBrush>
   <SolidColorBrush x:Key="SkyTint" Color="#17BEC6DC"/>
   <SolidColorBrush x:Key="LilacTint" Color="#17BEC6DC"/>
   <SolidColorBrush x:Key="NoticeTint" Color="#17BEC6DC"/>
@@ -97,6 +99,7 @@
   <SolidColorBrush x:Key="ItemSel" Color="#262A38"/>
   <SolidColorBrush x:Key="SegGroup" Color="#111319"/>
   <SolidColorBrush x:Key="SegOnBg" Color="#EDEFF5"/>
+  <SolidColorBrush x:Key="NavOnBg" Color="#24FFFFFF"/>
   <SolidColorBrush x:Key="SecGold" Color="#F5B942"/>
   <SolidColorBrush x:Key="ChipBg" Color="#14BEC6DC"/>
   <SolidColorBrush x:Key="ChipLine" Color="#2E3346"/>
@@ -145,7 +148,7 @@
 
   <Style x:Key="BodyStyle" TargetType="TextBlock">
     <Setter Property="FontSize" Value="13"/>
-    <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2}"/>
     <Setter Property="TextWrapping" Value="Wrap"/>
     <Setter Property="LineHeight" Value="19"/>
   </Style>
@@ -248,10 +251,17 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
+          <!-- v2 (2026-11-10, as the site's primary button): a soft gold glow under it, on a layer of its own so the label stays crisp -->
+          <Grid>
+            <Border x:Name="glow" Background="{DynamicResource Gold}" CornerRadius="8" Margin="4,6,4,0" Opacity="0.5">
+              <Border.Effect><BlurEffect Radius="14"/></Border.Effect>
+            </Border>
+            <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Grid>
           <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="glow" Property="Visibility" Value="Collapsed"/></Trigger>
             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.92"/></Trigger>
             <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.8"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
@@ -289,6 +299,12 @@
   <Style x:Key="SegOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
     <Setter Property="Background" Value="{DynamicResource SegOnBg}"/>
     <Setter Property="Foreground" Value="{DynamicResource SegOnInk}"/>
+  </Style>
+  <!-- the page tab on show (v2, 2026-11-10): a faint tint and the ink, as the site's top menu; the solid pill (SegOn) is for
+       switches inside a page (Today / Week, This session / All time) -->
+  <Style x:Key="NavOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
+    <Setter Property="Background" Value="{DynamicResource NavOnBg}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
   </Style>
   <!-- a quiet button: Start run under the ring (coral while a run is on). Rounded rectangles everywhere, no ovals (Steven, 2026-11-07) -->
   <Style x:Key="PillBtn" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -349,8 +365,14 @@
     <Setter Property="CornerRadius" Value="10"/>
     <Setter Property="Padding" Value="11,8,11,8"/>
     <Setter Property="Cursor" Value="Hand"/>
+    <!-- v2 motion (2026-11-10, as the site's cards): a card that opens something lifts a pixel under the mouse, in 0.12 s -->
+    <Setter Property="RenderTransform"><Setter.Value><TranslateTransform/></Setter.Value></Setter>
     <Style.Triggers>
-      <Trigger Property="IsMouseOver" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource CardLineHover}"/></Trigger>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="BorderBrush" Value="{DynamicResource CardLineHover}"/>
+        <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-1" Duration="0:0:0.12"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+        <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="0:0:0.12"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+      </Trigger>
     </Style.Triggers>
   </Style>
   <!-- a line icon at 16 px, the stroke in the text's muted tone; the chevron that turns when a card opens; a pill's icon in the pill's own ink -->

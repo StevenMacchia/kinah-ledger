@@ -988,7 +988,7 @@ public static class WpfApp
                 DoEvents();
                 return w.PartForTest;
             }
-            bool Lit(System.Windows.Controls.Button tab) => ReferenceEquals(tab.Style, w.FindResource("SegOn"));
+            bool Lit(System.Windows.Controls.Button tab) => ReferenceEquals(tab.Style, w.FindResource("NavOn"));
             Check(Follow(Session.ActivityKind.Farming, 10) == "Farming", "the page: farming leaves it on Farming");
             Check(Follow(Session.ActivityKind.Crafting, 3) == "Farming" && Follow(Session.ActivityKind.Farming, 5) == "Farming", "...3 s of crafting doesn't move it");
             Check(Follow(Session.ActivityKind.Crafting, 6) == "Crafting" && Lit(w.CraftTab) && !Lit(w.FarmTab), "...crafting that holds shows Crafting, its tab lit");

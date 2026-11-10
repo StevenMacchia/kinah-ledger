@@ -41,14 +41,28 @@ public partial class MainWindow
         "Gold" => "GoldIcTint", "Mint" => "MintTint", "Sky" => "SkyTint", "Coral" => "CoralTint", "Lilac" => "LilacTint", "Lime" => "LimeTint", _ => "Card2",
     };
 
-    /// <summary>An icon in a tinted box: 30 px, rounded (a circle in a row), the icon in the role's colour.</summary>
+    /// <summary>
+    /// An icon in a box: 30 px, rounded (a circle in a row). A concept with game art (Ui/GameArt.cs: Kinah, a fight, a run, a
+    /// quest...) shows the picture on the surface's second tone, as the site's icon chips; an interface mark (a check, a
+    /// plus) stays a line in the role's colour on its tint.
+    /// </summary>
     static Border QIconBox(string icon, string tone, double size = 30, bool round = false, double iconSize = 16)
     {
         var b = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(round ? size / 2 : Math.Round(size / 3)), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        if (GameArt.For(icon) is { } art)
+        {
+            b.SetResourceReference(Border.BackgroundProperty, "Card2");
+            b.Child = GameArt.Element(art, Math.Round(Math.Min(size - 4, iconSize * 1.55)));
+            return b;
+        }
         b.SetResourceReference(Border.BackgroundProperty, QTintOf(tone));
         b.Child = QIcon(icon, iconSize, tone == "Dim" ? "Faint" : tone, 2);
         return b;
     }
+
+    /// <summary>A concept's game art at <paramref name="size"/>, or the line icon when the name is an interface mark.</summary>
+    static FrameworkElement QGlyph(string name, double size, string brush, double stroke = 1.7) =>
+        GameArt.For(name) is { } art ? GameArt.Element(art, Math.Round(size * 1.25)) : QIcon(name, size, brush, stroke);
 
     /// <summary>
     /// An item's own icon from the cache, in a rounded (or round) box on the window's background; its initial while the
@@ -77,28 +91,61 @@ public partial class MainWindow
 
     /// <summary>
     /// What an item's slot shows when it has no picture (a name the list doesn't know, or the icon still on its way): the
-    /// line icon of its kind, from the kit's own set: a shield for gear, a coin for a currency, a leaf for a gathered
-    /// material, the loot sack for anything else. Until 2026-11-08 it was the name's first letter, which read as a broken
-    /// picture (the audit's "letter tiles").
+    /// game's art for its kind (Ui/GameArt.cs): a character card for gear, Kinah's coin for a currency, ore for a gathered
+    /// material, the loot chest for anything else. Until 2026-11-08 it was the name's first letter, which read as a broken
+    /// picture (the audit's "letter tiles"); until 2026-11-10 a drawn line icon.
     /// </summary>
-    Path KindGlyph(string name, long id, double size)
+    FrameworkElement KindGlyph(string name, long id, double size)
     {
         var info = _items.Get(id);
         var kind = _items.IsGear(id) || name.EndsWith("(bound)", StringComparison.OrdinalIgnoreCase) ? "Shield"
             : info?.Category is "Currency" or "Special Points" ? "Coin"
             : info?.Category == "Gathering Material" || Data.GatheringCatalog.Find(name) != null ? "Leaf"
             : "Sack";
-        return QIcon(kind, Math.Round(size * 0.5), "Muted", size >= 40 ? 2 : 1.8);
+        // faint, so a row of them reads as pictures still to come, not as one item many times (review 2026-11-10)
+        var e = GameArt.Element(GameArt.For(kind)!, Math.Round(size * 0.6)); e.Opacity = 0.35;
+        return e;
     }
 
-    /// <summary>Kinah's coin: a gold disc with the K, the game having no item icon for its money.</summary>
-    static FrameworkElement QCoin(double size = 30)
+    /// <summary>
+    /// A page's hero lit in the colour of what it is about (v2, 2026-11-10, as the site's heroes, kinah-ledger-site
+    /// tools/seo/hero-art.js): a glow in the item's grade colour from the top-left corner, under the card's content and
+    /// clipped to its corners. <paramref name="item"/> is the session's best drop, the recipe that pays most or a place's
+    /// best loot; none gives Kinah's gold. The item's picture faint behind the ring was tried and cut in review: a smudge
+    /// on bright drops, unreadable on dark gear. Safe to call on every fill: the layer is made once, only its colour changes.
+    /// </summary>
+    void HeroArt(Border hero, string? item)
     {
-        var b = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        b.Background = new LinearGradientBrush(Color.FromRgb(0xFF, 0xD2, 0x7A), Color.FromRgb(0xD9, 0x9A, 0x24), 160);
-        b.Child = QIcon("Coin", Math.Round(size * 0.6), "GoldInk", 2.2);
-        return b;
+        if (hero.Child is not Grid { Tag: "hero-art" } host)
+        {
+            var inner = hero.Child as FrameworkElement;
+            var pad = hero.Padding;
+            hero.Child = null;
+            hero.Padding = new Thickness(0);
+            host = new Grid { Tag = "hero-art", ClipToBounds = true };
+            host.Children.Add(new Border { IsHitTestVisible = false, Tag = "glow" });
+            if (inner != null) { inner.Margin = new Thickness(inner.Margin.Left + pad.Left, inner.Margin.Top + pad.Top, inner.Margin.Right + pad.Right, inner.Margin.Bottom + pad.Bottom); host.Children.Add(inner); }
+            // the card's rounded corners clip the layers (a Border doesn't clip its child)
+            host.SizeChanged += (_, e) => host.Clip = new RectangleGeometry(new Rect(e.NewSize), Math.Max(0, hero.CornerRadius.TopLeft - 1), Math.Max(0, hero.CornerRadius.TopLeft - 1));
+            hero.Child = host;
+        }
+        var glowBox = (Border)host.Children[0];
+        Color c;
+        if (item is { Length: > 0 } && _items.IdOf(item) is long id && id > 0)
+        {
+            var grade = GradeOf(item);
+            c = grade is "" or "Common" ? Color.FromRgb(0xC9, 0xCE, 0xDB) : TryFindResource("Grade" + grade) is SolidColorBrush gb ? gb.Color : Color.FromRgb(0xF5, 0xB9, 0x42);
+        }
+        else c = TryFindResource("Gold") is SolidColorBrush g ? g.Color : Color.FromRgb(0xF5, 0xB9, 0x42);
+        var glow = new RadialGradientBrush { Center = new Point(0.08, 0), GradientOrigin = new Point(0.08, 0), RadiusX = 0.6, RadiusY = 1.2 };
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0x30, c.R, c.G, c.B), 0));
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 1));
+        glow.Freeze();
+        glowBox.Background = glow;
     }
+
+    /// <summary>Kinah's coin: the game's own Kinah art (Art/kinah.png), the game having no item icon for its money.</summary>
+    static FrameworkElement QCoin(double size = 30) => GameArt.Element("kinah", size);
 
     /* ---------------- text, rows, chips, heads ---------------- */
 
@@ -251,13 +298,13 @@ public partial class MainWindow
         chip.Child = g;
     }
 
-    /// <summary>A card's head: the icon in lilac, the title, a note on the right in the muted tone, and the chevron when the card opens on a click.</summary>
+    /// <summary>A card's head: the icon (game art for a concept), the title, a note on the right in the muted tone, and the chevron when the card opens on a click.</summary>
     static Grid QHead(string icon, string title, string right = "", Path? chev = null)
     {
         var g = new Grid { Margin = new Thickness(0, 0, 0, 2), Background = Brushes.Transparent };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var ic = QIcon(icon, 16, "Lilac", 2); ic.Margin = new Thickness(0, 0, 8, 0); g.Children.Add(ic);
+        var ic = QGlyph(icon, 16, "Lilac", 2); ic.Margin = new Thickness(0, 0, 8, 0); g.Children.Add(ic);
         var t = QT(title, 12, FontWeights.SemiBold, "Ink"); Grid.SetColumn(t, 1); g.Children.Add(t);
         var r = QT(right, 11, FontWeights.Medium, "Muted", trim: true); r.HorizontalAlignment = HorizontalAlignment.Right; r.Margin = new Thickness(10, 0, 0, 0); r.Tag = "right";
         Grid.SetColumn(r, 2); g.Children.Add(r);

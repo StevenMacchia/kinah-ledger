@@ -24,22 +24,45 @@ public partial class MainWindow
     void CraftRowClick(object sender, MouseButtonEventArgs ev)
     {
         if (ev.OriginalSource is not FrameworkElement fe || RowOf(fe.DataContext) is not { Header: false } r) return;
-        if (_card != null) _card.IsOpen = false;
         // an upgrade's row (under its recipe) opens its recipe's card
-        var recipe = r.Child && r.Key.StartsWith("craft:", StringComparison.Ordinal) ? r.Key["craft:".Length..] : r.Name;
-        _card = new InCard { Child = BuildCraftCard(recipe), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = fe };
-        _card.IsOpen = true;
+        OpenCraftWindow(r.Child && r.Key.StartsWith("craft:", StringComparison.Ordinal) ? r.Key["craft:".Length..] : r.Name);
+    }
+
+    /// <summary>The craft window (Ui/CraftWindow.cs) while it is open, and what its card was built from (for a redraw).</summary>
+    CraftWindow? _craftWin;
+    (string Output, PlayerBoards.BestCraft? Best, int Rank, Action? Report)? _craftWinFor;
+
+    /// <summary>
+    /// Opens a recipe's card in the craft window, or puts it in place of the card there: every item on the Crafting page
+    /// calls this. Without a Best crafts row to go by, the server's list is looked up, so the card still has today's rank
+    /// and the site's prices for any gap. <paramref name="report"/> (a Just crafted line) adds the line's report link.
+    /// </summary>
+    internal void OpenCraftWindow(string output, PlayerBoards.BestCraft? best = null, int rank = 0, Action? report = null)
+    {
+        if (_card != null) _card.IsOpen = false;
+        if (best == null)
+        {
+            long id = _items.IdOf(output);
+            var list = PlayerBoards.Crafts;
+            for (int i = 0; i < list.Count; i++) if (list[i].Id == id) { best = list[i]; rank = i + 1; break; }
+        }
+        _craftWinFor = (output, best, rank, report);
+        if (_craftWin == null) { _craftWin = new CraftWindow(this); _craftWin.Closed += (_, _) => { _craftWin = null; _craftWinFor = null; }; }
+        _craftWin.ShowCard(output, BuildCraftCard(output, best, rank, market: true, report: report));
     }
 
     /// <summary>A typed vendor cost or an "I have these" tick changed the totals: the open card and the Crafting table redraw.</summary>
     void RefreshCraftCard(string output, PlayerBoards.BestCraft? best = null, int rank = 0)
     {
         if (_card is { IsOpen: true }) _card.Child = BuildCraftCard(output, best, rank);
+        if (_craftWin is { IsVisible: true } && _craftWinFor is { } f && f.Output == output) _craftWin.ShowCard(output, BuildCraftCard(output, f.Best, f.Rank, market: true, report: f.Report));
         FillCraft(CraftShown);
     }
 
     /// <param name="best">Set when the card opens from Best crafts today: the recipe that list priced (how many it makes) and its rank.</param>
-    internal Border BuildCraftCard(string output, PlayerBoards.BestCraft? best = null, int rank = 0)
+    /// <param name="market">The craft window's card (Ui/CraftWindow.cs): a MARKET section and a link to the item's page on the site too.</param>
+    /// <param name="report">A Just crafted line's report, as a link at the foot (its click used to open the report).</param>
+    internal Border BuildCraftCard(string output, PlayerBoards.BestCraft? best = null, int rank = 0, bool market = false, Action? report = null)
     {
         var mine = _crafted.FirstOrDefault(c => string.Equals(c.Name, output, StringComparison.OrdinalIgnoreCase));
         // the recipe this session crafted most (Orichalcum Ingot has a x1 and a x10 with different materials), unless the card
@@ -254,7 +277,19 @@ public partial class MainWindow
             SellTheMats(body, farmed, null);
             body.Children.Add(new Border { Height = 6 });
         }
-        body.Children.Add(CkLinks(("Recipe data: MetaBot.GG", "https://metabot.gg/en/aion-2/crafting")));
+        if (market) CraftMarket(body, recipe, best);
+        if (report != null)
+        {
+            var rl = new TextBlock { Margin = new Thickness(20, 10, 20, 0), FontSize = 12 };
+            rl.Inlines.Add(new System.Windows.Documents.Run("Was this craft counted wrong?  ") { Foreground = Ck(CkFaint) });
+            var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("Report it")); h.SetResourceReference(FrameworkContentElement.StyleProperty, "LinkStyle");
+            h.Click += (_, _) => report();
+            rl.Inlines.Add(h);
+            body.Children.Add(rl);
+        }
+        body.Children.Add(market
+            ? CkLinks(("Every server's price: kinahledger.com", SiteItemUrl(recipe.Output)), ("Recipe data: MetaBot.GG", "https://metabot.gg/en/aion-2/crafting"))
+            : CkLinks(("Recipe data: MetaBot.GG", "https://metabot.gg/en/aion-2/crafting")));
         return card;
     }
 
@@ -336,6 +371,41 @@ public partial class MainWindow
     }
 
     static Border Sized(Border b, double width) { b.Width = width; return b; }
+
+    /// <summary>
+    /// The craft window's market read on what the recipe makes (2026-11-10, Steven: "how to craft it, price, market
+    /// insights"), past what the card already says: the other servers' middle and how far this server sits from it, and which
+    /// materials still lack a sure price. No section when there is nothing to add; every server's price is the site link.
+    /// </summary>
+    void CraftMarket(StackPanel body, RecipeBook.Recipe recipe, PlayerBoards.BestCraft? best)
+    {
+        var head = CkSection("MARKET"); body.Children.Add(head);
+        var srv = Server?.Name ?? "your server";
+        // this server's own price and its source are on the Sells for line above; the section adds what that line doesn't say
+        var q = PriceBook.QuoteOf(recipe.Output);
+        if (PriceBook.RegionOf(recipe.Output) is { Price: > 0 } rg)
+        {
+            body.Children.Add(CkTip(CkKv("Other servers' middle", Amounts.Short(rg.Price), CkInk, $"{rg.Servers} server{(rg.Servers == 1 ? "" : "s")} in the region"), Amounts.Full(rg.Price) + " kinah each"));
+            if (q is { From: not PriceBook.From.Region } && rg.Price > 0)
+            {
+                double d = (q.Price - rg.Price) / (double)rg.Price;
+                body.Children.Add(CkNote(Math.Abs(d) < 0.05 ? $"{srv} sells it at about the region's price."
+                    : d < 0 ? $"{srv} is {-d:P0} under the other servers: cheap to buy here, and selling here makes less."
+                    : $"{srv} is {d:P0} over the other servers: selling here makes more."));
+            }
+        }
+        // a material whose price isn't sure makes the cost a guess: said once here, by name
+        var unsure = recipe.Materials.Where(m => !m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase) && !PriceBook.Farmed(m.Item) && PriceBook.QuoteOf(m.Item) is not { Sure: true }).Select(m => m.Item).ToList();
+        if (unsure.Count > 0) body.Children.Add(CkNote($"The cost is a best guess until {string.Join(", ", unsure.Take(3))}{(unsure.Count > 3 ? " and more" : "")} {(unsure.Count == 1 ? "has" : "have")} a sure price: open {(unsure.Count == 1 ? "its" : "their")} sale list in the game."));
+        if (ReferenceEquals(body.Children[^1], head)) body.Children.Remove(head);   // nothing to add: no section
+    }
+
+    /// <summary>The item's page on kinahledger.com (/items/&lt;slug&gt;, the site's own slug rule: build-seo-pages.js slug()).</summary>
+    static string SiteItemUrl(string name)
+    {
+        var s = System.Text.RegularExpressions.Regex.Replace(name.ToLowerInvariant().Replace("'", "").Replace("’", ""), "[^a-z0-9]+", "-").Trim('-');
+        return "https://kinahledger.com/items/" + s;
+    }
 
     /// <summary>
     /// A vendor material's cost, typed in its slot and kept on this PC: the NPC price shipped with the data ("NPC 880")
