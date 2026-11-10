@@ -188,7 +188,7 @@ public partial class MainWindow
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var chase = QT($"last run {Fk(lastV)}" + (isBest ? " · your best here" : $" · {Math.Round(100.0 * lastV / best):0}% of your best here"), 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
             var flag = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
-            var fi = QIcon("Flag", 12, isBest ? "Mint" : "Gold", 2); fi.Margin = new Thickness(0, 0, 5, 0); fi.VerticalAlignment = VerticalAlignment.Center; flag.Children.Add(fi);
+            var fi = QGlyph("Flag", 12, isBest ? "Mint" : "Gold", 2); fi.Margin = new Thickness(0, 0, 5, 0); fi.VerticalAlignment = VerticalAlignment.Center; flag.Children.Add(fi);
             flag.Children.Add(QT($"{Fk(best)} best run", 11.5, FontWeights.SemiBold, isBest ? "Mint" : "Gold"));
             Grid.SetColumn(flag, 1); row.Children.Add(flag);
             left.Children.Add(row);
@@ -219,6 +219,9 @@ public partial class MainWindow
         g.Children.Add(left);
         if (ring != null) { ring.VerticalAlignment = VerticalAlignment.Top; ring.Margin = new Thickness(0, 2, 0, 0); Grid.SetColumn(ring, 2); g.Children.Add(ring); }
         card.Child = g;
+        // lit by the art of the place's best loot (v2, Ui/Quest.cs HeroArt); "Name ×3" from RunsBestDrop
+        var bestDrop = RunsBestDrop(counted);
+        HeroArt(card, bestDrop.Length > 0 ? bestDrop[..(bestDrop.LastIndexOf(" ×") is int x and > 0 ? x : bestDrop.Length)] : null);
         return card;
     }
 

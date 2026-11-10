@@ -26,7 +26,8 @@ public partial class MainWindow
     void FillCraftQuest(int tries, int ok, int itemsMade, long spent, long worth, long net, bool some, bool atMost, List<DropRow> rows)
     {
         bool known = spent > 0 || worth > 0;
-        // the hero
+        // the hero, lit by the art of the recipe that paid most this session, else the one that pays most today (v2, Ui/Quest.cs HeroArt)
+        HeroArt(CraftHero, _craftPerRecipe.Count > 0 ? _craftPerRecipe.OrderByDescending(r => r.Profit).First().Name : _bestTop?.Name);
         double share = tries > 0 ? ok / (double)tries : 0;
         CraftChaseBox.Visibility = tries > 0 ? Visibility.Visible : Visibility.Collapsed;
         // the failed count is the ring's and "4 of 5 worked"'s already (UI audit 2026-11-08: one fact three times)
@@ -63,6 +64,8 @@ public partial class MainWindow
             var sub = $"{Fk(togo)} away" + (best.Name != null && best.Per > 0 ? $" · one {best.Name} that works (+{Fk(best.Per)})" : "");
             var row = QRow(QIconBox("Sack", "Mint", 28, round: true), $"+{Fk(target)} profit", sub, $"{Math.Round(100.0 * net / target):0}%", "Mint", net / (double)target, "Mint", rule: false, inline: true);
             row.Cursor = Cursors.Arrow; row.ToolTip = $"{Signed(net)} so far, {PriceBook.Cut}. The next round figure turns over by itself.";
+            // it names the recipe that gets there fastest: a click opens that recipe
+            if (best.Name != null && best.Per > 0) { var bn = best.Name; row.Cursor = Cursors.Hand; row.ToolTip += $" Click for {bn}."; row.MouseLeftButtonUp += (_, _) => OpenCraftWindow(bn); }
             next.Add(row);
         }
         else if (known && net < 0 && spent > 0)
@@ -79,8 +82,11 @@ public partial class MainWindow
             var chev = QIcon("Chev", 13, "Faint", 2); chev.Margin = new Thickness(4, 0, 0, 0); chev.RenderTransformOrigin = new Point(0.5, 0.5); QSetChev(chev, SecOpen("Best"));
             var right = g.Children.OfType<TextBlock>().FirstOrDefault(t => Grid.GetColumn(t) == 2);
             if (right != null) { g.Children.Remove(right); var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }; sp.Children.Add(right); sp.Children.Add(chev); Grid.SetColumn(sp, 2); g.Children.Add(sp); }
-            row.ToolTip = $"Today's most profitable recipe on {Server?.Name ?? "your server"} at the lowest Market asks. Click for all {bt.Count}.";
-            row.MouseLeftButtonUp += (_, _) => ToggleSec("Best");
+            row.ToolTip = $"Today's most profitable recipe on {Server?.Name ?? "your server"} at the lowest Market asks. Click for its recipe; ‘all {bt.Count}’ opens the list below.";
+            // the recipe opens in the craft window; the "all 6" with its chevron opens Best crafts below
+            var btName = bt.Name;
+            if (right?.Parent is Panel allBox) { allBox.Cursor = Cursors.Hand; allBox.Background = Brushes.Transparent; allBox.MouseLeftButtonUp += (_, e) => { e.Handled = true; ToggleSec("Best"); }; }
+            row.MouseLeftButtonUp += (_, e) => { if (!e.Handled) OpenCraftWindow(btName); };
             next.Add(row);
         }
         // the quests (phase 1, Ui/MainWindow.Quests.cs): the two crafting materials you are farming, as Next up on Farming has them, with their trees
@@ -103,12 +109,7 @@ public partial class MainWindow
             var tile = QRecipeCard(QItemIcon(r.Name, _items.IdOf(r.Name), 30, round: false, grade: r.Grade), r.Name, sub, r.Value, r.Tone == "Bad" ? "Coral" : r.Value.Length > 0 ? "Mint" : "Faint");
             tile.ToolTip = r.Tip; ToolTipService.SetInitialShowDelay(tile, 300);
             var name = r.Name;
-            tile.MouseLeftButtonUp += (_, _) =>
-            {
-                if (_card != null) _card.IsOpen = false;
-                _card = new InCard { Child = BuildCraftCard(name), StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade, Placement = PlacementMode.Mouse, PlacementTarget = tile };
-                _card.IsOpen = true;
-            };
+            tile.MouseLeftButtonUp += (_, _) => OpenCraftWindow(name);
             CraftRecipeHost.Children.Add(tile);
         }
     }

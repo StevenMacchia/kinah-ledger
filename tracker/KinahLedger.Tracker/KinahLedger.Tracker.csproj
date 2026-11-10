@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.10.35</Version>
+    <Version>0.10.36</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
@@ -73,6 +73,9 @@
     <Resource Include="Fonts\Inter-Medium.ttf" />
     <Resource Include="Fonts\Inter-SemiBold.ttf" />
     <Resource Include="Fonts\Inter-Bold.ttf" />
+    <!-- the game's own UI art for concepts (Kinah, a fight, a recipe, a run, a quest...), as the site's /img/ui icons, in
+         place of drawn line icons (Steven: real AION 2 art only); 80 px PNGs from the site's webp -->
+    <Resource Include="Art\*.png" />
 
     <None Update="settings.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- the 46 gathering materials' icon file names (8 KB), so their icons work before any item list is downloaded -->

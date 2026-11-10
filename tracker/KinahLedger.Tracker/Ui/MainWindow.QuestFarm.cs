@@ -54,6 +54,8 @@ public partial class MainWindow
     void FillBagStrip()
     {
         var h = _lootHere;
+        // the run card lit by the art of this place's best drop so far, Kinah's before any (v2, Ui/Quest.cs HeroArt)
+        HeroArt(SessionCard, h == null ? null : h.S.Drops.Where(r => !r.Header).Concat(h.S.Gathered.Where(r => !r.Header)).OrderByDescending(r => r.Worth).FirstOrDefault()?.Name);
         bool show = _part == "Farming" && !_welcome && !FullShown && _hasSummary && h != null;
         BagStrip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
@@ -117,7 +119,6 @@ public partial class MainWindow
             ChaseBest.Text = Fk(bestHr);
             ChaseFill.SetResourceReference(Border.BackgroundProperty, tone);
             ChaseFill.Effect = QGlow(tone, 10, 0.6);
-            ChaseFlag.SetResourceReference(Shape.StrokeProperty, tone);
             ChaseBest.SetResourceReference(TextBlock.ForegroundProperty, tone);
             ChaseBox.ToolTip = $"Your best hour in this zone on this server: {Amounts.Full(bestHr)}. This hour: {Amounts.Full(nowHr)}.";
             _chaseShare = share; LayoutChase();

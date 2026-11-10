@@ -274,17 +274,17 @@
         <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,8,0" Padding="4" CornerRadius="12" Background="{DynamicResource Card}" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal">
             <Button x:Name="FarmTab" Style="{StaticResource SegOn}">
-              <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcSword}"/><TextBlock Text="Farm" VerticalAlignment="Center"/></StackPanel>
+              <TextBlock Text="Farm" VerticalAlignment="Center"/>
             </Button>
             <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Margin="2,0,0,0">
-              <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcHammer}"/><TextBlock Text="Craft" VerticalAlignment="Center"/></StackPanel>
+              <TextBlock Text="Craft" VerticalAlignment="Center"/>
             </Button>
             <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Expeditions and events: each trip, from entering to the last loot. Never on the Farming page.">
-              <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcFlag}"/><TextBlock Text="Runs" VerticalAlignment="Center"/></StackPanel>
+              <TextBlock Text="Runs" VerticalAlignment="Center"/>
             </Button>
             <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): every quest, pins, daily and all time, done, your score -->
             <Button x:Name="QuestsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Quests: every quest with its tree, pins for Next up, today's and all time, what you have done, your score.">
-              <StackPanel Orientation="Horizontal"><Path Style="{StaticResource NavIcon}" Data="{StaticResource IcTrophy}"/><TextBlock Text="Quests" VerticalAlignment="Center"/></StackPanel>
+              <TextBlock Text="Quests" VerticalAlignment="Center"/>
             </Button>
           </StackPanel>
         </Border>
@@ -467,7 +467,7 @@
                   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                   <TextBlock x:Name="ChaseLbl" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
-                    <Path x:Name="ChaseFlag" Style="{StaticResource QIconStyle}" Data="{StaticResource IcFlag}" Width="13" Height="13" StrokeThickness="2" Stroke="{DynamicResource Gold}"/>
+                    <Image x:Name="ChaseFlag" Source="/Art/medalgold.png" Width="18" Height="18" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock x:Name="ChaseBest" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                   </StackPanel>
                 </Grid>
@@ -554,7 +554,7 @@
         <StackPanel>
           <Grid x:Name="BagStripHead" Background="Transparent" Cursor="Hand">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcBag}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+            <Image Source="/Art/attendance.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
             <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
             <TextBlock x:Name="BagStripNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
             <TextBlock x:Name="BagStripTotal" Grid.Column="3" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center"/>
@@ -574,7 +574,7 @@
         <StackPanel>
           <Grid x:Name="SessionHead" Margin="0,0,0,8">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcBag}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+            <Image Source="/Art/attendance.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
             <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
             <TextBlock x:Name="FootTotalNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
             <!-- one period at a time: this zone (or the run, or All zones), today, or the week -->
@@ -606,7 +606,7 @@
                 <Border Background="Transparent">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+                    <Image Source="/Art/medalgold.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Grid.Column="1" Text="Next up" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
                     <TextBlock x:Name="SlimLink" Grid.Column="2" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="⊕ Set a goal for today"/>
                   </Grid>
@@ -621,7 +621,7 @@
           <StackPanel x:Name="GoalsBox">
             <Grid x:Name="GoalsHead" Background="Transparent" Cursor="Hand">
               <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+              <Image Source="/Art/medalgold.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
               <TextBlock Grid.Column="1" Text="Next up" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
               <!-- "at this pace · 3 more" -->
               <TextBlock x:Name="GoalsNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
@@ -639,7 +639,7 @@
         <StackPanel>
           <Grid Margin="0,0,0,2">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcSpark}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+            <Image Source="/Art/attendance.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
             <TextBlock Grid.Column="1" Text="Just dropped" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
             <TextBlock x:Name="FeedNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
           </Grid>
@@ -669,7 +669,7 @@
           <Grid x:Name="WhereHead" Background="Transparent" Cursor="Hand">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Border x:Name="WhereIcon" Width="30" Height="30" CornerRadius="10" Background="{DynamicResource SkyTint}" VerticalAlignment="Center">
-              <Path x:Name="WhereIconPath" Style="{StaticResource QIconStyle}" Data="{StaticResource IcPin}" Stroke="{DynamicResource Sky}" StrokeThickness="2"/>
+              <Image x:Name="WhereIconPath" Source="/Art/rift.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Border>
             <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
               <TextBlock x:Name="WhereTitle" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -956,9 +956,9 @@
             <StackPanel>
               <Grid Margin="0,0,0,2">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcHammer}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+                <Image Source="/Art/scroll.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                 <TextBlock Grid.Column="1" Text="Just crafted" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                <TextBlock x:Name="CraftFeedNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="last five · click a line that is wrong"/>
+                <TextBlock x:Name="CraftFeedNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="last five · click one for its recipe"/>
               </Grid>
               <Grid>
                 <StackPanel x:Name="CraftFeedHost"/>
@@ -975,7 +975,7 @@
             <StackPanel>
               <Grid x:Name="CraftSessionHead" Background="Transparent" Cursor="Hand">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcPotion}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+                <Image Source="/Art/scroll.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                 <TextBlock Grid.Column="1" Text="Recipes this session" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 <TextBlock x:Name="CraftSpentNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
                 <TextBlock x:Name="CraftSpent" Grid.Column="3" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="10,0,0,0"/>
@@ -999,7 +999,7 @@
             <StackPanel>
               <Grid x:Name="BestHead" Background="Transparent" Cursor="Hand">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
+                <Image Source="/Art/medalgold.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                 <TextBlock Grid.Column="1" Text="Best crafts today" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 <TextBlock x:Name="BestNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
                 <Path x:Name="BestChev" Grid.Column="3" Style="{StaticResource QChev}"/>
