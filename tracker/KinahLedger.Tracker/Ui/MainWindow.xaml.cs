@@ -826,13 +826,12 @@ public partial class MainWindow : Window
             string rowValue = "";
             if (r.Count > 0)
             {
-                var price = PriceBook.Price(r.Name);
-                if (price != null) { long g0 = price.Value * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; rowValue = Amounts.Short(kept); worthN[r.Name] = g0; keptN[r.Name] = kept; }
-                else if (PriceBook.QuoteOf(r.Name) is { Sure: false } uq)
+                if (PriceBook.QuoteOf(r.Name) is { Price: > 0 } q)
                 {
-                    // a one-listing (or too old) price: shown, dimmed with a ~ (the Prices column dims it too), but in no total
-                    unsure++; if (GatheringCatalog.Find(r.Name) == null) dropsUnsure++;
-                    rowValue = "~" + Amounts.Short((long)Math.Round(uq.Price * r.Count * PriceBook.SellerKeeps));
+                    long g0 = q.Price * r.Count, kept = (long)Math.Round(g0 * PriceBook.SellerKeeps); gross += g0; value += kept; priced++; worthN[r.Name] = g0; keptN[r.Name] = kept;
+                    rowValue = Amounts.Short(kept);
+                    // a thin price (one listing, a day old: ~) or the other servers' (≈) counts too, marked (0.10.33: every item has some price)
+                    if (!q.Sure) { unsure++; if (GatheringCatalog.Find(r.Name) == null) dropsUnsure++; rowValue = (q.From == PriceBook.From.Region ? "≈" : "~") + rowValue; }
                 }
                 else { unpriced++; if (GatheringCatalog.Find(r.Name) == null) dropsUnpriced++; }
             }
@@ -1054,7 +1053,7 @@ public partial class MainWindow : Window
         ValueTile.ToolTip = (s.Priced + s.Unsure + s.Unpriced == 0 ? "No tradeable items yet."
                 : s.Priced == 0 ? "No Market price yet for any of these items. Open the Market in the game once: the prices you see there value your drops, and the site's price board fills in the rest."
                 : $"{s.Priced} of {s.Priced + s.Unsure + s.Unpriced} tradeable items priced, at the lowest Market price, at {PriceBook.Fee}. Bound items can't be sold and aren't counted."
-                  + (s.Unsure > 0 ? $" {s.Unsure} {(s.Unsure == 1 ? "has" : "have")} a one-listing price (shown with ~), which is left out." : "")
+                  + (s.Unsure > 0 ? $" {s.Unsure} of them {(s.Unsure == 1 ? "has" : "have")} a thin price (~, or ≈ the other servers'), counted." : "")
                   + (s.Unpriced > 0 ? " Open the Market and look at the others to price them too." : ""))
             + (_mode == Mode.Gather ? "" : " Kinah per hour is included.");
         // the card's head: what and how long ("Open world · 42 min"), in the one way the page writes time (2026-10-28: it was
@@ -1074,7 +1073,7 @@ public partial class MainWindow : Window
         var sums = new List<string>();
         if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
         if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); if (!PriceBook.ShowGross) sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
-        if (s.Unsure > 0) sums.Add($"{s.Unsure} item{(s.Unsure == 1 ? " has" : "s have")} a one-listing price, not counted.");
+        if (s.Unsure > 0) sums.Add($"{s.Unsure} item{(s.Unsure == 1 ? " has" : "s have")} a thin price (~ or ≈), counted.");
         if (s.Unpriced > 0) sums.Add($"{s.Unpriced} item{(s.Unpriced == 1 ? " has" : "s have")} no price yet and add{(s.Unpriced == 1 ? "s" : "")} nothing.");
         sums.Add($"Total, {PriceBook.Fee}: {totalNow:N0}.");
         if (PlayersHereLine(_watcher.Chat?.ZoneView?.Zone ?? _demoZone ?? e.Zone) is { Length: > 0 } players) sums.Add(players);
@@ -1470,8 +1469,8 @@ public partial class MainWindow : Window
         DropsMore.Visibility = plain.Count > TableRows || mats.Count > TableRows ? Visibility.Visible : Visibility.Collapsed;
         DropsMoreRun.Text = allDropsShown ? "Show fewer" : $"Show all {drops.Count}";
         int noPriceRows = pre?.DropsUnpriced ?? drops.Count(r => r.Value.Length == 0 && r.Worth == 0);
-        int unsureRows = pre?.DropsUnsure ?? drops.Count(r => r.Value.StartsWith('~'));
-        DropsNote.Text = drops.Count == 0 ? "" : $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")}" + (unsureRows > 0 ? $" · {unsureRows} {(unsureRows == 1 ? "has" : "have")} a one-listing price, not counted" : "") + (noPriceRows > 0 ? $" · {noPriceRows} {(noPriceRows == 1 ? "has" : "have")} no price yet" : "");
+        int unsureRows = pre?.DropsUnsure ?? drops.Count(r => r.Value.StartsWith('~') || r.Value.StartsWith('≈'));
+        DropsNote.Text = drops.Count == 0 ? "" : $"{drops.Count} kind{(drops.Count == 1 ? "" : "s")}" + (unsureRows > 0 ? $" · {unsureRows} {(unsureRows == 1 ? "has" : "have")} a thin price (~)" : "") + (noPriceRows > 0 ? $" · {noPriceRows} {(noPriceRows == 1 ? "has" : "have")} no price yet" : "");
         TableEmpty.Visibility = drops.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TableEmpty.Text = e == null ? "Drops show here as they're read, with the odds and how many come an hour." : "No drops yet.";
 
