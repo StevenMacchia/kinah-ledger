@@ -76,7 +76,7 @@ public partial class MainWindow
         var color = grade switch
         {
             "Legend" => Color.FromRgb(0x5A, 0xA6, 0xFF), "Unique" => Color.FromRgb(0xF3, 0xD3, 0x5E), "Epic" => Color.FromRgb(0xB4, 0x8B, 0xFF),
-            "Rare" => Color.FromRgb(0x62, 0xD9, 0x8B), _ => Color.FromRgb(0x5E, 0xD8, 0xCB),
+            "Rare" => Color.FromRgb(0x62, 0xD9, 0x8B), _ => Color.FromRgb(0x3D, 0xD6, 0x8C),
         };
         bool chime = _hudPrefs.Chime && ChimesFor(landed);
         if (chime && !_demo && (DateTime.UtcNow - _chimedAt).TotalSeconds >= ChimeGapSeconds) { _chimedAt = DateTime.UtcNow; Chime(); }

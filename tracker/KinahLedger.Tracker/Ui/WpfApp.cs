@@ -1299,8 +1299,8 @@ public static class WpfApp
             h.Show();
             h.Update(v);
             DoEvents();
-            // over the mock's dark page (#090B15), so the toasts' see-through washes read as they do over the game
-            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, Color.FromRgb(0x09, 0x0B, 0x15));
+            // over the mock's dark page (#0B0C0F), so the toasts' see-through washes read as they do over the game
+            Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, Color.FromRgb(0x0B, 0x0C, 0x0F));
             h.Close();
         }
 

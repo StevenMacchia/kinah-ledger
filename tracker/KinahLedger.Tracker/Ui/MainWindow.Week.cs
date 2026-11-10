@@ -270,7 +270,7 @@ public partial class MainWindow
             var area = new Grid { Height = WeekArea };
             area.Children.Add(stack);
             col.Children.Add(area);
-            var name = PT(DayLabel(d), on ? accent : "Muted", 12, FontWeights.SemiBold);
+            var name = PT(DayLabel(d), on ? accent : "Muted", 12, FontWeights.Normal);
             name.HorizontalAlignment = HorizontalAlignment.Center; name.Margin = new Thickness(0, 8, 0, 0);
             col.Children.Add(name);
             var word = PT(d.BeforeHistory ? "–" : under(d), "Faint", 11.5);
@@ -303,8 +303,8 @@ public partial class MainWindow
             var light = Mix(blue, Colors.White, 0.35);
             return (Down(A(blue, 0x80), A(blue, 0x24)), Solid(A(blue, 0x73)), Down(light, Mix(blue, Colors.Black, 0.15)), Solid(light));
         }
-        var gold = Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98));
-        var deep = Res("SecGold", Color.FromRgb(0xE9, 0xB4, 0x5A));
+        var gold = Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A));
+        var deep = Res("SecGold", Color.FromRgb(0xF5, 0xB9, 0x42));
         // Daylight's gold and heading gold are one colour: the picked bar still fades from a lighter top
         var top = gold == deep ? Mix(gold, Colors.White, 0.3) : gold;
         return (Down(A(gold, 0x6B), A(deep, 0x29)), Solid(A(gold, 0x52)), Down(top, deep), Solid(gold));
@@ -317,7 +317,7 @@ public partial class MainWindow
         var head = new Grid { Margin = new Thickness(0, 0, 0, chips.Count > 0 ? 10 : 0) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var t = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Tag = "week-line" };
-        var dn = PR(day.ToUpperInvariant(), "SecGold", FontWeights.Bold); dn.FontSize = 11;
+        var dn = PR(day.ToUpperInvariant(), "SecGold", FontWeights.Medium); dn.FontSize = 11;
         t.Inlines.Add(dn);
         if (line.Length > 0) t.Inlines.Add(PR("   " + line, "Muted"));
         head.Children.Add(t);
@@ -344,7 +344,7 @@ public partial class MainWindow
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         sp.Children.Add(PT(text, "Ink", 12.5));
         if (fig.Length > 0) { var f = PT(fig, "Muted", 12, null, "MonoFont"); f.Margin = new Thickness(7, 0, 0, 0); sp.Children.Add(f); }
-        var b = new Border { Child = sp, Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 8, 6), ToolTip = tip };
+        var b = new Border { Child = sp, Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 8, 6), ToolTip = tip };
         b.SetResourceReference(Border.BackgroundProperty, "ChipOff");
         b.SetResourceReference(Border.BorderBrushProperty, "ChipOffLine");
         ToolTipService.SetInitialShowDelay(b, 400);

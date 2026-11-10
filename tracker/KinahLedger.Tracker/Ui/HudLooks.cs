@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -64,18 +64,20 @@ static class HudKit
     public static Color Rgb(uint rgb, double alpha = 1) => Color.FromArgb((byte)Math.Round(255 * Math.Clamp(alpha, 0, 1)), (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
     public static SolidColorBrush B(uint rgb, double alpha = 1) => Frozen(Rgb(rgb, alpha));
 
-    // the Quest palette (2026-11-07, Ui/Skins.cs night): deep plum under Kinah gold, mint for what pays, coral for a run
-    public const uint InkC = 0xF6F2FF, MutedC = 0xB3ABD2, FaintC = 0x7F78A3, GoldC = 0xFFC857, SecGoldC = 0xE59F2B, WarnC = 0xF7A072, MintC = 0x5CE1B5,
-        RecC = 0xFF7D6E, SlotC = 0x110D21, LineC = 0x3B3366, BadgeLineC = 0x4A4180, CommonC = 0xE8E2FF, PanelC = 0x1A1433, Panel2C = 0x251E45;
+    // the v2 palette (2026-11-10, Ui/Skins.cs night, the site's tokens): near-black neutral under Kinah gold, mint for what pays, coral for a run.
+    // Over the game the panel is the site's darkest (0B0C10, not the window's 111319) and the muted and faint tones a step lighter, so every text
+    // keeps at least the plum panel's contrast over bright scenes at the usual opacities; the text sits a weight above the window's
+    public const uint InkC = 0xEDEFF5, MutedC = 0xB1B7C8, FaintC = 0x7A8094, GoldC = 0xF5B942, SecGoldC = 0xD99A24, WarnC = 0xF7A072, MintC = 0x3DD68C,
+        RecC = 0xF26D6D, SlotC = 0x0A0B10, LineC = 0x232736, BadgeLineC = 0x2E3346, CommonC = 0xD9DDE8, PanelC = 0x0B0C10, Panel2C = 0x171A22;
 
     public static readonly SolidColorBrush Ink = B(InkC), Muted = B(MutedC), Faint = B(FaintC), Gold = B(GoldC), Warn = B(WarnC), Mint = B(MintC),
-        Rec = B(RecC), DotOff = B(0x5B5485), Slot = B(SlotC), FrameLine = B(LineC), BadgeLine = B(BadgeLineC), White = B(0xFFFFFF),
+        Rec = B(RecC), DotOff = B(0x4A5066), Slot = B(SlotC), FrameLine = B(LineC), BadgeLine = B(BadgeLineC), White = B(0xFFFFFF),
         SlotFrame = B(CommonC, .28), Sep = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
 
-    /// <summary>Nunito (the window's face since the Quest look), heavy: figures were in a mono face, now the same face in a heavier weight.</summary>
-    public static readonly FontFamily Text = new("pack://application:,,,/Fonts/#Nunito, Segoe UI Variable Text, Segoe UI");
+    /// <summary>Inter (the window's face since the v2 look); figures in the same face, a weight heavier than the text.</summary>
+    public static readonly FontFamily Text = new("pack://application:,,,/Fonts/#Inter, Segoe UI Variable Text, Segoe UI");
     public static readonly FontFamily Mono = Text;
-    public static readonly FontWeight MonoWeight = FontWeights.ExtraBold;
+    public static readonly FontWeight MonoWeight = FontWeights.SemiBold;
 
     /// <summary>The game's grade colours, as the window's (MainWindow.GradeColor): Rare green, Legend blue, Unique yellow, Epic violet.</summary>
     public static Color GradeColor(string grade) => grade switch
@@ -95,13 +97,13 @@ static class HudKit
 
     public static TextBlock T(string text, double size, Brush fg, bool mono = false, FontWeight? weight = null) => new()
     {
-        Text = text, FontSize = size, Foreground = fg, FontFamily = mono ? Mono : Text, FontWeight = weight ?? (mono ? MonoWeight : FontWeights.SemiBold),
+        Text = text, FontSize = size, Foreground = fg, FontFamily = mono ? Mono : Text, FontWeight = weight ?? (mono ? MonoWeight : FontWeights.Medium),
         VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
     };
 
     public static System.Windows.Documents.Run R(string text, double size, Brush fg, bool mono = false, FontWeight? weight = null) => new(text)
     {
-        FontSize = size, Foreground = fg, FontFamily = mono ? Mono : Text, FontWeight = weight ?? (mono ? MonoWeight : FontWeights.SemiBold),
+        FontSize = size, Foreground = fg, FontFamily = mono ? Mono : Text, FontWeight = weight ?? (mono ? MonoWeight : FontWeights.Medium),
     };
 
     /// <summary>
@@ -125,10 +127,10 @@ static class HudKit
             g.Children.Add(new System.Windows.Shapes.Path { Data = geo, Stroke = brush, StrokeThickness = stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = size, Height = size, Effect = new DropShadowEffect { Color = tone, BlurRadius = 8, ShadowDepth = 0, Opacity = .5 } });
         }
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = T(big, size >= 40 ? 12.5 : 9.5, Ink, weight: FontWeights.Black); b.HorizontalAlignment = HorizontalAlignment.Center; b.TextTrimming = TextTrimming.None;
+        var b = T(big, size >= 40 ? 12.5 : 9.5, Ink, weight: FontWeights.Bold); b.HorizontalAlignment = HorizontalAlignment.Center; b.TextTrimming = TextTrimming.None;
         b.LineHeight = size >= 40 ? 13 : 10; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         text.Children.Add(b);
-        if (small.Length > 0) { var sm = T(small.ToUpperInvariant(), 7, Muted, weight: FontWeights.ExtraBold); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.TextTrimming = TextTrimming.None; text.Children.Add(sm); }
+        if (small.Length > 0) { var sm = T(small.ToUpperInvariant(), 7, Muted, weight: FontWeights.SemiBold); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.TextTrimming = TextTrimming.None; text.Children.Add(sm); }
         g.Children.Add(text);
         return g;
     }
@@ -306,7 +308,7 @@ static class HudKit
             var badge = new Border
             {
                 Padding = new Thickness(3, 0, 3, 0), CornerRadius = new CornerRadius(4), Background = Slot, BorderBrush = BadgeLine, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = p.Count, FontFamily = Mono, FontWeight = FontWeights.Black, FontSize = 9.5, Foreground = White, LineHeight = 11, LineStackingStrategy = LineStackingStrategy.BlockLineHeight },
+                Child = new TextBlock { Text = p.Count, FontFamily = Mono, FontWeight = FontWeights.Bold, FontSize = 9.5, Foreground = White, LineHeight = 11, LineStackingStrategy = LineStackingStrategy.BlockLineHeight },
             };
             Canvas.SetRight(badge, -4); Canvas.SetBottom(badge, -4);
             g.Children.Add(new Canvas { Width = size, Height = size, IsHitTestVisible = false, Children = { badge } });

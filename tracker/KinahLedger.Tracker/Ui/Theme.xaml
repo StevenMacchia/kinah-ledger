@@ -1,41 +1,43 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- the Quest look (2026-11-07, docs/ui/mockups/directions-2026-11-07): deep plum, Kinah gold for the chase, mint for what pays,
-       sky for places, lilac for milestones, coral for a miss. These are Night's values; Ui/Skins.cs sets every key per look -->
-  <SolidColorBrush x:Key="Bg" Color="#110D21"/>
-  <SolidColorBrush x:Key="Card" Color="#251E45"/>
-  <SolidColorBrush x:Key="Card2" Color="#312960"/>
-  <SolidColorBrush x:Key="Line" Color="#362E5E"/>
-  <SolidColorBrush x:Key="LineStrong" Color="#4A4180"/>
-  <SolidColorBrush x:Key="Ink" Color="#F6F2FF"/>
-  <SolidColorBrush x:Key="Muted" Color="#B3ABD2"/>
-  <SolidColorBrush x:Key="Faint" Color="#7F78A3"/>
-  <SolidColorBrush x:Key="Gold" Color="#FFC857"/>
-  <SolidColorBrush x:Key="Violet" Color="#B692FF"/>
-  <SolidColorBrush x:Key="Mint" Color="#5CE1B5"/>
-  <SolidColorBrush x:Key="Accent" Color="#6EC1FF"/>
-  <SolidColorBrush x:Key="AccentDim" Color="#1F2D4F"/>
-  <SolidColorBrush x:Key="Good" Color="#5CE1B5"/>
+  <!-- the v2 look (2026-11-10, the site's kl-v2.css tokens): a near-black neutral with a faint cool tint, gold the one accent
+       (Kinah, the primary action, focus), mint and coral for up and down, the grade colours the game's. The roles that were
+       candy colours (sky for places, lilac for milestones, lime for gathering) are quiet neutrals now. These are Night's
+       values; Ui/Skins.cs sets every key per look -->
+  <SolidColorBrush x:Key="Bg" Color="#0A0B10"/>
+  <SolidColorBrush x:Key="Card" Color="#111319"/>
+  <SolidColorBrush x:Key="Card2" Color="#171A22"/>
+  <SolidColorBrush x:Key="Line" Color="#232736"/>
+  <SolidColorBrush x:Key="LineStrong" Color="#2E3346"/>
+  <SolidColorBrush x:Key="Ink" Color="#EDEFF5"/>
+  <SolidColorBrush x:Key="Muted" Color="#A2A8BA"/>
+  <SolidColorBrush x:Key="Faint" Color="#6D7387"/>
+  <SolidColorBrush x:Key="Gold" Color="#F5B942"/>
+  <SolidColorBrush x:Key="Violet" Color="#B39BFF"/>
+  <SolidColorBrush x:Key="Mint" Color="#3DD68C"/>
+  <SolidColorBrush x:Key="Accent" Color="#F5B942"/>
+  <SolidColorBrush x:Key="AccentDim" Color="#1E2230"/>
+  <SolidColorBrush x:Key="Good" Color="#3DD68C"/>
   <SolidColorBrush x:Key="Warn" Color="#F7A072"/>
-  <SolidColorBrush x:Key="Bad" Color="#FF7D6E"/>
-  <SolidColorBrush x:Key="Slot" Color="#17132B"/>
+  <SolidColorBrush x:Key="Bad" Color="#F26D6D"/>
+  <SolidColorBrush x:Key="Slot" Color="#0D0F14"/>
   <!-- the Quest roles and their icon-box tints (Ui/Skins.cs sets them per look) -->
-  <SolidColorBrush x:Key="Sky" Color="#6EC1FF"/>
-  <SolidColorBrush x:Key="Lilac" Color="#B692FF"/>
-  <SolidColorBrush x:Key="Coral" Color="#FF7D6E"/>
-  <SolidColorBrush x:Key="Lime" Color="#C6F26B"/>
-  <SolidColorBrush x:Key="GoldInk" Color="#2B1B00"/>
-  <SolidColorBrush x:Key="SegOnInk" Color="#2B1B00"/>
-  <SolidColorBrush x:Key="CardLine" Color="#21FFFFFF"/>
-  <SolidColorBrush x:Key="CardLineHover" Color="#45FFFFFF"/>
-  <SolidColorBrush x:Key="SkyTint" Color="#296EC1FF"/>
-  <SolidColorBrush x:Key="LilacTint" Color="#29B692FF"/>
-  <SolidColorBrush x:Key="NoticeTint" Color="#29B692FF"/>
-  <SolidColorBrush x:Key="CoralTint" Color="#29FF7D6E"/>
-  <SolidColorBrush x:Key="LimeTint" Color="#29C6F26B"/>
-  <SolidColorBrush x:Key="MintTint" Color="#295CE1B5"/>
-  <SolidColorBrush x:Key="GoldIcTint" Color="#29FFC857"/>
+  <SolidColorBrush x:Key="Sky" Color="#AEB5C7"/>
+  <SolidColorBrush x:Key="Lilac" Color="#C9CDDA"/>
+  <SolidColorBrush x:Key="Coral" Color="#F26D6D"/>
+  <SolidColorBrush x:Key="Lime" Color="#AEB5C7"/>
+  <SolidColorBrush x:Key="GoldInk" Color="#1D1300"/>
+  <SolidColorBrush x:Key="SegOnInk" Color="#0A0B10"/>
+  <SolidColorBrush x:Key="CardLine" Color="#232736"/>
+  <SolidColorBrush x:Key="CardLineHover" Color="#3A4058"/>
+  <SolidColorBrush x:Key="SkyTint" Color="#17BEC6DC"/>
+  <SolidColorBrush x:Key="LilacTint" Color="#17BEC6DC"/>
+  <SolidColorBrush x:Key="NoticeTint" Color="#17BEC6DC"/>
+  <SolidColorBrush x:Key="CoralTint" Color="#24F26D6D"/>
+  <SolidColorBrush x:Key="LimeTint" Color="#17BEC6DC"/>
+  <SolidColorBrush x:Key="MintTint" Color="#17BEC6DC"/>
+  <SolidColorBrush x:Key="GoldIcTint" Color="#24F5B942"/>
   <!-- the Quest line icons: 24-unit strokes, drawn at 16 px (Ui/Quest.cs draws them from these keys) -->
   <Geometry x:Key="IcCoin">M12,3 A9,9 0 1 0 12,21 A9,9 0 1 0 12,3 Z M9.5,8 V16 M9.5,12 L14.5,8 M9.5,12 L14.5,16</Geometry>
   <Geometry x:Key="IcSword">M14.5,17.5 L3,6 V3 H6 L17.5,14.5 M13,19 L19,13 M16,16 L20,20 M19,21 L21,19</Geometry>
@@ -70,74 +72,74 @@
   <!-- the run card, its stat box, the slot frames and the item names: these used to be written into the window, so
        Daylight left them dark. Each look sets them now -->
   <RadialGradientBrush x:Key="HeroBg" Center="1,0" GradientOrigin="1,0" RadiusX="0.95" RadiusY="1.35">
-    <GradientStop Color="#3D2E72" Offset="0"/><GradientStop Color="#221C3D" Offset="0.62"/><GradientStop Color="#221C3D" Offset="1"/>
+    <GradientStop Color="#171A23" Offset="0"/><GradientStop Color="#111319" Offset="0.62"/><GradientStop Color="#111319" Offset="1"/>
   </RadialGradientBrush>
-  <SolidColorBrush x:Key="HeroLine" Color="#33FFC857"/>
+  <SolidColorBrush x:Key="HeroLine" Color="#2E3346"/>
   <SolidColorBrush x:Key="Inset" Color="#38000000"/>
-  <Color x:Key="SlotColor">#17132B</Color>
-  <SolidColorBrush x:Key="CommonInk" Color="#CDD3E2"/>
+  <Color x:Key="SlotColor">#0D0F14</Color>
+  <SolidColorBrush x:Key="CommonInk" Color="#D9DDE8"/>
   <SolidColorBrush x:Key="GradeRare" Color="#62D98B"/>
   <SolidColorBrush x:Key="GradeLegend" Color="#5AA6FF"/>
   <SolidColorBrush x:Key="GradeUnique" Color="#F3D35E"/>
   <SolidColorBrush x:Key="GradeEpic" Color="#B48BFF"/>
-  <SolidColorBrush x:Key="BtnPrimaryInk" Color="#261702"/>
+  <SolidColorBrush x:Key="BtnPrimaryInk" Color="#1D1300"/>
   <LinearGradientBrush x:Key="BtnPrimary" StartPoint="0,0" EndPoint="0,1">
-    <GradientStop Color="#F8D598" Offset="0"/><GradientStop Color="#EBAE4C" Offset="0.55"/><GradientStop Color="#D9952F" Offset="1"/>
+    <GradientStop Color="#F7C257" Offset="0"/><GradientStop Color="#F2B23A" Offset="1"/>
   </LinearGradientBrush>
   <LinearGradientBrush x:Key="BtnPrimaryHover" StartPoint="0,0" EndPoint="0,1">
-    <GradientStop Color="#FBE0AE" Offset="0"/><GradientStop Color="#F0BA5E" Offset="0.55"/><GradientStop Color="#E0A03C" Offset="1"/>
+    <GradientStop Color="#FFD27A" Offset="0"/><GradientStop Color="#FBC966" Offset="1"/>
   </LinearGradientBrush>
   <!-- control states, section headings, slot frames and chips: written into the templates before 0.8.31, so Daylight got
        navy button hovers, invisible dropdown rows, pale headings and white badges on a light slot. Each look sets them -->
-  <SolidColorBrush x:Key="BtnHover" Color="#1D2346"/>
-  <SolidColorBrush x:Key="BtnHoverLine" Color="#4A548F"/>
-  <SolidColorBrush x:Key="ItemHover" Color="#1E2D45"/>
-  <SolidColorBrush x:Key="ItemSel" Color="#24375A"/>
-  <SolidColorBrush x:Key="SegGroup" Color="#08FFFFFF"/>
-  <SolidColorBrush x:Key="SegOnBg" Color="#24EBAE4C"/>
-  <SolidColorBrush x:Key="SecGold" Color="#E9B45A"/>
-  <SolidColorBrush x:Key="ChipBg" Color="#1A5ED8CB"/>
-  <SolidColorBrush x:Key="ChipLine" Color="#735ED8CB"/>
-  <SolidColorBrush x:Key="ChipOff" Color="#B30B0E1E"/>
-  <SolidColorBrush x:Key="ChipOffLine" Color="#2A3154"/>
+  <SolidColorBrush x:Key="BtnHover" Color="#1E2230"/>
+  <SolidColorBrush x:Key="BtnHoverLine" Color="#3A4058"/>
+  <SolidColorBrush x:Key="ItemHover" Color="#1E2230"/>
+  <SolidColorBrush x:Key="ItemSel" Color="#262A38"/>
+  <SolidColorBrush x:Key="SegGroup" Color="#111319"/>
+  <SolidColorBrush x:Key="SegOnBg" Color="#EDEFF5"/>
+  <SolidColorBrush x:Key="SecGold" Color="#F5B942"/>
+  <SolidColorBrush x:Key="ChipBg" Color="#14BEC6DC"/>
+  <SolidColorBrush x:Key="ChipLine" Color="#2E3346"/>
+  <SolidColorBrush x:Key="ChipOff" Color="#0D0F14"/>
+  <SolidColorBrush x:Key="ChipOffLine" Color="#232736"/>
   <SolidColorBrush x:Key="OnSlot" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="SlotFrame" Color="#47CDD3E2"/>
-  <SolidColorBrush x:Key="SlotBadgeLine" Color="#4A5277"/>
-  <SolidColorBrush x:Key="HoverTint" Color="#08FFFFFF"/>
-  <SolidColorBrush x:Key="GoldTint" Color="#14F8D598"/>
-  <SolidColorBrush x:Key="GoldLine" Color="#80F8D598"/>
+  <SolidColorBrush x:Key="SlotFrame" Color="#2E3346"/>
+  <SolidColorBrush x:Key="SlotBadgeLine" Color="#2E3346"/>
+  <SolidColorBrush x:Key="HoverTint" Color="#0DFFFFFF"/>
+  <SolidColorBrush x:Key="GoldTint" Color="#14F5B942"/>
+  <SolidColorBrush x:Key="GoldLine" Color="#80F5B942"/>
   <!-- the Events cards (0.8.31): a place's band, its flags -->
   <LinearGradientBrush x:Key="PlaceBand" StartPoint="0,0" EndPoint="0,1">
-    <GradientStop Color="#29F8D598" Offset="0"/><GradientStop Color="#0DF8D598" Offset="0.6"/><GradientStop Color="#00F8D598" Offset="1"/>
+    <GradientStop Color="#1FF5B942" Offset="0"/><GradientStop Color="#0AF5B942" Offset="0.6"/><GradientStop Color="#00F5B942" Offset="1"/>
   </LinearGradientBrush>
-  <SolidColorBrush x:Key="PlaceBandLine" Color="#47E9B45A"/>
-  <SolidColorBrush x:Key="FlagBg" Color="#14F8D598"/>
-  <SolidColorBrush x:Key="FlagInk" Color="#F8D598"/>
-  <SolidColorBrush x:Key="FlagLine" Color="#4DF8D598"/>
+  <SolidColorBrush x:Key="PlaceBandLine" Color="#3DF5B942"/>
+  <SolidColorBrush x:Key="FlagBg" Color="#14F5B942"/>
+  <SolidColorBrush x:Key="FlagInk" Color="#FFD27A"/>
+  <SolidColorBrush x:Key="FlagLine" Color="#4DF5B942"/>
   <!-- rows and marks that used to be hard-coded; a skin overrides these too -->
-  <SolidColorBrush x:Key="RowHead" Color="#0E1124"/>
-  <SolidColorBrush x:Key="RowHover" Color="#171C38"/>
-  <SolidColorBrush x:Key="Mark" Color="#1A1F3D"/>
+  <SolidColorBrush x:Key="RowHead" Color="#0F1117"/>
+  <SolidColorBrush x:Key="RowHover" Color="#171A22"/>
+  <SolidColorBrush x:Key="Mark" Color="#1A1D27"/>
   <LinearGradientBrush x:Key="BtnStop" StartPoint="0,0" EndPoint="0,1">
-    <GradientStop Color="#F8D598" Offset="0"/><GradientStop Color="#EBAE4C" Offset="0.55"/><GradientStop Color="#D9952F" Offset="1"/>
+    <GradientStop Color="#F26D6D" Offset="0"/><GradientStop Color="#E35D5D" Offset="1"/>
   </LinearGradientBrush>
-  <!-- the redesign's type: Unbounded for headings and big figures, Figtree for text. Until those two ship inside the
-       exe, the nearest Windows faces stand in -->
-  <!-- the Quest look (2026-11-07): Nunito, rounded and heavy, shipped in the exe (Fonts/, OFL); Segoe UI stands in for any glyph it lacks -->
-  <FontFamily x:Key="DisplayFont">pack://application:,,,/Fonts/#Nunito, Segoe UI Variable Display, Segoe UI</FontFamily>
-  <FontFamily x:Key="BodyFont">pack://application:,,,/Fonts/#Nunito, Segoe UI Variable Text, Segoe UI</FontFamily>
+  <!-- the v2 type (2026-11-10, as the site): Inter 400 to 700, shipped in the exe (Fonts/, OFL); Segoe UI stands in for any
+       glyph it lacks. Nunito was asked for at 600 to 900; each of those asks moved one step lighter (600 to 400, 700 to 500,
+       800 to 600, 900 to 700), as the site's font faces map them: text 400, labels 500, headings 600, big figures 700 -->
+  <FontFamily x:Key="DisplayFont">pack://application:,,,/Fonts/#Inter, Segoe UI Variable Display, Segoe UI</FontFamily>
+  <FontFamily x:Key="BodyFont">pack://application:,,,/Fonts/#Inter, Segoe UI Variable Text, Segoe UI</FontFamily>
   <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 
   <Style x:Key="CardStyle" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource Card}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="18"/>
+    <Setter Property="CornerRadius" Value="12"/>
   </Style>
 
   <Style x:Key="LabelStyle" TargetType="TextBlock">
     <Setter Property="FontSize" Value="11"/>
-    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Faint}"/>
   </Style>
 
@@ -164,7 +166,7 @@
   </Style>
   <Style x:Key="BadgeText" TargetType="TextBlock">
     <Setter Property="FontSize" Value="12"/>
-    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
     <Setter Property="HorizontalAlignment" Value="Center"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
@@ -173,7 +175,7 @@
   <Style x:Key="TileValue" TargetType="TextBlock">
     <Setter Property="FontSize" Value="26"/>
     <Setter Property="FontWeight" Value="Bold"/>
-    <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI"/>
+    <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
     <Setter Property="Margin" Value="0,6,0,0"/>
   </Style>
 
@@ -193,7 +195,7 @@
     <Setter Property="Control.Template">
       <Setter.Value>
         <ControlTemplate>
-          <Rectangle Margin="-3" RadiusX="12" RadiusY="12" Stroke="{DynamicResource Accent}" StrokeThickness="1.5" SnapsToDevicePixels="True"/>
+          <Rectangle Margin="-3" RadiusX="11" RadiusY="11" Stroke="{DynamicResource Accent}" StrokeThickness="1.5" SnapsToDevicePixels="True"/>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
@@ -221,7 +223,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="{TemplateBinding Padding}">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
@@ -242,7 +244,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Gold}"/>
     <Setter Property="Foreground" Value="{DynamicResource BtnPrimaryInk}"/>
     <Setter Property="FontSize" Value="13"/>
-    <Setter Property="FontWeight" Value="ExtraBold"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -266,9 +268,9 @@
     <Setter Property="BorderBrush" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
     <Setter Property="Height" Value="28"/>
-    <Setter Property="Padding" Value="12,0"/>
+    <Setter Property="Padding" Value="11,0"/>
     <Setter Property="FontSize" Value="12"/>
-    <Setter Property="FontWeight" Value="ExtraBold"/>
+    <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -294,7 +296,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource CardLineHover}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
     <Setter Property="FontSize" Value="12"/>
-    <Setter Property="FontWeight" Value="ExtraBold"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Height" Value="30"/>
     <Setter Property="Padding" Value="14,0"/>
     <Setter Property="Template">
@@ -340,11 +342,11 @@
     <Setter Property="Background" Value="{DynamicResource Card}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource CardLine}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="16"/>
+    <Setter Property="CornerRadius" Value="12"/>
     <Setter Property="Padding" Value="14,12,14,12"/>
   </Style>
   <Style x:Key="QChip" TargetType="Border" BasedOn="{StaticResource QCard}">
-    <Setter Property="CornerRadius" Value="14"/>
+    <Setter Property="CornerRadius" Value="10"/>
     <Setter Property="Padding" Value="11,8,11,8"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Style.Triggers>
@@ -382,7 +384,7 @@
   </Style>
   <!-- a small rounded label: "this run · this zone", "best guess" -->
   <Style x:Key="Chip" TargetType="Border">
-    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="CornerRadius" Value="6"/>
     <Setter Property="Padding" Value="10,3"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Background" Value="{DynamicResource ChipBg}"/>
@@ -401,17 +403,17 @@
         <ControlTemplate TargetType="CheckBox">
           <StackPanel Orientation="Horizontal" Background="Transparent">
             <Border x:Name="box" Width="18" Height="18" CornerRadius="5" BorderThickness="1" BorderBrush="{DynamicResource LineStrong}" Background="{DynamicResource Card2}" VerticalAlignment="Center">
-              <Path x:Name="tick" Data="M4,9.5 L7.5,13 L14,5.5" Stroke="White" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Collapsed"/>
+              <Path x:Name="tick" Data="M4,9.5 L7.5,13 L14,5.5" Stroke="{DynamicResource BtnPrimaryInk}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Collapsed"/>
             </Border>
             <ContentPresenter Margin="9,0,0,0" VerticalAlignment="Center"/>
           </StackPanel>
           <ControlTemplate.Triggers>
             <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="box" Property="Background" Value="#2766B8"/>
-              <Setter TargetName="box" Property="BorderBrush" Value="#3C90E8"/>
+              <Setter TargetName="box" Property="Background" Value="{DynamicResource Gold}"/>
+              <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource Gold}"/>
               <Setter TargetName="tick" Property="Visibility" Value="Visible"/>
             </Trigger>
-            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="box" Property="BorderBrush" Value="#4C9BEF"/></Trigger>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource Gold}"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -425,7 +427,7 @@
     <Setter Property="Background" Value="{DynamicResource Card2}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
     <Setter Property="CaretBrush" Value="{DynamicResource Ink}"/>
-    <Setter Property="SelectionBrush" Value="#4C9BEF"/>
+    <Setter Property="SelectionBrush" Value="{DynamicResource Gold}"/>
     <Setter Property="FontSize" Value="14"/>
     <Setter Property="Padding" Value="11,0"/>
     <Setter Property="Height" Value="38"/>
@@ -578,7 +580,7 @@
 
   <!-- Options window: pages, groups of rows, switches and the side navigation -->
   <Style x:Key="PageTitle" TargetType="TextBlock">
-    <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI"/>
+    <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
     <Setter Property="FontSize" Value="22"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
@@ -626,12 +628,12 @@
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="track" Property="Background" Value="#2766B8"/>
-              <Setter TargetName="track" Property="BorderBrush" Value="#3C90E8"/>
-              <Setter TargetName="knob" Property="Fill" Value="White"/>
+              <Setter TargetName="track" Property="Background" Value="{DynamicResource Gold}"/>
+              <Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource Gold}"/>
+              <Setter TargetName="knob" Property="Fill" Value="{DynamicResource BtnPrimaryInk}"/>
               <Setter TargetName="knob" Property="Margin" Value="23,0,0,0"/>
             </Trigger>
-            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="track" Property="BorderBrush" Value="#4C9BEF"/></Trigger>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource Gold}"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>

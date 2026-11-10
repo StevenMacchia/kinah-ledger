@@ -183,9 +183,9 @@ public partial class MainWindow
         {
             bool recent = days < 2 || earlierOpen;
             if (!recent) { hidden += done.Count; hiddenPts += done.Sum(d => d.Points); days++; continue; }
-            var label = QT(day == nowLocal.Date ? "Today" : day == nowLocal.Date.AddDays(-1) ? "Yesterday" : day.ToString("ddd MMM d", System.Globalization.CultureInfo.InvariantCulture), 10.5, FontWeights.Black, "Faint");
+            var label = QT(day == nowLocal.Date ? "Today" : day == nowLocal.Date.AddDays(-1) ? "Yesterday" : day.ToString("ddd MMM d", System.Globalization.CultureInfo.InvariantCulture), 10.5, FontWeights.Bold, "Faint");
             label.Margin = new Thickness(0, days == 0 ? 6 : 10, 0, 2);
-            var dayPts = QT(Quests.Pts(done.Sum(d => (long)d.Points)), 10.5, FontWeights.Black, "Muted"); dayPts.HorizontalAlignment = HorizontalAlignment.Right;
+            var dayPts = QT(Quests.Pts(done.Sum(d => (long)d.Points)), 10.5, FontWeights.Bold, "Muted"); dayPts.HorizontalAlignment = HorizontalAlignment.Right;
             var lg = new Grid(); lg.Children.Add(label); lg.Children.Add(dayPts);
             QuestsDoneHost.Children.Add(lg);
             int k = 0;
@@ -207,7 +207,7 @@ public partial class MainWindow
     /// <summary>A card's fold at its foot: "5 more  ›" in gold, a click opens or closes it.</summary>
     static TextBlock FoldLink(string text, Action click)
     {
-        var t = QT(text, 11.5, FontWeights.ExtraBold, "Gold");
+        var t = QT(text, 11.5, FontWeights.SemiBold, "Gold");
         t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent; t.Margin = new Thickness(0, 8, 0, 0);
         t.MouseLeftButtonUp += (_, _) => click();
         return t;
@@ -233,7 +233,7 @@ public partial class MainWindow
 
     static TextBlock PageNote(string text)
     {
-        var t = QT(text, 12, FontWeights.Bold, "Faint"); t.TextWrapping = TextWrapping.Wrap; t.Margin = new Thickness(0, 8, 0, 2);
+        var t = QT(text, 12, FontWeights.Medium, "Faint"); t.TextWrapping = TextWrapping.Wrap; t.Margin = new Thickness(0, 8, 0, 2);
         return t;
     }
 

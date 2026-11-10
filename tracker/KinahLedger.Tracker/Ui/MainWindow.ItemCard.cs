@@ -55,7 +55,7 @@ public partial class MainWindow
                 var g = new Grid { Height = 32, Margin = new Thickness(12, 0, 12, 0) };
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 g.Children.Add(CkText(l.At.ToLocalTime().ToString("HH:mm:ss"), i == 0 ? CkGold : Color.FromRgb(0x5E, 0x65, 0x88), 11.5, mono: true));
-                var w = CkText($"{l.Name} ×{l.Amount:N0}", CkInk, 13, FontWeights.SemiBold); Grid.SetColumn(w, 1); g.Children.Add(w);
+                var w = CkText($"{l.Name} ×{l.Amount:N0}", CkInk, 13, FontWeights.Normal); Grid.SetColumn(w, 1); g.Children.Add(w);
                 var v = CkText(PickupValue(l).Text, CkGold, 12.5, mono: true); Grid.SetColumn(v, 2); g.Children.Add(v);
                 var row = new Border { Child = g, BorderThickness = new Thickness(0, i > 0 ? 1 : 0, 0, 0), BorderBrush = Ck(CkSlotLine, 0x73) };
                 if (i == 0) row.Background = new LinearGradientBrush(Color.FromArgb(0x1F, CkGold.R, CkGold.G, CkGold.B), Color.FromArgb(0x05, CkGold.R, CkGold.G, CkGold.B), 0);

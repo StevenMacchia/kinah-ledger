@@ -14,7 +14,7 @@ public static class Skins
 
     public static readonly Skin[] All =
     {
-        new("night", "Night", true, "deep plum, Kinah gold and candy accents: the Quest look"),
+        new("night", "Night", true, "near-black with Kinah gold: the site's look"),
         new("abyss", "Abyss", true, "navy and soft gold on near-black"),
         new("daylight", "Daylight", false, "light, for a bright room"),
     };
@@ -117,19 +117,22 @@ public static class Skins
                 R("HeroBg", "#FFF0D2", "#FFFFFF", "#FFFFFF"); S("HeroLine", "#66D9952F"); S("Inset", "#F4F6FA"); C("SlotColor", "#F1F4F9");
                 S("CommonInk", "#2A3444"); S("GradeRare", "#1E8E57"); S("GradeLegend", "#1F6FCB"); S("GradeUnique", "#8F6F06"); S("GradeEpic", "#6E46C9"); S("BtnPrimaryInk", "#261702");
                 break;
-            default:   // night, the Quest palette since 2026-11-07: deep plum, Kinah gold, mint, sky, lilac, coral
-                Quest("#6EC1FF", "#B692FF", "#FF7D6E", "#C6F26B", "#2B1B00", "#2B1B00", "#21FFFFFF", "#45FFFFFF", 0x29);
-                S("MintTint", "#295CE1B5"); S("GoldIcTint", "#29FFC857"); S("NoticeTint", "#29B692FF");
-                Controls("#2C2552", "#4A4180", "#2C2552", "#352C64", "#221C3D", "#FFC857", "#FFC857", "#1A5CE1B5", "#735CE1B5", "#2C2552", "#362E5E",
-                    "#FFFFFF", "#4A4180", "#4A4180", "#09FFFFFF", "#14FFC857", "#80FFC857", "#29FFC857", "#0DFFC857", "#47FFC857", "#14FFC857", "#FFC857", "#4DFFC857");
-                S("Bg", "#110D21"); S("Card", "#251E45"); S("Card2", "#312960"); S("Line", "#3B3366"); S("LineStrong", "#4A4180");
-                S("Ink", "#F6F2FF"); S("Muted", "#B3ABD2"); S("Faint", "#7F78A3");
-                S("Gold", "#FFC857"); S("Violet", "#B692FF"); S("Mint", "#5CE1B5"); S("Accent", "#6EC1FF"); S("AccentDim", "#1F2D4F");
-                S("Good", "#5CE1B5"); S("Warn", "#F7A072"); S("Bad", "#FF7D6E"); S("Slot", "#110D21");
-                S("RowHead", "#1C1735"); S("RowHover", "#2C2552"); S("Mark", "#2A2352");
-                R("HeroBg", "#42327A", "#251E45", "#251E45"); S("HeroLine", "#33FFC857"); S("Inset", "#38000000"); C("SlotColor", "#110D21");
-                S("CommonInk", "#E8E2FF"); S("GradeRare", "#62D98B"); S("GradeLegend", "#6EC1FF"); S("GradeUnique", "#FFC857"); S("GradeEpic", "#B692FF"); S("BtnPrimaryInk", "#2B1B00");
-                G("BtnPrimary", "#FFC857", "#E59F2B"); G("BtnPrimaryHover", "#FFD97A", "#F0AE3C"); G("BtnStop", "#FF7D6E", "#D9524A");
+            default:   // night, the v2 palette since 2026-11-10 (the site's kl-v2.css tokens): near-black neutral, gold the one
+                       // accent, mint and coral for up and down, the game's grade colours; the old candy roles (sky, lilac, lime) are
+                       // quiet neutrals, and their icon boxes one neutral tint. The lit pill is ink on near-black, as the site's
+                Quest("#AEB5C7", "#C9CDDA", "#F26D6D", "#AEB5C7", "#1D1300", "#0A0B10", "#232736", "#3A4058", 0x24);
+                S("SkyTint", "#17BEC6DC"); S("LilacTint", "#17BEC6DC"); S("LimeTint", "#17BEC6DC");
+                S("MintTint", "#17BEC6DC"); S("GoldIcTint", "#24F5B942"); S("NoticeTint", "#17BEC6DC");
+                Controls("#1E2230", "#3A4058", "#1E2230", "#262A38", "#111319", "#EDEFF5", "#F5B942", "#14BEC6DC", "#2E3346", "#0D0F14", "#232736",
+                    "#FFFFFF", "#2E3346", "#2E3346", "#0DFFFFFF", "#14F5B942", "#80F5B942", "#1FF5B942", "#0AF5B942", "#3DF5B942", "#14F5B942", "#FFD27A", "#4DF5B942");
+                S("Bg", "#0A0B10"); S("Card", "#111319"); S("Card2", "#171A22"); S("Line", "#232736"); S("LineStrong", "#2E3346");
+                S("Ink", "#EDEFF5"); S("Muted", "#A2A8BA"); S("Faint", "#6D7387");
+                S("Gold", "#F5B942"); S("Violet", "#B39BFF"); S("Mint", "#3DD68C"); S("Accent", "#F5B942"); S("AccentDim", "#1E2230");
+                S("Good", "#3DD68C"); S("Warn", "#F7A072"); S("Bad", "#F26D6D"); S("Slot", "#0D0F14");
+                S("RowHead", "#0F1117"); S("RowHover", "#171A22"); S("Mark", "#1A1D27");
+                R("HeroBg", "#171A23", "#111319", "#111319"); S("HeroLine", "#2E3346"); S("Inset", "#38000000"); C("SlotColor", "#0D0F14");
+                S("CommonInk", "#D9DDE8"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B48BFF"); S("BtnPrimaryInk", "#1D1300");
+                G("BtnPrimary", "#F7C257", "#F2B23A"); G("BtnPrimaryHover", "#FFD27A", "#FBC966"); G("BtnStop", "#F26D6D", "#E35D5D");
                 break;
         }
         return d;

@@ -39,7 +39,7 @@ public partial class MainWindow
         dot.SetResourceReference(Border.BackgroundProperty, on ? "Gold" : "Faint");
         if (on) dot.Effect = QGlow("Gold", 6, 0.7);
         sp.Children.Add(dot);
-        sp.Children.Add(QT(text, 11.5, FontWeights.ExtraBold, on ? "Gold" : "Muted"));
+        sp.Children.Add(QT(text, 11.5, FontWeights.SemiBold, on ? "Gold" : "Muted"));
         var b = new Border { Child = sp, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(9, 3, 10, 4), VerticalAlignment = VerticalAlignment.Center };
         b.SetResourceReference(Border.BorderBrushProperty, on ? "GoldLine" : "CardLineHover");
         b.SetResourceReference(Border.BackgroundProperty, on ? "GoldTint" : "Card2");
@@ -114,8 +114,8 @@ public partial class MainWindow
         var nameRow = new Grid();
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MaxWidth = 400 }); nameRow.ColumnDefinitions.Add(new ColumnDefinition());
         var name = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis };
-        name.Inlines.Add(Q(zone, 15, FontWeights.Black, "Ink"));
-        if (kind.Length > 0) name.Inlines.Add(Q(" · " + kind, 12, FontWeights.Bold, "Muted"));
+        name.Inlines.Add(Q(zone, 15, FontWeights.Bold, "Ink"));
+        if (kind.Length > 0) name.Inlines.Add(Q(" · " + kind, 12, FontWeights.Medium, "Muted"));
         nameRow.Children.Add(name);
         if (pickPlace != null)
         {
@@ -127,7 +127,7 @@ public partial class MainWindow
         titles.Children.Add(nameRow);
         titles.SizeChanged += (_, _) => name.MaxWidth = Math.Max(60, titles.ActualWidth - (pickPlace != null ? 26 : 2));
         var meta = RunBandLine(runs, open);
-        var ml = QT(meta, 11.5, FontWeights.Bold, "Muted", trim: true); ml.Margin = new Thickness(0, 1, 0, 0); titles.Children.Add(ml);
+        var ml = QT(meta, 11.5, FontWeights.Medium, "Muted", trim: true); ml.Margin = new Thickness(0, 1, 0, 0); titles.Children.Add(ml);
         Grid.SetColumn(titles, 1); kick.Children.Add(titles);
         if (open != null)
         {
@@ -146,10 +146,10 @@ public partial class MainWindow
 
         // the hour, big in gold; a place that pays nothing priced says so; a short record says what a run pays
         var big = new TextBlock { Margin = new Thickness(0, 10, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-        if (n == 0) { big.Inlines.Add(Q(runs.Count == 0 ? "No run here yet." : "No run counted yet.", 15, FontWeights.ExtraBold, "Muted")); }
-        else if (!known) { big.Inlines.Add(Q("no prices yet", 22, FontWeights.Black, "Muted")); big.Inlines.Add(Q("  what the rewards sell for isn't known", 11.5, FontWeights.Bold, "Faint")); }
-        else if (secs > 10) { big.Inlines.Add(Q(Fk(value / secs * 3600), 40, FontWeights.Black, "Gold")); big.Inlines.Add(Q(" an hour", 13, FontWeights.Bold, "Muted")); }
-        else { big.Inlines.Add(Q(Fk(value / (double)n), 40, FontWeights.Black, "Gold")); big.Inlines.Add(Q(" a run", 13, FontWeights.Bold, "Muted")); }
+        if (n == 0) { big.Inlines.Add(Q(runs.Count == 0 ? "No run here yet." : "No run counted yet.", 15, FontWeights.SemiBold, "Muted")); }
+        else if (!known) { big.Inlines.Add(Q("no prices yet", 22, FontWeights.Bold, "Muted")); big.Inlines.Add(Q("  what the rewards sell for isn't known", 11.5, FontWeights.Medium, "Faint")); }
+        else if (secs > 10) { big.Inlines.Add(Q(Fk(value / secs * 3600), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" an hour", 13, FontWeights.Medium, "Muted")); }
+        else { big.Inlines.Add(Q(Fk(value / (double)n), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" a run", 13, FontWeights.Medium, "Muted")); }
         big.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in the value. Flagged runs are left out.";
         left.Children.Add(big);
 
@@ -164,8 +164,8 @@ public partial class MainWindow
             int k = _liveK;
             var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var chase = QT($"runs here average {Clock(TimeSpan.FromSeconds(avg))}", 11.5, FontWeights.Bold, "Muted", trim: true); row.Children.Add(chase);
-            var togo = QT("", 11.5, FontWeights.ExtraBold, "Gold"); togo.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(togo, 1); row.Children.Add(togo);
+            var chase = QT($"runs here average {Clock(TimeSpan.FromSeconds(avg))}", 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
+            var togo = QT("", 11.5, FontWeights.SemiBold, "Gold"); togo.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(togo, 1); row.Children.Add(togo);
             left.Children.Add(row);
             var (bar, fill) = QLiveBar("Gold", 12); bar.Margin = new Thickness(0, 5, 0, 0); left.Children.Add(bar);
             bar.SizeChanged += (_, _) => LayoutLiveRun();
@@ -186,10 +186,10 @@ public partial class MainWindow
             bool isBest = lastV >= best;
             var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var chase = QT($"last run {Fk(lastV)}" + (isBest ? " · your best here" : $" · {Math.Round(100.0 * lastV / best):0}% of your best here"), 11.5, FontWeights.Bold, "Muted", trim: true); row.Children.Add(chase);
+            var chase = QT($"last run {Fk(lastV)}" + (isBest ? " · your best here" : $" · {Math.Round(100.0 * lastV / best):0}% of your best here"), 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
             var flag = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
             var fi = QIcon("Flag", 12, isBest ? "Mint" : "Gold", 2); fi.Margin = new Thickness(0, 0, 5, 0); fi.VerticalAlignment = VerticalAlignment.Center; flag.Children.Add(fi);
-            flag.Children.Add(QT($"{Fk(best)} best run", 11.5, FontWeights.ExtraBold, isBest ? "Mint" : "Gold"));
+            flag.Children.Add(QT($"{Fk(best)} best run", 11.5, FontWeights.SemiBold, isBest ? "Mint" : "Gold"));
             Grid.SetColumn(flag, 1); row.Children.Add(flag);
             left.Children.Add(row);
             var bar = QBar(QShare(lastV, best), isBest ? "Mint" : "Gold", 12); bar.Margin = new Thickness(0, 5, 0, 0); left.Children.Add(bar);
@@ -209,9 +209,9 @@ public partial class MainWindow
             var fl = new TextBlock { FontSize = 11.5, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
             for (int i = 0; i < figs.Count; i++)
             {
-                if (i > 0) fl.Inlines.Add(Q("   ·   ", 11.5, FontWeights.Bold, "Faint"));
-                fl.Inlines.Add(Q(figs[i].Fig, 12.5, FontWeights.Black, "Ink"));
-                fl.Inlines.Add(Q(" " + figs[i].Word, 11.5, FontWeights.Bold, "Muted"));
+                if (i > 0) fl.Inlines.Add(Q("   ·   ", 11.5, FontWeights.Medium, "Faint"));
+                fl.Inlines.Add(Q(figs[i].Fig, 12.5, FontWeights.Bold, "Ink"));
+                fl.Inlines.Add(Q(" " + figs[i].Word, 11.5, FontWeights.Medium, "Muted"));
             }
             fl.ToolTip = big.ToolTip;
             left.Children.Add(fl);
@@ -311,7 +311,7 @@ public partial class MainWindow
         var head = QHead("Sack", "Paid out here", n == 0 ? "" : n == 1 ? "from the run here" : $"from the {n} runs here");
         if (tr.Value > 0)
         {
-            var v = QT(Fk(tr.Value), 14, FontWeights.Black, "Gold"); v.Margin = new Thickness(10, 0, 0, 0); v.VerticalAlignment = VerticalAlignment.Center;
+            var v = QT(Fk(tr.Value), 14, FontWeights.Bold, "Gold"); v.Margin = new Thickness(10, 0, 0, 0); v.VerticalAlignment = VerticalAlignment.Center;
             v.ToolTip = "Kinah plus loot at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
             Grid.SetColumn(v, 3); head.Children.Add(v);
         }
@@ -327,12 +327,12 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = QT(all ? "Show fewer" : $"Show all {slots.Count}", 11.5, FontWeights.ExtraBold, "Gold");
+            var m = QT(all ? "Show fewer" : $"Show all {slots.Count}", 11.5, FontWeights.SemiBold, "Gold");
             m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 2, 0, 0);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); redraw(); };
             sp.Children.Add(m);
         }
-        if (slots.Count == 0) { var t = QT(n == 0 ? "The rewards show here once a run is counted." : tr.Kinah > 0 ? "Kinah only: nothing else read from the reward screens yet." : "Nothing read from the reward screens yet.", 12, FontWeights.Bold, "Faint"); t.Margin = new Thickness(0, 8, 0, 2); sp.Children.Add(t); }
+        if (slots.Count == 0) { var t = QT(n == 0 ? "The rewards show here once a run is counted." : tr.Kinah > 0 ? "Kinah only: nothing else read from the reward screens yet." : "Nothing read from the reward screens yet.", 12, FontWeights.Medium, "Faint"); t.Margin = new Thickness(0, 8, 0, 2); sp.Children.Add(t); }
         return card;
     }
 
@@ -367,7 +367,7 @@ public partial class MainWindow
         }
         if (order.Count > 3)
         {
-            var m = QT($"{order.Count - 3} earlier run{(order.Count - 3 == 1 ? "" : "s")}  ›", 11.5, FontWeights.ExtraBold, "Gold");
+            var m = QT($"{order.Count - 3} earlier run{(order.Count - 3 == 1 ? "" : "s")}  ›", 11.5, FontWeights.SemiBold, "Gold");
             m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.Margin = new Thickness(0, 6, 0, 0);
             m.ToolTip = "Every run on its line, in a box under this one, with what each one gave.";
             m.MouseLeftButtonUp += (_, _) => { _runListShown = true; _drawnSig.Remove("runs"); redraw(); };

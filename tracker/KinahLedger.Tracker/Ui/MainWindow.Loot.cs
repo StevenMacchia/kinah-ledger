@@ -71,7 +71,7 @@ public partial class MainWindow
             var mode = LootOrder.Modes[i];
             bool on = mode == LootSortMode;
             if (i > 0) { var dot = PT("·", "Muted", 11.5); dot.Margin = new Thickness(5, 0, 5, 0); sp.Children.Add(dot); }
-            var t = PT(mode, on ? "Gold" : "Muted", 11.5, on ? FontWeights.SemiBold : null);
+            var t = PT(mode, on ? "Gold" : "Muted", 11.5, on ? FontWeights.Normal : null);
             t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = LootOrder.Tip(mode); ToolTipService.SetInitialShowDelay(t, 400);
             t.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (mode == LootSortMode) return; _prefs.LootSort = mode; SavePrefs(); _drawnSig.Remove(sigKey); redraw(); };
             sp.Children.Add(t);
@@ -212,7 +212,7 @@ public partial class MainWindow
     {
         const int perRow = 4;   // Quest tiles, 149 px each with 8 px between, in the 632 px card
         var sp = new StackPanel { Margin = new Thickness(0, LootHost.Children.Count > 0 && title.Length > 0 ? 6 : 0, 0, 0) };
-        if (title.Length > 0) { var t = QT(title, 11, FontWeights.ExtraBold, "Muted"); t.Margin = new Thickness(0, 0, 0, 8); sp.Children.Add(t); }
+        if (title.Length > 0) { var t = QT(title, 11, FontWeights.SemiBold, "Muted"); t.Margin = new Thickness(0, 0, 0, 8); sp.Children.Add(t); }
         bool all = _todayAll.Contains(key);
         int max = perRow * (FullShown ? 3 : TodayRows);
         var wrap = new WrapPanel();
@@ -220,7 +220,7 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = PT(all ? "Show fewer" : $"{slots.Count - max} more", "Gold", 12, FontWeights.ExtraBold);   // tiles, not kinds: Kinah has one too
+            var m = PT(all ? "Show fewer" : $"{slots.Count - max} more", "Gold", 12, FontWeights.SemiBold);   // tiles, not kinds: Kinah has one too
             m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); _drawnSig.Remove("loot"); FillLoot(); };
             sp.Children.Add(m);

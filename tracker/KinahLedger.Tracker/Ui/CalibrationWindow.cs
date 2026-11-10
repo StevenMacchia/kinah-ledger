@@ -59,8 +59,8 @@ public sealed class CalibrationWindow : Window
         MaxHeight = SystemParameters.WorkArea.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         SetResourceReference(BackgroundProperty, "Bg");
-        FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
-        var left = new Border { CornerRadius = new CornerRadius(16), Padding = new Thickness(16), BorderThickness = new Thickness(1), Width = 860, Child = new StackPanel { Children = { new Border { CornerRadius = new CornerRadius(10), ClipToBounds = true, Child = _frame, MinHeight = 380 }, _pips } } };
+        FontFamily = HudKit.Text;   // Inter, the window's face (v2)
+        var left = new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(16), BorderThickness = new Thickness(1), Width = 860, Child = new StackPanel { Children = { new Border { CornerRadius = new CornerRadius(10), ClipToBounds = true, Child = _frame, MinHeight = 380 }, _pips } } };
         left.SetResourceReference(Border.BorderBrushProperty, "Line");
         left.SetResourceReference(Border.BackgroundProperty, "Card");
         var grid = new Grid
@@ -97,7 +97,7 @@ public sealed class CalibrationWindow : Window
         _step = Math.Clamp(step, 0, Steps.Length - 1);
         _pips.Children.Clear();
         for (int i = 0; i < Steps.Length; i++)
-            _pips.Children.Add(new Border { Width = 28, Height = 5, CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 0, 6, 0), Background = new SolidColorBrush(i <= _step ? Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98)) : Res("Line", Color.FromRgb(0x2A, 0x30, 0x58))) });
+            _pips.Children.Add(new Border { Width = 28, Height = 5, CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 0, 6, 0), Background = new SolidColorBrush(i <= _step ? Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A)) : Res("Line", Color.FromRgb(0x2E, 0x32, 0x40))) });
         Draw();
     }
 
@@ -185,7 +185,7 @@ public sealed class CalibrationWindow : Window
             gr.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
             gr.DrawImage(full, 0, 0, w, h);
             var a = new System.Drawing.Rectangle((int)((area.Left - game.Left) * k), (int)((area.Top - game.Top) * k), (int)(area.Width * k), (int)(area.Height * k));
-            using var dim = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(150, 4, 6, 16));
+            using var dim = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(150, 7, 8, 10));
             var region = new System.Drawing.Region(new System.Drawing.Rectangle(0, 0, w, h)); region.Exclude(a);
             gr.FillRegion(dim, region);
             var c = st == State.Good ? System.Drawing.Color.FromArgb(0x62, 0xD9, 0x8B) : st == State.Waiting ? System.Drawing.Color.FromArgb(0xF3, 0xB4, 0x5E) : System.Drawing.Color.FromArgb(0xFF, 0x6B, 0x5E);
@@ -222,7 +222,7 @@ public sealed class CalibrationWindow : Window
         if (s.Key == "chat") foot.Children.Add(Btn("Pick the area myself", false, () => { _pickChat(); _results.Remove("chat"); }));
         else if (r.Item1 != State.Good) foot.Children.Add(Btn("Skip", false, () => Show(_step + 1)));
         if (_step > 0) foot.Children.Add(Btn("Back", false, () => Show(_step - 1)));
-        body.Children.Add(new Border { Background = new SolidColorBrush(Al(Res("Line", Color.FromRgb(0x5A, 0xA6, 0xFF)), 0x40)), BorderBrush = new SolidColorBrush(Res("Line", Color.FromRgb(0x26, 0x2B, 0x4A))), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 6, 0, 0), Child = foot });
+        body.Children.Add(new Border { Background = new SolidColorBrush(Al(Res("Line", Color.FromRgb(0x5A, 0xA6, 0xFF)), 0x40)), BorderBrush = new SolidColorBrush(Res("Line", Color.FromRgb(0x28, 0x2B, 0x37))), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 6, 0, 0), Child = foot });
         _cardHost.Child = card;
     }
 
@@ -260,7 +260,7 @@ public sealed class CalibrationWindow : Window
         var g = new Grid { ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition(), new ColumnDefinition { Width = GridLength.Auto } } };
         var ic = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Res("Line", Color.FromArgb(0x40, 255, 255, 255))), Background = new SolidColorBrush(Al(Res("Bg", Color.FromRgb(0, 0, 0)), 0x70)), Child = new TextBlock { Text = icon, FontSize = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Res("Ink", Colors.White)) } };
         var names = new StackPanel { Margin = new Thickness(12, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Children = { new TextBlock { Text = name, FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Res("Ink", Color.FromRgb(0xE9, 0xEC, 0xF7))) }, new TextBlock { Text = sub, FontSize = 12.5, Foreground = new SolidColorBrush(Res("Muted", Color.FromRgb(0x9A, 0xA1, 0xC2))), TextTrimming = TextTrimming.CharacterEllipsis } } };
-        var chipB = new Border { CornerRadius = new CornerRadius(20), Padding = new Thickness(9, 3, 9, 3), VerticalAlignment = VerticalAlignment.Center, Background = new SolidColorBrush(Color.FromArgb(0x2E, col.R, col.G, col.B)), Child = new TextBlock { Text = chip, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(col) } };
+        var chipB = new Border { CornerRadius = new CornerRadius(6), Padding = new Thickness(9, 3, 9, 3), VerticalAlignment = VerticalAlignment.Center, Background = new SolidColorBrush(Color.FromArgb(0x2E, col.R, col.G, col.B)), Child = new TextBlock { Text = chip, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(col) } };
         Grid.SetColumn(names, 1); Grid.SetColumn(chipB, 2);
         g.Children.Add(ic); g.Children.Add(names); g.Children.Add(chipB);
         band.Child = g;
@@ -268,8 +268,8 @@ public sealed class CalibrationWindow : Window
         return new Border
         {
             Width = 350, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), ClipToBounds = true,
-            BorderBrush = new SolidColorBrush(Res("Line", Color.FromRgb(0x2F, 0x36, 0x60))),
-            Background = new LinearGradientBrush(Res("Card2", Color.FromRgb(0x14, 0x18, 0x33)), Res("Card", Color.FromRgb(0x0F, 0x12, 0x26)), 90),
+            BorderBrush = new SolidColorBrush(Res("Line", Color.FromRgb(0x33, 0x37, 0x46))),
+            Background = new LinearGradientBrush(Res("Card2", Color.FromRgb(0x19, 0x1B, 0x23)), Res("Card", Color.FromRgb(0x13, 0x14, 0x1A)), 90),
             Child = new Border { Child = body },
         };
     }
@@ -277,8 +277,8 @@ public sealed class CalibrationWindow : Window
     static UIElement Section(string t)
     {
         var g = new Grid { Margin = new Thickness(14, 12, 14, 6), ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition() } };
-        var tb = new TextBlock { Text = t, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98))) };
-        var rule = new Border { Height = 1, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Al(Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98)), 0x70), Al(Res("Gold", Color.FromRgb(0xF8, 0xD5, 0x98)), 0), 0) };
+        var tb = new TextBlock { Text = t, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A))) };
+        var rule = new Border { Height = 1, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Al(Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A)), 0x70), Al(Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A)), 0), 0) };
         Grid.SetColumn(rule, 1); g.Children.Add(tb); g.Children.Add(rule);
         return g;
     }

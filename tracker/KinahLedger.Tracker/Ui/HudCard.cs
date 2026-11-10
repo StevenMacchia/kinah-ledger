@@ -50,9 +50,9 @@ public sealed partial class HudCard : IHudLook
     public HudCard()
     {
         _dot = Dot(7);
-        _run = T("RUN", 10.5, Gold, weight: FontWeights.Black); _run.Margin = new Thickness(6, 0, 0, 0);
+        _run = T("RUN", 10.5, Gold, weight: FontWeights.Bold); _run.Margin = new Thickness(6, 0, 0, 0);
         _time = T("", 13, Ink, mono: true); _time.Margin = new Thickness(6, 0, 0, 0);
-        _zone = T("", 12, Muted, weight: FontWeights.Bold); _zone.Margin = new Thickness(10, 0, 0, 0);
+        _zone = T("", 12, Muted, weight: FontWeights.SemiBold); _zone.Margin = new Thickness(10, 0, 0, 0);
         _newest = T("", 13, Ink); _newest.Margin = new Thickness(6, 0, 0, 0); _newest.TextTrimming = TextTrimming.None;
         var head = new Grid { Height = 18 };
         foreach (var w in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto }) head.ColumnDefinitions.Add(new ColumnDefinition { Width = w });
@@ -70,7 +70,7 @@ public sealed partial class HudCard : IHudLook
         // the figures: the hour big in gold, the session under it
         _rate = new TextBlock { LineHeight = 26, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
         _total = new TextBlock { LineHeight = 18, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
-        _chase = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.ExtraBold, Foreground = Gold, FontFamily = Text, LineHeight = 16, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed };
+        _chase = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = Gold, FontFamily = Text, LineHeight = 16, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed };
         var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _rate, _total, _chase } };
         var body = new Grid();
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -81,7 +81,7 @@ public sealed partial class HudCard : IHudLook
         Grid.SetColumn(_tiles, 2); body.Children.Add(_tiles);
 
         _noticeIcon = WarnIcon(); _noticeIcon.Margin = new Thickness(0, 0, 7, 0);
-        _noticeText = T("", 13, Warn, weight: FontWeights.SemiBold);
+        _noticeText = T("", 13, Warn, weight: FontWeights.Medium);
         _noticeClock = HudClockNotice.ClockIcon(); _noticeClock.Margin = new Thickness(0, 0, 7, 0); _noticeClock.Visibility = Visibility.Collapsed;
         _drain = HudClockNotice.Drain(); _drain.Margin = new Thickness(0, 0, 0, -5); _drain.Visibility = Visibility.Collapsed;
         _notice = new Border
@@ -89,12 +89,12 @@ public sealed partial class HudCard : IHudLook
             Margin = new Thickness(0, 8, 0, 0), Padding = new Thickness(0, 6, 0, 0), BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = B(WarnC, .28), Visibility = Visibility.Collapsed,
             Child = new Grid { Children = { new StackPanel { Orientation = Orientation.Horizontal, Height = 17, Children = { _noticeIcon, _noticeClock, _noticeText } }, _drain } },
         };
-        _accText = T("", 12.5, Warn, weight: FontWeights.SemiBold);
+        _accText = T("", 12.5, Warn, weight: FontWeights.Medium);
         _acc = new Border { Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed, Child = _accText };
 
         _card = new Border
         {
-            Width = 360, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), BorderBrush = FrameLine, Padding = new Thickness(12, 8, 12, 9),
+            Width = 360, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), BorderBrush = FrameLine, Padding = new Thickness(12, 8, 12, 9),
             Child = new StackPanel { Children = { head, new Border { Height = 1, Margin = new Thickness(0, 6, 0, 7), Background = rule }, body, _drop.Body, _notice, _acc } },
         };
         _drop.Swap = new UIElement[] { _zone, _newest, body };
@@ -109,7 +109,7 @@ public sealed partial class HudCard : IHudLook
     {
         // the hero's wash (Ui/Skins.cs HeroBg): a lift of violet at the top-right corner over the plum
         var b = new RadialGradientBrush { Center = new Point(1, 0), GradientOrigin = new Point(1, 0), RadiusX = 1.1, RadiusY = 1.4 };
-        b.GradientStops.Add(new GradientStop(Rgb(0x42327A, .94 * _alpha), 0));
+        b.GradientStops.Add(new GradientStop(Rgb(0x1E2230, .94 * _alpha), 0));
         b.GradientStops.Add(new GradientStop(Rgb(Panel2C, .95 * _alpha), .55));
         b.GradientStops.Add(new GradientStop(Rgb(PanelC, .96 * _alpha), 1));
         b.Freeze();
@@ -157,12 +157,12 @@ public sealed partial class HudCard : IHudLook
         {
             _rate.Inlines.Clear();
             if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R("Waiting for the first count", 13, Faint));
-            else if (warm) _rate.Inlines.Add(R(V("rate"), 16, Gold, weight: FontWeights.Black));
-            else { _rate.Inlines.Add(R(V("rate"), 22, Gold, weight: FontWeights.Black)); _rate.Inlines.Add(R(" an hour", 12, Muted, weight: FontWeights.Bold)); }
+            else if (warm) _rate.Inlines.Add(R(V("rate"), 16, Gold, weight: FontWeights.Bold));
+            else { _rate.Inlines.Add(R(V("rate"), 22, Gold, weight: FontWeights.Bold)); _rate.Inlines.Add(R(" an hour", 12, Muted, weight: FontWeights.SemiBold)); }
             _rate.Opacity = warm ? .55 : 1;
             _total.Inlines.Clear();
             // "session" alone: the ring took the room the fee's words had (the window says the cut everywhere the figure is)
-            if (V("total").Length > 0 && counted) { _total.Inlines.Add(R(V("total"), 13, Ink, weight: FontWeights.ExtraBold)); _total.Inlines.Add(R(" session", 11.5, Muted, weight: FontWeights.Bold)); }
+            if (V("total").Length > 0 && counted) { _total.Inlines.Add(R(V("total"), 13, Ink, weight: FontWeights.SemiBold)); _total.Inlines.Add(R(" session", 11.5, Muted, weight: FontWeights.SemiBold)); }
             _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
             // the ring and the chase (Buddy): this hour against your best here, mint with a star once it is beaten
             _ringHost.Children.Clear();
@@ -224,13 +224,13 @@ public sealed partial class HudCard : IHudLook
             if (first?.Rare == true)
             {
                 var c = Frozen(ColorOf(first.Color, first.Grade));
-                _newest.Inlines.Add(R(first.Name, 13, c, weight: FontWeights.SemiBold));
+                _newest.Inlines.Add(R(first.Name, 13, c, weight: FontWeights.Medium));
                 if (first.Count.Length > 0) _newest.Inlines.Add(R(" " + first.Count, 12, Muted, mono: true));
             }
             else if (first != null)
             {
-                _newest.Inlines.Add(R(first.Name, 13, Ink, weight: FontWeights.ExtraBold));
-                if (first.Worth.Length > 0) { _newest.Inlines.Add(R("  ", 13, Ink)); _newest.Inlines.Add(R(first.Worth, 13, first.Kinah ? Gold : Mint, weight: FontWeights.ExtraBold)); }
+                _newest.Inlines.Add(R(first.Name, 13, Ink, weight: FontWeights.SemiBold));
+                if (first.Worth.Length > 0) { _newest.Inlines.Add(R("  ", 13, Ink)); _newest.Inlines.Add(R(first.Worth, 13, first.Kinah ? Gold : Mint, weight: FontWeights.SemiBold)); }
             }
             // a long name gives way to the zone, never the other way: the zone trims first
             _newest.MaxWidth = 200;

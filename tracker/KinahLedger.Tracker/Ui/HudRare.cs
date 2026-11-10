@@ -80,16 +80,16 @@ static class HudRare
         Child = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Children = { new Image { Source = Eye, Width = 11, Height = 11, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }, T("watching", 10.5, Gold, weight: FontWeights.SemiBold) },
+            Children = { new Image { Source = Eye, Width = 11, Height = 11, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }, T("watching", 10.5, Gold, weight: FontWeights.Medium) },
         },
     };
 
-    static TextBlock Label(Drop d) => T(d.Label, 10.5, Frozen(Color.FromArgb(0xD9, d.Color.R, d.Color.G, d.Color.B)), weight: FontWeights.Bold);
+    static TextBlock Label(Drop d) => T(d.Label, 10.5, Frozen(Color.FromArgb(0xD9, d.Color.R, d.Color.G, d.Color.B)), weight: FontWeights.SemiBold);
 
     static TextBlock NameLine(Drop d)
     {
         var t = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, LineHeight = 18, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
-        t.Inlines.Add(R(d.Pick.Name, 15, Frozen(d.Color), weight: FontWeights.SemiBold));
+        t.Inlines.Add(R(d.Pick.Name, 15, Frozen(d.Color), weight: FontWeights.Medium));
         if (d.Pick.Count.Length > 0) t.Inlines.Add(R(" " + d.Pick.Count, 12, Muted, mono: true));
         return t;
     }

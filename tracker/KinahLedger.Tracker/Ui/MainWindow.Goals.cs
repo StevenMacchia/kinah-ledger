@@ -35,7 +35,7 @@ public partial class MainWindow
     /// <summary>A box, for "An item" before one is picked.</summary>
     const string BoxPath = "M4,8 L12,4 L20,8 V16 L12,20 L4,16 Z M4,8 L12,12 L20,8 M12,12 V20";
     const double GoalSlotWidth = 104, GoalGap = 14, GoalRingSize = 64, GoalTileSize = 48;
-    static readonly Color GoalGold = Color.FromRgb(0xF8, 0xD5, 0x98);
+    static readonly Color GoalGold = Color.FromRgb(0xFF, 0xD2, 0x7A);
 
     /// <summary>The player's goals at the start; a layout render or a self-test (no watching) never reads them.</summary>
     void InitGoals(bool watch)
@@ -235,7 +235,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
         tile.Margin = new Thickness(0, 0, 16, 0); g.Children.Add(tile);
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(CkText(title, CkGold, 20, FontWeights.SemiBold, display: true));
+        names.Children.Add(CkText(title, CkGold, 20, FontWeights.Normal, display: true));
         if (sub.Length > 0) { var l = CkText(sub, CkMuted, 13); l.Margin = new Thickness(0, 3, 0, 0); names.Children.Add(l); }
         Grid.SetColumn(names, 1); g.Children.Add(names);
         return new Border
@@ -340,7 +340,7 @@ public partial class MainWindow
     {
         var (card, body) = CkShell(420);
         void Redo() { if (_card is { IsOpen: true }) _card.Child = BuildGoalSheet(d, editing); }
-        var title = CkText(editing != null ? "Change this goal" : "Set a goal", CkInk, 16, FontWeights.SemiBold, display: true); title.Margin = new Thickness(20, 16, 20, 2);
+        var title = CkText(editing != null ? "Change this goal" : "Set a goal", CkInk, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 16, 20, 2);
         body.Children.Add(title);
         var sub = CkText("It counts today, from midnight on this PC.", CkMuted, 12.5); sub.Margin = new Thickness(20, 0, 20, 12);
         body.Children.Add(sub);
@@ -353,7 +353,7 @@ public partial class MainWindow
             bool on = d.Kind == kind;
             var sp = new StackPanel();
             tile.HorizontalAlignment = HorizontalAlignment.Center; sp.Children.Add(tile);
-            var t = CkText(label, on ? CkGold : CkMuted, 12.5, on ? FontWeights.SemiBold : null); t.HorizontalAlignment = HorizontalAlignment.Center; t.Margin = new Thickness(0, 8, 0, 0);
+            var t = CkText(label, on ? CkGold : CkMuted, 12.5, on ? FontWeights.Normal : null); t.HorizontalAlignment = HorizontalAlignment.Center; t.Margin = new Thickness(0, 8, 0, 0);
             sp.Children.Add(t);
             var b = new Border
             {
@@ -380,7 +380,7 @@ public partial class MainWindow
             {
                 var tile = CkIcon(d.Item, 26, FrameOf(_items.IdOf(d.Item))); tile.Margin = new Thickness(0, 0, 10, 0); pick.Children.Add(tile);
                 var g = GradeOf(d.Item);
-                pick.Children.Add(CkText(d.Item, g is "" or "Common" ? CkInk : GradeColor(g), 13.5, FontWeights.SemiBold));
+                pick.Children.Add(CkText(d.Item, g is "" or "Common" ? CkInk : GradeColor(g), 13.5, FontWeights.Normal));
             }
             else pick.Children.Add(CkText("Pick one below", CkFaint, 12.5));
             Grid.SetColumn(pick, 1); row.Children.Add(pick);

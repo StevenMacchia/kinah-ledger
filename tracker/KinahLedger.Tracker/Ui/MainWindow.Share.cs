@@ -41,7 +41,7 @@ public partial class MainWindow
     Border? _sharePreview;
     int _shareTicks;
 
-    static readonly Color ShareSheetBg = Color.FromRgb(0x15, 0x1A, 0x33);
+    static readonly Color ShareSheetBg = Color.FromRgb(0x1A, 0x1C, 0x23);
     const double PicW = SharePicture.Width / 2.0, PicH = SharePicture.Height / 2.0;
 
     void InitShare()
@@ -206,7 +206,7 @@ public partial class MainWindow
         head.ColumnDefinitions.Add(new ColumnDefinition());
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var label = CkText("SHARE", CkGoldRule, 11, FontWeights.Bold); label.Margin = new Thickness(2, 0, 10, 0);
+        var label = CkText("SHARE", CkGoldRule, 11, FontWeights.Medium); label.Margin = new Thickness(2, 0, 10, 0);
         head.Children.Add(label);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), Background = new LinearGradientBrush(Color.FromArgb(0x66, CkGoldRule.R, CkGoldRule.G, CkGoldRule.B), Colors.Transparent, 0) };
         Grid.SetColumn(rule, 1); head.Children.Add(rule);
@@ -340,14 +340,14 @@ public partial class MainWindow
             new() { Text = text, FontSize = size, Foreground = Ck(c), FontWeight = w ?? FontWeights.Normal, FontFamily = f ?? bodyFont, TextTrimming = TextTrimming.CharacterEllipsis };
 
         var bg = new LinearGradientBrush { StartPoint = new Point(0.33, 0), EndPoint = new Point(0.67, 1) };
-        bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x1A, 0x20, 0x46), 0));
-        bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x0B, 0x0E, 0x1E), 0.6));
-        bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x12, 0x0F, 0x1C), 1));
+        bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x22, 0x25, 0x2F), 0));
+        bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x0F, 0x10, 0x14), 0.6));
+        bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x0F, 0x11, 0x15), 1));
         var page = new Grid();
         for (int i = 0; i < 6; i++) page.RowDefinitions.Add(new RowDefinition { Height = i == 4 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
         var card = new Border
         {
-            Width = PicW, Height = PicH, Background = bg, BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x3C, 0x44, 0x66)),
+            Width = PicW, Height = PicH, Background = bg, BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x2E, 0x33, 0x46)),
             CornerRadius = new CornerRadius(10), Padding = new Thickness(26, 22, 26, 20), Child = page, ClipToBounds = true,
         };
         TextOptions.SetTextFormattingMode(card, TextFormattingMode.Ideal);
@@ -357,13 +357,13 @@ public partial class MainWindow
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         top.ColumnDefinitions.Add(new ColumnDefinition());
-        var tileBg = new LinearGradientBrush(Color.FromRgb(0x1E, 0x25, 0x50), Color.FromRgb(0x0E, 0x12, 0x30), new Point(0.33, 0), new Point(0.67, 1));
-        var tile = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x2E, 0x36, 0x66)), Background = tileBg };
+        var tileBg = new LinearGradientBrush(Color.FromRgb(0x27, 0x2A, 0x36), Color.FromRgb(0x16, 0x18, 0x1F), new Point(0.33, 0), new Point(0.67, 1));
+        var tile = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x35, 0x39, 0x49)), Background = tileBg };
         tile.Child = TryFindResource("AppMark") is ImageSource mark
             ? new Image { Source = mark, Width = 20, Height = 20, Stretch = Stretch.Uniform }
             : new Path { Width = 16, Height = 16, Stretch = Stretch.Uniform, Fill = Ck(CkGoldRule), Data = Geometry.Parse("M6,3 H9.4 V10.2 L15.6,3 H19.7 L13.1,10.6 L20,21 H15.8 L10.8,13.2 L9.4,14.8 V21 H6 Z") };
         top.Children.Add(tile);
-        var brand = T("Kinah Ledger", 13, CkInk, FontWeights.Bold, display); brand.VerticalAlignment = VerticalAlignment.Center; brand.Margin = new Thickness(10, 0, 0, 0);
+        var brand = T("Kinah Ledger", 13, CkInk, FontWeights.Medium, display); brand.VerticalAlignment = VerticalAlignment.Center; brand.Margin = new Thickness(10, 0, 0, 0);
         Grid.SetColumn(brand, 1); top.Children.Add(brand);
         var head = T(p.Head, 12, CkFaint); head.HorizontalAlignment = HorizontalAlignment.Right; head.VerticalAlignment = VerticalAlignment.Center; head.Margin = new Thickness(16, 0, 0, 0);
         head.Tag = "share-head";
@@ -380,7 +380,7 @@ public partial class MainWindow
         foreach (var (v, l) in new[] { (p.Rate, p.RateLabel), (p.Made, p.MadeLabel) })
         {
             var cell = new StackPanel { Margin = new Thickness(0, 0, 30, 0) };
-            var big = T(v, 34, CkGold, FontWeights.Light, display); big.LineHeight = 34; big.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            var big = T(v, 34, CkGold, FontWeights.SemiBold, display); big.LineHeight = 34; big.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
             cell.Children.Add(big);
             var small = T(l, 12, CkMuted); small.Margin = new Thickness(0, 5, 0, 0);
             cell.Children.Add(small);
@@ -407,7 +407,7 @@ public partial class MainWindow
             drops.Children.Add(best);
         }
         foot.Children.Add(drops);
-        var site = T(p.Site, 12, CkGoldRule, FontWeights.SemiBold); site.VerticalAlignment = VerticalAlignment.Bottom;
+        var site = T(p.Site, 12, CkGoldRule, FontWeights.Normal); site.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetColumn(site, 1); foot.Children.Add(site);
         Grid.SetRow(foot, 5); page.Children.Add(foot);
         return card;

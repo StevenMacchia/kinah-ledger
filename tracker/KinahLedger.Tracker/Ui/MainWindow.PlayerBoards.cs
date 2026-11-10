@@ -142,7 +142,7 @@ public partial class MainWindow
         var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         // the name in the page's own ink (0.10.22): it was the dark cards' grade colour, white for a common item, which vanished on
         // the Daylight look; the tile beside it carries the grade, as on every other row of the page
-        var nt = new TextBlock { Text = name, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        var nt = new TextBlock { Text = name, FontSize = 13, FontWeight = FontWeights.Normal, TextTrimming = TextTrimming.CharacterEllipsis };
         nt.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         var oq = PriceBook.QuoteOf(name);
         var bits = new List<string>();
@@ -209,7 +209,7 @@ public partial class MainWindow
     {
         var g = new Grid { Margin = new Thickness(0, 2, 0, 8) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
-        var t = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Ck(CkGoldRule), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeights.Medium, Foreground = Ck(CkGoldRule), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         g.Children.Add(t);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Color.FromArgb(0x66, CkGoldRule.R, CkGoldRule.G, CkGoldRule.B), Colors.Transparent, 0) };
         Grid.SetColumn(rule, 1); g.Children.Add(rule);

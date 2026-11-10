@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Kinah Ledger Options" Width="860" Height="640" MinWidth="760" MinHeight="520" ResizeMode="CanResize"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}"
-        FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
+        FontFamily="{DynamicResource BodyFont}" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
 
@@ -23,7 +23,7 @@
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,0,18">
           <Image Source="{StaticResource AppMark}" Width="28" Height="28" Margin="0,0,10,0" VerticalAlignment="Center"/>
           <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="Options" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="16" FontWeight="SemiBold"/>
+            <TextBlock Text="Options" FontFamily="{DynamicResource DisplayFont}" FontSize="16" FontWeight="SemiBold"/>
             <TextBlock Text="Kinah Ledger" Foreground="{DynamicResource Faint}" FontSize="11.5"/>
           </StackPanel>
         </StackPanel>
@@ -363,12 +363,13 @@
                   <Image x:Name="Preview" Stretch="Uniform" Margin="3" RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Grid>
               </Border>
+              <!-- the boxes' own colours (TrackerSession.ChatColor, ZoneColor, MarketCapture.MarkColor), whatever the look -->
               <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                <Border Width="10" Height="10" CornerRadius="2" Background="#4CC3F5" VerticalAlignment="Center"/>
                 <TextBlock Text="chat" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
-                <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Gold}" VerticalAlignment="Center"/>
+                <Border Width="10" Height="10" CornerRadius="2" Background="#F1D08C" VerticalAlignment="Center"/>
                 <TextBlock Text="zone" Style="{StaticResource LabelStyle}" Margin="5,0,12,0"/>
-                <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource Mint}" VerticalAlignment="Center"/>
+                <Border Width="10" Height="10" CornerRadius="2" Background="#9BE8D3" VerticalAlignment="Center"/>
                 <TextBlock Text="market" Style="{StaticResource LabelStyle}" Margin="5,0,0,0"/>
               </StackPanel>
               <TextBlock x:Name="ReadingNote" Style="{StaticResource BodyStyle}" FontSize="12.5" Margin="0,10,0,0" Visibility="Collapsed"/>

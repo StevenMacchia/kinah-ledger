@@ -113,7 +113,7 @@ public partial class MainWindow
     {
         var (card, body) = CkShell(380);
         var head = new StackPanel { Margin = new Thickness(20, 16, 20, 4) };
-        var t = CkText(title, CkGold, 19, FontWeights.SemiBold, display: true); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None;
+        var t = CkText(title, CkGold, 19, FontWeights.Normal, display: true); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None;
         head.Children.Add(t);
         var sub = string.Join(" · ", new[] { expedition ? "" : f.Title, f.Server, f.Day.ToString("ddd HH:mm") }.Where(x => x.Length > 0));
         if (sub.Length > 0) { var s = CkText(sub, CkFaint, 12.5); s.Margin = new Thickness(0, 3, 0, 0); head.Children.Add(s); }
@@ -135,8 +135,8 @@ public partial class MainWindow
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var icon = CkIcon(top.Name, 36, GradeColor(top.Grade), glow: top.Grade is "Legend" or "Unique" or "Epic"); icon.Margin = new Thickness(0, 0, 12, 0);
             g.Children.Add(icon);
-            var n = CkText($"{top.Name} ×{top.Count:N0}", top.Grade is "" or "Common" ? CkInk : GradeColor(top.Grade), 13.5, FontWeights.SemiBold); Grid.SetColumn(n, 1); g.Children.Add(n);
-            var w = CkText(top.Worth > 0 ? Fk(top.Worth) : "no price", top.Worth > 0 ? CkGold : CkFaint, 13, FontWeights.SemiBold, mono: true); w.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(w, 2); g.Children.Add(w);
+            var n = CkText($"{top.Name} ×{top.Count:N0}", top.Grade is "" or "Common" ? CkInk : GradeColor(top.Grade), 13.5, FontWeights.Normal); Grid.SetColumn(n, 1); g.Children.Add(n);
+            var w = CkText(top.Worth > 0 ? Fk(top.Worth) : "no price", top.Worth > 0 ? CkGold : CkFaint, 13, FontWeights.Normal, mono: true); w.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(w, 2); g.Children.Add(w);
             body.Children.Add(g);
         }
         if (best.Length > 0) { var b = CkNote(best); b.Margin = new Thickness(20, 12, 20, 0); body.Children.Add(b); }

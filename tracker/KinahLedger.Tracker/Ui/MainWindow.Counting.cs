@@ -39,7 +39,7 @@ public partial class MainWindow
         var text = new TextBlock { Style = (Style)FindResource("BodyStyle"), FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         // a resource reference, not B("Ink"): B() hands back the brush of the look at that moment, and the look is often picked
         // after this notice is up (first run: Welcome's look chips), which left Night's pale ink on Daylight's white card
-        var head = new System.Windows.Documents.Run("Help improve counting is on. ") { FontWeight = FontWeights.SemiBold };
+        var head = new System.Windows.Documents.Run("Help improve counting is on. ") { FontWeight = FontWeights.Normal };
         head.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Ink");
         text.Inlines.Add(head);
         text.Inlines.Add(new System.Windows.Documents.Run(CountingSentence));

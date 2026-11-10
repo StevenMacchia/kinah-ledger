@@ -47,7 +47,7 @@ static class HudClockNotice
     {
         t.Text = "";
         int cut = text.IndexOf(" · ", StringComparison.Ordinal);
-        t.Inlines.Add(R(cut < 0 ? text : text[..cut], size, Gold, weight: FontWeights.SemiBold));
+        t.Inlines.Add(R(cut < 0 ? text : text[..cut], size, Gold, weight: FontWeights.Medium));
         if (cut >= 0) t.Inlines.Add(R(text[cut..], size, Muted));
     }
 

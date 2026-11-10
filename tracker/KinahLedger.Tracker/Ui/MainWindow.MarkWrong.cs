@@ -175,7 +175,7 @@ public partial class MainWindow
     void MarkRow(Border row, FeedLine l)
     {
         if (row.Child is not Grid g) return;
-        var wash = new SolidColorBrush(Color.FromArgb(0x14, 0xF8, 0xD5, 0x98)); wash.Freeze();
+        var wash = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xD2, 0x7A)); wash.Freeze();
         row.Background = wash;
         // after FeedRow's own hover handlers, so the row keeps its wash
         row.MouseEnter += (_, _) => row.Background = wash;

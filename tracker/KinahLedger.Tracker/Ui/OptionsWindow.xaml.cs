@@ -202,13 +202,13 @@ public partial class OptionsWindow : Window
             face.HorizontalAlignment = HorizontalAlignment.Left;
             // drawn as over the game: a dark scene whatever the window's theme, with the look's name and what it shows
             var label = new TextBlock { FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6), TextTrimming = TextTrimming.CharacterEllipsis };
-            label.Inlines.Add(new System.Windows.Documents.Run(l.Name) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xF6, 0xF2, 0xFF)) });
-            label.Inlines.Add(new System.Windows.Documents.Run((on ? "  ·  in use  ·  " : "  ·  ") + l.Hint) { Foreground = new SolidColorBrush(on ? Color.FromRgb(0xFF, 0xC8, 0x57) : Color.FromRgb(0xB3, 0xAB, 0xD2)) });
-            var scene = new LinearGradientBrush(Color.FromRgb(0x1A, 0x20, 0x2C), Color.FromRgb(0x0B, 0x0E, 0x18), 90);   // a dark game scene, whatever the window's skin
+            label.Inlines.Add(new System.Windows.Documents.Run(l.Name) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xED, 0xEF, 0xF5)) });
+            label.Inlines.Add(new System.Windows.Documents.Run((on ? "  ·  in use  ·  " : "  ·  ") + l.Hint) { Foreground = new SolidColorBrush(on ? Color.FromRgb(0xF5, 0xB9, 0x42) : Color.FromRgb(0xA2, 0xA8, 0xBA)) });
+            var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);   // a dark game scene, whatever the window's skin
             var box = new Border
             {
-                CornerRadius = new CornerRadius(14), Padding = new Thickness(10, 9, 10, 10), Margin = new Thickness(0, 6, 0, 0), Background = scene, Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(on ? 2 : 1), BorderBrush = new SolidColorBrush(on ? Color.FromRgb(0xFF, 0xC8, 0x57) : Color.FromRgb(0x3B, 0x33, 0x66)),
+                CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 9, 10, 10), Margin = new Thickness(0, 6, 0, 0), Background = scene, Cursor = Cursors.Hand,
+                BorderThickness = new Thickness(on ? 2 : 1), BorderBrush = new SolidColorBrush(on ? Color.FromRgb(0xF5, 0xB9, 0x42) : Color.FromRgb(0x23, 0x27, 0x36)),
                 Child = new StackPanel { Children = { label, face } }, ToolTip = on ? null : "Use the " + l.Name,
             };
             System.Windows.Automation.AutomationProperties.SetName(box, l.Name + " panel look");

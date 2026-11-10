@@ -95,7 +95,7 @@ public partial class MainWindow
 
         var head = new Grid { Margin = new Thickness(0, 0, 0, 6) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(PT(all ? "All set." : "Getting set up", all ? "Good" : "Ink", 13.5, FontWeights.SemiBold));
+        head.Children.Add(PT(all ? "All set." : "Getting set up", all ? "Good" : "Ink", 13.5, FontWeights.Normal));
         var count = PT($"{steps.Count(s => s.Done)} of {steps.Count}", "Faint", 12);
         Grid.SetColumn(count, 1); head.Children.Add(count);
         FeedOnboard.Children.Add(head);
@@ -109,7 +109,7 @@ public partial class MainWindow
         {
             var g = new Grid { Margin = new Thickness(0, 3, 0, 3) };
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var glyph = PT(s.Done ? "✓" : "○", s.Done ? "Good" : "Faint", 13, FontWeights.SemiBold);
+            var glyph = PT(s.Done ? "✓" : "○", s.Done ? "Good" : "Faint", 13, FontWeights.Normal);
             glyph.VerticalAlignment = VerticalAlignment.Top;
             g.Children.Add(glyph);
             var words = new StackPanel();

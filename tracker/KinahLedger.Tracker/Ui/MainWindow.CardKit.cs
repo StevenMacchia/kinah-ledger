@@ -14,9 +14,9 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     // the Quest palette (2026-11-07): plum body, Kinah gold, mint for what pays, coral for a miss; fixed, as the game's own tooltips are
-    static readonly Color CkInk = Color.FromRgb(0xF6, 0xF2, 0xFF), CkMuted = Color.FromRgb(0xB3, 0xAB, 0xD2), CkFaint = Color.FromRgb(0x7F, 0x78, 0xA3),
-        CkGold = Color.FromRgb(0xFF, 0xC8, 0x57), CkGoldRule = Color.FromRgb(0xE5, 0x9F, 0x2B), CkGood = Color.FromRgb(0x5C, 0xE1, 0xB5), CkBad = Color.FromRgb(0xFF, 0x7D, 0x6E),
-        CkWarn = Color.FromRgb(0xF7, 0xA0, 0x72), CkSlot = Color.FromRgb(0x17, 0x13, 0x2B), CkSlotLine = Color.FromRgb(0x36, 0x2E, 0x5E), CkFrame = Color.FromRgb(0x4A, 0x41, 0x80);
+    static readonly Color CkInk = Color.FromRgb(0xED, 0xEF, 0xF5), CkMuted = Color.FromRgb(0xA2, 0xA8, 0xBA), CkFaint = Color.FromRgb(0x6D, 0x73, 0x87),
+        CkGold = Color.FromRgb(0xF5, 0xB9, 0x42), CkGoldRule = Color.FromRgb(0xD9, 0x9A, 0x24), CkGood = Color.FromRgb(0x3D, 0xD6, 0x8C), CkBad = Color.FromRgb(0xF2, 0x6D, 0x6D),
+        CkWarn = Color.FromRgb(0xF7, 0xA0, 0x72), CkSlot = Color.FromRgb(0x0D, 0x0F, 0x14), CkSlotLine = Color.FromRgb(0x23, 0x27, 0x36), CkFrame = Color.FromRgb(0x2E, 0x33, 0x46);
 
     static SolidColorBrush Ck(Color c, byte a = 255) => new(Color.FromArgb(a, c.R, c.G, c.B));
 
@@ -27,7 +27,7 @@ public partial class MainWindow
         var t = new TextBlock { Text = text, FontSize = size, Foreground = Ck(color), TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         if (weight is { } w) t.FontWeight = w;
         if (mono) t.FontFamily = new FontFamily("Cascadia Mono, Consolas");
-        else if (display) t.FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI");
+        else if (display) t.FontFamily = HudKit.Text;   // Inter, the window's face (v2)
         return t;
     }
 
@@ -37,8 +37,8 @@ public partial class MainWindow
         var body = new StackPanel { Width = width };
         var card = new Border
         {
-            Child = body, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x4A, 0x41, 0x80)), Margin = new Thickness(10),
-            Background = new LinearGradientBrush(Color.FromRgb(0x2C, 0x25, 0x52), Color.FromRgb(0x1C, 0x17, 0x35), 90),
+            Child = body, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), BorderBrush = Ck(Color.FromRgb(0x2E, 0x33, 0x46)), Margin = new Thickness(10),
+            Background = new LinearGradientBrush(Color.FromRgb(0x1E, 0x22, 0x30), Color.FromRgb(0x0F, 0x11, 0x17), 90),
             Effect = new DropShadowEffect { BlurRadius = 26, ShadowDepth = 5, Opacity = 0.6 }, ClipToBounds = false,
         };
         return (card, body);
@@ -51,7 +51,7 @@ public partial class MainWindow
         var box = new Border
         {
             Width = size, Height = size, CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(glow ? 2 : 1), BorderBrush = Ck(frame, glow ? (byte)255 : (byte)200),
-            Background = glow ? new RadialGradientBrush(Color.FromArgb(0x55, frame.R, frame.G, frame.B), CkSlot) { Center = new Point(0.5, 0.4), GradientOrigin = new Point(0.5, 0.4) } : Ck(Color.FromRgb(0x17, 0x13, 0x2B)),
+            Background = glow ? new RadialGradientBrush(Color.FromArgb(0x55, frame.R, frame.G, frame.B), CkSlot) { Center = new Point(0.5, 0.4), GradientOrigin = new Point(0.5, 0.4) } : Ck(Color.FromRgb(0x0D, 0x0F, 0x14)),
             Effect = glow ? new DropShadowEffect { Color = frame, BlurRadius = 16, ShadowDepth = 0, Opacity = 0.45 } : null,
         };
         // the icon, or the item's initial only while the icon is still downloading: a card drawn before the file is on
@@ -75,7 +75,7 @@ public partial class MainWindow
         {
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 5, 1),
             Background = Ck(CkSlot), BorderBrush = Ck(CkFrame), BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = badge, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White },
+            Child = new TextBlock { Text = badge, FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = Brushes.White },
         });
         return g;
     }
@@ -90,7 +90,7 @@ public partial class MainWindow
         var icon = CkIcon(item, 64, c, glow: true); icon.Margin = new Thickness(0, 0, 16, 0);
         g.Children.Add(icon);
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var name = CkText(item, c, 20, FontWeights.SemiBold, display: true); name.TextWrapping = TextWrapping.Wrap; name.TextTrimming = TextTrimming.None;
+        var name = CkText(item, c, 20, FontWeights.Normal, display: true); name.TextWrapping = TextWrapping.Wrap; name.TextTrimming = TextTrimming.None;
         names.Children.Add(name);
         if (sub.Length > 0) { var s = CkText(sub, Color.FromRgb((byte)((c.R + 0xB3) / 2), (byte)((c.G + 0xB7) / 2), (byte)((c.B + 0xD3) / 2)), 13); s.Margin = new Thickness(0, 3, 0, 0); names.Children.Add(s); }
         Grid.SetColumn(names, 1); g.Children.Add(names);
@@ -107,7 +107,7 @@ public partial class MainWindow
         var g = new Grid { Margin = new Thickness(20, 16, 20, 8) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition());
-        var t = CkText(text, CkGoldRule, 11, FontWeights.Bold); t.Margin = new Thickness(0, 0, 10, 0);
+        var t = CkText(text, CkGoldRule, 11, FontWeights.Medium); t.Margin = new Thickness(0, 0, 10, 0);
         g.Children.Add(t);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Color.FromArgb(0x66, CkGoldRule.R, CkGoldRule.G, CkGoldRule.B), Colors.Transparent, 0) };
         Grid.SetColumn(rule, 1); g.Children.Add(rule);
@@ -123,7 +123,7 @@ public partial class MainWindow
         l.Children.Add(CkText(left, CkInk, 13.5));
         if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 11.5));
         g.Children.Add(l);
-        var r = CkText(right, rightColor, rightSize, FontWeights.SemiBold, mono); r.Margin = new Thickness(12, 0, 0, 0);
+        var r = CkText(right, rightColor, rightSize, FontWeights.Normal, mono); r.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(r, 1); g.Children.Add(r);
         return g;
     }
@@ -147,8 +147,8 @@ public partial class MainWindow
         var bar = new Grid { Height = 8, Margin = new Thickness(0, 6, 0, 0) };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.001, success), GridUnitType.Star) });
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.001, 1 - success), GridUnitType.Star) });
-        bar.Children.Add(new Border { CornerRadius = new CornerRadius(4, 0, 0, 4), Background = new LinearGradientBrush(Color.FromRgb(0x2F, 0xB5, 0x8C), Color.FromRgb(0x5C, 0xE1, 0xB5), 0) });
-        var fb = new Border { CornerRadius = new CornerRadius(0, 4, 4, 0), Background = Ck(Color.FromRgb(0xFF, 0x7D, 0x6E), 0xD8) }; Grid.SetColumn(fb, 1); bar.Children.Add(fb);
+        bar.Children.Add(new Border { CornerRadius = new CornerRadius(4, 0, 0, 4), Background = new LinearGradientBrush(Color.FromRgb(0x28, 0xA8, 0x6C), Color.FromRgb(0x3D, 0xD6, 0x8C), 0) });
+        var fb = new Border { CornerRadius = new CornerRadius(0, 4, 4, 0), Background = Ck(Color.FromRgb(0xF2, 0x6D, 0x6D), 0xD8) }; Grid.SetColumn(fb, 1); bar.Children.Add(fb);
         sp.Children.Add(bar);
         return sp;
     }
@@ -164,7 +164,7 @@ public partial class MainWindow
     static Border CkChip(string text, Color ink) => new()
     {
         CornerRadius = new CornerRadius(9), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(0, 0, 6, 6),
-        Background = Ck(Color.FromRgb(0x2C, 0x25, 0x52)), Child = CkText(text, ink, 12),
+        Background = Ck(Color.FromRgb(0x1E, 0x22, 0x30)), Child = CkText(text, ink, 12),
     };
 
     /// <summary>The tinted footer: a label with a small line under it, and a big figure, green or red.</summary>
@@ -176,7 +176,7 @@ public partial class MainWindow
         l.Children.Add(CkText(label, CkMuted, 13.5));
         if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 11.5));
         g.Children.Add(l);
-        var v = CkText(value, good ? CkGood : CkBad, 26, FontWeights.SemiBold, display: true); Grid.SetColumn(v, 1); g.Children.Add(v);
+        var v = CkText(value, good ? CkGood : CkBad, 26, FontWeights.Normal, display: true); Grid.SetColumn(v, 1); g.Children.Add(v);
         var tint = good ? Color.FromRgb(0x1B, 0x3A, 0x34) : Color.FromRgb(0x3A, 0x1E, 0x24);
         return new Border
         {

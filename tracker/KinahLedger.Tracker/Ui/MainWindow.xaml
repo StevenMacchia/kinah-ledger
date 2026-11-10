@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Kinah Ledger" SizeToContent="WidthAndHeight" ResizeMode="CanMinimize"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Ink}"
-        FontFamily="{DynamicResource BodyFont}" FontSize="13" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"
+        FontFamily="{DynamicResource BodyFont}" FontSize="13" FontWeight="Normal" Typography.NumeralAlignment="Tabular"
         UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
         WindowStartupLocation="CenterScreen">
 
@@ -66,7 +66,7 @@
                 <RadialGradientBrush Center="0.5,0.38" GradientOrigin="0.5,0.38" RadiusX="0.75" RadiusY="0.75"><GradientStop Color="#1ACDD3E2" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush>
               </Border.Background>
               <Grid>
-                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontFamily="{DynamicResource DisplayFont}" FontSize="15" FontWeight="Normal" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                 <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="HighQuality"/>
               </Grid>
             </Border>
@@ -77,7 +77,7 @@
           </Grid>
           <Grid x:Name="NameCell" Grid.Column="1" Margin="0,0,10,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+            <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource Ink}" FontWeight="Normal" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
             <!-- "Looks wrong? Report" (the hint, then the action): shown on hover, "Reported · Undo" kept on a flagged row. A
                  flagged drop is never sent to the site -->
             <TextBlock x:Name="ReportLink" Grid.Column="1" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Hidden"
@@ -111,7 +111,7 @@
         </DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Legend">
           <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeLegend}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#995AA6FF"/>
-          <Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.38" GradientOrigin="0.5,0.38" RadiusX="0.75" RadiusY="0.75"><GradientStop Color="#425AA6FF" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter>
+          <Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.38" GradientOrigin="0.5,0.38" RadiusX="0.75" RadiusY="0.75"><GradientStop Color="#42BEC6DC" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter>
         </DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Unique">
           <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeUnique}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#9EF3D35E"/>
@@ -119,7 +119,7 @@
         </DataTrigger>
         <DataTrigger Binding="{Binding Grade}" Value="Epic">
           <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource GradeEpic}"/><Setter TargetName="IconTile" Property="BorderBrush" Value="#99B48BFF"/>
-          <Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.38" GradientOrigin="0.5,0.38" RadiusX="0.75" RadiusY="0.75"><GradientStop Color="#42B48BFF" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter>
+          <Setter TargetName="IconTile" Property="Background"><Setter.Value><RadialGradientBrush Center="0.5,0.38" GradientOrigin="0.5,0.38" RadiusX="0.75" RadiusY="0.75"><GradientStop Color="#42BEC6DC" Offset="0"/><GradientStop Color="{DynamicResource SlotColor}" Offset="1"/></RadialGradientBrush></Setter.Value></Setter>
         </DataTrigger>
         <!-- the sub-line row: a small label, nothing else -->
         <DataTrigger Binding="{Binding Header}" Value="True">
@@ -142,12 +142,12 @@
           <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/><ColumnDefinition Width="80"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
           <Border x:Name="IconTile" Width="28" Height="28" CornerRadius="5" BorderThickness="1" BorderBrush="{DynamicResource SlotFrame}" Background="{DynamicResource Slot}" HorizontalAlignment="Left" VerticalAlignment="Center">
             <Grid>
-              <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+              <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="12" FontWeight="Normal" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
               <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Grid>
           </Border>
           <StackPanel x:Name="NameCell" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
-            <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="NameText" Text="{Binding Name}" Foreground="{DynamicResource Ink}" FontWeight="Normal" FontSize="13" TextTrimming="CharacterEllipsis"/>
             <TextBlock x:Name="SubText" Text="{Binding Sub}" Foreground="{DynamicResource Faint}" FontSize="12" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
           </StackPanel>
           <TextBlock Grid.Column="2" Style="{StaticResource FTd}" Text="{Binding Drops}"/>
@@ -195,13 +195,13 @@
           <Border x:Name="TreeLine" Width="8" Height="18" Margin="5,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" BorderThickness="1,0,0,1" BorderBrush="{DynamicResource LineStrong}" Visibility="Collapsed"/>
           <Border x:Name="IconTile" Width="30" Height="30" CornerRadius="5" BorderThickness="1" BorderBrush="{DynamicResource SlotFrame}" Background="{DynamicResource Slot}" HorizontalAlignment="Left" VerticalAlignment="Center">
             <Grid>
-              <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+              <TextBlock x:Name="IconInitial" Text="{Binding Initial}" FontSize="12" FontWeight="Normal" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
               <Image Source="{Binding Icon.Image}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Grid>
           </Border>
           <!-- the name (an upgrade row's count after it); under a recipe's name, what came out when it isn't one a craft ("40 made · 4 crafts of ×10") -->
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
-            <TextBlock x:Name="NameText" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"><Run Text="{Binding Name, Mode=OneWay}"/><Run Text="{Binding Sub, Mode=OneWay}" FontFamily="{DynamicResource MonoFont}" FontWeight="Normal" FontSize="12" Foreground="{DynamicResource Faint}"/></TextBlock>
+            <TextBlock x:Name="NameText" Foreground="{DynamicResource Ink}" FontWeight="Normal" FontSize="13" TextTrimming="CharacterEllipsis"><Run Text="{Binding Name, Mode=OneWay}"/><Run Text="{Binding Sub, Mode=OneWay}" FontFamily="{DynamicResource MonoFont}" FontWeight="Normal" FontSize="12" Foreground="{DynamicResource Faint}"/></TextBlock>
             <TextBlock x:Name="UnderText" Text="{Binding Under}" FontFamily="{DynamicResource MonoFont}" FontSize="11.5" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
           </StackPanel>
           <TextBlock Grid.Column="2" Style="{StaticResource FTd}" Text="{Binding Drops}" Foreground="{DynamicResource Faint}"/>
@@ -264,10 +264,10 @@
           <Image Source="{StaticResource AppMark}" Width="32" Height="32" Margin="0,0,10,0" VerticalAlignment="Center"/>
           <StackPanel VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="14" FontWeight="ExtraBold" VerticalAlignment="Center"/>
-              <TextBlock x:Name="Version" Text="v0.7.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="8,1,0,0" FontSize="11" FontWeight="Bold"/>
+              <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <TextBlock x:Name="Version" Text="v0.7.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="8,1,0,0" FontSize="11" FontWeight="Medium"/>
             </StackPanel>
-            <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="Bold" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
+            <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="Medium" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
           </StackPanel>
         </StackPanel>
         <!-- three pages that never mix: Farm (the run, the rate, the loot), Craft (recipes, cost, profit), Runs (expeditions and events) -->
@@ -327,7 +327,7 @@
       <!-- first run: region, faction, server and a look, before anything else. Everything shared is filed per server. -->
       <Border x:Name="WelcomeCard" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="22,20,22,20" Visibility="Collapsed">
         <StackPanel>
-          <TextBlock Text="Welcome. Where do you play?" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Bold"/>
+          <TextBlock Text="Welcome. Where do you play?" FontFamily="{DynamicResource DisplayFont}" FontSize="18" FontWeight="Medium"/>
           <TextBlock Style="{StaticResource BodyStyle}" Margin="0,6,0,0" Text="Everything the tracker shares is filed per server, so this comes first. Three clicks and you are in; change any of it later in Options."/>
           <TextBlock Style="{StaticResource LabelStyle}" Text="REGION" Margin="0,16,0,8"/>
           <WrapPanel x:Name="RegionChips"/>
@@ -359,7 +359,7 @@
           <Grid Margin="0,16,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Margin="0,0,16,0">
-              <TextBlock Text="Share my runs and Market prices, anonymously" FontSize="13.5" FontWeight="SemiBold"/>
+              <TextBlock Text="Share my runs and Market prices, anonymously" FontSize="13.5" FontWeight="Normal"/>
               <TextBlock Style="{StaticResource BodyStyle}" FontSize="12" Margin="0,2,0,0" Text="Totals only, sent in small batches about every 15 minutes while you play, for the site's public tables. Never your character, chat text or screenshots. Turn it off any time in Options."/>
               <TextBlock FontSize="12.5" Margin="0,4,0,0"><Hyperlink x:Name="WelcomeSentLink" Style="{StaticResource LinkStyle}">What's shared</Hyperlink><Run Text="   "/><Hyperlink x:Name="WelcomePrivacyLink" Style="{StaticResource LinkStyle}">Privacy</Hyperlink></TextBlock>
             </StackPanel>
@@ -379,13 +379,13 @@
            the day so far ("2:41 farming · 412 kills · 4 runs" and what it made); opened, the day's loot as inventory slots,
            farming and the runs apart, zone chips to pin one zone, and the game-tooltip card on each slot (Ui/MainWindow.Today.cs).
            Since midnight on this PC, carried across restarts in today.json. -->
-      <Border x:Name="TodayStrip" Margin="0,12,0,0" CornerRadius="16" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
+      <Border x:Name="TodayStrip" Margin="0,12,0,0" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
         <StackPanel>
           <Grid x:Name="TodayHead" Height="46" Background="Transparent" Cursor="Hand" ToolTip="Today since midnight on this PC. Click to see the loot.">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Path x:Name="TodayChev" Style="{StaticResource SecChev}" Margin="16,0,-6,0"/>
-            <TextBlock x:Name="TodayTitle" Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="16,0,10,0"/>
-            <TextBlock x:Name="TodayNote" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="TodayTitle" Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="16,0,10,0"/>
+            <TextBlock x:Name="TodayNote" Grid.Column="2" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
             <!-- today or the last 7 days (0.9, History A): the runs' Week side, Ui/MainWindow.Week.cs -->
             <Border x:Name="TodayScope" Grid.Column="3" Padding="3" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Margin="12,0,0,0">
               <StackPanel Orientation="Horizontal">
@@ -393,7 +393,7 @@
                 <Button x:Name="TodayWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of expeditions and events on this PC, a bar a day."/>
               </StackPanel>
             </Border>
-            <TextBlock x:Name="TodaySum" Grid.Column="4" FontSize="16" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
+            <TextBlock x:Name="TodaySum" Grid.Column="4" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
           </Grid>
           <Border x:Name="TodayBody" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource CardLine}" Padding="16,0,16,12" Visibility="Collapsed">
             <StackPanel x:Name="TodayHost"/>
@@ -408,9 +408,9 @@
     <StackPanel x:Name="LeftCol" Grid.Row="1" Width="662" VerticalAlignment="Top">
       <!-- What's new (0.9.12): after an update, this version's release notes as bold leads and the rest, once; Got it puts
            it away until the next version (Ui/MainWindow.WhatsNew.cs, the notes built in by Platform/WhatsNew.cs) -->
-      <Border x:Name="WhatsNewCard" Margin="0,12,0,0" CornerRadius="16" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
+      <Border x:Name="WhatsNewCard" Margin="0,12,0,0" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource GoldLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
         <StackPanel Margin="20,14,20,14">
-          <TextBlock x:Name="WhatsNewTitle" Text="WHAT'S NEW" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource SecGold}"/>
+          <TextBlock x:Name="WhatsNewTitle" Text="WHAT'S NEW" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource SecGold}"/>
           <StackPanel x:Name="WhatsNewList" Margin="0,8,0,0"/>
           <Grid Margin="0,10,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -434,17 +434,17 @@
                   <!-- live: the game is being read now -->
                   <StackPanel x:Name="LiveMark" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="The game is being read now." Background="Transparent">
                     <Ellipse x:Name="RecDot" Width="8" Height="8" Fill="{DynamicResource Mint}" Margin="0,0,8,0" VerticalAlignment="Center">
-                      <Ellipse.Effect><DropShadowEffect Color="#5CE1B5" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/></Ellipse.Effect>
+                      <Ellipse.Effect><DropShadowEffect Color="#3DD68C" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/></Ellipse.Effect>
                     </Ellipse>
                   </StackPanel>
-                  <TextBlock x:Name="ZoneLbl" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" Text="Waiting for the game" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="260"/>
-                  <TextBlock x:Name="ZoneSep" Text=" · " FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="ZoneLbl" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" Text="Waiting for the game" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="260"/>
+                  <TextBlock x:Name="ZoneSep" Text=" · " FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
                   <!-- what and how long ("Open world · 42 min"), in minutes -->
-                  <TextBlock x:Name="TableTitle" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Text="Not reading yet" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="TableTitle" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Medium" Text="Not reading yet" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel x:Name="ChartToggle" Grid.Column="1" Orientation="Horizontal" Cursor="Hand" Background="Transparent" VerticalAlignment="Center" Margin="8,0,0,0" Visibility="Collapsed"
                             ToolTip="The hour since the session started, one sample a minute; the dashed line is your best here.">
-                  <TextBlock Text="chart" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Faint}" VerticalAlignment="Center"/>
+                  <TextBlock Text="chart" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Faint}" VerticalAlignment="Center"/>
                   <Path x:Name="ChartChev" Style="{StaticResource QChev}" Margin="3,0,0,0"/>
                 </StackPanel>
               </Grid>
@@ -454,21 +454,21 @@
               <StackPanel x:Name="ReadingLine" Orientation="Horizontal" Margin="0,3,0,0" Visibility="Collapsed" Background="Transparent" Cursor="Hand"
                           ToolTipService.InitialShowDelay="600" AutomationProperties.Name="Game reading options">
                 <Ellipse x:Name="ReadingDot" Width="6" Height="6" Fill="{DynamicResource Good}" Margin="0,1,6,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="ReadingLbl" Foreground="{DynamicResource Faint}" FontSize="11.5" FontWeight="Bold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="420"/>
+                <TextBlock x:Name="ReadingLbl" Foreground="{DynamicResource Faint}" FontSize="11.5" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="420"/>
               </StackPanel>
               <!-- the hour, big, and its unit -->
               <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Black" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
-                <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
+                <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
               </StackPanel>
               <!-- the chase: this hour against your best here, a bar toward the flag (mint once it is beaten) -->
               <StackPanel x:Name="ChaseBox" Margin="0,8,0,0" Visibility="Collapsed">
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock x:Name="ChaseLbl" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="ChaseLbl" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
                     <Path x:Name="ChaseFlag" Style="{StaticResource QIconStyle}" Data="{StaticResource IcFlag}" Width="13" Height="13" StrokeThickness="2" Stroke="{DynamicResource Gold}"/>
-                    <TextBlock x:Name="ChaseBest" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Gold}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ChaseBest" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                   </StackPanel>
                 </Grid>
                 <Grid Margin="0,6,0,0">
@@ -480,14 +480,14 @@
               </StackPanel>
               <!-- your usual and best here (Compare B, 0.9.3, Ui/MainWindow.Compare.cs): only with Options › Compare zones and runs on -->
               <Border x:Name="UsualBox" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Line}" Margin="0,10,0,0" Padding="0,8,0,0" Background="Transparent" Visibility="Collapsed">
-                <TextBlock x:Name="UsualLine" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" LineHeight="19" TextWrapping="Wrap"/>
+                <TextBlock x:Name="UsualLine" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" LineHeight="19" TextWrapping="Wrap"/>
               </Border>
               <!-- "161 kills · 3.9K a kill" and "best here 1.40M": said by the chips and the chase now; kept for the figures the code reads -->
               <TextBlock x:Name="KvLine" Visibility="Collapsed"/>
               <!-- shown only when something is wrong (FillHealth) -->
               <StackPanel x:Name="HealthLine" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
                 <Path x:Name="HealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="HealthText" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
+                <TextBlock x:Name="HealthText" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
               </StackPanel>
             </StackPanel>
             <!-- the ring (QRing, filled by FillRate), Start run and the three dots under it -->
@@ -498,7 +498,7 @@
                         ToolTip="Times a run. Counting happens anyway; a run is what gets saved and shared."/>
                 <!-- the rest, out of the way: All zones, Clear everything, a missing pickup, the shortcut -->
                 <Button x:Name="MoreBtn" Style="{StaticResource RoundBtn}" Width="30" Height="30" Margin="6,0,0,0" Background="Transparent" BorderBrush="{DynamicResource CardLineHover}" ToolTip="More: goals, all zones, clear everything, report a missing pickup" AutomationProperties.Name="More">
-                  <TextBlock Text="⋯" FontSize="16" FontWeight="Black" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
+                  <TextBlock Text="⋯" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
                 </Button>
               </StackPanel>
             </StackPanel>
@@ -507,16 +507,16 @@
           <StackPanel x:Name="ChartBox" Margin="0,12,0,0" Visibility="Collapsed">
             <Canvas x:Name="RateCanvas" Width="628" Height="96" HorizontalAlignment="Left" ClipToBounds="False">
               <Path x:Name="RateFill" StrokeThickness="0">
-                <Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#99FFC857" Offset="0"/><GradientStop Color="#26FFC857" Offset="0.55"/><GradientStop Color="#00FFC857" Offset="1"/></LinearGradientBrush></Path.Fill>
+                <Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#99F5B942" Offset="0"/><GradientStop Color="#26F5B942" Offset="0.55"/><GradientStop Color="#00F5B942" Offset="1"/></LinearGradientBrush></Path.Fill>
               </Path>
               <Polyline x:Name="RateLinePath" Stroke="{DynamicResource Gold}" StrokeThickness="3" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
               <Ellipse x:Name="RateDot" Width="10" Height="10" Fill="{DynamicResource Gold}" Stroke="{DynamicResource Bg}" StrokeThickness="2" Visibility="Collapsed"/>
               <Line x:Name="BestLinePath" X1="0" X2="628" Stroke="{DynamicResource Lilac}" StrokeThickness="1.6" StrokeDashArray="4,3" Visibility="Collapsed"/>
-              <TextBlock x:Name="BestLineLbl" FontSize="10" FontWeight="ExtraBold" Foreground="{DynamicResource Lilac}" Canvas.Left="4" Visibility="Collapsed"/>
+              <TextBlock x:Name="BestLineLbl" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource Lilac}" Canvas.Left="4" Visibility="Collapsed"/>
             </Canvas>
             <Grid x:Name="RateAxis" Margin="0,2,0,0">
-              <TextBlock x:Name="RateFrom" FontSize="10.5" FontWeight="ExtraBold" Foreground="{DynamicResource Faint}" HorizontalAlignment="Left"/>
-              <TextBlock x:Name="RateTo" FontSize="10.5" FontWeight="ExtraBold" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right" Text="now"/>
+              <TextBlock x:Name="RateFrom" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Faint}" HorizontalAlignment="Left"/>
+              <TextBlock x:Name="RateTo" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right" Text="now"/>
             </Grid>
           </StackPanel>
           <!-- the shortcut that starts and stops a run (UpdateStartHint): in Start run's tooltip and the three dots now -->
@@ -555,9 +555,9 @@
           <Grid x:Name="BagStripHead" Background="Transparent" Cursor="Hand">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcBag}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
-            <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
-            <TextBlock x:Name="BagStripNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
-            <TextBlock x:Name="BagStripTotal" Grid.Column="3" FontSize="13" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <TextBlock x:Name="BagStripNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="BagStripTotal" Grid.Column="3" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center"/>
             <Path x:Name="BagStripChev" Grid.Column="4" Style="{StaticResource QChev}"/>
           </Grid>
           <WrapPanel x:Name="BagStripHost" Margin="0,8,0,-6"/>
@@ -575,8 +575,8 @@
           <Grid x:Name="SessionHead" Margin="0,0,0,8">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcBag}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
-            <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
-            <TextBlock x:Name="FootTotalNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <TextBlock x:Name="FootTotalNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
             <!-- one period at a time: this zone (or the run, or All zones), today, or the week -->
             <Border x:Name="LootScope" Grid.Column="3" Padding="3" CornerRadius="10" Background="{DynamicResource Bg}" VerticalAlignment="Center" Margin="12,0,0,0">
               <StackPanel Orientation="Horizontal">
@@ -586,7 +586,7 @@
                 <Button x:Name="LootWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="24" FontSize="11.5" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of farming on this PC, a bar a day."/>
               </StackPanel>
             </Border>
-            <TextBlock x:Name="FootTotal" Grid.Column="4" FontSize="14" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,0,0" Text=" " MinWidth="40" TextAlignment="Right" Background="Transparent" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000"/>
+            <TextBlock x:Name="FootTotal" Grid.Column="4" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,0,0" Text=" " MinWidth="40" TextAlignment="Right" Background="Transparent" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000"/>
           </Grid>
           <StackPanel x:Name="SessionBody">
             <StackPanel x:Name="LootHost"/>
@@ -607,8 +607,8 @@
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
-                    <TextBlock Grid.Column="1" Text="Next up" FontSize="12" FontWeight="ExtraBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="SlimLink" Grid.Column="2" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="⊕ Set a goal for today"/>
+                    <TextBlock Grid.Column="1" Text="Next up" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SlimLink" Grid.Column="2" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="⊕ Set a goal for today"/>
                   </Grid>
                 </Border>
                 <ControlTemplate.Triggers>
@@ -622,9 +622,9 @@
             <Grid x:Name="GoalsHead" Background="Transparent" Cursor="Hand">
               <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
-              <TextBlock Grid.Column="1" Text="Next up" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="Next up" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
               <!-- "at this pace · 3 more" -->
-              <TextBlock x:Name="GoalsNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="GoalsNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
               <Path x:Name="GoalsChev" Grid.Column="3" Style="{StaticResource QChev}"/>
             </Grid>
             <!-- three bars and no more (Steven, 2026-11-08): the rest is the Quests page -->
@@ -640,8 +640,8 @@
           <Grid Margin="0,0,0,2">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcSpark}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
-            <TextBlock Grid.Column="1" Text="Just dropped" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
-            <TextBlock x:Name="FeedNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Grid.Column="1" Text="Just dropped" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <TextBlock x:Name="FeedNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
           </Grid>
           <Border x:Name="FeedBox" Background="Transparent" ClipToBounds="True"
                   ToolTip="A line wrong? Click it to report it. A pickup that never showed: ⋯ › A pickup is missing." ToolTipService.InitialShowDelay="900">
@@ -650,7 +650,7 @@
               <!-- what the empty feed waits for, from the reader (FillFeedEmpty): the game, the chat, or the first pickup -->
               <!-- and while a new player sets up, the first-session checklist under it (Ui/MainWindow.Onboard.cs, 2026-11-04) -->
               <StackPanel x:Name="FeedEmptyBox">
-                <TextBlock x:Name="FeedEmpty" Style="{StaticResource BodyStyle}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,8,0,4" TextWrapping="Wrap"
+                <TextBlock x:Name="FeedEmpty" Style="{StaticResource BodyStyle}" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Faint}" Margin="0,8,0,4" TextWrapping="Wrap"
                            Text="Ready. Pick something up and it shows here, newest first."/>
                 <StackPanel x:Name="FeedOnboard" Margin="0,6,0,4" Visibility="Collapsed"/>
               </StackPanel>
@@ -672,11 +672,11 @@
               <Path x:Name="WhereIconPath" Style="{StaticResource QIconStyle}" Data="{StaticResource IcPin}" Stroke="{DynamicResource Sky}" StrokeThickness="2"/>
             </Border>
             <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-              <TextBlock x:Name="WhereTitle" FontSize="14" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis"/>
-              <TextBlock x:Name="WhereNote" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="WhereTitle" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="WhereNote" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-              <TextBlock x:Name="WhereSum" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+              <TextBlock x:Name="WhereSum" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
               <Path x:Name="WhereChev" Style="{StaticResource QChev}"/>
             </StackPanel>
           </Grid>
@@ -693,7 +693,7 @@
         <!-- how the count held up against the game's own numbers, as one chip in the look's colours; a click opens the Accuracy
              card over the window (Ui/MainWindow.AccuracyCard.cs). In the footer since 2026-10-28. Since 0.9.0 it shows only
              with Options › Show accuracy details on: the "2 to look at" pill is gone for players (Steven, 2026-10-30) -->
-        <Border x:Name="AccuracyChip" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center" Height="26" CornerRadius="13" BorderThickness="1" Padding="11,0,12,1"
+        <Border x:Name="AccuracyChip" Margin="0,0,12,0" HorizontalAlignment="Left" VerticalAlignment="Center" Height="26" CornerRadius="8" BorderThickness="1" Padding="11,0,12,1"
                 Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="AccuracyChipClick" AutomationProperties.Name="Accuracy"
                 ToolTip="How the count held up against the game's own numbers. Click to see." ToolTipService.InitialShowDelay="400">
           <Border.Style>
@@ -833,8 +833,8 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <!-- the title with what the runs shown made under it: "20 runs · 14 counted · 7.46M made" (0.8.31, the mock) -->
             <StackPanel VerticalAlignment="Bottom">
-              <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="ExtraBold" Foreground="{DynamicResource Ink}" Text="Expeditions and events"/>
-              <TextBlock x:Name="InstWhat" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+              <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Text="Expeditions and events"/>
+              <TextBlock x:Name="InstWhat" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Medium" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
               <!-- Share (0.9.3): the last run as a picture, the same sheet as Farming's (Ui/MainWindow.Share.cs) -->
@@ -852,7 +852,7 @@
               <Button x:Name="InstClearBtn" Content="Clear" Height="30" FontSize="12.5" Padding="10,0" Margin="6,0,0,0" VerticalAlignment="Center" Background="Transparent" BorderBrush="Transparent" Foreground="{DynamicResource Faint}" FontWeight="Normal" ToolTip="Clear the runs shown here" Visibility="Collapsed"/>
               <!-- the rest, out of the way (2026-11-06): Share the last run, every run on its line, Save as CSV, Clear -->
               <Button x:Name="EventsMoreBtn" Style="{StaticResource RoundBtn}" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="More: share the last run, every run on its line, Save as CSV, clear" AutomationProperties.Name="More">
-                <TextBlock Text="⋯" FontSize="17" FontWeight="Black" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
+                <TextBlock Text="⋯" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,-3,0,0"/>
               </Button>
             </StackPanel>
           </Grid>
@@ -870,12 +870,12 @@
       <StackPanel x:Name="QuestsPage" Margin="0,12,0,0" Visibility="Collapsed">
         <Grid Margin="2,0,0,12">
           <StackPanel>
-            <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="ExtraBold" Foreground="{DynamicResource Ink}" Text="Quests"/>
-            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Bold" Margin="0,3,0,0" TextWrapping="Wrap"
+            <TextBlock FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Text="Quests"/>
+            <TextBlock Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="Medium" Margin="0,3,0,0" TextWrapping="Wrap"
                        Text="Each quest is the next step of something you farm. Reach one to earn points (pts): bigger steps and rarer materials earn more."/>
           </StackPanel>
           <!-- the score, one line once there are points; the breakdown on hover -->
-          <TextBlock x:Name="QuestsScoreLine" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,0,0" FontSize="13" FontWeight="ExtraBold" Foreground="{DynamicResource Gold}" Visibility="Collapsed"/>
+          <TextBlock x:Name="QuestsScoreLine" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,0,0" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" Visibility="Collapsed"/>
         </Grid>
         <Border x:Name="QuestsOffCard" Style="{StaticResource QCard}" Padding="20,22,20,22" Visibility="Collapsed">
           <TextBlock Style="{StaticResource BodyStyle}" FontSize="12.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440"
@@ -901,21 +901,21 @@
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="14"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
-                  <TextBlock x:Name="CraftWhere" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Muted}" Text="Crafting" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock x:Name="CraftWhere" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" Text="Crafting" TextTrimming="CharacterEllipsis"/>
                   <!-- the queue under way: "3 of 10 · 2 worked · 1 unsure" (Steven, 2026-11-04: a miss should show while it happens) -->
-                  <TextBlock x:Name="CraftQueueNow" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+                  <TextBlock x:Name="CraftQueueNow" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource Faint}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
                   <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                    <TextBlock x:Name="CraftProfit" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Black" Foreground="{DynamicResource Mint}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
-                    <TextBlock x:Name="CraftProfitNote" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="profit this session"/>
+                    <TextBlock x:Name="CraftProfit" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Mint}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                    <TextBlock x:Name="CraftProfitNote" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="profit this session"/>
                   </StackPanel>
                   <!-- the chase: how many crafts worked, spent against sells for -->
                   <StackPanel x:Name="CraftChaseBox" Margin="0,8,0,0" Visibility="Collapsed">
                     <Grid>
                       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                      <TextBlock x:Name="CraftChaseLbl" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                      <TextBlock x:Name="CraftChaseLbl" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                       <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
                         <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcCheck}" Width="13" Height="13" StrokeThickness="2.4" Stroke="{DynamicResource Mint}"/>
-                        <TextBlock x:Name="CraftChaseBest" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource Mint}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="CraftChaseBest" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Mint}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                       </StackPanel>
                     </Grid>
                     <Grid Margin="0,6,0,0">
@@ -929,12 +929,12 @@
                   <TextBlock x:Name="CraftWhat" Visibility="Collapsed"/>
                   <StackPanel x:Name="CraftHealth" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
                     <Path x:Name="CraftHealthMark" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Good}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M3.5,8.5 L6.5,11.5 L12.5,4.5" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="CraftHealthText" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
+                    <TextBlock x:Name="CraftHealthText" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
                   </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center" MinWidth="120">
                   <Grid x:Name="CraftRingHost" Width="76" Height="76" HorizontalAlignment="Center"/>
-                  <TextBlock x:Name="CraftResetText" FontSize="11.5" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,10,0,0"><Hyperlink x:Name="CraftCsvLink" Style="{StaticResource LinkStyle}" ToolTip="This session's recipes as a file for a spreadsheet: tries, worked, what came out, cost, what it sells for, profit. Nothing is uploaded.">Save as CSV</Hyperlink><Run Text="   ·   " Foreground="{DynamicResource Faint}"/><Hyperlink x:Name="CraftResetLink" Style="{StaticResource LinkStyle}">Start over</Hyperlink></TextBlock>
+                  <TextBlock x:Name="CraftResetText" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,10,0,0"><Hyperlink x:Name="CraftCsvLink" Style="{StaticResource LinkStyle}" ToolTip="This session's recipes as a file for a spreadsheet: tries, worked, what came out, cost, what it sells for, profit. Nothing is uploaded.">Save as CSV</Hyperlink><Run Text="   ·   " Foreground="{DynamicResource Faint}"/><Hyperlink x:Name="CraftResetLink" Style="{StaticResource LinkStyle}">Start over</Hyperlink></TextBlock>
                 </StackPanel>
               </Grid>
             </StackPanel>
@@ -957,12 +957,12 @@
               <Grid Margin="0,0,0,2">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcHammer}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
-                <TextBlock Grid.Column="1" Text="Just crafted" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
-                <TextBlock x:Name="CraftFeedNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="last five · click a line that is wrong"/>
+                <TextBlock Grid.Column="1" Text="Just crafted" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="CraftFeedNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="last five · click a line that is wrong"/>
               </Grid>
               <Grid>
                 <StackPanel x:Name="CraftFeedHost"/>
-                <TextBlock x:Name="CraftEmpty" Style="{StaticResource BodyStyle}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,8,0,4" TextWrapping="Wrap"
+                <TextBlock x:Name="CraftEmpty" Style="{StaticResource BodyStyle}" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Faint}" Margin="0,8,0,4" TextWrapping="Wrap"
                            Text="Open the crafting window and queue a craft. It shows here, newest first."/>
               </Grid>
               <TextBlock x:Name="CraftHint" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" Background="Transparent" Cursor="Hand" HorizontalAlignment="Left" Visibility="Collapsed"
@@ -976,9 +976,9 @@
               <Grid x:Name="CraftSessionHead" Background="Transparent" Cursor="Hand">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcPotion}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
-                <TextBlock Grid.Column="1" Text="Recipes this session" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
-                <TextBlock x:Name="CraftSpentNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
-                <TextBlock x:Name="CraftSpent" Grid.Column="3" FontSize="13" FontWeight="Black" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <TextBlock Grid.Column="1" Text="Recipes this session" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="CraftSpentNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="CraftSpent" Grid.Column="3" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                 <Path x:Name="CraftSessionChev" Grid.Column="4" Style="{StaticResource QChev}"/>
               </Grid>
               <StackPanel x:Name="CraftBody" Margin="0,8,0,0">
@@ -989,7 +989,7 @@
                     <ItemsControl x:Name="CraftRows" ItemTemplate="{StaticResource CraftRowTemplate}"/>
                   </ScrollViewer>
                 </StackPanel>
-                <TextBlock x:Name="CraftMadeNote" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+                <TextBlock x:Name="CraftMadeNote" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource Faint}" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
               </StackPanel>
             </StackPanel>
           </Border>
@@ -1000,8 +1000,8 @@
               <Grid x:Name="BestHead" Background="Transparent" Cursor="Hand">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcTrophy}" Stroke="{DynamicResource Lilac}" StrokeThickness="2" Margin="0,0,8,0"/>
-                <TextBlock Grid.Column="1" Text="Best crafts today" FontSize="12" FontWeight="ExtraBold" VerticalAlignment="Center"/>
-                <TextBlock x:Name="BestNote" Grid.Column="2" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Column="1" Text="Best crafts today" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="BestNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
                 <Path x:Name="BestChev" Grid.Column="3" Style="{StaticResource QChev}"/>
               </Grid>
               <StackPanel x:Name="BestCraftsHost" Margin="0,8,0,0"/>
@@ -1009,7 +1009,7 @@
           </Border>
 
           <!-- the recipes come from MetaBot.GG, whose terms ask for a link to the page they came from -->
-          <TextBlock x:Name="CraftCredit" Foreground="{DynamicResource Faint}" FontSize="11" FontWeight="Bold" Margin="4,8,4,0" TextWrapping="Wrap">
+          <TextBlock x:Name="CraftCredit" Foreground="{DynamicResource Faint}" FontSize="11" FontWeight="Medium" Margin="4,8,4,0" TextWrapping="Wrap">
             <Run x:Name="CraftNote" Text="Lowest Market price on your server"/><Run Text="  ·  recipes from "/><Hyperlink x:Name="CraftCreditLink" Style="{StaticResource LinkStyle}">MetaBot.GG</Hyperlink>
           </TextBlock>
         </StackPanel>
@@ -1022,29 +1022,29 @@
     <!-- the Undo bar (Ui/MainWindow.Undo.cs): for 8 s after clearing the tables or the runs, starting crafting over,
          removing a run or stopping a run from this window. The game-tooltip look, the same in every look of the window;
          a gold line runs down the seconds left. Ctrl+Z works too. -->
-    <Border x:Name="UndoBar" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="622" Margin="20,0,0,10" CornerRadius="6" BorderThickness="1" BorderBrush="#3C4466" Visibility="Collapsed">
+    <Border x:Name="UndoBar" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="622" Margin="20,0,0,10" CornerRadius="6" BorderThickness="1" BorderBrush="#2E3346" Visibility="Collapsed">
       <Border.Background>
-        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#151A2C" Offset="0"/><GradientStop Color="#0C0F1C" Offset="1"/></LinearGradientBrush>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#171920" Offset="0"/><GradientStop Color="#0E0F14" Offset="1"/></LinearGradientBrush>
       </Border.Background>
       <Border.Effect><DropShadowEffect BlurRadius="22" ShadowDepth="4" Opacity="0.55"/></Border.Effect>
       <Grid>
         <Grid Height="44" Margin="16,0,8,0">
           <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <!-- a check in a gold-framed slot -->
-          <Border Width="22" Height="22" CornerRadius="4" BorderThickness="1" BorderBrush="#8CF8D598" Background="#0B0E1E" VerticalAlignment="Center" Margin="0,0,12,0">
-            <Path Data="M5,12 L10,17 L19,7" Stroke="#F8D598" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Margin="5"/>
+          <Border Width="22" Height="22" CornerRadius="4" BorderThickness="1" BorderBrush="#8CFFD27A" Background="#0F1014" VerticalAlignment="Center" Margin="0,0,12,0">
+            <Path Data="M5,12 L10,17 L19,7" Stroke="#FFD27A" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Margin="5"/>
           </Border>
-          <TextBlock x:Name="UndoText" Grid.Column="1" Foreground="#EEECF6" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-          <Button x:Name="UndoBtn" Grid.Column="2" Content="Undo" Height="30" FontSize="13" FontWeight="SemiBold" Margin="12,0,0,0" VerticalAlignment="Center"
-                  Foreground="#F8D598" ToolTip="Put it back (Ctrl+Z)" AutomationProperties.Name="Undo">
+          <TextBlock x:Name="UndoText" Grid.Column="1" Foreground="#EDEFF5" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          <Button x:Name="UndoBtn" Grid.Column="2" Content="Undo" Height="30" FontSize="13" FontWeight="Normal" Margin="12,0,0,0" VerticalAlignment="Center"
+                  Foreground="#FFD27A" ToolTip="Put it back (Ctrl+Z)" AutomationProperties.Name="Undo">
             <!-- its own colours: the look's hover brushes are made for the window's cards, not this dark bar -->
             <Button.Template>
               <ControlTemplate TargetType="Button">
-                <Border x:Name="b" Background="#14F8D598" BorderBrush="#80F8D598" BorderThickness="1" CornerRadius="8" Padding="16,0">
+                <Border x:Name="b" Background="#14FFD27A" BorderBrush="#80FFD27A" BorderThickness="1" CornerRadius="8" Padding="16,0">
                   <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <ControlTemplate.Triggers>
-                  <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#33F8D598"/></Trigger>
+                  <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#33FFD27A"/></Trigger>
                   <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.8"/></Trigger>
                 </ControlTemplate.Triggers>
               </ControlTemplate>
@@ -1052,7 +1052,7 @@
           </Button>
         </Grid>
         <!-- the time left: a gold line along the bottom that shortens to nothing over the 8 seconds -->
-        <Border x:Name="UndoTime" Height="2" VerticalAlignment="Bottom" Margin="6,0,6,1" Background="#F8D598" Opacity="0.7" RenderTransformOrigin="0,0.5">
+        <Border x:Name="UndoTime" Height="2" VerticalAlignment="Bottom" Margin="6,0,6,1" Background="#FFD27A" Opacity="0.7" RenderTransformOrigin="0,0.5">
           <Border.RenderTransform><ScaleTransform x:Name="UndoTimeScale" ScaleX="1"/></Border.RenderTransform>
         </Border>
       </Grid>
@@ -1062,18 +1062,18 @@
          centre of the left column, over the page so the window never changes size. The Undo bar's look, the same in every
          look of the window; it fades in, holds a moment and fades out. Never takes a click or the focus. -->
     <Border x:Name="Toast" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="662" Margin="0,0,0,14" IsHitTestVisible="False" Focusable="False" Visibility="Collapsed">
-      <Border x:Name="ToastCard" HorizontalAlignment="Center" MaxWidth="560" CornerRadius="6" BorderThickness="1" BorderBrush="#3C4466" Padding="12,9,16,9">
+      <Border x:Name="ToastCard" HorizontalAlignment="Center" MaxWidth="560" CornerRadius="6" BorderThickness="1" BorderBrush="#2E3346" Padding="12,9,16,9">
         <Border.Background>
-          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#151A2C" Offset="0"/><GradientStop Color="#0C0F1C" Offset="1"/></LinearGradientBrush>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#171920" Offset="0"/><GradientStop Color="#0E0F14" Offset="1"/></LinearGradientBrush>
         </Border.Background>
         <Border.Effect><DropShadowEffect BlurRadius="22" ShadowDepth="4" Opacity="0.55"/></Border.Effect>
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
           <!-- a check in a gold-framed slot, as on the Undo bar -->
-          <Border Width="20" Height="20" CornerRadius="4" BorderThickness="1" BorderBrush="#8CF8D598" Background="#0B0E1E" VerticalAlignment="Top" Margin="0,0,10,0">
-            <Path Data="M5,12 L10,17 L19,7" Stroke="#F8D598" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Margin="4.5"/>
+          <Border Width="20" Height="20" CornerRadius="4" BorderThickness="1" BorderBrush="#8CFFD27A" Background="#0F1014" VerticalAlignment="Top" Margin="0,0,10,0">
+            <Path Data="M5,12 L10,17 L19,7" Stroke="#FFD27A" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Margin="4.5"/>
           </Border>
-          <TextBlock x:Name="ToastText" Grid.Column="1" Foreground="#EEECF6" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" LineHeight="19"/>
+          <TextBlock x:Name="ToastText" Grid.Column="1" Foreground="#EDEFF5" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" LineHeight="19"/>
         </Grid>
       </Border>
     </Border>
