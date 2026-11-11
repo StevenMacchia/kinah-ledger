@@ -27,6 +27,8 @@ public sealed class RareGate
     /// </summary>
     public static bool IsRare(ItemDictionary items, long id, bool bossNow)
     {
+        // a coveted find from any node (Poko's Skin Bundle): bound and unpriced, but rare all the same (Steven, 2026-11-11)
+        if (id != 0 && GatheringCatalog.Find(items.NameOf(id)) is { AnyNode: true }) return true;
         if (id <= 0) return false;
         bool gear = items.IsGear(id);
         if (bossNow && gear) return true;

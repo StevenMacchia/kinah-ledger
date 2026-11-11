@@ -902,7 +902,7 @@ public partial class MainWindow : Window
                 var gtips = new List<string>();
                 if (e.Unconfirmed(_items.IdOf(name)) is int gu && gu > 0) gtips.Add($"{gu} of these came from the loot list beside your character or a partly hidden name, not a clear chat line.");
                 gathered.Add(new DropRow(name, total.ToString("N0"), st.Nodes > 0 ? Pct(total / (double)st.Nodes) : "", Whole(total / hours), Grade: bySkillGrade.GetValueOrDefault(name, ""), Icon: Slot(_items.IdOf(name)), Initial: InitialOf(name), Price: PriceCell(name).Text, PriceTone: PriceCell(name).Tone, PriceTip: PriceCell(name).Tip, Value: worth.GetValueOrDefault(name, ""),
-                    Sub: rep ? "Reported · not sent to the site" : "Gathering material", Tone: rep ? "Warn" : "", Report: name, Reported: rep, Tip: string.Join("\n\n", gtips), Worth: worthN.GetValueOrDefault(name)));
+                    Sub: rep ? "Reported · not sent to the site" : skill == GatherFamily.Find ? "Rare find · from any node" : "Gathering material", Tone: rep ? "Warn" : "", Report: name, Reported: rep, Tip: string.Join("\n\n", gtips), Worth: worthN.GetValueOrDefault(name)));
             }
         }
         // Kinah by enemy, a best guess: most Kinah first. The zone goes under the name when the view spans more than one.

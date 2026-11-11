@@ -84,6 +84,7 @@
   <SolidColorBrush x:Key="GradeLegend" Color="#5AA6FF"/>
   <SolidColorBrush x:Key="GradeUnique" Color="#F3D35E"/>
   <SolidColorBrush x:Key="GradeEpic" Color="#B48BFF"/>
+  <SolidColorBrush x:Key="GradeSpecial" Color="#3FD3C6"/>
   <SolidColorBrush x:Key="BtnPrimaryInk" Color="#1D1300"/>
   <LinearGradientBrush x:Key="BtnPrimary" StartPoint="0,0" EndPoint="0,1">
     <GradientStop Color="#F7C257" Offset="0"/><GradientStop Color="#F2B23A" Offset="1"/>

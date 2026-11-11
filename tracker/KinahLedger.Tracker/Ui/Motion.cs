@@ -217,7 +217,7 @@ public static class Motion
     }
 
     /// <summary>The grades that glow when they land.</summary>
-    public static bool Glows(string? grade) => grade is "Legend" or "Unique" or "Epic";
+    public static bool Glows(string? grade) => grade is "Legend" or "Unique" or "Epic" or "Special";
 
     /// <summary>One slot landing: a new one grows in from 90% as it fades in, more of one swells 8% and settles; a rare one glows.</summary>
     internal static void Land(FrameworkElement el, bool more, string? grade)

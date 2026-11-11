@@ -100,7 +100,7 @@ public static class Skins
                 S("Good", "#58D39A"); S("Warn", "#F3A65B"); S("Bad", "#FF7A86");
                 S("RowHead", "#0C1124"); S("RowHover", "#161C3A"); S("Mark", "#15294A"); S("Slot", "#070A18");
                 R("HeroBg", "#1C2A5E", "#0E1328", "#0E1328"); S("HeroLine", "#55F2C97D"); S("Inset", "#38000000"); C("SlotColor", "#070A18");
-                S("CommonInk", "#D6DCF0"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#C8A8FF"); S("BtnPrimaryInk", "#2B1B00");
+                S("CommonInk", "#D6DCF0"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#C8A8FF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#2B1B00");
                 G("BtnPrimary", "#F2C97D", "#D9A94A"); G("BtnPrimaryHover", "#F8D68F", "#E3B457"); G("BtnStop", "#FF7A86", "#C9505C");
                 break;
             case "daylight":
@@ -115,7 +115,7 @@ public static class Skins
                 S("RowHead", "#E8EDF4"); S("RowHover", "#F2F5F9"); S("Mark", "#E3EBF5"); S("Slot", "#E9EEF5");
                 G("BtnPrimary", "#F6CB72", "#D9952F"); G("BtnPrimaryHover", "#F9D78E", "#E0A03C"); G("BtnStop", "#F6CB72", "#D9952F");
                 R("HeroBg", "#FFF0D2", "#FFFFFF", "#FFFFFF"); S("HeroLine", "#66D9952F"); S("Inset", "#F4F6FA"); C("SlotColor", "#F1F4F9");
-                S("CommonInk", "#2A3444"); S("GradeRare", "#1E8E57"); S("GradeLegend", "#1F6FCB"); S("GradeUnique", "#8F6F06"); S("GradeEpic", "#6E46C9"); S("BtnPrimaryInk", "#261702");
+                S("CommonInk", "#2A3444"); S("GradeRare", "#1E8E57"); S("GradeLegend", "#1F6FCB"); S("GradeUnique", "#8F6F06"); S("GradeEpic", "#6E46C9"); S("GradeSpecial", "#0E8C83"); S("BtnPrimaryInk", "#261702");
                 break;
             default:   // night, the v2 palette since 2026-11-10 (the site's kl-v2.css tokens): near-black neutral, gold the one
                        // accent, mint and coral for up and down, the game's grade colours; the old candy roles (sky, lilac, lime) are
@@ -133,7 +133,7 @@ public static class Skins
                 S("Good", "#3DD68C"); S("Warn", "#F7A072"); S("Bad", "#F26D6D"); S("Slot", "#0D0F14");
                 S("RowHead", "#0F1117"); S("RowHover", "#171A22"); S("Mark", "#1A1D27");
                 R("HeroBg", "#171A23", "#111319", "#111319"); S("HeroLine", "#2E3346"); S("Inset", "#38000000"); C("SlotColor", "#0D0F14");
-                S("CommonInk", "#D9DDE8"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B48BFF"); S("BtnPrimaryInk", "#1D1300");
+                S("CommonInk", "#D9DDE8"); S("GradeRare", "#62D98B"); S("GradeLegend", "#5AA6FF"); S("GradeUnique", "#F3D35E"); S("GradeEpic", "#B48BFF"); S("GradeSpecial", "#3FD3C6"); S("BtnPrimaryInk", "#1D1300");
                 G("BtnPrimary", "#F7C257", "#F2B23A"); G("BtnPrimaryHover", "#FFD27A", "#FBC966"); G("BtnStop", "#F26D6D", "#E35D5D");
                 break;
         }
