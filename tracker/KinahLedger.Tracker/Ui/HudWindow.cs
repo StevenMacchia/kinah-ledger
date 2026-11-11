@@ -428,7 +428,11 @@ public sealed class HudWindow : Window
     /// blank loot left "loot / hr" standing alone), and the first one showing sits at the panel's edge.
     /// </summary>
     /// <summary>A render of the motion (KL_MOTION_AT with ui-shot): the Ticker's effects held at that point (Ui/HudTicker.Motion.cs).</summary>
-    internal void MotionFrameForRender(IReadOnlyDictionary<string, string> values) => (_look as HudTicker)?.MotionFrame(values);
+    internal void MotionFrameForRender(IReadOnlyDictionary<string, string> values)
+    {
+        if (_look is HudTicker t) t.MotionFrame(values);
+        else if (_look is HudCard c) c.MotionFrame(values);
+    }
 
     public void Update(IReadOnlyDictionary<string, string> values)
     {
