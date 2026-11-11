@@ -1384,6 +1384,7 @@ public sealed partial class TrackerSession
             }
         }
         Reread.NoteFirstSeen(_firstSeen, lines, now);
+        NoteSeenItems(lines);
         // every Kina amount this read shows, counted or not: a rise of the counter no line claims is named after them
         if (KinaWitnessOn(now)) foreach (var l in lines) if (_parser.Meaning(l) is { Exact: true } km && km.Key.StartsWith("k:") && long.TryParse(km.Key[2..], out var ka)) _kina.Seen(ka, l.Trim(), now);
         Reread.Remember(_recent, lines, now);
@@ -1415,7 +1416,7 @@ public sealed partial class TrackerSession
                 // inside the run, or (a run being left) landing on the Farming page, where the open world's checks apply
                 bool inRun = InRunFor(parsed);
                 // an achievement's reward or a box's contents is never a drop (Steven, 2026-10-23)
-                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0, Reread.FirstSeen(raw, _firstSeen), parsed is PetCrystal pcr ? pcr.Name : null, inRun)) : null;
+                var why = (parsed is ItemAcquired || parsed is PetCrystal) && !made ? (batchAchievement ? "an achievement's reward" : RewardWhy(parsed.Time, parsed is ItemAcquired bx && BoxName.IsMatch(_items.NameOf(bx.ItemId)), parsed is ItemAcquired ri ? ri.ItemId : 0, SeenFirst(raw, now), parsed is PetCrystal pcr ? pcr.Name : null, inRun)) : null;
                 // ...except a gather the panel or its bar just produced (GatherAttempts)
                 if (parsed is ItemAcquired gx) why = NotForGather(why, gx.ItemId, gx.Count, parsed.Time);
                 // the loot list beside the character shows a row of it: a pickup off the ground, whatever the player's inventory
@@ -3677,14 +3678,34 @@ public sealed partial class TrackerSession
     /// <summary>The end of a window a line opens (an inventory line, a box): <see cref="RewardWindowSeconds"/> after the line first showed (now when it shows for the first time).</summary>
     DateTime WindowFrom(string line, DateTime now) => (SeenFirst(line, now) is DateTime f && f <= now ? f : now).AddSeconds(RewardWindowSeconds);
     /// <summary>
-    /// When this line was first on screen, for NewLine and WindowFrom: not counting a line off screen for ten minutes, nor
-    /// another of the inventory's lines ("Retrieved item(s) from Storage." is not "Stored item(s) in Storage." read again;
-    /// 2026-11-10 15:06, PickupCheck.InventoryKind). A line whose verb didn't read matches any.
+    /// When this line was first on screen, for NewLine, WindowFrom and RewardWhy: not counting a line off screen for ten
+    /// minutes, nor a line the loose match takes for this one that says something else:
+    /// - another of the inventory's lines ("Retrieved item(s) from Storage." is not "Stored item(s) in Storage." read again;
+    ///   2026-11-10 15:06, PickupCheck.InventoryKind);
+    /// - another room or party line ("Left Fire Temple Dungeon room." is not "Joined Fire Temple Dungeon room.";
+    ///   RoomWitness.RoomKind);
+    /// - another item, each read clean ("Earth Boots acquired." is not "Earth Cloak acquired.").
+    /// A line whose verb or item didn't read matches any, as a misread of it.
     /// </summary>
     DateTime? SeenFirst(string line, DateTime now)
     {
-        var kind = PickupCheck.InventoryKind(line);
-        return Reread.FirstSeen(line, _firstSeen, now, kind == null ? null : key => PickupCheck.InventoryKind(key) is not { } k2 || k2 == kind);
+        var inv = PickupCheck.InventoryKind(line);
+        var room = RoomWitness.RoomKind(line) != null;
+        var item = ItemRead(line);
+        if (inv == null && !room && item.Length == 0) return Reread.FirstSeen(line, _firstSeen, now);
+        return Reread.FirstSeen(line, _firstSeen, now, key =>
+            !(inv != null && PickupCheck.InventoryKind(key) is { } k2 && k2 != inv)
+            && !(room && RoomWitness.SaysOther(line, key))
+            && !(item.Length > 0 && _seenItem.TryGetValue(key, out var i2) && i2.Length > 0 && !string.Equals(i2, item, StringComparison.OrdinalIgnoreCase)));
+    }
+    /// <summary>The item a line names, read clean ("" for any other line, or one read with a guess).</summary>
+    string ItemRead(string line) => _parser.Meaning(line) is { Exact: true } m && m.Key.StartsWith("i:") ? CountWatch.ItemOf(m.Key) : "";
+    // the item each first-seen key was read as (ItemRead), so SeenFirst can tell two items apart by their keys
+    readonly Dictionary<string, string> _seenItem = new();
+    void NoteSeenItems(IReadOnlyList<string> lines)
+    {
+        foreach (var l in lines) { var k = Reread.KeyOf(l); if (k.Length > 0 && !_seenItem.ContainsKey(k)) _seenItem[k] = ItemRead(l); }
+        if (_seenItem.Count > _firstSeen.Count + 200) foreach (var k in _seenItem.Keys.Where(k => !_firstSeen.ContainsKey(k)).ToList()) _seenItem.Remove(k);
     }
     // reads that couldn't be lined up, in a row: since when, the lines seen before them, what was counted meanwhile
     DateTime? _garbledSince; HashSet<string> _beforeGarbled = new(); readonly List<string> _countedGarbled = new();
