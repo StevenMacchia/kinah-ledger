@@ -105,6 +105,7 @@ public partial class MainWindow : Window
         _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.ManualChat ? _region : null, _prefs.Server) { RegionKey = _prefs.Region, Server = _prefs.Server };
         // another character in the world: close the run and start fresh (MainWindow.Shell.cs)
         _watcher.CharacterChanged += why => Dispatcher.BeginInvoke(() => { _ = StartFresh(why.Contains("character screen") ? "Logged off" : "Another character"); });
+        InitCharacters();   // which character: the class icon between the health and mana bars (Ui/MainWindow.Characters.cs)
         // the Market is read for this PC whatever the Share switch says; only sending follows it (MarketCapture.Sharing)
         _watcher.Market.Enabled = settings.Market.Enabled;
         Icon = Native.AppIconSource();
@@ -138,7 +139,7 @@ public partial class MainWindow : Window
         // everything that can be set is in the Options window, so the ledger never moves or grows for it
         OptionsBtn.Click += (_, _) => OpenOptions();
         SiteBtn.Click += (_, _) => Open(SiteUrl);
-        ServerChip.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Server);
+        ServerChip.MouseLeftButtonUp += (_, _) => ShowCharacterMenu();   // the character and the server (Ui/MainWindow.Characters.cs)
         FixLink.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
         ReadingLine.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Reading);   // the reading line and its dot (0.9.10)
         Version.Text = "v" + Upload.RunPayload.AppVersion;
@@ -1661,8 +1662,8 @@ public partial class MainWindow : Window
     {
         bool ok = HasServer;
         // on the Welcome card Options is out of reach, so the way to a server is the card's own chips
-        ServerChip.Text = Server is { } s ? $"{s.Label} · {s.Region.Name}" : _welcome ? "No server chosen · pick yours below" : "No server chosen · pick one in Options";
-        ServerChip.ToolTip = _welcome ? "Pick your server below." : "Your server. Change it in Options.";
+        // the character counted for, then the server (Ui/MainWindow.Characters.cs)
+        FillServerChip(Server is { } s ? $"{s.Label} · {s.Region.Name}" : _welcome ? "No server chosen · pick yours below" : "No server chosen · pick one in Options");
         ServerChip.Foreground = B(ok ? "Muted" : "Warn");
         if (!Farming) StartBtn.IsEnabled = ok;
     }
@@ -1921,6 +1922,7 @@ public partial class MainWindow : Window
     public void ShowDemo(string kind = "Open world", UiState? state = null)
     {
         _demo = true; Motion.Still = true; _uiState = state;
+        _demoCharacter = state?.Character ?? "Character 1";   // the header's character (Ui/MainWindow.Characters.cs)
         bool market = kind == "Market";
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false;
         ZoneLbl.Text = "Western Cantas Valley";

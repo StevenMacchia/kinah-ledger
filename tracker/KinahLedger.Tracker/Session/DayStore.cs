@@ -10,7 +10,7 @@ namespace KinahLedger.Session;
 /// </summary>
 public static class DayStore
 {
-    public static string PathFor() => Path.Combine(CrashLog.Dir, "today.json");
+    public static string PathFor() => Path.Combine(Characters.DataDir, "today.json");
 
     /// <summary>"2026-10-27": the local calendar day of <paramref name="local"/>.</summary>
     public static string DayOf(DateTime local) => local.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);

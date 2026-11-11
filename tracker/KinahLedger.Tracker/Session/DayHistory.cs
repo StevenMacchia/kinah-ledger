@@ -81,7 +81,7 @@ public static class DayHistory
     /// <summary>Days kept in days.json, today included.</summary>
     public const int KeepDays = 60;
 
-    public static string PathFor() => Path.Combine(CrashLog.Dir, "days.json");
+    public static string PathFor() => Path.Combine(Characters.DataDir, "days.json");
 
     /// <summary>days.json beside a today.json at <paramref name="todayPath"/> (a test's scratch folder).</summary>
     public static string PathBeside(string todayPath) => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(todayPath))!, "days.json");

@@ -68,6 +68,52 @@ public sealed class GameWatcher
     /// <summary>Another character is in the world (the reason, for the status line); the window closes the run and starts fresh.</summary>
     public event Action<string>? CharacterChanged;
     public int BalanceEverySec { get; set; } = 3;
+
+    /* ---------------- which character (Session/Characters.cs) ---------------- */
+
+    /// <summary>The class icon between the health and mana bars, read every <see cref="BadgeEverySec"/>; which character it is.</summary>
+    public CharacterSpotter Spotter { get; } = new();
+    /// <summary>A steady icon that is not the character counted for now (another one, or one never seen); the window switches.</summary>
+    public event Action<CharacterSpotter.Verdict>? CharacterSeen;
+    public int BadgeEverySec { get; set; } = 5;
+    DateTime _badgeAt = DateTime.MinValue;
+    volatile bool _characterBusy;
+    /// <summary>When the medallion was last read (the icon is working on this screen); null before.</summary>
+    public DateTime? BadgeSeenAt { get; private set; }
+
+    /// <summary>The window is done with the last <see cref="CharacterSeen"/>: the icon is watched afresh.</summary>
+    public void CharacterHandled() { Spotter.Clear(); _characterBusy = false; }
+
+    void TickBadge(Rectangle game)
+    {
+        var now = DateTime.UtcNow;
+        if ((now - _badgeAt).TotalSeconds < BadgeEverySec || _characterBusy || Update.RemoteConfig.Current.Off("characters")) return;
+        _badgeAt = now;
+        var band = CharacterBadge.Band(game);
+        if ((WindowCapture.Active ? null : GameWindow.Covered(band, _settings.ProcessHints)) != null) return;
+        string? print = null;
+        using (var bmp = ScreenReader.Capture(band)) print = CharacterBadge.Read(bmp, game.Height)?.Print;
+        if (print != null) BadgeSeenAt = now;
+        var v = Spotter.Observe(now, print, Server, Characters.All, Characters.Current?.Id);
+        if (v is not { } verdict) return;
+        if (verdict.Kind == CharacterSpotter.Kind.Same) { Characters.Learn(verdict.Character!, verdict.Print); return; }
+        _characterBusy = true;
+        CrashLog.Note(verdict.Kind == CharacterSpotter.Kind.New ? "character: a class icon not seen before is in the world"
+            : $"character: {Characters.Label(verdict.Character!)}'s class icon is in the world (counting for {(Characters.Current is { } cur ? Characters.Label(cur) : "nobody yet")})");
+        try { CharacterSeen?.Invoke(verdict); } catch (Exception ex) { CrashLog.Write("character seen", ex); _characterBusy = false; }
+    }
+
+    /// <summary>Today's count written to the current character's today.json (before a switch).</summary>
+    public void SaveDay() { try { if (DayView.Events > 0 || File.Exists(DayStore.PathFor())) DayStore.Save(DayView, _dayKey); } catch (Exception ex) { CrashLog.Write("today save", ex); } }
+
+    /// <summary>Today's count of the character counted for now (after a switch), read from its today.json.</summary>
+    public void LoadDay()
+    {
+        var d = DayStore.Load(_items); d.SetZone(Chat?.Zone);
+        DayView = d; _dayKey = DayStore.Today; _daySavedAt = DateTime.UtcNow;
+        if (Chat != null) Chat.DayView = d;
+        try { DayHistory.Seed(_items); } catch (Exception ex) { CrashLog.Write("days seed", ex); }
+    }
     DateTime _balanceTickAt = DateTime.MinValue;
     DateTime? _balanceApplied;
 
@@ -141,6 +187,14 @@ public sealed class GameWatcher
         // another character in the world: the run closes and counting starts fresh (RelogDetector, MainWindow.StartFresh)
         if (_relog.Observe(DateTime.UtcNow, Balance.Tracker.CounterSeen, Balance.Tracker.Balance, Balance.Tracker.BalanceAt, c.ZoneSeenAt) is { } switched)
         {
+            // the class icon is read on this screen: it says which character this is (a switch it sees, the window makes);
+            // the counter alone took a loading screen with Kinah paid out in it for another character (reads.log
+            // 2026-11-11 09:53 to 10:38: six "switches" 1 to 200,000 Kinah apart, the balance climbing all along)
+            if (BadgeSeenAt is { } seen && (DateTime.UtcNow - seen).TotalMinutes < 30 && !Update.RemoteConfig.Current.Off("characters"))
+            {
+                CrashLog.Note("the Kinah counter changed while the game's interface was gone (" + switched + "); the class icon says which character it is");
+                return;
+            }
             CrashLog.Note("character switch: " + switched);
             try { CharacterChanged?.Invoke(switched); } catch (Exception ex) { CrashLog.Write("character switch", ex); }
             return;   // the old character's balance mustn't reach the new count
@@ -322,6 +376,7 @@ public sealed class GameWatcher
                     if (Market.Enabled && !Update.RemoteConfig.Current.Off("market") && MarketInView()) await Market.TickAsync(game, _settings.Ocr.Scale);
                     if (Market.Enabled && Chat is { } mc && (DateTime.UtcNow - mc.MarketDialogAt).TotalSeconds < 5) Market.MissedOpening(game);
                     try { await TickBalanceAsync(game); } catch (Exception ex) { CrashLog.Write("balance", ex); }
+                    try { TickBadge(game); } catch (Exception ex) { CrashLog.Write("class icon", ex); }
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
                 await FlushPassiveAsync(false);

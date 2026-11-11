@@ -1,6 +1,7 @@
 {
-  "note": "A 41-character place name and a 62-character item name, with Traditional Chinese and Korean item names beside them. The item dictionary (data/tw-items.json) is en-US only, so the long and the CJK names are made up here and get no icon; the point is the band, the dropdown, the hover card and the slot badges with names that long.",
+  "note": "A 41-character place name and a 62-character item name, with Traditional Chinese and Korean item names beside them. The item dictionary (data/tw-items.json) is en-US only, so the long and the CJK names are made up here and get no icon; the point is the band, the dropdown, the hover card and the slot badges with names that long; the header with a 23-letter character name.",
   "live": "The Forgotten Sanctuary of the Silvermoon",
+  "character": "Silvermoonwhisperer1234",
   "prices": { "Spiritstone Powder": 3330, "Grand Master's Everlasting Orichalcum Breastplate of the Abyss": 4120000, "精煉石碎片 (綁定)": 2200, "정제석 조각": 1800 },
   "runs": [
     { "zone": "The Forgotten Sanctuary of the Silvermoon", "kind": "Expedition", "day": 0, "time": "13:10", "secs": 1265, "kinah": 1402000,
