@@ -221,8 +221,22 @@ internal static class Program
                     var gband = new System.Drawing.Rectangle(gf.Width / 4, 0, gf.Width / 2, gf.Height / 3);
                     using var gbb = gf.Clone(gband, gf.PixelFormat);
                     var glines = ScreenReader.ReadBoxesAsync(gbb, gband.Location, 1).GetAwaiter().GetResult();
-                    var grc = glines.First(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
-                    gs.ApplyGrid(RewardGrid.ReadAsync(gf, grc.Box.Bottom + (int)(gf.Height * 0.016)).GetAwaiter().GetResult(), g0.AddSeconds(3));
+                    // --top: the grid's first row in the picture, when "Reward collected." isn't read from it
+                    int gtop = opts.TryGetValue("top", out var gt) ? int.Parse(gt) : glines.First(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase)).Box.Bottom + (int)(gf.Height * 0.016);
+                    // --profile: each line around the estimate, its eight boxes' top and bottom edges (where the first row is)
+                    if (opts.ContainsKey("profile"))
+                    {
+                        int ph = gf.Height, ps = (int)Math.Round(RewardGrid.SlotH * ph), pp = (int)Math.Round(RewardGrid.PitchH * ph), px = gf.Width / 2 - 4 * pp + (pp - ps) / 2;
+                        for (int y = gtop - 40; y <= gtop + 40; y += 2)
+                        {
+                            double te = 0, be = 0;
+                            for (int c = 0; c < 8; c++) { var bx = new System.Drawing.Rectangle(px + c * pp, y, ps, ps); te += RewardGrid.TopEdge(gf, bx); be += RewardGrid.BottomEdge(gf, bx); }
+                            Console.WriteLine($"  y {y}: top {te / 8:0} bottom {be / 8:0}");
+                        }
+                        for (int c = 0; c < 8; c++) { var bx = new System.Drawing.Rectangle(px + c * pp, gtop, ps, ps); Console.WriteLine($"  box {c} at y {gtop}: border {RewardGrid.Border(gf, bx):0} top {RewardGrid.TopEdge(gf, bx):0} bottom {RewardGrid.BottomEdge(gf, bx):0} flat {RewardGrid.Flat(gf, bx)} contrast {RewardGrid.Contrast(gf, bx):0.00}"); }
+                        return 0;
+                    }
+                    gs.ApplyGrid(RewardGrid.ReadAsync(gf, gtop).GetAwaiter().GetResult(), g0.AddSeconds(3));
                     var grun = gs.Instances.Snapshot().LastOrDefault();
                     Console.WriteLine($"run {grun?.Zone}: {grun?.Kinah:N0} Kinah; " + string.Join(", ", (grun?.Items ?? new()).Select(kv => $"{gi.NameOf(kv.Key)} x{kv.Value}")));
                     foreach (var l in File.ReadAllLines(Path.Combine(CrashLog.DirOverride, "reads.log")).Where(l => l.Contains("reward table"))) Console.WriteLine("  " + l);

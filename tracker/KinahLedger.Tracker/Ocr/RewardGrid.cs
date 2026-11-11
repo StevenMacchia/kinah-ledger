@@ -288,20 +288,35 @@ public static class RewardGrid
         // on dark earth 37, blue slots over the water 20 to 38, the boxes past the grid 0 to 30). So: the last row is the
         // lowest with a clear slot, every row above it is full, and the last row runs to its last clear slot
         var clearAt = new int[6];   // per row: one past its last clear slot, 0 when none
+        var strongRow = new bool[6];   // per row: seven boxes or more stand out, a row of slots beyond doubt
         int lastRow = -1;
         for (int row = 0; row < 6; row++)
         {
             int y = top + row * p;
             if (y + s + 4 > h) break;
+            // a box that stands out after three empty ones or more must look like a slot outright, not just stand out: over
+            // Urugugu's planked floor the boxes past a row of three scored 24 to 37 and one 40 (Steven, 2026-11-11 17:29: the
+            // row of three read as eight and two rows of floor under it, 27 slots read as 34 and 39, "like gold bows")
+            int empty = 0, standOut = 0;
             for (int col = 0; col < 8; col++)
-                if (Border(frame, new Rectangle(xb + col * p, y, s, s)) >= BorderMin) clearAt[row] = col + 1;
+            {
+                var box = new Rectangle(xb + col * p, y, s, s);
+                bool border = Border(frame, box) >= BorderMin;
+                if (border) standOut++;
+                bool clear = border && (empty < 3 || SlotOutright(frame, box));
+                if (clear) { clearAt[row] = col + 1; empty = 0; } else empty++;
+            }
+            strongRow[row] = standOut >= 7;
             if (clearAt[row] > 0) lastRow = row;
         }
         // ...but a row whose clear slots end three boxes or more before its end is the table's last row, whatever stands out
         // below it (2026-10-25 13:53 Vakron: 29 slots, 8, 8, 8 and 5, read as 44: nameplates and health bars two rows under
         // the grid stood out like a slot, so the short row was read as full and 15 boxes of the world were filed as slots)
+        // ...unless a row of slots beyond doubt lies under it: then the short row's slots are only weak over their ground
+        // (2026-10-25 13:53 Vakron: a row of eight whose middle five scored 23 to 33, with two full rows under it)
         for (int row = 0; row < lastRow; row++)
-            if (clearAt[row] is > 0 and <= 5) { lastRow = row; break; }
+            if (clearAt[row] is > 0 and <= 5 && !strongRow.Skip(row + 1).Take(lastRow - row).Any(x => x)) { lastRow = row; break; }
+        CrashLog.Note($"reward table rows (first at y {top}, x {xb}): clear slots run to {string.Join(", ", clearAt.Take(Math.Max(lastRow + 2, 1)))}; read to row {lastRow + 1}");
         for (int row = 0; row <= lastRow; row++)
         {
             int y = top + row * p;
@@ -565,20 +580,54 @@ public static class RewardGrid
         return best;
     }
 
-    /// <summary>The first row's top: from 15 px above the estimate to 3 px below it, the line where the eight boxes' top edges are sharpest.</summary>
+    /// <summary>
+    /// The first row's top: from 15 px above the estimate to 12 px below it, the line where the eight boxes' top edges are
+    /// sharpest. Down 12, not 3: the table slides in after "Reward collected." shows, and an early frame of it sat 10 px
+    /// lower than the header said, out of reach, so the rows were read across the gaps (Steven, 2026-11-11 17:29 Urugugu).
+    /// Below 3 px a line needs the boxes' bottom edges too, which the bright tops of the art inside the slots never have
+    /// (Vakron, y 345 for 331; Vakron 21:11, art about 10 px below its header).
+    /// </summary>
     internal static int RefineTop(Bitmap f, int top, int x0, int s, int p)
     {
         int best = top; double bestScore = -1;
-        // the header puts the grid a few pixels low, never high (Urugugu 335 for 327, Vakron 337 for 331): searching below it
-        // found the bright tops of the art inside the slots instead (Vakron, y 345), so the search reaches up 15 and down 3
-        for (int y = top - 15; y <= top + 3; y++)
+        // the header puts the grid a few pixels low as a rule (Urugugu 335 for 327, Vakron 337 for 331)
+        for (int y = top - 15; y <= top + 12; y++)
         {
-            if (y - 5 < 0 || y + s >= f.Height) continue;
+            if (y - 5 < 0 || y + s + 3 >= f.Height) continue;
             double score = 0;
-            for (int col = 0; col < 8; col++) score += TopEdge(f, new Rectangle(x0 + col * p, y, s, s));
+            // past 3 px below, a line must also have the boxes' bottom edges a slot's height lower: the art's bright tops
+            // inside the slots have none (each box scored by the weaker of its two edges there)
+            for (int col = 0; col < 8; col++)
+            {
+                var box = new Rectangle(x0 + col * p, y, s, s);
+                score += y <= top + 3 ? TopEdge(f, box) : Math.Min(TopEdge(f, box), BottomEdge(f, box));
+            }
             if (score > bestScore) { bestScore = score; best = y; }
         }
         return best;
+    }
+
+    /// <summary>Contrast a box must have to count as a slot after empty boxes (<see cref="SlotOutright"/>): slots 139 to 249, the floor 58 to 105.</summary>
+    public const double SlotContrastMin = 120;
+
+    /// <summary>
+    /// A box that is a slot beyond doubt: the contrast of a slot's art (the 17:29 Urugugu frame: slots 139 to 249, the planked
+    /// floor 58 to 105) and a slot's backing edge at its top and its bottom (slots 95 and up, the floor's weaker side 37 to 94).
+    /// </summary>
+    internal static bool SlotOutright(Bitmap f, Rectangle b) => Contrast(f, b) >= SlotContrastMin && Math.Min(TopEdge(f, b), BottomEdge(f, b)) >= 95;
+
+    /// <summary>How sharply the colour changes across a box's bottom edge: the line just inside against the line just outside (<see cref="TopEdge"/>'s twin).</summary>
+    internal static double BottomEdge(Bitmap f, Rectangle b)
+    {
+        int yIn = b.Bottom - 3, yOut = b.Bottom + 2;
+        if (yIn < 0 || yOut >= f.Height) return 0;
+        double sum = 0; int n = 0;
+        for (int x = b.Left + b.Width / 6; x < b.Right - b.Width / 6; x += 3)
+        {
+            var a = f.GetPixel(x, yIn); var o = f.GetPixel(x, yOut);
+            sum += Math.Abs(a.R - o.R) + Math.Abs(a.G - o.G) + Math.Abs(a.B - o.B); n++;
+        }
+        return n == 0 ? 0 : sum / n;
     }
 
     /// <summary>The backing's colour: the four corners averaged.</summary>
