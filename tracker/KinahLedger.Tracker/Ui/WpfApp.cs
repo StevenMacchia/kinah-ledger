@@ -1020,6 +1020,61 @@ public static class WpfApp
         }
 
         w.ForceClose();
+        // motion (Ui/Motion.cs, 2026-11-11), each effect held at a point of its course (KL_MOTION_AT's way) so the frame can be read
+        {
+            var frozenWas = Motion.FrozenAt;
+            string N0(double v) => Math.Round(v).ToString("N0");
+            var fig = new System.Windows.Controls.TextBlock(); fig.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Ink");
+            var ink = (System.Windows.Media.SolidColorBrush)Application.Current.FindResource("Ink");
+            Motion.FrozenAt = 0.5;
+            Motion.Number(fig, "test|fig", 1000, N0);
+            string first = fig.Text;
+            Motion.Number(fig, "test|fig", 2000, N0);
+            var mid = (fig.Foreground as System.Windows.Media.SolidColorBrush)?.Color;
+            Check(first == "1,000" && fig.Text == "2,000" && mid != ink.Color && mid?.G > ink.Color.G - 40, $"motion: a figure's first value shows still, a rise rolls there and tints green ({first} then {fig.Text}, {mid})");
+            Motion.FrozenAt = 0.2;
+            Motion.Number(fig, "test|fig", 3000, N0);
+            Check(fig.Text == "2,784", $"motion: a roll a fifth of the way in, eased (2,000 to 3,000 reads {fig.Text})");
+            Motion.FrozenAt = 1;
+            Motion.Number(fig, "test|fig", 4000, N0);
+            Check(fig.Text == "4,000" && fig.Foreground == ink && fig.ReadLocalValue(System.Windows.Controls.TextBlock.ForegroundProperty).GetType().Name.Contains("Resource"),
+                $"motion: at its end the figure reads its value in its own theme colour again ({fig.Text}, {fig.ReadLocalValue(System.Windows.Controls.TextBlock.ForegroundProperty).GetType().Name})");
+            Motion.FrozenAt = 0.5;
+            var kills = new System.Windows.Controls.TextBlock(); kills.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "Ink");
+            Motion.Number(kills, "test|kills", 5, N0, -1); Motion.Number(kills, "test|kills", 6, N0, -1);
+            Motion.Number(fig, "test|fig", 5000, N0, roll: false);
+            string clock = fig.Text;
+            Motion.Blank(fig, "test|fig", " "); Motion.Number(fig, "test|fig", 100, N0);
+            Check(kills.Foreground == ink && clock == "5,000" && fig.Text == "100", $"motion: no tint for a count of kills, no roll for a figure the clock moved, none after a blank ({kills.Foreground == ink} {clock} {fig.Text})");
+
+            FrameworkElement El() => new System.Windows.Controls.Border { Width = 40, Height = 40 };
+            static bool Moved(FrameworkElement e) => e.RenderTransform is System.Windows.Media.ScaleTransform;
+            Motion.Begin("test|host"); var a0 = El(); Motion.Slot(a0, "test|host", "A", 1); Motion.End("test|host");
+            Motion.Begin("test|host"); var a1 = El(); var b1 = El();
+            Motion.Slot(a1, "test|host", "A", 1); Motion.Slot(b1, "test|host", "B", 1, "Legend"); Motion.End("test|host");
+            Check(!Moved(a0) && !Moved(a1) && Moved(b1) && b1.Effect is System.Windows.Media.Effects.DropShadowEffect { Opacity: > 0.3 },
+                $"motion: a host's first draw lands nothing; then a new Legend slot grows in and glows, the one already there stays still ({Moved(a0)} {Moved(a1)} {Moved(b1)} {b1.Effect?.GetType().Name} {(b1.Effect as System.Windows.Media.Effects.DropShadowEffect)?.Opacity:0.00})");
+            Motion.FrozenAt = 0.1;
+            Motion.Begin("test|host"); var a2 = El(); var b2 = El();
+            Motion.Slot(a2, "test|host", "A", 2); Motion.Slot(b2, "test|host", "B", 1, "Legend"); Motion.End("test|host");
+            double sx = (a2.RenderTransform as System.Windows.Media.ScaleTransform)?.ScaleX ?? 1;
+            Check(sx > 1.04 && sx < 1.08 && !Moved(b2) && a2.Effect == null && a2.Opacity == 1, $"motion: more of a slot swells and settles, without a glow (scale {sx:0.000} a tenth in)");
+            Motion.Begin("test|host"); var news = new[] { "A", "B", "C", "D", "E", "F" }.Select(k => { var e = El(); Motion.Slot(e, "test|host", k, 2); return e; }).ToList(); Motion.End("test|host");
+            Motion.Begin("test|host"); var gone = new[] { "A", "X" }.Select(k => { var e = El(); Motion.Slot(e, "test|host", k, 2); return e; }).ToList(); Motion.End("test|host");
+            Check(!news.Any(Moved) && !gone.Any(Moved), "motion: four new slots at once, or a slot gone, is another view: nothing lands");
+
+            Motion.FrozenAt = 0.5;
+            var chev = new System.Windows.Shapes.Path();
+            Motion.Turn(chev, 0, 90);
+            double angle = (chev.RenderTransform as System.Windows.Media.RotateTransform)?.Angle ?? -1;
+            bool folded = false; Motion.Close(new System.Windows.Controls.Border(), () => folded = true);
+            Check(angle > 70 && angle < 90 && folded, $"motion: a chevron halfway turned reads {angle:0}°, eased; a fold of something not shown hides it at once");
+            Motion.Still = true; Motion.FrozenAt = null;
+            var still = new System.Windows.Controls.TextBlock();
+            Motion.Number(still, "test|still", 1, N0); Motion.Number(still, "test|still", 2, N0);
+            Check(!Motion.On && still.Text == "2" && !Motion.Playing(still), "motion: none in a render (Still): a figure just shows its value");
+            Motion.FrozenAt = frozenWas;
+        }
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");
         return fails == 0 ? 0 : 1;
     }
@@ -1176,6 +1231,7 @@ public static class WpfApp
         else if (shotState.Length > 0) w.ShowStateSample(shotState);
         IconCache.Drain(TimeSpan.FromSeconds(8));   // the demo rows' icons, when this PC is online
         DoEvents();
+        if (demo && Motion.FrozenAt != null) { w.MotionFrameForRender(); DoEvents(); }   // KL_MOTION_AT: the effects held at that point
         if (Environment.GetEnvironmentVariable("KL_DEBUG_LAYOUT") == "1")
         {
             void Dump(DependencyObject d, int depth)

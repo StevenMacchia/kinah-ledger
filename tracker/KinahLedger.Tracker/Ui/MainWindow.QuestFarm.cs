@@ -65,7 +65,7 @@ public partial class MainWindow
         long crystals = pets.Sum(r => Qty(r.Drops));
         int kinds = drops.Count + (crystals > 0 ? 1 : 0);
         BagStripNote.Text = kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")}" : "";
-        BagStripTotal.Text = h.Total > 0 ? Fk(h.Total) : "";
+        if (h.Total > 0) Motion.Number(BagStripTotal, "bag-total|" + CountWhere(), h.Total, v => Fk(v)); else Motion.Blank(BagStripTotal, "bag-total|" + CountWhere(), "");
         BagStripTotal.ToolTip = h.TotalTip;
         QSetChev(BagStripChev, _qChip == "bag");
         var sig = $"{h.Kinah}|{h.Total}|{crystals}|{string.Join(";", drops.Select(d => $"{d.Row.Name}:{d.Row.Drops}:{d.Row.Grade}:{d.Row.Reported}"))}|{Skins.Current}";
@@ -73,6 +73,9 @@ public partial class MainWindow
         BagStripHost.Children.Clear();
         const int Max = 11;
         var where = CountWhere();
+        // a drop that lands grows in, a rare one glows once (Motion.Slot); the Kinah slot rises with every kill, so it stays still
+        var landHost = "bag-strip|" + where;
+        Motion.Begin(landHost);
         var slots = new List<FrameworkElement>();
         if (h.Kinah > 0)
         {
@@ -87,9 +90,10 @@ public partial class MainWindow
             if (r.Reported) s.Opacity = 0.55;
             CardTip(s, () => ItemHereCard(r, gathered, where));
             if (r.Report.Length > 0) s.MouseLeftButtonUp += (_, _) => ShowItemCard(r, s);
+            Motion.Slot(s, landHost, name, Qty(r.Drops), r.Grade);
             slots.Add(s);
         }
-        if (crystals > 0) slots.Add(QSlot(QIconBox("Gem", "Lime", 42), CountBadge(crystals)));
+        if (crystals > 0) { var c = QSlot(QIconBox("Gem", "Lime", 42), CountBadge(crystals)); Motion.Slot(c, landHost, "soul crystals", crystals); slots.Add(c); }
         foreach (var s in slots.Take(slots.Count > Max + 1 ? Max : slots.Count)) BagStripHost.Children.Add(s);
         if (slots.Count > Max + 1)
         {
@@ -99,6 +103,7 @@ public partial class MainWindow
             more.MouseLeftButtonUp += (_, _) => { if (_qChip != "bag") ToggleChip("bag"); };
             BagStripHost.Children.Add(more);
         }
+        Motion.End(landHost);
     }
 
     /// <summary>
@@ -162,13 +167,14 @@ public partial class MainWindow
             return;
         }
         foreach (var chip in new[] { ChipKinah, ChipLoot, ChipKills }) chip.Cursor = FullShown ? Cursors.Arrow : Cursors.Hand;
-        QChipFill(ChipKinah, QCoin(30), Fk(kinah), "Kinah picked up");
+        var at = CountWhere();
+        QChipFill(ChipKinah, QCoin(30), Fk(kinah), "Kinah picked up", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null);
         ChipKinah.ToolTip = $"{kinah:N0} Kinah {CountWhere()}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + ". Quest rewards and bound Kinah are left out. Click for Kinah by enemy.";
-        QChipFill(ChipLoot, QIconBox("Bag", "Mint"), s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", kinds > 0 ? $"loot · {kinds} kind{(kinds == 1 ? "" : "s")}" : "loot");
+        QChipFill(ChipLoot, QIconBox("Bag", "Mint"), s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", kinds > 0 ? $"loot · {kinds} kind{(kinds == 1 ? "" : "s")}" : "loot", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null);
         ChipLoot.ToolTip = kinds == 0 ? "Nothing picked up yet. Click for the bag."
             : $"{kinds} kind{(kinds == 1 ? "" : "s")} {CountWhere()}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (s.Unpriced > 0 ? $" · {s.Unpriced} with no price yet" : "") + ". Click for the bag.";
         double perMin = elapsed.TotalMinutes >= 1 ? kills / elapsed.TotalMinutes : 0;
-        QChipFill(ChipKills, QIconBox("Sword", "Coral"), kills.ToString("N0"), kills > 0 ? $"kill{(kills == 1 ? "" : "s")} · {Fk(kinah / (double)kills)} a kill" : "kills");
+        QChipFill(ChipKills, QIconBox("Sword", "Coral"), kills.ToString("N0"), kills > 0 ? $"kill{(kills == 1 ? "" : "s")} · {Fk(kinah / (double)kills)} a kill" : "kills", kills > 0 ? ("chip-kills|" + at, kills, false) : null);
         ChipKills.ToolTip = kills > 0 ? $"{kills:N0} kills in {TodayLoot.Dur(elapsed.TotalSeconds)}" + (perMin > 0 ? $", {perMin:0.0} a minute" : "") + ". Click for kills by enemy." : "Kills show here as enemies pay out.";
         foreach (var (chip, key, tone) in new[] { (ChipKinah, "who", "Gold"), (ChipLoot, "bag", "Mint"), (ChipKills, "kills", "Coral") })
         {

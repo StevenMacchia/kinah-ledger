@@ -126,7 +126,7 @@ public partial class MainWindow
         long crystals = pets.Sum(r => Qty(r.Drops));
         int kinds = drops.Count + gathered.Count + (crystals > 0 ? 1 : 0);
         FootTotalNote.Text = (kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")} · " : "") + TodayLoot.Dur(h.Elapsed.TotalSeconds);
-        FootTotal.Text = h.Total > 0 ? Fk(h.Total) : " ";
+        if (h.Total > 0) Motion.Number(FootTotal, "foot|here|" + LootHereName, h.Total, v => Fk(v)); else Motion.Blank(FootTotal, "foot|here|" + LootHereName, " ");
         FootTotal.ToolTip = h.TotalTip;
         string Row(DropRow r) => $"{r.Name}:{r.Drops}:{r.DropPct}:{r.PerHour}:{r.Value}:{r.Reported}:{r.Grade}:{r.Sub}";
         var sig = $"here|{LootHereName}|{LootSortMode}|{h.Kinah}|{h.Abyss}|{h.Kills}|{crystals}|{string.Join(";", drops.Select(Row))}|{string.Join(";", gathered.Select(Row))}|"
@@ -139,11 +139,19 @@ public partial class MainWindow
         var slots = new List<FrameworkElement>();
         if (h.Kinah > 0) slots.Add(KinahSlot(h.Kinah, h.ByEnemy, h.Kills > 0 ? $"{h.Kills:N0} kills · {Fk(h.Kinah / (double)h.Kills)} a kill" : "", "Picked up " + where, "BY ENEMY"));
         if (h.Abyss > 0) slots.Add(AbyssSlot(h.Abyss, h.Elapsed.TotalSeconds, where));
-        foreach (var r in drops) slots.Add(HereSlot(r, false, where));
-        foreach (var r in gathered) slots.Add(HereSlot(r, true, where));
-        if (crystals > 0) slots.Add(SoulSlot(pets, crystals, where));
+        // a drop that lands grows in, a rare one glows once (Motion.Slot); Kinah and Abyss Points rise with every kill and stay still
+        var landHost = "loot-here|" + LootHereName;
+        Motion.Begin(landHost);
+        foreach (var (r, g) in drops.Select(r => (r, false)).Concat(gathered.Select(r => (r, true))))
+        {
+            var t = HereSlot(r, g, where);
+            Motion.Slot(t, landHost, r.Name, Qty(r.Drops), r.Grade);
+            slots.Add(t);
+        }
+        if (crystals > 0) { var c = SoulSlot(pets, crystals, where); Motion.Slot(c, landHost, "soul crystals", crystals); slots.Add(c); }
         if (slots.Count == 0) LootEmpty("Nothing picked up here yet.");
         else LootGroup("here", slots);
+        Motion.End(landHost);
     }
 
     /// <summary>LOOT's Today side: the zones farmed for a minute or more (one pinned, or all), then the day's loot.</summary>
@@ -161,7 +169,7 @@ public partial class MainWindow
         var farm = _todayZone != null ? TodayLoot.Farm(TodayEngine!, _items, _todayZone) : whole;
         FootTotalNote.Text = string.Join(" · ", TodayLoot.FarmLine(farm).Select(n => n.Fig + n.Word));
         long made = farm.Made;
-        FootTotal.Text = made > 0 ? Fk(made) : " ";
+        if (made > 0) Motion.Number(FootTotal, "foot|day|" + _todayZone, made, v => Fk(v)); else Motion.Blank(FootTotal, "foot|day|" + _todayZone, " ");
         FootTotal.ToolTip = made <= 0 ? null : $"Made farming today{(_todayZone != null ? " in " + ZoneName(_todayZone) : ", every zone")}: Kinah plus drops and gathering at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
         string Slots(IEnumerable<TodaySlot> l) => string.Join(",", l.Select(s => $"{s.Id}:{s.Count}:{s.Bound}:{s.Worth}"));
         var sig = $"day|{_todayZone}|{LootSortMode}|{string.Join(";", zones.Select(z => $"{z.Zone}:{(int)(z.Active / 60)}"))}|{farm.Kinah}:{farm.Abyss}:{farm.Kills}:{farm.Attempts}:{(int)(farm.Active / 60)}|"

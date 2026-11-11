@@ -87,7 +87,7 @@ public partial class MainWindow
                 TodayNote.Inlines.Add(PR(note[i].Fig, "Ink", FontWeights.Bold));
                 TodayNote.Inlines.Add(PR(note[i].Word, "Muted"));
             }
-            TodaySum.Text = made > 0 ? Fk(made) : "";
+            if (made > 0) Motion.Number(TodaySum, "today-sum", made, v => Fk(v)); else Motion.Blank(TodaySum, "today-sum", "");
             TodaySum.ToolTip = made <= 0 ? null
                 : "Made in expeditions and events today: Kinah plus rewards at the lowest Market price, " + PriceBook.Cut + ". Gear, currencies, items with no price yet and runs left out of the averages add nothing.";
             TodayHead.ToolTip = "Today's expeditions and events since midnight on this PC. Week has the last 7 days.";

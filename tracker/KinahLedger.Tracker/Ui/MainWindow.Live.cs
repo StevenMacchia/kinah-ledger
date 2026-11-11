@@ -32,25 +32,41 @@ public partial class MainWindow
     void ToggleSec(string key)
     {
         _secUser[key] = !SecOpen(key);
+        _secMoved = key;
         if (key is "CraftSession" or "Best") { if (!_demo) FillCraft(CraftShown); else ApplySections(); return; }
         Redraw();
     }
 
     /// <summary>A section's chevron and body: pointing right and folded, or down and gold with the body showing.</summary>
-    void SetSec(Path chev, FrameworkElement body, bool open)
+    /// The section the player just opened or folded: it moves (Motion.Open/Close, its chevron turning), the rest are set still.
+    void SetSec(Path chev, FrameworkElement body, bool open, bool moved = false)
     {
-        chev.RenderTransform = new RotateTransform(open ? 90 : 0);
         chev.SetResourceReference(Shape.StrokeProperty, open ? "Gold" : "Faint");
-        body.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        bool shown = body.Visibility == Visibility.Visible;
+        // a move under way is left to finish (a tick redraws the sections every half second)
+        if (!moved && (Motion.Playing(body) || Motion.Playing(chev))) return;
+        if (!moved || shown == open || !Motion.On) { chev.RenderTransform = new RotateTransform(open ? 90 : 0); body.Visibility = open ? Visibility.Visible : Visibility.Collapsed; return; }
+        Motion.Turn(chev, open ? 0 : 90, open ? 90 : 0);
+        if (open) { body.Visibility = Visibility.Visible; Motion.Open(body); }
+        else Motion.Close(body, () => body.Visibility = SecShownFor(body) ? Visibility.Visible : Visibility.Collapsed);
     }
+    // the section a click just opened or folded, for its one move (ApplySections); null once drawn
+    string? _secMoved;
+    // the hour's count under the hero figure at its last draw: the figure rolls only when it moved
+    long _heroTotal = -1;
+    // whether a section's body should show now (a fold that ends after the player opened it again shows it)
+    bool SecShownFor(FrameworkElement body) =>
+        body == DropsOpenBody ? SecOpen("Drops") : body == ExtrasBody ? SecOpen("Extras") : body == WhereBody ? SecOpen("Where") && WhereBody.Children.Count > 0
+        : body == CraftBody ? SecOpen("CraftSession") : body == BestCraftsHost ? SecOpen("Best") : false;
 
     void ApplySections()
     {
-        SetSec(DropsChev, DropsOpenBody, SecOpen("Drops"));
-        SetSec(ExtrasChev, ExtrasBody, SecOpen("Extras"));
-        SetSec(WhereChev, WhereBody, SecOpen("Where") && WhereBody.Children.Count > 0);
-        SetSec(CraftSessionChev, CraftBody, SecOpen("CraftSession"));
-        SetSec(BestChev, BestCraftsHost, SecOpen("Best"));
+        var moved = _secMoved; _secMoved = null;
+        SetSec(DropsChev, DropsOpenBody, SecOpen("Drops"), moved == "Drops");
+        SetSec(ExtrasChev, ExtrasBody, SecOpen("Extras"), moved == "Extras");
+        SetSec(WhereChev, WhereBody, SecOpen("Where") && WhereBody.Children.Count > 0, moved == "Where");
+        SetSec(CraftSessionChev, CraftBody, SecOpen("CraftSession"), moved == "CraftSession");
+        SetSec(BestChev, BestCraftsHost, SecOpen("Best"), moved == "Best");
     }
 
     /// <summary>What options-test knows as the recent pickups strip: since 2026-10-28, LOOT's slots, under the live card in both views.</summary>
@@ -312,7 +328,10 @@ public partial class MainWindow
     void FillRate(SessionEngine e, double h, long kinah, long loot, int priced, int kills, int nodes, double itemsPerTry)
     {
         long total = kinah + loot;
-        HeadRate.Text = total > 0 ? Fk(total / h) : " ";
+        // it rolls when the count under it moved (a pickup), not as the hour ticks on; green when it rose 1% (not warming up)
+        bool counted = total != _heroTotal; _heroTotal = total;
+        if (total > 0) Motion.Number(HeadRate, "hero|" + _part + "|" + CountWhere(), total / h, v => Fk(v), _rateWarming ? -1 : 0.01, roll: counted);
+        else Motion.Blank(HeadRate, "hero|" + _part + "|" + CountWhere(), " ");
         HeadRateLbl.Text = total <= 0 ? "Kinah and loot an hour, once something is counted"
             : priced > 0 || loot > 0 ? (_mode == Mode.Gather && kinah == 0 ? "an hour, loot after tax" : "an hour, Kinah and loot after tax")
             : "an hour, Kinah; loot not priced yet";

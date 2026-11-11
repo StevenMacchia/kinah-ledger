@@ -694,7 +694,7 @@ public partial class MainWindow : Window
             if (show != _lastRun) _tableWhat = ViewTitle();
             FillNumbers(show, show.Active);
         }
-        else if (chat == null) { TableTitle.Text = _watcher.GameRect == null ? "Reading starts once the game is open" : "Looking for the chat"; HeadRate.Text = " "; HeadRateUnit.Visibility = Visibility.Collapsed; }
+        else if (chat == null) { TableTitle.Text = _watcher.GameRect == null ? "Reading starts once the game is open" : "Looking for the chat"; Motion.Blank(HeadRate, "hero", " "); HeadRateUnit.Visibility = Visibility.Collapsed; }
         FillReading(chat, show);
         UpdateTrayTip();
         // the live dot: the game is being read right now
@@ -1901,7 +1901,7 @@ public partial class MainWindow : Window
     /// <summary>Runs start → wait → stop exactly as the buttons would, for catching crashes without a desktop session.</summary>
     public async Task<string> DebugCycle(DRect? region, int ms)
     {
-        _demo = true;
+        _demo = true; Motion.Still = true;
         _region = region; _prefs.ManualChat = region != null; _watcher.ManualChat = region;
         if (!HasServer) { ApplyServer("na_e", "Siel (Elyos)"); }
         await StartTracking();
@@ -1917,7 +1917,7 @@ public partial class MainWindow : Window
     /// <param name="state">A review sweep's state (Ui/MainWindow.UiStates.cs): its own runs on the Events page, its strip; null for the plain sample.</param>
     public void ShowDemo(string kind = "Open world", UiState? state = null)
     {
-        _demo = true; _uiState = state;
+        _demo = true; Motion.Still = true; _uiState = state;
         bool market = kind == "Market";
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false;
         ZoneLbl.Text = "Western Cantas Valley";
