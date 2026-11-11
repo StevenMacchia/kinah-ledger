@@ -112,6 +112,70 @@ public sealed partial class MarketParser
         return null;   // a lone number is a price without a stack, or a chat line; never guessed
     }
 
+    /* ---------------- an item's listings, shown under the main board's headers ---------------- */
+
+    /// <summary>What <see cref="Listings"/> found: the asks, how many listing rows were on screen, and the item they were named for (null when none could be).</summary>
+    public sealed record ListingRead(List<MarketAsk> Asks, int Rows, string? Item);
+
+    /// <summary>
+    /// An item's listings as the Market shows them when it is opened to buy (2026-10-28 reads, Steven's 2026-11-10 report):
+    /// under the main board's headers, one row per listing with its unit price, its total and a time left ("16,799 537,568
+    /// 2d 23h"), and no name of their own. <see cref="Parse(MarketReader.Row)"/> reads none of them, so a Market opened only
+    /// to buy read nothing at all. Here they are named for the line above them, and only when that line is an item the
+    /// dictionary knows; a name it doesn't know in between leaves the listings below unnamed (a header line doesn't).
+    /// The stack is the total over the unit price, so a misread digit drops the row rather than guess.
+    /// </summary>
+    public ListingRead Listings(IReadOnlyList<MarketReader.Row> rows)
+    {
+        var asks = new List<MarketAsk>(); int listingRows = 0; string? item = null, named = null;
+        foreach (var r in rows)
+        {
+            if (HasTimeLeft(r.Flat))
+            {
+                listingRows++;
+                if (item == null || ListingNumbers(r.Flat) is not { } n) continue;
+                if (Make(item, n.Qty, n.Unit) is { Known: true } a) { asks.Add(a); named = a.Item; }
+                continue;
+            }
+            var text = r.Cells != null && r.Cells.TryGetValue("name", out var c) ? c : r.Flat;
+            if (LevelOnly().IsMatch(text.Trim())) continue;            // the item's own "Item Level 10" line keeps it
+            // only a line that reads as a name changes whose listings follow; a header line, a mark or a line of numbers doesn't
+            if (HeaderOnly().IsMatch(text.Trim())) continue;            // a listing table's own headers, read as one line
+            var name = CleanName(text);
+            if (name == null) continue;
+            item = _items.Knows(name) ? name : null;
+        }
+        return new ListingRead(asks, listingRows, named);
+    }
+
+    [GeneratedRegex(@"^(?:item\s*)?[l1]eve[l1]\s*\d{1,3}$", RegexOptions.IgnoreCase)]
+    private static partial Regex LevelOnly();
+    /// <summary>A line of nothing but column headers ("Unit Price Total Price Time Left"): no item's name.</summary>
+    [GeneratedRegex(@"^(?:(?:unit|pr[il1]ces?|tota[l1]|quant[il1]ty|qty|sa[l1]es?|[l1]owest|[l1]ist|[l1]ist[il1]ngs?|items?|name|grade|time|[l1]eft|remaining|se[l1][l1]er|each|per|amount|count|stock|period|date|expires?|expiry|registered|/)\s*)+$", RegexOptions.IgnoreCase)]
+    private static partial Regex HeaderOnly();
+
+    /// <summary>
+    /// A listing row's stack and unit price: the first two numbers (ten or more; a stray "0" or "01" from an icon is skipped)
+    /// where the second is a whole number of the first, the time left taken out first. "16,799 537,568 2d 23h 32" is 32 at
+    /// 16,799; "17,000 34,000 2d 22h" is 2 at 17,000; "16,799 16,799 2d 23h" is 1. Null when no pair agrees.
+    /// </summary>
+    public static (int Qty, long Unit)? ListingNumbers(string flat)
+    {
+        var nums = new List<long>();
+        foreach (var tok in TimeLeftRx().Replace(flat, " ").Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!IsNum(tok)) continue;
+            long v = ChatParser.Digits(NumTok().Match(tok).Groups["n"].Value);
+            if (v >= 10) nums.Add(v);
+        }
+        for (int i = 0; i + 1 < nums.Count; i++)
+        {
+            long u = nums[i], t = nums[i + 1];
+            if (u <= MaxPrice && t % u == 0 && t / u is >= 1 and <= MaxQty) return ((int)(t / u), u);
+        }
+        return null;
+    }
+
     static readonly char[] Separators = { ',', '.' };
 
     static bool IsNum(string tok)

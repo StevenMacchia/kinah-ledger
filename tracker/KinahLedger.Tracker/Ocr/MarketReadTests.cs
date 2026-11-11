@@ -113,6 +113,24 @@ static class MarketReadTests
         above.AddRange(listings);
         Check("a listing never gives the item above it a price", Asks(board, above), "(none)");
 
+        // 2026-11-10 (Steven: "opening the market doesn't do anything"): nine openings to buy Raw Leather read nothing, because
+        // an item's listings under the board's headers were never read at all. They are now, named for the item line above
+        string Listed(List<OcrLineBox> lines) { var l = parser.Listings(MarketReader.Rows(board, lines)); return $"{(l.Asks.Count == 0 ? "(none)" : string.Join(" / ", l.Asks))} · {l.Rows} rows · item {l.Item ?? "none"}"; }
+        Console.WriteLine("\nMarket reader, an item's listings under the board's headers (drawn):");
+        var leather = new List<OcrLineBox> { Line(360, 20, ("Raw", 450, 30), ("Leather", 484, 60)) }; leather.AddRange(listings);
+        Check("listings take the known item above them", Listed(leather), "Raw Leather ×1 @ 16,799 / Raw Leather ×32 @ 16,799 / Raw Leather ×4 @ 16,991 / Raw Leather ×10 @ 16,991 / Raw Leather ×2 @ 17,000 · 5 rows · item Raw Leather");
+        Check("listings with no line above them are named for nothing", Listed(listings), "(none) · 5 rows · item none");
+        var guild = new List<OcrLineBox> { Line(360, 20, ("Dawn", 450, 40), ("Legion", 494, 50)) }; guild.AddRange(listings);
+        Check("a name the item list doesn't know names nothing", Listed(guild), "(none) · 5 rows · item none");
+        var headed = new List<OcrLineBox> { Line(330, 20, ("Raw", 450, 30), ("Leather", 484, 60)), Line(360, 16, ("Item", 450, 30), ("Level", 484, 36), ("10", 524, 16)), Line(380, 16, ("Unit", 430, 30), ("Price", 464, 40), ("Total", 560, 40), ("Price", 604, 40)) };
+        headed.AddRange(listings);
+        Check("its level line and a header line in between keep the name", Listed(headed).Split(" · ")[2], "item Raw Leather");
+        var two = new List<OcrLineBox> { Line(300, 20, ("Spiritstone", 450, 90)), Line(330, 20, ("7,499", 430, 50), ("14,998", 560, 60), ("2d", 700, 20), ("23h", 724, 30)), Line(360, 20, ("Raw", 450, 30), ("Leather", 484, 60)) };
+        two.AddRange(listings.Take(1));
+        Check("each item's listings stay its own", Listed(two).Split(" · ")[0], "Spiritstone ×2 @ 7,499 / Raw Leather ×1 @ 16,799");
+        foreach (var (flat, want) in new[] { ("16,799 537,568 2d 23h 32", "32 @ 16,799"), ("16,991 0 169,910 2d 23h", "10 @ 16,991"), ("47,898 01 2d 21h", "(none)"), ("70,000 0140,000 2d 23h", "2 @ 70,000"), ("16,799 16,800 2d 23h", "(none)") })
+            Check($"listing numbers \"{flat}\"", MarketParser.ListingNumbers(flat) is { } ln ? $"{ln.Qty} @ {ln.Unit:N0}" : "(none)", want);
+
         // the fold reaches one line: numbers two lines down belong to nothing above them
         var far = new List<OcrLineBox> { Line(240, 20, ("Spiritstone", 450, 90)), Line(300, 20, ("12", 940, 20), ("7,499", 1200, 50)) };
         Check("numbers a few lines down are not an item's", Asks(board, far), "(none)");
@@ -132,7 +150,7 @@ static class MarketReadTests
     }
 
     /// <summary>One line as the recognizer returns it: words at x with a width, on a band from y of the given height.</summary>
-    static OcrLineBox Line(int y, int h, params (string text, int x, int w)[] words)
+    internal static OcrLineBox Line(int y, int h, params (string text, int x, int w)[] words)
     {
         var boxes = words.Select(w => new OcrWordBox(w.text, new Rectangle(w.x, y, w.w, h))).ToList();
         var box = boxes.Skip(1).Aggregate(boxes[0].Box, (acc, b) => Rectangle.Union(acc, b.Box));
