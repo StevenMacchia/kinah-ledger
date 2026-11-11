@@ -6,16 +6,20 @@ using KinahLedger.Ocr;
 namespace KinahLedger.Session;
 
 /// <summary>
-/// The old runs sorted by character, once, when the first character is seen (Steven, 2026-11-11: "sort where possible").
-/// The pictures kept of each run (reward-shots: in the run, its reward table, its event rewards) mostly show the
-/// medallion with the class icon; the pictures are grouped by icon, each group with three or more becomes a character
-/// (the one in the world now keeps its own), and a run whose pictures say another character moves to that character's
-/// runs. A run with no picture, or none showing the icon, stays with the first character, as do the days, the bests,
-/// goals and quest points kept before (they hold no picture to tell by).
+/// The history kept before characters, put with the characters it belongs to, once (Steven, 2026-11-11: "sort where
+/// possible"). The pictures kept of each run (reward-shots) mostly show the medallion's class icon, and the in-run ones
+/// the nameplate over the character's head. The pictures are grouped by icon; each group of three or more is a
+/// character (one already known by that icon, or a new one), named by the names read in its pictures. Then:
+/// <list type="bullet">
+/// <item>a run whose pictures show a character's icon goes to that character;</item>
+/// <item>the character with the most pictures is the main one: the runs with no picture, and the days, bests, goals,
+/// quest points and today kept before, go to it. 0.10.51 gave them to the first character seen, which on Steven's PC
+/// was an alt (the harp, Swoles), so a 0.10.51 install runs this pass once more and moves them on.</item>
+/// </list>
 /// </summary>
 public static class CharacterSort
 {
-    public sealed record Shot(DateTime Local, string Print, string File);
+    public sealed record Shot(DateTime Local, string Print, string File, string? Name = null);
 
     /// <summary>"20261111-164637-Auldors-Sanctum-in-run.jpg": when the picture was taken, local time.</summary>
     public static DateTime? TimeOf(string file)
@@ -24,7 +28,7 @@ public static class CharacterSort
         return n.Length >= 15 && DateTime.TryParseExact(n[..15], "yyyyMMdd-HHmmss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var t) ? t : null;
     }
 
-    /// <summary>The icon in each picture of a folder that shows one (slow: every picture is opened; run it off the window's thread).</summary>
+    /// <summary>The icon (and the name over the head, when it reads) in each picture of a folder (slow: every picture is opened; run it off the window's thread).</summary>
     public static List<Shot> ReadShots(string dir, CancellationToken ct = default)
     {
         var shots = new List<Shot>();
@@ -36,9 +40,17 @@ public static class CharacterSort
             try
             {
                 using var full = new Bitmap(f);
-                var band = CharacterBadge.Band(new Rectangle(0, 0, full.Width, full.Height));
-                using var b = full.Clone(band, full.PixelFormat);
-                if (CharacterBadge.Read(b, full.Height) is { } r) shots.Add(new Shot(t, r.Print, f));
+                var frame = new Rectangle(0, 0, full.Width, full.Height);
+                using var b = full.Clone(CharacterBadge.Band(frame), full.PixelFormat);
+                if (CharacterBadge.Read(b, full.Height) is not { } r) continue;
+                string? name = null;
+                try
+                {
+                    using var mid = full.Clone(CharacterName.Region(frame), full.PixelFormat);
+                    name = CharacterName.ReadAsync(mid, full.Width, full.Height).GetAwaiter().GetResult();
+                }
+                catch (Exception) { /* the icon still counts */ }
+                shots.Add(new Shot(t, r.Print, f, name));
             }
             catch (Exception) { /* a damaged picture tells nothing */ }
         }
@@ -80,65 +92,88 @@ public static class CharacterSort
         return votes.Count == 0 ? -1 : votes[0].i;
     }
 
-    /// <summary>What the sort did, for the log and the window.</summary>
-    public sealed record Outcome(int Pictures, int Groups, int Moved, List<(Character Who, int Runs)> To);
+    /// <summary>What the pass did, for the log and the window.</summary>
+    public sealed record Outcome(int Pictures, int Groups, int Moved, List<(Character Who, int Runs)> To, Character? Main, bool HistoryMoved, List<(Character Who, string Name)> Named);
 
     /// <summary>
-    /// Sorts <paramref name="first"/>'s runs (its instances.jsonl) by the pictures' icons. Groups of three pictures or more
-    /// that are not <paramref name="first"/>'s icon become characters of their own on <paramref name="server"/> (or the
-    /// one that already has that icon). <paramref name="rewrite"/> runs the file change (the window passes the runs log's
-    /// <see cref="InstanceLog.Reload"/>, so nothing is written while it changes); null writes directly (self-tests).
+    /// Puts the history <paramref name="adopter"/> took over with the characters it belongs to (see the class). Groups of
+    /// three pictures or more become characters on <paramref name="server"/> when no known one has their icon.
+    /// <paramref name="rewrite"/> runs the file changes (the window passes the runs log's <see cref="InstanceLog.Reload"/>,
+    /// so nothing is written while they change); null changes them directly (self-tests, the dry run).
     /// </summary>
-    public static Outcome Sort(Character first, string server, IReadOnlyList<Shot> shots, Action<Action>? rewrite = null)
+    public static Outcome Place(Character adopter, string server, IReadOnlyList<Shot> shots, Action<Action>? rewrite = null)
     {
         var groups = Group(shots).Where(g => g.Count >= 3).ToList();
-        var owners = new List<Character?>();
+        var owners = new List<Character>();
         foreach (var g in groups)
         {
             var prints = g.Select(s => s.Print).ToList();
-            if (prints.Any(p => Characters.Alike(first, p) >= CharacterBadge.SameIcon)) { owners.Add(first); continue; }
-            var known = Characters.All.Where(c => c.Id != first.Id).FirstOrDefault(c => prints.Any(p => Characters.Alike(c, p) >= CharacterBadge.SameIcon));
+            var known = Characters.All
+                .Select(c => (c, a: prints.Max(p => Characters.Alike(c, p))))
+                .Where(x => x.a >= CharacterBadge.SameIcon).OrderByDescending(x => x.a).Select(x => x.c).FirstOrDefault();
             if (known == null)
             {
                 known = Characters.Add(prints[0], server);
-                foreach (var p in prints.Skip(1)) Characters.Learn(known, p);
-                known.FirstSeen = g[0].Local.ToUniversalTime();
                 CrashLog.Note($"characters: {Characters.Label(known)} found in {g.Count} old pictures ({g[0].Local:MMM d} to {g[^1].Local:MMM d})");
             }
+            foreach (var p in prints) Characters.Learn(known, p);
             owners.Add(known);
         }
+        // the main character: the most pictures; with none, the history stays where it is
+        var main = owners.Count > 0 ? owners[0] : adopter;
+        var named = new List<(Character, string)>();
+        for (int i = 0; i < groups.Count; i++)
+            if (Characters.Settle(groups[i].Where(s => s.Name != null).Select(s => s.Name!), 2, 1.5) is { } name && Characters.SetReadName(owners[i], name))
+                named.Add((owners[i], name));
         var moved = new Dictionary<string, (Character Who, List<string> Lines)>();
-        int movedCount = 0;
+        int movedCount = 0; bool historyMoved = false;
         void Change()
         {
-            var path = Path.Combine(Characters.DirOf(first), "instances.jsonl");
-            if (!File.Exists(path)) return;
-            var keep = new List<string>();
-            foreach (var line in File.ReadAllLines(path))
+            var from = Characters.DirOf(adopter);
+            var path = Path.Combine(from, "instances.jsonl");
+            if (File.Exists(path))
             {
-                InstanceRun? r = null;
-                try { if (line.Length > 2) r = JsonSerializer.Deserialize<InstanceRun>(line); } catch (Exception) { }
-                int gi = r == null ? -1 : GroupOf(r, groups);
-                var who = gi >= 0 ? owners[gi] : null;
-                if (who == null || who.Id == first.Id) { keep.Add(line); continue; }
-                if (!moved.TryGetValue(who.Id, out var m)) moved[who.Id] = m = (who, new List<string>());
-                m.Lines.Add(line); movedCount++;
+                var keep = new List<string>();
+                foreach (var line in File.ReadAllLines(path))
+                {
+                    InstanceRun? r = null;
+                    try { if (line.Length > 2) r = JsonSerializer.Deserialize<InstanceRun>(line); } catch (Exception) { }
+                    int gi = r == null ? -1 : GroupOf(r, groups);
+                    // no picture: kept from before characters, the main one's; counted since the adopter was first seen, its own
+                    var who = gi >= 0 ? owners[gi] : r != null && r.Start >= adopter.FirstSeen ? adopter : main;
+                    if (who.Id == adopter.Id) { keep.Add(line); continue; }
+                    if (!moved.TryGetValue(who.Id, out var m)) moved[who.Id] = m = (who, new List<string>());
+                    m.Lines.Add(line); movedCount++;
+                }
+                if (movedCount > 0)
+                {
+                    foreach (var (who, lines) in moved.Values)
+                    {
+                        var dir = Characters.DirOf(who); Directory.CreateDirectory(dir);
+                        File.AppendAllLines(Path.Combine(dir, "instances.jsonl"), lines);
+                    }
+                    var tmp = path + ".tmp";
+                    File.WriteAllLines(tmp, keep);
+                    File.Move(tmp, path, overwrite: true);
+                }
             }
-            if (movedCount == 0) return;
-            foreach (var (who, lines) in moved.Values)
+            if (main.Id == adopter.Id) return;
+            // the rest of the history the adopter took over: to the main character, joined with what it counted since (CharacterMerge)
+            var to = Characters.DirOf(main); Directory.CreateDirectory(to);
+            foreach (var f in Characters.Files.Where(f => f != "instances.jsonl"))
             {
-                var dir = Characters.DirOf(who); Directory.CreateDirectory(dir);
-                File.AppendAllLines(Path.Combine(dir, "instances.jsonl"), lines);
+                var src = Path.Combine(from, f);
+                if (!File.Exists(src)) continue;
+                CharacterMerge.Into(src, Path.Combine(to, f), adopter.Id);
+                historyMoved = true;
             }
-            var tmp = path + ".tmp";
-            File.WriteAllLines(tmp, keep);
-            File.Move(tmp, path, overwrite: true);
         }
         if (rewrite != null) rewrite(Change); else Change();
-        var to = moved.Values.Select(m => (m.Who, m.Lines.Count)).ToList();
-        CrashLog.Note($"characters: old runs sorted by the class icon in {shots.Count} pictures, {groups.Count} character(s): "
-            + (movedCount == 0 ? "every run stays with " + Characters.Label(first) : string.Join(", ", to.Select(x => $"{x.Count} run(s) to {Characters.Label(x.Who)}"))));
+        var toList = moved.Values.Select(m => (m.Who, m.Lines.Count)).ToList();
+        CrashLog.Note($"characters: kept history placed by the class icon in {shots.Count} pictures, {groups.Count} character(s); "
+            + (movedCount == 0 ? "no run moved" : string.Join(", ", toList.Select(x => $"{x.Count} run(s) to {Characters.Label(x.Who)}")))
+            + (historyMoved ? $"; days, bests, goals, quest points and today to {Characters.Label(main)}, the character with the most pictures" : ""));
         Characters.MarkSorted();
-        return new Outcome(shots.Count, groups.Count, movedCount, to);
+        return new Outcome(shots.Count, groups.Count, movedCount, toList, main, historyMoved, named);
     }
 }

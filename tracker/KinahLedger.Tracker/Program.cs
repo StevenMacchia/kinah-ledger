@@ -112,6 +112,7 @@ internal static class Program
                 case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);
                 case "badge-file": return BadgeFile(pos, opts);
+                case "name-file": return NameFile(pos, opts);
                 case "character-sort": return CharacterSortCmd(pos, opts);
                 case "ui-shot": return UiShot(settings, opts, pos);
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
@@ -422,26 +423,78 @@ options: --process aion[,other]");
     /// </summary>
     static int CharacterSortCmd(List<string> pos, Dictionary<string, string> o)
     {
-        if (pos.Count < 2) { Console.Error.WriteLine("usage: character-sort <folder copy> <picture of the character now> [--shots dir] [--server label]"); return 1; }
+        if (pos.Count < 1) { Console.Error.WriteLine("usage: character-sort <folder copy> [picture of the character now, when it has no characters.json] [--shots dir] [--server label]"); return 1; }
         CrashLog.DirOverride = Path.GetFullPath(pos[0]); Session.Characters.Reset();
-        using var now = new System.Drawing.Bitmap(pos[1]);
-        var band = Ocr.CharacterBadge.Band(new System.Drawing.Rectangle(0, 0, now.Width, now.Height));
-        using var b = now.Clone(band, now.PixelFormat);
-        if (Ocr.CharacterBadge.Read(b, now.Height) is not { } r) { Console.Error.WriteLine("no class icon in that picture"); return 1; }
         var server = o.GetValueOrDefault("server") ?? "Siel (Elyos)";
-        var first = Session.Characters.Current ?? Session.Characters.Add(r.Print, server);
-        if (Session.Characters.Current == null) Session.Characters.Adopt(first);
+        if (Session.Characters.Current == null)
+        {
+            if (pos.Count < 2) { Console.Error.WriteLine("no characters.json there: give a picture of the character in the world"); return 1; }
+            using var now = new System.Drawing.Bitmap(pos[1]);
+            using var b = now.Clone(Ocr.CharacterBadge.Band(new System.Drawing.Rectangle(0, 0, now.Width, now.Height)), now.PixelFormat);
+            if (Ocr.CharacterBadge.Read(b, now.Height) is not { } r) { Console.Error.WriteLine("no class icon in that picture"); return 1; }
+            Session.Characters.Adopt(Session.Characters.Add(r.Print, server));
+        }
+        var adopter = Session.Characters.Adopter!;
         var shotsDir = o.GetValueOrDefault("shots") ?? Path.Combine(CrashLog.DirOverride, "reward-shots");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var shots = Session.CharacterSort.ReadShots(shotsDir);
-        Console.WriteLine($"{shots.Count} pictures with the icon, read in {sw.Elapsed.TotalSeconds:0} s");
-        foreach (var g in Session.CharacterSort.Group(shots)) Console.WriteLine($"  a group of {g.Count}: {g[0].Local:MMM d HH:mm} to {g[^1].Local:MMM d HH:mm}");
-        var outcome = Session.CharacterSort.Sort(first, server, shots);
-        Console.WriteLine($"moved {outcome.Moved} run(s): {string.Join(", ", outcome.To.Select(x => $"{x.Runs} to {Session.Characters.Label(x.Who)}"))}");
+        Console.WriteLine($"{shots.Count} pictures with the icon, {shots.Count(x => x.Name != null)} with a name read, in {sw.Elapsed.TotalSeconds:0} s; the history is with {Session.Characters.Label(adopter)} ({adopter.Id})");
+        foreach (var g in Session.CharacterSort.Group(shots))
+            Console.WriteLine($"  a group of {g.Count}: {g[0].Local:MMM d HH:mm} to {g[^1].Local:MMM d HH:mm}; names read: {string.Join(", ", g.Where(x => x.Name != null).GroupBy(x => x.Name!, StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Count()).Take(4).Select(x => $"{x.Key} {x.Count()}"))}");
+        var outcome = Session.CharacterSort.Place(adopter, server, shots);
+        Console.WriteLine($"moved {outcome.Moved} run(s): {string.Join(", ", outcome.To.Select(x => $"{x.Runs} to {Session.Characters.Label(x.Who)}"))}; history moved: {outcome.HistoryMoved} (main {(outcome.Main is { } m ? Session.Characters.Label(m) : "-")}); named: {string.Join(", ", outcome.Named.Select(x => x.Name))}");
         foreach (var c in Session.Characters.All)
         {
             var f = Path.Combine(Session.Characters.DirOf(c), "instances.jsonl");
-            Console.WriteLine($"  {c.Id} {Session.Characters.Label(c)}: {(File.Exists(f) ? File.ReadAllLines(f).Length : 0)} runs, {string.Join(" ", Directory.GetFiles(Session.Characters.DirOf(c)).Select(Path.GetFileName))}");
+            Console.WriteLine($"  {c.Id} {Session.Characters.Label(c)}: {(File.Exists(f) ? File.ReadAllLines(f).Length : 0)} runs, {string.Join(" ", Directory.Exists(Session.Characters.DirOf(c)) ? Directory.GetFiles(Session.Characters.DirOf(c)).Select(Path.GetFileName) : Array.Empty<string>())}");
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// The character's name over its head (Ocr/CharacterName.cs): name-file [whole-window pictures...] [--save dir]. With
+    /// no pictures, the live game a few times (--n), as the watcher reads it.
+    /// </summary>
+    static int NameFile(List<string> pos, Dictionary<string, string> o)
+    {
+        var dir = o.GetValueOrDefault("save");
+        void One(System.Drawing.Bitmap frame, int gw, int gh, string label)
+        {
+            var px = Ocr.CharacterBadge.Pixels(frame, out int w, out int h);
+            var bar = Ocr.CharacterName.FindBar(px, w, h, gw);
+            string got = "no plate";
+            if (bar is { } b)
+            {
+                using var strip = Ocr.CharacterName.NameStrip(px, w, h, b, gh);
+                if (strip == null) got = $"plate at {b.Left}-{b.Right}, row {b.Top}; no name line";
+                else
+                {
+                    if (dir != null) { Directory.CreateDirectory(dir); strip.Save(Path.Combine(dir, Path.GetFileNameWithoutExtension(label) + "-name.png")); }
+                    var lines = Task.Run(() => ScreenReader.ReadBitmapAsync(strip, false, 1)).GetAwaiter().GetResult();
+                    got = $"plate at {b.Left}-{b.Right}: OCR [{string.Join(" | ", lines)}] -> {Ocr.CharacterName.Clean(lines.Count == 1 ? lines[0] : null) ?? "-"}";
+                }
+            }
+            Console.WriteLine($"{label}: {got}");
+        }
+        if (pos.Count == 0)
+        {
+            var game = GameWindow.Find(new Settings().ProcessHints);
+            if (game == null) { Console.WriteLine("Game window not found."); return 1; }
+            int n = int.TryParse(o.GetValueOrDefault("n"), out var nn) ? nn : 6;
+            for (int i = 0; i < n; i++)
+            {
+                using var bmp = ScreenReader.Capture(Ocr.CharacterName.Region(game.Value));
+                One(bmp, game.Value.Width, game.Value.Height, $"live-{i}");
+                Thread.Sleep(1500);
+            }
+            return 0;
+        }
+        foreach (var f in pos)
+        {
+            using var full = new System.Drawing.Bitmap(f);
+            var r = Ocr.CharacterName.Region(new System.Drawing.Rectangle(0, 0, full.Width, full.Height));
+            using var mid = full.Clone(r, full.PixelFormat);
+            One(mid, full.Width, full.Height, Path.GetFileName(f));
         }
         return 0;
     }

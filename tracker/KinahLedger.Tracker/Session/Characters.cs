@@ -10,6 +10,8 @@ public sealed class Character
     public string Id { get; set; } = "";
     /// <summary>The name the player gave it; empty until then (the window says "Character 1").</summary>
     public string Name { get; set; } = "";
+    /// <summary>The name came from the nameplate (Ocr/CharacterName.cs), not typed: the reader may still correct it. A typed name is never read over.</summary>
+    public bool NameRead { get; set; }
     /// <summary>The server's label when it was first seen ("Siel (Elyos)"): a class icon on another server is another character.</summary>
     public string Server { get; set; } = "";
     /// <summary>Its icon's fingerprints, a few of them: the same icon under different light (a reward screen, a glow) reads a little differently.</summary>
@@ -27,6 +29,14 @@ public sealed class CharacterBook
     public List<Character> List { get; set; } = new();
     /// <summary>The old runs have been sorted by the class icon in their pictures (once, the first time a character is seen).</summary>
     public bool Sorted { get; set; }
+    /// <summary>
+    /// The history kept before characters (days, bests, goals, quest points, today, runs with no picture) is with the
+    /// character it belongs to: the one with the most pictures, not just the first seen (0.10.53; 0.10.51 gave it to the
+    /// first seen, which on Steven's PC was an alt).
+    /// </summary>
+    public bool Placed { get; set; }
+    /// <summary>The character that took the history over (Adopt); the place pass moves it on from there.</summary>
+    public string Adopter { get; set; } = "";
 }
 
 /// <summary>
@@ -83,7 +93,7 @@ public static class Characters
     }
 
     /// <summary>Forgets the loaded book (self-tests).</summary>
-    public static void Reset() { lock (Gate) { _book = null; _bookDir = ""; } }
+    public static void Reset() { lock (Gate) { _book = null; _bookDir = ""; Votes.Clear(); } }
 
     /// <summary>The character counted for now, or null before the first one was seen.</summary>
     public static Character? Current { get { lock (Gate) return Book.List.FirstOrDefault(c => c.Id == Book.Current); } }
@@ -163,19 +173,101 @@ public static class Characters
         }
     }
 
+    /// <summary>A name typed by the player: kept as it is, never read over.</summary>
     public static void Rename(Character c, string name)
     {
         lock (Gate)
         {
             var mine = Book.List.FirstOrDefault(x => x.Id == c.Id); if (mine == null) return;
             mine.Name = name.Trim().Length > 24 ? name.Trim()[..24] : name.Trim();
+            mine.NameRead = false;
             SaveLocked();
         }
     }
 
+    /// <summary>
+    /// The name a set of nameplate readings settles on, or null: the most read spelling (letters' case aside) with at
+    /// least <paramref name="least"/> readings and <paramref name="lead"/> times as many as the next one (twice live; 1.5
+    /// over a character's old pictures, where a pet's plate, "Cube", reads now and then). The OCR's slips ("Swot", "Swoyy",
+    /// "swoly" for Swoly) scatter, the name repeats; written as it was read most often.
+    /// </summary>
+    public static string? Settle(IEnumerable<string> reads, int least, double lead = 2)
+    {
+        var groups = reads.Where(r => r.Length >= 3).GroupBy(r => r, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (Spelling: g.GroupBy(x => x, StringComparer.Ordinal).OrderByDescending(x => x.Count()).ThenBy(x => char.IsUpper(x.Key[0]) ? 0 : 1).First().Key, N: g.Count()))
+            .OrderByDescending(x => x.N).ToList();
+        if (groups.Count == 0 || groups[0].N < least) return null;
+        if (groups.Count > 1 && groups[0].N < groups[1].N * lead) return null;
+        return groups[0].Spelling;
+    }
+
+    static readonly Dictionary<string, List<string>> Votes = new();
+    public const int VotesKept = 12, VotesNeeded = 4;
+
+    /// <summary>
+    /// One reading of the nameplate for the character counted for: the name is set once the last
+    /// <see cref="VotesKept"/> readings settle on one (<see cref="Settle"/>, <see cref="VotesNeeded"/>), unless the
+    /// player typed one. True when the name changed.
+    /// </summary>
+    public static bool VoteName(Character c, string read)
+    {
+        lock (Gate)
+        {
+            var mine = Book.List.FirstOrDefault(x => x.Id == c.Id); if (mine == null) return false;
+            if (mine.Name.Length > 0 && !mine.NameRead) return false;
+            if (!Votes.TryGetValue(mine.Id, out var v)) Votes[mine.Id] = v = new();
+            v.Add(read); if (v.Count > VotesKept) v.RemoveAt(0);
+            return Settle(v, VotesNeeded) is { } name && SetReadLocked(mine, name);
+        }
+    }
+
+    /// <summary>A name read for a character (from its pictures or the screen), unless the player typed one. True when it changed.</summary>
+    public static bool SetReadName(Character c, string name)
+    {
+        lock (Gate)
+        {
+            var mine = Book.List.FirstOrDefault(x => x.Id == c.Id);
+            return mine != null && !(mine.Name.Length > 0 && !mine.NameRead) && SetReadLocked(mine, name);
+        }
+    }
+
+    static bool SetReadLocked(Character mine, string name)
+    {
+        if (string.Equals(mine.Name, name, StringComparison.Ordinal)) return false;
+        CrashLog.Note($"characters: {Label(mine)} is {name} (read off the nameplate)");
+        mine.Name = name; mine.NameRead = true;
+        SaveLocked();
+        return true;
+    }
+
+    /// <summary>Whether the nameplate is worth reading for this character: no name yet, or one read (it may still be corrected); never a typed one.</summary>
+    public static bool WantsName(Character c) => c.Name.Length == 0 || c.NameRead;
+    public static bool HasReadName(Character c) => c.Name.Length > 0 && c.NameRead;
+
     /// <summary>Marks the old runs as sorted (CharacterSort ran, or had nothing to do).</summary>
-    public static void MarkSorted() { lock (Gate) { Book.Sorted = true; SaveLocked(); } }
+    public static void MarkSorted() { lock (Gate) { Book.Sorted = true; Book.Placed = true; SaveLocked(); } }
     public static bool Sorted { get { lock (Gate) return Book.Sorted; } }
+
+    /// <summary>The kept history still waits for the place pass: characters were seen, and it has not run (a 0.10.51 or 0.10.52 install, or a first character just adopted).</summary>
+    public static bool NeedsPlacing { get { lock (Gate) return Book.List.Count > 0 && !Book.Placed; } }
+
+    /// <summary>
+    /// The character that took the history over: the one the book says, else (a 0.10.51 book) the one whose folder holds
+    /// days.json or today.json, else the current one.
+    /// </summary>
+    public static Character? Adopter
+    {
+        get
+        {
+            lock (Gate)
+            {
+                var named = Book.List.FirstOrDefault(c => c.Id == Book.Adopter);
+                if (named != null) return named;
+                return Book.List.FirstOrDefault(c => File.Exists(Path.Combine(DirOf(c), "days.json")) || File.Exists(Path.Combine(DirOf(c), "today.json")))
+                    ?? Book.List.FirstOrDefault(c => c.Id == Book.Current);
+            }
+        }
+    }
 
     /// <summary>
     /// The first character seen takes over the numbers kept so far: each of <see cref="Files"/> in the top folder moves
@@ -199,6 +291,7 @@ public static class Characters
             catch (Exception ex) { CrashLog.Write("characters adopt " + f, ex); }
         }
         CrashLog.Note($"characters: {Label(c)} takes over the numbers kept so far ({dir})");
+        lock (Gate) { Book.Adopter = c.Id; }
         SetCurrent(c);
     }
 }
