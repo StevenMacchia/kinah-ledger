@@ -1114,6 +1114,14 @@ public static class WpfApp
                     .Concat(o is DependencyObject d ? LogicalTreeHelper.GetChildren(d).Cast<object>().SelectMany(Texts) : Enumerable.Empty<System.Windows.Controls.TextBlock>());
                 var tkShown = Texts(tk.Root).Select(t => t.Text).Where(t => t.EndsWith("M") || t.EndsWith("K")).ToList();
                 Check(tkShown.Contains("1.21M") && tkShown.Contains("845.9K"), $"motion: the overlay's hour and session roll on a pickup, held a fifth in, eased ({string.Join(" ", tkShown)})");
+                // Buddy (the Card look, 0.10.52): its figures roll the same way, and its ring sweeps from 60% of your best to 90%
+                var bd = new HudCard();
+                var bv1 = new Dictionary<string, string>(v1) { ["chase"] = "0.6" };
+                var bv2 = new Dictionary<string, string>(v2) { ["chase"] = "0.9" };
+                bd.Update(bv1); bd.Update(bv2);
+                var bdShown = Texts(bd.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
+                Check(bdShown.Any(t => t.StartsWith("1.21M")) && bdShown.Any(t => t.StartsWith("845.9K")) && bdShown.Contains("75"),
+                    $"motion: Buddy's hour and session roll and its ring sweeps (60 to 90), held a fifth in ({string.Join(" | ", bdShown.Where(t => t.Length is > 0 and < 24))})");
             }
             Motion.Still = true; Motion.FrozenAt = null;
             var still = new System.Windows.Controls.TextBlock();

@@ -155,19 +155,23 @@ public sealed partial class HudCard : IHudLook
         var (share, words, beat) = Chase(values);
         if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}"))
         {
-            _rate.Inlines.Clear();
+            // a pickup: the hour and the session roll to their new figures and the edge lights (Ui/HudCard.Motion.cs)
+            bool rose = TotalRose(V("total"));
+            _rate.Inlines.Clear(); _rateRun = _totalRun = null;
             if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R("Waiting for the first count", 13, Faint));
             else if (warm) _rate.Inlines.Add(R(V("rate"), 16, Gold, weight: FontWeights.Bold));
-            else { _rate.Inlines.Add(R(V("rate"), 22, Gold, weight: FontWeights.Bold)); _rate.Inlines.Add(R(" an hour", 12, Muted, weight: FontWeights.SemiBold)); }
+            else { _rateRun = R(V("rate"), 22, Gold, weight: FontWeights.Bold); _rate.Inlines.Add(_rateRun); _rate.Inlines.Add(R(" an hour", 12, Muted, weight: FontWeights.SemiBold)); }
+            if (_rateRun != null) Roll(_rate, "rate", () => _rateRun, V("rate"), rose, true);
             _rate.Opacity = warm ? .55 : 1;
             _total.Inlines.Clear();
             // "session" alone: the ring took the room the fee's words had (the window says the cut everywhere the figure is)
-            if (V("total").Length > 0 && counted) { _total.Inlines.Add(R(V("total"), 13, Ink, weight: FontWeights.SemiBold)); _total.Inlines.Add(R(" session", 11.5, Muted, weight: FontWeights.SemiBold)); }
+            if (V("total").Length > 0 && counted) { _totalRun = R(V("total"), 13, Ink, weight: FontWeights.SemiBold); _total.Inlines.Add(_totalRun); _total.Inlines.Add(R(" session", 11.5, Muted, weight: FontWeights.SemiBold)); Roll(_total, "total", () => _totalRun, V("total"), rose, false); }
+            if (rose && Moves) EdgeGlow();
             _total.Visibility = _total.Inlines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;   // no empty line under "Waiting for the first count"
             // the ring and the chase (Buddy): this hour against your best here, mint with a star once it is beaten
-            _ringHost.Children.Clear();
             bool ring = share >= 0 && counted && !warm;
-            if (ring) _ringHost.Children.Add(Ring(44, 4.5, share, Rgb(beat ? MintC : GoldC), beat ? "★" : $"{Math.Round(share * 100):0}", beat ? "best" : "of best"));
+            // the ring sweeps to its new share and pulses once when you pass your best (Ui/HudCard.Motion.cs)
+            if (ring) DrawRing(share, beat); else { _ringHost.Children.Clear(); Motion.ForgetShare(_key + "ring"); _ringDrawn = false; }
             _ringHost.Visibility = ring ? Visibility.Visible : Visibility.Collapsed;
             _chase.Text = words.Length > 0 && counted && !warm ? (beat ? "★ " : "⚑ ") + words : "";
             _chase.Foreground = beat ? Mint : Gold;
@@ -216,6 +220,10 @@ public sealed partial class HudCard : IHudLook
                 if (i == 0 && t is Grid g) g.Children.Add(Light(tiles[0]));
                 _tiles.Children.Add(t);
             }
+            // a new pickup at the front: its tile grows in, the head pops (Ui/HudCard.Motion.cs); not the first draw
+            var front = tiles.FirstOrDefault();
+            if (front != null && front.Id != _landedId && _landedId.Length > 0 && Moves && _tiles.Children.Count > 0 && _tiles.Children[0] is FrameworkElement ft) Arrived(ft, front);
+            _landedId = front?.Id ?? "";
         }
         var first = tiles.FirstOrDefault();
         if (Changed("newest", first == null ? "" : $"{first.Id}|{first.Name}|{first.Worth}|{first.Count}"))
@@ -246,6 +254,8 @@ public sealed partial class HudCard : IHudLook
                 var glow = Glow(c, 10, 18, .55, 2);
                 _ring.BorderBrush = glow.BorderBrush; _ring.BorderThickness = glow.BorderThickness; _ring.CornerRadius = glow.CornerRadius; _ring.Effect = glow.Effect;
                 _ring.Visibility = Visibility.Visible;
+                if (Moves && (rare.Id ?? "") != _lastRare) RareBeat();   // its frame beats twice as it lands
+                _lastRare = rare.Id ?? "";
             }
             else
             {
