@@ -58,8 +58,11 @@ public static class MarketLocator
         ("lowest",   new(@"^(?:[l1]owest\s*sa[l1]e\s*pr[il1]ce|[l1]owest\s*pr[il1]ce|[l1]owest\s*sa[l1]e|[l1]owest)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
         ("listings", new(@"^(?:sa[l1]es\s*[l1][il1]s[t7]|sa[l1]es|[l1]ist[il1]ngs?)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
         ("grade",    new(@"^grade$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
-        ("unit",     new(@"^(?:unit\s*pr[il1]ce|pr[il1]ce\s*(?:per|/|each)(?:\s*(?:unit|each|one))?|unit|pr[il1]ce|pr[il1]ce\s*each)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
-        ("total",    new(@"^(?:tota[l1]\s*pr[il1]ce|tota[l1]|sum|tota[l1]\s*amount)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        // the Main tab's search results (2026-11-11 market-shots\20261111-135300.png): "Item", "Sale Price Per It…" (the price
+        // per item, cut short by the game), "Sale Price" (the stack's total), "Time Left"; one row per listing, each named
+        ("unit",     new(@"^(?:unit\s*pr[il1]ce|pr[il1]ce\s*(?:per|/|each)(?:\s*(?:unit|each|one|[il1]tem|[il1]t\w*))?|unit|pr[il1]ce|pr[il1]ce\s*each|sa[l1]e\s*pr[il1]ce\s*per(?:\s*[il1]t\w*)?|per\s*[il1]tem)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("total",    new(@"^(?:tota[l1]\s*pr[il1]ce|tota[l1]|sum|tota[l1]\s*amount|sa[l1]e\s*pr[il1]ce)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("time",     new(@"^(?:time\s*[l1]eft|remaining(?:\s*time)?)$", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
     };
 
     /// <summary>The middle of the game frame, where panels open; the outer few percent hold the HUD.</summary>
@@ -126,6 +129,9 @@ public static class MarketLocator
             if ((listing || board) && (row == null || same.Count > row.Count)) row = same;
         }
         if (row == null) return (null, $"saw {string.Join(", ", hits.Select(h => h.kind).Distinct())} but not a whole header row");
+        // the board's "Lowest Sale Price" read in two pieces: its "Sale Price" is the rest of the lowest header, not a total
+        if (row.FirstOrDefault(o => o.kind == "lowest") is { box: var lb } && lb.Width > 0)
+            row = row.Where(o => !(o.kind == "total" && o.box.Left >= lb.Right && o.box.Left - lb.Right < lb.Height * 3)).ToList();
 
         int hh = Math.Max(8, row.Max(o => o.box.Height));
         int numericLeft = row.Where(o => o.kind is not ("name" or "grade")).Min(o => o.box.Left);
@@ -141,6 +147,14 @@ public static class MarketLocator
         }
         int rowTop = row.Min(o => o.box.Top), rowBottom = row.Max(o => o.box.Bottom);
         int left = row[0].kind is "name" or "grade" ? Math.Max(game.Left, row[0].box.Left - hh) : Math.Max(game.Left, numericLeft - game.Width * 22 / 100);
+        // a listing table's "Item" header sits in the middle of its column, the names start at the column's left (the Main
+        // tab's search results: the names begin half a column left of the header): the column runs as far left of the
+        // header's middle as it runs right of it
+        if (row[0].kind == "name" && !row.Any(o => o.kind == "lowest") && bounds.Count > 0)
+        {
+            int mid = row[0].box.Left + row[0].box.Width / 2;
+            left = Math.Max(game.Left, Math.Min(left, mid - (bounds[0] - mid)));
+        }
         int right = Math.Min(game.Right, row[^1].box.Right + Math.Max(2 * hh, game.Width * 2 / 100));
         int top = rowBottom + 2;
         int bottom = Math.Min(game.Bottom - game.Height * 4 / 100, top + game.Height * 60 / 100);

@@ -5756,6 +5756,36 @@ options: --process aion[,other]");
             var before = lm.Pending;
             Task.Run(() => lm.TickAsync(frame, 1)).GetAwaiter().GetResult();
             Check("listings with no item line above them queue nothing, and the Market stays open", lm.Pending == before && lm.Detected);
+
+            // the Main tab's search results (market-shots\20261111-135300.png, Steven: "it just says nothing read yet while im in
+            // the market window"; "the lowest price should be what is considered"): headers Item, "Sale Price Per It…", Sale
+            // Price, Time Left; each row named, the icon's stack count under the name's start; the names start half a column
+            // left of "Item". Only the lowest price per item is sent.
+            var mainTab = new List<OcrLineBox>
+            {
+                L(158, 12, new[] { ("Item", 671, 26), ("Sale", 1160, 30), ("Price", 1193, 36), ("Per", 1232, 22), ("It...", 1257, 26), ("Sale", 1332, 30), ("Price", 1365, 36), ("Time", 1479, 32), ("Left", 1514, 28) }),
+                L(220, 14, new[] { ("Fresh", 333, 40), ("Raw", 378, 28), ("Meat", 410, 36), ("643", 1151, 26), ("25,720", 1311, 46), ("2d", 1492, 18), ("19h", 1513, 26) }),
+                L(240, 9, new[] { ("40", 308, 14) }),
+                L(301, 14, new[] { ("Fresh", 333, 40), ("Raw", 378, 28), ("Meat", 410, 36), ("849", 1151, 26), ("78,108", 1311, 46), ("1d", 1492, 18), ("12h", 1513, 26) }),
+                L(321, 9, new[] { ("92", 308, 14) }),
+                L(382, 14, new[] { ("Fresh", 333, 40), ("Raw", 378, 28), ("Meat", 410, 36), ("678", 1151, 26), ("80,682", 1311, 46), ("2d", 1492, 18), ("7h", 1513, 20) }),
+                L(402, 9, new[] { ("119", 306, 18) }),
+            };
+            var (mainLayout, mainNote) = MarketLocator.Detect(frame, mainTab);
+            var mm = new MarketCapture(new Settings(), items, null, "Siel (Elyos)") { Send = (b, _) => Task.FromResult(new SendResult(true, 202, null, "{\"ok\":true}")), Read = (r, sc, bo) => Task.FromResult(mainTab) };
+            Task.Run(() => mm.TickAsync(frame, 1)).GetAwaiter().GetResult();
+            Check($"the Main tab's search results are found ({mainNote})", mainLayout?.Kinds is { } mk && mk.SequenceEqual(new[] { "name", "unit", "total", "time" }) && mainLayout.Table.Left < 333);
+            Check($"  each listing is read, only the lowest is sent ({mm.Pending} queued, {mm.LastAsk})", mm.Pending == 1 && mm.AsksSeen == 1 && mm.LastAsk.StartsWith("Fresh Raw Meat") && mm.LastAsk.Contains("643"));
+            Check("  and the drops take it", PriceBook.QuoteOf("Fresh Raw Meat")?.Price == 643);
+            // the board's headers seen for a moment, then the search results: unnamed listings under the board's layout send
+            // the reader to look for the table again, and the next read finds the Main tab's own
+            var shown = screen;
+            var mh = new MarketCapture(new Settings(), items, null, "Siel (Elyos)") { Send = (b, _) => Task.FromResult(new SendResult(true, 202, null, "{\"ok\":true}")), Read = (r, sc, bo) => Task.FromResult(shown) };
+            Task.Run(() => mh.TickAsync(frame, 1)).GetAwaiter().GetResult();
+            bool lostBoard = mh.Layout == null && mh.Pending == 0;
+            shown = mainTab;
+            Task.Run(() => mh.TickAsync(frame, 1)).GetAwaiter().GetResult();
+            Check($"  a board layout that reads only unnamed listings gives way to the search results ({lostBoard}, {mh.Pending} queued)", lostBoard && mh.Pending == 1 && mh.Layout?.Kinds?.Contains("unit") == true);
         }
         finally { PriceBook.PathOverride = keepPrices; PriceBook.Reset(); }
         return ok;
