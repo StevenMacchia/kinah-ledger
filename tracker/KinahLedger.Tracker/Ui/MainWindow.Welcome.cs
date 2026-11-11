@@ -148,7 +148,7 @@ public partial class MainWindow
     /// <summary>The first-run screen for a layout render, with a sample choice half made.</summary>
     public void ShowWelcomeDemo(string skin = "night")
     {
-        _demo = true;
+        _demo = true; Motion.Still = true;
         Skins.Apply(skin);
         // KL_WELCOME_REGION=eu: the region with the most servers, to check the chips still fit the card (2026-10-26)
         var region = Servers.Region(Environment.GetEnvironmentVariable("KL_WELCOME_REGION"))?.Key ?? "na_e";

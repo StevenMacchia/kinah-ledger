@@ -602,7 +602,10 @@ public partial class MainWindow
         return g;
     }
 
-    /// <summary>A folded group under Loot: one line (name, its summary) until a click opens it.</summary>
+    // the group a click just opened, for its one move (RunsGroup)
+    string? _runsMoved;
+
+    /// <summary>A folded group under Loot: one line (name, its summary) until a click opens it; it opens and folds smoothly.</summary>
     FrameworkElement RunsGroup(string zone, string name, List<Inline> summary, Func<FrameworkElement> content, Action redraw)
     {
         var key = zone + "|" + name;
@@ -621,18 +624,30 @@ public partial class MainWindow
             RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new RotateTransform(open ? 90 : 0),
         };
         chev.SetResourceReference(Shape.StrokeProperty, open ? "Gold" : "Faint");
+        // the group a click just opened: drawn open, it opens (Motion.Open) as its chevron turns
+        bool justOpened = open && _runsMoved == key;
+        if (justOpened) { _runsMoved = null; Motion.Turn(chev, 0, 90); }
         head.Children.Add(chev);
         var nm = PT(name, "Ink", 13.5, FontWeights.Normal); nm.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(nm, 1); head.Children.Add(nm);
         var sum = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }; sum.Inlines.AddRange(summary); Grid.SetColumn(sum, 2); head.Children.Add(sum);
         head.MouseEnter += (_, _) => head.SetResourceReference(Panel.BackgroundProperty, "HoverTint");
         head.MouseLeave += (_, _) => head.Background = Brushes.Transparent;
-        head.MouseLeftButtonUp += (_, _) => { if (!_runsOpen.Remove(key)) _runsOpen.Add(key); redraw(); };
+        Border? inner = null;
+        head.MouseLeftButtonUp += (_, _) =>
+        {
+            if (inner != null && Motion.Playing(inner)) return;
+            // folding: the body folds away and the chevron turns back, then the card is drawn folded
+            if (open && inner != null && Motion.On) { Motion.Turn(chev, 90, 0); Motion.Close(inner, () => { _runsOpen.Remove(key); redraw(); }); return; }
+            if (!_runsOpen.Remove(key)) { _runsOpen.Add(key); _runsMoved = key; }
+            redraw();
+        };
         sp.Children.Add(head);
         if (open)
         {
-            var inner = new Border { Child = content(), BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(14, 2, 14, 10) };
+            inner = new Border { Child = content(), BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(14, 2, 14, 10) };
             inner.SetResourceReference(Border.BorderBrushProperty, "Line");
             sp.Children.Add(inner);
+            if (justOpened) Motion.Open(inner);
         }
         return box;
     }

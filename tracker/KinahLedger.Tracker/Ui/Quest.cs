@@ -285,13 +285,16 @@ public partial class MainWindow
     }
 
     /// <summary>Fills a chip: the icon, the big figure over its label.</summary>
-    static void QChipFill(Border chip, FrameworkElement icon, string big, string small)
+    /// <paramref name="roll"/>: the big figure's key and value, so it rolls from the last one shown under that key (Motion.Number;
+    /// money tints green as it rises, a count of kills doesn't).
+    static void QChipFill(Border chip, FrameworkElement icon, string big, string small, (string Key, double Value, bool Money)? roll = null)
     {
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
         icon.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(icon);
         var text = new StackPanel { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         var b = QT(big, 15, FontWeights.SemiBold, "Ink", trim: true); b.LineHeight = 17; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        if (roll is { } r) Motion.Number(b, r.Key, r.Value, r.Money ? v => Amounts.Short(v) : v => Math.Round(v).ToString("N0"), r.Money ? 0 : -1);
         var sm = QT(small, 11, FontWeights.Medium, "Muted", trim: true); sm.LineHeight = 14; sm.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sm.Margin = new Thickness(0, 1, 0, 0);
         text.Children.Add(b); text.Children.Add(sm);
         Grid.SetColumn(text, 1); g.Children.Add(text);
