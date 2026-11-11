@@ -1727,6 +1727,8 @@ public sealed partial class TrackerSession
     public ActivityTracker Doing { get; } = new();
     /// <summary>True while the Market's listings are being read (set by the watcher, which runs the Market reader).</summary>
     public Func<DateTime, bool>? MarketOpen { get; set; }
+    /// <summary>When the Market's purchase dialog was last read over the loot list (wall clock): the watcher keeps a picture when the Market's table was never found.</summary>
+    public DateTime MarketDialogAt { get; private set; } = DateTime.MinValue;
     // the last farming sign in the open world (a kill, a drop, a gather, an enemy on the bar or around the character)
     DateTime _farmAt = DateTime.MinValue;
     /// <summary>Farming stops being the activity this long after its last sign.</summary>
@@ -3519,7 +3521,7 @@ public sealed partial class TrackerSession
         // the Market's purchase dialog over the band ("Total Amount Due", with "Funds" and "Cancel"): the Market is open, even
         // when its listings never showed (Steven, 2026-11-06 11:32: Pure Odyle x7, x2 and x5 bought from the dialog came in a
         // burst two seconds after it and counted as rare drops; no Market scene that whole stretch)
-        if (lines.Any(l => PickupCheck.IsMarketDialog(l.Text))) MarketSeen(now, "its purchase dialog over the loot list");
+        if (lines.Any(l => PickupCheck.IsMarketDialog(l.Text))) { MarketDialogAt = DateTime.UtcNow; MarketSeen(now, "its purchase dialog over the loot list"); }
         try
         {
             CommitHeld();   // anything a step without a picture left waiting (a replay) counts as read first

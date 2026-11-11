@@ -49,7 +49,7 @@ internal static class Program
             settings.ProcessHints = hints.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         // test and measuring commands log to a temp folder, never into the player's own reads.log
-        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine")
+        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
@@ -5639,6 +5639,38 @@ options: --process aion[,other]");
         answers.Enqueue(new SendResult(false, 429, TimeSpan.FromSeconds(30), "{\"ok\":false,\"retry_after\":30}"));
         Check("a 429 keeps the batch", !Flush() && m.Pending == 1 && sends == 5);
         Check("  and nothing goes out until its retry-after is over", !m.FlushDue && !Flush() && sends == 5 && m.LastError.Contains("30 s"));
+
+        // 2026-11-10 (Steven: "opening the market with the tracker running doesn't do anything"): the live read of an item's
+        // listings under the main board's headers. They are read, named for the item line above, and queued for the site when
+        // within 3x of the board's price; one far off it stays on this PC. The Market counts as open while they show.
+        var keepPrices = PriceBook.PathOverride; var listingDir = TestTemp.Path("KinahLedger-market-listing"); Directory.CreateDirectory(listingDir);
+        PriceBook.PathOverride = Path.Combine(listingDir, "prices.json"); PriceBook.Reset();
+        try
+        {
+            PriceBook.SetBoardQuotes(PriceBook.ParseQuotes("{\"items\":[{\"item\":\"Raw Leather\",\"price\":16500,\"price_from\":\"feed\",\"readings\":30,\"sure\":true}]}", null));
+            var L = (Func<int, int, (string, int, int)[], OcrLineBox>)((y, h, w) => MarketReadTests.Line(y, h, w));
+            var screen = new List<OcrLineBox>
+            {
+                L(200, 20, new[] { ("Grade", 300, 60), ("Item", 420, 40), ("Sales", 900, 50), ("List", 955, 35), ("Lowest", 1150, 60), ("Sale", 1215, 40), ("Price", 1260, 50) }),
+                L(360, 20, new[] { ("Raw", 450, 30), ("Leather", 484, 60) }),
+                L(400, 20, new[] { ("16,799", 430, 60), ("16,799", 560, 60), ("2d", 700, 20), ("23h", 724, 30) }),
+                L(440, 20, new[] { ("16,799", 430, 60), ("537,568", 560, 70), ("2d", 700, 20), ("23h", 724, 30), ("32", 1200, 20) }),
+                L(480, 20, new[] { ("17,000", 430, 60), ("34,000", 560, 60), ("2d", 700, 20), ("22h", 724, 30) }),
+                L(520, 20, new[] { ("1,500", 430, 60), ("1,500", 560, 60), ("2d", 700, 20), ("21h", 724, 30) }),
+            };
+            var lm = new MarketCapture(new Settings(), items, null, "Siel (Elyos)") { Send = (b, _) => Task.FromResult(new SendResult(true, 202, null, "{\"ok\":true}")), Read = (r, sc, bo) => Task.FromResult(screen) };
+            var frame = new System.Drawing.Rectangle(0, 0, 1920, 1080);
+            Task.Run(() => lm.TickAsync(frame, 1)).GetAwaiter().GetResult();
+            Check("an item's listings are read live and queued for the site", lm.Pending == 3 && lm.AsksSeen == 3 && lm.LastAsk.StartsWith("Raw Leather"));
+            Check("  one 10x under the board's price stays on this PC", lm.OffBoard == 1);
+            Check("  and the Market counts as open", lm.Detected && (DateTime.UtcNow - lm.SeenAt).TotalSeconds < 5);
+            Check("  the drops take the lowest of them", PriceBook.QuoteOf("Raw Leather")?.Price == 16_799);
+            screen.RemoveAt(1);
+            var before = lm.Pending;
+            Task.Run(() => lm.TickAsync(frame, 1)).GetAwaiter().GetResult();
+            Check("listings with no item line above them queue nothing, and the Market stays open", lm.Pending == before && lm.Detected);
+        }
+        finally { PriceBook.PathOverride = keepPrices; PriceBook.Reset(); }
         return ok;
     }
 

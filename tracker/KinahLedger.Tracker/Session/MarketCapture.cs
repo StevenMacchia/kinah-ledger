@@ -107,12 +107,12 @@ public sealed class MarketCapture
         }
         var rows = await MarketReader.ReadRowsAsync(layout, scale, Read);
         Reads++; LastReadAt = DateTime.UtcNow;
-        int parsed = 0;
-        foreach (var row in rows)
+        var (asks, listingRows, unnamed) = ReadAsks(layout, rows);
+        bool open = asks.Count > 0 || listingRows > 0;
+        if (open && (now - SeenAt).TotalSeconds > OpeningGapSec) BeginOpening(now);
+        foreach (var ask in asks)
         {
-            var ask = _parser.Parse(row);
-            if (ask == null) continue;
-            parsed++; AsksRead++;
+            AsksRead++; _openAsks++; _openItems.Add(ask.Item);
             PriceBook.Observe(ask.Item, ask.UnitPrice, now);   // the window values drops at the lowest ask seen
             bool fresh;
             lock (_lock)
@@ -125,16 +125,124 @@ public sealed class MarketCapture
                     Enqueue(ask.Item, ask.UnitPrice, ask.Qty, now);
                 }
             }
-            if (fresh) { AsksSeen++; LastAsk = ask.ToString(); }
+            if (fresh) { AsksSeen++; LastAsk = ask.ToString(); if (Sharing) _openQueued++; }
         }
-        if (parsed == 0)
+        if (unnamed && !_openShot)
+        {
+            // an item's listings on screen with no item name this reader can find above them: one picture per opening, kept on
+            // this PC, so where the Market puts the name can be seen and read next time
+            _openShot = true;
+            KeepShot(game, $"an item's listings ({listingRows} rows) with no item name above them", rows);
+        }
+        if (!open)
         {
             // the Market closed or moved: after a few empty reads go back to looking for it (a chosen area just waits)
-            if (++_emptyReads >= _cfg.LostAfterReads) { Detected = false; if (!Manual) Layout = null; }
+            if (++_emptyReads >= _cfg.LostAfterReads)
+            {
+                if (Detected) EndOpening();
+                Detected = false; if (!Manual) Layout = null;
+            }
         }
         else { _emptyReads = 0; Detected = true; SeenAt = now; }
         if (Reads % 60 == 0)
             lock (_lock) foreach (var k in _seen.Where(kv => (now - kv.Value).TotalMinutes >= _cfg.RepeatMinutes).Select(kv => kv.Key).ToList()) _seen.Remove(k);
+    }
+
+    /* ---------------- what one read holds, and one opening of the Market ---------------- */
+
+    /// <summary>An item's listing read off the main board shares only within this many times the board's price for it.</summary>
+    public const double ListingNearX = 3;
+    /// <summary>The Market seen again after this long without it is a new opening (its notes and its one picture).</summary>
+    public const int OpeningGapSec = 60;
+    /// <summary>Listings read but not shared because the item had no board price, or theirs was over 3x off it.</summary>
+    public int OffBoard { get; private set; }
+
+    /// <summary>
+    /// The asks in one read: each board row with its lowest price (or a listing table's row), plus an item's listings shown
+    /// under the main board's headers, named for the item line above them (MarketParser.Listings) and kept only when their
+    /// price agrees with the board's. Also how many listing rows were on screen, and whether they had no name to go by.
+    /// </summary>
+    internal (List<MarketAsk> Asks, int ListingRows, bool Unnamed) ReadAsks(MarketLayout layout, List<MarketReader.Row> rows)
+    {
+        var asks = new List<MarketAsk>();
+        foreach (var row in rows) if (_parser.Parse(row) is { } a) asks.Add(a);
+        if (layout.Kinds == null || Array.IndexOf(layout.Kinds, "lowest") < 0) return (asks, 0, false);
+        var l = _parser.Listings(rows);
+        foreach (var a in l.Asks)
+        {
+            if (PriceBook.NearKnown(a.Item, a.UnitPrice, ListingNearX)) asks.Add(a);
+            else { OffBoard++; CrashLog.NoteBurst($"Market: {a} not shared: no board price for it within {ListingNearX}x"); }
+        }
+        return (asks, l.Rows, l.Rows > 0 && l.Item == null);
+    }
+
+    DateTime _openedAt = DateTime.MinValue;
+    int _openAsks, _openQueued;
+    readonly HashSet<string> _openItems = new();
+    bool _openShot;
+
+    void BeginOpening(DateTime now)
+    {
+        _openedAt = now; _openAsks = 0; _openQueued = 0; _openItems.Clear(); _openShot = false;
+        CrashLog.Note($"Market: open, reading its prices ({Note})");
+    }
+
+    /// <summary>The Market's table gone after a read of it: one line on what this opening gave.</summary>
+    void EndOpening()
+    {
+        if (_openedAt == DateTime.MinValue) return;
+        _openedAt = DateTime.MinValue;
+        CrashLog.Note(_openAsks == 0
+            ? "Market: closed; no prices read this opening"
+            : $"Market: closed; {_openAsks:N0} prices read for {_openItems.Count:N0} item{(_openItems.Count == 1 ? "" : "s")} ({string.Join(", ", _openItems.Take(6))}), {_openQueued:N0} new for the site");
+    }
+
+    DateTime _missShotAt = DateTime.MinValue;
+
+    /// <summary>
+    /// The Market is open (its purchase dialog is up) but its table was never found: one picture every ten minutes at most,
+    /// kept on this PC, with what the finder last said. 2026-11-10: nine openings to buy, one 16-second read.
+    /// </summary>
+    public void MissedOpening(Rectangle game)
+    {
+        if (Detected || (DateTime.UtcNow - _missShotAt).TotalMinutes < 10) return;
+        _missShotAt = DateTime.UtcNow;
+        KeepShot(game, $"the Market's purchase dialog is up but its table wasn't found ({Note})", null);
+    }
+
+    /// <summary>Where the Market pictures go (newest <see cref="ShotsKept"/> kept). They never leave this PC.</summary>
+    public static string ShotsDir => Path.Combine(CrashLog.Dir, "market-shots");
+    public const int ShotsKept = 6;
+
+    /// <summary>The game frame at 1920 wide (the Market's text stays legible) and a .txt of why, the layout and the rows read.</summary>
+    void KeepShot(Rectangle game, string why, List<MarketReader.Row>? rows)
+    {
+        try
+        {
+            Directory.CreateDirectory(ShotsDir);
+            var stem = Path.Combine(ShotsDir, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            using (var raw = ScreenReader.Capture(game))
+            {
+                double f = Math.Min(1, 1920.0 / Math.Max(1, raw.Width));
+                using var small = new Bitmap(Math.Max(1, (int)(raw.Width * f)), Math.Max(1, (int)(raw.Height * f)));
+                using (var g = Graphics.FromImage(small))
+                {
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(raw, new Rectangle(0, 0, small.Width, small.Height));
+                }
+                small.Save(stem + ".png", System.Drawing.Imaging.ImageFormat.Png);
+            }
+            var text = new List<string> { why, "game " + game, "layout " + (Layout?.ToString() ?? "none"), "finder: " + Note };
+            if (rows != null) text.AddRange(rows.Select(r => "row: " + r.Flat));
+            File.WriteAllLines(stem + ".txt", text);
+            foreach (var old in new DirectoryInfo(ShotsDir).GetFiles("*.png").OrderByDescending(x => x.Name).Skip(ShotsKept))
+            {
+                old.Delete();
+                try { File.Delete(Path.ChangeExtension(old.FullName, ".txt")); } catch (Exception) { }
+            }
+            CrashLog.Note($"Market: {why}; a picture is kept in market-shots\\{Path.GetFileName(stem)}.png");
+        }
+        catch (Exception ex) { CrashLog.Write("market shot", ex); }
     }
 
     /* ---------------- the player's own sales, from the chat ---------------- */
@@ -258,10 +366,8 @@ public sealed class MarketCapture
         var rows = await MarketReader.ReadRowsAsync(layout, scale, Read);
         Reads++; LastReadAt = DateTime.UtcNow;
         var now = DateTime.UtcNow; int n = 0; var names = new HashSet<string>();
-        foreach (var row in rows)
+        foreach (var ask in ReadAsks(layout, rows).Asks)
         {
-            var ask = _parser.Parse(row);
-            if (ask == null) continue;
             n++; AsksRead++; names.Add(ask.Item);
             PriceBook.Observe(ask.Item, ask.UnitPrice, now);
             lock (_lock)
@@ -303,6 +409,7 @@ public sealed class MarketCapture
             {
                 _pending.RemoveRange(0, batch.Count); _sales.RemoveRange(0, sales.Count); _expired.RemoveRange(0, expired.Count);
                 Shared += batch.Count; SalesShared += sales.Count; LastError = "";
+                note = $"market prices: the site took {batch.Count:N0} price{(batch.Count == 1 ? "" : "s")}" + (sales.Count > 0 ? $" and {sales.Count:N0} sale{(sales.Count == 1 ? "" : "s")}" : "");
             }
             else if (res.Refused)
             {
