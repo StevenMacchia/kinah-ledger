@@ -197,6 +197,22 @@ public static class PriceBook
         lock (Lock) _region = med;
     }
 
+    /// <summary>
+    /// Whether a unit price sits within <paramref name="factor"/>x either side of the board's (or the other servers') price
+    /// for the item. False when there is no price to judge it by: an item's listings, named from the line above them, are
+    /// shared only when they agree with what is already known (MarketReader.ListingAsks).
+    /// </summary>
+    public static bool NearKnown(string name, long unitPrice, double factor)
+    {
+        if (unitPrice <= 0) return false;
+        var k = Norm(name);
+        lock (Lock)
+        {
+            long? rp = _board.TryGetValue(k, out var bq) && bq.Price > 0 ? bq.Price : _region.TryGetValue(k, out var rq) && rq.Price > 0 ? rq.Price : null;
+            return rp is long r && unitPrice * factor >= r && unitPrice <= factor * r;
+        }
+    }
+
     /// <summary>An ask read on the Market: kept when it is the lowest of the last day for that item.</summary>
     public static void Observe(string name, long unitPrice, DateTime at)
     {

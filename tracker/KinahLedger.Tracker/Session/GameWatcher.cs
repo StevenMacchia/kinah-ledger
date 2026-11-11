@@ -319,6 +319,7 @@ public sealed class GameWatcher
                         catch (Exception ex) { ChatNote = ex.Message; }
                     }
                     if (Market.Enabled && !Update.RemoteConfig.Current.Off("market") && MarketInView()) await Market.TickAsync(game, _settings.Ocr.Scale);
+                    if (Market.Enabled && Chat is { } mc && (DateTime.UtcNow - mc.MarketDialogAt).TotalSeconds < 5) Market.MissedOpening(game);
                     try { await TickBalanceAsync(game); } catch (Exception ex) { CrashLog.Write("balance", ex); }
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
