@@ -5293,5 +5293,15 @@ public sealed class UserPrefs
         return new UserPrefs { AllZonesDefaulted = true };
     }
 
-    public void Save() { try { File.WriteAllText(PathFor(), JsonSerializer.Serialize(this)); } catch (Exception) { /* read-only profile */ } }
+    /// <summary>
+    /// A layout render's or a self-test's prefs (MainWindow with watch off): a new install's defaults, never read from the
+    /// player's ui.json and never written to it, whatever the window does with them. Steven ticked Always on top in 0.10.43
+    /// and options-test and every ui-shot render took it from his ui.json (2026-11-11).
+    /// </summary>
+    public static UserPrefs Defaults() => new() { AllZonesDefaulted = true, _detached = true };
+
+    /// <summary>True for <see cref="Defaults"/>: Save does nothing. A field, so it is never in ui.json.</summary>
+    bool _detached;
+
+    public void Save() { if (_detached) return; try { File.WriteAllText(PathFor(), JsonSerializer.Serialize(this)); } catch (Exception) { /* read-only profile */ } }
 }
