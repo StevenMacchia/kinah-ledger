@@ -134,6 +134,12 @@ public static class ReplayBank
             var grci = got["run_chat_items"] as JsonObject ?? new JsonObject();
             foreach (var (n, v) in erci) if (N(grci[n]) != N(v)) d.Add($"run chat item {n}: expected {v}, set aside {grci[n]?.ToString() ?? "0"}");
         }
+        // what was set aside as rewards (a pass's, a shop's), by name: each one expect names must match
+        if (expect["rewards"] is JsonObject erw)
+        {
+            var grw = got["rewards"] as JsonObject ?? new JsonObject();
+            foreach (var (n, v) in erw) if (N(grw[n]) != N(v)) d.Add($"reward {n}: expected {v}, set aside {grw[n]?.ToString() ?? "0"}");
+        }
         if (expect["run_start"] is { } rstart && rstart.ToString() != (got["run_start"]?.ToString() ?? "")) d.Add($"run_start: expected {rstart}, counted {got["run_start"]?.ToString() ?? "none"}");
         if (expect["run_starts"] is { } rstarts && rstarts.ToString() != (got["run_starts"]?.ToString() ?? "")) d.Add($"run_starts: expected {rstarts}, counted {got["run_starts"]?.ToString() ?? "none"}");
         // the currency strip's numbers as read from its pictures, from the fixed crop and from the crop its anchor gives
@@ -560,6 +566,8 @@ public static class ReplayBank
             recipes[rc.Name] = $"{rc.Ok}/{rc.Fail} up {rc.Upgraded}/{rc.Upgraded + rc.NotUpgraded}";
         }
         var res = new JsonObject { ["craft_ok"] = ok, ["craft_fail"] = fail, ["items"] = outItems };
+        var rewards = e.RewardSnapshot();
+        if (rewards.Count > 0) { var rw = new JsonObject(); foreach (var (n, c) in rewards.OrderBy(kv => kv.Key, StringComparer.Ordinal)) rw[n] = c; res["rewards"] = rw; }
         if (made.Count > 0) res["craft_made"] = made;
         if (recipes.Count > 0) res["craft_recipes"] = recipes;
         if (table != null) res["table"] = table;

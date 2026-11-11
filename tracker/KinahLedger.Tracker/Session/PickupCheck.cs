@@ -108,6 +108,18 @@ public static class PickupCheck
     static readonly Regex BoxLineRx = new(@"(?:acqu|obta|btain).*\b(?:ch[e3]s[st5]?|box|pouch|bundle|cube|coffer|crate|package|parcel)\b|\b(?:ch[e3]s[st5]?|box|pouch|bundle|cube|coffer|crate|package|parcel)\b.*acqu",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    // the Daeva Pass window's membership text, read in pieces where the chat is when the window covers it: "IMembersh",
+    // "Membershil", "Grants A", "Grants Ac", "Max Odyl" (reads.log 2026-11-11 09:34:24 and 15:13:05)
+    static readonly Regex PassMemberRx = new(@"^\W*i?members\w*\W*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex PassGrantsRx = new(@"^\W*(?:grants?\s+a\w*|max\s+odyl\w*)\W*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// A read of the chat that is the Daeva Pass window's own text: a "Membership" piece and two "Grants Ac…" or "Max Odyl…"
+    /// pieces, nothing but those words on their lines. The window is open over the chat.
+    /// </summary>
+    public static bool IsPassWindowRead(IReadOnlyList<string> lines) =>
+        lines.Any(l => PassMemberRx.IsMatch(l.Trim())) && lines.Count(l => PassGrantsRx.IsMatch(l.Trim())) >= 2;
+
     /// <summary>A box obtained or opened: the lines printed with it are its contents.</summary>
     public static bool IsBoxLine(string line) =>
         !PlayerChat(line) && BoxLineRx.IsMatch(line) && !line.Contains("loot chest", StringComparison.OrdinalIgnoreCase);

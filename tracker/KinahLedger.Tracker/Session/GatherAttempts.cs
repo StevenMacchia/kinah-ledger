@@ -225,6 +225,14 @@ public sealed partial class TrackerSession
     {
         if (why == null || !(why == "an achievement's reward" || why.StartsWith("a box's", StringComparison.Ordinal) || why.StartsWith("the inventory at work", StringComparison.Ordinal)) || !GatherJustProduced(itemId, t)) return why;
         CrashLog.Note($"{_items.NameOf(itemId)} x{count}: the gathering panel or its bar just produced it, so a gather, not {why}");
+        _vouchedGather = (itemId, t);
         return null;
     }
+
+    /// <summary>The last pickup NotForGather judged a gather: its race may be claimed by then, so a later check asks this.</summary>
+    (long Id, DateTime At)? _vouchedGather;
+
+    /// <summary>A gather the panel or its bar produced: just now, or judged so a moment ago (NotForGather) for this item.</summary>
+    bool GatherVouched(long itemId, DateTime t) =>
+        GatherJustProduced(itemId, t) || _vouchedGather is { } v && v.Id == itemId && Math.Abs((v.At - t).TotalSeconds) <= 3;
 }
