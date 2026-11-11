@@ -457,7 +457,8 @@ public sealed class ItemDictionary
         // the item list built into the exe (data/tw-items.json at build time) is the whitelist whenever no other list is there
         if (d._byId.Count(kv => kv.Key > 0) == 0) d.LoadEmbedded();
         // the gathering materials are always known, so misreads of them snap to the right name even without the full list
-        foreach (var g in GatheringCatalog.All)
+        // (a find from any node is an extra, with its icon: data/extra-items.json)
+        foreach (var g in GatheringCatalog.All.Where(g => !g.AnyNode))
             if (d.Free(Norm(g.Name)))
             {
                 long id = -(long)(Fnv("gather:" + Norm(g.Name)) & 0x7FFFFFFF) - 1;

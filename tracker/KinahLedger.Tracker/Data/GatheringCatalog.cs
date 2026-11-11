@@ -1,20 +1,24 @@
 namespace KinahLedger.Data;
 
 /// <summary>Unknown: a gathering bar race whose node nothing named (no panel line, result, node on the target bar or recent node); its attempt still counts.</summary>
-public enum GatherFamily { Ore, Log, Odyle, Gemstone, Herb, Food, Unknown }
+/// Find: a coveted find that can come out of any node, whatever the skill (Poko's Skin Bundle, 2026-11-11).
+public enum GatherFamily { Ore, Log, Odyle, Gemstone, Herb, Food, Unknown, Find }
 
 /// <summary>One gatherable resource. Bonus marks what a node gives on top of its base material: gemstones and the higher tiers.</summary>
 public sealed record GatherItem(string Name, string Grade, GatherFamily Family, bool Bonus)
 {
     /// <summary>A line for a primary resource means one node was gathered; gemstones ride along with ore and don't count as nodes.</summary>
-    public bool IsNode => Family != GatherFamily.Gemstone;
+    public bool IsNode => Family is not (GatherFamily.Gemstone or GatherFamily.Find);
+    /// <summary>A coveted find from any node: no Market price (bound), but rare all the same, so it is counted and shown first.</summary>
+    public bool AnyNode => Family == GatherFamily.Find;
     /// <summary>The skill whose nodes this comes from. Gemstones come out of ore nodes.</summary>
     public GatherFamily Skill => Family == GatherFamily.Gemstone ? GatherFamily.Ore : Family;
 }
 
 public static class GatherSkills
 {
-    public static readonly GatherFamily[] Order = { GatherFamily.Ore, GatherFamily.Log, GatherFamily.Odyle, GatherFamily.Herb, GatherFamily.Food, GatherFamily.Unknown };
+    // the rare finds first: coveted, though with no price they'd sort last by worth
+    public static readonly GatherFamily[] Order = { GatherFamily.Find, GatherFamily.Ore, GatherFamily.Log, GatherFamily.Odyle, GatherFamily.Herb, GatherFamily.Food, GatherFamily.Unknown };
 
     public static string Label(GatherFamily f) => f switch
     {
@@ -24,6 +28,7 @@ public static class GatherSkills
         GatherFamily.Herb => "Herbs",
         GatherFamily.Food => "Cooking ingredients",
         GatherFamily.Unknown => "Gathering · node not named",
+        GatherFamily.Find => "Rare finds · from any node",
         _ => f.ToString()
     };
 
@@ -60,6 +65,11 @@ public static class GatheringCatalog
         (new[] { "Conide", "Coriolus", "Cypri", "Inina", "Kukuru", "Mela", "Morfa", "Ohkra", "Pujery", "Raydam" }, GatherFamily.Food, new[] { ("", "Common") })
     };
 
+    // Coveted finds that come out of any node on top of its material: bound, so no Market price, but rare all the same.
+    // Poko's Skin Bundle (Bound): a Special reward chest of 38 skins, from every gathering node (MetaBot, 2026-11-11;
+    // Steven's own at 13:51:36 that day, mining Orichalcum Ore: "ayyy at least i got a poko bundle").
+    static readonly (string Name, string Grade)[] Finds = { ("Poko's Skin Bundle (Bound)", "Special") };
+
     static readonly Dictionary<string, GatherItem> ByName = Build();
 
     static Dictionary<string, GatherItem> Build()
@@ -72,6 +82,7 @@ public static class GatheringCatalog
                     var name = prefix + n;
                     d[Norm(name)] = new GatherItem(name, grade, family, family == GatherFamily.Gemstone || grade != "Common");
                 }
+        foreach (var (name, grade) in Finds) d[Norm(name)] = new GatherItem(name, grade, GatherFamily.Find, true);
         return d;
     }
 
@@ -102,6 +113,7 @@ public static class GatheringCatalog
     public static GatherNode? NodeOf(string material)
     {
         if (Find(material) is not { } g) return null;
+        if (g.AnyNode) return new GatherNode(AnyNodeName, null, GatherFamily.Find);
         var b = BaseName(g.Name);
         // a gemstone comes out of an ore node or a gem node: "Gemstone", in mining
         return g.IsNode ? new GatherNode(b, b, g.Skill) : new GatherNode(GemNode, b, g.Skill);
@@ -109,6 +121,12 @@ public static class GatheringCatalog
 
     /// <summary>The node name gemstones are filed under (they ride along with ore, or come from a gem node).</summary>
     public const string GemNode = "Gemstone";
+
+    /// <summary>The node a find from any node is filed under: whichever node was being gathered.</summary>
+    public const string AnyNodeName = "Any node";
+
+    /// <summary>A chat line naming a find from any node ("Poko's Skin Bundle (Bound) acquired."): a pickup, not a box being opened.</summary>
+    public static bool IsFindLine(string line) => Finds.Any(f => Norm(line).Contains(Norm(f.Name)));
 
     /// <summary>A material's name without its tier ("Fresh Aria" → "Aria", "Fine Orichalcum Ore" → "Orichalcum Ore").</summary>
     public static string BaseName(string name) =>

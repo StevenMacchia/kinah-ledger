@@ -1294,7 +1294,8 @@ public sealed partial class TrackerSession
         }
         // a box obtained in this read, out in the world: what prints with it is its contents, even the lines read before its own
         if (!InRun && _boss == null)
-            foreach (var boxLine in lines.Where((l, i) => !playerText[i] && PickupCheck.IsBoxLine(l) && NewLine(l, now)))
+            // a find from any node ("Poko's Skin Bundle (Bound) acquired.") is picked up, not opened: what follows is no box's
+            foreach (var boxLine in lines.Where((l, i) => !playerText[i] && PickupCheck.IsBoxLine(l) && !GatheringCatalog.IsFindLine(l) && NewLine(l, now)))
             {
                 var until = WindowFrom(boxLine, now);
                 if (until <= _boxUntil) continue;
@@ -2635,7 +2636,7 @@ public sealed partial class TrackerSession
         }
         string? name = ev switch { RewardReceived r => r.Name, ItemAcquired a => _items.NameOf(a.ItemId), _ => null };
         if (name == null || name.Contains("Loot Chest", StringComparison.OrdinalIgnoreCase)) return;
-        if (ev is RewardReceived || BoxName.IsMatch(name)) _boxUntil = now.AddSeconds(RewardWindowSeconds);
+        if (ev is RewardReceived || BoxName.IsMatch(name) && GatheringCatalog.Find(name) is not { AnyNode: true }) _boxUntil = now.AddSeconds(RewardWindowSeconds);
     }
 
     /// <summary>

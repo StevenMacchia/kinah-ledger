@@ -61,7 +61,8 @@ public partial class MainWindow
         BagStrip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         var drops = h!.S.Drops.Where(r => !r.Header).Select(r => (Row: r, Gathered: false)).Concat(h.S.Gathered.Where(r => !r.Header).Select(r => (Row: r, Gathered: true)))
-            .OrderByDescending(x => x.Row.Worth).ThenByDescending(x => Qty(x.Row.Drops)).ToList();
+            // a coveted find (Poko's Skin Bundle) first: unpriced, it would sort last and hide behind the "+N"
+            .OrderByDescending(x => GatheringCatalog.Find(x.Row.Name) is { AnyNode: true }).ThenByDescending(x => x.Row.Worth).ThenByDescending(x => Qty(x.Row.Drops)).ToList();
         var pets = h.S.Pets ?? new();
         long crystals = pets.Sum(r => Qty(r.Drops));
         int kinds = drops.Count + (crystals > 0 ? 1 : 0);

@@ -813,6 +813,19 @@
    "bound": false,
    "url": null,
    "note": "not on MetaBot on 2026-11-04; grade, category and icon taken from Abyssal Waves Wings (Bound)"
+  },
+  {
+   "id": null,
+   "name": "Poko's Skin Bundle (Bound)",
+   "grade": "Special",
+   "tradable": false,
+   "category": "Reward Chest",
+   "icon": "https://metabot.gg/web/aion2/items/icon_item_skin_package_craft_a_s_002.webp",
+   "iconSource": "MetaBot",
+   "metabotCategory": "Reward Chest",
+   "bound": true,
+   "url": "https://metabot.gg/en/aion-2/items/pokos-skin-bundle-bound",
+   "note": "2026-11-11: a reward chest of 38 skins that any gathering node can give; counted as a rare find on Gathering (Data/GatheringCatalog.cs Finds)"
   }
  ]
 }

@@ -2949,6 +2949,28 @@ options: --process aion[,other]");
             Check("...into the Abyss it starts over, within it it goes on, back out it starts over",
                 $"{inAbyss} · {breaks} {sbk.AllView.Kinah}", "2 500 · 3 0");
         }
+        {
+            // Poko's Skin Bundle from an Orichalcum Ore node (reads.log 2026-11-11 13:51:36, Steven: "ayyy at least i got a poko
+            // bundle"; "the item has no value but its coveted"): it was taken for a box and for a name no list knows, so it
+            // never counted. Now a rare find on Gathering: counted, not a node, not a box being opened, rare though unpriced.
+            var pk0 = new DateTime(2026, 11, 11, 18, 51, 20, DateTimeKind.Utc);
+            var (spk, _) = Session(pk0.AddMinutes(-1), "Western Cantas Valley");
+            // the chat as it grew over three reads (each read the whole box, the new lines under the old)
+            var pkChat = new List<string> { "[EffyG] I'm tired of these fkn bots coming to", "the odyle I'm farming", "Orichalcum Ore acquired." };
+            spk.ProcessChat(new List<string>(pkChat), pk0);
+            pkChat.Add("Poko's Skin Bundle (Bound) acquired.");
+            spk.ProcessChat(new List<string>(pkChat), pk0.AddSeconds(16));
+            pkChat.AddRange(new[] { "[EffyG] instead of the one right next to me", "that's not touched", "Orichalcum Ore acquired." });
+            spk.ProcessChat(new List<string>(pkChat), pk0.AddSeconds(17.5));
+            spk.FlushVotes(pk0.AddSeconds(25));
+            long pid = items.IdOf("Poko's Skin Bundle (Bound)");
+            var find = GatheringCatalog.Find(items.NameOf(pid));
+            long bundles = spk.Engine.Items.GetValueOrDefault(pid) + spk.Engine.ItemsBound.GetValueOrDefault(pid);
+            var finds = spk.Engine.SkillSnapshot().GetValueOrDefault(GatherFamily.Find);
+            Check("Poko's Skin Bundle from a node: one, a rare find (not a node), rare though unpriced, its icon from the extras",
+                $"{bundles} {find?.AnyNode} {finds?.Items} {finds?.Nodes} {RareGate.IsRare(items, pid, false)} {items.Get(pid)?.Icon.Length > 0} {GatheringCatalog.IsFindLine("Poko's Skin Bundle (Bound) acquired.")}",
+                "1 True 1 0 True True True");
+        }
 
         // out of an event, then nothing for half an hour (2026-10-30 11:05:23, Defend Shugo Merchants: "rewards that land in the
         // next 45 s are still its own", and it stayed "rewards landing" until the next event closed it at 11:36:34). The time
