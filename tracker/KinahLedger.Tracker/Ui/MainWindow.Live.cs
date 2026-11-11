@@ -332,14 +332,20 @@ public partial class MainWindow
         bool counted = total != _heroTotal; _heroTotal = total;
         if (total > 0) Motion.Number(HeadRate, "hero|" + _part + "|" + CountWhere(), total / h, v => Fk(v), _rateWarming ? -1 : 0.01, roll: counted);
         else Motion.Blank(HeadRate, "hero|" + _part + "|" + CountWhere(), " ");
+        // which count it is, on the first line: overall (every zone since a break, the default) or this zone; a click on the
+        // figure switches. What it adds up, on the second
+        string which = RunShown ? "an hour" : _prefs.AllZones ? "an hour · all zones" : "an hour · this zone";
         HeadRateLbl.Text = total <= 0 ? "Kinah and loot an hour, once something is counted"
-            : priced > 0 || loot > 0 ? (_mode == Mode.Gather && kinah == 0 ? "an hour, loot after tax" : "an hour, Kinah and loot after tax")
-            : "an hour, Kinah; loot not priced yet";
+            : priced > 0 || loot > 0 ? which + "\n" + (_mode == Mode.Gather && kinah == 0 ? "loot after tax" : "Kinah and loot after tax")
+            : which + "\nKinah; loot not priced yet";
         // warming up (FillNumbers): the figure dimmed, and said so, until the count is old enough for an hour to mean something
         bool warm = _rateWarming && total > 0;
         HeadRate.Opacity = warm ? 0.4 : 1;
         if (warm) HeadRateLbl.Text += " · warming up";
-        HeadRate.ToolTip = warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted." : total > 0 ? Amounts.Full(total / h) + " an hour" : null;
+        string flip = RunShown ? "" : _prefs.AllZones
+            ? $"\nEvery zone since your last break ({TrackerSession.BreakMinutes:0} minutes with nothing farmed). Click for this zone only."
+            : "\nThis zone only: it starts over when you change zone. Click for every zone.";
+        HeadRate.ToolTip = (warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted." : total > 0 ? Amounts.Full(total / h) + " an hour" : "Nothing counted yet.") + flip;
         // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
         // none while warming up, so the line doesn't open on a spike
         // a clear that can still be undone draws no line and keeps the real one's samples for Undo
@@ -368,6 +374,16 @@ public partial class MainWindow
         DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now", bestHr);
         KvLine.Visibility = Visibility.Collapsed;   // the chips and the chase say it (Quest)
         FillHealth(HealthText, HealthMark, hideOk: true);
+    }
+
+    /// <summary>A click on the hour: overall (every zone since a break) or this zone, the same switch as ⋯ › All zones.</summary>
+    void HeadRate_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_welcome || RunShown) return;
+        _prefs.AllZones = !_prefs.AllZones;
+        if (!_demo) _prefs.Save();
+        Redraw(); Tick();
+        e.Handled = true;
     }
 
     static string AgoMinutes(DateTime minuteUtc) => TodayLoot.Dur((DateTime.UtcNow - minuteUtc).TotalSeconds) + " ago";

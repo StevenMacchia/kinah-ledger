@@ -216,8 +216,16 @@ public sealed partial class TrackerSession
     /// <summary>Runs in expeditions and events, entry to last loot, kept across restarts.</summary>
     public InstanceLog Instances { get; } = new();
     public void ResetCraftView() => CraftView = new SessionEngine(_items);
-    /// <summary>Every zone since the tracker started (GameWatcher.AllView): fed like the zone view, never reset by a zone change.</summary>
+    /// <summary>Every zone since the last break (GameWatcher.AllView): fed like the zone view, never reset by a zone change.</summary>
     public SessionEngine? AllView { get; set; }
+    /// <summary>A break: this long with nothing farmed, and the next farming line starts the overall count over.</summary>
+    public const double BreakMinutes = 15;
+    /// <summary>Back from a break (<see cref="BreakMinutes"/>), or into or out of the Abyss: the watcher starts the overall count over.</summary>
+    public event Action<DateTime>? OverallRestart;
+    /// <summary>A zone of the open world on the list: not an instance, not an area left alone, not unknown.</summary>
+    static bool OpenWorld(string? zone) => zone != null && zone != SessionEngine.UnknownZone && ZoneLocator.KindOf(zone) == null;
+    /// <summary>The last farming sign's own time (a line's, not the clock's), for telling a break.</summary>
+    DateTime? _farmSignAt;
     /// <summary>Every zone since midnight (GameWatcher.DayView): fed like the zone view, carried across restarts by the watcher.</summary>
     public SessionEngine? DayView { get; set; }
     /// <summary>The window's own counts, fed every line and never shared: the zone view, and the watcher's all-zones and Today counts.</summary>
@@ -621,6 +629,13 @@ public sealed partial class TrackerSession
             // the trace keeps every zone change beside the chat, so a replay knows where each read happened
             ReadTrace.Signal(now, "zone", zone);
             Report.Lines("zone", new[] { zone }, now);
+        }
+        // into the Abyss from the world, or back out (Steven, 2026-11-11: "switching to Abyss from normal world should change
+        // it, though it shouldn't persist there"): another kind of farming, so the overall count starts over
+        if (AllView != null && OpenWorld(ZoneView.Zone) && OpenWorld(zone) && ZoneLocator.IsAbyss(ZoneView.Zone) != ZoneLocator.IsAbyss(zone))
+        {
+            CrashLog.Note($"{ZoneView.Zone} → {zone}: {(ZoneLocator.IsAbyss(zone) ? "into the Abyss" : "out of the Abyss")}, so the overall count starts over");
+            OverallRestart?.Invoke(now);
         }
         Engine.SetZone(zone);
         Secondary?.SetZone(zone);
@@ -1603,6 +1618,9 @@ public sealed partial class TrackerSession
         batchAchievement = settledAchievement;
         batchCrystals = settled.Any(RewardCrystalLine);
         if (settledAchievement) { _achieveUntil = settledAt.AddSeconds(RewardWindowSeconds); CrashLog.Note("the settled lines came with an achievement: they are its reward, not drops"); }
+        // dated when the garbling began, the settled lines may predate the reward window that garbled the chat: it counts for them
+        _settleSpan = settled.Count > 0 ? (settledAt, now) : null;
+        try {
         foreach (var (l, parts) in _parser.JoinWrappedTails(settled, settledRead, settledAt))
         {
             // the vote or the read-again in this same read just counted it: the settle picked its lines before they ran
@@ -1616,6 +1634,7 @@ public sealed partial class TrackerSession
             // a line first on screen after the reads lined up again was the vote's, not the settle's (the replay bank's chat_settled_late)
             if (any && SettleLate(parts[0])) SettledLate++;
         }
+        } finally { _settleSpan = null; }
         if (settledAny)
         {
             CrashLog.Note($"the chat settled after {(now - settledAt).TotalSeconds:0} s of reads that didn't line up; its loot lines counted from the clean read: {string.Join(" | ", settled)}");
@@ -2528,6 +2547,8 @@ public sealed partial class TrackerSession
     /// <summary>Until when what lands is an event's or expedition's reward: a minute after its reward screen was last seen.</summary>
     DateTime _rewardScreenUntil = DateTime.MinValue;
     public const double RewardScreenSeconds = 60;
+    /// <summary>While the settle counts its lines: from when the garbling began to the read that settled it.</summary>
+    (DateTime From, DateTime To)? _settleSpan;
     /// <summary>For replay and tests: an event's or expedition's reward screen seen now.</summary>
     internal void RewardScreenSeen(DateTime t) { var u = t.AddSeconds(RewardScreenSeconds); if (u > _rewardScreenUntil) _rewardScreenUntil = u; }
 
@@ -2982,10 +3003,18 @@ public sealed partial class TrackerSession
         // the mail): what lands with it is that screen's reward, never the run's, and never says the run's rewards came in
         // (2026-10-29 13:02:27: the Daeva Pass level reward in Defend Shugo Merchants' lobby marked the run paid, so 20 s of
         // the lobby were kept as "event rewards" and read again as its cards: Abyss Points 1,100 became 780)
-        if (inside && ev is not CraftResult && Target.RewardOpen(ev.Time) && NotTheRunsScreen(Target.RewardTitle))
+        // A line the settle counts is dated when the chat's garbling began, which can be the moment that screen covered it:
+        // the screen, read a second later, still counts for it (Steven, 2026-11-11 09:34:28: the Daeva Pass Level Reward's
+        // "Acquired Unknown Fissure Challenge Ticket (Bound) x2." filed as Accursed Sword's loot, its x1 line set aside)
+        if (inside && ev is not CraftResult && (Target.RewardOpen(ev.Time) || _settleSpan is { } sp && Target.RewardOpenedIn(sp.From, sp.To)) && NotTheRunsScreen(Target.RewardTitle))
         {
             inside = false;
             CrashLog.NoteBurst($"{Describe(ev)}: the {Target.RewardTitle} screen's reward, not the run's");
+            // and filed as that screen's reward, as out in the world: never farming's loot (the same morning, the x1 line went
+            // to "Farming · Accursed Sword" as a bound drop and showed in LOOT; a day's replay had the pass's Shop Coin x5,000 and
+            // Life Crystals in farming's loot too). Items only: loose Kina with the window open came with kills (the Abyss's
+            // Rank Point lines, 2026-11-10 16:51) and goes where it went before
+            if (ev is ItemAcquired) ev = _parser.AsReward(ev);
         }
         if (inside)
         {
@@ -3007,9 +3036,17 @@ public sealed partial class TrackerSession
             if (_runPickups.Count > 60) _runPickups.RemoveAt(0);
             return where;
         }
-        Engine.Apply(ev); Secondary?.Apply(ev); foreach (var v in Views()) v.Apply(ev);
         // a farming sign: the activity is farming in this zone for a while
-        if (ev is MobKilled or EnemySoul or GatherFailed or XpGained or CurrencyGained or ItemAcquired { Bound: false } or KinahChanged { Bound: false, Delta: > 0 } && kind != ZoneLocator.Ignored && !ZoneLocator.IsBase(Zone)) _farmAt = ev.Time;
+        bool farmSign = ev is MobKilled or EnemySoul or GatherFailed or XpGained or CurrencyGained or ItemAcquired { Bound: false } or KinahChanged { Bound: false, Delta: > 0 } && kind != ZoneLocator.Ignored && !ZoneLocator.IsBase(Zone);
+        // back from a break: the overall count, which goes on across zones, starts over with this line (Steven, 2026-11-11:
+        // "stay active and stop resetting the timer until you've taken a break")
+        if (farmSign && AllView != null && _farmSignAt is { } lastFarm && (ev.Time - lastFarm).TotalMinutes >= BreakMinutes)
+        {
+            CrashLog.Note($"back from a break: nothing farmed since {lastFarm.ToLocalTime():HH:mm:ss} ({(ev.Time - lastFarm).TotalMinutes:0} min), so the overall count starts over");
+            OverallRestart?.Invoke(ev.Time);
+        }
+        Engine.Apply(ev); Secondary?.Apply(ev); foreach (var v in Views()) v.Apply(ev);
+        if (farmSign) { _farmAt = ev.Time; if (_farmSignAt is not { } fs || ev.Time > fs) _farmSignAt = ev.Time; }
         UpdateDoing(ev.Time);
         var label = FarmWhere(ev);
         Landed?.Invoke(ev, label);
@@ -5143,8 +5180,10 @@ public sealed class UserPrefs
     public bool MobsOpen { get; set; } = true;
     /// <summary>Soul Crystals sit folded at the bottom until opened.</summary>
     public bool PetsOpen { get; set; }
-    /// <summary>Off (the default): the tables start over when the zone changes. On: they keep counting across zones. What is shared is split by zone either way.</summary>
-    public bool AllZones { get; set; }
+    /// <summary>On (the default since 0.10.43): the tables keep counting across zones until a break. Off: they start over when the zone changes. A click on the hour switches. What is shared is split by zone either way.</summary>
+    public bool AllZones { get; set; } = true;
+    /// <summary>True once AllZones took its 0.10.43 default: a ui.json from before has it off only because off was the old default.</summary>
+    public bool AllZonesDefaulted { get; set; }
     /// <summary>The Today strip over Farming and Events (0.8.50) opened to its loot; folded to its one line until opened.</summary>
     public bool TodayOpen { get; set; }
     /// <summary>The Odds column as a percentage ("4.9%") instead of "1 in 21"; a click on its header switches.</summary>
@@ -5238,9 +5277,19 @@ public sealed class UserPrefs
 
     public static UserPrefs Load()
     {
-        try { var p = PathFor(); if (File.Exists(p)) return JsonSerializer.Deserialize<UserPrefs>(File.ReadAllText(p)) ?? new UserPrefs(); }
+        try
+        {
+            var p = PathFor();
+            if (File.Exists(p))
+            {
+                var u = JsonSerializer.Deserialize<UserPrefs>(File.ReadAllText(p)) ?? new UserPrefs();
+                // overall became the default in 0.10.43 (Steven, 2026-11-11): once, every window starts on it
+                if (!u.AllZonesDefaulted) { u.AllZones = true; u.AllZonesDefaulted = true; }
+                return u;
+            }
+        }
         catch (Exception) { /* corrupt prefs: start fresh */ }
-        return new UserPrefs();
+        return new UserPrefs { AllZonesDefaulted = true };
     }
 
     public void Save() { try { File.WriteAllText(PathFor(), JsonSerializer.Serialize(this)); } catch (Exception) { /* read-only profile */ } }

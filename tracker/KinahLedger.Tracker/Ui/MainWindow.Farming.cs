@@ -54,7 +54,7 @@ public partial class MainWindow
                  : new MenuEntry("Set a goal…", Sub: "Three goals are set. Click one to change or remove it."),
             new("All zones", () => { _prefs.AllZones = !_prefs.AllZones; if (!_demo) _prefs.Save(); Redraw(); Tick(); }, On: _prefs.AllZones,
                 Sub: "Keep counting across every zone",
-                Tip: "Off: the tables start over when you change zone, so they show this zone only. On: they keep counting across every zone since the tracker started (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
+                Tip: "Off: the tables start over when you change zone, so they show this zone only. On (the default): they keep counting across every zone until you take a break of 15 minutes (or the run). The Today line at the top keeps the whole day. Either way, what goes to the site is kept apart by zone."),
             // Keep above other windows (0.10.26): the same switch as Options › General, for a windowed game on one screen
             new(AlwaysOnTopText, () => { SetAlwaysOnTop(!_prefs.AlwaysOnTop); if (!_demo) _prefs.Save(); }, On: _prefs.AlwaysOnTop,
                 Sub: "Stays over the game and other windows",

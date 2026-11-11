@@ -202,9 +202,17 @@ public sealed partial class TargetReader
     /// <summary>When a reward screen's title was last seen in the band.</summary>
     public DateTime RewardAt { get; private set; } = DateTime.MinValue;
     bool _rewardSeen;
-    public void MarkReward(DateTime t) => RewardAt = t;
+    public void MarkReward(DateTime t) { Opened(t); RewardAt = t; }
     /// <summary>For replay: a reward screen recorded open at <paramref name="t"/> with this title.</summary>
-    internal void MarkReward(DateTime t, string title) { RewardAt = t; RewardTitle = title; }
+    internal void MarkReward(DateTime t, string title) { Opened(t); RewardAt = t; RewardTitle = title; }
+    /// <summary>When the reward screen now open (or last open) first showed: its opening, not its last read.</summary>
+    public DateTime RewardFrom { get; private set; } = DateTime.MinValue;
+    void Opened(DateTime t) { if ((t - RewardAt).TotalSeconds > RewardGraceSeconds) RewardFrom = t; }
+    /// <summary>
+    /// A reward screen that opened between <paramref name="from"/> (a second's slack) and <paramref name="to"/>, and is open at
+    /// <paramref name="to"/>: the window that covered the chat while its reads didn't line up.
+    /// </summary>
+    public bool RewardOpenedIn(DateTime from, DateTime to) => RewardOpen(to) && RewardFrom >= from.AddSeconds(-1) && RewardFrom <= to;
     /// <summary>The reward screen's title as last read ("Victory Reward", "Trade Shop").</summary>
     public string RewardTitle { get; private set; } = "";
     /// <summary>True while a reward screen is open, or was seen within the last <see cref="RewardGraceSeconds"/>.</summary>
@@ -253,6 +261,7 @@ public sealed partial class TargetReader
             {
                 CrashLog.Note($"reward screen open ({title}): its Kinah and items are rewards, not farming");
                 KinahLedger.Session.ReadTrace.Signal(DateTime.UtcNow, "reward", title);
+                RewardFrom = DateTime.UtcNow;
             }
             RewardAt = DateTime.UtcNow;
             RewardTitle = title;

@@ -2895,6 +2895,60 @@ options: --process aion[,other]");
             pu.ApplyGrid(ode, pt0.AddSeconds(31));
             Check("...and with its title missed, Odyle Energy on a small table says the same", RunsOf(pu) == puBefore ? "unchanged" : RunsOf(pu), "unchanged");
         }
+        {
+            // the Daeva Pass Level Reward opened over Accursed Sword's rewards (Steven, 2026-11-11 09:34:27): its window garbled
+            // the chat a second before its title was read, the settle dated its "Acquired Unknown Fissure Challenge Ticket
+            // (Bound) x2." from the garbling and filed it as the run's loot, and the x1 line, set aside as the pass's, went to
+            // farming's loot. Both are the pass's reward: neither the run's nor a drop (the reads as traced)
+            var fx0 = new DateTime(2026, 11, 11, 14, 32, 50, DateTimeKind.Utc);
+            var (sfx, sayFx) = Session(fx0.AddMinutes(-1), "Dawn Legion Base");
+            sfx.ApplyZone("Accursed Sword", fx0); sfx.UpdateDoing(fx0);
+            sayFx(fx0.AddSeconds(80), new[] { "[Player1] about PvP, without telling me you know", "nothing." });
+            var fr = fx0.AddSeconds(96);   // 09:34:26.8
+            string[] chatFx = { "Riverside Orb acquired.", "Forgotten Pauldrons acquired.", "Forgotten Gloves acquired.", "Acquired Radiant Odyle x2.", "Pure Odyle acquired.", "Acquired Fine Odyle x2.", "Acquired Odyle x6.", "Acquired Refining Stone x6.", "[Milet] we are g etting there", "[Natty] role play?" };
+            sfx.ProcessChat(chatFx.ToList(), fr);
+            sfx.ProcessChat(chatFx.ToList(), fr.AddSeconds(0.4));
+            sfx.ProcessChat(new List<string> { "IMembersh", "Grants A", "Grants Ac", "Max Odyl", "Grants A" }, fr.AddSeconds(0.9));
+            sfx.ProcessChat(new List<string> { "Membershil", "Grants Ac", "Grants Ac", "Max Odyl", "Grants Ac" }, fr.AddSeconds(1.1));
+            sfx.Target.MarkReward(fr.AddSeconds(1.95), "Daeva Pass Level Reward");
+            var clean = new List<string> { "Acquired Fine Odyle x2.", "Acquired Odyle x6.", "Acquired Refining Stone x6.", "[Milet] we are g etting there", "[Natty] role play?", "[Blembly] \"inflated cp\" what", "Unknown Fissure Challenge Ticket (Bound)", "acquired.", "Acquired Unknown Fissure Challenge Ticket", "(Bound) x2." };
+            foreach (var dt in new[] { 2.33, 2.58, 2.88, 3.19, 3.48 }) { sfx.Target.MarkReward(fr.AddSeconds(dt), "Daeva Pass Level Reward"); sfx.ProcessChat(new List<string>(clean), fr.AddSeconds(dt)); }
+            sfx.ProcessChat(clean.Skip(1).Append("[HimiTosi] any one can kill any one in pvp").ToList(), fr.AddSeconds(4.45));
+            sfx.FlushVotes(fr.AddSeconds(6));
+            const string ticket = "Unknown Fissure Challenge Ticket";
+            int InRun(InstanceRun? r) => r == null ? -1 : r.Items.Concat(r.BoundItems).Concat(r.ChatItems).Where(kv => Unbound(items.NameOf(kv.Key)) == ticket).Sum(kv => kv.Value);
+            int Farmed() => sfx.Engine.Items.Concat(sfx.Engine.ItemsBound).Where(kv => Unbound(items.NameOf(kv.Key)) == ticket).Sum(kv => kv.Value);
+            var fxRun = sfx.Instances.CurrentRun ?? sfx.Instances.Snapshot().LastOrDefault(r => r.Event == "Accursed Sword");
+            Check("a Daeva Pass reward that garbled the chat over an event: not the run's, not a drop, still the pass's",
+                $"run {InRun(fxRun)} · farming {Farmed()} · run's Pure Odyle {fxRun?.Items.Concat(fxRun.ChatItems).Where(kv => items.NameOf(kv.Key) == "Pure Odyle").Sum(kv => kv.Value)}",
+                "run 0 · farming 0 · run's Pure Odyle 1");
+            static string Unbound(string n) => n.EndsWith(" (Bound)") ? n[..^8] : n;
+        }
+        {
+            // the overall count goes on across zones and starts over only after a break (Steven, 2026-11-11: "stay active and
+            // stop resetting the timer until you've taken a break")
+            var bk0 = new DateTime(2026, 11, 11, 14, 0, 0, DateTimeKind.Utc);
+            var (sbk, sayBk) = Session(bk0.AddMinutes(-1), "Southern Tolbas Forest");
+            sbk.AllView = new SessionEngine(items); sbk.AllView.SetZone("Southern Tolbas Forest");
+            int breaks = 0;
+            sbk.OverallRestart += _ => { breaks++; var a = new SessionEngine(items); a.SetZone(sbk.Zone); sbk.AllView = a; };
+            sayBk(bk0, new[] { "Acquired 111 Kina." });
+            sbk.ApplyZone("Eastern Tolbas Forest", bk0.AddMinutes(2));
+            sayBk(bk0.AddMinutes(10), new[] { "Acquired 188 Kina." });
+            string at10 = $"{breaks} {sbk.AllView.Kinah} {sbk.ZoneView.Kinah}";
+            sayBk(bk0.AddMinutes(10 + TrackerSession.BreakMinutes + 1), new[] { "Acquired 239 Kina." });
+            Check("the overall count: across a zone change and 8 min idle it goes on; after a break it starts over",
+                $"{at10} · {breaks} {sbk.AllView.Kinah}", "0 299 188 · 1 239");
+            // into the Abyss and back out: each crossing starts it over; a town in between is still the world
+            var ab = bk0.AddMinutes(30);
+            sbk.ApplyZone("Chaotic Middle Reshanta", ab);
+            sayBk(ab.AddMinutes(1), new[] { "Acquired 500 Kina." });
+            string inAbyss = $"{breaks} {sbk.AllView.Kinah}";
+            sbk.ApplyZone("Chaotic Upper Reshanta", ab.AddMinutes(2));
+            sbk.ApplyZone("Southern Tolbas Forest", ab.AddMinutes(4));
+            Check("...into the Abyss it starts over, within it it goes on, back out it starts over",
+                $"{inAbyss} · {breaks} {sbk.AllView.Kinah}", "2 500 · 3 0");
+        }
 
         // out of an event, then nothing for half an hour (2026-10-30 11:05:23, Defend Shugo Merchants: "rewards that land in the
         // next 45 s are still its own", and it stayed "rewards landing" until the next event closed it at 11:36:34). The time

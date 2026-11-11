@@ -102,7 +102,7 @@ public partial class MainWindow
         SummaryCard.Visibility = show && (FullShown || _qChip == "bag") ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         LootHereBtn.Content = LootHereName;
-        LootHereBtn.ToolTip = _prefs.AllZones ? "Every zone since the tracker started (All zones is on, in ⋯)." : RunShown ? "This run, in this zone." : "Since you came to this zone. It starts over when you change zone.";
+        LootHereBtn.ToolTip = _prefs.AllZones ? "Every zone since your last break (15 minutes with nothing farmed). Click the hour to see this zone only." : RunShown ? "This run, in this zone." : "Since you came to this zone. It starts over when you change zone.";
         LootHereBtn.Style = (Style)FindResource(_lootDay || _lootWeek ? "SegOff" : "SegOn");
         LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
         LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");
@@ -135,7 +135,7 @@ public partial class MainWindow
         LootHost.Children.Clear();
         LootOrderForTest.Clear(); LootOrderForTest.AddRange(drops.Select(r => (r.Name, Qty(r.Drops), r.Grade, false)).Concat(gathered.Select(r => (r.Name, Qty(r.Drops), r.Grade, true))));
         if (drops.Count + gathered.Count >= 2) LootSortRow();
-        string where = _prefs.AllZones ? "since the tracker started" : RunShown ? "this run" : "here";
+        string where = _prefs.AllZones ? "since your last break" : RunShown ? "this run" : "here";
         var slots = new List<FrameworkElement>();
         if (h.Kinah > 0) slots.Add(KinahSlot(h.Kinah, h.ByEnemy, h.Kills > 0 ? $"{h.Kills:N0} kills · {Fk(h.Kinah / (double)h.Kills)} a kill" : "", "Picked up " + where, "BY ENEMY"));
         if (h.Abyss > 0) slots.Add(AbyssSlot(h.Abyss, h.Elapsed.TotalSeconds, where));
