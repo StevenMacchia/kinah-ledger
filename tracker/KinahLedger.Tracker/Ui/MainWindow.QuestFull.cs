@@ -44,12 +44,22 @@ public partial class MainWindow
         for (int i = 0; i < top.Count; i++)
         {
             var m = top[i]; named += m.Kills;
-            var drop = m.Drops.OrderByDescending(d => d.Value).Select(d => (Name: _items.Get(d.Key)?.Name ?? "", d.Value)).FirstOrDefault(d => d.Name.Length > 0);
-            var sub = $"{Fk(m.Kinah / (double)m.Kills)} Kinah a kill" + (drop.Name.Length > 0 && m.Kills >= drop.Value ? $" · drops {drop.Name} 1 in {Math.Round(m.Kills / (double)drop.Value):0}" : "");
-            host.Children.Add(QRow(QIconBox("Sword", "Coral", 30, round: true), m.Name, sub, m.Kills.ToString("N0"), "Ink", rule: i > 0));
+            host.Children.Add(QRow(QIconBox("Sword", "Coral", 30, round: true), m.Name, KillsSub(m, id => _items.Get(id)?.Name), m.Kills.ToString("N0"), "Ink", rule: i > 0));
         }
         if (top.Count == 0) host.Children.Add(QMore("No enemy named yet."));
         else if (_qKills - named > 0) host.Children.Add(QMore($"{_qKills - named:N0} kills came with no enemy named"));
+    }
+
+    /// <summary>
+    /// A Kills row's small print: "1.2K Kinah a kill · drops Thick hide 1 in 4". An enemy with no named drop (none yet, or
+    /// only items the list can't name) has no drop part: the empty tuple's name was null, and the panel crashed on any
+    /// such enemy (Steven, 2026-11-11 14:53: "when i click on kills on the farm page it gives me an error").
+    /// </summary>
+    internal static string KillsSub(SessionEngine.MobStats m, Func<long, string?> nameOf)
+    {
+        var drop = m.Drops.OrderByDescending(d => d.Value).Select(d => (Name: nameOf(d.Key) ?? "", d.Value)).FirstOrDefault(d => d.Name.Length > 0);
+        var kinah = m.Kills > 0 ? $"{Fk(m.Kinah / (double)m.Kills)} Kinah a kill" : "";
+        return kinah + (drop.Name is { Length: > 0 } && drop.Value > 0 && m.Kills >= drop.Value ? $" · drops {drop.Name} 1 in {Math.Round(m.Kills / (double)drop.Value):0}" : "");
     }
 
     /// <summary>The Full view's second column: Who pays, Drop odds and the gathering chips (the bag and the zone board are moved in by ApplyView).</summary>
