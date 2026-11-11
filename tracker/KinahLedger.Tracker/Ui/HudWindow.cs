@@ -427,6 +427,9 @@ public sealed class HudWindow : Window
     /// The figures by key (HudFields), as the window worked them out. A missing one hides with its label (2026-10-25: a
     /// blank loot left "loot / hr" standing alone), and the first one showing sits at the panel's edge.
     /// </summary>
+    /// <summary>A render of the motion (KL_MOTION_AT with ui-shot): the Ticker's effects held at that point (Ui/HudTicker.Motion.cs).</summary>
+    internal void MotionFrameForRender(IReadOnlyDictionary<string, string> values) => (_look as HudTicker)?.MotionFrame(values);
+
     public void Update(IReadOnlyDictionary<string, string> values)
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
