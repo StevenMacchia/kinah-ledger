@@ -600,6 +600,25 @@ public sealed class InstanceLog
     /// <summary>How much longer than <see cref="RewardGraceSeconds"/> the clock waits before closing a left run with no pickup (<see cref="RewardsOver"/>).</summary>
     public const double RewardClockSlackSeconds = 15;
 
+    /// <summary>
+    /// A gather inside the open run (Odyle in a dungeon): the run's loot, counted at once, never set aside for its reward picture,
+    /// which never shows a gather (Steven, 2026-11-11: "the odyle inside of a dungeon is farmed inside of the dungeon and should
+    /// count as a drop there, not the zone you return to"). False with no run open, or one being left: the caller files it.
+    /// </summary>
+    public bool Gathered(ItemAcquired a)
+    {
+        lock (_lock)
+        {
+            if (_cur == null || _cur.Kind == WorldBoss || _leftAt != null) return false;
+            // gathered before the run began (a count the first read lost, added as the zone changed: 17:33:00 today) is the world's
+            if (a.Time < _cur.Start) return false;
+            if (a.Bound) { _cur.Bound += a.Count; _cur.BoundItems[a.ItemId] = _cur.BoundItems.GetValueOrDefault(a.ItemId) + a.Count; }
+            else _cur.Items[a.ItemId] = _cur.Items.GetValueOrDefault(a.ItemId) + a.Count;
+            _cur.LastLoot = a.Time;
+            return true;
+        }
+    }
+
     /// <summary>An event as it was counted (rewards already turned into rewards): loot and kills go to the open run.</summary>
     /// <param name="batch">How many loot lines landed with it at once: three or more items are the run's rewards coming in.</param>
     public void Loot(GameEvent ev, int batch = 1)

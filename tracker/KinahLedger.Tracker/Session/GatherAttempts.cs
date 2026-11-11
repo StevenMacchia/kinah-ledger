@@ -45,6 +45,9 @@ public sealed partial class TrackerSession
     readonly List<DateTime> _okRaces = new();
     bool OkRaceNear(DateTime t, double before, double after) => _okRaces.Any(r => (t - r).TotalSeconds >= -after && (t - r).TotalSeconds <= before);
 
+    /// <summary>Gathering inside an open run (a dungeon's Odyle): its items and attempts are the run's, not farming's.</summary>
+    bool GatherInRun => InRun && Instances.Current is { } c && c.Kind != InstanceLog.WorldBoss && !c.Leaving;
+
     IEnumerable<SessionEngine> FarmEngines() => new[] { Engine, Secondary }.Concat(Views()).Where(e => e != null)!;
 
     /// <summary>What names an attempt at <paramref name="t"/>, short of its result: the panel, the target bar's node, the last named node, else unknown.</summary>
@@ -69,7 +72,9 @@ public sealed partial class TrackerSession
         _attempts.Add(a);
         _attempts.RemoveAll(x => (a.At - x.At).TotalSeconds > 120);
         Named(a.Family, a.Node, a.By, a.At);
-        foreach (var e in FarmEngines()) { e.AttemptsFromTally = true; e.GatherAttempt(a.At, a.Family, a.Node, a.Ok); }
+        // inside an open run its gathers are the run's loot (TrackerSession.Count), so its attempts aren't farming's either
+        if (GatherInRun) CrashLog.NoteBurst($"gather attempt at {a.At.ToLocalTime():HH:mm:ss}: inside the run, not farming's gathering");
+        else foreach (var e in FarmEngines()) { e.AttemptsFromTally = true; e.GatherAttempt(a.At, a.Family, a.Node, a.Ok); }
         CrashLog.Note($"gather attempt at {a.At.ToLocalTime():HH:mm:ss.f}: {a.Node} ({GatherSkills.Label(a.Family)}), {(a.Ok ? "success" : "failed")}, {why}; named by {a.By switch { "panel" => "the gathering panel", "result" => "its result", "target" => "the target bar", "recent" => "the last node named", _ => "nothing: no node read" }}");
     }
 
