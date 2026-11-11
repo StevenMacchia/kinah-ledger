@@ -765,6 +765,7 @@ public partial class MainWindow
         }
         finally { CrashLog.DirOverride = keep; }
         _demoInst = log; _demoLive = log.InProgress;
+        SetWelcome(false);   // a render starts from a new install's prefs, which would show the first-run screen
         ShowPart("Events", byHand: false); SetTrackingUi(false);
     }
 

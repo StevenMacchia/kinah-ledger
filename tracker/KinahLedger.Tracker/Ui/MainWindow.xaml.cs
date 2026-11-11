@@ -44,7 +44,8 @@ public partial class MainWindow : Window
     const int HotkeyId = 1;
 
     readonly Settings _settings;
-    readonly UserPrefs _prefs = UserPrefs.Load();
+    /// <summary>The player's ui.json; for a layout render or a self-test (watch off), a new install's defaults that are never saved.</summary>
+    readonly UserPrefs _prefs;
     readonly ItemDictionary _items;
     /// <summary>Runs from the moment the window opens: finds the game and reads the Market whenever it is open. Start tracking is only for farming runs.</summary>
     readonly GameWatcher _watcher;
@@ -71,9 +72,11 @@ public partial class MainWindow : Window
     // a timer tick after the window closed (the off-screen renders) finds no theme: grey rather than a crash
     Brush B(string key) => TryFindResource(key) as Brush ?? Brushes.Gray;
 
-    /// <param name="watch">False for layout renders, so no screen is read while the window exists off-screen.</param>
+    /// <param name="watch">False for layout renders and self-tests, so no screen is read while the window exists off-screen
+    /// and the player's ui.json is neither read nor written: they start from the defaults (UserPrefs.Defaults).</param>
     public MainWindow(Settings settings, bool watch = true)
     {
+        _prefs = watch ? UserPrefs.Load() : UserPrefs.Defaults();
         InitializeComponent();
         // the layer the click cards are drawn on, over the window's content and never past its edges (InCard, 2026-11-06)
         var layer = new System.Windows.Controls.Canvas { ClipToBounds = true };

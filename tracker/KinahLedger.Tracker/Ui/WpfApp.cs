@@ -10,19 +10,21 @@ namespace KinahLedger.Ui;
 /// <summary>Starts the WPF side without an App.xaml, so Program.Main stays the single entry point.</summary>
 public static class WpfApp
 {
-    static Application Ensure()
+    /// <param name="player">True for the window the player uses (and the debug cycles on the real game): their chosen look from
+    /// ui.json. False for renders and self-tests, which start from the default look and never read ui.json.</param>
+    static Application Ensure(bool player = false)
     {
         if (Application.Current != null) return Application.Current;
         var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
         app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/KinahLedger;component/Ui/Theme.xaml", UriKind.Relative) });
-        Skins.Apply(KinahLedger.Session.UserPrefs.Load().Skin);   // the chosen look, over the base theme
+        Skins.Apply(player ? KinahLedger.Session.UserPrefs.Load().Skin : Skins.Default);   // the look, over the base theme
         return app;
     }
 
     /// <summary>The real app lifecycle (window shown, message loop running) with an automatic start → wait → stop, to catch anything that kills the process.</summary>
     public static int Live(Settings settings, DRect? region, int ms)
     {
-        var app = Ensure();
+        var app = Ensure(player: true);
         app.DispatcherUnhandledException += (_, e) => { Console.WriteLine("UI exception: " + e.Exception); CrashLog.Write("ui", e.Exception); e.Handled = true; };
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Console.WriteLine("process exception: " + e.ExceptionObject);
         var w = new MainWindow(settings);
@@ -58,7 +60,7 @@ public static class WpfApp
             return 0;
         }
         if (Update.Updater.ExePath is { } exe) Platform.AutoStart.Repair(exe);   // the exe moved or was renamed since startup was turned on
-        var app = Ensure();
+        var app = Ensure(player: true);
         // an error in a button handler must not take the whole app down: log it, tell the player, carry on
         bool dialogUp = false; var dialogAt = DateTime.MinValue;
         app.DispatcherUnhandledException += (_, e) =>
@@ -92,7 +94,7 @@ public static class WpfApp
     /// <summary>Starts and stops a session in-process (no clicks needed) and reports any exception, for finding crashes.</summary>
     public static int Cycle(Settings settings, DRect? region, int ms)
     {
-        Ensure();
+        Ensure(player: true);
         var w = new MainWindow(settings) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
         w.Show();
         DoEvents();
@@ -108,7 +110,7 @@ public static class WpfApp
 
     public static DRect? PickRegion()
     {
-        Ensure();
+        Ensure(player: true);
         return RegionPickerWindow.Pick();
     }
 
@@ -452,7 +454,7 @@ public static class WpfApp
         Check(!chips.Any(c => c.Contains("Drana")) && chips.Skip(1).All(c => c.EndsWith(" min") || c.EndsWith(" h")), "no chip for a zone under a minute; each says its minutes");
         // Sort  worth · amount · quality over the slots (Steven, 2026-11-05): by amount the counts fall along the slots, by
         // quality the grades do; the slots are the same ones, and worth puts them back as they were
-        // worth first by name: the test runs with this PC's ui.json, where the player may have picked another order
+        // worth first by name, so the check holds whatever order the window starts in
         w.SetLootSortForTest(Session.LootOrder.Worth); DoEvents();
         var byWorth = w.LootOrderForTest.ToList();
         w.SetLootSortForTest(Session.LootOrder.Amount); DoEvents();
