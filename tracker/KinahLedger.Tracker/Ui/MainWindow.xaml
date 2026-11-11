@@ -267,7 +267,8 @@
               <TextBlock Text="Kinah Ledger" FontFamily="{DynamicResource DisplayFont}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
               <TextBlock x:Name="Version" Text="v0.7.6" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="8,1,0,0" FontSize="11" FontWeight="Medium"/>
             </StackPanel>
-            <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="Medium" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen"/>
+            <!-- the character, then the server (Ui/MainWindow.Characters.cs): capped so a long name never pushes the page tabs; the server trims first -->
+            <TextBlock x:Name="ServerChip" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="Medium" Cursor="Hand" ToolTip="Your server. Change it in Options." Text="No server chosen" MaxWidth="200" TextTrimming="CharacterEllipsis"/>
           </StackPanel>
         </StackPanel>
         <!-- three pages that never mix: Farm (the run, the rate, the loot), Craft (recipes, cost, profit), Runs (expeditions and events) -->

@@ -1347,6 +1347,7 @@ public static class WpfApp
         if (demo && kind == "Open world") w.ShotRecapCard(Path.Combine(dir, "ui-recap.png"));
         // the Today strip's hover cards (0.8.50): a farming drop's and the Kinah's
         if (demo && kind == "Open world") w.ShotTodayCards(dir);
+        if (demo && kind == "Open world") w.ShotCharacterMenu(dir);   // the header's character menu (Ui/MainWindow.Characters.cs)
         // and on the Events page, a run reward's (0.8.51: each page's strip shows its own day)
         if (demo && kind == "Events") w.ShotTodayRunCard(dir);
         // the Accuracy card on its own (the card the Farming page's chip opens), with its things to look at

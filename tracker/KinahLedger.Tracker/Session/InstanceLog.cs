@@ -251,9 +251,25 @@ public sealed class InstanceLog
     InstanceRun? _cur;
     /// <summary>True when the minimap itself named the open run (not only the chat or the header).</summary>
     bool _byMinimap;
-    static string PathOf => System.IO.Path.Combine(System.IO.Path.GetDirectoryName(CrashLog.ReadsPath)!, "instances.jsonl");
+    // the current character's runs (Session/Characters.cs); the top folder before any character was seen
+    static string PathOf => System.IO.Path.Combine(Characters.DataDir, "instances.jsonl");
 
     public InstanceLog() { Load(); }
+
+    /// <summary>
+    /// The kept runs read again from the runs file, under the log's lock: after a character switch (another character's
+    /// file) or the sort of old runs by character (runs moved out). <paramref name="whileHeld"/> runs first, under the same
+    /// lock, so no run is written to the file while it changes. The open run and the runs waiting to be sent stay.
+    /// </summary>
+    public void Reload(Action? whileHeld = null)
+    {
+        lock (_lock)
+        {
+            whileHeld?.Invoke();
+            _done.Clear(); _parked.Clear();
+            Load();
+        }
+    }
 
     /// <summary>
     /// An event's rewards print a little after the game has moved the player out (Steven, 2026-10-23, Hidden Lugi: back in

@@ -22,7 +22,7 @@ public static class BestRuns
     /// <summary>Tests point this elsewhere so the player's own files are never touched.</summary>
     public static string? DirOverride { get; set; }
 
-    static string Dir => DirOverride ?? CrashLog.Dir;
+    static string Dir => DirOverride ?? Characters.DataDir;
     static string Key(string server, string zone) => server.Trim() + "|" + zone.Trim();
 
     /// <summary>Kinah plus the tradeable items at the lowest Market price after the Market's cut; items with no price add nothing.</summary>

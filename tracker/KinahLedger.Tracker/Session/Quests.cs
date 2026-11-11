@@ -693,7 +693,7 @@ public static class Quests
 
     /* ---------------- quests.json ---------------- */
 
-    public static string PathFor() => Path.Combine(CrashLog.Dir, "quests.json");
+    public static string PathFor() => Path.Combine(Characters.DataDir, "quests.json");
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 

@@ -753,7 +753,7 @@ public partial class MainWindow
     {
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "KinahLedger-mine-runs");
         Directory.CreateDirectory(dir);
-        var src = System.IO.Path.Combine(CrashLog.Dir, "instances.jsonl");
+        var src = System.IO.Path.Combine(Characters.DataDir, "instances.jsonl");
         if (File.Exists(src)) File.Copy(src, System.IO.Path.Combine(dir, "instances.jsonl"), overwrite: true);
         var keep = CrashLog.DirOverride;
         InstanceLog log;

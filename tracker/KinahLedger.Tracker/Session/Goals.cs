@@ -127,7 +127,7 @@ public static class Goals
 {
     public const int Max = 3;
 
-    public static string PathFor() => Path.Combine(CrashLog.Dir, "goals.json");
+    public static string PathFor() => Path.Combine(Characters.DataDir, "goals.json");
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 

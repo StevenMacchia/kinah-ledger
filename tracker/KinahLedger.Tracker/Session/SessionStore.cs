@@ -6,7 +6,7 @@ namespace KinahLedger.Session;
 /// <summary>Every finished run, kept per Windows user in %LOCALAPPDATA%\KinahLedger\sessions.jsonl, one line per run.</summary>
 public static class SessionStore
 {
-    public static string PathFor() => Path.Combine(CrashLog.Dir, "sessions.jsonl");
+    public static string PathFor() => Path.Combine(Characters.DataDir, "sessions.jsonl");
 
     public sealed record Saved(string started, int minutes, string activity, string gear, string region, long kinah, long kinah_bound, int kills, int kinah_drops, int nodes, int rare_finds,
         Dictionary<string, int> drops, Dictionary<string, int> pets, Dictionary<string, Upload.ZoneRun> zones, bool shared,

@@ -111,6 +111,8 @@ internal static class Program
                 case "bench": return opts.ContainsKey("sizing") ? Platform.BenchSizing.Run(settings, opts) : Platform.Bench.Run(settings, int.TryParse(pos.FirstOrDefault(), out var bn) ? bn : 15);
                 case "in-view": return InView(settings);
                 case "ocr-file": return OcrFile(pos, opts);
+                case "badge-file": return BadgeFile(pos, opts);
+                case "character-sort": return CharacterSortCmd(pos, opts);
                 case "ui-shot": return UiShot(settings, opts, pos);
                 case "ui-cycle": return WpfApp.Cycle(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var ms) ? ms : 4000);
                 case "ui-live": return WpfApp.Live(settings, opts.ContainsKey("auto") ? null : RegionFor(opts), int.TryParse(opts.GetValueOrDefault("ms"), out var lms) ? lms : 4000);
@@ -413,6 +415,77 @@ options: --process aion[,other]");
     }
 
     /// <summary>Runs recognition on an image file, plain and boosted, to compare what each sees. For tuning against real screenshots.</summary>
+    /// <summary>
+    /// What the first character's take-over and the sort of old runs would do, on a copy: character-sort &lt;copy of the
+    /// KinahLedger folder&gt; &lt;a picture of the character in the world now&gt; [--shots dir] [--server "Siel (Elyos)"]. Works only
+    /// in the folder given (CrashLog.DirOverride); never on the live one unless that is the folder given.
+    /// </summary>
+    static int CharacterSortCmd(List<string> pos, Dictionary<string, string> o)
+    {
+        if (pos.Count < 2) { Console.Error.WriteLine("usage: character-sort <folder copy> <picture of the character now> [--shots dir] [--server label]"); return 1; }
+        CrashLog.DirOverride = Path.GetFullPath(pos[0]); Session.Characters.Reset();
+        using var now = new System.Drawing.Bitmap(pos[1]);
+        var band = Ocr.CharacterBadge.Band(new System.Drawing.Rectangle(0, 0, now.Width, now.Height));
+        using var b = now.Clone(band, now.PixelFormat);
+        if (Ocr.CharacterBadge.Read(b, now.Height) is not { } r) { Console.Error.WriteLine("no class icon in that picture"); return 1; }
+        var server = o.GetValueOrDefault("server") ?? "Siel (Elyos)";
+        var first = Session.Characters.Current ?? Session.Characters.Add(r.Print, server);
+        if (Session.Characters.Current == null) Session.Characters.Adopt(first);
+        var shotsDir = o.GetValueOrDefault("shots") ?? Path.Combine(CrashLog.DirOverride, "reward-shots");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var shots = Session.CharacterSort.ReadShots(shotsDir);
+        Console.WriteLine($"{shots.Count} pictures with the icon, read in {sw.Elapsed.TotalSeconds:0} s");
+        foreach (var g in Session.CharacterSort.Group(shots)) Console.WriteLine($"  a group of {g.Count}: {g[0].Local:MMM d HH:mm} to {g[^1].Local:MMM d HH:mm}");
+        var outcome = Session.CharacterSort.Sort(first, server, shots);
+        Console.WriteLine($"moved {outcome.Moved} run(s): {string.Join(", ", outcome.To.Select(x => $"{x.Runs} to {Session.Characters.Label(x.Who)}"))}");
+        foreach (var c in Session.Characters.All)
+        {
+            var f = Path.Combine(Session.Characters.DirOf(c), "instances.jsonl");
+            Console.WriteLine($"  {c.Id} {Session.Characters.Label(c)}: {(File.Exists(f) ? File.ReadAllLines(f).Length : 0)} runs, {string.Join(" ", Directory.GetFiles(Session.Characters.DirOf(c)).Select(Path.GetFileName))}");
+        }
+        return 0;
+    }
+
+    /// <summary>The character badge (Ocr/CharacterBadge.cs) in pictures: where it was found, its fingerprint, and how alike each pair is. --save dir writes each icon box.</summary>
+    static int BadgeFile(List<string> pos, Dictionary<string, string> o)
+    {
+        var prints = new List<(string File, string? Print)>();
+        if (pos.Count == 0)
+        {
+            // no pictures: the live game's band, captured as the watcher captures it (GameWatcher.TickBadge)
+            var game = GameWindow.Find(new Settings().ProcessHints);
+            if (game == null) { Console.WriteLine("Game window not found."); return 1; }
+            using var live = ScreenReader.Capture(Ocr.CharacterBadge.Band(game.Value));
+            var read = Ocr.CharacterBadge.Read(live, game.Value.Height);
+            Console.WriteLine($"game {game.Value.Width} x {game.Value.Height}: {(read is { } rr ? $"row {rr.Place.Row}, gap {rr.Place.Left}-{rr.Place.Right}" : "no medallion")}");
+            if (read is { } known)
+                foreach (var c in Session.Characters.All) Console.WriteLine($"  {Session.Characters.Label(c)}: {Session.Characters.Alike(c, known.Print):0.00}");
+            if (o.TryGetValue("save", out var sd)) { Directory.CreateDirectory(sd); live.Save(Path.Combine(sd, "live-band.png")); }
+            return 0;
+        }
+        foreach (var f in pos)
+        {
+            using var bmp = new System.Drawing.Bitmap(f);
+            var px = Ocr.CharacterBadge.Pixels(bmp, out int w, out int h);
+            var p = Ocr.CharacterBadge.Find(px, w, h, int.TryParse(o.GetValueOrDefault("game-height"), out var gh) ? gh : h);
+            var print = p is { } pp ? Ocr.CharacterBadge.Fingerprint(px, w, h, pp) : null;
+            Console.WriteLine($"{Path.GetFileName(f)}: {(p is { } q ? $"row {q.Row}, gap {q.Left}-{q.Right} ({q.Gap})" : "no medallion")}  {print ?? "-"}");
+            if (p is { } s && o.TryGetValue("save", out var dir))
+            {
+                Directory.CreateDirectory(dir);
+                var box = Ocr.CharacterBadge.IconBox(s, w, h);
+                using var c = new System.Drawing.Bitmap(box.Width, box.Height);
+                for (int y = 0; y < box.Height; y++) for (int x = 0; x < box.Width; x++)
+                    c.SetPixel(x, y, Ocr.CharacterBadge.InDiamond(s, box.X + x, box.Y + y) ? System.Drawing.Color.FromArgb((int)(px[(box.Y + y) * w + box.X + x] | 0xFF000000)) : System.Drawing.Color.Black);
+                c.Save(Path.Combine(dir, Path.GetFileNameWithoutExtension(f) + "-icon.png"));
+            }
+            prints.Add((Path.GetFileName(f), print));
+        }
+        for (int i = 0; i < prints.Count; i++)
+            Console.WriteLine($"{i,2} " + string.Join(" ", prints.Select(x => Ocr.CharacterBadge.Alike(prints[i].Print, x.Print).ToString("0.00"))) + "  " + prints[i].File);
+        return 0;
+    }
+
     static int OcrFile(List<string> pos, Dictionary<string, string> o)
     {
         if (pos.Count == 0) throw new ArgumentException("usage: ocr-file <image> [--scale 2]");
@@ -1361,6 +1434,7 @@ options: --process aion[,other]");
         ok &= Session.GoalsTests.Run(items, s);
         ok &= Session.QuestsTests.Run(items, s);
         ok &= Session.HistoryTests.Run(items, s);
+        ok &= Session.CharacterTests.Run(items, s);
         ok &= Session.CompareTests.Run(items, s);
         ok &= Session.LiveFeedTests.Run(items, s);
         ok &= Session.AccuracyScoreTests.Run(items, s);
