@@ -103,6 +103,27 @@ public sealed class GameWatcher
         try { CharacterSeen?.Invoke(verdict); } catch (Exception ex) { CrashLog.Write("character seen", ex); _characterBusy = false; }
     }
 
+    /// <summary>The nameplate read gave the character counted for a name (Characters.VoteName); the header shows it.</summary>
+    public event Action? CharacterNamed;
+    DateTime _nameAt = DateTime.MinValue;
+    /// <summary>How often the nameplate is read: every 6 s while the character has no name, every minute once one was read (it may still be corrected), never once the player typed one.</summary>
+    public int NameEverySec { get; set; } = 6;
+
+    async Task TickNameAsync(Rectangle game)
+    {
+        var now = DateTime.UtcNow;
+        if (_characterBusy || Update.RemoteConfig.Current.Off("characters") || Characters.Current is not { } c || !Characters.WantsName(c)) return;
+        // only while the icon says it is this character: a switch half-seen must not lend one character's name to another
+        if (Spotter.PrintAt is not { } seen || (now - seen).TotalSeconds > 30 || Characters.Alike(c, Spotter.Print ?? "") < CharacterBadge.SameIcon) return;
+        if ((now - _nameAt).TotalSeconds < (Characters.HasReadName(c) ? 60 : NameEverySec)) return;
+        _nameAt = now;
+        var region = CharacterName.Region(game);
+        if ((WindowCapture.Active ? null : GameWindow.Covered(region, _settings.ProcessHints)) != null) return;
+        string? name;
+        using (var bmp = ScreenReader.Capture(region)) name = await CharacterName.ReadAsync(bmp, game.Width, game.Height);
+        if (name != null && Characters.VoteName(c, name)) { try { CharacterNamed?.Invoke(); } catch (Exception ex) { CrashLog.Write("character named", ex); } }
+    }
+
     /// <summary>Today's count written to the current character's today.json (before a switch).</summary>
     public void SaveDay() { try { if (DayView.Events > 0 || File.Exists(DayStore.PathFor())) DayStore.Save(DayView, _dayKey); } catch (Exception ex) { CrashLog.Write("today save", ex); } }
 
@@ -377,6 +398,7 @@ public sealed class GameWatcher
                     if (Market.Enabled && Chat is { } mc && (DateTime.UtcNow - mc.MarketDialogAt).TotalSeconds < 5) Market.MissedOpening(game);
                     try { await TickBalanceAsync(game); } catch (Exception ex) { CrashLog.Write("balance", ex); }
                     try { TickBadge(game); } catch (Exception ex) { CrashLog.Write("class icon", ex); }
+                    try { await TickNameAsync(game); } catch (Exception ex) { CrashLog.Write("nameplate", ex); }
                 }
                 if (Market.FlushDue) await Market.FlushAsync();
                 await FlushPassiveAsync(false);

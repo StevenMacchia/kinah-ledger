@@ -37,6 +37,10 @@ public partial class MainWindow
     /// <summary>Hooks the watcher's character events (from the window's start, when it watches the game).</summary>
     void InitCharacters()
     {
+        // a name read off the nameplate: the header follows
+        _watcher.CharacterNamed += () => Dispatcher.BeginInvoke(() => ServerRowState());
+        // a 0.10.51 or 0.10.52 install, whose first character seen took all the history kept before: put it right, once
+        if (!_demo && Characters.NeedsPlacing) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () => _ = PlaceHistoryAsync());
         _watcher.CharacterSeen += v => Dispatcher.BeginInvoke(async () =>
         {
             try { await OnCharacterSeen(v); }
@@ -60,26 +64,49 @@ public partial class MainWindow
             ServerRowState(); Redraw();
             Say($"Counting for {Characters.Label(first)} from now on. Each character keeps its own numbers; click the name at the top to name it.", "Good");
             _statusHoldUntil = DateTime.UtcNow.AddSeconds(15);
-            if (!Characters.Sorted) _ = SortOldRunsAsync(first, server);
+            if (Characters.NeedsPlacing) _ = PlaceHistoryAsync();
             return;
         }
         var c = v.Character ?? Characters.Add(v.Print, server);
         await SwitchCharacter(c, v.Kind == CharacterSpotter.Kind.New ? "A new character" : Characters.Label(c));
     }
 
-    /// <summary>The old runs sorted by the class icon in their pictures, off the window's thread (it opens every kept picture).</summary>
-    async Task SortOldRunsAsync(Character first, string server)
+    bool _placing;
+
+    /// <summary>
+    /// The history kept before characters put with the characters it belongs to (Session/CharacterSort.cs Place), once:
+    /// the pictures are read off the window's thread (every kept picture is opened), then the files change between a save
+    /// and a load of the character counted for, so nothing it holds in memory is written back over them.
+    /// </summary>
+    async Task PlaceHistoryAsync()
     {
+        if (_demo || _placing || Characters.Adopter is not { } adopter) return;
+        _placing = true;
         try
         {
-            var dir = EventShotRecovery.ShotsDir;
-            var shots = await Task.Run(() => CharacterSort.ReadShots(dir));
-            var outcome = CharacterSort.Sort(first, server, shots, act => { if (_watcher.Chat is { } ch) ch.Instances.Reload(act); else act(); });
-            ServerRowState(); Redraw();
-            if (outcome.Moved > 0)
-                Say($"Old runs sorted by class icon: {string.Join(", ", outcome.To.Select(x => $"{x.Runs} to {Characters.Label(x.Who)}"))}. The rest stay with {Characters.Label(first)}.", "Faint");
+            var server = _prefs.Server;
+            var shots = await Task.Run(() => CharacterSort.ReadShots(EventShotRecovery.ShotsDir));
+            SaveCharacterState();
+            var outcome = CharacterSort.Place(adopter, server, shots, act => { if (_watcher.Chat is { } ch) ch.Instances.Reload(act); else act(); });
+            ReloadCharacterState();
+            var said = new List<string>();
+            if (outcome.Named.Count > 0) said.Add("named " + string.Join(", ", outcome.Named.Select(x => x.Name)) + " from their pictures");
+            if (outcome.Moved > 0) said.Add("runs sorted by class icon: " + string.Join(", ", outcome.To.Select(x => $"{x.Runs} to {Characters.Label(x.Who)}")));
+            if (outcome.HistoryMoved && outcome.Main != null) said.Add($"the days, bests, goals and quest points from before go to {Characters.Label(outcome.Main)}, your most played");
+            if (said.Count > 0) { Say("Characters: " + string.Join("; ", said) + ".", "Faint"); _statusHoldUntil = DateTime.UtcNow.AddSeconds(20); }
         }
-        catch (Exception ex) { CrashLog.Write("characters sort", ex); Characters.MarkSorted(); }
+        catch (Exception ex) { CrashLog.Write("characters place", ex); Characters.MarkSorted(); }
+        finally { _placing = false; }
+    }
+
+    /// <summary>The character counted for: its today, runs, goals, quest points and bests read again from its folder.</summary>
+    void ReloadCharacterState()
+    {
+        _watcher.LoadDay();
+        _watcher.Chat?.Instances.Reload();
+        _goals = Goals.Load(); _questLog = Quests.Load(); _questLoaded = true;
+        BestRuns.Reset();
+        ServerRowState(); RedrawGoals(); Redraw();
     }
 
     /// <summary>The current character's numbers written to its folder: today, goals, quests.</summary>
@@ -106,11 +133,7 @@ public partial class MainWindow
             await StartFresh(why == "A new character" ? "Another character" : $"{why} is in the world");
             SaveCharacterState();
             Characters.SetCurrent(c);
-            _watcher.LoadDay();
-            _watcher.Chat?.Instances.Reload();
-            _goals = Goals.Load(); _questLog = Quests.Load(); _questLoaded = true;
-            BestRuns.Reset();
-            ServerRowState(); RedrawGoals(); Redraw();
+            ReloadCharacterState();
             Say(why == "A new character"
                 ? $"A character not seen before: counting for {Characters.Label(c)}, with numbers of its own. Click its name at the top to name it."
                 : $"Counting for {Characters.Label(c)} now: its own today, days, runs, goals and quest points.", "Good");
