@@ -25,6 +25,10 @@ public sealed partial class SessionEngine
     public static bool IsAbyssPoints(string name) => AbyssPointsName.IsMatch(name.Trim());
     /// <summary>Quest, title and box rewards seen and deliberately left out of the farming numbers.</summary>
     public int RewardsSkipped { get; private set; }
+    // what was set aside as rewards (a pass, a shop, an achievement), by name: kept out of every count, for the replay bank
+    readonly Dictionary<string, long> _rewardItems = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The items set aside as rewards so far, by name.</summary>
+    public Dictionary<string, long> RewardSnapshot() { lock (_lock) return new(_rewardItems, StringComparer.OrdinalIgnoreCase); }
     /// <summary>Gathering: node attempts, one per primary-resource line (ore, log, Odyle, herb, food) plus failed attempts.</summary>
     public int Nodes { get; private set; }
     public int NodesFailed { get; private set; }
@@ -630,8 +634,9 @@ public sealed partial class SessionEngine
                         }
                     }
                     break;
-                case RewardReceived:
+                case RewardReceived rr:
                     RewardsSkipped++;
+                    _rewardItems[rr.Name] = _rewardItems.GetValueOrDefault(rr.Name) + rr.Count;
                     break;
                 case MobKilled mk:
                     KillsDefeated++; Z().Defeated++; MarkKill(mk.Time);

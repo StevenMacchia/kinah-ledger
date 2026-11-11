@@ -754,6 +754,13 @@ options: --process aion[,other]");
         Console.WriteLine($"  quest counter steps  {s.QuestStepsTotal}   (kills of quest enemies, counted by the game)");
         Console.WriteLine($"  Kinah                {tot.Kinah:N0}");
         Console.WriteLine($"  drops                {e.Items.Values.Sum()} items · crafts kept out of drops {e.CraftedSkipped}");
+        // --items: every item's count, tradeable and bound, and what was set aside as rewards (to compare two builds' replays)
+        if (opts.ContainsKey("items"))
+        {
+            foreach (var (n, c) in e.Items.Select(kv => ("item " + items.NameOf(kv.Key), (long)kv.Value)).Concat(e.ItemsBound.Select(kv => ("bound " + items.NameOf(kv.Key), (long)kv.Value)))
+                .Concat(e.RewardSnapshot().Select(kv => ("reward " + kv.Key, kv.Value))).OrderBy(x => x.Item1, StringComparer.Ordinal))
+                Console.WriteLine($"    {n} = {c}");
+        }
         Console.WriteLine($"  loot list            {s.CrossCheck.Matched} matched the chat · {s.CrossCheck.Added} added (chat missed) · {s.CrossCheck.Duplicates} chat repeats skipped");
         Console.WriteLine("  by enemy:");
         foreach (var m in e.MobSnapshot().Take(12)) Console.WriteLine($"    {m.Name,-36} {m.Kills,4} kills  {m.Kinah,9:N0} Kinah");
@@ -2970,6 +2977,28 @@ options: --process aion[,other]");
             Check("Poko's Skin Bundle from a node: one, a rare find (not a node), rare though unpriced, its icon from the extras",
                 $"{bundles} {find?.AnyNode} {finds?.Items} {finds?.Nodes} {RareGate.IsRare(items, pid, false)} {items.Get(pid)?.Icon.Length > 0} {GatheringCatalog.IsFindLine("Poko's Skin Bundle (Bound) acquired.")}",
                 "1 True 1 0 True True True");
+        }
+        {
+            // the Daeva Pass window over the chat, its title read only after the chat settled (reads.log 2026-11-11 15:13:05 to
+            // 15:13:06.8; Steven: "daeva pass reward counted towards my gathered loot in the bag"): its own words in the chat's
+            // place open it, so the settle's Battle Enhance Scroll and Odyle Energy are the pass's
+            var pw0 = new DateTime(2026, 11, 11, 20, 12, 59, DateTimeKind.Utc);
+            var (spw, _) = Session(pw0.AddMinutes(-1), "Western Cantas Valley");
+            var pwChat = new List<string> { "[Ashivera] stone", "Acquired Orichalcum Ore x2.", "[2C] ill be sticking with this for a awhile", "[CharlieNyerk] ye", "[LaJoker] [+15 Splendent Wise Dragon Lord", "Staff]", "[CharlieNyerk] We wont be getting next tier", "for atleast 1+ month from now" };
+            spw.ProcessChat(new List<string>(pwChat), pw0);
+            spw.ProcessChat(new List<string>(pwChat), pw0.AddSeconds(3));
+            var pwGarble = new List<string> { "Membershil", "Grants Ac", "Grants Ac", "Max Odyl", "Grants Ac" };
+            spw.ProcessChat(new List<string>(pwGarble), pw0.AddSeconds(6.2));
+            var pwAfter = pwChat.Skip(3).Concat(new[] { "Acquired Orichalcum Ore x2.", "Battle Enhance Scroll (Bound) acquired.", "Odyle Energy (Bound) acquired." }).ToList();
+            spw.ProcessChat(new List<string>(pwAfter), pw0.AddSeconds(7.1));
+            spw.ProcessChat(new List<string>(pwAfter), pw0.AddSeconds(7.7));
+            spw.Target.MarkReward(pw0.AddSeconds(7.8), "Daeva PassLevel Reward 0");
+            spw.ProcessChat(new List<string>(pwAfter), pw0.AddSeconds(8.0));
+            spw.FlushVotes(pw0.AddSeconds(12));
+            int PwFarmed(string n) => spw.Engine.Items.Concat(spw.Engine.ItemsBound).Where(kv => items.NameOf(kv.Key).StartsWith(n)).Sum(kv => kv.Value);
+            Check("a Daeva Pass reward settled before the window's title was read: the pass's, not farming",
+                $"scroll {PwFarmed("Battle Enhance Scroll")} · energy {PwFarmed("Odyle Energy")} · window read {PickupCheck.IsPassWindowRead(pwGarble)} · chat {PickupCheck.IsPassWindowRead(new[] { "[Bob] Membership", "Grants Ac" })}",
+                "scroll 0 · energy 0 · window read True · chat False");
         }
         {
             // the Kills panel (a click on "kills" on Farming): an enemy killed with no named drop crashed it (crash.log 2026-11-11

@@ -1221,6 +1221,15 @@ public sealed partial class TrackerSession
         // Kina lines waiting for the counter: judged when old enough, released as read when the counter went quiet
         if (_kina.Readings > 0) SettleKina(_kina.Tick(now), now);
         int unaligned = _tracker.Unaligned, emptyBefore = _tracker.Empty;
+        // the Daeva Pass window over the chat, read as its own words ("Membershil | Grants Ac | Max Odyl"): it opened now. Its
+        // title in the top band is read a moment later, and on 2026-11-11 15:13:06 that was 0.1 s after the chat settled and
+        // counted the pass's Battle Enhance Scroll and Odyle Energy as pickups (Steven: "daeva pass reward counted towards my
+        // gathered loot in the bag"). Marked here, the settle's lines fall inside the window's opening (RewardOpenedIn).
+        if (PickupCheck.IsPassWindowRead(lines))
+        {
+            if (!Target.RewardOpen(now)) CrashLog.Note("the Daeva Pass window covers the chat (its own words read there): what the chat shows after it is its reward");
+            Target.MarkReward(now, "Daeva Pass");
+        }
         var fresh = _tracker.NewLines(lines);
         // the chat's own word on an event: "joined event" in its lobby, its NPC's lines (EventWitness). A lobby filling up
         // scrolls the chat faster than reads line up (11:33:16 today, ten "joined event" lines at once): from such a read, the
@@ -1469,7 +1478,10 @@ public sealed partial class TrackerSession
                 // in a base only Odyle is farmed: anything else there is a buy, mail or a reward, never a drop
                 bool baseKina = InBaseKina(parsed);
                 if (baseKina) CrashLog.Note($"{((KinahChanged)parsed).Delta:N0} Kina in a base ({Zone}): a reward, a sale or the mail, never farming");
-                var ev = (reward || why != null || InBaseNotOdyle(parsed) || baseKina) && !made ? _parser.AsReward(parsed) : parsed;
+                // a gather the panel or its bar produced while a reward window is up is still a gather (2026-11-11 16:24:17: an
+                // Orichalcum Ore x2 with its race, read as the Daeva Pass window opened)
+                bool gathered = reward && why == null && parsed is ItemAcquired gw && GatherVouched(gw.ItemId, parsed.Time);
+                var ev = (reward && !gathered || why != null || InBaseNotOdyle(parsed) || baseKina) && !made ? _parser.AsReward(parsed) : parsed;
                 // counted as one from a line that showed no count: that one is no witness of a reward picture's count
                 if (ev is ItemAcquired or RewardReceived && !via.Contains("count read again") && _parser.CountUnsure(raw)) MarkAssumed(ev);
                 // an item that is a reward only because a window was open doesn't open a new one: a window would chain on
@@ -3007,7 +3019,10 @@ public sealed partial class TrackerSession
         // A line the settle counts is dated when the chat's garbling began, which can be the moment that screen covered it:
         // the screen, read a second later, still counts for it (Steven, 2026-11-11 09:34:28: the Daeva Pass Level Reward's
         // "Acquired Unknown Fissure Challenge Ticket (Bound) x2." filed as Accursed Sword's loot, its x1 line set aside)
-        if (inside && ev is not CraftResult && (Target.RewardOpen(ev.Time) || _settleSpan is { } sp && Target.RewardOpenedIn(sp.From, sp.To)) && NotTheRunsScreen(Target.RewardTitle))
+        // A gather the gathering panel or its bar just produced stays a gather (the replay of 2026-11-11 16:24:17: an Orichalcum
+        // Ore x2 the bar had made, read as the Daeva Pass window opened)
+        if (inside && ev is not CraftResult && (Target.RewardOpen(ev.Time) || _settleSpan is { } sp && Target.RewardOpenedIn(sp.From, sp.To)) && NotTheRunsScreen(Target.RewardTitle)
+            && !(ev is ItemAcquired gpi && GatherVouched(gpi.ItemId, gpi.Time)))
         {
             inside = false;
             CrashLog.NoteBurst($"{Describe(ev)}: the {Target.RewardTitle} screen's reward, not the run's");
