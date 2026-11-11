@@ -15,7 +15,7 @@
 // anything else. Its search is client-side, but its pages are server-rendered and answer a plain request by slug
 // (the name lowercased, apostrophes dropped, every other run of non-letters a hyphen): /items/<slug>,
 // /monsters/<slug>, /zones/<slug>; a missing page is a 404 titled "Page not found". The fields are read from the
-// rendered page: the name from <title>, grade/category/trading from the item card, the icon from og:image, and a
+// rendered page: the name from the <h1> (the <title> as fallback), grade/category/trading from the item card, the icon from og:image, and a
 // craftable item's recipe rows (skill, mastery, faction, materials, makes, combo chance) from its Crafting table.
 // One request per name, two for an item when the plain name is missing and the "(Bound)" one may exist.
 //
@@ -103,8 +103,12 @@ async function page(url) {
   const html = await r.text();
   const title = decode((html.match(/<title>([^<]*)<\/title>/) || [])[1] || '');
   if (/^Page not found/.test(title)) return null;
-  // "Kina – Drops, Sources & Uses | AION 2 | MetaBot.GG", "Nightmare Coin (Bound) | AION 2 | MetaBot.GG"
-  const name = title.split(' | ')[0].replace(/ – [^–]*$/, '').trim();
+  // The name is the first text in the <h1> (monster and zone pages put "Lv. 12 · Normal" / "Village · Altgard" in a second
+  // span beside it). The <title> is only the fallback, because its suffix has changed twice and varies by page: "Kina –
+  // Drops, Sources & Uses | AION 2 | MetaBot.GG", "Nightmare Coin (Bound) | MetaBot.GG", "Poko's Skin Bundle (Bound): How to Get | ...".
+  // A name can hold a colon of its own ("Soul Codex: Reset (Bound)"), so only a known ": How to ..." tail is cut.
+  const h1 = decode(((html.match(/<h1[^>]*>\s*(?:<[^>]+>\s*)*([^<]+)/) || [])[1] || '').trim());
+  const name = h1 || title.split(' | ')[0].replace(/ – [^–]*$/, '').replace(/: (?:How|Where|What) to [^:]*$/, '').trim();
   const body = html.slice(html.indexOf('<body'));
   const text = decode(body.replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<[^>]+>/g, '|')).replace(/\|\s*\|/g, '|').replace(/\|+/g, '|');
   const icons = [...html.matchAll(/property="og:image" content="([^"]+)"/g)].map(m => decode(m[1])).filter(u => !/\/brand\//.test(u));
@@ -250,4 +254,6 @@ async function main() {
   if (!noCheck && !run('data-check.js', dataDir === path.join(root, 'data') ? [] : ['--data', dataDir])) { console.error('data-fill: the validator failed; the drafts are in the files above, fix or revert them'); return 1; }
   return 0;
 }
-main().then(c => process.exit(c)).catch(e => { console.error(e.stack || e.message); process.exit(2); });
+// Set the exit code and let the event loop drain: process.exit() while a fetch socket is still closing aborts on Windows
+// with "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), src\win\async.c".
+main().then(c => { process.exitCode = c; }).catch(e => { console.error(e.stack || e.message); process.exitCode = 2; });
