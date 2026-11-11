@@ -62,6 +62,7 @@ public sealed partial class MarketParser
     public MarketAsk? ParseCells(IReadOnlyDictionary<string, string> cells)
     {
         if (!cells.TryGetValue("name", out var nameText)) return null;
+        nameText = KnownName(nameText);
         // the main board: one row per item with its lowest sale price; the price is per unit, so the stack is one
         if (cells.TryGetValue("lowest", out var lowText))
         {
@@ -207,6 +208,26 @@ public sealed partial class MarketParser
         bool known = _items.Knows(name);
         long id = _items.IdOf(name);
         return new MarketAsk(id, _items.NameOf(id), (int)qty, unit, known);
+    }
+
+    /// <summary>
+    /// A name cell that holds more than the name: the Main tab's rows have a checkbox and the item's icon, whose stack count
+    /// reads as a number beside the name ("40 Fresh Raw Meat"). When the cell isn't an item as it is, a short token at either
+    /// end is dropped, one at a time, for as long as that leaves an item the list knows; otherwise the cell is kept as read.
+    /// </summary>
+    string KnownName(string cell)
+    {
+        if (CleanName(cell) is { } whole && _items.Knows(whole)) return cell;
+        var toks = cell.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        for (int drop = 1; drop <= 3 && toks.Count > 1; drop++)
+        {
+            if (toks[0].Length <= 4 && !toks[0].All(char.IsLetter)) toks.RemoveAt(0);
+            else if (toks[^1].Length <= 4 && !toks[^1].All(char.IsLetter)) toks.RemoveAt(toks.Count - 1);
+            else break;
+            var t = string.Join(" ", toks);
+            if (CleanName(t) is { } n && _items.Knows(n)) return t;
+        }
+        return cell;
     }
 
     static readonly char[] NameEdges = { '.', ':', ',', ';', '|', '-', '_', '[', ']', '(', ')', '"', '•', '·' };

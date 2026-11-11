@@ -134,6 +134,10 @@ public sealed class MarketCapture
             _openShot = true;
             KeepShot(game, $"an item's listings ({listingRows} rows) with no item name above them", rows);
         }
+        // listings and nothing named, under the board's headers: the window may have moved on to a table of its own (the Main
+        // tab's search results, each row named; 2026-11-11 13:53, a board layout seen for a moment was kept for the whole
+        // opening and read nothing). The table is looked for again on the next read; the opening goes on meanwhile.
+        if (unnamed && asks.Count == 0 && !Manual) { Layout = null; _detectAt = DateTime.MinValue; }
         if (!open)
         {
             // the Market closed or moved: after a few empty reads go back to looking for it (a chosen area just waits)
@@ -166,6 +170,10 @@ public sealed class MarketCapture
     {
         var asks = new List<MarketAsk>();
         foreach (var row in rows) if (_parser.Parse(row) is { } a) asks.Add(a);
+        // a listing table (the Main tab's search results, one row per listing): each item's lowest price per item is its
+        // price, the dearer listings are not sent (Steven, 2026-11-11: "the lowest price should be what is considered")
+        if (layout.Kinds != null && Array.IndexOf(layout.Kinds, "lowest") < 0)
+            asks = asks.GroupBy(a => a.Item, StringComparer.OrdinalIgnoreCase).Select(g => g.OrderBy(a => a.UnitPrice).First()).ToList();
         if (layout.Kinds == null || Array.IndexOf(layout.Kinds, "lowest") < 0) return (asks, 0, false);
         var l = _parser.Listings(rows);
         foreach (var a in l.Asks)
