@@ -1069,6 +1069,33 @@ public static class WpfApp
             double angle = (chev.RenderTransform as System.Windows.Media.RotateTransform)?.Angle ?? -1;
             bool folded = false; Motion.Close(new System.Windows.Controls.Border(), () => folded = true);
             Check(angle > 70 && angle < 90 && folded, $"motion: a chevron halfway turned reads {angle:0}°, eased; a fold of something not shown hides it at once");
+
+            // 0.10.44: bars slide, a goal reached washes its row once, the chart draws in
+            double shown = -1; var bar = new System.Windows.Controls.Border();
+            Motion.Slide(bar, "test|bar", 0.2, s => shown = s);
+            double firstBar = shown;
+            Motion.Slide(bar, "test|bar", 0.6, s => shown = s);
+            Check(firstBar == 0.2 && shown > 0.5 && shown < 0.6, $"motion: a bar's first share shows still, a new one slides there, eased ({firstBar:0.00} then {shown:0.000} halfway)");
+            Motion.Slide(bar, "test|bar", 0.603, s => shown = s);
+            var bar2 = new System.Windows.Controls.Border(); double shown2 = -1;
+            Motion.Slide(bar2, "test|bar", 0.9, s => shown2 = s);
+            Check(shown2 > 0.6 && shown2 < 0.9, $"motion: a bar drawn again under its key slides from the share last shown ({shown2:0.000})");
+            Motion.ForgetShare("test|bar"); var bar3 = new System.Windows.Controls.Border(); double shown3 = -1;
+            Motion.Slide(bar3, "test|bar", 0.3, s => shown3 = s);
+            Check(shown3 == 0.3, $"motion: a bar that went away comes back without a slide ({shown3:0.000})");
+
+            System.Windows.Controls.Border Row() => new() { Background = System.Windows.Media.Brushes.Transparent };
+            var r0 = Row(); Motion.Reached(r0, "test|goal", true);
+            var r1 = Row(); Motion.Reached(r1, "test|goal2", false);
+            var r2 = Row(); Motion.Reached(r2, "test|goal2", true);
+            var r3 = Row(); Motion.Reached(r3, "test|goal2", true);
+            static bool Washed(System.Windows.Controls.Border b) => b.Background is System.Windows.Media.SolidColorBrush { Color.A: > 0x10 } && b.RenderTransform is System.Windows.Media.ScaleTransform;
+            Check(!Washed(r0) && !Washed(r1) && Washed(r2) && !Washed(r3), $"motion: a goal washes once, on the draw where it is reached; one first seen done stays still ({Washed(r0)} {Washed(r1)} {Washed(r2)} {Washed(r3)})");
+
+            var chart = new System.Windows.Controls.Canvas { Width = 600, Height = 90 };
+            Motion.Reveal(chart, 600, 90);
+            double clipW = (chart.Clip as System.Windows.Media.RectangleGeometry)?.Rect.Width ?? -1;
+            Check(clipW > 400 && clipW < 632, $"motion: the chart halfway drawn in shows {clipW:0} px of its width, eased");
             Motion.Still = true; Motion.FrozenAt = null;
             var still = new System.Windows.Controls.TextBlock();
             Motion.Number(still, "test|still", 1, N0); Motion.Number(still, "test|still", 2, N0);

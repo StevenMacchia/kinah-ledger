@@ -18,5 +18,13 @@ public partial class MainWindow
         if (bag.Count > 2) Motion.Land(bag[2], true, null);
         var tiles = LootHost.Children.OfType<System.Windows.Controls.Panel>().SelectMany(p => p.Children.OfType<System.Windows.Controls.WrapPanel>()).SelectMany(w => w.Children.OfType<FrameworkElement>()).ToList();
         if (tiles.Count > 1) Motion.Land(tiles[1], false, "Unique");
+        // 0.10.44: the chase bar slides up from 60% of its share, the chart draws in, the first Next up row washes as if just reached
+        if (ChaseBox.Visibility == Visibility.Visible)
+        {
+            double share = _chaseShare;
+            Motion.ReplaySlide(ChaseFill, ChaseKey, share * 0.6, share, s => { _chaseShare = s; LayoutChase(); });
+        }
+        if (ChartBox.Visibility == Visibility.Visible) Motion.Reveal(RateCanvas, RateCanvas.Width, RateCanvas.Height);
+        if (GoalsHost.Children.OfType<System.Windows.Controls.Border>().FirstOrDefault() is { } row) Motion.Wash(row, "Gold");
     }
 }

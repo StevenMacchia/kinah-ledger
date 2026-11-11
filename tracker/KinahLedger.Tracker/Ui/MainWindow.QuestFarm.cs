@@ -29,7 +29,7 @@ public partial class MainWindow
     /// <summary>Wires the hero's chart, the chips, Next up's head and the chase bar's width, once from the constructor.</summary>
     void InitQuest()
     {
-        ChartToggle.MouseLeftButtonUp += (_, _) => { _qOpen["chart"] = !QOpen("chart"); ChartBox.Visibility = QOpen("chart") && ChartToggle.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed; QSetChev(ChartChev, QOpen("chart")); };
+        ChartToggle.MouseLeftButtonUp += (_, _) => { _qOpen["chart"] = !QOpen("chart"); ShowChart(QOpen("chart") && ChartToggle.Visibility == Visibility.Visible); QSetChev(ChartChev, QOpen("chart")); };
         ChaseTrack.SizeChanged += (_, _) => LayoutChase();
         CraftChaseTrack.SizeChanged += (_, _) => LayoutCraftChase();
         ChipKinah.MouseLeftButtonUp += (_, _) => ToggleChip("who");
@@ -42,6 +42,7 @@ public partial class MainWindow
     /* ---------------- the chase ---------------- */
 
     double _chaseShare;
+    string ChaseKey => "chase|" + _part + "|" + CountWhere();
     void LayoutChase() => ChaseFill.Width = Math.Max(0, ChaseTrack.ActualWidth * _chaseShare);
 
     /* ---------------- the bag at a glance ---------------- */
@@ -86,7 +87,7 @@ public partial class MainWindow
         foreach (var (r, gathered) in drops)
         {
             var name = r.Report.Length > 0 ? r.Report : r.Name;
-            var s = QSlot(QItemIcon(name, _items.IdOf(name), 42, round: false, grade: r.Grade), CountBadge(Qty(r.Drops)));
+            var s = QSlot(QItemIcon(name, _items.IdOf(name), 42, round: false, grade: r.Grade), CountBadge(Qty(r.Drops)), ("bag-count|" + where + "|" + name, Qty(r.Drops)));
             if (r.Reported) s.Opacity = 0.55;
             CardTip(s, () => ItemHereCard(r, gathered, where));
             if (r.Report.Length > 0) s.MouseLeftButtonUp += (_, _) => ShowItemCard(r, s);
@@ -126,8 +127,10 @@ public partial class MainWindow
             ChaseFill.Effect = QGlow(tone, 10, 0.6);
             ChaseBest.SetResourceReference(TextBlock.ForegroundProperty, tone);
             ChaseBox.ToolTip = $"Your best hour in this zone on this server: {Amounts.Full(bestHr)}. This hour: {Amounts.Full(nowHr)}.";
-            _chaseShare = share; LayoutChase();
+            // the bar slides to its new share (Motion.Slide); keyed by where it counts, so a switch to this zone doesn't slide
+            Motion.Slide(ChaseFill, ChaseKey, share, s => { _chaseShare = s; LayoutChase(); });
         }
+        else Motion.ForgetShare(ChaseKey);
         var sig = $"{has}|{beat}|{Math.Round(share, 3)}|{nowHr > 0}|{Skins.Current}";
         if (!Changed("ring", sig)) return;
         RingHost.Children.Clear();
@@ -239,7 +242,9 @@ public partial class MainWindow
         var pace = Goals.PaceText(p);
         var sub = p.Done ? "reached today ✓" : $"{GoalAmount(g, p.Have)} so far · {GoalAmount(g, p.ToGo)} to go" + (pace.Length > 0 ? " · " + pace : "");
         var tone = p.Done ? "Gold" : "Lilac";
-        var row = QRow(icon, Goals.Label(g), sub, p.Done ? "✓" : $"{Math.Round(p.Fraction * 100):0}%", tone, p.Fraction, tone, rule, inline: true);
+        var key = $"goal|{g.Kind}|{g.Name}|{g.Which}|{g.Target}";
+        var row = QRow(icon, Goals.Label(g), sub, p.Done ? "✓" : $"{Math.Round(p.Fraction * 100):0}%", tone, p.Fraction, tone, rule, inline: true, barKey: key);
+        Motion.Reached(row, key, p.Done);   // the draw where it is reached washes it gold once
         row.Tag = "goal";
         AutomationProperties.SetName(row, $"Goal: {Goals.Label(g)}, {GoalCountText(g, p)}");
         CardTip(row, () => GoalCard(g));

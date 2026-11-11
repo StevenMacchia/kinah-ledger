@@ -242,7 +242,8 @@ public partial class MainWindow
         // every row has its track, so rows keep one height; under 5% the fill would be a sliver, so the track stays empty and
         // the figures say it (2026-11-08 reviews: no sliver bars, then rows jumping in height where the bar was left out)
         double share = q.Share < 0.05 ? 0 : q.Share;
-        var row = QRow(QuestIcon(q), Quests.Title(q, Fk), note ?? QuestSub(q), Quests.Pts(q.Points), "Lilac", share, tone, rule, inline: true);
+        var row = QRow(QuestIcon(q), Quests.Title(q, Fk), note ?? QuestSub(q), Quests.Pts(q.Points), "Lilac", share, tone, rule, inline: true, barKey: depth == 0 ? "quest|" + q.Key : null);
+        if (depth == 0) Motion.Reached(row, "quest|" + q.Key, q.Done, tone);   // the draw where it is done washes it once in its tone
         row.Tag = depth == 0 ? "quest" : "tree";
         AutomationProperties.SetName(row, $"Quest: {Quests.Title(q, Fk)}, {Quests.Pts(q.Points)}");
         if (depth > 0)
