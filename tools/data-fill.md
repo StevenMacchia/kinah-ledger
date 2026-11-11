@@ -20,7 +20,7 @@ Its search box is client-side (useless without a browser), but every page is ser
 request by slug: the name lowercased, apostrophes dropped, every other run of non-letters turned into one hyphen
 (`Balaur's Essence` → `/items/balaurs-essence`, `Gear Change Voucher: Ludra (Bound)` → `/items/gear-change-voucher-ludra-bound`).
 A missing page is a 404 titled "Page not found". Checked 2026-11-06 from Node with a plain `fetch`: the page carries
-the name in `<title>`, the item card as text (Grade, Category, Required Level, Trading, Stack size), the icon in
+the name in the `<h1>` (the `<title>` suffix changes: ": How to Get", " – Drops", none), the item card as text (Grade, Category, Required Level, Trading, Stack size), the icon in
 `og:image`, and for a craftable item its Crafting table (skill, mastery, faction, materials, makes, combo chance).
 Monster pages (`/monsters/<slug>`) carry Level and Rank, zone pages (`/zones/<slug>`) Map and Type. Nothing needs the
 Next.js payload the page also embeds. One request per name, two for an item when the plain slug is missing and the
