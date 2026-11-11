@@ -242,7 +242,8 @@ public partial class MainWindow
         var name = r.Report.Length > 0 ? r.Report : r.Name;
         // the Quest tile (2026-11-07): the game's icon, the count, the name, the worth or why there is none
         var tile = QTile(QItemIcon(name, _items.IdOf(name), 34, round: false, grade: r.Grade), Qty(r.Drops).ToString("N0"), name,
-            r.Worth > 0 ? r.Value : r.Sub.Contains("bound", StringComparison.OrdinalIgnoreCase) ? "bound" : "no price yet", r.Worth > 0 ? "Gold" : "Faint");
+            r.Worth > 0 ? r.Value : r.Sub.Contains("bound", StringComparison.OrdinalIgnoreCase) ? "bound" : "no price yet", r.Worth > 0 ? "Gold" : "Faint",
+            roll: ("loot-count|" + LootHereName + "|" + name, Qty(r.Drops)));
         if (r.Reported) tile.Opacity = 0.55;
         CardTip(tile, () => ItemHereCard(r, gathered, where));
         if (r.Report.Length == 0) return tile;

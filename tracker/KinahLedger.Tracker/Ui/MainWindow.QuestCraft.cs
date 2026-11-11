@@ -33,7 +33,8 @@ public partial class MainWindow
         // the failed count is the ring's and "4 of 5 worked"'s already (UI audit 2026-11-08: one fact three times)
         CraftChaseLbl.Text = tries > 0 && known ? $"profit {PriceBook.Cut}" : "";
         CraftChaseBest.Text = tries > 0 ? $"{ok:N0} of {tries:N0} worked" : "";
-        _craftShare = share; LayoutCraftChase();
+        if (tries > 0) Motion.Slide(CraftChaseFill, "craft-chase", share, s => { _craftShare = s; LayoutCraftChase(); });
+        else { Motion.ForgetShare("craft-chase"); _craftShare = 0; LayoutCraftChase(); }
         CraftChaseFill.Effect ??= QGlow("Mint", 10, 0.6);
         CraftProfit.SetResourceReference(TextBlock.ForegroundProperty, known ? (net >= 0 ? "Mint" : "Coral") : "Ink");
         CraftProfit.Visibility = known ? Visibility.Visible : Visibility.Collapsed;   // before the first craft the note stands alone

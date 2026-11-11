@@ -13,7 +13,9 @@ namespace KinahLedger.Ui;
 /// - a figure that changes rolls to its new value, with a short green tint when money came in (<see cref="Number"/>);
 /// - a slot that lands (a new item, or more of one) grows in, and a Legend, Unique or Epic one glows once in its grade's
 ///   colour (<see cref="Begin"/>, <see cref="Slot"/>, <see cref="End"/>);
-/// - a section opens and folds smoothly, its chevron turning (<see cref="Open"/>, <see cref="Close"/>, <see cref="Turn"/>).
+/// - a section opens and folds smoothly, its chevron turning (<see cref="Open"/>, <see cref="Close"/>, <see cref="Turn"/>);
+/// - a bar slides to its new share (<see cref="Slide"/>), a goal row washes once when it is reached (<see cref="Reached"/>),
+///   and the rate chart draws itself in when it opens (<see cref="Reveal"/>) (0.10.44).
 /// Nothing loops and nothing plays without a change, so the tracker costs the game nothing while it sits still. Off in a
 /// render (<see cref="Still"/>) and when Windows's animations are off. KL_MOTION_AT=0..1 holds every effect at that point
 /// instead of playing it, for a render of the frame.
@@ -173,7 +175,7 @@ public static class Motion
     }
 
     /// <summary>Forgets every figure's last value (a new session, Undo): the next one shows without a roll.</summary>
-    public static void ForgetFigures() => Last.Clear();
+    public static void ForgetFigures() { Last.Clear(); Shares.Clear(); DoneSeen.Clear(); }
 
     /* ---------------- slots that land ---------------- */
 
@@ -240,6 +242,100 @@ public static class Motion
             // the glow: up in the first sixth, held, then fading out faster toward the end
             if (glow != null) glow.Opacity = p < 0.15 ? 0.95 * p / 0.15 : 0.95 * (1 - Math.Pow((p - 0.15) / 0.85, 2));
         }, () => { el.Opacity = opacity; if (glow != null && el.Effect == glow) el.ClearValue(UIElement.EffectProperty); el.ClearValue(UIElement.RenderTransformProperty); });
+    }
+
+    /* ---------------- bars that slide ---------------- */
+
+    sealed class Glide { public double Shown, Target; }
+    static readonly ConditionalWeakTable<UIElement, Glide> Glides = new();
+    // the last share shown under each key, so a bar rebuilt with its row still slides from where it was
+    static readonly Dictionary<string, double> Shares = new();
+
+    /// <summary>A bar sliding to its new share takes this long.</summary>
+    public const double SlideMs = 600;
+
+    /// <summary>
+    /// A share (a bar's fill, 0 to 1) shown through <paramref name="apply"/>: when the one last shown under <paramref name="key"/>
+    /// was another, it slides there. The same share again (each tick, a resize) leaves a slide under way alone or applies it
+    /// as it is; a change under half a percent (the clock moving the hour) is set without a slide.
+    /// </summary>
+    public static void Slide(UIElement el, string key, double value, Action<double> apply)
+    {
+        bool had = Shares.TryGetValue(key, out var was);
+        Shares[key] = value;
+        var g = Glides.GetValue(el, _ => new Glide { Shown = had ? was : value, Target = had ? was : value });
+        if (Playing(el) && g.Target == value) return;
+        double from = Playing(el) ? g.Shown : had ? was : value;
+        g.Target = value;
+        if (!On || !had || Math.Abs(from - value) < 0.005) { Halt(el); g.Shown = value; apply(value); return; }
+        Play(el, SlideMs, p => { g.Shown = from + (value - from) * Out(p); apply(g.Shown); }, () => { g.Shown = value; apply(value); });
+    }
+
+    /// <summary>Forgets a bar's last share (it went away): when it comes back it shows without a slide.</summary>
+    public static void ForgetShare(string key) => Shares.Remove(key);
+
+    /// <summary>For a render of the motion: the bar as if it had been at <paramref name="from"/> and just moved to <paramref name="to"/>.</summary>
+    internal static void ReplaySlide(UIElement el, string key, double from, double to, Action<double> apply)
+    {
+        Shares[key] = from;
+        if (Glides.TryGetValue(el, out var g)) g.Shown = g.Target = from;
+        Halt(el);
+        Slide(el, key, to, apply);
+    }
+
+    /* ---------------- a goal reached ---------------- */
+
+    static readonly Dictionary<string, bool> DoneSeen = new();
+
+    /// <summary>A row's wash when its goal is reached takes this long.</summary>
+    public const double ReachMs = 1500;
+
+    /// <summary>
+    /// A goal or quest row drawn, with whether it is done: the draw where it turns done (after one where it wasn't) washes
+    /// the row once in <paramref name="tone"/>. A row seen first already done (the tracker starting, another page) stays still.
+    /// </summary>
+    public static void Reached(Border row, string key, bool done, string tone = "Gold")
+    {
+        bool had = DoneSeen.TryGetValue(key, out var was);
+        DoneSeen[key] = done;
+        if (had && !was && done && On) Wash(row, tone);
+    }
+
+    /// <summary>One wash: the row lights in its tone quickly, swells 2% and settles, then the light fades out.</summary>
+    internal static void Wash(Border row, string tone)
+    {
+        var c = Brush(tone, Colors.Gold);
+        var bg = new SolidColorBrush(Color.FromArgb(0, c.R, c.G, c.B));
+        row.Background = bg;
+        var scale = new ScaleTransform(1, 1);
+        row.RenderTransformOrigin = new Point(0.5, 0.5);
+        row.RenderTransform = scale;
+        Play(row, ReachMs, p =>
+        {
+            // up in the first eighth, held a little, then out
+            double a = p < 0.12 ? p / 0.12 : 1 - Math.Pow(Math.Clamp((p - 0.25) / 0.75, 0, 1), 2);
+            bg.Color = Color.FromArgb((byte)(0x48 * a), c.R, c.G, c.B);
+            double s = p < 0.12 ? 1 + 0.02 * Out(p / 0.12) : 1.02 - 0.02 * Out((p - 0.12) / 0.3);
+            scale.ScaleX = scale.ScaleY = s;
+        }, () => { if (row.Background == bg) row.Background = Brushes.Transparent; row.ClearValue(UIElement.RenderTransformProperty); });
+    }
+
+    /* ---------------- a chart that draws in ---------------- */
+
+    /// <summary>A chart drawing itself in takes this long.</summary>
+    public const double RevealMs = 700;
+
+    /// <summary>
+    /// A chart just shown draws in from the left: a clip over it (with room for the line's glow) widens to its full width,
+    /// so the line, its fill and the dot at its end come in as they would be drawn.
+    /// </summary>
+    public static void Reveal(FrameworkElement chart, double width, double height, double pad = 16)
+    {
+        if (!On) return;
+        var rect = new RectangleGeometry(new Rect(-pad, -pad, 0, height + 2 * pad));
+        chart.Clip = rect;
+        Play(chart, RevealMs, p => rect.Rect = new Rect(-pad, -pad, (width + 2 * pad) * Out(p), height + 2 * pad),
+            () => chart.ClearValue(UIElement.ClipProperty));
     }
 
     /* ---------------- sections that open and fold ---------------- */

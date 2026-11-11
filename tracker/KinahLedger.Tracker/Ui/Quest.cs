@@ -165,7 +165,7 @@ public partial class MainWindow
         => new() { Color = QColor(tone), BlurRadius = blur, ShadowDepth = 0, Opacity = Skins.IsDark(Skins.Current) ? opacity : opacity * 0.3 };
 
     /// <summary>A bar: the share filled in the role's colour with a light edge and a glow, on the window's background.</summary>
-    static Grid QBar(double share, string tone, double height = 7)
+    static Grid QBar(double share, string tone, double height = 7, string? key = null)
     {
         var g = new Grid { Height = height };
         var track = new Border { CornerRadius = new CornerRadius(height / 2) };
@@ -176,19 +176,25 @@ public partial class MainWindow
         fill.Child = new Border { CornerRadius = new CornerRadius(height / 2), Margin = new Thickness(1, 1, 1, 0),
             Background = new LinearGradientBrush(Color.FromArgb(0x55, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90) };
         g.Children.Add(fill);
-        g.SizeChanged += (_, _) => fill.Width = Math.Max(0, g.ActualWidth * Math.Clamp(share, 0, 1));
+        void Set(double s) => fill.Width = Math.Max(0, g.ActualWidth * Math.Clamp(s, 0, 1));
+        // with a key the fill slides from the share last shown under it (a goal's bar after a pickup, its row drawn again)
+        if (key == null) g.SizeChanged += (_, _) => Set(share);
+        else g.SizeChanged += (_, _) => Motion.Slide(fill, key, share, Set);
         return g;
     }
 
     /// <summary>An inventory slot: the item's icon at 42 px with its count in a badge at the corner (the old LOOT grid's grammar, kept for the Compact bag strip).</summary>
-    FrameworkElement QSlot(FrameworkElement icon, string badge)
+    /// <param name="roll">The item's key and count: the badge rolls up from the count last shown under it (Motion.Number).</param>
+    FrameworkElement QSlot(FrameworkElement icon, string badge, (string Key, long Count)? roll = null)
     {
         var g = new Grid { Width = 46, Height = 46, Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, Background = Brushes.Transparent };
         icon.HorizontalAlignment = HorizontalAlignment.Left; icon.VerticalAlignment = VerticalAlignment.Top;
         g.Children.Add(icon);
         var b = new Border { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, MinWidth = 18, Height = 16, CornerRadius = new CornerRadius(8), Padding = new Thickness(4, 0, 4, 0), BorderThickness = new Thickness(1) };
         b.SetResourceReference(Border.BackgroundProperty, "Bg"); b.SetResourceReference(Border.BorderBrushProperty, "CardLineHover");
-        b.Child = QT(badge, 10.5, FontWeights.Bold, "Ink");
+        var t = QT(badge, 10.5, FontWeights.Bold, "Ink");
+        if (roll is { } r) Motion.Number(t, r.Key, r.Count, v => CountBadge((long)Math.Round(v)), -1);
+        b.Child = t;
         g.Children.Add(b);
         return g;
     }
@@ -197,7 +203,8 @@ public partial class MainWindow
     /// One row: a 30 px icon, the name in bold over the small print, a figure on the right in the tone given, and under
     /// them a thin bar when <paramref name="bar"/> is a share. Lit a little under the mouse; the whole row is the click.
     /// </summary>
-    static Border QRow(FrameworkElement icon, string title, string sub, string value = "", string valueTone = "Ink", double? bar = null, string barTone = "Lilac", bool rule = true, bool inline = false)
+    /// <param name="barKey">Who the bar is (a goal, a quest): it slides from the share last shown under it (Motion.Slide).</param>
+    static Border QRow(FrameworkElement icon, string title, string sub, string value = "", string valueTone = "Ink", double? bar = null, string barTone = "Lilac", bool rule = true, bool inline = false, string? barKey = null)
     {
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
@@ -230,7 +237,7 @@ public partial class MainWindow
         }
         if (bar is { } share)
         {
-            var b = QBar(share, barTone, 7); b.Margin = new Thickness(10, inline ? 3 : 5, 0, 0);
+            var b = QBar(share, barTone, 7, barKey); b.Margin = new Thickness(10, inline ? 3 : 5, 0, 0);
             Grid.SetRow(b, 1); Grid.SetColumn(b, 1); Grid.SetColumnSpan(b, 2); g.Children.Add(b);
         }
         var row = new Border { Child = g, Padding = new Thickness(6, inline ? 4 : 7, 6, inline ? 4 : 7), Margin = new Thickness(-6, 0, -6, 0), CornerRadius = new CornerRadius(9), Background = Brushes.Transparent, Cursor = Cursors.Hand };
@@ -244,12 +251,14 @@ public partial class MainWindow
     /// A bag tile (Full view's inventory feel, with names on): the item's icon, the count big, the name, and its worth in gold
     /// (or "no price yet", "bound", faint). Four to a row at 149 px; lit under the mouse.
     /// </summary>
-    static Border QTile(FrameworkElement icon, string big, string name, string value, string valueTone = "Gold", double width = 149)
+    /// <param name="roll">The item's key and count: the big count rolls up from the one last shown under it (Motion.Number).</param>
+    static Border QTile(FrameworkElement icon, string big, string name, string value, string valueTone = "Gold", double width = 149, (string Key, long Count)? roll = null)
     {
         var sp = new StackPanel();
         icon.HorizontalAlignment = HorizontalAlignment.Left;
         sp.Children.Add(icon);
         var b = QT(big, 16, FontWeights.Bold, "Ink", trim: true); b.Margin = new Thickness(0, 5, 0, 0); b.LineHeight = 18; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        if (roll is { } r) Motion.Number(b, r.Key, r.Count, v => Math.Round(v).ToString("N0"), -1);
         sp.Children.Add(b);
         sp.Children.Add(QT(name, 11, FontWeights.Medium, "Muted", trim: true));
         if (value.Length > 0) { var v = QT(value, 11, FontWeights.SemiBold, valueTone, trim: true); sp.Children.Add(v); }

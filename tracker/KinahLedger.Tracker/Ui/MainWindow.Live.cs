@@ -395,13 +395,21 @@ public partial class MainWindow
     /// The rate line (Quest: behind "chart" on the hero): the samples under a gold line in a 628 by 84 box, your best here
     /// as a dashed lilac line at its height on the same scale, clamped to the box when it is above every sample.
     /// </summary>
+    /// <summary>The rate chart shown or hidden; once it opens (a click on "chart", or its line ready with it open) it draws itself in from the left.</summary>
+    void ShowChart(bool on)
+    {
+        bool was = ChartBox.Visibility == Visibility.Visible;
+        ChartBox.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (on && !was) Motion.Reveal(RateCanvas, RateCanvas.Width, RateCanvas.Height);
+    }
+
     void DrawRateLine(RateLine line, string from, string to, double best = 0)
     {
         const double W = 628, H = 96;
         var pts = line.Points(W, H);
         bool show = pts.Count >= 2;
         ChartToggle.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        ChartBox.Visibility = show && QOpen("chart") ? Visibility.Visible : Visibility.Collapsed;
+        ShowChart(show && QOpen("chart"));
         QSetChev(ChartChev, QOpen("chart"));
         if (!show) return;
         RateLinePath.Points = new PointCollection(pts.Select(p => new Point(p.X, p.Y)));
