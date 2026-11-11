@@ -3009,9 +3009,20 @@ public sealed partial class TrackerSession
             // just out of it: its rewards may still be landing
             else if (run.Leaving) inside = Instances.Route(ev, _batch, Target.RewardOpen(ev.Time)) == RunRoute.Run;
         }
-        // a gather the panel or its bar just produced is gathering, even in a zone the minimap calls an instance (Steven, 2026-10-24
-        // 15:21: Odyle gathered in Auldor's Sanctum); never the run's loot
-        if (inside && gathered) { inside = false; CrashLog.Note($"{_items.NameOf(((ItemAcquired)ev).ItemId)}: gathered here, counted with gathering, not the run's loot"); }
+        // a gather the panel or its bar just produced inside an open run is that run's loot, counted at once (its reward picture
+        // never shows it): the dungeon's, not the zone you return to (Steven, 2026-11-11). With no run open, in a zone the minimap
+        // calls an instance, it is gathering, as before (2026-10-24 15:21: Odyle gathered in Auldor's Sanctum)
+        if (inside && gathered)
+        {
+            if (ev is ItemAcquired ga && Instances.Gathered(ga))
+            {
+                var gwhere = RunWhere();
+                CrashLog.Note($"{_items.NameOf(ga.ItemId)} x{ga.Count}: gathered inside the run, counted as its loot, not farming's");
+                Landed?.Invoke(ev, gwhere);
+                return gwhere;
+            }
+            inside = false; CrashLog.Note($"{_items.NameOf(((ItemAcquired)ev).ItemId)}: gathered here, counted with gathering, not the run's loot");
+        }
         // a reward screen that isn't the run's own over it (the Daeva Pass's level reward, attendance, an achievement, a shop,
         // the mail): what lands with it is that screen's reward, never the run's, and never says the run's rewards came in
         // (2026-10-29 13:02:27: the Daeva Pass level reward in Defend Shugo Merchants' lobby marked the run paid, so 20 s of

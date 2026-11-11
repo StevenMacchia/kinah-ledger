@@ -3670,6 +3670,29 @@ options: --process aion[,other]");
         ga.GatherOutcome(n0.AddSeconds(40), false, false);
         ChatG(n0.AddSeconds(40.8), "Essence Extraction failed");
         Check("...the bar's Fail race and its \"Essence Extraction failed\" 0.8 s later: one failed attempt, mining's (not Odyle's)", Att(ga) + " " + string.Join(" ", ga.Engine.SkillSnapshot().OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value.Nodes}/{kv.Value.Failed}")), "Orichalcum Ore=2/1 Ore=3/1");
+        // Odyle gathered inside a dungeon run is that run's loot, its attempt not farming's (Steven, 2026-11-11: "the odyle inside
+        // of a dungeon is farmed inside of the dungeon and should count as a drop there - not the zone u return to")
+        {
+            var gd = new TrackerSession(null, settings, items, "Test");
+            var d0 = n0.AddMinutes(30);
+            gd.ApplyZone("Fire Temple", d0); gd.UpdateDoing(d0);
+            var chatD = new List<string> { "[Player1] hi" };
+            void ChatD(DateTime at, string line)
+            {
+                chatD.Add(line);
+                for (int i = 0; i < 4; i++) gd.ChatGated(new List<string>(chatD), at.AddSeconds(i * 0.4), Gate.Run);
+                gd.FlushVotes(at.AddSeconds(1.6));
+            }
+            ChatD(d0.AddSeconds(5), "[Player2] pull");
+            gd.ProcessList(L("Profes x1", "Odyle x1", "Success x1"), d0.AddSeconds(20));
+            gd.GatherOutcome(d0.AddSeconds(23), true, false);
+            ChatD(d0.AddSeconds(23.5), "Odyle acquired.");
+            var dRun = gd.Instances.CurrentRun;
+            long odyle = items.IdOf("Odyle");
+            Check("Odyle gathered inside a dungeon run: the run's loot, not farming's, its attempt not farming's either",
+                $"run {(dRun == null ? -1 : dRun.Items.GetValueOrDefault(odyle) + dRun.BoundItems.GetValueOrDefault(odyle))} · farming {gd.Engine.Items.GetValueOrDefault(odyle)} · attempts {gd.Engine.SkillSnapshot().Values.Sum(k => k.Nodes)}",
+                "run 1 · farming 0 · attempts 0");
+        }
         // a race nobody named: still an attempt, under "unknown node"
         var gu = new TrackerSession(null, settings, items, "Test");
         gu.Engine.SetZone("Eastern Cantas Valley");
