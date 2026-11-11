@@ -108,9 +108,10 @@ public sealed partial class HudTicker : IHudLook
             SetDot(_dot, live);
             _run.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
             _time.Text = clock; _time.Foreground = live || (!run && paused.Length == 0) ? Ink : Faint;
-            _rate.Text = V("rate"); _rate.FontSize = warm ? 13 : 15; _rate.Opacity = warm ? .55 : 1;
+            // the hour and the session roll to their new figures on a pickup (Ui/HudTicker.Motion.cs)
+            PillFigures(V("rate"), V("total"), warm);
+            _rate.FontSize = warm ? 13 : 15; _rate.Opacity = warm ? .55 : 1;
             _unit.Visibility = V("rate").Length > 0 && !warm ? Visibility.Visible : Visibility.Collapsed;
-            _total.Text = V("total");
             _sep2.Visibility = _total.Visibility = V("total").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _rate.Visibility = Visibility.Visible;
             _idle.Visibility = counted ? Visibility.Collapsed : Visibility.Visible;
@@ -170,6 +171,7 @@ public sealed partial class HudTicker : IHudLook
             _toasts.Remove(k);
             if (!Still && gone.Kind == "pick") Leave(gone);
         }
+        var before = StackPlaces();   // where the toasts that stay sat, for their glide down
         _stack.Children.Clear();
         for (int i = 0; i < want.Count; i++)
         {
@@ -181,6 +183,13 @@ public sealed partial class HudTicker : IHudLook
                 _toasts[key] = t;
                 // a top drop slides in when it is a new item, not when its count or worth moves on
                 if (!Still) Arrive(t, kind == "pick" ? Age(values, key) : kind == "top" && !newTop ? 99 : -1);
+                // and its moment (Ui/HudTicker.Motion.cs): a fresh pickup's worth pops, a new top drop shines, a rare drop beats
+                if (Moves)
+                {
+                    if (kind == "pick" && Age(values, key) < 0.5 && Picks(values).FirstOrDefault(x => x.Id == key) is { } fp) PickPop(t.Body, fp);
+                    else if (kind == "top" && newTop) Sheen(t.Body);
+                    else if (kind == "rare") RareBeat(t.Body);
+                }
             }
             t.Place.Margin = new Thickness(0, i == 0 ? 6 : 4, 0, 0);
             t.Place.Opacity = kind == "pick" ? PlaceOpacity[i] : 1;
@@ -189,6 +198,7 @@ public sealed partial class HudTicker : IHudLook
             _stack.Children.Add(t.Place);
         }
         foreach (var l in _leaving) if (l.Place.Parent == null) _stack.Children.Add(l.Place);
+        Glide(before);
     }
 
     /// <summary>A pickup pushed out by a newer one: it fades where it is, under the stack, and goes.</summary>
@@ -249,7 +259,7 @@ public sealed partial class HudTicker : IHudLook
         if (p.Note.Length > 0) name.Inlines.Add(R(" " + p.Note, 11.5, Faint, weight: FontWeights.SemiBold));
         Grid.SetColumn(name, 1); g.Children.Add(name);
         // Kinah pops gold, loot pops mint (the mock's Pop)
-        var worth = T(p.Worth, 13, p.Kinah ? Gold : Mint, weight: FontWeights.Bold); worth.Margin = new Thickness(9, 0, 0, 0);
+        var worth = T(p.Worth, 13, p.Kinah ? Gold : Mint, weight: FontWeights.Bold); worth.Margin = new Thickness(9, 0, 0, 0); worth.Tag = "worth";
         Grid.SetColumn(worth, 2); g.Children.Add(worth);
         return new Border
         {

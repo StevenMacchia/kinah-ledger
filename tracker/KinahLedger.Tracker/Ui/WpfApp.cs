@@ -1098,6 +1098,23 @@ public static class WpfApp
             Motion.Reveal(chart, 600, 90);
             double clipW = (chart.Clip as System.Windows.Media.RectangleGeometry)?.Rect.Width ?? -1;
             Check(clipW > 400 && clipW < 632, $"motion: the chart halfway drawn in shows {clipW:0} px of its width, eased");
+            // the overlay's Ticker (0.10.49): its figures read back as numbers only when the overlay writes them the same way,
+            // and the hour rolls on a pickup (held halfway: between the old and the new figure)
+            Check(HudTicker.Num("1.27M") == 1_270_000 && HudTicker.Num("894K") == 894_000 && HudTicker.Num("12,345") == 12_345 && HudTicker.Num("warming up") == null && HudTicker.Num("1.2345M") == null,
+                "motion: the overlay's figures read back as numbers (1.27M, 894K, 12,345), and nothing else does");
+            {
+                var tk = new HudTicker();
+                var v1 = new Dictionary<string, string> { ["run"] = "1", ["time"] = "RUN 42:17", ["rate"] = "1M", ["total"] = "800K" };
+                var v2 = new Dictionary<string, string>(v1) { ["rate"] = "1.27M", ["total"] = "894K" };
+                // held a fifth in: the hour's roll (its tint takes twice as long, so the figure moves in the first half) and the session's
+                Motion.FrozenAt = 0.2;
+                tk.Update(v1); tk.Update(v2);
+                static IEnumerable<System.Windows.Controls.TextBlock> Texts(object o) =>
+                    (o is System.Windows.Controls.TextBlock t ? new[] { t } : Enumerable.Empty<System.Windows.Controls.TextBlock>())
+                    .Concat(o is DependencyObject d ? LogicalTreeHelper.GetChildren(d).Cast<object>().SelectMany(Texts) : Enumerable.Empty<System.Windows.Controls.TextBlock>());
+                var tkShown = Texts(tk.Root).Select(t => t.Text).Where(t => t.EndsWith("M") || t.EndsWith("K")).ToList();
+                Check(tkShown.Contains("1.21M") && tkShown.Contains("845.9K"), $"motion: the overlay's hour and session roll on a pickup, held a fifth in, eased ({string.Join(" ", tkShown)})");
+            }
             Motion.Still = true; Motion.FrozenAt = null;
             var still = new System.Windows.Controls.TextBlock();
             Motion.Number(still, "test|still", 1, N0); Motion.Number(still, "test|still", 2, N0);
@@ -1384,6 +1401,7 @@ public static class WpfApp
             h.Show();
             h.Update(v);
             DoEvents();
+            if (Motion.FrozenAt != null) { h.MotionFrameForRender(v); DoEvents(); }   // KL_MOTION_AT: the overlay's motion held at that point
             // over the mock's dark page (#0B0C0F), so the toasts' see-through washes read as they do over the game
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0, Color.FromRgb(0x0B, 0x0C, 0x0F));
             h.Close();
