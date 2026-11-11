@@ -2971,6 +2971,17 @@ options: --process aion[,other]");
                 $"{bundles} {find?.AnyNode} {finds?.Items} {finds?.Nodes} {RareGate.IsRare(items, pid, false)} {items.Get(pid)?.Icon.Length > 0} {GatheringCatalog.IsFindLine("Poko's Skin Bundle (Bound) acquired.")}",
                 "1 True 1 0 True True True");
         }
+        {
+            // the Kills panel (a click on "kills" on Farming): an enemy killed with no named drop crashed it (crash.log 2026-11-11
+            // 14:53:19, NullReferenceException in BuildKills: the empty drop's name was null)
+            var none = new SessionEngine.MobStats { Name = "Gentle Papis", KinahDrops = 4, Kinah = 1_200 };
+            var unnamed = new SessionEngine.MobStats { Name = "Cairn Tog", KinahDrops = 3, Kinah = 900, Drops = new() { [999_999_999] = 2 } };
+            var some = new SessionEngine.MobStats { Name = "Abyss Drakan Striker", KinahDrops = 8, Kinah = 9_536, Drops = new() { [1] = 2 } };
+            string? NameOf(long id) => id == 1 ? "Thick hide" : null;
+            Check("the Kills panel's small print: no drop, an unnamed drop, a named one",
+                $"{MainWindow.KillsSub(none, NameOf)} | {MainWindow.KillsSub(unnamed, NameOf)} | {MainWindow.KillsSub(some, NameOf)}",
+                "300 Kinah a kill | 300 Kinah a kill | 1,192 Kinah a kill · drops Thick hide 1 in 4");
+        }
 
         // out of an event, then nothing for half an hour (2026-10-30 11:05:23, Defend Shugo Merchants: "rewards that land in the
         // next 45 s are still its own", and it stayed "rewards landing" until the next event closed it at 11:36:34). The time
