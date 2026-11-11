@@ -3251,6 +3251,47 @@ options: --process aion[,other]");
             Check("after a reward screen: a drop with its kill, on no card, counts; the card's own item and a drop with no kill don't",
                 $"{n(dr.Engine, "Order Greaves")} {n(dr.Engine, "Riverside Cloak")} {n(dn.Engine, "Order Greaves")}", "1 0 0");
         }
+        // ...and a drop named like the screen's item is still a drop: the loose match took "Order Greaves acquired." for the
+        // "Order Gloves acquired." of the screen, so its line looked older than the screen (2026-11-10, Earth Boots read as the
+        // Earth Cloak line minutes before)
+        {
+            var dg = new TrackerSession(null, settings, items, "Test");
+            dg.Engine.SetZone("Contaminated Sanctum"); dg.ZoneView.SetZone("Contaminated Sanctum");
+            var og0 = new DateTime(2026, 10, 27, 19, 35, 5, DateTimeKind.Utc);
+            var ogChat = new List<string> { "[Player1] hi" };
+            dg.ProcessChat(ogChat, og0.AddSeconds(-5));
+            dg.RewardScreenSeen(og0);
+            dg.RewardPictureFiled(new[] { "Order Gloves", "Pure Odyle" }, og0.AddSeconds(-1));
+            ogChat.Add("Order Gloves acquired.");
+            for (int i = 0; i < 3; i++) dg.ProcessChat(ogChat, og0.AddSeconds(1 + i * 0.4));
+            ogChat.AddRange(new[] { "Obtained 1 Agrint Soul Points.", "Order Greaves acquired." });
+            for (int i = 0; i < 3; i++) dg.ProcessChat(ogChat, og0.AddSeconds(50 + i * 0.4));
+            dg.FlushVotes(og0.AddSeconds(56));
+            Check("after a reward screen: a drop named like the screen's item (Order Greaves, Order Gloves on the card) counts",
+                $"{n(dg.Engine, "Order Gloves")} {n(dg.Engine, "Order Greaves")}", "0 1");
+        }
+        // room and party lines that say different things are never one line misread
+        Check("RoomKind: left or joined, room or party",
+            string.Join(" | ", new[] { "Left Fire Temple Dungeon room.", "Joined Fire Temple Dungeon room.", "TillyT left the party.", "Riziy[ARI] joined the room.", "Created a room for Urugugu Canyon Dungeon.", "Joined Fire Temple Dungeonxoom.", "Fine Orichalcum Ore acquired." }.Select(l => RoomWitness.RoomKind(l) ?? "-")),
+            "left room | joined room | left party | joined room | created room | joined | -");
+        Check("...says another thing: another verb, or another noun where both read",
+            string.Join(" ", new[] { ("Left Fire Temple Dungeon room.", "Joined Fire Temple Dungeonxoom."), ("TillyT left the party.", "TillyT left the room."), ("Left Fire Temple Dungeon room.", "Left Fire Temple Dungeon rpom."), ("Left Fire Temple Dungeon room.", "Lefe Fire Temple Dungeon room.") }.Select(p => RoomWitness.SaysOther(p.Item1, p.Item2))),
+            "True True False False");
+        // "Left Fire Temple Dungeon room." five minutes after "Joined Fire Temple Dungeon room." is the room left, not the join
+        // read again (2026-11-10: the loose match took it for the join, so none of the day's four Fire Temple runs closed on it)
+        {
+            var rl = new TrackerSession(null, settings, items, "Test");
+            var r0 = new DateTime(2026, 11, 10, 18, 14, 18, DateTimeKind.Utc);
+            var rChat = new List<string> { "[Player1] hi", "Joined Fire Temple Dungeon room." };
+            rl.ProcessChat(new List<string> { "[Player1] hi", "Joined Fire Temple Dungeonxoom." }, r0.AddSeconds(-0.4));
+            for (int i = 0; i < 3; i++) rl.ProcessChat(rChat, r0.AddSeconds(i * 0.4));
+            for (int m = 1; m <= 5; m++) rl.ProcessChat(new List<string>(rChat) { $"[Player2] wave {m}" }, r0.AddMinutes(m));
+            rChat.AddRange(new[] { "[Player2] wave 5", "Left Fire Temple Dungeon room." });
+            var rAt = r0.AddMinutes(5).AddSeconds(10);
+            for (int i = 0; i < 3; i++) rl.ProcessChat(rChat, rAt.AddSeconds(i * 0.4));
+            int saidLeft = File.ReadAllText(CrashLog.ReadsPath).Split('\n').Count(l => l.Contains($"the chat says the Fire Temple room was left ({rAt.ToLocalTime():HH:mm:ss})"));
+            Check("a room left minutes after it was joined: the chat's room line is seen", $"{saidLeft > 0}", "True");
+        }
         // the inventory at work sets aside what prints for 10 s from when its line first showed, not from each read that still
         // shows it (Steven, 2026-10-27 15:37: "Stored item(s) in Storage." on screen 14 s, then a Comet Cloak dropped 23 s
         // after it, with its kill and its loot list row, was set aside)

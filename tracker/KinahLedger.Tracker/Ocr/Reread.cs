@@ -356,6 +356,9 @@ public sealed class Reread
         return sb.ToString();
     }
 
+    /// <summary>The key a line is filed under in the first-seen table (lower case, letters and digits only).</summary>
+    public static string KeyOf(string s) => Key(s);
+
     static string Key(string s)
     {
         var sb = new StringBuilder();

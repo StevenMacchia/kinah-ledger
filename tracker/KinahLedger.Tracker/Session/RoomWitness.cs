@@ -26,6 +26,34 @@ public static class RoomWitness
     // "Starting in 9s.", with up to a stray mark or a letter and a dash in front ("—Starting in Is", "A-Starting in 2s.")
     static readonly Regex StartRx = new(@"^\W{0,4}(?:[A-Za-z]\W)?\s*starting\s*in(?<rest>.*)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>
+    /// What a room or party line says happened, from its letters alone so it works on a first-seen key: "left room" for
+    /// "Left Fire Temple Dungeon room.", "joined room" for "Joined Fire Temple Dungeon room.", "left party" for "TillyT left
+    /// the party.", the verb alone when the noun didn't read ("joined" for "Joined Fire Temple Dungeonxoom."). Null when no
+    /// verb read.
+    /// </summary>
+    public static string? RoomKind(string text)
+    {
+        var k = new string(text.ToLowerInvariant().Where(char.IsLetter).ToArray());
+        var verb = Regex.Match(k, "joined|left|created|invited");
+        if (!verb.Success) return null;
+        var what = Regex.Match(k, "party|room", RegexOptions.RightToLeft);
+        return what.Success ? verb.Value + " " + what.Value : verb.Value;
+    }
+
+    /// <summary>
+    /// Two lines that say different things about a room or party: another verb, or another noun where both read. Never one
+    /// line misread (2026-11-10: the loose match took every "Left … Dungeon room." for the "Joined" line minutes before, so
+    /// no run closed on it).
+    /// </summary>
+    public static bool SaysOther(string a, string b)
+    {
+        if (RoomKind(a) is not { } ka || RoomKind(b) is not { } kb) return false;
+        var (va, na) = (ka.Split(' ')[0], ka.Contains(' ') ? ka.Split(' ')[1] : null);
+        var (vb, nb) = (kb.Split(' ')[0], kb.Contains(' ') ? kb.Split(' ')[1] : null);
+        return va != vb || (na != null && nb != null && na != nb);
+    }
+
     /// <summary>The place a "Left … Dungeon room." line names ("Urugugu Canyon"), or null.</summary>
     public static string? LeftRoom(string line)
     {
