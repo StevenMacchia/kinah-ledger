@@ -210,7 +210,10 @@ public partial class MainWindow
     {
         _prefs.AlwaysOnTop = on;
         Topmost = on;
+        TopmostBox.IsChecked = on;
     }
+    /// <summary>The status bar's Always on top box: the same switch, saved at once.</summary>
+    void TopmostBox_Click(object sender, RoutedEventArgs e) { SetAlwaysOnTop(TopmostBox.IsChecked == true); if (!_demo) _prefs.Save(); }
     public const string AlwaysOnTopText = "Keep above other windows";
 
     /// <summary>

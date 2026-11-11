@@ -458,7 +458,7 @@
               </StackPanel>
               <!-- the hour, big, and its unit -->
               <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                <TextBlock x:Name="HeadRate" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                <TextBlock x:Name="HeadRate" Cursor="Hand" MouseLeftButtonUp="HeadRate_Click" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
                 <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
               </StackPanel>
               <!-- the chase: this hour against your best here, a bar toward the flag (mint once it is beaten) -->
@@ -689,7 +689,7 @@
       <Border x:Name="StatusBar" Grid.Row="3" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left" Margin="0,14,0,0">
       <Border x:Name="StatusInner" BorderBrush="{DynamicResource Line}">
       <Grid x:Name="StatusRow">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <!-- how the count held up against the game's own numbers, as one chip in the look's colours; a click opens the Accuracy
              card over the window (Ui/MainWindow.AccuracyCard.cs). In the footer since 2026-10-28. Since 0.9.0 it shows only
              with Options › Show accuracy details on: the "2 to look at" pill is gone for players (Steven, 2026-10-30) -->
@@ -716,6 +716,11 @@
         <!-- the Kinah Ledger Discord: where a miscount report goes (#bugs-and-feedback), help and release news (2026-10-25) -->
         <TextBlock x:Name="DiscordText" Grid.Column="4" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
                    ToolTip="Opens the Kinah Ledger Discord in your browser. Post a miscount in #bugs-and-feedback with a screenshot, your server and the tracker version."><Hyperlink x:Name="DiscordLink" Style="{StaticResource LinkStyle}">Discord</Hyperlink></TextBlock>
+        <!-- Always on top, in sight (Steven, 2026-11-11: "so I stop losing the window"): the same switch as Options › General
+             and the ⋯ menu's Keep above other windows (MainWindow.Shell.cs SetAlwaysOnTop) -->
+        <CheckBox x:Name="TopmostBox" Grid.Column="5" Content="Always on top" FontSize="12" Margin="14,-3,0,-3" VerticalAlignment="Center"
+                  Foreground="{DynamicResource Muted}" Click="TopmostBox_Click" AutomationProperties.Name="Always on top"
+                  ToolTip="Keeps this window above the game and other windows. The same switch as Options › General." ToolTipService.InitialShowDelay="400"/>
       </Grid>
       </Border>
       </Border>

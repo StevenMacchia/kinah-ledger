@@ -186,7 +186,7 @@ public partial class MainWindow
     /// <summary>For options-test: a chip's click.</summary>
     internal void ToggleChipForTest(string key) => ToggleChip(key);
 
-    string CountWhere() => _prefs.AllZones ? "since the tracker started" : RunShown ? "this run" : "here";
+    string CountWhere() => _prefs.AllZones ? "since your last break" : RunShown ? "this run" : "here";
 
     void ToggleChip(string key)
     {

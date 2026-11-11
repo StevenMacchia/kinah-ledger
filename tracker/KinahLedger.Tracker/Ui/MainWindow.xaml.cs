@@ -221,7 +221,7 @@ public partial class MainWindow : Window
             ev.Handled = true;
             StepWindowScale(ev.Delta > 0 ? 1 : -1);
         };
-        Topmost = _prefs.AlwaysOnTop;   // Keep above other windows (0.10.26, Ui/MainWindow.Shell.cs)
+        Topmost = _prefs.AlwaysOnTop; TopmostBox.IsChecked = _prefs.AlwaysOnTop;   // Keep above other windows (0.10.26, Ui/MainWindow.Shell.cs)
         ShowPart(PageFollow.Farming, byHand: false);   // always Farming at the start, whatever page it closed on (0.8.55)
         SizeChanged += (_, _) => KeepOnScreen();
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(RefitIfNeeded);   // the screen's scaling changed, or a screen with another one
@@ -424,7 +424,7 @@ public partial class MainWindow : Window
         return farm ?? (chat != null ? _watcher.AllView : null);
     }
 
-    string ViewTitle() => RunEngine != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "every zone since the tracker started" : "this zone");
+    string ViewTitle() => RunEngine != null ? (_prefs.AllZones ? "this run" : "this run · this zone") : (_prefs.AllZones ? "every zone since your last break" : "this zone");
 
     void ResetTiles() { KinahHr.Text = "0"; KinahKill.Text = _mode != Mode.Gather ? "" : "0"; KillsHr.Text = "0"; DropsHr.Text = "0"; ValueHr.Text = ""; }
 
