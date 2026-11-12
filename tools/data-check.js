@@ -168,7 +168,9 @@ if (!zones.length) bad('zones.txt', 'empty'); if (!mobs.length) bad('mobs.txt', 
 const instances = lines('instances.txt'); unique('instances.txt', 'instance', instances.map(l => l.split('|')[0].trim()));
 for (const l of instances) {
   const parts = l.split('|').map(s => s.trim());
-  if (parts.length < 2 || parts.length > 3 || !parts[0]) bad('instances.txt', `not "Name|Kind" or "Area|Kind|Expedition": ${l}`);
+  // a fourth field "chat" (Name|Kind||chat, instances.txt's header, 0.10.14): an area whose loot prints in the chat kill by kill
+  const chat = parts.length === 4 && parts[3] === 'chat';
+  if (parts.length < 2 || (parts.length > 3 && !chat) || !parts[0]) bad('instances.txt', `not "Name|Kind", "Area|Kind|Expedition" or "Name|Kind||chat": ${l}`);
   else if (!KINDS.has(parts[1])) bad('instances.txt', `${parts[0]}: unknown kind ${parts[1]}`);
 }
 for (const f of ['aliases.json', 'vendor-prices.json', 'mob-images.json', 'gear-factions.json', 'models.json']) json(f);
