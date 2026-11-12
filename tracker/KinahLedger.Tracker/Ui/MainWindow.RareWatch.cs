@@ -157,7 +157,7 @@ public partial class MainWindow
         {
             ["rare"] = "Shade Gloves", ["rareId"] = "sample-watched", ["rareCount"] = "×1", ["rareGrade"] = "Legend",
             ["rareIcon"] = _items.IconUrl(id), ["rareColor"] = "#5AA6FF", ["rareItem"] = id.ToString(),
-            ["rarePrice"] = "28K", ["rareWhere"] = "on Siel", ["rareWatched"] = "1", ["rareChime"] = "1",
+            ["rarePrice"] = "28K", ["rareWhere"] = "on Siel", ["rareWatched"] = "1", ["rareChime"] = "1", ["rareMore"] = DemoRareMore(),
         };
         return new() { ("ui-hud-card-rare-watched.png", HudLooks.Card, v), ("ui-hud-ticker-rare-watched.png", HudLooks.Ticker, v) };
     }

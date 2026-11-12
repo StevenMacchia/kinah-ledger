@@ -271,7 +271,7 @@ public sealed partial class HudCard : IHudLook
         var drop = crafting ? null : HudRare.Of(values);
         if (Changed("drop", HudRare.Sig(drop)))
         {
-            _drop.Show(drop);
+            _drop.Show(drop, Moves);   // a new drop makes its entrance (Ui/HudRare.Motion.cs)
             if (crafting) _farmBody.Visibility = Visibility.Collapsed;   // Show(null) brings the farming figures back
         }
         if (drop != null && Changed("dropRate", V("rate"))) _drop.Rate(V("rate"));
