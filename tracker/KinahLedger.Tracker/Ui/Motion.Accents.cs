@@ -12,7 +12,7 @@ namespace KinahLedger.Ui;
 /// - an overlay figure rolls through <see cref="Number"/> when it reads back as a number (<see cref="Figure"/>);
 /// - a frame's edge lights in a tone and fades back to its line (<see cref="EdgeLight"/>);
 /// - something just changed pops from a little larger and settles (<see cref="Pop"/>);
-/// - a meter that passed its mark swells and glows once (<see cref="Pulse"/>);
+/// - a meter that passed its mark swells and glows once (<see cref="Pulse"/>, on the <see cref="Swell"/> curve);
 /// - a rare drop's colour beats twice and holds (<see cref="Beats"/>).
 /// </summary>
 public static partial class Motion
@@ -85,11 +85,17 @@ public static partial class Motion
         host.Effect = glow;
         Play(course, PulseMs, p =>
         {
-            double up = p < PulsePeak ? Out(p / PulsePeak) : 1 - Out((p - PulsePeak) / (1 - PulsePeak));
+            double up = Swell(p, PulsePeak);
             s.ScaleX = s.ScaleY = 1 + swell * up;
             glow.Opacity = 0.95 * up;
         }, () => { host.ClearValue(UIElement.RenderTransformProperty); if (host.Effect == glow) host.ClearValue(UIElement.EffectProperty); });
     }
+
+    /// <summary>
+    /// A swell's strength at point <paramref name="p"/> of its course, 0 to 1 and back: up quickly (eased) until
+    /// <paramref name="peak"/>, then settling slowly back to nothing by the end.
+    /// </summary>
+    internal static double Swell(double p, double peak) => p < peak ? Out(p / peak) : 1 - Out((p - peak) / (1 - peak));
 
     /// <summary>
     /// A rare drop's colour at point <paramref name="p"/> of its course, 0.35 to 1: full as it lands, then down and back up

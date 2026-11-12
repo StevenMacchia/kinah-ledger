@@ -444,7 +444,7 @@ public sealed partial class HudWindow : Window
         ShowAs(V("show"));
         ApplyLock(V("unlocked"));
         if (_look != null) { _look.Update(values); return; }
-        bool rose = TotalRose(V("total"));   // a pickup: Badge's figures roll and its ring sweeps (Ui/HudWindow.BadgeMotion.cs)
+        bool picked = PickedUp(values);   // a pickup just made: Badge's figures roll and its ring sweeps (Ui/HudWindow.BadgeMotion.cs)
         // a start or stop's flash ("Run started") over a waiting notice, for its few seconds
         bool flash = V("flash").Length > 0;
         var noteText = flash ? V("flash") : V("notice");
@@ -470,7 +470,7 @@ public sealed partial class HudWindow : Window
         if (ringSig != _ringSig)
         {
             _ringSig = ringSig;
-            DrawRing(share, beat, rose);
+            DrawRing(share, beat, picked);
             _ringHost.Visibility = share >= 0 ? Visibility.Visible : Visibility.Collapsed;
             _chaseLine.Text = words; _chaseLine.Foreground = beat ? Mint : Gold;
             _chaseLine.Visibility = words.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -502,7 +502,7 @@ public sealed partial class HudWindow : Window
             if (c.Visibility != Visibility.Visible) continue;
             c.Margin = new Thickness(first ? 0 : 20, 0, 0, 0); first = false;
         }
-        BadgeMoved(values, rose);
+        BadgeMoved(values, picked);
     }
 
     /// <summary>

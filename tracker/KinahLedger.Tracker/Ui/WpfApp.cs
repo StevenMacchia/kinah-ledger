@@ -1105,7 +1105,8 @@ public static class WpfApp
             {
                 var tk = new HudTicker();
                 var v1 = new Dictionary<string, string> { ["run"] = "1", ["time"] = "RUN 42:17", ["rate"] = "1M", ["total"] = "800K" };
-                var v2 = new Dictionary<string, string>(v1) { ["rate"] = "1.27M", ["total"] = "894K" };
+                // a pickup just made (Ui/HudFreshPicks.cs): only that rolls the figures
+                var v2 = new Dictionary<string, string>(v1) { ["rate"] = "1.27M", ["total"] = "894K", ["pick0"] = "Thick hide", ["pick0Id"] = "fresh", ["pick0At"] = DateTime.UtcNow.Ticks.ToString() };
                 // held a fifth in: the hour's roll (its tint takes twice as long, so the figure moves in the first half) and the session's
                 Motion.FrozenAt = 0.2;
                 tk.Update(v1); tk.Update(v2);
@@ -1175,7 +1176,30 @@ public static class WpfApp
                 bool bgHidden = !BgTexts(bgGone).Any(t => BgWords(t) == bgV2["notice"] && t.Visibility == Visibility.Visible);
                 Check(bgGoingNote is { Visibility: Visibility.Visible, Parent: FrameworkElement { Opacity: > 0 and < 0.5 } } && bgHidden,
                     $"motion: Badge's notice fades out before it hides ({(bgGoingNote?.Parent as FrameworkElement)?.Opacity:0.00}, then hidden {bgHidden})");
-                foreach (var h in new[] { badge, bgFresh, bgStill, bgGoing, bgGone }) h.Close();
+                // no pickup, nothing moves: a price refresh revaluing the session (the same newest pickup, the figures up) and another
+                // character's session coming in (the pickups cleared, then its own from minutes ago) show their figures as they are,
+                // with no roll, no lit edge and no sweep, on Badge, Pop and Buddy alike
+                Motion.FrozenAt = 0.2;
+                var bgLine = HudKit.Rgb(0x232736);
+                var bgPrice = new Dictionary<string, string>(bgV2) { ["rate"] = "1.4M", ["total"] = "990K", ["feedRate"] = "1.4M", ["chase"] = "0.95" };
+                var bgCleared = new Dictionary<string, string>(bgV2) { ["rate"] = "", ["total"] = "0", ["feedRate"] = "", ["chase"] = "", ["toBest"] = "", ["pick0"] = "", ["pick0Id"] = "", ["pick0At"] = "" };
+                var bgOther = new Dictionary<string, string>(bgV2) { ["rate"] = "1.9M", ["total"] = "2.1M", ["feedRate"] = "1.9M", ["chase"] = "0.8", ["pick0Id"] = "other", ["pick0At"] = bgNow.AddMinutes(-5).Ticks.ToString() };
+                var bgQuiet = new HudWindow(bgFields);
+                bgQuiet.Update(bgV2);
+                bgQuiet.Update(bgPrice);
+                var quietPrice = BgTexts(bgQuiet).Select(BgWords).ToList();
+                bool priceStill = quietPrice.Count(t => t == "1.4M") == 2 && quietPrice.Contains("990K") && quietPrice.Contains("95") && (BgFrame(bgQuiet).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color == bgLine;
+                bgQuiet.Update(bgCleared); bgQuiet.Update(bgOther);
+                var quietOther = BgTexts(bgQuiet).Select(BgWords).ToList();
+                bool otherStill = quietOther.Count(t => t == "1.9M") == 2 && quietOther.Contains("2.1M") && quietOther.Contains("80") && (BgFrame(bgQuiet).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color == bgLine;
+                var tkQuiet = new HudTicker(); tkQuiet.Update(v2); tkQuiet.Update(new Dictionary<string, string>(v2) { ["rate"] = "1.4M", ["total"] = "990K" });
+                var tkQuietShown = Texts(tkQuiet.Root).Select(t => t.Text).ToList();
+                var bdQuiet = new HudCard(); bdQuiet.Update(new Dictionary<string, string>(v2) { ["chase"] = "0.6" }); bdQuiet.Update(new Dictionary<string, string>(v2) { ["rate"] = "1.4M", ["total"] = "990K", ["chase"] = "0.9" });
+                var bdQuietShown = Texts(bdQuiet.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
+                bool popStill = tkQuietShown.Contains("1.4M") && tkQuietShown.Contains("990K"), buddyStill = bdQuietShown.Contains("1.4M") && bdQuietShown.Contains("990K") && bdQuietShown.Contains("90");
+                Check(priceStill && otherStill && popStill && buddyStill,
+                    $"motion: with no pickup just made (a price refresh, another session) nothing rolls, lights or sweeps (Badge price {priceStill}, other session {otherStill}; Pop {popStill}; Buddy {buddyStill})");
+                foreach (var h in new[] { badge, bgFresh, bgStill, bgGoing, bgGone, bgQuiet }) h.Close();
             }
             Motion.Still = true; Motion.FrozenAt = null;
             var still = new System.Windows.Controls.TextBlock();

@@ -153,10 +153,11 @@ public sealed partial class HudCard : IHudLook
         // the hour and the session: "1.27M an hour", "894K session, after the Market's cut"; warming up says so, dimmed
         bool warm = V("warm") == "1";
         var (share, words, beat) = Chase(values);
+        bool picked = _picks.Next(values, out _) != null;   // only a pickup just made rolls, sweeps and lights (Ui/HudFreshPicks.cs)
         if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}"))
         {
             // a pickup: the hour and the session roll to their new figures and the edge lights (Ui/HudCard.Motion.cs)
-            bool rose = TotalRose(V("total"));
+            bool rose = TotalRose(V("total")) && picked;
             _rate.Inlines.Clear(); _rateRun = _totalRun = null;
             if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R("Waiting for the first count", 13, Faint));
             else if (warm) _rate.Inlines.Add(R(V("rate"), 16, Gold, weight: FontWeights.Bold));
@@ -171,7 +172,7 @@ public sealed partial class HudCard : IHudLook
             // the ring and the chase (Buddy): this hour against your best here, mint with a star once it is beaten
             bool ring = share >= 0 && counted && !warm;
             // the ring sweeps to its new share and pulses once when you pass your best (Ui/HudCard.Motion.cs)
-            if (ring) DrawRing(share, beat); else { _ringHost.Children.Clear(); Motion.ForgetShare(_key + "ring"); _ringDrawn = false; }
+            if (ring) DrawRing(share, beat, rose); else { _ringHost.Children.Clear(); Motion.ForgetShare(_key + "ring"); _ringDrawn = false; }
             _ringHost.Visibility = ring ? Visibility.Visible : Visibility.Collapsed;
             _chase.Text = words.Length > 0 && counted && !warm ? (beat ? "★ " : "⚑ ") + words : "";
             _chase.Foreground = beat ? Mint : Gold;

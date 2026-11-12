@@ -12,9 +12,11 @@ namespace KinahLedger.Ui;
 /// Badge's motion (the Strip look, 0.10.55; Steven, 2026-11-11: "cool and flashy"), so the default look moves like Pop
 /// (Ui/HudTicker.Motion.cs) and Buddy (Ui/HudCard.Motion.cs). Once per change, nothing loops; through Ui/Motion.cs, so a
 /// render, the Options preview (still) and Windows's animations off show none of it.
-/// - on a pickup the hour, Kinah, loot, best and session figures roll to their new values, the per-hour ones green for a
-///   moment as they rise, and the panel's edge lights gold;
-/// - the ring of your best here sweeps round to its new share, and swells and glows mint once the moment you pass your best;
+/// - on a pickup just made (Ui/HudFreshPicks.cs: not a price refresh, a session loaded or cleared, another character or an
+///   Undo) the hour, Kinah, loot, best and session figures roll to their new values, the per-hour ones green for a moment as
+///   they rise, each figure holding its width meanwhile, and the panel's edge lights gold;
+/// - the ring of your best here sweeps round to its new share, and when the sweep reaches your best it turns mint with its
+///   star, swelling and glowing once;
 /// - a new pickup's worth pops and the feed's live dot flashes in its grade's colour (gold for Kinah);
 /// - a rare drop's coloured frame beats twice as it lands, its spark popping with it;
 /// - the notice, accuracy and rare drop lines cross-fade when they change, fade in when they come and out when they go.
@@ -25,9 +27,14 @@ public sealed partial class HudWindow
     readonly bool _still;
     /// <summary>This panel's own figure keys: the Options preview never rolls the overlay's.</summary>
     readonly string _key = "hud-strip|" + Guid.NewGuid().ToString("N")[..8] + "|";
-    string _lastTotal = "", _pickId = "";
-    DateTime _pickAt = DateTime.MinValue;
-    bool _picksSeen, _ringDrawn, _wasBeat;
+    readonly FreshPicks _picks = new();
+    /// <summary>The pickup this update brought, if it was one just made (PickedUp, for BadgeMoved).</summary>
+    Pick? _landed;
+    bool _ringDrawn, _wasBeat;
+    /// <summary>Your best was just passed: the ring pulses when its sweep gets there.</summary>
+    bool _pulseDue;
+    /// <summary>The ring a sweep under way moves (built once per sweep), or null when the ring is drawn still.</summary>
+    SweepRing? _sweep;
     /// <summary>The colour of the rare drop on the frame now, which its beat runs up to.</summary>
     Color _alertTone;
     /// <summary>The feed dot's glow at rest, which its flash settles back to.</summary>
@@ -50,38 +57,58 @@ public sealed partial class HudWindow
     const double DotSwell = 2, DotMs = 700;
     /// <summary>The share of the dot's course spent lighting up; the rest fades back.</summary>
     const double DotPeak = 0.25;
-    /// <summary>A pickup older than this when it reaches the panel is history (a session loaded), not one just made.</summary>
-    static readonly TimeSpan FreshFor = TimeSpan.FromSeconds(10);
-    /// <summary>A rare drop's beat on the frame, and its spark's pop.</summary>
-    const double AlertBeatMs = 1400, SparkPop = 1.5, SparkBlur = 8;
+    /// <summary>A rare drop's beat on the frame, and its spark's pop and glow (small enough to stay inside the panel's padding).</summary>
+    const double AlertBeatMs = 1400, SparkPop = 1.3, SparkBlur = 4;
+    /// <summary>A sweeping ring's arc: hidden below this share, and short of a closed circle at most (HudKit.Ring's own bounds).</summary>
+    const double MinArc = 0.004, MaxArc = 0.999;
+    /// <summary>A sweep this close to its share has got there.</summary>
+    const double SweepDone = 1e-6;
     /// <summary>A state line fades out in this long and the next fades in in this long, rising this far into its place.</summary>
     const double LineOutMs = 180, LineInMs = 240, LineRise = 3;
     /// <summary>A render's held frame: the figures rolled from this share of their value, the ring swept from this share of its own.</summary>
     const double ReplayFrom = 0.85, RingReplayFrom = 0.7;
 
-    /// <summary>The session total rose since the last update (a pickup), from a figure above nothing: a session just loaded doesn't count.</summary>
-    bool TotalRose(string total)
+    /// <summary>
+    /// Whether this update brings a pickup just made (before anything is drawn; BadgeMoved lands it): the one thing Badge's
+    /// figures roll, its ring sweeps and its edge lights for. When the pickups went away or back in time (a session cleared,
+    /// another character, an Undo), what Badge showed is forgotten, so this draw is a plain first draw.
+    /// </summary>
+    bool PickedUp(IReadOnlyDictionary<string, string> values)
     {
-        bool rose = total != _lastTotal && HudTicker.Num(total) is double t && HudTicker.Num(_lastTotal) is double was && was > 0 && t > was;
-        _lastTotal = total;
-        return rose;
+        if (_still) return false;
+        _landed = _picks.Next(values, out var back);
+        if (back) ForgetShown();
+        return _landed != null;
+    }
+
+    /// <summary>Badge's figures and ring as if never drawn: the next values show as they are, without a roll or a sweep.</summary>
+    void ForgetShown()
+    {
+        foreach (var (k, _) in Rolled)
+            if (_cells.TryGetValue(k, out var tb)) Motion.Blank(tb, _key + k, tb.Text);
+        if (_feedRate != null) Motion.Blank(_feedRate, _key + "feedRate", _feedRate.Text);
+        Motion.Halt(_ringHost);
+        Motion.ForgetShare(_key + "ring");
+        _ringDrawn = _wasBeat = _pulseDue = false;
     }
 
     /// <summary>
-    /// Badge's motion for this update, after it is drawn: the figures roll on a pickup, a pickup just made lands, the edge
-    /// lights and the notice line cross-fades when it changed.
+    /// Badge's motion for this update, after it is drawn: on a pickup just made the figures roll, the pickup lands and the
+    /// edge lights; the notice line cross-fades when it changed.
     /// </summary>
-    void BadgeMoved(IReadOnlyDictionary<string, string> values, bool rose)
+    void BadgeMoved(IReadOnlyDictionary<string, string> values, bool picked)
     {
         if (_still) return;
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
+        bool roll = picked && Moves;
         foreach (var (k, tint) in Rolled)
-            if (_cells.TryGetValue(k, out var tb)) Motion.Figure(tb, _key + k, V(k), tint, rose && Moves);
-        if (_feedLine != null && _feedRate != null) Motion.Figure(_feedRate, _key + "feedRate", V("feedRate"), RiseTint, rose && Moves);
-        var fresh = FreshPickup(Picks(values).FirstOrDefault());
-        bool landed = fresh != null && Moves;
-        if (landed) PickupLanded(ToneOf(fresh));
-        if ((rose || landed) && Moves && _alert.Visibility != Visibility.Visible) Motion.EdgeLight(_frame, Rgb(GoldC), FrameBrush);
+            if (_cells.TryGetValue(k, out var tb)) RollFigure(tb, k, V(k), tint, roll);
+        if (_feedLine != null && _feedRate != null) RollFigure(_feedRate, "feedRate", V("feedRate"), RiseTint, roll);
+        if (roll)
+        {
+            PickupLanded(ToneOf(_landed));
+            if (_alert.Visibility != Visibility.Visible) Motion.EdgeLight(_frame, Rgb(GoldC), FrameBrush);
+        }
         Fade(_note, _noteSign);
         // the lines Update doesn't write are as they stand on the first draw, so the first rare drop or accuracy line fades in
         Seed(_acc, _accSign); Seed(_alert, _alertSign);
@@ -93,15 +120,28 @@ public sealed partial class HudWindow
         if (!_fades.ContainsKey(text)) _fades[text] = new LineFade { To = FaceOf(text, sign) };
     }
 
-    /// <summary>The newest pickup when it is one just made: not on the first draw, not an older one (an Undo), not one from minutes ago (a session loaded).</summary>
-    Pick? FreshPickup(Pick? front)
+    /// <summary>
+    /// A figure through <see cref="Motion.Figure"/>, rolled when <paramref name="roll"/>. A figure about to roll holds the
+    /// wider of its old and new widths until the roll is over, so the panel (sized to what it shows) doesn't change width
+    /// with each frame's digits; it takes its own width again when the roll ends.
+    /// </summary>
+    void RollFigure(TextBlock tb, string part, string text, double tint, bool roll)
     {
-        bool fresh = _picksSeen && front != null && front.Id != _pickId && front.At > _pickAt && DateTime.UtcNow - front.At < FreshFor;
-        _picksSeen = true;
-        _pickId = front?.Id ?? "";
-        if (front != null) _pickAt = front.At;
-        return fresh ? front : null;
+        if (roll && tb.Parent is FrameworkElement box && HudTicker.Num(text) is double v && v > 0)
+        {
+            // the old text's width is still the laid-out one: the new text was written this update and isn't laid out yet
+            double w = Math.Ceiling(Math.Max(tb.ActualWidth, TextWidth(tb, text)));
+            tb.MinWidth = w;
+            // its own course (on the cell's box, which nothing else moves) ends with the longest roll, the tinted one
+            Motion.Play(box, Motion.RollMs * 2, _ => { }, () => tb.ClearValue(MinWidthProperty));
+        }
+        Motion.Figure(tb, _key + part, text, tint, roll);
     }
+
+    /// <summary>How wide <paramref name="text"/> is in the figure's own face and size, as the panel draws it.</summary>
+    static double TextWidth(TextBlock tb, string text) => new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, tb.FlowDirection,
+        new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.Black, null,
+        TextOptions.GetTextFormattingMode(tb), VisualTreeHelper.GetDpi(tb).PixelsPerDip).WidthIncludingTrailingWhitespace;
 
     /// <summary>A pickup's colour on the panel: gold for Kinah, its grade's for a graded item, the live dot's own mint for a common one (or none known).</summary>
     static Color ToneOf(Pick? p) => p == null || (!p.Kinah && p.Grade is "" or "Common") ? Rgb(MintC) : p.Kinah ? Rgb(GoldC) : GradeColor(p.Grade);
@@ -133,7 +173,7 @@ public sealed partial class HudWindow
         dot.RenderTransform = s;
         Motion.Play(dot, DotMs, p =>
         {
-            double up = p < DotPeak ? Motion.Out(p / DotPeak) : 1 - Motion.Out((p - DotPeak) / (1 - DotPeak));
+            double up = Motion.Swell(p, DotPeak);
             s.ScaleX = s.ScaleY = 1 + (DotSwell - 1) * up;
             // the tone holds through the swell and turns back to mint as it settles
             fill.Color = Motion.Blend(mint, tone, p < DotPeak ? 1 : up);
@@ -146,35 +186,91 @@ public sealed partial class HudWindow
         });
     }
 
-    /// <summary>The ring at a share: the gold share of your best here, or mint with a star once it is beaten.</summary>
+    /// <summary>The ring at a share, drawn still: the gold share of your best here, or mint with a star once it is beaten.</summary>
     void RingAt(double s, bool beat)
     {
+        _sweep = null;
         _ringHost.Children.Clear();
         _ringHost.Children.Add(Ring(RingSize, RingStroke, s, Rgb(beat ? MintC : GoldC), beat ? "★" : $"{Math.Round(s * 100):0}"));
     }
 
+    /// <summary>The ring a sweep moves: HudKit's ring built once, its arc and its figure changed in place at each step.</summary>
+    sealed class SweepRing
+    {
+        public required ArcSegment Arc;
+        public required FrameworkElement Line;
+        public required TextBlock Figure;
+        public int Shown = -1;
+    }
+
     /// <summary>
-    /// The ring of your best here at <paramref name="share"/> (-1: none). On a pickup it sweeps round from the share last shown;
-    /// the clock moving the hour's share a point is set as it is. The moment it passes your best, one mint pulse.
+    /// The ring at <paramref name="s"/> on its way to <paramref name="share"/>: gold with its percent while it sweeps, the
+    /// arc and figure moved in place; drawn still once it gets there, mint with its star if that is past your best (and the
+    /// pulse, if your best was just passed).
     /// </summary>
-    void DrawRing(double share, bool beat, bool rose)
+    void RingStep(double s, double share, bool beat)
+    {
+        if (Math.Abs(s - share) < SweepDone)
+        {
+            RingAt(share, beat);
+            if (beat && _pulseDue && Moves) Motion.Pulse(_ringHost, _chaseLine, Rgb(MintC), BestSwell, BestBlur);
+            _pulseDue = false;
+            return;
+        }
+        if ((_sweep ??= NewSweep()) is not { } r) { RingAt(s, false); return; }
+        double c = RingSize / 2, rad = (RingSize - RingStroke) / 2, a = 2 * Math.PI * Math.Clamp(s, 0, MaxArc);
+        r.Arc.Point = new Point(c + rad * Math.Sin(a), c - rad * Math.Cos(a));
+        r.Arc.IsLargeArc = a > Math.PI;
+        r.Line.Visibility = s > MinArc ? Visibility.Visible : Visibility.Collapsed;
+        int pct = (int)Math.Round(s * 100);
+        if (pct != r.Shown) { r.Shown = pct; r.Figure.Text = pct.ToString(); }
+    }
+
+    /// <summary>
+    /// HudKit's gold ring at half, put on the host with an arc of its own the sweep can move (HudKit freezes its geometry);
+    /// null if the ring is ever drawn another way, and the sweep then draws it still at each step.
+    /// </summary>
+    SweepRing? NewSweep()
+    {
+        var face = Ring(RingSize, RingStroke, 0.5, Rgb(GoldC), "50");
+        if (face.Children.OfType<System.Windows.Shapes.Path>().FirstOrDefault() is not { } line
+            || face.Children.OfType<StackPanel>().FirstOrDefault()?.Children.OfType<TextBlock>().FirstOrDefault() is not { } figure) return null;
+        double c = RingSize / 2, rad = (RingSize - RingStroke) / 2;
+        var arc = new ArcSegment(new Point(c, c + rad), new Size(rad, rad), 0, false, SweepDirection.Clockwise, true);
+        var fig = new PathFigure { StartPoint = new Point(c, c - rad), IsClosed = false, IsFilled = false };
+        fig.Segments.Add(arc);
+        var geo = new PathGeometry();
+        geo.Figures.Add(fig);
+        line.Data = geo;
+        _ringHost.Children.Clear();
+        _ringHost.Children.Add(face);
+        return new SweepRing { Arc = arc, Line = line, Figure = figure };
+    }
+
+    /// <summary>
+    /// The ring of your best here at <paramref name="share"/> (-1: none). On a pickup just made it sweeps round from the share
+    /// last shown; any other change (the clock moving the hour, a price refresh) is set as it is. Passing your best, it turns
+    /// mint and pulses once when the sweep gets there.
+    /// </summary>
+    void DrawRing(double share, bool beat, bool picked)
     {
         var key = _key + "ring";
         if (share < 0)
         {
             Motion.Halt(_ringHost);
             _ringHost.Children.Clear();
+            _sweep = null;
             Motion.ForgetShare(key);
-            _ringDrawn = _wasBeat = false;
+            _ringDrawn = _wasBeat = _pulseDue = false;
             return;
         }
+        if (beat && !_wasBeat && _ringDrawn && Moves) _pulseDue = true;
         if (!Moves) RingAt(share, beat);
         else
         {
-            if (!rose && !Motion.Playing(_ringHost)) Motion.ForgetShare(key);
-            Motion.Slide(_ringHost, key, share, s => RingAt(s, beat));
+            if (!picked && !Motion.Playing(_ringHost)) Motion.ForgetShare(key);
+            Motion.Slide(_ringHost, key, share, s => RingStep(s, share, beat));
         }
-        if (beat && !_wasBeat && _ringDrawn && Moves) Motion.Pulse(_ringHost, _chaseLine, Rgb(MintC), BestSwell, BestBlur);
         _wasBeat = beat; _ringDrawn = true;
     }
 
@@ -336,8 +432,9 @@ public sealed partial class HudWindow
         var (share, _, beat) = Chase(values);
         if (share >= 0 && V("warm") != "1")
         {
-            Motion.ReplaySlide(_ringHost, _key + "ring", share * RingReplayFrom, share, s => RingAt(s, beat));
-            if (beat) Motion.Pulse(_ringHost, _chaseLine, Rgb(MintC), BestSwell, BestBlur);
+            // past your best the pulse is what plays (it follows the sweep, which a held frame can't show both of)
+            if (beat) { RingAt(share, true); Motion.Pulse(_ringHost, _chaseLine, Rgb(MintC), BestSwell, BestBlur); }
+            else Motion.ReplaySlide(_ringHost, _key + "ring", share * RingReplayFrom, share, s => RingStep(s, share, false));
         }
         PickupLanded(ToneOf(Picks(values).FirstOrDefault()));   // the Strip's render states carry no pickups: a common one's mint then
         foreach (var (text, sign) in new[] { (_note, _noteSign), (_acc, _accSign), (_alert, _alertSign) })
