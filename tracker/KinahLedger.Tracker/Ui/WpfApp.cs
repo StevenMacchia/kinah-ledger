@@ -515,8 +515,9 @@ public static partial class WpfApp
         // way to write time, no zone chip under a minute, nothing said while all is well, no section with nothing in it
         w.ShowDemo(); w.ShowCompact(); DoEvents();   // the sample again, after the Options round above changed the server and said things
         var here = w.LootForTest();
-        Check(here.Here == "This zone" && here.Slots >= 8 && here.Note.Contains("kinds · 42 min") && "KMB".Contains(here.Total[^1]) && !here.Total.Contains(','),
-            $"LOOT, This zone: {here.Slots} slots, \"{here.Note}\", {here.Total}");
+        // the overall count across zones is the default since 0.10.43 (Steven, 2026-11-11), so LOOT's heading is All zones
+        Check(here.Here == "All zones" && here.Slots >= 8 && here.Note.Contains("kinds · 42 min") && "KMB".Contains(here.Total[^1]) && !here.Total.Contains(','),
+            $"LOOT, {here.Here}: {here.Slots} slots, \"{here.Note}\", {here.Total}");
         Check(w.FootTotal.ToolTip is string tt && tt.Contains("Kinah picked up") && tt.Contains("Total, " + Data.PriceBook.Fee), "LOOT's total says how it adds up on hover");
         Check(w.TableTitle.Text == "Open world · 42 min" && !w.TableTitle.Text.Contains(':'), $"the card says how long in minutes: \"{w.TableTitle.Text}\"");
         Check(w.TodayStrip.Visibility != Visibility.Visible, "no Today strip over the Farming card: Today is LOOT's other side");
