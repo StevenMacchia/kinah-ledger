@@ -172,12 +172,16 @@ public sealed partial class HudWindow : Window
         var badge = new Grid();
         badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         badge.Children.Add(_ringHost); Grid.SetColumn(lines, 1); badge.Children.Add(lines);
+        var pad = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(14, 9, 18, 9);
+        // the hot streak bar along the bottom edge, in the frame's padding under the lines: it takes no room (Ui/HudStreak.cs)
+        _streak.Root.Margin = new Thickness(0, 0, 0, StreakEdge - pad.Bottom);
+        Grid.SetColumnSpan(_streak.Root, 2); badge.Children.Add(_streak.Root);
         _frame = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x0B, 0x0C, 0x10)),
             BorderBrush = FrameBrush,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(_fields.Count == 1 && _fields[0] == "feed" ? 10 : 12),
-            Padding = _fields.Count == 1 && _fields[0] == "feed" ? new Thickness(10, 6, 12, 6) : new Thickness(14, 9, 18, 9),
+            Padding = pad,
             Child = _look == null ? badge : null
         };
         _content = _look?.Root ?? _frame;
@@ -444,7 +448,9 @@ public sealed partial class HudWindow : Window
         ShowAs(V("show"));
         ApplyLock(V("unlocked"));
         if (_look != null) { _look.Update(values); return; }
-        bool picked = PickedUp(values);   // a pickup just made: Badge's figures roll and its ring sweeps (Ui/HudWindow.BadgeMotion.cs)
+        bool picked = PickedUp(values);   // a pickup just made: Badge's figures flip and its ring sweeps (Ui/HudWindow.BadgeMotion.cs)
+        // the hot streak bar fills and drains (Ui/HudStreak.cs), while something is counted
+        _streak.Show(values, V("run") == "1" || HudKit.Picks(values).Count > 0 || V("feedText").Length > 0 || V("total") is not ("" or "0"), Moves);
         // a start or stop's flash ("Run started") over a waiting notice, for its few seconds
         bool flash = V("flash").Length > 0;
         var noteText = flash ? V("flash") : V("notice");

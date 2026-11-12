@@ -34,7 +34,44 @@ public partial class MainWindow
         bool held = DateTime.UtcNow < _hudRareUntil;
         foreach (var k in RareKeys) _hudValues[k] = held ? _hudRare.GetValueOrDefault(k, "") : "";
         foreach (var (k, v) in HudTopValues(_topRows)) _hudValues[k] = v;
+        _hudValues["streak"] = HudStreakNow();   // the looks' hot streak bar (Ui/HudStreak.cs)
     }
+
+    /// <summary>
+    /// The hot streak (2026-11-12, Steven: a bar that "fills as pickups come quickly and drains when you slow down"): each
+    /// pickup of the last <see cref="StreakWindow"/> s counts whole for its first <see cref="StreakHold"/> s, then less and
+    /// less until it ages out; <see cref="StreakFull"/> of them fill the bar.
+    /// </summary>
+    internal const double StreakWindow = 45, StreakHold = 20, StreakFull = 12;
+
+    /// <summary>The hot streak, 0 to 1, from the times of the pickups (item and Kinah lines), at <paramref name="now"/>.</summary>
+    internal static double Streak(IEnumerable<DateTime> picks, DateTime now)
+    {
+        double sum = 0;
+        foreach (var at in picks)
+        {
+            double age = Math.Max(0, (now - at).TotalSeconds);
+            if (age >= StreakWindow) continue;
+            sum += age <= StreakHold ? 1 : 1 - (age - StreakHold) / (StreakWindow - StreakHold);
+        }
+        return Math.Clamp(sum / StreakFull, 0, 1);
+    }
+
+    /// <summary>
+    /// The looks' "streak" value: the hot streak from the pickups farming and in events (the feed's item and Kinah lines, not
+    /// crafts or run steps), "0.000" to "1.000"; "" with nothing picked up in the window's time.
+    /// </summary>
+    string HudStreakNow()
+    {
+        var now = DateTime.UtcNow;
+        var at = new[] { FeedTab.Farming, FeedTab.Events }
+            .SelectMany(t => _demo ? FeedFor(t) : _watcher.Chat?.Live.Recent(t, StreakLines) ?? new())
+            .Where(l => l.Kind is "item" or "kinah" && (now - l.At).TotalSeconds < StreakWindow).Select(l => l.At).ToList();
+        return at.Count == 0 ? "" : Streak(at, now).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>How many of a tab's newest lines the streak looks through: far more than fill it.</summary>
+    const int StreakLines = 40;
 
     /// <summary>
     /// The Ticker's pinned fourth slot (Steven, 2026-10-26: "the 3 most recent and the Top Drop"): the session's most valuable
@@ -114,6 +151,7 @@ public partial class MainWindow
             ["total"] = "894K", ["best"] = "1.40M", ["last"] = "Spiritstone ×1", ["zone"] = "Western Cantas Valley", ["paused"] = "", ["notice"] = "", ["flash"] = "", ["flag"] = "",
             ["feedText"] = "Spiritstone", ["feedValue"] = "+7.5K", ["feedRate"] = "1.27M", ["feedUnit"] = "an hour",
             ["chase"] = "0.907", ["toBest"] = "130K to your best here",   // the ring (Badge, Buddy): 1.27M against the 1.40M best
+            ["streak"] = "0.625",   // the hot streak bar part filled: about eight pickups in the last half minute
         };
         var t = DateTime.UtcNow;
         var picks = new (string Name, string Count, string Worth, string Kind, string Note, string Icon)[]

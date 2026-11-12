@@ -9,11 +9,12 @@ namespace KinahLedger.Ui;
 
 /// <summary>
 /// The rare drop card's entrance (2026-11-11, Steven: "cool and flashy"), on Buddy (the Card) and Pop (the Ticker): the
-/// item's tile grows in with a ring bursting out from it in the grade's colour, the label comes up, a band of light runs
-/// across the name in that colour, and the price rolls up to its figure, all in under a second. It plays alongside the
-/// looks' own rare beats (Ui/HudCard.Motion.cs, Ui/HudTicker.Motion.cs), once for each new drop, never on a look's first
-/// draw, and stays inside the card: the ring grows to half again the tile's size, a quarter of it each side, less than the card's margin round it, so
-/// nothing moves outside the panel or over what the reader reads. Through Ui/Motion.cs, so a render (Still) and Windows's
+/// item's tile grows in with a ring bursting out from it in the grade's colour and a dozen sparks flying out with it
+/// (2026-11-12), the label comes up, a band of light runs across the name in that colour, and the price rolls up to its
+/// figure, all in under a second. It plays alongside the looks' own rare beats (Ui/HudCard.Motion.cs,
+/// Ui/HudTicker.Motion.cs), once for each new drop, never on a look's first draw, and stays inside the card: the ring
+/// grows to half again the tile's size, a quarter of it each side, and the sparks end within that same reach, less than
+/// the card's margin round it, so nothing moves outside the panel or over what the reader reads. Through Ui/Motion.cs, so a render (Still) and Windows's
 /// animations off show the card as it is.
 /// </summary>
 static partial class HudRare
@@ -31,6 +32,8 @@ static partial class HudRare
     const double TileFrom = 0.6;
     /// <summary>The ring grows by this share of the tile, and is drawn this thick.</summary>
     const double RingGrow = 0.5, RingStroke = 2;
+    /// <summary>The sparks are this wide, and start this far into the entrance.</summary>
+    const double SparkDot = 3, SparkFrom = 0.05;
 
     /// <summary>
     /// A drawn drop (the Card's body or the Ticker's toast) makes its entrance: the tile grows in and fades up in the first
@@ -47,6 +50,11 @@ static partial class HudRare
         var ring = Motion.BurstRing(p.Color, tile.Width, RingStroke);
         Grid.SetColumn(ring, Grid.GetColumn(tile));
         host.Children.Add(ring);
+        // the sparks go under the tile, so they come out from behind it; they end within the ring's reach
+        var sparks = Motion.BurstSparks(p.Color, tile.Width, SparkDot);
+        Grid.SetColumn(sparks, Grid.GetColumn(tile));
+        host.Children.Insert(host.Children.IndexOf(tile), sparks);
+        double reach = tile.Width * RingGrow / 2, sparkEnd = Motion.SparkSpan(EnterMs, SparkFrom);
         var light = Motion.SweepBrush(p.Color);
         p.Name.Foreground = light;
         void Step(double t)
@@ -54,6 +62,7 @@ static partial class HudRare
             scale.ScaleX = scale.ScaleY = TileFrom + (1 - TileFrom) * Motion.Out(Motion.Span(t, 0, 0.35));
             tile.Opacity = Motion.Out(Motion.Span(t, 0, 0.2));
             Motion.Burst(ring, Motion.Span(t, 0.05, 0.6), RingGrow);
+            Motion.Sparks(sparks, Motion.Span(t, SparkFrom, sparkEnd), reach);
             p.Label.Opacity = Motion.Out(Motion.Span(t, 0.1, 0.35));
             Motion.Sweep(light, Motion.Span(t, 0.15, 0.8));
             if (p.Figure != null) p.Figure.Text = Motion.RollIn(p.Price, Motion.Span(t, 0, 0.6));
@@ -64,6 +73,7 @@ static partial class HudRare
             tile.Opacity = 1;
             tile.ClearValue(UIElement.RenderTransformProperty);
             host.Children.Remove(ring);
+            host.Children.Remove(sparks);
             p.Label.Opacity = 1;
             p.Name.Foreground = Frozen(p.Color);
             if (p.Figure != null) p.Figure.Text = p.Price;
@@ -75,6 +85,10 @@ static partial class HudRare
     {
         if (Drawn.TryGetValue(made, out var p)) p.More.Text = MoreText(more);
     }
+
+    /// <summary>For the options self-test: the sparks of a drawn drop's entrance under way, if any.</summary>
+    internal static Canvas? SparksForTest(FrameworkElement? made) =>
+        made != null && Drawn.TryGetValue(made, out var p) && p.Tile.Parent is Grid host ? host.Children.OfType<Canvas>().FirstOrDefault(c => c.Children.OfType<System.Windows.Shapes.Ellipse>().Count() == Motion.SparkCount) : null;
 
     /// <summary>For the options self-test: a drawn drop's tile, its label and price as shown, and whether its name's light is on it.</summary>
     internal static (FrameworkElement Tile, string Label, string Price, bool Lit)? PartsForTest(FrameworkElement? made) =>

@@ -25,8 +25,10 @@ public sealed partial class HudTicker : IHudLook
     public Thickness Inset { get; } = new(10);
     public double Corner => 10;
 
-    /// <summary>How long a pickup pushed out of the stack takes to fade.</summary>
-    static readonly TimeSpan LeaveTime = TimeSpan.FromMilliseconds(320);
+    /// <summary>How long a pickup pushed out of the stack takes to fade (the game's own toasts fade in about 300 ms).</summary>
+    static readonly TimeSpan LeaveTime = TimeSpan.FromMilliseconds(300);
+    /// <summary>A new toast slides in from this far right and fades in, eased out, in this long (the game's settles about 25 px left in 100 to 200 ms).</summary>
+    const double ArriveFrom = 16, ArriveMs = 150;
     /// <summary>The toasts below the first, each a little fainter (the mock's ages 1 to 3).</summary>
     static readonly double[] PlaceOpacity = { 1, .92, .75, .5 };
 
@@ -71,7 +73,8 @@ public sealed partial class HudTicker : IHudLook
         {
             Height = 28, Padding = new Thickness(10, 0, 12, 0), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), BorderBrush = FrameLine,
             HorizontalAlignment = HorizontalAlignment.Left,
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { _dot, _run, _time, _sep1, _rate, _unit, _sep2, _total, _idle } },
+            // the hot streak bar along the pill's bottom, over its content: it takes no room (Ui/HudStreak.cs)
+            Child = new Grid { Children = { new StackPanel { Orientation = Orientation.Horizontal, Children = { _dot, _run, _time, _sep1, _rate, _unit, _sep2, _total, _idle } }, Streak(new Thickness(0, 0, 0, 2)) } },
         };
         BuildCraft();   // the crafting pill (Ui/HudCraftLooks.cs)
         Paint();
@@ -119,6 +122,7 @@ public sealed partial class HudTicker : IHudLook
             _time.Visibility = _sep1.Visibility = counted ? Visibility.Visible : Visibility.Collapsed;
             if (!counted) _rate.Visibility = _unit.Visibility = _sep2.Visibility = _total.Visibility = Visibility.Collapsed;
         }
+        _streak.Show(values, counted, Moves);   // the hot streak bar fills and drains (Ui/HudStreak.cs)
         bool crafting = CraftPill(values);   // while the crafting window is open: the crafts instead of the pickups
 
         // what the stack shows, top down: one notice, the accuracy line, the rare drop, then the newest pickups (crafts while
@@ -219,17 +223,20 @@ public sealed partial class HudTicker : IHudLook
     }
 
     /// <summary>
-    /// A new toast (under half a second old) slides in from the left and fades in (220 ms), then stays until a newer one
-    /// pushes it out (<see cref="Leave"/>). One DoubleAnimation each, started once: no timer touches the stack.
+    /// A new toast (under half a second old) comes in as the game's own pickup toasts do (2026-11-12, from Steven's
+    /// recording): from 16 px to the right it settles left into its place as it fades in, eased out, in 150 ms; then it
+    /// stays still until a newer one pushes it out (<see cref="Leave"/>). One DoubleAnimation each, started once: no timer
+    /// touches the stack.
     /// </summary>
     static void Arrive(Toast t, double age)
     {
         if (age >= 0.5) return;
         var body = t.Body;
-        var slide = new TranslateTransform(-18, 0);
+        var slide = new TranslateTransform(ArriveFrom, 0);
         body.RenderTransform = slide;
-        slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(220)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-        body.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(ArriveMs)) { EasingFunction = ease });
+        body.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ArriveMs)) { EasingFunction = ease });
     }
 
     /// <summary>A toast's wash: dark navy fading lighter to the right; the newest pickup's warm at its start, a notice's amber.</summary>

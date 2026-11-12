@@ -11,12 +11,15 @@ namespace KinahLedger.Ui;
 /// Buddy's motion (the Card look; Steven, 2026-11-11: "doesnt look like the in-app buddy got much animation or cool things?"),
 /// the Ticker's kin (Ui/HudTicker.Motion.cs). Once per change, nothing loops; through Ui/Motion.cs, so a render or the Options
 /// preview (Still) and Windows's animations off show none of it.
-/// - the hour and the session roll to their new figures on a pickup, the hour green for a moment as it rises, and the card's
-///   edge lights gold;
+/// Since 2026-11-12 it moves like the game's own pop-ups (Steven: "like the game's own UI"): short, eased out, small.
+/// - the hour and the session flip to their new figures on a pickup, character by character (Ui/Motion.Flip.cs), the hour
+///   green for a moment as it rises, and the card's edge lights softly gold;
+/// - the hot streak bar under the figures fills as pickups come quickly and drains as they slow (Ui/HudStreak.cs);
 /// - the ring of your best here sweeps round to its new share, its percent counting with it, and pulses once in mint the
 ///   moment you pass your best;
-/// - the newest pickup's tile grows in (a rare grade's glows once) and its name and worth in the head pop;
-/// - a rare drop's coloured frame beats twice as it lands, and the drop over the figures makes its entrance (Ui/HudRare.Motion.cs).
+/// - the newest pickup's tile grows in (a rare grade's glows once) and its name and worth in the head pop from 110%;
+/// - a rare drop's coloured frame beats twice as it lands, and the drop over the figures makes its entrance with its
+///   sparks (Ui/HudRare.Motion.cs).
 /// </summary>
 public sealed partial class HudCard
 {
@@ -27,6 +30,11 @@ public sealed partial class HudCard
     /// <summary>The figures' runs as last built, which a roll under way writes into (the figures are rebuilt as the clock moves).</summary>
     Run? _rateRun, _totalRun;
     readonly Dictionary<string, double> _shown = new();
+    /// <summary>The hot streak bar under the figures, this far below them (into the card's padding).</summary>
+    readonly StreakBar _streak = new();
+    const double StreakBelow = -4;
+    /// <summary>Past your best the ring swells this much and glows this strong at most; a rare frame's glow dips to this between its beats.</summary>
+    const double BestSwell = 0.10, BestGlow = 0.6, RareLow = .55;
 
     bool Moves => !Still && Motion.On;
 
@@ -39,42 +47,26 @@ public sealed partial class HudCard
     }
 
     /// <summary>
-    /// A figure's run rolled from the figure last shown to <paramref name="text"/> (on a pickup), the hour tinted green as it
-    /// rises; else just noted, so the next roll starts from it.
+    /// A figure's run (just built with <paramref name="text"/>) flipped in from the figure last shown (on a pickup), its changed
+    /// characters coming up into place right to left (Ui/Motion.Flip.cs), the hour tinted green as it rises; else just noted,
+    /// so the next flip starts from it.
     /// </summary>
     void Roll(TextBlock host, string part, Func<Run?> run, string text, bool roll, bool tint, bool force = false)
     {
         if (HudTicker.Num(text) is not double v || v <= 0) { _shown.Remove(part); return; }
         bool had = _shown.TryGetValue(part, out var from);
         _shown[part] = v;
-        if (!roll || !had || !(Moves || force) || from <= 0 || Amounts.Short(from) == text) return;
-        var gold = Rgb(GoldC); var good = Rgb(MintC);
-        double ms = tint ? Motion.RollMs * 2 : Motion.RollMs;
-        Motion.Play(host, ms, p =>
-        {
-            double q = Motion.Out(p * ms / Motion.RollMs);
-            var shown = from + (v - from) * q;
-            _shown[part] = shown;
-            if (run() is not { } r) return;
-            r.Text = p >= 1 ? text : Amounts.Short(shown);
-            if (tint) { double k = Math.Clamp((p - 0.25) / 0.75, 0, 1); r.Foreground = new SolidColorBrush(Mix(good, gold, k)); }
-        }, () => { _shown[part] = v; if (run() is { } r) { r.Text = text; if (tint) r.Foreground = Gold; } });
+        if (!roll || !had || !(Moves || force) || from <= 0 || Amounts.Short(from) == text || run() is not { } r) return;
+        var own = (r.Foreground as SolidColorBrush)?.Color ?? Rgb(GoldC);
+        var keep = r.Foreground;
+        Motion.FlipRun(host, r, Amounts.Short(from), own, tint ? Rgb(MintC) : null, () => { if (tint) r.Foreground = keep; });
     }
 
-    static Color Mix(Color a, Color b, double t) => Color.FromArgb(255, (byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
-
-    /// <summary>The card's edge lights gold on a pickup and fades back to its frame line (900 ms); not while a rare drop's frame holds it.</summary>
+    /// <summary>The card's edge lights softly gold on a pickup and fades back to its frame line (600 ms); not while a rare drop's frame holds it.</summary>
     void EdgeGlow()
     {
         if (_ring.Visibility == Visibility.Visible) return;
-        var gold = Rgb(GoldC); var line = (FrameLine as SolidColorBrush)?.Color ?? Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF);
-        var b = new SolidColorBrush(gold);
-        _card.BorderBrush = b;
-        Motion.Play(_card, 900, p =>
-        {
-            double a = 1 - Motion.Out(p);
-            b.Color = Color.FromArgb((byte)(line.A + (0xE6 - line.A) * a), (byte)(line.R + (gold.R - line.R) * a), (byte)(line.G + (gold.G - line.G) * a), (byte)(line.B + (gold.B - line.B) * a));
-        }, () => { if (_ring.Visibility != Visibility.Visible) _card.BorderBrush = FrameLine; });
+        Motion.EdgeLight(_card, Rgb(GoldC), FrameLine);
     }
 
     /// <summary>The pickups seen, to tell one just made from a price refresh, a session loaded or cleared, or an Undo.</summary>
@@ -99,7 +91,7 @@ public sealed partial class HudCard
         _wasBeat = beat; _ringDrawn = true;
     }
 
-    /// <summary>Past your best: the ring swells 18% and glows mint once (900 ms).</summary>
+    /// <summary>Past your best: the ring swells 10% and glows mint once (900 ms).</summary>
     void BestPulse()
     {
         var host = _ringHost;
@@ -112,19 +104,16 @@ public sealed partial class HudCard
         Motion.Play(_chase, 900, p =>
         {
             double up = p < 0.3 ? Motion.Out(p / 0.3) : 1 - Motion.Out((p - 0.3) / 0.7);
-            s.ScaleX = s.ScaleY = 1 + 0.18 * up;
-            glow.Opacity = 0.95 * up;
+            s.ScaleX = s.ScaleY = 1 + BestSwell * up;
+            glow.Opacity = BestGlow * up;
         }, () => { host.ClearValue(UIElement.RenderTransformProperty); if (host.Effect == glow) host.ClearValue(UIElement.EffectProperty); });
     }
 
-    /// <summary>A new pickup: its tile grows in (a rare grade glows once) and the head's name and worth pop from 115%.</summary>
+    /// <summary>A new pickup: its tile grows in (a rare grade glows once) and the head's name and worth pop from 110%.</summary>
     void Arrived(FrameworkElement tile, Pick p)
     {
         Motion.Land(tile, false, p.Rare || Motion.Glows(p.Grade) ? p.Grade : null);
-        var s = new ScaleTransform(1.15, 1.15);
-        _newest.RenderTransformOrigin = new Point(1, 0.5);
-        _newest.RenderTransform = s;
-        Motion.Play(_newest, 420, q => s.ScaleX = s.ScaleY = 1 + 0.15 * (1 - Motion.Out(q)), () => _newest.ClearValue(UIElement.RenderTransformProperty));
+        Motion.Pop(_newest, Motion.PopFrom, new Point(1, 0.5));
     }
 
     /// <summary>A rare drop landing: its coloured frame's glow beats twice and settles at its held strength (1.4 s).</summary>
@@ -133,16 +122,20 @@ public sealed partial class HudCard
         Motion.Play(_ring, 1400, p =>
         {
             double beat = Math.Abs(Math.Sin(p * Math.PI * 2.5));
-            _ring.Opacity = p < 0.8 ? .3 + .7 * beat : 1;
+            _ring.Opacity = p < 0.8 ? RareLow + (1 - RareLow) * beat : 1;
         }, () => _ring.Opacity = 1);
     }
 
-    /// <summary>For a render of the motion (KL_MOTION_AT): the figures risen from 85%, the ring swept from 70% of its share, the newest tile landing, a rare frame beating and its drop making its entrance.</summary>
+    /// <summary>
+    /// For a render of the motion (KL_MOTION_AT): the figures flipping in from 85%, the streak bar filling from half its value,
+    /// the ring swept from 70% of its share, the newest tile landing, a rare frame beating and its drop making its entrance.
+    /// </summary>
     internal void MotionFrame(IReadOnlyDictionary<string, string> values)
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
         if (HudTicker.Num(V("rate")) is double r) { _shown["rate"] = r * 0.85; Roll(_rate, "rate", () => _rateRun, V("rate"), true, true, force: true); }
         if (HudTicker.Num(V("total")) is double t) { _shown["total"] = t * 0.85; Roll(_total, "total", () => _totalRun, V("total"), true, false, force: true); }
+        _streak.Replay(values, 0.5);
         EdgeGlow();
         var (share, _, beat) = Chase(values);
         if (share >= 0)
@@ -157,4 +150,7 @@ public sealed partial class HudCard
 
     /// <summary>For the options self-test: the rare drop drawn over the figures, while one shows.</summary>
     internal FrameworkElement? RareDropForTest => _drop.Made;
+
+    /// <summary>For the options self-test: the hour's and the session's runs as last built, and the hot streak bar.</summary>
+    internal (Run? Rate, Run? Total, StreakBar Streak) FiguresForTest => (_rateRun, _totalRun, _streak);
 }
