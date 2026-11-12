@@ -130,6 +130,7 @@ public partial class MainWindow
         card.SetResourceReference(Border.BackgroundProperty, "Card2");
         card.MouseEnter += (_, _) => card.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         card.MouseLeave += (_, _) => card.SetResourceReference(Border.BackgroundProperty, "Card2");
+        Motion.SetFeel(card, Feel.Lift);
         return card;
     }
 

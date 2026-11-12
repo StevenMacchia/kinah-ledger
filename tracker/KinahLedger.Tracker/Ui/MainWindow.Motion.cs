@@ -11,6 +11,8 @@ public partial class MainWindow
     /// </summary>
     internal void MotionFrameForRender()
     {
+        // KL_CLICK, KL_HOVER: a click's or the pointer's motion alone (Ui/MainWindow.PointerFrames.cs); | so a frame can hold both
+        if (ClickFrameForRender() | HoverFrameForRender()) return;
         var key = "hero|" + _part + "|" + CountWhere();
         if (Motion.LastOf(key) is double v && v > 0) Motion.Replay(HeadRate, key, v * 0.85, v, x => Fk(x), 0.01);
         var bag = BagStripHost.Children.OfType<FrameworkElement>().ToList();
