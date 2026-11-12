@@ -90,7 +90,7 @@ sealed class CraftWindow : Window
     }
 
     /// <summary>A control the press belongs to (a text box, a button, a tick box, a link, the scroll bar): no drag from there.</summary>
-    static bool Interactive(DependencyObject? d)
+    internal static bool Interactive(DependencyObject? d)
     {
         for (; d != null; d = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) ?? LogicalTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
             if (d is TextBoxBase or ButtonBase or Hyperlink or ScrollBar or Thumb or ComboBox) return true;

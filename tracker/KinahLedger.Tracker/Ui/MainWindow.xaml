@@ -383,18 +383,20 @@
       <Border x:Name="TodayStrip" Margin="0,12,0,0" CornerRadius="12" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource Card}" Visibility="Collapsed">
         <StackPanel>
           <Grid x:Name="TodayHead" Height="46" Background="Transparent" Cursor="Hand" ToolTip="Today since midnight on this PC. Click to see the loot.">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Path x:Name="TodayChev" Style="{StaticResource SecChev}" Margin="16,0,-6,0"/>
             <TextBlock x:Name="TodayTitle" Grid.Column="1" Text="TODAY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="16,0,10,0"/>
             <TextBlock x:Name="TodayNote" Grid.Column="2" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <!-- Day wrapped or Week wrapped, for the side shown (2026-11-11): the recap sheet, Ui/MainWindow.Wrapped.cs -->
+            <Button x:Name="TodayWrapBtn" Grid.Column="3" Style="{StaticResource PillBtn}" Height="28" FontSize="12" Padding="10,0" Margin="12,0,0,0" VerticalAlignment="Center"/>
             <!-- today or the last 7 days (0.9, History A): the runs' Week side, Ui/MainWindow.Week.cs -->
-            <Border x:Name="TodayScope" Grid.Column="3" Padding="3" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Margin="12,0,0,0">
+            <Border x:Name="TodayScope" Grid.Column="4" Padding="3" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource CardLine}" Background="{DynamicResource SegGroup}" VerticalAlignment="Center" Margin="12,0,0,0">
               <StackPanel Orientation="Horizontal">
                 <Button x:Name="TodayDayBtn" Style="{StaticResource SegOn}" Content="Today" Height="26" FontSize="12.5" Padding="10,0" ToolTip="Today's expeditions and events since midnight on this PC."/>
                 <Button x:Name="TodayWeekBtn" Style="{StaticResource SegOff}" Content="Week" Height="26" FontSize="12.5" Padding="10,0" Margin="2,0,0,0" ToolTip="The last 7 days of expeditions and events on this PC, a bar a day."/>
               </StackPanel>
             </Border>
-            <TextBlock x:Name="TodaySum" Grid.Column="4" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
+            <TextBlock x:Name="TodaySum" Grid.Column="5" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="12,0,16,0"/>
           </Grid>
           <Border x:Name="TodayBody" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource CardLine}" Padding="16,0,16,12" Visibility="Collapsed">
             <StackPanel x:Name="TodayHost"/>

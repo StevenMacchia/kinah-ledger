@@ -104,6 +104,7 @@ public partial class MainWindow
     {
         _watcher.LoadDay();
         _watcher.Chat?.Instances.Reload();
+        CloseWrapped();   // an open Week or Day wrapped is the other character's: it goes (Ui/MainWindow.Wrapped.cs)
         _goals = Goals.Load(); _questLog = Quests.Load(); _questLoaded = true;
         BestRuns.Reset();
         ServerRowState(); RedrawGoals(); Redraw();

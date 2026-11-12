@@ -202,6 +202,7 @@ public partial class MainWindow
         if (kills.Count > 0) LootGroup("farm", kills, both ? "FROM KILLS" : "");
         if (gather.Count > 0) LootGroup("gather", gather, both ? "GATHERED" : "");
         if (kills.Count + gather.Count == 0) LootEmpty(_todayZone != null ? "Nothing picked up here yet today." : "Nothing picked up from farming yet today.");
+        LootHost.Children.Add(WrappedButton(Wrapped.Day));
     }
 
     static string ZoneName(string zone) => zone == SessionEngine.UnknownZone ? "Zone not read" : zone;

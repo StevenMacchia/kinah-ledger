@@ -8,7 +8,7 @@ using DRect = System.Drawing.Rectangle;
 namespace KinahLedger.Ui;
 
 /// <summary>Starts the WPF side without an App.xaml, so Program.Main stays the single entry point.</summary>
-public static class WpfApp
+public static partial class WpfApp
 {
     /// <param name="player">True for the window the player uses (and the debug cycles on the real game): their chosen look from
     /// ui.json. False for renders and self-tests, which start from the default look and never read ui.json.</param>
@@ -551,6 +551,25 @@ public static class WpfApp
         var wk = w.WeekForTest();
         Check(wk.Bars == 7 && wk.Picked == "Today" && wk.Line.StartsWith("TODAY") && wk.TodayFig == day.Total && w.FootTotalNote.Text.Contains(" to ") && ReferenceEquals(w.LootWeekBtn.Style, w.FindResource("SegOn")),
             $"LOOT, Week: {wk.Bars} bars, {wk.Picked} picked, \"{wk.Line}\", today's bar {wk.TodayFig} as Today's {day.Total}, \"{w.FootTotalNote.Text}\"");
+        // Week wrapped and Day wrapped (Ui/MainWindow.Wrapped.cs): the button at the foot of LOOT's Week and Today sides opens the
+        // sheet (off the screens in a render), whose farming is that side's own total and whose total adds the runs
+        {
+            var wf = w.WrappedFactsForTest(Session.Wrapped.Week);
+            bool opened = w.WrapButtonForTest(false) == "Week wrapped" && w.ClickWrapButtonForTest(false); DoEvents();
+            var sh = w.WrappedSheetForTest();
+            Check(opened && w.FootTotal.Text == Amounts.Short(wf.Farmed) && sh.Total == Amounts.Short(wf.Total) && (wf.FromRuns > 0 || sh.Total == w.FootTotal.Text)
+                && sh.Stats.Count == 3 && sh.Rows.Count >= 2 && sh.Thin.Length == 0 && sh.Buttons.Contains("Copy picture") && sh.Buttons.Contains("Save picture"),
+                $"Week wrapped: LOOT's Week side opens it, {sh.Total} made as the Week side's {w.FootTotal.Text}, tiles {string.Join(" / ", sh.Stats)}, {string.Join(" / ", sh.Rows)}");
+            w.CloseWrapped();
+            w.PickLootForTest(true); DoEvents();
+            var df = w.WrappedFactsForTest(Session.Wrapped.Day);
+            opened = w.WrapButtonForTest(false) == "Day wrapped" && w.ClickWrapButtonForTest(false); DoEvents();
+            var dsh = w.WrappedSheetForTest();
+            Check(opened && w.FootTotal.Text == Amounts.Short(df.Farmed) && dsh.Total == Amounts.Short(df.Total) && dsh.Stats.Count == 3,
+                $"Day wrapped: LOOT's Today side opens it, {dsh.Total} made as the Today side's {w.FootTotal.Text}, tiles {string.Join(" / ", dsh.Stats)}");
+            w.CloseWrapped();
+            w.PickLootWeekForTest(); DoEvents();
+        }
         w.PickWeekDayForTest(2); DoEvents();
         var wk2 = w.WeekForTest();
         Check(wk2.Bars == 7 && wk2.Picked.Length > 0 && wk2.Picked != "Today" && wk2.Line.StartsWith(wk2.Picked.ToUpperInvariant()) && wk2.Chips.Count >= 2 && !wk2.Line.Contains('%'),
@@ -1048,8 +1067,18 @@ public static class WpfApp
             var rw2 = w.WeekForTest(runs: true);
             Check(rw2.Picked != "Today" && rw2.Line.StartsWith(rw2.Picked.ToUpperInvariant()) && rw2.Chips.Any(c => c.StartsWith("Urugugu Canyon ×")),
                 $"...yesterday picked: {rw2.Picked}, \"{rw2.Line}\", chips {string.Join(" / ", rw2.Chips)}");
+            Check(w.WrapButtonForTest(true) == "Week wrapped", $"...its head's recap button names the week: \"{w.WrapButtonForTest(true)}\"");
             w.PickRunsWeekForTest(false); DoEvents();
             Check(w.TodayTitle.Text == "TODAY" && !MainWindow.InlineText(w.TodayNote).Contains(" to "), $"...and back to Today: \"{MainWindow.InlineText(w.TodayNote)}\"");
+            // Day wrapped from the strip's head: the day's runs as the strip sums them, beside the day's farming
+            {
+                var df = w.WrappedFactsForTest(Session.Wrapped.Day);
+                bool opened = w.WrapButtonForTest(true) == "Day wrapped" && w.ClickWrapButtonForTest(true); DoEvents();
+                var sh = w.WrappedSheetForTest();
+                Check(opened && w.TodaySum.Text == Amounts.Short(df.FromRuns) && sh.Total == Amounts.Short(df.Total) && (df.Farmed == 0 || sh.Split.Contains(w.TodaySum.Text + " from ")),
+                    $"Day wrapped from the TODAY strip: its runs {w.TodaySum.Text} as the strip's sum, {sh.Total} made, \"{sh.Split}\"");
+                w.CloseWrapped();
+            }
             w.TodayOpenForTest = stripOpen; DoEvents();
         }
 
@@ -1646,6 +1675,26 @@ public static class WpfApp
             var still = new System.Windows.Controls.TextBlock();
             Motion.Number(still, "test|still", 1, N0); Motion.Number(still, "test|still", 2, N0);
             Check(!Motion.On && still.Text == "2" && !Motion.Playing(still), "motion: none in a render (Still): a figure just shows its value");
+            // Week wrapped's entrance (Ui/Motion.Wrapped.cs on Motion.Sequence): one course over the sheet, each part at its own time. Held a fifth in,
+            // the total is counting, the first part is in and the last still to come; halfway, the drop lands glowing; at the end
+            // every part is settled and the glow gone; with no motion the sheet shows settled at once
+            {
+                var sheet = new System.Windows.Controls.Border();
+                var total = new System.Windows.Controls.TextBlock();
+                System.Windows.Controls.Border head = new(), last = new(), drop = new();
+                Motion.Cues Cues() => new Motion.Cues().Add(0, 1000, Motion.CountUp(total, 1_000_000, N0)).Add(0, 300, Motion.Arrive(head, 0, 12))
+                    .Add(1000, 800, Motion.GlowLand(drop, "Gold")).Add(2000, 300, Motion.Stamp(last));
+                Motion.FrozenAt = 0.2; Motion.Sequence(sheet, Cues());
+                string counting = total.Text; double headIn = head.Opacity, lastIn = last.Opacity;
+                Motion.FrozenAt = 0.5; Motion.Sequence(sheet, Cues());
+                double glow = (drop.Effect as System.Windows.Media.Effects.DropShadowEffect)?.Opacity ?? -1;
+                Motion.FrozenAt = 1; Motion.Sequence(sheet, Cues());
+                bool settled = total.Text == "1,000,000" && last.Opacity == 1 && drop.Effect == null && drop.RenderTransform is System.Windows.Media.ScaleTransform { ScaleX: 1 };
+                Motion.FrozenAt = null; Motion.Sequence(sheet, Cues());
+                bool still2 = total.Text == "1,000,000" && head.Opacity == 1 && last.Opacity == 1 && !Motion.Playing(sheet);
+                Check(counting != "0" && counting != "1,000,000" && headIn == 1 && lastIn == 0 && glow > 0.3 && settled && still2,
+                    $"motion: Week wrapped's sequence held a fifth in counts ({counting}), first in, last to come ({headIn} {lastIn}); the drop glows halfway ({glow:0.00}); settled at the end and at once with none ({settled} {still2})");
+            }
             Motion.FrozenAt = frozenWas;
         }
         Console.WriteLine(fails == 0 ? "options self-test passed" : $"options self-test: {fails} failed");

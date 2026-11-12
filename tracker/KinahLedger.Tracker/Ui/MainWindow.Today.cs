@@ -71,6 +71,7 @@ public partial class MainWindow
         TodayDayBtn.Style = (Style)FindResource(_runsWeek ? "SegOff" : "SegOn");
         TodayWeekBtn.Style = (Style)FindResource(_runsWeek ? "SegOn" : "SegOff");
         TodayTitle.Text = _runsWeek ? "WEEK" : "TODAY";
+        SetWrapButton(_runsWeek ? Wrapped.Week : Wrapped.Day);
         if (_runsWeek) { FillRunsWeek(week); return; }
 
         // the line: today's runs, the figures in the data face, and what they made
