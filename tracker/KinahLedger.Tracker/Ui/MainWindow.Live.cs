@@ -368,6 +368,7 @@ public partial class MainWindow
         // the chase (Quest): this hour against your best here, as the bar toward the flag and the ring; the panel's Badge and
         // Buddy draw the same ring from "chase" (the share) and "toBest" (the words)
         FillChase(nowHr, bestHr, warm);
+        FillBests(e, h, kinah, nowHr, bestHr, warm);   // a new best here and today's milestones get a moment (Ui/MainWindow.Bests.cs)
         bool chase = nowHr > 0 && bestHr > 0 && !warm;
         _hudValues["chase"] = chase ? QShare(nowHr, bestHr).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) : "";
         _hudValues["toBest"] = !chase ? "" : nowHr >= bestHr ? "New best here" : $"{Fk(bestHr - nowHr)} to your best here";

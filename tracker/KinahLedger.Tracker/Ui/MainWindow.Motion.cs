@@ -26,5 +26,6 @@ public partial class MainWindow
         }
         if (ChartBox.Visibility == Visibility.Visible) ChartFrameForRender();
         if (GoalsHost.Children.OfType<System.Windows.Controls.Border>().FirstOrDefault() is { } row) Motion.Wash(row, "Gold");
+        BestsFrameForRender();   // KL_MOMENT=best|day: a new best's or a milestone's moment (Ui/MainWindow.Bests.cs)
     }
 }
