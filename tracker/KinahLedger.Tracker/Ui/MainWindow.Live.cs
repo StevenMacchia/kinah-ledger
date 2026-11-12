@@ -950,6 +950,8 @@ public partial class MainWindow
         var craft = HudFeedValues(craftLine, "");
         if (craft["feedRate"].Length == 0) craft["feedRate"] = "+686K";
         var flag = HudFeedValues(null, "Urugugu Canyon record looks like 5 runs");
+        // the hot streak bar from the sample feed's pickups (Ui/HudStreak.cs), part filled
+        foreach (var d in new[] { farm, craft, flag }) d["streak"] = HudStreakNow();
         return new() { ("ui-hud-farming.png", farm), ("ui-hud-crafting.png", craft), ("ui-hud-flag.png", flag) };
     }
 

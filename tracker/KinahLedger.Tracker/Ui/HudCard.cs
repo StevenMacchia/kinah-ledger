@@ -71,7 +71,9 @@ public sealed partial class HudCard : IHudLook
         _rate = new TextBlock { LineHeight = 26, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
         _total = new TextBlock { LineHeight = 18, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis };
         _chase = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = Gold, FontFamily = Text, LineHeight = 16, LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed };
-        var figs = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _rate, _total, _chase } };
+        // the hot streak bar under the figures, in the card's padding below them: it takes no room (Ui/HudStreak.cs)
+        _streak.Root.Margin = new Thickness(0, 0, 0, StreakBelow);
+        var figs = new Grid { VerticalAlignment = VerticalAlignment.Center, Children = { new StackPanel { Children = { _rate, _total, _chase } }, _streak.Root } };
         var body = new Grid();
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition());
@@ -153,10 +155,11 @@ public sealed partial class HudCard : IHudLook
         // the hour and the session: "1.27M an hour", "894K session, after the Market's cut"; warming up says so, dimmed
         bool warm = V("warm") == "1";
         var (share, words, beat) = Chase(values);
-        bool picked = _picks.Next(values, out _) != null;   // only a pickup just made rolls, sweeps and lights (Ui/HudFreshPicks.cs)
+        bool picked = _picks.Next(values, out _) != null;   // only a pickup just made flips, sweeps and lights (Ui/HudFreshPicks.cs)
+        _streak.Show(values, counted, Moves);   // the hot streak bar fills and drains (Ui/HudStreak.cs)
         if (Changed("figs", $"{V("rate")}|{warm}|{V("total")}|{counted}|{Math.Round(share, 2)}|{words}"))
         {
-            // a pickup: the hour and the session roll to their new figures and the edge lights (Ui/HudCard.Motion.cs)
+            // a pickup: the hour and the session flip to their new figures and the edge lights (Ui/HudCard.Motion.cs)
             bool rose = TotalRose(V("total")) && picked;
             _rate.Inlines.Clear(); _rateRun = _totalRun = null;
             if (V("rate").Length == 0 || !counted) _rate.Inlines.Add(R("Waiting for the first count", 13, Faint));

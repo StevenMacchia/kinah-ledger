@@ -12,13 +12,16 @@ namespace KinahLedger.Ui;
 /// Badge's motion (the Strip look, 0.10.55; Steven, 2026-11-11: "cool and flashy"), so the default look moves like Pop
 /// (Ui/HudTicker.Motion.cs) and Buddy (Ui/HudCard.Motion.cs). Once per change, nothing loops; through Ui/Motion.cs, so a
 /// render, the Options preview (still) and Windows's animations off show none of it.
+/// Since 2026-11-12 it moves like the game's own pop-ups (Steven: "like the game's own UI"): short, eased out, small.
 /// - on a pickup just made (Ui/HudFreshPicks.cs: not a price refresh, a session loaded or cleared, another character or an
-///   Undo) the hour, Kinah, loot, best and session figures roll to their new values, the per-hour ones green for a moment as
-///   they rise, each figure holding its width meanwhile, and the panel's edge lights gold;
+///   Undo) the hour, Kinah, loot, best and session figures flip to their new values character by character
+///   (Ui/Motion.Flip.cs), the per-hour ones green for a moment as they rise, and the panel's edge lights softly gold;
+/// - the hot streak bar along the bottom edge fills as pickups come quickly and drains as they slow (Ui/HudStreak.cs);
 /// - the ring of your best here sweeps round to its new share, and when the sweep reaches your best it turns mint with its
 ///   star, swelling and glowing once;
-/// - a new pickup's worth pops and the feed's live dot flashes in its grade's colour (gold for Kinah);
-/// - a rare drop's coloured frame beats twice as it lands, its spark popping with it;
+/// - a new pickup's worth pops from 110% and the feed's live dot flashes in its grade's colour (gold for Kinah);
+/// - a rare drop's coloured frame beats twice as it lands, its spark popping with it and a burst of sparks in its colour
+///   flying out from it (Motion.Sparks, the rare card's own on Pop and Buddy);
 /// - the notice, accuracy and rare drop lines cross-fade when they change, fade in when they come and out when they go.
 /// </summary>
 public sealed partial class HudWindow
@@ -40,6 +43,9 @@ public sealed partial class HudWindow
     /// <summary>The feed dot's glow at rest, which its flash settles back to.</summary>
     double _dotGlow;
     readonly Dictionary<TextBlock, LineFade> _fades = new();
+    /// <summary>The hot streak bar along the bottom edge; it sits this far above the frame's inner edge.</summary>
+    readonly StreakBar _streak = new();
+    const double StreakEdge = 2;
 
     bool Moves => !_still && _look == null && Motion.On;
 
@@ -50,15 +56,17 @@ public sealed partial class HudWindow
     /// <summary>The ring on Badge (smaller than Buddy's): its size and line.</summary>
     const double RingSize = 30, RingStroke = 3.5;
     /// <summary>Past your best: the ring swells this much and glows this wide (inside the panel's padding).</summary>
-    const double BestSwell = 0.12, BestBlur = 10;
+    const double BestSwell = 0.07, BestBlur = 10;
     /// <summary>A new pickup's worth pops from this size; the last pickup's name from this one (at its 240 px widest, still inside the panel's right padding).</summary>
-    const double WorthPop = 1.15, LastPop = 1.06;
+    const double WorthPop = Motion.PopFrom, LastPop = 1.06;
     /// <summary>The feed's live dot on a pickup: it swells to this many times its size and is back in this long.</summary>
-    const double DotSwell = 2, DotMs = 700;
+    const double DotSwell = 1.6, DotMs = 500;
     /// <summary>The share of the dot's course spent lighting up; the rest fades back.</summary>
     const double DotPeak = 0.25;
-    /// <summary>A rare drop's beat on the frame, and its spark's pop and glow (small enough to stay inside the panel's padding).</summary>
-    const double AlertBeatMs = 1400, SparkPop = 1.3, SparkBlur = 4;
+    /// <summary>A rare drop's beat on the frame, and its spark's pop, settling and glow (small enough to stay inside the panel's padding).</summary>
+    const double AlertBeatMs = 1400, SparkPop = 1.15, SparkSettleMs = 420, SparkBlur = 4;
+    /// <summary>The burst round the spark: its dots this wide, reaching a quarter of the 14 px sign past its edge (inside the panel's padding).</summary>
+    const double BurstDot = 2, BurstReach = 3.5;
     /// <summary>A sweeping ring's arc: hidden below this share, and short of a closed circle at most (HudKit.Ring's own bounds).</summary>
     const double MinArc = 0.004, MaxArc = 0.999;
     /// <summary>A sweep this close to its share has got there.</summary>
@@ -121,27 +129,10 @@ public sealed partial class HudWindow
     }
 
     /// <summary>
-    /// A figure through <see cref="Motion.Figure"/>, rolled when <paramref name="roll"/>. A figure about to roll holds the
-    /// wider of its old and new widths until the roll is over, so the panel (sized to what it shows) doesn't change width
-    /// with each frame's digits; it takes its own width again when the roll ends.
+    /// A figure through <see cref="Motion.Figure"/>, flipped when <paramref name="roll"/>. A flip writes the new text at once
+    /// (its characters come up into place), so the panel, sized to what it shows, changes width once, not with each frame.
     /// </summary>
-    void RollFigure(TextBlock tb, string part, string text, double tint, bool roll)
-    {
-        if (roll && tb.Parent is FrameworkElement box && HudTicker.Num(text) is double v && v > 0)
-        {
-            // the old text's width is still the laid-out one: the new text was written this update and isn't laid out yet
-            double w = Math.Ceiling(Math.Max(tb.ActualWidth, TextWidth(tb, text)));
-            tb.MinWidth = w;
-            // its own course (on the cell's box, which nothing else moves) ends with the longest roll, the tinted one
-            Motion.Play(box, Motion.RollMs * 2, _ => { }, () => tb.ClearValue(MinWidthProperty));
-        }
-        Motion.Figure(tb, _key + part, text, tint, roll);
-    }
-
-    /// <summary>How wide <paramref name="text"/> is in the figure's own face and size, as the panel draws it.</summary>
-    static double TextWidth(TextBlock tb, string text) => new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, tb.FlowDirection,
-        new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.Black, null,
-        TextOptions.GetTextFormattingMode(tb), VisualTreeHelper.GetDpi(tb).PixelsPerDip).WidthIncludingTrailingWhitespace;
+    void RollFigure(TextBlock tb, string part, string text, double tint, bool roll) => Motion.Figure(tb, _key + part, text, tint, roll);
 
     /// <summary>A pickup's colour on the panel: gold for Kinah, its grade's for a graded item, the live dot's own mint for a common one (or none known).</summary>
     static Color ToneOf(Pick? p) => p == null || (!p.Kinah && p.Grade is "" or "Common") ? Rgb(MintC) : p.Kinah ? Rgb(GoldC) : GradeColor(p.Grade);
@@ -274,7 +265,7 @@ public sealed partial class HudWindow
         _wasBeat = beat; _ringDrawn = true;
     }
 
-    /// <summary>A rare drop on the frame (Alert): its line comes in, the frame beats twice in its colour and its spark pops.</summary>
+    /// <summary>A rare drop on the frame (Alert): its line comes in, the frame beats twice in its colour, its spark pops and sparks burst from it.</summary>
     void AlertLanded(Color tone)
     {
         _alertTone = tone;
@@ -282,7 +273,11 @@ public sealed partial class HudWindow
         if (Moves) AlertBeat();
     }
 
-    /// <summary>The frame's colour beats twice and holds (1.4 s), the spark the line starts with popping and glowing with the first beat.</summary>
+    /// <summary>
+    /// The frame's colour beats twice and holds (1.4 s), the spark the line starts with popping and glowing with the first
+    /// beat, and a burst of sparks in the drop's colour flying out from it in the first 650 ms (under the sign, in its row,
+    /// taking no room: they reach a quarter of the sign past its edge, inside the panel's padding).
+    /// </summary>
     void AlertBeat()
     {
         var tone = _alertTone;
@@ -292,18 +287,26 @@ public sealed partial class HudWindow
         _alertSign.RenderTransform = spark;
         var glow = new DropShadowEffect { Color = tone, ShadowDepth = 0, BlurRadius = SparkBlur, Opacity = 0 };
         _alertSign.Effect = glow;
+        var row = _alertSign.Parent as Panel;
+        foreach (var old in row?.Children.OfType<Canvas>().ToList() ?? new()) row!.Children.Remove(old);   // an earlier drop's burst cut short
+        var burst = Motion.BurstSparks(tone, _alertSign.Width, BurstDot);
+        burst.Margin = new Thickness(0, 0, -_alertSign.Width, 0);
+        row?.Children.Insert(0, burst);
+        double sparkEnd = Motion.SparkSpan(AlertBeatMs);
         Motion.Play(_frame, AlertBeatMs, p =>
         {
             double k = Motion.Beats(p);
             edge.Color = Color.FromArgb((byte)Math.Round(255 * k), tone.R, tone.G, tone.B);
-            double settle = Math.Clamp(p * AlertBeatMs / Motion.PopMs, 0, 1);
+            double settle = Math.Clamp(p * AlertBeatMs / SparkSettleMs, 0, 1);
             spark.ScaleX = spark.ScaleY = 1 + (SparkPop - 1) * (1 - Motion.Out(settle));
             glow.Opacity = k * (1 - p * p);   // the spark's glow beats with the frame and is gone by the end
+            Motion.Sparks(burst, Motion.Span(p, 0, sparkEnd), BurstReach);
         }, () =>
         {
             edge.Color = tone;
             _alertSign.ClearValue(UIElement.RenderTransformProperty);
             if (_alertSign.Effect == glow) _alertSign.ClearValue(UIElement.EffectProperty);
+            row?.Children.Remove(burst);
         });
     }
 
@@ -418,16 +421,21 @@ public sealed partial class HudWindow
         });
     }
 
+    /// <summary>For the options self-test: the hot streak bar along the bottom edge.</summary>
+    internal StreakBar StreakForTest => _streak;
+
     /// <summary>
-    /// For a render of the motion (KL_MOTION_AT): the figures risen from 85%, the edge lit, the ring swept from 70% of its
-    /// share (pulsing past your best), the newest pickup landing, each state line showing coming in, and a rare drop's frame beating.
+    /// For a render of the motion (KL_MOTION_AT): the figures flipping in from 85%, the streak bar filling from half its
+    /// value, the edge lit, the ring swept from 70% of its share (pulsing past your best), the newest pickup landing, each
+    /// state line showing coming in, and a rare drop's frame beating with its burst.
     /// </summary>
     void BadgeFrame(IReadOnlyDictionary<string, string> values)
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
         foreach (var (k, tint) in Rolled)
-            if (_cells.TryGetValue(k, out var tb) && HudTicker.Num(V(k)) is double v && v > 0) Motion.Replay(tb, _key + k, v * ReplayFrom, v, Amounts.Short, tint);
-        if (_feedLine != null && _feedRate != null && HudTicker.Num(V("feedRate")) is double r && r > 0) Motion.Replay(_feedRate, _key + "feedRate", r * ReplayFrom, r, Amounts.Short, RiseTint);
+            if (_cells.TryGetValue(k, out var tb) && HudTicker.Num(V(k)) is double v && v > 0) Motion.ReplayFlip(tb, _key + k, v * ReplayFrom, v, Amounts.Short, tint);
+        if (_feedLine != null && _feedRate != null && HudTicker.Num(V("feedRate")) is double r && r > 0) Motion.ReplayFlip(_feedRate, _key + "feedRate", r * ReplayFrom, r, Amounts.Short, RiseTint);
+        _streak.Replay(values, 0.5);
         if (_alert.Visibility != Visibility.Visible) Motion.EdgeLight(_frame, Rgb(GoldC), FrameBrush);
         var (share, _, beat) = Chase(values);
         if (share >= 0 && V("warm") != "1")
