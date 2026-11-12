@@ -1004,6 +1004,137 @@ public static class WpfApp
             w.ShowDemo(); DoEvents();
         }
 
+        // the window under the mouse (2026-11-11: Ui/Motion.Glide.cs, Ui/Motion.Feel.cs, Ui/MainWindow.PageTurn.cs), each motion
+        // held at a point of its course: a page tab's light slides from the old tab and ends exactly on the new one at every
+        // page and window size without the tabs measuring differently; a switch's light the same, its inks swapping halfway;
+        // the page cross-fades and rises; a card lifts, a tile's light passes, a button sinks and springs back; with motion
+        // off a hover and a press show at once and nothing slides, turns or shines
+        {
+            var frozenWas = Motion.FrozenAt; bool stillWas = Motion.Still;
+            static Rect Near(Rect r) => new(Math.Round(r.X, 3), Math.Round(r.Y, 3), Math.Round(r.Width, 3), Math.Round(r.Height, 3));
+            var tabs = new[] { w.FarmTab, w.CraftTab, w.EventsTab, w.QuestsTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
+            var tabRow = (System.Windows.Controls.Panel)System.Windows.Media.VisualTreeHelper.GetParent(w.FarmTab);
+            // where a tab's face draws its light, as the screen has it: the tab's box in its row, inside its one-pixel edge
+            Rect Face(System.Windows.Controls.Button b)
+            {
+                var r = b.TransformToVisual(tabRow).TransformBounds(new Rect(b.RenderSize));
+                var face = (System.Windows.Controls.Border)b.Template.FindName("b", b);
+                double dpi = System.Windows.Media.VisualTreeHelper.GetDpi(face).DpiScaleX, edge = Math.Round(face.BorderThickness.Left * dpi) / dpi;
+                r.Inflate(-edge, -edge);
+                return r;
+            }
+            foreach (var scale in new[] { 0.8, 1.0, 1.5 })
+            {
+                Motion.FrozenAt = 1; Click(w.FarmTab); w.PreviewWindowScale(scale); DoEvents();
+                var size = new Size(w.PartTabs.ActualWidth, w.PartTabs.ActualHeight);
+                var off = new List<string>();
+                var from = w.FarmTab;
+                foreach (var tab in tabs.Skip(1).Append(w.FarmTab))
+                {
+                    Motion.FrozenAt = 0; Click(tab); DoEvents();
+                    var start = Motion.LightNow(tabRow);
+                    if (start is not { } s0 || Near(s0) != Near(Face(from))) off.Add($"{tab.Name} starts at {start} not {Face(from)}");
+                    Motion.FrozenAt = 1 - 1e-9; Click(from); DoEvents(); Click(tab); DoEvents();
+                    var end = Motion.LightNow(tabRow);
+                    if (end is not { } e1 || Near(e1) != Near(Face(tab))) off.Add($"{tab.Name} ends at {end} not {Face(tab)}");
+                    if (new Size(w.PartTabs.ActualWidth, w.PartTabs.ActualHeight) != size) off.Add($"{tab.Name} measured {w.PartTabs.ActualWidth}x{w.PartTabs.ActualHeight}");
+                    Motion.FrozenAt = 1; Click(from); DoEvents(); Click(tab); DoEvents();
+                    if (Motion.LightNow(tabRow) != null || tabRow.Background != null || tab.ReadLocalValue(System.Windows.Controls.Control.BackgroundProperty) != DependencyProperty.UnsetValue || !Motion.GetLit(tab))
+                        off.Add($"{tab.Name} not handed its own light at the end");
+                    from = tab;
+                }
+                Check(off.Count == 0, $"the page tabs' light at {scale:0.0}: starts on the old tab, ends exactly on the new one and hands it its own light, the tabs {size.Width:0.#}x{size.Height:0.#} throughout{(off.Count > 0 ? ": " + string.Join("; ", off) : "")}");
+            }
+            w.PreviewWindowScale(1); DoEvents();
+
+            // an in-page switch (the Today strip's Today / Week, on Runs): the light a tenth in, the inks not yet swapped
+            Motion.FrozenAt = 1; Click(w.EventsTab); w.PickRunsWeekForTest(false); DoEvents();
+            var segRow = (System.Windows.Controls.Panel)System.Windows.Media.VisualTreeHelper.GetParent(w.TodayDayBtn);
+            var segOnInk = w.TodayDayBtn.Foreground; var segOffInk = w.TodayWeekBtn.Foreground;
+            Motion.FrozenAt = 0.1; Click(w.TodayWeekBtn); DoEvents();
+            var seg = Motion.LightNow(segRow);
+            var dayBox = Motion.LightBox(w.TodayDayBtn)!.Value.Box; var weekBox = Motion.LightBox(w.TodayWeekBtn)!.Value.Box;
+            bool segMid = seg is { } sm && sm.X > dayBox.X && sm.X < weekBox.X && w.TodayWeekBtn.Foreground == segOffInk && w.TodayDayBtn.Foreground == segOnInk;
+            Motion.FrozenAt = 0.5; Click(w.TodayDayBtn); DoEvents(); Click(w.TodayWeekBtn); DoEvents();
+            bool segSwapped = w.TodayWeekBtn.Foreground == segOnInk && w.TodayDayBtn.Foreground == segOffInk;
+            Motion.FrozenAt = 1; Click(w.TodayDayBtn); DoEvents();
+            Check(segMid && segSwapped && Motion.LightNow(segRow) == null && w.TodayDayBtn.ReadLocalValue(System.Windows.Controls.Control.ForegroundProperty) == DependencyProperty.UnsetValue,
+                $"a switch's light slides too (a tenth in at x {seg?.X:0.#}, between {dayBox.X:0.#} and {weekBox.X:0.#}, inks not swapped: {segMid}); halfway the inks have swapped ({segSwapped}); at its end the styles' own inks");
+
+            // the page turn, a fifth in: the page left is a picture over the window fading out, the new page rising and fading in
+            Motion.FrozenAt = 1; Click(w.FarmTab); DoEvents();
+            Motion.FrozenAt = 0.2; Click(w.CraftTab); DoEvents();
+            var cover = w.LedgerCol.Children.OfType<System.Windows.Controls.Canvas>().SelectMany(c => c.Children.OfType<System.Windows.Controls.Image>()).FirstOrDefault();
+            double rise = (w.LowerScroll.RenderTransform as System.Windows.Media.TranslateTransform)?.Y ?? -1, shown = w.LowerScroll.Opacity;
+            Motion.FrozenAt = 1; Click(w.FarmTab); DoEvents();
+            bool turnedBack = !w.LedgerCol.Children.OfType<System.Windows.Controls.Canvas>().Any() && w.LeftCol.RenderTransform == System.Windows.Media.Transform.Identity && w.LeftCol.Opacity == 1 && w.LowerScroll.Opacity == 1;
+            Check(cover is { Opacity: > 0.2 and < 0.4 } && rise > 3.5 && rise < 4.5 && shown > 0.4 && shown < 0.6 && turnedBack,
+                $"a page turn a fifth in: the page left fading ({cover?.Opacity:0.00}), the new one {rise:0.0} px low at {shown:0.00}; at its end nothing left over ({turnedBack})");
+
+            // hover and press: a card lifts and its edge brightens, a tile's light passes, a button sinks and springs back
+            var card = new System.Windows.Controls.Border { Width = 80, Height = 40, BorderThickness = new Thickness(1), Cursor = System.Windows.Input.Cursors.Hand };
+            Motion.SetFeel(card, Feel.Lift);
+            var inert = new System.Windows.Controls.Border { Width = 80, Height = 40, BorderThickness = new Thickness(1) };
+            Motion.SetFeel(inert, Feel.Lift);
+            Motion.FrozenAt = 0.5; Motion.HoverFeel(card, true); Motion.HoverFeel(inert, true);
+            double lifted = Motion.TouchOf(card).Lift;
+            bool edged = card.BorderBrush == Application.Current.FindResource("CardLineHover");
+            Motion.FrozenAt = 1; Motion.HoverFeel(card, false);
+            Check(lifted < -0.8 && lifted > -1 && edged && Motion.TouchOf(inert).Lift == 0 && Motion.TouchOf(card).Lift == 0 && card.RenderTransform == System.Windows.Media.Transform.Identity && card.ReadLocalValue(System.Windows.Controls.Border.BorderBrushProperty) == DependencyProperty.UnsetValue,
+                $"a card under the mouse lifts ({lifted:0.00} px halfway) and its edge brightens; one that opens nothing stays still; left, it settles and its edge is the style's again");
+            var tile = MainWindow.Under(w).FirstOrDefault(e => Motion.GetFeel(e) == Feel.Tile && e.IsVisible && e.ActualWidth > 0);
+            bool shining = false, gone = false;
+            if (tile != null)
+            {
+                Motion.FrozenAt = 0.5; Motion.HoverFeel(tile, true);
+                shining = Motion.TouchOf(tile).Shining && InCard.Layer!.Children.OfType<System.Windows.Shapes.Rectangle>().Any(r => System.Windows.Controls.Panel.GetZIndex(r) < 0);
+                Motion.FrozenAt = 1; Motion.HoverFeel(tile, false); Motion.HoverFeel(tile, true); Motion.HoverFeel(tile, false);
+                gone = !Motion.TouchOf(tile).Shining && !InCard.Layer!.Children.OfType<System.Windows.Shapes.Rectangle>().Any();
+            }
+            Check(tile != null && shining && gone, $"an item tile under the mouse has a light pass across it, under the hover cards; at its end the light is gone ({tile?.GetType().Name}: {shining} {gone})");
+            var btn = new System.Windows.Controls.Button();
+            Motion.FrozenAt = 0.5; Motion.SetPressed(btn, true);
+            double sunk = Motion.TouchOf(btn).Scale;
+            Motion.SetPressed(btn, false);
+            double sprung = Motion.TouchOf(btn).Scale;
+            Motion.FrozenAt = 1; Motion.SetPressed(btn, true); Motion.SetPressed(btn, false);
+            Check(sunk < 0.98 && sunk > 0.97 && sprung > 1 && sprung < 1.01 && btn.RenderTransform == System.Windows.Media.Transform.Identity,
+                $"a button held sinks ({sunk:0.000} halfway), let go it springs past 1 ({sprung:0.0000} halfway) and settles with no transform left");
+
+            // motion off (a render, or Windows's animations off): a hover and a press show at once, nothing slides, turns or shines
+            Motion.Still = true; Motion.FrozenAt = null;
+            Motion.HoverFeel(card, true);
+            double offLift = Motion.TouchOf(card).Lift;
+            bool offShine = false;
+            if (tile != null) { Motion.HoverFeel(tile, true); offShine = Motion.TouchOf(tile).Shining; }
+            Motion.SetPressed(btn, true);
+            double offPress = Motion.TouchOf(btn).Scale;
+            Motion.SetPressed(btn, false); Motion.HoverFeel(card, false); if (tile != null) Motion.HoverFeel(tile, false);
+            Click(w.CraftTab); DoEvents();
+            bool offTurn = Motion.LightNow(tabRow) == null && tabRow.Background == null && !w.LedgerCol.Children.OfType<System.Windows.Controls.Canvas>().Any();
+            Click(w.FarmTab); DoEvents();
+            Check(offLift == -1 && !offShine && offPress == 0.97 && Motion.TouchOf(btn).Scale == 1 && Motion.TouchOf(card).Lift == 0 && offTurn,
+                $"motion off: a hover lifts at once ({offLift}), a press sinks at once ({offPress}), no light passes ({offShine}), a tab's light and the page don't slide ({offTurn})");
+
+            // played for real, not held: a hover's clock runs to its end though it is in no window
+            Motion.Still = false;
+            if (Motion.On)
+            {
+                var live = new System.Windows.Controls.Border { Cursor = System.Windows.Input.Cursors.Hand };
+                Motion.SetFeel(live, Feel.Lift);
+                Motion.HoverFeel(live, true);
+                var until = DateTime.UtcNow.AddMilliseconds(Motion.HoverMs * 4);
+                while (DateTime.UtcNow < until && Motion.TouchOf(live).Lift != -1) { DoEvents(); Thread.Sleep(10); }
+                double up = Motion.TouchOf(live).Lift;
+                Motion.HoverFeel(live, false);
+                until = DateTime.UtcNow.AddMilliseconds(Motion.HoverMs * 4);
+                while (DateTime.UtcNow < until && live.RenderTransform != System.Windows.Media.Transform.Identity) { DoEvents(); Thread.Sleep(10); }
+                Check(up == -1 && live.RenderTransform == System.Windows.Media.Transform.Identity, $"a hover played in real time lifts to -1 ({up}) and settles back with no transform left");
+            }
+            else Console.WriteLine("skip  a hover played in real time: Windows's animations are off on this PC");
+            Motion.Still = stillWas; Motion.FrozenAt = frozenWas;
+        }
+
         // Options › Sharing › Share my week opens the profile with the share card (site PR 28), no browser started here
         {
             var opened = new List<string>();

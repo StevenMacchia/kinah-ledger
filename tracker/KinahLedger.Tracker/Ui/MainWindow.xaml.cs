@@ -1195,6 +1195,8 @@ public partial class MainWindow : Window
         if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = ActualHeight;
         _part = part is "Crafting" or "Events" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";
         bool craft = _part == "Crafting";
+        // the page being left, as a picture for the cross-fade, before the new page's parts show (Ui/MainWindow.PageTurn.cs)
+        var leaving = byHand && was != _part ? LeavingPage() : null;
         ApplyView();
         FarmTab.Style = (Style)FindResource(_part == "Farming" ? "NavOn" : "SegOff");
         CraftTab.Style = (Style)FindResource(craft ? "NavOn" : "SegOff");
@@ -1204,26 +1206,7 @@ public partial class MainWindow : Window
         if (_part == "Quests") RedrawQuestsPage();
         if (byHand) _follow.Picked();
         if (craft && !_demo) FillCraft(CraftShown);
-        if (byHand && was != _part) RiseIn();
-    }
-
-    /// <summary>
-    /// v2 motion (2026-11-10, as the site's views): a page the player opens fades up 8 px in 0.26 s. Never in a render
-    /// (the demo) or with Windows's animations off, so the review loop's PNGs and a player who turned motion off see it still.
-    /// </summary>
-    void RiseIn()
-    {
-        if (_demo || !SystemParameters.ClientAreaAnimation) return;
-        var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-        var parts = HeadStack.Children.OfType<FrameworkElement>().Skip(1).Append(LeftCol).Append(LowerScroll).Where(e => e.Visibility == Visibility.Visible);
-        foreach (var el in parts)
-        {
-            var move = new TranslateTransform(0, 8);
-            el.RenderTransform = move;
-            var t = TimeSpan.FromMilliseconds(260);
-            el.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, t) { EasingFunction = ease, FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop });
-            move.BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(8, 0, t) { EasingFunction = ease });
-        }
+        if (leaving is { } l) TurnPage(l);
     }
 
     /// <summary>
