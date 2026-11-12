@@ -26,7 +26,8 @@ public partial class MainWindow
             double share = _chaseShare;
             Motion.ReplaySlide(ChaseFill, ChaseKey, share * 0.6, share, s => { _chaseShare = s; LayoutChase(); });
         }
-        if (ChartBox.Visibility == Visibility.Visible) Motion.Reveal(RateCanvas, RateCanvas.Width, RateCanvas.Height);
+        if (ChartBox.Visibility == Visibility.Visible) ChartFrameForRender();
         if (GoalsHost.Children.OfType<System.Windows.Controls.Border>().FirstOrDefault() is { } row) Motion.Wash(row, "Gold");
+        BestsFrameForRender();   // KL_MOMENT=best|day: a new best's or a milestone's moment (Ui/MainWindow.Bests.cs)
     }
 }
