@@ -435,12 +435,7 @@ public partial class MainWindow
         if (CurrentSharePic() is not { } p) return false;
         try
         {
-            var bmp = RenderSharePicture(p);
-            // the picture as a PNG (Discord keeps it sharp) and as a plain bitmap for everything else
-            var data = new DataObject();
-            using (var ms = new MemoryStream()) { var enc = new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(bmp)); enc.Save(ms); data.SetData("PNG", new MemoryStream(ms.ToArray())); }
-            data.SetImage(bmp);
-            Clipboard.SetDataObject(data, true);
+            CopyPng(RenderSharePicture(p));
             Say("Picture copied. Paste it in Discord or anywhere with Ctrl+V.", "Good");
             return true;
         }
@@ -452,15 +447,30 @@ public partial class MainWindow
         if (CurrentSharePic() is not { } p) return;
         try
         {
-            var dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Kinah Ledger");
-            Directory.CreateDirectory(dir);
-            var path = System.IO.Path.Combine(dir, SharePicture.FileName(_shareScope, DateTime.Now));
-            SavePng(RenderSharePicture(p), path);
-            _shareSaved = path;
+            _shareSaved = SavePicture(RenderSharePicture(p), SharePicture.FileName(_shareScope, DateTime.Now));
             DrawShare();
             Say(@"Picture saved in Pictures\Kinah Ledger.", "Good");
         }
         catch (Exception ex) { CrashLog.Write("share save", ex); Say("Couldn't save the picture: " + ex.Message, "Bad"); }
+    }
+
+    /// <summary>A picture on the clipboard as a PNG (Discord keeps it sharp) and as a plain bitmap for everything else (Share, and Week wrapped).</summary>
+    static void CopyPng(BitmapSource bmp)
+    {
+        var data = new DataObject();
+        using (var ms = new MemoryStream()) { var enc = new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(bmp)); enc.Save(ms); data.SetData("PNG", new MemoryStream(ms.ToArray())); }
+        data.SetImage(bmp);
+        Clipboard.SetDataObject(data, true);
+    }
+
+    /// <summary>A picture saved as a PNG in Pictures\Kinah Ledger under <paramref name="fileName"/> (Share, and Week wrapped); where it went.</summary>
+    static string SavePicture(BitmapSource bmp, string fileName)
+    {
+        var dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Kinah Ledger");
+        Directory.CreateDirectory(dir);
+        var path = System.IO.Path.Combine(dir, fileName);
+        SavePng(bmp, path);
+        return path;
     }
 
     void CopyShareText()

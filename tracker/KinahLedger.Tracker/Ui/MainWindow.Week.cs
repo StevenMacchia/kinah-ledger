@@ -39,6 +39,7 @@ public partial class MainWindow
         LootWeekBtn.Click += (_, _) => PickLootWeek();
         TodayDayBtn.Click += (_, _) => PickRunsWeek(false);
         TodayWeekBtn.Click += (_, _) => PickRunsWeek(true);
+        InitWrapped();   // Week wrapped and Day wrapped (Ui/MainWindow.Wrapped.cs)
     }
 
     void PickLootWeek() { _lootWeek = true; _drawnSig.Remove("loot"); FillLoot(); }
@@ -123,6 +124,7 @@ public partial class MainWindow
             LootHost.Children.Add(n);
         }
         LootHost.Children.Add(FarmDayDetail(pd));
+        LootHost.Children.Add(WrappedButton(Wrapped.Week));
     }
 
     static string FarmTip(HistoryDay d)
