@@ -470,7 +470,10 @@ public static class ReplayBank
             else if (f["k"]!.GetValue<string>() == "table")
             {
                 // an expedition's reward table: the picture is the game window; read as RewardGridDue reads it, each slot named
-                // the way ApplyGrid names it (2026-10-23 Urugugu: 29 slots, 14 not named by 0.8.17)
+                // the way ApplyGrid names it (2026-10-23 Urugugu: 29 slots, 14 not named by 0.8.17). "top_shift" moves the
+                // header's estimate of the first row by that many px, as a table still sliding in does live (2026-11-11 17:29
+                // Urugugu: the grid about 12 px under where its header put it, read as 34 and 39 slots for 27)
+                int topShift = f["top_shift"]?.GetValue<int>() ?? 0;
                 var band = new Rectangle(bmp.Width / 4, 0, bmp.Width / 2, bmp.Height / 3);
                 using var bandBmp = bmp.Clone(band, bmp.PixelFormat);
                 var lines = Task.Run(() => ScreenReader.ReadBoxesAsync(bandBmp, band.Location, 1)).GetAwaiter().GetResult();
@@ -488,14 +491,14 @@ public static class ReplayBank
                     RewardGrid.MaskBadges = false;
                     try
                     {
-                        var before = Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016))).GetAwaiter().GetResult();
+                        var before = Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016) + topShift)).GetAwaiter().GetResult();
                         Console.WriteLine($"  table without the badge mask: {before.Count(s => TrackerSession.SlotName(items, s) != null)} of {before.Count} slots named, {before.Take(29).Count(s => TrackerSession.SlotName(items, s) != null)} of the first 29: " + string.Join(" | ", before.Select(s => $"{TrackerSession.SlotName(items, s) ?? "?"} x{s.Count} ({(s.Icons.Count > 0 ? s.Icons[0].Distance.ToString("0") : "-")})")));
                     }
                     finally { RewardGrid.MaskBadges = true; }
                 }
                 if (rc != null)
                 {
-                    var read = Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016))).GetAwaiter().GetResult();
+                    var read = Task.Run(() => RewardGrid.ReadAsync(bmp, rc.Box.Bottom + (int)(bmp.Height * 0.016) + topShift)).GetAwaiter().GetResult();
                     var prefer = TrackerSession.SetMates(read, TrackerSession.ByIcon(items));
                     foreach (var sl in read)
                         table.Add(new JsonObject
