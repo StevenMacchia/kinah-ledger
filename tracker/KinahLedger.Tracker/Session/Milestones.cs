@@ -4,8 +4,8 @@ namespace KinahLedger.Session;
 /// When the window marks a moment (Ui/MainWindow.Bests.cs): this hour passing your best here, and today's Kinah passing a
 /// milestone. Only a crossing seen as it happens counts. The first look at a count (the tracker starting, another zone,
 /// page, character or day, a count put back by Undo, a day loaded again) only notes where it stands, so a figure already
-/// past on that look says nothing. A milestone is said at most once per character and day; a best at most once per count.
-/// Kept apart from WPF, so the self-test can drive it tick by tick.
+/// past on that look says nothing. A milestone is said at most once per day's count of a character; a best at most once
+/// per count. Kept apart from WPF, so the self-test can drive it tick by tick.
 /// </summary>
 public sealed class Milestones
 {
@@ -18,11 +18,11 @@ public sealed class Milestones
 
     /// <summary>The day the notes below are for ("2026-11-11", DayStore.Today); a new day forgets them.</summary>
     string _day = "";
-    /// <summary>The highest mark each character has passed today, as its place in <see cref="DayMarks"/> (-1: none yet).</summary>
+    /// <summary>The highest mark each character's day count has passed, as its place in <see cref="DayMarks"/> (-1: none yet).</summary>
     readonly Dictionary<string, int> _passed = new();
 
-    /// <summary>The last look at each count's hour: shown against a best, at or past it, its pickups, and whether it was said.</summary>
-    readonly record struct Look(bool Shown, bool Past, int Events, bool Said);
+    /// <summary>The last look at each count's hour: shown against a best, at or past it, and whether it was said.</summary>
+    readonly record struct Look(bool Shown, bool Past, bool Said);
     readonly Dictionary<string, Look> _looks = new();
 
     void OnDay(string day)
@@ -41,33 +41,53 @@ public sealed class Milestones
 
     /// <summary>
     /// Today's Kinah for <paramref name="character"/>, looked at each tick: the mark it just passed, or null. Several passed at
-    /// once give the highest. <paramref name="fresh"/>: the count under it was loaded or replaced since the last look (the
-    /// day read again for this character, the history put in place), so where it stands is noted without a word. A mark
-    /// passed once stays passed for the day, so Kinah taken off (Looks wrong?) and picked up again doesn't say it twice.
+    /// once give the highest. <paramref name="fresh"/>: the count under it is another one since the last look (the day rolled
+    /// over at midnight, the day read again for this character, the history put in place), so where it stands is taken as
+    /// it is, without a word: the clock can reach midnight a moment before the reader starts the new day's count, and that
+    /// last look at yesterday's total must not hold back today's marks. Within one count a mark passed stays passed, so Kinah
+    /// taken off (Looks wrong?) and picked up again doesn't say it twice.
     /// </summary>
     public long? Day(string day, string character, long kinah, bool fresh)
     {
         OnDay(day);
         int at = MarkAt(kinah);
-        bool seen = _passed.TryGetValue(character, out var was);
-        if (!seen || fresh) { _passed[character] = seen ? Math.Max(was, at) : at; return null; }
+        if (fresh || !_passed.TryGetValue(character, out var was)) { _passed[character] = at; return null; }
         if (at <= was) return null;
         _passed[character] = at;
         return DayMarks[at];
     }
 
     /// <summary>
+    /// What was picked up between two looks at a count, at the prices now: the Kinah, and each item's new pieces at
+    /// <paramref name="worthOfOne"/> (the Market price after the cut, as the hero's total values them; null: no price, nothing).
+    /// What prices did to the pieces already there is left out, so the hour without this is the hour play didn't move.
+    /// </summary>
+    public static double Picked(long kinahWas, long kinahNow, IReadOnlyDictionary<long, int> piecesWas,
+        IEnumerable<(long Id, string Name, int Count)> piecesNow, Func<string, double?> worthOfOne)
+    {
+        double worth = Math.Max(0, kinahNow - kinahWas);
+        foreach (var (id, name, count) in piecesNow)
+        {
+            int more = count - piecesWas.GetValueOrDefault(id);
+            if (more > 0 && worthOfOne(name) is double one) worth += more * one;
+        }
+        return worth;
+    }
+
+    /// <summary>
     /// This hour against your best here, looked at each tick, for one count (<paramref name="count"/>: the character, the page,
     /// where it counts and which count it is). True once: on the tick the hour reaches the best after a tick where the chase
-    /// showed it under, with a pickup in between. Never on a count's first look, while it warms up (<paramref name="shown"/>
-    /// false: no chase), on a price change alone (no pickup), or again for the same count after it dips under and passes again.
+    /// showed it under, when this tick's pickups did it (<paramref name="pastBefore"/>: the hour without them, at the prices
+    /// now, would be past the best already, so prices moved it, not play). Never on a count's first look, while it warms up
+    /// (<paramref name="shown"/> false: no chase), on a price change, or again for the same count after it dips under and
+    /// passes again.
     /// </summary>
-    public bool Best(string day, string count, bool shown, bool past, int events)
+    public bool Best(string day, string count, bool shown, bool past, bool pastBefore)
     {
         OnDay(day);
         bool had = _looks.TryGetValue(count, out var was);
-        bool now = had && was.Shown && !was.Past && shown && past && events > was.Events && !was.Said;
-        _looks[count] = new Look(shown, past, events, now || (had && was.Said));
+        bool now = had && was.Shown && !was.Past && shown && past && !pastBefore && !was.Said;
+        _looks[count] = new Look(shown, past, now || (had && was.Said));
         return now;
     }
 }

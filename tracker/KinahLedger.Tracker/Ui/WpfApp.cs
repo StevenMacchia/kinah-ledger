@@ -1126,14 +1126,35 @@ public static class WpfApp
                 var next = new[] { ms.Day(d2, "c1", 900_000, false), ms.Day(d2, "c1", 1_000_000, false) };
                 Check(loaded == null && jump == 25_000_000 && next[0] == null && next[1] == 1_000_000,
                     $"motion: a day loaded again is noted, not said; several marks at once say the highest; a new day starts over ({loaded} {jump} {next[0]} {next[1]})");
-                bool firstLook = ms.Best(d1, "c1|here|1", true, true, 10);
-                var crossing = new[] { ms.Best(d1, "c1|here|2", true, false, 10), ms.Best(d1, "c1|here|2", true, true, 10), ms.Best(d1, "c1|here|2", true, false, 10),
-                    ms.Best(d1, "c1|here|2", true, true, 11), ms.Best(d1, "c1|here|2", true, true, 12), ms.Best(d1, "c1|here|2", true, false, 12), ms.Best(d1, "c1|here|2", true, true, 13) };
+                // midnight: the clock's new day can be read a moment before the reader starts its count, with yesterday's total
+                const string d3 = "2026-11-13";
+                var midnight = new[] { ms.Day(d3, "c1", 6_000_000, false), ms.Day(d3, "c1", 0, true), ms.Day(d3, "c1", 1_000_000, false) };
+                Check(midnight[0] == null && midnight[1] == null && midnight[2] == 1_000_000,
+                    $"motion: yesterday's 6M seen under the new day, then the new day's own count from 0: its 1M is still said ({string.Join(", ", midnight.Select(x => x?.ToString() ?? "-"))})");
+                bool firstLook = ms.Best(d1, "c1|here|1", true, true, false);
+                var crossing = new[] { ms.Best(d1, "c1|here|2", true, false, false), ms.Best(d1, "c1|here|2", true, true, true), ms.Best(d1, "c1|here|2", true, false, false),
+                    ms.Best(d1, "c1|here|2", true, true, false), ms.Best(d1, "c1|here|2", true, true, false), ms.Best(d1, "c1|here|2", true, false, false), ms.Best(d1, "c1|here|2", true, true, false) };
                 Check(!firstLook && crossing.Count(x => x) == 1 && crossing[3],
-                    $"motion: a best already passed on a count's first look says nothing; passing it with a pickup says it once (not on a price change alone, not again after a dip) ({string.Join("", crossing.Select(x => x ? "1" : "0"))})");
-                bool warm = ms.Best(d1, "c1|here|3", false, false, 5) | ms.Best(d1, "c1|here|3", true, true, 6);
-                bool newDay = ms.Best(d2, "c1|here|2", true, false, 1) | ms.Best(d2, "c1|here|2", true, true, 2);
+                    $"motion: a best already passed on a count's first look says nothing; passing it by a pickup says it once (not when prices moved it, not again after a dip) ({string.Join("", crossing.Select(x => x ? "1" : "0"))})");
+                bool warm = ms.Best(d1, "c1|here|3", false, false, false) | ms.Best(d1, "c1|here|3", true, true, false);
+                bool newDay = ms.Best(d2, "c1|here|2", true, false, false) | ms.Best(d2, "c1|here|2", true, true, false);
                 Check(!warm && newDay, "motion: an hour past its best when it stops warming up says nothing; on a new day the same count can say a best again");
+                // the hour against a 1,050,000 best over one hour: 1M Kinah and 10 Spiritstone, sold at 5,000 then 7,000 after a price refresh
+                {
+                    const double keeps = 0.88, best = 1_050_000;
+                    var piecesWas = new Dictionary<long, int> { [1] = 10 };
+                    double hourWas = 1_000_000 + 10 * 5_000 * keeps;
+                    // the refresh and an ordinary pickup (500 Kinah, one Spiritstone) in the same tick: the prices did it
+                    double picked = Session.Milestones.Picked(1_000_000, 1_000_500, piecesWas, new[] { (1L, "Spiritstone", 11) }, _ => 7_000 * keeps);
+                    double hourNow = 1_000_500 + 11 * 7_000 * keeps;
+                    bool refresh = ms.Best(d1, "c1|here|4", true, hourWas >= best, false) | ms.Best(d1, "c1|here|4", true, hourNow >= best, hourNow - picked >= best);
+                    // no refresh, two Spiritstone and 500 Kinah: play did it
+                    double picked2 = Session.Milestones.Picked(1_000_000, 1_000_500, piecesWas, new[] { (1L, "Spiritstone", 12) }, _ => 5_000 * keeps);
+                    double hourNow2 = 1_000_500 + 12 * 5_000 * keeps;
+                    bool play = ms.Best(d1, "c1|here|5", true, hourWas >= best, false) | ms.Best(d1, "c1|here|5", true, hourNow2 >= best, hourNow2 - picked2 >= best);
+                    Check(!refresh && play && Math.Abs(picked - (500 + 7_000 * keeps)) < 1e-6,
+                        $"motion: a price refresh and a pickup in one tick don't say a best the prices made ({hourNow:N0} without {picked:N0} picked); two pieces that pass it do ({hourNow2:N0})");
+                }
                 var lit = new System.Windows.Shapes.Rectangle { Visibility = Visibility.Collapsed };
                 var figure = new System.Windows.Controls.TextBlock { Text = "1.27M" };
                 Motion.FrozenAt = 0.5;
