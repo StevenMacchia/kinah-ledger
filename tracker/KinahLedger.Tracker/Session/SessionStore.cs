@@ -28,13 +28,16 @@ public static class SessionStore
             var drops = new Dictionary<string, int>();
             foreach (var r in e.ItemRows()) drops[r.Name] = r.Count + r.Bound;
             var zones = e.ZoneSnapshot().ToDictionary(kv => kv.Key, kv => new Upload.ZoneRun((int)Math.Round(kv.Value.Seconds / 60), kv.Value.Kills, kv.Value.Nodes, kv.Value.Kinah, kv.Value.Drops, kv.Value.Pets, kv.Value.PetsByName, ByName(kv.Value.Items, items), ByName(kv.Value.ItemsBound, items)));
-            var rec = new Saved(e.Started.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), (int)Math.Round(e.Active.TotalMinutes), activity, Upload.RunPayload.Gear, s.Region,
+            var rec = new Saved(StartedKey(e.Started), (int)Math.Round(e.Active.TotalMinutes), activity, Upload.RunPayload.Gear, s.Region,
                 t.Kinah, t.KinahBound, t.Kills, e.KinahDrops, t.Nodes, t.Bonus, drops, e.PetSnapshot(), zones, shared,
                 e.NetKinah, Upload.OddsPayload.From(e), e.Sold, e.SoldKinah, server);
             File.AppendAllText(PathFor(), JsonSerializer.Serialize(rec) + "\n");
         }
         catch (Exception ex) { CrashLog.Write("session store", ex); }
     }
+
+    /// <summary>A run's start as its line keeps it ("2026-11-11 21:40", local time), which also tells the run apart from the earlier ones (BestRuns.Stays).</summary>
+    public static string StartedKey(DateTime started) => started.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
     public static int Count()
     {

@@ -428,6 +428,8 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
                                 the figures check beside an Events render (tools/ui-review.md)
         --sweep [events|all]    every state on the Events page, or on every page; exit 1 if a render fails or a figure is off
         --wrapped week|day      the Week wrapped or Day wrapped sheet (with --state, over that state; KL_MOTION_AT holds its sequence)
+        --recap                 the run-end recap card in each of its states (ui-recap-<state>.png); with KL_MOTION_AT=0..1,
+                                held at that point of its opening
         [--states-dir folder]   the states folder, when it isn't found from here
   market-shot [dir]             the window with the Market card in its tracking state
   replay-event-shots [--since 2026-10-24] [--send] [--dir folder] [--verbose]
@@ -1257,6 +1259,7 @@ options: --process aion[,other]");
     {
         var dir = pos.Count > 0 ? pos[0] : ".";
         if (o.ContainsKey("options")) { WpfApp.ShotOptions(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
+        if (o.ContainsKey("recap")) { WpfApp.ShotRecap(s, dir, o.GetValueOrDefault("skin")); Console.WriteLine($"wrote {Path.GetFullPath(dir)}"); return 0; }
         // the review loop's states (tools/ui-review.md): one state, or the sweep over every state file
         var statesDir = Ui.UiState.FindDir(o.GetValueOrDefault("states-dir"));
         if (o.TryGetValue("sweep", out var sweep))
@@ -4106,6 +4109,20 @@ options: --process aion[,other]");
             Check("kept per server", (BestRuns.For("Nezekan (Elyos)", "Western Cantas Valley") == null).ToString(), "True");
             BestRuns.Reset();
             Check("read back from best.json", BestRuns.For("Siel (Elyos)", "Western Cantas Valley")?.PerHr.ToString() ?? "none", "300000");
+            // the recap's "vs your average here" (2026-11-11): the zone's earlier saved stays on the server, the run just saved left out
+            File.WriteAllLines(Path.Combine(tmp, "sessions.jsonl"), new[]
+            {
+                """{"started":"2026-11-01 20:00","server":"Siel (Elyos)","zones":{"Western Cantas Valley":{"minutes":30,"kinah":300000}}}""",
+                """{"started":"2026-11-02 20:00","server":"Siel (Elyos)","zones":{"Western Cantas Valley":{"minutes":5,"kinah":50000},"Kraka Footpath":{"minutes":20,"kinah":100000}}}""",
+                """{"started":"2026-11-03 20:00","server":"Nezekan (Elyos)","zones":{"Western Cantas Valley":{"minutes":30,"kinah":900000}}}""",
+                "not json",
+                """{"started":"2026-11-04 20:00","server":"Siel (Elyos)","zones":{"western cantas valley":{"minutes":60,"kinah":500000}}}""",
+                """{"started":"2026-11-05 20:00","server":"Siel (Elyos)","zones":{"Western Cantas Valley":{"minutes":20,"kinah":200000}}}""",
+            });
+            Check("a zone's earlier stays: this server, ten minutes or more, not the run just saved", string.Join(" ", BestRuns.Stays("Siel (Elyos)", "Western Cantas Valley", "2026-11-05 20:00").Select(x => $"{x.Value}/{x.Seconds}")), "300000/1800 500000/3600");
+            // the lines are skipped unread unless they name the server and the zone, as the file's JSON writes them (an apostrophe escaped)
+            File.AppendAllText(Path.Combine(tmp, "sessions.jsonl"), """{"started":"2026-11-06 20:00","server":"Siel (Elyos)","zones":{"Ara's Rest":{"minutes":30,"kinah":90000}}}""" + "\n");
+            Check("a zone named with an apostrophe is still found in the file", string.Join(" ", BestRuns.Stays("Siel (Elyos)", "Ara's Rest", "").Select(x => $"{x.Value}/{x.Seconds}")), "90000/1800");
 
             Check("panel fields in panel order", string.Join(",", Ui.HudFields.Parse("total, rate,time,nope")), "time,rate,total");
             Check("an empty choice keeps the clock", string.Join(",", Ui.HudFields.Parse("")), "time");

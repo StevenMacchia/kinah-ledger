@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using static KinahLedger.Ui.HudKit;
 
@@ -13,25 +14,34 @@ namespace KinahLedger.Ui;
 /// the Ticker's rare toast grows to 66 px. Everything comes from the window's "rare…" values (MainWindow.HoldRareOnHud
 /// and MainWindow.RareWatch.cs): "rarePrice", "rareWhere", "rareWatched", "rareChime" on top of the drop's own.
 /// </summary>
-static class HudRare
+static partial class HudRare
 {
     /// <param name="Label">"RARE DROP · LEGEND"; "WATCHED DROP · RARE" or "WATCHED DROP" for a lower grade on the watch list.</param>
     /// <param name="Price">"28K", "≈28K" for the region's price, "" for no price yet.</param>
     /// <param name="Where">"on Siel", "each on Siel" for more than one.</param>
-    public sealed record Drop(Pick Pick, Color Color, string Label, string Price, string Where, bool Watched, bool Chime);
+    /// <param name="More">How many more drops came with this one, the best of them (Ui/MainWindow.RareMoment.cs): "+2 more" after the label.</param>
+    public sealed record Drop(Pick Pick, Color Color, string Label, string Price, string Where, bool Watched, bool Chime, int More = 0);
 
     /// <summary>The drop the window holds, or null.</summary>
     public static Drop? Of(IReadOnlyDictionary<string, string> v)
     {
         if (Rare(v) is not { } p) return null;
         string V(string k) => v.TryGetValue(k, out var s) ? s : "";
-        var g = p.Grade;
-        var label = Glows(g) ? "RARE DROP · " + g.ToUpperInvariant() : g is "" or "Common" ? "WATCHED DROP" : "WATCHED DROP · " + g.ToUpperInvariant();
-        return new Drop(p, ColorOf(p.Color, g), label, V("rarePrice"), V("rareWhere"), V("rareWatched") == "1", V("rareChime") == "1");
+        bool watched = V("rareWatched") == "1";
+        int more = int.TryParse(V("rareMore"), out var m) && m > 0 ? m : 0;
+        return new Drop(p, ColorOf(p.Color, p.Grade), LabelOf(p.Grade, watched), V("rarePrice"), V("rareWhere"), watched, V("rareChime") == "1", more);
     }
 
+    /// <summary>
+    /// "RARE DROP · LEGEND" for a Legend, Unique or Epic; "RARE DROP" for a coveted find of no such grade (Poko's Skin Bundle)
+    /// that isn't on the watch list; "WATCHED DROP · RARE", or "WATCHED DROP" with no grade, for a lower grade on the list.
+    /// The overlay's card and the window's moment say it the same way.
+    /// </summary>
+    public static string LabelOf(string grade, bool watched) =>
+        Glows(grade) ? "RARE DROP · " + grade.ToUpperInvariant() : !watched ? "RARE DROP" : grade is "" or "Common" ? "WATCHED DROP" : "WATCHED DROP · " + grade.ToUpperInvariant();
+
     /// <summary>What the drop's drawing depends on (the looks' Changed gate).</summary>
-    public static string Sig(Drop? d) => d == null ? "" : $"{d.Pick.Id}|{d.Pick.Count}|{d.Pick.Icon}|{d.Label}|{d.Color}|{d.Price}|{d.Where}|{d.Watched}|{d.Chime}";
+    public static string Sig(Drop? d) => d == null ? "" : $"{d.Pick.Id}|{d.Pick.Count}|{d.Pick.Icon}|{d.Label}|{d.Color}|{d.Price}|{d.Where}|{d.Watched}|{d.Chime}|{d.More}";
 
     /* ---------------- the parts both looks share ---------------- */
 
@@ -84,23 +94,35 @@ static class HudRare
         },
     };
 
-    static TextBlock Label(Drop d) => T(d.Label, 10.5, Frozen(Color.FromArgb(0xD9, d.Color.R, d.Color.G, d.Color.B)), weight: FontWeights.SemiBold);
+    /// <summary>The label in the grade's colour, then "+2 more" muted when more came with the drop (<see cref="SetMore"/> changes it).</summary>
+    static TextBlock Label(Drop d, out Run more)
+    {
+        var t = T(d.Label, 10.5, Frozen(Color.FromArgb(0xD9, d.Color.R, d.Color.G, d.Color.B)), weight: FontWeights.SemiBold);
+        more = R(MoreText(d.More), 10.5, Muted, weight: FontWeights.SemiBold);
+        t.Inlines.Add(more);
+        return t;
+    }
 
-    static TextBlock NameLine(Drop d)
+    static string MoreText(int more) => more > 0 ? $"  +{more} more" : "";
+
+    static TextBlock NameLine(Drop d, out Run name)
     {
         var t = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, LineHeight = 18, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
-        t.Inlines.Add(R(d.Pick.Name, 15, Frozen(d.Color), weight: FontWeights.Medium));
+        name = R(d.Pick.Name, 15, Frozen(d.Color), weight: FontWeights.Medium);
+        t.Inlines.Add(name);
         if (d.Pick.Count.Length > 0) t.Inlines.Add(R(" " + d.Pick.Count, 12, Muted, mono: true));
         return t;
     }
 
     /// <summary>"sells for 28K on Siel" (the figure gold, as the board's price in the window's rows), or "no price yet".</summary>
-    static TextBlock PriceLine(Drop d)
+    static TextBlock PriceLine(Drop d, out Run? figure)
     {
         var t = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, LineHeight = 15, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
+        figure = null;
         if (d.Price.Length == 0) { t.Inlines.Add(R("no price yet", 12, Faint)); return t; }
         t.Inlines.Add(R("sells for ", 12, Muted));
-        t.Inlines.Add(R(d.Price, 12, Gold, mono: true));
+        figure = R(d.Price, 12, Gold, mono: true);
+        t.Inlines.Add(figure);
         if (d.Where.Length > 0) t.Inlines.Add(R(" " + d.Where, 12, Muted));
         return t;
     }
@@ -118,6 +140,16 @@ static class HudRare
         public UIElement[] Swap { get; set; } = Array.Empty<UIElement>();
         readonly TextBlock _rate = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
         readonly Image _bell = Bell(false);
+        /// <summary>
+        /// The drop drawn now; whether the card has drawn before (its first draw never makes an entrance); and the last drop
+        /// it has shown, so one hidden while crafting and shown again in its hold doesn't make its entrance twice (each
+        /// drop's id is its own, so this is never cleared).
+        /// </summary>
+        Drop? _shown;
+        bool _drawn;
+        string _shownId = "";
+        /// <summary>The body's drop as drawn, which its entrance moves (Ui/HudRare.Motion.cs).</summary>
+        internal FrameworkElement? Made { get; private set; }
 
         public CardParts()
         {
@@ -127,25 +159,41 @@ static class HudRare
             Grid.SetColumn(_bell, 1); Head.Children.Add(_bell);
         }
 
-        public void Show(Drop? d)
+        /// <summary>
+        /// The drop over the figures, or the figures back (null). <paramref name="enter"/>: a drop other than the one drawn
+        /// just before makes its entrance (<see cref="Enter"/>), except on the card's first draw. More drops joining the one
+        /// drawn change its "+2 more" in place, so an entrance under way plays on.
+        /// </summary>
+        public void Show(Drop? d, bool enter = false)
         {
+            bool first = !_drawn;
+            _drawn = true;
             bool on = d != null;
             Head.Visibility = Body.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
             foreach (var e in Swap) e.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-            if (d == null) { Body.Child = null; return; }
+            var was = _shown;
+            _shown = d;
+            if (d == null) { Body.Child = null; Made = null; return; }
+            if (was != null && Made != null && Sig(was with { More = 0 }) == Sig(d with { More = 0 })) { SetMore(Made, d.More); return; }
             _bell.Source = d.Chime ? BellOn : BellOff;
             var col = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            var l1 = new StackPanel { Orientation = Orientation.Horizontal, Height = 16, Children = { Label(d) } };
+            var label = Label(d, out var more);
+            var l1 = new StackPanel { Orientation = Orientation.Horizontal, Height = 16, Children = { label } };
             if (d.Watched) { var w = WatchTag(); w.Margin = new Thickness(8, 0, 0, 0); l1.Children.Add(w); }
-            var name = NameLine(d); name.Margin = new Thickness(0, 1, 0, 0);
-            var price = PriceLine(d); price.Margin = new Thickness(0, 1, 0, 0);
+            var name = NameLine(d, out var nameRun); name.Margin = new Thickness(0, 1, 0, 0);
+            var price = PriceLine(d, out var figure); price.Margin = new Thickness(0, 1, 0, 0);
             col.Children.Add(l1); col.Children.Add(name); col.Children.Add(price);
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             g.ColumnDefinitions.Add(new ColumnDefinition());
-            g.Children.Add(Tile(d.Pick, 40));
+            var tile = Tile(d.Pick, 40);
+            g.Children.Add(tile);
             Grid.SetColumn(col, 1); g.Children.Add(col);
             Body.Child = g;
+            Made = g;
+            Keep(g, new Parts(tile, label, more, nameRun, figure, d.Price, d.Color));
+            if (enter && !first && _shownId != d.Pick.Id) Enter(g);
+            _shownId = d.Pick.Id;
         }
 
         /// <summary>The hour's rate in the head while the drop shows ("1.27M /h"), as the Ticker's pill says it.</summary>
@@ -166,17 +214,19 @@ static class HudRare
         var c = d.Color;
         var l1 = new Grid();
         l1.ColumnDefinitions.Add(new ColumnDefinition()); l1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        l1.Children.Add(Label(d));
+        var label = Label(d, out var more);
+        l1.Children.Add(label);
         var bell = Bell(d.Chime); Grid.SetColumn(bell, 1); l1.Children.Add(bell);
         var l3 = new Grid { Margin = new Thickness(0, 2, 0, 0) };
         l3.ColumnDefinitions.Add(new ColumnDefinition()); l3.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        l3.Children.Add(PriceLine(d));
+        l3.Children.Add(PriceLine(d, out var figure));
         if (d.Watched) { var w = WatchTag(); w.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(w, 1); l3.Children.Add(w); }
-        var name = NameLine(d); name.Margin = new Thickness(0, 2, 0, 0);
+        var name = NameLine(d, out var nameRun); name.Margin = new Thickness(0, 2, 0, 0);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0), Children = { l1, name, l3 } };
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.Children.Add(Tile(d.Pick, 40));
+        var tile = Tile(d.Pick, 40);
+        row.Children.Add(tile);
         Grid.SetColumn(text, 1); row.Children.Add(text);
         var wash = new RadialGradientBrush { Center = new Point(0, .5), GradientOrigin = new Point(0, .5), RadiusX = .9, RadiusY = 1.6 };
         wash.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Round(.32 * 255), c.R, c.G, c.B), 0));
@@ -188,6 +238,8 @@ static class HudRare
             BorderBrush = Frozen(c), Background = wash, Child = row,
         };
         // the glow sits under the toast in its own ring, so the words stay sharp
-        return new Border { Child = new Grid { Children = { Glow(c, 10, 16, .5), body } } };
+        var toast = new Border { Child = new Grid { Children = { Glow(c, 10, 16, .5), body } } };
+        Keep(toast, new Parts(tile, label, more, nameRun, figure, d.Price, d.Color));   // for its entrance (Ui/HudRare.Motion.cs)
+        return toast;
     }
 }

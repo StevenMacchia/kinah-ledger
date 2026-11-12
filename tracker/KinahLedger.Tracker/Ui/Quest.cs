@@ -196,6 +196,7 @@ public partial class MainWindow
         if (roll is { } r) Motion.Number(t, r.Key, r.Count, v => CountBadge((long)Math.Round(v)), -1);
         b.Child = t;
         g.Children.Add(b);
+        Motion.SetFeel(g, Feel.Tile);   // lifts, and a light passes across its icon (Ui/Motion.Feel.cs)
         return g;
     }
 
@@ -244,6 +245,7 @@ public partial class MainWindow
         if (rule) { row.BorderThickness = new Thickness(0, 1, 0, 0); row.SetResourceReference(Border.BorderBrushProperty, "Line"); }
         row.MouseEnter += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "HoverTint");
         row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+        Motion.SetFeel(row, Feel.Lift);
         return row;
     }
 
@@ -266,6 +268,7 @@ public partial class MainWindow
         tile.SetResourceReference(Border.BackgroundProperty, "Card2");
         tile.MouseEnter += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         tile.MouseLeave += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "Card2");
+        Motion.SetFeel(tile, Feel.Tile);
         return tile;
     }
 
@@ -283,6 +286,7 @@ public partial class MainWindow
         badge.SetResourceReference(Border.BackgroundProperty, "Card2");
         badge.MouseEnter += (_, _) => badge.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         badge.MouseLeave += (_, _) => badge.SetResourceReference(Border.BackgroundProperty, "Card2");
+        Motion.SetFeel(badge, Feel.Tile);
         return badge;
     }
 

@@ -67,7 +67,7 @@ sealed class WrappedWindow : Window
     /// the primary one; with none (a sheet with too little to share) the bar holds the note alone.
     /// </summary>
     /// <param name="offscreen">For a render (ui-shot): shown far off the screens, never where the player would see it.</param>
-    public void Present(FrameworkElement sheet, Motion.Cue[] cues, IReadOnlyList<(string Text, string Tip, Action Go)> actions, string note, bool offscreen = false)
+    public void Present(FrameworkElement sheet, Motion.Cues cues, IReadOnlyList<(string Text, string Tip, Action Go)> actions, string note, bool offscreen = false)
     {
         if (_sheet != null) Motion.Halt(_sheet);
         _sheet = sheet;

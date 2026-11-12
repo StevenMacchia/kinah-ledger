@@ -68,8 +68,12 @@ public static class HoverTip
         Panel.SetZIndex(_box, 1000);
         layer.Children.Add(_box);
         Place(el, layer);
-        _box.Opacity = 0;
-        _box.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(90)));
+        // a quick fade in, with the window's other motion (none with Windows's animations off: it shows at once)
+        if (Motion.On)
+        {
+            _box.Opacity = 0;
+            _box.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(90)));
+        }
         el.MouseLeave += Left;
         el.IsVisibleChanged += Gone;
         el.Unloaded += GoneRouted;

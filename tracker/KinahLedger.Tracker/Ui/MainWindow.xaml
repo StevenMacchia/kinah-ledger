@@ -461,8 +461,13 @@
               </StackPanel>
               <!-- the hour, big, and its unit -->
               <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                <TextBlock x:Name="HeadRate" Cursor="Hand" MouseLeftButtonUp="HeadRate_Click" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                <!-- the light that crosses the figure on a new best or a day's milestone, and their tags after the unit, drawn over the card (Ui/MainWindow.Bests.cs) -->
+                <Grid>
+                  <TextBlock x:Name="HeadRate" Cursor="Hand" MouseLeftButtonUp="HeadRate_Click" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                  <Rectangle x:Name="HeadLight" IsHitTestVisible="False" Visibility="Collapsed"/>
+                </Grid>
                 <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
+                <Canvas x:Name="BestTags"/>
               </StackPanel>
               <!-- the chase: this hour against your best here, a bar toward the flag (mint once it is beaten) -->
               <StackPanel x:Name="ChaseBox" Margin="0,8,0,0" Visibility="Collapsed">
@@ -506,12 +511,11 @@
               </StackPanel>
             </StackPanel>
           </Grid>
-          <!-- the rate since the start (click "chart"): one sample a minute under a gold line, the dashed lilac line your best here -->
+          <!-- the rate since the start (click "chart"): one sample a minute under a gold line, the dashed lilac line your best here;
+               live (Ui/RateChart.cs): the fill in the look's gold, a new minute lands, the mouse reads a minute -->
           <StackPanel x:Name="ChartBox" Margin="0,12,0,0" Visibility="Collapsed">
             <Canvas x:Name="RateCanvas" Width="628" Height="96" HorizontalAlignment="Left" ClipToBounds="False">
-              <Path x:Name="RateFill" StrokeThickness="0">
-                <Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#99F5B942" Offset="0"/><GradientStop Color="#26F5B942" Offset="0.55"/><GradientStop Color="#00F5B942" Offset="1"/></LinearGradientBrush></Path.Fill>
-              </Path>
+              <Path x:Name="RateFill" StrokeThickness="0"/>
               <Polyline x:Name="RateLinePath" Stroke="{DynamicResource Gold}" StrokeThickness="3" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
               <Ellipse x:Name="RateDot" Width="10" Height="10" Fill="{DynamicResource Gold}" Stroke="{DynamicResource Bg}" StrokeThickness="2" Visibility="Collapsed"/>
               <Line x:Name="BestLinePath" X1="0" X2="628" Stroke="{DynamicResource Lilac}" StrokeThickness="1.6" StrokeDashArray="4,3" Visibility="Collapsed"/>

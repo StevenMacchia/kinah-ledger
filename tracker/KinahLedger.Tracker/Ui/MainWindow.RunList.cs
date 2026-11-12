@@ -171,6 +171,7 @@ public partial class MainWindow
         ToolTipService.SetInitialShowDelay(line, 500);
         line.MouseEnter += (_, _) => { line.SetResourceReference(Border.BackgroundProperty, "HoverTint"); name.SetResourceReference(TextBlock.ForegroundProperty, "Gold"); };
         line.MouseLeave += (_, _) => { line.Background = Brushes.Transparent; name.SetResourceReference(TextBlock.ForegroundProperty, out_ ? "Faint" : "Ink"); };
+        Motion.SetFeel(line, Feel.Lift);
         line.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenPlace(run.Zone); _fixOpen = RunKey(run); _drawnSig.Remove("runs"); redraw(); };
         sp.Children.Add(line);
         var slots = new List<FrameworkElement>();

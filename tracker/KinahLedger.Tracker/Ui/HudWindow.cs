@@ -50,7 +50,7 @@ public static class HudFields
 /// ("show"), and locked it lets clicks through to the game ("unlocked"); unlocked, drag it anywhere. Its opacity is a
 /// slider in Options. Everything it shows comes in through Update's values, worked out by the window.
 /// </summary>
-public sealed class HudWindow : Window
+public sealed partial class HudWindow : Window
 {
     readonly Dictionary<string, TextBlock> _cells = new();
     /// <summary>The words beside a figure ("/ hr"), by key: the rate's goes while it warms up.</summary>
@@ -135,6 +135,7 @@ public sealed class HudWindow : Window
     {
         if (fields != null) _fields = HudFields.Parse(string.Join(",", fields));
         Look = HudLooks.Parse(look);
+        _still = still;
         _look = Look switch { HudLooks.Card => new HudCard { Still = still }, HudLooks.Ticker => new HudTicker { Still = still }, _ => null };
         if (!still)
         {
@@ -301,6 +302,7 @@ public sealed class HudWindow : Window
         _acc.Foreground = toCheck ? AccCheck : AccGood;
         _accSign.Source = toCheck ? HudKit.WarnSign : HudKit.GoodSign;
         _acc.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+        Fade(_acc, _accSign);   // a change cross-fades (Ui/HudWindow.BadgeMotion.cs)
     }
     System.Windows.Threading.DispatcherTimer? _alertTimer;
 
@@ -314,9 +316,10 @@ public sealed class HudWindow : Window
         _alert.Text = text; _alert.Foreground = new SolidColorBrush(color); _alert.Visibility = Visibility.Visible;
         _alertSign.Source = HudKit.DropSign(color);
         _frame.BorderBrush = new SolidColorBrush(color); _frame.BorderThickness = new Thickness(2);
+        AlertLanded(color);   // the line comes in, the frame beats (Ui/HudWindow.BadgeMotion.cs)
         _alertTimer?.Stop();
         _alertTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
-        _alertTimer.Tick += (_, _) => { _alertTimer?.Stop(); _alert.Visibility = Visibility.Collapsed; _frame.BorderBrush = FrameBrush; _frame.BorderThickness = new Thickness(1); };
+        _alertTimer.Tick += (_, _) => { _alertTimer?.Stop(); _alert.Visibility = Visibility.Collapsed; _frame.BorderBrush = FrameBrush; _frame.BorderThickness = new Thickness(1); Fade(_alert, _alertSign); };
         _alertTimer.Start();
     }
 
@@ -427,11 +430,12 @@ public sealed class HudWindow : Window
     /// The figures by key (HudFields), as the window worked them out. A missing one hides with its label (2026-10-25: a
     /// blank loot left "loot / hr" standing alone), and the first one showing sits at the panel's edge.
     /// </summary>
-    /// <summary>A render of the motion (KL_MOTION_AT with ui-shot): the Ticker's effects held at that point (Ui/HudTicker.Motion.cs).</summary>
+    /// <summary>A render of the motion (KL_MOTION_AT with ui-shot): the look's effects held at that point (Ui/HudTicker.Motion.cs, Ui/HudCard.Motion.cs, Ui/HudWindow.BadgeMotion.cs).</summary>
     internal void MotionFrameForRender(IReadOnlyDictionary<string, string> values)
     {
         if (_look is HudTicker t) t.MotionFrame(values);
         else if (_look is HudCard c) c.MotionFrame(values);
+        else if (_look == null) BadgeFrame(values);
     }
 
     public void Update(IReadOnlyDictionary<string, string> values)
@@ -440,6 +444,7 @@ public sealed class HudWindow : Window
         ShowAs(V("show"));
         ApplyLock(V("unlocked"));
         if (_look != null) { _look.Update(values); return; }
+        bool picked = PickedUp(values);   // a pickup just made: Badge's figures roll and its ring sweeps (Ui/HudWindow.BadgeMotion.cs)
         // a start or stop's flash ("Run started") over a waiting notice, for its few seconds
         bool flash = V("flash").Length > 0;
         var noteText = flash ? V("flash") : V("notice");
@@ -465,8 +470,7 @@ public sealed class HudWindow : Window
         if (ringSig != _ringSig)
         {
             _ringSig = ringSig;
-            _ringHost.Children.Clear();
-            if (share >= 0) _ringHost.Children.Add(HudKit.Ring(30, 3.5, share, HudKit.Rgb(beat ? HudKit.MintC : HudKit.GoldC), beat ? "★" : $"{Math.Round(share * 100):0}"));
+            DrawRing(share, beat, picked);
             _ringHost.Visibility = share >= 0 ? Visibility.Visible : Visibility.Collapsed;
             _chaseLine.Text = words; _chaseLine.Foreground = beat ? Mint : Gold;
             _chaseLine.Visibility = words.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -498,6 +502,7 @@ public sealed class HudWindow : Window
             if (c.Visibility != Visibility.Visible) continue;
             c.Margin = new Thickness(first ? 0 : 20, 0, 0, 0); first = false;
         }
+        BadgeMoved(values, picked);
     }
 
     /// <summary>

@@ -149,10 +149,10 @@ public partial class MainWindow
     /// big, what it is and how it splits between farming and runs, the change on its right; up to three tiles; the
     /// highlights; the site at the foot. A thin sheet says what will appear and when in the total's place.
     /// </summary>
-    (Border Sheet, Motion.Cue[] Cues) BuildWrappedSheet(WrappedFacts f, WrappedText t)
+    (Border Sheet, Motion.Cues Cues) BuildWrappedSheet(WrappedFacts f, WrappedText t)
     {
-        var cues = new List<Motion.Cue>();
-        void Cue(double at, Action<double> step, double ms = CueMs) => cues.Add(new Motion.Cue(at, ms, step));
+        var cues = new Motion.Cues();
+        void Cue(double at, Action<double> step, double ms = CueMs) => cues.Add(at, ms, step);
         var body = new StackPanel();
         var sheet = new Border { Width = WrapWidth, Child = body, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(28, 24, 28, 22), Tag = "wrapped-sheet" };
         sheet.SetResourceReference(Border.BackgroundProperty, "HeroBg");
@@ -162,9 +162,9 @@ public partial class MainWindow
 
         var head = WrapHead(t);
         body.Children.Add(head);
-        Cue(0, Motion.Rise(head, 8));
+        Cue(0, Motion.Arrive(head, 0, 8));
 
-        if (f.Thin) { WrapThin(body, t, Cue); return (sheet, cues.ToArray()); }
+        if (f.Thin) { WrapThin(body, t, Cue); return (sheet, cues); }
 
         // the total, counting up, with the change against the period before on its right
         var totalRow = new Grid { Margin = new Thickness(0, 22, 0, 0) };
@@ -176,7 +176,7 @@ public partial class MainWindow
         total.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         total.Width = Math.Ceiling(total.DesiredSize.Width);
         totalRow.Children.Add(FitLeft(total));
-        Cue(CountAt, Motion.Rise(total, 14));
+        Cue(CountAt, Motion.Arrive(total, 0, 14));
         Cue(CountAt, Motion.CountUp(total, f.Total, Fk), CountMs);
         Border? chip = null;
         if (t.Change.Length > 0)
@@ -200,7 +200,7 @@ public partial class MainWindow
         if (t.Split.Length > 0) { var s = PR("   " + t.Split, "Muted"); s.FontSize = 13; what.Inlines.Add(s); }
         what.ToolTip = "Made farming and in expeditions and events: Kinah plus drops, gathering and rewards at the lowest Market price, " + PriceBook.Cut + ". Bound items and items with no price yet add nothing.";
         body.Children.Add(what);
-        Cue(LineAt, Motion.Rise(what, 8));
+        Cue(LineAt, Motion.Arrive(what, 0, 8));
 
         // the tiles: the time, the hour's rate, the days played (the day: its kills or runs)
         if (t.Stats.Count > 0)
@@ -218,7 +218,7 @@ public partial class MainWindow
                 tile.SetResourceReference(Border.BackgroundProperty, "Inset");
                 tile.SetResourceReference(Border.BorderBrushProperty, "CardLine");
                 tiles.Children.Add(tile);
-                Cue(TilesAt + i * TileGap, Motion.Rise(tile, 10));
+                Cue(TilesAt + i * TileGap, Motion.Arrive(tile, 0, 10));
             }
             body.Children.Add(tiles);
         }
@@ -232,7 +232,7 @@ public partial class MainWindow
                 var (row, icon) = WrapRow(t.Rows[j], f, j > 0);
                 list.Children.Add(row);
                 double at = RowsAt + j * RowGap;
-                Cue(at, Motion.Rise(row, 10));
+                Cue(at, Motion.Arrive(row, 0, 10));
                 if (t.Rows[j].Kind == "drop" && f.Drop is { } d)
                     Cue(at + DropAt, Motion.GlowLand(icon, d.Grade is "" or "Common" ? "Gold" : "Grade" + d.Grade), DropMs);
             }
@@ -243,8 +243,8 @@ public partial class MainWindow
 
         var foot = WrapFoot();
         body.Children.Add(foot);
-        Cue(FootAt, Motion.Rise(foot, 6));
-        return (sheet, cues.ToArray());
+        Cue(FootAt, Motion.Arrive(foot, 0, 6));
+        return (sheet, cues);
     }
 
     /// <summary>A figure drawn whole at its size, or smaller when its place is narrower (a time or a figure in billions): never cut.</summary>
@@ -320,11 +320,11 @@ public partial class MainWindow
         var head = PT(t.ThinHead, "Ink", 22, FontWeights.SemiBold, "DisplayFont");
         head.TextWrapping = TextWrapping.Wrap; head.TextTrimming = TextTrimming.None; head.Margin = new Thickness(0, 22, 0, 0); head.Tag = "wrapped-thin";
         body.Children.Add(head);
-        cue(ThinGap, Motion.Rise(head, 10), CueMs);
+        cue(ThinGap, Motion.Arrive(head, 0, 10), CueMs);
         var then = PT(t.ThinBody, "Muted", 13.5);
         then.TextWrapping = TextWrapping.Wrap; then.TextTrimming = TextTrimming.None; then.Margin = new Thickness(0, 8, 0, 0);
         body.Children.Add(then);
-        cue(2 * ThinGap, Motion.Rise(then, 8), CueMs);
+        cue(2 * ThinGap, Motion.Arrive(then, 0, 8), CueMs);
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
         g.Children.Add(GameArt.Element("daily", 28));
@@ -334,10 +334,10 @@ public partial class MainWindow
         box.SetResourceReference(Border.BackgroundProperty, "Inset");
         box.SetResourceReference(Border.BorderBrushProperty, "CardLine");
         body.Children.Add(box);
-        cue(3 * ThinGap, Motion.Rise(box, 8), CueMs);
+        cue(3 * ThinGap, Motion.Arrive(box, 0, 8), CueMs);
         var foot = WrapFoot();
         body.Children.Add(foot);
-        cue(4 * ThinGap, Motion.Rise(foot, 6), CueMs);
+        cue(4 * ThinGap, Motion.Arrive(foot, 0, 6), CueMs);
     }
 
     /// <summary>The foot: Kinah Ledger and the site.</summary>
@@ -358,7 +358,7 @@ public partial class MainWindow
     {
         if (_wrapShown is not { } shown) return null;
         var (sheet, cues) = BuildWrappedSheet(shown.Facts, shown.Text);
-        Motion.Settle(cues);
+        cues.Seek(cues.Length);
         sheet.CornerRadius = new CornerRadius(0);
         sheet.Measure(new Size(WrapWidth, double.PositiveInfinity));
         sheet.Arrange(new Rect(sheet.DesiredSize));

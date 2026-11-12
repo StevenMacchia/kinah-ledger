@@ -103,13 +103,14 @@ public sealed partial class HudTicker : IHudLook
         bool warm = V("warm") == "1";
         // nothing counted yet (no run, no pickup, a total of 0): "Waiting for the first count" rather than "0:00 | 0" (2026-10-26)
         bool counted = run || Picks(values).Count > 0 || V("total") is not ("" or "0");
+        bool picked = _picks.Next(values, out _) != null;   // only a pickup just made rolls the pill (Ui/HudFreshPicks.cs)
         if (Changed("pill", $"{live}|{run}|{clock}|{V("rate")}|{warm}|{V("total")}|{paused.Length > 0}|{counted}"))
         {
             SetDot(_dot, live);
             _run.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
             _time.Text = clock; _time.Foreground = live || (!run && paused.Length == 0) ? Ink : Faint;
             // the hour and the session roll to their new figures on a pickup (Ui/HudTicker.Motion.cs)
-            PillFigures(V("rate"), V("total"), warm);
+            PillFigures(V("rate"), V("total"), warm, picked);
             _rate.FontSize = warm ? 13 : 15; _rate.Opacity = warm ? .55 : 1;
             _unit.Visibility = V("rate").Length > 0 && !warm ? Visibility.Visible : Visibility.Collapsed;
             _sep2.Visibility = _total.Visibility = V("total").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -132,7 +133,7 @@ public sealed partial class HudTicker : IHudLook
         if (note.Length > 0) { var (n, t, s, cv) = (note, tone, sign, clockV); want.Add(("notice|" + n + cv, "notice", () => NoticeToast(n, t, s, HudClockNotice.Parse(cv)))); }
         if (_acc is { } acc) { var check = _accCheck; want.Add(("acc|" + acc + check, "notice", () => NoticeToast(acc, check ? Warn : Mint, check))); }
         var rare = Rare(values);
-        if (HudRare.Of(values) is { } drop) want.Add((drop.Pick.Id, "rare", () => HudRare.TickerToast(drop, _alpha)));   // 66 px since 2026-10-26
+        if (HudRare.Of(values) is { } drop) { want.Add((drop.Pick.Id, "rare", () => HudRare.TickerToast(drop, _alpha))); RareMore(drop); }   // 66 px since 2026-10-26
         var top = crafting ? null : Top(values);
         if (top != null && rare != null && string.Equals(top.Name, rare.Name, StringComparison.OrdinalIgnoreCase)) top = null;   // the drop itself is on show above
         int room = 4 - want.Count - (top != null ? 1 : 0);
@@ -188,7 +189,7 @@ public sealed partial class HudTicker : IHudLook
                 {
                     if (kind == "pick" && Age(values, key) < 0.5 && Picks(values).FirstOrDefault(x => x.Id == key) is { } fp) PickPop(t.Body, fp);
                     else if (kind == "top" && newTop) Sheen(t.Body);
-                    else if (kind == "rare") RareBeat(t.Body);
+                    else if (kind == "rare") RareArrived(t.Body, key);
                 }
             }
             t.Place.Margin = new Thickness(0, i == 0 ? 6 : 4, 0, 0);
@@ -199,6 +200,7 @@ public sealed partial class HudTicker : IHudLook
         }
         foreach (var l in _leaving) if (l.Place.Parent == null) _stack.Children.Add(l.Place);
         Glide(before);
+        _stacked = true;
     }
 
     /// <summary>A pickup pushed out by a newer one: it fades where it is, under the stack, and goes.</summary>

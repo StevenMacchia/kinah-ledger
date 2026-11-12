@@ -369,6 +369,8 @@ public partial class MainWindow
         if (state == "paused" && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
         // Share (0.9.3): the sheet open on This session, Last run or This week; share-picture also draws the pictures themselves
         if (state.StartsWith("share-")) OpenShareSample(state);
+        // the hero's rate chart open, live (Ui/MainWindow.RateChart.cs)
+        if (state is "chart" or "chart-hover") ShowChartSample(state);
     }
 
     /// <summary>The chat out of view in a layout render (KL_SHOT_STATE=paused).</summary>
