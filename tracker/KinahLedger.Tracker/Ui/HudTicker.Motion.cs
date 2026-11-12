@@ -140,12 +140,15 @@ public sealed partial class HudTicker
 
     /// <summary>Whether the stack has been drawn before: a rare drop already held when the look is first drawn makes no entrance.</summary>
     bool _stacked;
+    /// <summary>The last rare drop whose toast was made: a toast made again for the same drop makes no second entrance (ids are each drop's own, so never cleared).</summary>
+    string _rareId = "";
 
-    /// <summary>A rare drop's toast just made: its glow beats, and after the look's first draw the card makes its entrance too.</summary>
-    void RareArrived(Border toast)
+    /// <summary>A rare drop's toast just made: its glow beats, and after the look's first draw a new drop makes its entrance too.</summary>
+    void RareArrived(Border toast, string id)
     {
         RareBeat(toast);
-        if (_stacked) HudRare.Enter(toast);
+        if (_stacked && id != _rareId) HudRare.Enter(toast);
+        _rareId = id;
     }
 
     /// <summary>The rare drop held: when its toast is up already, its "+2 more" follows the drops that joined it (the stack isn't drawn again for that).</summary>

@@ -1145,6 +1145,8 @@ public static class WpfApp
                 var cp = HudRare.PartsForTest(card.RareDropForTest);
                 Check(h0 is { Lit: false, Price: "28,000" } && TileScale(h0) == 1 && cp is { Lit: true } && TileScale(cp) is > 0.6 and < 1 && HudTicker.Num(cp.Value.Price) is > 0 and < 28_000,
                     $"motion: Buddy's rare drop makes its entrance, a fifth in (tile at {TileScale(cp):0.00}, price {cp?.Price}); one held on the look's first draw stands still");
+                card.Update(new Dictionary<string, string>(drop) { ["craft"] = "1" }); card.Update(drop);
+                Check(HudRare.PartsForTest(card.RareDropForTest) is { } back && TileScale(back) == 1, "motion: a drop hidden while crafting and shown again in its hold makes no second entrance");
                 var tick = new HudTicker(); tick.Update(v2); tick.Update(drop);
                 var tp = HudRare.PartsForTest(tick.RareToastForTest);
                 Check(tp is { Lit: true } && TileScale(tp) < 1, $"motion: Pop's rare toast makes the same entrance (tile at {TileScale(tp):0.00})");

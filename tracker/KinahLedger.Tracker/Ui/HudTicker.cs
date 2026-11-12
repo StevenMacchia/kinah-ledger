@@ -188,7 +188,7 @@ public sealed partial class HudTicker : IHudLook
                 {
                     if (kind == "pick" && Age(values, key) < 0.5 && Picks(values).FirstOrDefault(x => x.Id == key) is { } fp) PickPop(t.Body, fp);
                     else if (kind == "top" && newTop) Sheen(t.Body);
-                    else if (kind == "rare") RareArrived(t.Body);
+                    else if (kind == "rare") RareArrived(t.Body, key);
                 }
             }
             t.Place.Margin = new Thickness(0, i == 0 ? 6 : 4, 0, 0);

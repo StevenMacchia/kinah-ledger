@@ -36,6 +36,7 @@ public partial class MainWindow
     /// <summary>Called from the window's tick: alerts on pickups counted since the last tick.</summary>
     void AlertTick()
     {
+        ForgetRare(held: false);   // nothing from outside a tick waits for this one's moment (Ui/MainWindow.RareMoment.cs)
         var chat = _watcher.Chat;
         if (chat == null) return;
         var fresh = chat.RecentPickups(12).Where(p => p.At > _alertSeen).OrderBy(p => p.At).ToList();

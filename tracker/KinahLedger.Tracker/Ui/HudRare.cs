@@ -140,9 +140,14 @@ static partial class HudRare
         public UIElement[] Swap { get; set; } = Array.Empty<UIElement>();
         readonly TextBlock _rate = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
         readonly Image _bell = Bell(false);
-        /// <summary>The drop drawn now, and whether the card has drawn before (its first draw never makes an entrance).</summary>
+        /// <summary>
+        /// The drop drawn now; whether the card has drawn before (its first draw never makes an entrance); and the last drop
+        /// it has shown, so one hidden while crafting and shown again in its hold doesn't make its entrance twice (each
+        /// drop's id is its own, so this is never cleared).
+        /// </summary>
         Drop? _shown;
         bool _drawn;
+        string _shownId = "";
         /// <summary>The body's drop as drawn, which its entrance moves (Ui/HudRare.Motion.cs).</summary>
         internal FrameworkElement? Made { get; private set; }
 
@@ -187,7 +192,8 @@ static partial class HudRare
             Body.Child = g;
             Made = g;
             Keep(g, new Parts(tile, label, more, nameRun, figure, d.Price, d.Color));
-            if (enter && !first && was?.Pick.Id != d.Pick.Id) Enter(g);
+            if (enter && !first && _shownId != d.Pick.Id) Enter(g);
+            _shownId = d.Pick.Id;
         }
 
         /// <summary>The hour's rate in the head while the drop shows ("1.27M /h"), as the Ticker's pill says it.</summary>

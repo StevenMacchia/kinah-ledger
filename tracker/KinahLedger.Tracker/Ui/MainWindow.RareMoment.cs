@@ -28,6 +28,8 @@ public partial class MainWindow
     RareFind? _rareLead;
     int _rareMore;
     DateTime _rareJoinUntil = DateTime.MinValue;
+    /// <summary>Whether the lead was taken in a demo: a lead from before the window turned into a demo (or out of one) is forgotten.</summary>
+    bool _rareLeadDemo;
 
     /// <summary>The moment takes this long, start to gone.</summary>
     const double MomentMs = 1500;
@@ -48,6 +50,19 @@ public partial class MainWindow
     void NoteRare(RareFind f) => _rareTick.Add(f);
 
     /// <summary>
+    /// No drop held for the moment and none waiting (AlertTick's start, a character switch): a drop from before can't lead
+    /// the next moment or count into its "+2 more".
+    /// </summary>
+    void ForgetRare(bool held = true)
+    {
+        _rareTick.Clear();
+        if (!held) return;
+        _rareLead = null;
+        _rareMore = 0;
+        _rareJoinUntil = DateTime.MinValue;
+    }
+
+    /// <summary>
     /// AlertTick's end: the tick's drops become one moment. The best grade leads (the first of equals); while a lead is
     /// held a better one takes over and plays, a lesser one is counted with it. The panel is held on the lead with the
     /// count ("rareMore"), since AlertFor held each drop in turn.
@@ -60,6 +75,7 @@ public partial class MainWindow
         _rareTick.Clear();
         var now = DateTime.UtcNow;
         bool leads = true;
+        if (_rareLeadDemo != _demo) { _rareLead = null; _rareLeadDemo = _demo; }
         if (_rareLead != null && now < _rareJoinUntil)
         {
             more += 1 + _rareMore;
@@ -97,13 +113,14 @@ public partial class MainWindow
         var layer = _momentLayer;
         if (_moment != null) { Motion.Halt(_moment.Stage); layer.Children.Remove(_moment.Stage); }
         var width = Math.Min(MomentWidth, Math.Max(MomentMinWidth, FitHost.ActualWidth - 2 * MomentGutter));
-        var card = new RareMomentCard(f, more, width, QItemIcon(f.Name, f.Id, MomentTile, round: false, grade: f.Grade));
+        var card = new RareMomentCard(f, more, width, QItemIcon(f.Name, f.Id, MomentTile, round: false, grade: f.Grade), VisualTreeHelper.GetDpi(this).DpiScaleX);
         _moment = card;
         layer.Visibility = Visibility.Visible;
         layer.Children.Add(card.Stage);
         card.Stage.Measure(new Size(width, double.PositiveInfinity));
         Canvas.SetLeft(card.Stage, -width / 2);
         Canvas.SetTop(card.Stage, -card.Stage.DesiredSize.Height / 2);
+        card.Step(0);
         Motion.Play(card.Stage, MomentMs, card.Step, () =>
         {
             layer.Children.Remove(card.Stage);
@@ -130,7 +147,8 @@ public partial class MainWindow
         readonly string _price;
         readonly double _width;
 
-        public RareMomentCard(RareFind f, int more, double width, FrameworkElement tile)
+        /// <param name="dpi">The screen's scale, which the shadow's cached picture is drawn at.</param>
+        public RareMomentCard(RareFind f, int more, double width, FrameworkElement tile, double dpi)
         {
             _width = width;
             _price = f.Price;
@@ -203,9 +221,16 @@ public partial class MainWindow
             const double corner = 16, edge = 1.5;
             face.SizeChanged += (_, e) => face.Clip = new RectangleGeometry(new Rect(e.NewSize), corner - edge, corner - edge);
             var card = new Border { CornerRadius = new CornerRadius(corner), BorderThickness = new Thickness(edge), Child = face };
-            // its lift off the page: a soft shadow under it, on a plate of its own so the card's words stay sharp
-            var plate = new Border { CornerRadius = new CornerRadius(corner), Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = MomentShadowBlur, ShadowDepth = MomentShadowDepth, Direction = 270, Opacity = MomentShadowOpacity } };
-            plate.SetResourceReference(Border.BackgroundProperty, "Card");
+            // its lift off the page: a soft shadow under it, on a plate of its own so the card's words stay sharp. The plate is
+            // drawn once into a cached picture (at the screen's scale; the card is never shown past 100%, and the window's fit
+            // only shrinks it), so the blur isn't worked out again on each frame while the card grows and fades
+            var shade = new Border
+            {
+                CornerRadius = new CornerRadius(corner),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = MomentShadowBlur, ShadowDepth = MomentShadowDepth, Direction = 270, Opacity = MomentShadowOpacity },
+            };
+            shade.SetResourceReference(Border.BackgroundProperty, "Card");
+            var plate = new Border { Child = shade, CacheMode = new BitmapCache { RenderAtScale = Math.Max(1, dpi), SnapsToDevicePixels = true } };
             card.SetResourceReference(Border.BackgroundProperty, "Card");
             card.SetResourceReference(Border.BorderBrushProperty, tone);
 
@@ -221,11 +246,17 @@ public partial class MainWindow
             };
         }
 
-        /// <summary>"+2 more" while more came with the drop; none for one alone.</summary>
+        /// <summary>The course point the pill starts to fade in at: <see cref="MoreFrom"/>, or later when more came during the moment.</summary>
+        double _moreAt = MoreFrom, _at;
+        const double MoreFrom = 0.3, MoreFade = 0.15;
+
+        /// <summary>"+2 more" while more came with the drop; none for one alone. A pill that comes up during the moment fades in from there.</summary>
         public void SetMore(int more)
         {
             _moreText.Text = $"+{more} more";
+            bool comes = more > 0 && _morePill.Visibility != Visibility.Visible;
             _morePill.Visibility = more > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (comes && _at > MoreFrom) { _moreAt = _at; _morePill.Opacity = 0; }
         }
 
         /// <summary>
@@ -236,6 +267,7 @@ public partial class MainWindow
         /// </summary>
         public void Step(double p)
         {
+            _at = p;
             double gone = Motion.Out(Motion.Span(p, 0.82, 1));
             Stage.Opacity = Motion.Out(Motion.Span(p, 0, 0.16)) * (1 - gone);
             _scale.ScaleX = _scale.ScaleY = 0.9 + 0.1 * Motion.Out(Motion.Span(p, 0, 0.24));
@@ -245,7 +277,7 @@ public partial class MainWindow
             Motion.Burst(_ring, Motion.Span(p, 0.08, 0.55), MomentRingGrow);
             _aura.Opacity = Motion.Out(Motion.Span(p, 0, 0.14)) * (1 - 0.5 * Motion.Out(Motion.Span(p, 0.14, 0.7)));
             _label.Opacity = Motion.Out(Motion.Span(p, 0.1, 0.3));
-            _morePill.Opacity = Motion.Out(Motion.Span(p, 0.3, 0.45));
+            _morePill.Opacity = Motion.Out(Motion.Span(p, _moreAt, _moreAt + MoreFade));
             double s = Motion.Span(p, 0.2, 0.66);
             _sheen.Opacity = s > 0 && s < 1 ? 1 : 0;
             _sheenAt.X = -MomentSheenWidth + (_width + 2 * MomentSheenWidth) * Motion.Out(s);
@@ -295,8 +327,7 @@ public partial class MainWindow
     /// </summary>
     internal (string Rare, string More, bool Moment) RareTickForTest(params string[] whats)
     {
-        _rareTick.Clear();
-        _rareLead = null;
+        ForgetRare();
         foreach (var w in whats) AlertFor(w, DateTime.UtcNow);
         RareTickDone();
         return (_hudRare.GetValueOrDefault("rare", ""), _hudRare.GetValueOrDefault("rareMore", ""), _moment != null);

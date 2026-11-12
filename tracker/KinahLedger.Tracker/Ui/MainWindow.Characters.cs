@@ -127,6 +127,7 @@ public partial class MainWindow
     {
         if (_demo || _switchingCharacter || Characters.Current?.Id == c.Id) return;
         _switchingCharacter = true;
+        ForgetRare();   // the other character's drop never leads this one's moment (Ui/MainWindow.RareMoment.cs)
         try
         {
             CrashLog.Note($"character: counting for {Characters.Label(c)} now (was {(Characters.Current is { } was ? Characters.Label(was) : "nobody")})");

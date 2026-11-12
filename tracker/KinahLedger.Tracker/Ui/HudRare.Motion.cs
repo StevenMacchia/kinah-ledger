@@ -49,7 +49,7 @@ static partial class HudRare
         host.Children.Add(ring);
         var light = Motion.SweepBrush(p.Color);
         p.Name.Foreground = light;
-        Motion.Play(tile, EnterMs, t =>
+        void Step(double t)
         {
             scale.ScaleX = scale.ScaleY = TileFrom + (1 - TileFrom) * Motion.Out(Motion.Span(t, 0, 0.35));
             tile.Opacity = Motion.Out(Motion.Span(t, 0, 0.2));
@@ -57,7 +57,9 @@ static partial class HudRare
             p.Label.Opacity = Motion.Out(Motion.Span(t, 0.1, 0.35));
             Motion.Sweep(light, Motion.Span(t, 0.15, 0.8));
             if (p.Figure != null) p.Figure.Text = Motion.RollIn(p.Price, Motion.Span(t, 0, 0.6));
-        }, () =>
+        }
+        Step(0);   // the first frame drawn is the entrance's start, not the card as it settles
+        Motion.Play(tile, EnterMs, Step, () =>
         {
             tile.Opacity = 1;
             tile.ClearValue(UIElement.RenderTransformProperty);
