@@ -396,7 +396,7 @@ public partial class MainWindow
     {
         bool was = ChartBox.Visibility == Visibility.Visible;
         ChartBox.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        if (on && !was) Motion.Reveal(RateCanvas, RateCanvas.Width, RateCanvas.Height);
+        if (on && !was) { _rateChart?.Open(); Motion.Reveal(RateCanvas, RateCanvas.Width, RateCanvas.Height); }
     }
 
     /// <summary>

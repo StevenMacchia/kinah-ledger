@@ -41,6 +41,16 @@ sealed class RateChart
     const byte FillTop = 0x99, FillMid = 0x26;
     const double FillMidAt = 0.55, LightFill = 0.5;
 
+    /// <summary>A look whose background is under this luminance (0 to 255) is a dark one.</summary>
+    const double DarkBelow = 128;
+
+    /// <summary>
+    /// The look's gold and background, held on the fill by resource reference: a change of look sets them, and the fill is
+    /// painted again at once in the new gold (<see cref="Repaint"/>).
+    /// </summary>
+    static readonly DependencyProperty GoldProperty = DependencyProperty.RegisterAttached("Gold", typeof(Brush), typeof(RateChart), new PropertyMetadata(null, Repaint));
+    static readonly DependencyProperty BgProperty = DependencyProperty.RegisterAttached("Bg", typeof(Brush), typeof(RateChart), new PropertyMetadata(null, Repaint));
+
     /// <summary>The best-here line never sits closer than this to the box's top or bottom, so its label stays in.</summary>
     const double BestInset = 8;
 
@@ -78,11 +88,11 @@ sealed class RateChart
     Point[] _from = Array.Empty<Point>(), _to = Array.Empty<Point>(), _end = Array.Empty<Point>();
     double _bestFrom, _bestTo;
     bool _wasLive;
-    // the minute under the mouse (an index into _samples; -1: none) and where across it was, to pick again after the line moved
+    // while the chart is closed: the line and best of the last draw, drawn when it opens (Open)
+    (RateLine Line, double Best)? _closed;
+    // the minute under the mouse (an index into _samples; -1: none) and where the mouse is across, to pick again after the line moved
     int _hovered = -1;
-    double _hoveredX;
-    Color _fillGold;
-    bool _fillDark;
+    double _mouseX;
 
     public RateChart(Canvas canvas, Path fill, Polyline line, Ellipse dot, Line best, TextBlock bestLbl)
     {
@@ -90,6 +100,8 @@ sealed class RateChart
         _w = canvas.Width; _h = canvas.Height;
         _fillFig.Segments.Add(_fillSeg);
         _fill.Data = new PathGeometry(new[] { _fillFig });
+        _fill.SetResourceReference(BgProperty, "Bg");
+        _fill.SetResourceReference(GoldProperty, "Gold");
         _dot.RenderTransformOrigin = new Point(0.5, 0.5);
         _dot.RenderTransform = _dotScale;
         _ring.SetResourceReference(Shape.StrokeProperty, "Gold");
@@ -111,19 +123,23 @@ sealed class RateChart
         canvas.Children.Add(_hover);
         // the box's empty part takes the mouse too, so the crosshair follows anywhere over the chart
         canvas.Background ??= Brushes.Transparent;
-        canvas.MouseMove += (_, e) => HoverAt(Nearest(e.GetPosition(_canvas).X));
+        canvas.MouseMove += (_, e) => { _mouseX = e.GetPosition(_canvas).X; Hover(Nearest(_mouseX)); };
         canvas.MouseLeave += (_, _) => Unhover();
     }
 
     /// <summary>
     /// Draws the line for <paramref name="line"/>'s samples (two or more), with <paramref name="best"/> (0: none) as the dashed
     /// line on the same scale. <paramref name="live"/>: the chart is open. A draw that follows an open one moves to the new
-    /// samples (a minute landed, a pickup, the scale changed); any other is set as it is, since the chart just opening draws
-    /// itself in (<see cref="Motion.Reveal"/>) and a closed one shows nothing.
+    /// samples (a minute landed, a pickup, the scale changed); the first one after the chart opened is set as it is, since the
+    /// chart draws itself in (<see cref="Motion.Reveal"/>). A closed chart draws nothing until it opens (<see cref="Open"/>),
+    /// and an open one whose samples didn't change (the same count, first and last) does nothing at all.
     /// </summary>
     public void Draw(RateLine line, double best, bool live)
     {
-        var samples = line.Samples.ToArray();
+        if (!live) { Close(line, best); return; }
+        var now = line.Samples;
+        if (_wasLive && now.Count == _samples.Length && best == _bestRate && now[0] == _samples[0] && now[^1] == _samples[^1]) return;
+        var samples = now.ToArray();
         var pts = line.Points(_w, _h).Select(p => new Point(p.X, p.Y)).ToArray();
         var minutes = samples.Select(s => s.Minute).ToArray();
         double lo = samples.Min(s => s.Rate), hi = samples.Max(s => s.Rate);
@@ -134,11 +150,9 @@ sealed class RateChart
         _best.Visibility = _bestLbl.Visibility = hasBest ? Visibility.Visible : Visibility.Collapsed;
         if (hasBest) _bestLbl.Text = "best here " + Amounts.Short(best);
         _bestRate = best;
-        bool moving = live && _wasLive && Motion.On;
-        _wasLive = live;
+        bool moving = _wasLive && Motion.On;
+        _wasLive = true;
         _samples = samples;
-        RefreshFill();
-        if (!live) HideHover();
         if (bestNew) _bestY = bestY;
         if (!moving || !Plan(minutes, pts, out var from, out var to, out int dropped, out bool added)) { Settle(pts, minutes, bestY); return; }
         // a course under way toward these same minutes: it ends where this draw says (a tick's nudge), or starts again from
@@ -206,7 +220,7 @@ sealed class RateChart
         _shown = pts; _minutes = minutes; _lead = 0; _bestY = bestY;
         if (same) { if (_hovered >= 0) PlaceHover(); return; }
         Apply();
-        if (_hovered >= 0) HoverAt(Nearest(_hoveredX));
+        if (_hovered >= 0) Hover(Nearest(_mouseX));
     }
 
     /// <summary>What is shown, put on the screen: the line's and the fill's points (in place, so a course allocates nothing a frame), the head dot, its ring, the best-here line and the crosshair.</summary>
@@ -233,20 +247,20 @@ sealed class RateChart
     /// <summary>The head dot's centre across: the newest minute's, kept inside the box at the right edge.</summary>
     double HeadX() => Math.Min(_shown[^1].X, _w - DotR);
 
-    /// <summary>The fill in the look's gold, from soft at the line to clear at the bottom; built again only when the look changed.</summary>
-    void RefreshFill()
+    /// <summary>The fill in the look's gold, from soft at the line to clear at the bottom (softer on a light look); painted again when the look changes.</summary>
+    static void Repaint(DependencyObject d, DependencyPropertyChangedEventArgs _)
     {
-        var gold = (_canvas.TryFindResource("Gold") as SolidColorBrush)?.Color ?? Colors.Gold;
-        bool dark = Skins.IsDark(Skins.Current);
-        if (_fill.Fill != null && gold == _fillGold && dark == _fillDark) return;
-        _fillGold = gold; _fillDark = dark;
+        if (d is not Shape fill || fill.GetValue(GoldProperty) is not SolidColorBrush goldBrush) return;
+        var gold = goldBrush.Color;
+        var bg = (fill.GetValue(BgProperty) as SolidColorBrush)?.Color ?? Colors.Black;
+        bool dark = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B < DarkBelow;
         double k = dark ? 1 : LightFill;
         var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
         g.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(FillTop * k), gold.R, gold.G, gold.B), 0));
         g.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(FillMid * k), gold.R, gold.G, gold.B), FillMidAt));
         g.GradientStops.Add(new GradientStop(Color.FromArgb(0, gold.R, gold.G, gold.B), 1));
         g.Freeze();
-        _fill.Fill = g;
+        fill.Fill = g;
     }
 
     /* ---------------- the head dot's pop ---------------- */
@@ -284,15 +298,21 @@ sealed class RateChart
         return best;
     }
 
-    /// <summary>The crosshair on the <paramref name="i"/>th minute with its time and rate, fading in if it wasn't up (-1: away).</summary>
+    /// <summary>For a render and the self-test: the mouse as if on the <paramref name="i"/>th minute.</summary>
     internal void HoverAt(int i)
+    {
+        if (i >= 0 && i < _samples.Length) _mouseX = _shown[_lead + i].X;
+        Hover(i);
+    }
+
+    /// <summary>The crosshair on the <paramref name="i"/>th minute with its time and rate, fading in if it wasn't up (-1: away).</summary>
+    void Hover(int i)
     {
         if (i < 0 || i >= _samples.Length) { Unhover(); return; }
         // the mouse moving along the same minute: nothing to do (a draw keeps it up to date)
         if (i == _hovered) return;
         bool was = _hovered >= 0;
         _hovered = i;
-        _hoveredX = _shown[_lead + i].X;
         PlaceHover();
         if (!was) Fade(1);
     }
@@ -345,14 +365,36 @@ sealed class RateChart
     /// <summary>No line to draw (under two samples): everything under way stops, and the next line is drawn as it is.</summary>
     public void Forget()
     {
-        if (_shown.Length == 0 && !_wasLive) return;
-        Motion.Halt(_line); Motion.Halt(_dot);
-        _dotScale.ScaleX = _dotScale.ScaleY = 1;
-        _ring.Visibility = Visibility.Collapsed;
-        HideHover();
+        if (_shown.Length == 0 && !_wasLive && _closed == null) return;
+        Motion.Halt(_line); StopPop(); HideHover();
         _shown = Array.Empty<Point>(); _minutes = Array.Empty<DateTime>(); _lead = 0;
         _samples = Array.Empty<(DateTime, double)>();
+        _wasLive = false; _closed = null;
+    }
+
+    /// <summary>The chart closed: whatever was under way stops, and the line waits to be drawn as it is when it opens again.</summary>
+    void Close(RateLine line, double best)
+    {
+        _closed = (line, best);
+        if (!_wasLive) return;
         _wasLive = false;
+        Motion.Halt(_line); StopPop(); HideHover();
+    }
+
+    /// <summary>The chart opening (a click on "chart"): its line drawn as it is now, before it draws itself in.</summary>
+    public void Open()
+    {
+        if (_closed is not { } c) return;
+        _closed = null;
+        if (c.Line.Samples.Count >= 2) Draw(c.Line, c.Best, live: true);
+    }
+
+    /// <summary>The head dot's pop stopped: the dot at rest, the ring gone.</summary>
+    void StopPop()
+    {
+        Motion.Halt(_dot);
+        _dotScale.ScaleX = _dotScale.ScaleY = 1;
+        _ring.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>For a render of the motion: the line as if it had ended a minute earlier and its newest minute just landed.</summary>
