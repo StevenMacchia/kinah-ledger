@@ -1,0 +1,16 @@
+{
+  "pending": false,
+  "needs_ocr": true,
+  "name": "Urugugu Canyon reward table, 2026-11-11 17:29:18 (the frame 0.10.53 kept as -reward-table, its first read): 27 slots (8, 8, 8, 3) over the planked floor. 0.10.53 read this table as 34 and 39 slots (Steven: \"credit for a shit ton of loot ... like gold bows\"): the table slid in after its header, the first row was looked for only 3 px under the header's estimate, and a box of planks past the row of three stood out like a slot's outline, so the row of three read as full and two rows of floor were filed as slots. The rows are now found by three rows' edges together, and the slots are the first N boxes, N where the running sum of each box's slot score is highest (a slot's top corners show its smooth dark backing; planks don't). Read here with the header's estimate 12 px high (top_shift -12), as the live read had it: 0.10.53 reads 35 slots so. Slot 2, the Divine Canyon Pauldrons, shows no count, but the pink feathers in its corner read as 44 (as 0.10.53 read them too): the session holds gear to 1 (\"gear never stacks\"), so it is kept here as read; a count reader that leaves it empty should change it to 1",
+  "source": "%LocalAppData%/KinahLedger/reward-shots/20261111-172918-Urugugu-Canyon-reward-table.jpg (5120x2160): everything but the title, the grid and the two rows of floor under it blacked out (no player names in what is left)",
+  "game": { "w": 5120, "h": 2160 },
+  "frames": [ { "f": "table.jpg", "k": "table", "t": "2026-11-11T22:29:18Z", "x": 0, "y": 0, "top_shift": -12 } ],
+  "expect": {
+    "table": [
+      { "n": 1 }, { "n": 44 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
+      { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 4000, "name": "Enhance Stone" }, { "n": 600000, "name": "Kina" }, { "n": 1 },
+      { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 }, { "n": 1 },
+      { "n": 4 }, { "n": 5, "name": "Soul Codex" }, { "n": 14, "name": "Silentium" }
+    ]
+  }
+}

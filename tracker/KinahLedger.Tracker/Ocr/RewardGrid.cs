@@ -272,47 +272,118 @@ public static class RewardGrid
     /// </summary>
     public static async Task<List<Slot>> ReadAsync(Bitmap frame, int top)
     {
+        var g = Find(frame, top);
+        CrashLog.Note(g.Said);
+        var slots = new List<Slot>();
+        foreach (var box in g.Boxes) slots.Add(await ReadSlotAsync(frame, box));
+        return slots;
+    }
+
+    /// <summary>Where the table's slots are: the first row's top and left, each slot's box in reading order, and a line saying how the boxes were judged.</summary>
+    public sealed record Layout(int Top, int Left, List<Rectangle> Boxes, string Said);
+
+    /// <summary>
+    /// The table's slots found in a frame, without reading them (<see cref="ReadAsync"/> reads each one). The game fills the
+    /// table row by row from the top left, eight to a row, so its slots are the first N boxes in reading order: each box
+    /// gets a score for how much it looks like a slot (<see cref="Evidence"/>), and N is where the running sum of the scores
+    /// is highest. A box of floor that stands out somewhere past the table can't extend it unless the boxes between look
+    /// like slots too (Steven, 2026-11-11 17:29 Urugugu: 27 slots read as 34 and 39, "like gold bows"; the rule this
+    /// replaces took every row above the lowest box that stood out as full). A table of fewer than eight is drawn centred
+    /// in one row (the Daeva Pass level reward, an instant clear's Kinah): it isn't read here, so N under 8 reads nothing.
+    /// </summary>
+    public static Layout Find(Bitmap frame, int top)
+    {
         int h = frame.Height, s = (int)Math.Round(SlotH * h), p = (int)Math.Round(PitchH * h);
         int x0 = frame.Width / 2 - 4 * p + (p - s) / 2;
-        // the first row's top edge, found where it is: the header's line gives it within a few pixels, and 7 px low put the
-        // corners in the gap (2026-10-23 Urugugu: the gold slot read Common, its "4" cut off, the row ended at slot 7)
+        // the first row's top edge, found where it is (RefineTop)
         top = RefineTop(frame, top, x0, s, p);
         // the outline test is made where the slots' sides are sharpest, within 6 px of the centred estimate: two pixels off
         // put it on the slot's own backing (2026-10-23, the Urugugu picture is 5117 wide, so the centre gave 1972 for 1974
         // and the row ended at its seventh slot). The slots are still read at the estimate, where their icons and grades
         // were measured (read at 1974, three Urugugu slots lost their names)
         int xb = RefineLeft(frame, top, x0, s, p);
-        var slots = new List<Slot>();
-        // The game fills the table row by row, eight to a row, so only the last row is short. A box whose outline stands out
-        // all round (Border) is surely a slot; a slot over ground its own colour may not stand out (2026-10-23: the grey orb
-        // on dark earth 37, blue slots over the water 20 to 38, the boxes past the grid 0 to 30). So: the last row is the
-        // lowest with a clear slot, every row above it is full, and the last row runs to its last clear slot
-        var clearAt = new int[6];   // per row: one past its last clear slot, 0 when none
-        int lastRow = -1;
-        for (int row = 0; row < 6; row++)
+        var looks = new List<Look>();
+        for (int row = 0; row < 6 && top + row * p + s + 4 <= h; row++)
+            for (int col = 0; col < 8; col++) looks.Add(LookAt(frame, new Rectangle(xb + col * p, top + row * p, s, s)));
+        // the backing of the plain grey slots, the most of any table: the middle of the smooth top corners of the boxes that
+        // stand out
+        var plain = looks.Where(l => l.Border >= 40).SelectMany(l => l.Corners.Take(2)).Where(c => c.Smooth).Select(c => c.Mean).OrderBy(m => m).ToList();
+        double? backing = plain.Count > 0 ? plain[plain.Count / 2] : null;
+        double sum = 0, best = 0; int n = 0;
+        var scores = new List<double>();
+        for (int i = 0; i < looks.Count; i++)
         {
-            int y = top + row * p;
-            if (y + s + 4 > h) break;
-            for (int col = 0; col < 8; col++)
-                if (Border(frame, new Rectangle(xb + col * p, y, s, s)) >= BorderMin) clearAt[row] = col + 1;
-            if (clearAt[row] > 0) lastRow = row;
+            double e = Evidence(frame, looks[i], backing);
+            scores.Add(e); sum += e;
+            if (sum > best) { best = sum; n = i + 1; }
         }
-        // ...but a row whose clear slots end three boxes or more before its end is the table's last row, whatever stands out
-        // below it (2026-10-25 13:53 Vakron: 29 slots, 8, 8, 8 and 5, read as 44: nameplates and health bars two rows under
-        // the grid stood out like a slot, so the short row was read as full and 15 boxes of the world were filed as slots)
-        for (int row = 0; row < lastRow; row++)
-            if (clearAt[row] is > 0 and <= 5) { lastRow = row; break; }
-        for (int row = 0; row <= lastRow; row++)
+        var rows = Enumerable.Range(0, (scores.Count + 7) / 8).Select(r => string.Join(" ", scores.Skip(r * 8).Take(8).Select(e => e.ToString("+0.#;-0.#;0"))));
+        // a table of eight or more starts with a full row: one whose boxes mostly don't look like slots is the rows found in
+        // the wrong place (the header further off than RefineTop reaches: 2026-11-05 15:13 with a reach 15 px down and the
+        // estimate 16 px high, rows found 38 px high read as 27 slots for 26), and its count would only be luck. Every table
+        // counted by eye had 7 or 8 there, 5 under a pop-up
+        int firstRow = scores.Take(8).Count(e => e > 0);
+        string why = n is > 0 and < 8 ? ", less than a row: not read" : n >= 8 && firstRow < 5 ? $", but only {firstRow} of the first row look like slots: not read" : "";
+        var said = $"reward table (first row at y {top}, x {xb}): {n} slots{why}; box scores {string.Join(" | ", rows)}";
+        if (n < 8 || firstRow < 5) n = 0;
+        var boxes = Enumerable.Range(0, n).Select(i => new Rectangle(x0 + i % 8 * p, top + i / 8 * p, s, s)).ToList();
+        return new Layout(top, xb, boxes, said);
+    }
+
+    /// <summary>A corner patch of a box: how much its brightness spreads, and its mean; a slot's backing is smooth and dark there.</summary>
+    internal readonly record struct Patch(double Spread, double Mean)
+    {
+        /// <summary>A slot's backing (2026-11-11, 208 saved tables: 95% of slots' top corners spread under 3.6; grades from grey 24 to teal 58).</summary>
+        public bool Smooth => Spread < 5 && Mean is >= 12 and <= 80;
+    }
+
+    /// <summary>What a box shows: its outline (<see cref="Border"/>) and its four corners (top left, top right, bottom left, bottom right).</summary>
+    internal sealed record Look(Rectangle Box, double Border, Patch[] Corners);
+
+    internal static Look LookAt(Bitmap f, Rectangle b) => new(b, Border(f, b), Corners(f, b));
+
+    /// <summary>
+    /// How much a box looks like a slot, as a score the running sum in <see cref="Find"/> adds up: plus for a slot, minus
+    /// for the world. Measured on 208 saved tables of 2026-11-04 to 11-11, each counted by eye (kinah-bench/reward-tables):
+    /// a slot's top corners show its backing, smooth and dark (art reaches one corner at times, rarely both), the world's
+    /// mostly don't; a slot's outline stands out (<see cref="Border"/> 20 and up), and dark ground under a grey slot is the
+    /// one place it doesn't (Fire Temple, Mirror Altar: slots 9 to 19). There a slot is told by a top corner matching the
+    /// table's own grey backing (<paramref name="backing"/>, within 5) and a smooth bottom corner, which smooth dark ground
+    /// beside the table doesn't have together.
+    /// </summary>
+    internal static double Evidence(Bitmap f, Look l, double? backing)
+    {
+        bool corner = l.Corners[0].Smooth || l.Corners[1].Smooth;
+        // both top corners covered: the world, or a slot whose art or a glare reaches both (a fading teal slot over lava,
+        // 2026-11-10 17:14, outline 100); a strong outline alone is half a vote
+        if (!corner) return l.Border >= 60 ? 0.5 : -2;
+        if (l.Border >= 20) return 2;
+        bool matches = backing is double bk && l.Corners.Take(2).Any(c => c.Smooth && Math.Abs(c.Mean - bk) <= 5)
+                       && Math.Min(l.Corners[2].Spread, l.Corners[3].Spread) < 8;
+        if (!matches) return l.Border >= 10 ? -0.5 : -2;
+        if (l.Border >= 10) return 0.5;
+        // no outline at all but a grey slot's corners: its art must stand out from the gaps round it
+        return Contrast(f, l.Box) >= 100 ? 0 : -2;
+    }
+
+    /// <summary>The four corner patches of a box (top left, top right, bottom left, bottom right): 10 px squares 4 px in from its sides.</summary>
+    internal static Patch[] Corners(Bitmap f, Rectangle b)
+    {
+        var at = new[] { (b.Left + 4, b.Top + 4), (b.Right - 14, b.Top + 4), (b.Left + 4, b.Bottom - 14), (b.Right - 14, b.Bottom - 14) };
+        var res = new Patch[4];
+        for (int i = 0; i < 4; i++)
         {
-            int y = top + row * p;
-            int found = row < lastRow ? 8 : clearAt[row];
-            for (int col = 0; col < found; col++)
-            {
-                slots.Add(await ReadSlotAsync(frame, new Rectangle(x0 + col * p, y, s, s)));
-            }
-            if (found < 8) break;   // a short row is the last one, and a row with none ends the grid
+            double sum = 0, sum2 = 0; int n = 0;
+            for (int y = at[i].Item2; y < at[i].Item2 + 10; y++)
+                for (int x = at[i].Item1; x < at[i].Item1 + 10; x++)
+                {
+                    if (x < 0 || y < 0 || x >= f.Width || y >= f.Height) continue;
+                    var c = f.GetPixel(x, y); double v = (c.R + c.G + c.B) / 3.0; sum += v; sum2 += v * v; n++;
+                }
+            if (n == 0) { res[i] = new Patch(255, 0); continue; }
+            double m = sum / n; res[i] = new Patch(Math.Sqrt(Math.Max(0, sum2 / n - m * m)), m);
         }
-        return slots;
+        return res;
     }
 
     /// <summary>
@@ -495,9 +566,6 @@ public static class RewardGrid
         }.Max();
     }
 
-    /// <summary>A slot's outline stands out at least this much (see <see cref="Border"/>).</summary>
-    public const double BorderMin = 40;
-
     /// <summary>
     /// How much a box's outline stands out all round: the colour difference between a pixel 3 px inside the box and one 4 px
     /// outside, at points along all four sides, and the lower quartile of those (most of the outline must differ). A slot's
@@ -565,20 +633,56 @@ public static class RewardGrid
         return best;
     }
 
-    /// <summary>The first row's top: from 15 px above the estimate to 3 px below it, the line where the eight boxes' top edges are sharpest.</summary>
+    /// <summary>
+    /// The first row's top: from 35 px above the estimate to 25 px below it, the line where the first three rows' boxes have
+    /// the sharpest top and bottom edges, all eight boxes of each; then, within 2 px of that, the line where the first row's
+    /// top edges alone are sharpest, where the slots were read before (a pixel off, the 2026-10-23 Urugugu necklace's icon
+    /// missed its sure distance). The table slides in after "Reward collected." shows, so the header can be well off
+    /// (2026-11-11 17:29 Urugugu, 10 px; 2026-11-06 11:56 Ferocious Horn Den, 20 px), and the search reached only 15 up and
+    /// 3 down, so the rows were read across the gaps. Three rows' edges together: a line 13 px off puts one row's bottom edge
+    /// on the next row's top, so it has half the edges of the right one, where one row's top edges alone lost to the bright
+    /// tops of the art inside the slots (Vakron, y 345 for 331) and to the bottom edges a gap lower (2026-11-09 13:21
+    /// Bakarmas, y 342 for 330). On 208 saved tables, estimates 20 px off either way gave the same counts but for a few
+    /// slots short, never one too many.
+    /// </summary>
     internal static int RefineTop(Bitmap f, int top, int x0, int s, int p)
     {
         int best = top; double bestScore = -1;
-        // the header puts the grid a few pixels low, never high (Urugugu 335 for 327, Vakron 337 for 331): searching below it
-        // found the bright tops of the art inside the slots instead (Vakron, y 345), so the search reaches up 15 and down 3
-        for (int y = top - 15; y <= top + 3; y++)
+        for (int y = top - 35; y <= top + 25; y++)
+        {
+            if (y - 5 < 0 || y + 2 * p + s + 3 >= f.Height) continue;
+            double score = 0;
+            for (int row = 0; row < 3; row++)
+                for (int col = 0; col < 8; col++)
+                {
+                    var box = new Rectangle(x0 + col * p, y + row * p, s, s);
+                    score += TopEdge(f, box) + BottomEdge(f, box);
+                }
+            if (score > bestScore) { bestScore = score; best = y; }
+        }
+        int fine = best; bestScore = -1;
+        for (int y = best - 2; y <= best + 2; y++)
         {
             if (y - 5 < 0 || y + s >= f.Height) continue;
             double score = 0;
             for (int col = 0; col < 8; col++) score += TopEdge(f, new Rectangle(x0 + col * p, y, s, s));
-            if (score > bestScore) { bestScore = score; best = y; }
+            if (score > bestScore) { bestScore = score; fine = y; }
         }
-        return best;
+        return fine;
+    }
+
+    /// <summary>How sharply the colour changes across a box's bottom edge: the line just inside against the line just outside (<see cref="TopEdge"/>'s twin).</summary>
+    internal static double BottomEdge(Bitmap f, Rectangle b)
+    {
+        int yIn = b.Bottom - 3, yOut = b.Bottom + 2;
+        if (yIn < 0 || yOut >= f.Height) return 0;
+        double sum = 0; int n = 0;
+        for (int x = b.Left + b.Width / 6; x < b.Right - b.Width / 6; x += 3)
+        {
+            var a = f.GetPixel(x, yIn); var o = f.GetPixel(x, yOut);
+            sum += Math.Abs(a.R - o.R) + Math.Abs(a.G - o.G) + Math.Abs(a.B - o.B); n++;
+        }
+        return n == 0 ? 0 : sum / n;
     }
 
     /// <summary>The backing's colour: the four corners averaged.</summary>
