@@ -1424,9 +1424,9 @@ public static class WpfApp
             var own = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Gold);
             var cu = new System.Windows.Controls.TextBlock { Foreground = own };
             var count = Motion.CountUp(cu, 1000, N0, System.Windows.Media.Colors.Lime);
-            count(0.5); string half = cu.Text; bool lit = !ReferenceEquals(cu.Foreground, own);
+            count(0.5); string half = cu.Text; bool tinted = !ReferenceEquals(cu.Foreground, own);
             count(1);
-            Check(half == "875" && lit && cu.Text == "1,000" && ReferenceEquals(cu.Foreground, own), $"motion: a figure counts up from nothing, eased and tinted, and ends in its own brush ({half} then {cu.Text})");
+            Check(half == "875" && tinted && cu.Text == "1,000" && ReferenceEquals(cu.Foreground, own), $"motion: a figure counts up from nothing, eased and tinted, and ends in its own brush ({half} then {cu.Text})");
             var seqSlot = El();
             var landing = Motion.Landing(seqSlot, "Legend", System.Windows.Media.Colors.Red);
             landing(0); double waiting = seqSlot.Opacity;
