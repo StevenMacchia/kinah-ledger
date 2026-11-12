@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 /// - the toasts already in the stack glide down to their new places when a new one comes in on top;
 /// - a new pickup's worth pops and its tile grows in (a Legend, Unique, Epic or Special one glows once in its colour);
 /// - a new top drop gets one gold sheen across it;
-/// - a rare drop's glow beats twice as it lands.
+/// - a rare drop's glow beats twice as it lands, and its card makes its entrance (Ui/HudRare.Motion.cs).
 /// </summary>
 public sealed partial class HudTicker
 {
@@ -138,6 +138,25 @@ public sealed partial class HudTicker
         }, () => { glow.Opacity = 1; body?.ClearValue(UIElement.RenderTransformProperty); });
     }
 
+    /// <summary>Whether the stack has been drawn before: a rare drop already held when the look is first drawn makes no entrance.</summary>
+    bool _stacked;
+
+    /// <summary>A rare drop's toast just made: its glow beats, and after the look's first draw the card makes its entrance too.</summary>
+    void RareArrived(Border toast)
+    {
+        RareBeat(toast);
+        if (_stacked) HudRare.Enter(toast);
+    }
+
+    /// <summary>The rare drop held: when its toast is up already, its "+2 more" follows the drops that joined it (the stack isn't drawn again for that).</summary>
+    void RareMore(HudRare.Drop d)
+    {
+        if (_toasts.TryGetValue(d.Pick.Id, out var t)) HudRare.SetMore(t.Body, d.More);
+    }
+
+    /// <summary>For the options self-test: the rare drop's toast, while one shows.</summary>
+    internal FrameworkElement? RareToastForTest => _toasts.Values.FirstOrDefault(x => x.Kind == "rare")?.Body;
+
     /// <summary>For a render of the motion (KL_MOTION_AT): the pill's figures as if the session had just risen from 85%, the stack's motions held.</summary>
     internal void MotionFrame(IReadOnlyDictionary<string, string> values)
     {
@@ -147,7 +166,7 @@ public sealed partial class HudTicker
         PillGlow();
         foreach (var x in _toasts.Values)
         {
-            if (x.Kind == "rare") RareBeat(x.Body);
+            if (x.Kind == "rare") { RareBeat(x.Body); HudRare.Enter(x.Body); }
             else if (x.Kind == "top") Sheen(x.Body);
         }
         if (_toasts.Values.FirstOrDefault(x => x.Kind == "pick" && _stack.Children.IndexOf(x.Place) >= 0) is { } first && Picks(values).FirstOrDefault() is { } fp) PickPop(first.Body, fp);

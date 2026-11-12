@@ -132,7 +132,7 @@ public sealed partial class HudTicker : IHudLook
         if (note.Length > 0) { var (n, t, s, cv) = (note, tone, sign, clockV); want.Add(("notice|" + n + cv, "notice", () => NoticeToast(n, t, s, HudClockNotice.Parse(cv)))); }
         if (_acc is { } acc) { var check = _accCheck; want.Add(("acc|" + acc + check, "notice", () => NoticeToast(acc, check ? Warn : Mint, check))); }
         var rare = Rare(values);
-        if (HudRare.Of(values) is { } drop) want.Add((drop.Pick.Id, "rare", () => HudRare.TickerToast(drop, _alpha)));   // 66 px since 2026-10-26
+        if (HudRare.Of(values) is { } drop) { want.Add((drop.Pick.Id, "rare", () => HudRare.TickerToast(drop, _alpha))); RareMore(drop); }   // 66 px since 2026-10-26
         var top = crafting ? null : Top(values);
         if (top != null && rare != null && string.Equals(top.Name, rare.Name, StringComparison.OrdinalIgnoreCase)) top = null;   // the drop itself is on show above
         int room = 4 - want.Count - (top != null ? 1 : 0);
@@ -188,7 +188,7 @@ public sealed partial class HudTicker : IHudLook
                 {
                     if (kind == "pick" && Age(values, key) < 0.5 && Picks(values).FirstOrDefault(x => x.Id == key) is { } fp) PickPop(t.Body, fp);
                     else if (kind == "top" && newTop) Sheen(t.Body);
-                    else if (kind == "rare") RareBeat(t.Body);
+                    else if (kind == "rare") RareArrived(t.Body);
                 }
             }
             t.Place.Margin = new Thickness(0, i == 0 ? 6 : 4, 0, 0);
@@ -199,6 +199,7 @@ public sealed partial class HudTicker : IHudLook
         }
         foreach (var l in _leaving) if (l.Place.Parent == null) _stack.Children.Add(l.Place);
         Glide(before);
+        _stacked = true;
     }
 
     /// <summary>A pickup pushed out by a newer one: it fades where it is, under the stack, and goes.</summary>

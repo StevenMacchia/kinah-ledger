@@ -26,5 +26,6 @@ public partial class MainWindow
         }
         if (ChartBox.Visibility == Visibility.Visible) Motion.Reveal(RateCanvas, RateCanvas.Width, RateCanvas.Height);
         if (GoalsHost.Children.OfType<System.Windows.Controls.Border>().FirstOrDefault() is { } row) Motion.Wash(row, "Gold");
+        RareMomentFrame();   // KL_DEMO_RARE: a rare drop's moment over the page (Ui/MainWindow.RareMoment.cs)
     }
 }

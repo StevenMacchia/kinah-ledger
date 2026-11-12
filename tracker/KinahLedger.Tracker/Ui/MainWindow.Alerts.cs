@@ -42,6 +42,7 @@ public partial class MainWindow
         if (fresh.Count == 0) return;
         _alertSeen = fresh[^1].At;
         foreach (var p in fresh) AlertFor(p.What, p.At, p.Where);
+        RareTickDone();   // the tick's drops are one moment, the best with "+2 more" (Ui/MainWindow.RareMoment.cs)
     }
 
     /// <summary>
@@ -86,6 +87,7 @@ public partial class MainWindow
         _hud?.Alert((rare ? "Rare drop: " : "Watched drop: ") + what + " · " + priceText, color);
         HoldRareOnHud(name, count, grade, color, at);   // the Card's and the Ticker's rare drop
         HoldRareExtras(id, price, where, watched, chime);
+        NoteRare(new RareFind(id, name, count, grade, color, at, price, where, watched, chime));
         Say((rare ? $"Rare drop ({grade}): " : "Watched drop: ") + what + " · " + priceText, "Good");
         return true;
     }

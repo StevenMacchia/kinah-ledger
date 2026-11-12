@@ -1021,6 +1021,19 @@ public static class WpfApp
             finally { MainWindow.OpenForTest = null; }
         }
 
+        // a rare drop is a moment (2026-11-11, Ui/MainWindow.RareMoment.cs): the drops of one tick are one moment, the best grade with
+        // "+2 more", and none plays in a demo; held halfway the window's says what dropped on a layer that takes no room; at its end it is gone
+        {
+            var (lead, more, played) = w.RareTickForTest("Thick Balaur Horn ×1", "Noble Dragon Lord Greatsword ×1", "Wisdom Greatsword ×1");
+            Check(lead == "Noble Dragon Lord Greatsword" && more == "2" && !played, $"motion: three rare drops in one tick are one moment, the Epic's with +2 more, and none plays in a demo ({lead}, +{more}, {played})");
+            var frozenWas = Motion.FrozenAt;
+            Motion.FrozenAt = 0.5;
+            var words = w.RareMomentForTest("Noble Dragon Lord Greatsword", 2);
+            Check(words?.StartsWith("RARE DROP · EPIC +2 more | ") == true && w.RareMomentLayerIsFlat, $"motion: the window's moment held halfway, over the page and taking no room in it ({words})");
+            Motion.FrozenAt = 1;
+            Check(w.RareMomentForTest("Noble Dragon Lord Greatsword", 0) == null, "motion: at its end the window's moment is gone, the page as it was");
+            Motion.FrozenAt = frozenWas;
+        }
         w.ForceClose();
         // motion (Ui/Motion.cs, 2026-11-11), each effect held at a point of its course (KL_MOTION_AT's way) so the frame can be read
         {
@@ -1122,6 +1135,28 @@ public static class WpfApp
                 var bdShown = Texts(bd.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
                 Check(bdShown.Any(t => t.StartsWith("1.21M")) && bdShown.Any(t => t.StartsWith("845.9K")) && bdShown.Contains("75"),
                     $"motion: Buddy's hour and session roll and its ring sweeps (60 to 90), held a fifth in ({string.Join(" | ", bdShown.Where(t => t.Length is > 0 and < 24))})");
+                // a rare drop's card makes its entrance (2026-11-11, Ui/HudRare.Motion.cs), held a fifth in: the tile growing in, the
+                // name's light on it, the price rolling up; not on a look's first draw; "+2 more" follows the drops that join it
+                static double TileScale((FrameworkElement Tile, string Label, string Price, bool Lit)? p) => (p?.Tile.RenderTransform as System.Windows.Media.ScaleTransform)?.ScaleX ?? 1;
+                var drop = new Dictionary<string, string>(v2) { ["rare"] = "Shade Gloves", ["rareId"] = "1", ["rareCount"] = "×1", ["rareGrade"] = "Legend", ["rareColor"] = "#5AA6FF", ["rarePrice"] = "28,000", ["rareWhere"] = "on Siel" };
+                var heldFirst = new HudCard(); heldFirst.Update(drop);
+                var h0 = HudRare.PartsForTest(heldFirst.RareDropForTest);
+                var card = new HudCard(); card.Update(v2); card.Update(drop);
+                var cp = HudRare.PartsForTest(card.RareDropForTest);
+                Check(h0 is { Lit: false, Price: "28,000" } && TileScale(h0) == 1 && cp is { Lit: true } && TileScale(cp) is > 0.6 and < 1 && HudTicker.Num(cp.Value.Price) is > 0 and < 28_000,
+                    $"motion: Buddy's rare drop makes its entrance, a fifth in (tile at {TileScale(cp):0.00}, price {cp?.Price}); one held on the look's first draw stands still");
+                var tick = new HudTicker(); tick.Update(v2); tick.Update(drop);
+                var tp = HudRare.PartsForTest(tick.RareToastForTest);
+                Check(tp is { Lit: true } && TileScale(tp) < 1, $"motion: Pop's rare toast makes the same entrance (tile at {TileScale(tp):0.00})");
+                Motion.FrozenAt = 1;
+                var ended = new HudCard(); ended.Update(v2); ended.Update(drop);
+                var ep = HudRare.PartsForTest(ended.RareDropForTest);
+                Check(ep is { Lit: false, Price: "28,000" } && TileScale(ep) == 1, "motion: at its end the rare drop reads as the card draws it still");
+                var joined = new Dictionary<string, string>(drop) { ["rareMore"] = "2" };
+                var made = ended.RareDropForTest;
+                ended.Update(joined); tick.Update(joined);
+                Check(ended.RareDropForTest == made && HudRare.PartsForTest(made)?.Label == "RARE DROP · LEGEND  +2 more" && HudRare.PartsForTest(tick.RareToastForTest)?.Label == "RARE DROP · LEGEND  +2 more",
+                    $"motion: drops joining the one held say so on Buddy and Pop, the card left as it is ({HudRare.PartsForTest(made)?.Label})");
             }
             Motion.Still = true; Motion.FrozenAt = null;
             var still = new System.Windows.Controls.TextBlock();

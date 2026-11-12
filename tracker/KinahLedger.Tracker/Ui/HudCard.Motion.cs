@@ -16,7 +16,7 @@ namespace KinahLedger.Ui;
 /// - the ring of your best here sweeps round to its new share, its percent counting with it, and pulses once in mint the
 ///   moment you pass your best;
 /// - the newest pickup's tile grows in (a rare grade's glows once) and its name and worth in the head pop;
-/// - a rare drop's coloured frame beats twice as it lands.
+/// - a rare drop's coloured frame beats twice as it lands, and the drop over the figures makes its entrance (Ui/HudRare.Motion.cs).
 /// </summary>
 public sealed partial class HudCard
 {
@@ -132,7 +132,7 @@ public sealed partial class HudCard
         }, () => _ring.Opacity = 1);
     }
 
-    /// <summary>For a render of the motion (KL_MOTION_AT): the figures risen from 85%, the ring swept from 70% of its share, the newest tile landing, a rare frame beating.</summary>
+    /// <summary>For a render of the motion (KL_MOTION_AT): the figures risen from 85%, the ring swept from 70% of its share, the newest tile landing, a rare frame beating and its drop making its entrance.</summary>
     internal void MotionFrame(IReadOnlyDictionary<string, string> values)
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
@@ -147,5 +147,9 @@ public sealed partial class HudCard
         }
         if (_tiles.Children.Count > 0 && _tiles.Children[0] is FrameworkElement t0 && Picks(values).FirstOrDefault() is { } fp) Arrived(t0, fp);
         if (_ring.Visibility == Visibility.Visible) RareBeat();
+        if (_drop.Made is { } made) HudRare.Enter(made);
     }
+
+    /// <summary>For the options self-test: the rare drop drawn over the figures, while one shows.</summary>
+    internal FrameworkElement? RareDropForTest => _drop.Made;
 }
