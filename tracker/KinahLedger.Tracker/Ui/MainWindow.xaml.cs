@@ -1191,6 +1191,7 @@ public partial class MainWindow : Window
     void ShowPart(string part, bool byHand = true)
     {
         var was = _part;
+        if (byHand) Motion.PickedByHand();   // the tab's light slides to a page the player picked, not to one the page follow picked
         // a Farming page that has been laid out (the demo's first switch happens before any layout, when the window is still small)
         if (_part == "Farming" && !_welcome && IsLoaded && LeftCol.ActualHeight > 0 && ActualHeight >= 500) _farmHeight = ActualHeight;
         _part = part is "Crafting" or "Events" ? part : part == "Quests" && _prefs.Quests ? part : "Farming";

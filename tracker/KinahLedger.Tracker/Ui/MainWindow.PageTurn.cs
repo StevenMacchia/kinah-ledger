@@ -19,24 +19,31 @@ public partial class MainWindow
     /// <summary>How far the new page rises into place.</summary>
     const double TurnRisePx = 8;
 
-    /// <summary>The page turn under way puts everything back with this (a turn started before it ended ends it first).</summary>
+    /// <summary>The page turn under way puts everything back with this (a turn started before it ended ends it, once the page as it shows is taken).</summary>
     Action? _turnEnd;
 
     /// <summary>
-    /// The page about to be left, as a picture of everything under the header on the window's background, at the screen's
-    /// pixels; null with motion off or before the window is laid out. Taken before the new page's parts are shown.
+    /// The page about to be left, as a picture of everything under the header on the window's background, as it is on screen
+    /// now (a turn still under way included, so a quick second click carries on from what shows, then that turn ends), at
+    /// the screen's pixels and on the screen's pixel grid; null with motion off or before the window is laid out. Taken
+    /// before the new page's parts are shown.
     /// </summary>
     (BitmapSource Picture, Rect Where)? LeavingPage()
     {
         if (!Motion.On || !IsLoaded || LedgerCol.ActualWidth <= 0 || HeadStack.Children.Count == 0 || HeadStack.Children[0] is not FrameworkElement head) return null;
-        _turnEnd?.Invoke();
-        double top = head.TranslatePoint(new Point(0, head.ActualHeight), LedgerCol).Y;
-        // the tables' scroll bar hangs into the window's right padding (LowerScroll's margin), so the picture takes that in too
-        var where = new Rect(0, top, LedgerCol.ActualWidth + Root.Padding.Right, Math.Max(0, LedgerCol.ActualHeight - top));
-        if (where.Height < 1) return null;
+        // the window's draw scale (Ui/MainWindow.Fit.cs) and the screen's: one unit of the page is this many pixels
         var dpi = VisualTreeHelper.GetDpi(this);
-        double scale = LedgerCol.TransformToAncestor(this) is Transform t ? t.Value.M11 : 1;
-        int pw = (int)Math.Ceiling(where.Width * scale * dpi.DpiScaleX), ph = (int)Math.Ceiling(where.Height * scale * dpi.DpiScaleY);
+        double px = _fitScale * dpi.DpiScaleX, py = _fitScale * dpi.DpiScaleY;
+        // the picture starts on a whole screen pixel at the header's foot, so it is drawn pixel for pixel over the page
+        double top = head.TranslatePoint(new Point(0, head.ActualHeight), LedgerCol).Y;
+        var onScreen = LedgerCol.TranslatePoint(new Point(0, top), this);
+        double dx = (Math.Round(onScreen.X * dpi.DpiScaleX) - onScreen.X * dpi.DpiScaleX) / px, dy = (Math.Round(onScreen.Y * dpi.DpiScaleY) - onScreen.Y * dpi.DpiScaleY) / py;
+        // the tables' scroll bar hangs into the window's right padding (LowerScroll's margin), so the picture takes that in too;
+        // the padding is outside the draw scale, so in the page's units it is the padding over the scale
+        double width = LedgerCol.ActualWidth + Root.Padding.Right / _fitScale - dx, height = LedgerCol.ActualHeight - top - dy;
+        if (height < 1) return null;
+        int pw = (int)Math.Ceiling(width * px), ph = (int)Math.Ceiling(height * py);
+        var where = new Rect(dx, top + dy, pw / px, ph / py);
         var shot = new DrawingVisual();
         using (var dc = shot.RenderOpen())
         {
@@ -44,9 +51,10 @@ public partial class MainWindow
             dc.DrawRectangle(B("Bg"), null, size);
             dc.DrawRectangle(new VisualBrush(LedgerCol) { Viewbox = where, ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill }, null, size);
         }
-        var bmp = new RenderTargetBitmap(pw, ph, 96 * scale * dpi.DpiScaleX, 96 * scale * dpi.DpiScaleY, PixelFormats.Pbgra32);
+        var bmp = new RenderTargetBitmap(pw, ph, 96 * px, 96 * py, PixelFormats.Pbgra32);
         bmp.Render(shot);
         bmp.Freeze();
+        _turnEnd?.Invoke();
         return (bmp, where);
     }
 
@@ -56,9 +64,11 @@ public partial class MainWindow
     /// </summary>
     void TurnPage((BitmapSource Picture, Rect Where) leaving)
     {
+        // pixel for pixel: the bitmap's own size, placed where it was taken, with no rounding or resampling on the way
         var picture = new Image { Source = leaving.Picture, Width = leaving.Where.Width, Height = leaving.Where.Height, Stretch = Stretch.Fill, IsHitTestVisible = false };
-        var cover = new Canvas { IsHitTestVisible = false };
-        Canvas.SetTop(picture, leaving.Where.Top);
+        RenderOptions.SetBitmapScalingMode(picture, BitmapScalingMode.NearestNeighbor);
+        var cover = new Canvas { IsHitTestVisible = false, UseLayoutRounding = false, SnapsToDevicePixels = false };
+        Canvas.SetLeft(picture, leaving.Where.Left); Canvas.SetTop(picture, leaving.Where.Top);
         cover.Children.Add(picture);
         Grid.SetRowSpan(cover, LedgerCol.RowDefinitions.Count); Grid.SetColumnSpan(cover, LedgerCol.ColumnDefinitions.Count);
         LedgerCol.Children.Add(cover);   // a canvas asks for no room, so the page is measured as without it

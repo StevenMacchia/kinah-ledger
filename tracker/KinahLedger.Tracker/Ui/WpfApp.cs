@@ -1101,6 +1101,33 @@ public static class WpfApp
             Check(sunk < 0.98 && sunk > 0.97 && sprung > 1 && sprung < 1.01 && btn.RenderTransform == System.Windows.Media.Transform.Identity,
                 $"a button held sinks ({sunk:0.000} halfway), let go it springs past 1 ({sprung:0.0000} halfway) and settles with no transform left");
 
+            var corner = new System.Windows.Controls.Button { RenderTransformOrigin = new Point(0, 1) };
+            Motion.SetPressed(corner, true); Motion.SetPressed(corner, false);
+            Check(corner.RenderTransformOrigin == new Point(0, 1), $"a press gives a button its own transform origin back ({corner.RenderTransformOrigin})");
+            // a row washing as its goal is reached while the pointer is on it: the wash takes the transform and gives it back
+            // at its end, and the row lifts again on the next hover
+            var washed = new System.Windows.Controls.Border { Cursor = System.Windows.Input.Cursors.Hand, Background = System.Windows.Media.Brushes.Transparent };
+            Motion.SetFeel(washed, Feel.Lift);
+            Motion.FrozenAt = 0.5; Motion.HoverFeel(washed, true);
+            Motion.Wash(washed, "Gold");
+            Motion.HoverFeel(washed, false);
+            bool washKept = washed.RenderTransform is System.Windows.Media.ScaleTransform;
+            Motion.FrozenAt = 1; Motion.Wash(washed, "Gold");
+            bool washGave = washed.RenderTransform == System.Windows.Media.Transform.Identity;
+            Motion.HoverFeel(washed, true);
+            double relifted = Motion.TouchOf(washed).Lift;
+            Motion.HoverFeel(washed, false);
+            Check(washKept && washGave && relifted == -1 && washed.RenderTransform == System.Windows.Media.Transform.Identity,
+                $"a row washing under the pointer: leaving keeps the wash's transform ({washKept}), the wash gives it back ({washGave}), the row lifts again ({relifted})");
+
+            // the page following what the player does (not a pick by hand) moves the tab's light without a slide
+            var settle = DateTime.UtcNow.AddMilliseconds(700);
+            while (DateTime.UtcNow < settle) { DoEvents(); Thread.Sleep(10); }
+            Motion.FrozenAt = 0.5; w.ShowPartForTest("Crafting"); DoEvents();
+            bool followSlid = Motion.LightNow(tabRow) != null;
+            Motion.FrozenAt = 1; Click(w.FarmTab); DoEvents();
+            Check(!followSlid && Motion.LightNow(tabRow) == null, $"the page following what the player does moves the tab's light at once, no slide ({followSlid})");
+
             // motion off (a render, or Windows's animations off): a hover and a press show at once, nothing slides, turns or shines
             Motion.Still = true; Motion.FrozenAt = null;
             Motion.HoverFeel(card, true);

@@ -70,6 +70,10 @@ public static partial class Motion
         public readonly UIElement LiftClock = new(), PressClock = new(), SheenClock = new();
         public bool Edged;
         public Rectangle? Sheen;
+        /// <summary>Takes the light passing away now (it ended, the tile scrolled, its page closed, another pass began).</summary>
+        public Action? SheenEnd;
+        /// <summary>The button's own transform origin before a press set the middle (UnsetValue: none of its own).</summary>
+        public object? Origin;
     }
     static readonly ConditionalWeakTable<UIElement, Touch> Touches = new();
     // where the pointer was when the light last passed, so a tile drawn again under a still pointer doesn't shine again
@@ -125,7 +129,9 @@ public static partial class Motion
     /// <summary>
     /// The light passing across a tile once: a soft, leaning band in the skin's lightest tone, from the left edge to the right,
     /// inside the tile's own corners. Drawn on the window's card layer just under the hover cards (so a tile's card opening
-    /// over it covers it) and moved with the tile's lift. Not with motion off, and not again while the pointer hasn't moved.
+    /// over it covers it) and moved with the tile's lift. The layer isn't clipped by the tile's scroll area, so the light
+    /// passes only over a tile wholly in view, and goes the moment the area scrolls or the tile is hidden (its page closed).
+    /// Not with motion off, and not again while the pointer hasn't moved.
     /// </summary>
     static void HoverSheen(FrameworkElement el, Touch t)
     {
@@ -136,7 +142,9 @@ public static partial class Motion
         var surface = el is Panel p && p.Children.Count > 0 && p.Children[0] is Border first ? first : el;
         double w = surface.ActualWidth, h = surface.ActualHeight;
         if (w <= 2 * SheenInset || h <= 2 * SheenInset) return;
-        if (t.Sheen != null) { Halt(t.SheenClock); layer.Children.Remove(t.Sheen); t.Sheen = null; }
+        var scroll = FindAncestor<ScrollViewer>(surface);
+        if (scroll != null && !WhollyInView(surface, scroll)) return;
+        t.SheenEnd?.Invoke();
         double corner = surface is Border sb ? sb.CornerRadius.TopLeft : SheenCorner;
         // where the surface is on the layer with the lift taken out; the lift is put back by the same transform as the tile's
         if (surface.TransformToVisual(layer) is not Transform toLayer) return;
@@ -166,12 +174,38 @@ public static partial class Motion
         Panel.SetZIndex(sheen, -1);
         layer.Children.Add(sheen);
         t.Sheen = sheen;
-        // eased in and out (smoothstep), so the light glides across at an even pace instead of lingering at the far edge
-        Play(t.SheenClock, SheenMs, q => sweep.X = -band + (w + band + lean) * q * q * (3 - 2 * q), () =>
+        void Scrolled(object sender, ScrollChangedEventArgs e) { if (e.HorizontalChange != 0 || e.VerticalChange != 0) Gone(); }
+        void Hidden(object sender, DependencyPropertyChangedEventArgs e) { if (!el.IsVisible) Gone(); }
+        void Gone()
         {
+            if (!ReferenceEquals(t.Sheen, sheen)) return;
+            Halt(t.SheenClock);
             layer.Children.Remove(sheen);
-            if (ReferenceEquals(t.Sheen, sheen)) t.Sheen = null;
-        });
+            t.Sheen = null; t.SheenEnd = null;
+            scroll?.RemoveHandler(ScrollViewer.ScrollChangedEvent, (ScrollChangedEventHandler)Scrolled);
+            el.IsVisibleChanged -= Hidden;
+        }
+        t.SheenEnd = Gone;
+        scroll?.AddHandler(ScrollViewer.ScrollChangedEvent, (ScrollChangedEventHandler)Scrolled);
+        el.IsVisibleChanged += Hidden;
+        // eased in and out (smoothstep), so the light glides across at an even pace instead of lingering at the far edge
+        Play(t.SheenClock, SheenMs, q => sweep.X = -band + (w + band + lean) * q * q * (3 - 2 * q), Gone);
+    }
+
+    /// <summary>The nearest <typeparamref name="T"/> above an element, if any.</summary>
+    static T? FindAncestor<T>(DependencyObject el) where T : DependencyObject
+    {
+        for (var d = VisualTreeHelper.GetParent(el); d != null; d = VisualTreeHelper.GetParent(d)) if (d is T found) return found;
+        return null;
+    }
+
+    /// <summary>The element's whole box inside its scroll area's view (a pixel of rounding allowed).</summary>
+    static bool WhollyInView(FrameworkElement el, ScrollViewer scroll)
+    {
+        var box = el.TransformToVisual(scroll).TransformBounds(new Rect(el.RenderSize));
+        var view = new Rect(0, 0, scroll.ViewportWidth, scroll.ViewportHeight);
+        view.Inflate(1, 1);
+        return view.Contains(box);
     }
 
     /// <summary>The light's colour at its middle: the skin's lightest tone (its ink on a dark look, its card on a light one).</summary>
@@ -193,6 +227,7 @@ public static partial class Motion
         {
             if (!down || !TransformFree(el.RenderTransform)) return;
             t.Scale.ScaleX = t.Scale.ScaleY = 1;
+            t.Origin = el.ReadLocalValue(UIElement.RenderTransformOriginProperty);
             el.RenderTransformOrigin = new Point(0.5, 0.5);
             el.RenderTransform = t.Scale;
         }
@@ -201,7 +236,7 @@ public static partial class Motion
         {
             if (down || !ReferenceEquals(el.RenderTransform, t.Scale)) return;
             el.ClearValue(UIElement.RenderTransformProperty);
-            el.ClearValue(UIElement.RenderTransformOriginProperty);
+            if (t.Origin is Point origin) el.RenderTransformOrigin = origin; else el.ClearValue(UIElement.RenderTransformOriginProperty);
         }
         if (!On) { Halt(t.PressClock); t.Scale.ScaleX = t.Scale.ScaleY = to; Released(); return; }
         Play(t.PressClock, down ? PressMs : ReleaseMs, p =>

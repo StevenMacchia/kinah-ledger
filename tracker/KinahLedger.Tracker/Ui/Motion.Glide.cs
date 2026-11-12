@@ -25,8 +25,9 @@ public static partial class Motion
     public static void SetLit(DependencyObject d, bool value) => d.SetValue(LitProperty, value);
 
     /// <summary>
-    /// Set by the switch style (SegOff, so SegOn and NavOn too): a click on the button is noted, so a switch drawn again by
-    /// that click still slides its light, and a switch drawn for any other reason (a page opening, a new day) doesn't.
+    /// Set by the switch style (SegOff, so SegOn and NavOn too): a click on the button is noted, so the light slides only
+    /// for the player's own pick (a switch drawn again by that click too), never for a restyle the player didn't make (the
+    /// page following what they do, a new day, the prefs loading).
     /// </summary>
     public static readonly DependencyProperty SwitchProperty = DependencyProperty.RegisterAttached("Switch", typeof(bool), typeof(Motion),
         new PropertyMetadata(false, (d, e) =>
@@ -40,7 +41,7 @@ public static partial class Motion
 
     /// <summary>The light's slide from one button to the next takes this long.</summary>
     public const double GlideMs = 220;
-    /// <summary>A switch drawn again this soon after a click on it is that click's answer, and slides.</summary>
+    /// <summary>A switch lit or drawn again this soon after the player picked is that pick's answer, and slides.</summary>
     const long ClickAnswerMs = 600;
     /// <summary>A switch's new row gets this many layout passes to be drawn before its light is shown still.</summary>
     const int GlideLayoutPasses = 12;
@@ -50,6 +51,11 @@ public static partial class Motion
     static readonly Dictionary<string, int> WordsLit = new();
     // the last click on a switch's button: its words and when (its row may be gone by the time the switch is drawn again)
     static (string Label, long At) _switchClick;
+    // when the player last picked a switch's button or a page (a click, a shortcut): only then does a light slide
+    static long _pickedAt = long.MinValue / 2;
+
+    /// <summary>The player picked a page by hand (a tab, Ctrl+1 to 4, a link to a page): its tab's light slides there.</summary>
+    public static void PickedByHand() => _pickedAt = Environment.TickCount64;
 
     /// <summary>One slide under way on a row: the light's shape (for a slide that starts from where this one is) and its end.</summary>
     sealed class Light { public required RectangleGeometry Shape; public required Action End; }
@@ -57,7 +63,9 @@ public static partial class Motion
 
     static void SwitchClicked(object sender, RoutedEventArgs e)
     {
-        if (sender is Button b) _switchClick = (SwitchWords(b), Environment.TickCount64);
+        if (sender is not Button b) return;
+        _switchClick = (SwitchWords(b), Environment.TickCount64);
+        PickedByHand();
     }
 
     /// <summary>A button's words as the switch shows them ("Farm", "This zone").</summary>
@@ -71,8 +79,9 @@ public static partial class Motion
 
     /// <summary>
     /// A button just took its switch's light (after the caller has restyled the whole switch, before the next frame): the
-    /// light slides from the button lit before when that one was on screen in the same row, or when the switch was drawn
-    /// again on a click on it. Anything else (the switch's first drawing, a page set up before it is shown) just remembers it.
+    /// light slides from the button lit before when the player has just picked (a click, a page by hand) and that one was on
+    /// screen in the same row, or the switch was drawn again on a click on it. Anything else (the switch's first drawing, a
+    /// page set up before it is shown, a restyle the player didn't make) just remembers it.
     /// </summary>
     static void LightArrived(Button to)
     {
@@ -86,7 +95,7 @@ public static partial class Motion
         int before = sameRow ? onRow!.Value : onWords;
         RowLit.AddOrUpdate(row, new StrongBox<int>(at));
         WordsLit[words] = at;
-        if (!(sameRow || drawnBefore) || before == at || before >= buttons.Count || !On) return;
+        if (!(sameRow || drawnBefore) || before == at || before >= buttons.Count || !On || Environment.TickCount64 - _pickedAt > ClickAnswerMs) return;
         var from = buttons[before];
         if (sameRow) { if (ShownNow(row) && ShownNow(from) && ShownNow(to)) GlideLight(row, from, to); return; }
         if (_switchClick.Label != SwitchWords(to) || Environment.TickCount64 - _switchClick.At > ClickAnswerMs) return;
