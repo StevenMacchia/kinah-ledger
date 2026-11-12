@@ -8,6 +8,12 @@ with NCSOFT. MIT licensed.
 
 This is a side project, separate from the author's professional work.
 
+**The data lives on [kinahledger.com](https://kinahledger.com):** where every item drops and its
+[price on your server](https://kinahledger.com/market/), [farming spots by zone and level](https://kinahledger.com/farming/),
+[monster drop lists](https://kinahledger.com/monsters/), the [field boss schedule](https://kinahledger.com/bosses/),
+[crafting profit](https://kinahledger.com/guides/aion-2-crafting-profit) and [guides](https://kinahledger.com/guides/).
+No download needed for any of it; the tracker below is how the measured drop rates get there.
+
 ## Download
 
 [**KinahLedger-Setup.exe, the latest installer**](https://github.com/StevenMacchia/kinah-ledger/releases/latest/download/KinahLedger-Setup.exe):
