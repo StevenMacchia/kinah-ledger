@@ -1098,6 +1098,40 @@ public static class WpfApp
             Motion.Reveal(chart, 600, 90);
             double clipW = (chart.Clip as System.Windows.Media.RectangleGeometry)?.Rect.Width ?? -1;
             Check(clipW > 400 && clipW < 632, $"motion: the chart halfway drawn in shows {clipW:0} px of its width, eased");
+            // a new best here and today's milestones (Session/Milestones.cs, Ui/MainWindow.Bests.cs): said only on a crossing seen live, once
+            {
+                var ms = new Session.Milestones();
+                const string d1 = "2026-11-11", d2 = "2026-11-12";
+                Check(Session.Milestones.MarkAt(999_999) == -1 && Session.Milestones.MarkAt(1_000_000) == 0 && Session.Milestones.MarkAt(200_000_000) == Session.Milestones.DayMarks.Length - 1,
+                    "motion: today's Kinah marks start at 1M and the last holds past 100M");
+                var marks = new[] { ms.Day(d1, "c1", 1_200_000, false), ms.Day(d1, "c1", 1_300_000, false), ms.Day(d1, "c1", 2_600_000, false), ms.Day(d1, "c1", 2_700_000, false) };
+                Check(marks[0] == null && marks[1] == null && marks[2] == 2_500_000 && marks[3] == null,
+                    $"motion: today's Kinah already past 1M on the first look (the tracker starting) says nothing; passing 2.5M says it once ({string.Join(", ", marks.Select(x => x?.ToString() ?? "-"))})");
+                var again = new[] { ms.Day(d1, "c2", 3_000_000, false), ms.Day(d1, "c1", 2_800_000, false), ms.Day(d1, "c1", 2_400_000, false), ms.Day(d1, "c1", 2_600_000, false) };
+                Check(again.All(x => x == null), "motion: another character's first look says nothing, and a mark passed once isn't said again that day (Kinah taken off and picked up again)");
+                var loaded = ms.Day(d1, "c1", 6_000_000, true); var jump = ms.Day(d1, "c1", 26_000_000, false);
+                var next = new[] { ms.Day(d2, "c1", 900_000, false), ms.Day(d2, "c1", 1_000_000, false) };
+                Check(loaded == null && jump == 25_000_000 && next[0] == null && next[1] == 1_000_000,
+                    $"motion: a day loaded again is noted, not said; several marks at once say the highest; a new day starts over ({loaded} {jump} {next[0]} {next[1]})");
+                bool firstLook = ms.Best(d1, "c1|here|1", true, true, 10);
+                var crossing = new[] { ms.Best(d1, "c1|here|2", true, false, 10), ms.Best(d1, "c1|here|2", true, true, 10), ms.Best(d1, "c1|here|2", true, false, 10),
+                    ms.Best(d1, "c1|here|2", true, true, 11), ms.Best(d1, "c1|here|2", true, true, 12), ms.Best(d1, "c1|here|2", true, false, 12), ms.Best(d1, "c1|here|2", true, true, 13) };
+                Check(!firstLook && crossing.Count(x => x) == 1 && crossing[3],
+                    $"motion: a best already passed on a count's first look says nothing; passing it with a pickup says it once (not on a price change alone, not again after a dip) ({string.Join("", crossing.Select(x => x ? "1" : "0"))})");
+                bool warm = ms.Best(d1, "c1|here|3", false, false, 5) | ms.Best(d1, "c1|here|3", true, true, 6);
+                bool newDay = ms.Best(d2, "c1|here|2", true, false, 1) | ms.Best(d2, "c1|here|2", true, true, 2);
+                Check(!warm && newDay, "motion: an hour past its best when it stops warming up says nothing; on a new day the same count can say a best again");
+                var lit = new System.Windows.Shapes.Rectangle { Visibility = Visibility.Collapsed };
+                var figure = new System.Windows.Controls.TextBlock { Text = "1.27M" };
+                Motion.FrozenAt = 0.5;
+                Motion.LightSweep(lit, figure, "Gold");
+                double bandX = ((lit.Fill as System.Windows.Media.LinearGradientBrush)?.RelativeTransform as System.Windows.Media.TranslateTransform)?.X ?? double.NaN;
+                bool lightHalf = lit.Visibility == Visibility.Visible && lit.OpacityMask is System.Windows.Media.VisualBrush && bandX > 0.5 && bandX < 0.6;
+                Motion.FrozenAt = 1;
+                Motion.LightSweep(lit, figure, "Gold");
+                Check(lightHalf && lit.Visibility == Visibility.Collapsed && lit.Fill == null && lit.OpacityMask == null,
+                    $"motion: the light halfway has crossed most of the figure, eased (band at {bandX:0.000}), masked by its glyphs; at its end it is gone");
+            }
             // the overlay's Ticker (0.10.49): its figures read back as numbers only when the overlay writes them the same way,
             // and the hour rolls on a pickup (held halfway: between the old and the new figure)
             Check(HudTicker.Num("1.27M") == 1_270_000 && HudTicker.Num("894K") == 894_000 && HudTicker.Num("12,345") == 12_345 && HudTicker.Num("warming up") == null && HudTicker.Num("1.2345M") == null,
