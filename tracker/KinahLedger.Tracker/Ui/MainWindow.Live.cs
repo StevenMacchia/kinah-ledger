@@ -391,10 +391,6 @@ public partial class MainWindow
     /// <summary>The hour this count is at, for the Where next line's "43% more than here".</summary>
     double _lastRateHr;
 
-    /// <summary>
-    /// The rate line (Quest: behind "chart" on the hero): the samples under a gold line in a 628 by 84 box, your best here
-    /// as a dashed lilac line at its height on the same scale, clamped to the box when it is above every sample.
-    /// </summary>
     /// <summary>The rate chart shown or hidden; once it opens (a click on "chart", or its line ready with it open) it draws itself in from the left.</summary>
     void ShowChart(bool on)
     {
@@ -403,33 +399,23 @@ public partial class MainWindow
         if (on && !was) Motion.Reveal(RateCanvas, RateCanvas.Width, RateCanvas.Height);
     }
 
+    /// <summary>
+    /// The rate line (Quest: behind "chart" on the hero): the samples under a gold line in a 628 by 96 box, your best here
+    /// as a dashed lilac line at its height on the same scale, clamped to the box when it is above every sample. Live while
+    /// open (Ui/RateChart.cs): a new minute runs the line out to it and pops the head dot; the mouse reads a minute.
+    /// </summary>
     void DrawRateLine(RateLine line, string from, string to, double best = 0)
     {
-        const double W = 628, H = 96;
-        var pts = line.Points(W, H);
-        bool show = pts.Count >= 2;
+        bool show = line.Samples.Count >= 2;
         ChartToggle.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         ShowChart(show && QOpen("chart"));
         QSetChev(ChartChev, QOpen("chart"));
-        if (!show) return;
-        RateLinePath.Points = new PointCollection(pts.Select(p => new Point(p.X, p.Y)));
+        var chart = LiveChart();
+        if (!show) { chart.Forget(); return; }
         RateLinePath.Effect ??= QGlow("Gold", 12, 0.7);
-        var last = pts[^1];
-        RateDot.Visibility = Visibility.Visible; RateDot.Effect ??= QGlow("Gold", 10, 0.9);
-        Canvas.SetLeft(RateDot, Math.Min(last.X, W - 5) - 5); Canvas.SetTop(RateDot, last.Y - 5);
-        var fig = new PathFigure { StartPoint = new Point(0, H), IsClosed = true };
-        foreach (var p in pts) fig.Segments.Add(new LineSegment(new Point(p.X, p.Y), false));
-        fig.Segments.Add(new LineSegment(new Point(W, H), false));
-        RateFill.Data = new PathGeometry(new[] { fig });
+        RateDot.Effect ??= QGlow("Gold", 10, 0.9);
+        chart.Draw(line, best, live: ChartBox.Visibility == Visibility.Visible);
         RateFrom.Text = from; RateTo.Text = to;
-        double lo = line.Samples.Min(x => x.Rate), hi = line.Samples.Max(x => x.Rate);
-        bool hasBest = best > 0 && hi - lo > 1e-9;
-        BestLinePath.Visibility = BestLineLbl.Visibility = hasBest ? Visibility.Visible : Visibility.Collapsed;
-        if (!hasBest) return;
-        double y = Math.Clamp(H - 2 - (H - 4) * (best - lo) / (hi - lo), 8, H - 8);
-        BestLinePath.Y1 = BestLinePath.Y2 = y;
-        BestLineLbl.Text = "best here " + Fk(best);
-        Canvas.SetTop(BestLineLbl, y < 22 ? y + 3 : y - 15);
     }
 
     /// <summary>

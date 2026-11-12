@@ -1098,6 +1098,72 @@ public static class WpfApp
             Motion.Reveal(chart, 600, 90);
             double clipW = (chart.Clip as System.Windows.Media.RectangleGeometry)?.Rect.Width ?? -1;
             Check(clipW > 400 && clipW < 632, $"motion: the chart halfway drawn in shows {clipW:0} px of its width, eased");
+            // the rate chart, live (Ui/RateChart.cs): a new minute runs the line out from where it ended and pops the head dot; a
+            // pickup eases the newest minute, the clock's nudge is set at once; past an hour the oldest minute folds away; the mouse reads a minute
+            {
+                const double CW = 628, CH = 96;
+                var t0 = new DateTime(2026, 11, 11, 20, 0, 0, DateTimeKind.Utc);
+                Session.RateLine Rates(int n, double last = 0, int from = 0)
+                {
+                    var l = new Session.RateLine();
+                    for (int i = from; i < from + n; i++) l.Add(t0.AddMinutes(i), i == from + n - 1 && last > 0 ? last : 500_000 + 10_000 * i);
+                    return l;
+                }
+                (RateChart Chart, System.Windows.Shapes.Polyline Line, System.Windows.Shapes.Path Fill) Fresh()
+                {
+                    var cv = new System.Windows.Controls.Canvas { Width = CW, Height = CH };
+                    var fill = new System.Windows.Shapes.Path(); var line = new System.Windows.Shapes.Polyline(); var dot = new System.Windows.Shapes.Ellipse { Width = 10, Height = 10 };
+                    var bestLine = new System.Windows.Shapes.Line(); var bestLbl = new System.Windows.Controls.TextBlock();
+                    foreach (UIElement el in new UIElement[] { fill, line, dot, bestLine, bestLbl }) cv.Children.Add(el);
+                    return (new RateChart(cv, fill, line, dot, bestLine, bestLbl), line, fill);
+                }
+                static bool At(Point p, (double X, double Y) q) => Math.Abs(p.X - q.X) < 0.01 && Math.Abs(p.Y - q.Y) < 0.01;
+                bool Settled(System.Windows.Shapes.Polyline line, Session.RateLine l) { var t = l.Points(CW, CH); return line.Points.Count == t.Count && t.Select((q, i) => At(line.Points[i], q)).All(x => x); }
+                var three = Rates(3); var four = Rates(4, 505_000);
+                var lastWas = three.Points(CW, CH)[^1];
+
+                Motion.FrozenAt = 0;
+                var land0 = Fresh(); land0.Chart.Draw(three, 600_000, live: true); land0.Chart.Draw(four, 600_000, live: true);
+                Check(land0.Line.Points.Count == 4 && At(land0.Line.Points[3], lastWas) && At(land0.Line.Points[2], lastWas) && land0.Chart.Head.Ring,
+                    $"motion: chart: a new minute starts where the line ended, its segment not yet out ({land0.Line.Points[^1]}, was {lastWas})");
+                Motion.FrozenAt = 0.3;
+                var land3 = Fresh(); land3.Chart.Draw(three, 600_000, live: true); land3.Chart.Draw(four, 600_000, live: true);
+                double y3 = land3.Line.Points[^1].Y, yTo = four.Points(CW, CH)[^1].Y;
+                Check(Math.Abs(land3.Chart.Head.Scale - 1.6) < 0.01 && land3.Chart.Head.Ring && y3 > Math.Min(lastWas.Y, yTo) + 1 && y3 < Math.Max(lastWas.Y, yTo) - 1,
+                    $"motion: chart: three tenths in the head dot is at its swell ({land3.Chart.Head.Scale:0.00}), its ring out, the line on its way ({lastWas.Y:0.0} → {y3:0.0} → {yTo:0.0})");
+                Motion.FrozenAt = 1;
+                var land1 = Fresh(); land1.Chart.Draw(three, 600_000, live: true); land1.Chart.Draw(four, 600_000, live: true);
+                Check(Settled(land1.Line, four) && land1.Chart.Head == (1.0, false), $"motion: chart: at its end the line's last point is the newest minute's ({land1.Line.Points[^1]}), the dot at rest");
+                var gold = ((System.Windows.Media.SolidColorBrush)Application.Current.FindResource("Gold")).Color;
+                var stop = (land1.Fill.Fill as System.Windows.Media.LinearGradientBrush)?.GradientStops[0].Color;
+                Check(stop is { } sc && sc.R == gold.R && sc.G == gold.G && sc.B == gold.B && sc.A > 0, $"motion: chart: the fill under the line is the look's gold ({stop}, gold {gold})");
+                land1.Chart.HoverAt(2);
+                string readout = t0.AddMinutes(2).ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) + " · " + Amounts.Short(520_000) + " /h";
+                Check(land1.Chart.Crosshair.Shown && land1.Chart.Readout == readout && Math.Abs(land1.Chart.Crosshair.X - land1.Line.Points[2].X) < 0.01,
+                    $"motion: chart: the mouse on the third minute reads its time and rate (\"{land1.Chart.Readout}\") at its point ({land1.Chart.Crosshair.X:0.0})");
+
+                Motion.FrozenAt = 0.5;
+                var cn = Fresh(); cn.Chart.Draw(four, 600_000, live: true);
+                var nudged = Rates(4, 505_000 * 1.0001); cn.Chart.Draw(nudged, 600_000, live: true);
+                bool nudgeSet = Settled(cn.Line, nudged);
+                var picked = Rates(4, 515_000); cn.Chart.Draw(picked, 600_000, live: true);
+                double yWas = nudged.Points(CW, CH)[^1].Y, yPick = picked.Points(CW, CH)[^1].Y, yHalf = cn.Line.Points[^1].Y;
+                Check(nudgeSet && yHalf < yWas - 1 && yHalf > yPick + 1 && !cn.Chart.Head.Ring,
+                    $"motion: chart: the clock's nudge is set at once ({nudgeSet}); a pickup eases the newest minute, halfway {yHalf:0.0} between {yWas:0.0} and {yPick:0.0}, without a pop");
+                var cr = Fresh(); var hour = Rates(60); cr.Chart.Draw(hour, 0, live: true);
+                var rolled = Rates(60, from: 1); cr.Chart.Draw(rolled, 0, live: true);
+                Check(cr.Line.Points.Count == 61 && cr.Line.Points[0].X == 0 && cr.Line.Points[1].X > 0 && cr.Line.Points[1].X < CW / 59,
+                    $"motion: chart: past an hour the oldest minute folds onto the first while the line slides left ({cr.Line.Points.Count} points, the second at {cr.Line.Points[1].X:0.0})");
+                var cc = Fresh(); cc.Chart.Draw(three, 600_000, live: false); cc.Chart.Draw(four, 600_000, live: false);
+                var co = Fresh(); co.Chart.Draw(three, 600_000, live: false); co.Chart.Draw(four, 600_000, live: true);
+                Check(Settled(cc.Line, four) && Settled(co.Line, four) && !co.Chart.Head.Ring, "motion: chart: closed, or just opened (it draws itself in), the line is set as it is");
+                bool stillWas = Motion.Still;
+                Motion.FrozenAt = null; Motion.Still = true;
+                var cs = Fresh(); cs.Chart.Draw(three, 600_000, live: true); cs.Chart.Draw(four, 600_000, live: true);
+                cs.Chart.HoverAt(1);
+                Check(Settled(cs.Line, four) && cs.Chart.Head == (1.0, false) && cs.Chart.Crosshair.Shown, "motion: chart: with motion off a new minute is drawn settled at once, the crosshair up at once");
+                Motion.Still = stillWas;
+            }
             // the overlay's Ticker (0.10.49): its figures read back as numbers only when the overlay writes them the same way,
             // and the hour rolls on a pickup (held halfway: between the old and the new figure)
             Check(HudTicker.Num("1.27M") == 1_270_000 && HudTicker.Num("894K") == 894_000 && HudTicker.Num("12,345") == 12_345 && HudTicker.Num("warming up") == null && HudTicker.Num("1.2345M") == null,
