@@ -94,32 +94,77 @@ public static class BestRuns
     /// <summary>Each saved run's zones (ten minutes or more), valued at today's prices. Runs from before servers were saved are skipped.</summary>
     static void Seed(Dictionary<string, Best> into)
     {
+        foreach (var s in SavedStays())
+        {
+            long perHr = (long)Math.Round(s.Value / (s.Minutes / 60.0));
+            var k = Key(s.Server, s.Zone);
+            if (perHr > 0 && (!into.TryGetValue(k, out var b) || b.PerHr < perHr)) into[k] = new Best(perHr, s.Minutes, s.Started.Length >= 10 ? s.Started[..10] : "");
+        }
+    }
+
+    /// <summary>
+    /// The earlier saved stays in a zone on a server (ten minutes or more each), worth at today's prices and their time, for the
+    /// recap's "vs your average here" (Session/RunStanding.cs). <paramref name="except"/> is the run just saved, by its start
+    /// as sessions.jsonl keeps it (<see cref="SessionStore.StartedKey"/>), so a run is never set against itself.
+    /// </summary>
+    public static List<(long Value, double Seconds)> Stays(string server, string? zone, string except)
+    {
+        if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(zone) || zone == SessionEngine.UnknownZone) return new();
+        var k = Key(server, zone);
+        // a line that names neither the server nor the zone (as written, or as the run file's JSON escapes it) isn't parsed:
+        // this runs on the window's thread as a run ends, over every saved run
+        static (string Plain, string Escaped) Forms(string s) => (s.Trim(), JsonSerializer.Serialize(s.Trim())[1..^1]);
+        static bool Names(string line, (string Plain, string Escaped) f) =>
+            line.Contains(f.Plain, StringComparison.OrdinalIgnoreCase) || line.Contains(f.Escaped, StringComparison.OrdinalIgnoreCase);
+        var serverForms = Forms(server); var zoneForms = Forms(zone);
+        try
+        {
+            return SavedStays(line => Names(line, serverForms) && Names(line, zoneForms))
+                .Where(s => s.Started != except && string.Equals(Key(s.Server, s.Zone), k, StringComparison.OrdinalIgnoreCase))
+                .Select(s => (s.Value, s.Minutes * 60.0)).ToList();
+        }
+        catch (Exception ex) { CrashLog.Write("best runs", ex); return new(); }
+    }
+
+    /// <summary>One zone of a saved run: its server, zone, minutes there, worth at today's prices, and the run's start as saved.</summary>
+    readonly record struct Stay(string Server, string Zone, int Minutes, long Value, string Started);
+
+    /// <summary>
+    /// Every saved run's zones of ten minutes or more, oldest first, from the lines <paramref name="worth"/> lets through (all
+    /// when null). Runs from before servers were saved are skipped.
+    /// </summary>
+    static IEnumerable<Stay> SavedStays(Func<string, bool>? worth = null)
+    {
         var path = Path.Combine(Dir, "sessions.jsonl");
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path)) yield break;
         foreach (var line in File.ReadLines(path))
         {
-            if (line.Length < 3) continue;
-            try
-            {
-                using var doc = JsonDocument.Parse(line);
-                var root = doc.RootElement;
-                var server = root.TryGetProperty("server", out var sv) && sv.ValueKind == JsonValueKind.String ? sv.GetString() ?? "" : "";
-                if (server.Length == 0 || !root.TryGetProperty("zones", out var zones) || zones.ValueKind != JsonValueKind.Object) continue;
-                var at = root.TryGetProperty("started", out var st) && st.ValueKind == JsonValueKind.String && st.GetString() is { Length: >= 10 } s ? s[..10] : "";
-                foreach (var z in zones.EnumerateObject())
-                {
-                    int minutes = Int(z.Value, "minutes");
-                    if (minutes < MinMinutes) continue;
-                    var items = new List<(string, int)>();
-                    if (z.Value.TryGetProperty("items", out var it) && it.ValueKind == JsonValueKind.Object)
-                        foreach (var i in it.EnumerateObject()) if (i.Value.TryGetInt32(out var n)) items.Add((i.Name, n));
-                    long perHr = (long)Math.Round(Value(Long(z.Value, "kinah"), items) / (minutes / 60.0));
-                    var k = Key(server, z.Name);
-                    if (perHr > 0 && (!into.TryGetValue(k, out var b) || b.PerHr < perHr)) into[k] = new Best(perHr, minutes, at);
-                }
-            }
+            if (line.Length < 3 || worth?.Invoke(line) == false) continue;
+            List<Stay>? stays = null;
+            try { stays = StaysOf(line); }
             catch (Exception) { /* one bad line doesn't stop the rest */ }
+            if (stays != null) foreach (var s in stays) yield return s;
         }
+    }
+
+    static List<Stay>? StaysOf(string line)
+    {
+        using var doc = JsonDocument.Parse(line);
+        var root = doc.RootElement;
+        var server = root.TryGetProperty("server", out var sv) && sv.ValueKind == JsonValueKind.String ? sv.GetString() ?? "" : "";
+        if (server.Length == 0 || !root.TryGetProperty("zones", out var zones) || zones.ValueKind != JsonValueKind.Object) return null;
+        var started = root.TryGetProperty("started", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString() ?? "" : "";
+        var list = new List<Stay>();
+        foreach (var z in zones.EnumerateObject())
+        {
+            int minutes = Int(z.Value, "minutes");
+            if (minutes < MinMinutes) continue;
+            var items = new List<(string, int)>();
+            if (z.Value.TryGetProperty("items", out var it) && it.ValueKind == JsonValueKind.Object)
+                foreach (var i in it.EnumerateObject()) if (i.Value.TryGetInt32(out var n)) items.Add((i.Name, n));
+            list.Add(new Stay(server, z.Name, minutes, Value(Long(z.Value, "kinah"), items), started));
+        }
+        return list;
     }
 
     static int Int(JsonElement e, string p) => e.TryGetProperty(p, out var v) && v.TryGetInt32(out var n) ? n : 0;

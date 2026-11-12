@@ -257,6 +257,82 @@ public static class WpfApp
         DoEvents();
         Check(p.RunRecap, "recap back on");
         Check(w.SampleRecapCard() is System.Windows.Controls.Border, "the recap card builds");
+        // the recap comes alive (2026-11-11): its opening held at points of its course, as KL_MOTION_AT holds a render
+        {
+            var frozenWas = Motion.FrozenAt; bool stillWas = Motion.Still;
+            static IEnumerable<DependencyObject> Tree(DependencyObject d) => new[] { d }.Concat(LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>().SelectMany(Tree));
+            static List<string> Texts(DependencyObject d) => Tree(d).OfType<System.Windows.Controls.TextBlock>().Select(t => t.Text).ToList();
+            static List<FrameworkElement> Tiles(DependencyObject d) => Tree(d).OfType<System.Windows.Controls.Grid>().Where(g => g.ToolTip is string).Cast<FrameworkElement>().ToList();
+            System.Windows.Controls.Border Held(string state, double? at)
+            {
+                Motion.FrozenAt = at;
+                var (_, card, open) = w.RecapSamples().First(x => x.State == state);
+                open();
+                card.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                return card;
+            }
+            var early = Held("run", 0.1); var settled = Held("run", 1);
+            var et = Texts(early); var ends = Texts(settled);
+            Check(early.Opacity is > 0 and < 1 && !et.Contains("686K") && !et.Contains("955K") && Tiles(early).All(x => x.Opacity == 0)
+                  && ends.Contains("686K") && ends.Contains("47:12") && ends.Contains("955K") && ends.Contains("+18%") && ends.Contains(" vs your average here")
+                  && settled.Opacity == 1 && Tiles(settled).Count == 5 && Tiles(settled).All(x => x.Opacity == 1 && x.RenderTransform is not System.Windows.Media.ScaleTransform),
+                $"recap: a tenth in, the card is arriving and its figures and tiles wait their turn; at the end it reads 686K, 47:12, 955K, +18% ({early.Opacity:0.00}; {string.Join(" ", ends.Take(12))})");
+            Check(early.DesiredSize == settled.DesiredSize, $"recap: the card keeps its size while it plays ({early.DesiredSize} and {settled.DesiredSize})");
+            // the best drop (a Legend) a tenth into its course: grown in part way and glowing in the dark cards' Legend blue
+            var glowing = Held("run", (MainWindow.RecapBestDropAt + 0.1 * Motion.GlowMs) / (MainWindow.RecapBestDropAt + Motion.GlowMs));
+            var glow = Tree(glowing).OfType<UIElement>().Select(e => e.Effect).OfType<System.Windows.Media.Effects.DropShadowEffect>().FirstOrDefault(d => d.BlurRadius == 18);
+            Check(glow is { Opacity: > 0.3 } && glow.Color == System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF), $"recap: the best drop glows once in its grade's colour as it lands ({glow?.Color} {glow?.Opacity:0.00})");
+            var best = Texts(Held("new-best", 1)); var thin = Texts(Held("no-loot", 1)); var longName = Texts(Held("long-name", 1));
+            Check(best.Contains("★ NEW BEST HERE") && best.Any(x => x.Contains("it was 1.05M")) && !best.Contains(" vs your average here") && !ends.Contains("★ NEW BEST HERE"),
+                "recap: a new best has the gold tag and its figures, and no line against the average; a run as usual has no tag");
+            Check(!thin.Contains("DROPS") && !thin.Any(x => x.Contains("average")) && thin.Count(x => x == "148K") == 1 && thin.Contains("all Kinah") && !thin.Contains("Kinah") && !thin.Contains("Loot"),
+                $"recap: a run with no loot says its Kinah once, as the total (all Kinah), with no DROPS and, on thin history, no line against the average ({string.Join(" ", thin)})");
+            Check(longName.Any(x => x.EndsWith("The Forgotten Sanctuary of the Silvermoon")) && longName.Contains("\u22127%") && longName.Contains("+4"),
+                $"recap: a long place name is whole, a run under the average reads \u22127%, and drops past the strip are counted ({string.Join(" ", longName.Where(x => x.Contains('%') || x.StartsWith('+')))})");
+            Motion.Still = true;
+            var calm = Held("run", null);
+            Check(!Motion.On && calm.Opacity == 1 && Texts(calm).Contains("686K") && Tiles(calm).All(x => x.Opacity == 1), "recap: with motion off the card shows settled at once");
+            // a card with its own way out: closed at once, its drawing kept until the leave is done, then gone
+            if (InCard.Layer is { } layer)
+            {
+                Action? leaving = null;
+                int drawn = layer.Children.Count;
+                var ic = new InCard { Child = new System.Windows.Controls.Border { Width = 10, Height = 10 }, Leave = remove => { leaving = remove; return remove; } };
+                ic.IsOpen = true; ic.IsOpen = false;
+                bool kept = !ic.IsOpen && InCard.Current == null && layer.Children.Count == drawn + 1;
+                leaving?.Invoke();
+                bool goneAfter = layer.Children.Count == drawn;
+                // opened again while still leaving: the old drawing goes at once, and only the new one is drawn
+                ic.IsOpen = true; ic.IsOpen = false; ic.IsOpen = true;
+                bool once = layer.Children.Count == drawn + 1;
+                ic.IsOpen = false;
+                bool leavingNow = layer.Children.Count == drawn + 1;
+                var second = new InCard { Child = new System.Windows.Controls.Border { Width = 10, Height = 10 } };
+                second.IsOpen = true;
+                bool notOverlapping = layer.Children.Count == drawn + 1;
+                second.IsOpen = false;
+                Check(kept && goneAfter && once && leavingNow && notOverlapping && layer.Children.Count == drawn,
+                    "recap: a card that leaves is closed at once, its drawing goes when the leave is done, and opening it or another card ends the leave at once");
+            }
+            // the leave's own timer: a leave whose course never ticks (the clock held) still takes the card away, once
+            Motion.Still = false; Motion.FrozenAt = null;
+            if (Motion.On)
+            {
+                int removals = 0;
+                var leaver = new System.Windows.Controls.Border();
+                Motion.Leave(leaver, () => removals++);
+                Motion.Halt(leaver);   // as if the course never ran: only the timer is left
+                var until = DateTime.UtcNow.AddMilliseconds(Motion.LeaveMs * 3);
+                while (DateTime.UtcNow < until) { DoEvents(); Thread.Sleep(10); }
+                int byTimer = removals;
+                var cut = new System.Windows.Controls.Border();
+                var ended = Motion.Leave(cut, () => removals++);
+                ended(); ended();
+                bool settledBack = cut.Opacity == 1 && !Motion.Playing(cut);
+                Check(byTimer == 1 && removals == 2 && settledBack, $"recap: a leave that never finishes is taken away by its timer, once; ended at once it removes once and the card is put back settled ({byTimer} {removals} {settledBack})");
+            }
+            Motion.Still = stillWas; Motion.FrozenAt = frozenWas;
+        }
 
         // Options › Game reading › Explain each count (Steven, 2026-11-04: "an option you can turn on"): off by default, the
         // line card's WHY IT WAS COUNTED only while it is on, kept on Save, off again
@@ -1339,6 +1415,38 @@ public static class WpfApp
                     $"motion: with no pickup just made (a price refresh, another session) nothing rolls, lights or sweeps (Badge price {priceStill}, other session {otherStill}; Pop {popStill}; Buddy {buddyStill})");
                 foreach (var h in new[] { badge, bgFresh, bgStill, bgGoing, bgGone, bgQuiet }) h.Close();
             }
+            // 2026-11-11 (Ui/Motion.Sequence.cs): a staged opening, each effect in its turn on one course, held at a point of it
+            var seen = new List<string>();
+            var cues = new Motion.Cues().Add(0, 100, p => seen.Add($"a{p:0.##}")).Add(100, 100, p => seen.Add($"b{p:0.##}"));
+            Motion.FrozenAt = 0.25;
+            Motion.Sequence(new System.Windows.Controls.Border(), cues);
+            Check(string.Join(" ", seen) == "a0 b0 a0.5", $"motion: a sequence sets every effect to its start, then each moves only in its turn ({string.Join(" ", seen)})");
+            var own = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Gold);
+            var cu = new System.Windows.Controls.TextBlock { Foreground = own };
+            var count = Motion.CountUp(cu, 1000, N0, System.Windows.Media.Colors.Lime);
+            count(0.5); string half = cu.Text; bool lit = !ReferenceEquals(cu.Foreground, own);
+            count(1);
+            Check(half == "875" && lit && cu.Text == "1,000" && ReferenceEquals(cu.Foreground, own), $"motion: a figure counts up from nothing, eased and tinted, and ends in its own brush ({half} then {cu.Text})");
+            var seqSlot = El();
+            var landing = Motion.Landing(seqSlot, "Legend", System.Windows.Media.Colors.Red);
+            landing(0); double waiting = seqSlot.Opacity;
+            landing(0.1);
+            double ls = (seqSlot.RenderTransform as System.Windows.Media.ScaleTransform)?.ScaleX ?? 1;
+            Check(waiting == 0 && ls is > 0.9 and < 1 && seqSlot.Effect is System.Windows.Media.Effects.DropShadowEffect { Color: var lc } && lc == System.Windows.Media.Colors.Red,
+                $"motion: a slot in a sequence waits unseen, then lands and glows in the colour it was given (scale {ls:0.000})");
+            bool left = false; _ = Motion.Leave(new System.Windows.Controls.Border(), () => left = true);
+            var tag = new System.Windows.Controls.Border(); var glint = Motion.Glint(tag, System.Windows.Media.Colors.Gold, System.Windows.Media.Colors.White); glint(0.5);
+            Check(left && (tag.Background as System.Windows.Media.LinearGradientBrush)?.RelativeTransform is System.Windows.Media.TranslateTransform { X: 0 },
+                "motion: a card leaving in a held render goes at once; a glint halfway is in the middle of its box");
+            // the recap's line against your average here (Session/RunStanding.cs): the hour over earlier stays, only with three of them
+            var stays = new List<(long, double)> { (300_000, 1800), (500_000, 3600), (90_000, 300) };
+            var thin = KinahLedger.Session.RunStanding.HourAverage(stays);
+            stays.Add((400_000, 1800));
+            var avg = KinahLedger.Session.RunStanding.HourAverage(stays);
+            Check(thin == null && avg == 600_000, $"recap: the average hour here weighs each stay by its time, leaves out one under ten minutes, and waits for three ({thin?.ToString() ?? "none"} then {avg})");
+            Check(KinahLedger.Session.RunStanding.Line(KinahLedger.Session.RunStanding.Share(708_000, 600_000)) == ("+18%", " vs your average here", 1) && KinahLedger.Session.RunStanding.Line(-0.07) == ("\u22127%", " vs your average here", -1)
+                  && KinahLedger.Session.RunStanding.Line(0.02) == ("", "About your average here", 0) && KinahLedger.Session.RunStanding.Share(5, 0) == 0,
+                "recap: +18% over the average, \u22127% under it, within 3% about your average, and no average is no share");
             Motion.Still = true; Motion.FrozenAt = null;
             var still = new System.Windows.Controls.TextBlock();
             Motion.Number(still, "test|still", 1, N0); Motion.Number(still, "test|still", 2, N0);
@@ -1363,6 +1471,33 @@ public static class WpfApp
             var until = DateTime.UtcNow.AddSeconds(step < 3 ? 4 : 1);
             while (DateTime.UtcNow < until) { DoEvents(); Thread.Sleep(50); }
             Save((FrameworkElement)w.Content, Path.Combine(dir, $"ui-calibration-{step + 1}.png"), 1300);
+        }
+        w.Close();
+    }
+
+    /// <summary>
+    /// ui-shot --recap: the run-end recap card in each of its sample states (ui-recap-<state>.png), on the window's page
+    /// colour with room round it for its rise, held at KL_MOTION_AT's point of its opening when that is set (else settled).
+    /// </summary>
+    public static void ShotRecap(Settings settings, string dir, string? skin)
+    {
+        Ensure();
+        Directory.CreateDirectory(dir);
+        var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        w.Show();
+        if (skin != null) Skins.Apply(skin);
+        w.ShowDemo("Open world");
+        var samples = w.RecapSamples();
+        IconCache.Drain(TimeSpan.FromSeconds(8));   // the drops' icons, when this PC is online
+        DoEvents();
+        foreach (var (state, card, open) in samples)
+        {
+            var page = new System.Windows.Controls.Border { Child = card, Padding = new Thickness(16) };
+            page.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Bg");
+            page.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); page.Arrange(new Rect(page.DesiredSize)); page.UpdateLayout();
+            open();
+            DoEvents();
+            Save(page, Path.Combine(dir, "ui-recap-" + state + (skin != null ? "-" + skin : "") + ".png"), 0);
         }
         w.Close();
     }
