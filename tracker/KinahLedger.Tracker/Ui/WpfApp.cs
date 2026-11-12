@@ -1243,7 +1243,8 @@ public static class WpfApp
             {
                 var tk = new HudTicker();
                 var v1 = new Dictionary<string, string> { ["run"] = "1", ["time"] = "RUN 42:17", ["rate"] = "1M", ["total"] = "800K" };
-                var v2 = new Dictionary<string, string>(v1) { ["rate"] = "1.27M", ["total"] = "894K" };
+                // a pickup just made (Ui/HudFreshPicks.cs): only that rolls the figures
+                var v2 = new Dictionary<string, string>(v1) { ["rate"] = "1.27M", ["total"] = "894K", ["pick0"] = "Thick hide", ["pick0Id"] = "fresh", ["pick0At"] = DateTime.UtcNow.Ticks.ToString() };
                 // held a fifth in: the hour's roll (its tint takes twice as long, so the figure moves in the first half) and the session's
                 Motion.FrozenAt = 0.2;
                 tk.Update(v1); tk.Update(v2);
@@ -1260,6 +1261,83 @@ public static class WpfApp
                 var bdShown = Texts(bd.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
                 Check(bdShown.Any(t => t.StartsWith("1.21M")) && bdShown.Any(t => t.StartsWith("845.9K")) && bdShown.Contains("75"),
                     $"motion: Buddy's hour and session roll and its ring sweeps (60 to 90), held a fifth in ({string.Join(" | ", bdShown.Where(t => t.Length is > 0 and < 24))})");
+                // Badge (the Strip look, 0.10.55) moves like them: on a pickup its hour, feed rate and session roll and its ring sweeps
+                // (60 to 90), the Legend pickup's worth pops and the live dot lights blue, the edge lights gold, and the changed notice
+                // cross-fades (a fifth in, the old one is still fading out); a first draw and a still drawing move nothing
+                var bgNow = DateTime.UtcNow;
+                var bgV1 = new Dictionary<string, string>(v1)
+                {
+                    ["chase"] = "0.6", ["toBest"] = "560K to your best here", ["feedText"] = "Thick hide", ["feedValue"] = "+1.1K", ["feedRate"] = "1M", ["feedUnit"] = "an hour",
+                    ["pick0"] = "Thick hide", ["pick0Id"] = "a", ["pick0At"] = bgNow.AddSeconds(-4).Ticks.ToString(), ["notice"] = "Update ready",
+                };
+                var bgV2 = new Dictionary<string, string>(bgV1)
+                {
+                    ["rate"] = "1.27M", ["total"] = "894K", ["chase"] = "0.9", ["toBest"] = "130K to your best here", ["feedText"] = "Shade Gloves", ["feedValue"] = "+28K", ["feedRate"] = "1.27M",
+                    ["pick0"] = "Shade Gloves", ["pick0Id"] = "b", ["pick0Grade"] = "Legend", ["pick0At"] = bgNow.Ticks.ToString(), ["notice"] = "Price alert: Shade Gloves under 30K",
+                };
+                var bgGoneV = new Dictionary<string, string>(bgV2) { ["notice"] = "" };
+                string[] bgFields = { "rate", "total", "feed" };
+                static string BgWords(System.Windows.Controls.TextBlock t) => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text));
+                List<System.Windows.Controls.TextBlock> BgTexts(HudWindow h) => BadgeTree((DependencyObject)h.Content).OfType<System.Windows.Controls.TextBlock>().ToList();
+                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.Content).Children[0];
+                var badge = new HudWindow(bgFields);
+                badge.Update(bgV1); badge.Update(bgV2);
+                var bgShown = BgTexts(badge).Select(BgWords).ToList();
+                var bgWorth = BgTexts(badge).FirstOrDefault(t => BgWords(t) == "+28K");
+                var bgEdge = (BgFrame(badge).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color;
+                var bgDot = BadgeTree((DependencyObject)badge.Content).OfType<System.Windows.Shapes.Ellipse>().FirstOrDefault(e => e.Width == 6);
+                var bgOld = BgTexts(badge).FirstOrDefault(t => BgWords(t) == "Update ready");
+                Check(bgShown.Count(t => t == "1.21M") == 2 && bgShown.Contains("845.9K") && bgShown.Contains("75")
+                      && bgWorth?.RenderTransform is System.Windows.Media.ScaleTransform { ScaleX: > 1.05 } && bgEdge?.R > 0x70
+                      && (bgDot?.Fill as System.Windows.Media.SolidColorBrush)?.Color == HudKit.GradeColor("Legend")
+                      && bgOld?.Parent is FrameworkElement { Opacity: > 0 and < 0.5 } && !bgShown.Contains(bgV2["notice"]),
+                    $"motion: Badge's hour, feed rate and session roll, its ring sweeps, a Legend pickup pops in blue, the edge lights and the notice cross-fades, a fifth in ({string.Join(" | ", bgShown.Where(t => t.Length is > 0 and < 40))}; edge {bgEdge}, dot {(bgDot?.Fill as System.Windows.Media.SolidColorBrush)?.Color})");
+                var bgFresh = new HudWindow(bgFields); bgFresh.Update(bgV2);
+                var bgStill = new HudWindow(bgFields, still: true); bgStill.Update(bgV1); bgStill.Update(bgV2);
+                bool BgCalm(HudWindow h) => BgTexts(h).Select(BgWords).Count(t => t == "1.27M") == 2 && BgTexts(h).Any(t => BgWords(t) == "90") && BgTexts(h).Any(t => BgWords(t) == bgV2["notice"])
+                    && BgTexts(h).All(t => t.RenderTransform is not System.Windows.Media.ScaleTransform && t.Parent is FrameworkElement { Opacity: 1 });
+                Check(BgCalm(bgFresh) && BgCalm(bgStill), $"motion: Badge's first draw and a still drawing of it show their figures, ring and notice as they are ({BgCalm(bgFresh)} {BgCalm(bgStill)})");
+                // a rare drop: the frame beats in its colour (down between beats a fifth in), the spark pops, the line comes in
+                var bgBlue = HudKit.GradeColor("Legend");
+                bgFresh.Alert("Rare drop: Shade Gloves ×1", bgBlue);
+                var bgBeat = (BgFrame(bgFresh).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color;
+                var bgSpark = BadgeTree((DependencyObject)bgFresh.Content).OfType<System.Windows.Controls.Image>().FirstOrDefault(i => i.RenderTransform is System.Windows.Media.ScaleTransform);
+                var bgAlert = BgTexts(bgFresh).FirstOrDefault(t => BgWords(t).StartsWith("Rare drop"));
+                Check(bgBeat?.A < 0xA0 && bgBeat?.B == bgBlue.B && bgSpark?.RenderTransform is System.Windows.Media.ScaleTransform { ScaleX: > 1.005 } && bgAlert?.Parent is FrameworkElement { Opacity: > 0.3 and < 0.8 },
+                    $"motion: Badge's rare drop beats its frame in the drop's colour, pops its spark and fades its line in ({bgBeat}, spark {bgSpark != null}, line {(bgAlert?.Parent as FrameworkElement)?.Opacity:0.00})");
+                // a notice that goes fades out before it hides: halfway it still reads, faint; at its end it is gone
+                Motion.FrozenAt = 0.5;
+                var bgGoing = new HudWindow(bgFields); bgGoing.Update(bgV2); bgGoing.Update(bgGoneV);
+                var bgGoingNote = BgTexts(bgGoing).FirstOrDefault(t => BgWords(t) == bgV2["notice"]);
+                Motion.FrozenAt = 1;
+                var bgGone = new HudWindow(bgFields); bgGone.Update(bgV2); bgGone.Update(bgGoneV);
+                bool bgHidden = !BgTexts(bgGone).Any(t => BgWords(t) == bgV2["notice"] && t.Visibility == Visibility.Visible);
+                Check(bgGoingNote is { Visibility: Visibility.Visible, Parent: FrameworkElement { Opacity: > 0 and < 0.5 } } && bgHidden,
+                    $"motion: Badge's notice fades out before it hides ({(bgGoingNote?.Parent as FrameworkElement)?.Opacity:0.00}, then hidden {bgHidden})");
+                // no pickup, nothing moves: a price refresh revaluing the session (the same newest pickup, the figures up) and another
+                // character's session coming in (the pickups cleared, then its own from minutes ago) show their figures as they are,
+                // with no roll, no lit edge and no sweep, on Badge, Pop and Buddy alike
+                Motion.FrozenAt = 0.2;
+                var bgLine = HudKit.Rgb(0x232736);
+                var bgPrice = new Dictionary<string, string>(bgV2) { ["rate"] = "1.4M", ["total"] = "990K", ["feedRate"] = "1.4M", ["chase"] = "0.95" };
+                var bgCleared = new Dictionary<string, string>(bgV2) { ["rate"] = "", ["total"] = "0", ["feedRate"] = "", ["chase"] = "", ["toBest"] = "", ["pick0"] = "", ["pick0Id"] = "", ["pick0At"] = "" };
+                var bgOther = new Dictionary<string, string>(bgV2) { ["rate"] = "1.9M", ["total"] = "2.1M", ["feedRate"] = "1.9M", ["chase"] = "0.8", ["pick0Id"] = "other", ["pick0At"] = bgNow.AddMinutes(-5).Ticks.ToString() };
+                var bgQuiet = new HudWindow(bgFields);
+                bgQuiet.Update(bgV2);
+                bgQuiet.Update(bgPrice);
+                var quietPrice = BgTexts(bgQuiet).Select(BgWords).ToList();
+                bool priceStill = quietPrice.Count(t => t == "1.4M") == 2 && quietPrice.Contains("990K") && quietPrice.Contains("95") && (BgFrame(bgQuiet).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color == bgLine;
+                bgQuiet.Update(bgCleared); bgQuiet.Update(bgOther);
+                var quietOther = BgTexts(bgQuiet).Select(BgWords).ToList();
+                bool otherStill = quietOther.Count(t => t == "1.9M") == 2 && quietOther.Contains("2.1M") && quietOther.Contains("80") && (BgFrame(bgQuiet).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color == bgLine;
+                var tkQuiet = new HudTicker(); tkQuiet.Update(v2); tkQuiet.Update(new Dictionary<string, string>(v2) { ["rate"] = "1.4M", ["total"] = "990K" });
+                var tkQuietShown = Texts(tkQuiet.Root).Select(t => t.Text).ToList();
+                var bdQuiet = new HudCard(); bdQuiet.Update(new Dictionary<string, string>(v2) { ["chase"] = "0.6" }); bdQuiet.Update(new Dictionary<string, string>(v2) { ["rate"] = "1.4M", ["total"] = "990K", ["chase"] = "0.9" });
+                var bdQuietShown = Texts(bdQuiet.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
+                bool popStill = tkQuietShown.Contains("1.4M") && tkQuietShown.Contains("990K"), buddyStill = bdQuietShown.Contains("1.4M") && bdQuietShown.Contains("990K") && bdQuietShown.Contains("90");
+                Check(priceStill && otherStill && popStill && buddyStill,
+                    $"motion: with no pickup just made (a price refresh, another session) nothing rolls, lights or sweeps (Badge price {priceStill}, other session {otherStill}; Pop {popStill}; Buddy {buddyStill})");
+                foreach (var h in new[] { badge, bgFresh, bgStill, bgGoing, bgGone, bgQuiet }) h.Close();
             }
             Motion.Still = true; Motion.FrozenAt = null;
             var still = new System.Windows.Controls.TextBlock();
@@ -1523,6 +1601,7 @@ public static class WpfApp
             h.Show();
             h.Update(hudState);
             DoEvents();
+            if (Motion.FrozenAt != null) { h.MotionFrameForRender(hudState); DoEvents(); }   // KL_MOTION_AT: Badge's motion held at that point
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }
@@ -1535,6 +1614,7 @@ public static class WpfApp
             if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ Nothing looked wrong", hudAcc != null && hudToLook);
             if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1 · sells for 28K on Siel", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
             DoEvents();
+            if (Motion.FrozenAt != null) { h.MotionFrameForRender(values); DoEvents(); }
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }
@@ -1564,6 +1644,8 @@ public static class WpfApp
             // a run on: the red dot, the run's clock, and the shortcut's confirmation; then the stop's line on the default panel
             ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = "Run started" }),
             ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["run"] = "", ["flash"] = "Run stopped · 1.27M this run" }),
+            // past your best here: the ring full in mint with its star, the chase line mint
+            ("ui-hud-best.png", HudFields.Parse(null), new() { ["chase"] = "1.000", ["toBest"] = "New best here" }),
             // Options at its far ends: 30% background (the figures stay solid) at 150%
             ("ui-hud-scaled.png", HudFields.Parse("time,rate,total"), new()),
             // the first two minutes: the hour says it is warming up instead of a wild figure, on the feed and on the classic set
@@ -1578,6 +1660,7 @@ public static class WpfApp
             h.Update(v);
             if (file == "ui-hud-scaled.png") { h.SetOpacity(0.3); h.SetScale(1.5); }
             DoEvents();
+            if (Motion.FrozenAt != null) { h.MotionFrameForRender(v); DoEvents(); }
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }

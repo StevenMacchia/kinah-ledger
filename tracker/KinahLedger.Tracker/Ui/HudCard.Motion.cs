@@ -77,11 +77,15 @@ public sealed partial class HudCard
         }, () => { if (_ring.Visibility != Visibility.Visible) _card.BorderBrush = FrameLine; });
     }
 
+    /// <summary>The pickups seen, to tell one just made from a price refresh, a session loaded or cleared, or an Undo.</summary>
+    readonly FreshPicks _picks = new();
+
     /// <summary>
-    /// The ring of your best here at <paramref name="share"/>: swept round from the share last shown (600 ms, its percent counting
-    /// with it); the moment it passes your best, one mint pulse.
+    /// The ring of your best here at <paramref name="share"/>: on a pickup just made (<paramref name="rose"/>) swept round from
+    /// the share last shown (600 ms, its percent counting with it), any other change set as it is; the moment it passes your
+    /// best, one mint pulse.
     /// </summary>
-    void DrawRing(double share, bool beat)
+    void DrawRing(double share, bool beat, bool rose)
     {
         var tone = Rgb(beat ? MintC : GoldC);
         void Draw(double s)
@@ -89,6 +93,7 @@ public sealed partial class HudCard
             _ringHost.Children.Clear();
             _ringHost.Children.Add(Ring(44, 4.5, s, tone, beat ? "★" : $"{Math.Round(Math.Min(s, 1) * 100):0}", beat ? "best" : "of best"));
         }
+        if (Moves && !rose && !Motion.Playing(_ringHost)) Motion.ForgetShare(_key + "ring");   // set as it is: no slide
         if (Moves) Motion.Slide(_ringHost, _key + "ring", share, Draw); else Draw(share);
         if (beat && !_wasBeat && _ringDrawn && Moves) BestPulse();
         _wasBeat = beat; _ringDrawn = true;
