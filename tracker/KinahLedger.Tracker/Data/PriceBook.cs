@@ -321,9 +321,12 @@ public static class PriceBook
         return _farmed;
     }
 
-    public static bool Farmed(string name) { lock (Lock) return FarmedSet().Contains(Norm(name)); }
+    /// <summary>
+    /// "I have these": ticked, or held bound (<see cref="BoundHeld"/>). Either way the material costs nothing in a craft.
+    /// </summary>
+    public static bool Farmed(string name) { lock (Lock) { var k = Norm(name); return FarmedSet().Contains(k) || BoundSet().Contains(Norm(Unbound(name))); } }
 
-    /// <summary>Ticks (or unticks) "I have these" for a material.</summary>
+    /// <summary>Ticks (or unticks) "I have these" for a material. Unticking also lets go of the bound copies it was held for.</summary>
     public static void SetFarmed(string name, bool on)
     {
         lock (Lock)
@@ -332,7 +335,53 @@ public static class PriceBook
             if (on) d.Add(Norm(name)); else d.Remove(Norm(name));
             try { File.WriteAllText(Path.Combine(Dir, "farmed-materials.json"), JsonSerializer.Serialize(d.OrderBy(x => x, StringComparer.Ordinal).ToList())); }
             catch (Exception ex) { CrashLog.Write("farmed materials", ex); }
+            if (!on && BoundSet().Remove(Norm(Unbound(name)))) SaveBound();
         }
+    }
+
+    /// <summary>
+    /// Materials the player has picked up bound copies of (2026-11-12, Steven: his bound Lesser Manastones "cant even be sold",
+    /// and the Crafting part said he lost 500K a craft making Manastones by charging them at the Market's price). A bound copy
+    /// has no Market value, so a material held bound costs nothing in a craft (<see cref="Farmed"/>), and what a craft makes
+    /// from it is bound as well (RecipeBook.BoundCraft). The game's crafting window doesn't say which copies a craft used, so
+    /// having picked up bound ones is the sign. Kept on this PC in bound-held.json; unticking "I have these" lets one go.
+    /// </summary>
+    static HashSet<string>? _boundHeld;
+    static HashSet<string> BoundSet()
+    {
+        if (_boundHeld != null) return _boundHeld;
+        _boundHeld = new();
+        try
+        {
+            var path = Path.Combine(Dir, "bound-held.json");
+            if (File.Exists(path)) foreach (var n in JsonSerializer.Deserialize<List<string>>(File.ReadAllText(path)) ?? new()) _boundHeld.Add(Norm(n));
+        }
+        catch (Exception ex) { CrashLog.Write("bound held", ex); }
+        return _boundHeld;
+    }
+
+    static void SaveBound()
+    {
+        try { File.WriteAllText(Path.Combine(Dir, "bound-held.json"), JsonSerializer.Serialize(BoundSet().OrderBy(x => x, StringComparer.Ordinal).ToList())); }
+        catch (Exception ex) { CrashLog.Write("bound held", ex); }
+    }
+
+    static string Unbound(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+
+    /// <summary>Whether the player has picked up bound copies of this material.</summary>
+    public static bool BoundHeld(string name) { lock (Lock) return BoundSet().Contains(Norm(Unbound(name))); }
+
+    /// <summary>Bound copies picked up (their names, with or without "(Bound)"): kept from now on. Returns the ones new to the list.</summary>
+    public static List<string> NoteBoundHeld(IEnumerable<string> names)
+    {
+        var added = new List<string>();
+        lock (Lock)
+        {
+            var d = BoundSet();
+            foreach (var n in names) { var k = Norm(Unbound(n)); if (k.Length > 0 && d.Add(k)) added.Add(Unbound(n)); }
+            if (added.Count > 0) SaveBound();
+        }
+        return added;
     }
 
     /// <summary>Sets (or, with 0, clears) what the NPC charges for one.</summary>
@@ -476,7 +525,7 @@ public static class PriceBook
     }
 
     /// <summary>Forgets what was loaded from files, for tests that switch folders.</summary>
-    public static void Reset() { lock (Lock) { _local = null; _typed = null; _vendor = null; _farmed = null; } }
+    public static void Reset() { lock (Lock) { _local = null; _typed = null; _vendor = null; _farmed = null; _boundHeld = null; } }
 
     static string Norm(string s) => string.Join(' ', s.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
 }

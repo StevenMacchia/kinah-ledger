@@ -225,6 +225,23 @@ public static class RecipeBook
     }
 
     /// <summary>
+    /// A craft made from the player's bound stock: the recipe's main material (the Market one that costs the most, not an
+    /// NPC's "(Bound)" ink) is held bound (PriceBook.BoundHeld). It cost nothing, and what it makes is bound too: it can't
+    /// be sold, so it isn't valued at the Market's price either (2026-11-12, Steven's Manastones: 5 bound Lesser Manastone
+    /// charged at 55,542 each against an Intermediate Manastone at 51,220). A bound powder from a quest doesn't make every
+    /// recipe that uses powder a bound one: only the main material decides.
+    /// </summary>
+    public static bool BoundCraft(string recipeOutput) => BoundMain(recipeOutput) is { Length: > 0 } m && PriceBook.BoundHeld(m);
+
+    /// <summary>The recipe's main material: the Market one that costs the most for a try ("" when the book doesn't have it).</summary>
+    public static string BoundMain(string recipeOutput) =>
+        ForOutput(recipeOutput) is { } r
+        && r.Materials.Where(m => !m.Item.Contains("(Bound)", StringComparison.OrdinalIgnoreCase))
+                      .OrderByDescending(m => (PriceBook.CostPrice(m.Item) ?? 0) * m.Qty).ThenByDescending(m => m.Qty)
+                      .FirstOrDefault() is { } main ? main.Item : "";
+
+
+    /// <summary>
     /// What a run of tries cost, each at its own recipe's cost: <paramref name="tries"/> is the tries by how many one success
     /// makes (CraftLedger.Recipe.Tries), so 3 tries of the ×10 recipe are not priced as the ×1 one. The counts of unpriced,
     /// vendor and farmed materials are the most any one recipe had. Null when the book doesn't have the item.
