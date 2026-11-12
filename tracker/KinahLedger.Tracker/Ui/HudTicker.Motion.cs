@@ -42,10 +42,16 @@ public sealed partial class HudTicker
         else Motion.Blank(tb, _key + part, text);
     }
 
-    /// <summary>The pill's figures for this update; true when the session total moved, so its edge lights.</summary>
-    bool PillFigures(string rate, string total, bool warm)
+    /// <summary>The pickups seen, to tell one just made from a price refresh, a session loaded or cleared, or an Undo.</summary>
+    readonly FreshPicks _picks = new();
+
+    /// <summary>
+    /// The pill's figures for this update; true when the session total rose with a pickup just made (<paramref name="picked"/>),
+    /// so its edge lights. A total that moved any other way (a price refresh, another session) is set without a roll.
+    /// </summary>
+    bool PillFigures(string rate, string total, bool warm, bool picked)
     {
-        bool rose = _lastTotal.Length > 0 && total != _lastTotal && Num(total) is double t && Num(_lastTotal) is double was && t > was;
+        bool rose = picked && _lastTotal.Length > 0 && total != _lastTotal && Num(total) is double t && Num(_lastTotal) is double was && t > was;
         _lastTotal = total;
         if (warm) Motion.Blank(_rate, _key + "rate", rate); else Fig(_rate, "rate", rate, 0.01, rose);
         Fig(_total, "total", total, -1, rose);

@@ -103,13 +103,14 @@ public sealed partial class HudTicker : IHudLook
         bool warm = V("warm") == "1";
         // nothing counted yet (no run, no pickup, a total of 0): "Waiting for the first count" rather than "0:00 | 0" (2026-10-26)
         bool counted = run || Picks(values).Count > 0 || V("total") is not ("" or "0");
+        bool picked = _picks.Next(values, out _) != null;   // only a pickup just made rolls the pill (Ui/HudFreshPicks.cs)
         if (Changed("pill", $"{live}|{run}|{clock}|{V("rate")}|{warm}|{V("total")}|{paused.Length > 0}|{counted}"))
         {
             SetDot(_dot, live);
             _run.Visibility = run ? Visibility.Visible : Visibility.Collapsed;
             _time.Text = clock; _time.Foreground = live || (!run && paused.Length == 0) ? Ink : Faint;
             // the hour and the session roll to their new figures on a pickup (Ui/HudTicker.Motion.cs)
-            PillFigures(V("rate"), V("total"), warm);
+            PillFigures(V("rate"), V("total"), warm, picked);
             _rate.FontSize = warm ? 13 : 15; _rate.Opacity = warm ? .55 : 1;
             _unit.Visibility = V("rate").Length > 0 && !warm ? Visibility.Visible : Visibility.Collapsed;
             _sep2.Visibility = _total.Visibility = V("total").Length > 0 ? Visibility.Visible : Visibility.Collapsed;

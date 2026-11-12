@@ -257,6 +257,82 @@ public static class WpfApp
         DoEvents();
         Check(p.RunRecap, "recap back on");
         Check(w.SampleRecapCard() is System.Windows.Controls.Border, "the recap card builds");
+        // the recap comes alive (2026-11-11): its opening held at points of its course, as KL_MOTION_AT holds a render
+        {
+            var frozenWas = Motion.FrozenAt; bool stillWas = Motion.Still;
+            static IEnumerable<DependencyObject> Tree(DependencyObject d) => new[] { d }.Concat(LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>().SelectMany(Tree));
+            static List<string> Texts(DependencyObject d) => Tree(d).OfType<System.Windows.Controls.TextBlock>().Select(t => t.Text).ToList();
+            static List<FrameworkElement> Tiles(DependencyObject d) => Tree(d).OfType<System.Windows.Controls.Grid>().Where(g => g.ToolTip is string).Cast<FrameworkElement>().ToList();
+            System.Windows.Controls.Border Held(string state, double? at)
+            {
+                Motion.FrozenAt = at;
+                var (_, card, open) = w.RecapSamples().First(x => x.State == state);
+                open();
+                card.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                return card;
+            }
+            var early = Held("run", 0.1); var settled = Held("run", 1);
+            var et = Texts(early); var ends = Texts(settled);
+            Check(early.Opacity is > 0 and < 1 && !et.Contains("686K") && !et.Contains("955K") && Tiles(early).All(x => x.Opacity == 0)
+                  && ends.Contains("686K") && ends.Contains("47:12") && ends.Contains("955K") && ends.Contains("+18%") && ends.Contains(" vs your average here")
+                  && settled.Opacity == 1 && Tiles(settled).Count == 5 && Tiles(settled).All(x => x.Opacity == 1 && x.RenderTransform is not System.Windows.Media.ScaleTransform),
+                $"recap: a tenth in, the card is arriving and its figures and tiles wait their turn; at the end it reads 686K, 47:12, 955K, +18% ({early.Opacity:0.00}; {string.Join(" ", ends.Take(12))})");
+            Check(early.DesiredSize == settled.DesiredSize, $"recap: the card keeps its size while it plays ({early.DesiredSize} and {settled.DesiredSize})");
+            // the best drop (a Legend) a tenth into its course: grown in part way and glowing in the dark cards' Legend blue
+            var glowing = Held("run", (MainWindow.RecapBestDropAt + 0.1 * Motion.GlowMs) / (MainWindow.RecapBestDropAt + Motion.GlowMs));
+            var glow = Tree(glowing).OfType<UIElement>().Select(e => e.Effect).OfType<System.Windows.Media.Effects.DropShadowEffect>().FirstOrDefault(d => d.BlurRadius == 18);
+            Check(glow is { Opacity: > 0.3 } && glow.Color == System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF), $"recap: the best drop glows once in its grade's colour as it lands ({glow?.Color} {glow?.Opacity:0.00})");
+            var best = Texts(Held("new-best", 1)); var thin = Texts(Held("no-loot", 1)); var longName = Texts(Held("long-name", 1));
+            Check(best.Contains("★ NEW BEST HERE") && best.Any(x => x.Contains("it was 1.05M")) && !best.Contains(" vs your average here") && !ends.Contains("★ NEW BEST HERE"),
+                "recap: a new best has the gold tag and its figures, and no line against the average; a run as usual has no tag");
+            Check(!thin.Contains("DROPS") && !thin.Any(x => x.Contains("average")) && thin.Count(x => x == "148K") == 1 && thin.Contains("all Kinah") && !thin.Contains("Kinah") && !thin.Contains("Loot"),
+                $"recap: a run with no loot says its Kinah once, as the total (all Kinah), with no DROPS and, on thin history, no line against the average ({string.Join(" ", thin)})");
+            Check(longName.Any(x => x.EndsWith("The Forgotten Sanctuary of the Silvermoon")) && longName.Contains("\u22127%") && longName.Contains("+4"),
+                $"recap: a long place name is whole, a run under the average reads \u22127%, and drops past the strip are counted ({string.Join(" ", longName.Where(x => x.Contains('%') || x.StartsWith('+')))})");
+            Motion.Still = true;
+            var calm = Held("run", null);
+            Check(!Motion.On && calm.Opacity == 1 && Texts(calm).Contains("686K") && Tiles(calm).All(x => x.Opacity == 1), "recap: with motion off the card shows settled at once");
+            // a card with its own way out: closed at once, its drawing kept until the leave is done, then gone
+            if (InCard.Layer is { } layer)
+            {
+                Action? leaving = null;
+                int drawn = layer.Children.Count;
+                var ic = new InCard { Child = new System.Windows.Controls.Border { Width = 10, Height = 10 }, Leave = remove => { leaving = remove; return remove; } };
+                ic.IsOpen = true; ic.IsOpen = false;
+                bool kept = !ic.IsOpen && InCard.Current == null && layer.Children.Count == drawn + 1;
+                leaving?.Invoke();
+                bool goneAfter = layer.Children.Count == drawn;
+                // opened again while still leaving: the old drawing goes at once, and only the new one is drawn
+                ic.IsOpen = true; ic.IsOpen = false; ic.IsOpen = true;
+                bool once = layer.Children.Count == drawn + 1;
+                ic.IsOpen = false;
+                bool leavingNow = layer.Children.Count == drawn + 1;
+                var second = new InCard { Child = new System.Windows.Controls.Border { Width = 10, Height = 10 } };
+                second.IsOpen = true;
+                bool notOverlapping = layer.Children.Count == drawn + 1;
+                second.IsOpen = false;
+                Check(kept && goneAfter && once && leavingNow && notOverlapping && layer.Children.Count == drawn,
+                    "recap: a card that leaves is closed at once, its drawing goes when the leave is done, and opening it or another card ends the leave at once");
+            }
+            // the leave's own timer: a leave whose course never ticks (the clock held) still takes the card away, once
+            Motion.Still = false; Motion.FrozenAt = null;
+            if (Motion.On)
+            {
+                int removals = 0;
+                var leaver = new System.Windows.Controls.Border();
+                Motion.Leave(leaver, () => removals++);
+                Motion.Halt(leaver);   // as if the course never ran: only the timer is left
+                var until = DateTime.UtcNow.AddMilliseconds(Motion.LeaveMs * 3);
+                while (DateTime.UtcNow < until) { DoEvents(); Thread.Sleep(10); }
+                int byTimer = removals;
+                var cut = new System.Windows.Controls.Border();
+                var ended = Motion.Leave(cut, () => removals++);
+                ended(); ended();
+                bool settledBack = cut.Opacity == 1 && !Motion.Playing(cut);
+                Check(byTimer == 1 && removals == 2 && settledBack, $"recap: a leave that never finishes is taken away by its timer, once; ended at once it removes once and the card is put back settled ({byTimer} {removals} {settledBack})");
+            }
+            Motion.Still = stillWas; Motion.FrozenAt = frozenWas;
+        }
 
         // Options › Game reading › Explain each count (Steven, 2026-11-04: "an option you can turn on"): off by default, the
         // line card's WHY IT WAS COUNTED only while it is on, kept on Save, off again
@@ -1021,6 +1097,19 @@ public static class WpfApp
             finally { MainWindow.OpenForTest = null; }
         }
 
+        // a new best's moment in the window (Ui/MainWindow.Bests.cs): held a third in, the best tag growing in and the ring
+        // swelling; with motion off, no tag at all (the ring's ★ says it); the hour back under the best takes a tag away
+        {
+            var frozenWas = Motion.FrozenAt;
+            Motion.FrozenAt = 0.3;
+            var held = w.BestMomentForTest();
+            Motion.FrozenAt = null;
+            var still = w.BestMomentForTest();
+            Motion.FrozenAt = frozenWas;
+            Check(held.Tag && held.Opacity > 0.3 && held.Opacity < 1 && held.RingScale > 1.05 && held.GoneUnder && !still.Tag,
+                $"motion: a new best grows its tag in and pops the ring once ({held.Tag} {held.Opacity:0.00} ring {held.RingScale:0.000}); still, no tag ({still.Tag}); back under, the tag goes ({held.GoneUnder})");
+        }
+
         // a rare drop is a moment (2026-11-11, Ui/MainWindow.RareMoment.cs): the drops of one tick are one moment, the best grade with
         // "+2 more", and none plays in a demo; held halfway the window's says what dropped on a layer that takes no room; at its end it is gone
         {
@@ -1111,6 +1200,131 @@ public static class WpfApp
             Motion.Reveal(chart, 600, 90);
             double clipW = (chart.Clip as System.Windows.Media.RectangleGeometry)?.Rect.Width ?? -1;
             Check(clipW > 400 && clipW < 632, $"motion: the chart halfway drawn in shows {clipW:0} px of its width, eased");
+            // the rate chart, live (Ui/RateChart.cs): a new minute runs the line out from where it ended and pops the head dot; a
+            // pickup eases the newest minute, the clock's nudge is set at once; past an hour the oldest minute folds away; the mouse reads a minute
+            {
+                const double CW = 628, CH = 96;
+                var t0 = new DateTime(2026, 11, 11, 20, 0, 0, DateTimeKind.Utc);
+                Session.RateLine Rates(int n, double last = 0, int from = 0)
+                {
+                    var l = new Session.RateLine();
+                    for (int i = from; i < from + n; i++) l.Add(t0.AddMinutes(i), i == from + n - 1 && last > 0 ? last : 500_000 + 10_000 * i);
+                    return l;
+                }
+                (RateChart Chart, System.Windows.Shapes.Polyline Line, System.Windows.Shapes.Path Fill, System.Windows.Controls.Canvas Box) Fresh()
+                {
+                    var cv = new System.Windows.Controls.Canvas { Width = CW, Height = CH };
+                    var fill = new System.Windows.Shapes.Path(); var line = new System.Windows.Shapes.Polyline(); var dot = new System.Windows.Shapes.Ellipse { Width = 10, Height = 10 };
+                    var bestLine = new System.Windows.Shapes.Line(); var bestLbl = new System.Windows.Controls.TextBlock();
+                    foreach (UIElement el in new UIElement[] { fill, line, dot, bestLine, bestLbl }) cv.Children.Add(el);
+                    return (new RateChart(cv, fill, line, dot, bestLine, bestLbl), line, fill, cv);
+                }
+                static bool At(Point p, (double X, double Y) q) => Math.Abs(p.X - q.X) < 0.01 && Math.Abs(p.Y - q.Y) < 0.01;
+                bool Settled(System.Windows.Shapes.Polyline line, Session.RateLine l) { var t = l.Points(CW, CH); return line.Points.Count == t.Count && t.Select((q, i) => At(line.Points[i], q)).All(x => x); }
+                var three = Rates(3); var four = Rates(4, 505_000);
+                var lastWas = three.Points(CW, CH)[^1];
+
+                Motion.FrozenAt = 0;
+                var land0 = Fresh(); land0.Chart.Draw(three, 600_000, live: true); land0.Chart.Draw(four, 600_000, live: true);
+                Check(land0.Line.Points.Count == 4 && At(land0.Line.Points[3], lastWas) && At(land0.Line.Points[2], lastWas) && land0.Chart.Head.Ring,
+                    $"motion: chart: a new minute starts where the line ended, its segment not yet out ({land0.Line.Points[^1]}, was {lastWas})");
+                Motion.FrozenAt = 0.3;
+                var land3 = Fresh(); land3.Chart.Draw(three, 600_000, live: true); land3.Chart.Draw(four, 600_000, live: true);
+                double y3 = land3.Line.Points[^1].Y, yTo = four.Points(CW, CH)[^1].Y;
+                Check(Math.Abs(land3.Chart.Head.Scale - 1.6) < 0.01 && land3.Chart.Head.Ring && y3 > Math.Min(lastWas.Y, yTo) + 1 && y3 < Math.Max(lastWas.Y, yTo) - 1,
+                    $"motion: chart: three tenths in the head dot is at its swell ({land3.Chart.Head.Scale:0.00}), its ring out, the line on its way ({lastWas.Y:0.0} → {y3:0.0} → {yTo:0.0})");
+                Motion.FrozenAt = 1;
+                var land1 = Fresh(); land1.Chart.Draw(three, 600_000, live: true); land1.Chart.Draw(four, 600_000, live: true);
+                Check(Settled(land1.Line, four) && land1.Chart.Head == (1.0, false), $"motion: chart: at its end the line's last point is the newest minute's ({land1.Line.Points[^1]}), the dot at rest");
+                var gold = ((System.Windows.Media.SolidColorBrush)Application.Current.FindResource("Gold")).Color;
+                var stop = (land1.Fill.Fill as System.Windows.Media.LinearGradientBrush)?.GradientStops[0].Color;
+                land1.Box.Resources["Bg"] = System.Windows.Media.Brushes.White; land1.Box.Resources["Gold"] = System.Windows.Media.Brushes.Red;
+                var switched = (land1.Fill.Fill as System.Windows.Media.LinearGradientBrush)?.GradientStops[0].Color;
+                Check(stop is { } sc && sc.R == gold.R && sc.G == gold.G && sc.B == gold.B && sc.A > 0 && switched == System.Windows.Media.Color.FromArgb(0x4C, 0xFF, 0, 0),
+                    $"motion: chart: the fill under the line is the look's gold ({stop}, gold {gold}), repainted at once in a new look's, softer on a light one ({switched})");
+                land1.Chart.HoverAt(2);
+                string readout = t0.AddMinutes(2).ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) + " · " + Amounts.Short(520_000) + " /h";
+                Check(land1.Chart.Crosshair.Shown && land1.Chart.Readout == readout && Math.Abs(land1.Chart.Crosshair.X - land1.Line.Points[2].X) < 0.01,
+                    $"motion: chart: the mouse on the third minute reads its time and rate (\"{land1.Chart.Readout}\") at its point ({land1.Chart.Crosshair.X:0.0})");
+
+                Motion.FrozenAt = 0.5;
+                var cn = Fresh(); cn.Chart.Draw(four, 600_000, live: true);
+                var nudged = Rates(4, 505_000 * 1.0001); cn.Chart.Draw(nudged, 600_000, live: true);
+                bool nudgeSet = Settled(cn.Line, nudged);
+                var picked = Rates(4, 515_000); cn.Chart.Draw(picked, 600_000, live: true);
+                double yWas = nudged.Points(CW, CH)[^1].Y, yPick = picked.Points(CW, CH)[^1].Y, yHalf = cn.Line.Points[^1].Y;
+                Check(nudgeSet && yHalf < yWas - 1 && yHalf > yPick + 1 && !cn.Chart.Head.Ring,
+                    $"motion: chart: the clock's nudge is set at once ({nudgeSet}); a pickup eases the newest minute, halfway {yHalf:0.0} between {yWas:0.0} and {yPick:0.0}, without a pop");
+                var cr = Fresh(); var hour = Rates(60); cr.Chart.Draw(hour, 0, live: true);
+                var rolled = Rates(60, from: 1); cr.Chart.Draw(rolled, 0, live: true);
+                Check(cr.Line.Points.Count == 61 && cr.Line.Points[0].X == 0 && cr.Line.Points[1].X > 0 && cr.Line.Points[1].X < CW / 59,
+                    $"motion: chart: past an hour the oldest minute folds onto the first while the line slides left ({cr.Line.Points.Count} points, the second at {cr.Line.Points[1].X:0.0})");
+                var cc = Fresh(); cc.Chart.Draw(three, 600_000, live: false); cc.Chart.Draw(four, 600_000, live: false);
+                int closedPts = cc.Line.Points.Count; cc.Chart.Open();
+                var co = Fresh(); co.Chart.Draw(three, 600_000, live: false); co.Chart.Draw(four, 600_000, live: true);
+                Check(closedPts == 0 && Settled(cc.Line, four) && Settled(co.Line, four) && !co.Chart.Head.Ring, $"motion: chart: closed it draws nothing ({closedPts} points); opened, or the first draw after, the line is set as it is");
+                bool stillWas = Motion.Still;
+                Motion.FrozenAt = null; Motion.Still = true;
+                var cs = Fresh(); cs.Chart.Draw(three, 600_000, live: true); cs.Chart.Draw(four, 600_000, live: true);
+                cs.Chart.HoverAt(1);
+                Check(Settled(cs.Line, four) && cs.Chart.Head == (1.0, false) && cs.Chart.Crosshair.Shown, "motion: chart: with motion off a new minute is drawn settled at once, the crosshair up at once");
+                Motion.Still = stillWas;
+            }
+            // a new best here and today's milestones (Session/Milestones.cs, Ui/MainWindow.Bests.cs): said only on a crossing seen live, once
+            {
+                var ms = new Session.Milestones();
+                const string d1 = "2026-11-11", d2 = "2026-11-12";
+                Check(Session.Milestones.MarkAt(999_999) == -1 && Session.Milestones.MarkAt(1_000_000) == 0 && Session.Milestones.MarkAt(200_000_000) == Session.Milestones.DayMarks.Length - 1,
+                    "motion: today's Kinah marks start at 1M and the last holds past 100M");
+                var marks = new[] { ms.Day(d1, "c1", 1_200_000, false), ms.Day(d1, "c1", 1_300_000, false), ms.Day(d1, "c1", 2_600_000, false), ms.Day(d1, "c1", 2_700_000, false) };
+                Check(marks[0] == null && marks[1] == null && marks[2] == 2_500_000 && marks[3] == null,
+                    $"motion: today's Kinah already past 1M on the first look (the tracker starting) says nothing; passing 2.5M says it once ({string.Join(", ", marks.Select(x => x?.ToString() ?? "-"))})");
+                var again = new[] { ms.Day(d1, "c2", 3_000_000, false), ms.Day(d1, "c1", 2_800_000, false), ms.Day(d1, "c1", 2_400_000, false), ms.Day(d1, "c1", 2_600_000, false) };
+                Check(again.All(x => x == null), "motion: another character's first look says nothing, and a mark passed once isn't said again that day (Kinah taken off and picked up again)");
+                var loaded = ms.Day(d1, "c1", 6_000_000, true); var jump = ms.Day(d1, "c1", 26_000_000, false);
+                var next = new[] { ms.Day(d2, "c1", 900_000, false), ms.Day(d2, "c1", 1_000_000, false) };
+                Check(loaded == null && jump == 25_000_000 && next[0] == null && next[1] == 1_000_000,
+                    $"motion: a day loaded again is noted, not said; several marks at once say the highest; a new day starts over ({loaded} {jump} {next[0]} {next[1]})");
+                // midnight: the clock's new day can be read a moment before the reader starts its count, with yesterday's total
+                const string d3 = "2026-11-13";
+                var midnight = new[] { ms.Day(d3, "c1", 6_000_000, false), ms.Day(d3, "c1", 0, true), ms.Day(d3, "c1", 1_000_000, false) };
+                Check(midnight[0] == null && midnight[1] == null && midnight[2] == 1_000_000,
+                    $"motion: yesterday's 6M seen under the new day, then the new day's own count from 0: its 1M is still said ({string.Join(", ", midnight.Select(x => x?.ToString() ?? "-"))})");
+                bool firstLook = ms.Best(d1, "c1|here|1", true, true, false);
+                var crossing = new[] { ms.Best(d1, "c1|here|2", true, false, false), ms.Best(d1, "c1|here|2", true, true, true), ms.Best(d1, "c1|here|2", true, false, false),
+                    ms.Best(d1, "c1|here|2", true, true, false), ms.Best(d1, "c1|here|2", true, true, false), ms.Best(d1, "c1|here|2", true, false, false), ms.Best(d1, "c1|here|2", true, true, false) };
+                Check(!firstLook && crossing.Count(x => x) == 1 && crossing[3],
+                    $"motion: a best already passed on a count's first look says nothing; passing it by a pickup says it once (not when prices moved it, not again after a dip) ({string.Join("", crossing.Select(x => x ? "1" : "0"))})");
+                bool warm = ms.Best(d1, "c1|here|3", false, false, false) | ms.Best(d1, "c1|here|3", true, true, false);
+                bool newDay = ms.Best(d2, "c1|here|2", true, false, false) | ms.Best(d2, "c1|here|2", true, true, false);
+                Check(!warm && newDay, "motion: an hour past its best when it stops warming up says nothing; on a new day the same count can say a best again");
+                // the hour against a 1,050,000 best over one hour: 1M Kinah and 10 Spiritstone, sold at 5,000 then 7,000 after a price refresh
+                {
+                    const double keeps = 0.88, best = 1_050_000;
+                    var piecesWas = new Dictionary<long, int> { [1] = 10 };
+                    double hourWas = 1_000_000 + 10 * 5_000 * keeps;
+                    // the refresh and an ordinary pickup (500 Kinah, one Spiritstone) in the same tick: the prices did it
+                    double picked = Session.Milestones.Picked(1_000_000, 1_000_500, piecesWas, new[] { (1L, "Spiritstone", 11) }, _ => 7_000 * keeps);
+                    double hourNow = 1_000_500 + 11 * 7_000 * keeps;
+                    bool refresh = ms.Best(d1, "c1|here|4", true, hourWas >= best, false) | ms.Best(d1, "c1|here|4", true, hourNow >= best, hourNow - picked >= best);
+                    // no refresh, two Spiritstone and 500 Kinah: play did it
+                    double picked2 = Session.Milestones.Picked(1_000_000, 1_000_500, piecesWas, new[] { (1L, "Spiritstone", 12) }, _ => 5_000 * keeps);
+                    double hourNow2 = 1_000_500 + 12 * 5_000 * keeps;
+                    bool play = ms.Best(d1, "c1|here|5", true, hourWas >= best, false) | ms.Best(d1, "c1|here|5", true, hourNow2 >= best, hourNow2 - picked2 >= best);
+                    Check(!refresh && play && Math.Abs(picked - (500 + 7_000 * keeps)) < 1e-6,
+                        $"motion: a price refresh and a pickup in one tick don't say a best the prices made ({hourNow:N0} without {picked:N0} picked); two pieces that pass it do ({hourNow2:N0})");
+                }
+                var lit = new System.Windows.Shapes.Rectangle { Visibility = Visibility.Collapsed };
+                var figure = new System.Windows.Controls.TextBlock { Text = "1.27M" };
+                Motion.FrozenAt = 0.5;
+                Motion.LightSweep(lit, figure, "Gold");
+                double bandX = ((lit.Fill as System.Windows.Media.LinearGradientBrush)?.RelativeTransform as System.Windows.Media.TranslateTransform)?.X ?? double.NaN;
+                bool lightHalf = lit.Visibility == Visibility.Visible && lit.OpacityMask is System.Windows.Media.VisualBrush && bandX > 0.5 && bandX < 0.6;
+                Motion.FrozenAt = 1;
+                Motion.LightSweep(lit, figure, "Gold");
+                Check(lightHalf && lit.Visibility == Visibility.Collapsed && lit.Fill == null && lit.OpacityMask == null,
+                    $"motion: the light halfway has crossed most of the figure, eased (band at {bandX:0.000}), masked by its glyphs; at its end it is gone");
+            }
             // the overlay's Ticker (0.10.49): its figures read back as numbers only when the overlay writes them the same way,
             // and the hour rolls on a pickup (held halfway: between the old and the new figure)
             Check(HudTicker.Num("1.27M") == 1_270_000 && HudTicker.Num("894K") == 894_000 && HudTicker.Num("12,345") == 12_345 && HudTicker.Num("warming up") == null && HudTicker.Num("1.2345M") == null,
@@ -1118,7 +1332,8 @@ public static class WpfApp
             {
                 var tk = new HudTicker();
                 var v1 = new Dictionary<string, string> { ["run"] = "1", ["time"] = "RUN 42:17", ["rate"] = "1M", ["total"] = "800K" };
-                var v2 = new Dictionary<string, string>(v1) { ["rate"] = "1.27M", ["total"] = "894K" };
+                // a pickup just made (Ui/HudFreshPicks.cs): only that rolls the figures
+                var v2 = new Dictionary<string, string>(v1) { ["rate"] = "1.27M", ["total"] = "894K", ["pick0"] = "Thick hide", ["pick0Id"] = "fresh", ["pick0At"] = DateTime.UtcNow.Ticks.ToString() };
                 // held a fifth in: the hour's roll (its tint takes twice as long, so the figure moves in the first half) and the session's
                 Motion.FrozenAt = 0.2;
                 tk.Update(v1); tk.Update(v2);
@@ -1135,6 +1350,83 @@ public static class WpfApp
                 var bdShown = Texts(bd.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
                 Check(bdShown.Any(t => t.StartsWith("1.21M")) && bdShown.Any(t => t.StartsWith("845.9K")) && bdShown.Contains("75"),
                     $"motion: Buddy's hour and session roll and its ring sweeps (60 to 90), held a fifth in ({string.Join(" | ", bdShown.Where(t => t.Length is > 0 and < 24))})");
+                // Badge (the Strip look, 0.10.55) moves like them: on a pickup its hour, feed rate and session roll and its ring sweeps
+                // (60 to 90), the Legend pickup's worth pops and the live dot lights blue, the edge lights gold, and the changed notice
+                // cross-fades (a fifth in, the old one is still fading out); a first draw and a still drawing move nothing
+                var bgNow = DateTime.UtcNow;
+                var bgV1 = new Dictionary<string, string>(v1)
+                {
+                    ["chase"] = "0.6", ["toBest"] = "560K to your best here", ["feedText"] = "Thick hide", ["feedValue"] = "+1.1K", ["feedRate"] = "1M", ["feedUnit"] = "an hour",
+                    ["pick0"] = "Thick hide", ["pick0Id"] = "a", ["pick0At"] = bgNow.AddSeconds(-4).Ticks.ToString(), ["notice"] = "Update ready",
+                };
+                var bgV2 = new Dictionary<string, string>(bgV1)
+                {
+                    ["rate"] = "1.27M", ["total"] = "894K", ["chase"] = "0.9", ["toBest"] = "130K to your best here", ["feedText"] = "Shade Gloves", ["feedValue"] = "+28K", ["feedRate"] = "1.27M",
+                    ["pick0"] = "Shade Gloves", ["pick0Id"] = "b", ["pick0Grade"] = "Legend", ["pick0At"] = bgNow.Ticks.ToString(), ["notice"] = "Price alert: Shade Gloves under 30K",
+                };
+                var bgGoneV = new Dictionary<string, string>(bgV2) { ["notice"] = "" };
+                string[] bgFields = { "rate", "total", "feed" };
+                static string BgWords(System.Windows.Controls.TextBlock t) => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text));
+                List<System.Windows.Controls.TextBlock> BgTexts(HudWindow h) => BadgeTree((DependencyObject)h.Content).OfType<System.Windows.Controls.TextBlock>().ToList();
+                static System.Windows.Controls.Border BgFrame(HudWindow h) => (System.Windows.Controls.Border)((System.Windows.Controls.Grid)h.Content).Children[0];
+                var badge = new HudWindow(bgFields);
+                badge.Update(bgV1); badge.Update(bgV2);
+                var bgShown = BgTexts(badge).Select(BgWords).ToList();
+                var bgWorth = BgTexts(badge).FirstOrDefault(t => BgWords(t) == "+28K");
+                var bgEdge = (BgFrame(badge).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color;
+                var bgDot = BadgeTree((DependencyObject)badge.Content).OfType<System.Windows.Shapes.Ellipse>().FirstOrDefault(e => e.Width == 6);
+                var bgOld = BgTexts(badge).FirstOrDefault(t => BgWords(t) == "Update ready");
+                Check(bgShown.Count(t => t == "1.21M") == 2 && bgShown.Contains("845.9K") && bgShown.Contains("75")
+                      && bgWorth?.RenderTransform is System.Windows.Media.ScaleTransform { ScaleX: > 1.05 } && bgEdge?.R > 0x70
+                      && (bgDot?.Fill as System.Windows.Media.SolidColorBrush)?.Color == HudKit.GradeColor("Legend")
+                      && bgOld?.Parent is FrameworkElement { Opacity: > 0 and < 0.5 } && !bgShown.Contains(bgV2["notice"]),
+                    $"motion: Badge's hour, feed rate and session roll, its ring sweeps, a Legend pickup pops in blue, the edge lights and the notice cross-fades, a fifth in ({string.Join(" | ", bgShown.Where(t => t.Length is > 0 and < 40))}; edge {bgEdge}, dot {(bgDot?.Fill as System.Windows.Media.SolidColorBrush)?.Color})");
+                var bgFresh = new HudWindow(bgFields); bgFresh.Update(bgV2);
+                var bgStill = new HudWindow(bgFields, still: true); bgStill.Update(bgV1); bgStill.Update(bgV2);
+                bool BgCalm(HudWindow h) => BgTexts(h).Select(BgWords).Count(t => t == "1.27M") == 2 && BgTexts(h).Any(t => BgWords(t) == "90") && BgTexts(h).Any(t => BgWords(t) == bgV2["notice"])
+                    && BgTexts(h).All(t => t.RenderTransform is not System.Windows.Media.ScaleTransform && t.Parent is FrameworkElement { Opacity: 1 });
+                Check(BgCalm(bgFresh) && BgCalm(bgStill), $"motion: Badge's first draw and a still drawing of it show their figures, ring and notice as they are ({BgCalm(bgFresh)} {BgCalm(bgStill)})");
+                // a rare drop: the frame beats in its colour (down between beats a fifth in), the spark pops, the line comes in
+                var bgBlue = HudKit.GradeColor("Legend");
+                bgFresh.Alert("Rare drop: Shade Gloves ×1", bgBlue);
+                var bgBeat = (BgFrame(bgFresh).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color;
+                var bgSpark = BadgeTree((DependencyObject)bgFresh.Content).OfType<System.Windows.Controls.Image>().FirstOrDefault(i => i.RenderTransform is System.Windows.Media.ScaleTransform);
+                var bgAlert = BgTexts(bgFresh).FirstOrDefault(t => BgWords(t).StartsWith("Rare drop"));
+                Check(bgBeat?.A < 0xA0 && bgBeat?.B == bgBlue.B && bgSpark?.RenderTransform is System.Windows.Media.ScaleTransform { ScaleX: > 1.005 } && bgAlert?.Parent is FrameworkElement { Opacity: > 0.3 and < 0.8 },
+                    $"motion: Badge's rare drop beats its frame in the drop's colour, pops its spark and fades its line in ({bgBeat}, spark {bgSpark != null}, line {(bgAlert?.Parent as FrameworkElement)?.Opacity:0.00})");
+                // a notice that goes fades out before it hides: halfway it still reads, faint; at its end it is gone
+                Motion.FrozenAt = 0.5;
+                var bgGoing = new HudWindow(bgFields); bgGoing.Update(bgV2); bgGoing.Update(bgGoneV);
+                var bgGoingNote = BgTexts(bgGoing).FirstOrDefault(t => BgWords(t) == bgV2["notice"]);
+                Motion.FrozenAt = 1;
+                var bgGone = new HudWindow(bgFields); bgGone.Update(bgV2); bgGone.Update(bgGoneV);
+                bool bgHidden = !BgTexts(bgGone).Any(t => BgWords(t) == bgV2["notice"] && t.Visibility == Visibility.Visible);
+                Check(bgGoingNote is { Visibility: Visibility.Visible, Parent: FrameworkElement { Opacity: > 0 and < 0.5 } } && bgHidden,
+                    $"motion: Badge's notice fades out before it hides ({(bgGoingNote?.Parent as FrameworkElement)?.Opacity:0.00}, then hidden {bgHidden})");
+                // no pickup, nothing moves: a price refresh revaluing the session (the same newest pickup, the figures up) and another
+                // character's session coming in (the pickups cleared, then its own from minutes ago) show their figures as they are,
+                // with no roll, no lit edge and no sweep, on Badge, Pop and Buddy alike
+                Motion.FrozenAt = 0.2;
+                var bgLine = HudKit.Rgb(0x232736);
+                var bgPrice = new Dictionary<string, string>(bgV2) { ["rate"] = "1.4M", ["total"] = "990K", ["feedRate"] = "1.4M", ["chase"] = "0.95" };
+                var bgCleared = new Dictionary<string, string>(bgV2) { ["rate"] = "", ["total"] = "0", ["feedRate"] = "", ["chase"] = "", ["toBest"] = "", ["pick0"] = "", ["pick0Id"] = "", ["pick0At"] = "" };
+                var bgOther = new Dictionary<string, string>(bgV2) { ["rate"] = "1.9M", ["total"] = "2.1M", ["feedRate"] = "1.9M", ["chase"] = "0.8", ["pick0Id"] = "other", ["pick0At"] = bgNow.AddMinutes(-5).Ticks.ToString() };
+                var bgQuiet = new HudWindow(bgFields);
+                bgQuiet.Update(bgV2);
+                bgQuiet.Update(bgPrice);
+                var quietPrice = BgTexts(bgQuiet).Select(BgWords).ToList();
+                bool priceStill = quietPrice.Count(t => t == "1.4M") == 2 && quietPrice.Contains("990K") && quietPrice.Contains("95") && (BgFrame(bgQuiet).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color == bgLine;
+                bgQuiet.Update(bgCleared); bgQuiet.Update(bgOther);
+                var quietOther = BgTexts(bgQuiet).Select(BgWords).ToList();
+                bool otherStill = quietOther.Count(t => t == "1.9M") == 2 && quietOther.Contains("2.1M") && quietOther.Contains("80") && (BgFrame(bgQuiet).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color == bgLine;
+                var tkQuiet = new HudTicker(); tkQuiet.Update(v2); tkQuiet.Update(new Dictionary<string, string>(v2) { ["rate"] = "1.4M", ["total"] = "990K" });
+                var tkQuietShown = Texts(tkQuiet.Root).Select(t => t.Text).ToList();
+                var bdQuiet = new HudCard(); bdQuiet.Update(new Dictionary<string, string>(v2) { ["chase"] = "0.6" }); bdQuiet.Update(new Dictionary<string, string>(v2) { ["rate"] = "1.4M", ["total"] = "990K", ["chase"] = "0.9" });
+                var bdQuietShown = Texts(bdQuiet.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
+                bool popStill = tkQuietShown.Contains("1.4M") && tkQuietShown.Contains("990K"), buddyStill = bdQuietShown.Contains("1.4M") && bdQuietShown.Contains("990K") && bdQuietShown.Contains("90");
+                Check(priceStill && otherStill && popStill && buddyStill,
+                    $"motion: with no pickup just made (a price refresh, another session) nothing rolls, lights or sweeps (Badge price {priceStill}, other session {otherStill}; Pop {popStill}; Buddy {buddyStill})");
+                foreach (var h in new[] { badge, bgFresh, bgStill, bgGoing, bgGone, bgQuiet }) h.Close();
                 // a rare drop's card makes its entrance (2026-11-11, Ui/HudRare.Motion.cs), held a fifth in: the tile growing in, the
                 // name's light on it, the price rolling up; not on a look's first draw; "+2 more" follows the drops that join it
                 static double TileScale((FrameworkElement Tile, string Label, string Price, bool Lit)? p) => (p?.Tile.RenderTransform as System.Windows.Media.ScaleTransform)?.ScaleX ?? 1;
@@ -1160,6 +1452,38 @@ public static class WpfApp
                 Check(ended.RareDropForTest == made && HudRare.PartsForTest(made)?.Label == "RARE DROP · LEGEND  +2 more" && HudRare.PartsForTest(tick.RareToastForTest)?.Label == "RARE DROP · LEGEND  +2 more",
                     $"motion: drops joining the one held say so on Buddy and Pop, the card left as it is ({HudRare.PartsForTest(made)?.Label})");
             }
+            // 2026-11-11 (Ui/Motion.Sequence.cs): a staged opening, each effect in its turn on one course, held at a point of it
+            var seen = new List<string>();
+            var cues = new Motion.Cues().Add(0, 100, p => seen.Add($"a{p:0.##}")).Add(100, 100, p => seen.Add($"b{p:0.##}"));
+            Motion.FrozenAt = 0.25;
+            Motion.Sequence(new System.Windows.Controls.Border(), cues);
+            Check(string.Join(" ", seen) == "a0 b0 a0.5", $"motion: a sequence sets every effect to its start, then each moves only in its turn ({string.Join(" ", seen)})");
+            var own = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Gold);
+            var cu = new System.Windows.Controls.TextBlock { Foreground = own };
+            var count = Motion.CountUp(cu, 1000, N0, System.Windows.Media.Colors.Lime);
+            count(0.5); string half = cu.Text; bool tinted = !ReferenceEquals(cu.Foreground, own);
+            count(1);
+            Check(half == "875" && tinted && cu.Text == "1,000" && ReferenceEquals(cu.Foreground, own), $"motion: a figure counts up from nothing, eased and tinted, and ends in its own brush ({half} then {cu.Text})");
+            var seqSlot = El();
+            var landing = Motion.Landing(seqSlot, "Legend", System.Windows.Media.Colors.Red);
+            landing(0); double waiting = seqSlot.Opacity;
+            landing(0.1);
+            double ls = (seqSlot.RenderTransform as System.Windows.Media.ScaleTransform)?.ScaleX ?? 1;
+            Check(waiting == 0 && ls is > 0.9 and < 1 && seqSlot.Effect is System.Windows.Media.Effects.DropShadowEffect { Color: var lc } && lc == System.Windows.Media.Colors.Red,
+                $"motion: a slot in a sequence waits unseen, then lands and glows in the colour it was given (scale {ls:0.000})");
+            bool left = false; _ = Motion.Leave(new System.Windows.Controls.Border(), () => left = true);
+            var tag = new System.Windows.Controls.Border(); var glint = Motion.Glint(tag, System.Windows.Media.Colors.Gold, System.Windows.Media.Colors.White); glint(0.5);
+            Check(left && (tag.Background as System.Windows.Media.LinearGradientBrush)?.RelativeTransform is System.Windows.Media.TranslateTransform { X: 0 },
+                "motion: a card leaving in a held render goes at once; a glint halfway is in the middle of its box");
+            // the recap's line against your average here (Session/RunStanding.cs): the hour over earlier stays, only with three of them
+            var stays = new List<(long, double)> { (300_000, 1800), (500_000, 3600), (90_000, 300) };
+            var thin = KinahLedger.Session.RunStanding.HourAverage(stays);
+            stays.Add((400_000, 1800));
+            var avg = KinahLedger.Session.RunStanding.HourAverage(stays);
+            Check(thin == null && avg == 600_000, $"recap: the average hour here weighs each stay by its time, leaves out one under ten minutes, and waits for three ({thin?.ToString() ?? "none"} then {avg})");
+            Check(KinahLedger.Session.RunStanding.Line(KinahLedger.Session.RunStanding.Share(708_000, 600_000)) == ("+18%", " vs your average here", 1) && KinahLedger.Session.RunStanding.Line(-0.07) == ("\u22127%", " vs your average here", -1)
+                  && KinahLedger.Session.RunStanding.Line(0.02) == ("", "About your average here", 0) && KinahLedger.Session.RunStanding.Share(5, 0) == 0,
+                "recap: +18% over the average, \u22127% under it, within 3% about your average, and no average is no share");
             Motion.Still = true; Motion.FrozenAt = null;
             var still = new System.Windows.Controls.TextBlock();
             Motion.Number(still, "test|still", 1, N0); Motion.Number(still, "test|still", 2, N0);
@@ -1184,6 +1508,33 @@ public static class WpfApp
             var until = DateTime.UtcNow.AddSeconds(step < 3 ? 4 : 1);
             while (DateTime.UtcNow < until) { DoEvents(); Thread.Sleep(50); }
             Save((FrameworkElement)w.Content, Path.Combine(dir, $"ui-calibration-{step + 1}.png"), 1300);
+        }
+        w.Close();
+    }
+
+    /// <summary>
+    /// ui-shot --recap: the run-end recap card in each of its sample states (ui-recap-<state>.png), on the window's page
+    /// colour with room round it for its rise, held at KL_MOTION_AT's point of its opening when that is set (else settled).
+    /// </summary>
+    public static void ShotRecap(Settings settings, string dir, string? skin)
+    {
+        Ensure();
+        Directory.CreateDirectory(dir);
+        var w = new MainWindow(settings, watch: false) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -12000, Top = -12000, ShowActivated = false };
+        w.Show();
+        if (skin != null) Skins.Apply(skin);
+        w.ShowDemo("Open world");
+        var samples = w.RecapSamples();
+        IconCache.Drain(TimeSpan.FromSeconds(8));   // the drops' icons, when this PC is online
+        DoEvents();
+        foreach (var (state, card, open) in samples)
+        {
+            var page = new System.Windows.Controls.Border { Child = card, Padding = new Thickness(16) };
+            page.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Bg");
+            page.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); page.Arrange(new Rect(page.DesiredSize)); page.UpdateLayout();
+            open();
+            DoEvents();
+            Save(page, Path.Combine(dir, "ui-recap-" + state + (skin != null ? "-" + skin : "") + ".png"), 0);
         }
         w.Close();
     }
@@ -1422,6 +1773,7 @@ public static class WpfApp
             h.Show();
             h.Update(hudState);
             DoEvents();
+            if (Motion.FrozenAt != null) { h.MotionFrameForRender(hudState); DoEvents(); }   // KL_MOTION_AT: Badge's motion held at that point
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }
@@ -1434,6 +1786,7 @@ public static class WpfApp
             if (file == "ui-hud-accuracy.png") h.SetAccuracy(hudAcc ?? "✓ Nothing looked wrong", hudAcc != null && hudToLook);
             if (file == "ui-hud-alert.png") h.Alert("Rare drop: Shade Gloves ×1 · sells for 28K on Siel", System.Windows.Media.Color.FromRgb(0x5A, 0xA6, 0xFF));
             DoEvents();
+            if (Motion.FrozenAt != null) { h.MotionFrameForRender(values); DoEvents(); }
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }
@@ -1463,6 +1816,8 @@ public static class WpfApp
             // a run on: the red dot, the run's clock, and the shortcut's confirmation; then the stop's line on the default panel
             ("ui-hud-run.png", HudFields.Parse("time,rate,total"), new() { ["run"] = "1", ["time"] = "RUN 42:17", ["flash"] = "Run started" }),
             ("ui-hud-stopped.png", HudFields.Parse(null), new() { ["run"] = "", ["flash"] = "Run stopped · 1.27M this run" }),
+            // past your best here: the ring full in mint with its star, the chase line mint
+            ("ui-hud-best.png", HudFields.Parse(null), new() { ["chase"] = "1.000", ["toBest"] = "New best here" }),
             // Options at its far ends: 30% background (the figures stay solid) at 150%
             ("ui-hud-scaled.png", HudFields.Parse("time,rate,total"), new()),
             // the first two minutes: the hour says it is warming up instead of a wild figure, on the feed and on the classic set
@@ -1477,6 +1832,7 @@ public static class WpfApp
             h.Update(v);
             if (file == "ui-hud-scaled.png") { h.SetOpacity(0.3); h.SetScale(1.5); }
             DoEvents();
+            if (Motion.FrozenAt != null) { h.MotionFrameForRender(v); DoEvents(); }
             Save((FrameworkElement)h.Content, Path.Combine(dir, file), 0);
             h.Close();
         }
