@@ -132,7 +132,23 @@ public sealed partial class HudWindow
     /// A figure through <see cref="Motion.Figure"/>, flipped when <paramref name="roll"/>. A flip writes the new text at once
     /// (its characters come up into place), so the panel, sized to what it shows, changes width once, not with each frame.
     /// </summary>
-    void RollFigure(TextBlock tb, string part, string text, double tint, bool roll) => Motion.Figure(tb, _key + part, text, tint, roll);
+    void RollFigure(TextBlock tb, string part, string text, double tint, bool roll)
+    {
+        if (roll && tb.Parent is FrameworkElement box && HudTicker.Num(text) is double v && v > 0)
+        {
+            // the old text's width is still the laid-out one: the new text was written this update and isn't laid out yet
+            double w = Math.Ceiling(Math.Max(tb.ActualWidth, TextWidth(tb, text)));
+            tb.MinWidth = w;
+            // its own course (on the cell's box, which nothing else moves) ends with the longest roll, the tinted one
+            Motion.Play(box, Motion.RollMs * 2, _ => { }, () => tb.ClearValue(MinWidthProperty));
+        }
+        Motion.Figure(tb, _key + part, text, tint, roll);
+    }
+
+    /// <summary>How wide <paramref name="text"/> is in the figure's own face and size, as the panel draws it.</summary>
+    static double TextWidth(TextBlock tb, string text) => new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, tb.FlowDirection,
+        new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.Black, null,
+        TextOptions.GetTextFormattingMode(tb), VisualTreeHelper.GetDpi(tb).PixelsPerDip).WidthIncludingTrailingWhitespace;
 
     /// <summary>A pickup's colour on the panel: gold for Kinah, its grade's for a graded item, the live dot's own mint for a common one (or none known).</summary>
     static Color ToneOf(Pick? p) => p == null || (!p.Kinah && p.Grade is "" or "Common") ? Rgb(MintC) : p.Kinah ? Rgb(GoldC) : GradeColor(p.Grade);
@@ -433,8 +449,8 @@ public sealed partial class HudWindow
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
         foreach (var (k, tint) in Rolled)
-            if (_cells.TryGetValue(k, out var tb) && HudTicker.Num(V(k)) is double v && v > 0) Motion.ReplayFlip(tb, _key + k, v * ReplayFrom, v, Amounts.Short, tint);
-        if (_feedLine != null && _feedRate != null && HudTicker.Num(V("feedRate")) is double r && r > 0) Motion.ReplayFlip(_feedRate, _key + "feedRate", r * ReplayFrom, r, Amounts.Short, RiseTint);
+            if (_cells.TryGetValue(k, out var tb) && HudTicker.Num(V(k)) is double v && v > 0) Motion.Replay(tb, _key + k, v * ReplayFrom, v, Amounts.Short, tint);
+        if (_feedLine != null && _feedRate != null && HudTicker.Num(V("feedRate")) is double r && r > 0) Motion.Replay(_feedRate, _key + "feedRate", r * ReplayFrom, r, Amounts.Short, RiseTint);
         _streak.Replay(values, 0.5);
         if (_alert.Visibility != Visibility.Visible) Motion.EdgeLight(_frame, Rgb(GoldC), FrameBrush);
         var (share, _, beat) = Chase(values);

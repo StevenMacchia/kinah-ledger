@@ -45,7 +45,7 @@ public sealed partial class HudTicker
     /// <summary>A pill figure: flipped when the session total moved (a pickup), else set (the hour moving with the clock).</summary>
     void Fig(TextBlock tb, string part, string text, double tint, bool roll)
     {
-        if (Num(text) is double v && v > 0) Motion.FlipNumber(tb, _key + part, v, Amounts.Short, tint, roll && Moves);
+        if (Num(text) is double v && v > 0) Motion.Number(tb, _key + part, v, Amounts.Short, tint, roll && Moves);
         else Motion.Blank(tb, _key + part, text);
     }
 
@@ -172,8 +172,8 @@ public sealed partial class HudTicker
     internal void MotionFrame(IReadOnlyDictionary<string, string> values)
     {
         string V(string k) => values.TryGetValue(k, out var v) ? v : "";
-        if (Num(V("rate")) is double r) Motion.ReplayFlip(_rate, _key + "rate", r * 0.85, r, Amounts.Short, 0.01);
-        if (Num(V("total")) is double t) Motion.ReplayFlip(_total, _key + "total", t * 0.85, t, Amounts.Short, -1);
+        if (Num(V("rate")) is double r) Motion.Replay(_rate, _key + "rate", r * 0.85, r, Amounts.Short, 0.01);
+        if (Num(V("total")) is double t) Motion.Replay(_total, _key + "total", t * 0.85, t, Amounts.Short, -1);
         _streak.Replay(values, 0.5);
         PillGlow();
         foreach (var x in _toasts.Values)
