@@ -16,10 +16,10 @@ namespace KinahLedger.Ui;
 /// at the foot of LOOT's Week side, "Day wrapped" at the foot of its Today side, and the Events strip's head has the one for
 /// the side it shows. The sheet opens in a window of its own (Ui/WrappedWindow.cs) and plays once: the total counts up,
 /// then the time and the hour's rate, the top zone, the best run, the biggest drop (its tile landing and glowing in its
-/// grade), crafting, and last the change against last week (or yesterday), up green or down red; all settled in under
+/// grade), crafting, and last, on the week, the change against the week before, up green or down red; all settled in under
 /// 2.5 s (Ui/Motion.Wrapped.cs). The figures come from the lists and sums the views use (Session/Wrapped.cs): farming as
-/// the Week side and LOOT's Today side make it, the day's runs as the TODAY strip sums them, the week's as the Events cards
-/// count a run. With too little to wrap it says what will appear and when. Copy picture and Save picture draw the
+/// the Week side and LOOT's Today side make it, the runs (each on the day it started) as the TODAY strip sums them and the
+/// Events cards count a run. With too little to wrap it says what will appear and when. Copy picture and Save picture draw the
 /// settled sheet again at twice its size, as Share does; nothing leaves the PC.
 /// </summary>
 public partial class MainWindow
@@ -79,21 +79,22 @@ public partial class MainWindow
     /* ---------------- the figures ---------------- */
 
     /// <summary>
-    /// The sheet's figures: the week (the last 7 days, against the 7 before) or today (against yesterday), from the lists the
-    /// views draw from (days.json with today live, the run log). Farming is the Week side's and LOOT's Today side's own made;
-    /// the runs are what the TODAY strip sums for a day and what the Events cards count a run as made for the week (Kinah
-    /// plus rewards: the Week side's bars count the Kinah alone, which would let one run out-make the whole week's total).
+    /// The sheet's figures: the week (the last 7 days, against the 7 before) or today, from the lists the views draw from
+    /// (days.json with today live, the run log with its fixes kept). Farming is the Week side's and LOOT's Today side's own
+    /// made. A run belongs to the day it started, as on the Week side, so one past midnight is in one period only; its made
+    /// is Kinah plus rewards, as the TODAY strip sums a day and the Events cards count a run (the Week side's bars count the
+    /// Kinah alone, which would let one run out-make the whole week's total).
     /// </summary>
     internal WrappedFacts WrappedFor(string scope)
     {
         bool week = scope == Wrapped.Week;
         int n = week ? 7 : 1;
         var runs = WeekRunList();
-        var days = DayHistory.Days(2 * n, TodayEngine, _items, runs, WeekFile());
-        var before = days.Take(n).ToList(); var now = days.Skip(n).ToList();
-        List<InstanceRun> In(List<HistoryDay> p) => runs.Where(r => DayHistory.LocalStart(r).Date >= p[0].Date && DayHistory.LocalStart(r).Date <= p[^1].Date).ToList();
-        var nowRuns = week ? In(now) : TodayRunList();
-        var beforeRuns = In(before);
+        var days = DayHistory.Days(week ? 2 * n : n, TodayEngine, _items, runs, WeekFile());
+        var now = days.TakeLast(n).ToList();
+        var before = week ? days.Take(n).ToList() : null;
+        var nowRuns = Wrapped.RunsIn(runs, now[0].Date, now[^1].Date);
+        var beforeRuns = before != null ? Wrapped.RunsIn(runs, before[0].Date, before[^1].Date) : new();
         long Made(List<InstanceRun> rs) => week ? rs.Where(r => !r.OutOfAverages).Sum(RunValue) : TodayLoot.Runs(rs, _items, IsCurrency).Value;
         WrappedRun Run(InstanceRun r) => new(r.Label, ZoneCompare.PlaceOf(r), DayHistory.KindOf(r.Kind) is { Length: > 0 } k ? k : r.Kind, DayHistory.LocalStart(r).Date, RunValue(r), r.Seconds, !r.OutOfAverages);
         // each counted run's rewards that sell, at the lowest Market price after the cut (gear is bound, currencies aren't sold)
@@ -101,10 +102,18 @@ public partial class MainWindow
             .Where(kv => kv.Value > 0 && !_items.IsGear(kv.Key) && !IsCurrency(kv.Key) && PriceBook.Price(_items.NameOf(kv.Key)) != null)
             .Select(kv => new WrappedDrop(_items.NameOf(kv.Key), _items.Get(kv.Key)?.Grade ?? "", kv.Value,
                 (long)Math.Round(PriceBook.Price(_items.NameOf(kv.Key))!.Value * kv.Value * PriceBook.SellerKeeps), r.Label, DayHistory.LocalStart(r).Date)));
-        var craft = _demo ? _demoCraft : SumCrafts(CraftShown) is { Any: true } s ? new WrappedCraft(s.Net, s.Tries, s.AtMost) : null;
+        // crafting is this session's, as the Crafting page sums it: on a sheet only when the session began within its days
+        var craft = _demo ? _demoCraft : SumCrafts(CraftShown) is { Any: true } s && SessionSince(now[0].Date) ? new WrappedCraft(s.Net, s.Tries, s.AtMost) : null;
         string Grade(string item) => GatheringCatalog.Find(item)?.Grade ?? GradeOf(item);
         return Wrapped.Of(scope, new WrappedPeriod(now, nowRuns.Select(Run).ToList(), Made(nowRuns)),
-            new WrappedPeriod(before, beforeRuns.Select(Run).ToList(), Made(beforeRuns)), drops, Grade, craft);
+            before != null ? new WrappedPeriod(before, beforeRuns.Select(Run).ToList(), Made(beforeRuns)) : null, drops, Grade, craft);
+    }
+
+    /// <summary>Whether this run of the tracker (and so the Crafting page's session) began on <paramref name="day"/> or later.</summary>
+    static bool SessionSince(DateTime day)
+    {
+        using var me = System.Diagnostics.Process.GetCurrentProcess();
+        return me.StartTime.Date >= day.Date;
     }
 
     /// <summary>"Aerin" and "Siel · NA East": who the sheet is for, as the header names the character and the server.</summary>
@@ -132,7 +141,7 @@ public partial class MainWindow
         // a week of one day: that day has a sheet of its own
         else if (scope == Wrapped.Week && !WrappedFor(Wrapped.Day).Thin)
             acts.Add(("See Day wrapped", "Today on its own sheet.", () => OpenWrapped(Wrapped.Day)));
-        _wrapWin.Present(scope, sheet, cues, acts, f.Thin ? "" : SharePicture.Note, offscreen: _demo);
+        _wrapWin.Present(sheet, cues, acts, f.Thin ? "" : SharePicture.Note, offscreen: _demo);
     }
 
     /// <summary>
@@ -421,6 +430,7 @@ public partial class MainWindow
         return _wrapWin?.Content as FrameworkElement;
     }
 
+    /// <summary>Closes the sheet, if one is open: another character's numbers are about to load, or a render or test is done with it.</summary>
     internal void CloseWrapped() => _wrapWin?.Close();
 
     internal WrappedFacts WrappedFactsForTest(string scope) => WrappedFor(scope);

@@ -53,7 +53,9 @@ public static class WrappedTests
         var wf = Wrapped.Of(Wrapped.Week, Period(week, 1_700_000, wRuns), null, Array.Empty<WrappedDrop>(), Grade, null);
         Check("the week: farmed, its time, the runs' figure, the total", $"{wf.Farmed} {wf.FarmSeconds} {wf.FromRuns} {wf.Total}", "2150000 6300 1700000 3850000");
         Check("...the hour's rate is farming's made over its time", Fk(wf.PerHour ?? -1), Fk(2_150_000 / (6300 / 3600.0)));
-        Check("...days played: farming or a run; history's days kept", $"{wf.DaysPlayed} of {wf.Days}", "4 of 6");
+        Check("...days played: farming or a run, of the week's seven", $"{wf.DaysPlayed} of {wf.Days}", "4 of 7");
+        var runsBefore = new List<HistoryDay> { Day(6, before: true, runs: 2, runKinah: 1), Day(5, runs: 1, runKinah: 1) }.Concat(Enumerable.Range(0, 5).Select(a => Day(4 - a))).ToList();
+        Check("...runs before farming history began still count, never past the week's days", $"{Wrapped.Of(Wrapped.Week, Period(runsBefore), null, Array.Empty<WrappedDrop>(), Grade, null).DaysPlayed} of {runsBefore.Count}", "2 of 7");
         Check("...runs: all of them, the counted ones", $"{wf.Runs} {wf.Counted}", "4 3");
         Check("...a week of four days is no thin sheet", wf.Thin.ToString(), "False");
 
@@ -94,6 +96,14 @@ public static class WrappedTests
         var idle = Enumerable.Range(7, 7).Select(a => Day(a)).ToList();
         Check("...nor a week with no play", Wrapped.Of(Wrapped.Week, Period(week, 1_700_000, wRuns), Period(idle), Array.Empty<WrappedDrop>(), Grade, null).Before?.ToString() ?? "none", "none");
 
+        // a run past midnight belongs to the day it started: yesterday's sheet has it, today's doesn't, a week has it once
+        var lateStart = new DateTime(today.Year, today.Month, today.Day, 23, 50, 0, DateTimeKind.Utc).AddDays(-1);
+        var late = new List<InstanceRun> { new() { Zone = "Urugugu Canyon", Kind = "Expedition", Start = lateStart, LastLoot = lateStart.AddMinutes(30), Kinah = 600_000 } };
+        Check("a run past midnight: yesterday's, not today's, once in the week",
+            $"{Wrapped.RunsIn(late, today.AddDays(-1), today.AddDays(-1), TimeZoneInfo.Utc).Count} {Wrapped.RunsIn(late, today, today, TimeZoneInfo.Utc).Count} {Wrapped.RunsIn(late, today.AddDays(-6), today, TimeZoneInfo.Utc).Count}", "1 0 1");
+        var dayVs = Wrapped.Of(Wrapped.Day, Period(new List<HistoryDay> { Day(0, new[] { ("Western Cantas Valley", 30, 300_000L, "", 0L) }) }), Period(new List<HistoryDay> { Day(1, new[] { ("Western Cantas Valley", 300, 3_000_000L, "", 0L) }) }), Array.Empty<WrappedDrop>(), Grade, null);
+        Check("a day is set against nothing: today so far isn't yesterday whole", $"{dayVs.Before?.ToString() ?? "none"} \"{Wrapped.Text(dayVs, Fk).Change}\"", "none \"\"");
+
         // f. the thin cutoff: a week needs two days of play, a day ten minutes of farming or a run
         var oneDay = Wrapped.Of(Wrapped.Week, Period(Enumerable.Range(0, 7).Select(a => a == 0 ? Day(0, new[] { ("Western Cantas Valley", 80, 1_200_000L, "", 0L) }) : Day(a)).Reverse().ToList()), null, Array.Empty<WrappedDrop>(), Grade, null);
         var oneText = Wrapped.Text(oneDay, Fk);
@@ -109,7 +119,7 @@ public static class WrappedTests
         Check("...nothing at all: thin, and says so", $"{none.Thin} | {Wrapped.Text(none, Fk).ThinSoFar}", "True | Nothing counted yet today.");
 
         // g. the words: no tile or line without a figure, the split only when both made something
-        Check("the week's tiles: time, the hour's rate, days played", string.Join(" | ", wt.Stats.Select(s => $"{s.Fig} {s.Label}")), $"1 h 45 min farming | {Fk(2_150_000 / 1.75)} an hour farming | 4 of 6 days played");
+        Check("the week's tiles: time, the hour's rate, days played", string.Join(" | ", wt.Stats.Select(s => $"{s.Fig} {s.Label}")), $"1 h 45 min farming | {Fk(2_150_000 / 1.75)} an hour farming | 4 of 7 days played");
         Check("...the split: farming and the runs", wt.Split, "2,150,000 farming · 1,700,000 from 4 runs");
         var rt = Wrapped.Text(oneRun, Fk);
         Check("a day of one run: its time in runs and the run; no split, no average of one", $"{string.Join(" | ", rt.Stats.Select(s => $"{s.Fig} {s.Label}"))} | split \"{rt.Split}\"", "7 min in runs | 1 run | split \"\"");

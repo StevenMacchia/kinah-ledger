@@ -10,8 +10,10 @@ namespace KinahLedger.Ui;
 /// The window Week wrapped and Day wrapped open in (2026-11-11): the recap sheet on its own, a cross over its corner, and
 /// under it a bar with its buttons (Copy picture, Save picture) and a line saying what they did. Like the recipe window
 /// (Ui/CraftWindow.cs) it is owned by the main window, drags from anywhere that isn't a control, closes on Esc or the cross,
-/// and remembers where it was put until the app closes. It opens only on the player's click, beside the window they just
-/// clicked in, and never brings itself forward on its own: opening the other sheet while it is up redraws it in place.
+/// and remembers where it was put until the app closes. It opens only on the player's click on a button in the main
+/// window, and opens active then: the player is already in the tracker, not the game, and Esc closes it. It never brings
+/// itself forward on its own: opening the other sheet while it is up redraws it in place. It stays on top of other windows
+/// exactly when the main window does (its pin), even when the pin changes while it is open.
 /// </summary>
 sealed class WrappedWindow : Window
 {
@@ -25,9 +27,6 @@ sealed class WrappedWindow : Window
     /// <summary>The sheet on show, so its sequence can be stopped when another replaces it or the window closes.</summary>
     FrameworkElement? _sheet;
 
-    /// <summary>The scope on show ("week" or "day").</summary>
-    public string Scope { get; private set; } = "";
-
     public WrappedWindow(Window owner)
     {
         Owner = owner;
@@ -38,7 +37,7 @@ sealed class WrappedWindow : Window
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.WidthAndHeight;
-        Topmost = owner.Topmost;
+        SetBinding(TopmostProperty, new System.Windows.Data.Binding(nameof(Topmost)) { Source = owner });
         _note.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
         var barRow = new Grid();
         barRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -68,9 +67,8 @@ sealed class WrappedWindow : Window
     /// the primary one; with none (a sheet with too little to share) the bar holds the note alone.
     /// </summary>
     /// <param name="offscreen">For a render (ui-shot): shown far off the screens, never where the player would see it.</param>
-    public void Present(string scope, FrameworkElement sheet, Motion.Cue[] cues, IReadOnlyList<(string Text, string Tip, Action Go)> actions, string note, bool offscreen = false)
+    public void Present(FrameworkElement sheet, Motion.Cue[] cues, IReadOnlyList<(string Text, string Tip, Action Go)> actions, string note, bool offscreen = false)
     {
-        Scope = scope;
         if (_sheet != null) Motion.Halt(_sheet);
         _sheet = sheet;
         _sheetHost.Children.Clear();
@@ -96,7 +94,7 @@ sealed class WrappedWindow : Window
         {
             WindowStartupLocation = WindowStartupLocation.Manual;
             if (offscreen) { Left = -12000; Top = -12000; ShowActivated = false; }
-            else Place(sheet);
+            else Place();
             Show();   // on the player's click in the main window, so the game had already let go of the focus
         }
         Motion.Sequence(sheet, cues);
@@ -112,18 +110,30 @@ sealed class WrappedWindow : Window
 
     /// <summary>The first spot opens this far under the main window's top edge, clear of its header.</summary>
     const double UnderHeader = 48;
-    /// <summary>At least this much of the window stays on a screen, so it can always be dragged back.</summary>
-    const double OnScreen = 160;
 
-    /// <summary>The first spot: where it was last put, else centred over the main window, under its header; always on a screen.</summary>
-    void Place(FrameworkElement sheet)
+    /// <summary>
+    /// The first spot: where it was last put, else centred over the main window under its header; then moved so the whole
+    /// window, its measured size with the bar of buttons, is inside the work area of the main window's screen (its top kept
+    /// in view when it is taller than that).
+    /// </summary>
+    void Place()
     {
-        sheet.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        double w = sheet.DesiredSize.Width;
+        var root = (FrameworkElement)Content;
+        root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double w = root.DesiredSize.Width, h = root.DesiredSize.Height;
         var o = Owner;
         double left = _at?.X ?? o.Left + Math.Max(0, o.ActualWidth - w) / 2, top = _at?.Y ?? o.Top + UnderHeader;
-        left = Math.Clamp(left, SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - Math.Min(w, OnScreen));
-        top = Math.Clamp(top, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - OnScreen);
+        var area = OwnerWorkArea();
+        left = Math.Max(area.Left, Math.Min(left, area.Right - w));
+        top = Math.Max(area.Top, Math.Min(top, area.Bottom - h));
         Left = left; Top = top;
+    }
+
+    /// <summary>The work area (the screen less the taskbar) of the screen the main window is on, in the window's units.</summary>
+    Rect OwnerWorkArea()
+    {
+        var px = System.Windows.Forms.Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(Owner).Handle).WorkingArea;
+        var toDip = PresentationSource.FromVisual(Owner)?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        return new Rect(toDip.Transform(new Point(px.Left, px.Top)), toDip.Transform(new Point(px.Right, px.Bottom)));
     }
 }

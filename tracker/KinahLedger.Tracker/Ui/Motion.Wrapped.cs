@@ -8,16 +8,13 @@ namespace KinahLedger.Ui;
 /// <summary>
 /// A recap sheet's entrance (Week wrapped and Day wrapped, 2026-11-11): when it opens, its parts land one after another as
 /// one short sequence (the total counting up, the tiles and the highlights rising in, the biggest drop landing and glowing
-/// in its grade, the change against last week stamped last), all settled within <see cref="WrappedMs"/>. It plays once,
+/// in its grade, the change against last week stamped last), all settled within 2.5 s. It plays once,
 /// on the open; nothing loops. One course drives every part, so KL_MOTION_AT holds the whole sequence at that point for a
 /// render, and with motion off (<see cref="Still"/>, or Windows's animations off) the sheet shows settled at once. Only
 /// opacity and render transforms move: the sheet keeps its size from the first frame.
 /// </summary>
 public static partial class Motion
 {
-    /// <summary>The longest a sheet's sequence may take, open to settled: every cue a sheet sets ends by then.</summary>
-    public const double WrappedMs = 2400;
-
     /// <summary>A count-up's figure is written beforehand at this many points along its course, so a frame only picks one.</summary>
     const int CountSteps = 60;
 

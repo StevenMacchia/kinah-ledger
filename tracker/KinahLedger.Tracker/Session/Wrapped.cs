@@ -28,8 +28,9 @@ public sealed record WrappedPlace(string Name, long Made, double Seconds, int Ru
 
 /// <summary>
 /// What a recap sheet says, before it is written in words: the period, what was made farming and in runs, the time and the
-/// rates, the days played, the top place, the best run (or with none the best day), the biggest drop, crafting, and the
-/// whole against the period before (null when that period had no play, or history didn't cover all of it).
+/// rates, the days played of the period's days, the top place, the best run (or with none the best day), the biggest drop,
+/// crafting, and a week against the week before (null for a day, whose evening isn't played yet, and when the week before
+/// had no play or history didn't cover all of it).
 /// </summary>
 public sealed record WrappedFacts(string Scope, DateTime From, DateTime To, long Farmed, double FarmSeconds, int Kills, int Attempts,
     long FromRuns, int Runs, int Counted, double RunSeconds, int DaysPlayed, int Days, WrappedPlace? Top, WrappedRun? BestRun, HistoryDay? BestDay,
@@ -52,7 +53,7 @@ public sealed record WrappedRow(string Kind, string Label, string Name, string F
 
 /// <summary>
 /// The sheet's words, as drawn: the title and the period, the total and what it is, the split between farming and runs,
-/// the tiles, the highlights, the change against the period before (its tone 1 up, -1 down, 0 about the same) and, for a
+/// the tiles, the highlights, a week's change against the week before (its tone 1 up, -1 down, 0 about the same) and, for a
 /// thin sheet, what will appear and when.
 /// </summary>
 public sealed record WrappedText(string Title, string Range, string Total, string TotalLabel, string Split, IReadOnlyList<WrappedStat> Stats,
@@ -62,8 +63,8 @@ public sealed record WrappedText(string Title, string Range, string Total, strin
 /// Week wrapped and Day wrapped (2026-11-11, Steven: the tracker "cool and flashy"): a recap sheet of the week or the day
 /// for the character counted for, made to be shared. These are its figures and words, apart from the drawing
 /// (Ui/MainWindow.Wrapped.cs) so the self-test can check them. The days come from <see cref="DayHistory.Days"/> and the
-/// runs from the run log, through the same sums the Week side and the TODAY strip use, so the sheet says the same numbers
-/// those views do. With too little to wrap (a week of one day, a day of a few minutes) the sheet says what will appear and
+/// runs from the run log (each on the day it started), through the same sums the views use: farming as the Week side and
+/// LOOT's Today side make it, runs as the TODAY strip sums them (Kinah plus rewards). With too little to wrap (a week of one day, a day of a few minutes) the sheet says what will appear and
 /// when instead of a page of zeros. Display only, on this PC: nothing here is sent anywhere.
 /// </summary>
 public static class Wrapped
@@ -81,7 +82,15 @@ public static class Wrapped
     static bool Played(HistoryDay d) => (!d.BeforeHistory && d.Farm.Any) || d.Runs.Runs > 0;
 
     /// <summary>
-    /// The sheet's figures for <paramref name="now"/>, set against <paramref name="before"/> (the week before, or yesterday).
+    /// The runs started on the local days <paramref name="first"/> to <paramref name="last"/> (in <paramref name="tz"/>, this
+    /// PC's by default): a run belongs to the day it started, as on the Week side, so one past midnight is in one period only.
+    /// </summary>
+    public static List<InstanceRun> RunsIn(IEnumerable<InstanceRun> runs, DateTime first, DateTime last, TimeZoneInfo? tz = null) =>
+        runs.Where(r => DayHistory.LocalStart(r, tz).Date is var d && d >= first.Date && d <= last.Date).ToList();
+
+    /// <summary>
+    /// The sheet's figures for <paramref name="now"/>; a week is set against <paramref name="before"/>, the week before it
+    /// (a day is not: today so far against the whole of yesterday would read as a drop every morning).
     /// <paramref name="runDrops"/> are the period's run rewards with their worth; <paramref name="gradeOf"/> names a farmed
     /// item's grade; <paramref name="craft"/> is this session's crafting, or null with none.
     /// </summary>
@@ -112,13 +121,13 @@ public static class Wrapped
         var drop = drops.OrderByDescending(x => x.Worth).ThenByDescending(x => SharePicture.GradeRank(x.Grade)).ThenBy(x => x.Name, StringComparer.Ordinal).FirstOrDefault();
 
         long? was = null;
-        if (before != null && before.Days.Count > 0 && before.Days.All(d => !d.BeforeHistory) && (before.Days.Any(Played) || before.Runs.Count > 0))
+        if (scope == Week && before != null && before.Days.Count > 0 && before.Days.All(d => !d.BeforeHistory) && (before.Days.Any(Played) || before.Runs.Count > 0))
         {
             long b = DayHistory.Totals(before.Days).Made + before.RunsMade;
             if (b > 0) was = b;
         }
         var f = new WrappedFacts(scope, days[0].Date, days[^1].Date, t.Made, t.Active, t.Kills, kept.Sum(d => d.Farm.Attempts),
-            now.RunsMade, now.Runs.Count, counted.Count, counted.Sum(r => r.Seconds), played, kept.Count, top, best, bestDay, drop,
+            now.RunsMade, now.Runs.Count, counted.Count, counted.Sum(r => r.Seconds), played, days.Count, top, best, bestDay, drop,
             craft is { Tries: > 0 } ? craft : null, was, false);
         bool thin = f.Total <= 0 || (scope == Week ? played < MinDays : f.FarmSeconds < MinFarmSeconds && f.Runs == 0);
         return f with { Thin = thin };
@@ -181,7 +190,7 @@ public static class Wrapped
         string change = "", changeLabel = ""; int tone = 0;
         if (f.Change is double ch && f.Before is long b)
         {
-            changeLabel = (week ? "vs last week, " : "vs yesterday, ") + fk(b);
+            changeLabel = "vs last week, " + fk(b);
             if (Math.Abs(ch) < Same) change = "about the same";
             // twice the period before or more reads as a multiple ("▲ 7×"), not a four-figure share
             else if (ch >= 1) { tone = 1; change = $"▲ {(1 + ch).ToString("0.#", c)}×"; }
