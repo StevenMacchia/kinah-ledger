@@ -48,6 +48,13 @@ public sealed class InCard
     public double VerticalOffset { get; set; }
     public event EventHandler? Opened;
     public event EventHandler? Closed;
+    /// <summary>
+    /// The card's own way out (the run-end recap's): given its removal, it plays the card leaving and then removes it. The
+    /// card counts as closed at once (IsOpen, Current, Closed); only its drawing stays the moment it takes, ignoring the mouse.
+    /// </summary>
+    public Action<Action>? Leave { get; set; }
+    /// <summary>The removal of a card still leaving, done at once if it opens again before that.</summary>
+    Action? _leaving;
 
     public bool IsOpen
     {
@@ -62,6 +69,7 @@ public sealed class InCard
         var layer = Layer;
         if (layer == null || _child == null) return;
         if (Current != null && !ReferenceEquals(Current, this)) Current.Close();
+        _leaving?.Invoke();
         _open = true;
         Current = this;
         _anchor = AnchorPoint(layer, out _anchorTop);
@@ -82,7 +90,14 @@ public sealed class InCard
         if (!_open) return;
         _open = false;
         if (ReferenceEquals(Current, this)) Current = null;
-        if (_box != null) { if (_scroll != null) _scroll.Content = null; Layer?.Children.Remove(_box); }
+        if (_box is { } box)
+        {
+            var scroll = _scroll;
+            Action remove = null!;
+            remove = () => { if (ReferenceEquals(_leaving, remove)) _leaving = null; if (scroll != null) scroll.Content = null; Layer?.Children.Remove(box); };
+            if (Leave is { } leave) { box.IsHitTestVisible = false; _leaving = remove; leave(remove); }
+            else remove();
+        }
         _box = null; _scroll = null;
         Closed?.Invoke(this, EventArgs.Empty);
     }
