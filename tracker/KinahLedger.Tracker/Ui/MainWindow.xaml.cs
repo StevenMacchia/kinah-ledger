@@ -1316,34 +1316,65 @@ public partial class MainWindow : Window
     /// makes the cost "at least" the priced part and the profit "at most", said once in the section line; materials ticked
     /// "I have these" cost nothing. A missing figure is a blank cell.
     /// </summary>
+    /// <summary>
+    /// Bound copies picked up, from the session and the runs, into the bound stock the crafting costs go by (PriceBook.BoundHeld):
+    /// a bound Lesser Manastone picked up makes the Manastone crafts it goes into cost nothing. Live only (never a render or the
+    /// self-test, which must not write the player's list); a new one is noted once in reads.log.
+    /// </summary>
+    void NoteBoundPickups()
+    {
+        if (_demo || _watcher.Chat is not { } s) return;
+        try
+        {
+            var names = new List<string>();
+            void From(IEnumerable<KeyValuePair<long, int>> items, bool allBound)
+            {
+                foreach (var (id, n) in items)
+                    if (n > 0 && _items.NameOf(id) is { Length: > 0 } nm && (allBound || nm.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase))) names.Add(nm);
+            }
+            From(s.Engine.ItemsBound.ToList(), true);
+            From(s.Engine.Items.ToList(), false);
+            // a run's pickups: its bound ones, and the chat's lines (where a dungeon's "Lesser Manastone (Bound)" lands)
+            foreach (var r in s.Instances.Snapshot()) { From(r.BoundItems.ToList(), true); From(r.Items.ToList(), false); From(r.ChatItems.ToList(), false); }
+            var added = PriceBook.NoteBoundHeld(names);
+            if (added.Count > 0) CrashLog.Note($"crafting: bound {string.Join(", ", added.Take(8))} picked up: crafts made from them cost nothing and make bound items");
+        }
+        catch (InvalidOperationException) { /* a count changed while read: the next refresh takes it */ }
+    }
+
     void FillCraft(SessionEngine? e)
     {
         var rows = new List<DropRow>();
         long spent = 0, worth = 0; int noBook = 0, noPrice = 0, tries = 0, ok = 0, recipes = 0, itemsMade = 0;
         var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         _craftPerRecipe.Clear();
+        NoteBoundPickups();
         foreach (var r in e?.CraftSnapshot() ?? new())
         {
             tries += r.Attempts; ok += r.Ok; itemsMade += r.MadeCount;
             long? cost = RecipeBook.CostOfTries(r.Name, r.Tries, out int unpricedMats, out int vendorMats, out int farmedMats, missing);
             // vendor materials with no NPC price are unpriced too: the cost is then the least a try costs
             int gaps = unpricedMats + vendorMats;
-            long made = 0; bool madeKnown = r.MadeUnknown == 0;
-            foreach (var (item, n) in r.Made)
-            {
-                if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
-            }
+            // made from your bound stock: the bound materials cost nothing and what came out is bound, so it has no sale value
+            bool bound = RecipeBook.BoundCraft(r.Name);
+            long made = 0; bool madeKnown = r.MadeUnknown == 0 || bound;
+            if (!bound)
+                foreach (var (item, n) in r.Made)
+                {
+                    if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
+                }
             if (cost != null) spent += cost.Value; else noBook++;
             if (madeKnown) worth += made; else noPrice++;
-            long? profit = cost != null && madeKnown ? made - cost.Value : null;
+            long? profit = cost != null && madeKnown && !bound ? made - cost.Value : null;
             if (profit is long pr) _craftPerRecipe.Add((r.Name, pr, r.Ok));
             var spentCell = cost is not long cv ? "" : gaps == 0 ? Fk(cv) : cv == 0 && farmedMats == 0 ? "" : "≥ " + Fk(cv);
-            var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
+            var profitCell = bound ? "bound" : profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
             var book = RecipeBook.ForOutput(r.Name);
             // what came out and what it sells for, so a loss reads against the whole yield (Steven, 2026-11-05: 40 ingots from
             // 4 crafts of the ×10 recipe, "shows as if only 4 were made with a loss of 151k")
             var tip = "Click for the materials, what a craft costs and what it makes."
+                + (bound ? "\nMade from your bound " + RecipeBook.BoundMain(r.Name) + ": it costs nothing here, and what it makes is bound, so it can't be sold. Only what you paid for (an NPC's ink, Market materials you have no bound copies of) is counted." : "")
                 + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
                 + (r.MadeCount > 0 ? $"\n{r.MadeCount:N0} made" + (madeKnown && made > 0 ? $", selling for {Fk(made)} at the lowest Market ask, {PriceBook.Cut}." : ".") : "")
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")

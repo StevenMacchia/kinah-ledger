@@ -5935,8 +5935,45 @@ options: --process aion[,other]");
         ok &= PriceUploadTests(items);
         Console.WriteLine("\nPlayer features (best crafts, where to farm, gear score, price alerts):");
         ok &= PlayerTests.Run();
+        Console.WriteLine("\nBound crafts (materials you hold bound cost nothing; what they make is bound):");
+        ok &= BoundCraftTests();
         Console.WriteLine(ok ? "\nAll market cases passed." : "\nMarket mismatch, see above.");
         return ok ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Steven, 2026-11-12: "prices for crafting are still SO off i cant be losing 500m on bound items to make manastones";
+    /// "the point is that they cant even be sold". Siel's board that day: Lesser Manastone 55,542, Spiritstone Powder 230,
+    /// Intermediate Manastone 51,220, Superior Manastone 900,000; Professional Ink (Bound) 1,200 at the NPC. Once his bound
+    /// Lesser Manastones are picked up, the Intermediate Manastone craft costs its powder and ink only and is a bound craft.
+    /// </summary>
+    static bool BoundCraftTests()
+    {
+        bool ok = true;
+        void Check(string what, string got, string expect) { bool pass = got == expect; ok &= pass; Console.WriteLine($"  {what,-78} -> {got} {(pass ? "ok" : "MISMATCH, expected " + expect)}"); }
+        var keep = PriceBook.PathOverride;
+        var tmp = Path.Combine(Path.GetTempPath(), "KinahLedger-bound-crafts-" + Environment.ProcessId);
+        try
+        {
+            Directory.CreateDirectory(tmp);
+            PriceBook.PathOverride = Path.Combine(tmp, "prices.json"); PriceBook.Reset();
+            PriceBook.SetBoardQuotes(PriceBook.ParseQuotes("{\"items\":[" + string.Join(",", new[] { ("Lesser Manastone", 55542), ("Spiritstone Powder", 230), ("Intermediate Manastone", 51220), ("Superior Manastone", 900000) }
+                .Select(p => $"{{\"item\":\"{p.Item1}\",\"price\":{p.Item2},\"price_from\":\"feed\",\"readings\":20,\"sure\":true}}")) + "]}", null));
+            string Cost(string output) => RecipeBook.CostPerTry(output, 0, out _, out _, out _) is long c ? c.ToString("N0") : "-";
+            Check("before: an Intermediate Manastone try at the Market's prices, not bound", $"{Cost("Intermediate Manastone")} {RecipeBook.BoundCraft("Intermediate Manastone")}", "280,800 False");
+            // a bound powder from a quest: powder is free, but the Manastone isn't a bound craft (its main material is the Manastone)
+            var powder = PriceBook.NoteBoundHeld(new[] { "Spiritstone Powder (Bound)" });
+            Check("a bound powder alone: powder costs nothing, the craft is not bound", $"{Cost("Intermediate Manastone")} {RecipeBook.BoundCraft("Intermediate Manastone")} {string.Join(",", powder)}", "280,110 False Spiritstone Powder");
+            var added = PriceBook.NoteBoundHeld(new[] { "Lesser Manastone (Bound)", "Lesser Manastone (Bound)", "Spiritstone Powder (Bound)" });
+            Check("bound Lesser Manastones picked up: the try costs the NPC's ink, a bound craft", $"{Cost("Intermediate Manastone")} {RecipeBook.BoundCraft("Intermediate Manastone")} {string.Join(",", added)}", "2,400 True Lesser Manastone");
+            Check("  Superior Manastone stays a Market craft until bound Intermediates are picked up", $"{RecipeBook.BoundCraft("Superior Manastone")} {RecipeBook.BoundMain("Superior Manastone")}", "False Intermediate Manastone");
+            PriceBook.Reset();
+            Check("  the bound stock is kept on this PC (read back after a restart)", $"{PriceBook.BoundHeld("Lesser Manastone")} {PriceBook.Farmed("Lesser Manastone")} {File.Exists(Path.Combine(tmp, "bound-held.json"))}", "True True True");
+            PriceBook.SetFarmed("Lesser Manastone", false);
+            Check("  unticking I have these lets it go: Market price again", $"{Cost("Intermediate Manastone")} {RecipeBook.BoundCraft("Intermediate Manastone")}", "280,110 False");
+        }
+        finally { PriceBook.PathOverride = keep; PriceBook.Reset(); try { Directory.Delete(tmp, true); } catch (IOException) { } }
+        return ok;
     }
 
     /// <summary>

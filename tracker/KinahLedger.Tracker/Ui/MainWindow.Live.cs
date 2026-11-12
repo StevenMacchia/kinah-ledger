@@ -309,6 +309,8 @@ public partial class MainWindow
         if (cost == null) return ("", true);
         bool floor = unpriced + vendor > 0;
         if (!l.Ok) return ((floor ? "≤ " : "") + FeedK(-cost.Value), true);
+        // made from bound stock: bound, not for sale; what the try cost (the NPC's ink) is all there is to say
+        if (RecipeBook.BoundCraft(l.Name)) return (cost.Value > 0 ? FeedK(-cost.Value) + " · bound" : "bound", true);
         int makes = CraftMakes(l) ?? 1;
         if (PriceBook.Price(l.Name) is not long p) return ("", true);
         var worth = FeedK(p * makes * PriceBook.SellerKeeps - cost.Value);

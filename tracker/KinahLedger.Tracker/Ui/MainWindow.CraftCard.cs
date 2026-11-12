@@ -134,12 +134,14 @@ public partial class MainWindow
             info.Children.Add(CkText(m.Item.Replace(" (Bound)", ""), GradeColor(GradeOf(m.Item)), 13));
             if (have)
             {
-                // free in cash: "farmed · 0", with what it would cost dimmed beside it
+                // free in cash: "farmed · 0" (or "bound · 0", your own bound copies), with what it would cost dimmed beside it
+                bool heldBound = !vendor && PriceBook.BoundHeld(m.Item);
                 var fp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-                fp.Children.Add(CkText("farmed · 0", Color.FromRgb(0x3D, 0xD6, 0x8C), 12.5, mono: true));
+                fp.Children.Add(CkText(heldBound ? "bound · 0" : "farmed · 0", Color.FromRgb(0x3D, 0xD6, 0x8C), 12.5, mono: true));
                 if (each is long ref1) { var dim = CkText(vendor ? $"NPC {Amounts.Short(ref1)}" : $"Market {Amounts.Short(ref1)}", CkFaint, 11.5, mono: true); dim.ToolTip = Amounts.Full(ref1) + " each"; dim.Margin = new Thickness(8, 0, 0, 0); fp.Children.Add(dim); }
                 info.Children.Add(fp);
-                if (!vendor) farmed.Add((m.Item, m.Qty, each));
+                // bound copies can't be sold, so there is no "sell them instead" for them
+                if (!vendor && !heldBound) farmed.Add((m.Item, m.Qty, each));
             }
             else if (vendor) info.Children.Add(VendorCost(m.Item, output, best, rank));
             else
@@ -248,7 +250,15 @@ public partial class MainWindow
         // the verdict, in the top band: profit per craft at the success chance (the same sum as the site's best crafts: CraftMath),
         // then profit an hour and the break-even price; the materials-for-sale line closes the card
         var (rate, kind) = CraftMath.SuccessUsed(recipe.SuccessRate, mine?.Attempts ?? 0, mine?.Ok ?? 0);
-        if (unpriced == 0 && CraftMath.Judge(recipe, Price, total, rate, PriceBook.SellerKeeps) is { } v)
+        // made from your bound stock (RecipeBook.BoundCraft): no Market value in or out, so no profit or loss to show; what a
+        // try costs is what you paid for (an NPC's ink), said as such (Steven, 2026-11-12: "they cant even be sold")
+        if (RecipeBook.BoundCraft(recipe.Output))
+        {
+            top.Children.Add(CkKv("Bound craft", unpriced == 0 ? (total > 0 ? Amounts.Short(total) + " a try" : "free") : "", CkGood,
+                $"made from your bound {RecipeBook.BoundMain(recipe.Output)}: it costs nothing, and what it makes is bound and can't be sold", rightSize: 15));
+            top.Children.Add(new Border { Height = 6 });
+        }
+        else if (unpriced == 0 && CraftMath.Judge(recipe, Price, total, rate, PriceBook.SellerKeeps) is { } v)
         {
             double per = v.Profit;
             // the chance counted: the listed one, the player's own once it differs over 20 crafts, or measured; unknown is an upper bound

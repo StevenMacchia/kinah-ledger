@@ -93,11 +93,14 @@ public partial class MainWindow
         {
             tries += r.Attempts; ok += r.Ok;
             long? cost = RecipeBook.CostOfTries(r.Name, r.Tries, out _, out _, out _, missing);
-            long made = 0; bool madeKnown = r.MadeUnknown == 0;
-            foreach (var (item, n) in r.Made)
-            {
-                if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
-            }
+            // made from bound stock: what came out is bound, no sale value (the same rule as FillCraft)
+            bool bound = RecipeBook.BoundCraft(r.Name);
+            long made = 0; bool madeKnown = r.MadeUnknown == 0 || bound;
+            if (!bound)
+                foreach (var (item, n) in r.Made)
+                {
+                    if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
+                }
             if (cost != null) spent += cost.Value; else noBook++;
             if (madeKnown) worth += made;
         }
