@@ -202,6 +202,7 @@ public partial class MainWindow
         if (kills.Count > 0) LootGroup("farm", kills, both ? "FROM KILLS" : "");
         if (gather.Count > 0) LootGroup("gather", gather, both ? "GATHERED" : "");
         if (kills.Count + gather.Count == 0) LootEmpty(_todayZone != null ? "Nothing picked up here yet today." : "Nothing picked up from farming yet today.");
+        LootHost.Children.Add(WrappedButton(Wrapped.Day));
     }
 
     static string ZoneName(string zone) => zone == SessionEngine.UnknownZone ? "Zone not read" : zone;
@@ -368,6 +369,8 @@ public partial class MainWindow
         if (state == "paused" && !TableTitle.Text.EndsWith(" · paused")) TableTitle.Text += " · paused";
         // Share (0.9.3): the sheet open on This session, Last run or This week; share-picture also draws the pictures themselves
         if (state.StartsWith("share-")) OpenShareSample(state);
+        // the hero's rate chart open, live (Ui/MainWindow.RateChart.cs)
+        if (state is "chart" or "chart-hover") ShowChartSample(state);
     }
 
     /// <summary>The chat out of view in a layout render (KL_SHOT_STATE=paused).</summary>

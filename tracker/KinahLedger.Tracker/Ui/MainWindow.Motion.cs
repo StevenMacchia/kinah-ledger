@@ -11,6 +11,8 @@ public partial class MainWindow
     /// </summary>
     internal void MotionFrameForRender()
     {
+        // KL_CLICK, KL_HOVER: a click's or the pointer's motion alone (Ui/MainWindow.PointerFrames.cs); | so a frame can hold both
+        if (ClickFrameForRender() | HoverFrameForRender()) return;
         var key = "hero|" + _part + "|" + CountWhere();
         if (Motion.LastOf(key) is double v && v > 0) Motion.Replay(HeadRate, key, v * 0.85, v, x => Fk(x), 0.01);
         var bag = BagStripHost.Children.OfType<FrameworkElement>().ToList();
@@ -24,7 +26,9 @@ public partial class MainWindow
             double share = _chaseShare;
             Motion.ReplaySlide(ChaseFill, ChaseKey, share * 0.6, share, s => { _chaseShare = s; LayoutChase(); });
         }
-        if (ChartBox.Visibility == Visibility.Visible) Motion.Reveal(RateCanvas, RateCanvas.Width, RateCanvas.Height);
+        if (ChartBox.Visibility == Visibility.Visible) ChartFrameForRender();
         if (GoalsHost.Children.OfType<System.Windows.Controls.Border>().FirstOrDefault() is { } row) Motion.Wash(row, "Gold");
+        RareMomentFrame();   // KL_DEMO_RARE: a rare drop's moment over the page (Ui/MainWindow.RareMoment.cs)
+        BestsFrameForRender();   // KL_MOMENT=best|day: a new best's or a milestone's moment (Ui/MainWindow.Bests.cs)
     }
 }

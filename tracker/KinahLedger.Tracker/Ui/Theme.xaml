@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="clr-namespace:KinahLedger.Ui">
 
   <!-- the v2 look (2026-11-10, the site's kl-v2.css tokens): a near-black neutral with a faint cool tint, gold the one accent
        (Kinah, the primary action, focus), mint and coral for up and down, the grade colours the game's. The roles that were
@@ -241,6 +242,12 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+    <!-- a button held down sinks to 97% and springs back (2026-11-11). A trigger can't see whether motion is on, so it only
+         says the button is down; Ui/Motion.Feel.cs plays the press, or shows it at once with Windows's animations off. In a
+         style trigger, so every button style based on this one has it, whatever its own template -->
+    <Style.Triggers>
+      <Trigger Property="IsPressed" Value="True"><Setter Property="ui:Motion.Pressed" Value="True"/></Trigger>
+    </Style.Triggers>
   </Style>
 
   <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -273,8 +280,11 @@
   </Style>
 
   <!-- the page pills (Quest, 2026-11-07): Farm / Craft / Runs in one rounded group, the lit one a gold pill with dark ink;
-       the same two styles switch LOOT's sides and the Today strip's scope -->
+       the same two styles switch LOOT's sides and the Today strip's scope. The lit ones set ui:Motion.Lit, and the light
+       slides from the old button to the new one (Ui/Motion.Glide.cs); the lit button keeps its light under the mouse (it used
+       to swap it for the hover tint, so a pill just clicked went dark until the pointer left it) -->
   <Style x:Key="SegOff" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="ui:Motion.Switch" Value="True"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderBrush" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
@@ -289,7 +299,10 @@
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource HoverTint}"/></Trigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="ui:Motion.Lit" Value="False"/></MultiTrigger.Conditions>
+              <Setter TargetName="b" Property="Background" Value="{DynamicResource HoverTint}"/>
+            </MultiTrigger>
             <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.85"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
           </ControlTemplate.Triggers>
@@ -298,12 +311,14 @@
     </Setter>
   </Style>
   <Style x:Key="SegOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
+    <Setter Property="ui:Motion.Lit" Value="True"/>
     <Setter Property="Background" Value="{DynamicResource SegOnBg}"/>
     <Setter Property="Foreground" Value="{DynamicResource SegOnInk}"/>
   </Style>
   <!-- the page tab on show (v2, 2026-11-10): a faint tint and the ink, as the site's top menu; the solid pill (SegOn) is for
        switches inside a page (Today / Week, This session / All time) -->
   <Style x:Key="NavOn" TargetType="Button" BasedOn="{StaticResource SegOff}">
+    <Setter Property="ui:Motion.Lit" Value="True"/>
     <Setter Property="Background" Value="{DynamicResource NavOnBg}"/>
     <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
   </Style>
@@ -366,15 +381,10 @@
     <Setter Property="CornerRadius" Value="10"/>
     <Setter Property="Padding" Value="11,8,11,8"/>
     <Setter Property="Cursor" Value="Hand"/>
-    <!-- v2 motion (2026-11-10, as the site's cards): a card that opens something lifts a pixel under the mouse, in 0.12 s -->
-    <Setter Property="RenderTransform"><Setter.Value><TranslateTransform/></Setter.Value></Setter>
-    <Style.Triggers>
-      <Trigger Property="IsMouseOver" Value="True">
-        <Setter Property="BorderBrush" Value="{DynamicResource CardLineHover}"/>
-        <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-1" Duration="0:0:0.12"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
-        <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="0:0:0.12"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
-      </Trigger>
-    </Style.Triggers>
+    <!-- v2 motion (2026-11-10, as the site's cards): a card that opens something lifts a pixel under the mouse and its edge
+         brightens. Played by Ui/Motion.Feel.cs (2026-11-11), which a storyboard here couldn't be: that one lifted with
+         Windows's animations off too -->
+    <Setter Property="ui:Motion.Feel" Value="Lift"/>
   </Style>
   <!-- a line icon at 16 px, the stroke in the text's muted tone; the chevron that turns when a card opens; a pill's icon in the pill's own ink -->
   <Style x:Key="QIconStyle" TargetType="Path">

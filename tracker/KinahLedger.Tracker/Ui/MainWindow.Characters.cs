@@ -104,6 +104,7 @@ public partial class MainWindow
     {
         _watcher.LoadDay();
         _watcher.Chat?.Instances.Reload();
+        CloseWrapped();   // an open Week or Day wrapped is the other character's: it goes (Ui/MainWindow.Wrapped.cs)
         _goals = Goals.Load(); _questLog = Quests.Load(); _questLoaded = true;
         BestRuns.Reset();
         ServerRowState(); RedrawGoals(); Redraw();
@@ -127,6 +128,7 @@ public partial class MainWindow
     {
         if (_demo || _switchingCharacter || Characters.Current?.Id == c.Id) return;
         _switchingCharacter = true;
+        ForgetRare();   // the other character's drop never leads this one's moment (Ui/MainWindow.RareMoment.cs)
         try
         {
             CrashLog.Note($"character: counting for {Characters.Label(c)} now (was {(Characters.Current is { } was ? Characters.Label(was) : "nobody")})");

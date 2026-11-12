@@ -20,7 +20,7 @@ namespace KinahLedger.Ui;
 /// render (<see cref="Still"/>) and when Windows's animations are off. KL_MOTION_AT=0..1 holds every effect at that point
 /// instead of playing it, for a render of the frame.
 /// </summary>
-public static class Motion
+public static partial class Motion
 {
     /// <summary>No motion at all: the demo and the review loop's renders, which must come out the same each time.</summary>
     public static bool Still { get; set; }

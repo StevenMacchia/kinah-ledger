@@ -18,7 +18,7 @@ public partial class MainWindow
     /// <summary>The coin the game draws for Kinah (data/extra-items.json, "Kina"): the Kinah pickups' tile.</summary>
     const string KinahIcon = ItemDictionary.IconBase + "Icon_gold.png";
     static readonly string[] PickKeys = { "", "Id", "At", "Count", "Worth", "Grade", "Icon", "Note", "Kind" };
-    static readonly string[] RareKeys = { "rare", "rareId", "rareCount", "rareGrade", "rareIcon", "rareColor", "rareItem", "rarePrice", "rareWhere", "rareWatched", "rareChime" };
+    static readonly string[] RareKeys = { "rare", "rareId", "rareCount", "rareGrade", "rareIcon", "rareColor", "rareItem", "rarePrice", "rareWhere", "rareWatched", "rareChime", "rareMore" };
     static readonly string[] TopKeys = { "top", "topCount", "topWorth", "topGrade", "topIcon" };
 
     /// <summary>
