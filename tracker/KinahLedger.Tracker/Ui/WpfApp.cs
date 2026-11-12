@@ -1021,6 +1021,19 @@ public static class WpfApp
             finally { MainWindow.OpenForTest = null; }
         }
 
+        // a new best's moment in the window (Ui/MainWindow.Bests.cs): held a third in, the best tag growing in and the ring
+        // swelling; with motion off, no tag at all (the ring's ★ says it); the hour back under the best takes a tag away
+        {
+            var frozenWas = Motion.FrozenAt;
+            Motion.FrozenAt = 0.3;
+            var held = w.BestMomentForTest();
+            Motion.FrozenAt = null;
+            var still = w.BestMomentForTest();
+            Motion.FrozenAt = frozenWas;
+            Check(held.Tag && held.Opacity > 0.3 && held.Opacity < 1 && held.RingScale > 1.05 && held.GoneUnder && !still.Tag,
+                $"motion: a new best grows its tag in and pops the ring once ({held.Tag} {held.Opacity:0.00} ring {held.RingScale:0.000}); still, no tag ({still.Tag}); back under, the tag goes ({held.GoneUnder})");
+        }
+
         w.ForceClose();
         // motion (Ui/Motion.cs, 2026-11-11), each effect held at a point of its course (KL_MOTION_AT's way) so the frame can be read
         {
