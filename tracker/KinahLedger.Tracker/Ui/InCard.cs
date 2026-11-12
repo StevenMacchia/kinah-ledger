@@ -49,12 +49,13 @@ public sealed class InCard
     public event EventHandler? Opened;
     public event EventHandler? Closed;
     /// <summary>
-    /// The card's own way out (the run-end recap's): given its removal, it plays the card leaving and then removes it. The
-    /// card counts as closed at once (IsOpen, Current, Closed); only its drawing stays the moment it takes, ignoring the mouse.
+    /// The card's own way out (the run-end recap's): given its removal, it plays the card leaving, removes it at the end, and
+    /// hands back what ends the leave at once. The card counts as closed at once (IsOpen, Current, Closed); only its drawing
+    /// stays the moment it takes, ignoring the mouse.
     /// </summary>
-    public Action<Action>? Leave { get; set; }
-    /// <summary>The removal of a card still leaving, done at once if it opens again before that.</summary>
-    Action? _leaving;
+    public Func<Action, Action>? Leave { get; set; }
+    /// <summary>Ends a card's leave still under way at once: any card opening first takes the one leaving away, so two never overlap.</summary>
+    static Action? _leaving;
 
     public bool IsOpen
     {
@@ -69,7 +70,7 @@ public sealed class InCard
         var layer = Layer;
         if (layer == null || _child == null) return;
         if (Current != null && !ReferenceEquals(Current, this)) Current.Close();
-        _leaving?.Invoke();
+        EndLeaving();
         _open = true;
         Current = this;
         _anchor = AnchorPoint(layer, out _anchorTop);
@@ -93,13 +94,34 @@ public sealed class InCard
         if (_box is { } box)
         {
             var scroll = _scroll;
-            Action remove = null!;
-            remove = () => { if (ReferenceEquals(_leaving, remove)) _leaving = null; if (scroll != null) scroll.Content = null; Layer?.Children.Remove(box); };
-            if (Leave is { } leave) { box.IsHitTestVisible = false; _leaving = remove; leave(remove); }
-            else remove();
+            bool removed = false;
+            Action? end = null;
+            void Remove()
+            {
+                if (removed) return;
+                removed = true;
+                if (end != null && ReferenceEquals(_leaving, end)) _leaving = null;
+                if (scroll != null) scroll.Content = null;
+                Layer?.Children.Remove(box);
+            }
+            if (Leave is { } leave)
+            {
+                EndLeaving();
+                box.IsHitTestVisible = false;
+                end = leave(Remove);
+                if (!removed) _leaving = end;
+            }
+            else Remove();
         }
         _box = null; _scroll = null;
         Closed?.Invoke(this, EventArgs.Empty);
+    }
+
+    static void EndLeaving()
+    {
+        var end = _leaving;
+        _leaving = null;
+        end?.Invoke();
     }
 
     /// <summary>Where the card goes before it is kept inside the window: under the pointer, under its target, or in the target's middle.</summary>

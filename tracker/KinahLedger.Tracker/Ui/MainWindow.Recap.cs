@@ -69,24 +69,33 @@ public partial class MainWindow
         if (_shareFarmRun is not { } fr) return;
         var f = fr.Facts;
         long kinah = e.Totals().Kinah;
-        var standing = FarmStanding(e, f.Seconds, worth, bestBefore);
+        var standing = FarmStanding(e, bestBefore);
         OfferRecap(() => BuildRecap("Run done", f, kinah, standing, expedition: false), $"Run done: {Fk(worth)} Kinah");
     }
 
     /// <summary>
-    /// A farming run against its zone: a new best when its hour beats the best there (over ten minutes), else the best there
-    /// and, with three earlier stays there, its hour against theirs. Worked out when the run ends, so a run saved while the
-    /// card waits for the window is never counted among the earlier ones.
+    /// A farming run against the zone it ended in, by its stay there (a run that moved zones is set against that zone's
+    /// history with that zone's own Kinah, loot and time, as the best there is kept): a new best when its hour beats the best
+    /// there (over ten minutes), else the best there and, with Compare zones and runs on and three earlier stays there, its
+    /// hour against theirs. Worked out when the run ends, so a run saved while the card waits for the window is never counted
+    /// among the earlier ones.
     /// </summary>
-    RecapStanding FarmStanding(SessionEngine e, double seconds, long worth, BestRuns.Best? bestBefore)
+    RecapStanding FarmStanding(SessionEngine e, BestRuns.Best? bestBefore)
     {
+        double seconds = 0; long worth = 0;
+        if (e.Zone is { } zone && e.ZoneSnapshot().TryGetValue(zone, out var z))
+        {
+            seconds = z.Seconds;
+            worth = BestRuns.Value(z.Kinah, z.Items.Select(kv => (_items.NameOf(kv.Key), kv.Value)));
+        }
         double hours = seconds / 3600;
         long rate = hours > 0 ? (long)Math.Round(worth / hours) : 0;
         bool timed = seconds >= BestRuns.MinMinutes * 60;
         var b = bestBefore is { PerHr: > 0 } had ? had : null;
         if (b != null && timed && rate > b.PerHr) return new($"{Fk(rate)} Kinah/h · it was {Fk(b.PerHr)}", true, null);
         var best = b != null ? $"Your best here: {Fk(b.PerHr)} Kinah/h" : "";
-        if (!timed || rate <= 0) return new(best, false, null);
+        // the line against your average is one of Compare's figures: only with Options › Compare zones and runs on
+        if (!_prefs.CompareZones || !timed || rate <= 0) return new(best, false, null);
         var earlier = BestRuns.Stays(Server?.Label ?? "", e.Zone, SessionStore.StartedKey(e.Started));
         return new(best, false, RunStanding.HourAverage(earlier) is double avg ? RunStanding.Share(rate, avg) : null);
     }
@@ -104,8 +113,8 @@ public partial class MainWindow
 
     /// <summary>
     /// An expedition or event against the earlier counted runs of its place (as the Events page's Compare counts them): a new
-    /// best when it beats every one, else its worth against their average. With fewer than three, or a flagged run, only the
-    /// zone's best hour, as before.
+    /// best when it beats every one, else (with Compare zones and runs on) its worth against their average. With fewer than
+    /// three, or a flagged run, only the zone's best hour, as before.
     /// </summary>
     RecapStanding PlaceStanding(InstanceRun r)
     {
@@ -115,7 +124,7 @@ public partial class MainWindow
         var earlier = WeekRunList().Where(x => x.Start < r.Start && !x.OutOfAverages && string.Equals(ZoneCompare.PlaceOf(x), place, StringComparison.OrdinalIgnoreCase)).Select(RunValue);
         if (ZoneCompare.VsPlace(RunValue(r), earlier) is not { Average: > 0 } v) return new(best, false, null);
         if (v.This > v.Best) return new($"Best of your {v.Of:N0} runs here · it was {Fk(v.Best)}", true, null);
-        return new(best, false, RunStanding.Share(v.This, v.Average));
+        return new(best, false, _prefs.CompareZones ? RunStanding.Share(v.This, v.Average) : null);
     }
 
     /// <summary>The card now when the window is the active one; else it waits for the window, with a tray notice when the window is in the tray.</summary>
@@ -141,7 +150,7 @@ public partial class MainWindow
         {
             Child = card, StaysOpen = false, AllowsTransparency = true, PopupAnimation = moves ? PopupAnimation.None : PopupAnimation.Fade,
             Placement = PlacementMode.Center, PlacementTarget = Content as UIElement ?? this,
-            Leave = moves ? gone => Motion.Leave(card, gone) : null,
+            Leave = moves ? remove => Motion.Leave(card, remove) : null,
         };
         _card.IsOpen = true;
         Motion.Sequence(card, recap.Intro);
@@ -209,20 +218,27 @@ public partial class MainWindow
             var count = CkKv(f.CountWord == "attempt" ? "Attempts" : "Kills", f.Count.ToString("N0"), CkInk); body.Children.Add(count);
             Count(count, 2, f.Count, Whole);
         }
-        var kin = CkKv("Kinah", kinah > 0 ? Fk(kinah) : "none", kinah > 0 ? CkGold : CkFaint); body.Children.Add(kin);
-        if (kinah > 0) Count(kin, 0, kinah, Money, CkGood);
+        // Kinah and Loot each get a line only when the loot adds something: with no loot worth anything Made is the Kinah, and
+        // the total says it once (its line under it says it was all Kinah); unpriced pieces still get their Loot line
         long loot = Math.Max(0, f.Made - Math.Max(0, kinah));
         int pieces = f.Drops.Sum(d => d.Count);
-        var lootRow = CkKv("Loot", loot > 0 ? Fk(loot) : pieces > 0 ? "no price yet" : "none", loot > 0 ? CkGold : CkFaint,
-            sub: pieces > 0 ? $"{pieces:N0} item{(pieces == 1 ? "" : "s")}, {PriceBook.Cut}" : "");
-        body.Children.Add(lootRow);
-        if (loot > 0) Count(lootRow, 3, loot, Money, CkGood);
+        if (loot > 0)
+        {
+            var kin = CkKv("Kinah", kinah > 0 ? Fk(kinah) : "none", kinah > 0 ? CkGold : CkFaint); body.Children.Add(kin);
+            if (kinah > 0) Count(kin, 0, kinah, Money, CkGood);
+        }
+        if (loot > 0 || pieces > 0)
+        {
+            var lootRow = CkKv("Loot", loot > 0 ? Fk(loot) : "no price yet", loot > 0 ? CkGold : CkFaint, sub: pieces > 0 ? $"{pieces:N0} item{(pieces == 1 ? "" : "s")}, {PriceBook.Cut}" : "");
+            body.Children.Add(lootRow);
+            if (loot > 0) Count(lootRow, 3, loot, Money, CkGood);
+        }
 
         var drops = f.Drops.Where(d => d.Count > 0).OrderByDescending(d => d.Worth).ThenByDescending(d => SharePicture.GradeRank(d.Grade)).ThenByDescending(d => d.Count).ToList();
         if (drops.Count > 0) AddRecapDrops(body, intro, drops);
         AddRecapStanding(body, intro, standing);
 
-        var made = CkFooter("Made", PriceBook.Cut, Fk(f.Made), f.Made > 0);
+        var made = CkFooter("Made", loot > 0 || kinah <= 0 ? PriceBook.Cut : "all Kinah", Fk(f.Made), f.Made > 0);
         made.CornerRadius = new CornerRadius(0);
         body.Children.Add(made);
         if (f.Made > 0) Count(made, 4, f.Made, Money);
@@ -299,6 +315,9 @@ public partial class MainWindow
             if (figure.Length > 0)
             {
                 var pct = CkText(figure, tone, 13, FontWeights.SemiBold, mono: true);
+                // as wide as its final text from the start, so the words after it don't slide as it counts up
+                pct.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                pct.MinWidth = pct.DesiredSize.Width;
                 line.Children.Add(pct);
                 intro.Add(RecapStandingAt, RecapStandingMs, Motion.CountUp(pct, Math.Round(Math.Abs(share) * 100), v => RunStanding.Percent(sign, v)));
             }

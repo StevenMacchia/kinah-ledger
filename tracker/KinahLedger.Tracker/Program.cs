@@ -4116,6 +4116,9 @@ options: --process aion[,other]");
                 """{"started":"2026-11-05 20:00","server":"Siel (Elyos)","zones":{"Western Cantas Valley":{"minutes":20,"kinah":200000}}}""",
             });
             Check("a zone's earlier stays: this server, ten minutes or more, not the run just saved", string.Join(" ", BestRuns.Stays("Siel (Elyos)", "Western Cantas Valley", "2026-11-05 20:00").Select(x => $"{x.Value}/{x.Seconds}")), "300000/1800 500000/3600");
+            // the lines are skipped unread unless they name the server and the zone, as the file's JSON writes them (an apostrophe escaped)
+            File.AppendAllText(Path.Combine(tmp, "sessions.jsonl"), """{"started":"2026-11-06 20:00","server":"Siel (Elyos)","zones":{"Ara's Rest":{"minutes":30,"kinah":90000}}}""" + "\n");
+            Check("a zone named with an apostrophe is still found in the file", string.Join(" ", BestRuns.Stays("Siel (Elyos)", "Ara's Rest", "").Select(x => $"{x.Value}/{x.Seconds}")), "90000/1800");
 
             Check("panel fields in panel order", string.Join(",", Ui.HudFields.Parse("total, rate,time,nope")), "time,rate,total");
             Check("an empty choice keeps the clock", string.Join(",", Ui.HudFields.Parse("")), "time");

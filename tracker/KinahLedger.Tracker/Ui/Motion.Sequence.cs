@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Threading;
 
 namespace KinahLedger.Ui;
 
@@ -17,6 +18,8 @@ public static partial class Motion
     public const double EnterMs = 300, LeaveMs = 170;
     /// <summary>How far a card arriving rises (px) and the size it grows from.</summary>
     const double EnterRise = 14, EnterScale = 0.96;
+    /// <summary>A leave not done in this many times its length (the window minimized, the animation clock held) takes the card away anyway.</summary>
+    const double LeaveGrace = 2;
 
     /// <summary>
     /// The effects of a sequence, each with when it starts (ms after the first) and how long it takes. A step gets its own
@@ -76,11 +79,28 @@ public static partial class Motion
 
     /// <summary>
     /// A card leaving: the way it arrived, backwards and quicker, from wherever it is (it may still be arriving), then
-    /// <paramref name="then"/> takes it away. With motion off, or in a held render, it goes at once.
+    /// <paramref name="then"/> takes it away, once. With motion off, or in a held render, it goes at once. A one-shot timer
+    /// takes it away if the leave has not finished in <see cref="LeaveGrace"/> times its length, so a card never stays drawn
+    /// when the animation clock stops; the timer stops with the leave. Returns what ends the leave at once. Gone, the card is
+    /// put back settled (its course stopped, opaque, in place), so a card shown again never carries a leave's last frame.
     /// </summary>
-    public static void Leave(FrameworkElement card, Action then)
+    public static Action Leave(FrameworkElement card, Action then)
     {
-        if (!On || FrozenAt != null) { then(); return; }
+        bool gone = false;
+        DispatcherTimer? late = null;
+        void Gone()
+        {
+            if (gone) return;
+            gone = true;
+            late?.Stop();
+            then();
+            var (s, t) = Lift(card);
+            s.ScaleX = s.ScaleY = 1; t.Y = 0;
+            card.Opacity = 1;
+        }
+        void End() { Halt(card); Gone(); }
+        if (!On || FrozenAt != null) { Gone(); return Gone; }
+        late = new DispatcherTimer(TimeSpan.FromMilliseconds(LeaveMs * LeaveGrace), DispatcherPriority.Normal, (_, _) => End(), card.Dispatcher);
         var (scale, shift) = Lift(card);
         double o0 = card.Opacity, y0 = shift.Y, s0 = scale.ScaleX;
         Play(card, LeaveMs, p =>
@@ -89,7 +109,8 @@ public static partial class Motion
             card.Opacity = o0 * (1 - q);
             shift.Y = y0 + (EnterRise - y0) * q;
             scale.ScaleX = scale.ScaleY = s0 + (EnterScale - s0) * q;
-        }, then);
+        }, Gone);
+        return End;
     }
 
     /// <summary>The card's own size and place transforms, made once and kept, so arriving and leaving move the same ones.</summary>

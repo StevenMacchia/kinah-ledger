@@ -111,9 +111,16 @@ public static class BestRuns
     {
         if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(zone) || zone == SessionEngine.UnknownZone) return new();
         var k = Key(server, zone);
+        // a line that names neither the server nor the zone (as written, or as the run file's JSON escapes it) isn't parsed:
+        // this runs on the window's thread as a run ends, over every saved run
+        static (string Plain, string Escaped) Forms(string s) => (s.Trim(), JsonSerializer.Serialize(s.Trim())[1..^1]);
+        static bool Names(string line, (string Plain, string Escaped) f) =>
+            line.Contains(f.Plain, StringComparison.OrdinalIgnoreCase) || line.Contains(f.Escaped, StringComparison.OrdinalIgnoreCase);
+        var serverForms = Forms(server); var zoneForms = Forms(zone);
         try
         {
-            return SavedStays().Where(s => s.Started != except && string.Equals(Key(s.Server, s.Zone), k, StringComparison.OrdinalIgnoreCase))
+            return SavedStays(line => Names(line, serverForms) && Names(line, zoneForms))
+                .Where(s => s.Started != except && string.Equals(Key(s.Server, s.Zone), k, StringComparison.OrdinalIgnoreCase))
                 .Select(s => (s.Value, s.Minutes * 60.0)).ToList();
         }
         catch (Exception ex) { CrashLog.Write("best runs", ex); return new(); }
@@ -122,14 +129,17 @@ public static class BestRuns
     /// <summary>One zone of a saved run: its server, zone, minutes there, worth at today's prices, and the run's start as saved.</summary>
     readonly record struct Stay(string Server, string Zone, int Minutes, long Value, string Started);
 
-    /// <summary>Every saved run's zones of ten minutes or more, oldest first. Runs from before servers were saved are skipped.</summary>
-    static IEnumerable<Stay> SavedStays()
+    /// <summary>
+    /// Every saved run's zones of ten minutes or more, oldest first, from the lines <paramref name="worth"/> lets through (all
+    /// when null). Runs from before servers were saved are skipped.
+    /// </summary>
+    static IEnumerable<Stay> SavedStays(Func<string, bool>? worth = null)
     {
         var path = Path.Combine(Dir, "sessions.jsonl");
         if (!File.Exists(path)) yield break;
         foreach (var line in File.ReadLines(path))
         {
-            if (line.Length < 3) continue;
+            if (line.Length < 3 || worth?.Invoke(line) == false) continue;
             List<Stay>? stays = null;
             try { stays = StaysOf(line); }
             catch (Exception) { /* one bad line doesn't stop the rest */ }

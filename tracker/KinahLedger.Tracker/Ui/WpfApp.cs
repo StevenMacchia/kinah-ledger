@@ -285,7 +285,8 @@ public static class WpfApp
             var best = Texts(Held("new-best", 1)); var thin = Texts(Held("no-loot", 1)); var longName = Texts(Held("long-name", 1));
             Check(best.Contains("★ NEW BEST HERE") && best.Any(x => x.Contains("it was 1.05M")) && !best.Contains(" vs your average here") && !ends.Contains("★ NEW BEST HERE"),
                 "recap: a new best has the gold tag and its figures, and no line against the average; a run as usual has no tag");
-            Check(!thin.Contains("DROPS") && !thin.Any(x => x.Contains("average")) && thin.Contains("148K"), "recap: a run with no loot has no DROPS, and thin history no line against the average");
+            Check(!thin.Contains("DROPS") && !thin.Any(x => x.Contains("average")) && thin.Count(x => x == "148K") == 1 && thin.Contains("all Kinah") && !thin.Contains("Kinah") && !thin.Contains("Loot"),
+                $"recap: a run with no loot says its Kinah once, as the total (all Kinah), with no DROPS and, on thin history, no line against the average ({string.Join(" ", thin)})");
             Check(longName.Any(x => x.EndsWith("The Forgotten Sanctuary of the Silvermoon")) && longName.Contains("\u22127%") && longName.Contains("+4"),
                 $"recap: a long place name is whole, a run under the average reads \u22127%, and drops past the strip are counted ({string.Join(" ", longName.Where(x => x.Contains('%') || x.StartsWith('+')))})");
             Motion.Still = true;
@@ -296,11 +297,39 @@ public static class WpfApp
             {
                 Action? leaving = null;
                 int drawn = layer.Children.Count;
-                var ic = new InCard { Child = new System.Windows.Controls.Border { Width = 10, Height = 10 }, Leave = gone => leaving = gone };
+                var ic = new InCard { Child = new System.Windows.Controls.Border { Width = 10, Height = 10 }, Leave = remove => { leaving = remove; return remove; } };
                 ic.IsOpen = true; ic.IsOpen = false;
                 bool kept = !ic.IsOpen && InCard.Current == null && layer.Children.Count == drawn + 1;
                 leaving?.Invoke();
-                Check(kept && layer.Children.Count == drawn, "recap: a card that leaves is closed at once and its drawing goes when the leave is done");
+                bool goneAfter = layer.Children.Count == drawn;
+                // opened again while still leaving: the old drawing goes at once, and only the new one is drawn
+                ic.IsOpen = true; ic.IsOpen = false; ic.IsOpen = true;
+                bool once = layer.Children.Count == drawn + 1;
+                ic.IsOpen = false;
+                bool leavingNow = layer.Children.Count == drawn + 1;
+                var second = new InCard { Child = new System.Windows.Controls.Border { Width = 10, Height = 10 } };
+                second.IsOpen = true;
+                bool notOverlapping = layer.Children.Count == drawn + 1;
+                second.IsOpen = false;
+                Check(kept && goneAfter && once && leavingNow && notOverlapping && layer.Children.Count == drawn,
+                    "recap: a card that leaves is closed at once, its drawing goes when the leave is done, and opening it or another card ends the leave at once");
+            }
+            // the leave's own timer: a leave whose course never ticks (the clock held) still takes the card away, once
+            Motion.Still = false; Motion.FrozenAt = null;
+            if (Motion.On)
+            {
+                int removals = 0;
+                var leaver = new System.Windows.Controls.Border();
+                Motion.Leave(leaver, () => removals++);
+                Motion.Halt(leaver);   // as if the course never ran: only the timer is left
+                var until = DateTime.UtcNow.AddMilliseconds(Motion.LeaveMs * 3);
+                while (DateTime.UtcNow < until) { DoEvents(); Thread.Sleep(10); }
+                int byTimer = removals;
+                var cut = new System.Windows.Controls.Border();
+                var ended = Motion.Leave(cut, () => removals++);
+                ended(); ended();
+                bool settledBack = cut.Opacity == 1 && !Motion.Playing(cut);
+                Check(byTimer == 1 && removals == 2 && settledBack, $"recap: a leave that never finishes is taken away by its timer, once; ended at once it removes once and the card is put back settled ({byTimer} {removals} {settledBack})");
             }
             Motion.Still = stillWas; Motion.FrozenAt = frozenWas;
         }
@@ -1189,7 +1218,7 @@ public static class WpfApp
             double ls = (seqSlot.RenderTransform as System.Windows.Media.ScaleTransform)?.ScaleX ?? 1;
             Check(waiting == 0 && ls is > 0.9 and < 1 && seqSlot.Effect is System.Windows.Media.Effects.DropShadowEffect { Color: var lc } && lc == System.Windows.Media.Colors.Red,
                 $"motion: a slot in a sequence waits unseen, then lands and glows in the colour it was given (scale {ls:0.000})");
-            bool left = false; Motion.Leave(new System.Windows.Controls.Border(), () => left = true);
+            bool left = false; _ = Motion.Leave(new System.Windows.Controls.Border(), () => left = true);
             var tag = new System.Windows.Controls.Border(); var glint = Motion.Glint(tag, System.Windows.Media.Colors.Gold, System.Windows.Media.Colors.White); glint(0.5);
             Check(left && (tag.Background as System.Windows.Media.LinearGradientBrush)?.RelativeTransform is System.Windows.Media.TranslateTransform { X: 0 },
                 "motion: a card leaving in a held render goes at once; a glint halfway is in the middle of its box");
