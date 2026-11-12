@@ -9,7 +9,7 @@ namespace KinahLedger.Ui;
 /// The overlay's accents (0.10.55, Badge's motion, Ui/HudWindow.BadgeMotion.cs): the small marks a change leaves on a look,
 /// written once here so Badge doesn't carry a third copy of what Pop and Buddy each drew for themselves. Each plays once, on
 /// a change, through <see cref="Play"/>, so KL_MOTION_AT holds it for a render and <see cref="On"/> false shows none of it.
-/// - an overlay figure flips through <see cref="FlipNumber"/> when it reads back as a number (<see cref="Figure"/>);
+/// - an overlay figure rolls through <see cref="Number"/> when it reads back as a number (<see cref="Figure"/>);
 /// - a frame's edge lights in a tone and fades back to its line (<see cref="EdgeLight"/>);
 /// - something just changed pops from a little larger and settles (<see cref="Pop"/>);
 /// - a meter that passed its mark swells and glows once (<see cref="Pulse"/>, on the <see cref="Swell"/> curve);
@@ -20,7 +20,8 @@ namespace KinahLedger.Ui;
 public static partial class Motion
 {
     /// <summary>An edge lighting up fades back to its line in this long; a pop settles in this long; a pulse, this long.</summary>
-    public const double EdgeMs = 600, PopMs = 260, PulseMs = 900;
+    // 0.10.56's lengths again: at 600 and 260 ms the lights and pops read as blinks in the game (Steven, 2026-11-12)
+    public const double EdgeMs = 900, PopMs = 420, PulseMs = 900;
 
     /// <summary>How much of the tone a lit edge starts with over its own line (soft: the game lights nothing hard).</summary>
     internal const byte EdgeAlpha = 0x90;
@@ -39,12 +40,13 @@ public static partial class Motion
 
     /// <summary>
     /// An overlay figure as the overlay writes it ("1.27M", "894K"): when it reads back as a number it goes through
-    /// <see cref="FlipNumber"/> under <paramref name="key"/> (flipped when <paramref name="roll"/>, tinted on a rise of over
-    /// <paramref name="tintRise"/>); anything else ("warming up", "") is shown as it is and the next number shows without a flip.
+    /// <see cref="Number"/> under <paramref name="key"/> (rolled when <paramref name="roll"/>, tinted on a rise of over
+    /// <paramref name="tintRise"/>); anything else ("warming up", "") is shown as it is and the next number shows without a roll.
     /// </summary>
     internal static void Figure(TextBlock tb, string key, string text, double tintRise, bool roll)
     {
-        if (HudTicker.Num(text) is double v && v > 0) FlipNumber(tb, key, v, Amounts.Short, tintRise, roll);
+        // rolled again, not flipped (Steven, 2026-11-12, of 0.10.57: "looks like it blinks/flashes instead of rolling")
+        if (HudTicker.Num(text) is double v && v > 0) Number(tb, key, v, Amounts.Short, tintRise, roll);
         else Blank(tb, key, text);
     }
 

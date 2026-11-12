@@ -158,7 +158,6 @@ public static partial class Motion
     public static void Blank(TextBlock tb, string key, string text)
     {
         Halt(tb);
-        Unflip(tb);
         if (Figs.TryGetValue(tb, out var fig)) { Untint(tb, fig); Figs.Remove(tb); }
         Last.Remove(key);
         tb.Text = text;

@@ -1534,20 +1534,11 @@ public static partial class WpfApp
                 static IEnumerable<System.Windows.Controls.TextBlock> Texts(object o) =>
                     (o is System.Windows.Controls.TextBlock t ? new[] { t } : Enumerable.Empty<System.Windows.Controls.TextBlock>())
                     .Concat(o is DependencyObject d ? LogicalTreeHelper.GetChildren(d).Cast<object>().SelectMany(Texts) : Enumerable.Empty<System.Windows.Controls.TextBlock>());
-                // the flip (Ui/Motion.Flip.cs, 2026-11-12): the new text at once, each changed character (lined up from the right)
-                // still on its way up from below and part faded, the rightmost furthest on; unchanged ones drawn as they are
-                static string FlipSays(DependencyObject? o) => o == null ? "none" : Motion.FlipOn(o) is not { } fx ? "still" : string.Join(",", fx.Select(e =>
-                    $"{e.PositionStart}:{(e.Transform as System.Windows.Media.TranslateTransform)?.Y:0.0}:{(e.Foreground as System.Windows.Media.SolidColorBrush)?.Color.A}"));
-                static bool MidFlip(DependencyObject? o, params int[] at) => o != null && Motion.FlipOn(o) is { } fx && fx.Select(e => e.PositionStart).SequenceEqual(at)
-                    && fx.All(e => e.PositionCount == 1 && e.Transform is System.Windows.Media.TranslateTransform { Y: > 0 } && e.Foreground is System.Windows.Media.SolidColorBrush { Color.A: < 255 })
-                    && fx[0].Foreground is System.Windows.Media.SolidColorBrush { Color.A: > 40 }
-                    && Enumerable.Range(1, fx.Count - 1).All(i => ((System.Windows.Media.SolidColorBrush)fx[i].Foreground).Color.A <= ((System.Windows.Media.SolidColorBrush)fx[i - 1].Foreground).Color.A
-                        && ((System.Windows.Media.TranslateTransform)fx[i].Transform).Y >= ((System.Windows.Media.TranslateTransform)fx[i - 1].Transform).Y);
-                Check(Motion.FlipChanged("894K", "1.27M").SequenceEqual(new[] { 4, 3, 2, 1, 0 }) && Motion.FlipChanged("1.21M", "1.27M").SequenceEqual(new[] { 3 }) && Motion.FlipChanged("12,345", "12,355").SequenceEqual(new[] { 4 }),
-                    "motion: a flip lines the old and new figures up from the right: 894K to 1.27M changes every character, 1.21M to 1.27M only the 7");
-                var tkRate = Texts(tk.Root).FirstOrDefault(t => t.Text == "1.27M"); var tkTotal = Texts(tk.Root).FirstOrDefault(t => t.Text == "894K");
-                Check(MidFlip(tkRate, 3, 2, 1, 0) && MidFlip(tkTotal, 2, 1) && (tkRate?.Foreground as System.Windows.Media.SolidColorBrush)?.Color != HudKit.Rgb(HudKit.GoldC),
-                    $"motion: the overlay's hour and session flip on a pickup, held a fifth in: the new figures at once, the changed characters coming up from below, part faded, right to left, the hour tinted (hour {FlipSays(tkRate)}; session {FlipSays(tkTotal)})");
+                // rolled, not flipped (Steven, 2026-11-12, of 0.10.57's flip: "blinks/flashes instead of rolling"): a fifth in, the hour
+                // tinted (its tint takes twice as long, so the figure moves in the first half) and the session part way, eased
+                var tkRate = Texts(tk.Root).FirstOrDefault(t => t.Text.EndsWith("M")); var tkTotal = Texts(tk.Root).FirstOrDefault(t => t.Text.EndsWith("K"));
+                Check(tkRate?.Text == "1.21M" && tkTotal?.Text == "845.9K" && (tkRate.Foreground as System.Windows.Media.SolidColorBrush)?.Color != HudKit.Rgb(HudKit.GoldC),
+                    $"motion: the overlay's hour and session roll on a pickup, held a fifth in, eased, the hour tinted ({tkRate?.Text} {tkTotal?.Text})");
                 // the hot streak bar (Ui/HudStreak.cs) slides to its new share on Pop, and takes no room: the look measures the same with it
                 var tkBare = new HudTicker(); tkBare.Update(v1); tkBare.Update(v2);
                 var sv1 = new Dictionary<string, string>(v1) { ["streak"] = "0.25" }; var sv2 = new Dictionary<string, string>(v2) { ["streak"] = "0.75", ["pick0Id"] = "fresh2" };
@@ -1564,8 +1555,8 @@ public static partial class WpfApp
                 var bdShown = Texts(bd.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
                 // Buddy's figures are runs (the first inline of their lines): a run's own start takes text position 0, so its characters count from 1
                 var (bdRate, bdTotal, _) = bd.FiguresForTest;
-                Check(bdRate?.Text == "1.27M" && bdTotal?.Text == "894K" && MidFlip(bdRate, 4, 3, 2, 1) && MidFlip(bdTotal, 3, 2) && bdShown.Contains("75"),
-                    $"motion: Buddy's hour and session flip and its ring sweeps (60 to 90), held a fifth in (hour {FlipSays(bdRate)}; session {FlipSays(bdTotal)}; {string.Join(" | ", bdShown.Where(t => t.Length is > 0 and < 24))})");
+                Check(bdRate?.Text == "1.21M" && bdTotal?.Text == "845.9K" && bdShown.Contains("75"),
+                    $"motion: Buddy's hour and session roll and its ring sweeps (60 to 90), held a fifth in ({string.Join(" | ", bdShown.Where(t => t.Length is > 0 and < 24))})");
                 var bdBar = new HudCard(); bdBar.Update(sv1); bdBar.Update(sv2);
                 var bdBare = new HudCard(); bdBare.Update(v1); bdBare.Update(v2);
                 var bdSh = bdBar.FiguresForTest.Streak;
@@ -1597,12 +1588,12 @@ public static partial class WpfApp
                 var bgEdge = (BgFrame(badge).BorderBrush as System.Windows.Media.SolidColorBrush)?.Color;
                 var bgDot = BadgeTree((DependencyObject)badge.Content).OfType<System.Windows.Shapes.Ellipse>().FirstOrDefault(e => e.Width == 6);
                 var bgOld = BgTexts(badge).FirstOrDefault(t => BgWords(t) == "Update ready");
-                var bgFlips = BgTexts(badge).Where(t => t.Text is "1.27M" or "894K").ToList();
-                Check(bgFlips.Count(t => t.Text == "1.27M" && MidFlip(t, 3, 2, 1, 0)) == 2 && bgFlips.Any(t => t.Text == "894K" && MidFlip(t, 2, 1)) && bgShown.Contains("75")
+                var bgRolls = BgTexts(badge).Where(t => t.Text is "1.21M" or "845.9K").ToList();
+                Check(bgRolls.Count(t => t.Text == "1.21M") == 2 && bgRolls.Any(t => t.Text == "845.9K") && bgShown.Contains("75")
                       && bgWorth?.RenderTransform is System.Windows.Media.ScaleTransform { ScaleX: > 1.03 } && bgEdge?.R > 0x50
                       && (bgDot?.Fill as System.Windows.Media.SolidColorBrush)?.Color == HudKit.GradeColor("Legend")
                       && bgOld?.Parent is FrameworkElement { Opacity: > 0 and < 0.5 } && !bgShown.Contains(bgV2["notice"]),
-                    $"motion: Badge's hour, feed rate and session flip, its ring sweeps, a Legend pickup pops in blue, the edge lights softly and the notice cross-fades, a fifth in ({string.Join(" | ", bgFlips.Select(t => t.Text + " " + FlipSays(t)))}; edge {bgEdge}, dot {(bgDot?.Fill as System.Windows.Media.SolidColorBrush)?.Color})");
+                    $"motion: Badge's hour, feed rate and session roll, its ring sweeps, a Legend pickup pops in blue, the edge lights softly and the notice cross-fades, a fifth in ({string.Join(" | ", bgRolls.Select(t => t.Text))}; edge {bgEdge}, dot {(bgDot?.Fill as System.Windows.Media.SolidColorBrush)?.Color})");
                 var bgBar = new HudWindow(bgFields); bgBar.Update(new Dictionary<string, string>(bgV1) { ["streak"] = "0.25" }); bgBar.Update(new Dictionary<string, string>(bgV2) { ["streak"] = "0.75" });
                 var bgSh = bgBar.StreakForTest;
                 var bgBarSize = Measured((FrameworkElement)bgBar.Content);
@@ -1619,7 +1610,7 @@ public static partial class WpfApp
                 var bgFresh = new HudWindow(bgFields); bgFresh.Update(bgV2);
                 var bgStill = new HudWindow(bgFields, still: true); bgStill.Update(bgV1); bgStill.Update(bgV2);
                 bool BgCalm(HudWindow h) => BgTexts(h).Select(BgWords).Count(t => t == "1.27M") == 2 && BgTexts(h).Any(t => BgWords(t) == "90") && BgTexts(h).Any(t => BgWords(t) == bgV2["notice"])
-                    && BgTexts(h).All(t => t.RenderTransform is not System.Windows.Media.ScaleTransform && t.Parent is FrameworkElement { Opacity: 1 } && Motion.FlipOn(t) == null);
+                    && BgTexts(h).All(t => t.RenderTransform is not System.Windows.Media.ScaleTransform && t.Parent is FrameworkElement { Opacity: 1 } && !Motion.Playing(t));
                 Check(BgCalm(bgFresh) && BgCalm(bgStill), $"motion: Badge's first draw and a still drawing of it show their figures, ring and notice as they are ({BgCalm(bgFresh)} {BgCalm(bgStill)})");
                 // a rare drop: the frame beats in its colour (down between beats a fifth in), the spark pops, the line comes in
                 var bgBlue = HudKit.GradeColor("Legend");
@@ -1671,8 +1662,8 @@ public static partial class WpfApp
                 var tkQuietShown = Texts(tkQuiet.Root).Select(t => t.Text).ToList();
                 var bdQuiet = new HudCard(); bdQuiet.Update(new Dictionary<string, string>(v2) { ["chase"] = "0.6" }); bdQuiet.Update(new Dictionary<string, string>(v2) { ["rate"] = "1.4M", ["total"] = "990K", ["chase"] = "0.9" });
                 var bdQuietShown = Texts(bdQuiet.Root).SelectMany(t => t.Inlines.Count > 0 ? t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text) : new[] { t.Text }).ToList();
-                bool popStill = tkQuietShown.Contains("1.4M") && tkQuietShown.Contains("990K") && Texts(tkQuiet.Root).All(t => Motion.FlipOn(t) == null),
-                    buddyStill = bdQuietShown.Contains("1.4M") && bdQuietShown.Contains("990K") && bdQuietShown.Contains("90") && bdQuiet.FiguresForTest is { Rate: { } qr, Total: { } qt } && Motion.FlipOn(qr) == null && Motion.FlipOn(qt) == null;
+                bool popStill = tkQuietShown.Contains("1.4M") && tkQuietShown.Contains("990K") && Texts(tkQuiet.Root).All(t => !Motion.Playing(t)),
+                    buddyStill = bdQuietShown.Contains("1.4M") && bdQuietShown.Contains("990K") && bdQuietShown.Contains("90") && bdQuiet.FiguresForTest is { Rate: { } qr, Total: { } qt } && qr.Text == "1.4M" && qt.Text == "990K";
                 Check(priceStill && otherStill && popStill && buddyStill,
                     $"motion: with no pickup just made (a price refresh, another session) nothing rolls, lights or sweeps (Badge price {priceStill}, other session {otherStill}; Pop {popStill}; Buddy {buddyStill})");
                 foreach (var h in new[] { badge, bgFresh, bgStill, bgGoing, bgGone, bgQuiet }) h.Close();

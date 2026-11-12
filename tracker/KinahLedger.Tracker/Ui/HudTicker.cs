@@ -28,7 +28,8 @@ public sealed partial class HudTicker : IHudLook
     /// <summary>How long a pickup pushed out of the stack takes to fade (the game's own toasts fade in about 300 ms).</summary>
     static readonly TimeSpan LeaveTime = TimeSpan.FromMilliseconds(300);
     /// <summary>A new toast slides in from this far right and fades in, eased out, in this long (the game's settles about 25 px left in 100 to 200 ms).</summary>
-    const double ArriveFrom = 16, ArriveMs = 150;
+    // from the right like the game's toast, but over 240 ms: at 150 it read as a blink (Steven, 2026-11-12)
+    const double ArriveFrom = 16, ArriveMs = 240;
     /// <summary>The toasts below the first, each a little fainter (the mock's ages 1 to 3).</summary>
     static readonly double[] PlaceOpacity = { 1, .92, .75, .5 };
 
