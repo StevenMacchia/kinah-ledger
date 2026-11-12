@@ -224,11 +224,87 @@ internal static class Program
                     var gband = new System.Drawing.Rectangle(gf.Width / 4, 0, gf.Width / 2, gf.Height / 3);
                     using var gbb = gf.Clone(gband, gf.PixelFormat);
                     var glines = ScreenReader.ReadBoxesAsync(gbb, gband.Location, 1).GetAwaiter().GetResult();
-                    var grc = glines.First(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase));
-                    gs.ApplyGrid(RewardGrid.ReadAsync(gf, grc.Box.Bottom + (int)(gf.Height * 0.016)).GetAwaiter().GetResult(), g0.AddSeconds(3));
+                    // --top: the grid's first row in the picture, when "Reward collected." isn't read from it
+                    int gtop = opts.TryGetValue("top", out var gt) ? int.Parse(gt) : glines.First(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase)).Box.Bottom + (int)(gf.Height * 0.016);
+                    // --profile: each line around the estimate, its eight boxes' top and bottom edges (where the first row is)
+                    if (opts.ContainsKey("profile"))
+                    {
+                        int ph = gf.Height, ps = (int)Math.Round(RewardGrid.SlotH * ph), pp = (int)Math.Round(RewardGrid.PitchH * ph), px = gf.Width / 2 - 4 * pp + (pp - ps) / 2;
+                        for (int y = gtop - 40; y <= gtop + 40; y += 2)
+                        {
+                            double te = 0, be = 0;
+                            for (int c = 0; c < 8; c++) { var bx = new System.Drawing.Rectangle(px + c * pp, y, ps, ps); te += RewardGrid.TopEdge(gf, bx); be += RewardGrid.BottomEdge(gf, bx); }
+                            Console.WriteLine($"  y {y}: top {te / 8:0} bottom {be / 8:0}");
+                        }
+                        for (int c = 0; c < 8; c++) { var bx = new System.Drawing.Rectangle(px + c * pp, gtop, ps, ps); Console.WriteLine($"  box {c} at y {gtop}: border {RewardGrid.Border(gf, bx):0} top {RewardGrid.TopEdge(gf, bx):0} bottom {RewardGrid.BottomEdge(gf, bx):0} flat {RewardGrid.Flat(gf, bx)} contrast {RewardGrid.Contrast(gf, bx):0.00}"); }
+                        return 0;
+                    }
+                    gs.ApplyGrid(RewardGrid.ReadAsync(gf, gtop).GetAwaiter().GetResult(), g0.AddSeconds(3));
                     var grun = gs.Instances.Snapshot().LastOrDefault();
                     Console.WriteLine($"run {grun?.Zone}: {grun?.Kinah:N0} Kinah; " + string.Join(", ", (grun?.Items ?? new()).Select(kv => $"{gi.NameOf(kv.Key)} x{kv.Value}")));
                     foreach (var l in File.ReadAllLines(Path.Combine(CrashLog.DirOverride, "reads.log")).Where(l => l.Contains("reward table"))) Console.WriteLine("  " + l);
+                    return 0;
+                }
+                case "grid-sweep":
+                {
+                    // grid-sweep --dir <reward-shots> [--glob *reward-table*.jpg] [--tops <file>] [--truth <file>] [--draw <folder>]: each saved table
+                    // picture's slot count, found without reading the slots (fast). --tops keeps each picture's header estimate
+                    // ("name y" lines), so the header is read once; --draw saves the grid's area with the counted slots outlined
+                    var sdir = opts["dir"];
+                    var topsFile = opts.GetValueOrDefault("tops");
+                    var tops = new Dictionary<string, int>();
+                    if (topsFile != null && File.Exists(topsFile))
+                        foreach (var l in File.ReadAllLines(topsFile)) { var sp = l.Split(' '); if (sp.Length == 2) tops[sp[0]] = int.Parse(sp[1]); }
+                    var draw = opts.GetValueOrDefault("draw"); if (draw != null) Directory.CreateDirectory(draw);
+                    // --truth: "name count" lines, each picture's slots counted by eye (kinah-bench\reward-tables\truth.txt)
+                    var truth = new Dictionary<string, int>();
+                    if (opts.TryGetValue("truth", out var truthFile))
+                        foreach (var l in File.ReadAllLines(truthFile)) { var sp = l.Split(' '); if (sp.Length >= 2 && int.TryParse(sp[1], out int tc)) truth[sp[0]] = tc; }
+                    int right = 0, over = 0, overSlots = 0, under = 0;
+                    CrashLog.DirOverride = Path.Combine(Path.GetTempPath(), "kinah-grid-sweep"); Directory.CreateDirectory(CrashLog.DirOverride);
+                    foreach (var fp in Directory.GetFiles(sdir, opts.GetValueOrDefault("glob", "*reward-table*.jpg")).OrderBy(x => x))
+                    {
+                        var name = Path.GetFileName(fp);
+                        using var sf = new System.Drawing.Bitmap(fp);
+                        if (!tops.TryGetValue(name, out int st))
+                        {
+                            var band = new System.Drawing.Rectangle(sf.Width / 4, 0, sf.Width / 2, sf.Height / 3);
+                            using var bb = sf.Clone(band, sf.PixelFormat);
+                            // at the reader's own scale first, as the tracker does; a header over a glare is read larger
+                            OcrLineBox? rc = null;
+                            foreach (var (sc, boost) in new[] { (1, false), (2, false), (1, true), (2, true) }) if ((rc = ScreenReader.ReadBoxesAsync(bb, band.Location, sc, boost).GetAwaiter().GetResult().FirstOrDefault(l => l.Text.Contains("collected", StringComparison.OrdinalIgnoreCase))) != null) break;
+                            st = rc == null ? -1 : rc.Box.Bottom + (int)(sf.Height * 0.016);
+                            tops[name] = st;
+                            if (topsFile != null) File.AppendAllText(topsFile, $"{name} {st}\n");
+                        }
+                        if (st < 0) { Console.WriteLine($"{name} - no header"); continue; }
+                        var lay = RewardGrid.Find(sf, st);
+                        string mark = "";
+                        if (truth.TryGetValue(name, out int tn))
+                        {
+                            int got = lay.Boxes.Count;
+                            mark = got == tn ? " right" : got > tn ? $" OVER (truth {tn})" : $" under (truth {tn})";
+                            if (got == tn) right++; else if (got > tn) { over++; overSlots += got - tn; } else under++;
+                        }
+                        Console.WriteLine($"{name} {lay.Boxes.Count}{mark} | {lay.Said}");
+                        if (draw != null)
+                        {
+                            int sp = (int)Math.Round(RewardGrid.PitchH * sf.Height);
+                            var area = new System.Drawing.Rectangle(sf.Width / 2 - 5 * sp, Math.Max(0, st - 160), 10 * sp, Math.Min(sf.Height - Math.Max(0, st - 160), 7 * sp + 40));
+                            using var crop = new System.Drawing.Bitmap(area.Width / 3, area.Height / 3);
+                            using (var g = System.Drawing.Graphics.FromImage(crop))
+                            {
+                                g.DrawImage(sf, new System.Drawing.Rectangle(0, 0, crop.Width, crop.Height), area, System.Drawing.GraphicsUnit.Pixel);
+                                using var pen = new System.Drawing.Pen(System.Drawing.Color.Red, 2);
+                                foreach (var b in lay.Boxes) g.DrawRectangle(pen, (b.X - area.X) / 3 + 2, (b.Y - area.Y) / 3 + 2, b.Width / 3 - 4, b.Height / 3 - 4);
+                                using var font = new System.Drawing.Font("Arial", 16, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+                                g.FillRectangle(System.Drawing.Brushes.Black, 0, 0, crop.Width, 22);
+                                g.DrawString($"{name.Substring(0, 15)} {lay.Boxes.Count}", font, System.Drawing.Brushes.Yellow, 2, 2);
+                            }
+                            crop.Save(Path.Combine(draw, Path.ChangeExtension(name, ".png")), System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                    }
+                    if (truth.Count > 0) Console.WriteLine($"against the truth: {right} right, {over} over ({overSlots} slots too many), {under} under");
                     return 0;
                 }
                 case "grid-test":
