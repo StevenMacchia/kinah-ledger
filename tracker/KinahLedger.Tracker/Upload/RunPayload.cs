@@ -36,8 +36,9 @@ public static class InstallId
 
 /// <summary>
 /// Exactly what leaves the PC when a run is shared: the server it was played on (as chosen in the window, so the site
-/// can keep drops per server) and the totals the public tables need. No character name, account, class, level,
-/// chat text or screenshots. Since 0.7: the change in the Kinah balance over the run (rounded, never the balance
+/// can keep drops per server) and the totals the public tables need. No account, level, chat text or screenshots.
+/// Since 0.10.55 the character it was played on (<see cref="CharacterPayload"/>: its slot and its name), which only the
+/// profile it is linked to shows. Since 0.7: the change in the Kinah balance over the run (rounded, never the balance
 /// itself) and craft and enchant outcome counts. Since 0.7.2: the expedition and event runs that finished meanwhile
 /// (area, length, Kinah, kills, tradeable items), each sent once.
 /// </summary>
@@ -69,7 +70,10 @@ public sealed record RunPayload(
     // since 0.8.24: true on a send that carries only finished expedition, Transcendence and event runs, sent the moment
     // each ends; it holds no farming (no minutes, zones, kills or Kinah), so the site files only the runs
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? runs_only = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<QuestDonePayload>? quests = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<QuestDonePayload>? quests = null,
+    // since 0.10.55: which of the player's characters ran it (CharacterPayload), so the profile on the site can show each
+    // apart; absent before the first character was seen. A site from before ignores it
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CharacterPayload? character = null)
 {
     /// <summary>The completed quests the next batch should carry (the window keeps them, Ui/MainWindow.QuestsPage.cs); null for none or with quests off.</summary>
     public static Func<List<QuestDonePayload>?>? QuestsPending { get; set; }
@@ -79,7 +83,7 @@ public sealed record RunPayload(
     /// <summary>A send of finished runs alone, with no farming in it (RunSync).</summary>
     public static RunPayload RunsOnly(string region, string server, ItemDictionary? dict, List<InstanceRunPayload> runs) =>
         new(AppVersion, region, ServerKeys.Build(region, server), "Runs", runs.Count > 0 ? runs[0].kind : "Expedition", null, Gear,
-            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true);
+            0, 0, 0, 0, 0, new(), new(), new(), new(), InstallId.Get(), instance_runs: runs, runs_only: true, character: CharacterPayload.Now());
 
     /// <summary>The gear the runs are shared under: "gs:1400-1599" from the player's gear score (Options), "unknown" until it is set (Data.GearScore).</summary>
     public static string Gear { get; set; } = "unknown";
@@ -131,7 +135,8 @@ public sealed record RunPayload(
             MobRun.From(s, Key, Off),
             InstanceRunPayload.From(instances, Key, Off),
             s.Focus,
-            quests: quests is { Count: > 0 } ? quests : null);
+            quests: quests is { Count: > 0 } ? quests : null,
+            character: CharacterPayload.Now());
     }
 
     /// <summary>The net is rounded to the nearest 100 so the figure says nothing exact about the player's purse.</summary>
@@ -216,6 +221,28 @@ public sealed record MobRun(string name, string zone, int kills, long kinah, Dic
 /// ver, since 2026-10-25 checked, matched and not_checked, and note when it applies), left out when nothing in the run
 /// was judged.
 /// </summary>
+/// <summary>
+/// The character a run was played on (since 0.10.55, Steven 2026-11-11: the site's profile shows each character apart):
+/// its slot here (<c>c1</c>, the folder its numbers are kept in), the name it was given or read off the nameplate when it
+/// has one, and the class when the tracker knows it (it tells characters apart by the class icon, it doesn't name the
+/// class yet, so this is left out). Null before the first character was seen.
+/// </summary>
+public sealed record CharacterPayload(
+    string id,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? name = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? @class = null)
+{
+    /// <summary>The character counted for now, as sent; null before any was seen.</summary>
+    public static CharacterPayload? Now() => From(Characters.Current);
+
+    public static CharacterPayload? From(Character? c)
+    {
+        if (c == null || c.Id.Length == 0) return null;
+        var name = c.Name.Trim();
+        return new CharacterPayload(c.Id, name.Length > 0 ? (name.Length > 24 ? name[..24] : name) : null);
+    }
+}
+
 /// <summary>A quest completed, as the site reads it (the contract in the design note quest-score-design.md, v1): the tracker's key and once-per-scope key, the points after the cap and the worth before it, when it was reached.</summary>
 public sealed record QuestDonePayload(string key, string kind, string horizon, string subject, long target, int tier, int points, int worth, long have, string done_at, string scope);
 

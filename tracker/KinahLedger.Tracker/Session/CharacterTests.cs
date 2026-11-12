@@ -122,6 +122,7 @@ public static class CharacterTests
         try
         {
             Check("before any character: the numbers in the top folder", Characters.DataDir == dir ? "top" : Characters.DataDir, "top");
+            Check("...and an upload names no character", KinahLedger.Upload.CharacterPayload.Now() == null ? "none" : "some", "none");
             File.WriteAllText(Path.Combine(dir, "today.json"), "{}");
             File.WriteAllText(Path.Combine(dir, "goals.json"), "[]");
             File.WriteAllText(Path.Combine(dir, "prices.json"), "{}");
@@ -135,9 +136,11 @@ public static class CharacterTests
             Check("...prices stay shared", File.Exists(Path.Combine(dir, "prices.json")) ? "shared" : "moved", "shared");
             Check("...and its folder is where the numbers go now", $"{Characters.DataDir == cdir} {DayStore.PathFor() == Path.Combine(cdir, "today.json")} {Quests.PathFor().StartsWith(cdir)}", "True True True");
             Check("the book is kept: characters.json", File.Exists(Path.Combine(dir, "characters.json")) ? Characters.Label(Characters.Current!) : "none", "Character 1");
+            Check("an upload says which character, by its slot before it has a name", JsonSerializer.Serialize(KinahLedger.Upload.CharacterPayload.Now()), "{\"id\":\"c1\"}");
             Characters.Rename(first, "  Swoly  ");
             Characters.Reset();
             Check("a name, read back after a restart", Characters.Current is { } back ? Characters.Label(back) : "none", "Swoly");
+            Check("...and the upload carries it, the run's JSON too", $"{JsonSerializer.Serialize(KinahLedger.Upload.CharacterPayload.Now())} {(JsonSerializer.Serialize(KinahLedger.Upload.RunPayload.RunsOnly("na_e", "Siel (Elyos)", null, new())).Contains("\"character\":{\"id\":\"c1\",\"name\":\"Swoly\"}") ? "in the run" : "not in the run")}", "{\"id\":\"c1\",\"name\":\"Swoly\"} in the run");
 
             Check("a typed name is never read over", $"{Characters.SetReadName(Characters.Current!, "Swoles")} {Characters.Label(Characters.Current!)}", "False Swoly");
             Check("...a read one is, by a reading that settles", $"{Characters.SetReadName(Characters.Current!, "Swoly") || true} {RenameRead(Characters.Current!)}", "True Swoles");

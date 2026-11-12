@@ -1627,8 +1627,9 @@ public partial class MainWindow : Window
     public void WhatsSent(Window? owner = null) => MessageBox.Show(owner ?? this,
         "These totals go to the public tables:\n\n" +
         "•  your server (region and world, as chosen above), what you're farming and where, gear score bracket\n•  run length in minutes and kill count\n•  Kinah picked up, tradeable and bound\n•  drop counts per item, Soul Crystal counts per zone, minutes per zone\n•  app version and a random install ID used only to stop spam\n\n" +
-        "Never your character name, account, class, level, chat text or screenshots.\n" +
-        "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n\n" +
+        "Never your account, level, chat text or screenshots.\n" +
+        "If you paste the profile link code into your profile on the site, the runs from this PC show up there too; nobody else can see them unless you make the profile public.\n" +
+        "With each run, which of your characters played it: its number here and the name it has in the window, so your profile can show each character apart. Only your own signed-in profile shows the names, never a public profile or a leaderboard.\n\n" +
         "The totals go to kinahledger.com (https://kinahledger.com/v1/runs) in small batches: every 15 minutes while the game is being read, once more when you close the tracker, and when you press Stop on a farming run. A 15-minute batch the site can't take is kept on this PC (up to a day's worth) and sent with the next one; the window says when sharing last worked. A stopped run the site can't take stays in your history here and isn't sent later. The Share switch (Options › Sharing) turns all of this off, and anything still waiting is let go.\n\n" +
         "Market prices: while the Market is open, the listings on your screen (item, quantity and unit price, never seller names) go to kinahledger.com (https://kinahledger.com/v1/prices) for your server's price board.\n\n" +
         "Item icons: each is fetched once from NCSOFT's own image server by file name, the way a browser does on their site, and kept in a small cache on this PC. Nothing about you goes with it. ui.icons in settings.json turns this off.\n\n" +

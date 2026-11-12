@@ -51,7 +51,10 @@ and never sends input to the game. It sends data to these places, and nowhere el
     pictures of that item's name words, icon or reward slot, at most 60 an hour, deleted after 90 days
     (`https://kinahledger.com/v1/label-crops`). Never the chat box, a chat line that isn't your own pickup, anyone's
     name or a whole screenshot. Off, nothing is written or sent for it. Details: [docs/privacy.md](docs/privacy.md).
-  - Never your character name, account, class, level, chat text or screenshots of the chat or the whole screen.
+  - With each run, which of your characters played it (since 0.10.55): its number in the tracker and the name it has
+    in the window, so the profile it is linked to can show each character apart. Only that profile's own signed-in
+    page shows the names; they are deleted with the profile.
+  - Never your account, level, chat text or screenshots of the chat or the whole screen.
   - If you paste the profile link code into a profile on the site, runs from that PC show there; profiles are
     private unless you make them public.
 - **kinahledger.com, for reference data.** The item list (`/data/items.json`) and your server's price board
