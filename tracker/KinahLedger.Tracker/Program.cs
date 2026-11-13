@@ -1700,7 +1700,7 @@ options: --process aion[,other]");
         Check("session: the five icons, most worth first", string.Join(",", off.Icons.Select(i => i.Name)), "Spiritstone,Ruby,Thick Hide,Iron Ore,Gold Dust");
         Check("session: the best drop is the rarest", off.Best, "best drop: Ruby");
         Check("Copy as text: the same words, a line each", SharePicture.Text(off).Replace("\n", " | "),
-            "Kinah Ledger · Sat 31 Oct · Siel · NA East | Northern Tolbas Forest | 1 h 12 min of farming · 722 kills | 224.2K Kinah an hour · 269K made, after the Market's cut | best drop: Ruby | kinahledger.com");
+            "Kinah Ledger · Sat 31 Oct · Siel · NA East | Northern Tolbas Forest | 1 h 12 min of farming · 722 kills | 224.2K Kinah an hour · 269K made, after the Market's cut | top drops: Spiritstone ×30 90,000 · Ruby ×1 40,000 · Thick Hide ×12 24,000 · Iron Ore ×8 16,000 · Gold Dust ×5 10,000 | best drop: Ruby | kinahledger.com");
         var withRing = drops.Append(new ShareDrop("Ancient Ring", "Legend", 1, 0)).ToList();
         var ring = SharePicture.Compose(session with { Drops = withRing }, false, null, fk);
         Check("a bound Legend drop worth nothing still shows, in fifth place", $"{string.Join(",", ring.Icons.Select(i => i.Name))} | {ring.Best}", "Spiritstone,Ruby,Thick Hide,Iron Ore,Ancient Ring | best drop: Ancient Ring");
@@ -1729,6 +1729,35 @@ options: --process aion[,other]");
         var all = string.Join("\n", new[] { off, on, rp, wp, young }.Select(SharePicture.Text));
         Check("no accuracy figures, nothing to look at", all.Contains('%') || all.Contains("look at", StringComparison.OrdinalIgnoreCase) || all.Contains("accura", StringComparison.OrdinalIgnoreCase) ? "found" : "none", "none");
         Check("Save picture's file name", SharePicture.FileName(SharePicture.Week, day), "kinah-ledger-2026-10-31-2241-week.png");
+
+        // 7. the richer picture (0.10.67, Steven: "way better and more informative"): Today, the side over the title, the rate,
+        // time and kills, Kinah against loot, the top drops with count and worth (a bound Legend in fifth, "bound"), the zones
+        var today = new ShareFacts(SharePicture.Today, day, "Siel · NA East", "3 zones · most in Northern Tolbas Forest", "of farming", 2 * 3600 + 41 * 60, 413, "kill", 2_130_000,
+            withRing.Select(d => d.Name == "Ancient Ring" ? d with { Bound = 1 } : d).ToList())
+        {
+            Kinah = 1_550_000,
+            Zones = new List<ShareZone> { new("Northern Tolbas Forest", 900_000, 3600), new("Altamia", 800_000, 3000), new("Eastern Cantas Valley", 430_000, 2000), new("Town", 0, 60) },
+        };
+        var tp = SharePicture.Compose(today, false, null, fk);
+        Check("today: the side over the title", tp.Kicker, "TODAY · FARMING");
+        Check("today: rate, time, kills", string.Join(" | ", tp.Stats.Select(x => $"{x.Fig} {x.Label}")), "793.8K Kinah an hour | 2h 41m farming | 413 kills");
+        Check("today: Kinah against loot", $"{tp.Split?.Loot} {tp.Split?.Kinah} {tp.Split?.LootShare:0.00}", "580K 1.55M 0.27");
+        Check("today: the panel", $"{tp.RowsHead} | {tp.RowsSide} | " + string.Join(" / ", tp.Rows.Select(r => $"{r.Name} {r.Count} {r.Fig}{(r.Best ? " best" : "")}{(r.Dim ? " dim" : "")}")), "TOP DROPS | top 5 of 7 kinds | Spiritstone ×30 90,000 / Ruby ×1 40,000 / Thick Hide ×12 24,000 / Iron Ore ×8 16,000 / Ancient Ring ×1 bound best dim");
+        Check("today: two zones, then how many more (none made nothing)", tp.Zones, "Northern Tolbas Forest 900K · Altamia 800K · +1 more");
+        Check("today: the foot is the zones, the best drop kept for the text", $"{tp.BestLine} | {tp.Best}", "Best drop: Ancient Ring ×1 · Legend | best drop: Ancient Ring");
+        Check("today: Copy as text", SharePicture.Text(tp).Replace("\n", " | "),
+            "Kinah Ledger · Sat 31 Oct · Siel · NA East | 3 zones · most in Northern Tolbas Forest | 2 h 41 min of farming · 413 kills | 793.8K Kinah an hour · 2.13M made, after the Market's cut | loot 580K · Kinah 1.55M | top drops: Spiritstone ×30 90,000 · Ruby ×1 40,000 · Thick Hide ×12 24,000 · Iron Ore ×8 16,000 · Ancient Ring ×1 bound | zones: Northern Tolbas Forest 900K · Altamia 800K · +1 more | best drop: Ancient Ring | kinahledger.com");
+        Check("session (no zones, no Kinah known): no split, the best drop at the foot", $"{off.Split == null} | {off.Zones} | {off.BestLine}", "True |  | Best drop: Ruby ×1 · Rare");
+        Check("a run: its kind over the title, run time", $"{rp.Kicker} | {rp.Stats[1].Label}", "LAST RUN · EXPEDITION | run time");
+        Check("short times for the figures", string.Join(" ", new[] { 30.0, 42 * 60, 2 * 3600, 2 * 3600 + 41 * 60 }.Select(SharePicture.Short)), "<1 min 42 min 2h 2h 41m");
+
+        // 8. This week: a line a day, today named, the best day marked, a day off dimmed
+        var wdays = Enumerable.Range(0, 7).Select(i => new ShareDay(day.Date.AddDays(i - 6), i == 3 ? 0 : (i + 1) * 100_000, i == 6)).ToList();
+        var wk = SharePicture.Compose(week with { Days = wdays, Kinah = 1_000_000 }, false, null, fk);
+        Check("week: the panel", $"{wk.RowsHead} | {wk.RowsSide} | " + string.Join(" / ", wk.Rows.Select(r => $"{r.Name} {r.Fig} {r.Bar:0.00}{(r.Best ? " best" : "")}{(r.Dim ? " dim" : "")}")), "BY DAY | 6 of 7 days farmed | Sun 25 100K 0.14 / Mon 26 200K 0.29 / Tue 27 300K 0.43 / Wed 28 – 0.00 dim / Thu 29 500K 0.71 / Fri 30 600K 0.86 / Today 700K 1.00 best");
+        Check("week: its best day and zone at the foot", wk.BestLine, "Best day: Thu 29, 1.2M · most made in Northern Tolbas Forest");
+        var all2 = string.Join("\n", new[] { tp, wk }.Select(SharePicture.Text));
+        Check("still no accuracy figures", all2.Contains('%') || all2.Contains("accura", StringComparison.OrdinalIgnoreCase) ? "found" : "none", "none");
         return ok;
     }
 
