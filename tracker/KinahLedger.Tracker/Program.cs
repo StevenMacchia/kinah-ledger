@@ -1331,7 +1331,7 @@ options: --process aion[,other]");
         }
         // Week wrapped and Day wrapped (Ui/MainWindow.Wrapped.cs): the recap sheet, over the sample or a state
         if (o.TryGetValue("wrapped", out var wrapped)) return WpfApp.ShotWrapped(s, dir, wrapped.ToLowerInvariant(), state, o.GetValueOrDefault("skin"));
-        var kind = o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("quests") ? "Quests" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : "Open world";
+        var kind = o.ContainsKey("market") ? "Market" : o.ContainsKey("crafting") ? (o.ContainsKey("empty") ? "CraftingEmpty" : o.ContainsKey("upgrades") ? "CraftingUpgrades" : "Crafting") : o.ContainsKey("events") ? "Events" : o.ContainsKey("quests") ? "Quests" : o.ContainsKey("pets") ? "Pets" : o.ContainsKey("gathering") ? "Gathering" : o.ContainsKey("mixed") ? "Mixed" : o.ContainsKey("abyss") ? "Abyss" : "Open world";
         var problems = WpfApp.Shot(s, dir, o.ContainsKey("demo") || state != null, kind, o.ContainsKey("compact"), o.ContainsKey("welcome"), o.GetValueOrDefault("skin"), o.ContainsKey("full"), o.ContainsKey("tall") || state != null, o.ContainsKey("mine"), state);
         Console.WriteLine($"wrote {Path.GetFullPath(dir)}");
         if (problems.Count > 0) { Console.WriteLine("figures check: " + string.Join(" | ", problems)); return 1; }
