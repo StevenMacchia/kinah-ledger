@@ -76,6 +76,7 @@ public static class Skins
             d["PlaceBand"] = Frozen(band);
             S("PlaceBandLine", bandLine); S("FlagBg", flagBg); S("FlagInk", flagInk); S("FlagLine", flagLine);
         }
+        // CardQuiet and CardHair (UX pass, 2026-11-13): the reference tier's surface, a step flatter than Card, and its hairline edge
         // the Quest look's roles (2026-11-07, docs/ui/mockups/directions-2026-11-07): gold is the chase, mint anything that pays,
         // sky a place, lilac a milestone, coral a miss, lime gathering; each with the tint its icon box sits on. SegOnInk is the
         // text on a lit pill, CardLine the one-pixel edge every card has, brighter under the mouse.
@@ -90,12 +91,13 @@ public static class Skins
         {
             case "abyss":
                 // navy (2026-11-07, step 6 of the Quest look): the Abyss's own night, blue where Night is plum
-                Quest("#7FC4FF", "#C8A8FF", "#FF7A86", "#BFE86A", "#2B1B00", "#2B1B00", "#24FFFFFF", "#47FFFFFF", 0x29);
+                Quest("#A9B2D6", "#C4CAE4", "#FF7A86", "#A9B2D6", "#2B1B00", "#05070F", "#24FFFFFF", "#47FFFFFF", 0x29);
                 S("MintTint", "#298EE3D6"); S("GoldIcTint", "#29F2C97D"); S("NoticeTint", "#1F7FC4FF");
-                Controls(true, "#1A2240", "#3E4C7A", "#172038", "#1E2A4A", "#08FFFFFF", "#F2C97D", "#E9B45A", "#1A8EE3D6", "#738EE3D6", "#B30A0E1E", "#263056",
+                Controls(true, "#1A2240", "#3E4C7A", "#172038", "#1E2A4A", "#08FFFFFF", "#ECEFFF", "#E9B45A", "#1A8EE3D6", "#738EE3D6", "#B30A0E1E", "#263056",
                     "#FFFFFF", "#47D9DEF0", "#3E4C7A", "#08FFFFFF", "#14F2C97D", "#80F2C97D", "#29F2C97D", "#0DF2C97D", "#47E9B45A", "#14F2C97D", "#F2C97D", "#4DF2C97D");
-                S("Bg", "#05070F"); S("Card", "#0E1328"); S("Card2", "#161C3A"); S("Line", "#242D52"); S("LineStrong", "#3A4878");
-                S("Ink", "#ECEFFF"); S("Muted", "#A4ACCF"); S("Text2", "#C4CAE4"); S("Faint", "#7A84AE");
+                S("Bg", "#05070F"); S("Card", "#0E1328"); S("Card2", "#161C3A"); S("CardQuiet", "#0A0E1E"); S("CardHair", "#1A2142"); S("Line", "#242D52"); S("LineStrong", "#3A4878");
+                S("Ink", "#ECEFFF"); S("Muted", "#B0B8D9"); S("Text2", "#C4CAE4"); S("Faint", "#8C96C0");
+                S("Link", "#9FB8F0"); S("LinkHover", "#CFDCFF"); S("Progress", "#7F8FC4");
                 S("Gold", "#F2C97D"); S("Violet", "#C8A8FF"); S("Mint", "#8EE3D6"); S("Accent", "#7FC4FF"); S("AccentDim", "#15294A");
                 S("Good", "#58D39A"); S("Warn", "#F3A65B"); S("Bad", "#FF7A86");
                 S("RowHead", "#0C1124"); S("RowHover", "#161C3A"); S("Mark", "#15294A"); S("Slot", "#070A18");
@@ -104,14 +106,15 @@ public static class Skins
                 G("BtnPrimary", "#F2C97D", "#D9A94A"); G("BtnPrimaryHover", "#F8D68F", "#E3B457"); G("BtnStop", "#FF7A86", "#C9505C");
                 break;
             case "daylight":
-                Quest("#1F8FCB", "#5C46C9", "#C2463A", "#5B8A1E", "#261702", "#261702", "#24000000", "#4A000000", 0x24);
+                Quest("#4D5C72", "#3A475A", "#C2463A", "#4D5C72", "#261702", "#FFFFFF", "#24000000", "#4A000000", 0x24);
                 S("MintTint", "#241F8A6B"); S("GoldIcTint", "#29D9952F"); S("NoticeTint", "#125C46C9");
-                Controls(false, "#E6ECF4", "#9FB0C6", "#E8EEF6", "#DCE6F3", "#E9EEF5", "#F6CB72", "#9A6B10", "#141F8A6B", "#661F8A6B", "#F1F4F9", "#D9E0EA",
+                Controls(false, "#E6ECF4", "#9FB0C6", "#E8EEF6", "#DCE6F3", "#E9EEF5", "#14202F", "#9A6B10", "#141F8A6B", "#661F8A6B", "#F1F4F9", "#D9E0EA",
                     "#14202F", "#8FA3BC", "#B9C5D6", "#0A14202F", "#1AD9952F", "#99B07A1A", "#FFF3DA", "#FFFAF0", "#4DB07A1A", "#FFF2DC", "#8A4F00", "#59B86A14");
-                S("Bg", "#E7EAF2"); S("Card", "#FFFFFF"); S("Card2", "#EEF1F7"); S("Line", "#D4DBE6"); S("LineStrong", "#B9C5D6");
-                S("Ink", "#14202F"); S("Muted", "#5B6B82"); S("Text2", "#3A475A"); S("Faint", "#637287");
-                S("Gold", "#9A6B10"); S("Violet", "#5C46C9"); S("Mint", "#1F8A6B"); S("Accent", "#1F8FCB"); S("AccentDim", "#D7ECF8");
-                S("Good", "#1E8E57"); S("Warn", "#B86A14"); S("Bad", "#C2463A");
+                S("Bg", "#E7EAF2"); S("Card", "#FFFFFF"); S("Card2", "#EEF1F7"); S("CardQuiet", "#F4F6FA"); S("CardHair", "#D7DDE7"); S("Line", "#D4DBE6"); S("LineStrong", "#B9C5D6");
+                S("Ink", "#14202F"); S("Muted", "#4D5C72"); S("Text2", "#3A475A"); S("Faint", "#56657A");
+                S("Link", "#2F5596"); S("LinkHover", "#1B3768"); S("Progress", "#74829E");
+                S("Gold", "#835B0C"); S("Violet", "#5C46C9"); S("Mint", "#167560"); S("Accent", "#1F8FCB"); S("AccentDim", "#D7ECF8");
+                S("Good", "#18794A"); S("Warn", "#B86A14"); S("Bad", "#C2463A");
                 S("RowHead", "#E8EDF4"); S("RowHover", "#F2F5F9"); S("Mark", "#E3EBF5"); S("Slot", "#E9EEF5");
                 G("BtnPrimary", "#F6CB72", "#D9952F"); G("BtnPrimaryHover", "#F9D78E", "#E0A03C"); G("BtnStop", "#F6CB72", "#D9952F");
                 R("HeroBg", "#FFF0D2", "#FFFFFF", "#FFFFFF"); S("HeroLine", "#66D9952F"); S("Inset", "#F4F6FA"); C("SlotColor", "#F1F4F9");
@@ -127,8 +130,9 @@ public static class Skins
                 S("MintTint", "#17BEC6DC"); S("GoldIcTint", "#24F5B942"); S("NoticeTint", "#17BEC6DC");
                 Controls(true, "#1E2230", "#3A4058", "#1E2230", "#262A38", "#111319", "#EDEFF5", "#F5B942", "#14BEC6DC", "#2E3346", "#0D0F14", "#232736",
                     "#FFFFFF", "#2E3346", "#2E3346", "#0DFFFFFF", "#14F5B942", "#80F5B942", "#1FF5B942", "#0AF5B942", "#3DF5B942", "#14F5B942", "#FFD27A", "#4DF5B942");
-                S("Bg", "#0A0B10"); S("Card", "#111319"); S("Card2", "#171A22"); S("Line", "#232736"); S("LineStrong", "#2E3346");
-                S("Ink", "#EDEFF5"); S("Muted", "#A2A8BA"); S("Text2", "#C9CDDA"); S("Faint", "#6D7387");
+                S("Bg", "#0A0B10"); S("Card", "#111319"); S("Card2", "#171A22"); S("CardQuiet", "#0E1015"); S("CardHair", "#1F222C"); S("Line", "#232736"); S("LineStrong", "#2E3346");
+                S("Ink", "#EDEFF5"); S("Muted", "#AFB5C6"); S("Text2", "#C9CDDA"); S("Faint", "#868DA1");
+                S("Link", "#9DB2E8"); S("LinkHover", "#C9D6F7"); S("Progress", "#7F8BAA");
                 S("Gold", "#F5B942"); S("Violet", "#B39BFF"); S("Mint", "#3DD68C"); S("Accent", "#F5B942"); S("AccentDim", "#1E2230");
                 S("Good", "#3DD68C"); S("Warn", "#F7A072"); S("Bad", "#F26D6D"); S("Slot", "#0D0F14");
                 S("RowHead", "#0F1117"); S("RowHover", "#171A22"); S("Mark", "#1A1D27");

@@ -113,7 +113,7 @@ public partial class MainWindow
                 {
                     var c = new StackPanel();
                     c.Children.Add(QT(Fk(p.Kinah), 13, FontWeights.Bold, "Gold"));
-                    c.Children.Add(QT($"{p.Start.ToLocalTime():HH:mm} · {Clock(TimeSpan.FromSeconds(p.Seconds))}", 11, FontWeights.Medium, "Muted"));
+                    c.Children.Add(QT($"{p.Start.ToLocalTime():HH:mm} · {Clock(TimeSpan.FromSeconds(p.Seconds))}", 12, FontWeights.Medium, "Muted"));
                     var cell = new Border { Child = c, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 6, 6) };
                     cell.SetResourceReference(Border.BorderBrushProperty, "CardLine"); cell.SetResourceReference(Border.BackgroundProperty, "Card2");
                     mini.Children.Add(cell);

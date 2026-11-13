@@ -59,20 +59,21 @@ public partial class MainWindow
     internal void SetLootSortForTest(string mode) { _prefs.LootSort = mode; _drawnSig.Remove("loot"); _drawnSig.Remove("today"); FillToday(); }
 
     /// <summary>
-    /// "Sort  worth · amount · quality", the one picked gold: a click keeps it (ui.json) and draws the slots again. Over
+    /// "Sort  worth · amount · quality", the one picked in ink, the others links (gold until the colour pass): a click keeps it (ui.json) and draws the slots again. Over
     /// LOOT's slots on Farming and in the TODAY strip's heading on Events; shown once there are two slots to order.
     /// </summary>
     FrameworkElement SortLinks(string sigKey, Action redraw)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var label = PT("Sort", "Muted", 11.5); label.Margin = new Thickness(0, 0, 7, 0); sp.Children.Add(label);
+        var label = PT("Sort", "Muted", 12); label.Margin = new Thickness(0, 0, 7, 0); sp.Children.Add(label);
         for (int i = 0; i < LootOrder.Modes.Length; i++)
         {
             var mode = LootOrder.Modes[i];
             bool on = mode == LootSortMode;
-            if (i > 0) { var dot = PT("·", "Muted", 11.5); dot.Margin = new Thickness(5, 0, 5, 0); sp.Children.Add(dot); }
-            var t = PT(mode, on ? "Gold" : "Muted", 11.5, on ? FontWeights.Normal : null);
-            t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = LootOrder.Tip(mode); ToolTipService.SetInitialShowDelay(t, 400);
+            if (i > 0) { var dot = PT("·", "Muted", 12); dot.Margin = new Thickness(5, 0, 5, 0); sp.Children.Add(dot); }
+            var t = PT(mode, "Ink", 12, on ? FontWeights.SemiBold : null);
+            if (!on) QLinkify(t);
+            t.Cursor = on ? Cursors.Arrow : Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = LootOrder.Tip(mode); ToolTipService.SetInitialShowDelay(t, 400);
             t.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (mode == LootSortMode) return; _prefs.LootSort = mode; SavePrefs(); _drawnSig.Remove(sigKey); redraw(); };
             sp.Children.Add(t);
         }
@@ -106,6 +107,9 @@ public partial class MainWindow
         LootHereBtn.Style = (Style)FindResource(_lootDay || _lootWeek ? "SegOff" : "SegOn");
         LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
         LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");
+        FootTotal.Visibility = Visibility.Visible;   // the first side has none (FillLootHere)
+        // in Compact the bag card opened from the hero's loot figure stands in for the strip; its head puts it away again
+        SessionHead.Cursor = FullShown ? null : Cursors.Hand;
         if (_lootWeek) FillLootWeek(); else if (_lootDay) FillLootDay(whole); else FillLootHere();
         FillBagStrip();   // the Compact page's slots with counts (Ui/MainWindow.QuestFarm.cs)
     }
@@ -125,9 +129,12 @@ public partial class MainWindow
         var pets = h.S.Pets ?? new();
         long crystals = pets.Sum(r => Qty(r.Drops));
         int kinds = drops.Count + gathered.Count + (crystals > 0 ? 1 : 0);
-        FootTotalNote.Text = (kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")} · " : "") + TodayLoot.Dur(h.Elapsed.TotalSeconds);
-        if (h.Total > 0) Motion.Number(FootTotal, "foot|here|" + LootHereName, h.Total, v => Fk(v)); else Motion.Blank(FootTotal, "foot|here|" + LootHereName, " ");
-        FootTotal.ToolTip = h.TotalTip;
+        // the UX pass (2026-11-13): this side's Kinah, loot and how long are the hero's (its line and its "Open world · 42 min"),
+        // so the bag says only how many kinds; no Kinah slot and no total, which was the hero line's two figures added up
+        FootTotalNote.Text = kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")}" : "";
+        Motion.Blank(FootTotal, "foot|here|" + LootHereName, " ");
+        FootTotal.ToolTip = null;
+        FootTotal.Visibility = Visibility.Collapsed;
         string Row(DropRow r) => $"{r.Name}:{r.Drops}:{r.DropPct}:{r.PerHour}:{r.Value}:{r.Reported}:{r.Grade}:{r.Sub}";
         var sig = $"here|{LootHereName}|{LootSortMode}|{h.Kinah}|{h.Abyss}|{h.Kills}|{crystals}|{string.Join(";", drops.Select(Row))}|{string.Join(";", gathered.Select(Row))}|"
             + $"{string.Join(",", h.ByEnemy.Take(6).Select(x => x.Where + x.Count))}|{string.Join(",", _todayAll)}|{FullShown}|{Skins.Current}";
@@ -137,7 +144,6 @@ public partial class MainWindow
         if (drops.Count + gathered.Count >= 2) LootSortRow();
         string where = _prefs.AllZones ? "since your last break" : RunShown ? "this run" : "here";
         var slots = new List<FrameworkElement>();
-        if (h.Kinah > 0) slots.Add(KinahSlot(h.Kinah, h.ByEnemy, h.Kills > 0 ? $"{h.Kills:N0} kills · {Fk(h.Kinah / (double)h.Kills)} a kill" : "", "Picked up " + where, "BY ENEMY"));
         if (h.Abyss > 0) slots.Add(AbyssSlot(h.Abyss, h.Elapsed.TotalSeconds, where));
         // a drop that lands grows in, a rare one glows once (Motion.Slot); Kinah and Abyss Points rise with every kill and stay still
         var landHost = "loot-here|" + LootHereName;
@@ -221,7 +227,7 @@ public partial class MainWindow
     {
         const int perRow = 4;   // Quest tiles, 149 px each with 8 px between, in the 632 px card
         var sp = new StackPanel { Margin = new Thickness(0, LootHost.Children.Count > 0 && title.Length > 0 ? 6 : 0, 0, 0) };
-        if (title.Length > 0) { var t = QT(title, 11, FontWeights.SemiBold, "Muted"); t.Margin = new Thickness(0, 0, 0, 8); sp.Children.Add(t); }
+        if (title.Length > 0) { var t = QT(title, 12, FontWeights.SemiBold, "Muted"); t.Margin = new Thickness(0, 0, 0, 8); sp.Children.Add(t); }
         bool all = _todayAll.Contains(key);
         int max = perRow * (FullShown ? 3 : TodayRows);
         var wrap = new WrapPanel();
@@ -229,8 +235,8 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = PT(all ? "Show fewer" : $"{slots.Count - max} more", "Gold", 12, FontWeights.SemiBold);   // tiles, not kinds: Kinah has one too
-            m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
+            var m = QLinkify(PT(all ? "Show fewer" : $"{slots.Count - max} more", "Link", 12, FontWeights.SemiBold));   // tiles, not kinds: Kinah has one too
+            m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); _drawnSig.Remove("loot"); FillLoot(); };
             sp.Children.Add(m);
         }
@@ -371,6 +377,8 @@ public partial class MainWindow
         if (state.StartsWith("share-")) OpenShareSample(state);
         // the hero's rate chart open, live (Ui/MainWindow.RateChart.cs)
         if (state is "chart" or "chart-hover") ShowChartSample(state);
+        // what a figure of the hero's line opens in Compact (UX pass, 2026-11-13): Who pays, the bag, Kills
+        if (state is "who" or "bag" or "kills") ToggleChip(state);
     }
 
     /// <summary>The chat out of view in a layout render (KL_SHOT_STATE=paused).</summary>

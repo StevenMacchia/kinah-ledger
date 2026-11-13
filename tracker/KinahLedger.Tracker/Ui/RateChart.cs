@@ -111,7 +111,7 @@ sealed class RateChart
         _mark.SetResourceReference(Shape.FillProperty, "Card");
         _tip.SetResourceReference(Border.BackgroundProperty, "Card2");
         _tip.SetResourceReference(Border.BorderBrushProperty, "LineStrong");
-        var text = new TextBlock { FontSize = 11, FontWeight = FontWeights.SemiBold };
+        var text = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
         var sep = new Run(" · ");
         var unit = new Run(" /h");
         foreach (var r in new[] { _tipTime, sep, unit }) r.SetResourceReference(TextElement.ForegroundProperty, "Faint");

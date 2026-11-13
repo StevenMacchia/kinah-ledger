@@ -30,7 +30,7 @@ public sealed class UiState
     public string? View { get; set; }
     /// <summary>The look (Options › General › Look): "night" (the default), "abyss" or "daylight". A sweep renders a state without one in Night, whatever this PC's own look is.</summary>
     public string? Skin { get; set; }
-    /// <summary>The character in the header (Ui/MainWindow.Characters.cs); absent, "Character 1".</summary>
+    /// <summary>The character in the header (Ui/MainWindow.Characters.cs); absent, the demo's "Lysandra".</summary>
     public string? Character { get; set; }
     /// <summary>The TODAY strip: "open" (the default, so its rows can be reviewed) or "closed".</summary>
     public string Strip { get; set; } = "open";

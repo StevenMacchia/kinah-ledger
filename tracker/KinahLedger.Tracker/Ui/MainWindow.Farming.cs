@@ -50,6 +50,16 @@ public partial class MainWindow
         bool room = _goals.Count < Session.Goals.Max;
         var list = new List<MenuEntry>
         {
+            // Share and Compact/Full left the header (UX pass 2026-11-13): they act on this page only, and the header's buttons
+            // are the same on every page now. Share opens its sheet in this card, as the header's button did
+            _shareReady
+                ? new MenuEntry(ShareText, () => ToggleShare("Farming"), Sub: "This session, the last run or the week", Key: CopyPictureKey,
+                    Tip: $"A picture to paste in Discord or anywhere. Nothing is uploaded.\n{CopyPictureKey} copies this session's picture without opening it.")
+                : new MenuEntry(ShareText, Sub: "Nothing to share yet: it opens once the game is being read."),
+            new(FullViewText, () => SetView(!FullShown), On: FullShown,
+                Sub: _fullTooWide && !FullShown ? "Needs a wider screen than this one" : "Twice as wide: the drop tables beside the loot",
+                Tip: "On: the window doubles in width, with the drops, Who pays and the odds beside the live card. Off (Compact): one column. Farming only; Crafting, Runs and Quests keep one column."),
+            MenuEntry.Line,
             room ? new MenuEntry("Set a goal…", () => OpenGoalSheet(null, new GoalDraft(), MoreBtn), Tip: "Kinah, an item or runs to reach today. Up to three, shown over LOOT.")
                  : new MenuEntry("Set a goal…", Sub: "Three goals are set. Click one to change or remove it."),
             new("All zones", () => { _prefs.AllZones = !_prefs.AllZones; if (!_demo) _prefs.Save(); Redraw(); Tick(); }, On: _prefs.AllZones,

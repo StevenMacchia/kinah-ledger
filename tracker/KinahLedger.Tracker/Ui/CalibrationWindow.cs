@@ -260,7 +260,7 @@ public sealed class CalibrationWindow : Window
         var g = new Grid { ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition(), new ColumnDefinition { Width = GridLength.Auto } } };
         var ic = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Res("Line", Color.FromArgb(0x40, 255, 255, 255))), Background = new SolidColorBrush(Al(Res("Bg", Color.FromRgb(0, 0, 0)), 0x70)), Child = new TextBlock { Text = icon, FontSize = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Res("Ink", Colors.White)) } };
         var names = new StackPanel { Margin = new Thickness(12, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Children = { new TextBlock { Text = name, FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Res("Ink", Color.FromRgb(0xE9, 0xEC, 0xF7))) }, new TextBlock { Text = sub, FontSize = 12.5, Foreground = new SolidColorBrush(Res("Muted", Color.FromRgb(0x9A, 0xA1, 0xC2))), TextTrimming = TextTrimming.CharacterEllipsis } } };
-        var chipB = new Border { CornerRadius = new CornerRadius(6), Padding = new Thickness(9, 3, 9, 3), VerticalAlignment = VerticalAlignment.Center, Background = new SolidColorBrush(Color.FromArgb(0x2E, col.R, col.G, col.B)), Child = new TextBlock { Text = chip, FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(col) } };
+        var chipB = new Border { CornerRadius = new CornerRadius(6), Padding = new Thickness(9, 3, 9, 3), VerticalAlignment = VerticalAlignment.Center, Background = new SolidColorBrush(Color.FromArgb(0x2E, col.R, col.G, col.B)), Child = new TextBlock { Text = chip, FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(col) } };
         Grid.SetColumn(names, 1); Grid.SetColumn(chipB, 2);
         g.Children.Add(ic); g.Children.Add(names); g.Children.Add(chipB);
         band.Child = g;
@@ -277,7 +277,7 @@ public sealed class CalibrationWindow : Window
     static UIElement Section(string t)
     {
         var g = new Grid { Margin = new Thickness(14, 12, 14, 6), ColumnDefinitions = { new ColumnDefinition { Width = GridLength.Auto }, new ColumnDefinition() } };
-        var tb = new TextBlock { Text = t, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A))) };
+        var tb = new TextBlock { Text = t, FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A))) };
         var rule = new Border { Height = 1, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Al(Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A)), 0x70), Al(Res("Gold", Color.FromRgb(0xFF, 0xD2, 0x7A)), 0), 0) };
         Grid.SetColumn(rule, 1); g.Children.Add(tb); g.Children.Add(rule);
         return g;

@@ -84,11 +84,11 @@ public partial class MainWindow
         var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var text = CkText(e.Text, live ? CkInk : CkFaint, 13.5);
         words.Children.Add(text);
-        if (e.Sub.Length > 0) { var s = CkText(e.Sub, CkFaint, 11.5); s.TextWrapping = TextWrapping.Wrap; s.TextTrimming = TextTrimming.None; s.Margin = new Thickness(0, 2, 0, 0); words.Children.Add(s); }
+        if (e.Sub.Length > 0) { var s = CkText(e.Sub, CkFaint, 12); s.TextWrapping = TextWrapping.Wrap; s.TextTrimming = TextTrimming.None; s.Margin = new Thickness(0, 2, 0, 0); words.Children.Add(s); }
         g.Children.Add(words);
         if (e.Key.Length > 0 && e.On == null)
         {
-            var k = CkText(e.Key, CkFaint, 11.5); k.VerticalAlignment = VerticalAlignment.Center; k.HorizontalAlignment = HorizontalAlignment.Right; k.Margin = new Thickness(14, 0, 0, 0); k.IsHitTestVisible = false;
+            var k = CkText(e.Key, CkFaint, 12); k.VerticalAlignment = VerticalAlignment.Center; k.HorizontalAlignment = HorizontalAlignment.Right; k.Margin = new Thickness(14, 0, 0, 0); k.IsHitTestVisible = false;
             Grid.SetColumn(k, 1); g.Children.Add(k);
         }
         bool on = e.On == true;
@@ -142,7 +142,7 @@ public partial class MainWindow
         foreach (var (text, act) in actions)
         {
             if (t.Inlines.Count > 0) t.Inlines.Add(new Run("   ·   ") { Foreground = Ck(CkFaint) });
-            var h = new Hyperlink(new Run(text)) { Foreground = Ck(CkGold), TextDecorations = null };
+            var h = new Hyperlink(new Run(text)) { Foreground = Ck(CkLink), TextDecorations = null };
             h.Click += (_, _) => { if (_card != null) _card.IsOpen = false; Dispatcher.BeginInvoke(DispatcherPriority.Background, act); };
             t.Inlines.Add(h);
         }

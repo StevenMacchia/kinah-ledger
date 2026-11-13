@@ -185,7 +185,7 @@ public partial class MainWindow
             var sp = new StackPanel();
             var big = PT(t.Change, t.Tone == 0 ? "Ink" : tone, 16, FontWeights.SemiBold, "DisplayFont"); big.HorizontalAlignment = HorizontalAlignment.Right;
             sp.Children.Add(big);
-            var small = PT(t.ChangeLabel, "Muted", 11.5); small.HorizontalAlignment = HorizontalAlignment.Right; small.Margin = new Thickness(0, 2, 0, 0);
+            var small = PT(t.ChangeLabel, "Muted", 12); small.HorizontalAlignment = HorizontalAlignment.Right; small.Margin = new Thickness(0, 2, 0, 0);
             sp.Children.Add(small);
             chip = new Border { Child = sp, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(12, 6, 12, 7), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0), Tag = "wrapped-change" };
             chip.SetResourceReference(Border.BackgroundProperty, "Inset");
@@ -263,7 +263,7 @@ public partial class MainWindow
         g.Children.Add(tile);
         var words = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         var title = new TextBlock { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Tag = "wrapped-title" };
-        title.Inlines.Add(PR(t.Title, "Gold", FontWeights.Bold));
+        title.Inlines.Add(PR(t.Title, "Ink", FontWeights.Bold));   // a heading: ink (colour pass, 2026-11-13); the total under it is the gold
         var range = PR("   " + t.Range, "Muted", FontWeights.Medium); range.FontSize = 12.5; title.Inlines.Add(range);
         words.Children.Add(title);
         var (who, server) = WrappedWho();
@@ -296,7 +296,7 @@ public partial class MainWindow
         }
         g.Children.Add(icon);
         var mid = new StackPanel { Margin = new Thickness(14, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
-        var lab = PT(r.Label, "SecGold", 10.5, FontWeights.Bold); mid.Children.Add(lab);
+        var lab = PT(r.Label, "Muted", 12, FontWeights.Bold); mid.Children.Add(lab);
         // a long name (a 60-letter item, a place in full) takes a second line before it is cut, so the picture names it
         var name = PT(r.Name, "Ink", 14.5, FontWeights.Medium); name.Margin = new Thickness(0, 2, 0, 0); name.ToolTip = r.Name; name.Tag = "wrapped-row";
         name.TextWrapping = TextWrapping.Wrap; name.LineHeight = NameLine; name.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; name.MaxHeight = 2 * NameLine;
@@ -346,7 +346,7 @@ public partial class MainWindow
         var g = new Grid { Margin = new Thickness(0, 16, 0, 0) };
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.Children.Add(PT("Kinah Ledger", "Faint", 12, FontWeights.Medium));
-        var site = PT(SharePicture.Site, "SecGold", 12, FontWeights.Medium);
+        var site = PT(SharePicture.Site, "Muted", 12, FontWeights.Medium);
         Grid.SetColumn(site, 1); g.Children.Add(site);
         return g;
     }

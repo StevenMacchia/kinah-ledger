@@ -140,14 +140,14 @@ public partial class MainWindow
         return r;
     }
 
-    /// <summary>A section label: "RUNS" in the heading gold, a faint word after it, and a rule fading out to the right.</summary>
+    /// <summary>A section label: "RUNS" in the muted heading tone (gold until the colour pass), a faint word after it, and a rule fading out to the right.</summary>
     static Grid PSection(string text, string note = "")
     {
         var g = new Grid { Margin = new Thickness(0, 4, 0, 10) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition());
-        var t = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-        t.Inlines.Add(PR(text, "SecGold", FontWeights.Medium));
+        var t = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        t.Inlines.Add(PR(text, "Muted", FontWeights.SemiBold));
         if (note.Length > 0) { var n = PR("  " + note, "Faint"); n.FontSize = 12; t.Inlines.Add(n); }
         g.Children.Add(t);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, OpacityMask = new LinearGradientBrush(Colors.Black, Colors.Transparent, 0) };
@@ -179,17 +179,17 @@ public partial class MainWindow
         };
     }
 
-    /// <summary>A small rounded label in the band: "● Paid · 8:11 in" while a run is open (gold), "● last 18:02" after (faint).</summary>
+    /// <summary>A small rounded label in the band: "● Paid · 8:11 in" while a run is open (ink, the live dot green), "● last 18:02" after (faint). A status, not money.</summary>
     static Border PPill(string text, bool on)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal };
         var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 1, 7, 0), VerticalAlignment = VerticalAlignment.Center };
-        dot.SetResourceReference(Shape.FillProperty, on ? "Gold" : "Faint");
+        dot.SetResourceReference(Shape.FillProperty, on ? "Good" : "Faint");
         sp.Children.Add(dot);
-        sp.Children.Add(PT(text, on ? "Gold" : "Faint", 12, on ? FontWeights.Normal : null));
+        sp.Children.Add(PT(text, on ? "Ink" : "Muted", 12, on ? FontWeights.Normal : null));
         var b = new Border { Child = sp, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 3, 11, 4), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 4, 0, 0) };
-        b.SetResourceReference(Border.BorderBrushProperty, on ? "FlagLine" : "Line");
-        if (on) b.SetResourceReference(Border.BackgroundProperty, "GoldTint");
+        b.SetResourceReference(Border.BorderBrushProperty, on ? "CardLineHover" : "Line");
+        if (on) b.SetResourceReference(Border.BackgroundProperty, "Card2");
         return b;
     }
 
@@ -277,8 +277,7 @@ public partial class MainWindow
         // the hero: the place (the band's dropdown), the hour, the open run as a timer against the average run (or the last run against the best), the ring
         body.Children.Add(QRunHero(zone, runs, counted, live, kind, open, newest, pickPlace, redraw));
         if (withNow && known && secs > 10) _eventsRate = Fk(value / secs * 3600);
-        // the chips: what the counted runs paid out
-        if (n > 0 && known) body.Children.Add(QRunChips(counted, value));   // nothing priced: a row of dashes says nothing
+        // what the counted runs paid out is the hero's second line now (QRunStats, UX pass 2026-11-13)
         // Next up (quests, phase 1, Ui/MainWindow.Quests.cs): the runs here today and this week, beating the best run here, with their trees
         RefreshQuests();
         if (QuestNextCard(q => q.Kind is QuestKind.Runs or QuestKind.BestRun && string.Equals(q.Subject, zone, StringComparison.OrdinalIgnoreCase), redraw) is { } nextUp) body.Children.Add(nextUp);
@@ -623,7 +622,7 @@ public partial class MainWindow
             Data = Geometry.Parse("M0,0 L4,4 L0,8"), StrokeThickness = 1.5, Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center,
             RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new RotateTransform(open ? 90 : 0),
         };
-        chev.SetResourceReference(Shape.StrokeProperty, open ? "Gold" : "Faint");
+        chev.SetResourceReference(Shape.StrokeProperty, open ? "Link" : "Faint");
         // the group a click just opened: drawn open, it opens (Motion.Open) as its chevron turns
         bool justOpened = open && _runsMoved == key;
         if (justOpened) { _runsMoved = null; Motion.Turn(chev, 0, 90); }
@@ -674,7 +673,7 @@ public partial class MainWindow
         g.Children.Add(icon);
         var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         names.Children.Add(PT(name, "Ink", 13.5, FontWeights.Normal));
-        if (sub.Length > 0) { var s = PT(sub, "Faint", 11.5); s.Margin = new Thickness(0, 1, 0, 0); names.Children.Add(s); }
+        if (sub.Length > 0) { var s = PT(sub, "Faint", 12); s.Margin = new Thickness(0, 1, 0, 0); names.Children.Add(s); }
         Grid.SetColumn(names, 1); g.Children.Add(names);
         var v = value.Length > 0 ? PT(value, "Gold", 13, null, "MonoFont") : PT(noValue, "Faint", 12.5);
         v.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(v, 2); g.Children.Add(v);

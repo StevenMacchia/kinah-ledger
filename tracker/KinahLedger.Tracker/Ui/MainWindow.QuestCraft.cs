@@ -37,24 +37,29 @@ public partial class MainWindow
         else { Motion.ForgetShare("craft-chase"); _craftShare = 0; LayoutCraftChase(); }
         CraftChaseFill.Effect ??= QGlow("Mint", 10, 0.6);
         CraftProfit.SetResourceReference(TextBlock.ForegroundProperty, known ? (net >= 0 ? "Mint" : "Coral") : "Ink");
-        CraftProfit.Visibility = known ? Visibility.Visible : Visibility.Collapsed;   // before the first craft the note stands alone
+        CraftProfit.Visibility = known ? Visibility.Visible : Visibility.Collapsed;   // crafts with no price yet: the note stands alone
+        // before the first craft the hero says what it is for and what lands in it (colour pass review, 2026-11-13)
+        CraftEmptyHead.Visibility = CraftEmptyBody.Visibility = tries == 0 ? Visibility.Visible : Visibility.Collapsed;
+        CraftProfitRow.Visibility = tries == 0 ? Visibility.Collapsed : Visibility.Visible;
         CraftProfitNote.Margin = known ? new Thickness(8, 0, 0, 7) : new Thickness(0, 0, 0, 2);
         if (Changed("craft-ring", $"{tries}|{ok}|{Skins.Current}"))
         {
             CraftRingHost.Children.Clear();
-            CraftRingHost.Children.Add(tries > 0 ? QRing(76, 7, share, "Mint", $"{Math.Round(share * 100):0}%", "worked") : QRing(76, 7, 0, "Mint", "–", "no crafts yet"));
+            CraftRingHost.Children.Add(tries > 0 ? QRing(76, 7, share, "Mint", $"{Math.Round(share * 100):0}%", "worked") : QRing(76, 7, 0, "Mint", "–", "worked"));
             CraftRingHost.ToolTip = tries > 0 ? $"{ok:N0} of {tries:N0} crafts worked this session." : null;
         }
-        // the chips
-        CraftChips.Visibility = tries > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // the hero's line (UX pass, 2026-11-13; three chips under the hero until then): what came out, spent, sells for; the
+        // crafts and how many worked are the chase's "4 of 5 worked" and the ring's already
+        CraftStats.Visibility = tries > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (tries > 0 && Changed("craft-chips", $"{tries}|{ok}|{itemsMade}|{spent}|{worth}|{atMost}|{Skins.Current}"))
         {
-            QChipFill(ChipCrafts, QIconBox("Hammer", "Lilac"), $"{tries:N0} craft{(tries == 1 ? "" : "s")}", itemsMade > 0 ? $"{itemsMade:N0} thing{(itemsMade == 1 ? "" : "s")} made" : $"{ok:N0} worked");
-            ChipCrafts.ToolTip = $"{tries:N0} crafts this session: {ok:N0} worked, {tries - ok:N0} failed" + (itemsMade > 0 ? $", {itemsMade:N0} things made." : ".");
-            QChipFill(ChipSpent, QIconBox("Coin", "Coral"), spent > 0 ? Fk(spent) : "–", "spent on materials");
-            ChipSpent.ToolTip = spent > 0 ? $"{spent:N0} Kinah of materials at the lowest Market price when each craft was made; a failed craft uses them too." + (atMost ? " At least: a material has no price yet." : "") : "Materials show once a recipe is in the book.";
-            QChipFill(ChipSells, QIconBox("Sack", "Mint"), worth > 0 ? Fk(worth) : "–", "sells for, after the cut");
-            ChipSells.ToolTip = worth > 0 ? $"What came out sells for {worth:N0} at today's lowest Market price, {PriceBook.Cut}." : "Shows once what came out has a Market price.";
+            var parts = new List<QStat>();
+            if (itemsMade > 0) parts.Add(new QStat(itemsMade.ToString("N0"), "made", $"{tries:N0} crafts this session: {ok:N0} worked, {tries - ok:N0} failed, {itemsMade:N0} things made."));
+            parts.Add(new QStat(spent > 0 ? Fk(spent) : "–", "spent",
+                spent > 0 ? $"{spent:N0} Kinah of materials at the lowest Market price when each craft was made; a failed craft uses them too." + (atMost ? " At least: a material has no price yet." : "") : "Materials show once a recipe is in the book."));
+            parts.Add(new QStat(worth > 0 ? Fk(worth) : "–", "sells for",
+                worth > 0 ? $"What came out sells for {worth:N0} at today's lowest Market price, {PriceBook.Cut}." : "Shows once what came out has a Market price."));
+            QStatsFill(CraftStats, parts);
         }
         // Next up
         var next = new List<FrameworkElement>();
@@ -63,7 +68,8 @@ public partial class MainWindow
             long target = NextRound(net), togo = target - net;
             var best = _craftPerRecipe.Where(x => x.Ok > 0 && x.Profit > 0).Select(x => (x.Name, Per: x.Profit / (double)x.Ok)).OrderByDescending(x => x.Per).FirstOrDefault();
             var sub = $"{Fk(togo)} away" + (best.Name != null && best.Per > 0 ? $" · one {best.Name} that works (+{Fk(best.Per)})" : "");
-            var row = QRow(QIconBox("Sack", "Mint", 28, round: true), $"+{Fk(target)} profit", sub, $"{Math.Round(100.0 * net / target):0}%", "Mint", net / (double)target, "Mint", rule: false, inline: true);
+            // progress toward a Kinah target: gold, as every chase (colour pass, 2026-11-13; mint until then)
+            var row = QRow(QIconBox("Sack", "Gold", 28, round: true), $"+{Fk(target)} profit", sub, $"{Math.Round(100.0 * net / target):0}%", "Gold", net / (double)target, "Gold", rule: false, inline: true);
             row.Cursor = Cursors.Arrow; row.ToolTip = $"{Signed(net)} so far, {PriceBook.Cut}. The next round figure turns over by itself.";
             // it names the recipe that gets there fastest: a click opens that recipe
             if (best.Name != null && best.Per > 0) { var bn = best.Name; row.Cursor = Cursors.Hand; row.ToolTip += $" Click for {bn}."; row.MouseLeftButtonUp += (_, _) => OpenCraftWindow(bn); }
@@ -71,7 +77,7 @@ public partial class MainWindow
         }
         else if (known && net < 0 && spent > 0)
         {
-            var row = QRow(QIconBox("Sack", "Coral", 28, round: true), "Back to even", $"{Fk(-net)} away · a worked craft that sells for more than its materials", $"{Math.Round(100.0 * worth / spent):0}%", "Coral", worth / (double)spent, "Coral", rule: false, inline: true);
+            var row = QRow(QIconBox("Sack", "Coral", 28, round: true), "Back to even", $"{Fk(-net)} away · a worked craft that sells for more than its materials", $"{Math.Round(100.0 * worth / spent):0}%", "Gold", worth / (double)spent, "Gold", rule: false, inline: true);   // progress toward a Kinah target: gold; the coral icon says it is a loss
             row.Cursor = Cursors.Arrow; row.ToolTip = $"{Signed(net)} so far: {Fk(worth)} back from {Fk(spent)} spent.";
             next.Add(row);
         }
@@ -124,7 +130,7 @@ public partial class MainWindow
         var sp = new StackPanel();
         icon.HorizontalAlignment = HorizontalAlignment.Left; sp.Children.Add(icon);
         var n = QT(name, 12.5, FontWeights.SemiBold, "Ink"); n.Margin = new Thickness(0, 6, 0, 0); n.TextWrapping = TextWrapping.Wrap; n.MaxHeight = 34; n.LineHeight = 16; n.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sp.Children.Add(n);
-        sp.Children.Add(QT(sub, 11, FontWeights.Medium, "Muted", trim: true));
+        sp.Children.Add(QT(sub, 12, FontWeights.Medium, "Muted", trim: true));
         var p = QT(profit.Length > 0 ? profit : "no price yet", 15, FontWeights.Bold, tone); p.Margin = new Thickness(0, 4, 0, 0); sp.Children.Add(p);
         var card = new Border { Width = 205, Padding = new Thickness(10), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 8, 8) };
         card.SetResourceReference(Border.BackgroundProperty, "Card2");

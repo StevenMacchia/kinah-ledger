@@ -178,7 +178,7 @@ public sealed partial class HudCard : IHudLook
             if (ring) DrawRing(share, beat, rose); else { _ringHost.Children.Clear(); Motion.ForgetShare(_key + "ring"); _ringDrawn = false; }
             _ringHost.Visibility = ring ? Visibility.Visible : Visibility.Collapsed;
             _chase.Text = words.Length > 0 && counted && !warm ? (beat ? "★ " : "⚑ ") + words : "";
-            _chase.Foreground = beat ? Mint : Gold;
+            _chase.Foreground = Gold;   // the chase is gold beaten or not (colour pass, 2026-11-13); the ★ says it is beaten
             _chase.Visibility = _chase.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 

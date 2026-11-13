@@ -21,7 +21,10 @@ public partial class MainWindow
     /// <summary>New session's name since it left the card (0.9.13), in the ⋯ menu and the tray.</summary>
     public const string ClearAllText = "Clear everything";
 
-    string _shareTip = "";
+    /// <summary>The Farming count has been drawn once, so Share has something to open on (it was the header's Share button's IsEnabled).</summary>
+    bool _shareReady;
+    /// <summary>The Farming ⋯ menu's rows for the two things that left the header (UX pass 2026-11-13).</summary>
+    public const string ShareText = "Share a picture…", FullViewText = "Full view";
 
     void InitShortcuts()
     {
@@ -41,16 +44,15 @@ public partial class MainWindow
             var p = part;
             InputBindings.Add(new KeyBinding(new KeyAct(() => { if (!_welcome && _part != p) ShowPart(p); }), key, ModifierKeys.Control));
         }
-        OptionsBtn.ToolTip = $"{OptionsBtn.ToolTip}\n{OptionsKey} opens it.";
-        _shareTip = $"{ShareCardBtn.ToolTip}\n{CopyPictureKey} copies the picture without opening it.";
-        // a button that is off says why: Start until a server is chosen, Share until the game is being read
-        foreach (var b in new[] { StartBtn, ShareCardBtn }) { ToolTipService.SetShowOnDisabled(b, true); b.IsEnabledChanged += (_, _) => ButtonTips(); }
+        OptionsBtn.ToolTip = $"{OptionsBtn.ToolTip}\n{OptionsKey} opens them.";
+        // a button that is off says why: Start until a server is chosen (Share, in the Farming ⋯ menu, says so on its row)
+        ToolTipService.SetShowOnDisabled(StartBtn, true); StartBtn.IsEnabledChanged += (_, _) => ButtonTips();
         // whether a run would clear counts changes with every pickup: said as the tooltip opens (0.9.13)
         HoverTip.Opening += el => { if (ReferenceEquals(el, StartBtn)) ButtonTips(); };
         ButtonTips();
     }
 
-    /// <summary>Start run's and Share's tooltips: what they do and their keys, or why they are off.</summary>
+    /// <summary>Start run's tooltip: what it does and its key, or why it is off.</summary>
     void ButtonTips()
     {
         var key = HotkeyText;
@@ -58,7 +60,6 @@ public partial class MainWindow
             ? (!HasServer && !Farming ? "Pick your server first, in Options › Server: prices and drops are kept per server." : "A moment: the run is starting or stopping.")
             : (key.Length > 0 ? $"{StartTip}\n{key} in the game starts or stops it." : StartTip)
               + (!Farming && HasCounts() ? "\nStarting a run clears the counts on the tables first (Undo brings them back). The Today strip keeps the day." : "");
-        if (_shareTip.Length > 0) ShareCardBtn.ToolTip = ShareCardBtn.IsEnabled ? _shareTip : "Nothing to share yet: Share opens once the game is being read.";
     }
 
     /// <summary>Ctrl+N and the tray's Clear everything: the Farming page, then the ⋯ menu's own clear with its Undo bar.</summary>

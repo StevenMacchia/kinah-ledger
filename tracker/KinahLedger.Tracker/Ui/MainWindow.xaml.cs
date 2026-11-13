@@ -143,7 +143,8 @@ public partial class MainWindow : Window
         // everything that can be set is in the Options window, so the ledger never moves or grows for it
         OptionsBtn.Click += (_, _) => OpenOptions();
         SiteBtn.Click += (_, _) => Open(SiteUrl);
-        ServerChip.MouseLeftButtonUp += (_, _) => ShowCharacterMenu();   // the character and the server (Ui/MainWindow.Characters.cs)
+        CharChip.Click += (_, _) => ShowCharacterMenu();   // the character chip and the server line open the switcher (Ui/MainWindow.Characters.cs)
+        ServerChip.MouseLeftButtonUp += (_, _) => ShowCharacterMenu();
         FixLink.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
         ReadingLine.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Reading);   // the reading line and its dot (0.9.10)
         Version.Text = "v" + Upload.RunPayload.AppVersion;
@@ -159,9 +160,6 @@ public partial class MainWindow : Window
         ReportBuffer.KeepUiFrames = _prefs.SendReportFrames;
         MiscountLink.Click += (_, _) => ReportMiscount();
         DiscordLink.Click += (_, _) => Open(DiscordUrl);
-        // Compact and Full view: the header button switches, and the summary's link opens Full view
-        // the view as it shows: on a screen too narrow for Full view, a click asks for it again and says why it can't
-        ViewBtn.Click += (_, _) => SetView(!FullShown);
         // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
         OddsAsPct = _prefs.OddsAsPercent; ShowOddsHeader();
         PctHeader.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; OddsAsPct = _prefs.OddsAsPercent = !_prefs.OddsAsPercent; if (!_demo) _prefs.Save(); ShowOddsHeader(); Redraw(); };
@@ -391,11 +389,12 @@ public partial class MainWindow : Window
     void Redraw()
     {
         var e = Shown();
-        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); FillToday(); return; }   // a layout render keeps its sample
+        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); FillToday(); BalanceFull(); return; }   // a layout render keeps its sample
         if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; _lootHere = null; FillLoot(); }
         FillLive();
         FillAccuracyCard();
         FillToday();
+        BalanceFull();   // Full view: Just dropped and Where to farm in the column that evens the two out (Ui/MainWindow.QuestFull.cs)
     }
 
     /// <summary>One line of the recent pickups strip; Tip says, in plain words, how it was read (on hover).</summary>
@@ -1077,7 +1076,7 @@ public partial class MainWindow : Window
         // LOOT's first side (Ui/MainWindow.Loot.cs): what this count picked up and its total, with how it adds up on hover.
         // It replaced the SESSION line (2026-10-28), which was this same count; only what happened: gathering doesn't say "0 kills"
         _hasSummary = e.Events > 0;
-        ShareCardBtn.IsEnabled = true;   // the sheet says what each of its sides waits for
+        _shareReady = true;   // the sheet says what each of its sides waits for (Share is in the Farming ⋯ menu)
         var sums = new List<string>();
         if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
         if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); if (!PriceBook.ShowGross) sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
@@ -1278,19 +1277,20 @@ public partial class MainWindow : Window
         RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
         // the feed and the rate with LOOT and Where to farm now under them and the footer closing that card, in both views;
         // Full view adds the drops and the chips on the right
-        if (full) { MoveTo(SummaryCard, QuestRight, 0); MoveTo(WhereSection, QuestRight, 3); }
-        else { MoveTo(SummaryCard, LeftCol, LeftCol.Children.IndexOf(ChipPanel) + 1); MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1); }
+        // Full view: the bag heads the second column; Just dropped and Where to farm go to whichever column evens the two out (BalanceFull)
+        if (full) { MoveTo(SummaryCard, QuestRight, 0); _fullSides = null; }
+        else
+        {
+            MoveTo(SummaryCard, LeftCol, LeftCol.Children.IndexOf(BagStrip) + 1);
+            MoveTo(FeedCard, LeftCol, LeftCol.Children.IndexOf(GoalsCard) + 1);
+            MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1);
+        }
         if (!farm || full) BagStrip.Visibility = Visibility.Collapsed;
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
-        // Share's round button in the header goes with the Farming page, as the card's button did (Quest, 2026-11-07)
-        ShareCardBtn.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
-        if (!farm) { ChipsRow.Visibility = Visibility.Collapsed; ChipPanel.Visibility = Visibility.Collapsed; }
+        if (!farm) { HeroStats.Visibility = Visibility.Collapsed; ChipPanel.Visibility = Visibility.Collapsed; }
         System.Windows.Controls.Grid.SetRow(StatusBar, 3); System.Windows.Controls.Grid.SetColumnSpan(StatusBar, 2);
         HeadStack.Width = full ? 662 * 2 + 16 : 662;
         StatusBar.Width = 662;
-        ViewFill.Opacity = full ? 1 : 0.25;
-        ViewBtn.ToolTip = full ? "Compact view: one column" : _fullTooWide ? "Full view needs a wider screen than this one" : "Full view: twice as wide, with the drop tables beside the loot";
-        ViewBtn.Visibility = craft || events || quests || _welcome ? Visibility.Collapsed : Visibility.Visible;
         // Session and Where to farm now open in Full view, folded in Compact, until the player opens or folds them
         _secUser.Remove("Session"); _secUser.Remove("Where");
         ApplyPlayerView(craft, farm, full);
@@ -1824,7 +1824,7 @@ public partial class MainWindow : Window
             _trayToggle.ShortcutKeyDisplayString = HotkeyText;   // the in-game key, when one is set
             _trayToggle.Enabled = Farming || (HasServer && !_welcome);
             clearAll.Enabled = !RunOn && !_welcome;
-            copyPic.Enabled = ShareCardBtn.IsEnabled && !_welcome;
+            copyPic.Enabled = _shareReady && !_welcome;
         };
         var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
         var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
@@ -1942,7 +1942,7 @@ public partial class MainWindow : Window
     public void ShowDemo(string kind = "Open world", UiState? state = null)
     {
         _demo = true; Motion.Still = true; _uiState = state;
-        _demoCharacter = state?.Character ?? "Character 1";   // the header's character (Ui/MainWindow.Characters.cs)
+        _demoCharacter = state?.Character ?? DemoCharacterName;   // the header's character (Ui/MainWindow.Characters.cs)
         bool market = kind == "Market";
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false;
         ZoneLbl.Text = "Western Cantas Valley";
@@ -1970,6 +1970,8 @@ public partial class MainWindow : Window
             ShowPart("Quests", byHand: false);
             // KL_QUESTS_TALL=1: the whole page without its scroll cap, for a look below the fold (Your goals, Done)
             if (Environment.GetEnvironmentVariable("KL_QUESTS_TALL") == "1") LowerScroll.MaxHeight = double.PositiveInfinity;
+            // KL_QUESTS_SCROLL=end: the page scrolled to its foot, for a look at how it ends
+            if (Environment.GetEnvironmentVariable("KL_QUESTS_SCROLL") == "end") Dispatcher.BeginInvoke(() => LowerScroll.ScrollToEnd(), System.Windows.Threading.DispatcherPriority.Loaded);
             return;
         }
         if (kind == "CraftingEmpty")

@@ -252,7 +252,7 @@ public partial class MainWindow
             bool on = d.Date == picked.Date;
             var col = new StackPanel { Background = Brushes.Transparent, Margin = new Thickness(i == 0 ? 0 : 5, 0, i == days.Count - 1 ? 0 : 5, 0), Tag = d.Key + (on ? "|on" : "") };
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom };
-            var val = PT(d.BeforeHistory ? "–" : Fk(v), on ? accent : v > 0 ? "Muted" : "Faint", 11.5, null, "MonoFont");
+            var val = PT(d.BeforeHistory ? "–" : Fk(v), on ? accent : v > 0 ? "Muted" : "Faint", 12, null, "MonoFont");
             val.HorizontalAlignment = HorizontalAlignment.Center; val.Margin = new Thickness(0, 0, 0, 6);
             stack.Children.Add(val);
             Border bar;
@@ -275,7 +275,7 @@ public partial class MainWindow
             var name = PT(DayLabel(d), on ? accent : "Muted", 12, FontWeights.Normal);
             name.HorizontalAlignment = HorizontalAlignment.Center; name.Margin = new Thickness(0, 8, 0, 0);
             col.Children.Add(name);
-            var word = PT(d.BeforeHistory ? "–" : under(d), "Faint", 11.5);
+            var word = PT(d.BeforeHistory ? "–" : under(d), "Faint", 12);
             word.HorizontalAlignment = HorizontalAlignment.Center; word.Margin = new Thickness(0, 1, 0, 0);
             col.Children.Add(word);
             if (!d.BeforeHistory)
@@ -319,7 +319,7 @@ public partial class MainWindow
         var head = new Grid { Margin = new Thickness(0, 0, 0, chips.Count > 0 ? 10 : 0) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var t = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Tag = "week-line" };
-        var dn = PR(day.ToUpperInvariant(), "SecGold", FontWeights.Medium); dn.FontSize = 11;
+        var dn = PR(day.ToUpperInvariant(), "Muted", FontWeights.SemiBold); dn.FontSize = 12;
         t.Inlines.Add(dn);
         if (line.Length > 0) t.Inlines.Add(PR("   " + line, "Muted"));
         head.Children.Add(t);

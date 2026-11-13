@@ -61,7 +61,7 @@ public partial class OptionsWindow
     static TextBlock KeyText(string text)
     {
         var t = new TextBlock { Text = text, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
-        t.SetResourceReference(TextBlock.ForegroundProperty, "Gold");
+        t.SetResourceReference(TextBlock.ForegroundProperty, "Ink");   // a key's name, not money (colour pass, 2026-11-13)
         return t;
     }
 

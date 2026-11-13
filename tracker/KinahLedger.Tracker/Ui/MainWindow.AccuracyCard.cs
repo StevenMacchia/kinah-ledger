@@ -72,7 +72,7 @@ public partial class MainWindow
     Border BuildAccuracyCard(AccuracyCardView v)
     {
         var (card, body) = CkShell(460);
-        var title = CkText(AccuracyCardView.Title, CkGold, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 14, 20, 0);
+        var title = CkText(AccuracyCardView.Title, CkInk, 16, FontWeights.Normal, display: true); title.Margin = new Thickness(20, 14, 20, 0);
         body.Children.Add(title);
         var line = CkText(v.Line, CkInk, 14); line.Margin = new Thickness(20, 6, 20, 0); line.TextWrapping = TextWrapping.Wrap; line.TextTrimming = TextTrimming.None;
         if (v.Line.Length > 0) body.Children.Add(line);
@@ -105,7 +105,7 @@ public partial class MainWindow
             Grid.SetColumn(what, 1); g.Children.Add(what);
             var acts = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 1, 0, 0) };
             var check = r.Check;
-            var report = new Hyperlink(new Run("Report")) { Foreground = Ck(CkGold), TextDecorations = null, ToolTip = "Save what was read around this moment to a folder on this PC, for a bug report." };
+            var report = new Hyperlink(new Run("Report")) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = "Save what was read around this moment to a folder on this PC, for a bug report." };
             report.Click += (_, _) => { if (_card != null) _card.IsOpen = false; ReportCheck(check); };
             var fine = new Hyperlink(new Run("Fine")) { Foreground = Ck(CkMuted), TextDecorations = null, ToolTip = "It's right: take it off this list for this session." };
             fine.Click += (_, _) => { if (_demo) _demoScore?.Dismiss(check.Id); else _watcher.Chat?.Score.Dismiss(check.Id); FillAccuracyCard(); UpdateHud(); };

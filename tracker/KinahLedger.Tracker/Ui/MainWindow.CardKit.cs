@@ -13,10 +13,12 @@ namespace KinahLedger.Ui;
 /// </summary>
 public partial class MainWindow
 {
-    // the Quest palette (2026-11-07): plum body, Kinah gold, mint for what pays, coral for a miss; fixed, as the game's own tooltips are
-    static readonly Color CkInk = Color.FromRgb(0xED, 0xEF, 0xF5), CkMuted = Color.FromRgb(0xA2, 0xA8, 0xBA), CkFaint = Color.FromRgb(0x6D, 0x73, 0x87),
+    // the Quest palette (2026-11-07): plum body, Kinah gold, mint for what pays, coral for a miss; fixed, as the game's own tooltips are.
+    // The colour pass (2026-11-13) locked the roles as the window's: gold money and progress, mint a gain or a success, CkLink
+    // (Night's Link) the links and text buttons, the headings muted; CkMuted and CkFaint a step lighter for AA at 12 px
+    static readonly Color CkInk = Color.FromRgb(0xED, 0xEF, 0xF5), CkMuted = Color.FromRgb(0xAF, 0xB5, 0xC6), CkFaint = Color.FromRgb(0x86, 0x8D, 0xA1),
         CkGold = Color.FromRgb(0xF5, 0xB9, 0x42), CkGoldRule = Color.FromRgb(0xD9, 0x9A, 0x24), CkGood = Color.FromRgb(0x3D, 0xD6, 0x8C), CkBad = Color.FromRgb(0xF2, 0x6D, 0x6D),
-        CkWarn = Color.FromRgb(0xF7, 0xA0, 0x72), CkSlot = Color.FromRgb(0x0D, 0x0F, 0x14), CkSlotLine = Color.FromRgb(0x23, 0x27, 0x36), CkFrame = Color.FromRgb(0x2E, 0x33, 0x46);
+        CkWarn = Color.FromRgb(0xF7, 0xA0, 0x72), CkLink = Color.FromRgb(0x9D, 0xB2, 0xE8), CkSlot = Color.FromRgb(0x0D, 0x0F, 0x14), CkSlotLine = Color.FromRgb(0x23, 0x27, 0x36), CkFrame = Color.FromRgb(0x2E, 0x33, 0x46);
 
     static SolidColorBrush Ck(Color c, byte a = 255) => new(Color.FromArgb(a, c.R, c.G, c.B));
 
@@ -101,15 +103,15 @@ public partial class MainWindow
         };
     }
 
-    /// <summary>A gold section heading with a rule fading out to its right.</summary>
+    /// <summary>A section heading in the muted tone (gold until the colour pass, 2026-11-13: gold is money) with a rule fading out to its right.</summary>
     static FrameworkElement CkSection(string text)
     {
         var g = new Grid { Margin = new Thickness(20, 16, 20, 8) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition());
-        var t = CkText(text, CkGoldRule, 11, FontWeights.Medium); t.Margin = new Thickness(0, 0, 10, 0);
+        var t = CkText(text, CkMuted, 12, FontWeights.SemiBold); t.Margin = new Thickness(0, 0, 10, 0);
         g.Children.Add(t);
-        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Color.FromArgb(0x66, CkGoldRule.R, CkGoldRule.G, CkGoldRule.B), Colors.Transparent, 0) };
+        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Color.FromArgb(0x99, CkFrame.R, CkFrame.G, CkFrame.B), Colors.Transparent, 0) };
         Grid.SetColumn(rule, 1); g.Children.Add(rule);
         return g;
     }
@@ -121,7 +123,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var l = new StackPanel();
         l.Children.Add(CkText(left, CkInk, 13.5));
-        if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 11.5));
+        if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 12));
         g.Children.Add(l);
         var r = CkText(right, rightColor, rightSize, FontWeights.Normal, mono); r.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(r, 1); g.Children.Add(r);
@@ -167,17 +169,17 @@ public partial class MainWindow
         Background = Ck(Color.FromRgb(0x1E, 0x22, 0x30)), Child = CkText(text, ink, 12),
     };
 
-    /// <summary>The tinted footer: a label with a small line under it, and a big figure, green or red.</summary>
+    /// <summary>The tinted footer: a label with a small line under it, and a big figure: gold, the money a run made (mint until the colour pass, 2026-11-13; the rise against the usual is the green line above it), red for a loss.</summary>
     static Border CkFooter(string label, string sub, string value, bool good)
     {
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var l = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         l.Children.Add(CkText(label, CkMuted, 13.5));
-        if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 11.5));
+        if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 12));
         g.Children.Add(l);
-        var v = CkText(value, good ? CkGood : CkBad, 26, FontWeights.Normal, display: true); Grid.SetColumn(v, 1); g.Children.Add(v);
-        var tint = good ? Color.FromRgb(0x1B, 0x3A, 0x34) : Color.FromRgb(0x3A, 0x1E, 0x24);
+        var v = CkText(value, good ? CkGold : CkBad, 26, FontWeights.Normal, display: true); Grid.SetColumn(v, 1); g.Children.Add(v);
+        var tint = good ? Color.FromRgb(0x33, 0x2A, 0x16) : Color.FromRgb(0x3A, 0x1E, 0x24);
         return new Border
         {
             Child = g, Margin = new Thickness(0, 16, 0, 0), Padding = new Thickness(20, 12, 20, 14), BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Ck(CkSlotLine),
@@ -192,7 +194,7 @@ public partial class MainWindow
         foreach (var (text, url) in links)
         {
             if (t.Inlines.Count > 0) t.Inlines.Add(new System.Windows.Documents.Run("   ·   ") { Foreground = Ck(CkFaint) });
-            var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(text)) { Foreground = Ck(CkGold), TextDecorations = null };
+            var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(text)) { Foreground = Ck(CkLink), TextDecorations = null };
             h.Click += (_, _) => { Open(url); if (_card != null) _card.IsOpen = false; };
             t.Inlines.Add(h);
         }

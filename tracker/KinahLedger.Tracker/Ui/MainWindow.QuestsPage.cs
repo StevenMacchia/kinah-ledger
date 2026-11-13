@@ -68,10 +68,11 @@ public partial class MainWindow
         bool on = IsPinned(q);
         var b = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(8), Margin = new Thickness(6, 0, 0, 0), Background = Brushes.Transparent, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center,
             ToolTip = on ? "Pinned to Next up. Click to unpin." : "Pin to Next up: it takes one of the two material rows on the Farming page." };
-        var ic = QIcon("Pin", 13, on ? "Gold" : "Faint", 2); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center;
-        if (on) ic.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Gold");   // filled when pinned, so the two states read apart
+        // a control's state, in the link tone (colour pass, 2026-11-13; gold until then, which read as money)
+        var ic = QIcon("Pin", 13, on ? "Link" : "Faint", 2); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center;
+        if (on) ic.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Link");   // filled when pinned, so the two states read apart
         b.Child = ic;
-        if (on) b.SetResourceReference(Border.BackgroundProperty, "GoldTint");
+        if (on) b.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         b.MouseEnter += (_, _) => b.SetResourceReference(Border.BackgroundProperty, "HoverTint");
         b.MouseLeave += (_, _) => { if (on) b.SetResourceReference(Border.BackgroundProperty, "GoldTint"); else b.Background = Brushes.Transparent; };
         b.MouseLeftButtonUp += (_, e) => { e.Handled = true; TogglePin(q); };
@@ -151,7 +152,7 @@ public partial class MainWindow
         // All time: the long chains from this PC's tally, the nearest to done first; two at rest, the rest behind "N more"
         // (2026-11-08 review: seven "1,000 X · 5 pts" rows read as one)
         QuestsAllTimeHost.Children.Clear();
-        QuestsAllTimeHost.Children.Add(QHead("Globe", "All time", "this PC's tally since quests began"));
+        QuestsAllTimeHost.Children.Add(QHead("Globe", "All time", "this PC's tally since quests began", quiet: true));
         var atRows = allTime.Where(q => !Repeats(q)).OrderByDescending(q => q.Share).ToList();
         bool atOpen = QOpen("quests-alltime");
         int atShow = atOpen || atRows.Count <= AllTimeAtRest + 1 ? atRows.Count : AllTimeAtRest;
@@ -176,16 +177,16 @@ public partial class MainWindow
         QuestsDoneHost.Children.Clear();
         var byDay = Quests.DoneByDay(_questLog, nowLocal);
         // the points are on the page's head and each day's label, so the head counts the quests alone
-        QuestsDoneHost.Children.Add(QHead("Check", "Done", _questLog.Done.Count == 0 ? "" : $"{_questLog.Done.Count} quest{(_questLog.Done.Count == 1 ? "" : "s")} in the last {Quests.KeepDays} days"));
+        QuestsDoneHost.Children.Add(QHead("Check", "Done", _questLog.Done.Count == 0 ? "" : $"{_questLog.Done.Count} quest{(_questLog.Done.Count == 1 ? "" : "s")} in the last {Quests.KeepDays} days", quiet: true));
         if (byDay.Count == 0) QuestsDoneHost.Children.Add(PageNote("Nothing reached yet. A quest you reach shows on the panel over the game for a few seconds, then lands here."));
         int days = 0; bool earlierOpen = QOpen("quests-earlier"); int hidden = 0, hiddenPts = 0;
         foreach (var (day, done) in byDay)
         {
             bool recent = days < 2 || earlierOpen;
             if (!recent) { hidden += done.Count; hiddenPts += done.Sum(d => d.Points); days++; continue; }
-            var label = QT(day == nowLocal.Date ? "Today" : day == nowLocal.Date.AddDays(-1) ? "Yesterday" : day.ToString("ddd MMM d", System.Globalization.CultureInfo.InvariantCulture), 10.5, FontWeights.Bold, "Faint");
+            var label = QT(day == nowLocal.Date ? "Today" : day == nowLocal.Date.AddDays(-1) ? "Yesterday" : day.ToString("ddd MMM d", System.Globalization.CultureInfo.InvariantCulture), 12, FontWeights.Bold, "Faint");
             label.Margin = new Thickness(0, days == 0 ? 6 : 10, 0, 2);
-            var dayPts = QT(Quests.Pts(done.Sum(d => (long)d.Points)), 10.5, FontWeights.Bold, "Muted"); dayPts.HorizontalAlignment = HorizontalAlignment.Right;
+            var dayPts = QT(Quests.Pts(done.Sum(d => (long)d.Points)), 12, FontWeights.Bold, "Muted"); dayPts.HorizontalAlignment = HorizontalAlignment.Right;
             var lg = new Grid(); lg.Children.Add(label); lg.Children.Add(dayPts);
             QuestsDoneHost.Children.Add(lg);
             int k = 0;
@@ -204,11 +205,11 @@ public partial class MainWindow
     /// <summary>All time's rows at rest; a fold of one is not worth its row, so three show as three.</summary>
     const int AllTimeAtRest = 2;
 
-    /// <summary>A card's fold at its foot: "5 more  ›" in gold, a click opens or closes it.</summary>
+    /// <summary>A card's fold at its foot: "5 more  ›" as a link, a click opens or closes it.</summary>
     static TextBlock FoldLink(string text, Action click)
     {
-        var t = QT(text, 11.5, FontWeights.SemiBold, "Gold");
-        t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent; t.Margin = new Thickness(0, 8, 0, 0);
+        var t = QLinkify(QT(text, 12, FontWeights.SemiBold, "Link"));
+        t.Margin = new Thickness(0, 8, 0, 0);
         t.MouseLeftButtonUp += (_, _) => click();
         return t;
     }

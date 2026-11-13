@@ -169,9 +169,9 @@ public partial class MainWindow
             tile.RenderTransform = _tileScale;
             _ring = Motion.BurstRing(c, MomentTile, MomentRingStroke);
 
-            _label = new TextBlock { Text = HudRare.LabelOf(f.Grade, f.Watched), FontSize = 11.5, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
+            _label = new TextBlock { Text = HudRare.LabelOf(f.Grade, f.Watched), FontSize = 12, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
             _label.SetResourceReference(TextBlock.ForegroundProperty, tone);
-            _moreText = new TextBlock { FontSize = 11.5, FontWeight = FontWeights.SemiBold };
+            _moreText = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
             _moreText.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
             _morePill = new Border { CornerRadius = new CornerRadius(9), Padding = new Thickness(8, 1, 8, 2), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), Child = _moreText };
             _morePill.SetResourceReference(Border.BackgroundProperty, "Card2");

@@ -88,7 +88,7 @@ public sealed partial class HudCard
     /// </summary>
     void DrawRing(double share, bool beat, bool rose)
     {
-        var tone = Rgb(beat ? MintC : GoldC);
+        var tone = Rgb(GoldC);   // gold beaten or not, as the window's ring (colour pass, 2026-11-13); the star and the pulse say it is beaten
         void Draw(double s)
         {
             _ringHost.Children.Clear();
@@ -149,7 +149,7 @@ public sealed partial class HudCard
         var (share, _, beat) = Chase(values);
         if (share >= 0)
         {
-            var tone = Rgb(beat ? MintC : GoldC);
+            var tone = Rgb(GoldC);
             Motion.ReplaySlide(_ringHost, _key + "ring", share * 0.7, share, s => { _ringHost.Children.Clear(); _ringHost.Children.Add(Ring(44, 4.5, s, tone, beat ? "★" : $"{Math.Round(Math.Min(s, 1) * 100):0}", beat ? "best" : "of best")); });
         }
         if (_tiles.Children.Count > 0 && _tiles.Children[0] is FrameworkElement t0 && Picks(values).FirstOrDefault() is { } fp) Arrived(t0, fp);
