@@ -3238,6 +3238,27 @@ options: --process aion[,other]");
             var find = GatheringCatalog.Find(items.NameOf(pid));
             long bundles = spk.Engine.Items.GetValueOrDefault(pid) + spk.Engine.ItemsBound.GetValueOrDefault(pid);
             var finds = spk.Engine.SkillSnapshot().GetValueOrDefault(GatherFamily.Find);
+            {
+                // Wrathful Ego's table slot, as the live read voted it (2026-11-13 12:11 Fire Temple): its own icon closest at 48, the
+                // lookalike icons of Wrathful Will and Mind within a quarter, so the picture alone can't call it; the chat named it
+                static RewardGrid.Slot EgoSlot() => new(new System.Drawing.Rectangle(0, 0, 135, 135), "Unique", "", 1,
+                    new() { ("Icon_Item_Material_Craft_Draconic_L_lv3_04", 48), ("Icon_Item_Material_Craft_Draconic_L_lv2_04", 52), ("Icon_Item_Material_Craft_Draconic_L_lv1_04", 55) });
+                var alone = TrackerSession.SlotName(items, EgoSlot());
+                var byChat = TrackerSession.SlotName(items, EgoSlot(), n => n == "Wrathful Ego");
+                // ...and the whole way: the chat's line in a Fire Temple run, then its table with that slot: the run has its Wrathful Ego
+                var we0 = new DateTime(2026, 11, 13, 17, 10, 0, DateTimeKind.Utc);
+                var (swe, _) = Session(we0.AddMinutes(-6), "Fire Temple");
+                swe.ApplyZone("Fire Temple", we0.AddMinutes(-5)); swe.UpdateDoing(we0.AddMinutes(-5));
+                var weChat = new List<string> { "[Player1] pull", "Wrathful Ego acquired." };
+                for (int i = 0; i < 3; i++) swe.ProcessChat(new List<string>(weChat), we0.AddSeconds(i * 0.4));
+                swe.FlushVotes(we0.AddSeconds(2));
+                swe.ApplyGrid(new List<RewardGrid.Slot> { EgoSlot() }, we0.AddSeconds(4));
+                var weRun = swe.Instances.CurrentRun ?? swe.Instances.Snapshot().LastOrDefault();
+                long egoId = items.IdOf("Wrathful Ego");
+                long egoInRun = weRun == null ? -1 : weRun.Items.Concat(weRun.BoundItems).Where(kv => items.NameOf(kv.Key).StartsWith("Wrathful Ego")).Sum(kv => kv.Value);
+                Check("a table slot two lookalike icons can't call, which the chat named with the table (Wrathful Ego): named by the chat, counted once",
+                    $"{alone ?? "none"} | {byChat ?? "none"} | run {egoInRun}", "none | Wrathful Ego | run 1");
+            }
             Check("Poko's Skin Bundle from a node: one, a rare find (not a node), rare though unpriced, its icon from the extras",
                 $"{bundles} {find?.AnyNode} {finds?.Items} {finds?.Nodes} {RareGate.IsRare(items, pid, false)} {items.Get(pid)?.Icon.Length > 0} {GatheringCatalog.IsFindLine("Poko's Skin Bundle (Bound) acquired.")}",
                 "1 True 1 0 True True True");
