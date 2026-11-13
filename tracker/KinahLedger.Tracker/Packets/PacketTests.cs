@@ -120,6 +120,28 @@ public static class PacketTests
         }
         Console.WriteLine($"decoder in this build: {(NativeDecoder.Available ? "yes (klnet.dll)" : "no (a build from the public source: the screen counts)")}");
 
+        // the local recording's keeping (Packets/PacketLog.cs): past 48 hours goes, then the oldest over the size, never the file being written
+        {
+            var keepFor = PacketLog.KeepFor; var keepBytes = PacketLog.KeepBytes;
+            try
+            {
+                if (Directory.Exists(PacketLog.Dir)) Directory.Delete(PacketLog.Dir, true);
+                Directory.CreateDirectory(PacketLog.Dir);
+                string F(string name, TimeSpan ago)
+                {
+                    var p = Path.Combine(PacketLog.Dir, name); File.WriteAllBytes(p, new byte[600]); File.SetLastWriteTimeUtc(p, DateTime.UtcNow - ago); return p;
+                }
+                var old = F("20261110-01.pcapng", TimeSpan.FromHours(50)); File.WriteAllText(Path.ChangeExtension(old, ".json"), "{}");
+                var a = F("20261113-20.pcapng", TimeSpan.FromHours(2)); var b = F("20261113-21.pcapng", TimeSpan.FromHours(1)); var cur = F("20261113-22.pcapng", TimeSpan.Zero);
+                PacketLog.KeepBytes = 1500;
+                new PacketLog().Prune(cur);
+                Check(!File.Exists(old) && !File.Exists(Path.ChangeExtension(old, ".json")) && !File.Exists(a) && File.Exists(b) && File.Exists(cur),
+                    "the traffic recording keeps 48 hours and the size limit, oldest out first, never the file being written");
+                Check(!PacketLog.Wanted || Environment.GetEnvironmentVariable("KL_PACKET_LOG") != null, "...and is off unless this PC asked for it");
+            }
+            finally { PacketLog.KeepFor = keepFor; PacketLog.KeepBytes = keepBytes; try { Directory.Delete(PacketLog.Dir, true); } catch (Exception) { } }
+        }
+
         Check(TcpTable.GameServer(new[] { new TcpTable.Link(me, 52139, IPAddress.Parse("34.149.33.84"), 443, 1), new TcpTable.Link(me, 57735, server, 13328, 1), new TcpTable.Link(IPAddress.Loopback, 57066, IPAddress.Loopback, 57065, 1) }) is { RemotePort: 13328 },
             "the game's server connection: not the web (443) and not this PC");
         Console.WriteLine(_fails == 0 ? "packet self-test passed" : $"packet self-test: {_fails} failed");
@@ -203,7 +225,8 @@ public static class Pcapng
 {
     public static IEnumerable<(DateTime At, byte[] Frame, int Link)> Read(string path)
     {
-        var d = File.ReadAllBytes(path);
+        byte[] d;   // a file the tracker is still writing reads too, up to its last whole block
+        using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) { d = new byte[fs.Length]; fs.ReadExactly(d); }
         int pos = 0;
         var ifaces = new List<(int Link, double Res)>();
         while (pos + 12 <= d.Length)
@@ -237,21 +260,60 @@ public static class Pcapng
         }
     }
 
+    /// <summary>A whole capture file of Ethernet frames at once (the tests); <see cref="PcapngWriter"/> writes one as it comes.</summary>
     public static void Write(string path, IEnumerable<(DateTime At, byte[] Frame)> frames)
     {
-        using var w = new BinaryWriter(File.Create(path));
-        void Block(uint type, byte[] body)
-        {
-            int pad = (4 - body.Length % 4) % 4, len = 12 + body.Length + pad;
-            w.Write(type); w.Write(len); w.Write(body); w.Write(new byte[pad]); w.Write(len);
-        }
-        Block(0x0A0D0D0A, BitConverter.GetBytes(0x1A2B3C4Du).Concat(BitConverter.GetBytes((ushort)1)).Concat(BitConverter.GetBytes((ushort)0)).Concat(BitConverter.GetBytes(-1L)).ToArray());
-        Block(1, BitConverter.GetBytes((ushort)1).Concat(BitConverter.GetBytes((ushort)0)).Concat(BitConverter.GetBytes(0u)).ToArray());
-        foreach (var (at, f) in frames)
-        {
-            ulong us = (ulong)((at - DateTime.UnixEpoch).Ticks / 10);
-            Block(6, BitConverter.GetBytes(0u).Concat(BitConverter.GetBytes((uint)(us >> 32))).Concat(BitConverter.GetBytes((uint)us))
-                .Concat(BitConverter.GetBytes((uint)f.Length)).Concat(BitConverter.GetBytes((uint)f.Length)).Concat(f).ToArray());
-        }
+        using var w = new PcapngWriter(path, 1);
+        foreach (var (at, f) in frames) w.Add(at, f);
     }
+}
+
+/// <summary>
+/// A pcapng file written frame by frame, as Wireshark and pktmon's etl2pcap write one: a section header, one interface
+/// (its link type, microsecond times) and an enhanced packet block per frame. Flushed now and then, so a recording cut short
+/// keeps what it had.
+/// </summary>
+public sealed class PcapngWriter : IDisposable
+{
+    readonly FileStream _f;
+    readonly BinaryWriter _w;
+    DateTime _flushed = DateTime.UtcNow;
+    public long Frames { get; private set; }
+    public long Bytes => _f.Position;
+
+    public PcapngWriter(string path, int linkType, int snapLen = 0)
+    {
+        _f = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read | FileShare.Delete);   // readable while it is written
+        _w = new BinaryWriter(_f);
+        // section header: byte-order magic, version 1.0, section length unknown (-1)
+        Block(0x0A0D0D0A, w => { w.Write(0x1A2B3C4Du); w.Write((ushort)1); w.Write((ushort)0); w.Write(-1L); });
+        // interface description: link type, reserved, snap length (0: no limit); no options, so microseconds
+        Block(1, w => { w.Write((ushort)linkType); w.Write((ushort)0); w.Write((uint)snapLen); });
+    }
+
+    /// <summary>One frame as captured; <paramref name="wireLength"/> is its length on the wire when more than was kept.</summary>
+    public void Add(DateTime atUtc, byte[] frame, int wireLength = 0)
+    {
+        ulong us = (ulong)((atUtc - DateTime.UnixEpoch).Ticks / 10);
+        Block(6, w =>
+        {
+            w.Write(0u); w.Write((uint)(us >> 32)); w.Write((uint)us);
+            w.Write((uint)frame.Length); w.Write((uint)Math.Max(wireLength, frame.Length)); w.Write(frame);
+        });
+        Frames++;
+        if ((DateTime.UtcNow - _flushed).TotalSeconds >= 2) { _w.Flush(); _flushed = DateTime.UtcNow; }
+    }
+
+    readonly MemoryStream _body = new();
+    void Block(uint type, Action<BinaryWriter> body)
+    {
+        _body.SetLength(0);
+        using (var bw = new BinaryWriter(_body, System.Text.Encoding.UTF8, leaveOpen: true)) body(bw);
+        int n = (int)_body.Length, pad = (4 - n % 4) % 4, len = 12 + n + pad;
+        _w.Write(type); _w.Write(len); _w.Write(_body.GetBuffer(), 0, n);
+        for (int i = 0; i < pad; i++) _w.Write((byte)0);
+        _w.Write(len);
+    }
+
+    public void Dispose() { _w.Flush(); _w.Dispose(); }
 }
