@@ -143,7 +143,8 @@ public partial class MainWindow : Window
         // everything that can be set is in the Options window, so the ledger never moves or grows for it
         OptionsBtn.Click += (_, _) => OpenOptions();
         SiteBtn.Click += (_, _) => Open(SiteUrl);
-        ServerChip.MouseLeftButtonUp += (_, _) => ShowCharacterMenu();   // the character and the server (Ui/MainWindow.Characters.cs)
+        CharChip.Click += (_, _) => ShowCharacterMenu();   // the character chip and the server line open the switcher (Ui/MainWindow.Characters.cs)
+        ServerChip.MouseLeftButtonUp += (_, _) => ShowCharacterMenu();
         FixLink.Click += (_, _) => OpenOptions(OptionsWindow.Page.Reading);
         ReadingLine.MouseLeftButtonUp += (_, _) => OpenOptions(OptionsWindow.Page.Reading);   // the reading line and its dot (0.9.10)
         Version.Text = "v" + Upload.RunPayload.AppVersion;
@@ -159,9 +160,6 @@ public partial class MainWindow : Window
         ReportBuffer.KeepUiFrames = _prefs.SendReportFrames;
         MiscountLink.Click += (_, _) => ReportMiscount();
         DiscordLink.Click += (_, _) => Open(DiscordUrl);
-        // Compact and Full view: the header button switches, and the summary's link opens Full view
-        // the view as it shows: on a screen too narrow for Full view, a click asks for it again and says why it can't
-        ViewBtn.Click += (_, _) => SetView(!FullShown);
         // a click on ODDS switches "1 in 21" and "4.9%" (and doesn't fold the section under it)
         OddsAsPct = _prefs.OddsAsPercent; ShowOddsHeader();
         PctHeader.MouseLeftButtonUp += (_, ev) => { ev.Handled = true; OddsAsPct = _prefs.OddsAsPercent = !_prefs.OddsAsPercent; if (!_demo) _prefs.Save(); ShowOddsHeader(); Redraw(); };
@@ -1077,7 +1075,7 @@ public partial class MainWindow : Window
         // LOOT's first side (Ui/MainWindow.Loot.cs): what this count picked up and its total, with how it adds up on hover.
         // It replaced the SESSION line (2026-10-28), which was this same count; only what happened: gathering doesn't say "0 kills"
         _hasSummary = e.Events > 0;
-        ShareCardBtn.IsEnabled = true;   // the sheet says what each of its sides waits for
+        _shareReady = true;   // the sheet says what each of its sides waits for (Share is in the Farming ⋯ menu)
         var sums = new List<string>();
         if (kinah > 0 || _mode != Mode.Gather) sums.Add($"Kinah picked up: {kinah:N0}, from {t.Kills:N0} kill{(t.Kills == 1 ? "" : "s")}. Quest rewards and bound Kinah are left out.");
         if (s.Priced > 0) { sums.Add($"Loot at the lowest Market price: {s.Gross:N0}."); if (!PriceBook.ShowGross) sums.Add($"Market fee and tax, {1 - PriceBook.SellerKeeps:P0}: −{s.Gross - s.Value:N0}."); }
@@ -1282,15 +1280,10 @@ public partial class MainWindow : Window
         else { MoveTo(SummaryCard, LeftCol, LeftCol.Children.IndexOf(ChipPanel) + 1); MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1); }
         if (!farm || full) BagStrip.Visibility = Visibility.Collapsed;
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
-        // Share's round button in the header goes with the Farming page, as the card's button did (Quest, 2026-11-07)
-        ShareCardBtn.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
         if (!farm) { ChipsRow.Visibility = Visibility.Collapsed; ChipPanel.Visibility = Visibility.Collapsed; }
         System.Windows.Controls.Grid.SetRow(StatusBar, 3); System.Windows.Controls.Grid.SetColumnSpan(StatusBar, 2);
         HeadStack.Width = full ? 662 * 2 + 16 : 662;
         StatusBar.Width = 662;
-        ViewFill.Opacity = full ? 1 : 0.25;
-        ViewBtn.ToolTip = full ? "Compact view: one column" : _fullTooWide ? "Full view needs a wider screen than this one" : "Full view: twice as wide, with the drop tables beside the loot";
-        ViewBtn.Visibility = craft || events || quests || _welcome ? Visibility.Collapsed : Visibility.Visible;
         // Session and Where to farm now open in Full view, folded in Compact, until the player opens or folds them
         _secUser.Remove("Session"); _secUser.Remove("Where");
         ApplyPlayerView(craft, farm, full);
@@ -1824,7 +1817,7 @@ public partial class MainWindow : Window
             _trayToggle.ShortcutKeyDisplayString = HotkeyText;   // the in-game key, when one is set
             _trayToggle.Enabled = Farming || (HasServer && !_welcome);
             clearAll.Enabled = !RunOn && !_welcome;
-            copyPic.Enabled = ShareCardBtn.IsEnabled && !_welcome;
+            copyPic.Enabled = _shareReady && !_welcome;
         };
         var site = new WF.ToolStripMenuItem("kinahledger.com"); site.Click += (_, _) => Open(SiteUrl);
         var support = new WF.ToolStripMenuItem("Support on Ko-fi"); support.Click += (_, _) => Open(SupportUrl);
@@ -1942,7 +1935,7 @@ public partial class MainWindow : Window
     public void ShowDemo(string kind = "Open world", UiState? state = null)
     {
         _demo = true; Motion.Still = true; _uiState = state;
-        _demoCharacter = state?.Character ?? "Character 1";   // the header's character (Ui/MainWindow.Characters.cs)
+        _demoCharacter = state?.Character ?? DemoCharacterName;   // the header's character (Ui/MainWindow.Characters.cs)
         bool market = kind == "Market";
         _region = new DRect(96, 1664, 1338, 384); _prefs.ManualChat = false;
         ZoneLbl.Text = "Western Cantas Valley";

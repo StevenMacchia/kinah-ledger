@@ -46,7 +46,7 @@ public partial class MainWindow
 
     void InitShare()
     {
-        ShareCardBtn.Click += (_, _) => ToggleShare("Farming");
+        // the Farming page's Share is its ⋯ menu's first row since the UX pass (2026-11-13, Ui/MainWindow.Farming.cs MoreEntries)
         EventsShareBtn.Click += (_, _) => ToggleShare("Events");
     }
 

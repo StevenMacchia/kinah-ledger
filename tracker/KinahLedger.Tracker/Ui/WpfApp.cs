@@ -664,7 +664,7 @@ public static partial class WpfApp
         Check(keys.Contains((System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.OemComma)) && keys.Contains((System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.N))
               && keys.Contains((System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift, System.Windows.Input.Key.C)), "Ctrl+, Ctrl+N and Ctrl+Shift+C are bound in the window");
         Check(w.OptionsBtn.ToolTip is string ot && ot.Contains(MainWindow.OptionsKey) && w.MoreEntries().Any(e => e.Text == MainWindow.ClearAllText && e.Key == MainWindow.NewSessionKey)
-              && w.ShareCardBtn.ToolTip is string st && st.Contains(MainWindow.CopyPictureKey), "each button's tooltip says its key, and ⋯ › Clear everything says Ctrl+N");
+              && w.MoreEntries().Any(e => e.Text == MainWindow.ShareText && e.Key == MainWindow.CopyPictureKey), "each button's tooltip says its key, and ⋯ › Clear everything and Share a picture… say Ctrl+N and Ctrl+Shift+C");
 
         // 0.9.13: Start run is the fresh start. New session left the card (it is Clear everything in ⋯ and the tray); Start run
         // with counts on the tables clears them at once with an Undo bar, and Undo brings them back and cancels the run
@@ -682,14 +682,14 @@ public static partial class WpfApp
             Check(w.UndoShowing == null && w.ShownEventsForTest == counted && w.StartBtn.Content as string == "Start run",
                 $"Undo brings the counts back ({w.ShownEventsForTest}) and the run is not started");
         }
-        Check(System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.StartBtn) && System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.ShareCardBtn), "Start run and Share say why while they are off");
+        Check(System.Windows.Controls.ToolTipService.GetShowOnDisabled(w.StartBtn), "Start run says why while it is off");
 
         // Share (0.9.3, ShareA): the Farming card's button says Share and opens the sheet inside the card (never a window or a
         // menu) on This session, the character name off by default; typed but off it is nowhere, on it is in the head line
         {
             var keep = w.SharePrefsForTest;
             w.SharePrefsForTest = (false, "");
-            Check(System.Windows.Automation.AutomationProperties.GetName(w.ShareCardBtn) == "Share" && w.ShareCardBtn.IsEnabled, "the header's round Share button is named Share");
+            Check(w.MoreEntries().FirstOrDefault(e => e.Text == MainWindow.ShareText) is { Do: not null }, "Farming's ⋯ › Share a picture… opens the sheet");
             w.ToggleShareForTest("Farming"); DoEvents();
             var sh = w.ShareForTest();
             Check(sh.Open && sh.Host == "ShareHost" && sh.Scope == KinahLedger.Session.SharePicture.Session && !sh.Switch, $"Share opens inside the farming card on This session, name off ({sh.Host} {sh.Scope})");
@@ -707,6 +707,55 @@ public static partial class WpfApp
             w.ToggleShareForTest("Farming"); DoEvents();
             Check(!w.ShareForTest().Open && w.ShareHost.Visibility != Visibility.Visible, "Share again closes the sheet");
             w.SharePrefsForTest = keep;
+        }
+
+        // the header (UX pass 2026-11-13): the same two round buttons on every page, each with a tooltip in words; the character
+        // chip shows the character counted for with its class icon; the switcher lists every character, the one counted for
+        // first and marked, each with its icon, when it was played and its week, Rename on every row and Count for on the others
+        {
+            static IEnumerable<DependencyObject> Tree(DependencyObject d) => new[] { d }.Concat(LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>().SelectMany(Tree));
+            var seen = new List<string>();
+            foreach (var page in new[] { "Farming", "Crafting", "Events", "Quests" })
+            {
+                w.ShowPartForTest(page); DoEvents();
+                var shown = w.HeadButtons.Children.OfType<System.Windows.Controls.Button>().Where(b => b.Visibility == Visibility.Visible).ToList();
+                seen.Add(page + ": " + string.Join(", ", shown.Select(b => System.Windows.Automation.AutomationProperties.GetName(b))));
+                Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20), $"the header's round buttons on {page}: the site and Settings, each with a tooltip ({seen[^1]})");
+            }
+            Check(seen.Select(s => s[(s.IndexOf(':') + 1)..]).Distinct().Count() == 1, "...the same on every page");
+            w.ShowPartForTest("Farming"); DoEvents();
+            Check(w.MoreEntries().Any(e => e.Text == MainWindow.FullViewText && e.On != null), "Compact/Full is a switch in Farming's ⋯ menu");
+            var whoChip = w.CharChipForTest();
+            Check(whoChip.Shown && whoChip.Name == MainWindow.DemoCharacterName && whoChip.Picture, $"the header's chip shows the character counted for, with its class icon ({whoChip.Name}, icon drawn: {whoChip.Picture})");
+            var rows = w.SwitcherForTest();
+            Check(rows.Count == 3 && rows.Count(r => r.Counting) == 1 && rows[0].Counting && rows[0].Name == MainWindow.DemoCharacterName && rows[0].Status == "Counting now",
+                "the switcher lists the three characters, the one counted for first and marked: " + string.Join(" | ", rows.Select(r => $"{r.Name} ({r.Status})")));
+            Check(rows.All(r => r.Picture) && rows.Skip(1).All(r => r.Status.StartsWith("Played ")) && rows.All(r => r.Week.StartsWith("Last 7 days: ")),
+                "...each with its class icon, when it was played and its week: " + string.Join(" | ", rows.Select(r => r.Week)));
+            var card = w.SwitcherCardForTest();
+            var texts = Tree(card).OfType<System.Windows.Controls.TextBlock>().Select(t => t.Text).ToList();
+            var named = Tree(card).OfType<FrameworkElement>().Select(e => System.Windows.Automation.AutomationProperties.GetName(e)).Where(n => n.Length > 0).ToList();
+            Check(texts.Count(t => t == "Counting now") == 1 && rows.All(r => texts.Contains(r.Name)), "the card draws every name and one Counting now");
+            Check(named.Count(n => n.StartsWith("Rename ")) == 3 && named.Count(n => n.StartsWith("Count for ")) == 2 && named.Contains("Count as a new character"),
+                "...Rename on every row, Count for on the two others, and Count as a new character");
+
+            // another character's week is read from its own folder and nothing there is written (Session/CharacterLooks.cs)
+            var alt = TestTemp.Path("KinahLedger-options-test-character-" + Environment.ProcessId);
+            if (Directory.Exists(alt)) Directory.Delete(alt, true);
+            Directory.CreateDirectory(alt);
+            var today = DateTime.Today;
+            File.WriteAllText(Path.Combine(alt, "days.json"), System.Text.Json.JsonSerializer.Serialize(new Session.DayFile
+            {
+                Since = Session.DayStore.DayOf(today.AddDays(-10)),
+                Days = { new() { Day = Session.DayStore.DayOf(today.AddDays(-1)), Made = 800_000 }, new() { Day = Session.DayStore.DayOf(today.AddDays(-9)), Made = 5_000_000 } },
+            }));
+            File.WriteAllText(Path.Combine(alt, "best.json"), """{"Siel (Elyos)|Western Cantas Valley":{"PerHr":1200000,"Minutes":40,"At":"2026-11-10"},"Zikel (Asmodian)|Ara Village":{"PerHr":9000000,"Minutes":20,"At":"2026-11-09"}}""");
+            var altFiles = Directory.GetFiles(alt).Select(f => (f, File.GetLastWriteTimeUtc(f))).ToList();
+            var look = Session.CharacterLooks.Read(alt, "Siel (Elyos)", w.ItemsForTest);
+            Check(look.Farmed == 800_000 && look.Best?.PerHr == 1_200_000 && look.BestZone == "Western Cantas Valley" && look.Runs == 0,
+                $"an alt's week from its folder: the last 7 days only, its best on this server ({Amounts.Short(look.Farmed)}, best {look.Best?.PerHr} in {look.BestZone})");
+            Check(Directory.GetFiles(alt).Select(f => (f, File.GetLastWriteTimeUtc(f))).SequenceEqual(altFiles), "...and nothing in that folder written");
+            Directory.Delete(alt, true);
         }
 
         // GOALS (0.9, Goals B of kinah-bench/mock-goals-history): no box with no goal; sample goals as slots between the
@@ -747,7 +796,7 @@ public static partial class WpfApp
             Check(w.BuildMenu(more) is { } menuCard && Tree(menuCard).OfType<System.Windows.Controls.ContextMenu>().Count() == 0 && Tree(menuCard).OfType<System.Windows.Controls.MenuItem>().Count() == 0,
                 "the ⋯ menu is drawn in the card kit, no Windows menu items");
             w.ShowGoalsSample(2); DoEvents();
-            Check(w.MoreEntries().First().Do != null, "with room for a goal, ⋯ › Set a goal… opens the sheet");
+            Check(w.MoreEntries().First(e => e.Text == "Set a goal…").Do != null, "with room for a goal, ⋯ › Set a goal… opens the sheet");
             w.ShowPartForTest("Crafting"); DoEvents();
             Check(w.GoalsForTest() is { Shown: false, Slim: false }, "GOALS (and the slim row) only on the Farming page");
             w.ShowPartForTest("Farming"); DoEvents();
@@ -1960,6 +2009,8 @@ public static partial class WpfApp
         {
             var file = Path.Combine(dir, UiState.PageName(kind) + "-" + state.Name + (skin != null ? "-" + skin : "") + ".png");
             Save((FrameworkElement)w.Content, file, (compact ? 640 : 800) - 16);
+            // KL_SWITCHER=1 (UX pass 2026-11-13): the same window with the header's character switcher open, "<page>-<state>-switcher.png"
+            if (demo && Environment.GetEnvironmentVariable("KL_SWITCHER") == "1") w.SaveWithSwitcher(Path.Combine(dir, Path.GetFileNameWithoutExtension(file) + "-switcher.png"));
             if (kind == "Events")
             {
                 var fig = w.EventsFigures(state);
@@ -2010,7 +2061,8 @@ public static partial class WpfApp
         if (demo && kind == "Open world") w.ShotRecapCard(Path.Combine(dir, "ui-recap.png"));
         // the Today strip's hover cards (0.8.50): a farming drop's and the Kinah's
         if (demo && kind == "Open world") w.ShotTodayCards(dir);
-        if (demo && kind == "Open world") w.ShotCharacterMenu(dir);   // the header's character menu (Ui/MainWindow.Characters.cs)
+        if (demo && kind == "Open world") w.ShotCharacterSwitcher(dir);   // the header's character switcher (Ui/MainWindow.Characters.cs)
+        if (demo && Environment.GetEnvironmentVariable("KL_SWITCHER") == "1") w.SaveWithSwitcher(Path.Combine(dir, name + "-switcher.png"));
         // and on the Events page, a run reward's (0.8.51: each page's strip shows its own day)
         if (demo && kind == "Events") w.ShotTodayRunCard(dir);
         // the Accuracy card on its own (the card the Farming page's chip opens), with its things to look at
