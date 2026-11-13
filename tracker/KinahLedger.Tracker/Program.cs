@@ -49,7 +49,10 @@ internal static class Program
             settings.ProcessHints = hints.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         // test and measuring commands log to a temp folder, never into the player's own reads.log
-        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test")
+        // (options-test, ui-shot and accuracy-test too: their demo windows wrote "Goal reached", "Marked … as wrong" and undo-bar
+        // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
+        if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
+                or "options-test" or "ui-shot" or "accuracy-test")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
