@@ -37,6 +37,11 @@ public sealed class CharacterBook
     public bool Placed { get; set; }
     /// <summary>The character that took the history over (Adopt); the place pass moves it on from there.</summary>
     public string Adopter { get; set; } = "";
+    /// <summary>
+    /// The runs counted from a reward table before 0.10.54 were counted again from their pictures (Session/RunRecount.cs),
+    /// once. Kept here beside Sorted and Placed: one flag for the whole PC, every character's runs at once.
+    /// </summary>
+    public bool Recounted { get; set; }
 }
 
 /// <summary>
@@ -60,6 +65,7 @@ public static class Characters
     {
         "today.json", "days.json", "best.json", "goals.json", "quests.json", "quests.bad.json", "sessions.jsonl",
         "instances.jsonl", "instances.old.jsonl", "instances.removed.jsonl", "instances.repaired.jsonl", "instances.flagged.txt",
+        "instances.pre-recount.jsonl",
     };
 
     static string BookPath => Path.Combine(CrashLog.Dir, "characters.json");
@@ -247,6 +253,10 @@ public static class Characters
     /// <summary>Marks the old runs as sorted (CharacterSort ran, or had nothing to do).</summary>
     public static void MarkSorted() { lock (Gate) { Book.Sorted = true; Book.Placed = true; SaveLocked(); } }
     public static bool Sorted { get { lock (Gate) return Book.Sorted; } }
+
+    /// <summary>The one-time re-count of old reward tables ran (Session/RunRecount.cs), or had nothing to do.</summary>
+    public static bool Recounted { get { lock (Gate) return Book.Recounted; } }
+    public static void MarkRecounted() { lock (Gate) { Book.Recounted = true; SaveLocked(); } }
 
     /// <summary>The kept history still waits for the place pass: characters were seen, and it has not run (a 0.10.51 or 0.10.52 install, or a first character just adopted).</summary>
     public static bool NeedsPlacing { get { lock (Gate) return Book.List.Count > 0 && !Book.Placed; } }

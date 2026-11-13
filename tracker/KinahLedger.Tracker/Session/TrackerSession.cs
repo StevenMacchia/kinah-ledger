@@ -3870,6 +3870,8 @@ public sealed partial class TrackerSession
 
     /// <summary>A picture of the game kept in reward-shots (only where that folder exists, within its kind's budget for the day), named for the zone and what it shows.</summary>
     string _gridShot = "";
+    /// <summary>For a read of a kept picture (Session/RunRecount.cs): the picture its slots not read are noted with, as live.</summary>
+    internal string GridShot { set => _gridShot = value; }
     void SaveShot(System.Drawing.Bitmap bmp, string title)
     {
         _gridShot = "";

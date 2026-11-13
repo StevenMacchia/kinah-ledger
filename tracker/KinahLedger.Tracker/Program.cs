@@ -125,6 +125,7 @@ internal static class Program
                 case "accuracy-sample": return Session.AccuracyTests.Sample(settings, pos, opts);
                 case "replay-bank": return ReplayBankCmd(settings, pos, opts);
                 case "replay-event-shots": return ReplayEventShots(settings, opts);
+                case "recount-runs": return RecountRuns(settings, pos, opts);
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
                 case "market-test": return MarketTest(settings, opts);
@@ -439,6 +440,11 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
                                 event runs whose rewards were not read, read again from their kept reward pictures; prints
                                 what each reads (--send uploads the ones read and marks them sent; --dir: a copy of the
                                 KinahLedger folder with instances.jsonl and reward-shots)
+  recount-runs <data dir> [--dry-run] [--shots folder] [--before 2026-11-12T03:06:47Z] [--report file] [--verbose]
+                                the one-time re-count of expedition runs counted before 0.10.54 (the reader that took the
+                                floor for slots): each run's kept table pictures read again; a run that surely reads fewer
+                                slots takes the new read (instances.pre-recount.jsonl kept beside each file changed).
+                                --dry-run writes nothing; run it on a copy of the KinahLedger folder
   reset-id                      replace the random install ID used for uploads
   update [--check]              install the newest version from kinahledger.com now (--check only says whether there is one)
         [--manifest url]        read another version file (a local test server)
@@ -495,6 +501,50 @@ options: --process aion[,other]");
         RegionStore.Save(r.Value);
         Console.WriteLine($"Saved chat region {r.Value.X},{r.Value.Y},{r.Value.Width},{r.Value.Height}. Next: `ocr-test` to check it reads, then `watch`.");
         return 0;
+    }
+
+    /// <summary>
+    /// `recount-runs &lt;data dir&gt; [--dry-run]`: the one-time re-count of old reward tables (Session/RunRecount.cs) on the
+    /// folder given, a copy of the KinahLedger folder. Its notes go to a temp folder, never the folder's reads.log; without
+    /// --dry-run the runs files there are written (each copied to instances.pre-recount.jsonl first) and characters.json
+    /// marked Recounted, so a tracker started on that folder doesn't count them again.
+    /// </summary>
+    static int RecountRuns(Settings settings, List<string> pos, Dictionary<string, string> o)
+    {
+        if (pos.Count < 1 || !Directory.Exists(pos[0])) { Console.Error.WriteLine("usage: recount-runs <data dir> [--dry-run] [--shots folder] [--before utc time] [--report file] [--verbose]"); return 1; }
+        var dataDir = Path.GetFullPath(pos[0]);
+        bool dry = o.ContainsKey("dry-run"), verbose = o.ContainsKey("verbose");
+        var shots = o.GetValueOrDefault("shots") ?? Path.Combine(dataDir, "reward-shots");
+        var before = o.TryGetValue("before", out var bs) ? DateTime.Parse(bs, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal) : RunRecount.FixedReaderAt;
+        var keepDir = CrashLog.DirOverride;
+        // the reads' own notes and the session they are read in: a folder of their own, never the data folder's
+        CrashLog.DirOverride = TestTemp.Path("KinahLedger-recount-runs"); Directory.CreateDirectory(CrashLog.DirOverride); Characters.Reset();
+        try
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Console.WriteLine($"recount-runs {(dry ? "(dry run) " : "")}on {dataDir}, pictures from {shots}, tables read before {before:yyyy-MM-dd HH:mm:ss}Z");
+            var plan = RunRecount.PlanAsync(dataDir, shots, settings, items, before, RunRecount.ServersOf(dataDir), say: verbose ? Console.WriteLine : null).GetAwaiter().GetResult();
+            var report = RunRecount.Report(plan, items).ToList();
+            if (o.TryGetValue("report", out var rp))
+            {
+                var detail = new List<string>(report);
+                foreach (var c in plan.Changes) { detail.Add(""); detail.Add($"== {c.Before.Label} {c.Before.Start.ToLocalTime():yyyy-MM-dd HH:mm:ss}"); detail.AddRange(c.Notes); }
+                File.WriteAllLines(rp, detail);
+            }
+            foreach (var l in report) Console.WriteLine(l);
+            Console.WriteLine();
+            Console.WriteLine($"{plan.Summary} in {sw.Elapsed.TotalSeconds:0} s");
+            if (dry) { Console.WriteLine("dry run: nothing written"); return 0; }
+            int n = RunRecount.Apply(plan);
+            var book = Path.Combine(dataDir, "characters.json");
+            var node = File.Exists(book) ? System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(book))!.AsObject() : new System.Text.Json.Nodes.JsonObject();
+            node["Recounted"] = true;
+            File.WriteAllText(book, node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"{n} run(s) written; {Path.GetFileName(book)} marked Recounted");
+            return 0;
+        }
+        finally { CrashLog.DirOverride = keepDir; Characters.Reset(); }
     }
 
     /// <summary>Runs recognition on an image file, plain and boosted, to compare what each sees. For tuning against real screenshots.</summary>
@@ -1579,6 +1629,7 @@ options: --process aion[,other]");
         ok &= Session.AccuracyScoreTests.Run(items, s);
         ok &= Session.LabelWriterTests.Run(items, s);
         ok &= Session.TableWitnessTests.Run(items, s);
+        ok &= Session.RunRecountTests.Run(items, s);
         ok &= Session.ReliabilityTests.Run(items, s);
         ok &= Session.QtySettleTests.Run(items, s);
         ok &= Session.PassCostTests.Run(items, s);
