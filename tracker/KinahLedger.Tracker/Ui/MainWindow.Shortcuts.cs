@@ -71,15 +71,15 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Ctrl+Shift+C and the tray's Copy share picture: the side the Share sheet shows while it is open, else This session,
-    /// as the sheet opens on. True when a picture went to the clipboard.
+    /// Ctrl+Shift+C and the tray's Copy share picture: the side the Share sheet shows while it is open, else Today,
+    /// as the sheet opens on (Today). True when a picture went to the clipboard.
     /// </summary>
     bool CopySharePictureNow()
     {
-        if (_shareOn == null) _shareScope = SharePicture.Session;
+        if (_shareOn == null) _shareScope = SharePicture.Today;
         if (CurrentSharePic() == null)
         {
-            Say(_shareScope == SharePicture.Session ? "Nothing to share yet. Kill or gather something and the picture fills in." : "Nothing on this side of Share yet.", "Warn");
+            Say(_shareScope is SharePicture.Today or SharePicture.Session ? "Nothing to share yet. Kill or gather something and the picture fills in." : "Nothing on this side of Share yet.", "Warn");
             return false;
         }
         return CopySharePicture();
