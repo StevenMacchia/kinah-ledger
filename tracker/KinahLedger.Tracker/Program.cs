@@ -56,6 +56,11 @@ internal static class Program
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
+        // ...and the demo windows count with the item list built into this exe, never the copy the site keeps on the player's PC
+        // (2026-11-13: that copy names a category "Conversion Resource" where the built-in list says "Substance Morph Material", so the
+        // sample had four plain drops on Steven's PC and three on CI, and two Full view checks failed there only)
+        if (cmd is "options-test" or "ui-shot")
+            KinahLedger.Data.DictionaryCache.DirOverride = TestTemp.Path("KinahLedger-test-items");
         if (cmd is "parse-test" or "replay" or "replay-bank" or "bench" or "log-mine")
             KinahLedger.Data.DataFiles.DirOverride ??= TestTemp.Path("KinahLedger-test-data");
         try

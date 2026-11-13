@@ -2091,7 +2091,7 @@ public partial class MainWindow : Window
                 e.SetTarget("Abyss Drakan Scout", t); Kills(94, 3690);
                 e.SetTarget("Abyss Drakan Striker", t); Kills(52, 4120);
                 e.SetTarget("Abyss Drakan Striker", t.AddMinutes(-5)); Kills(15, 3500);   // the bar went quiet: nobody's
-                Drop("Raw Leather", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Power Shard", 8); Drop("Superior Power Shard", 7); Drop("Fairy's Dream Wing Featherdown", 3); Drop("Lesser Abyssal Manastone", 1);
+                Drop("Raw Leather", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Power Shard", 8); Drop("Superior Power Shard", 7); Drop("Abyssal Power Shard", 3); Drop("Lesser Abyssal Manastone", 1);
                 Drop("Orichalcum Ore", 6); Drop("Sapphire Gemstone", 1);
                 // on both Drakans' tables: their odds pool the kills of the two
                 Drop("Soft Balaur Meat", 3); Drop("Refining Stone", 4);
