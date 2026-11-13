@@ -52,7 +52,7 @@ internal static class Program
         // (options-test, ui-shot and accuracy-test too: their demo windows wrote "Goal reached", "Marked … as wrong" and undo-bar
         // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
-                or "options-test" or "ui-shot" or "accuracy-test")
+                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "packet-replay" or "packet-live")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
@@ -128,6 +128,10 @@ internal static class Program
                 case "recount-runs": return RecountRuns(settings, pos, opts);
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
+                // packet reading (Packets/): its parts on made-up bytes, and the reader over a saved capture
+                case "packet-test": return KinahLedger.Packets.PacketTests.Run();
+                case "packet-live": return KinahLedger.Packets.PacketTests.Live(settings.ProcessHints, int.TryParse(opts.GetValueOrDefault("seconds"), out var psec) ? psec : 30);
+                case "packet-replay": if (pos.Count == 0) { Console.WriteLine("packet-replay <capture.pcapng> [--port 13328]"); return 2; } KinahLedger.Packets.PacketTests.Replay(pos[0], int.TryParse(opts.GetValueOrDefault("port"), out var pport) ? pport : 13328); return 0;
                 case "market-test": return MarketTest(settings, opts);
                 case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
                 case "market-watch": return MarketWatch(settings, opts);

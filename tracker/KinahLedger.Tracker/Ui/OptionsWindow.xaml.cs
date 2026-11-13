@@ -112,6 +112,8 @@ public partial class OptionsWindow : Window
         GrossChk.IsChecked = c.ShowGross;
         RecapChk.IsChecked = c.RunRecap;
         ExplainChk.IsChecked = c.ExplainCounts;
+        PacketChk.IsChecked = c.PacketReading;
+        PacketStateLbl.Text = c.PacketState.Length > 0 ? "Now: " + c.PacketState : "";
         GrossHint.Text = $"Values and profit show after the Market's {Data.PriceBook.FeeRate:P0} fee and tax by default. Turn this on to see what things sell for before it.";
         RegionPick.SelectedItem = Servers.Region(c.Region) ?? Servers.Regions[0];
         FillServers(c.Region, c.Server);
@@ -245,6 +247,7 @@ public partial class OptionsWindow : Window
         GrossChk.Click += (_, _) => Edit(_edit with { ShowGross = GrossChk.IsChecked == true });
         RecapChk.Click += (_, _) => Edit(_edit with { RunRecap = RecapChk.IsChecked == true });
         ExplainChk.Click += (_, _) => Edit(_edit with { ExplainCounts = ExplainChk.IsChecked == true });
+        PacketChk.Click += (_, _) => Edit(_edit with { PacketReading = PacketChk.IsChecked == true });
         RegionPick.SelectionChanged += (_, _) =>
         {
             if (_loading || RegionPick.SelectedItem is not GameRegion r) return;

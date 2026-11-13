@@ -5248,6 +5248,12 @@ public sealed class UserPrefs
     /// </summary>
     public bool ExplainCounts { get; set; }
     /// <summary>
+    /// Options › Game reading › Read the game's network traffic (2026-11-13, Packets/PacketReader.cs): the Kinah balance from
+    /// the game server's own messages, beside the screen, logged against the chat's count. On by default; it changes no
+    /// count yet, and with neither Npcap nor administrator it is simply off.
+    /// </summary>
+    public bool PacketReading { get; set; } = true;
+    /// <summary>
     /// The first-session checklist on the Farming feed is done or skipped (Steven, 2026-11-04, Ui/MainWindow.Onboard.cs).
     /// Set at once for a player with saved runs, so nobody who already farms sees it.
     /// </summary>

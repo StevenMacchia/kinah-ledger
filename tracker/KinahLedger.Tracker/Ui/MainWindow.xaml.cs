@@ -105,6 +105,8 @@ public partial class MainWindow : Window
         // the site's item list, so drops are shared under real ids and show their icons; one conditional request per start
         if (watch && (settings.Ui.Icons || _settings.Upload.Enabled)) _ = DictionaryCache.RefreshAsync(_items);
         _watcher = new GameWatcher(settings, _items, _marketRegion, _prefs.ManualChat ? _region : null, _prefs.Server) { RegionKey = _prefs.Region, Server = _prefs.Server };
+        // packet reading beside the screen (Packets/PacketReader.cs): only a watching window reads; a layout render or test never does
+        _watcher.Packets.Enabled = watch && _prefs.PacketReading;
         // another character in the world: close the run and start fresh (MainWindow.Shell.cs)
         _watcher.CharacterChanged += why => Dispatcher.BeginInvoke(() => { _ = StartFresh(why.Contains("character screen") ? "Logged off" : "Another character"); });
         InitCharacters();   // which character: the class icon between the health and mana bars (Ui/MainWindow.Characters.cs)
