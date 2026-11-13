@@ -73,10 +73,12 @@ public partial class MainWindow : Window
     Brush B(string key) => TryFindResource(key) as Brush ?? Brushes.Gray;
 
     /// <param name="watch">False for layout renders and self-tests, so no screen is read while the window exists off-screen
-    /// and the player's ui.json is neither read nor written: they start from the defaults (UserPrefs.Defaults).</param>
+    /// and the player's ui.json, hud.json and watch.txt are neither read nor written: they start from the defaults
+    /// (UserPrefs.Defaults, HudPrefs.Defaults, an empty watch list).</param>
     public MainWindow(Settings settings, bool watch = true)
     {
         _prefs = watch ? UserPrefs.Load() : UserPrefs.Defaults();
+        UseWatchList(player: watch);   // watch.txt the same way (Ui/MainWindow.Alerts.cs)
         InitializeComponent();
         // the layer the click cards are drawn on, over the window's content and never past its edges (InCard, 2026-11-06)
         var layer = new System.Windows.Controls.Canvas { ClipToBounds = true };
@@ -111,8 +113,9 @@ public partial class MainWindow : Window
         Icon = Native.AppIconSource();
         // the panel over the game shows the newest feed line and the rate since 0.8.30: the old default set moves to it once
         if (_prefs.HudFields == HudFields.OldDefault) _prefs.HudFields = HudFields.Default;
-        // the panel's lock and size: locked for a new install, left draggable for one that used the tracker before
-        _hudPrefs = HudPrefs.Load(existingInstall: _prefs.Welcomed || _prefs.LastVersion.Length > 0, remember: watch);
+        // the panel's lock and size: locked for a new install, left draggable for one that used the tracker before; a render or
+        // a self-test starts from the defaults, as with ui.json, so the player's look (hud.json) never changes what it draws
+        _hudPrefs = watch ? HudPrefs.Load(existingInstall: _prefs.Welcomed || _prefs.LastVersion.Length > 0) : HudPrefs.Defaults();
         // starting with Windows is on by default since 0.9.19 (Steven, 2026-11-04: "run on by default when you start Windows"):
         // the installed tracker waits in the tray from sign-in. Set once per install, so a switch-off in Options › Startup holds;
         // never for a build run from its folder (the self-tests, dotnet run), which Windows must not start

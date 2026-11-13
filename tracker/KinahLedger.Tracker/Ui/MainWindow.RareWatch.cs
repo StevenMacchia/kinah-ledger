@@ -34,7 +34,7 @@ public partial class MainWindow
             Watched.Clear();
             foreach (var n in names) Watched.Add(n);
             if (_demo) return;   // never the player's list
-            try { System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(WatchPath)!); System.IO.File.WriteAllLines(WatchPath, Watched.OrderBy(x => x)); } catch (Exception) { }
+            SaveWatched();
         }
     }
 

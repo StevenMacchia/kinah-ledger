@@ -10,13 +10,33 @@ namespace KinahLedger.Ui;
 public partial class MainWindow
 {
     static string WatchPath => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger", "watch.txt");
-    static readonly HashSet<string> Watched = LoadWatched();
+    /// <summary>The watch list: watch.txt, read when the player's window opens (<see cref="UseWatchList"/>).</summary>
+    static readonly HashSet<string> Watched = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// A layout render's or a self-test's process (a window made with watch: false): the list starts empty and watch.txt is
+    /// neither read nor written, as with ui.json and hud.json, so a render or a test reads the same on every PC.
+    /// </summary>
+    static bool _watchLoaded, _watchDetached;
     DateTime _alertSeen = DateTime.UtcNow;
 
-    static HashSet<string> LoadWatched()
+    /// <summary>From the window's constructor: the player's window reads watch.txt once; a render's or a test's empties the list and keeps it off the file.</summary>
+    static void UseWatchList(bool player)
     {
-        try { return System.IO.File.Exists(WatchPath) ? System.IO.File.ReadAllLines(WatchPath).Select(l => l.Trim()).Where(l => l.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase) : new(StringComparer.OrdinalIgnoreCase); }
-        catch (Exception) { return new(StringComparer.OrdinalIgnoreCase); }
+        lock (Watched)
+        {
+            if (!player) { _watchDetached = true; Watched.Clear(); return; }
+            if (_watchLoaded || _watchDetached) return;
+            _watchLoaded = true;
+            try { if (System.IO.File.Exists(WatchPath)) foreach (var l in System.IO.File.ReadAllLines(WatchPath)) if (l.Trim() is { Length: > 0 } n) Watched.Add(n); }
+            catch (Exception) { /* unreadable: start empty */ }
+        }
+    }
+
+    /// <summary>Writes the list to watch.txt (the caller holds the lock), never from a render's or a test's process.</summary>
+    static void SaveWatched()
+    {
+        if (_watchDetached) return;
+        try { System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(WatchPath)!); System.IO.File.WriteAllLines(WatchPath, Watched.OrderBy(x => x)); } catch (Exception) { }
     }
 
     public static bool IsWatched(string item) { lock (Watched) return Watched.Contains(item); }
@@ -28,7 +48,7 @@ public partial class MainWindow
         {
             bool on = !Watched.Remove(item);
             if (on) Watched.Add(item);
-            try { System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(WatchPath)!); System.IO.File.WriteAllLines(WatchPath, Watched.OrderBy(x => x)); } catch (Exception) { }
+            SaveWatched();
             return on;
         }
     }
