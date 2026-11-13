@@ -20,7 +20,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>KinahLedger</AssemblyName>
     <RootNamespace>KinahLedger</RootNamespace>
-    <Version>0.10.65</Version>
+    <Version>0.10.66</Version>
     <AssemblyTitle>Kinah Ledger</AssemblyTitle>
     <Product>Kinah Ledger</Product>
     <Company>Kinah Ledger</Company>
@@ -113,6 +113,12 @@
     <PackageReference Include="Velopack" Version="1.2.161" />
     <!-- the item-name decoder's recogniser (Ocr/NameDecoder.cs), CPU only; the model itself is not shipped: tools/data/models.js -->
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+  </ItemGroup>
+
+  <!-- the release build's traffic decoder (Packets/Decoder.cs; not part of this source): the release workflow puts it in native\,
+       and it goes into the single-file exe beside the rest; a build without it reads no traffic and the screen counts -->
+  <ItemGroup Condition="Exists('native\klnet.dll')">
+    <None Include="native\klnet.dll" Link="klnet.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

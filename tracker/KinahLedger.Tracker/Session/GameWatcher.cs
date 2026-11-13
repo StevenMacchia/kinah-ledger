@@ -316,7 +316,7 @@ public sealed class GameWatcher
         {
             var c = Chat;
             if (c != null && c.Running) return c;
-            var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server, AllView = AllView, DayView = DayView };
+            var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server, AllView = AllView, DayView = DayView, Packets = Packets };
             s.Parsed += ev => { if (ev is MarketSold or MarketListed or MarketExpired) Market.OnChatEvent(ev); };
             s.OverallRestart += _ => { var a = new SessionEngine(_items); a.SetZone(s.Zone); AllView = a; s.AllView = a; };
             s.MarketOpen = t => (t - Market.SeenAt).TotalSeconds is >= -2 and <= 10;

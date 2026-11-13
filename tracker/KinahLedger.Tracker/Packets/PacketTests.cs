@@ -1,106 +1,124 @@
 using System.Net;
+using KinahLedger.Data;
+using KinahLedger.Session;
 
 namespace KinahLedger.Packets;
 
 /// <summary>
-/// packet-test: the packet reader's parts on made-up bytes (the balance message in both shapes and cut across segments,
-/// segments out of order, twice and lost, frames from a card, a capture file), and packet-replay: the reader over a saved
-/// capture (kinah-bench/packets/capture-*/capture.pcapng), printing every balance message it finds.
+/// packet-test: the packet reader's own parts (segments out of order, twice and lost, frames from a card, a capture file,
+/// the game's connection) and the counting: a change from the game's traffic counts where a chat line would, the chat's line
+/// for it doesn't, a baseline's own pickup is the chat's, a sale counts nothing, and three misses hand a currency back to
+/// the screen. The decoder itself is tested where it lives. packet-replay and packet-live run the decoder when the build has it.
 /// </summary>
 public static class PacketTests
 {
     static int _fails;
     static void Check(bool ok, string what) { Console.WriteLine((ok ? "ok    " : "FAIL  ") + what); if (!ok) _fails++; }
 
-    /// <summary>A balance message as the game sent it on 2026-11-13: plain, or the long shape with another field after the low 24 bits.</summary>
-    internal static byte[] Message(uint balance, bool plain, byte other = 0x22)
-    {
-        var m = new List<byte> { 0x56, 0x01, 0x01, 0x00, 0xae, 0xae, 0x0d, 0x00, 0x00, 0x78, 0x01, 0x00, 0x3f, 0x33, 0x70, 0x37,
-                                 (byte)balance, (byte)(balance >> 8), (byte)(balance >> 16) };
-        if (plain) m.AddRange(new byte[] { (byte)(balance >> 24), 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 });
-        else m.AddRange(new byte[] { other, 0x00, 0x11, 0x00, 0x05, 0x00, 0x06, 0x02, 0x00, 0x20, 0x0b, 0x00 });
-        return m.ToArray();
-    }
-
-    public static int Run()
+    public static int Run(Settings settings)
     {
         _fails = 0;
         var t = new DateTime(2026, 11, 13, 21, 44, 43, DateTimeKind.Utc);
 
-        // the balance: the long shape before any plain one gives changes only; a plain one gives the whole figure
-        {
-            var k = new KinahBalance(); var seen = new List<KinahBalance.Seen>();
-            k.Changed += seen.Add;
-            var noise = new byte[] { 0x11, 0x1d, 0x37, 0xb5, 0x37, 0x2f, 0x03, 0x56, 0x01 };
-            k.Feed(noise.Concat(Message(30_124_466, false)).ToArray(), t);
-            k.Feed(Message(30_124_883, true), t.AddSeconds(1));
-            k.Feed(Message(30_125_300, true).Concat(noise).ToArray(), t.AddSeconds(2));
-            Check(seen.Count == 3 && seen[0].Change == 0 && seen[0].Balance == null && seen[1].Change == 417 && seen[1].Balance == 30_124_883 && seen[2].Change == 417 && seen[2].Balance == 30_125_300,
-                $"the balance message: the long shape gives a change, a plain one the balance: {string.Join(", ", seen.Select(s => $"{s.Change:+0;-0;0}={s.Balance}"))}");
-            // cut across two segments, anywhere in it
-            var m = Message(30_125_364, false, 0x9b);
-            k.Feed(m[..7], t.AddSeconds(3)); k.Feed(m[7..], t.AddSeconds(3));
-            Check(seen.Count == 4 && seen[3].Change == 64 && seen[3].Balance == 30_125_364, $"...cut across two segments: +{seen[^1].Change}, balance {seen[^1].Balance:N0}");
-            // spent, and the low 24 bits rolling over
-            k.Feed(Message(30_120_364, false), t.AddSeconds(4));
-            Check(seen[^1].Change == -5_000 && seen[^1].Balance == 30_120_364, $"...spent: {seen[^1].Change:N0}");
-            var r = new KinahBalance(); var rs = new List<KinahBalance.Seen>(); r.Changed += rs.Add;
-            r.Feed(Message(0x01FFFFF0, true), t); r.Feed(Message(0x02000010, false), t);
-            Check(rs[^1].Change == 32 && rs[^1].Balance == 0x02000010, $"...the low 24 bits rolling over: +{rs[^1].Change}, balance {rs[^1].Balance:N0}");
-            // a gap: a cut message is dropped, and the next one's change still covers what was missed
-            k.Feed(Message(30_121_000, true)[..10], t.AddSeconds(5)); k.Gap(); k.Feed(Message(30_121_500, true), t.AddSeconds(6));
-            Check(seen[^1].Change == 1_136 && seen[^1].Balance == 30_121_500, $"...after lost bytes: the next message carries the change over the gap (+{seen[^1].Change:N0})");
-        }
-
-        // the stream: in order, out of order, twice, overlapping, and a hole given up on
+        // the stream: in order, out of order, twice, overlapping, a hole given up on, the sequence rolling over
         {
             var s = new TcpStream(); var got = new List<byte>(); int gaps = 0;
             s.OnData = (d, _) => got.AddRange(d); s.OnGap = () => gaps++;
             byte[] B(int from, int n) => Enumerable.Range(from, n).Select(i => (byte)i).ToArray();
-            s.Add(1000, B(0, 10), t);
-            s.Add(1020, B(20, 10), t);          // early
-            s.Add(1010, B(10, 10), t);          // fills the hole
-            s.Add(1010, B(10, 10), t);          // again
-            s.Add(1025, B(25, 10), t);          // overlaps the end
+            s.Add(1000, B(0, 10), t); s.Add(1020, B(20, 10), t); s.Add(1010, B(10, 10), t); s.Add(1010, B(10, 10), t); s.Add(1025, B(25, 10), t);
             Check(got.SequenceEqual(B(0, 35)) && gaps == 0, $"the stream puts segments in order once each: {got.Count} bytes");
-            s.Add(1045, B(45, 5), t.AddSeconds(1));   // 1035..1045 never comes
-            s.Add(1050, B(50, 5), t.AddSeconds(4));
+            s.Add(1045, B(45, 5), t.AddSeconds(1)); s.Add(1050, B(50, 5), t.AddSeconds(4));
             Check(gaps == 1 && got.Count == 45 && got[^1] == 54, $"...and gives up on a hole after {TcpStream.GapSeconds:0} s: {gaps} gap, {got.Count} bytes");
             var w = new TcpStream(); var wg = new List<byte>(); w.OnData = (d, _) => wg.AddRange(d);
             w.Add(0xFFFFFFFA, B(0, 6), t); w.Add(0, B(6, 4), t);
             Check(wg.SequenceEqual(B(0, 10)), "...across the sequence number rolling over");
         }
 
-        // a segment and a frame: Ethernet with a VLAN tag, the TCP header's own length
+        // a frame from the card: Ethernet with a VLAN tag, the TCP header's own length
         var server = IPAddress.Parse("193.202.112.2"); var me = IPAddress.Parse("192.168.1.4");
+        var payload = Enumerable.Range(0, 32).Select(i => (byte)(i * 7)).ToArray();
         {
-            var ip = Ip(server, 13328, me, 57735, 0x01020304, Message(30_125_300, true));
+            var ip = Ip(server, 13328, me, 57735, 0x01020304, payload);
             var eth = new byte[12].Concat(new byte[] { 0x81, 0x00, 0x00, 0x05, 0x08, 0x00 }).Concat(ip).ToArray();
-            var back = NpcapSource.IpOf(eth, 1);
-            var seg = back == null ? null : TcpSegment.Parse(back);
-            Check(seg is { SrcPort: 13328, DstPort: 57735, Seq: 0x01020304 } sg && sg.Src.Equals(server) && sg.Payload.Length == Message(1, true).Length,
+            var seg = NpcapSource.IpOf(eth, 1) is { } back ? TcpSegment.Parse(back) : null;
+            Check(seg is { SrcPort: 13328, DstPort: 57735, Seq: 0x01020304 } sg && sg.Src.Equals(server) && sg.Payload.SequenceEqual(payload),
                 $"a frame from the card: {seg?.Src}:{seg?.SrcPort} → {seg?.Dst}:{seg?.DstPort}, {seg?.Payload.Length} bytes");
         }
 
-        // the whole way, from a capture file: two balance messages, the second split over two segments, a packet twice
+        // a capture file read back: the server's side of the connection put together, this PC's own packets left out
         {
             var dir = TestTemp.Path("KinahLedger-packet-test"); Directory.CreateDirectory(dir);
             var file = Path.Combine(dir, "capture.pcapng");
-            var a = Message(30_125_300, true); var b = Message(30_125_364, false, 0x9b);
             var pk = new List<(DateTime, byte[])>
             {
-                (t, Ip(server, 13328, me, 57735, 5000, a)),
-                (t.AddSeconds(1), Ip(server, 13328, me, 57735, 5000 + (uint)a.Length, b[..9])),
-                (t.AddSeconds(1), Ip(server, 13328, me, 57735, 5000 + (uint)a.Length, b[..9])),
-                (t.AddSeconds(1), Ip(server, 13328, me, 57735, 5000 + (uint)a.Length + 9, b[9..])),
-                (t.AddSeconds(1), Ip(me, 57735, server, 13328, 9000, Message(1, true))),   // this PC to the server: not read
+                (t, Ip(server, 13328, me, 57735, 5000, payload[..20])),
+                (t.AddSeconds(1), Ip(server, 13328, me, 57735, 5020, payload[20..])),
+                (t.AddSeconds(1), Ip(server, 13328, me, 57735, 5020, payload[20..])),
+                (t.AddSeconds(1), Ip(me, 57735, server, 13328, 9000, payload)),
             };
             Pcapng.Write(file, pk.Select(p => (p.Item1, new byte[12].Concat(new byte[] { 0x08, 0x00 }).Concat(p.Item2).ToArray())));
-            var seen = Replay(file, 13328, quiet: true);
-            Check(seen.Count == 2 && seen[0].Balance == 30_125_300 && seen[1].Change == 64 && seen[1].Balance == 30_125_364,
-                $"a capture file, start to end: {string.Join(", ", seen.Select(s => $"{s.Change:+0;-0;0} → {s.Balance:N0}"))}");
+            var down = new List<byte>(); var st = new TcpStream { OnData = (d, _) => down.AddRange(d) };
+            int frames = 0;
+            foreach (var (at, frame, link) in Pcapng.Read(file))
+            {
+                frames++;
+                if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { SrcPort: 13328 } s) st.Add(s.Seq, s.Payload, at, s.Syn);
+            }
+            Check(frames == 4 && down.SequenceEqual(payload), $"a capture file read back: {frames} frames, the server's {down.Count} bytes once each and in order");
             try { Directory.Delete(dir, true); } catch (Exception) { }
         }
+
+        // the counting: a change counts where a chat line would, the chat's own line for it doesn't, the baseline's own
+        // pickup is the chat's, a sale counts nothing, and three misses hand a currency back to the screen
+        {
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var reader = new PacketReader(); reader.ReadingForTest();
+            var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+            var t0 = DateTime.UtcNow.AddMinutes(-3);
+            s.Engine.SetZone("Western Cantas Valley");
+            reader.AmountForTest(CurrencyKind.Kinah, 30_000_000, t0);
+            s.CommitForTest(new KinahChanged(t0.AddSeconds(1.5), 300, false) { Via = "chat" });   // the baseline's own pickup: the chat's
+            reader.AmountForTest(CurrencyKind.Kinah, 30_000_417, t0.AddSeconds(10));
+            s.CommitForTest(new KinahChanged(t0.AddSeconds(11.2), 417, false) { Via = "chat" });   // the same pickup read off the chat
+            s.CommitForTest(new KinahChanged(t0.AddSeconds(11.5), 5_193, false) { Via = "chat" });   // a misread
+            reader.AmountForTest(CurrencyKind.Kinah, 30_000_936, t0.AddSeconds(12));   // the 519 the chat misread
+            reader.AmountForTest(CurrencyKind.Kinah, 30_001_094, t0.AddSeconds(14));   // +158 the chat never read...
+            s.CommitForTest(new CurrencyGained(t0.AddSeconds(15), "Fera Soul Points", 1) { Via = "chat" });   // ...though it read the kill
+            s.DrainPacketsForTest();
+            Check(s.Engine.Kinah == 300 + 417 + 519 + 158, $"Kinah counted from the game's traffic: {s.Engine.Kinah:N0} (300 from the chat before the baseline, then 417 + 519 + 158; the chat's 417 and its misread 5,193 left out)");
+            // bound Kinah and Abyss Points in the Abyss
+            s.Engine.SetZone("Chaotic Lower Reshanta");
+            reader.AmountForTest(CurrencyKind.BoundKinah, 2_946_591, t0.AddSeconds(20)); reader.AmountForTest(CurrencyKind.AbyssPoints, 31_422, t0.AddSeconds(20));
+            reader.AmountForTest(CurrencyKind.BoundKinah, 2_946_869, t0.AddSeconds(30)); reader.AmountForTest(CurrencyKind.AbyssPoints, 31_434, t0.AddSeconds(30));
+            s.CommitForTest(new CurrencyGained(t0.AddSeconds(31), "Abyss Points", 7) { Via = "chat" });   // "Acquired M 7 Abyss Point(s)"
+            s.CommitForTest(new KinahChanged(t0.AddSeconds(31), 278, true) { Via = "chat" });
+            s.DrainPacketsForTest();
+            Check(s.Engine.KinahBound == 278 && s.Engine.AbyssPoints == 12, $"...bound Kinah +{s.Engine.KinahBound} and Abyss Points +{s.Engine.AbyssPoints} from the game's traffic, the chat's misread 7 left out");
+            // a sale (an NPC in town, nothing killed around it) and a rise in a base are no pickups
+            s.Engine.SetZone("Western Cantas Valley");
+            reader.AmountForTest(CurrencyKind.Kinah, 30_001_594, t0.AddSeconds(50)); s.DrainPacketsForTest();
+            s.Engine.SetZone("Test Base");
+            reader.AmountForTest(CurrencyKind.Kinah, 30_002_094, t0.AddSeconds(52)); s.CommitForTest(new CurrencyGained(t0.AddSeconds(52), "Fera Soul Points", 1) { Via = "chat" }); s.DrainPacketsForTest();
+            Check(s.Engine.Kinah == 1_394, $"...a rise with nothing killed around it (a sale) and one in a base count nothing: {s.Engine.Kinah:N0}");
+            // three chat pickups the traffic never showed: Kinah goes back to the screen
+            s.Engine.SetZone("Western Cantas Valley");
+            for (int i = 0; i < 3; i++) s.CommitForTest(new KinahChanged(t0.AddSeconds(70 + i * 20), 400 + i, false) { Via = "chat" });
+            reader.AgreeForTest();
+            bool broken = reader.Broken(CurrencyKind.Kinah) != null;
+            s.CommitForTest(new KinahChanged(t0.AddSeconds(135), 500, false) { Via = "chat" });
+            Check(broken && s.Engine.Kinah == 1_894 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
+        }
+
+        // a build without the decoder reads no traffic and says so
+        {
+            var keep = PacketReader.Decoders;
+            PacketReader.Decoders = () => null;
+            var r = new PacketReader();
+            r.Tick(new uint[] { 1 }, null);   // no such game connection: it waits, it doesn't fail
+            PacketReader.Decoders = keep;
+            Check(!r.On && r.State.Length > 0, $"no game connection: \"{r.State}\"");
+        }
+        Console.WriteLine($"decoder in this build: {(NativeDecoder.Available ? "yes (klnet.dll)" : "no (a build from the public source: the screen counts)")}");
 
         Check(TcpTable.GameServer(new[] { new TcpTable.Link(me, 52139, IPAddress.Parse("34.149.33.84"), 443, 1), new TcpTable.Link(me, 57735, server, 13328, 1), new TcpTable.Link(IPAddress.Loopback, 57066, IPAddress.Loopback, 57065, 1) }) is { RemotePort: 13328 },
             "the game's server connection: not the web (443) and not this PC");
@@ -108,24 +126,21 @@ public static class PacketTests
         return _fails == 0 ? 0 : 1;
     }
 
-    /// <summary>
-    /// packet-live: the reader against the game running now, for <paramref name="seconds"/>: which connection, which source
-    /// (Npcap or a raw socket), how many packets, and each balance message as it comes. Logs to the test folder, never the player's.
-    /// </summary>
+    /// <summary>packet-live: the reader against the game running now, for <paramref name="seconds"/>, each currency change as it comes.</summary>
     public static int Live(IEnumerable<string> processHints, int seconds)
     {
         Ocr.GameWindow.Find(processHints);
         var pids = Ocr.GameWindow.Pids;
-        Console.WriteLine($"game processes: {(pids.Count == 0 ? "none" : string.Join(", ", pids))} · Npcap {(PacketSources.NpcapInstalled ? "installed" : "not installed")} · administrator {(PacketSources.IsAdmin() ? "yes" : "no")}");
+        Console.WriteLine($"game processes: {(pids.Count == 0 ? "none" : string.Join(", ", pids))} · Npcap {(PacketSources.NpcapInstalled ? "installed" : "not installed")} · administrator {(PacketSources.IsAdmin() ? "yes" : "no")} · decoder {(NativeDecoder.Available ? "yes" : "no")}");
+        using var dec = NativeDecoder.TryOpen();
+        if (dec == null) { Console.WriteLine("this build has no decoder (klnet.dll)"); return 1; }
         var link = TcpTable.GameServer(TcpTable.Of(pids));
         if (link == null) { Console.WriteLine("no game server connection: is a character logged in?"); return 1; }
         Console.WriteLine($"game server: {link.Remote}:{link.RemotePort} → {link.Local}:{link.LocalPort}");
         using var src = PacketSources.Open(link, out var why);
         if (src == null) { Console.WriteLine("no packet source: " + why); return 1; }
-        Console.WriteLine($"reading with {src.Kind} for {seconds} s; pick up some Kinah to see the balance");
-        var k = new KinahBalance();
-        k.Changed += s => Console.WriteLine($"  {s.At.ToLocalTime():HH:mm:ss.ff}  Kinah {(s.Change >= 0 ? "+" : "−")}{Math.Abs(s.Change):N0}  {(s.Balance is long b ? $"balance {b:N0}" : "(balance not seen whole yet)")}");
-        var st = new TcpStream { OnData = k.Feed, OnGap = k.Gap };
+        Console.WriteLine($"reading with {src.Kind} for {seconds} s");
+        var st = new TcpStream { OnData = (d, at) => { dec.Feed(d, at); while (dec.Next() is { } c) Print(c); }, OnGap = dec.Gap };
         long packets = 0;
         var end = DateTime.UtcNow.AddSeconds(seconds);
         while (DateTime.UtcNow < end)
@@ -135,9 +150,13 @@ public static class PacketTests
             packets++;
             st.Add(s.Seq, s.Payload, p.At, s.Syn);
         }
-        Console.WriteLine($"{packets:N0} packets, {st.Bytes:N0} bytes, {st.Gaps} gaps, {k.Messages} balance messages");
+        var stats = dec.Stats;
+        Console.WriteLine($"{packets:N0} packets, {st.Bytes:N0} bytes, {stats.Messages:N0} messages, {st.Gaps} gaps, {stats.Resyncs} resyncs, {stats.CurrencyMessages} currency messages");
         return packets > 0 ? 0 : 1;
     }
+
+    static void Print(CurrencyChange c) =>
+        Console.WriteLine($"  {c.At.ToLocalTime():HH:mm:ss.ff}  {c.What,-12} {(c.First ? "now" : (c.Delta >= 0 ? "+" : "−") + Math.Abs(c.Delta).ToString("N0")),8}  {c.Amount:N0}");
 
     /// <summary>An IPv4 TCP packet carrying <paramref name="payload"/>.</summary>
     internal static byte[] Ip(IPAddress src, int sport, IPAddress dst, int dport, uint seq, byte[] payload)
@@ -154,27 +173,28 @@ public static class PacketTests
     }
 
     /// <summary>
-    /// The reader over a capture file: the server's side of the connection on <paramref name="serverPort"/> (the busiest one
-    /// when there are several), every balance message it finds. Prints them unless quiet.
+    /// The decoder over a capture file: every connection from <paramref name="serverPort"/> in turn (an event or the Abyss is
+    /// another server), each its own decoder, every currency change, printed. Needs the decoder in the build.
     /// </summary>
-    public static List<KinahBalance.Seen> Replay(string pcapng, int serverPort, bool quiet = false)
+    public static int Replay(string pcapng, int serverPort)
     {
+        if (!NativeDecoder.Available) { Console.WriteLine("this build has no decoder (klnet.dll)"); return 1; }
         var segs = new List<(DateTime At, TcpSegment S)>();
         foreach (var (at, frame, link) in Pcapng.Read(pcapng))
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
-        var busiest = segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderByDescending(g => g.Sum(x => x.S.Payload.Length)).FirstOrDefault();
-        var seen = new List<KinahBalance.Seen>();
-        if (busiest == null) { if (!quiet) Console.WriteLine($"no packets from port {serverPort}"); return seen; }
-        var k = new KinahBalance(); k.Changed += seen.Add;
-        var st = new TcpStream { OnData = k.Feed, OnGap = k.Gap };
-        foreach (var (at, s) in busiest) st.Add(s.Seq, s.Payload, at, s.Syn);
-        if (!quiet)
+        var seen = new List<CurrencyChange>();
+        foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
-            foreach (var s in seen)
-                Console.WriteLine($"{s.At.ToLocalTime():HH:mm:ss.ff}  {(s.Change >= 0 ? "+" : "−")}{Math.Abs(s.Change),7:N0}  {(s.Balance is long b ? b.ToString("N0") : "(balance not seen whole yet)"),14}{(s.Plain ? "" : "  long shape")}");
-            Console.WriteLine($"{seen.Count} balance messages from {busiest.Key.Item1}:{serverPort}, {st.Bytes:N0} bytes, {st.Gaps} gaps; Kinah gained {seen.Where(s => s.Change > 0).Sum(s => s.Change):N0}, spent {-seen.Where(s => s.Change < 0).Sum(s => s.Change):N0}");
+            using var dec = NativeDecoder.TryOpen()!;
+            var st = new TcpStream { OnData = (d, at) => { dec.Feed(d, at); while (dec.Next() is { } c) seen.Add(c); }, OnGap = dec.Gap };
+            foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
+            var stats = dec.Stats;
+            Console.WriteLine($"{conn.Key.Item1}:{serverPort} → :{conn.Key.DstPort}: {st.Bytes:N0} bytes, {stats.Messages:N0} messages, {st.Gaps} gaps, {stats.Resyncs} resyncs, {stats.CurrencyMessages} currency messages");
         }
-        return seen;
+        foreach (var c in seen) Print(c);
+        foreach (var k in Enum.GetValues<CurrencyKind>())
+            Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
+        return 0;
     }
 }
 

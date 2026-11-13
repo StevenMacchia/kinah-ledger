@@ -295,7 +295,7 @@ public partial class MainWindow
                 parts.Add(new QStat(Fk(abyss), "Abyss Points", $"{abyss:N0} Abyss Points picked up {at}" + (kills > 0 ? $", {Fk(abyss / (double)kills)} a kill" : "") + ".",
                     null, false, "Sky", ("chip-abyss|" + at, abyss, false)));
             parts.Add(new QStat(Fk(kinah), "Kinah",
-                $"{kinah:N0} Kinah picked up {at}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + ". Quest rewards and bound Kinah are left out." + (FullShown ? "" : " Click for Kinah by enemy."),
+                $"{kinah:N0} Kinah picked up {at}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + (_boundInKinah ? ". Bound Kinah is in it: in the Abyss every Kinah drop is bound." : ". Quest rewards and bound Kinah are left out.") + (FullShown ? "" : " Click for Kinah by enemy."),
                 Open("who"), _qChip == "who", "Gold", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null));
             parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 || kinds == 0 ? "loot" : (kinds == 1 ? "kind of loot" : "kinds of loot"),
                 (kinds == 0 ? "Nothing picked up yet." : $"{kindsText} {at}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (s.Unpriced > 0 ? $" · {s.Unpriced} with no price yet" : "") + ".")
