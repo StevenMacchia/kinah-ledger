@@ -392,6 +392,21 @@
           </Border>
 
           <!-- for checking the tracker (0.8.34, Steven 2026-10-25): accuracy figures are off for players; this shows them -->
+          <!-- packet reading beside the screen (2026-11-13, Packets/PacketReader.cs): on by default, changes no count yet -->
+          <TextBlock Style="{StaticResource GroupLabel}" Text="GAME TRAFFIC"/>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Read the game's network traffic"/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Reads your Kinah from the game server's own messages, beside the screen, and logs it against the chat's count (packets.log). It changes no count yet. Needs Npcap from npcap.com, or the tracker run as administrator. It only listens: nothing is sent and the game isn't touched."/>
+                  <TextBlock x:Name="PacketStateLbl" Style="{StaticResource RowHint}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+                <CheckBox x:Name="PacketChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Read the game's network traffic"/>
+              </Grid>
+            </StackPanel>
+          </Border>
           <TextBlock Style="{StaticResource GroupLabel}" Text="FOR CHECKING THE TRACKER"/>
           <Border Style="{StaticResource Group}">
             <StackPanel>

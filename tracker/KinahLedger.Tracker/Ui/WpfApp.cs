@@ -352,6 +352,16 @@ public static partial class WpfApp
         DoEvents();
         Check(!p.ExplainCounts && !w.SampleLineReportExplains(), "explain back off");
 
+        // Options › Game reading › Read the game's network traffic (2026-11-13, Packets/PacketReader.cs): on by default, saved
+        // on Save; a test window never reads (the watcher's loop doesn't run), so its reader stays off whatever the switch says
+        o = Open();
+        o.Go(OptionsWindow.Page.Reading);
+        Check(o.PacketChk.IsChecked == true && p.PacketReading && o.PacketStateLbl.Text.StartsWith("Now: "), $"packet reading: on Game reading, on by default, \"{o.PacketStateLbl.Text}\"");
+        Flip(o.PacketChk); Click(o.SaveBtn); DoEvents();
+        Check(!p.PacketReading && !w.PacketsForTest.Enabled, "...off and saved: the reader is off");
+        o = Open(); Flip(o.PacketChk); Click(o.SaveBtn); DoEvents();
+        Check(p.PacketReading && !w.PacketsForTest.On, "...on again, and a test window still reads nothing");
+
         // Options › Shortcuts & tips (2026-11-04): the three groups, the tips, the start/stop key as it is now
         OptionsWindow.SelfTestTips(w, Open, Check);
 

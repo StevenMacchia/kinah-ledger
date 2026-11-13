@@ -35,6 +35,8 @@ public static class GameWindow
 
     /// <summary>True when the last <see cref="Find"/> saw a game process, window or not (still loading, minimized).</summary>
     public static bool ProcessSeen { get; private set; }
+    /// <summary>The game's process ids at the last <see cref="Find"/>, window or not: the packet reader finds the game's server connection by them.</summary>
+    public static IReadOnlyCollection<uint> Pids { get; private set; } = Array.Empty<uint>();
 
     public static Rectangle? Find(IEnumerable<string> processHints)
     {
@@ -57,6 +59,7 @@ public static class GameWindow
         }
         if (found != null) _found = new Found(handle, pids);
         ProcessSeen = pids.Count > 0;
+        Pids = pids;
         return found;
     }
 

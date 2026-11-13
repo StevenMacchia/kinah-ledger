@@ -32,6 +32,10 @@ public sealed record OptionsChoice(
     public bool RunRecap { get; init; } = true;
     /// <summary>Options › Game reading › Explain each count (2026-11-04): a counted line's card says why. Off by default.</summary>
     public bool ExplainCounts { get; init; }
+    /// <summary>Options › Game reading › Read the game's network traffic (2026-11-13, Packets/PacketReader.cs). On by default.</summary>
+    public bool PacketReading { get; init; } = true;
+    /// <summary>What packet reading is doing, for the line under its switch (not saved).</summary>
+    public string PacketState { get; init; } = "";
     /// <summary>Options › General › Window size (0.10.11, Ui/MainWindow.Fit.cs): 0.8 to 1.5, 1 is the designed size. Shown as the slider moves, kept on Save.</summary>
     public double WindowScale { get; init; } = 1;
     /// <summary>Options › General › Keep above other windows (0.10.26). Off by default.</summary>
@@ -201,6 +205,8 @@ public partial class MainWindow
     }
 
     public UserPrefs Prefs => _prefs;
+    /// <summary>For options-test: the watcher's packet reader (Packets/PacketReader.cs).</summary>
+    internal KinahLedger.Packets.PacketReader PacketsForTest => _watcher.Packets;
 
     /// <summary>
     /// Keep above other windows (0.10.26): the window stays over the game and everything else, for a windowed game on one
@@ -281,7 +287,7 @@ public partial class MainWindow
         AutoStart.IsOn(), _prefs.OnGameStart == "tray" ? "tray" : "open", _prefs.HideWhenGameCloses, _prefs.CloseToTray, _prefs.MinimizeToTray, Ui.HudFields.Join(Ui.HudFields.Parse(_prefs.HudFields)),
         _prefs.ReportFrames, _prefs.SendReportFrames, _prefs.GearScore, _prefs.HelpImproveCounting, _prefs.ShowAccuracy,
         _hudPrefs.Locked, Math.Round(Math.Clamp(_prefs.HudOpacity, 0.3, 1), 2), Math.Round(Math.Clamp(_hudPrefs.Scale, HudPrefs.MinScale, HudPrefs.MaxScale), 2), HudLook)
-        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Quests = _prefs.Quests, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap, ExplainCounts = _prefs.ExplainCounts,
+        { RareWatch = WatchText(), RareChime = _hudPrefs.Chime, RareVolume = Math.Round(Math.Clamp(_hudPrefs.ChimeVolume, 0, 1), 2), MarkWrongKey = MarkWrongText, FollowActivity = _prefs.FollowActivity, Quests = _prefs.Quests, Compare = _prefs.CompareZones, ShowGross = _prefs.ShowGross, RunRecap = _prefs.RunRecap, ExplainCounts = _prefs.ExplainCounts, PacketReading = _prefs.PacketReading, PacketState = _watcher.Packets.State,
           WindowScale = Math.Round(Math.Clamp(_prefs.WindowScale, MinWindowScale, MaxWindowScale), 2), AlwaysOnTop = _prefs.AlwaysOnTop };
 
     /// <summary>Save in Options: every change takes effect now and is remembered. A message for anything Windows refused, else null.</summary>
@@ -337,6 +343,7 @@ public partial class MainWindow
         if (c.ShowGross != was.ShowGross) SetGross(c.ShowGross);
         _prefs.RunRecap = c.RunRecap;
         if (!c.RunRecap) _recapWaiting = null;   // off: a recap waiting for the window is dropped too
+        _prefs.PacketReading = _watcher.Packets.Enabled = c.PacketReading;   // off: the capture stops on the watcher's next look
         _prefs.ExplainCounts = c.ExplainCounts;   // the feeds redraw on the next tick: the switch is in DrawFeed's signature
         _prefs.WindowScale = Math.Round(Math.Clamp(c.WindowScale, MinWindowScale, MaxWindowScale), 2);   // shown already while the slider moved; EndWindowScalePreview draws the saved one
         _prefs.ReportFrames = ReportBuffer.KeepFrames = c.ReportFrames;
