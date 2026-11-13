@@ -20,6 +20,10 @@
 #   AZURE_SIGNING_ENDPOINT       e.g. https://eus.codesigning.azure.net
 #   AZURE_SIGNING_ACCOUNT        the Artifact Signing account name
 #   AZURE_SIGNING_PROFILE        its certificate profile name
+#
+# The release also needs the repository secret PACKETS_DEPLOY_KEY (Settings > Secrets and variables > Actions): the
+# private half of a read-only deploy key on StevenMacchia/kinah-ledger-packets, which builds klnet.dll into the exe.
+# Without it the release stops. Build tracker (build-tracker.yml) builds the public code only.
 name: Release tracker
 
 on:
@@ -84,9 +88,45 @@ jobs:
           echo "VERSION=$ver" >> "$GITHUB_ENV"
           echo "TAG=$tag" >> "$GITHUB_ENV"
 
+      # The network decoder (klnet.dll) is built from a private repository and ships inside the release only: never in
+      # this repository, never as an artifact of its own. PACKETS_DEPLOY_KEY is a read-only deploy key on that repository.
+      # A release without it is refused, so no release goes out without the decoder.
+      - name: Check the decoder's deploy key is set
+        shell: bash
+        env:
+          PACKETS_DEPLOY_KEY: ${{ secrets.PACKETS_DEPLOY_KEY }}
+        run: '[ -n "$PACKETS_DEPLOY_KEY" ] || { echo "::error::the PACKETS_DEPLOY_KEY secret is missing, so the decoder cannot be built"; exit 1; }'
+
+      - name: Check out the decoder (private)
+        uses: actions/checkout@v4
+        with:
+          repository: StevenMacchia/kinah-ledger-packets
+          path: _private
+          ssh-key: ${{ secrets.PACKETS_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Build the decoder
+        shell: bash
+        run: |
+          (cd _private && dotnet publish src/KlNet/KlNet.csproj -c Release -r win-x64 -o out -nologo -v quiet -clp:NoSummary)
+          dll=_private/out/klnet.dll
+          [ -s "$dll" ] || { echo "::error::the decoder build made no klnet.dll"; exit 1; }
+          [ "$(head -c 2 "$dll")" = "MZ" ] || { echo "::error::klnet.dll is not a Windows DLL"; exit 1; }
+          mkdir -p tracker/KinahLedger.Tracker/native
+          cp -f "$dll" tracker/KinahLedger.Tracker/native/klnet.dll
+          rm -rf _private
+          echo "decoder built: klnet.dll, $(stat -c %s tracker/KinahLedger.Tracker/native/klnet.dll) bytes"
+
       - name: Publish the single-file exe
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -o ../../dist
+
+      # the decoder must be inside the exe: a klnet.dll left beside it was not bundled, and players get only the exe
+      - name: Check the decoder is in the exe
+        shell: bash
+        run: |
+          [ ! -e dist/klnet.dll ] || { echo "::error::klnet.dll was published beside the exe, not bundled into it"; exit 1; }
+          grep -qai 'klnet\.dll' dist/KinahLedger.exe || { echo "::error::KinahLedger.exe does not carry klnet.dll"; exit 1; }
 
       # the replay test bank (tracker/tests/replays): saved loot list and crafting panel crops, from players' miscount
       # reports and generated cases, must count as their case says, or nothing is released. Cases that need text
@@ -120,6 +160,10 @@ jobs:
       - name: Publish the app as files for the installer
         working-directory: tracker/KinahLedger.Tracker
         run: dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=false -p:PublishReadyToRun=true -o ../../build-vpk/publish
+
+      - name: Check the decoder is in the installer's files
+        shell: bash
+        run: '[ -n "$(find build-vpk/publish -iname klnet.dll -size +0)" ] || { echo "::error::the installer files have no klnet.dll"; exit 1; }'
 
       - name: Install vpk
         run: dotnet tool install -g vpk --version 1.2.161
