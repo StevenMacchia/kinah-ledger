@@ -20,6 +20,14 @@ namespace KinahLedger.Session;
 /// </list>
 /// A rise in a base, with the Market open, or of over a million at once is not a pickup (a sale, the mail, a quest) and
 /// counts nothing, as the Kinah counter's own rises never did there.
+///
+/// Since 0.10.68, item pickups and crafts too, when the build's decoder reads the inventory (Steven, 2026-11-13: loot in the
+/// Abyss "was not being properly tracked before at all"). An item going up counts as a pickup through the same gate as a
+/// currency (a kill, a gather or the screen's own line for it nearby, or an open run; not in a base, with the Market or a
+/// reward screen open, nor a bound item no line named, which is a quest's or a box's), while the chat's and the loot list's
+/// item pickups are logged and left out. A chat line the traffic didn't count (it never showed it, or only showed a
+/// stack's first sight) is counted from the chat after the agreement check, so nothing is lost. While crafting, updates
+/// are crafts (<see cref="PacketCrafts"/>), never pickups, and the crafting panel's races are logged and left out.
 /// </summary>
 public sealed partial class TrackerSession
 {
@@ -42,6 +50,7 @@ public sealed partial class TrackerSession
         if (Packets is not { } p) return;
         while (p.Next() is { } next) _packetHeld.Add(next);
         var now = DateTime.UtcNow;
+        DrainItems(p, now);
         while (_packetHeld.Count > 0 && (now - _packetHeld[0].At).TotalSeconds >= PacketHoldSeconds)
         {
             var c = _packetHeld[0]; _packetHeld.RemoveAt(0);
@@ -73,7 +82,16 @@ public sealed partial class TrackerSession
     /// </summary>
     bool PacketsHave(GameEvent ev)
     {
+        if (ev is RewardReceived rr) { _rewardLines.Add((ev.Time, Unbound(rr.Name))); if (_rewardLines.Count > 40) _rewardLines.RemoveAt(0); }
         if (Packets is not { } p || ev.Via == "packets" || ev.Via.Contains("reward table")) return false;
+        // an item pickup from the screen while the packets count items: the agreement check decides whether the chat's line counts after all
+        if (ev is ItemAcquired { Count: > 0 } ia && p.CountingItems(ev.Time) && !_screenLate.Contains(ev))
+        {
+            bool chat = !ev.Via.Contains("loot list");
+            p.ScreenSawItem(ia.ItemId, ia.Count, ev.Time, chat, chat ? ev : null);
+            CrashLog.Note($"{Describe(ev)} ({(ev.Via.Length > 0 ? ev.Via : "chat")}): counted from the game's messages instead{(chat ? " (the chat's, if they didn't show it)" : "")}");
+            return true;
+        }
         CurrencyKind? kind = ev switch
         {
             KinahChanged { Delta: > 0 } k => k.Bound ? CurrencyKind.BoundKinah : CurrencyKind.Kinah,
@@ -84,6 +102,99 @@ public sealed partial class TrackerSession
         long amount = ev is KinahChanged kc ? kc.Delta : ((CurrencyGained)ev).Amount;
         p.ScreenSaw(k2, amount, ev.Time);
         CrashLog.Note($"{Describe(ev)} ({(ev.Via.Length > 0 ? ev.Via : "chat")}): counted from the game's messages instead");
+        return true;
+    }
+
+    // ---- items and crafts (0.10.68) ----
+    readonly List<ItemBatch> _itemHeld = new();
+    PacketCrafts? _packetCrafts;
+    /// <summary>Screen pickups the traffic didn't count, handed back by the agreement check: Commit counts them.</summary>
+    readonly HashSet<GameEvent> _screenLate = new(ReferenceEqualityComparer.Instance);
+    readonly List<(DateTime At, string Name)> _rewardLines = new();
+    const double CraftEndSeconds = 20;
+
+    /// <summary>Crafting under way at <paramref name="at"/>: the crafting panel up lately, or the crafting window open.</summary>
+    bool CraftingAt(DateTime at) => CraftView.CraftPanelActive(at) || TargetReader.CraftOpen(Target.CraftAt, at);
+
+    /// <summary>The recipe the crafting panel names now, "" when it wasn't read.</summary>
+    string PanelRecipeNow => _queueName.Length >= 2 && (_queueSure || _queueGuessed) ? _queueName : _panelRecipe;
+
+    void DrainItems(PacketReader p, DateTime now)
+    {
+        p.NameOf ??= id => _items.NameOf(id);
+        p.CraftingAt ??= CraftingAt;
+        while (p.NextItems() is { } b) _itemHeld.Add(b);
+        while (_itemHeld.Count > 0 && (now - _itemHeld[0].At).TotalSeconds >= PacketHoldSeconds)
+        {
+            var b = _itemHeld[0]; _itemHeld.RemoveAt(0);
+            TakeItems(p, b);
+        }
+        // the crafting is over: its tries with nothing made are fails
+        if (_packetCrafts is { Open: true } pc && (now - pc.LastAt).TotalSeconds > CraftEndSeconds && !CraftingAt(now.AddSeconds(-PacketHoldSeconds)))
+            foreach (var o in pc.End(pc.LastAt)) CountPacketCraft(o);
+        // the screen's pickups the traffic didn't count: the screen's after all
+        while (p.NextUncovered() is GameEvent late)
+        {
+            _screenLate.Add(late);
+            CrashLog.Note($"{Describe(late)} ({(late.Via.Length > 0 ? late.Via : "chat")}): the game's messages didn't count it, so the chat does");
+            Commit(late);
+            _screenLate.Remove(late);
+        }
+    }
+
+    /// <summary>One inventory update, once the lines around it are in: a craft's while crafting, else each item that went up a pickup if the gate lets it.</summary>
+    void TakeItems(PacketReader p, ItemBatch b)
+    {
+        string Said() => string.Join(", ", b.Net().Select(n => $"{_items.NameOf(n.ItemId)} {(n.Unknown ? "(first seen)" : n.Net >= 0 ? $"+{n.Net:N0}" : $"−{-n.Net:N0}")}"));
+        if (CraftingAt(b.At))
+        {
+            p.CraftSeen(b.At);
+            if (!p.CountingCrafts(b.At)) { CrashLog.Note($"packets: {Said()} while crafting: the crafting panel counts the crafts"); return; }
+            _packetCrafts ??= new PacketCrafts(id => _items.NameOf(id), id => _items.Get(id) != null);
+            foreach (var o in _packetCrafts.Take(b, PanelRecipeNow)) CountPacketCraft(o);
+            return;
+        }
+        if (!p.CountingItems(b.At)) return;
+        // something went down with it: a craft's materials, a box opened, a stack moved or something used, never a pickup
+        if (b.Fell) { CrashLog.Note($"packets: {Said()} in one update with something going down: not a pickup"); return; }
+        foreach (var (id, n, unknown) in b.Net())
+        {
+            string name = _items.NameOf(id);
+            if (unknown) { CrashLog.Note($"packets: {name} first seen (its earlier amount not known): its pickup is the chat's"); continue; }
+            if (n <= 0) continue;
+            if (_items.Get(id) == null) { CrashLog.Note($"packets: {name} +{n:N0} is not on the item list: the chat's"); continue; }
+            bool bound = name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase);
+            bool screenSaw = p.ScreenNearItem(id, b.At, PacketNearSeconds);
+            bool near = (_lastKillAt - b.At).TotalSeconds >= -PacketNearSeconds || (_lastGatherAt - b.At).TotalSeconds >= -PacketNearSeconds
+                || (_gatherRaces.Count > 0 && (_gatherRaces[^1].At - b.At).TotalSeconds >= -PacketNearSeconds);
+            string un = Unbound(name);
+            string? why = InBase && !name.Contains("Odyle", StringComparison.OrdinalIgnoreCase) ? $"in a base ({Zone})"
+                : MarketOpen?.Invoke(b.At) == true ? "with the Market open"
+                : Target.RewardOpen(b.At) ? "with a reward screen open (the reward table reads it)"
+                : _rewardLines.Any(r => Math.Abs((r.At - b.At).TotalSeconds) <= PacketNearSeconds && string.Equals(r.Name, un, StringComparison.OrdinalIgnoreCase)) ? "with the chat calling it a reward"
+                : bound && !screenSaw && Instances.Current == null ? "bound, with no pickup line for it (a quest's or a box's reward)"
+                : !near && !screenSaw && Instances.Current == null ? "with no kill, gather or pickup line around it" : null;
+            if (why != null) { CrashLog.Note($"packets: {name} +{n:N0} {why}: not a pickup; not counted"); continue; }
+            var ev = new ItemAcquired(b.At, id, (int)Math.Min(n, 99999), bound) { Via = "packets" };
+            CrashLog.Note($"packets: {name} +{n:N0}: counted from the game's message");
+            CommitWith(ev, "counter");
+        }
+    }
+
+    /// <summary>A craft the traffic told, counted as the panel's race would be (its queue's tallies, the Crafting page, the feed).</summary>
+    void CountPacketCraft(PacketCrafts.Outcome o)
+    {
+        string recipe = o.Recipe.Length >= 2 ? o.Recipe : PanelRecipeNow;
+        CrashLog.Note($"packets: craft {(o.Combo ? "combo won" : o.Ok ? "worked" : "failed")} for {(recipe.Length > 0 ? recipe : "an unread recipe")}: {o.Why}");
+        PanelRace(recipe, o.Ok, o.Combo, o.At, _panelLevel, _queueOpen ? _queueId : 0, makes: o.Makes, why: "the game's messages: " + o.Why, fromPackets: true);
+    }
+
+    /// <summary>True when the packets count crafts now: a race of the crafting panel is logged, kept for the agreement check and left out.</summary>
+    bool PacketsHaveCraft(DateTime at, string what)
+    {
+        if (Packets is not { } p || !p.CountingCrafts(at)) return false;
+        p.ScreenSawCraft(at);
+        CrashLog.Note($"crafting panel: {what}: counted from the game's messages instead");
         return true;
     }
 

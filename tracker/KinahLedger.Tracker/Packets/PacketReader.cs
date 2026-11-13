@@ -24,7 +24,11 @@ public sealed class PacketReader : IDisposable
     public bool On => _testOn || _thread is { IsAlive: true };
     bool _testOn;
     /// <summary>For packet-test: reading as if a capture ran, the messages handed in by hand.</summary>
-    internal void ReadingForTest() { _testOn = true; _packetAt = DateTime.UtcNow; }
+    internal void ReadingForTest() { _testOn = true; _testItems = true; _packetAt = DateTime.UtcNow; }
+    bool _testItems;
+    /// <summary>For packet-test: item changes as the decoder would report them (cut into updates by their batch).</summary>
+    internal void ItemsForTest(params ItemChange[] changes) { _packetAt = DateTime.UtcNow; TakeItems(changes); }
+    internal void AgreeItemsForTest(DateTime now) { lock (_gate) AgreeItems(now); }
     readonly Dictionary<CurrencyKind, long> _testAmounts = new();
     /// <summary>For packet-test: an amount as the decoder would report it (the change from the last one, or a baseline).</summary>
     internal void AmountForTest(CurrencyKind k, long amount, DateTime at)
@@ -44,6 +48,8 @@ public sealed class PacketReader : IDisposable
 
     IGameDecoder? _decoder;
     readonly ConcurrentQueue<CurrencyChange> _changes = new();
+    readonly ConcurrentQueue<ItemBatch> _items = new();
+    readonly ConcurrentQueue<object> _uncovered = new();
     TcpStream _down = new();
     TcpTable.Link? _link;
     IPacketSource? _source;
@@ -59,6 +65,18 @@ public sealed class PacketReader : IDisposable
     readonly List<(CurrencyKind K, long Amount, DateTime At)> _screen = new();
     readonly List<(CurrencyKind K, long Delta, DateTime At)> _seen = new();
     readonly List<DateTime> _misses = new();
+    // items and crafts: the item changes seen (a rise, or a stack's first sight), the screen's item pickups and crafting
+    // races set aside for the agreement check, the misses, and why either stopped
+    readonly List<(long Id, long Delta, bool First, DateTime At)> _itemSeen = new();
+    readonly List<(long Id, int Count, DateTime At, bool Late, object? Tag)> _screenItems = new();
+    readonly List<(long Id, DateTime At)> _screenItemsAll = new();
+    readonly List<DateTime> _craftSeen = new(), _screenCrafts = new(), _itemMisses = new(), _craftMisses = new();
+    string? _itemsBroken, _craftsBroken;
+    DateTime _readingSince = DateTime.MaxValue;
+    /// <summary>What packets.log calls an item: the session's item list.</summary>
+    public Func<long, string>? NameOf { get; set; }
+    /// <summary>For the agreement check: whether crafting was under way at a time (a chat item line then is the craft's item).</summary>
+    public Func<DateTime, bool>? CraftingAt { get; set; }
 
     /// <summary>A change the decoder found: kept for the agreement check, queued for counting, logged.</summary>
     void Take(CurrencyChange c)
@@ -74,6 +92,57 @@ public sealed class PacketReader : IDisposable
 
     /// <summary>The next change for the tracker to count (TrackerSession.DrainPackets), null when there is none.</summary>
     public CurrencyChange? Next() => _changes.TryDequeue(out var c) ? c : null;
+
+    /// <summary>Item changes the decoder found, cut into the game's updates: kept for the agreement check, queued, logged.</summary>
+    void TakeItems(IReadOnlyList<ItemChange> rows)
+    {
+        foreach (var b in ItemBatch.Cut(rows))
+        {
+            lock (_gate) foreach (var r in b.Rows) _itemSeen.Add((r.ItemId, r.Delta, r.First, r.At));
+            _items.Enqueue(b);
+            Log($"{Local(b.At)}  {string.Join(", ", b.Rows.Select(r => $"{ItemName(r.ItemId)} {(r.First ? "now" : Signed(r.Delta))} · {r.Total:N0}"))}{(b.Rows.Count > 1 ? $" (one update{(b.Fell ? ", something went down" : "")})" : "")}");
+        }
+    }
+    string ItemName(long id) { try { return NameOf?.Invoke(id) ?? $"item {id}"; } catch (Exception) { return $"item {id}"; } }
+
+    /// <summary>The next inventory update for the tracker (TrackerSession.DrainPackets), null when there is none.</summary>
+    public ItemBatch? NextItems() => _items.TryDequeue(out var b) ? b : null;
+
+    /// <summary>A screen pickup the agreement check found the traffic didn't count (never showed it, or showed only a stack's first sight): the screen's to count after all.</summary>
+    public object? NextUncovered() => _uncovered.TryDequeue(out var o) ? o : null;
+
+    /// <summary>True while the decoder reads item changes on a live connection (the release build's klnet.dll, version 2).</summary>
+    bool ItemsOn => On && (DateTime.UtcNow - _packetAt).TotalSeconds <= 15 && (_testItems || _decoder?.ReadsItems == true);
+    DateTime ReadingSince => _testItems ? DateTime.MinValue : _readingSince;
+
+    /// <summary>Whether the packets count item pickups at <paramref name="at"/>: reading items since a while before, and not stopped.</summary>
+    public bool CountingItems(DateTime at) { if (!ItemsOn) return false; lock (_gate) return _itemsBroken == null && at > ReadingSince.AddSeconds(4); }
+
+    /// <summary>Whether the packets count crafts at <paramref name="at"/>: what each craft made, and the tries that made nothing.</summary>
+    public bool CountingCrafts(DateTime at) { if (!ItemsOn) return false; lock (_gate) return _craftsBroken == null && at > ReadingSince.AddSeconds(4); }
+
+    /// <summary>Why the packets stopped counting items, or crafts; null while they count.</summary>
+    public string? ItemsBroken { get { lock (_gate) return _itemsBroken; } }
+    public string? CraftsBroken { get { lock (_gate) return _craftsBroken; } }
+
+    /// <summary>An item pickup the screen read and the packets count instead, for the agreement check. Late: a chat line, counted from the screen if the traffic didn't count it (<see cref="NextUncovered"/>).</summary>
+    public void ScreenSawItem(long id, int count, DateTime at, bool late, object? tag)
+    {
+        lock (_gate)
+        {
+            _screenItems.Add((id, count, at, late, tag));
+            _screenItemsAll.Add((id, at)); _screenItemsAll.RemoveAll(s => (at - s.At).TotalMinutes > 2);
+        }
+    }
+
+    /// <summary>Whether the screen read a pickup of the item within <paramref name="seconds"/> of <paramref name="at"/>.</summary>
+    public bool ScreenNearItem(long id, DateTime at, double seconds) { lock (_gate) return _screenItemsAll.Any(s => s.Id == id && Math.Abs((s.At - at).TotalSeconds) <= seconds); }
+
+    /// <summary>The traffic showed a craft's materials or its item at <paramref name="at"/>.</summary>
+    public void CraftSeen(DateTime at) { lock (_gate) { _craftSeen.Add(at); _craftSeen.RemoveAll(c => (at - c).TotalMinutes > 2); } }
+
+    /// <summary>A race the crafting panel finished while the packets count crafts, for the agreement check.</summary>
+    public void ScreenSawCraft(DateTime at) { lock (_gate) _screenCrafts.Add(at); }
 
     /// <summary>
     /// Whether the packets count <paramref name="k"/> at <paramref name="at"/>: reading now, its baseline in a while before
@@ -131,12 +200,24 @@ public sealed class PacketReader : IDisposable
         _source = src; _link = game; Kind = src.Kind;
         // a new connection starts from a fresh amount: the chat counted while nothing was read, so the first message is a baseline
         var dec = _decoder;
-        dec.Reset(); lock (_gate) _baseAt.Clear();
-        _down = new TcpStream { OnData = (d, at) => { dec.Feed(d, at); while (dec.Next() is { } ch) Take(ch); }, OnGap = dec.Gap };
+        dec.Reset(); lock (_gate) { _baseAt.Clear(); _readingSince = DateTime.UtcNow; }
+        var rows = new List<ItemChange>();
+        _down = new TcpStream
+        {
+            OnData = (d, at) =>
+            {
+                dec.Feed(d, at);
+                while (dec.Next() is { } ch) Take(ch);
+                rows.Clear();
+                while (dec.NextItem() is { } it) rows.Add(it);
+                if (rows.Count > 0) TakeItems(rows);
+            },
+            OnGap = dec.Gap,
+        };
         _stop = false;
         _thread = new Thread(Run) { IsBackground = true, Name = "packet reading", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
-        State = $"On ({Kind}): counting Kinah, bound Kinah and Abyss Points from the game's server {game.Remote}:{game.RemotePort}";
+        State = $"On ({Kind}): counting Kinah, bound Kinah, Abyss Points{(dec.ReadsItems ? ", item pickups and crafts" : "")} from the game's server {game.Remote}:{game.RemotePort}";
         Log($"{Local(DateTime.UtcNow)}  reading {game.Remote}:{game.RemotePort} → {game.Local}:{game.LocalPort} with {Kind}");
     }
 
@@ -196,6 +277,61 @@ public sealed class PacketReader : IDisposable
                 }
             }
             _seen.RemoveAll(p => (now - p.At).TotalMinutes > 2);
+            AgreeItems(now);
+            _itemSeen.RemoveAll(p => (now - p.At).TotalMinutes > 2);
+            _risesTaken.RemoveWhere(r => (now - r.At).TotalMinutes > 2);
+        }
+    }
+
+    /// <summary>How near a screen pickup an item rise covers it: the game's update lands about 1.5 s before the chat line (up to 4.5 s), never much after.</summary>
+    const double ItemBefore = 8, ItemAfter = 0.5;
+    readonly HashSet<(long Id, DateTime At)> _risesTaken = new();
+
+    /// <summary>
+    /// The agreement check for items and crafts (under _gate). A screen pickup 15 s old or more is covered by a rise of that
+    /// item the traffic showed around it (left out: the traffic counted it); during a craft it is the craft's item (left
+    /// out); a first sight of that item's stack around it is the pickup the traffic couldn't count, and the screen counts
+    /// it after all; another item's rise around it covers it too (a line that misread the name); nothing at all is a miss,
+    /// and the screen counts it after all too. Three misses in five minutes and
+    /// items go back to the screen. A crafting race the traffic showed nothing of within 12 s is a miss for crafts.
+    /// </summary>
+    void AgreeItems(DateTime now)
+    {
+        foreach (var s in _screenItems.Where(s => (now - s.At).TotalSeconds >= 15).ToList())
+        {
+            _screenItems.Remove(s);
+            bool crafting = false;
+            try { crafting = CraftingAt?.Invoke(s.At) == true; } catch (Exception) { }
+            if (crafting) continue;
+            bool Near((long Id, long Delta, bool First, DateTime At) p) => (p.At - s.At).TotalSeconds is >= -ItemBefore and <= ItemAfter;
+            // the item's own rise (each covers one line: the latest before it not taken yet); its stack's first sight (the
+            // screen's to count, no miss); another item's rise (the line misread its name)
+            var own = _itemSeen.Where(p => Near(p) && p.Id == s.Id && !p.First && p.Delta > 0 && !_risesTaken.Contains((p.Id, p.At))).OrderByDescending(p => p.At).ToList();
+            if (own.Count > 0) { _risesTaken.Add((own[0].Id, own[0].At)); continue; }
+            if (_itemSeen.Any(p => Near(p) && p.Id == s.Id && p.First)) { if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag); continue; }
+            if (_itemSeen.Any(p => Near(p) && !p.First && p.Delta > 0)) continue;
+            if (s.Late && s.Tag != null) _uncovered.Enqueue(s.Tag);
+            if (!s.Late) continue;   // the loot list alone: no miss, nothing counted
+            _itemMisses.Add(now); _itemMisses.RemoveAll(m => (now - m).TotalMinutes > 5);
+            Log($"{Local(now)}  the screen read {ItemName(s.Id)} x{s.Count} at {Local(s.At)} that the game's messages didn't show: counted from the screen");
+            if (_itemMisses.Count >= 3 && _itemsBroken == null)
+            {
+                _itemsBroken = "the chat read three item pickups in five minutes that the game's messages didn't show";
+                Log($"{Local(now)}  items: {_itemsBroken}; the screen counts them again");
+                CrashLog.Note($"packets: {_itemsBroken}; the screen counts them again");
+            }
+        }
+        foreach (var c in _screenCrafts.Where(c => (now - c).TotalSeconds >= 15).ToList())
+        {
+            _screenCrafts.Remove(c);
+            if (_craftSeen.Any(p => Math.Abs((p - c).TotalSeconds) <= 12)) continue;
+            _craftMisses.Add(now); _craftMisses.RemoveAll(m => (now - m).TotalMinutes > 5);
+            if (_craftMisses.Count >= 3 && _craftsBroken == null)
+            {
+                _craftsBroken = "the crafting panel finished three crafts in five minutes that the game's messages didn't show";
+                Log($"{Local(now)}  crafts: {_craftsBroken}; the panel counts them again");
+                CrashLog.Note($"packets: {_craftsBroken}; the panel counts them again");
+            }
         }
     }
 
@@ -214,6 +350,8 @@ public sealed class PacketReader : IDisposable
                 long sc = _screen.Where(s => s.K == k && s.At >= from).Sum(s => s.Amount);
                 return pk == 0 && sc == 0 ? "" : $"{Name(k)} +{pk:N0} in {n} (the screen read +{sc:N0}{(pk == sc ? ": agree" : "")})";
             }).Where(s => s.Length > 0).ToList();
+            var rises = _itemSeen.Where(p => p.At >= from && !p.First && p.Delta > 0).ToList();
+            if (rises.Count > 0) parts.Add($"items +{rises.Sum(p => p.Delta):N0} in {rises.Count} rises");
         }
         if (!On && parts.Count == 0) return;
         Log($"{Local(now)}  minute: {(parts.Count == 0 ? "nothing picked up" : string.Join("; ", parts))} · {Packets:N0} packets, {DecoderStats.Messages:N0} messages, {_down.Gaps} gaps, {DecoderStats.Resyncs} resyncs");

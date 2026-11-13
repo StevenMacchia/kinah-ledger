@@ -8,6 +8,17 @@ public enum CurrencyKind { Kinah = 0, BoundKinah = 1, AbyssPoints = 2 }
 /// <summary>A change of a currency: how much, the amount now, and whether it is the first seen on a connection (a baseline, no change known).</summary>
 public sealed record CurrencyChange(DateTime At, CurrencyKind What, long Delta, long Amount, bool First);
 
+/// <summary>What happened to a stack of an item in the inventory.</summary>
+public enum ItemOp { NewStack = 0, Changed = 1, Gone = 2 }
+
+/// <summary>
+/// A change of one stack of an item: the game's item id (the item list's), how much the stack changed and what it holds now.
+/// First: the stack's earlier amount isn't known (the first change seen of it on a connection), so neither is the change.
+/// Batch: the game's update it came in; the changes of one update came together (a craft's materials, a stack moved),
+/// BatchRows of them, and BatchFell when something in that update went down.
+/// </summary>
+public sealed record ItemChange(DateTime At, long ItemId, ItemOp Op, long StackId, long Delta, long Total, bool First, int Batch, int BatchRows, bool BatchFell);
+
 /// <summary>
 /// What turns the game server's stream into currency changes. The decoder is not part of this source: release builds carry
 /// it as a native library (klnet.dll), and a build without it reads no traffic (the screen counts, as before).
@@ -22,6 +33,10 @@ public interface IGameDecoder : IDisposable
     void Feed(byte[] data, DateTime at);
     /// <summary>The next change found, or null.</summary>
     CurrencyChange? Next();
+    /// <summary>True when this decoder reads item changes too (klnet.dll's interface version 2).</summary>
+    bool ReadsItems => false;
+    /// <summary>The next item change found, or null (always null for a decoder that reads no items).</summary>
+    ItemChange? NextItem() => null;
     (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats { get; }
 }
 
@@ -29,6 +44,7 @@ public interface IGameDecoder : IDisposable
 public sealed unsafe class NativeDecoder : IGameDecoder
 {
     [StructLayout(LayoutKind.Sequential)] struct KlChange { public int Kind; public int First; public long Delta; public long Amount; public long AtUtcTicks; }
+    [StructLayout(LayoutKind.Sequential)] struct KlItem { public long AtUtcTicks; public uint ItemId; public int Op; public long StackId; public long Delta; public long Total; public int First; public int Batch; public int BatchRows; public int BatchFell; }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
     [DllImport("klnet", EntryPoint = "kl_abi")] static extern int Abi();
@@ -39,19 +55,22 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_feed")] static extern void FeedN(nint h, byte* data, int len, long atUtcTicks);
     [DllImport("klnet", EntryPoint = "kl_next")] static extern int NextN(nint h, KlChange* change);
     [DllImport("klnet", EntryPoint = "kl_stats")] static extern int StatsN(nint h, KlStats* stats);
+    [DllImport("klnet", EntryPoint = "kl_next_item")] static extern int NextItemN(nint h, KlItem* item);
 
-    static bool? _have;
-    /// <summary>True when this build carries the decoder (klnet.dll, its interface version 1).</summary>
-    public static bool Available
+    static int? _abi;
+    /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes.</summary>
+    public static int Version
     {
         get
         {
-            if (_have is bool h) return h;
-            try { _have = Abi() == 1; }
-            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException) { _have = false; }
-            return _have.Value;
+            if (_abi is int v) return v;
+            try { int a = Abi(); _abi = a is 1 or 2 ? a : 0; }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException) { _abi = 0; }
+            return _abi.Value;
         }
     }
+    /// <summary>True when this build carries the decoder (klnet.dll, interface version 1 or 2).</summary>
+    public static bool Available => Version > 0;
 
     /// <summary>A decoder, or null when this build has none.</summary>
     public static IGameDecoder? TryOpen()
@@ -77,6 +96,14 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         KlChange c;
         if (NextN(_h, &c) != 1 || c.Kind is < 0 or > 2) return null;
         return new CurrencyChange(new DateTime(c.AtUtcTicks, DateTimeKind.Utc), (CurrencyKind)c.Kind, c.Delta, c.Amount, c.First != 0);
+    }
+    public bool ReadsItems => Version >= 2;
+    public ItemChange? NextItem()
+    {
+        if (_h == 0 || Version < 2) return null;
+        KlItem c;
+        if (NextItemN(_h, &c) != 1 || c.Op is < 0 or > 2) return null;
+        return new ItemChange(new DateTime(c.AtUtcTicks, DateTimeKind.Utc), c.ItemId, (ItemOp)c.Op, c.StackId, c.Delta, c.Total, c.First != 0, c.Batch, c.BatchRows, c.BatchFell != 0);
     }
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats
     {

@@ -109,6 +109,92 @@ public static class PacketTests
             Check(broken && s.Engine.Kinah == 1_894 && reader.Broken(CurrencyKind.AbyssPoints) == null, $"...three chat pickups the game's traffic never showed: Kinah is the screen's again ({s.Engine.Kinah:N0}), Abyss Points stay the traffic's");
         }
 
+        // items: a rise counts as a pickup where a chat line would, the chat's own line for it doesn't, a stack's first sight
+        // and a line the traffic never showed are the chat's, a rise with nothing around it or with something going down is
+        // no pickup, and three chat pickups the traffic never showed hand items back to the screen
+        {
+            const long Manastone = 511360001, Meat = 610531001, Odyle = 610610013, Kukuru = 610680044, Oil = 630554003, Leather = 610530011;
+            var items = ItemDictionary.LoadOrEmpty(settings.ItemsFile);
+            var reader = new PacketReader(); reader.ReadingForTest();
+            var s = new TrackerSession(null, settings, items, "Test") { Packets = reader };
+            var t0 = DateTime.UtcNow.AddMinutes(-4);
+            int batch = 0;
+            ItemChange Row(double at, long id, ItemOp op, long stack, long delta, long total, bool first = false, int rows = 1, bool fell = false) =>
+                new(t0.AddSeconds(at), id, op, stack, delta, total, first, batch, rows, fell);
+            s.Engine.SetZone("Chaotic Lower Reshanta");
+            s.CommitForTest(new CurrencyGained(t0.AddSeconds(1), "Modified Karnif Soul Points", 1, "Modified Karnif") { Via = "chat" });   // a kill
+            batch++; reader.ItemsForTest(Row(2, Manastone, ItemOp.NewStack, 1, 1, 1));   // the chat never read it
+            batch++; reader.ItemsForTest(Row(4, Meat, ItemOp.Changed, 2, 0, 3, first: true));   // first sight: its pickup is the chat's...
+            s.CommitForTest(new ItemAcquired(t0.AddSeconds(5.4), Meat, 1, false) { Via = "chat" });
+            batch++; reader.ItemsForTest(Row(6, Meat, ItemOp.Changed, 2, 1, 4));   // ...the next one the traffic's
+            s.CommitForTest(new ItemAcquired(t0.AddSeconds(7.5), Meat, 1, false) { Via = "chat" });   // the chat's line for it: left out
+            s.DrainPacketsForTest(); reader.AgreeItemsForTest(DateTime.UtcNow); s.DrainPacketsForTest();
+            int M(long id) => s.Engine.Items.GetValueOrDefault(id) + s.Engine.ItemsBound.GetValueOrDefault(id);
+            Check(M(Manastone) == 1 && M(Meat) == 2 && reader.ItemsBroken == null,
+                $"items from the game's traffic: Lesser Manastone {M(Manastone)} (no chat line), Fresh Raw Meat {M(Meat)} (the first sight's from the chat, the next from the traffic, its chat line left out)");
+            // a chat line the traffic never showed is counted from the chat; nothing around a rise, or something going down with it, is no pickup
+            s.CommitForTest(new ItemAcquired(t0.AddSeconds(30), Odyle, 1, false) { Via = "chat" });
+            s.Engine.SetZone("Western Cantas Valley");
+            batch++; reader.ItemsForTest(Row(60, Leather, ItemOp.Changed, 3, 5, 9));   // nothing killed or gathered around it: a purchase, the mail
+            s.DrainPacketsForTest();
+            batch++; reader.ItemsForTest(Row(70, Meat, ItemOp.Changed, 2, -3, 1, rows: 2, fell: true), Row(70, Kukuru, ItemOp.Changed, 4, 2, 7, rows: 2, fell: true));
+            s.CommitForTest(new CurrencyGained(t0.AddSeconds(69), "Fera Soul Points", 1, "Fera") { Via = "chat" });
+            s.DrainPacketsForTest(); reader.AgreeItemsForTest(DateTime.UtcNow); s.DrainPacketsForTest();
+            Check(M(Odyle) == 1 && M(Leather) == 0 && M(Kukuru) == 0,
+                $"...a chat pickup the traffic never showed counts from the chat (Odyle {M(Odyle)}); a rise with nothing around it, and one in an update where something went down, count nothing (Raw Leather {M(Leather)}, Kukuru {M(Kukuru)})");
+            for (int i = 0; i < 2; i++) s.CommitForTest(new ItemAcquired(t0.AddSeconds(100 + i * 20), Odyle, 1, false) { Via = "chat" });
+            reader.AgreeItemsForTest(DateTime.UtcNow); s.DrainPacketsForTest();
+            bool broken = reader.ItemsBroken != null;
+            s.CommitForTest(new ItemAcquired(t0.AddSeconds(150), Odyle, 2, false) { Via = "chat" });
+            Check(broken && M(Odyle) == 5, $"...three chat pickups the traffic never showed: items are the screen's again (Odyle {M(Odyle)}, every chat line counted)");
+
+            // crafting: materials going down start a try, the item going up ends it; nothing made before the next try is a
+            // fail, twice the yield is a won combo; the panel's races are left out, and no craft's item is a pickup
+            var r2 = new PacketReader(); r2.ReadingForTest();
+            var c = new TrackerSession(null, settings, items, "Test") { Packets = r2 };
+            c.Engine.SetZone("Western Cantas Valley");
+            const long Dish = 510716005;
+            const string Recipe = "Kukuru Fried Meat";
+            void Mats(double at, bool first = false)
+            {
+                batch++; c.PanelUp(Recipe, t0.AddSeconds(at));
+                r2.ItemsForTest(Row(at, Meat, ItemOp.Changed, 2, first ? 0 : -1, 200, first, 3, !first), Row(at, Kukuru, ItemOp.Changed, 4, first ? 0 : -1, 20, first, 3, !first), Row(at, Oil, ItemOp.Changed, 5, first ? 0 : -1, 60, first, 3, !first));
+            }
+            void Made(double at, long n, long total, bool fresh = false) { batch++; c.PanelUp(Recipe, t0.AddSeconds(at)); r2.ItemsForTest(Row(at, Dish, fresh ? ItemOp.NewStack : ItemOp.Changed, 9, n, total)); }
+            c.CommitForTest(new CurrencyGained(t0.AddSeconds(1), "Fera Soul Points", 1, "Fera") { Via = "chat" });   // a kill just before: still no pickup
+            Mats(2, first: true); Made(9, 1, 1, fresh: true);
+            Mats(11); Made(14, 1, 2);
+            Mats(16); Made(30, 2, 4);   // a combo: two
+            Mats(32);                   // a fail: nothing made...
+            Mats(40); Made(47, 1, 5);   // ...before this try
+            c.PanelRace(Recipe, true, false, t0.AddSeconds(14));   // the panel's own race: left out
+            c.CommitForTest(new ItemAcquired(t0.AddSeconds(31), Dish, 2, false) { Via = "chat" });   // the dish's chat line
+            c.DrainPacketsForTest(); r2.AgreeItemsForTest(DateTime.UtcNow); c.DrainPacketsForTest();
+            var rec = c.CraftView.CraftSnapshot().FirstOrDefault(x => x.Name == Recipe);
+            Check(rec is { Ok: 4, Fail: 1, Upgraded: 1 } && M2(Dish) == 0,
+                $"crafts from the game's traffic: {Recipe} {rec?.Ok} worked, {rec?.Fail} failed, {rec?.Upgraded} combo won, {rec?.MadeCount} made (the panel's race and the dish's chat line left out; {M2(Dish)} counted as pickups)");
+            int M2(long id) => c.Engine.Items.GetValueOrDefault(id) + c.Engine.ItemsBound.GetValueOrDefault(id);
+
+            // one material, two crafts' worth of it gone in one update, then the next queue's first update all first sights:
+            // no fail from either
+            var r3 = new PacketReader(); r3.ReadingForTest();
+            var q = new TrackerSession(null, settings, items, "Test") { Packets = r3 };
+            const long Strong = 610720011;
+            void One(double at, string recipe, params ItemChange[] rows) { batch++; q.PanelUp(recipe, t0.AddSeconds(at)); r3.ItemsForTest(rows.Select(x => x with { Batch = batch, At = t0.AddSeconds(at) }).ToArray()); }
+            One(2, "Strong Leather", Row(0, Leather, ItemOp.Changed, 3, 0, 9, first: true));
+            One(5, "Strong Leather", Row(0, Strong, ItemOp.NewStack, 6, 1, 1));
+            One(15, "Strong Leather", Row(0, Strong, ItemOp.Changed, 6, 1, 2));
+            One(17, "Strong Leather", Row(0, Leather, ItemOp.Changed, 3, -4, 5, fell: true));
+            One(25, "Strong Leather", Row(0, Strong, ItemOp.Changed, 6, 1, 3));
+            One(30, "Kukuru Fried Meat", Row(0, Meat, ItemOp.Changed, 2, 0, 200, true, 3), Row(0, Kukuru, ItemOp.Changed, 4, 0, 20, true, 3), Row(0, Oil, ItemOp.Changed, 5, 0, 60, true, 3));
+            One(38, "Kukuru Fried Meat", Row(0, Dish, ItemOp.NewStack, 9, 1, 1));
+            q.DrainPacketsForTest(); q.DrainPacketsForTest();
+            var sl = q.CraftView.CraftSnapshot().FirstOrDefault(x => x.Name == "Strong Leather");
+            var fm = q.CraftView.CraftSnapshot().FirstOrDefault(x => x.Name == Recipe);
+            Check(sl is { Ok: 3, Fail: 0 } && fm is { Ok: 1, Fail: 0 },
+                $"...a one-material recipe whose two tries went in one update, then another queue: Strong Leather {sl?.Ok} worked {sl?.Fail} failed, {Recipe} {fm?.Ok} worked {fm?.Fail} failed");
+        }
+
         // a build without the decoder reads no traffic and says so
         {
             var keep = PacketReader.Decoders;
@@ -176,17 +262,32 @@ public static class PacketTests
     /// The decoder over a capture file: every connection from <paramref name="serverPort"/> in turn (an event or the Abyss is
     /// another server), each its own decoder, every currency change, printed. Needs the decoder in the build.
     /// </summary>
-    public static int Replay(string pcapng, int serverPort)
+    public static int Replay(string pcapng, int serverPort, Settings? settings = null)
     {
         if (!NativeDecoder.Available) { Console.WriteLine("this build has no decoder (klnet.dll)"); return 1; }
         var segs = new List<(DateTime At, TcpSegment S)>();
         foreach (var (at, frame, link) in Pcapng.Read(pcapng))
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
         var seen = new List<CurrencyChange>();
+        var batches = new List<ItemBatch>();
+        bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
             using var dec = NativeDecoder.TryOpen()!;
-            var st = new TcpStream { OnData = (d, at) => { dec.Feed(d, at); while (dec.Next() is { } c) seen.Add(c); }, OnGap = dec.Gap };
+            reads = dec.ReadsItems;
+            var rows = new List<ItemChange>();
+            var st = new TcpStream
+            {
+                OnData = (d, at) =>
+                {
+                    dec.Feed(d, at);
+                    while (dec.Next() is { } c) seen.Add(c);
+                    rows.Clear();
+                    while (dec.NextItem() is { } it) rows.Add(it);
+                    batches.AddRange(ItemBatch.Cut(rows));
+                },
+                OnGap = dec.Gap,
+            };
             foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
             var stats = dec.Stats;
             Console.WriteLine($"{conn.Key.Item1}:{serverPort} → :{conn.Key.DstPort}: {st.Bytes:N0} bytes, {stats.Messages:N0} messages, {st.Gaps} gaps, {stats.Resyncs} resyncs, {stats.CurrencyMessages} currency messages");
@@ -194,7 +295,104 @@ public static class PacketTests
         foreach (var c in seen) Print(c);
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
+        if (!reads) { Console.WriteLine("this decoder reads no items (klnet.dll version 1)"); return 0; }
+        ReplayItems(pcapng, batches, settings);
         return 0;
+    }
+
+    /// <summary>
+    /// The items and crafts the tracker would count from a capture's inventory updates. The capture's chat.log, when beside
+    /// it (kinah-bench's capture.ps1 keeps the tracker's reads.log lines of those minutes), says when crafting was under way
+    /// (the crafting panel's and window's lines) and which pickups the chat read; without it nothing is crafting. The gate
+    /// a live session adds (a kill or gather nearby, not in a base, no Market or reward screen) is left out here.
+    /// </summary>
+    static void ReplayItems(string pcapng, List<ItemBatch> batches, Settings? settings)
+    {
+        var items = ItemDictionary.LoadOrEmpty((settings ?? new Settings()).ItemsFile);
+        var dir = Path.GetDirectoryName(Path.GetFullPath(pcapng)) ?? ".";
+        var crafting = new List<DateTime>();
+        Func<DateTime, string> recipeAt = _ => "";
+        var chat = new List<(DateTime At, long Id, int N, string Text)>();
+        var log = Path.Combine(dir, "chat.log");
+        var info = Path.Combine(dir, "info.json");
+        if (File.Exists(log) && File.Exists(info))
+        {
+            using var j = System.Text.Json.JsonDocument.Parse(File.ReadAllText(info));
+            var day = DateTime.Parse(j.RootElement.GetProperty("localDate").GetString()!, System.Globalization.CultureInfo.InvariantCulture);
+            int off = j.RootElement.GetProperty("utcOffsetMinutes").GetInt32();
+            var line = new System.Text.RegularExpressions.Regex(@"^﻿?(\d\d):(\d\d):(\d\d\.\d)\s+(\S+)\s+(.*)$");
+            var acq = new System.Text.RegularExpressions.Regex(@"^(?:Acquired (?<n1>.+?) x(?<c>\d+)|(?<n2>.+?) acquired)\W*$");
+            DateTime last = DateTime.MinValue;
+            var panel = new List<(DateTime At, string Recipe)>();
+            foreach (var l in File.ReadLines(log))
+            {
+                var m = line.Match(l);
+                if (!m.Success) continue;
+                var at = day.AddHours(int.Parse(m.Groups[1].Value)).AddMinutes(int.Parse(m.Groups[2].Value))
+                    .AddSeconds(double.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture)).AddMinutes(-off);
+                at = DateTime.SpecifyKind(at, DateTimeKind.Utc);
+                // capture.ps1 takes reads.old.log's lines of the same time of day too, from an earlier day: only the last run that goes forward is this capture's
+                if ((last - at).TotalSeconds > 60) { crafting.Clear(); chat.Clear(); panel.Clear(); }
+                last = at;
+                string tag = m.Groups[4].Value, text = System.Text.RegularExpressions.Regex.Replace(m.Groups[5].Value, @"\s{2,}\(.*$", "").Trim();
+                if (text.StartsWith("crafting panel") || text.StartsWith("crafting window") || text.StartsWith("crafting:")) crafting.Add(at);
+                var pr = System.Text.RegularExpressions.Regex.Match(text, @"^crafting panel: (?<r>.+?), this queue's recipe");
+                if (pr.Success) panel.Add((at, pr.Groups["r"].Value));
+                if (tag != "ok" || System.Text.RegularExpressions.Regex.IsMatch(text, "Kina|Rank|Abyss|Soul|Point", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;
+                var a = acq.Match(text);
+                if (!a.Success) continue;
+                var name = a.Groups["n1"].Success ? a.Groups["n1"].Value : a.Groups["n2"].Value;
+                if ((items.Find(name) ?? items.Guess(name)) is long id) chat.Add((at, id, a.Groups["c"].Success ? int.Parse(a.Groups["c"].Value) : 1, text));
+            }
+            Console.WriteLine($"chat.log: {chat.Count} item pickup lines, {crafting.Count} crafting lines");
+            recipeAt = t => panel.LastOrDefault(p => p.At <= t.AddSeconds(3)).Recipe ?? "";
+        }
+        bool CraftingAt(DateTime t) => crafting.Any(c => (t - c).TotalSeconds is >= -3 and <= CraftLedger.PanelSeconds);
+        var crafts = new PacketCrafts(items.NameOf, id => items.Get(id) != null);
+        var made = new List<PacketCrafts.Outcome>();
+        int pickups = 0, withLine = 0; long count = 0;
+        var used = new HashSet<int>();
+        void Craft(IEnumerable<PacketCrafts.Outcome> os)
+        {
+            foreach (var o in os)
+            {
+                made.Add(o);
+                Console.WriteLine($"  {o.At.ToLocalTime():HH:mm:ss.ff}  craft {(o.Combo ? "combo won" : o.Ok ? "worked" : "failed")} · {(o.Recipe.Length > 0 ? o.Recipe : "?")}{(o.Makes is int mk ? $" · makes {mk}" : "")}  ({o.Why})");
+            }
+        }
+        foreach (var b in batches.OrderBy(b => b.At))
+        {
+            if (crafts.Open && (b.At - crafts.LastAt).TotalSeconds > 20 && !CraftingAt(b.At)) Craft(crafts.End(crafts.LastAt));
+            string said = string.Join(", ", b.Net().Select(n => $"{items.NameOf(n.ItemId)} {(n.Unknown ? "(first seen)" : n.Net >= 0 ? $"+{n.Net:N0}" : $"−{-n.Net:N0}")}"));
+            if (CraftingAt(b.At))
+            {
+                var os = crafts.Take(b, recipeAt(b.At));
+                Console.WriteLine($"  {b.At.ToLocalTime():HH:mm:ss.ff}  crafting: {said} (tries {crafts.Tally.Tries}, worked {crafts.Tally.Ok}, failed {crafts.Tally.Failed})");
+                Craft(os);
+                continue;
+            }
+            if (b.Fell) { Console.WriteLine($"  {b.At.ToLocalTime():HH:mm:ss.ff}  left out ({said}: something went down with it)"); continue; }
+            foreach (var (id, n, unknown) in b.Net())
+            {
+                if (items.Get(id) == null) continue;   // not on the item list (soul crystals): the chat's
+                if (unknown) { Console.WriteLine($"  {b.At.ToLocalTime():HH:mm:ss.ff}  first seen · {items.NameOf(id)} (its pickup is the chat's)"); continue; }
+                if (n <= 0) continue;
+                int ci = -1;
+                for (int i = 0; i < chat.Count; i++)
+                    if (!used.Contains(i) && chat[i].Id == id && (chat[i].At - b.At).TotalSeconds is >= -0.5 and <= 6) { ci = i; break; }
+                if (ci >= 0) { used.Add(ci); withLine++; }
+                pickups++; count += n;
+                Console.WriteLine($"  {b.At.ToLocalTime():HH:mm:ss.ff}  pickup · {items.NameOf(id)} +{n:N0}  ({(ci >= 0 ? $"chat {chat[ci].At.ToLocalTime():HH:mm:ss.f}: {chat[ci].Text}" : "no chat line")})");
+            }
+        }
+        if (crafts.Open) Craft(crafts.End(crafts.LastAt));
+        Console.WriteLine($"items: {pickups} pickups (+{count:N0}), {withLine} with a chat line, {pickups - withLine} the chat didn't read; chat item lines no pickup matched: {chat.Count - used.Count}");
+        foreach (var g in made.GroupBy(o => o.Recipe))
+        {
+            int ok = g.Count(o => o.Ok && !o.Combo), combos = g.Count(o => o.Combo);
+            int makes = g.Where(o => o.Ok && !o.Combo).Sum(o => o.Makes ?? 0) + combos * g.Where(o => o.Ok && !o.Combo).Select(o => o.Makes ?? 0).DefaultIfEmpty(0).Max();
+            Console.WriteLine($"crafts: {(g.Key.Length > 0 ? g.Key : "?")} {ok} worked, {g.Count(o => !o.Ok)} failed, {combos} combos won, {makes} made");
+        }
     }
 }
 
