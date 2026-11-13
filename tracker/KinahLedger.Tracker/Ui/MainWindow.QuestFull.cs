@@ -51,7 +51,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// A Kills row's small print: "1.2K Kinah a kill · drops Thick hide 1 in 4". An enemy with no named drop (none yet, or
+    /// A Kills row's small print: "1.2K Kinah a kill · drops Raw Leather 1 in 4". An enemy with no named drop (none yet, or
     /// only items the list can't name) has no drop part: the empty tuple's name was null, and the panel crashed on any
     /// such enemy (Steven, 2026-11-11 14:53: "when i click on kills on the farm page it gives me an error").
     /// </summary>

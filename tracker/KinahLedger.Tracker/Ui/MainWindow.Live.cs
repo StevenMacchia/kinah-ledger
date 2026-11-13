@@ -987,7 +987,7 @@ public partial class MainWindow
             new(t.AddSeconds(-4), FeedTab.Farming, "item", "Spiritstone", 1, Via: "chat · recovered", Where: "Farming · Western Cantas Valley", ItemId: Id("Spiritstone")),
             new(t.AddSeconds(-5), FeedTab.Farming, "kinah", "", 1_192, "Abyss Drakan Striker", Via: "chat · recovered", Where: "Farming · Western Cantas Valley"),
             new(t.AddSeconds(-7), FeedTab.Farming, "kinah", "", 431, "Abyss Drakan Scout", Via: "chat", Where: "Farming · Western Cantas Valley"),
-            new(t.AddSeconds(-18), FeedTab.Farming, "item", "Thick hide", 1, Via: "chat", Where: "Farming · Western Cantas Valley", ItemId: Id("Thick hide")),
+            new(t.AddSeconds(-18), FeedTab.Farming, "item", "Raw Leather", 1, Via: "chat", Where: "Farming · Western Cantas Valley", ItemId: Id("Raw Leather")),
             new(t.AddSeconds(-35), FeedTab.Farming, "item", kind == "Gathering" ? "Sapphire Gemstone" : "Orichalcum Ore", 1, Via: "chat", Where: "Farming · Western Cantas Valley"),
         };
         if (kind == "Gathering")

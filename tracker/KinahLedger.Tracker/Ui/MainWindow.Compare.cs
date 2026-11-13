@@ -475,8 +475,8 @@ public partial class MainWindow
     {
         var best = new Dictionary<string, (string, int, long)>
         {
-            ["Western Cantas Valley"] = ("Spiritstone", 9, 63_000), ["Eastern Cantas Valley"] = ("Thick hide", 14, 42_000), ["Kraka Footpath"] = ("Spiritstone", 4, 28_000),
-            ["Pilgrim's Ridge"] = ("Manastone", 3, 15_000), ["Altamia Canyon"] = ("Orichalcum Ore", 8, 16_000), ["Ellun River Midstream"] = ("Thick hide", 5, 15_000), ["Ellun River Marsh"] = ("Fresh Fruit", 6, 6_000),
+            ["Western Cantas Valley"] = ("Spiritstone", 9, 63_000), ["Eastern Cantas Valley"] = ("Raw Leather", 14, 42_000), ["Kraka Footpath"] = ("Spiritstone", 4, 28_000),
+            ["Pilgrim's Ridge"] = ("Power Shard", 3, 15_000), ["Altamia Canyon"] = ("Orichalcum Ore", 8, 16_000), ["Ellun River Midstream"] = ("Raw Leather", 5, 15_000), ["Ellun River Marsh"] = ("Fresh Fruit", 6, 6_000),
         };
         foreach (var d in f.Days) foreach (var z in d.Zones) if (best.TryGetValue(z.Zone, out var b)) (z.Best, z.BestCount, z.BestWorth) = b;
     }

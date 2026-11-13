@@ -37,7 +37,7 @@ public partial class MainWindow
         }
         if (fired.Count == 0) return;
         // Focus Assist and Game Mode hold back the tray notice while a game is in front, so the alert also goes on the
-        // panel for 8 s ("Price alert: Thick hide is 28,000 on Siel") and stays in the window's status line as long
+        // panel for 8 s ("Price alert: Raw Leather is 28,000 on Siel") and stays in the window's status line as long
         var line = fired.Count == 1 ? $"Price alert: {fired[0]}" : $"Price alerts: {string.Join(" · ", fired)}";
         ShowPriceAlert(line);
     }

@@ -158,7 +158,7 @@ public partial class MainWindow
         {
             ("Spiritstone", "×1", "+7.5K", "item", "", ""),
             ("1,192 Kinah", "1192", "+1.2K", "kinah", "", KinahIcon),
-            ("Thick hide", "×1", "+1.1K", "item", "", ""),
+            ("Raw Leather", "×1", "+1.1K", "item", "", ""),
             ("Orichalcum Ore", "×1", "+2.0K", "item", "gathered", ""),
         };
         for (int i = 0; i < picks.Length; i++)
