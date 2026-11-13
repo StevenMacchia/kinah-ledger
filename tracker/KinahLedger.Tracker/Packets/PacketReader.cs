@@ -141,6 +141,14 @@ public sealed class PacketReader : IDisposable
     /// <summary>The traffic showed a craft's materials or its item at <paramref name="at"/>.</summary>
     public void CraftSeen(DateTime at) { lock (_gate) { _craftSeen.Add(at); _craftSeen.RemoveAll(c => (at - c).TotalMinutes > 2); } }
 
+    // when the traffic lost bytes (TcpStream gave up on a hole), the last two minutes
+    readonly List<DateTime> _gapsAt = new();
+    DateTime _dataAt = DateTime.MinValue;
+    /// <summary>Whether the traffic lost bytes between <paramref name="from"/> and <paramref name="to"/>.</summary>
+    public bool GapBetween(DateTime from, DateTime to) { lock (_gate) return _gapsAt.Any(g => g >= from.AddSeconds(-1) && g <= to.AddSeconds(1)); }
+    /// <summary>For packet-test: the traffic lost bytes at <paramref name="at"/>.</summary>
+    internal void GapForTest(DateTime at) { lock (_gate) _gapsAt.Add(at); }
+
     /// <summary>A race the crafting panel finished while the packets count crafts, for the agreement check.</summary>
     public void ScreenSawCraft(DateTime at) { lock (_gate) _screenCrafts.Add(at); }
 
@@ -206,13 +214,18 @@ public sealed class PacketReader : IDisposable
         {
             OnData = (d, at) =>
             {
+                _dataAt = at;
                 dec.Feed(d, at);
                 while (dec.Next() is { } ch) Take(ch);
                 rows.Clear();
                 while (dec.NextItem() is { } it) rows.Add(it);
                 if (rows.Count > 0) TakeItems(rows);
             },
-            OnGap = dec.Gap,
+            OnGap = () =>
+            {
+                dec.Gap();
+                lock (_gate) { var at = _dataAt == DateTime.MinValue ? DateTime.UtcNow : _dataAt; _gapsAt.Add(at); _gapsAt.RemoveAll(g => (at - g).TotalMinutes > 2); }
+            },
         };
         _stop = false;
         _thread = new Thread(Run) { IsBackground = true, Name = "packet reading", Priority = ThreadPriority.BelowNormal };

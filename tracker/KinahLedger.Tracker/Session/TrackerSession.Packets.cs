@@ -150,7 +150,7 @@ public sealed partial class TrackerSession
         {
             p.CraftSeen(b.At);
             if (!p.CountingCrafts(b.At)) { CrashLog.Note($"packets: {Said()} while crafting: the crafting panel counts the crafts"); return; }
-            _packetCrafts ??= new PacketCrafts(id => _items.NameOf(id), id => _items.Get(id) != null);
+            _packetCrafts ??= new PacketCrafts(id => _items.NameOf(id), id => _items.Get(id) != null) { GapBetween = p.GapBetween };
             foreach (var o in _packetCrafts.Take(b, PanelRecipeNow)) CountPacketCraft(o);
             return;
         }
@@ -185,6 +185,7 @@ public sealed partial class TrackerSession
     void CountPacketCraft(PacketCrafts.Outcome o)
     {
         string recipe = o.Recipe.Length >= 2 ? o.Recipe : PanelRecipeNow;
+        if (o.Lost) { CrashLog.Note($"packets: a try of {(recipe.Length > 0 ? recipe : "an unread recipe")}: {o.Why}; not counted"); return; }
         CrashLog.Note($"packets: craft {(o.Combo ? "combo won" : o.Ok ? "worked" : "failed")} for {(recipe.Length > 0 ? recipe : "an unread recipe")}: {o.Why}");
         PanelRace(recipe, o.Ok, o.Combo, o.At, _panelLevel, _queueOpen ? _queueId : 0, makes: o.Makes, why: "the game's messages: " + o.Why, fromPackets: true);
     }

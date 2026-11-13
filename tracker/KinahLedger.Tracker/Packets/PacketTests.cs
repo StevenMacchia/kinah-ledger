@@ -191,6 +191,16 @@ public static class PacketTests
             q.DrainPacketsForTest(); q.DrainPacketsForTest();
             var sl = q.CraftView.CraftSnapshot().FirstOrDefault(x => x.Name == "Strong Leather");
             var fm = q.CraftView.CraftSnapshot().FirstOrDefault(x => x.Name == Recipe);
+            // a try with nothing made while the traffic lost bytes: its item may have gone with them, so no fail
+            var r4 = new PacketReader(); r4.ReadingForTest();
+            var g4 = new TrackerSession(null, settings, items, "Test") { Packets = r4 };
+            void Four(double at, params ItemChange[] rows) { batch++; g4.PanelUp("Strong Leather", t0.AddSeconds(at)); r4.ItemsForTest(rows.Select(x => x with { Batch = batch, At = t0.AddSeconds(at) }).ToArray()); }
+            Four(2, Row(0, Leather, ItemOp.Changed, 3, -2, 9, fell: true)); Four(6, Row(0, Strong, ItemOp.NewStack, 6, 1, 1));
+            Four(8, Row(0, Leather, ItemOp.Changed, 3, -2, 7, fell: true)); r4.GapForTest(t0.AddSeconds(12));
+            Four(16, Row(0, Leather, ItemOp.Changed, 3, -2, 5, fell: true)); Four(20, Row(0, Strong, ItemOp.Changed, 6, 1, 2));
+            g4.DrainPacketsForTest(); g4.DrainPacketsForTest();
+            var lost = g4.CraftView.CraftSnapshot().FirstOrDefault(x => x.Name == "Strong Leather");
+            Check(lost is { Ok: 2, Fail: 0 }, $"...a try with nothing made while the traffic lost bytes is no fail (its item may have gone with them): {lost?.Ok} worked, {lost?.Fail} failed");
             Check(sl is { Ok: 3, Fail: 0 } && fm is { Ok: 1, Fail: 0 },
                 $"...a one-material recipe whose two tries went in one update, then another queue: Strong Leather {sl?.Ok} worked {sl?.Fail} failed, {Recipe} {fm?.Ok} worked {fm?.Fail} failed");
         }
@@ -292,23 +302,26 @@ public static class PacketTests
             if (NpcapSource.IpOf(frame, link) is { } ip && TcpSegment.Parse(ip) is { } s && s.SrcPort == serverPort) segs.Add((at, s));
         var seen = new List<CurrencyChange>();
         var batches = new List<ItemBatch>();
+        var gaps = new List<DateTime>();
         bool reads = false;
         foreach (var conn in segs.GroupBy(x => (x.S.Src.ToString(), x.S.DstPort)).OrderBy(g => g.First().At))
         {
             using var dec = NativeDecoder.TryOpen()!;
             reads = dec.ReadsItems;
             var rows = new List<ItemChange>();
+            DateTime last = DateTime.MinValue;
             var st = new TcpStream
             {
                 OnData = (d, at) =>
                 {
+                    last = at;
                     dec.Feed(d, at);
                     while (dec.Next() is { } c) seen.Add(c);
                     rows.Clear();
                     while (dec.NextItem() is { } it) rows.Add(it);
                     batches.AddRange(ItemBatch.Cut(rows));
                 },
-                OnGap = dec.Gap,
+                OnGap = () => { dec.Gap(); gaps.Add(last); },
             };
             foreach (var (at, s) in conn) st.Add(s.Seq, s.Payload, at, s.Syn);
             var stats = dec.Stats;
@@ -318,7 +331,7 @@ public static class PacketTests
         foreach (var k in Enum.GetValues<CurrencyKind>())
             Console.WriteLine($"{k}: gained {seen.Where(c => c.What == k && c.Delta > 0).Sum(c => c.Delta):N0} in {seen.Count(c => c.What == k && c.Delta > 0)} changes");
         if (!reads) { Console.WriteLine("this decoder reads no items (klnet.dll version 1)"); return 0; }
-        ReplayItems(pcapng, batches, settings);
+        ReplayItems(pcapng, batches, settings, gaps);
         return 0;
     }
 
@@ -328,7 +341,7 @@ public static class PacketTests
     /// (the crafting panel's and window's lines) and which pickups the chat read; without it nothing is crafting. The gate
     /// a live session adds (a kill or gather nearby, not in a base, no Market or reward screen) is left out here.
     /// </summary>
-    static void ReplayItems(string pcapng, List<ItemBatch> batches, Settings? settings)
+    static void ReplayItems(string pcapng, List<ItemBatch> batches, Settings? settings, List<DateTime> gaps)
     {
         var items = ItemDictionary.LoadOrEmpty((settings ?? new Settings()).ItemsFile);
         var dir = Path.GetDirectoryName(Path.GetFullPath(pcapng)) ?? ".";
@@ -370,7 +383,7 @@ public static class PacketTests
             recipeAt = t => panel.LastOrDefault(p => p.At <= t.AddSeconds(3)).Recipe ?? "";
         }
         bool CraftingAt(DateTime t) => crafting.Any(c => (t - c).TotalSeconds is >= -3 and <= CraftLedger.PanelSeconds);
-        var crafts = new PacketCrafts(items.NameOf, id => items.Get(id) != null);
+        var crafts = new PacketCrafts(items.NameOf, id => items.Get(id) != null) { GapBetween = (a, b) => gaps.Any(g => g >= a.AddSeconds(-1) && g <= b.AddSeconds(1)) };
         var made = new List<PacketCrafts.Outcome>();
         int pickups = 0, withLine = 0; long count = 0;
         var used = new HashSet<int>();
@@ -379,7 +392,7 @@ public static class PacketTests
             foreach (var o in os)
             {
                 made.Add(o);
-                Console.WriteLine($"  {o.At.ToLocalTime():HH:mm:ss.ff}  craft {(o.Combo ? "combo won" : o.Ok ? "worked" : "failed")} · {(o.Recipe.Length > 0 ? o.Recipe : "?")}{(o.Makes is int mk ? $" · makes {mk}" : "")}  ({o.Why})");
+                Console.WriteLine($"  {o.At.ToLocalTime():HH:mm:ss.ff}  craft {(o.Lost ? "not known" : o.Combo ? "combo won" : o.Ok ? "worked" : "failed")} · {(o.Recipe.Length > 0 ? o.Recipe : "?")}{(o.Makes is int mk ? $" · makes {mk}" : "")}  ({o.Why})");
             }
         }
         foreach (var b in batches.OrderBy(b => b.At))
@@ -413,7 +426,7 @@ public static class PacketTests
         {
             int ok = g.Count(o => o.Ok && !o.Combo), combos = g.Count(o => o.Combo);
             int makes = g.Where(o => o.Ok && !o.Combo).Sum(o => o.Makes ?? 0) + combos * g.Where(o => o.Ok && !o.Combo).Select(o => o.Makes ?? 0).DefaultIfEmpty(0).Max();
-            Console.WriteLine($"crafts: {(g.Key.Length > 0 ? g.Key : "?")} {ok} worked, {g.Count(o => !o.Ok)} failed, {combos} combos won, {makes} made");
+            Console.WriteLine($"crafts: {(g.Key.Length > 0 ? g.Key : "?")} {ok} worked, {g.Count(o => !o.Ok && !o.Lost)} failed, {g.Count(o => o.Lost)} not known (bytes lost), {combos} combos won, {makes} made");
         }
     }
 }
