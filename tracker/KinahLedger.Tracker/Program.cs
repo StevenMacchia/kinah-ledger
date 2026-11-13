@@ -6105,8 +6105,9 @@ options: --process aion[,other]");
             Check("  unticking I have these lets it go: Market price again", $"{Cost("Intermediate Manastone")} {RecipeBook.MadeFromBound("Intermediate Manastone")}", "280,110 False");
 
             // Steven's 2026-11-13 18:19:58 queue of 5 Orichalcum Guard (reads.log): his bound Refining Stones from the 18:05
-            // event cards, noted at 18:20:37 ("crafting: bound Refining Stone picked up"), five races counted. The guards
-            // sell: the Crafting part values them at the Market's price, and only the stones cost nothing
+            // event cards, noted at 18:20:37 ("crafting: bound Refining Stone picked up"), five races counted. Steven had no
+            // guards before the queue and 5 after, none bound. The guards sell: the Crafting part values them at the Market's
+            // price, and only the stones cost nothing
             PriceBook.Reset();
             PriceBook.SetBoardQuotes(PriceBook.ParseQuotes("{\"items\":[" + string.Join(",", new[] { ("Orichalcum Guard", 60000), ("Orichalcum Ingot", 3000), ("Refining Stone", 2000), ("Odyle", 1500) }
                 .Select(p => $"{{\"item\":\"{p.Item1}\",\"price\":{p.Item2},\"price_from\":\"feed\",\"readings\":20,\"sure\":true}}")) + "]}", null));
