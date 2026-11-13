@@ -65,6 +65,8 @@ public sealed class GameWatcher
     public BalanceReader Balance { get; } = new();
     /// <summary>Packet reading beside the screen (Packets/PacketReader.cs): the Kinah balance from the game's own messages, set against the chat's count in packets.log. Changes no count yet.</summary>
     public KinahLedger.Packets.PacketReader Packets { get; } = new();
+    /// <summary>The local recording of the game's traffic for diagnosis (Packets/PacketLog.cs): off unless this PC asked for it.</summary>
+    public KinahLedger.Packets.PacketLog PacketLog { get; } = new();
     readonly RelogDetector _relog = new();
     DateTime _screenScanAt = DateTime.MinValue; bool _screenLogged;
     /// <summary>Another character is in the world (the reason, for the status line); the window closes the run and starts fresh.</summary>
@@ -386,7 +388,7 @@ public sealed class GameWatcher
             try
             {
                 // the game window is looked up every few seconds; without it there is nothing to read and the loop just waits
-                if ((t0 - _gameAt).TotalSeconds >= 5) { GameRect = GameWindow.Find(_settings.ProcessHints); GameRunning = GameWindow.ProcessSeen; _gameAt = t0; Packets.Tick(GameWindow.Pids, Chat?.Engine); }
+                if ((t0 - _gameAt).TotalSeconds >= 5) { GameRect = GameWindow.Find(_settings.ProcessHints); GameRunning = GameWindow.ProcessSeen; _gameAt = t0; Packets.Tick(GameWindow.Pids, Chat?.Engine); PacketLog.Tick(GameWindow.Pids); }
                 if (GameRect is { } game)
                 {
                     // the chat reader starts as soon as the game is there and is retried every 20 s while the chat can't be seen
@@ -548,6 +550,7 @@ public sealed class GameWatcher
     {
         _cts.Cancel();
         Packets.Dispose();
+        PacketLog.Dispose();
         if (_loop != null) { try { await Task.WhenAny(_loop, Task.Delay(6000)); } catch (Exception) { /* loop ended */ } }
         var c = Chat; Chat = null;
         if (c != null) { try { await c.StopAsync(); } catch (Exception) { /* reader ended */ } }

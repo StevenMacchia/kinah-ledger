@@ -103,24 +103,45 @@ public sealed unsafe class NpcapSource : IPacketSource
     IntPtr _pcap;
     readonly int _link;
 
+    /// <summary>The capture's link type (1 = Ethernet), as a capture file's interface block keeps it.</summary>
+    public int LinkType => _link;
+    /// <summary>The most of each frame kept (all of it, for the game's packets).</summary>
+    public const int SnapLen = 65535;
+
     public NpcapSource(TcpTable.Link game)
+        // only the game's connection: the rest of this PC's traffic is never handed to the tracker
+        : this(game.Local, $"tcp and host {game.Remote} and port {game.RemotePort}") { }
+
+    /// <summary>
+    /// The network card with <paramref name="local"/> among its addresses, with a capture filter (pcap's filter language):
+    /// packet-record opens it on the game's server ports, any server, so a move to an event or Abyss server is recorded too.
+    /// </summary>
+    public NpcapSource(IPAddress local, string filter)
     {
         Load();
-        var device = DeviceFor(game.Local) ?? throw new InvalidOperationException($"no network card has the address {game.Local}");
+        var device = DeviceFor(local) ?? throw new InvalidOperationException($"no network card has the address {local}");
         var err = stackalloc byte[512];
         var dev = Encoding.ASCII.GetBytes(device + "\0");
-        fixed (byte* d = dev) _pcap = _openLive(d, 65535, 0, 250, err);
+        fixed (byte* d = dev) _pcap = _openLive(d, SnapLen, 0, 250, err);
         if (_pcap == IntPtr.Zero) throw new InvalidOperationException(Marshal.PtrToStringAnsi((IntPtr)err) ?? "couldn't open the network card");
         _link = _dataLink(_pcap);
-        // only the game's connection: the rest of this PC's traffic is never handed to the tracker
-        var filter = Encoding.ASCII.GetBytes($"tcp and host {game.Remote} and port {game.RemotePort}\0");
+        try { Filter(filter); }
+        catch { Dispose(); throw; }
+    }
+
+    /// <summary>Replaces the capture filter on the open card (packet-record widens it when the game moves to another port).</summary>
+    public void Filter(string filter)
+    {
+        var f8 = Encoding.ASCII.GetBytes(filter + "\0");
         var prog = Marshal.AllocHGlobal(16);   // struct bpf_program { u_int bf_len; struct bpf_insn *bf_insns; }
         try
         {
             int rc;
-            fixed (byte* f = filter) rc = _compile(_pcap, prog, f, 1, 0xFFFFFFFF);
-            if (rc != 0 || _setFilter(_pcap, prog) != 0) { var e = Error(); Dispose(); throw new InvalidOperationException("capture filter: " + e); }
+            fixed (byte* f = f8) rc = _compile(_pcap, prog, f, 1, 0xFFFFFFFF);
+            if (rc != 0) throw new InvalidOperationException("capture filter: " + Error());
+            rc = _setFilter(_pcap, prog);
             _freeCode(prog);
+            if (rc != 0) throw new InvalidOperationException("capture filter: " + Error());
         }
         finally { Marshal.FreeHGlobal(prog); }
     }
@@ -153,7 +174,15 @@ public sealed unsafe class NpcapSource : IPacketSource
         finally { _freeAllDevs(all); }
     }
 
-    public (DateTime At, byte[] Ip)? Next()
+    public (DateTime At, byte[] Ip)? Next() =>
+        NextFrame() is { } f && IpOf(f.Frame, _link) is { } ip ? (f.At, ip) : null;
+
+    /// <summary>
+    /// Blocks for the next whole frame as the card handed it (link header included, see <see cref="LinkType"/>) or a short
+    /// timeout: null on a timeout. <c>Length</c> is the frame's length on the wire, which is more than the bytes kept only
+    /// past <see cref="SnapLen"/>.
+    /// </summary>
+    public (DateTime At, byte[] Frame, int Length)? NextFrame()
     {
         if (_pcap == IntPtr.Zero) throw new ObjectDisposedException(nameof(NpcapSource));
         IntPtr hdr, data;
@@ -161,10 +190,9 @@ public sealed unsafe class NpcapSource : IPacketSource
         if (rc == 0) return null;
         if (rc < 0) throw new InvalidOperationException("Npcap: " + Error());
         // struct pcap_pkthdr on Windows: timeval { long sec; long usec } (4 bytes each), caplen, len
-        int sec = Marshal.ReadInt32(hdr), usec = Marshal.ReadInt32(hdr, 4), cap = Marshal.ReadInt32(hdr, 8);
-        var at = DateTime.UnixEpoch.AddSeconds(sec).AddTicks(usec * 10L);
-        var frame = new ReadOnlySpan<byte>((void*)data, cap);
-        return IpOf(frame, _link) is { } ip ? (at, ip) : null;
+        int sec = Marshal.ReadInt32(hdr), usec = Marshal.ReadInt32(hdr, 4), cap = Marshal.ReadInt32(hdr, 8), len = Marshal.ReadInt32(hdr, 12);
+        var at = DateTime.UnixEpoch.AddSeconds((uint)sec).AddTicks(usec * 10L);
+        return (at, new ReadOnlySpan<byte>((void*)data, cap).ToArray(), Math.Max(len, cap));
     }
 
     /// <summary>The IPv4 packet inside a captured frame: Ethernet (with VLAN tags), loopback or raw IP.</summary>

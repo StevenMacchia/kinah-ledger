@@ -12,7 +12,7 @@ namespace KinahLedger.Packets;
 ///
 /// It only listens: the copy comes from Npcap or a raw socket (Packets/Sources.cs), filtered to the game's own server
 /// connection, found from the game's process id in Windows' connection table. Nothing is sent, the game is never touched,
-/// and no packet is kept: only the decoded changes go to the log.
+/// and no packet is kept: only the decoded changes go to the log (a PC that asked for a local recording keeps one, Packets/PacketLog.cs).
 /// </summary>
 public sealed class PacketReader : IDisposable
 {
@@ -227,7 +227,7 @@ public sealed class PacketReader : IDisposable
     const long LogMax = 2_000_000;
     static readonly object LogGate = new();
 
-    static void Log(string line)
+    internal static void Log(string line)
     {
         try
         {
@@ -242,7 +242,7 @@ public sealed class PacketReader : IDisposable
         catch (Exception) { /* the log is for checking: never a reason to stop reading */ }
     }
 
-    static string Local(DateTime utc) => utc.ToLocalTime().ToString("HH:mm:ss.f");
+    internal static string Local(DateTime utc) => utc.ToLocalTime().ToString("HH:mm:ss.f");
     static string Signed(long v) => v >= 0 ? $"+{v:N0}" : $"−{-v:N0}";
 
     public void Dispose() { StopCapture(); _decoder?.Dispose(); _decoder = null; }

@@ -52,7 +52,7 @@ internal static class Program
         // (options-test, ui-shot and accuracy-test too: their demo windows wrote "Goal reached", "Marked … as wrong" and undo-bar
         // notes into Steven's reads.log, 160 lines on 2026-11-11, and their counts beside it)
         if (cmd is "data-update" or "data-check" or "capture-test" or "calib-shot" or "bench" or "replay-bank" or "log-mine" or "market-test"
-                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "packet-replay" or "packet-live")
+                or "options-test" or "ui-shot" or "accuracy-test" or "packet-test" or "packet-replay" or "packet-live" or "packet-record")
             CrashLog.DirOverride = TestTemp.Path("KinahLedger-test-logs");
         // ...and count with the data files this build carries, never the player's kept copies from the site (2026-11-06: a
         // change to instances.txt was invisible to parse-test and the replays while a kept copy of the old file was up to date)
@@ -132,6 +132,8 @@ internal static class Program
                 case "packet-test": return KinahLedger.Packets.PacketTests.Run(settings);
                 case "packet-live": return KinahLedger.Packets.PacketTests.Live(settings.ProcessHints, int.TryParse(opts.GetValueOrDefault("seconds"), out var psec) ? psec : 30);
                 case "packet-replay": if (pos.Count == 0) { Console.WriteLine("packet-replay <capture.pcapng> [--port 13328]"); return 2; } return KinahLedger.Packets.PacketTests.Replay(pos[0], int.TryParse(opts.GetValueOrDefault("port"), out var pport) ? pport : 13328);
+                case "packet-record": return KinahLedger.Packets.PacketRecord.Run(settings.ProcessHints, opts);
+                case "packet-log": return KinahLedger.Packets.PacketLog.Command(pos.Count > 0 ? pos[0] : null, settings.ProcessHints, int.TryParse(opts.GetValueOrDefault("seconds"), out var lsec) ? lsec : 40);
                 case "market-test": return MarketTest(settings, opts);
                 case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
                 case "market-watch": return MarketWatch(settings, opts);
@@ -449,11 +451,22 @@ Screen reading (works today; the chat, the zone and the Market are found on thei
                                 floor for slots): each run's kept table pictures read again; a run that surely reads fewer
                                 slots takes the new read (instances.pre-recount.jsonl kept beside each file changed).
                                 --dry-run writes nothing; run it on a copy of the KinahLedger folder
+Network reading (a copy of the game server's traffic through Npcap, npcap.com; only listens, needs no admin):
+  packet-test                   self-test of the packet reader's parts and its counting (made-up packets)
+  packet-live [--seconds 30]    the packet reader against the game running now, each change as it comes
+  packet-replay <capture.pcapng> [--port 13328]  the packet reader over a saved capture
+  packet-record [--minutes 10] [--out folder]  record the game server's traffic for a few minutes, with reads.log's lines
+                                for them, into capture-<date-time>\ (capture.pcapng, chat.log, info.json); Ctrl+C stops
+                                early and still saves. --out defaults to kinah-bench\packets beside the repo, else
+                                Documents\KinahLedger captures; --seconds n for a short one; --self-test writes made-up packets
+  packet-log on|off|status      while on, the running tracker keeps a local recording of the game server's traffic, one
+                                file an hour in %LOCALAPPDATA%\KinahLedger\packets (48 hours, 2 GB at most; never uploaded).
+                                Off by default; KL_PACKET_LOG=1 turns it on too
   reset-id                      replace the random install ID used for uploads
   update [--check]              install the newest version from kinahledger.com now (--check only says whether there is one)
         [--manifest url]        read another version file (a local test server)
 
-The tracker only ever reads the screen: it never captures network traffic, reads game memory or sends input to the game.
+The tracker only reads: the screen, and with Npcap a copy of the game server's traffic. It never reads game memory or sends input to the game.
 
 options: --process aion[,other]");
 
