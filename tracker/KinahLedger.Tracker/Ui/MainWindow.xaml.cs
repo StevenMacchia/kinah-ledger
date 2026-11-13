@@ -2038,7 +2038,7 @@ public partial class MainWindow : Window
         }
         var e = new SessionEngine(_items); var t = DateTime.UtcNow;
         // a price board for the layout render, as the site would send it, so the value tile shows a figure
-        PriceBook.SetBoard(new() { ["Thick hide"] = 1_100, ["Spiritstone"] = 7_499, ["Manastone"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });
+        PriceBook.SetBoard(new() { ["Raw Leather"] = 1_100, ["Spiritstone"] = 7_499, ["Power Shard"] = 4_200, ["Orichalcum Ore"] = 1_950, ["Fine Orichalcum Ore"] = 9_800, ["Sapphire Gemstone"] = 12_000, ["Ruby Gemstone"] = 12_000, ["Odyle"] = 2_300, ["Kukuru"] = 900 });
         void Drop(string n, int c, bool b = false) { for (int i = 0; i < c; i++) e.Apply(new ItemAcquired(t, _items.IdOf(n), 1, b)); }
         void Kills(int n, int kinah) { for (int i = 0; i < n; i++) { e.Apply(new KinahChanged(t, kinah + (i % 7) * 40, false)); e.Apply(new CurrencyGained(t, "Oculazen Soul Points", 1)); } }
         void Pet(string n, int c) { for (int i = 0; i < c; i++) e.Apply(new PetCrystal(t, n + " Soul Crystal", 1)); }
@@ -2049,7 +2049,7 @@ public partial class MainWindow : Window
                 // a layout render of farming and gathering at once: mobs and nodes in the same stretch
                 e.CreditZone("Western Cantas Valley", 42 * 60 + 17);
                 e.SetTarget("Abyss Drakan Scout", t); Kills(61, 3690);
-                Drop("Thick hide", 22); Drop("Spiritstone", 14);
+                Drop("Raw Leather", 22); Drop("Spiritstone", 14);
                 Drop("Orichalcum Ore", 38); Drop("Sapphire Gemstone", 4); Drop("Odyle", 12);
                 for (int i = 0; i < 5; i++) e.Apply(new GatherFailed(t, "Essence Extraction"));
                 break;
@@ -2066,7 +2066,7 @@ public partial class MainWindow : Window
                 e.SetTarget("Abyss Drakan Scout", t); Kills(94, 3690);
                 e.SetTarget("Abyss Drakan Striker", t); Kills(52, 4120);
                 e.SetTarget("Abyss Drakan Striker", t.AddMinutes(-5)); Kills(15, 3500);   // the bar went quiet: nobody's
-                Drop("Thick hide", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Manastone", 8); Drop("Aether shard", 7); Drop("Enchantment stone", 3); Drop("Greater manastone", 1);
+                Drop("Raw Leather", 41); Drop("Spiritstone", 26); Drop("Fresh Fruit", 19); Drop("Power Shard", 8); Drop("Superior Power Shard", 7); Drop("Fairy's Dream Wing Featherdown", 3); Drop("Lesser Abyssal Manastone", 1);
                 Drop("Orichalcum Ore", 6); Drop("Sapphire Gemstone", 1);
                 // on both Drakans' tables: their odds pool the kills of the two
                 Drop("Soft Balaur Meat", 3); Drop("Refining Stone", 4);

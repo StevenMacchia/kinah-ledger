@@ -292,9 +292,9 @@ public partial class MainWindow
             c.Zones[zone] = z;
             c.Active += active; c.Elapsed += active + 240; c.KillsSeen += kills; c.KinahDrops += kills; c.Kinah += kinah; c.Events += kills * 2 + z.Drops;
         }
-        Zone("Western Cantas Valley", 72 * 60, 161, 632_000, ("Thick hide", 41), ("Spiritstone", 26), ("Fresh Fruit", 19), ("Manastone", 8), ("Aether shard", 7), ("Enchantment stone", 3), ("Greater manastone", 1), ("Soft Balaur Meat", 3), ("Refining Stone", 4));
-        Zone("Eastern Cantas Valley", 58 * 60, 148, 560_000, ("Thick hide", 37), ("Spiritstone", 22), ("Fresh Fruit", 15), ("Manastone", 11), ("Aether shard", 5), ("Enchantment stone", 3), ("Soft Balaur Meat", 3), ("Refining Stone", 3));
-        Zone("Altamia Canyon", 31 * 60, 103, 360_000, ("Thick hide", 18), ("Spiritstone", 13), ("Fresh Fruit", 10), ("Aether shard", 3), ("Enchantment stone", 1), ("Greater manastone", 1), ("Soft Balaur Meat", 1), ("Refining Stone", 2), ("Orichalcum Ore", 6));
+        Zone("Western Cantas Valley", 72 * 60, 161, 632_000, ("Raw Leather", 41), ("Spiritstone", 26), ("Fresh Fruit", 19), ("Power Shard", 8), ("Superior Power Shard", 7), ("Fairy's Dream Wing Featherdown", 3), ("Lesser Abyssal Manastone", 1), ("Soft Balaur Meat", 3), ("Refining Stone", 4));
+        Zone("Eastern Cantas Valley", 58 * 60, 148, 560_000, ("Raw Leather", 37), ("Spiritstone", 22), ("Fresh Fruit", 15), ("Power Shard", 11), ("Superior Power Shard", 5), ("Fairy's Dream Wing Featherdown", 3), ("Soft Balaur Meat", 3), ("Refining Stone", 3));
+        Zone("Altamia Canyon", 31 * 60, 103, 360_000, ("Raw Leather", 18), ("Spiritstone", 13), ("Fresh Fruit", 10), ("Superior Power Shard", 3), ("Fairy's Dream Wing Featherdown", 1), ("Lesser Abyssal Manastone", 1), ("Soft Balaur Meat", 1), ("Refining Stone", 2), ("Orichalcum Ore", 6));
         // passed through on the way (2026-10-28): under a minute, so it gets no chip, its one kill counted in All zones
         Zone("Drana Cultivation Area", 25, 1, 400);
         var d = new SessionEngine(_items);

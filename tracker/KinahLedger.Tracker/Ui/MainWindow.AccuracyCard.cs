@@ -142,7 +142,7 @@ public partial class MainWindow
     {
         var a = new AccuracyScore(); var t = DateTime.UtcNow.AddMinutes(-40);
         for (int i = 0; i < 230; i++) a.Counted(t.AddSeconds(i * 9), $"{3690 + (i % 7) * 40:N0} Kinah", true, "k:" + (3690 + (i % 7) * 40), "counter", true);
-        for (int i = 0; i < 60; i++) a.Counted(t.AddSeconds(i * 30 + 4), "Thick hide ×1", false, "i:thick hidex1", "row", false);
+        for (int i = 0; i < 60; i++) a.Counted(t.AddSeconds(i * 30 + 4), "Raw Leather ×1", false, "i:raw leatherx1", "row", false);
         for (int i = 0; i < 4; i++) a.Counted(t.AddSeconds(i * 400 + 7), "Spiritstone ×1", false, "i:spiritstonex1", null, false);
         a.Refused(DateTime.UtcNow.AddMinutes(-6), "Acquired 2367 Kina.", 2367);
         _demoScore = a;
