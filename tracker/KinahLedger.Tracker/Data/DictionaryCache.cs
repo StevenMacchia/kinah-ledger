@@ -14,7 +14,9 @@ namespace KinahLedger.Data;
 public static class DictionaryCache
 {
     public const string Url = "https://kinahledger.com/data/items.json";
-    public static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger");
+    /// <summary>A folder to use instead of the player's: the demo-window test commands point it at an empty one, so they count with the list built into the exe, as CI does.</summary>
+    public static string? DirOverride { get; set; }
+    public static string Dir => DirOverride ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger");
     public static string FilePath => Path.Combine(Dir, "items.json");
     static string EtagPath => FilePath + ".etag";
     public static string Note { get; private set; } = "";
