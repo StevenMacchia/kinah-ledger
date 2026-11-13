@@ -300,13 +300,14 @@ public partial class MainWindow
     /// <summary>Fills a chip: the icon, the big figure over its label.</summary>
     /// <paramref name="roll"/>: the big figure's key and value, so it rolls from the last one shown under that key (Motion.Number;
     /// money tints green as it rises, a count of kills doesn't).
-    static void QChipFill(Border chip, FrameworkElement icon, string big, string small, (string Key, double Value, bool Money)? roll = null)
+    /// <param name="quiet">On a reference card (UX pass, 2026-11-13): the big figure at row size, so it doesn't read as a working card.</param>
+    static void QChipFill(Border chip, FrameworkElement icon, string big, string small, (string Key, double Value, bool Money)? roll = null, bool quiet = false)
     {
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
         icon.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(icon);
         var text = new StackPanel { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var b = QT(big, 15, FontWeights.SemiBold, "Ink", trim: true); b.LineHeight = 17; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        var b = QT(big, quiet ? 13 : 15, FontWeights.SemiBold, "Ink", trim: true); b.LineHeight = 17; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         if (roll is { } r) Motion.Number(b, r.Key, r.Value, r.Money ? v => Amounts.Short(v) : v => Math.Round(v).ToString("N0"), r.Money ? 0 : -1);
         var sm = QT(small, 11, FontWeights.Medium, "Muted", trim: true); sm.LineHeight = 14; sm.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sm.Margin = new Thickness(0, 1, 0, 0);
         text.Children.Add(b); text.Children.Add(sm);
@@ -314,14 +315,54 @@ public partial class MainWindow
         chip.Child = g;
     }
 
+    /// <summary>One part of a hero's line of figures: the figure, its word, the hover text, and what a click opens (none: a plain figure).</summary>
+    /// <param name="On">What it opens is open: the part wears its tone's tint and its word the tone.</param>
+    /// <param name="Roll">The figure's Motion.Number key and value, so it rolls from the last one shown under that key.</param>
+    internal sealed record QStat(string Fig, string Word, string Tip, Action? Click = null, bool On = false, string Tone = "Gold", (string Key, double Value, bool Money)? Roll = null);
+
+    /// <summary>
+    /// A hero's line of figures (UX pass, 2026-11-13): "632.3K Kinah · 261.7K loot · 161 kills", the figures in ink, their
+    /// words muted, a faint dot between. It replaced the row of three chips under each hero, cards that said what one line
+    /// in the hero can, at the height of a card. A part that opens something has the hand, a tint under the mouse and its
+    /// tone's tint while what it opens is open; the host's left margin of -6 lines the first figure up with the hero's text.
+    /// </summary>
+    static void QStatsFill(Panel host, IReadOnlyList<QStat> parts)
+    {
+        host.Children.Clear();
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var p = parts[i];
+            if (i > 0) { var dot = QT("·", 12, FontWeights.Bold, "Faint"); dot.VerticalAlignment = VerticalAlignment.Center; host.Children.Add(dot); }
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            var fig = QT(p.Fig, 13, FontWeights.SemiBold, "Ink"); fig.VerticalAlignment = VerticalAlignment.Bottom;
+            if (p.Roll is { } r) Motion.Number(fig, r.Key, r.Value, r.Money ? v => Amounts.Short(v) : v => Math.Round(v).ToString("N0"), r.Money ? 0 : -1);
+            var word = QT(p.Word, 12, FontWeights.Medium, p.On ? p.Tone : "Muted"); word.VerticalAlignment = VerticalAlignment.Bottom; word.Margin = new Thickness(4, 0, 0, 0);
+            sp.Children.Add(fig); sp.Children.Add(word);
+            var b = new Border { Child = sp, Padding = new Thickness(6, 2, 6, 3), CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, ToolTip = p.Tip, Tag = "stat" };
+            ToolTipService.SetInitialShowDelay(b, 300);
+            if (p.Click is { } click)
+            {
+                b.Cursor = Cursors.Hand;
+                void Rest() { if (p.On) b.SetResourceReference(Border.BackgroundProperty, QTintOf(p.Tone)); else b.Background = Brushes.Transparent; }
+                b.MouseEnter += (_, _) => b.SetResourceReference(Border.BackgroundProperty, p.On ? QTintOf(p.Tone) : "ItemHover");
+                b.MouseLeave += (_, _) => Rest();
+                b.MouseLeftButtonUp += (_, e) => { e.Handled = true; click(); };
+                System.Windows.Automation.AutomationProperties.SetName(b, $"{p.Fig} {p.Word}");
+                Rest();
+            }
+            host.Children.Add(b);
+        }
+    }
+
     /// <summary>A card's head: the icon (game art for a concept), the title, a note on the right in the muted tone, and the chevron when the card opens on a click.</summary>
-    static Grid QHead(string icon, string title, string right = "", Path? chev = null)
+    /// <param name="quiet">A reference card's head (UX pass, 2026-11-13): the art smaller and dimmer, the title in the muted tone at medium weight.</param>
+    static Grid QHead(string icon, string title, string right = "", Path? chev = null, bool quiet = false)
     {
         var g = new Grid { Margin = new Thickness(0, 0, 0, 2), Background = Brushes.Transparent };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var ic = QGlyph(icon, 16, "Lilac", 2); ic.Margin = new Thickness(0, 0, 8, 0); g.Children.Add(ic);
-        var t = QT(title, 12, FontWeights.SemiBold, "Ink"); Grid.SetColumn(t, 1); g.Children.Add(t);
+        var ic = QGlyph(icon, quiet ? 13 : 16, "Lilac", 2); ic.Margin = new Thickness(0, 0, quiet ? 7 : 8, 0); if (quiet) ic.Opacity = 0.75; g.Children.Add(ic);
+        var t = QT(title, 12, quiet ? FontWeights.Medium : FontWeights.SemiBold, quiet ? "Muted" : "Ink"); Grid.SetColumn(t, 1); g.Children.Add(t);
         var r = QT(right, 11, FontWeights.Medium, "Muted", trim: true); r.HorizontalAlignment = HorizontalAlignment.Right; r.Margin = new Thickness(10, 0, 0, 0); r.Tag = "right";
         Grid.SetColumn(r, 2); g.Children.Add(r);
         if (chev != null) { Grid.SetColumn(chev, 3); g.Children.Add(chev); g.Cursor = Cursors.Hand; }

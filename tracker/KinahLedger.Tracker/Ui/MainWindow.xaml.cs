@@ -389,11 +389,12 @@ public partial class MainWindow : Window
     void Redraw()
     {
         var e = Shown();
-        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); FillToday(); return; }   // a layout render keeps its sample
+        if (_demo && _demoEngine != null) { FillNumbers(_demoEngine, _demoElapsed); FillLive(); FillAccuracyCard(); FillToday(); BalanceFull(); return; }   // a layout render keeps its sample
         if (e != null) FillNumbers(e, e.Active); else { ShowTable(null); _hasSummary = false; _lootHere = null; FillLoot(); }
         FillLive();
         FillAccuracyCard();
         FillToday();
+        BalanceFull();   // Full view: Just dropped and Where to farm in the column that evens the two out (Ui/MainWindow.QuestFull.cs)
     }
 
     /// <summary>One line of the recent pickups strip; Tip says, in plain words, how it was read (on hover).</summary>
@@ -1276,11 +1277,17 @@ public partial class MainWindow : Window
         RightColDef.Width = new GridLength(full ? 16 + 662 : 0);
         // the feed and the rate with LOOT and Where to farm now under them and the footer closing that card, in both views;
         // Full view adds the drops and the chips on the right
-        if (full) { MoveTo(SummaryCard, QuestRight, 0); MoveTo(WhereSection, QuestRight, 3); }
-        else { MoveTo(SummaryCard, LeftCol, LeftCol.Children.IndexOf(ChipPanel) + 1); MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1); }
+        // Full view: the bag heads the second column; Just dropped and Where to farm go to whichever column evens the two out (BalanceFull)
+        if (full) { MoveTo(SummaryCard, QuestRight, 0); _fullSides = null; }
+        else
+        {
+            MoveTo(SummaryCard, LeftCol, LeftCol.Children.IndexOf(BagStrip) + 1);
+            MoveTo(FeedCard, LeftCol, LeftCol.Children.IndexOf(GoalsCard) + 1);
+            MoveTo(WhereSection, LeftCol, LeftCol.Children.IndexOf(FeedCard) + 1);
+        }
         if (!farm || full) BagStrip.Visibility = Visibility.Collapsed;
         MoveTo(StatusBar, full ? LeftCol : LedgerCol, -1);
-        if (!farm) { ChipsRow.Visibility = Visibility.Collapsed; ChipPanel.Visibility = Visibility.Collapsed; }
+        if (!farm) { HeroStats.Visibility = Visibility.Collapsed; ChipPanel.Visibility = Visibility.Collapsed; }
         System.Windows.Controls.Grid.SetRow(StatusBar, 3); System.Windows.Controls.Grid.SetColumnSpan(StatusBar, 2);
         HeadStack.Width = full ? 662 * 2 + 16 : 662;
         StatusBar.Width = 662;

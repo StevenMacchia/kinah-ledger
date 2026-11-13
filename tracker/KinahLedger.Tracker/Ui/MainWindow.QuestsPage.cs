@@ -151,7 +151,7 @@ public partial class MainWindow
         // All time: the long chains from this PC's tally, the nearest to done first; two at rest, the rest behind "N more"
         // (2026-11-08 review: seven "1,000 X · 5 pts" rows read as one)
         QuestsAllTimeHost.Children.Clear();
-        QuestsAllTimeHost.Children.Add(QHead("Globe", "All time", "this PC's tally since quests began"));
+        QuestsAllTimeHost.Children.Add(QHead("Globe", "All time", "this PC's tally since quests began", quiet: true));
         var atRows = allTime.Where(q => !Repeats(q)).OrderByDescending(q => q.Share).ToList();
         bool atOpen = QOpen("quests-alltime");
         int atShow = atOpen || atRows.Count <= AllTimeAtRest + 1 ? atRows.Count : AllTimeAtRest;
@@ -176,7 +176,7 @@ public partial class MainWindow
         QuestsDoneHost.Children.Clear();
         var byDay = Quests.DoneByDay(_questLog, nowLocal);
         // the points are on the page's head and each day's label, so the head counts the quests alone
-        QuestsDoneHost.Children.Add(QHead("Check", "Done", _questLog.Done.Count == 0 ? "" : $"{_questLog.Done.Count} quest{(_questLog.Done.Count == 1 ? "" : "s")} in the last {Quests.KeepDays} days"));
+        QuestsDoneHost.Children.Add(QHead("Check", "Done", _questLog.Done.Count == 0 ? "" : $"{_questLog.Done.Count} quest{(_questLog.Done.Count == 1 ? "" : "s")} in the last {Quests.KeepDays} days", quiet: true));
         if (byDay.Count == 0) QuestsDoneHost.Children.Add(PageNote("Nothing reached yet. A quest you reach shows on the panel over the game for a few seconds, then lands here."));
         int days = 0; bool earlierOpen = QOpen("quests-earlier"); int hidden = 0, hiddenPts = 0;
         foreach (var (day, done) in byDay)

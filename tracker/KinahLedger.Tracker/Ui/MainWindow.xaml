@@ -473,16 +473,26 @@
                 <Ellipse x:Name="ReadingDot" Width="6" Height="6" Fill="{DynamicResource Good}" Margin="0,1,6,0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="ReadingLbl" Foreground="{DynamicResource Faint}" FontSize="11.5" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="420"/>
               </StackPanel>
-              <!-- the hour, big, and its unit -->
-              <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                <!-- the light that crosses the figure on a new best or a day's milestone, and their tags after the unit, drawn over the card (Ui/MainWindow.Bests.cs) -->
-                <Grid>
-                  <TextBlock x:Name="HeadRate" Cursor="Hand" MouseLeftButtonUp="HeadRate_Click" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
-                  <Rectangle x:Name="HeadLight" IsHitTestVisible="False" Visibility="Collapsed"/>
-                </Grid>
-                <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
-                <Canvas x:Name="BestTags"/>
-              </StackPanel>
+              <!-- the hour, big, and its unit; beside them the hour's last 30 minutes as a faint line (UX pass, 2026-11-13,
+                   DrawHeroSpark in Ui/MainWindow.QuestFarm.cs): a click opens the chart, as "chart" does -->
+              <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal">
+                  <!-- the light that crosses the figure on a new best or a day's milestone, and their tags after the unit, drawn over the card (Ui/MainWindow.Bests.cs) -->
+                  <Grid>
+                    <TextBlock x:Name="HeadRate" Cursor="Hand" MouseLeftButtonUp="HeadRate_Click" FontFamily="{DynamicResource DisplayFont}" FontSize="44" FontWeight="Bold" Foreground="{DynamicResource Ink}" Text=" " LineHeight="42" LineStackingStrategy="BlockLineHeight"/>
+                    <Rectangle x:Name="HeadLight" IsHitTestVisible="False" Visibility="Collapsed"/>
+                  </Grid>
+                  <TextBlock x:Name="HeadRateLbl" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource Muted}" Margin="8,0,0,7" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="230" Text="Kinah and loot an hour, once something is counted"/>
+                  <Canvas x:Name="BestTags"/>
+                </StackPanel>
+                <Canvas x:Name="HeroSpark" Grid.Column="1" Height="30" Margin="14,0,0,7" VerticalAlignment="Bottom" Background="Transparent" Cursor="Hand" Visibility="Collapsed"
+                        ToolTip="This hour over the last 30 minutes, a sample a minute. Click for the chart." ToolTipService.InitialShowDelay="400" AutomationProperties.Name="The hour's trend">
+                  <Path x:Name="HeroSparkFill" StrokeThickness="0" IsHitTestVisible="False"/>
+                  <Polyline x:Name="HeroSparkLine" Stroke="{DynamicResource Gold}" StrokeThickness="1.6" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.6" IsHitTestVisible="False"/>
+                  <Ellipse x:Name="HeroSparkDot" Width="5" Height="5" Fill="{DynamicResource Gold}" Opacity="0.85" IsHitTestVisible="False"/>
+                </Canvas>
+              </Grid>
               <!-- the chase: this hour against your best here, a bar toward the flag (mint once it is beaten) -->
               <StackPanel x:Name="ChaseBox" Margin="0,8,0,0" Visibility="Collapsed">
                 <Grid>
@@ -500,6 +510,10 @@
                   </Border>
                 </Grid>
               </StackPanel>
+              <!-- the count's figures, one line (UX pass, 2026-11-13: it was three chips under the card): Kinah, loot and kills, or a
+                   gathering stretch's attempts, what they gave and the items; Kinah opens Who pays, loot the bag, kills Kills
+                   (FillChips, Ui/MainWindow.QuestFarm.cs) -->
+              <WrapPanel x:Name="HeroStats" Margin="-6,7,0,-3" Visibility="Collapsed"/>
               <!-- your usual and best here (Compare B, 0.9.3, Ui/MainWindow.Compare.cs): only with Options › Compare zones and runs on -->
               <Border x:Name="UsualBox" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Line}" Margin="0,10,0,0" Padding="0,8,0,0" Background="Transparent" Visibility="Collapsed">
                 <TextBlock x:Name="UsualLine" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" LineHeight="19" TextWrapping="Wrap"/>
@@ -561,14 +575,10 @@
         </StackPanel>
       </Border>
 
-      <!-- three chips (Quest): Kinah, loot, kills; a click opens what is behind it under the row: Kinah by enemy, the bag,
-           kills by enemy (Ui/MainWindow.QuestFarm.cs) -->
-      <Grid x:Name="ChipsRow" Margin="0,8,0,0" Visibility="Collapsed">
-        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
-        <Border x:Name="ChipKinah" Style="{StaticResource QChip}"/>
-        <Border x:Name="ChipLoot" Grid.Column="2" Style="{StaticResource QChip}"/>
-        <Border x:Name="ChipKills" Grid.Column="4" Style="{StaticResource QChip}"/>
-      </Grid>
+      <!-- what a figure of the hero's line opens, under the hero: Kinah by enemy (Who pays) or kills by enemy; a reference card -->
+      <Border x:Name="ChipPanel" Style="{StaticResource QRefCard}" Margin="0,8,0,0" Visibility="Collapsed">
+        <StackPanel x:Name="ChipPanelHost"/>
+      </Border>
       <!-- the bag at a glance (Compact): the session's items as inventory slots with their counts, the total on the right;
            a click on the head opens the bag card under it (Ui/MainWindow.QuestFarm.cs FillBagStrip) -->
       <Border x:Name="BagStrip" Style="{StaticResource QCard}" Margin="0,8,0,0" Padding="14,10,14,10" Visibility="Collapsed">
@@ -584,16 +594,13 @@
           <WrapPanel x:Name="BagStripHost" Margin="0,8,0,-6"/>
         </StackPanel>
       </Border>
-      <Border x:Name="ChipPanel" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
-        <StackPanel x:Name="ChipPanelHost"/>
-      </Border>
 
       <!-- the bag (LOOT since 2026-10-28, Ui/MainWindow.Loot.cs): what was picked up, as slots with the game-tooltip card on
            hover, for one period at a time: this zone since you arrived (or the run, or every zone), Today, or the Week. It
            opens from the loot chip in Compact; in Full view it is a column of its own -->
       <Border x:Name="SummaryCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
         <StackPanel>
-          <Grid x:Name="SessionHead" Margin="0,0,0,8">
+          <Grid x:Name="SessionHead" Margin="0,0,0,8" Background="Transparent">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Image Source="/Art/attendance.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
             <TextBlock Grid.Column="1" Text="The bag" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -656,12 +663,12 @@
 
       <!-- Just dropped (Quest): the last five things counted, newest first, each with the game's icon and its worth in mint;
            a line that looks wrong is clicked and filed as a miscount report (Ui/MainWindow.Live.cs) -->
-      <Border x:Name="FeedCard" Style="{StaticResource QCard}" Margin="0,8,0,0">
+      <Border x:Name="FeedCard" Style="{StaticResource QRefCard}" Margin="0,8,0,0">
         <StackPanel>
           <Grid Margin="0,0,0,2">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Image Source="/Art/attendance.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
-            <TextBlock Grid.Column="1" Text="Just dropped" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <Image Source="/Art/attendance.png" Width="16" Height="16" Margin="0,0,7,0" Opacity="0.75" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+            <TextBlock Grid.Column="1" Text="Just dropped" Style="{StaticResource RefHead}"/>
             <TextBlock x:Name="FeedNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
           </Grid>
           <Border x:Name="FeedBox" Background="Transparent" ClipToBounds="True"
@@ -685,7 +692,7 @@
 
       <!-- Where next (Quest): the zone that pays more than here as one line with a pin; a click opens the board, the best zones
            for the player's gear as bars (FillWhere) -->
-      <Border x:Name="WhereSection" Style="{StaticResource QCard}" Margin="0,8,0,0" Padding="14,10,14,10" Visibility="Collapsed">
+      <Border x:Name="WhereSection" Style="{StaticResource QRefCard}" Margin="0,8,0,0" Visibility="Collapsed">
         <StackPanel>
           <Grid x:Name="WhereHead" Background="Transparent" Cursor="Hand">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -693,7 +700,7 @@
               <Image x:Name="WhereIconPath" Source="/Art/rift.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Border>
             <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-              <TextBlock x:Name="WhereTitle" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="WhereTitle" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
               <TextBlock x:Name="WhereNote" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
@@ -754,12 +761,13 @@
       <!-- the Quest right column (Full view, 2026-11-07, Ui/MainWindow.QuestFull.cs): the bag as tiles (LOOT's card, moved in by
            ApplyView), Kinah by enemy as bars, drop odds as badges, the zone board as bars (Where next, moved in too), gathering as two chips -->
       <StackPanel x:Name="QuestRight" Margin="0,2,0,0" Visibility="Collapsed">
-        <Border x:Name="QuestWho" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed"><StackPanel x:Name="QuestWhoHost"/></Border>
-        <Border x:Name="QuestOdds" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed"><StackPanel x:Name="QuestOddsHost"/></Border>
+        <Border x:Name="QuestWho" Style="{StaticResource QRefCard}" Margin="0,8,0,0" Visibility="Collapsed"><StackPanel x:Name="QuestWhoHost"/></Border>
+        <Border x:Name="QuestOdds" Style="{StaticResource QRefCard}" Margin="0,8,0,0" Visibility="Collapsed"><StackPanel x:Name="QuestOddsHost"/></Border>
+        <!-- gathering: the day's limit (when the game said it) and what each skill gathered; one spans the row when the other has nothing to say -->
         <Grid x:Name="QuestGather" Margin="0,8,0,0" Visibility="Collapsed">
           <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
-          <Border x:Name="GatherChip1" Style="{StaticResource QChip}" Cursor="Arrow"/>
-          <Border x:Name="GatherChip2" Grid.Column="2" Style="{StaticResource QChip}" Cursor="Arrow"/>
+          <Border x:Name="GatherChip1" Style="{StaticResource QRefCard}"/>
+          <Border x:Name="GatherChip2" Grid.Column="2" Style="{StaticResource QRefCard}"/>
         </Grid>
       </StackPanel>
 
@@ -909,9 +917,10 @@
         </Border>
         <Border x:Name="QuestsActiveCard" Style="{StaticResource QCard}"><StackPanel x:Name="QuestsActiveHost"/></Border>
         <Border x:Name="QuestsDailyCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsDailyHost"/></Border>
-        <Border x:Name="QuestsAllTimeCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsAllTimeHost"/></Border>
+        <!-- the tiers (UX pass, 2026-11-13): this session, daily and your goals are worked at; all time and done are looked up -->
+        <Border x:Name="QuestsAllTimeCard" Style="{StaticResource QRefCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsAllTimeHost"/></Border>
         <Border x:Name="QuestsGoalsCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsGoalsHost"/></Border>
-        <Border x:Name="QuestsDoneCard" Style="{StaticResource QCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsDoneHost"/></Border>
+        <Border x:Name="QuestsDoneCard" Style="{StaticResource QRefCard}" Margin="0,8,0,0"><StackPanel x:Name="QuestsDoneHost"/></Border>
       </StackPanel>
 
       <!-- Crafting (direction C, 2026-10-24): the last five crafts beside the session's profit, then This session (every recipe
@@ -951,6 +960,8 @@
                       </Border>
                     </Grid>
                   </StackPanel>
+                  <!-- what came out, spent, sells for: one line (UX pass, 2026-11-13; three chips under the card until then) -->
+                  <WrapPanel x:Name="CraftStats" Margin="-6,7,0,-3" Visibility="Collapsed"/>
                   <!-- the figures the code still writes (crafts, worked, made, spent, sells for): the chips say them -->
                   <TextBlock x:Name="CraftWhat" Visibility="Collapsed"/>
                   <StackPanel x:Name="CraftHealth" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
@@ -966,24 +977,17 @@
             </StackPanel>
           </Border>
 
-          <Grid x:Name="CraftChips" Margin="0,8,0,0" Visibility="Collapsed">
-            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <Border x:Name="ChipCrafts" Style="{StaticResource QChip}" Cursor="Arrow"/>
-            <Border x:Name="ChipSpent" Grid.Column="2" Style="{StaticResource QChip}" Cursor="Arrow"/>
-            <Border x:Name="ChipSells" Grid.Column="4" Style="{StaticResource QChip}" Cursor="Arrow"/>
-          </Grid>
-
           <Border x:Name="CraftNextCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
             <StackPanel x:Name="CraftNextHost"/>
           </Border>
 
           <!-- Just crafted: the last five crafts, worked or failed, with what each made or cost; a line that looks wrong is clicked and reported -->
-          <Border x:Name="CraftFeedCard" Style="{StaticResource QCard}" Margin="0,8,0,0">
+          <Border x:Name="CraftFeedCard" Style="{StaticResource QRefCard}" Margin="0,8,0,0">
             <StackPanel>
               <Grid Margin="0,0,0,2">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <Image Source="/Art/scroll.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
-                <TextBlock Grid.Column="1" Text="Just crafted" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <Image Source="/Art/scroll.png" Width="16" Height="16" Margin="0,0,7,0" Opacity="0.75" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <TextBlock Grid.Column="1" Text="Just crafted" Style="{StaticResource RefHead}"/>
                 <TextBlock x:Name="CraftFeedNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" Text="last five · click one for its recipe"/>
               </Grid>
               <Grid>
@@ -1021,12 +1025,12 @@
           </Border>
 
           <!-- the server's most profitable recipes today (kinahledger.com /crafts), behind its head and Next up's "all N" -->
-          <Border x:Name="BestCraftsCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Visibility="Collapsed">
+          <Border x:Name="BestCraftsCard" Style="{StaticResource QRefCard}" Margin="0,8,0,0" Visibility="Collapsed">
             <StackPanel>
               <Grid x:Name="BestHead" Background="Transparent" Cursor="Hand">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <Image Source="/Art/medalgold.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
-                <TextBlock Grid.Column="1" Text="Best crafts today" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <Image Source="/Art/medalgold.png" Width="16" Height="16" Margin="0,0,7,0" Opacity="0.75" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <TextBlock Grid.Column="1" Text="Best crafts today" Style="{StaticResource RefHead}"/>
                 <TextBlock x:Name="BestNote" Grid.Column="2" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
                 <Path x:Name="BestChev" Grid.Column="3" Style="{StaticResource QChev}"/>
               </Grid>

@@ -106,6 +106,9 @@ public partial class MainWindow
         LootHereBtn.Style = (Style)FindResource(_lootDay || _lootWeek ? "SegOff" : "SegOn");
         LootTodayBtn.Style = (Style)FindResource(_lootDay && !_lootWeek ? "SegOn" : "SegOff");
         LootWeekBtn.Style = (Style)FindResource(_lootWeek ? "SegOn" : "SegOff");
+        FootTotal.Visibility = Visibility.Visible;   // the first side has none (FillLootHere)
+        // in Compact the bag card opened from the hero's loot figure stands in for the strip; its head puts it away again
+        SessionHead.Cursor = FullShown ? null : Cursors.Hand;
         if (_lootWeek) FillLootWeek(); else if (_lootDay) FillLootDay(whole); else FillLootHere();
         FillBagStrip();   // the Compact page's slots with counts (Ui/MainWindow.QuestFarm.cs)
     }
@@ -125,9 +128,12 @@ public partial class MainWindow
         var pets = h.S.Pets ?? new();
         long crystals = pets.Sum(r => Qty(r.Drops));
         int kinds = drops.Count + gathered.Count + (crystals > 0 ? 1 : 0);
-        FootTotalNote.Text = (kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")} · " : "") + TodayLoot.Dur(h.Elapsed.TotalSeconds);
-        if (h.Total > 0) Motion.Number(FootTotal, "foot|here|" + LootHereName, h.Total, v => Fk(v)); else Motion.Blank(FootTotal, "foot|here|" + LootHereName, " ");
-        FootTotal.ToolTip = h.TotalTip;
+        // the UX pass (2026-11-13): this side's Kinah, loot and how long are the hero's (its line and its "Open world · 42 min"),
+        // so the bag says only how many kinds; no Kinah slot and no total, which was the hero line's two figures added up
+        FootTotalNote.Text = kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")}" : "";
+        Motion.Blank(FootTotal, "foot|here|" + LootHereName, " ");
+        FootTotal.ToolTip = null;
+        FootTotal.Visibility = Visibility.Collapsed;
         string Row(DropRow r) => $"{r.Name}:{r.Drops}:{r.DropPct}:{r.PerHour}:{r.Value}:{r.Reported}:{r.Grade}:{r.Sub}";
         var sig = $"here|{LootHereName}|{LootSortMode}|{h.Kinah}|{h.Abyss}|{h.Kills}|{crystals}|{string.Join(";", drops.Select(Row))}|{string.Join(";", gathered.Select(Row))}|"
             + $"{string.Join(",", h.ByEnemy.Take(6).Select(x => x.Where + x.Count))}|{string.Join(",", _todayAll)}|{FullShown}|{Skins.Current}";
@@ -137,7 +143,6 @@ public partial class MainWindow
         if (drops.Count + gathered.Count >= 2) LootSortRow();
         string where = _prefs.AllZones ? "since your last break" : RunShown ? "this run" : "here";
         var slots = new List<FrameworkElement>();
-        if (h.Kinah > 0) slots.Add(KinahSlot(h.Kinah, h.ByEnemy, h.Kills > 0 ? $"{h.Kills:N0} kills · {Fk(h.Kinah / (double)h.Kills)} a kill" : "", "Picked up " + where, "BY ENEMY"));
         if (h.Abyss > 0) slots.Add(AbyssSlot(h.Abyss, h.Elapsed.TotalSeconds, where));
         // a drop that lands grows in, a rare one glows once (Motion.Slot); Kinah and Abyss Points rise with every kill and stay still
         var landHost = "loot-here|" + LootHereName;
@@ -371,6 +376,8 @@ public partial class MainWindow
         if (state.StartsWith("share-")) OpenShareSample(state);
         // the hero's rate chart open, live (Ui/MainWindow.RateChart.cs)
         if (state is "chart" or "chart-hover") ShowChartSample(state);
+        // what a figure of the hero's line opens in Compact (UX pass, 2026-11-13): Who pays, the bag, Kills
+        if (state is "who" or "bag" or "kills") ToggleChip(state);
     }
 
     /// <summary>The chat out of view in a layout render (KL_SHOT_STATE=paused).</summary>

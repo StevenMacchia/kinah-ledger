@@ -170,7 +170,8 @@ public partial class MainWindow
             int k = _liveK;
             var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var chase = QT($"runs here average {Clock(TimeSpan.FromSeconds(avg))}", 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
+            // the average's figure is the line under the bar's ("7:26 a run"); said once (UX pass, 2026-11-13)
+            var chase = QT("this run against the average run here", 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
             var togo = QT("", 11.5, FontWeights.SemiBold, "Gold"); togo.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(togo, 1); row.Children.Add(togo);
             left.Children.Add(row);
             var (bar, fill) = QLiveBar("Gold", 12); bar.Margin = new Thickness(0, 5, 0, 0); left.Children.Add(bar);
@@ -212,15 +213,18 @@ public partial class MainWindow
             else if (known) figs.Add((Fk(value / (double)n), "a run"));
             figs.Add((Clock(TimeSpan.FromSeconds(avg)), "a run"));
             if (known && n > 1 && !bestInFlag) figs.Add((Fk(best), "best run"));
-            var fl = new TextBlock { FontSize = 11.5, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+            // set as the paid-out line under it (QStatsFill's sizes and spacing), so the hero's two lines read as one block
+            var fl = new TextBlock { FontSize = 12, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
             for (int i = 0; i < figs.Count; i++)
             {
-                if (i > 0) fl.Inlines.Add(Q("   ·   ", 11.5, FontWeights.Medium, "Faint"));
-                fl.Inlines.Add(Q(figs[i].Fig, 12.5, FontWeights.Bold, "Ink"));
-                fl.Inlines.Add(Q(" " + figs[i].Word, 11.5, FontWeights.Medium, "Muted"));
+                if (i > 0) fl.Inlines.Add(Q("   ·   ", 12, FontWeights.Bold, "Faint"));
+                fl.Inlines.Add(Q(figs[i].Fig, 13, FontWeights.SemiBold, "Ink"));
+                fl.Inlines.Add(Q(" " + figs[i].Word, 12, FontWeights.Medium, "Muted"));
             }
             fl.ToolTip = big.ToolTip;
             left.Children.Add(fl);
+            // what they paid out, the second line (nothing priced: a line of dashes says nothing)
+            if (known) left.Children.Add(QRunStats(counted, value));
         }
         g.Children.Add(left);
         if (ring != null) { ring.VerticalAlignment = VerticalAlignment.Top; ring.Margin = new Thickness(0, 2, 0, 0); Grid.SetColumn(ring, 2); g.Children.Add(ring); }
@@ -269,29 +273,28 @@ public partial class MainWindow
         if (_liveFill != null && _liveTrack != null) _liveFill.Width = Math.Max(0, _liveTrack.ActualWidth * _liveShare);
     }
 
-    /// <summary>The three chips: what the counted runs paid out as Kinah, as materials, as bound gear (or the slots not named).</summary>
-    FrameworkElement QRunChips(List<InstanceRun> counted, long value)
+    /// <summary>
+    /// What the counted runs paid out, as the hero's second line (UX pass, 2026-11-13; three chips under the hero until
+    /// then, the Farming page's grammar now): the Kinah, the materials' worth, the bound gear (or the slots not named).
+    /// Each figure is a text block of its own, as the figures check reads it.
+    /// </summary>
+    FrameworkElement QRunStats(List<InstanceRun> counted, long value)
     {
         var (kinah, mats, matKinds, gear, unread, curr) = RunLootSums(counted);
-        var row = new UniformGrid { Columns = 3, Margin = new Thickness(-4, 8, -4, 0) };
-        Border Chip(FrameworkElement icon, string big, string small, string tip)
+        var parts = new List<QStat>
         {
-            var b = new Border { Margin = new Thickness(4, 0, 4, 0), ToolTip = tip };
-            b.SetResourceReference(StyleProperty, "QChip"); b.Cursor = Cursors.Arrow;
-            ToolTipService.SetInitialShowDelay(b, 300);
-            QChipFill(b, icon, big, small);
-            return b;
-        }
-        row.Children.Add(Chip(QIconBox("Coin", "Gold"), kinah > 0 ? Fk(kinah) : "–", kinah > 0 && value > 0 ? $"Kinah · {Math.Round(100.0 * kinah / value):0}% of the value" : "Kinah paid out",
-            kinah > 0 ? $"{kinah:N0} Kinah paid by the counted runs here." : "No Kinah read from the runs here."));
-        row.Children.Add(Chip(QIconBox("Sack", "Mint"), mats > 0 ? Fk(mats) : matKinds > 0 ? "no price" : "–", matKinds > 0 ? $"materials sell for · {matKinds} kind{(matKinds == 1 ? "" : "s")}" : "materials",
-            mats > 0 ? $"The materials from the counted runs sell for {Fk(mats)} at the lowest Market price, {PriceBook.Cut}." : "Nothing priced among the materials yet."));
-        if (gear > 0 || unread == 0)
-            row.Children.Add(Chip(QIconBox("Shield", "Lilac"), gear > 0 ? gear.ToString("N0") : curr > 0 ? curr.ToString("N0") : "–", gear > 0 ? "bound gear · no price" : curr > 0 ? $"currenc{(curr == 1 ? "y" : "ies")}" : "bound gear",
-                gear > 0 ? "Gear from an expedition or event is bound to you, so it adds nothing to the value." : curr > 0 ? "Amounts, not pieces: a currency is never sold." : "No gear from the runs here yet."));
-        else
-            row.Children.Add(Chip(QIconBox("Q", "Coral"), unread.ToString("N0"), $"slot{(unread == 1 ? "" : "s")} not named", "Slots on the reward screens the tracker saw but couldn't name. They aren't guessed, and they aren't in the value."));
-        return row;
+            new(kinah > 0 ? Fk(kinah) : "–", "Kinah",
+                (kinah > 0 ? $"{kinah:N0} Kinah paid by the counted runs here" + (value > 0 ? $", {Math.Round(100.0 * kinah / value):0}% of the value." : ".") : "No Kinah read from the runs here.")),
+            new(mats > 0 ? Fk(mats) : matKinds > 0 ? "no price" : "–", "materials",
+                (matKinds > 0 ? $"{matKinds} kind{(matKinds == 1 ? "" : "s")} of materials. " : "") + (mats > 0 ? $"They sell for {Fk(mats)} at the lowest Market price, {PriceBook.Cut}." : "Nothing priced among the materials yet.")),
+        };
+        // the bound gear and the currencies are Paid out here's own line and slots ("13 gear · bound, no value"): said once, there
+        if (unread > 0 && gear == 0)
+            parts.Add(new(unread.ToString("N0"), $"slot{(unread == 1 ? "" : "s")} not named", "Slots on the reward screens the tracker saw but couldn't name. They aren't guessed, and they aren't in the value."));
+        _ = curr;
+        var line = new WrapPanel { Margin = new Thickness(-6, 4, 0, -3) };
+        QStatsFill(line, parts);
+        return line;
     }
 
     /// <summary>A loot slot: the item's icon at 46 px with the count in a badge, the game-tooltip card on hover, pinned with Set a goal on a click.</summary>

@@ -503,11 +503,13 @@ public static partial class WpfApp
             "Compact: the hero and the chips, the bag behind its chip, no tables, Where next folded");
         w.ToggleChipForTest("bag"); DoEvents();
         Check(w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.LootForTest().Slots >= 8, "...the loot chip opens the bag with its slots (two rows of four tiles)");
+        // UX pass (2026-11-13): the open bag card takes the strip's place, not a second copy of the same slots under it
+        Check(!w.BagStripForTest().Strip, "...and stands in for the bag strip while it is open");
         w.ToggleChipForTest("bag"); DoEvents();
         Check(w.SummaryCard.Visibility != Visibility.Visible, "...and closes it again");
         w.ShowFull(); DoEvents();
         Check(w.QuestRight.Visibility == Visibility.Visible && w.SummaryCard.Visibility == Visibility.Visible && w.PickupStrip.Visibility == Visibility.Visible && w.TopDropsBox.Visibility == Visibility.Visible && w.Rows.Items.Count > 3 && w.HeadStack.Width > compactLayout * 1.8,
-            $"Full view: the bag and the zone board in the second column, open, {compactW:0} -> {w.ActualWidth:0} px wide");
+            $"Full view: the bag in the second column, the zone board open, {compactW:0} -> {w.ActualWidth:0} px wide");
         w.ShowCompact(); DoEvents();
         Check(Math.Abs(w.HeadStack.Width - compactLayout) < 1, "back to Compact: the width it had");
 
@@ -516,9 +518,24 @@ public static partial class WpfApp
         w.ShowDemo(); w.ShowCompact(); DoEvents();   // the sample again, after the Options round above changed the server and said things
         var here = w.LootForTest();
         // the overall count across zones is the default since 0.10.43 (Steven, 2026-11-11), so LOOT's heading is All zones
-        Check(here.Here == "All zones" && here.Slots >= 8 && here.Note.Contains("kinds · 42 min") && "KMB".Contains(here.Total[^1]) && !here.Total.Contains(','),
-            $"LOOT, {here.Here}: {here.Slots} slots, \"{here.Note}\", {here.Total}");
-        Check(w.FootTotal.ToolTip is string tt && tt.Contains("Kinah picked up") && tt.Contains("Total, " + Data.PriceBook.Fee), "LOOT's total says how it adds up on hover");
+        // UX pass (2026-11-13): each figure one home. The hero's line says the Kinah, the loot and the kills; LOOT's first side
+        // no longer repeats them as a Kinah slot, a total (the two added up) and the hero's "42 min", so its line is the kinds alone
+        Check(here.Here == "All zones" && here.Slots >= 8 && here.Note.EndsWith(" kinds") && !here.Note.Contains("min") && here.Total.Trim().Length == 0,
+            $"LOOT, {here.Here}: {here.Slots} slots, \"{here.Note}\", no total (the hero's line has the Kinah and the loot)");
+        var heroLine = w.HeroStatsForTest();
+        Check(heroLine.Count == 3 && heroLine[0].EndsWith(" Kinah") && heroLine[1].EndsWith(" loot") && heroLine[2].EndsWith(" kills") && heroLine.All(p => "KMB0123456789".Contains(p.Split(' ')[0][^1])),
+            "the hero's line: " + string.Join(" · ", heroLine));
+        // how the total adds up moved with it: from the bag's total to the loot figure's hover
+        Check(w.HeroStatTipForTest("loot") is var tt && tt.Contains("Kinah picked up") && tt.Contains("Total, " + Data.PriceBook.Fee), "the hero's loot figure says how Kinah and loot add up on hover");
+        var bagStrip = w.BagStripForTest();
+        Check(bagStrip.Strip && bagStrip.Slots is > 0 and <= 11 && bagStrip.Spark && bagStrip.SparkPoints == 30,
+            $"the bag strip is one row of items, no Kinah slot ({bagStrip.Slots} slots); the hero's trend draws the last 30 of the sample's minutes ({bagStrip.SparkPoints} points)");
+        // Full view's columns end level (Steven's no-empty-space rule; the left one used to stop halfway beside the second)
+        w.ShowFull(); DoEvents();
+        var bal = w.FullBalanceForTest();
+        Check(bal.Left > 0 && bal.Right > 0 && Math.Abs(bal.Left - bal.Right) <= 0.2 * Math.Max(bal.Left, bal.Right),
+            $"Full view: the columns end within a fifth of each other, {bal.Left:0} and {bal.Right:0} px; Just dropped {(bal.FeedRight ? "right" : "left")}, Where to farm {(bal.WhereRight ? "right" : "left")}");
+        w.ShowCompact(); DoEvents();
         Check(w.TableTitle.Text == "Open world · 42 min" && !w.TableTitle.Text.Contains(':'), $"the card says how long in minutes: \"{w.TableTitle.Text}\"");
         Check(w.TodayStrip.Visibility != Visibility.Visible, "no Today strip over the Farming card: Today is LOOT's other side");
         Check(w.HealthLine.Visibility != Visibility.Visible && w.Summary.Visibility != Visibility.Visible && w.FeedHint.Visibility != Visibility.Visible && w.Status.Text.Length == 0,

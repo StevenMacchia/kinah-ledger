@@ -32,11 +32,12 @@ public partial class MainWindow
         ChartToggle.MouseLeftButtonUp += (_, _) => { _qOpen["chart"] = !QOpen("chart"); ShowChart(QOpen("chart") && ChartToggle.Visibility == Visibility.Visible); QSetChev(ChartChev, QOpen("chart")); };
         ChaseTrack.SizeChanged += (_, _) => LayoutChase();
         CraftChaseTrack.SizeChanged += (_, _) => LayoutCraftChase();
-        ChipKinah.MouseLeftButtonUp += (_, _) => ToggleChip("who");
-        ChipLoot.MouseLeftButtonUp += (_, _) => ToggleChip("bag");
-        ChipKills.MouseLeftButtonUp += (_, _) => ToggleChip("kills");
         GoalsHead.MouseLeftButtonUp += (_, _) => { if (QuestsOn) ShowPart("Quests"); };   // the rest of the quests live on their page (2026-11-08)
         BagStripHead.MouseLeftButtonUp += (_, _) => ToggleChip("bag");
+        // the open bag card's head puts it back to the strip in Compact (its scope buttons handle their own clicks)
+        SessionHead.MouseLeftButtonUp += (_, _) => { if (!FullShown && _qChip == "bag") ToggleChip("bag"); };
+        HeroSpark.MouseLeftButtonUp += (_, e) => { e.Handled = true; _qOpen["chart"] = !QOpen("chart"); ShowChart(QOpen("chart") && ChartToggle.Visibility == Visibility.Visible); QSetChev(ChartChev, QOpen("chart")); };
+        HeroSpark.SizeChanged += (_, _) => DrawHeroSpark();
     }
 
     /* ---------------- the chase ---------------- */
@@ -49,42 +50,38 @@ public partial class MainWindow
 
     /// <summary>
     /// The Compact page's bag strip (Steven, 2026-11-07): what you have got this session as inventory slots with their counts,
-    /// Kinah first, then the drops and gathered items by worth, the Soul Crystals last; eleven slots and a "+N" for the rest;
-    /// the total on the right. The hover card and the click are the bag's; the head opens the bag card under the chips.
+    /// the drops and gathered items by worth, the Soul Crystals last; eleven slots and a "+N" for the rest. The hover card
+    /// and the click are the bag's; the head opens the bag card, which takes the strip's place while it is open.
+    /// Since the UX pass (2026-11-13) the strip has no Kinah slot and no total: the hero's line says the Kinah and the
+    /// loot, and the strip's total was those two added up, the same count a third time.
     /// </summary>
     void FillBagStrip()
     {
         var h = _lootHere;
         // the run card lit by the art of this place's best drop so far, Kinah's before any (v2, Ui/Quest.cs HeroArt)
         HeroArt(SessionCard, h == null ? null : h.S.Drops.Where(r => !r.Header).Concat(h.S.Gathered.Where(r => !r.Header)).OrderByDescending(r => r.Worth).FirstOrDefault()?.Name);
-        bool show = _part == "Farming" && !_welcome && !FullShown && _hasSummary && h != null;
-        BagStrip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        if (!show) return;
-        var drops = h!.S.Drops.Where(r => !r.Header).Select(r => (Row: r, Gathered: false)).Concat(h.S.Gathered.Where(r => !r.Header).Select(r => (Row: r, Gathered: true)))
+        var drops = h == null ? new() : h.S.Drops.Where(r => !r.Header).Select(r => (Row: r, Gathered: false)).Concat(h.S.Gathered.Where(r => !r.Header).Select(r => (Row: r, Gathered: true)))
             // a coveted find (Poko's Skin Bundle) first: unpriced, it would sort last and hide behind the "+N"
             .OrderByDescending(x => GatheringCatalog.Find(x.Row.Name) is { AnyNode: true }).ThenByDescending(x => x.Row.Worth).ThenByDescending(x => Qty(x.Row.Drops)).ToList();
-        var pets = h.S.Pets ?? new();
+        var pets = h?.S.Pets ?? new();
         long crystals = pets.Sum(r => Qty(r.Drops));
         int kinds = drops.Count + (crystals > 0 ? 1 : 0);
-        BagStripNote.Text = kinds > 0 ? $"{kinds} kind{(kinds == 1 ? "" : "s")}" : "";
-        if (h.Total > 0) Motion.Number(BagStripTotal, "bag-total|" + CountWhere(), h.Total, v => Fk(v)); else Motion.Blank(BagStripTotal, "bag-total|" + CountWhere(), "");
-        BagStripTotal.ToolTip = h.TotalTip;
-        QSetChev(BagStripChev, _qChip == "bag");
-        var sig = $"{h.Kinah}|{h.Total}|{crystals}|{string.Join(";", drops.Select(d => $"{d.Row.Name}:{d.Row.Drops}:{d.Row.Grade}:{d.Row.Reported}"))}|{Skins.Current}";
+        // the open bag card stands in for the strip (the same slots twice otherwise); with nothing but Kinah yet, no strip
+        bool show = _part == "Farming" && !_welcome && !FullShown && _hasSummary && h != null && _qChip != "bag" && kinds > 0;
+        BagStrip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show) return;
+        BagStripNote.Text = $"{kinds} kind{(kinds == 1 ? "" : "s")}";
+        BagStripTotal.Text = ""; BagStripTotal.ToolTip = null;
+        QSetChev(BagStripChev, false);
+        var sig = $"{crystals}|{string.Join(";", drops.Select(d => $"{d.Row.Name}:{d.Row.Drops}:{d.Row.Grade}:{d.Row.Reported}"))}|{Skins.Current}";
         if (!Changed("bag-strip", sig)) return;
         BagStripHost.Children.Clear();
         const int Max = 11;
         var where = CountWhere();
-        // a drop that lands grows in, a rare one glows once (Motion.Slot); the Kinah slot rises with every kill, so it stays still
+        // a drop that lands grows in, a rare one glows once (Motion.Slot)
         var landHost = "bag-strip|" + where;
         Motion.Begin(landHost);
         var slots = new List<FrameworkElement>();
-        if (h.Kinah > 0)
-        {
-            var k = QSlot(QCoin(42), CountBadge(h.Kinah));
-            CardTip(k, () => KinahTodayCard(h.Kinah, h.ByEnemy, h.Kills > 0 ? $"{h.Kills:N0} kills · {Fk(h.Kinah / (double)h.Kills)} a kill" : "", "Picked up " + where, "BY ENEMY"));
-            slots.Add(k);
-        }
         foreach (var (r, gathered) in drops)
         {
             var name = r.Report.Length > 0 ? r.Report : r.Name;
@@ -96,12 +93,13 @@ public partial class MainWindow
             slots.Add(s);
         }
         if (crystals > 0) { var c = QSlot(QIconBox("Gem", "Lime", 42), CountBadge(crystals)); Motion.Slot(c, landHost, "soul crystals", crystals); slots.Add(c); }
-        foreach (var s in slots.Take(slots.Count > Max + 1 ? Max : slots.Count)) BagStripHost.Children.Add(s);
-        if (slots.Count > Max + 1)
+        // one row: eleven slots, or ten and the "+N"
+        foreach (var s in slots.Take(slots.Count > Max ? Max - 1 : slots.Count)) BagStripHost.Children.Add(s);
+        if (slots.Count > Max)
         {
             var more = new Border { Width = 42, Height = 42, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, ToolTip = "The rest of the bag" };
             more.SetResourceReference(Border.BackgroundProperty, "Card2");
-            more.Child = QT($"+{slots.Count - Max}", 12, FontWeights.Bold, "Muted");
+            more.Child = QT($"+{slots.Count - (Max - 1)}", 12, FontWeights.Bold, "Muted");
             more.MouseLeftButtonUp += (_, _) => { if (_qChip != "bag") ToggleChip("bag"); };
             BagStripHost.Children.Add(more);
         }
@@ -140,52 +138,125 @@ public partial class MainWindow
         RingHost.ToolTip = has ? ChaseBox.ToolTip : nowHr > 0 ? "No best hour here yet: this one sets it." : null;
     }
 
+    /* ---------------- the hero's trend ---------------- */
+
+    /// <summary>The rate line the hero's trend is drawn from (DrawRateLine hands it over).</summary>
+    RateLine? _sparkOf;
+    bool _sparkHooked;
+    const int SparkMinutes = 30;
+    const double SparkMaxWidth = 132;
+
+    /// <summary>
+    /// The hour's last 30 minutes as a faint line beside the big figure (UX pass, 2026-11-13): a sample a minute from the
+    /// same rate line as the chart, its lowest at the bottom and its highest at the top, a soft fill under it and a dot on
+    /// now, right-aligned in the room the figure and its unit leave (none under 56 px). Gold at 60%, so it reads as a trend
+    /// and never competes with the figure. Shown from three samples; hidden while a new-best or milestone tag is over it.
+    /// "chart" still opens the full chart, and so does a click here.
+    /// </summary>
+    void DrawHeroSpark()
+    {
+        if (!_sparkHooked && _bestTag != null && _dayTag != null)
+        {
+            _sparkHooked = true;
+            _bestTag.IsVisibleChanged += (_, _) => DrawHeroSpark();
+            _dayTag.IsVisibleChanged += (_, _) => DrawHeroSpark();
+        }
+        var all = _sparkOf?.Samples;
+        var rates = all == null ? new List<double>() : all.Skip(Math.Max(0, all.Count - SparkMinutes)).Select(s => s.Rate).ToList();
+        HeroSpark.Visibility = rates.Count >= 3 ? Visibility.Visible : Visibility.Collapsed;
+        bool tag = _bestTag?.IsVisible == true || _dayTag?.IsVisible == true;
+        HeroSpark.Opacity = tag ? 0 : 1;
+        double room = HeroSpark.ActualWidth, h = HeroSpark.Height;
+        if (rates.Count < 3 || room < 56) { HeroSparkLine.Points = new PointCollection(); HeroSparkFill.Data = null; HeroSparkDot.Visibility = Visibility.Collapsed; return; }
+        double w = Math.Min(room, SparkMaxWidth), x0 = room - w;
+        double lo = rates.Min(), hi = rates.Max();
+        var pts = new PointCollection();
+        for (int i = 0; i < rates.Count; i++)
+        {
+            double y = hi - lo < 1e-9 ? h / 2 : h - 2 - (h - 4) * (rates[i] - lo) / (hi - lo);
+            pts.Add(new Point(Math.Round(x0 + w * i / (rates.Count - 1), 1), Math.Round(y, 1)));
+        }
+        HeroSparkLine.Points = pts;
+        var fig = new PathFigure { StartPoint = new Point(pts[0].X, h), IsClosed = true };
+        foreach (var p in pts) fig.Segments.Add(new LineSegment(p, false));
+        fig.Segments.Add(new LineSegment(new Point(pts[^1].X, h), false));
+        HeroSparkFill.Data = new PathGeometry(new[] { fig });
+        var c = QColor("Gold");
+        var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb(Skins.IsDark(Skins.Current) ? (byte)0x30 : (byte)0x26, c.R, c.G, c.B), 0));
+        fill.GradientStops.Add(new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 1));
+        fill.Freeze();
+        HeroSparkFill.Fill = fill;
+        HeroSparkDot.Visibility = Visibility.Visible;
+        Canvas.SetLeft(HeroSparkDot, pts[^1].X - HeroSparkDot.Width / 2); Canvas.SetTop(HeroSparkDot, pts[^1].Y - HeroSparkDot.Height / 2);
+    }
+
     /* ---------------- the chips ---------------- */
 
-    /// <summary>The three chips under the hero: Kinah, loot at Market prices, kills; and the Just dropped head's note.</summary>
+    /// <summary>
+    /// The hero's line of figures (UX pass, 2026-11-13; three chips under the hero until then): Kinah, loot at Market prices
+    /// and kills, each the one place the page says it (the bag lost its Kinah slot and its total, Who pays its "of 632.3K");
+    /// a click opens what is behind it under the hero: Kinah by enemy, the bag, kills by enemy. A gathering stretch says its
+    /// attempts, what they gave and the items instead, which would read 0 as Kinah and kills. Also the Just dropped head's note.
+    /// </summary>
     void FillChips(SessionEngine e, long kinah, Tables s, int kills, TimeSpan elapsed, long totalNow, int nodes = 0)
     {
         bool farm = _part == "Farming" && !_welcome && _hasSummary;
-        ChipsRow.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
-        FeedNote.Text = farm ? "last five" : "";   // the bag strip and the bag card carry the total
+        HeroStats.Visibility = farm ? Visibility.Visible : Visibility.Collapsed;
+        FeedNote.Text = farm ? "last five" : "";
         if (!farm) { ChipPanel.Visibility = Visibility.Collapsed; return; }
         _qMobs = e.MobSnapshot(); _qKinah = kinah; _qKills = kills; _qElapsed = elapsed;
         int kinds = s.Drops.Count(r => !r.Header) + s.Gathered.Count(r => !r.Header) + (s.Pets is { Count: > 0 } ? 1 : 0);
         bool gather = _mode == Mode.Gather;
         var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}";
         if (!Changed("chips", sig)) return;
+        var at = CountWhere();
+        // Full view has the bag, Who pays and the odds in its second column already: the figures there open nothing
+        Action? Open(string key) => FullShown ? null : () => ToggleChip(key);
+        string kindsText = $"{kinds} kind{(kinds == 1 ? "" : "s")}";
+        // how Kinah and loot add up (the bag's total said it on hover until it went): on the loot figure's hover
+        string total = _lootHere?.TotalTip is { Length: > 0 } tt ? "\n\n" + tt : "";
+        var parts = new List<QStat>();
         if (gather)
         {
-            // a gathering stretch (the Gathering mode): attempts and what they gave, in place of Kinah and kills, which would read 0
             double perTry = nodes > 0 ? s.GatherCount / (double)nodes : 0;
-            QChipFill(ChipKinah, QIconBox("Pick", "Lime"), nodes.ToString("N0"), $"gathering attempt{(nodes == 1 ? "" : "s")}");
-            ChipKinah.ToolTip = $"{nodes:N0} gathering attempts {CountWhere()}" + (elapsed.TotalMinutes >= 1 ? $", {Fk(nodes / elapsed.TotalHours)} an hour" : "") + ".";
-            QChipFill(ChipLoot, QIconBox("Bag", "Mint"), s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", kinds > 0 ? $"gathered · {kinds} kind{(kinds == 1 ? "" : "s")}" : "gathered");
-            ChipLoot.ToolTip = kinds == 0 ? "Nothing gathered yet. Click for the bag." : $"{kinds} kind{(kinds == 1 ? "" : "s")} {CountWhere()}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + ". Click for the bag.";
-            QChipFill(ChipKills, QIconBox("Leaf", "Lime"), Fk(s.GatherCount), nodes > 0 ? $"items · {perTry:0.0} a try" : "items");
-            ChipKills.ToolTip = nodes > 0 ? $"{s.GatherCount:N0} items from {nodes:N0} attempts, {perTry:0.0} a try." : "Items show here as nodes are gathered.";
-            foreach (var chip in new[] { ChipKinah, ChipKills }) { chip.Cursor = Cursors.Arrow; chip.ClearValue(Border.BorderBrushProperty); }
-            ChipLoot.Cursor = Cursors.Hand;
-            if (_qChip == "bag") ChipLoot.SetResourceReference(Border.BorderBrushProperty, "Mint"); else ChipLoot.ClearValue(Border.BorderBrushProperty);
-            FillChipPanel();
-            return;
+            parts.Add(new QStat(nodes.ToString("N0"), $"attempt{(nodes == 1 ? "" : "s")}",
+                $"{nodes:N0} gathering attempts {at}" + (elapsed.TotalMinutes >= 1 ? $", {Fk(nodes / elapsed.TotalHours)} an hour" : "") + "."));
+            parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 ? "gathered" : kinds > 0 ? (kinds == 1 ? "kind gathered" : "kinds gathered") : "gathered",
+                kinds == 0 ? "Nothing gathered yet." : $"{kindsText} {at}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (FullShown ? "." : ". Click for the bag."),
+                Open("bag"), _qChip == "bag", "Mint", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null));
+            parts.Add(new QStat(Fk(s.GatherCount), nodes > 0 ? $"items · {perTry:0.0} a try" : "items",
+                nodes > 0 ? $"{s.GatherCount:N0} items from {nodes:N0} attempts, {perTry:0.0} a try." : "Items show here as nodes are gathered."));
         }
-        foreach (var chip in new[] { ChipKinah, ChipLoot, ChipKills }) chip.Cursor = FullShown ? Cursors.Arrow : Cursors.Hand;
-        var at = CountWhere();
-        QChipFill(ChipKinah, QCoin(30), Fk(kinah), "Kinah picked up", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null);
-        ChipKinah.ToolTip = $"{kinah:N0} Kinah {CountWhere()}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + ". Quest rewards and bound Kinah are left out. Click for Kinah by enemy.";
-        QChipFill(ChipLoot, QIconBox("Bag", "Mint"), s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", kinds > 0 ? $"loot · {kinds} kind{(kinds == 1 ? "" : "s")}" : "loot", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null);
-        ChipLoot.ToolTip = kinds == 0 ? "Nothing picked up yet. Click for the bag."
-            : $"{kinds} kind{(kinds == 1 ? "" : "s")} {CountWhere()}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (s.Unpriced > 0 ? $" · {s.Unpriced} with no price yet" : "") + ". Click for the bag.";
-        double perMin = elapsed.TotalMinutes >= 1 ? kills / elapsed.TotalMinutes : 0;
-        QChipFill(ChipKills, QIconBox("Sword", "Coral"), kills.ToString("N0"), kills > 0 ? $"kill{(kills == 1 ? "" : "s")} · {Fk(kinah / (double)kills)} a kill" : "kills", kills > 0 ? ("chip-kills|" + at, kills, false) : null);
-        ChipKills.ToolTip = kills > 0 ? $"{kills:N0} kills in {TodayLoot.Dur(elapsed.TotalSeconds)}" + (perMin > 0 ? $", {perMin:0.0} a minute" : "") + ". Click for kills by enemy." : "Kills show here as enemies pay out.";
-        foreach (var (chip, key, tone) in new[] { (ChipKinah, "who", "Gold"), (ChipLoot, "bag", "Mint"), (ChipKills, "kills", "Coral") })
+        else
         {
-            if (_qChip == key) chip.SetResourceReference(Border.BorderBrushProperty, tone); else chip.ClearValue(Border.BorderBrushProperty);
+            double perMin = elapsed.TotalMinutes >= 1 ? kills / elapsed.TotalMinutes : 0;
+            parts.Add(new QStat(Fk(kinah), "Kinah",
+                $"{kinah:N0} Kinah picked up {at}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + ". Quest rewards and bound Kinah are left out." + (FullShown ? "" : " Click for Kinah by enemy."),
+                Open("who"), _qChip == "who", "Gold", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null));
+            parts.Add(new QStat(s.Value > 0 ? Fk(s.Value) : kinds > 0 ? kinds.ToString("N0") : "–", s.Value > 0 || kinds == 0 ? "loot" : (kinds == 1 ? "kind of loot" : "kinds of loot"),
+                (kinds == 0 ? "Nothing picked up yet." : $"{kindsText} {at}" + (s.Priced > 0 ? $": {Fk(s.Value)} at the lowest Market price, {PriceBook.Cut}" : "") + (s.Unpriced > 0 ? $" · {s.Unpriced} with no price yet" : "") + ".")
+                + (FullShown ? "" : " Click for the bag.") + total,
+                Open("bag"), _qChip == "bag", "Mint", s.Value > 0 ? ("chip-loot|" + at, s.Value, true) : null));
+            parts.Add(new QStat(kills.ToString("N0"), kills == 1 ? "kill" : "kills",
+                kills > 0 ? $"{kills:N0} kills in {TodayLoot.Dur(elapsed.TotalSeconds)}" + (perMin > 0 ? $", {perMin:0.0} a minute" : "") + $", {Fk(kinah / (double)kills)} Kinah a kill." + (FullShown ? "" : " Click for kills by enemy.") : "Kills show here as enemies pay out.",
+                Open("kills"), _qChip == "kills", "Coral", kills > 0 ? ("chip-kills|" + at, kills, false) : null));
         }
+        QStatsFill(HeroStats, parts);
         FillChipPanel();
     }
+
+    /// <summary>For options-test: the hover text of the hero line's part whose word is <paramref name="word"/>.</summary>
+    internal string HeroStatTipForTest(string word) => HeroStats.Children.OfType<Border>()
+        .FirstOrDefault(b => b.Tag as string == "stat" && ((StackPanel)b.Child).Children.OfType<TextBlock>().Last().Text == word)?.ToolTip as string ?? "";
+
+    /// <summary>For options-test: the bag strip's slots as drawn, and the hero's trend (shown, its points).</summary>
+    internal (bool Strip, int Slots, bool Spark, int SparkPoints) BagStripForTest() =>
+        (BagStrip.Visibility == Visibility.Visible, BagStripHost.Children.Count, HeroSpark.Visibility == Visibility.Visible, HeroSparkLine.Points.Count);
+
+    /// <summary>For options-test: the hero line's parts as drawn, figure and word ("632.3K Kinah").</summary>
+    internal List<string> HeroStatsForTest() => HeroStats.Children.OfType<Border>().Where(b => b.Tag as string == "stat")
+        .Select(b => string.Join(" ", ((StackPanel)b.Child).Children.OfType<TextBlock>().Select(t => t.Text))).ToList();
 
     /// <summary>For options-test: a chip's click.</summary>
     internal void ToggleChipForTest(string key) => ToggleChip(key);
