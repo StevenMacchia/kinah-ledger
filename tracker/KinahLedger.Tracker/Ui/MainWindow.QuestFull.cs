@@ -21,7 +21,8 @@ public partial class MainWindow
         host.Children.Clear();
         var mobs = _qMobs.Where(m => m.Kinah > 0).OrderByDescending(m => m.Kinah).ToList();
         long named = mobs.Sum(m => m.Kinah);
-        host.Children.Add(QHead("Sword", "Who pays", named > 0 && _qKinah > 0 ? $"{Fk(named)} of {Fk(_qKinah)} Kinah came with a name" : ""));
+        // "578.1K came with a name": the Kinah it is out of is the hero line's, beside it (UX pass: it said "of 632.3K" too)
+        host.Children.Add(QHead("Sword", "Who pays", named > 0 && _qKinah > 0 ? $"{Fk(named)} came with a name" : "", quiet: true));
         var top = mobs.Take(6).ToList();
         long max = top.Count > 0 ? top[0].Kinah : 0;
         for (int i = 0; i < top.Count; i++)
@@ -38,7 +39,8 @@ public partial class MainWindow
     {
         host.Children.Clear();
         double perMin = _qElapsed.TotalMinutes >= 1 ? _qKills / _qElapsed.TotalMinutes : 0;
-        host.Children.Add(QHead("Sword", "Kills", _qKills > 0 ? $"{_qKills:N0} in {TodayLoot.Dur(_qElapsed.TotalSeconds)}" + (perMin > 0 ? $" · {perMin:0.0} a minute" : "") : ""));
+        // the kills and the minutes are the hero's (its line and its "Open world · 42 min"); the pace is this card's own
+        host.Children.Add(QHead("Sword", "Kills", perMin > 0 ? $"{perMin:0.0} a minute" : "", quiet: true));
         var top = _qMobs.Where(m => m.Kills > 0).OrderByDescending(m => m.Kills).Take(6).ToList();
         int named = 0;
         for (int i = 0; i < top.Count; i++)
@@ -60,6 +62,54 @@ public partial class MainWindow
         var drop = m.Drops.OrderByDescending(d => d.Value).Select(d => (Name: nameOf(d.Key) ?? "", d.Value)).FirstOrDefault(d => d.Name.Length > 0);
         var kinah = m.Kills > 0 ? $"{Fk(m.Kinah / (double)m.Kills)} Kinah a kill" : "";
         return kinah + (drop.Name is { Length: > 0 } && drop.Value > 0 && m.Kills >= drop.Value ? $" · drops {drop.Name} 1 in {Math.Round(m.Kills / (double)drop.Value):0}" : "");
+    }
+
+    /// <summary>Full view: whether Just dropped and Where to farm sit in the second column; null until the view's first balance.</summary>
+    (bool Feed, bool Where)? _fullSides;
+
+    /// <summary>For options-test: the Full view's two columns' heights as laid out, and where Just dropped and Where to farm went.</summary>
+    internal (double Left, double Right, bool FeedRight, bool WhereRight) FullBalanceForTest()
+    {
+        double Sum(Panel p) => p.Children.OfType<FrameworkElement>().Where(c => c.Visibility == Visibility.Visible).Sum(c => c.ActualHeight + c.Margin.Top + c.Margin.Bottom);
+        return (Sum(LeftCol), Sum(QuestRight) + QuestRight.Margin.Top, FeedCard.Parent == QuestRight, WhereSection.Parent == QuestRight);
+    }
+
+    /// <summary>
+    /// Full view's two columns kept level (UX pass, 2026-11-13; Steven's "no empty space"): the left column used to end
+    /// halfway down beside the bag, Who pays, the odds, the zone board and the gathering cards. Just dropped and Where to farm
+    /// each go to the column that leaves the smaller gap at the bottom, measured as they are now: with Who pays and the odds
+    /// on the right both stay left under Next up; a gathering stretch (no enemies) sends Just dropped beside the bag. A
+    /// placement only changes for a gap 48 px better than the current one, so a pickup doesn't make cards hop.
+    /// </summary>
+    void BalanceFull()
+    {
+        if (!(_part == "Farming" && !_welcome && FullShown)) return;
+        var size = new Size(662, double.PositiveInfinity);
+        double H(UIElement e) { if (e.Visibility != Visibility.Visible) return 0; e.Measure(size); return e.DesiredSize.Height; }
+        double left = LeftCol.Children.OfType<UIElement>().Where(c => c != FeedCard && c != WhereSection).Sum(H);
+        double right = QuestRight.Margin.Top + QuestRight.Children.OfType<UIElement>().Where(c => c != FeedCard && c != WhereSection).Sum(H);
+        double feed = H(FeedCard), where = H(WhereSection);
+        (bool Feed, bool Where) best = (false, false);
+        double bestGap = double.PositiveInfinity, nowGap = double.PositiveInfinity;
+        foreach (var f in new[] { false, true })
+            foreach (var w in new[] { false, true })
+            {
+                double gap = Math.Abs(left + (f ? 0 : feed) + (w ? 0 : where) - (right + (f ? feed : 0) + (w ? where : 0)));
+                if (gap < bestGap - 0.5) { bestGap = gap; best = (f, w); }
+                if (_fullSides == (f, w)) nowGap = gap;
+            }
+        if (_fullSides is { } now && nowGap - bestGap < 48) best = now;
+        _fullSides = best;
+        // the left column: Next up, then Just dropped and Where to farm (those that stay), then the footer;
+        // the right column: the bag, Who pays, Drop odds, then Just dropped and Where to farm (those that go), the gathering cards last
+        static void Place(FrameworkElement el, Panel to, UIElement after)
+        {
+            if (ReferenceEquals(el.Parent, to) && to.Children.IndexOf(el) == to.Children.IndexOf(after) + 1) return;
+            (el.Parent as Panel)?.Children.Remove(el);
+            to.Children.Insert(to.Children.IndexOf(after) + 1, el);
+        }
+        Place(FeedCard, best.Feed ? QuestRight : LeftCol, best.Feed ? QuestOdds : GoalsCard);
+        Place(WhereSection, best.Where ? QuestRight : LeftCol, best.Where == best.Feed ? FeedCard : best.Where ? QuestOdds : GoalsCard);
     }
 
     /// <summary>The Full view's second column: Who pays, Drop odds and the gathering chips (the bag and the zone board are moved in by ApplyView).</summary>
@@ -88,7 +138,8 @@ public partial class MainWindow
         if (odds.Count > 0)
         {
             QuestOddsHost.Children.Clear();
-            QuestOddsHost.Children.Add(QHead("Bolt", "Drop odds", kills > 0 ? $"from {kills:N0} kill{(kills == 1 ? "" : "s")}" : ""));
+            // how many kills they come from is the hero line's figure; each badge's hover says it with the drops
+            QuestOddsHost.Children.Add(QHead("Bolt", "Drop odds", "", quiet: true));
             var g = new Grid { Margin = new Thickness(0, 6, 0, 0) };
             for (int i = 0; i < odds.Count; i++)
             {
@@ -105,15 +156,20 @@ public partial class MainWindow
         if (gather)
         {
             // "46 of 1,000" over "gathers today · resets 03:00 here", from the game's daily limit line
+            // only when the game said its limit line: the attempts alone were the hero line's figure in a gathering stretch, and
+            // "N kinds gathered" the bag's (UX pass, 2026-11-13); the other card spans the row then
             int at = limit.IndexOf(" gathers", StringComparison.Ordinal);
-            QChipFill(GatherChip1, QIconBox("Pick", "Sky"), at > 0 ? limit[..at] : (s.Skills?.Sum(k => k.Attempts) ?? 0).ToString("N0"), at > 0 ? limit[(at + 1)..] : "gathering attempts");
+            GatherChip1.Visibility = at > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (at > 0) QChipFill(GatherChip1, QIconBox("Pick", "Sky"), limit[..at], limit[(at + 1)..], quiet: true);
             GatherChip1.ToolTip = limit.Length > 0 ? limit + ". The game allows 1,000 gathers a day on a server." : null;
-            var parts = (s.Skills ?? new()).Select(k => $"{k.Name.Split(" · ")[0]} {Fk(k.Value)}").ToList();   // "Mining", not "Mining · ore and gemstones"
-            if (crystals > 0) parts.Add($"Soul Crystals {crystals:N0}");
-            int kinds = gKinds + (crystals > 0 ? 1 : 0);
-            // the chip has room for two skills; the rest is "+N" and the tooltip names them all (2026-11-08 release check: "Cook…" cut)
-            var shown = parts.Count > 2 ? parts.Take(2).Append($"+{parts.Count - 2} more").ToList() : parts;
-            QChipFill(GatherChip2, QIconBox("Leaf", "Lime"), $"{kinds:N0} kind{(kinds == 1 ? "" : "s")} gathered", shown.Count > 0 ? string.Join(" · ", shown) : "");
+            Grid.SetColumn(GatherChip2, at > 0 ? 2 : 0); Grid.SetColumnSpan(GatherChip2, at > 0 ? 1 : 3);
+            // "Mining", not "Mining · ore and gemstones"; the Soul Crystals are the bag's tile beside it
+            var parts = (s.Skills ?? new()).Select(k => $"{k.Name.Split(" · ")[0]} {Fk(k.Value)}").ToList();
+            // by skill: the first big, the rest under it; the card has room for two under it, the rest is "+N" and the tooltip
+            // names them all (2026-11-08 release check: "Cook…" cut)
+            var rest = parts.Skip(1).ToList();
+            var shown = rest.Count > 2 ? rest.Take(2).Append($"+{rest.Count - 2} more").ToList() : rest;
+            QChipFill(GatherChip2, QIconBox("Leaf", "Lime"), parts.Count > 0 ? parts[0] : "Gathered", shown.Count > 0 ? string.Join(" · ", shown) : "gathered " + CountWhere(), quiet: true);
             GatherChip2.ToolTip = parts.Count > 0 ? "Gathered " + CountWhere() + ": " + string.Join(", ", parts) + ". Each skill's value is at the lowest Market price, " + PriceBook.Cut + "." : null;
         }
     }

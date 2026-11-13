@@ -277,8 +277,7 @@ public partial class MainWindow
         // the hero: the place (the band's dropdown), the hour, the open run as a timer against the average run (or the last run against the best), the ring
         body.Children.Add(QRunHero(zone, runs, counted, live, kind, open, newest, pickPlace, redraw));
         if (withNow && known && secs > 10) _eventsRate = Fk(value / secs * 3600);
-        // the chips: what the counted runs paid out
-        if (n > 0 && known) body.Children.Add(QRunChips(counted, value));   // nothing priced: a row of dashes says nothing
+        // what the counted runs paid out is the hero's second line now (QRunStats, UX pass 2026-11-13)
         // Next up (quests, phase 1, Ui/MainWindow.Quests.cs): the runs here today and this week, beating the best run here, with their trees
         RefreshQuests();
         if (QuestNextCard(q => q.Kind is QuestKind.Runs or QuestKind.BestRun && string.Equals(q.Subject, zone, StringComparison.OrdinalIgnoreCase), redraw) is { } nextUp) body.Children.Add(nextUp);

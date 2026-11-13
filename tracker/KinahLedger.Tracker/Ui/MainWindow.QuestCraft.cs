@@ -45,16 +45,18 @@ public partial class MainWindow
             CraftRingHost.Children.Add(tries > 0 ? QRing(76, 7, share, "Mint", $"{Math.Round(share * 100):0}%", "worked") : QRing(76, 7, 0, "Mint", "–", "no crafts yet"));
             CraftRingHost.ToolTip = tries > 0 ? $"{ok:N0} of {tries:N0} crafts worked this session." : null;
         }
-        // the chips
-        CraftChips.Visibility = tries > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // the hero's line (UX pass, 2026-11-13; three chips under the hero until then): what came out, spent, sells for; the
+        // crafts and how many worked are the chase's "4 of 5 worked" and the ring's already
+        CraftStats.Visibility = tries > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (tries > 0 && Changed("craft-chips", $"{tries}|{ok}|{itemsMade}|{spent}|{worth}|{atMost}|{Skins.Current}"))
         {
-            QChipFill(ChipCrafts, QIconBox("Hammer", "Lilac"), $"{tries:N0} craft{(tries == 1 ? "" : "s")}", itemsMade > 0 ? $"{itemsMade:N0} thing{(itemsMade == 1 ? "" : "s")} made" : $"{ok:N0} worked");
-            ChipCrafts.ToolTip = $"{tries:N0} crafts this session: {ok:N0} worked, {tries - ok:N0} failed" + (itemsMade > 0 ? $", {itemsMade:N0} things made." : ".");
-            QChipFill(ChipSpent, QIconBox("Coin", "Coral"), spent > 0 ? Fk(spent) : "–", "spent on materials");
-            ChipSpent.ToolTip = spent > 0 ? $"{spent:N0} Kinah of materials at the lowest Market price when each craft was made; a failed craft uses them too." + (atMost ? " At least: a material has no price yet." : "") : "Materials show once a recipe is in the book.";
-            QChipFill(ChipSells, QIconBox("Sack", "Mint"), worth > 0 ? Fk(worth) : "–", "sells for, after the cut");
-            ChipSells.ToolTip = worth > 0 ? $"What came out sells for {worth:N0} at today's lowest Market price, {PriceBook.Cut}." : "Shows once what came out has a Market price.";
+            var parts = new List<QStat>();
+            if (itemsMade > 0) parts.Add(new QStat(itemsMade.ToString("N0"), "made", $"{tries:N0} crafts this session: {ok:N0} worked, {tries - ok:N0} failed, {itemsMade:N0} things made."));
+            parts.Add(new QStat(spent > 0 ? Fk(spent) : "–", "spent",
+                spent > 0 ? $"{spent:N0} Kinah of materials at the lowest Market price when each craft was made; a failed craft uses them too." + (atMost ? " At least: a material has no price yet." : "") : "Materials show once a recipe is in the book."));
+            parts.Add(new QStat(worth > 0 ? Fk(worth) : "–", "sells for",
+                worth > 0 ? $"What came out sells for {worth:N0} at today's lowest Market price, {PriceBook.Cut}." : "Shows once what came out has a Market price."));
+            QStatsFill(CraftStats, parts);
         }
         // Next up
         var next = new List<FrameworkElement>();

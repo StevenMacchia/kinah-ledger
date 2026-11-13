@@ -410,6 +410,7 @@ public partial class MainWindow
     void DrawRateLine(RateLine line, string from, string to, double best = 0)
     {
         bool show = line.Samples.Count >= 2;
+        _sparkOf = line; DrawHeroSpark();   // the hero's faint trend beside the figure (Ui/MainWindow.QuestFarm.cs)
         ChartToggle.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         ShowChart(show && QOpen("chart"));
         QSetChev(ChartChev, QOpen("chart"));
