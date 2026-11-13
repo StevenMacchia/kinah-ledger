@@ -1017,6 +1017,11 @@ public partial class MainWindow : Window
         // counts, whichever comes later, the window dims its figure and the panel says it is warming up
         _rateWarming = elapsed < RateWarmup || e.Events < RateWarmupCounts;
         var t = e.Totals(); long kinah = t.Kinah;   // farming Kinah only; bound Kinah is reward money
+        // in the Abyss every Kinah drop is bound (Steven, 2026-11-13: "kinah and abyss points are not being properly tracked"):
+        // its Kinah figures count the bound Kinah too; out of it bound Kinah stays reward money, left out
+        bool inAbyss = ZoneLocator.IsAbyss(_demo ? _demoZone : e.Zone ?? _watcher.Chat?.ZoneView?.Zone);
+        if (inAbyss) kinah += e.KinahBound;
+        _boundInKinah = inAbyss && e.KinahBound > 0;
         var s = Build(e, h, t.Kills);
         string worth = s.Value > 0 ? $" · worth {Fk(s.Value)} ({Fk(s.Value / h)}/hr)" : "";
         // quest and payment rewards: bound Kinah, a payment line, or one line far above what the mobs pay. Never farming income.
@@ -1073,7 +1078,6 @@ public partial class MainWindow : Window
         long totalNow = kinah + s.Value;
         // the live card's right side: the hour's worth, its line since the start, kills and Kinah a kill, best here, the health line
         // in the Abyss's zones the hour is in Abyss Points, Kinah and loot on a ticket under it (FillRate)
-        bool inAbyss = ZoneLocator.IsAbyss(_demo ? _demoZone : e.Zone ?? _watcher.Chat?.ZoneView?.Zone);
         FillRate(e, h, _mode == Mode.Gather ? 0 : kinah, s.Value, s.Priced, t.Kills, t.Nodes, t.Nodes > 0 ? s.GatherCount / (double)t.Nodes : 0, e.AbyssPoints, inAbyss);
         Summary.Visibility = Visibility.Collapsed;   // idle and skipped reward lines: in ⋯ (ShowMoreMenu)
 
@@ -1118,6 +1122,8 @@ public partial class MainWindow : Window
 
     /// <summary>True once the count on screen has something in it: LOOT's first side shows it from then on.</summary>
     bool _hasSummary;
+    /// <summary>The Kinah figures on screen count bound Kinah too (the Abyss, where every Kinah drop is bound).</summary>
+    bool _boundInKinah;
 
     /// <summary>
     /// What the Farming page stopped saying while all is well (2026-10-28), kept for the ⋯ menu: the reward lines left out
@@ -2071,12 +2077,12 @@ public partial class MainWindow : Window
                 for (int i = 0; i < 11; i++) e.Apply(new GatherFailed(t, "Essence Extraction"));
                 break;
             case Mode.Open when kind == "Abyss":
-                // a layout render of the Abyss (2026-11-13): kills that pay Kinah and Abyss Points, so the hero is the points'
+                // a layout render of the Abyss (2026-11-13): kills that pay bound Kinah (all the Abyss pays) and Abyss Points, so the hero is the points'
                 // hour and the Kinah ticket shows under it (FillHeroTicket)
                 _demoZone = ZoneLbl.Text = "Chaotic Lower Reshanta";
                 e.CreditZone(_demoZone, 42 * 60 + 17);
                 e.SetTarget("Shadowclaw Mauler", t);
-                for (int i = 0; i < 118; i++) { e.Apply(new KinahChanged(t, 2_140 + (i % 5) * 60, false)); e.Apply(new CurrencyGained(t, "Abyss Points", 180 + (i % 4) * 20)); }
+                for (int i = 0; i < 118; i++) { e.Apply(new KinahChanged(t, 2_140 + (i % 5) * 60, true)); e.Apply(new CurrencyGained(t, "Shadowclaw Mauler Soul Points", 1)); e.Apply(new CurrencyGained(t, "Abyss Points", 180 + (i % 4) * 20)); }
                 Drop("Lesser Abyssal Manastone", 6); Drop("Spiritstone", 9); Drop("Power Shard", 5); Drop("Refining Stone", 3);
                 break;
             default:

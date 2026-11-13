@@ -134,9 +134,9 @@ internal static class Program
                 case "balance-test": return BalanceTest(settings, opts);
                 case "options-test": return WpfApp.OptionsSelfTest(settings);
                 // packet reading (Packets/): its parts on made-up bytes, and the reader over a saved capture
-                case "packet-test": return KinahLedger.Packets.PacketTests.Run();
+                case "packet-test": return KinahLedger.Packets.PacketTests.Run(settings);
                 case "packet-live": return KinahLedger.Packets.PacketTests.Live(settings.ProcessHints, int.TryParse(opts.GetValueOrDefault("seconds"), out var psec) ? psec : 30);
-                case "packet-replay": if (pos.Count == 0) { Console.WriteLine("packet-replay <capture.pcapng> [--port 13328]"); return 2; } KinahLedger.Packets.PacketTests.Replay(pos[0], int.TryParse(opts.GetValueOrDefault("port"), out var pport) ? pport : 13328); return 0;
+                case "packet-replay": if (pos.Count == 0) { Console.WriteLine("packet-replay <capture.pcapng> [--port 13328]"); return 2; } return KinahLedger.Packets.PacketTests.Replay(pos[0], int.TryParse(opts.GetValueOrDefault("port"), out var pport) ? pport : 13328);
                 case "market-test": return MarketTest(settings, opts);
                 case "market-shot": opts["demo"] = "true"; opts["market"] = "true"; return UiShot(settings, opts, pos);
                 case "market-watch": return MarketWatch(settings, opts);

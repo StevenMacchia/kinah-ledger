@@ -17,3 +17,7 @@ build-vpk/
 
 # the name decoder model, fetched by tools/data/models.js --out data/models (never committed)
 data/models/
+
+# the private network decoder, built into tracker/KinahLedger.Tracker/native by the release workflow (never committed)
+tracker/KinahLedger.Tracker/native/
+_private/
