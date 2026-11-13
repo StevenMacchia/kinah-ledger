@@ -127,8 +127,26 @@ public static class CrashLog
         }
     }
 
+    // notes of a background read of saved pictures (Session/RunRecount.cs), kept apart from reads.log for its own flow only
+    static readonly AsyncLocal<List<string>?> Captured = new();
+
+    /// <summary>
+    /// The notes written on this flow (this thread and the tasks it awaits) go into <paramref name="into"/> instead of
+    /// reads.log until the result is disposed: a one-time read of hundreds of saved pictures would bury the live lines.
+    /// The rest of the tracker's notes go on as ever.
+    /// </summary>
+    public static IDisposable CaptureNotes(List<string> into)
+    {
+        var was = Captured.Value;
+        Captured.Value = into;
+        return new Restore(() => Captured.Value = was);
+    }
+
+    sealed class Restore(Action undo) : IDisposable { public void Dispose() => undo(); }
+
     static void NoteCore(string text, int free)
     {
+        if (Captured.Value is { } cap) { lock (cap) cap.Add(text); return; }
         try
         {
             Remember(text);

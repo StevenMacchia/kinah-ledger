@@ -138,6 +138,13 @@ public sealed class InstanceRun
     public bool Resend { get; set; }
 
     /// <summary>
+    /// When the one-time re-count of old reward tables changed this record (Session/RunRecount.cs, 0.10.61): counted before
+    /// 0.10.54, its table was read again from its pictures with the fixed reader, and the floor rows the old reader took for
+    /// slots are gone. Its counts before are in <see cref="RepairedFrom"/>, sent to the site as a correction like the gear repair's.
+    /// </summary>
+    public DateTime? Recounted { get; set; }
+
+    /// <summary>
     /// What a read of its pictures found, onto this run: the items, the Kinah, the slots not read and the flags. Its times,
     /// witnesses and the chat items set aside stay as they were.
     /// </summary>
@@ -1277,7 +1284,7 @@ public sealed class InstanceLog
     }
 
     /// <summary>The site has the run: it wasn't parked as unsent, and its rewards were read (or it was sent later from its pictures).</summary>
-    static bool WentToSite(InstanceRun r) => !r.Unsent && (r.SentLate != null || !r.KinahUnknown);
+    internal static bool WentToSite(InstanceRun r) => !r.Unsent && (r.SentLate != null || !r.KinahUnknown);
 
     /// <summary>
     /// The repair on the runs loaded from instances.jsonl, with the item list that says what is gear: a real id by the
@@ -1656,6 +1663,16 @@ public sealed class InstanceLog
             ResetEdgesLocked();
             _cur = r; _byMinimap = true;
         }
+    }
+
+    /// <summary>
+    /// For a read of a closed run's pictures (Session/RunRecount.cs): the kept runs this log holds in memory become
+    /// <paramref name="runs"/> (the same place's runs, the history a close call between two items is settled by, as live).
+    /// Nothing is written; only on a log of its own.
+    /// </summary>
+    internal void UseKept(IEnumerable<InstanceRun> runs)
+    {
+        lock (_lock) { _done.Clear(); _parked.Clear(); _unshared.Clear(); _done.AddRange(runs); }
     }
 
     /// <summary>Which event cards the reward picture just filed into the open run had received ("2,3,4"): <see cref="InstanceRun.CardsReceived"/>.</summary>

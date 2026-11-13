@@ -108,6 +108,7 @@ public partial class MainWindow : Window
         // another character in the world: close the run and start fresh (MainWindow.Shell.cs)
         _watcher.CharacterChanged += why => Dispatcher.BeginInvoke(() => { _ = StartFresh(why.Contains("character screen") ? "Logged off" : "Another character"); });
         InitCharacters();   // which character: the class icon between the health and mana bars (Ui/MainWindow.Characters.cs)
+        InitRecount(watch);   // once: old reward tables read again with the fixed reader (Ui/MainWindow.Recount.cs)
         // the Market is read for this PC whatever the Share switch says; only sending follows it (MarketCapture.Sharing)
         _watcher.Market.Enabled = settings.Market.Enabled;
         Icon = Native.AppIconSource();
