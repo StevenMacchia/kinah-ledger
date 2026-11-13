@@ -41,9 +41,18 @@ public sealed class HudPrefs
 
     static string PathFor() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinahLedger", "hud.json");
 
+    /// <summary>A layout render's or a self-test's: never read from hud.json nor written to it (UserPrefs.Defaults is ui.json's).</summary>
+    bool _detached;
+
+    /// <summary>
+    /// The choices a new install starts with, kept apart from the player's hud.json: the windows the self-tests and the layout
+    /// renders make (MainWindow's watch: false) draw the same on every PC, whatever look the player picked, and Save does nothing.
+    /// </summary>
+    public static HudPrefs Defaults() => new() { _detached = true };
+
+    /// <summary>The player's hud.json; the first choice is written down at once, so a later start makes the same one.</summary>
     /// <param name="existingInstall">The tracker ran here before this file existed: the panel stays draggable, as it was.</param>
-    /// <param name="remember">Writes the first choice down at once, so a later start makes the same one (never for layout renders).</param>
-    public static HudPrefs Load(bool existingInstall, bool remember)
+    public static HudPrefs Load(bool existingInstall)
     {
         try
         {
@@ -52,12 +61,13 @@ public sealed class HudPrefs
         }
         catch (Exception) { /* corrupt: decide again */ }
         var fresh = new HudPrefs { Locked = !existingInstall };
-        if (remember) fresh.Save();
+        fresh.Save();
         return fresh;
     }
 
     public void Save()
     {
+        if (_detached) return;
         try { Directory.CreateDirectory(Path.GetDirectoryName(PathFor())!); File.WriteAllText(PathFor(), JsonSerializer.Serialize(this)); }
         catch (Exception) { /* read-only profile */ }
     }
