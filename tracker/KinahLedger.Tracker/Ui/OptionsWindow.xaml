@@ -24,10 +24,10 @@
           <Image Source="{StaticResource AppMark}" Width="28" Height="28" Margin="0,0,10,0" VerticalAlignment="Center"/>
           <StackPanel VerticalAlignment="Center">
             <TextBlock Text="Options" FontFamily="{DynamicResource DisplayFont}" FontSize="16" FontWeight="SemiBold"/>
-            <TextBlock Text="Kinah Ledger" Foreground="{DynamicResource Faint}" FontSize="11.5"/>
+            <TextBlock Text="Kinah Ledger" Foreground="{DynamicResource Faint}" FontSize="12"/>
           </StackPanel>
         </StackPanel>
-        <TextBlock x:Name="NavVersion" DockPanel.Dock="Bottom" Foreground="{DynamicResource Faint}" FontSize="11.5" Margin="8,0,0,0"/>
+        <TextBlock x:Name="NavVersion" DockPanel.Dock="Bottom" Foreground="{DynamicResource Faint}" FontSize="12" Margin="8,0,0,0"/>
         <StackPanel x:Name="Nav"/>
       </DockPanel>
     </Border>
@@ -292,7 +292,7 @@
                   <TextBlock Style="{StaticResource RowHint}" Text="The same code, for pasting by hand into Profile › Link your tracker."/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <TextBlock x:Name="LinkCodeText" FontFamily="Consolas" FontSize="14" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                  <TextBlock x:Name="LinkCodeText" FontFamily="Consolas" FontSize="14" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                   <Button x:Name="CopyCodeBtn" Content="Copy" Height="32"/>
                 </StackPanel>
               </Grid>
@@ -303,7 +303,7 @@
                   <TextBlock Style="{StaticResource RowTitle}" Text="Your score"/>
                   <TextBlock Style="{StaticResource RowHint}" Text="Points from the quests in Next up on the Farming page: this session, today, this week. Once your tracker is linked, the score will go to your profile on the site and count on the leaderboards (coming next)."/>
                 </StackPanel>
-                <TextBlock x:Name="ScoreText" Grid.Column="1" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="220" TextAlignment="Right"/>
+                <TextBlock x:Name="ScoreText" Grid.Column="1" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="220" TextAlignment="Right"/>
               </Grid>
             </StackPanel>
           </Border>

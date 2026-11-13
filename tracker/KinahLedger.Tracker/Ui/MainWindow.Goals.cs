@@ -89,13 +89,13 @@ public partial class MainWindow
         var score = ScoreNow();
         var sig = string.Join(";", _goals.Select((g, i) => $"{g.Kind}:{g.Target}:{g.Name}:{g.Which}:{prog[i].Have}:{Math.Round((prog[i].SecondsToGo ?? 0) / 60)}"))
             + "|" + string.Join(";", quests.Select(q => $"{q.Key}:{q.Have}:{Math.Round((q.SecondsToGo ?? 0) / 60)}"))
-            + $"|{_qTree}|{score.Session}|{QuestsOn}|{Skins.Current}";
+            + $"|{_qTree}|{score.Session}|{QuestsOn}|{Skins.Current}|{Fk(_qKinah)}|{HeroStats.Visibility}";
         if (!Changed("goals", sig)) return;
         int done = prog.Count(p => p.Done);
         var rows = new List<(FrameworkElement El, bool Primary)>();
         for (int i = 0; i < _goals.Count && i < Quests.NextUpRows; i++) rows.Add((GoalRow(_goals[i], prog[i], rows.Count > 0), true));
         int primaries = rows.Count;
-        foreach (var (el, primary) in QuestRows(null, rows.Count > 0))
+        foreach (var (el, primary) in QuestRows(null, rows.Count > 0, besideHero: true))
         {
             if (primary && primaries >= Quests.NextUpRows) break;
             if (primary) primaries++;
@@ -154,7 +154,7 @@ public partial class MainWindow
         var count = PT(GoalCountText(g, p), p.Done ? "Gold" : "Ink", 12.5, null, "MonoFont");
         count.HorizontalAlignment = HorizontalAlignment.Center; count.Margin = new Thickness(0, 7, 0, 0);
         slot.Children.Add(count);
-        var name = PT(Goals.Label(g), "Faint", 11.5);
+        var name = PT(Goals.Label(g), "Faint", 12);
         name.HorizontalAlignment = HorizontalAlignment.Center; name.TextAlignment = TextAlignment.Center; name.TextWrapping = TextWrapping.Wrap; name.MaxHeight = 31; name.Margin = new Thickness(0, 3, 0, 0);
         slot.Children.Add(name);
         AutomationProperties.SetName(slot, $"Goal: {Goals.Label(g)}, {GoalCountText(g, p)}");
@@ -200,7 +200,7 @@ public partial class MainWindow
         plus.HorizontalAlignment = HorizontalAlignment.Center; plus.Margin = new Thickness(0, -4, 0, 0);
         ring.Children.Add(plus);
         slot.Children.Add(ring);
-        var name = PT("Add a goal", "Faint", 11.5); name.HorizontalAlignment = HorizontalAlignment.Center; name.Margin = new Thickness(0, 7, 0, 0);
+        var name = PT("Add a goal", "Faint", 12); name.HorizontalAlignment = HorizontalAlignment.Center; name.Margin = new Thickness(0, 7, 0, 0);
         slot.Children.Add(name);
         AutomationProperties.SetName(slot, "Add a goal");
         slot.MouseEnter += (_, _) => dash.SetResourceReference(Shape.StrokeProperty, "Gold");

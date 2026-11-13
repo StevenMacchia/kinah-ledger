@@ -147,7 +147,7 @@ public partial class OptionsWindow
         tile.HorizontalAlignment = HorizontalAlignment.Center;
         var label = new TextBlock
         {
-            Text = name, FontSize = 11.5, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
+            Text = name, FontSize = 12, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
             TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 30, Margin = new Thickness(0, 7, 0, 0),
         };
         label.SetResourceReference(TextBlock.ForegroundProperty, common ? "Ink" : "Grade" + grade);
@@ -228,7 +228,7 @@ public partial class OptionsWindow
             Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false,
         };
         search.SetResourceReference(Shape.StrokeProperty, "Faint");
-        _watchHint = new TextBlock { Text = "type a name", FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), IsHitTestVisible = false };
+        _watchHint = new TextBlock { Text = "type a name", FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), IsHitTestVisible = false };
         _watchHint.SetResourceReference(TextBlock.ForegroundProperty, "Faint");
         _watchSuggest = new StackPanel();
         var list = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(4), Child = _watchSuggest, Width = 420 };
@@ -277,7 +277,7 @@ public partial class OptionsWindow
         var n = new Run(name);
         n.SetResourceReference(TextElement.ForegroundProperty, common ? "Ink" : "Grade" + grade);
         text.Inlines.Add(n);
-        if (!common) { var g = new Run("  " + grade) { FontSize = 11.5 }; g.SetResourceReference(TextElement.ForegroundProperty, "Faint"); text.Inlines.Add(g); }
+        if (!common) { var g = new Run("  " + grade) { FontSize = 12 }; g.SetResourceReference(TextElement.ForegroundProperty, "Faint"); text.Inlines.Add(g); }
         var b = new Button
         {
             Template = t, Tag = name, Height = 32, HorizontalContentAlignment = HorizontalAlignment.Left, Cursor = Cursors.Hand,

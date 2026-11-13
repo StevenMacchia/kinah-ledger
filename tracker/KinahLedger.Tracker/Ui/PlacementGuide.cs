@@ -465,7 +465,7 @@ public sealed class PlacementGuide : Window
     static Border Kbd(string key, Brush fg, Brush bg, Brush line, FontWeight weight) => new()
     {
         Background = bg, BorderBrush = line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1),
-        VerticalAlignment = VerticalAlignment.Center, Child = Label(key, 11.5, fg, weight),
+        VerticalAlignment = VerticalAlignment.Center, Child = Label(key, 12, fg, weight),
     };
 
     /// <summary>"Place your panel · Drag it, or pick a snap spot · Enter save · Esc put it back", along the bottom.</summary>
@@ -503,7 +503,7 @@ public sealed class PlacementGuide : Window
     Border MakeChooser()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var k = Label("SNAP TO", 11, Faint, FontWeights.Medium); k.Margin = new Thickness(0, 0, 10, 0);
+        var k = Label("SNAP TO", 12, Faint, FontWeights.Medium); k.Margin = new Thickness(0, 0, 10, 0);
         row.Children.Add(k);
         for (int i = 0; i < HudSpots.All.Length; i++)
         {

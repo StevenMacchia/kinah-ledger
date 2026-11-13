@@ -196,7 +196,7 @@ public partial class MainWindow
         // the title, with the tag beside it on a new best (the line under it keeps the card's whole width)
         var top = new Grid();
         top.ColumnDefinitions.Add(new ColumnDefinition()); top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var t = CkText(title, CkGold, 19, FontWeights.Normal, display: true); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None;
+        var t = CkText(title, CkInk, 19, FontWeights.Normal, display: true);   // a heading: ink (colour pass, 2026-11-13); the money is the gold t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None;
         top.Children.Add(t);
         if (standing.NewBest) { var tag = NewBestTag(intro); Grid.SetColumn(tag, 1); top.Children.Add(tag); }
         head.Children.Add(top);
@@ -225,13 +225,13 @@ public partial class MainWindow
         if (loot > 0)
         {
             var kin = CkKv("Kinah", kinah > 0 ? Fk(kinah) : "none", kinah > 0 ? CkGold : CkFaint); body.Children.Add(kin);
-            if (kinah > 0) Count(kin, 0, kinah, Money, CkGood);
+            if (kinah > 0) Count(kin, 0, kinah, Money);
         }
         if (loot > 0 || pieces > 0)
         {
             var lootRow = CkKv("Loot", loot > 0 ? Fk(loot) : "no price yet", loot > 0 ? CkGold : CkFaint, sub: pieces > 0 ? $"{pieces:N0} item{(pieces == 1 ? "" : "s")}, {PriceBook.Cut}" : "");
             body.Children.Add(lootRow);
-            if (loot > 0) Count(lootRow, 3, loot, Money, CkGood);
+            if (loot > 0) Count(lootRow, 3, loot, Money);
         }
 
         var drops = f.Drops.Where(d => d.Count > 0).OrderByDescending(d => d.Worth).ThenByDescending(d => SharePicture.GradeRank(d.Grade)).ThenByDescending(d => d.Count).ToList();
@@ -337,7 +337,7 @@ public partial class MainWindow
     {
         var tag = new Border
         {
-            Child = CkText("★ NEW BEST HERE", RecapTagInk, 11, FontWeights.SemiBold), CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 3, 10, 4),
+            Child = CkText("★ NEW BEST HERE", RecapTagInk, 12, FontWeights.SemiBold), CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 3, 10, 4),
             VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 3, 0, 0),
             Effect = new DropShadowEffect { Color = CkGold, BlurRadius = 14, ShadowDepth = 0, Opacity = 0.45 },
         };

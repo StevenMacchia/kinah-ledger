@@ -37,12 +37,15 @@ public partial class MainWindow
         else { Motion.ForgetShare("craft-chase"); _craftShare = 0; LayoutCraftChase(); }
         CraftChaseFill.Effect ??= QGlow("Mint", 10, 0.6);
         CraftProfit.SetResourceReference(TextBlock.ForegroundProperty, known ? (net >= 0 ? "Mint" : "Coral") : "Ink");
-        CraftProfit.Visibility = known ? Visibility.Visible : Visibility.Collapsed;   // before the first craft the note stands alone
+        CraftProfit.Visibility = known ? Visibility.Visible : Visibility.Collapsed;   // crafts with no price yet: the note stands alone
+        // before the first craft the hero says what it is for and what lands in it (colour pass review, 2026-11-13)
+        CraftEmptyHead.Visibility = CraftEmptyBody.Visibility = tries == 0 ? Visibility.Visible : Visibility.Collapsed;
+        CraftProfitRow.Visibility = tries == 0 ? Visibility.Collapsed : Visibility.Visible;
         CraftProfitNote.Margin = known ? new Thickness(8, 0, 0, 7) : new Thickness(0, 0, 0, 2);
         if (Changed("craft-ring", $"{tries}|{ok}|{Skins.Current}"))
         {
             CraftRingHost.Children.Clear();
-            CraftRingHost.Children.Add(tries > 0 ? QRing(76, 7, share, "Mint", $"{Math.Round(share * 100):0}%", "worked") : QRing(76, 7, 0, "Mint", "–", "no crafts yet"));
+            CraftRingHost.Children.Add(tries > 0 ? QRing(76, 7, share, "Mint", $"{Math.Round(share * 100):0}%", "worked") : QRing(76, 7, 0, "Mint", "–", "worked"));
             CraftRingHost.ToolTip = tries > 0 ? $"{ok:N0} of {tries:N0} crafts worked this session." : null;
         }
         // the hero's line (UX pass, 2026-11-13; three chips under the hero until then): what came out, spent, sells for; the
@@ -65,7 +68,8 @@ public partial class MainWindow
             long target = NextRound(net), togo = target - net;
             var best = _craftPerRecipe.Where(x => x.Ok > 0 && x.Profit > 0).Select(x => (x.Name, Per: x.Profit / (double)x.Ok)).OrderByDescending(x => x.Per).FirstOrDefault();
             var sub = $"{Fk(togo)} away" + (best.Name != null && best.Per > 0 ? $" · one {best.Name} that works (+{Fk(best.Per)})" : "");
-            var row = QRow(QIconBox("Sack", "Mint", 28, round: true), $"+{Fk(target)} profit", sub, $"{Math.Round(100.0 * net / target):0}%", "Mint", net / (double)target, "Mint", rule: false, inline: true);
+            // progress toward a Kinah target: gold, as every chase (colour pass, 2026-11-13; mint until then)
+            var row = QRow(QIconBox("Sack", "Gold", 28, round: true), $"+{Fk(target)} profit", sub, $"{Math.Round(100.0 * net / target):0}%", "Gold", net / (double)target, "Gold", rule: false, inline: true);
             row.Cursor = Cursors.Arrow; row.ToolTip = $"{Signed(net)} so far, {PriceBook.Cut}. The next round figure turns over by itself.";
             // it names the recipe that gets there fastest: a click opens that recipe
             if (best.Name != null && best.Per > 0) { var bn = best.Name; row.Cursor = Cursors.Hand; row.ToolTip += $" Click for {bn}."; row.MouseLeftButtonUp += (_, _) => OpenCraftWindow(bn); }
@@ -73,7 +77,7 @@ public partial class MainWindow
         }
         else if (known && net < 0 && spent > 0)
         {
-            var row = QRow(QIconBox("Sack", "Coral", 28, round: true), "Back to even", $"{Fk(-net)} away · a worked craft that sells for more than its materials", $"{Math.Round(100.0 * worth / spent):0}%", "Coral", worth / (double)spent, "Coral", rule: false, inline: true);
+            var row = QRow(QIconBox("Sack", "Coral", 28, round: true), "Back to even", $"{Fk(-net)} away · a worked craft that sells for more than its materials", $"{Math.Round(100.0 * worth / spent):0}%", "Gold", worth / (double)spent, "Gold", rule: false, inline: true);   // progress toward a Kinah target: gold; the coral icon says it is a loss
             row.Cursor = Cursors.Arrow; row.ToolTip = $"{Signed(net)} so far: {Fk(worth)} back from {Fk(spent)} spent.";
             next.Add(row);
         }
@@ -126,7 +130,7 @@ public partial class MainWindow
         var sp = new StackPanel();
         icon.HorizontalAlignment = HorizontalAlignment.Left; sp.Children.Add(icon);
         var n = QT(name, 12.5, FontWeights.SemiBold, "Ink"); n.Margin = new Thickness(0, 6, 0, 0); n.TextWrapping = TextWrapping.Wrap; n.MaxHeight = 34; n.LineHeight = 16; n.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sp.Children.Add(n);
-        sp.Children.Add(QT(sub, 11, FontWeights.Medium, "Muted", trim: true));
+        sp.Children.Add(QT(sub, 12, FontWeights.Medium, "Muted", trim: true));
         var p = QT(profit.Length > 0 ? profit : "no price yet", 15, FontWeights.Bold, tone); p.Margin = new Thickness(0, 4, 0, 0); sp.Children.Add(p);
         var card = new Border { Width = 205, Padding = new Thickness(10), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 8, 8) };
         card.SetResourceReference(Border.BackgroundProperty, "Card2");

@@ -269,7 +269,7 @@ public partial class MainWindow
         var head = new Grid { Margin = new Thickness(18, 4, 18, 8) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.Children.Add(CkText("Your characters", CkInk, 14, FontWeights.SemiBold));
-        var where = CkText(Server is { } sv ? $"{sv.Label} · {sv.Region.Name}" : _prefs.Server ?? "", CkFaint, 11.5);
+        var where = CkText(Server is { } sv ? $"{sv.Label} · {sv.Region.Name}" : _prefs.Server ?? "", CkFaint, 12);
         where.Margin = new Thickness(12, 0, 0, 0); Grid.SetColumn(where, 1); head.Children.Add(where);
         body.Children.Add(head);
         if (rows.Count == 0)
@@ -285,7 +285,7 @@ public partial class MainWindow
         if (rows.Count > 0)
         {
             var how = CkText("The tracker counts for the character in the game: it reads the class icon between the health and mana bars and switches by itself."
-                + (elsewhere > 0 ? $" {elsewhere} more on other servers." : ""), CkFaint, 11.5);
+                + (elsewhere > 0 ? $" {elsewhere} more on other servers." : ""), CkFaint, 12);
             how.TextWrapping = TextWrapping.Wrap; how.TextTrimming = TextTrimming.None; how.Margin = new Thickness(18, 0, 18, 4);
             body.Children.Add(how);
             body.Children.Add(MenuRow(new MenuEntry("Count as a new character", () => { if (!_demo) _ = SplitNewCharacter(); },
@@ -321,17 +321,17 @@ public partial class MainWindow
             {
                 CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                 Background = Ck(CkGood, 0x22), BorderBrush = Ck(CkGood, 0x55), BorderThickness = new Thickness(1),
-                Child = CkText(r.Status, CkGood, 10.5, FontWeights.SemiBold),
+                Child = CkText(r.Status, CkGood, 12, FontWeights.SemiBold),
             };
             line1.Children.Add(pill);
         }
-        else { var st = CkText(r.Status, CkFaint, 11); st.Margin = new Thickness(8, 1, 0, 0); line1.Children.Add(st); }
+        else { var st = CkText(r.Status, CkFaint, 12); st.Margin = new Thickness(8, 1, 0, 0); line1.Children.Add(st); }
         words.Children.Add(line1);
-        var week = CkText(WeekLine(r.Look), r.Look.Any ? CkMuted : CkFaint, 11.5); week.Margin = new Thickness(0, 3, 0, 0);
+        var week = CkText(WeekLine(r.Look), r.Look.Any ? CkMuted : CkFaint, 12); week.Margin = new Thickness(0, 3, 0, 0);
         words.Children.Add(week);
         if (r.Look.Best is { } best)
         {
-            var b = CkText($"Best hour {Fk(best.PerHr)}" + (r.Look.BestZone.Length > 0 ? " · " + r.Look.BestZone : ""), CkFaint, 11.5);
+            var b = CkText($"Best hour {Fk(best.PerHr)}" + (r.Look.BestZone.Length > 0 ? " · " + r.Look.BestZone : ""), CkFaint, 12);
             b.Margin = new Thickness(0, 1, 0, 0);
             b.ToolTip = $"The best hour {r.Name} has farmed on this server: {Amounts.Full(best.PerHr)} Kinah and loot after the Market's cut, over {best.Minutes} minutes" + (r.Look.BestZone.Length > 0 ? $" in {r.Look.BestZone}" : "") + (best.At.Length > 0 ? $", on {best.At}." : ".");
             words.Children.Add(b);

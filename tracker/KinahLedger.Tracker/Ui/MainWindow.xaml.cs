@@ -1970,6 +1970,8 @@ public partial class MainWindow : Window
             ShowPart("Quests", byHand: false);
             // KL_QUESTS_TALL=1: the whole page without its scroll cap, for a look below the fold (Your goals, Done)
             if (Environment.GetEnvironmentVariable("KL_QUESTS_TALL") == "1") LowerScroll.MaxHeight = double.PositiveInfinity;
+            // KL_QUESTS_SCROLL=end: the page scrolled to its foot, for a look at how it ends
+            if (Environment.GetEnvironmentVariable("KL_QUESTS_SCROLL") == "end") Dispatcher.BeginInvoke(() => LowerScroll.ScrollToEnd(), System.Windows.Threading.DispatcherPriority.Loaded);
             return;
         }
         if (kind == "CraftingEmpty")

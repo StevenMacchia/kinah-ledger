@@ -62,7 +62,7 @@ public partial class MainWindow
         });
         var t = CkText(cur != null ? $"Alert when {(cur.Above ? "above" : "below")} {cur.Price:N0}" : "No price alert", cur != null ? CkMuted : CkFaint, 12.5); Grid.SetColumn(t, 1); g.Children.Add(t);
         var link = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
-        var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(cur != null ? "change" : "set one")) { Foreground = Ck(CkGold), TextDecorations = null };
+        var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(cur != null ? "change" : "set one")) { Foreground = Ck(CkLink), TextDecorations = null };
         h.Click += (_, _) => { _alertEdit.Add(item); redo(); };
         link.Inlines.Add(h); Grid.SetColumn(link, 2); g.Children.Add(link);
         return new Border
@@ -129,7 +129,7 @@ public partial class MainWindow
         if (cur != null)
         {
             var rm = new TextBlock { Margin = new Thickness(20, 4, 20, 0), FontSize = 12 };
-            var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("Remove the alert")) { Foreground = Ck(CkGold), TextDecorations = null };
+            var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("Remove the alert")) { Foreground = Ck(CkLink), TextDecorations = null };
             h.Click += (_, _) => { PriceAlerts.Remove(s.Label, item); ((TextBlock)note).Text = "Alert removed."; rm.Visibility = Visibility.Collapsed; set.Content = "Set alert"; };
             rm.Inlines.Add(h);
             sp.Children.Add(rm);

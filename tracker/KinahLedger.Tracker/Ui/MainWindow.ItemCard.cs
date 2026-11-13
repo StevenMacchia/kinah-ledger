@@ -46,8 +46,8 @@ public partial class MainWindow
             var lv = new StackPanel();
             var cap = new Grid { Margin = new Thickness(12, 6, 12, 2) };
             cap.ColumnDefinitions.Add(new ColumnDefinition()); cap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            cap.Children.Add(CkText("YOUR LAST PICKUPS", CkGoldRule, 11));
-            var n = CkText($"{r.Drops} this session", CkFaint, 11.5); Grid.SetColumn(n, 1); cap.Children.Add(n);
+            cap.Children.Add(CkText("YOUR LAST PICKUPS", CkMuted, 12, FontWeights.SemiBold));
+            var n = CkText($"{r.Drops} this session", CkFaint, 12); Grid.SetColumn(n, 1); cap.Children.Add(n);
             lv.Children.Add(cap);
             for (int i = 0; i < mine.Count; i++)
             {
@@ -130,17 +130,17 @@ public partial class MainWindow
         if (listed?.Url is { Length: > 0 } mu && Uri.IsWellFormedUriString(mu, UriKind.Absolute)) links.Add(("MetaBot.GG page", mu));
         var linkLine = CkLinks(links.ToArray());
         // Watch: this item alerts like a rare drop (Ui/MainWindow.Alerts.cs)
-        var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop the drop alert" : "Alert me when it drops")) { Foreground = Ck(CkGold), TextDecorations = null };
+        var watch = new Hyperlink(new Run(IsWatched(name) ? "Stop the drop alert" : "Alert me when it drops")) { Foreground = Ck(CkLink), TextDecorations = null };
         watch.Click += (_, _) => { bool on = ToggleWatch(name); ((Run)watch.Inlines.FirstInline).Text = on ? "Stop the drop alert" : "Alert me when it drops"; Say(on ? $"Watching {name}: a chime and the panel light up when it drops." : $"Stopped watching {name}.", "Faint"); };
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, watch);
         // Set a goal, beside Watch (0.9): how many of it to pick up today, in the goal sheet (Ui/MainWindow.Goals.cs)
-        var goal = new Hyperlink(new Run("Set a goal")) { Foreground = Ck(CkGold), TextDecorations = null };
+        var goal = new Hyperlink(new Run("Set a goal")) { Foreground = Ck(CkLink), TextDecorations = null };
         goal.Click += (_, _) => { if (_card != null) _card.IsOpen = false; OpenGoalSheetLater(null, GoalDraft.ForItem(name), null); };
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.InsertBefore(linkLine.Inlines.FirstInline, goal);
         // Looks wrong? (or its Undo) at the end, what a right-click on a LOOT slot used to hide (2026-10-31)
-        var rep = new Hyperlink(new Run(r.Reported ? "Reported · Undo" : "Looks wrong? Report")) { Foreground = Ck(CkGold), TextDecorations = null, ToolTip = "Keeps it out of what this count sends to the site, and saves the last minute of what was read." };
+        var rep = new Hyperlink(new Run(r.Reported ? "Reported · Undo" : "Looks wrong? Report")) { Foreground = Ck(CkLink), TextDecorations = null, ToolTip = "Keeps it out of what this count sends to the site, and saves the last minute of what was read." };
         rep.Click += (_, _) => { if (_card != null) _card.IsOpen = false; ToggleReport(r); };
         linkLine.Inlines.Add(new Run("   ·   ") { Foreground = Ck(CkFaint) });
         linkLine.Inlines.Add(rep);

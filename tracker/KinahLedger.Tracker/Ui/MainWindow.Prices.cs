@@ -54,8 +54,8 @@ public partial class MainWindow
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         if (q?.From == PriceBook.From.Sold && label == "Lowest Market price") label = "Sold average";   // the site's pick was what it sold for, not a listing
         left.Children.Add(CkText(label, CkInk, 13.5));
-        if (q != null && CardSourceOnLine) left.Children.Add(CkText(PriceBook.Describe(q), q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkFaint : CkWarn, 11.5));
-        if (q == null) left.Children.Add(CkText($"no Market price on {(server.Length > 0 ? server : "your server")} yet", CkFaint, 11.5));
+        if (q != null && CardSourceOnLine) left.Children.Add(CkText(PriceBook.Describe(q), q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkFaint : CkWarn, 12));
+        if (q == null) left.Children.Add(CkText($"no Market price on {(server.Length > 0 ? server : "your server")} yet", CkFaint, 12));
         g.Children.Add(left);
         var right = CkPriceEditor(item, q, changed, qty);
         Grid.SetColumn(right, 1); g.Children.Add(right);
@@ -73,13 +73,13 @@ public partial class MainWindow
         var t = CkText(figure, q == null ? CkWarn : q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : CkGold, size, FontWeights.Normal, mono: true);
         if (q is { Sure: false } || (q != null && PriceBook.IsOld(q))) t.Opacity = 0.6;
         shown.Children.Add(new Border { Child = t, BorderThickness = new Thickness(0, 0, 0, 1), BorderBrush = Ck(CkGold, 0x55) });
-        shown.Children.Add(CkText(" ✎", CkFaint, 11));
+        shown.Children.Add(CkText(" ✎", CkFaint, 12));
         if (!CardSourceOnLine && q != null)
             shown.Children.Add(new Border
             {
                 Margin = new Thickness(6, 0, 0, 0), CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 1, 6, 2), VerticalAlignment = VerticalAlignment.Center,
                 Background = Ck(q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkMuted : CkWarn, 0x24),
-                Child = CkText(q.Mine ? "YOURS" : !q.Sure ? "UNSURE" : q.From switch { PriceBook.From.Sold => "SOLD", PriceBook.From.Region => "≈ REGION", _ => "BOARD" }, q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkMuted : CkWarn, 10.5, FontWeights.Normal),
+                Child = CkText(q.Mine ? "YOURS" : !q.Sure ? "UNSURE" : q.From switch { PriceBook.From.Sold => "SOLD", PriceBook.From.Region => "≈ REGION", _ => "BOARD" }, q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkMuted : CkWarn, 12, FontWeights.Normal),
             });
         host.Children.Add(shown);
 

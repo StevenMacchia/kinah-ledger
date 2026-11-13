@@ -37,18 +37,22 @@ public partial class MainWindow
 
     static string KindIcon(string kind) => kind switch { "Event" => "Star", InstanceLog.Transcendence => "Bolt", "Arena" => "Sword", _ => "Door" };
 
-    /// <summary>A small rounded label: a dot and the words, gold while a run is open, faint after ("Paid · 5:48 in", "last 18:02"). Its text is the figures check's.</summary>
+    /// <summary>
+    /// A small rounded label: a dot and the words ("Paid · 5:48 in", "last 18:02"). A status, not money (colour pass,
+    /// 2026-11-13; gold until then): ink words with the live dot green while a run is open, as the Farming hero's, muted
+    /// after. Its text is the figures check's.
+    /// </summary>
     static Border QPill(string text, bool on)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal };
         var dot = new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(3.5), Margin = new Thickness(0, 1, 7, 0), VerticalAlignment = VerticalAlignment.Center };
-        dot.SetResourceReference(Border.BackgroundProperty, on ? "Gold" : "Faint");
-        if (on) dot.Effect = QGlow("Gold", 6, 0.7);
+        dot.SetResourceReference(Border.BackgroundProperty, on ? "Good" : "Faint");
+        if (on) dot.Effect = QGlow("Good", 6, 0.7);
         sp.Children.Add(dot);
-        sp.Children.Add(QT(text, 11.5, FontWeights.SemiBold, on ? "Gold" : "Muted"));
+        sp.Children.Add(QT(text, 12, FontWeights.SemiBold, on ? "Ink" : "Muted"));
         var b = new Border { Child = sp, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(9, 3, 10, 4), VerticalAlignment = VerticalAlignment.Center };
-        b.SetResourceReference(Border.BorderBrushProperty, on ? "GoldLine" : "CardLineHover");
-        b.SetResourceReference(Border.BackgroundProperty, on ? "GoldTint" : "Card2");
+        b.SetResourceReference(Border.BorderBrushProperty, "CardLineHover");
+        b.SetResourceReference(Border.BackgroundProperty, "Card2");
         return b;
     }
 
@@ -133,7 +137,7 @@ public partial class MainWindow
         titles.Children.Add(nameRow);
         titles.SizeChanged += (_, _) => name.MaxWidth = Math.Max(60, titles.ActualWidth - (pickPlace != null ? 26 : 2));
         var meta = RunBandLine(runs, open);
-        var ml = QT(meta, 11.5, FontWeights.Medium, "Muted", trim: true); ml.Margin = new Thickness(0, 1, 0, 0); titles.Children.Add(ml);
+        var ml = QT(meta, 12, FontWeights.Medium, "Muted", trim: true); ml.Margin = new Thickness(0, 1, 0, 0); titles.Children.Add(ml);
         Grid.SetColumn(titles, 1); kick.Children.Add(titles);
         if (open != null)
         {
@@ -153,7 +157,7 @@ public partial class MainWindow
         // the hour, big in gold; a place that pays nothing priced says so; a short record says what a run pays
         var big = new TextBlock { Margin = new Thickness(0, 10, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         if (n == 0) { big.Inlines.Add(Q(runs.Count == 0 ? "No run here yet." : "No run counted yet.", 15, FontWeights.SemiBold, "Muted")); }
-        else if (!known) { big.Inlines.Add(Q("no prices yet", 22, FontWeights.Bold, "Muted")); big.Inlines.Add(Q("  what the rewards sell for isn't known", 11.5, FontWeights.Medium, "Faint")); }
+        else if (!known) { big.Inlines.Add(Q("no prices yet", 22, FontWeights.Bold, "Muted")); big.Inlines.Add(Q("  what the rewards sell for isn't known", 12, FontWeights.Medium, "Faint")); }
         else if (secs > 10) { big.Inlines.Add(Q(Fk(value / secs * 3600), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" an hour", 13, FontWeights.Medium, "Muted")); }
         else { big.Inlines.Add(Q(Fk(value / (double)n), 40, FontWeights.Bold, "Gold")); big.Inlines.Add(Q(" a run", 13, FontWeights.Medium, "Muted")); }
         big.ToolTip = "Over the counted runs: Kinah plus materials at the lowest Market price, " + PriceBook.Cut + ". Gear is bound and not in the value. Flagged runs are left out.";
@@ -171,8 +175,8 @@ public partial class MainWindow
             var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             // the average's figure is the line under the bar's ("7:26 a run"); said once (UX pass, 2026-11-13)
-            var chase = QT("this run against the average run here", 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
-            var togo = QT("", 11.5, FontWeights.SemiBold, "Gold"); togo.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(togo, 1); row.Children.Add(togo);
+            var chase = QT("this run against the average run here", 12, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
+            var togo = QT("", 12, FontWeights.SemiBold, "Gold"); togo.Margin = new Thickness(10, 0, 0, 0); Grid.SetColumn(togo, 1); row.Children.Add(togo);
             left.Children.Add(row);
             var (bar, fill) = QLiveBar("Gold", 12); bar.Margin = new Thickness(0, 5, 0, 0); left.Children.Add(bar);
             bar.SizeChanged += (_, _) => LayoutLiveRun();
@@ -195,13 +199,13 @@ public partial class MainWindow
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var chase = QT($"last run {Fk(lastV)}" + (isBest ? " · your best here" : $" · {Math.Round(100.0 * lastV / best):0}% of your best here"), 11.5, FontWeights.Medium, "Muted", trim: true); row.Children.Add(chase);
             var flag = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
-            var fi = QGlyph("Flag", 12, isBest ? "Mint" : "Gold", 2); fi.Margin = new Thickness(0, 0, 5, 0); fi.VerticalAlignment = VerticalAlignment.Center; flag.Children.Add(fi);
-            flag.Children.Add(QT($"{Fk(best)} best run", 11.5, FontWeights.SemiBold, isBest ? "Mint" : "Gold"));
+            var fi = QGlyph("Flag", 12, "Gold", 2);   // gold beaten or not: the chase toward a target (colour pass, 2026-11-13) fi.Margin = new Thickness(0, 0, 5, 0); fi.VerticalAlignment = VerticalAlignment.Center; flag.Children.Add(fi);
+            flag.Children.Add(QT($"{Fk(best)} best run", 12, FontWeights.SemiBold, "Gold"));
             Grid.SetColumn(flag, 1); row.Children.Add(flag);
             left.Children.Add(row);
-            var bar = QBar(QShare(lastV, best), isBest ? "Mint" : "Gold", 12); bar.Margin = new Thickness(0, 5, 0, 0); left.Children.Add(bar);
+            var bar = QBar(QShare(lastV, best), "Gold", 12); bar.Margin = new Thickness(0, 5, 0, 0); left.Children.Add(bar);
             bestInFlag = true;
-            ring = isBest ? QRing(76, 7, 1, "Mint", "★", "best run") : QRing(76, 7, QShare(lastV, best), "Gold", $"{Math.Round(100.0 * lastV / best):0}%", "of best");
+            ring = isBest ? QRing(76, 7, 1, "Gold", "★", "best run") : QRing(76, 7, QShare(lastV, best), "Gold", $"{Math.Round(100.0 * lastV / best):0}%", "of best");
             ring.ToolTip = $"The last run here, {Fk(lastV)}, against the best, {Fk(best)}.";
         }
 
@@ -253,14 +257,14 @@ public partial class MainWindow
         if (_liveToGo != null)
         {
             _liveToGo.Text = past ? "past the average" : at ? "at the average" : $"{Clock(TimeSpan.FromSeconds(_liveAvg - elapsedSecs))} to go";
-            _liveToGo.SetResourceReference(TextBlock.ForegroundProperty, past || at ? "Mint" : "Gold");
+            _liveToGo.SetResourceReference(TextBlock.ForegroundProperty, past || at ? "Muted" : "Gold");   // past the average is no gain: never green
         }
-        if (_liveFill != null) { _liveFill.SetResourceReference(Border.BackgroundProperty, past ? "Mint" : "Gold"); _liveFill.Effect = QGlow(past ? "Mint" : "Gold", 8, 0.6); }
+        if (_liveFill != null) { _liveFill.SetResourceReference(Border.BackgroundProperty, "Gold"); _liveFill.Effect = QGlow("Gold", 8, 0.6); }
         LayoutLiveRun(share);
         if (_liveRingHost != null)
         {
             _liveRingHost.Children.Clear();
-            var ring = QRing(76, 7, share, past ? "Mint" : "Gold", el, $"run {_liveK}");
+            var ring = QRing(76, 7, share, "Gold", el, $"run {_liveK}");
             ring.ToolTip = _liveAvg <= 0 ? $"Run {_liveK}, {el} in. The first counted run here sets the average to chase." : past ? "This run has gone past the average run here." : $"Run {_liveK}, {el} in; runs here take {Clock(TimeSpan.FromSeconds(_liveAvg))} on average.";
             _liveRingHost.Children.Add(ring);
         }
@@ -325,7 +329,7 @@ public partial class MainWindow
     {
         if (tr.Gear <= 0) return null;
         var sp = new StackPanel();
-        var t = QT($"{tr.Gear:N0} gear · bound, no value", 11.5, FontWeights.Medium, "Faint");
+        var t = QT($"{tr.Gear:N0} gear · bound, no value", 12, FontWeights.Medium, "Faint");
         t.ToolTip = "Gear from an expedition, dungeon or event is bound to you: it can't be sold, so it isn't in the value. Each piece shows how many you got.";
         ToolTipService.SetInitialShowDelay(t, 300);
         sp.Children.Add(t);
@@ -362,8 +366,8 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = QT(all ? "Show fewer" : $"Show all {slots.Count}", 11.5, FontWeights.SemiBold, "Gold");
-            m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 2, 0, 0);
+            var m = QLinkify(QT(all ? "Show fewer" : $"Show all {slots.Count}", 12, FontWeights.SemiBold, "Link"));
+            m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 2, 0, 0);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); redraw(); };
             sp.Children.Add(m);
         }
@@ -405,8 +409,8 @@ public partial class MainWindow
         }
         if (order.Count > 3)
         {
-            var m = QT($"{order.Count - 3} earlier run{(order.Count - 3 == 1 ? "" : "s")}  ›", 11.5, FontWeights.SemiBold, "Gold");
-            m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.Margin = new Thickness(0, 6, 0, 0);
+            var m = QLinkify(QT($"{order.Count - 3} earlier run{(order.Count - 3 == 1 ? "" : "s")}  ›", 12, FontWeights.SemiBold, "Link"));
+            m.Margin = new Thickness(0, 6, 0, 0);
             m.ToolTip = "Every run on its line, in a box under this one, with what each one gave.";
             m.MouseLeftButtonUp += (_, _) => { _runListShown = true; _drawnSig.Remove("runs"); redraw(); };
             sp.Children.Add(m);

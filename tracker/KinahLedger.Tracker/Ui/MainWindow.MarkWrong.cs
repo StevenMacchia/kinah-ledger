@@ -187,7 +187,7 @@ public partial class MainWindow
         {
             var local = l.At.ToLocalTime();
             time.Text = local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : local.ToString("MMM d");
-            time.FontSize = 11.5; time.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); time.SetResourceReference(TextBlock.ForegroundProperty, "Gold");
+            time.FontSize = 12; time.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); time.SetResourceReference(TextBlock.ForegroundProperty, "Gold");
         }
         if (g.Children.OfType<TextBlock>().FirstOrDefault(t => Grid.GetColumn(t) == 2) is { } what)
         {

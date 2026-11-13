@@ -59,20 +59,21 @@ public partial class MainWindow
     internal void SetLootSortForTest(string mode) { _prefs.LootSort = mode; _drawnSig.Remove("loot"); _drawnSig.Remove("today"); FillToday(); }
 
     /// <summary>
-    /// "Sort  worth · amount · quality", the one picked gold: a click keeps it (ui.json) and draws the slots again. Over
+    /// "Sort  worth · amount · quality", the one picked in ink, the others links (gold until the colour pass): a click keeps it (ui.json) and draws the slots again. Over
     /// LOOT's slots on Farming and in the TODAY strip's heading on Events; shown once there are two slots to order.
     /// </summary>
     FrameworkElement SortLinks(string sigKey, Action redraw)
     {
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var label = PT("Sort", "Muted", 11.5); label.Margin = new Thickness(0, 0, 7, 0); sp.Children.Add(label);
+        var label = PT("Sort", "Muted", 12); label.Margin = new Thickness(0, 0, 7, 0); sp.Children.Add(label);
         for (int i = 0; i < LootOrder.Modes.Length; i++)
         {
             var mode = LootOrder.Modes[i];
             bool on = mode == LootSortMode;
-            if (i > 0) { var dot = PT("·", "Muted", 11.5); dot.Margin = new Thickness(5, 0, 5, 0); sp.Children.Add(dot); }
-            var t = PT(mode, on ? "Gold" : "Muted", 11.5, on ? FontWeights.Normal : null);
-            t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = LootOrder.Tip(mode); ToolTipService.SetInitialShowDelay(t, 400);
+            if (i > 0) { var dot = PT("·", "Muted", 12); dot.Margin = new Thickness(5, 0, 5, 0); sp.Children.Add(dot); }
+            var t = PT(mode, "Ink", 12, on ? FontWeights.SemiBold : null);
+            if (!on) QLinkify(t);
+            t.Cursor = on ? Cursors.Arrow : Cursors.Hand; t.Background = Brushes.Transparent; t.ToolTip = LootOrder.Tip(mode); ToolTipService.SetInitialShowDelay(t, 400);
             t.MouseLeftButtonUp += (_, e) => { e.Handled = true; if (mode == LootSortMode) return; _prefs.LootSort = mode; SavePrefs(); _drawnSig.Remove(sigKey); redraw(); };
             sp.Children.Add(t);
         }
@@ -226,7 +227,7 @@ public partial class MainWindow
     {
         const int perRow = 4;   // Quest tiles, 149 px each with 8 px between, in the 632 px card
         var sp = new StackPanel { Margin = new Thickness(0, LootHost.Children.Count > 0 && title.Length > 0 ? 6 : 0, 0, 0) };
-        if (title.Length > 0) { var t = QT(title, 11, FontWeights.SemiBold, "Muted"); t.Margin = new Thickness(0, 0, 0, 8); sp.Children.Add(t); }
+        if (title.Length > 0) { var t = QT(title, 12, FontWeights.SemiBold, "Muted"); t.Margin = new Thickness(0, 0, 0, 8); sp.Children.Add(t); }
         bool all = _todayAll.Contains(key);
         int max = perRow * (FullShown ? 3 : TodayRows);
         var wrap = new WrapPanel();
@@ -234,8 +235,8 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = PT(all ? "Show fewer" : $"{slots.Count - max} more", "Gold", 12, FontWeights.SemiBold);   // tiles, not kinds: Kinah has one too
-            m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
+            var m = QLinkify(PT(all ? "Show fewer" : $"{slots.Count - max} more", "Link", 12, FontWeights.SemiBold));   // tiles, not kinds: Kinah has one too
+            m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); _drawnSig.Remove("loot"); FillLoot(); };
             sp.Children.Add(m);
         }

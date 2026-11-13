@@ -246,7 +246,7 @@ public partial class MainWindow
         g.Children.Add(tick);
         var t = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, CmpGap, 0) };
         t.Inlines.Add(PR(name, mark == "here now" ? "Gold" : "Ink"));
-        if (mark.Length > 0) { var m = PR("  " + mark, "Faint"); m.FontSize = 11.5; t.Inlines.Add(m); }
+        if (mark.Length > 0) { var m = PR("  " + mark, "Faint"); m.FontSize = 12; t.Inlines.Add(m); }
         Grid.SetColumn(t, 1); g.Children.Add(t);
         // the bar: a slot-dark track, filled gold (blue for runs) as far as this row's figure goes against the best
         var track = new Border { Height = 8, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
@@ -299,7 +299,7 @@ public partial class MainWindow
         {
             var sp = new StackPanel();
             var h = PT(name, "Ink", 13, FontWeights.Normal); sp.Children.Add(h);
-            var s = PT(sub, "Faint", 11.5); s.Margin = new Thickness(0, 2, 0, 8); sp.Children.Add(s);
+            var s = PT(sub, "Faint", 12); s.Margin = new Thickness(0, 2, 0, 8); sp.Children.Add(s);
             foreach (var (label, a, b, win) in rows)
             {
                 var r = new Grid { MinHeight = 24 };
@@ -358,7 +358,7 @@ public partial class MainWindow
         if (vs is { } x)
         {
             UsualLine.Inlines.Add(new LineBreak());
-            UsualLine.Inlines.Add(PR(x.Text, x.Sign > 0 ? "Good" : x.Sign < 0 ? "SecGold" : "Muted"));
+            UsualLine.Inlines.Add(PR(x.Text, x.Sign > 0 ? "Good" : x.Sign < 0 ? "Coral" : "Muted"));
         }
         // the higher of your best day there and the card's own "best here" (Session/BestRuns.cs, your best hour), so the
         // figure is the same one the card shows with Compare off
@@ -389,7 +389,7 @@ public partial class MainWindow
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var t = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var k = PR("LAST RUN", "SecGold", FontWeights.Medium); k.FontSize = 11; t.Inlines.Add(k);
+        var k = PR("LAST RUN", "Muted", FontWeights.SemiBold); k.FontSize = 12; t.Inlines.Add(k);
         var when = (last.LastLoot ?? last.Start).ToLocalTime();
         var w = PR($"   {(when.Date == DateTime.Today ? when.ToString("HH:mm", CultureInfo.InvariantCulture) : when.ToString("MMM d", CultureInfo.InvariantCulture))} · {TodayLoot.Dur(last.Seconds)}", "Faint"); w.FontSize = 12; t.Inlines.Add(w);
         head.Children.Add(t);
@@ -401,7 +401,7 @@ public partial class MainWindow
         void Cell(int i, string label, string fig, string brush)
         {
             var c = new StackPanel { Margin = new Thickness(i == 0 ? 0 : 14, 10, 0, 0) };
-            c.Children.Add(PT(label, "Faint", 11.5));
+            c.Children.Add(PT(label, "Faint", 12));
             var f = PT(fig, brush, 15, null, "MonoFont"); f.Margin = new Thickness(0, 3, 0, 0); c.Children.Add(f);
             var cell = new Border { Child = c, BorderThickness = new Thickness(i == 0 ? 0 : 1, 0, 0, 0) };
             cell.SetResourceReference(Border.BorderBrushProperty, "Line");
@@ -410,7 +410,7 @@ public partial class MainWindow
         long diff = v.Diff;
         bool same = Math.Abs(diff) < Math.Max(1_000, v.Average * 0.03);
         Cell(0, "Your average there", Fk(v.Average), "Ink");
-        Cell(1, "This run", same ? "about the same" : $"{Fk(Math.Abs(diff))} {(diff > 0 ? "more" : "less")}", same ? "Ink" : diff > 0 ? "Good" : "SecGold");
+        Cell(1, "This run", same ? "about the same" : $"{Fk(Math.Abs(diff))} {(diff > 0 ? "more" : "less")}", same ? "Ink" : diff > 0 ? "Good" : "Coral");
         Cell(2, "Your best there", Fk(v.Best), "Ink");
         var rule = new Border { Child = row, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 12, 0, 0) };
         rule.SetResourceReference(Border.BorderBrushProperty, "Line");

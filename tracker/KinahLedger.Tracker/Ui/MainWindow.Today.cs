@@ -111,8 +111,8 @@ public partial class MainWindow
         var head = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         head.ColumnDefinitions.Add(new ColumnDefinition()); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (sort) { var links = SortLinks(sigKey, again); Grid.SetColumn(links, 1); head.Children.Add(links); }
-        var t = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        t.Inlines.Add(PR(title, "SecGold", FontWeights.Medium));
+        var t = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        t.Inlines.Add(PR(title, "Muted", FontWeights.SemiBold));   // a heading, not money: neutral since the colour pass
         if (note.Length > 0) { var n = PR("   " + note, "Muted"); n.FontSize = 12; t.Inlines.Add(n); }
         head.Children.Add(t);
         if (worth > 0)
@@ -129,8 +129,8 @@ public partial class MainWindow
         sp.Children.Add(wrap);
         if (slots.Count > max)
         {
-            var m = PT(all ? "Show fewer" : $"Show all {slots.Count}", "Gold", 12, FontWeights.Normal);
-            m.Cursor = Cursors.Hand; m.Background = Brushes.Transparent; m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
+            var m = QLinkify(PT(all ? "Show fewer" : $"Show all {slots.Count}", "Link", 12, FontWeights.SemiBold));
+            m.HorizontalAlignment = HorizontalAlignment.Left; m.Margin = new Thickness(0, 0, 0, 2);
             m.MouseLeftButtonUp += (_, _) => { if (!_todayAll.Remove(key)) _todayAll.Add(key); again(); };
             sp.Children.Add(m);
         }
@@ -144,14 +144,15 @@ public partial class MainWindow
         if (on)
         {
             var pin = new Path { Data = Geometry.Parse("M6,2 H10 L9.4,6 L12,8.4 H4 L6.6,6 Z M8,8.4 V14"), StrokeThickness = 1.4, Width = 12, Height = 12, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, StrokeLineJoin = PenLineJoin.Round };
-            pin.SetResourceReference(Shape.StrokeProperty, "Gold");
+            pin.SetResourceReference(Shape.StrokeProperty, "SegOnInk");
             sp.Children.Add(pin);
         }
-        sp.Children.Add(PT(text, on ? "Gold" : "Ink", 12.5, on ? FontWeights.Normal : null));
-        if (time.Length > 0) { var tm = PT(time, on ? "Gold" : "Muted", 12, null, "MonoFont"); tm.Margin = new Thickness(7, 0, 0, 0); sp.Children.Add(tm); }
+        // the picked chip as the lit pill everywhere: its ink on SegOnBg (gold on the light pill until the colour pass, 2026-11-13)
+        sp.Children.Add(PT(text, on ? "SegOnInk" : "Ink", 12.5, on ? FontWeights.SemiBold : null));
+        if (time.Length > 0) { var tm = PT(time, on ? "SegOnInk" : "Muted", 12, null, "MonoFont"); tm.Margin = new Thickness(7, 0, 0, 0); sp.Children.Add(tm); }
         var b = new Border { Child = sp, Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 8, 6), Cursor = Cursors.Hand, ToolTip = tip };
         b.SetResourceReference(Border.BackgroundProperty, on ? "SegOnBg" : "ChipOff");
-        b.SetResourceReference(Border.BorderBrushProperty, on ? "GoldLine" : "ChipOffLine");
+        b.SetResourceReference(Border.BorderBrushProperty, on ? "SegOnBg" : "ChipOffLine");
         ToolTipService.SetInitialShowDelay(b, 400);
         b.MouseLeftButtonUp += (_, _) => { pick(); FillToday(); };
         return b;

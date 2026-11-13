@@ -206,7 +206,7 @@ public partial class MainWindow
         head.ColumnDefinitions.Add(new ColumnDefinition());
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var label = CkText("SHARE", CkGoldRule, 11, FontWeights.Medium); label.Margin = new Thickness(2, 0, 10, 0);
+        var label = CkText("SHARE", CkMuted, 12, FontWeights.Medium); label.Margin = new Thickness(2, 0, 10, 0);
         head.Children.Add(label);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), Background = new LinearGradientBrush(Color.FromArgb(0x66, CkGoldRule.R, CkGoldRule.G, CkGoldRule.B), Colors.Transparent, 0) };
         Grid.SetColumn(rule, 1); head.Children.Add(rule);
@@ -297,7 +297,7 @@ public partial class MainWindow
         {
             var saved = new TextBlock { FontSize = 12, Margin = new Thickness(0, 10, 0, 0), Foreground = Ck(CkMuted), TextTrimming = TextTrimming.CharacterEllipsis };
             saved.Inlines.Add(new Run(@"Saved in Pictures\Kinah Ledger as " + System.IO.Path.GetFileName(_shareSaved) + "   "));
-            var show = new Hyperlink(new Run("Show in folder")) { Foreground = Ck(CkGold), TextDecorations = null };
+            var show = new Hyperlink(new Run("Show in folder")) { Foreground = Ck(CkLink), TextDecorations = null };
             var path = _shareSaved;
             show.Click += (_, _) => { try { System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\""); } catch (Exception) { } };
             saved.Inlines.Add(show);

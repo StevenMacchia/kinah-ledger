@@ -94,14 +94,14 @@ public partial class MainWindow
             var lv = new StackPanel();
             var cap = new Grid { Margin = new Thickness(12, 6, 12, 2) };
             cap.ColumnDefinitions.Add(new ColumnDefinition()); cap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            cap.Children.Add(CkText($"TODAY ON {(Server?.Name ?? "YOUR SERVER").ToUpperInvariant()}", CkGoldRule, 11));
-            var age = CkText($"price read {PriceBook.Ago(PlayerBoards.CraftsBoardAt ?? PlayerBoards.CraftsAt ?? DateTime.UtcNow, DateTime.UtcNow)}", CkFaint, 11.5); Grid.SetColumn(age, 1); cap.Children.Add(age);
+            cap.Children.Add(CkText($"TODAY ON {(Server?.Name ?? "YOUR SERVER").ToUpperInvariant()}", CkMuted, 12, FontWeights.SemiBold));
+            var age = CkText($"price read {PriceBook.Ago(PlayerBoards.CraftsBoardAt ?? PlayerBoards.CraftsAt ?? DateTime.UtcNow, DateTime.UtcNow)}", CkFaint, 12); Grid.SetColumn(age, 1); cap.Children.Add(age);
             lv.Children.Add(cap);
             void Live(string left, string mid, string right, bool first)
             {
                 var g = new Grid { Height = 32, Margin = new Thickness(12, 0, 12, 0) };
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                g.Children.Add(CkText(left, first ? CkGold : CkFaint, 11.5, mono: true));
+                g.Children.Add(CkText(left, first ? CkGold : CkFaint, 12, mono: true));
                 var m = CkText(mid, CkInk, 13); Grid.SetColumn(m, 1); g.Children.Add(m);
                 var r = CkText(right, CkGold, 12.5, mono: true); Grid.SetColumn(r, 2); g.Children.Add(r);
                 lv.Children.Add(new Border { Child = g, BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0), BorderBrush = Ck(CkSlotLine, 0x73) });
@@ -138,7 +138,7 @@ public partial class MainWindow
                 bool heldBound = !vendor && PriceBook.BoundHeld(m.Item);
                 var fp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
                 fp.Children.Add(CkText(heldBound ? "bound · 0" : "farmed · 0", Color.FromRgb(0x3D, 0xD6, 0x8C), 12.5, mono: true));
-                if (each is long ref1) { var dim = CkText(vendor ? $"NPC {Amounts.Short(ref1)}" : $"Market {Amounts.Short(ref1)}", CkFaint, 11.5, mono: true); dim.ToolTip = Amounts.Full(ref1) + " each"; dim.Margin = new Thickness(8, 0, 0, 0); fp.Children.Add(dim); }
+                if (each is long ref1) { var dim = CkText(vendor ? $"NPC {Amounts.Short(ref1)}" : $"Market {Amounts.Short(ref1)}", CkFaint, 12, mono: true); dim.ToolTip = Amounts.Full(ref1) + " each"; dim.Margin = new Thickness(8, 0, 0, 0); fp.Children.Add(dim); }
                 info.Children.Add(fp);
                 // bound copies can't be sold, so there is no "sell them instead" for them
                 if (!vendor && !heldBound) farmed.Add((m.Item, m.Qty, each));
@@ -151,11 +151,11 @@ public partial class MainWindow
                 var ed = CkPriceEditor(m.Item, mq ?? (each is long bp ? new PriceBook.Quote(bp, PriceBook.From.Server, PriceBook.SureReadings, true, PlayerBoards.CraftsAt) : null), Redo, 1, 12.5);
                 ed.HorizontalAlignment = HorizontalAlignment.Left;
                 info.Children.Add(ed);
-                if (CardSourceOnLine && mq != null) info.Children.Add(CkText(PriceBook.Describe(mq), mq.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : mq.Sure ? CkFaint : CkWarn, 11));
-                else if (mq == null && each == null) info.Children.Add(CkText($"none on {Server?.Name ?? "your server"}'s Market now", CkFaint, 11.5));
+                if (CardSourceOnLine && mq != null) info.Children.Add(CkText(PriceBook.Describe(mq), mq.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : mq.Sure ? CkFaint : CkWarn, 12));
+                else if (mq == null && each == null) info.Children.Add(CkText($"none on {Server?.Name ?? "your server"}'s Market now", CkFaint, 12));
                 if (thin.FirstOrDefault(t => t.Item == m.Item) is { Item: not null } th)
                 {
-                    var w = CkText($"~ only {th.Listings} listings, costs more than the craft makes", CkWarn, 11);
+                    var w = CkText($"~ only {th.Listings} listings, costs more than the craft makes", CkWarn, 12);
                     w.ToolTip = $"{m.Qty} × {each:N0} = {m.Qty * (each ?? 0):N0}, more than the {recipe.Output} a craft makes sells for. Few listings: type what you'd pay, or tick I have these if you farmed them.";
                     info.Children.Add(w);
                 }
@@ -175,7 +175,7 @@ public partial class MainWindow
         tot.ColumnDefinitions.Add(new ColumnDefinition()); tot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var tl = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         tl.Children.Add(CkText("Cost per craft", CkMuted, 13.5));
-        if (unpriced > 0) tl.Children.Add(CkText(unpriced == 1 ? "one price unsure or missing, left out: click it to type yours" : $"{unpriced} prices unsure or missing, left out", CkWarn, 11.5));
+        if (unpriced > 0) tl.Children.Add(CkText(unpriced == 1 ? "one price unsure or missing, left out: click it to type yours" : $"{unpriced} prices unsure or missing, left out", CkWarn, 12));
         tot.Children.Add(tl);
         // a floor says so: "at least 246,619"; with nothing priced it is "no price yet", never "0+" (the CI render of 2026-10-24)
         var tv = total <= 0 && unpriced > 0 ? CkText("no price yet", CkFaint, 15) : CkText((unpriced > 0 ? "at least " : "") + Amounts.Short(total), CkGold, 19, FontWeights.Normal, mono: true);
@@ -323,7 +323,7 @@ public partial class MainWindow
     {
         var cb = new CheckBox
         {
-            IsChecked = on, Content = CkText("I have these", CkMuted, 11.5), Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
+            IsChecked = on, Content = CkText("I have these", CkMuted, 12), Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
             ToolTip = "Counts as free: you farmed, gathered or already own these, so no kinah goes out. Untick to price them at the Market.",
         };
         cb.Click += (_, _) => { PriceBook.SetFarmed(item, cb.IsChecked == true); Dispatcher.BeginInvoke(redo); };
@@ -338,7 +338,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var l = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         l.Children.Add(CkText(label, CkMuted, 13.5));
-        if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 11.5));
+        if (sub.Length > 0) l.Children.Add(CkText(sub, CkFaint, 12));
         g.Children.Add(l);
         var v = CkText((upTo ? "up to " : "") + Signed(per), good ? CkGood : CkBad, 26, FontWeights.Normal, display: true); Grid.SetColumn(v, 1); g.Children.Add(v);
         v.ToolTip = (per >= 0 ? "+" : "−") + Amounts.Full(Math.Abs(per)) + " a craft";
@@ -365,11 +365,11 @@ public partial class MainWindow
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(CkText($"Sells for, {PriceBook.Fee}", CkInk, 13.5));
         var sub = new StackPanel { Orientation = Orientation.Horizontal };
-        sub.Children.Add(CkText(q == null ? $"no Market price on {Server?.Name ?? "your server"} yet:  " : "Market price  ", CkFaint, 11.5));
-        sub.Children.Add(CkPriceEditor(recipe.Output, q, redo, 1, 11.5));
-        sub.Children.Add(CkText(q == null ? "" : recipe.OutputQty > 1 ? $"  each · {recipe.OutputQty} made per craft" : "  each", CkFaint, 11.5));
+        sub.Children.Add(CkText(q == null ? $"no Market price on {Server?.Name ?? "your server"} yet:  " : "Market price  ", CkFaint, 12));
+        sub.Children.Add(CkPriceEditor(recipe.Output, q, redo, 1, 12));
+        sub.Children.Add(CkText(q == null ? "" : recipe.OutputQty > 1 ? $"  each · {recipe.OutputQty} made per craft" : "  each", CkFaint, 12));
         left.Children.Add(sub);
-        if (q != null && CardSourceOnLine) left.Children.Add(CkText(PriceBook.Describe(q), q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkFaint : CkWarn, 11));
+        if (q != null && CardSourceOnLine) left.Children.Add(CkText(PriceBook.Describe(q), q.Mine ? Color.FromRgb(0x3D, 0xD6, 0x8C) : q.Sure ? CkFaint : CkWarn, 12));
         if (q is { Sure: false }) left.Opacity = 0.75;
         g.Children.Add(left);
         var right = net >= 0 ? CkText(Amounts.Short(net), CkGold, 13.5, FontWeights.Normal, mono: true) : CkText("no sure price yet", CkFaint, 13.5, FontWeights.Normal);

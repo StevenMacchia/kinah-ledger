@@ -114,7 +114,7 @@ public partial class MainWindow
             g.Children.Add(glyph);
             var words = new StackPanel();
             words.Children.Add(PT(s.Title, s.Done ? "Muted" : "Ink", 12.5));
-            if (!s.Done && s.Sub.Length > 0) { var sub = PT(s.Sub, "Faint", 11.5); sub.TextWrapping = TextWrapping.Wrap; sub.TextTrimming = TextTrimming.None; words.Children.Add(sub); }
+            if (!s.Done && s.Sub.Length > 0) { var sub = PT(s.Sub, "Faint", 12); sub.TextWrapping = TextWrapping.Wrap; sub.TextTrimming = TextTrimming.None; words.Children.Add(sub); }
             Grid.SetColumn(words, 1); g.Children.Add(words);
             if (!s.Done && s.Link.Length > 0 && s.Go is { } go)
             {
@@ -128,7 +128,7 @@ public partial class MainWindow
             FeedOnboard.Children.Add(g);
         }
 
-        var skipLine = new TextBlock { FontSize = 11.5, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
+        var skipLine = new TextBlock { FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
         var skip = new Hyperlink(new Run("Skip this")) { Cursor = Cursors.Hand, TextDecorations = null };
         skip.SetResourceReference(TextElement.ForegroundProperty, "Faint");
         skip.Click += (_, _) => SkipOnboard();

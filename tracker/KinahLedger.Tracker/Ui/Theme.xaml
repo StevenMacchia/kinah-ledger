@@ -12,10 +12,11 @@
   <SolidColorBrush x:Key="Line" Color="#232736"/>
   <SolidColorBrush x:Key="LineStrong" Color="#2E3346"/>
   <SolidColorBrush x:Key="Ink" Color="#EDEFF5"/>
-  <SolidColorBrush x:Key="Muted" Color="#A2A8BA"/>
+  <!-- Muted and Faint a step lighter since the colour pass (2026-11-13): muted text on any card meets WCAG AA (4.5:1) at 12 px -->
+  <SolidColorBrush x:Key="Muted" Color="#AFB5C6"/>
   <!-- sentences (a card's text, a page's lead, a setting's hint): the site's card paragraph tone, a step above Muted -->
   <SolidColorBrush x:Key="Text2" Color="#C9CDDA"/>
-  <SolidColorBrush x:Key="Faint" Color="#6D7387"/>
+  <SolidColorBrush x:Key="Faint" Color="#868DA1"/>
   <SolidColorBrush x:Key="Gold" Color="#F5B942"/>
   <SolidColorBrush x:Key="Violet" Color="#B39BFF"/>
   <SolidColorBrush x:Key="Mint" Color="#3DD68C"/>
@@ -38,6 +39,14 @@
        step flatter than a working card, between the page and Card, with a hairline edge instead of the lit one -->
   <SolidColorBrush x:Key="CardQuiet" Color="#0E1015"/>
   <SolidColorBrush x:Key="CardHair" Color="#1F222C"/>
+  <!-- the colour roles, locked (colour pass, 2026-11-13): gold is money and progress toward a target (Kinah, the hour, the
+       best and chase bars, the ring); mint/Good is a gain or a success only (profit, "worked", a rise, a loot value's plus);
+       the grade colours are items only. Link is the one neutral accent for links and text buttons (Sort, "N more", Report a
+       miscount, Save as CSV, Start over, Discord), LinkHover under the mouse. Progress is a quest's or a goal's bar while it
+       tracks something that isn't Kinah (a material, gathers, runs): never green for "not done yet" -->
+  <SolidColorBrush x:Key="Link" Color="#9DB2E8"/>
+  <SolidColorBrush x:Key="LinkHover" Color="#C9D6F7"/>
+  <SolidColorBrush x:Key="Progress" Color="#7F8BAA"/>
   <SolidColorBrush x:Key="SkyTint" Color="#17BEC6DC"/>
   <SolidColorBrush x:Key="LilacTint" Color="#17BEC6DC"/>
   <SolidColorBrush x:Key="NoticeTint" Color="#17BEC6DC"/>
@@ -147,7 +156,7 @@
   </Style>
 
   <Style x:Key="LabelStyle" TargetType="TextBlock">
-    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Faint}"/>
   </Style>
@@ -189,10 +198,10 @@
   </Style>
 
   <Style x:Key="LinkStyle" TargetType="Hyperlink">
-    <Setter Property="Foreground" Value="{DynamicResource Gold}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Link}"/>
     <Setter Property="TextDecorations" Value="{x:Null}"/>
     <Style.Triggers>
-      <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
+      <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource LinkHover}"/><Setter Property="TextDecorations" Value="Underline"/></Trigger>
     </Style.Triggers>
   </Style>
 

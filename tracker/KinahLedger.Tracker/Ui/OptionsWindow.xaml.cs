@@ -201,14 +201,14 @@ public partial class OptionsWindow : Window
             catch (Exception ex) { CrashLog.Write("panel look preview", ex); continue; }
             face.HorizontalAlignment = HorizontalAlignment.Left;
             // drawn as over the game: a dark scene whatever the window's theme, with the look's name and what it shows
-            var label = new TextBlock { FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6), TextTrimming = TextTrimming.CharacterEllipsis };
+            var label = new TextBlock { FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6), TextWrapping = TextWrapping.Wrap };
             label.Inlines.Add(new System.Windows.Documents.Run(l.Name) { FontWeight = FontWeights.ExtraBold, Foreground = new SolidColorBrush(Color.FromRgb(0xED, 0xEF, 0xF5)) });
-            label.Inlines.Add(new System.Windows.Documents.Run((on ? "  ·  in use  ·  " : "  ·  ") + l.Hint) { Foreground = new SolidColorBrush(on ? Color.FromRgb(0xF5, 0xB9, 0x42) : Color.FromRgb(0xA2, 0xA8, 0xBA)) });
+            label.Inlines.Add(new System.Windows.Documents.Run((on ? "  ·  in use  ·  " : "  ·  ") + l.Hint) { Foreground = new SolidColorBrush(on ? Color.FromRgb(0xC9, 0xD6, 0xF7) : Color.FromRgb(0xAF, 0xB5, 0xC6)) });
             var scene = new LinearGradientBrush(Color.FromRgb(0x19, 0x1B, 0x23), Color.FromRgb(0x0C, 0x0D, 0x11), 90);   // a dark game scene, whatever the window's skin
             var box = new Border
             {
                 CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 9, 10, 10), Margin = new Thickness(0, 6, 0, 0), Background = scene, Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(on ? 2 : 1), BorderBrush = new SolidColorBrush(on ? Color.FromRgb(0xF5, 0xB9, 0x42) : Color.FromRgb(0x23, 0x27, 0x36)),
+                BorderThickness = new Thickness(on ? 2 : 1), BorderBrush = new SolidColorBrush(on ? Color.FromRgb(0x9D, 0xB2, 0xE8) : Color.FromRgb(0x23, 0x27, 0x36)),   // the one in use: the link tone (gold until the colour pass)
                 Child = new StackPanel { Children = { label, face } }, ToolTip = on ? null : "Use the " + l.Name,
             };
             System.Windows.Automation.AutomationProperties.SetName(box, l.Name + " panel look");

@@ -37,11 +37,11 @@ public partial class MainWindow
         Redraw();
     }
 
-    /// <summary>A section's chevron and body: pointing right and folded, or down and gold with the body showing.</summary>
+    /// <summary>A section's chevron and body: pointing right and folded, or down in the link tone with the body showing (gold until the colour pass: a control, not money).</summary>
     /// The section the player just opened or folded: it moves (Motion.Open/Close, its chevron turning), the rest are set still.
     void SetSec(Path chev, FrameworkElement body, bool open, bool moved = false)
     {
-        chev.SetResourceReference(Shape.StrokeProperty, open ? "Gold" : "Faint");
+        chev.SetResourceReference(Shape.StrokeProperty, open ? "Link" : "Faint");
         bool shown = body.Visibility == Visibility.Visible;
         // a move under way is left to finish (a tick redraws the sections every half second)
         if (!moved && (Motion.Playing(body) || Motion.Playing(chev))) return;
@@ -138,13 +138,17 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>One feed line (Quest): the item's own icon at 30 px, what in bold over when and from whom, and its worth in mint on the right.</summary>
+    /// <summary>
+    /// One feed line (Quest): the item's own icon at 30 px, what in bold over when and from whom, and its worth on the right:
+    /// Kinah picked up in gold (money), a loot value's plus in mint (a gain), a loss in coral (colour pass, 2026-11-13: the
+    /// Kinah lines were mint too, as the overlay's ticker never had them).
+    /// </summary>
     Border FeedRow(FeedLine l, bool newest, bool justNow, bool oldest, bool rule, (string Text, bool Muted) value, FrameworkElement icon)
     {
         var (bold, rest, small) = FeedWords(l);
         var local = l.At.ToLocalTime();
         var when = justNow ? "just now" : local.Date == DateTime.Today ? local.ToString("HH:mm:ss") : local.ToString("MMM d HH:mm");
-        var row = QRow(icon, bold + rest, small.Length > 0 ? when + " · " + small : when, value.Text, value.Text.StartsWith("−") || value.Text.StartsWith("≤ −") ? "Coral" : value.Muted ? "Faint" : "Mint", rule: rule, inline: true);
+        var row = QRow(icon, bold + rest, small.Length > 0 ? when + " · " + small : when, value.Text, value.Text.StartsWith("−") || value.Text.StartsWith("≤ −") ? "Coral" : value.Muted ? "Faint" : l.Kind == "kinah" ? "Gold" : "Mint", rule: rule, inline: true);
         // the why is behind Options › Game reading › Explain each count (Steven, 2026-11-04), so the hover offers it only then
         var click = _prefs.ExplainCounts ? "Click to see why, or to report it." : "Click if it's wrong.";
         row.ToolTip = ViaTip(l.Via) is { Length: > 0 } vt ? vt + " " + click : click;
@@ -162,7 +166,7 @@ public partial class MainWindow
                 if (r != null) CardTip(row, () => ItemHereCard(r, gathered, CountWhere()));
             }
         }
-        if (oldest) row.Opacity = 0.7;
+        if (oldest) row.Opacity = 0.82;   // 0.7 until the colour pass review (2026-11-13): its muted words fell to about 3:1 on Daylight
         return row;
 
         static FeedTab tabOf(FeedLine x) => x.Tab;
@@ -574,7 +578,7 @@ public partial class MainWindow
         else if (open) WhereNote.Inlines.Add(PR("Kinah and loot an hour · " + (atGear ? $"gear {GearBracket!.Replace("-", "–")}" : "all players") + $" · {(all ? "all regions" : server)} · last 7 days", "Muted"));
         else
         {
-            WhereNote.Inlines.Add(PR(Fk(topHr) + " an hour", "Mint", FontWeights.SemiBold));
+            WhereNote.Inlines.Add(PR(Fk(topHr) + " an hour", "Gold", FontWeights.SemiBold));   // money an hour: gold (colour pass, 2026-11-13)
             WhereNote.Inlines.Add(PR($"{more} · {top!.Runs} runs from {top.Players} players at {(atGear ? "your gear" : "any gear")}", "Muted"));
         }
         WhereSum.Text = open || zones.Count <= 1 ? "" : $"{zones.Count - 1} more";
@@ -592,13 +596,13 @@ public partial class MainWindow
             bool isHere = i == hereAt;
             var sub = $"{z.Runs} runs · {z.Players} players" + (isHere ? " · you are here" : "");
             var row = QRow(isHere ? QIconBox("Flag", "Gold", 30, round: true) : QIconBox("Pin", "Sky", 30, round: true), z.Zone, sub, Fk(z.ValueHr ?? 0), "Ink",
-                topHr > 0 ? (z.ValueHr ?? 0) / (double)topHr : null, isHere ? "Gold" : "Sky", rule: i > 0);
+                topHr > 0 ? (z.ValueHr ?? 0) / (double)topHr : null, "Gold", rule: i > 0);   // Kinah an hour: gold on every row (colour pass review, 2026-11-13)
             var g = (Grid)row.Child;
             g.Background = Brushes.Transparent; g.Cursor = Cursors.Hand;
             if (bests[i] is long yb)
             {
                 // "your best 1.4M" under the figure (options-test reads it by its tag)
-                var y = new TextBlock { FontSize = 10.5, FontWeight = FontWeights.Medium, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Tag = "where-best", Margin = new Thickness(0, 0, 0, -1) };
+                var y = new TextBlock { FontSize = 12, FontWeight = FontWeights.Medium, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Tag = "where-best", Margin = new Thickness(0, 0, 0, -1) };
                 y.Inlines.Add(PR("your best ", "Faint")); y.Inlines.Add(PR(Fk(yb), "Muted"));
                 foreach (var v in g.Children.OfType<TextBlock>().Where(t => Grid.GetColumn(t) == 2 && Grid.GetRow(t) == 0)) { v.VerticalAlignment = VerticalAlignment.Top; v.Margin = new Thickness(0, -2, 0, 0); }
                 Grid.SetColumn(y, 2); g.Children.Add(y);
@@ -821,8 +825,8 @@ public partial class MainWindow
                 bool on = key == chosen;
                 var pill = new Border
                 {
-                    Child = CkText(text, on ? CkGold : CkMuted, 12.5), Padding = new Thickness(12, 5, 12, 6), Margin = new Thickness(0, 0, 8, 8), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
-                    BorderBrush = on ? Ck(CkGold, 0x99) : Ck(CkSlotLine), Background = on ? Ck(CkGold, 0x14) : Brushes.Transparent,
+                    Child = CkText(text, on ? CkLink : CkMuted, 12.5), Padding = new Thickness(12, 5, 12, 6), Margin = new Thickness(0, 0, 8, 8), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Cursor = Cursors.Hand,
+                    BorderBrush = on ? Ck(CkLink, 0x99) : Ck(CkSlotLine), Background = on ? Ck(CkLink, 0x14) : Brushes.Transparent,
                 };
                 pill.MouseLeftButtonUp += (_, _) => Redo(key);
                 picks.Children.Add(pill);
@@ -857,7 +861,7 @@ public partial class MainWindow
         if (line != null)
         {
             var other = new TextBlock { Margin = new Thickness(20, 12, 20, 14), FontSize = 12 };
-            var link = new Hyperlink(new Run(label == "missing" ? "Report this line instead" : "Missing a pickup")) { Foreground = Ck(CkGold), TextDecorations = null };
+            var link = new Hyperlink(new Run(label == "missing" ? "Report this line instead" : "Missing a pickup")) { Foreground = Ck(CkLink), TextDecorations = null };
             link.Click += (_, _) => Redo(label == "missing" ? "wrong_amount" : "missing");
             other.Inlines.Add(link);
             body.Children.Add(other);
@@ -925,7 +929,7 @@ public partial class MainWindow
 
     Dictionary<string, string> HudFeedValues(FeedLine? l, string flag)
     {
-        var d = new Dictionary<string, string> { ["flag"] = flag, ["feedText"] = "", ["feedValue"] = "", ["feedRate"] = "", ["feedUnit"] = "" };
+        var d = new Dictionary<string, string> { ["flag"] = flag, ["feedText"] = "", ["feedValue"] = "", ["feedTone"] = "", ["feedRate"] = "", ["feedUnit"] = "" };
         // the farming hour beside the line: "warming up" alone while the count is young (FillNumbers), else "1.27M an hour"
         var hour = _hudValues.GetValueOrDefault("rate", "");
         var hourUnit = hour == WarmingUp ? "" : "an hour";
@@ -935,6 +939,7 @@ public partial class MainWindow
         // the queue under way beside a craft: "· 3/10" (Steven, 2026-11-04: a miss should show while it happens)
         if (l.Tab == FeedTab.Crafting && !_demo && QueueShort(_watcher.Chat?.CraftQueue) is { Length: > 0 } qs) d["feedText"] += " · " + qs;
         d["feedValue"] = (l.Tab == FeedTab.Crafting ? CraftValue(l) : PickupValue(l)).Text;
+        d["feedTone"] = d["feedValue"].StartsWith("−") || d["feedValue"].StartsWith("≤ −") ? "coral" : l.Kind == "kinah" ? "gold" : "mint";
         (d["feedRate"], d["feedUnit"]) = l.Tab switch
         {
             FeedTab.Crafting => (_craftNet, "today"),

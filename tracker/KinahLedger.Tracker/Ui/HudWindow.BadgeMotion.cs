@@ -198,7 +198,7 @@ public sealed partial class HudWindow
     {
         _sweep = null;
         _ringHost.Children.Clear();
-        _ringHost.Children.Add(Ring(RingSize, RingStroke, s, Rgb(beat ? MintC : GoldC), beat ? "★" : $"{Math.Round(s * 100):0}"));
+        _ringHost.Children.Add(Ring(RingSize, RingStroke, s, Rgb(GoldC), beat ? "★" : $"{Math.Round(s * 100):0}"));
     }
 
     /// <summary>The ring a sweep moves: HudKit's ring built once, its arc and its figure changed in place at each step.</summary>

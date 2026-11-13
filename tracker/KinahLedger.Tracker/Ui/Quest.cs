@@ -157,6 +157,20 @@ public partial class MainWindow
         return t;
     }
 
+    /// <summary>
+    /// A text button ("5 more", "Show all 14", a sort choice) in the one neutral link tone, lighter and underlined under the
+    /// mouse (colour pass, 2026-11-13: gold is money and progress, so a link in gold read as a figure). The text block is
+    /// made a link in place: the cursor, a hit-testable background and the hover.
+    /// </summary>
+    static T QLinkify<T>(T t) where T : TextBlock
+    {
+        t.SetResourceReference(TextBlock.ForegroundProperty, "Link");
+        t.Cursor = Cursors.Hand; t.Background = Brushes.Transparent;
+        t.MouseEnter += (_, _) => { t.SetResourceReference(TextBlock.ForegroundProperty, "LinkHover"); t.TextDecorations = TextDecorations.Underline; };
+        t.MouseLeave += (_, _) => { t.SetResourceReference(TextBlock.ForegroundProperty, "Link"); t.TextDecorations = null; };
+        return t;
+    }
+
     /// <summary>A skin brush's colour, for a glow the effect system needs as a Color (it keeps the colour of the look it was built in).</summary>
     static Color QColor(string key) => (Application.Current.TryFindResource(key) as SolidColorBrush)?.Color ?? Colors.White;
 
@@ -205,7 +219,7 @@ public partial class MainWindow
     /// them a thin bar when <paramref name="bar"/> is a share. Lit a little under the mouse; the whole row is the click.
     /// </summary>
     /// <param name="barKey">Who the bar is (a goal, a quest): it slides from the share last shown under it (Motion.Slide).</param>
-    static Border QRow(FrameworkElement icon, string title, string sub, string value = "", string valueTone = "Ink", double? bar = null, string barTone = "Lilac", bool rule = true, bool inline = false, string? barKey = null)
+    static Border QRow(FrameworkElement icon, string title, string sub, string value = "", string valueTone = "Ink", double? bar = null, string barTone = "Progress", bool rule = true, bool inline = false, string? barKey = null)
     {
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
@@ -220,14 +234,14 @@ public partial class MainWindow
         {
             // one line: the name in bold, the small print after it in the muted tone
             var t = QT(title, 13, FontWeights.SemiBold, "Ink", trim: true); t.Margin = new Thickness(10, 0, 8, 0);
-            if (sub.Length > 0) { var r = new System.Windows.Documents.Run("  " + sub) { FontSize = 11, FontWeight = FontWeights.Medium }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Muted"); t.Inlines.Add(r); }
+            if (sub.Length > 0) { var r = new System.Windows.Documents.Run("  " + sub) { FontSize = 12, FontWeight = FontWeights.Medium }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Muted"); t.Inlines.Add(r); }
             text = t;
         }
         else
         {
             var st = new StackPanel { Margin = new Thickness(10, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
             st.Children.Add(QT(title, 13, FontWeights.SemiBold, "Ink", trim: true));
-            if (sub.Length > 0) st.Children.Add(QT(sub, 11, FontWeights.Medium, "Muted", trim: true));
+            if (sub.Length > 0) st.Children.Add(QT(sub, 12, FontWeights.Medium, "Muted", trim: true));
             text = st;
         }
         Grid.SetColumn(text, 1); g.Children.Add(text);
@@ -262,9 +276,11 @@ public partial class MainWindow
         var b = QT(big, 16, FontWeights.Bold, "Ink", trim: true); b.Margin = new Thickness(0, 5, 0, 0); b.LineHeight = 18; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         if (roll is { } r) Motion.Number(b, r.Key, r.Count, v => Math.Round(v).ToString("N0"), -1);
         sp.Children.Add(b);
-        sp.Children.Add(QT(name, 11, FontWeights.Medium, "Muted", trim: true));
-        if (value.Length > 0) { var v = QT(value, 11, FontWeights.SemiBold, valueTone, trim: true); sp.Children.Add(v); }
-        var tile = new Border { Width = width, Padding = new Thickness(10, 9, 10, 9), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand };
+        // the name wraps to a second line rather than trimming (colour pass review, 2026-11-13: "Fairy's Dream Wing F...");
+        // a tile in a row of the bag stretches to the row's tallest, so a two-line name never leaves the row ragged
+        sp.Children.Add(QWrapName(name, 12, "Muted"));
+        if (value.Length > 0) { var v = QT(value, 12, FontWeights.SemiBold, valueTone, trim: true); sp.Children.Add(v); }
+        var tile = new Border { Width = width, VerticalAlignment = VerticalAlignment.Stretch, Padding = new Thickness(10, 9, 10, 9), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand };
         tile.SetResourceReference(Border.BackgroundProperty, "Card2");
         tile.MouseEnter += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "ItemSel");
         tile.MouseLeave += (_, _) => tile.SetResourceReference(Border.BackgroundProperty, "Card2");
@@ -280,7 +296,7 @@ public partial class MainWindow
         sp.Children.Add(icon);
         var b = QT(odds, 12, FontWeights.Bold, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.Margin = new Thickness(0, 4, 0, 0);
         sp.Children.Add(b);
-        var n = QT(name, 10.5, FontWeights.Medium, "Muted", trim: true); n.HorizontalAlignment = HorizontalAlignment.Center; n.TextAlignment = TextAlignment.Center;
+        var n = QWrapName(name, 12, "Muted"); n.HorizontalAlignment = HorizontalAlignment.Center; n.TextAlignment = TextAlignment.Center;
         sp.Children.Add(n);
         var badge = new Border { Padding = new Thickness(6, 8, 6, 8), CornerRadius = new CornerRadius(12), Child = sp, Cursor = Cursors.Hand };
         badge.SetResourceReference(Border.BackgroundProperty, "Card2");
@@ -290,10 +306,19 @@ public partial class MainWindow
         return badge;
     }
 
+    /// <summary>An item's name in a tile: two lines at most, wrapped at a word, trimmed only past the second line.</summary>
+    static TextBlock QWrapName(string name, double size, string brush)
+    {
+        var t = QT(name, size, FontWeights.Medium, brush, trim: true);
+        t.TextWrapping = TextWrapping.Wrap; t.LineHeight = Math.Round(size * 1.25); t.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+        t.MaxHeight = 2 * t.LineHeight; t.VerticalAlignment = VerticalAlignment.Top;
+        return t;
+    }
+
     /// <summary>A centred faint line under a list: "7 more kinds have no Market price yet".</summary>
     static TextBlock QMore(string text)
     {
-        var t = QT(text, 11, FontWeights.SemiBold, "Muted"); t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; t.Margin = new Thickness(0, 6, 0, 0); t.TextWrapping = TextWrapping.Wrap;
+        var t = QT(text, 12, FontWeights.SemiBold, "Muted"); t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; t.Margin = new Thickness(0, 6, 0, 0); t.TextWrapping = TextWrapping.Wrap;
         return t;
     }
 
@@ -309,7 +334,7 @@ public partial class MainWindow
         var text = new StackPanel { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         var b = QT(big, quiet ? 13 : 15, FontWeights.SemiBold, "Ink", trim: true); b.LineHeight = 17; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         if (roll is { } r) Motion.Number(b, r.Key, r.Value, r.Money ? v => Amounts.Short(v) : v => Math.Round(v).ToString("N0"), r.Money ? 0 : -1);
-        var sm = QT(small, 11, FontWeights.Medium, "Muted", trim: true); sm.LineHeight = 14; sm.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sm.Margin = new Thickness(0, 1, 0, 0);
+        var sm = QT(small, 12, FontWeights.Medium, "Muted", trim: true); sm.LineHeight = 14; sm.LineStackingStrategy = LineStackingStrategy.BlockLineHeight; sm.Margin = new Thickness(0, 1, 0, 0);
         text.Children.Add(b); text.Children.Add(sm);
         Grid.SetColumn(text, 1); g.Children.Add(text);
         chip.Child = g;
@@ -363,7 +388,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var ic = QGlyph(icon, quiet ? 13 : 16, "Lilac", 2); ic.Margin = new Thickness(0, 0, quiet ? 7 : 8, 0); if (quiet) ic.Opacity = 0.75; g.Children.Add(ic);
         var t = QT(title, 12, quiet ? FontWeights.Medium : FontWeights.SemiBold, quiet ? "Muted" : "Ink"); Grid.SetColumn(t, 1); g.Children.Add(t);
-        var r = QT(right, 11, FontWeights.Medium, "Muted", trim: true); r.HorizontalAlignment = HorizontalAlignment.Right; r.Margin = new Thickness(10, 0, 0, 0); r.Tag = "right";
+        var r = QT(right, 12, FontWeights.Medium, "Muted", trim: true); r.HorizontalAlignment = HorizontalAlignment.Right; r.Margin = new Thickness(10, 0, 0, 0); r.Tag = "right";
         Grid.SetColumn(r, 2); g.Children.Add(r);
         if (chev != null) { Grid.SetColumn(chev, 3); g.Children.Add(chev); g.Cursor = Cursors.Hand; }
         return g;
@@ -395,7 +420,7 @@ public partial class MainWindow
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var b = QT(big, size >= 60 ? (big.Length > 5 ? 12.5 : 17) : 10, FontWeights.Bold, "Ink"); b.HorizontalAlignment = HorizontalAlignment.Center; b.LineHeight = size >= 60 ? 18 : 11; b.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         text.Children.Add(b);
-        if (small.Length > 0) { var sm = QT(small.ToUpperInvariant(), 9, FontWeights.SemiBold, "Muted"); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.Margin = new Thickness(0, 1, 0, 0); text.Children.Add(sm); }
+        if (small.Length > 0) { var sm = QT(small.ToUpperInvariant(), 10, FontWeights.SemiBold, "Muted"); sm.HorizontalAlignment = HorizontalAlignment.Center; sm.Margin = new Thickness(0, 1, 0, 0); text.Children.Add(sm); }
         g.Children.Add(text);
         return g;
     }
@@ -406,11 +431,11 @@ public partial class MainWindow
     readonly Dictionary<string, bool> _qOpen = new();
     bool QOpen(string key) => _qOpen.GetValueOrDefault(key);
 
-    /// <summary>Turns a chevron to point down when its card is open, and gold.</summary>
+    /// <summary>Turns a chevron to point down when its card is open, in the link tone (a control, not money: colour pass, 2026-11-13).</summary>
     static void QSetChev(Path chev, bool open)
     {
         chev.RenderTransform = new RotateTransform(open ? 90 : 0);
-        chev.SetResourceReference(Shape.StrokeProperty, open ? "Gold" : "Faint");
+        chev.SetResourceReference(Shape.StrokeProperty, open ? "Link" : "Faint");
     }
 
     /// <summary>The percentage the chase bar and the ring show: this hour against your best here, capped at the full bar.</summary>

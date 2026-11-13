@@ -38,6 +38,25 @@ public partial class MainWindow
         SessionHead.MouseLeftButtonUp += (_, _) => { if (!FullShown && _qChip == "bag") ToggleChip("bag"); };
         HeroSpark.MouseLeftButtonUp += (_, e) => { e.Handled = true; _qOpen["chart"] = !QOpen("chart"); ShowChart(QOpen("chart") && ChartToggle.Visibility == Visibility.Visible); QSetChev(ChartChev, QOpen("chart")); };
         HeroSpark.SizeChanged += (_, _) => DrawHeroSpark();
+        LowerScroll.ScrollChanged += (_, _) => FadeLowerScroll();
+    }
+
+    /// <summary>
+    /// The scrolling column's foot fades out while there is more below (colour pass review, 2026-11-13: the Quests page
+    /// read as cut off at the bottom, a card chopped by the footer's rule with nothing saying the page goes on); scrolled to
+    /// the end, the fade goes and the last card ends with its own margin.
+    /// </summary>
+    void FadeLowerScroll()
+    {
+        double h = LowerScroll.ActualHeight;
+        bool more = h > 0 && LowerScroll.ScrollableHeight > 1 && LowerScroll.VerticalOffset < LowerScroll.ScrollableHeight - 1;
+        if (!more) { LowerScroll.OpacityMask = null; return; }
+        var m = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        m.GradientStops.Add(new GradientStop(Colors.Black, 0));
+        m.GradientStops.Add(new GradientStop(Colors.Black, Math.Clamp(1 - 36 / h, 0, 1)));
+        m.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
+        m.Freeze();
+        LowerScroll.OpacityMask = m;
     }
 
     /* ---------------- the chase ---------------- */
@@ -108,7 +127,7 @@ public partial class MainWindow
 
     /// <summary>
     /// The chase: this hour against your best here (Session/BestRuns.cs), as the bar toward the flag and the ring beside the
-    /// figure; mint with a star once it is beaten. With no best yet the ring is empty and says so; while the rate warms up
+    /// figure; gold beaten or not, a star in the ring once it is. With no best yet the ring is empty and says so; while the rate warms up
     /// the bar waits, as the figure does.
     /// </summary>
     void FillChase(double nowHr, double bestHr, bool warm)
@@ -116,7 +135,8 @@ public partial class MainWindow
         bool has = nowHr > 0 && bestHr > 0 && !warm;
         bool beat = has && nowHr >= bestHr;
         double share = QShare(nowHr, bestHr);
-        string tone = beat ? "Mint" : "Gold";
+        // gold beaten or not (colour pass, 2026-11-13): the bar and the ring are progress toward a target; the ring's star says it is beaten
+        const string tone = "Gold";
         ChaseBox.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
         if (has)
         {
@@ -313,10 +333,12 @@ public partial class MainWindow
         };
         var pace = Goals.PaceText(p);
         var sub = p.Done ? "reached today ✓" : $"{GoalAmount(g, p.Have)} so far · {GoalAmount(g, p.ToGo)} to go" + (pace.Length > 0 ? " · " + pace : "");
-        var tone = p.Done ? "Gold" : "Lilac";
+        // the bar in the colour of what it tracks (colour pass, 2026-11-13): a Kinah goal gold, an item or runs the Progress
+        // tone; the ✓ of a reached goal green, a success
+        var tone = g.Kind is Goal.KindItem or Goal.KindRuns ? "Progress" : "Gold";
         var key = $"goal|{g.Kind}|{g.Name}|{g.Which}|{g.Target}";
-        var row = QRow(icon, Goals.Label(g), sub, p.Done ? "✓" : $"{Math.Round(p.Fraction * 100):0}%", tone, p.Fraction, tone, rule, inline: true, barKey: key);
-        Motion.Reached(row, key, p.Done);   // the draw where it is reached washes it gold once
+        var row = QRow(icon, Goals.Label(g), sub, p.Done ? "✓" : $"{Math.Round(p.Fraction * 100):0}%", p.Done ? "Good" : tone == "Gold" ? "Gold" : "Ink", p.Fraction, tone, rule, inline: true, barKey: key);
+        Motion.Reached(row, key, p.Done, tone == "Gold" ? "Gold" : "Good");   // the draw where it is reached washes it once
         row.Tag = "goal";
         AutomationProperties.SetName(row, $"Goal: {Goals.Label(g)}, {GoalCountText(g, p)}");
         CardTip(row, () => GoalCard(g));

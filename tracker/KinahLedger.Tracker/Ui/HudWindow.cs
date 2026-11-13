@@ -376,7 +376,7 @@ public sealed partial class HudWindow : Window
                 default:
                     var color = key switch
                     {
-                        "rate" => Color.FromRgb(0xF5, 0xB9, 0x42), "kinah" => Color.FromRgb(0xF5, 0xB9, 0x42), "total" => Color.FromRgb(0x3D, 0xD6, 0x8C),
+                        "rate" => Color.FromRgb(0xF5, 0xB9, 0x42), "kinah" => Color.FromRgb(0xF5, 0xB9, 0x42), "total" => Color.FromRgb(0xF5, 0xB9, 0x42),   // money: gold (mint until the colour pass, 2026-11-13)
                         "best" => Color.FromRgb(0xA2, 0xA8, 0xBA), _ => Color.FromRgb(0xED, 0xEF, 0xF5),
                     };
                     number.FontSize = key == "rate" ? 19 : 16; number.FontWeight = FontWeights.Bold; number.Foreground = new SolidColorBrush(color);
@@ -402,7 +402,7 @@ public sealed partial class HudWindow : Window
     TextBlock? _feedText, _feedValue, _feedRate, _feedUnit, _flagText;
     FrameworkElement? _feedLine, _flagLine, _feedSep;
 
-    static readonly SolidColorBrush Gold = Frozen(Color.FromRgb(0xF5, 0xB9, 0x42)), Ink = Frozen(Color.FromRgb(0xED, 0xEF, 0xF5)), Mint = Frozen(Color.FromRgb(0x3D, 0xD6, 0x8C));
+    static readonly SolidColorBrush Gold = Frozen(Color.FromRgb(0xF5, 0xB9, 0x42)), Ink = Frozen(Color.FromRgb(0xED, 0xEF, 0xF5)), Mint = Frozen(Color.FromRgb(0x3D, 0xD6, 0x8C)), Coral = Frozen(Color.FromRgb(0xF2, 0x6D, 0x6D));
 
     /// <summary>The feed cell: a live dot, the newest line and its worth, a rule, the rate and its unit; and the flagged-run line it swaps to.</summary>
     void BuildFeed(StackPanel cell)
@@ -478,7 +478,7 @@ public sealed partial class HudWindow : Window
             _ringSig = ringSig;
             DrawRing(share, beat, picked);
             _ringHost.Visibility = share >= 0 ? Visibility.Visible : Visibility.Collapsed;
-            _chaseLine.Text = words; _chaseLine.Foreground = beat ? Mint : Gold;
+            _chaseLine.Text = words; _chaseLine.Foreground = Gold;   // gold beaten or not, as the window's chase (colour pass, 2026-11-13)
             _chaseLine.Visibility = words.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         if (_feedLine != null)
@@ -490,6 +490,8 @@ public sealed partial class HudWindow : Window
             _flagText!.Text = V("flag");
             _feedText!.Text = V("feedText").Length > 0 ? V("feedText") : "Waiting for the first count";
             _feedValue!.Text = V("feedValue");
+            // Kinah in gold, a loot value's plus in mint, a loss in coral: the window's feed and the ticker's roles (colour pass, 2026-11-13)
+            _feedValue.Foreground = V("feedTone") switch { "gold" => Gold, "coral" => Coral, _ => Mint };
             _feedRate!.Text = V("feedRate"); _feedUnit!.Text = V("feedRate").Length > 0 ? V("feedUnit") : "";
             _feedSep!.Visibility = V("feedRate").Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             _feedRate.Opacity = warm ? WarmOpacity : 1;

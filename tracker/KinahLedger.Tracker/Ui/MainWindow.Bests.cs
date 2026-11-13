@@ -230,7 +230,7 @@ public partial class MainWindow
     /// <summary>A small pill in the look's brushes, put away.</summary>
     static Border MomentTag(string text, string fill, string line, string ink, out TextBlock label)
     {
-        label = QT(text, 11, FontWeights.SemiBold, ink);
+        label = QT(text, 12, FontWeights.SemiBold, ink);
         var tag = new Border
         {
             Height = TagHeight, CornerRadius = new CornerRadius(TagHeight / 2), BorderThickness = new Thickness(1), Padding = new Thickness(8, 0, 8, 0),

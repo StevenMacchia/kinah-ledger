@@ -120,7 +120,7 @@ public partial class MainWindow
         heads.ColumnDefinitions.Add(new ColumnDefinition()); heads.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) }); heads.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
         foreach (var (text, col) in new[] { ("Success", 1), ("Profit", 2) })
         {
-            var h = new TextBlock { Text = text, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
+            var h = new TextBlock { Text = text, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
             h.SetResourceReference(TextBlock.ForegroundProperty, "Faint"); Grid.SetColumn(h, col); heads.Children.Add(h);
         }
         host.Children.Add(heads);
@@ -208,7 +208,7 @@ public partial class MainWindow
     {
         var g = new Grid { Margin = new Thickness(0, 2, 0, 8) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
-        var t = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeights.Medium, Foreground = Ck(CkGoldRule), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = Ck(CkGoldRule), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         g.Children.Add(t);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Background = new LinearGradientBrush(Color.FromArgb(0x66, CkGoldRule.R, CkGoldRule.G, CkGoldRule.B), Colors.Transparent, 0) };
         Grid.SetColumn(rule, 1); g.Children.Add(rule);

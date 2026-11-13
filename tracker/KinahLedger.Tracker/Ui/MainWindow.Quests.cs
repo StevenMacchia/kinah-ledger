@@ -204,9 +204,14 @@ public partial class MainWindow
 
     /* ---------------- rows ---------------- */
 
+    /// <summary>
+    /// A quest's bar takes the colour of what it tracks (colour pass, 2026-11-13): Kinah and a best run in gold, money and
+    /// the chase; a material, gathers, runs and the rest in the neutral Progress tone. Green was the material bars' until
+    /// then, which read as "done" on a quest that wasn't; green is for a gain or a success only.
+    /// </summary>
     static string QuestTone(Quest q) => q.Kind switch
     {
-        QuestKind.Material => "Mint", QuestKind.Runs => "Sky", QuestKind.BestRun => "Gold", QuestKind.Kinah => "Gold", QuestKind.Gather => "Lime", _ => "Lilac",   // Kinah in gold, as the v2 look (2026-11-10)
+        QuestKind.BestRun or QuestKind.Kinah => "Gold", _ => "Progress",
     };
 
     FrameworkElement QuestIcon(Quest q, double size = 28) => q.Kind switch
@@ -232,6 +237,13 @@ public partial class MainWindow
         return $"{when}{Quests.Amount(q, q.Have, Fk)} so far · {Quests.Amount(q, q.ToGo, Fk)} to go{eta}";
     }
 
+    /// <summary>A Kinah quest whose "so far" reads as the hero line's Kinah figure on the Farming page.</summary>
+    bool SameAsHero(Quest q) => q.Kind == QuestKind.Kinah && _part == "Farming" && _mode != Mode.Gather && HeroStats.Visibility == Visibility.Visible
+        && Quests.Amount(q, q.Have, Fk) == Fk(_qKinah);
+
+    /// <summary>"367.7K to go · about 24 min": the quest's line without its "so far".</summary>
+    string QuestToGo(Quest q) => $"{Quests.Amount(q, q.ToGo, Fk)} to go" + (q.SecondsToGo is double s ? " · " + Eta(s) : "");
+
     /// <summary>
     /// A quest as a Next up row: its icon, the target, how far with the pace, the points in lilac and the bar; the card on
     /// hover; a click opens its tree under it. Depth 1 rows are the tree's: indented, a chevron before the icon.
@@ -243,7 +255,7 @@ public partial class MainWindow
         // the figures say it (2026-11-08 reviews: no sliver bars, then rows jumping in height where the bar was left out)
         double share = q.Share < 0.05 ? 0 : q.Share;
         var row = QRow(QuestIcon(q), Quests.Title(q, Fk), note ?? QuestSub(q), Quests.Pts(q.Points), "Lilac", share, tone, rule, inline: true, barKey: depth == 0 ? "quest|" + q.Key : null);
-        if (depth == 0) Motion.Reached(row, "quest|" + q.Key, q.Done, tone);   // the draw where it is done washes it once in its tone
+        if (depth == 0) Motion.Reached(row, "quest|" + q.Key, q.Done, tone == "Gold" ? tone : "Good");   // the draw where it is done washes it once: gold for Kinah, green (a success) for the rest
         row.Tag = depth == 0 ? "quest" : "tree";
         AutomationProperties.SetName(row, $"Quest: {Quests.Title(q, Fk)}, {Quests.Pts(q.Points)}");
         if (depth > 0)
@@ -292,12 +304,14 @@ public partial class MainWindow
     /// completions beside the step that followed them. <paramref name="primary"/> is true for a row that counts towards the
     /// rows at rest (a tree's or a fresh row follows its quest).
     /// </summary>
-    List<(FrameworkElement El, bool Primary)> QuestRows(Func<Quest, bool>? pick, bool rule, Action? toggled = null)
+    /// <param name="besideHero">Farming's Next up, under the hero's line: a Kinah quest whose "so far" is the hero's Kinah
+    /// figure leaves it out (colour pass, 2026-11-13: "632.3K so far" under "632.3K Kinah" was one figure twice).</param>
+    List<(FrameworkElement El, bool Primary)> QuestRows(Func<Quest, bool>? pick, bool rule, Action? toggled = null, bool besideHero = false)
     {
         var rows = new List<(FrameworkElement, bool)>();
         foreach (var q in _questsNow.Where(q => pick == null || pick(q)))
         {
-            rows.Add((QuestRow(q, rule || rows.Count > 0, toggled: toggled), true));
+            rows.Add((QuestRow(q, rule || rows.Count > 0, toggled: toggled, note: besideHero && SameAsHero(q) ? QuestToGo(q) : null), true));
             if (_qTree == q.Key) foreach (var r in QuestTreeRows(q)) rows.Add((r, false));
         }
         return rows;
