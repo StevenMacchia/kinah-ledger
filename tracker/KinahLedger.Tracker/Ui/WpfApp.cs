@@ -669,6 +669,20 @@ public static partial class WpfApp
             $"panel, gathering: the hour once ({w.HudValues.GetValueOrDefault("rate", "")}, the window's {w.HeadRate.Text}), no second loot figure");
         Check(w.HudValues.GetValueOrDefault("warm", "") == "" && w.HeadRate.Opacity == 1, "a 42-minute count shows its rate, not warming up");
 
+        // the Abyss (Steven, 2026-11-13: "in abyss zones the primary should be abyss points per hour and a secondary ticket
+        // for kinah"): the sample's 118 kills paid 24,740 Abyss Points in 42 min 17 s, so the hero is their hour and Kinah and
+        // loot an hour sit on the gold ticket under it; out of the Abyss the hero is the Kinah hour again and there is no ticket
+        w.ShowDemo("Abyss"); DoEvents();
+        var abyssHero = w.HeroForTest();
+        string apHour = Amounts.Short(24_740 / ((42 * 60 + 17) / 3600.0));
+        Check(abyssHero.Abyss && abyssHero.Hero == apHour && abyssHero.Label.EndsWith("Abyss Points") && abyssHero.Ticket.Contains(" Kinah and loot an hour") && !abyssHero.Ticket.StartsWith(apHour),
+            $"the Abyss: the hero is {abyssHero.Hero} (expected {apHour}) \"{abyssHero.Label.Replace('\n', ' ')}\", the ticket \"{abyssHero.Ticket}\"");
+        var abyssLine = w.HeroStatsForTest();
+        Check(abyssLine.Count == 4 && abyssLine[0] == "24,740 Abyss Points" && abyssLine[1].EndsWith(" Kinah"), "...the hero's line leads with the points picked up: " + string.Join(" · ", abyssLine));
+        w.ShowDemo(); DoEvents();
+        var worldHero = w.HeroForTest();
+        Check(!worldHero.Abyss && worldHero.Ticket == "" && worldHero.Label.Contains("Kinah and loot"), $"...out of the Abyss: the Kinah hour {worldHero.Hero}, no ticket");
+
         // Undo instead of "Are you sure?" (2026-10-25): Clear the tables happens at once with a bar, and Undo puts them back
         w.ShowDemo(); DoEvents();
         _ = w.ClearTablesForTest(); DoEvents();
@@ -2040,7 +2054,7 @@ public static partial class WpfApp
             w.Close();
             return problems;
         }
-        var name = welcome ? "ui-welcome" : !demo ? (mine && kind == "Events" ? "ui-main-events-mine" : "ui-main") : kind switch { "Gathering" => "ui-main-gathering", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", "Quests" => "ui-main-quests", _ => "ui-main-tracking" };
+        var name = welcome ? "ui-welcome" : !demo ? (mine && kind == "Events" ? "ui-main-events-mine" : "ui-main") : kind switch { "Gathering" => "ui-main-gathering", "Abyss" => "ui-main-abyss", "Pets" => "ui-main-pets", "Market" => "ui-main-market", "Crafting" => "ui-main-crafting", "CraftingEmpty" => "ui-main-crafting-empty", "CraftingUpgrades" => "ui-main-crafting-upgrades", "Events" => "ui-main-events", "Quests" => "ui-main-quests", _ => "ui-main-tracking" };
         Save((FrameworkElement)w.Content, Path.Combine(dir, name + (shotState.Length > 0 ? "-" + shotState : "") + (compact ? "-compact" : full ? "-full" : "") + (tall ? "-tall" : "") + (skin != null ? "-" + skin : "") + ".png"), (compact ? 640 : 800) - 16);
         // GOALS (0.9): a goal's hover card and the Set a goal sheet beside the goals render (ui-goal-card.png, ui-goal-card-kinah.png,
         // ui-goal-sheet.png, ui-goal-sheet-item.png)

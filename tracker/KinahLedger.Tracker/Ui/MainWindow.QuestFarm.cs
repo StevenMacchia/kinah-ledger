@@ -211,6 +211,44 @@ public partial class MainWindow
         Canvas.SetLeft(HeroSparkDot, pts[^1].X - HeroSparkDot.Width / 2); Canvas.SetTop(HeroSparkDot, pts[^1].Y - HeroSparkDot.Height / 2);
     }
 
+    /* ---------------- the Abyss's Kinah ticket ---------------- */
+
+    /// <summary>True while the hero's figure is the Abyss Points hour (FillRate), so a test or a render can ask.</summary>
+    bool _heroAbyss;
+    /// <summary>Which kind of hour the rate line was sampled in: a switch starts the line over.</summary>
+    bool _rateOfAbyss;
+
+    /// <summary>
+    /// The Kinah ticket under the hero in the Abyss's zones (Steven, 2026-11-13): the hero says the Abyss Points an hour, and
+    /// this small gold ticket the Kinah and loot an hour after tax, the hour the hero says everywhere else. Kinah's art, the
+    /// figure in gold, the words muted; dimmed while the hour warms up, as the hero is. Hidden outside the Abyss and before
+    /// anything is counted.
+    /// </summary>
+    void FillHeroTicket(bool abyss, long total, double h, int priced, long loot, bool warm)
+    {
+        bool show = abyss && total > 0 && h > 0;
+        HeroTicket.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show) return;
+        string words = priced > 0 || loot > 0 ? "Kinah and loot an hour" : "Kinah an hour";
+        HeroTicket.Opacity = warm ? 0.4 : 1;
+        HeroTicket.ToolTip = $"{Amounts.Full(total / h)} {words}" + (priced > 0 || loot > 0 ? $", loot at the lowest Market price {PriceBook.Cut}" : "") + ": the Kinah picked up here and what the loot sells for, the hour the big figure says outside the Abyss.";
+        var sig = $"{Fk(total / h)}|{words}|{Skins.Current}";
+        if (!Changed("ticket", sig)) return;
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var art = GameArt.Element("kinah", 14); art.VerticalAlignment = VerticalAlignment.Center; art.Margin = new Thickness(0, 0, 5, 0);
+        row.Children.Add(art);
+        var fig = QT(Fk(total / h), 13, FontWeights.Bold, "Gold"); fig.VerticalAlignment = VerticalAlignment.Center;
+        var word = QT(" " + words, 12, FontWeights.Medium, "Muted"); word.VerticalAlignment = VerticalAlignment.Center;
+        row.Children.Add(fig); row.Children.Add(word);
+        HeroTicket.Child = row;
+        HeroTicket.SetResourceReference(Border.BackgroundProperty, QTintOf("Gold"));
+    }
+
+    /// <summary>For options-test: the hero's figure and label, and the ticket's words when it shows ("" when not).</summary>
+    internal (string Hero, string Label, string Ticket, bool Abyss) HeroForTest() =>
+        (HeadRate.Text, HeadRateLbl.Text,
+         HeroTicket.Visibility == Visibility.Visible && HeroTicket.Child is StackPanel sp ? string.Concat(sp.Children.OfType<TextBlock>().Select(t => t.Text)) : "", _heroAbyss);
+
     /* ---------------- the chips ---------------- */
 
     /// <summary>
@@ -228,7 +266,8 @@ public partial class MainWindow
         _qMobs = e.MobSnapshot(); _qKinah = kinah; _qKills = kills; _qElapsed = elapsed;
         int kinds = s.Drops.Count(r => !r.Header) + s.Gathered.Count(r => !r.Header) + (s.Pets is { Count: > 0 } ? 1 : 0);
         bool gather = _mode == Mode.Gather;
-        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}";
+        long abyss = _heroAbyss && !gather ? _lootHere?.Abyss ?? 0 : 0;
+        var sig = $"{kinah}|{s.Value}|{s.Priced}|{kinds}|{kills}|{nodes}|{s.GatherCount}|{gather}|{_qChip}|{FullShown}|{Skins.Current}|{abyss}";
         if (!Changed("chips", sig)) return;
         var at = CountWhere();
         // Full view has the bag, Who pays and the odds in its second column already: the figures there open nothing
@@ -251,6 +290,10 @@ public partial class MainWindow
         else
         {
             double perMin = elapsed.TotalMinutes >= 1 ? kills / elapsed.TotalMinutes : 0;
+            // in the Abyss the points the hero is the hour of lead the line (2026-11-13): their one home on the page, as Kinah's is
+            if (abyss > 0)
+                parts.Add(new QStat(Fk(abyss), "Abyss Points", $"{abyss:N0} Abyss Points picked up {at}" + (kills > 0 ? $", {Fk(abyss / (double)kills)} a kill" : "") + ".",
+                    null, false, "Sky", ("chip-abyss|" + at, abyss, false)));
             parts.Add(new QStat(Fk(kinah), "Kinah",
                 $"{kinah:N0} Kinah picked up {at}" + (kills > 0 ? $", {Fk(kinah / (double)kills)} a kill" : "") + ". Quest rewards and bound Kinah are left out." + (FullShown ? "" : " Click for Kinah by enemy."),
                 Open("who"), _qChip == "who", "Gold", kinah > 0 ? ("chip-kinah|" + at, kinah, true) : null));

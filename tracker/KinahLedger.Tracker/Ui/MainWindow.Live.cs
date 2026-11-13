@@ -331,34 +331,47 @@ public partial class MainWindow
     /// The live card's right side for the count on screen: the hour's worth, the rate line since the start, kills and Kinah
     /// a kill (or attempts in a gathering stretch), your best here, and the health line. Called from FillNumbers.
     /// </summary>
-    void FillRate(SessionEngine e, double h, long kinah, long loot, int priced, int kills, int nodes, double itemsPerTry)
+    void FillRate(SessionEngine e, double h, long kinah, long loot, int priced, int kills, int nodes, double itemsPerTry, long abyss = 0, bool inAbyss = false)
     {
         long total = kinah + loot;
+        // in the Abyss's zones the hour is in Abyss Points (Steven, 2026-11-13: "in abyss zones the primary should be abyss
+        // points per hour and a secondary ticket for kinah"): the big figure, its trend and its chart are the points, and
+        // Kinah and loot an hour go to the ticket under it (FillHeroTicket). A gathering stretch there is still loot
+        bool ap = inAbyss && _mode != Mode.Gather;
+        _heroAbyss = ap;
+        long hero = ap ? abyss : total;
         // it rolls when the count under it moved (a pickup), not as the hour ticks on; green when it rose 1% (not warming up)
-        bool counted = total != _heroTotal; _heroTotal = total;
-        if (total > 0) Motion.Number(HeadRate, "hero|" + _part + "|" + CountWhere(), total / h, v => Fk(v), _rateWarming ? -1 : 0.01, roll: counted);
-        else Motion.Blank(HeadRate, "hero|" + _part + "|" + CountWhere(), " ");
+        bool counted = hero != _heroTotal; _heroTotal = hero;
+        // keyed apart in the Abyss, so walking in doesn't roll the Kinah hour down into the points'
+        string heroKey = "hero|" + _part + "|" + CountWhere() + (ap ? "|ap" : "");
+        if (hero > 0) Motion.Number(HeadRate, heroKey, hero / h, v => Fk(v), _rateWarming ? -1 : 0.01, roll: counted);
+        else Motion.Blank(HeadRate, heroKey, " ");
         // which count it is, on the first line: overall (every zone since a break, the default) or this zone; a click on the
         // figure switches. What it adds up, on the second
         string which = RunShown ? "an hour" : _prefs.AllZones ? "an hour · all zones" : "an hour · this zone";
-        HeadRateLbl.Text = total <= 0 ? "Kinah and loot an hour, once something is counted"
+        HeadRateLbl.Text = ap ? (abyss <= 0 ? "Abyss Points an hour, once some are picked up" : which + "\nAbyss Points")
+            : total <= 0 ? "Kinah and loot an hour, once something is counted"
             : priced > 0 || loot > 0 ? which + "\n" + (_mode == Mode.Gather && kinah == 0 ? "loot after tax" : "Kinah and loot after tax")
             : which + "\nKinah; loot not priced yet";
         // warming up (FillNumbers): the figure dimmed, and said so, until the count is old enough for an hour to mean something
-        bool warm = _rateWarming && total > 0;
+        bool warm = _rateWarming && hero > 0;
         HeadRate.Opacity = warm ? 0.4 : 1;
         if (warm) HeadRateLbl.Text += " · warming up";
         string flip = RunShown ? "" : _prefs.AllZones
             ? $"\nEvery zone since your last break ({TrackerSession.BreakMinutes:0} minutes with nothing farmed). Click for this zone only."
             : "\nThis zone only: it starts over when you change zone. Click for every zone.";
-        HeadRate.ToolTip = (warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted." : total > 0 ? Amounts.Full(total / h) + " an hour" : "Nothing counted yet.") + flip;
+        HeadRate.ToolTip = (warm ? $"Warming up: a rate from the first moments swings wildly. It settles after {RateWarmup.TotalMinutes:0} minutes and {RateWarmupCounts} things counted."
+            : ap ? (abyss > 0 ? $"{Amounts.Full(abyss / h)} Abyss Points an hour: {abyss:N0} picked up in the Abyss. Kinah and loot an hour are on the ticket under it." : "No Abyss Points picked up yet.")
+            : total > 0 ? Amounts.Full(total / h) + " an hour" : "Nothing counted yet.") + flip;
+        FillHeroTicket(ap, total, h, priced, loot, _rateWarming && total > 0);
         // one sample a minute, from the first count to now; the window's own count only (a render draws its sample line);
         // none while warming up, so the line doesn't open on a spike
         // a clear that can still be undone draws no line and keeps the real one's samples for Undo
         if (!_demo && !ReferenceEquals(e, _clearedView))
         {
-            if (!ReferenceEquals(_rateOf, e)) { _rateOf = e; _rateLine.Clear(); }
-            if (total > 0 && !_rateWarming) _rateLine.Add(DateTime.UtcNow, total / h);
+            // a line of one thing: the points' in the Abyss, the Kinah hour's elsewhere (a count only crosses over at a break)
+            if (!ReferenceEquals(_rateOf, e) || _rateOfAbyss != ap) { _rateOf = e; _rateOfAbyss = ap; _rateLine.Clear(); }
+            if (hero > 0 && !_rateWarming) _rateLine.Add(DateTime.UtcNow, hero / h);
         }
         KvLine.Inlines.Clear();
         void Fig(string text) { var r = new Run(text); r.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont"); r.SetResourceReference(TextElement.ForegroundProperty, "Ink"); KvLine.Inlines.Add(r); }
@@ -373,12 +386,15 @@ public partial class MainWindow
         if (best != null) { if (KvLine.Inlines.Count > 0) KvLine.Inlines.Add(new LineBreak()); KvLine.Inlines.Add(new Run("best here ")); Fig(Fk(best.PerHr)); }
         // the chase (Quest): this hour against your best here, as the bar toward the flag and the ring; the panel's Badge and
         // Buddy draw the same ring from "chase" (the share) and "toBest" (the words)
+        // in the Abyss the chase stays the Kinah hour's (your bests here are Kinah hours) and says so, the figure above being the points
         FillChase(nowHr, bestHr, warm);
+        if (ap && ChaseBox.Visibility == Visibility.Visible) ChaseLbl.Text = "Kinah: " + ChaseLbl.Text;
         FillBests(e, h, kinah, nowHr, bestHr, warm);   // a new best here and today's milestones get a moment (Ui/MainWindow.Bests.cs)
         bool chase = nowHr > 0 && bestHr > 0 && !warm;
         _hudValues["chase"] = chase ? QShare(nowHr, bestHr).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) : "";
         _hudValues["toBest"] = !chase ? "" : nowHr >= bestHr ? "New best here" : $"{Fk(bestHr - nowHr)} to your best here";
-        DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now", bestHr);
+        // the chart's dashed best is a Kinah hour: none over the points' line
+        DrawRateLine(ReferenceEquals(e, _clearedView) ? new RateLine() : _rateLine, _demo ? "42 min ago" : _rateLine.Samples.Count > 0 ? AgoMinutes(_rateLine.Samples[0].Minute) : "", "now", ap ? 0 : bestHr);
         KvLine.Visibility = Visibility.Collapsed;   // the chips and the chase say it (Quest)
         FillHealth(HealthText, HealthMark, hideOk: true);
     }

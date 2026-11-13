@@ -1070,7 +1070,9 @@ public partial class MainWindow : Window
         TableTitle.ToolTip = _tableWhat.Length > 0 ? "Counting " + _tableWhat + "." : null;
         long totalNow = kinah + s.Value;
         // the live card's right side: the hour's worth, its line since the start, kills and Kinah a kill, best here, the health line
-        FillRate(e, h, _mode == Mode.Gather ? 0 : kinah, s.Value, s.Priced, t.Kills, t.Nodes, t.Nodes > 0 ? s.GatherCount / (double)t.Nodes : 0);
+        // in the Abyss's zones the hour is in Abyss Points, Kinah and loot on a ticket under it (FillRate)
+        bool inAbyss = ZoneLocator.IsAbyss(_demo ? _demoZone : e.Zone ?? _watcher.Chat?.ZoneView?.Zone);
+        FillRate(e, h, _mode == Mode.Gather ? 0 : kinah, s.Value, s.Priced, t.Kills, t.Nodes, t.Nodes > 0 ? s.GatherCount / (double)t.Nodes : 0, e.AbyssPoints, inAbyss);
         Summary.Visibility = Visibility.Collapsed;   // idle and skipped reward lines: in ⋯ (ShowMoreMenu)
 
         // LOOT's first side (Ui/MainWindow.Loot.cs): what this count picked up and its total, with how it adds up on hover.
@@ -2065,6 +2067,15 @@ public partial class MainWindow : Window
                 Drop("Fine Orichalcum Ore", 14); Drop("Pure Orichalcum Ore", 2); Drop("Sapphire Gemstone", 9); Drop("Ruby Gemstone", 6); Drop("Diamond Gemstone", 4); Drop("Fine Sapphire Gemstone", 1);
                 Drop("Kukuru", 23); Drop("Conide", 11); Drop("Odyle", 31); Drop("Fine Odyle", 3);
                 for (int i = 0; i < 11; i++) e.Apply(new GatherFailed(t, "Essence Extraction"));
+                break;
+            case Mode.Open when kind == "Abyss":
+                // a layout render of the Abyss (2026-11-13): kills that pay Kinah and Abyss Points, so the hero is the points'
+                // hour and the Kinah ticket shows under it (FillHeroTicket)
+                _demoZone = ZoneLbl.Text = "Chaotic Lower Reshanta";
+                e.CreditZone(_demoZone, 42 * 60 + 17);
+                e.SetTarget("Shadowclaw Mauler", t);
+                for (int i = 0; i < 118; i++) { e.Apply(new KinahChanged(t, 2_140 + (i % 5) * 60, false)); e.Apply(new CurrencyGained(t, "Abyss Points", 180 + (i % 4) * 20)); }
+                Drop("Lesser Abyssal Manastone", 6); Drop("Spiritstone", 9); Drop("Power Shard", 5); Drop("Refining Stone", 3);
                 break;
             default:
                 e.CreditZone("Western Cantas Valley", 42 * 60 + 17);

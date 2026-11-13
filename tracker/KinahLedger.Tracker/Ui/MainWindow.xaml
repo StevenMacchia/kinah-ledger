@@ -493,6 +493,8 @@
                   <Ellipse x:Name="HeroSparkDot" Width="5" Height="5" Fill="{DynamicResource Gold}" Opacity="0.85" IsHitTestVisible="False"/>
                 </Canvas>
               </Grid>
+              <!-- in the Abyss's zones the hero is the Abyss Points hour and this gold ticket the Kinah and loot hour (FillHeroTicket, Ui/MainWindow.QuestFarm.cs) -->
+              <Border x:Name="HeroTicket" HorizontalAlignment="Left" Margin="0,7,0,0" Padding="7,3,10,3" CornerRadius="11" Visibility="Collapsed" ToolTipService.InitialShowDelay="300" AutomationProperties.Name="Kinah an hour"/>
               <!-- the chase: this hour against your best here, a bar toward the flag (mint once it is beaten) -->
               <StackPanel x:Name="ChaseBox" Margin="0,8,0,0" Visibility="Collapsed">
                 <Grid>
