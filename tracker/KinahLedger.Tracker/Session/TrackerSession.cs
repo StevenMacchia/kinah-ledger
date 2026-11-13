@@ -4656,6 +4656,7 @@ public sealed partial class TrackerSession
             var at = r.First ?? now;
             if (!CraftView.CraftPopupSays(recipe, r.Count, at)) continue;
             _hiddenObjs.Add(r.Obj); if (_hiddenObjs.Count > 200) _hiddenObjs.Remove(_hiddenObjs.Min());
+            if (PacketsHaveCraft(at, $"{name} x{r.Count} beside the character (a combo)")) continue;
             CrashLog.Note($"crafting panel: {name} x{r.Count} beside the character at {at.ToLocalTime():HH:mm:ss.f}: the craft just counted made two, its combo, credited");
             var ev = new CraftResult(at, recipe, true, true) { Via = SessionEngine.CraftPanelVia, Popup = r.Count, Queue = _queueId };
             Count(ev);
@@ -4850,8 +4851,10 @@ public sealed partial class TrackerSession
     /// </summary>
     // makes: what the craft made when something other than the recipe book says it (a hidden craft's pop-up, HiddenCraftRows);
     // why: the reads log's reason, carried on the feed line so its card can say it (Steven, 2026-11-04)
-    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0, int? makes = null, int unseen = 0, string why = "")
+    // fromPackets: told by the game's traffic (TrackerSession.Packets.cs); while that counts crafts, the panel's own races are left out
+    internal void PanelRace(string recipe, bool ok, bool combo, DateTime now, int level = 0, int queue = 0, int? makes = null, int unseen = 0, string why = "", bool fromPackets = false)
     {
+        if (!fromPackets && PacketsHaveCraft(now, $"{(combo ? "combo roll " : "")}{(ok ? "success" : "fail")} for {(recipe.Length > 0 ? recipe : "an unread recipe")}")) return;
         // this queue's tallies for the live line on the HUD and the Crafting page (CraftQueue)
         if (queue > 0 && queue == _queueId && _queueOpen) { if (ok && !combo) _queueOk++; if (ok && combo) _queueCombo++; QueueViewNow(); }
         PanelUp(recipe, now);
