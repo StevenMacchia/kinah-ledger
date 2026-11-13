@@ -2242,7 +2242,12 @@ public sealed partial class TrackerSession
         var fromGrid = new List<GameEvent>();   // every slot the picture names, counted from the chat or not: the run's rewards
         // a close call is settled by the table's own sets, or by what this expedition gave in runs before (GradedPick)
         var history = Instances.Snapshot().Where(r => string.Equals(r.Zone, Instances.Open, StringComparison.OrdinalIgnoreCase)).SelectMany(r => r.Items.Keys.Concat(r.BoundItems.Keys)).Select(id => _items.NameOf(id)).ToList();
-        var prefer = SetMates(slots, _byIcon!, history);
+        var setMates = SetMates(slots, _byIcon!, history);
+        // ...and by the chat: an item the chat said was acquired with this table (its reward lines, the last 30 s) is the one of
+        // two lookalike icons it names (Steven, 2026-11-13 12:11 Fire Temple: "Wrathful Ego acquired." in the chat, its slot 48
+        // from Wrathful Ego's icon with Wrathful Mind's and Will's within a quarter, so it was named nothing and counted nowhere)
+        var chatNamed = _runPickups.Where(p => (now - p.At).TotalSeconds is >= -5 and <= 30 && p.Name != "Kina").Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Func<string, bool> prefer = n => setMates(n) || chatNamed.Contains(Unbound(n));
         var notRead = new List<string>();       // every slot it can't name, as "Rare x14 (picture)": shown as Unknown item, never dropped
         var gearNotes = new List<string>();     // gear whose icon two items share: one piece of unknown gear each ("Legend gear, one of A / B")
         int unknownItems = 0;                   // visible slots not named: one unknown item each, never dropped
