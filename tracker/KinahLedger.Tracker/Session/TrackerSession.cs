@@ -367,6 +367,7 @@ public sealed partial class TrackerSession
         if (gap > 0 && gap <= BalanceCheck.MaxPickupGap && !InBase && _cross.TakeSingleKinah(gap, at))
         {
             var ev = new KinahChanged(at, gap, false) { Via = "loot list · balance" };
+            if (PacketsHave(ev)) return;
             Feed(ev, Count(ev));
             Interlocked.Add(ref _kinahPicked, gap);
             _balanceCheck.Observe(balance, KinahRead, Interlocked.Read(ref _kinahBound), at);   // the count matches the counter again
@@ -789,6 +790,7 @@ public sealed partial class TrackerSession
             try
             {
                 await FollowGameAsync();
+                DrainPackets();   // what the game's own messages said since the last pass (TrackerSession.Packets.cs)
                 if (Region == null) await FindChatAsync();
                 if (Region == null)
                 {
@@ -1168,6 +1170,8 @@ public sealed partial class TrackerSession
     /// <summary>One pickup counted everywhere it goes: the run, the window, the crafting part, the balance check, listeners.</summary>
     void Commit(GameEvent ev)
     {
+        // Kinah, bound Kinah and Abyss Points come from the game's own messages while the packets count them (TrackerSession.Packets.cs)
+        if (PacketsHave(ev)) return;
         // counted where it belongs, and stamped with where that was (the activity: a run, farming, a reward screen)
         Feed(ev, Count(ev));
         // a line in the seconds around a reward picture is its second witness (TrackerSession.Witness.cs)

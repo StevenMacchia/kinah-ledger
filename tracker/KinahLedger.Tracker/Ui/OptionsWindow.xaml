@@ -400,7 +400,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
                   <TextBlock Style="{StaticResource RowTitle}" Text="Read the game's network traffic"/>
-                  <TextBlock Style="{StaticResource RowHint}" Text="Reads your Kinah from the game server's own messages, beside the screen, and logs it against the chat's count (packets.log). It changes no count yet. Needs Npcap from npcap.com, or the tracker run as administrator. It only listens: nothing is sent and the game isn't touched."/>
+                  <TextBlock Style="{StaticResource RowHint}" Text="Counts Kinah, bound Kinah and Abyss Points from the game server's own messages, exact to the Kinah, instead of reading them off the chat (the chat counts them whenever this can't). Needs Npcap from npcap.com, or the tracker run as administrator. It only listens: nothing is sent and the game isn't touched. What it counted is in packets.log."/>
                   <TextBlock x:Name="PacketStateLbl" Style="{StaticResource RowHint}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
                 <CheckBox x:Name="PacketChk" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Read the game's network traffic"/>
