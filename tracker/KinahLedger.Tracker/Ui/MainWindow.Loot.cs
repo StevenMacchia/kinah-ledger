@@ -112,7 +112,6 @@ public partial class MainWindow
         SessionHead.Cursor = FullShown ? null : Cursors.Hand;
         if (_lootWeek) FillLootWeek(); else if (_lootDay) FillLootDay(whole); else FillLootHere();
         FillBagStrip();   // the Compact page's slots with counts (Ui/MainWindow.QuestFarm.cs)
-        FillInventory();   // the whole inventory from the game's messages (Ui/MainWindow.Inventory.cs)
     }
 
     /// <summary>LOOT's first side: the Kinah, every drop and gathered item, and the Soul Crystals of the count on screen.</summary>

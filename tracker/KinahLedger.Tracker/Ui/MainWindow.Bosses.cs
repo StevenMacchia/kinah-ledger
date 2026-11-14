@@ -316,6 +316,9 @@ public partial class MainWindow
         B("Eternal Gartua", "Eternal Isle", 306.5);
         B("Silent Dartan", "Southern Altamia Highland", 312.7);
         B("Phantasm Kasia", "Garden of the Illusion God", 349.3);
+        // two of Steven's watched-by-default bosses (101023, 101024), so renders show them under Watched
+        B("Soul Ruler Kashapa", "Eastern Altamia Highland", 318.4);
+        B("High Commander Lagta", "Drana Plantation", 402.1);
         return list;
     }
 }

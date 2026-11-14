@@ -146,11 +146,23 @@ public partial class MainWindow
         return g;
     }
 
-    /// <summary>Rows two to a line, each the same height, so a card never leaves a ragged gap.</summary>
-    static UniformGrid TimersGrid(IEnumerable<FrameworkElement> rows)
+    /// <summary>
+    /// Rows two to a line, the pair as tall as the taller of the two (a long name wraps to a second line), so the columns
+    /// stay level and a card never leaves a ragged gap.
+    /// </summary>
+    static Grid TimersGrid(IEnumerable<FrameworkElement> rows)
     {
-        var grid = new UniformGrid { Columns = 2 };
-        foreach (var r in rows) grid.Children.Add(r);
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        int n = 0;
+        foreach (var r in rows)
+        {
+            if (n % 2 == 0) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(r, n / 2); Grid.SetColumn(r, n % 2);
+            grid.Children.Add(r);
+            n++;
+        }
         return grid;
     }
 
@@ -189,12 +201,14 @@ public partial class MainWindow
 
     FrameworkElement TimerLine(string name, string sub, string big, string small, string tone, string? key)
     {
-        var g = new Grid { Height = 42, Margin = new Thickness(0, 0, 14, 2) };
+        var g = new Grid { MinHeight = 42, Margin = new Thickness(0, 4, 14, 5) };
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (key != null) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        left.Children.Add(QT(name, 12.5, FontWeights.SemiBold, "Ink", trim: true));
+        var nm = QT(name, 12.5, FontWeights.SemiBold, "Ink");
+        nm.TextWrapping = TextWrapping.Wrap; nm.TextTrimming = TextTrimming.None;   // a full name always shows: a long one takes a second line
+        left.Children.Add(nm);
         if (sub.Length > 0) left.Children.Add(QT(sub, 11, FontWeights.Medium, "Faint", trim: true));
         g.Children.Add(left);
         var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, key != null ? 6 : 0, 0) };

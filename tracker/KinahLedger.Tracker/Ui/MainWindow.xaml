@@ -294,14 +294,37 @@
             </StackPanel>
           </StackPanel>
         </StackPanel>
-        <!-- the overlays over the game, each separate and optional (redesign 2026-11-14, Ui/MainWindow.Overlays.cs): one pill each, lit
-             while it is on; a click switches it, from any page -->
-        <StackPanel x:Name="OverlaysGroup" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <!-- round buttons, the same on every page: the site and Options (each says what it opens in plain words) -->
+        <!-- the pages as pills (redesign 2026-11-14, Steven's pick): Farm, Craft, Runs, Timers (the next watched countdown rides on
+             it), and Parser while it is on; Quests is reached from Next up's head. Every feature lives on one of them -->
+        <Border x:Name="PartTabs" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,8,0" Padding="4" CornerRadius="12" Background="{DynamicResource Card}" VerticalAlignment="Center">
+          <StackPanel x:Name="PartTabRow" Orientation="Horizontal">
+            <Button x:Name="FarmTab" Style="{StaticResource SegOn}">
+              <TextBlock Text="Farm" VerticalAlignment="Center"/>
+            </Button>
+            <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Margin="2,0,0,0">
+              <TextBlock Text="Craft" VerticalAlignment="Center"/>
+            </Button>
+            <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Expeditions and events: each trip, from entering to the last loot.">
+              <TextBlock Text="Runs" VerticalAlignment="Center"/>
+            </Button>
+            <!-- Timers (Ui/MainWindow.TimersPage.cs): events and world bosses; the next watched one's countdown rides on the tab -->
+            <Button x:Name="TimersTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Timers: when the events start and the world bosses spawn.">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Timers" VerticalAlignment="Center"/>
+                <TextBlock x:Name="TimersTabNext" Margin="6,0,0,0" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Visibility="Collapsed"/>
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Border>
+        <!-- round buttons, the same on every page: the overlays over the game (a green dot while any is on; Ui/MainWindow.Overlays.cs)
+             and Options (each says what it opens in plain words). The site is a link in the footer since the redesign -->
         <StackPanel x:Name="HeadButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-          <Button x:Name="SiteBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" AutomationProperties.Name="Open kinahledger.com"
-                  ToolTip="Open kinahledger.com in your browser: drop rates from every player, Market prices and your profile.">
-            <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcGlobe}"/>
+          <Button x:Name="OverlaysBtn" Style="{StaticResource RoundBtn}" Margin="0,0,6,0" AutomationProperties.Name="Overlays"
+                  ToolTip="Overlays over the game: the Kinah panel, the timers and the parser, each on or off.">
+            <Grid>
+              <Path Style="{StaticResource QIconStyle}" Data="{StaticResource IcPanels}"/>
+              <Ellipse x:Name="OverlaysDot" Width="7" Height="7" Fill="{DynamicResource Good}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-3,-4,0" Visibility="Collapsed"/>
+            </Grid>
           </Button>
           <Button x:Name="OptionsBtn" Style="{StaticResource RoundBtn}" AutomationProperties.Name="Settings"
                   ToolTip="Settings: look and window size, server and price alerts, sharing and your data, game reading, the panel over the game, updates.">
@@ -309,32 +332,6 @@
           </Button>
         </StackPanel>
       </Grid>
-      <!-- the pages, one row under the header (redesign 2026-11-14, Steven: "pages across the top"): Farm, Runs, Craft, Timers,
-           Quests (Parser joins between Timers and Quests); every feature lives on one of them -->
-      <Border x:Name="PartTabs" Margin="0,10,0,0" Padding="4" CornerRadius="12" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
-        <UniformGrid x:Name="PartTabRow" Rows="1">
-          <Button x:Name="FarmTab" Style="{StaticResource SegOn}">
-            <TextBlock Text="Farm" VerticalAlignment="Center"/>
-          </Button>
-          <Button x:Name="EventsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Expeditions and events: each trip, from entering to the last loot.">
-            <TextBlock Text="Runs" VerticalAlignment="Center"/>
-          </Button>
-          <Button x:Name="CraftTab" Style="{StaticResource SegOff}" Margin="2,0,0,0">
-            <TextBlock Text="Craft" VerticalAlignment="Center"/>
-          </Button>
-          <!-- Timers (Ui/MainWindow.TimersPage.cs): events and world bosses; the next one's countdown rides on the tab -->
-          <Button x:Name="TimersTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Timers: when the events start and the world bosses spawn.">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="Timers" VerticalAlignment="Center"/>
-              <TextBlock x:Name="TimersTabNext" Margin="6,0,0,0" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Visibility="Collapsed"/>
-            </StackPanel>
-          </Button>
-          <!-- Quests (2026-11-08, Ui/MainWindow.QuestsPage.cs): every quest, pins, daily and all time, done, your score -->
-          <Button x:Name="QuestsTab" Style="{StaticResource SegOff}" Margin="2,0,0,0" ToolTip="Quests: every quest with its tree, pins for Next up, today's and all time, what you have done, your score.">
-            <TextBlock Text="Quests" VerticalAlignment="Center"/>
-          </Button>
-        </UniformGrid>
-      </Border>
       <!-- a newer version: downloaded on its own, installed when the window closes or on Restart now -->
       <!-- one line (2026-10-28, the calm Farming page): the ready notice fits beside its two actions -->
       <Border x:Name="UpdateCard" Style="{StaticResource CardStyle}" Margin="0,12,0,0" Padding="14,6,6,6" Visibility="Collapsed">
@@ -612,24 +609,6 @@
         </StackPanel>
       </Border>
 
-      <!-- the whole inventory from the game's messages (Ui/MainWindow.Inventory.cs): its worth, the sellable part, what has no
-           price, the change since the tracker first saw it, the most valuable items; only while the reader gets it -->
-      <Border x:Name="InvCard" Style="{StaticResource QCard}" Margin="0,8,0,0" Padding="14,10,14,10" Visibility="Collapsed">
-        <StackPanel>
-          <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Image Source="/Art/kinah.png" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
-            <TextBlock Grid.Column="1" Text="Inventory" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
-            <TextBlock x:Name="InvNote" Grid.Column="2" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"/>
-            <TextBlock x:Name="InvTotal" Grid.Column="3" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Background="Transparent" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000"/>
-          </Grid>
-          <TextBlock x:Name="InvSub" FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-          <WrapPanel x:Name="InvHost" Margin="0,8,0,-6"/>
-          <TextBlock x:Name="InvWornHead" Text="Gear worn" FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,12,0,0" Visibility="Collapsed"/>
-          <WrapPanel x:Name="InvWornHost" Margin="0,6,0,-6" Visibility="Collapsed"/>
-        </StackPanel>
-      </Border>
-
       <!-- the bag (LOOT since 2026-10-28, Ui/MainWindow.Loot.cs): what was picked up, as slots with the game-tooltip card on
            hover, for one period at a time: this zone since you arrived (or the run, or every zone), Today, or the Week. It
            opens from the loot chip in Compact; in Full view it is a column of its own -->
@@ -752,7 +731,7 @@
       <Border x:Name="StatusBar" Grid.Row="3" Grid.ColumnSpan="2" Width="662" HorizontalAlignment="Left" Margin="0,14,0,0">
       <Border x:Name="StatusInner" BorderBrush="{DynamicResource Line}">
       <Grid x:Name="StatusRow">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <!-- how the count held up against the game's own numbers, as one chip in the look's colours; a click opens the Accuracy
              card over the window (Ui/MainWindow.AccuracyCard.cs). In the footer since 2026-10-28. Since 0.9.0 it shows only
              with Options › Show accuracy details on: the "2 to look at" pill is gone for players (Steven, 2026-10-30) -->
@@ -777,11 +756,14 @@
         <TextBlock x:Name="MiscountText" Grid.Column="3" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
                    ToolTip="Sends this report to Kinah Ledger (no chat from other players): what the tracker read and counted in the last minute. A copy stays on this PC."><Hyperlink x:Name="MiscountLink" Style="{StaticResource LinkStyle}">Report a miscount</Hyperlink></TextBlock>
         <!-- the Kinah Ledger Discord: where a miscount report goes (#bugs-and-feedback), help and release news (2026-10-25) -->
-        <TextBlock x:Name="DiscordText" Grid.Column="4" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+        <!-- the site (the header's globe until the redesign, 2026-11-14) -->
+        <TextBlock x:Name="SiteText" Grid.Column="4" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+                   ToolTip="Opens kinahledger.com in your browser: drop rates from every player, Market prices and your profile."><Hyperlink x:Name="SiteLink" Style="{StaticResource LinkStyle}">kinahledger.com</Hyperlink></TextBlock>
+        <TextBlock x:Name="DiscordText" Grid.Column="5" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
                    ToolTip="Opens the Kinah Ledger Discord in your browser. Post a miscount in #bugs-and-feedback with a screenshot, your server and the tracker version."><Hyperlink x:Name="DiscordLink" Style="{StaticResource LinkStyle}">Discord</Hyperlink></TextBlock>
         <!-- Always on top, in sight (Steven, 2026-11-11: "so I stop losing the window"): the same switch as Options › General
              and the ⋯ menu's Keep above other windows (MainWindow.Shell.cs SetAlwaysOnTop) -->
-        <CheckBox x:Name="TopmostBox" Grid.Column="5" Content="Always on top" FontSize="12" Margin="14,-3,0,-3" VerticalAlignment="Center"
+        <CheckBox x:Name="TopmostBox" Grid.Column="6" Content="Always on top" FontSize="12" Margin="14,-3,0,-3" VerticalAlignment="Center"
                   Foreground="{DynamicResource Muted}" Click="TopmostBox_Click" AutomationProperties.Name="Always on top"
                   ToolTip="Keeps this window above the game and other windows. The same switch as Options › General." ToolTipService.InitialShowDelay="400"/>
       </Grid>

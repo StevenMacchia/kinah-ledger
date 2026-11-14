@@ -339,6 +339,7 @@ public static partial class WpfApp
         o = Open();
         o.Go(OptionsWindow.Page.Reading);
         Check(o.PageReading.Visibility == Visibility.Visible && o.ExplainChk.IsChecked == false && !p.ExplainCounts, "Explain each count: on Game reading, off by default");
+        Check(o.InvDetailsChk.IsChecked == false && !p.InventoryDetails, "Inventory details: off by default (the window shows the worth and the items)");
         Check(!w.SampleLineReportExplains(), "a line's card has no WHY IT WAS COUNTED with it off");
         Flip(o.ExplainChk);
         Check(o.SaveBtn.IsEnabled && !p.ExplainCounts, "the explain switch waits for Save");
@@ -430,9 +431,9 @@ public static partial class WpfApp
         Check(o.TopmostChk.IsChecked == false, "Options opens with it off again");
         Click(o.CancelBtn);
         DoEvents();
-        // the pages by key (0.10.26; redesign 2026-11-14: as the tabs sit, Farm, Runs, Craft, Timers, Quests)
-        w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+2 shows Runs");
-        w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+3 shows Crafting");
+        // the pages by key (0.10.26; redesign 2026-11-14: as the pills sit, Farm, Craft, Runs, Timers)
+        w.PressForTest(Key.D2, ModifierKeys.Control); Check(w.PartForTest == "Crafting", "Ctrl+2 shows Crafting");
+        w.PressForTest(Key.D3, ModifierKeys.Control); Check(w.PartForTest == "Events", "Ctrl+3 shows Runs");
         w.PressForTest(Key.D4, ModifierKeys.Control); Check(w.PartForTest == "Timers" && w.TimersPage.Visibility == Visibility.Visible && w.TimersPage.Children.Count > 0, "Ctrl+4 shows the Timers page, drawn");
         w.PressForTest(Key.NumPad1, ModifierKeys.Control); Check(w.PartForTest == "Farming", "Ctrl+1 (the keypad's too) shows Farming");
         // no page names where its figures come from (Steven, 2026-11-14: only Options may); every page, the timers live and empty
@@ -794,11 +795,21 @@ public static partial class WpfApp
                 w.ShowPartForTest(page); DoEvents();
                 var shown = w.HeadButtons.Children.OfType<System.Windows.Controls.Button>().Where(b => b.Visibility == Visibility.Visible).ToList();
                 seen.Add(page + ": " + string.Join(", ", shown.Select(b => System.Windows.Automation.AutomationProperties.GetName(b))));
-                Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20),
-                    $"the header's round buttons on {page}: the site and Settings, each with a tooltip; Timers is a tab now ({seen[^1]})");
+                Check(shown.Count == 2 && shown.All(b => b.ToolTip is string t && t.Length > 20) && System.Windows.Automation.AutomationProperties.GetName(shown[0]) == "Overlays" && w.SiteText.IsVisible,
+                    $"the header's round buttons on {page}: Overlays and Settings, each with a tooltip; the site is a footer link ({seen[^1]})");
             }
-            var pills = w.OverlayPillsForTest();
-            Check(string.Join(",", pills.Select(p => p.Name)) == "Kinah,Timers", $"the header's Overlays group: Kinah, then Timers ({string.Join(", ", pills.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
+            // the Overlays button's menu: a switch per overlay, Kinah then Timers; a switch flips its overlay and the dot follows
+            var ovs = w.OverlaysForTest();
+            var entries = w.OverlayEntries();
+            Check(string.Join(",", ovs.Select(p => p.Name)) == "Kinah,Timers" && entries.Count == 2 && entries.All(e => e.On != null && e.Sub.Length > 0),
+                $"the header's Overlays menu: a switch each for Kinah, then Timers, with a line saying where each is set up ({string.Join(", ", ovs.Select(p => $"{p.Name} {(p.On ? "on" : "off")}"))})");
+            bool kinahWas = ovs[0].On;
+            entries[0].Do!(); DoEvents();
+            bool flipped = w.OverlaysForTest()[0].On != kinahWas;
+            bool dotOff = !w.OverlaysForTest().Any(o => o.On) ? !w.OverlaysDotForTest : w.OverlaysDotForTest;
+            w.OverlayEntries()[0].Do!(); DoEvents();
+            Check(flipped && dotOff && w.OverlaysForTest()[0].On == kinahWas && w.OverlaysDotForTest == w.OverlaysForTest().Any(o => o.On),
+                $"...its Kinah switch turns the panel {(kinahWas ? "off" : "on")} and back; the button's green dot shows while any overlay is on ({flipped} {dotOff})");
             Check(seen.Select(s => s[(s.IndexOf(':') + 1)..]).Distinct().Count() == 1, "...the same on every page");
         // the timers (0.10.85, Ui/MainWindow.Timers.cs): a Timers button in the header opens the window; the overlay never
         // takes focus, passes clicks through when asked, and Customize's switches land in the settings
@@ -830,7 +841,7 @@ public static partial class WpfApp
             tw.TimersSampleForShot("off");
             tw.ShowPartForTest("Farming"); DoEvents();
             tw.SetTimersOverlay(true, save: false); DoEvents();
-            Check(tw.OverlayPillsForTest().Any(p => p.Name == "Timers" && p.On), "...the header's Timers pill lights with the overlay on");
+            Check(tw.OverlaysForTest().Any(p => p.Name == "Timers" && p.On) && tw.OverlaysDotForTest, "...the header's Overlays menu shows Timers on, and the button its green dot");
             var ov = tw.TimersOverlayForTest;
             long ex0 = ov?.ExStyleForTest ?? 0;                 // click-through by default
             ov?.InteractiveForTest(true); DoEvents();
@@ -986,11 +997,11 @@ public static partial class WpfApp
             Check(so.ScoreText.Text == w.QuestScoreLine() && so.ScoreText.Text.Contains("pts"), $"Options > Sharing: Your score under the profile link card: \"{so.ScoreText.Text}\"");
             so.Close();
             Check(w.QuestCard(w.QuestsNowForTest[1]) is { } qc && qc.Child is System.Windows.Controls.StackPanel qb && qb.Children.Count >= 8, "a quest's hover card: band, bar, the horizon, Have, To go, pace, POINTS, Worth, Tier, unlocks");
-            // Options > General > Quests off: the tab and the rows go; on again brings them back
+            // Options > General > Quests off: the rows go (Quests has no tab: Next up's head opens it); on again brings them back
             var og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); Click(og.SaveBtn); DoEvents();
-            Check(w.QuestsTab.Visibility != Visibility.Visible && w.QuestsForTest().Rows == 0, "Options > General > Quests off: no tab, no quest rows on Next up");
+            Check(w.QuestsForTest().Rows == 0, "Options > General > Quests off: no quest rows on Next up");
             og = Open(); og.Go(OptionsWindow.Page.General); Flip(og.QuestsChk); Click(og.SaveBtn); DoEvents();
-            Check(w.QuestsTab.Visibility == Visibility.Visible && w.QuestsForTest().Rows > 0, "...and on again");
+            Check(w.QuestsForTest().Rows > 0, "...and on again");
             // the Crafting page's Next up carries the two materials' quests while the farming count is on
             w.ShowDemo("Crafting"); DoEvents();
             Check(w.CraftNextForTest().Split(',').Count(x => x == "quest") == 2, $"Crafting's Next up: the two materials' quest rows: {w.CraftNextForTest()}");
@@ -1313,7 +1324,7 @@ public static partial class WpfApp
         {
             var frozenWas = Motion.FrozenAt; bool stillWas = Motion.Still;
             static Rect Near(Rect r) => new(Math.Round(r.X, 3), Math.Round(r.Y, 3), Math.Round(r.Width, 3), Math.Round(r.Height, 3));
-            var tabs = new[] { w.FarmTab, w.EventsTab, w.CraftTab, w.TimersTab, w.QuestsTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
+            var tabs = new[] { w.FarmTab, w.CraftTab, w.EventsTab, w.TimersTab }.Where(t => t.Visibility == Visibility.Visible).ToList();
             var tabRow = (System.Windows.Controls.Panel)System.Windows.Media.VisualTreeHelper.GetParent(w.FarmTab);
             // where a tab's face draws its light, as the screen has it: the tab's box in its row, inside its one-pixel edge
             Rect Face(System.Windows.Controls.Button b)

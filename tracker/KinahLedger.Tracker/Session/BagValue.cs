@@ -3,43 +3,59 @@ using KinahLedger.Data;
 namespace KinahLedger.Session;
 
 /// <summary>
-/// What the character's inventory is worth (Packets/BagBook.cs, Steven, 2026-11-13: "bag value"): every item at the lowest
-/// Market price the tracker knows (the site's server board, the Market's own reads, a price typed in), a bound item at
-/// its tradable twin's price. Sellable is the tradable items alone, after the Market's cut. Items with no price are
-/// counted, never guessed. Items not on the item list (soul crystals, costumes, the game's own counters) are left out.
+/// What the character's bag (or a session's drops) is worth (Packets/BagBook.cs, Steven, 2026-11-13: "bag value"): the
+/// tradable items at the lowest Market price the tracker knows (the site's server board, the Market's own reads, a price
+/// typed in), and what that sells for after the Market's cut. Bound or unbound decides it, every time (Steven, 2026-11-14:
+/// "that matters in every instance ever in this game"): a bound item can't be sold, so it has no value here, as everywhere
+/// in the tracker; it is counted apart. The game's own messages say which: a bound item has its own item id ("Life Potion
+/// (Bound)" is not "Life Potion"), and the item list says the id isn't tradable. Items with no price are counted, never
+/// guessed. Items not on the item list (soul crystals, costumes, the game's own counters) are left out.
 /// </summary>
 public static class BagValue
 {
-    /// <summary>One kind of item held: how many, what they are worth, whether bound, and the change since the first snapshot.</summary>
+    /// <summary>One kind of item held: how many, its price (null for a bound item, or none known), its value, whether bound, the change since the first snapshot.</summary>
     public sealed record Line(long Id, string Name, long Count, long? Price, long Value, bool Bound, long Change);
 
     /// <summary>
-    /// The inventory's figures: its worth, the sellable part after the Market's cut, how many tradable kinds have no price,
-    /// the lines (most valuable first), and the worth's change since <paramref name="first"/> (null when there is none).
+    /// The figures: the tradable items' worth at the price, what that sells for after the Market's cut, how many tradable
+    /// kinds have no price, the bound kinds and items (no value), the lines (most valuable first, bound last), and the
+    /// tradable worth's change since <paramref name="first"/> (null when there is none).
     /// </summary>
-    public sealed record Worth(long Total, long Sellable, int Unpriced, int Kinds, List<Line> Lines, long? Change);
+    public sealed record Worth(long Total, long Sellable, int Unpriced, int Kinds, List<Line> Lines, long? Change, int BoundKinds = 0, long BoundCount = 0);
 
     public static Worth Of(IReadOnlyDictionary<long, long> now, IReadOnlyDictionary<long, long>? first, ItemDictionary items, Func<string, long?> price, double keeps)
     {
         var lines = new List<Line>();
-        long total = 0, sellable = 0, change = 0; int unpriced = 0;
+        long total = 0, change = 0, boundCount = 0; int unpriced = 0, boundKinds = 0;
         var ids = now.Keys.Union(first?.Keys ?? Enumerable.Empty<long>()).ToList();
         foreach (var id in ids)
         {
             if (items.Get(id) is not { } info) continue;
             long n = now.GetValueOrDefault(id), was = first?.GetValueOrDefault(id) ?? n;
-            bool bound = !info.Tradable || info.Name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase);
-            long? p = price(bound ? Unbound(info.Name) : info.Name);
+            bool bound = IsBound(info);
+            long? p = bound ? null : price(info.Name);   // bound: can't be sold, no value
             if (p is long pv) change += (n - was) * pv;
             if (n <= 0) continue;
             long value = p is long v ? v * n : 0;
             total += value;
-            if (!bound) { if (p == null) unpriced++; else sellable += (long)Math.Round(value * keeps); }
+            if (bound) { boundKinds++; boundCount += n; }
+            else if (p == null) unpriced++;
             lines.Add(new Line(id, info.Name, n, p, value, bound, n - was));
         }
-        lines = lines.OrderByDescending(l => l.Value).ThenByDescending(l => l.Count).ToList();
-        return new Worth(total, sellable, unpriced, lines.Count, lines, first == null ? null : change);
+        lines = lines.OrderBy(l => l.Bound).ThenByDescending(l => l.Value).ThenByDescending(l => l.Count).ToList();
+        return new Worth(total, (long)Math.Round(total * keeps), unpriced, lines.Count, lines, first == null ? null : change, boundKinds, boundCount);
     }
 
-    static string Unbound(string n) => System.Text.RegularExpressions.Regex.Replace(n, @"\s*\(bound\)\s*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+    /// <summary>
+    /// A worn piece's enhancement level as the game's window says it ("+10"), "" when none is said: the level is confirmed for
+    /// +1 to +12 against the game's window (2026-11-13); over +15 (the weapon's 18 there) the game shows a badge of its own.
+    /// </summary>
+    public static string LevelText(int level) => level is >= 1 and <= MaxShownLevel ? $"+{level}" : "";
+    public const int MaxShownLevel = 15;
+
+    /// <summary>Whether a worn piece has a picture: only an item the item list knows has one (never a made-up icon).</summary>
+    public static bool HasIcon(ItemDictionary items, long itemId) => items.Get(itemId) != null;
+
+    /// <summary>Bound: its own id says so (the item list's "(Bound)" name, or the id not tradable).</summary>
+    public static bool IsBound(ItemInfo info) => !info.Tradable || info.Name.EndsWith("(Bound)", StringComparison.OrdinalIgnoreCase);
 }
