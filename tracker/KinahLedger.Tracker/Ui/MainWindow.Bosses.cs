@@ -287,6 +287,20 @@ public partial class MainWindow
                 if (o.Content is FrameworkElement root) Save(root, $"timers-{state}{sfx}.png", ground);
                 o.Close();
             }
+            // Move overlay: the strip outlined to be placed, with the next watched timers standing in (none is due yet), and
+            // with the sample when nothing is watched at all
+            foreach (var (state, none) in new[] { ("overlay-placing", false), ("overlay-placing-sample", true) })
+            {
+                _timerPrefs = TimerPrefs.Defaults();
+                foreach (var i in TimerItems(now)) _timerPrefs.SetWatched(i.Key, !none);
+                var o = new TimersOverlay(_timerPrefs) { Left = -12000, Top = -12000 };
+                o.StartPlacing(PlacementSample(now), now);
+                o.Left = -12000; o.Top = -12000;   // never on a screen in a render
+                o.UpdateLayout();
+                Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
+                if (o.Content is FrameworkElement root) Save(root, $"timers-{state}{sfx}.png", ground);
+                o.Close();
+            }
         }
         _bossesForShot = null; _eventsForShot = null; _eventRegionForShot = null; _timerPrefs = keepPrefs;
     }
