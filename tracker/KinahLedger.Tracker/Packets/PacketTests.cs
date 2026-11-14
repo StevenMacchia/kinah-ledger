@@ -550,7 +550,7 @@ public static class PacketTests
         var names = new Dictionary<long, string>();
         var dmg = new Dictionary<long, Dictionary<long, long>>();
         var mine = new Dictionary<long, Dictionary<int, (long Total, int Hits)>>();
-        string? boss = null;
+        string? boss = null; long open = 0;   // the pull under way: a wave's damage lands on many targets
         foreach (var e in ev)
             switch (e)
             {
@@ -560,10 +560,11 @@ public static class PacketTests
                     foreach (var m in g.Members) names[m.Id] = m.Name;
                     Console.WriteLine($"{Local(g.At)}  group: {string.Join(", ", g.Members.Select(m => $"{m.Name}{(m.You ? " (you)" : "")} {(m.Class.Length > 0 ? m.Class + " " : "")}item level {m.ItemLevel:N0}, Combat Power {m.CombatPower:N0}"))}");
                     break;
-                case BossEngaged b: boss = b.Boss; dmg[b.BossId] = new(); mine[b.BossId] = new(); Console.WriteLine($"{Local(b.At)}  pull: {b.Boss}"); break;
+                case BossEngaged b: boss = b.Boss; open = b.BossId; dmg[b.BossId] = new(); mine[b.BossId] = new(); Console.WriteLine($"{Local(b.At)}  pull: {b.Boss}"); break;
                 case DamageDealt d:
-                    if (dmg.TryGetValue(d.TargetId, out var by)) by[d.SourceId] = by.GetValueOrDefault(d.SourceId) + d.Amount;
-                    if (d.SourceIsYou && mine.TryGetValue(d.TargetId, out var sk)) { var w = sk.GetValueOrDefault(d.Skill); sk[d.Skill] = (w.Total + d.Amount, w.Hits + d.Hits); }
+                    long pull = dmg.ContainsKey(d.TargetId) ? d.TargetId : open;
+                    if (dmg.TryGetValue(pull, out var by)) by[d.SourceId] = by.GetValueOrDefault(d.SourceId) + d.Amount;
+                    if (d.SourceIsYou && mine.TryGetValue(pull, out var sk)) { var w = sk.GetValueOrDefault(d.Skill); sk[d.Skill] = (w.Total + d.Amount, w.Hits + d.Hits); }
                     break;
                 case BossEnded x:
                     var t = dmg.GetValueOrDefault(x.BossId) ?? new();
