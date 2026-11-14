@@ -36,9 +36,8 @@ docs/      notes on data sources and the pipeline
 
 ## Tracker status
 
-The tracker only ever reads the screen. It never captures network traffic, reads game memory, modifies
-the client or sends input to the game; everything runs on the player's PC, and what leaves it is listed
-below. (An earlier packet-capture experiment was removed in 0.6.0 so that this stays true in full.)
+The tracker never reads or changes the game's memory, never modifies the client and never sends input to
+the game; everything runs on the player's PC, and what leaves it is listed below.
 
 Since 0.6.2 it reads only the parts of the game that nothing covers. While another window sits over the chat
 (a browser, a chat app, the tracker's own window) or the game is minimized, reading pauses, the window says
