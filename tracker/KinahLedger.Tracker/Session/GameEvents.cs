@@ -16,6 +16,12 @@ public abstract record GameEvent(DateTime Time)
 public sealed record ItemAcquired(DateTime Time, long ItemId, int Count, bool Bound) : GameEvent(Time);
 public sealed record KinahChanged(DateTime Time, long Delta, bool Bound) : GameEvent(Time);
 public sealed record MobKilled(DateTime Time, long MobId) : GameEvent(Time);
+/// <summary>
+/// A kill or death of the player's as the game's own messages tell it (Packets/FightTally.cs): a kill of a player
+/// (<paramref name="Player"/>) or of a monster, or the player's death (<paramref name="Death"/>; Player then means a
+/// player killed them). <paramref name="Name"/> is the other player's, when the game named one.
+/// </summary>
+public sealed record FightCounted(DateTime Time, bool Player, bool Death, string Name) : GameEvent(Time);
 /// <summary>Points-type pickups (Soul Points, Abyss Points). Guaranteed per kill, so they mark kills and never count as drops.</summary>
 /// <param name="Enemy">For Soul Points: the kind of enemy the line names, as read ("Obtained 1 Drakan Probe Soul Points."). One line per kill, so it says which enemy died.</param>
 public sealed record CurrencyGained(DateTime Time, string Name, long Amount, string Enemy = "") : GameEvent(Time);

@@ -50,6 +50,10 @@ public interface IGameDecoder : IDisposable
     ItemChange? NextItem() => null;
     /// <summary>The next field boss from the world map's boss list, or null (always null for a decoder without it).</summary>
     BossSighting? NextBoss() => null;
+    /// <summary>True when this decoder reads the player's kills and deaths too (klnet.dll's interface version 3).</summary>
+    bool ReadsFights => false;
+    /// <summary>The next fight event found, or null (always null for a decoder that reads no fights).</summary>
+    FightEvent? NextFight() => null;
     (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats { get; }
 }
 
@@ -64,6 +68,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         public float X, Y, Z; public int Reserved;
         public fixed byte Name[48]; public fixed byte Place[48]; public fixed byte Region[24];
     }
+    [StructLayout(LayoutKind.Sequential)] struct KlEvent { public long AtUtcTicks; public int Kind; public int Flags; public uint OwnId; public uint VictimId; public uint KillerId; public uint MonsterId; public long Delta; public long Total; public fixed byte VictimName[32]; public fixed byte KillerName[32]; }
     [StructLayout(LayoutKind.Sequential)] struct KlStats { public long Messages; public long Bundles; public int Resyncs; public int CurrencyMessages; }
 
     [DllImport("klnet", EntryPoint = "kl_abi")] static extern int Abi();
@@ -76,6 +81,7 @@ public sealed unsafe class NativeDecoder : IGameDecoder
     [DllImport("klnet", EntryPoint = "kl_stats")] static extern int StatsN(nint h, KlStats* stats);
     [DllImport("klnet", EntryPoint = "kl_next_item")] static extern int NextItemN(nint h, KlItem* item);
     [DllImport("klnet", EntryPoint = "kl_next_boss")] static extern int NextBossN(nint h, KlBoss* boss);
+    [DllImport("klnet", EntryPoint = "kl_next_event")] static extern int NextEventN(nint h, KlEvent* ev);
 
     static int? _abi;
     /// <summary>klnet.dll's interface version: 0 when this build has none, 1 for currencies only, 2 with item changes, 5 with the field boss list; later versions only add exports.</summary>
@@ -138,6 +144,16 @@ public sealed unsafe class NativeDecoder : IGameDecoder
         static DateTime? Ms(long ms) => ms > 0 && ms < 4_102_444_800_000 ? DateTime.UnixEpoch.AddMilliseconds(ms) : null;
         return new BossSighting(new DateTime(b.AtUtcTicks, DateTimeKind.Utc), Ms(b.ServerUtcMs), $"{b.MapId}:{b.BossId}",
             Str(b.Name, 48), Str(b.Place, 48), Str(b.Region, 24), (BossSighting.Kind)b.State, Ms(b.TimeUtcMs), (b.Flags & 1) != 0);
+    }
+    public bool ReadsFights => Version >= 3;
+    public FightEvent? NextFight()
+    {
+        if (_h == 0 || Version < 3) return null;
+        KlEvent e;
+        if (NextEventN(_h, &e) != 1 || e.Kind is < 1 or > 2) return null;
+        static string Text(byte* b) { int n = 0; while (n < 32 && b[n] != 0) n++; return System.Text.Encoding.UTF8.GetString(b, n); }
+        return new FightEvent(new DateTime(e.AtUtcTicks, DateTimeKind.Utc), (FightKind)e.Kind, (FightFlags)e.Flags, e.VictimId, e.KillerId, e.MonsterId,
+            e.Delta, e.Total, Text(e.VictimName), Text(e.KillerName));
     }
     public (long Messages, long Bundles, int Resyncs, int CurrencyMessages) Stats
     {
