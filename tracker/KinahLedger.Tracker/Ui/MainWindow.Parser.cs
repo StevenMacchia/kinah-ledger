@@ -13,12 +13,14 @@ using KinahLedger.Session;
 namespace KinahLedger.Ui;
 
 /// <summary>
-/// The Parser page (Steven, 2026-11-13: "It should have its own tab for parser"): boss fights in a Transcendence, an
-/// Expedition or a Sanctuary, one per boss (Parser/BossParser.cs). On top, the fight under way with its clock and the group
-/// (name, class, Combat Power, item level; damage and DPS only when the game's messages give them, never made up) or, with
-/// no fight, where you are and what starts one. Under it, the fights kept on this PC for the character playing, filtered by
-/// kind and boss; a click opens one with its group, its timings and the kills near you. The overlay over the game
-/// (Ui/ParserOverlay.cs) is switched here and with its shortcut.
+/// The Parser page (Steven, 2026-11-13: "It should have its own tab for parser", then "allow users to select just boss
+/// only for parser or full run etc, give options"). Its mode says what is kept (Parser/BossParser.cs): Bosses only (each
+/// boss pull in a Transcendence, an Expedition or a Sanctuary), Full run (each run of those, entering to leaving, every boss
+/// a split) or Every fight (anywhere, the first hit or kill to a pause), each named on the page with what it counts. On
+/// top, the record under way with its clock and the group (name, class, Combat Power, item level; damage and DPS only when
+/// the game's messages give them, never made up) or, with none, where you are and what starts one. Under it, the records
+/// kept on this PC for the character playing, by mode, kind and boss or instance; a click opens one. The overlay over the
+/// game (Ui/ParserOverlay.cs) is switched here, with its shortcut, and has the mode on its own menu.
 /// </summary>
 public partial class MainWindow
 {
@@ -43,6 +45,7 @@ public partial class MainWindow
     void InitParser(bool watch)
     {
         _parserPrefs = watch ? ParserPrefs.Load() : new ParserPrefs();
+        if (watch) TrackerSession.ParserMode = ParserModeNow;   // a session made from now on starts in it
         ParserTab.Click += (_, _) => ShowPart("Parser");
         if (!watch) return;
         SourceInitialized += (_, _) =>
@@ -82,6 +85,19 @@ public partial class MainWindow
         RedrawParserPage();
     }
 
+    /// <summary>
+    /// The Parser overlay's switches for the window's header Overlays group and Options › Overlays (the redesign's shell):
+    /// on/off, click-through and a reset of the spot it was dragged to, all kept in parser.json.
+    /// </summary>
+    internal bool ParserOverlayOn { get => _parserPrefs.Overlay; set { if (value != _parserPrefs.Overlay) SetParserOverlay(value); } }
+    internal bool ParserOverlayClickThrough { get => _parserPrefs.ClickThrough; set { if (value != _parserPrefs.ClickThrough) SetParserClickThrough(value); } }
+    internal void ResetParserOverlayPosition()
+    {
+        _parserPrefs.Left = null; _parserPrefs.Top = null;
+        if (!_demo) _parserPrefs.Save();
+        _parserOverlay?.Place(null, null, _watcher.GameRect);
+    }
+
     void SetParserClickThrough(bool on)
     {
         _parserPrefs.ClickThrough = on;
@@ -90,6 +106,29 @@ public partial class MainWindow
         RedrawParserPage();
     }
 
+    /// <summary>What the Parser keeps now (parser.json).</summary>
+    ParserMode ParserModeNow => BossParser.ModeOf(_parserPrefs.Mode);
+    /// <summary>Which records the list shows: its own pick, else the mode's.</summary>
+    ParserMode ParserListMode => _parserPrefs.ListMode.Length > 0 ? BossParser.ModeOf(_parserPrefs.ListMode) : ParserModeNow;
+
+    /// <summary>The mode picked (the page or the overlay's menu): remembered, the session's parser switched, the list follows it.</summary>
+    void SetParserMode(ParserMode mode)
+    {
+        if (mode == ParserModeNow && _parserPrefs.ListMode == BossParser.ModeKey(mode)) return;
+        _parserPrefs.Mode = BossParser.ModeKey(mode);
+        _parserPrefs.ListMode = BossParser.ModeKey(mode);
+        _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; _parserAllRows = false; _parserOpen = null;
+        if (!_demo) _parserPrefs.Save();
+        TrackerSession.ParserMode = mode;
+        try { ParserFights?.SetMode(mode, DateTime.UtcNow); } catch (Exception ex) { CrashLog.Write("parser mode", ex); }
+        if (_demo && _parserDemoState.Length > 0) { ShowParserDemo(mode switch { ParserMode.Run => "run", ParserMode.Fights => "fight", _ => "live" }); return; }
+        Say($"Parser: {BossParser.Name(mode)}. {BossParser.Counts(mode)}", "Faint");
+        ParserOverlayTick();
+        RedrawParserPage();
+    }
+
+    static string Noun(ParserMode m, int n = 1) => m switch { ParserMode.Run => n == 1 ? "run" : "runs", ParserMode.Fights => n == 1 ? "fight" : "fights", _ => n == 1 ? "boss pull" : "boss pulls" };
+
     // ---- what the page shows ----
 
     BossParser? ParserFights => _watcher.Chat?.Fights;
@@ -97,12 +136,15 @@ public partial class MainWindow
     Encounter? ParserLive => _demo ? _parserDemoLive : ParserFights?.Live;
     (ContentKind Kind, string Instance) ParserWhere => _demo ? _parserDemoWhere : ParserFights?.Where ?? (ContentKind.Other, "");
     List<Encounter> ParserPast() => _demo ? _parserDemoPast ?? new() : TrackerSession.FightStore.All();
+    /// <summary>The session's parser in the mode the page says (a session made before the pick, or after a restart of the reader).</summary>
+    void ParserModeSync() { if (!_demo && ParserFights is { } f && f.Mode != ParserModeNow) f.SetMode(ParserModeNow, DateTime.UtcNow); }
 
     /// <summary>The window's tick: the page while it shows, and the overlay always.</summary>
     void ParserTick()
     {
         try
         {
+            ParserModeSync();
             if (_part == "Parser") FillParserPage();
             ParserOverlayTick();
         }
@@ -136,13 +178,18 @@ public partial class MainWindow
         {
             _parserOverlay = new ParserOverlay { HotkeyText = Hotkey.Parse(_parserPrefs.Hotkey)?.ToString() ?? "" };
             _parserOverlay.Dropped += (x, y) => { _parserPrefs.Left = x; _parserPrefs.Top = y; _parserPrefs.Save(); };
+            _parserOverlay.ModePicked += SetParserMode;
+            _parserOverlay.HideAsked += () => SetParserOverlay(false);
+            _parserOverlay.ClickThroughAsked += () => SetParserClickThrough(true);
             _parserOverlay.SetClickThrough(_parserPrefs.ClickThrough);
+            _parserOverlay.Mode = ParserModeNow;
             _parserOverlay.Draw(show!, now);
             _parserOverlay.ShowWanted(true);
             _parserOverlay.SetClickThrough(_parserPrefs.ClickThrough);
             _parserOverlay.Place(_parserPrefs.Left, _parserPrefs.Top, _watcher.GameRect);
             return;
         }
+        _parserOverlay.Mode = ParserModeNow;
         _parserOverlay.Draw(show!, now);
         _parserOverlay.ShowWanted(true);
     }
@@ -156,7 +203,7 @@ public partial class MainWindow
         var live = ParserLive;
         var past = ParserPast();
         var where = ParserWhere;
-        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}|{Skins.Current}|{ParserStatus(where).Line}";
+        var sig = $"{live?.Id}:{(int)(live?.Duration(now).TotalSeconds ?? 0)}:{live?.Roster.Sum(f => f.Damage)}:{live?.Roster.Count}:{live?.Kills.Count}:{live?.Partial}:{live?.BossHp}|{past.Count}:{past.LastOrDefault()?.Id}|{where}|{_parserOpen}|{_parserAllRows}|{_parserPrefs.KindFilter}|{_parserPrefs.BossFilter}|{_parserPrefs.Overlay}:{_parserPrefs.ClickThrough}|{Skins.Current}|{ParserStatus(where).Line}|{_parserPrefs.Mode}:{_parserPrefs.ListMode}|{live?.Splits.Count}:{live?.YourKills}:{live?.YourDeaths}:{live?.Boss}";
         if (!Changed("parserpage", sig)) return;
 
         ParserPage.Children.Clear();
@@ -168,24 +215,41 @@ public partial class MainWindow
         ParserPage.Children.Add(ParserHistory(past, now));
     }
 
-    /// <summary>The page's head: the title and its one line, the overlay's switches on the right.</summary>
+    /// <summary>The page's head: the title and the overlay's switches, then the mode (Bosses only, Full run, Every fight) and what it counts.</summary>
     FrameworkElement ParserHead(List<Encounter> past)
     {
-        var g = new Grid { Margin = new Thickness(2, 0, 0, 10) };
+        var box = new StackPanel { Margin = new Thickness(2, 0, 0, 10) };
+        var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom };
-        left.Children.Add(PT("Parser", 20, FontWeights.SemiBold, "Ink", display: true));
-        left.Children.Add(Margin(PT("Boss fights in Transcendence, Expeditions and Sanctuaries.", 12, FontWeights.Medium, "Muted", trim: true), 0, 3, 0, 0));
-        g.Children.Add(left);
-        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(12, 0, 0, 0) };
+        g.Children.Add(PT("Parser", 20, FontWeights.SemiBold, "Ink", display: true));
+        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         right.Children.Add(ParserSwitch("Overlay", _parserPrefs.Overlay, SetParserOverlay,
-            $"The fight over the game: the boss, the clock and the group. It shows during boss fights only and never takes the game's focus.{(Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? $" Shortcut: {k}." : "")}", "Fight overlay"));
+            $"The record under way over the game: the boss or the run, the clock and the group. It shows while one is under way and never takes the game's focus; right-click it for the mode.{(Hotkey.Parse(_parserPrefs.Hotkey) is { } k ? $" Shortcut: {k}." : "")}", "Fight overlay"));
         right.Children.Add(Margin(ParserSwitch("Click-through", _parserPrefs.ClickThrough, SetParserClickThrough,
             "On: clicks go through the overlay to the game. Off: drag the overlay where you want it; it stays there.", "Overlay click-through"), 14, 0, 0, 0));
         Grid.SetColumn(right, 1);
         g.Children.Add(right);
-        return g;
+        box.Children.Add(g);
+        // the mode: three choices, and one line on what the one picked counts
+        var modes = new StackPanel { Orientation = Orientation.Horizontal };
+        var seg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = modes, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) };
+        seg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); seg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
+        AutomationProperties.SetName(seg, "What the Parser keeps");
+        foreach (var md in new[] { ParserMode.Bosses, ParserMode.Run, ParserMode.Fights })
+        {
+            var b = new Button { Content = BossParser.Name(md), Height = 26, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(modes.Children.Count > 0 ? 2 : 0, 0, 0, 0), ToolTip = BossParser.Counts(md) };
+            b.SetResourceReference(StyleProperty, md == ParserModeNow ? "SegOn" : "SegOff");
+            AutomationProperties.SetName(b, "Parser mode: " + BossParser.Name(md));
+            var pick = md;
+            b.Click += (_, _) => SetParserMode(pick);
+            modes.Children.Add(b);
+        }
+        box.Children.Add(seg);
+        var counts = PT(BossParser.Counts(ParserModeNow), 12, FontWeights.Medium, "Muted");
+        counts.TextWrapping = TextWrapping.Wrap; counts.Margin = new Thickness(0, 6, 0, 0);
+        box.Children.Add(counts);
+        return box;
     }
 
     FrameworkElement ParserSwitch(string label, bool on, Action<bool> set, string tip, string name)
@@ -210,11 +274,85 @@ public partial class MainWindow
         var card = PCard(hero: true);
         var body = new StackPanel();
         body.Children.Add(FightHead(e, now, live: true));
-        if (e.BossHpLeft is { } left) body.Children.Add(Margin(BossHpBar(e, left), 0, 10, 0, 0));
+        if (e.ModeKind == ParserMode.Run)
+        {
+            // the pull under way inside the run, with its boss's HP; then the splits so far
+            if (e.Boss.Length > 0) body.Children.Add(Margin(PullNow(e, now), 0, 10, 0, 0));
+            if (e.Splits.Count > 0) body.Children.Add(Margin(SplitsTable(e, live: true), 0, 10, 0, 0));
+        }
+        else if (e.BossHpLeft is { } left) body.Children.Add(Margin(BossHpBar(e, left), 0, 10, 0, 0));
         if (FightChips(e, now, live: true) is { } chips) body.Children.Add(Margin(chips, 0, 10, 0, 0));
-        body.Children.Add(Margin(RosterTable(e, now, detail: false), 0, 10, 0, 0));
+        if (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) body.Children.Add(Margin(RosterTable(e, now, detail: false), 0, 10, 0, 0));
         card.Child = body;
         return card;
+    }
+
+    /// <summary>A run's pull under way: "Now" and the boss, its clock, its HP bar.</summary>
+    FrameworkElement PullNow(Encounter e, DateTime now)
+    {
+        var box = new Border { CornerRadius = new CornerRadius(9), Padding = new Thickness(10, 7, 10, 8), BorderThickness = new Thickness(1) };
+        box.SetResourceReference(Border.BackgroundProperty, "GoldTint"); box.SetResourceReference(Border.BorderBrushProperty, "GoldLine");
+        var sp = new StackPanel();
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var l = new StackPanel { Orientation = Orientation.Horizontal };
+        l.Children.Add(PT("Now", 11.5, FontWeights.SemiBold, "Gold"));
+        l.Children.Add(Margin(PT(e.Boss, 13.5, FontWeights.Bold, "Ink", trim: true), 8, 0, 0, 0));
+        g.Children.Add(l);
+        var pull = e.Splits.LastOrDefault(x => x.Outcome == "");
+        var clock = PT(pull != null ? BossParser.Clock(TimeSpan.FromSeconds(pull.Seconds)) : "", 13.5, FontWeights.Bold, "Gold");
+        Grid.SetColumn(clock, 1); g.Children.Add(clock);
+        sp.Children.Add(g);
+        if (e.BossHpLeft is { } left) sp.Children.Add(Margin(BossHpBar(e, left), 0, 6, 0, 0));
+        box.Child = sp;
+        return box;
+    }
+
+    /// <summary>A run's boss pulls: the boss (final marked), when into the run, how long, how it ended, the group's DPS.</summary>
+    FrameworkElement SplitsTable(Encounter e, bool live)
+    {
+        var host = new StackPanel();
+        bool dps = e.Splits.Any(x => x.Dps > 0);
+        Grid Row()
+        {
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(104) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(dps ? 66 : 0) });
+            return g;
+        }
+        void Cell(Grid g, int col, FrameworkElement el) { Grid.SetColumn(el, col); g.Children.Add(el); }
+        var head = Row(); head.Margin = new Thickness(0, 0, 0, 3);
+        Cell(head, 1, PT("Boss", 11, FontWeights.SemiBold, "Faint"));
+        Cell(head, 2, Right(PT("At", 11, FontWeights.SemiBold, "Faint")));
+        Cell(head, 3, Right(PT("Time", 11, FontWeights.SemiBold, "Faint")));
+        if (dps) Cell(head, 5, Right(PT("Group DPS", 11, FontWeights.SemiBold, "Faint")));
+        host.Children.Add(head);
+        int i = 0;
+        foreach (var x in e.Splits)
+        {
+            var row = Row();
+            var rule = new Border { BorderThickness = new Thickness(0, i == 0 ? 0 : 1, 0, 0), Padding = new Thickness(0, 4, 0, 4), Child = row };
+            rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
+            Cell(row, 0, PT((++i).ToString(CultureInfo.InvariantCulture), 11.5, FontWeights.SemiBold, "Faint"));
+            var nm = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 0) };
+            nm.Children.Add(PT(x.Boss, 12.5, FontWeights.SemiBold, x.Outcome == "" ? "Gold" : "Ink", trim: true));
+            if (x.Final) nm.Children.Add(Margin(PT("final", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
+            if (x.Partial) nm.Children.Add(Margin(PT("partial", 11, FontWeights.SemiBold, "Warn"), 6, 1, 0, 0));
+            Cell(row, 1, nm);
+            Cell(row, 2, Right(PT(BossParser.Clock(x.Start - e.Start), 12.5, FontWeights.Medium, "Muted")));
+            Cell(row, 3, Right(PT(BossParser.Clock(TimeSpan.FromSeconds(x.Seconds)), 12.5, FontWeights.SemiBold, "Ink")));
+            var tone = x.Outcome switch { "kill" => ("Killed", "Mint", "MintTint"), "wipe" => ("Wiped", "Coral", "CoralTint"), "left" => ("Left", "Muted", "ChipBg"), _ => ("In progress", "Gold", "GoldTint") };
+            var chip = PChip(tone.Item1, tone.Item2, tone.Item3, dot: x.Outcome == ""); chip.Margin = new Thickness(10, 0, 0, 0);
+            Cell(row, 4, chip);
+            if (dps) Cell(row, 5, Right(PT(x.Dps > 0 ? Amounts.Short(x.Dps) : "–", 12.5, FontWeights.SemiBold, "Text2")));
+            host.Children.Add(rule);
+        }
+        return host;
     }
 
     /// <summary>The fight's head: the boss's art, its name, the instance and kind under it; the clock and the outcome on the right.</summary>
@@ -224,25 +362,29 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var art = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 12, 0), Child = GameArt.Element("boss", 34) };
+        var artName = e.ModeKind == ParserMode.Run ? "dungeon" : e.ModeKind == ParserMode.Fights && e.Boss.Length == 0 ? (e.Kind == "Abyss" ? "rift" : "medal") : "boss";
+        var art = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 12, 0), Child = GameArt.Element(artName, 34) };
         art.SetResourceReference(Border.BackgroundProperty, "SegGroup");
         art.SetResourceReference(Border.BorderBrushProperty, live ? "GoldLine" : "CardHair");
         art.BorderThickness = new Thickness(1);
         g.Children.Add(art);
         var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var name = PT(e.Boss, live ? 22 : 19, FontWeights.SemiBold, "Ink", trim: true, display: true);
-        AutomationProperties.SetName(name, "Boss " + e.Boss);
+        var name = PT(e.Title, live ? 22 : 19, FontWeights.SemiBold, "Ink", trim: true, display: true);
+        AutomationProperties.SetName(name, $"{(e.ModeKind == ParserMode.Run ? "Run" : e.ModeKind == ParserMode.Fights ? "Fight" : "Boss")} {e.Title}");
         mid.Children.Add(name);
         var sub = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
-        sub.Children.Add(PT(BossBook.Strip(e.Instance), 12, FontWeights.Medium, "Muted", trim: true));
-        sub.Children.Add(PT("  ·  " + KindLabel(e), 12, FontWeights.Medium, "Faint"));
-        if (e.FinalBoss) sub.Children.Add(PT("  ·  final boss", 12, FontWeights.Medium, "Faint"));
+        var place = BossBook.Strip(e.Instance);
+        bool showPlace = place.Length > 0 && place != e.Title && place != e.Kind;
+        if (showPlace) sub.Children.Add(PT(place, 12, FontWeights.Medium, "Muted", trim: true));
+        sub.Children.Add(PT((showPlace ? "  ·  " : "") + KindLabel(e), 12, FontWeights.Medium, showPlace ? "Faint" : "Muted"));
+        if (e.ModeKind != ParserMode.Run && e.FinalBoss) sub.Children.Add(PT("  ·  final boss", 12, FontWeights.Medium, "Faint"));
+        if (e.ModeKind == ParserMode.Run) sub.Children.Add(PT($"  ·  {e.Splits.Count(x => x.Outcome == "kill")} of {e.Splits.Select(x => x.Boss).Distinct().Count()} bosses down", 12, FontWeights.Medium, "Faint"));
         mid.Children.Add(sub);
         Grid.SetColumn(mid, 1); g.Children.Add(mid);
         var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(12, 0, 0, 0) };
         var clock = PT(BossParser.Clock(e.Duration(now)), live ? 30 : 24, FontWeights.Bold, live ? "Gold" : "Ink", display: true);
         clock.HorizontalAlignment = HorizontalAlignment.Right;
-        AutomationProperties.SetName(clock, "Fight time " + BossParser.Clock(e.Duration(now)));
+        AutomationProperties.SetName(clock, "Time " + BossParser.Clock(e.Duration(now)));
         right.Children.Add(clock);
         var chipRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 2, 0, 0) };
         chipRow.Children.Add(OutcomeChip(e));
@@ -259,10 +401,10 @@ public partial class MainWindow
         return stage.Length > 0 ? $"{e.Kind} {stage}" : e.Kind;
     }
 
-    /// <summary>"Killed" in mint, "Wiped" in coral, "Left" quiet, "In progress" in gold with a dot.</summary>
+    /// <summary>"Killed", "Cleared" or "3 kills" in mint, "Wiped" or "Died" in coral, "Left" or "Ended" quiet, "In progress" in gold with a dot.</summary>
     FrameworkElement OutcomeChip(Encounter e)
     {
-        var (ink, tint) = e.Outcome switch { "kill" => ("Mint", "MintTint"), "wipe" => ("Coral", "CoralTint"), "left" => ("Muted", "ChipBg"), _ => ("Gold", "GoldTint") };
+        var (ink, tint) = e.Tone switch { "good" => ("Mint", "MintTint"), "bad" => ("Coral", "CoralTint"), "quiet" => ("Muted", "ChipBg"), _ => ("Gold", "GoldTint") };
         return PChip(e.OutcomeLabel, ink, tint, dot: e.Live);
     }
 
@@ -273,16 +415,19 @@ public partial class MainWindow
         void Add(FrameworkElement c) { c.Margin = new Thickness(0, 0, 6, 4); wp.Children.Add(c); }
         if (e.HasDamage)
         {
-            Add(PStat("Group DPS", Amounts.Short(e.GroupDps(now)), "Ink"));
+            var gd = PStat("Group DPS", Amounts.Short(e.GroupDps(now)), "Ink", e.ModeKind == ParserMode.Run ? "boss pulls" : "");
+            if (e.ModeKind == ParserMode.Run) gd.ToolTip = "Over the run's boss pulls: the damage the game gives is the bosses'.";
+            Add(gd);
             if (e.BossDamage > 0 && e.BossMaxHp <= 0) Add(PStat("Boss damage", Amounts.Short(e.BossDamage), "Ink"));
             if (e.BossMaxHp > 0 && !live) Add(PStat("Boss HP", Amounts.Short(e.BossMaxHp), "Ink", e.Outcome == "kill" ? "" : e.BossHpLeft is { } l ? $"{l:P0} left" : ""));
         }
-        int adds = e.Kills.Count(k => !k.Boss);
+        if (e.YourKills > 0) Add(PStat("Your kills", e.YourKills.ToString("N0", CultureInfo.InvariantCulture), "Ink", e.PlayerKills > 0 ? $"{e.PlayerKills} player{(e.PlayerKills == 1 ? "" : "s")}" : ""));
+        int adds = e.Kills.Count(k => !k.Boss && !k.Yours);
         if (adds > 0) Add(PStat("Kills near you", adds.ToString("N0", CultureInfo.InvariantCulture), "Ink"));
-        int deaths = e.Roster.Sum(f => f.Deaths);
+        int deaths = Math.Max(e.Roster.Sum(f => f.Deaths), e.YourDeaths);
         if (deaths > 0) Add(PStat("Deaths", deaths.ToString("N0", CultureInfo.InvariantCulture), "Coral"));
         if (!e.HasDamage && e.Members.Any(f => f.CombatPower > 0)) Add(PStat("Group CP", AvgCp(e), "Ink", "average"));
-        if (e.Partial) { var c = PChip("Partial", "Warn", "GoldTint"); c.ToolTip = "Some of this fight wasn't seen: " + string.Join("; ", e.PartialWhy) + ". It is still one fight; its damage and kills may be short."; Add(c); }
+        if (e.Partial) { var c = PChip("Partial", "Warn", "GoldTint"); c.ToolTip = $"Some of this {Noun(e.ModeKind)} wasn't seen: {string.Join("; ", e.PartialWhy)}. It is still one {Noun(e.ModeKind)}; its damage and kills may be short."; Add(c); }
         return wp.Children.Count > 0 ? wp : null;
     }
 
@@ -293,22 +438,25 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The group: class mark, name (you marked), class, Combat Power, item level; with damage from the game, damage, DPS
-    /// and a share bar under the name; in the detail view, deaths too. Unknown figures say "–", never 0.
+    /// The group (Steven, 2026-11-14: "thicker bars that act as a background for the character ... show the icon for what
+    /// class they are in the game ... Color coordinate it"): each row on a meter bar in its class's colour (Ui/ClassArt.cs),
+    /// as long as its share of the top row's damage (its Combat Power before any damage), the class's own emblem at its left,
+    /// then name (you marked), class, Combat Power, item level; with damage, damage and DPS; in the detail view, deaths too.
+    /// Unknown figures say "–", never 0.
     /// </summary>
     FrameworkElement RosterTable(Encounter e, DateTime now, bool detail)
     {
         var host = new StackPanel();
         if (e.Roster.Count == 0)
         {
-            host.Children.Add(PT("The group wasn't seen for this fight.", 12, FontWeights.Medium, "Faint"));
+            host.Children.Add(PT("The group wasn't seen.", 12, FontWeights.Medium, "Faint"));
             return host;
         }
         bool dmg = e.HasDamage;
         bool deaths = detail && e.Roster.Any(f => f.Deaths > 0);
         // before the group list comes (damage only), the rows are who hit the boss: no class, CP or item level to show
         bool gear = e.Members.Any(f => f.CombatPower > 0 || f.ItemLevel > 0 || f.Class.Length > 0);
-        var cols = new List<(double Width, string Head, bool Right)> { (28, "", false), (0, "Member", false), (gear ? 92 : 0.01, gear ? "Class" : "", false), (gear ? 64 : 0.01, gear ? "CP" : "", true), (gear ? 62 : 0.01, gear ? "Item lvl" : "", true) };
+        var cols = new List<(double Width, string Head, bool Right)> { (34, "", false), (0, "Member", false), (gear ? 92 : 0.01, gear ? "Class" : "", false), (gear ? 64 : 0.01, gear ? "CP" : "", true), (gear ? 62 : 0.01, gear ? "Item lvl" : "", true) };
         if (dmg) { cols.Add((76, "Damage", true)); cols.Add((66, "DPS", true)); }
         if (deaths) cols.Add((50, "Deaths", true));
         Grid Row()
@@ -319,7 +467,7 @@ public partial class MainWindow
         }
         void Cell(Grid g, int col, FrameworkElement el) { Grid.SetColumn(el, col); g.Children.Add(el); }
 
-        var head = Row(); head.Margin = new Thickness(0, 0, 0, 4);
+        var head = Row(); head.Margin = new Thickness(6, 0, 4, 4);
         for (int i = 0; i < cols.Count; i++)
         {
             if (cols[i].Head.Length == 0) continue;
@@ -328,35 +476,35 @@ public partial class MainWindow
             Cell(head, i, t);
         }
         host.Children.Add(head);
-        long top = Math.Max(1, e.Roster.Max(f => f.Damage));
+        // what the bars measure: damage when the game gives it, else Combat Power (the group's strength before a hit lands)
+        double Measure(Fighter f) => dmg ? f.Damage : f.CombatPower;
+        double top = Math.Max(1, e.Roster.Max(Measure));
         bool first = true;
         foreach (var f in e.Ranked())
         {
             var row = Row();
-            var rule = new Border { BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0), Padding = new Thickness(0, 6, 0, 6), Child = row };
-            rule.SetResourceReference(Border.BorderBrushProperty, "CardHair");
+            row.Margin = new Thickness(6, 0, 4, 0);
+            var meter = ClassArt.MeterRow(row, f.Class, Measure(f) / top, other: f.Other);
+            meter.Margin = new Thickness(0, first ? 0 : 3, 0, 0);
+            var rule = new Border { Padding = new Thickness(0), Child = meter, MinHeight = 34 };
+            row.MinHeight = 34;
             first = false;
-            Cell(row, 0, f.Other ? OtherMark(20) : ClassMark(f.Class, 20, f.Name));
+            Cell(row, 0, f.Other ? OtherMark(24) : ClassArt.Icon(f.Class, 24, f.Name));
             var nameBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
             var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
-            var nm = PT(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 13, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.You ? "Gold" : f.Other || f.Name.Length == 0 ? "Muted" : "Ink", trim: true);
+            var nm = PT(f.Other ? "Other" : f.Name.Length > 0 ? f.Name : "Unnamed", 13, f.Other ? FontWeights.Medium : FontWeights.SemiBold, f.Other || f.Name.Length == 0 ? "Muted" : "Ink", trim: true);
             if (f.Other) nm.ToolTip = "HP the boss lost with no hit to name a source: damage over time, or traffic that was lost. Shown so the rows add up to the HP it lost.";
             else if (f.Name.Length == 0) nm.ToolTip = "A source the game's messages didn't name yet (a pet, or a player not seen up close).";
             nameLine.Children.Add(nm);
-            if (f.You) nameLine.Children.Add(Margin(PT("you", 11, FontWeights.SemiBold, "Faint"), 6, 1, 0, 0));
+            // you: a gold pill (the name stays in ink: gold would read as a class colour on the bars)
+            if (f.You) { var you = PChip("you", "GoldInk", "Gold"); you.Margin = new Thickness(7, 0, 0, 0); you.Padding = new Thickness(6, 0, 6, 1); nameLine.Children.Add(you); }
             if (f.Late) nameLine.Children.Add(Margin(PT("joined late", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
             if (f.Gone) nameLine.Children.Add(Margin(PT("left", 11, FontWeights.Medium, "Faint"), 6, 1, 0, 0));
             nameBox.Children.Add(nameLine);
-            if (dmg)
-            {
-                var bar = ShareBar(f.Damage / (double)top, f.You);
-                nameBox.SizeChanged += (_, _) => bar.Width = Math.Min(220, nameBox.ActualWidth);   // left-aligned, never past the column
-                nameBox.Children.Add(bar);
-            }
             Cell(row, 1, nameBox);
             if (gear && !f.Other)
             {
-                Cell(row, 2, PT(f.Class.Length > 0 ? f.Class : "–", 12, FontWeights.Medium, "Muted", trim: true));
+                Cell(row, 2, PT(f.Class.Length > 0 ? ClassArt.Title(f.Class) : "–", 12, FontWeights.SemiBold, "Text2", trim: true));
                 Cell(row, 3, Right(PT(f.CombatPower > 0 ? f.CombatPower.ToString("N0", CultureInfo.InvariantCulture) : "–", 13, FontWeights.SemiBold, "Ink")));
                 Cell(row, 4, Right(PT(f.ItemLevel > 0 ? f.ItemLevel.ToString("N0", CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, "Text2")));
             }
@@ -364,7 +512,7 @@ public partial class MainWindow
             if (dmg)
             {
                 Cell(row, c++, Right(PT(Amounts.Short(f.Damage), 13, FontWeights.Medium, "Text2")));
-                Cell(row, c++, Right(PT(Amounts.Short(e.Dps(f, now)), 13, FontWeights.Bold, f.You ? "Gold" : "Ink")));
+                Cell(row, c++, Right(PT(Amounts.Short(e.Dps(f, now)), 13, FontWeights.Bold, "Ink")));
             }
             if (deaths) Cell(row, c, Right(PT(f.Deaths > 0 ? f.Deaths.ToString(CultureInfo.InvariantCulture) : "–", 13, FontWeights.Medium, f.Deaths > 0 ? "Coral" : "Faint")));
             host.Children.Add(rule);
@@ -399,7 +547,7 @@ public partial class MainWindow
         var c = Color.FromRgb(0x86, 0x8D, 0xA1);
         return new Border
         {
-            Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.28), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
+            Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
             Background = Frozen(Color.FromArgb(0x18, c.R, c.G, c.B)), BorderBrush = Frozen(Color.FromArgb(0x50, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
             Child = new TextBlock { Text = "···", FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -size * 0.12, 0, 0) },
         };
@@ -416,45 +564,29 @@ public partial class MainWindow
         return track;
     }
 
-    /// <summary>
-    /// A class's mark: its two letters on a tile in the class's role colour (no class art in the tracker yet). Tanks blue,
-    /// healers and support green, melee coral, casters and ranged violet; an unknown class a quiet tile.
-    /// </summary>
-    internal static FrameworkElement ClassMark(string cls, double size, string name = "")
-    {
-        var c = ClassColor(cls);
-        var b = new Border
-        {
-            Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.28), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
-            Background = Frozen(Color.FromArgb(0x2E, c.R, c.G, c.B)), BorderBrush = Frozen(Color.FromArgb(0x80, c.R, c.G, c.B)), BorderThickness = new Thickness(1),
-            ToolTip = cls.Length > 0 ? cls : null,
-        };
-        // no class yet (the damage rows before a group list): the name's first letter on the quiet tile
-        var letters = cls.Trim().Length >= 2 ? cls.Trim()[..2] : cls.Trim().Length == 1 ? cls.Trim() : name.Trim().Length > 0 ? name.Trim()[..1].ToUpperInvariant() : "·";
-        b.Child = new TextBlock { Text = letters, FontSize = size * 0.45, FontWeight = FontWeights.Bold, Foreground = Frozen(c), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        return b;
-    }
-
-    internal static Color ClassColor(string cls) => cls.Trim().ToLowerInvariant() switch
-    {
-        "templar" or "gladiator" => Color.FromRgb(0x6F, 0xA8, 0xF0),
-        "cleric" or "chanter" => Color.FromRgb(0x3D, 0xD6, 0x8C),
-        "assassin" => Color.FromRgb(0xF2, 0x8A, 0x6D),
-        "ranger" or "sorcerer" or "spiritmaster" => Color.FromRgb(0xB3, 0x8C, 0xF5),
-        _ => Color.FromRgb(0x86, 0x8D, 0xA1),
-    };
+    /// <summary>A class's mark: the game's emblem on a ring in the class's colour (Ui/ClassArt.cs).</summary>
+    internal static FrameworkElement ClassMark(string cls, double size, string name = "") => ClassArt.Icon(cls, size, name);
 
     static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
-    /// <summary>What the Parser is doing with no fight under way, and where you are; null line when all is well.</summary>
+    /// <summary>What the Parser is waiting for in its mode, and where you are.</summary>
     (string Head, string Line, string Tone) ParserStatus((ContentKind Kind, string Instance) where)
     {
         bool kept = where.Kind is ContentKind.Transcendence or ContentKind.Expedition or ContentKind.Sanctuary;
         if (!_demo && _watcher.Packets is { } pr && !pr.On)
-            return ("Not reading the game's messages", pr.State.StartsWith("Off: ") ? pr.State[5..] + "." : "Fights come from the game's own messages; the screen alone can't tell a boss.", "Warn");
-        if (kept)
-            return ($"Ready in {BossBook.Strip(where.Instance)}", $"{Encounter.KindName(where.Kind)}. The next boss you pull starts a fight here; trash and adds never do.", "Good");
-        return ("Waiting for a boss", "Fights are kept in Transcendence, Expeditions and Sanctuaries only. Enter one and pull a boss.", "Faint");
+            return ("Not reading the game's messages", pr.State.StartsWith("Off: ") ? pr.State[5..] + "." : "The Parser counts from the game's own messages; the screen alone can't tell a boss or a kill.", "Warn");
+        switch (ParserModeNow)
+        {
+            case ParserMode.Run:
+                return kept ? ($"In {BossBook.Strip(where.Instance)}", "Full run counts from entering to leaving; this run started before the Parser could see it.", "Good")
+                    : ("Waiting for a run", "Enter a Transcendence, an Expedition or a Sanctuary: the run counts from there to leaving, every boss a split.", "Faint");
+            case ParserMode.Fights:
+                var zone = _demo ? "" : ParserFights?.Zone ?? "";
+                return ("Waiting for a fight", $"Your next kill or hit starts one{(kept ? $" in {BossBook.Strip(where.Instance)}" : zone.Length > 0 ? $" in {zone}" : "")}. It ends {BossParser.PauseSeconds:0} seconds after the last.", "Good");
+            default:
+                return kept ? ($"Ready in {BossBook.Strip(where.Instance)}", $"{Encounter.KindName(where.Kind)}. The next boss you pull starts a fight here; trash and adds never do.", "Good")
+                    : ("Waiting for a boss", "Boss pulls are kept in Transcendence, Expeditions and Sanctuaries only. Enter one and pull a boss.", "Faint");
+        }
     }
 
     FrameworkElement ParserWaitingCard((ContentKind Kind, string Instance) where, List<Encounter> past)
@@ -465,7 +597,7 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var art = GameArt.Element("dungeon", 30); art.Margin = new Thickness(0, 0, 12, 0); art.Opacity = 0.85;
+        var art = GameArt.Element(ParserModeNow == ParserMode.Fights ? "medal" : "dungeon", 30); art.Margin = new Thickness(0, 0, 12, 0); art.Opacity = 0.85;
         g.Children.Add(art);
         var (head, line, tone) = ParserStatus(where);
         var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -478,14 +610,14 @@ public partial class MainWindow
         var l = PT(line, 12, FontWeights.Medium, "Text2"); l.TextWrapping = TextWrapping.Wrap; l.Margin = new Thickness(0, 3, 0, 0);
         sp.Children.Add(l);
         Grid.SetColumn(sp, 1); g.Children.Add(sp);
-        // the last fight, one line, so the card says something useful between pulls
-        if (past.LastOrDefault() is { } last)
+        // the last record of this mode, one line, so the card says something useful in between
+        if (past.LastOrDefault(e => e.ModeKind == ParserModeNow) is { } last)
         {
             var lastBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-            var lt = PT("Last fight", 11, FontWeights.SemiBold, "Faint"); lt.HorizontalAlignment = HorizontalAlignment.Right;
+            var lt = PT("Last " + Noun(ParserModeNow).Replace("boss ", ""), 11, FontWeights.SemiBold, "Faint"); lt.HorizontalAlignment = HorizontalAlignment.Right;
             lastBox.Children.Add(lt);
             var lr = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 3, 0, 0) };
-            lr.Children.Add(PT(last.Boss, 12.5, FontWeights.SemiBold, "Ink", trim: true));
+            lr.Children.Add(PT(last.Title, 12.5, FontWeights.SemiBold, "Ink", trim: true));
             lr.Children.Add(PT("  " + BossParser.Clock(last.Duration(last.End!.Value)) + "  ", 12.5, FontWeights.Medium, "Muted"));
             lr.Children.Add(OutcomeChip(last));
             lastBox.Children.Add(lr);
@@ -498,81 +630,107 @@ public partial class MainWindow
 
     // ---- the fights kept ----
 
-    FrameworkElement ParserHistory(List<Encounter> past, DateTime now)
+    FrameworkElement ParserHistory(List<Encounter> all, DateTime now)
     {
         var card = new Border { Margin = new Thickness(0, 8, 0, 0) };
         card.SetResourceReference(StyleProperty, "QRefCard");
         var body = new StackPanel();
-        // the head: the title and count, the kind switch, the boss pick
+        var mode = ParserListMode;
+        var past = all.Where(e => e.ModeKind == mode).ToList();
+        // the head: which records (boss pulls, runs, fights, with their counts), the boss or instance pick
         var head = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var ic = GameArt.Element("scroll", 16); ic.Margin = new Thickness(0, 0, 7, 0); ic.Opacity = 0.75;
-        titleRow.Children.Add(ic);
-        var title = PT("Past fights", 12, FontWeights.Medium, "Muted");
-        titleRow.ToolTip = "Every boss fight of this character, kept on this PC only: never uploaded."; title.SetResourceReference(StyleProperty, "RefHead");
-        titleRow.Children.Add(title);
-        head.Children.Add(titleRow);
-        var kinds = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        var seg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = kinds, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(10, 0, 0, 0), Visibility = past.Count == 0 ? Visibility.Collapsed : Visibility.Visible };
-        seg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); seg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
-        foreach (var (key, label) in new[] { ("", "All"), ("Transcendence", "Transcendence"), ("Expedition", "Expedition"), ("Sanctuary", "Sanctuary") })
+        var modes = new StackPanel { Orientation = Orientation.Horizontal };
+        var mseg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = modes, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Every record of this character, kept on this PC only: never uploaded. Each is kept in the mode it was counted in." };
+        mseg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); mseg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
+        foreach (var (md, label) in new[] { (ParserMode.Bosses, "Boss pulls"), (ParserMode.Run, "Runs"), (ParserMode.Fights, "Fights") })
         {
-            int n = key.Length == 0 ? past.Count : past.Count(e => e.Kind == key);
-            var b = new Button { Content = n > 0 ? $"{label} {n}" : label, Height = 24, FontSize = 12, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(kinds.Children.Count > 0 ? 2 : 0, 0, 0, 0) };
-            b.SetResourceReference(StyleProperty, _parserPrefs.KindFilter == key ? "SegOn" : "SegOff");
-            b.Click += (_, _) => { _parserPrefs.KindFilter = key; _parserPrefs.BossFilter = ""; _parserAllRows = false; if (!_demo) _parserPrefs.Save(); RedrawParserPage(); };
-            kinds.Children.Add(b);
+            int n = all.Count(e => e.ModeKind == md);
+            var b = new Button { Content = n > 0 ? $"{label} {n}" : label, Height = 24, FontSize = 12, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(modes.Children.Count > 0 ? 2 : 0, 0, 0, 0) };
+            b.SetResourceReference(StyleProperty, md == mode ? "SegOn" : "SegOff");
+            AutomationProperties.SetName(b, $"Show the kept {label.ToLowerInvariant()}");
+            var pick = md;
+            b.Click += (_, _) => { _parserPrefs.ListMode = BossParser.ModeKey(pick); _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = ""; ParserFilterChanged(); };
+            modes.Children.Add(b);
         }
-        Grid.SetColumn(seg, 1); head.Children.Add(seg);
+        head.Children.Add(mseg);
         var inKind = past.Where(e => _parserPrefs.KindFilter.Length == 0 || e.Kind == _parserPrefs.KindFilter).ToList();
+        // a boss (pulls) or an instance (runs) to look at alone; fights are told apart by their kind
+        Func<Encounter, string>? keyOf = mode switch { ParserMode.Bosses => e => e.Boss, ParserMode.Run => e => e.Title, _ => null };
+        string anyLabel = mode == ParserMode.Run ? "Any instance" : "Any boss";
         var bossBtn = new Button { Height = 30, FontSize = 12, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         bossBtn.Content = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Children =
             {
-                PT(_parserPrefs.BossFilter.Length > 0 ? _parserPrefs.BossFilter : "Any boss", 12, FontWeights.SemiBold, "Ink", trim: true),
+                PT(_parserPrefs.BossFilter.Length > 0 ? _parserPrefs.BossFilter : anyLabel, 12, FontWeights.SemiBold, "Ink", trim: true),
                 new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L3.5,3.5 L7,0"), StrokeThickness = 1.4, Margin = new Thickness(7, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round },
             },
         };
         ((System.Windows.Shapes.Path)((StackPanel)bossBtn.Content).Children[1]).SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Muted");
         ((TextBlock)((StackPanel)bossBtn.Content).Children[0]).MaxWidth = 150;
-        AutomationProperties.SetName(bossBtn, "Filter by boss");
-        bossBtn.ToolTip = "Show one boss's fights";
+        AutomationProperties.SetName(bossBtn, mode == ParserMode.Run ? "Filter by instance" : "Filter by boss");
+        bossBtn.ToolTip = mode == ParserMode.Run ? "Show one instance's runs" : "Show one boss's pulls";
         bossBtn.Click += (_, _) =>
         {
-            var entries = new List<MenuEntry> { new("Any boss", () => { _parserPrefs.BossFilter = ""; ParserFilterChanged(); }, Sub: $"{inKind.Count} fights", On: _parserPrefs.BossFilter.Length == 0) };
-            foreach (var g in inKind.GroupBy(e => e.Boss, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Max(e => e.Start)))
+            if (keyOf == null) return;
+            var entries = new List<MenuEntry> { new(anyLabel, () => { _parserPrefs.BossFilter = ""; ParserFilterChanged(); }, Sub: $"{inKind.Count} {Noun(mode, inKind.Count)}", On: _parserPrefs.BossFilter.Length == 0) };
+            foreach (var g in inKind.GroupBy(keyOf, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Max(e => e.Start)))
             {
-                var boss = g.First().Boss;
-                int kills = g.Count(e => e.Outcome == "kill");
-                entries.Add(new MenuEntry(boss, () => { _parserPrefs.BossFilter = boss; ParserFilterChanged(); }, Sub: $"{BossBook.Strip(g.First().Instance)} · {g.Count()} fight{(g.Count() == 1 ? "" : "s")}, {kills} kill{(kills == 1 ? "" : "s")}", On: _parserPrefs.BossFilter == boss));
+                var key = keyOf(g.First());
+                int good = g.Count(e => e.Tone == "good");
+                string sub = mode == ParserMode.Run ? $"{g.Count()} {Noun(mode, g.Count())}, {good} cleared" : $"{BossBook.Strip(g.First().Instance)} · {g.Count()} {Noun(mode, g.Count())}, {good} kill{(good == 1 ? "" : "s")}";
+                entries.Add(new MenuEntry(key, () => { _parserPrefs.BossFilter = key; ParserFilterChanged(); }, Sub: sub, On: _parserPrefs.BossFilter == key));
             }
             ShowMenu(bossBtn, entries);
         };
-        if (inKind.Count == 0) bossBtn.Visibility = Visibility.Collapsed;
-        Grid.SetColumn(bossBtn, 2); head.Children.Add(bossBtn);
+        if (inKind.Count == 0 || keyOf == null) bossBtn.Visibility = Visibility.Collapsed;
+        Grid.SetColumn(bossBtn, 1); head.Children.Add(bossBtn);
         body.Children.Add(head);
+        // the kinds this mode's records are in (Transcendence, Expedition, Sanctuary; the open world, the Abyss for fights), when more than one
+        var kindsHere = past.Select(e => e.Kind).Where(k => k.Length > 0).Distinct().OrderBy(k => k).ToList();
+        if (kindsHere.Count > 1)
+        {
+            var kinds = new StackPanel { Orientation = Orientation.Horizontal };
+            var seg = new Border { Padding = new Thickness(3), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = kinds, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 8) };
+            seg.SetResourceReference(Border.BackgroundProperty, "SegGroup"); seg.SetResourceReference(Border.BorderBrushProperty, "CardLine");
+            foreach (var key in kindsHere.Prepend(""))
+            {
+                int n = key.Length == 0 ? past.Count : past.Count(e => e.Kind == key);
+                var b = new Button { Content = $"{(key.Length == 0 ? "All" : key)} {n}", Height = 24, FontSize = 12, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(kinds.Children.Count > 0 ? 2 : 0, 0, 0, 0) };
+                b.SetResourceReference(StyleProperty, _parserPrefs.KindFilter == key ? "SegOn" : "SegOff");
+                var k = key;
+                b.Click += (_, _) => { _parserPrefs.KindFilter = k; _parserPrefs.BossFilter = ""; ParserFilterChanged(); };
+                kinds.Children.Add(b);
+            }
+            body.Children.Add(seg);
+        }
 
-        var shown = inKind.Where(e => _parserPrefs.BossFilter.Length == 0 || e.Boss.Equals(_parserPrefs.BossFilter, StringComparison.OrdinalIgnoreCase)).OrderByDescending(e => e.Start).ToList();
+        var shown = inKind.Where(e => _parserPrefs.BossFilter.Length == 0 || keyOf == null || keyOf(e).Equals(_parserPrefs.BossFilter, StringComparison.OrdinalIgnoreCase)).OrderByDescending(e => e.Start).ToList();
         if (shown.Count == 0)
         {
-            var empty = PT(past.Count == 0 ? "No fights kept yet. Each boss you fight in a Transcendence, an Expedition or a Sanctuary lands here, with its group and timings. They stay on this PC."
-                : "No fights of this kind yet.", 12.5, FontWeights.Normal, "Faint");
+            var empty = PT(past.Count > 0 ? $"No {Noun(mode, 2)} of this kind yet." : mode switch
+            {
+                ParserMode.Run => "No runs kept yet. In Full run, each Transcendence, Expedition or Sanctuary run lands here, entering to leaving, with every boss as a split.",
+                ParserMode.Fights => "No fights kept yet. In Every fight, each fight anywhere lands here, with your kills and deaths.",
+                _ => "No boss pulls kept yet. Each boss you fight in a Transcendence, an Expedition or a Sanctuary lands here, with its group and timings.",
+            } + " They stay on this PC.", 12.5, FontWeights.Normal, "Faint");
             empty.TextWrapping = TextWrapping.Wrap; empty.Margin = new Thickness(0, 4, 0, 6);
             body.Children.Add(empty);
         }
         else
         {
-            // a boss picked: its record on one line (fights, kills, best kill time)
-            if (_parserPrefs.BossFilter.Length > 0)
+            // a boss or an instance picked: its record on one line
+            if (_parserPrefs.BossFilter.Length > 0 && keyOf != null)
             {
-                var kills = shown.Where(e => e.Outcome == "kill").ToList();
-                var best = kills.Count > 0 ? kills.Min(e => e.Duration(e.End!.Value)) : (TimeSpan?)null;
-                var rec = PT($"{shown.Count} fight{(shown.Count == 1 ? "" : "s")} · {kills.Count} kill{(kills.Count == 1 ? "" : "s")}{(best is { } b ? " · best kill " + BossParser.Clock(b) : "")}", 12, FontWeights.SemiBold, "Text2");
+                var good = shown.Where(e => e.Tone == "good").ToList();
+                var best = good.Count > 0 ? good.Min(e => e.Duration(e.End!.Value)) : (TimeSpan?)null;
+                var rec = PT(mode == ParserMode.Run
+                    ? $"{shown.Count} {Noun(mode, shown.Count)} · {good.Count} cleared{(best is { } b ? " · best clear " + BossParser.Clock(b) : "")}"
+                    : $"{shown.Count} {Noun(mode, shown.Count)} · {good.Count} kill{(good.Count == 1 ? "" : "s")}{(best is { } b2 ? " · best kill " + BossParser.Clock(b2) : "")}", 12, FontWeights.SemiBold, "Text2");
                 rec.Margin = new Thickness(0, 0, 0, 6);
                 body.Children.Add(rec);
             }
@@ -605,10 +763,25 @@ public partial class MainWindow
         g.Children.Add(when);
         var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
-        nameLine.Children.Add(PT(e.Boss, 13, FontWeights.SemiBold, "Ink", trim: true));
+        nameLine.Children.Add(PT(e.Title, 13, FontWeights.SemiBold, "Ink", trim: true));
         if (e.Partial) nameLine.Children.Add(Margin(PT("partial", 11, FontWeights.SemiBold, "Warn"), 6, 1, 0, 0));
+        // the group at a glance: each member's class emblem, small, in the same colours as the tab and the overlay
+        var classes = e.Members.Where(f => ClassArt.Key(f.Class).Length > 0).OrderByDescending(f => f.You).Take(8).ToList();
+        if (classes.Count > 0)
+        {
+            var icons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            foreach (var f in classes) { var ic = ClassArt.Icon(f.Class, 15, f.Name); ic.Margin = new Thickness(0, 0, 2, 0); icons.Children.Add(ic); }
+            nameLine.Children.Add(icons);
+        }
         mid.Children.Add(nameLine);
-        mid.Children.Add(PT($"{BossBook.Strip(e.Instance)} · {KindLabel(e)}", 11.5, FontWeights.Medium, "Muted", trim: true));
+        var place = BossBook.Strip(e.Instance);
+        string sub = e.ModeKind switch
+        {
+            ParserMode.Run => $"{KindLabel(e)} · {e.Splits.Count(x => x.Outcome == "kill")} of {e.Splits.Select(x => x.Boss).Distinct().Count()} bosses{(e.YourKills > 0 ? $" · {e.YourKills} kills" : "")}",
+            ParserMode.Fights => $"{(place.Length > 0 && place != e.Kind && place != e.Title ? place + " · " : "")}{KindLabel(e)}{(e.YourDeaths > 0 && e.YourKills > 0 ? $" · {e.YourKills} kill{(e.YourKills == 1 ? "" : "s")}" : "")}",
+            _ => $"{place} · {KindLabel(e)}",
+        };
+        mid.Children.Add(PT(sub, 11.5, FontWeights.Medium, "Muted", trim: true));
         Grid.SetColumn(mid, 1); g.Children.Add(mid);
         var oc = OutcomeChip(e); oc.HorizontalAlignment = HorizontalAlignment.Left;
         Grid.SetColumn(oc, 2); g.Children.Add(oc);
@@ -616,6 +789,7 @@ public partial class MainWindow
         Grid.SetColumn(dur, 3); g.Children.Add(dur);
         var fig = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         if (e.HasDamage) { fig.Children.Add(Right(PT(Amounts.Short(e.GroupDps(e.End ?? now)), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT("group DPS", 10.5, FontWeights.Medium, "Faint"))); }
+        else if (e.ModeKind != ParserMode.Bosses) { fig.Children.Add(Right(PT(e.YourKills.ToString("N0", CultureInfo.InvariantCulture), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT(e.PlayerKills > 0 ? $"kills · {e.PlayerKills} PvP" : "your kills", 10.5, FontWeights.Medium, "Faint"))); }
         else { fig.Children.Add(Right(PT(AvgCp(e), 13, FontWeights.SemiBold, "Text2"))); fig.Children.Add(Right(PT($"avg CP · {e.Members.Count()} in group", 10.5, FontWeights.Medium, "Faint"))); }
         Grid.SetColumn(fig, 4); g.Children.Add(fig);
         var chev = new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L3.5,3.5 L0,7"), StrokeThickness = 1.4, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
@@ -623,8 +797,13 @@ public partial class MainWindow
         Grid.SetColumn(chev, 5); g.Children.Add(chev);
         var b = new Border { Child = g, Padding = new Thickness(6, 6, 6, 6), Margin = new Thickness(-6, 0, -6, 0), CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(0, rule ? 1 : 0, 0, 0), Background = Brushes.Transparent, Cursor = Cursors.Hand, Focusable = true };
         b.SetResourceReference(Border.BorderBrushProperty, "CardHair");
-        AutomationProperties.SetName(b, $"{e.Boss}, {e.OutcomeLabel}, {BossParser.Clock(e.Duration(e.End ?? now))}");
-        b.ToolTip = "Open this fight: the group, the timings, the kills near you";
+        AutomationProperties.SetName(b, $"{e.Title}, {e.OutcomeLabel}, {BossParser.Clock(e.Duration(e.End ?? now))}");
+        b.ToolTip = e.ModeKind switch
+        {
+            ParserMode.Run => "Open this run: every boss as a split, the group, the timings, the kills",
+            ParserMode.Fights => "Open this fight: your kills and deaths, the group, the timings",
+            _ => "Open this boss pull: the group, the timings, the kills near you",
+        };
         b.MouseEnter += (_, _) => b.SetResourceReference(Border.BackgroundProperty, "HoverTint");
         b.MouseLeave += (_, _) => b.Background = Brushes.Transparent;
         b.MouseLeftButtonUp += (_, _) => OpenFight(e.Id);
@@ -639,7 +818,7 @@ public partial class MainWindow
     {
         var end = e.End ?? e.LastAt;
         var box = new StackPanel();
-        var back = FoldLink("‹  All fights", () => OpenFight(null));
+        var back = FoldLink($"‹  All {Noun(e.ModeKind, 2)}", () => OpenFight(null));
         back.Margin = new Thickness(2, 0, 0, 8);
         box.Children.Add(back);
         var card = PCard(hero: false);
@@ -648,27 +827,37 @@ public partial class MainWindow
         if (FightChips(e, end, live: false) is { } chips) body.Children.Add(Margin(chips, 0, 10, 0, 0));
         // the timings: pulled, ended, how long; the instance's copy said apart only when it matters
         var local = e.Start.ToLocalTime();
-        var times = PT($"Pulled {local.ToString("ddd MMM d, HH:mm:ss", CultureInfo.InvariantCulture)}   ·   Ended {end.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)}   ·   {BossParser.Clock(e.Duration(end))}", 12, FontWeights.Medium, "Text2", trim: true);
+        var startWord = e.ModeKind switch { ParserMode.Run => "Entered", ParserMode.Fights => "Started", _ => "Pulled" };
+        var endWord = e.ModeKind == ParserMode.Run ? "Left" : "Ended";
+        var times = PT($"{startWord} {local.ToString("ddd MMM d, HH:mm:ss", CultureInfo.InvariantCulture)}   ·   {endWord} {end.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)}   ·   {BossParser.Clock(e.Duration(end))}", 12, FontWeights.Medium, "Text2", trim: true);
         times.Margin = new Thickness(0, 8, 0, 0);
         body.Children.Add(times);
         if (e.Partial)
         {
-            var why = PT("Partial: " + string.Join("; ", e.PartialWhy) + ". Still one fight; its damage and kills may be short.", 12, FontWeights.Medium, "Warn");
+            var why = PT($"Partial: {string.Join("; ", e.PartialWhy)}. Still one {Noun(e.ModeKind)}; its damage and kills may be short.", 12, FontWeights.Medium, "Warn");
             why.TextWrapping = TextWrapping.Wrap; why.Margin = new Thickness(0, 4, 0, 0);
             body.Children.Add(why);
         }
-        body.Children.Add(Margin(RosterTable(e, end, detail: true), 0, 12, 0, 0));
-        var adds = e.Kills.Where(k => !k.Boss).GroupBy(k => k.Name, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Count()).ToList();
-        if (adds.Count > 0)
+        if (e.ModeKind == ParserMode.Run && e.Splits.Count > 0)
         {
-            body.Children.Add(Margin(PT("Kills near you", 11, FontWeights.SemiBold, "Faint"), 0, 12, 0, 4));
+            body.Children.Add(Margin(PT("Bosses", 11, FontWeights.SemiBold, "Faint"), 0, 12, 0, 4));
+            body.Children.Add(SplitsTable(e, live: false));
+        }
+        if (e.Roster.Count > 0 || e.ModeKind == ParserMode.Bosses) body.Children.Add(Margin(RosterTable(e, end, detail: true), 0, 12, 0, 0));
+        void KillChips(string head, IEnumerable<KillNear> kills, string ink)
+        {
+            var groups = kills.GroupBy(k => k.Name, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Count()).ToList();
+            if (groups.Count == 0) return;
+            body.Children.Add(Margin(PT(head, 11, FontWeights.SemiBold, "Faint"), 0, 12, 0, 4));
             var wp = new WrapPanel();
-            foreach (var g in adds) { var c = PChip(g.Count() > 1 ? $"{g.First().Name} ×{g.Count()}" : g.First().Name, "Text2", "ChipBg"); c.Margin = new Thickness(0, 0, 6, 4); wp.Children.Add(c); }
+            foreach (var g in groups) { var c = PChip(g.Count() > 1 ? $"{g.First().Name} ×{g.Count()}" : g.First().Name, ink, "ChipBg"); c.Margin = new Thickness(0, 0, 6, 4); wp.Children.Add(c); }
             body.Children.Add(wp);
         }
+        KillChips("Your kills", e.Kills.Where(k => k.Yours), "Text2");
+        KillChips("Kills near you", e.Kills.Where(k => !k.Boss && !k.Yours), "Text2");
         if (!e.HasDamage)
         {
-            var nd = PT("The game's messages gave no damage for this fight, so none is shown.", 11.5, FontWeights.Medium, "Faint");
+            var nd = PT($"The game's messages gave no damage for this {Noun(e.ModeKind)}, so none is shown.", 11.5, FontWeights.Medium, "Faint");
             nd.Margin = new Thickness(0, 10, 0, 0);
             body.Children.Add(nd);
         }
@@ -729,19 +918,47 @@ public partial class MainWindow
 
     // ---- renders and tests ----
 
-    /// <summary>A layout render's Parser page: "live" (a fight under way), "history" (between fights), "detail" (one kept fight open), "nodamage", "nogroup" (damage before any group list), "empty".</summary>
+    string _parserDemoState = "";
+
+    /// <summary>
+    /// A layout render's Parser page: Bosses only "live" (a pull under way), "history" (between pulls), "detail" (one kept
+    /// pull open), "nodamage", "nogroup" (damage before any group list), "empty"; Full run "run" (a run under way),
+    /// "run-detail"; Every fight "fight" (a fight under way), "fight-history".
+    /// </summary>
     internal void ShowParserDemo(string state)
     {
         _demo = true;
+        _parserDemoState = state;
         _parserDemoNow = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);
-        var (past, live) = state == "empty" ? (new List<Encounter>(), null) : ParserDemo.Sample(_parserDemoNow, live: state is "live" or "nodamage" or "nogroup", damage: state != "nodamage", group: state != "nogroup");
-        _parserDemoPast = past; _parserDemoLive = live;
-        _parserDemoWhere = state == "empty" ? (ContentKind.Other, "") : (ContentKind.Transcendence, "Shattered Arkanis [Stage 3]");
-        _parserOpen = state == "detail" ? past.LastOrDefault(e => e.Kills.Any(k => !k.Boss) && e.Roster.Any(f => f.Deaths > 0))?.Id ?? past.LastOrDefault()?.Id : null;
+        var mode = state.StartsWith("run") ? ParserMode.Run : state.StartsWith("fight") ? ParserMode.Fights : ParserMode.Bosses;
+        bool live = state is "live" or "nodamage" or "nogroup" or "run" or "fight";
+        // the kept records of every mode, so the list's switch has something in each; the one under way in the mode shown
+        var all = new List<Encounter>();
+        Encounter? now = null;
+        if (state != "empty")
+            foreach (var md in new[] { ParserMode.Bosses, ParserMode.Run, ParserMode.Fights })
+            {
+                var (past, l) = ParserDemo.Sample(_parserDemoNow, live: live && md == mode, damage: state != "nodamage", group: state != "nogroup", mode: md);
+                all.AddRange(past);
+                if (md == mode) now = l;
+            }
+        _parserDemoPast = all.OrderBy(e => e.Start).ToList(); _parserDemoLive = now;
+        _parserDemoWhere = state == "empty" || state == "fight-history" ? (ContentKind.Other, "") : (ContentKind.Transcendence, "Shattered Arkanis [Stage 3]");
+        _parserPrefs.Mode = BossParser.ModeKey(mode); _parserPrefs.ListMode = "";
+        _parserOpen = state switch
+        {
+            "detail" => all.LastOrDefault(e => e.ModeKind == ParserMode.Bosses && e.Kills.Any(k => !k.Boss) && e.Roster.Any(f => f.Deaths > 0))?.Id,
+            "run-detail" => all.LastOrDefault(e => e.ModeKind == ParserMode.Run && e.Outcome == "cleared")?.Id,
+            _ => null,
+        };
         _parserPrefs.KindFilter = ""; _parserPrefs.BossFilter = "";
         ShowPart("Parser", byHand: false);
         RedrawParserPage();
     }
+
+    internal void SetParserModeForTest(ParserMode m) => SetParserMode(m);
+    internal ParserMode ParserModeForTest => ParserModeNow;
+    internal Encounter? ParserLiveForTest => ParserLive;
 
     /// <summary>For the options test: what the page shows (a live fight, the rows in the list, the detail open).</summary>
     internal (bool Live, int Rows, bool Detail, int Roster) ParserPageForTest()
@@ -750,7 +967,7 @@ public partial class MainWindow
         foreach (var c in ParserPage.Children.OfType<FrameworkElement>()) Walk(c);
         void Walk(DependencyObject d)
         {
-            if (d is Border b && b.Cursor == Cursors.Hand && b.ToolTip is string s && s.StartsWith("Open this fight")) rows++;
+            if (d is Border b && b.Cursor == Cursors.Hand && b.ToolTip is string s && s.StartsWith("Open this ")) rows++;
             if (d is TextBlock t && t.Text == "In progress") live = true;
             foreach (var ch in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) Walk(ch);
         }

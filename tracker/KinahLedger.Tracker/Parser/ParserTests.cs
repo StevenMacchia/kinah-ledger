@@ -106,7 +106,7 @@ public static class ParserTests
                 $"lost traffic marks the fight partial, said once: {string.Join("; ", p.Live?.PartialWhy ?? new())}");
             p.Take(new InstanceEntered(t.AddSeconds(120), ContentKind.Transcendence, "Shattered Arkanis [Stage 2]", 78));   // reconnected, same copy
             p.Take(new GroupChanged(t.AddSeconds(121), new[] { Me, Ally, Ally2 }));
-            Check(kept.Count == 0 && p.Live is { BossId: 910 } l2 && l2.PartialWhy.Contains("the game reconnected during the fight") && l2.Roster.Single(f => f.Name == "Thorne").Late,
+            Check(kept.Count == 0 && p.Live is { BossId: 910 } l2 && l2.PartialWhy.Contains("the game reconnected during it") && l2.Roster.Single(f => f.Name == "Thorne").Late,
                 "back in the same instance after a reconnect: the same fight carries on, a joiner marked late");
             p.Take(new UnitDied(t.AddSeconds(180), 910, "Ruthilis of Pain", true));
             Check(kept.Count == 1 && kept[0] is { Outcome: "kill", Partial: true }, "...and ends as one fight, partial");
@@ -162,6 +162,96 @@ public static class ParserTests
             Check(p.Live?.Boss == BossParser.UnnamedBoss, "...and one with no name at all is kept too");
         }
 
+        // Full run: one record from entering to leaving, trash included, each boss a split, cleared by the final boss
+        {
+            var (p, kept) = New();
+            p.SetMode(ParserMode.Run, t);
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Shattered Arkanis", 85));
+            p.Take(new GroupChanged(t.AddSeconds(1), new[] { Me, Ally }));
+            p.Kill(t.AddSeconds(30), player: false, death: false, "");
+            p.Kill(t.AddSeconds(35), player: false, death: false, "");
+            p.Take(new BossEngaged(t.AddSeconds(60), "Talisra of the Void", 960));
+            p.Take(new DamageDealt(t.AddSeconds(70), 1, 960, 40_000));
+            p.Take(new BossEnded(t.AddSeconds(120), 960, BossOutcome.Kill));
+            p.Take(new BossEngaged(t.AddSeconds(200), "Siliator of Deceit", 961));
+            Check(p.Live is { ModeKind: ParserMode.Run, Title: "Shattered Arkanis", Boss: "Siliator of Deceit" } lr && lr.Splits.Count == 2 && lr.Splits[1].Outcome == "",
+                $"Full run: the run under way, its last split the pull under way: {string.Join(", ", p.Live?.Splits.Select(x => x.Boss + " " + x.Outcome) ?? Array.Empty<string>())}");
+            p.Take(new UnitDied(t.AddSeconds(230), 1, "Swoly", false));
+            p.Kill(t.AddSeconds(230), player: false, death: true, "");
+            p.Take(new BossEnded(t.AddSeconds(260), 961, BossOutcome.Wipe));
+            p.Take(new BossEngaged(t.AddSeconds(400), "Siliator of Deceit", 962));
+            p.Take(new BossEnded(t.AddSeconds(470), 962, BossOutcome.Kill));
+            p.Take(new BossEngaged(t.AddSeconds(600), "Ruthilis of Pain", 963));
+            p.Take(new FeedGap(t.AddSeconds(650)));
+            p.Take(new BossEnded(t.AddSeconds(700), 963, BossOutcome.Kill));
+            Check(kept.Count == 0, "...no boss pull kept on its own in Full run");
+            p.Take(new InstanceLeft(t.AddSeconds(760)));
+            var run = kept.SingleOrDefault();
+            Check(run is { ModeKind: ParserMode.Run, Outcome: "cleared", Partial: true } && run.Duration(t).TotalSeconds == 760 && run.Splits.Count == 4,
+                $"...and ends as one run on leaving: {run?.OutcomeLabel}, {run?.Splits.Count} splits, {run?.Duration(t).TotalSeconds} s, partial ({string.Join("; ", run?.PartialWhy ?? new())})");
+            Check(run!.Splits.Select(x => x.Outcome).SequenceEqual(new[] { "kill", "wipe", "kill", "kill" }) && run.Splits[3].Final && run.Splits[0].Seconds == 60,
+                "...its splits in order with their outcomes and times, the last the final boss");
+            Check(run.YourKills == 2 && run.YourDeaths == 1 && run.Roster.First(f => f.You).Deaths == 1 && run.Roster.First(f => f.You).Damage == 40_000 && run.Roster.Count == 2,
+                $"...with the run's totals: {run.YourKills} kills, {run.YourDeaths} death, the group and its damage");
+            p.Take(new InstanceEntered(t.AddSeconds(800), ContentKind.Expedition, "Shattered Arkanis", 86));
+            p.Take(new InstanceLeft(t.AddSeconds(810)));
+            Check(kept.Count == 1, $"a run of under {BossParser.RunMinSeconds:0} s with no boss isn't kept");
+            p.Take(new InstanceEntered(t.AddSeconds(900), ContentKind.Expedition, "Fire Temple", 87));
+            p.Take(new BossEngaged(t.AddSeconds(960), "Silver Blade Rotan", 964));
+            p.Take(new BossEnded(t.AddSeconds(1000), 964, BossOutcome.Kill));
+            p.Take(new InstanceEntered(t.AddSeconds(1100), ContentKind.Expedition, "Fire Temple", 87));   // a loading screen, same copy
+            p.Take(new InstanceLeft(t.AddSeconds(1200)));
+            Check(kept.Count == 2 && kept[1] is { Outcome: "left", Instance: "Fire Temple" } && kept[1].Splits.Count == 1,
+                "...a loading screen in the same copy doesn't end it; leaving before the final boss is left");
+        }
+
+        // Every fight: anywhere, the first kill or hit to a pause; deaths and players apart; a boss pull keeps it open
+        {
+            var (p, kept) = New();
+            p.SetMode(ParserMode.Fights, t);
+            p.Place("Abyss", abyss: true);
+            p.Kill(t, player: true, death: false, "Rhavos");
+            p.Kill(t.AddSeconds(8), player: false, death: false, "");
+            p.Tick(t.AddSeconds(20));
+            Check(p.Live is { ModeKind: ParserMode.Fights, Kind: "Abyss", YourKills: 2, PlayerKills: 1, Title: "vs Rhavos" }, $"Every fight: kills in the Abyss make a fight: {p.Live?.Title} in {p.Live?.Kind}");
+            p.Tick(t.AddSeconds(8 + BossParser.PauseSeconds));
+            Check(kept.Count == 1 && kept[0] is { Outcome: "kill", Instance: "Abyss", OutcomeLabel: "2 kills" } && kept[0].Duration(t).TotalSeconds == 8,
+                $"...ended {BossParser.PauseSeconds:0} s after its last kill, at the last kill: {kept.FirstOrDefault()?.OutcomeLabel}");
+            p.Place("Western Cantas Valley", abyss: false);
+            p.Kill(t.AddSeconds(100), player: false, death: false, "");
+            p.Kill(t.AddSeconds(110), player: true, death: true, "Rhavos");
+            p.Tick(t.AddSeconds(140));
+            Check(kept.Count == 2 && kept[1] is { Kind: "Open world", Outcome: "died", YourDeaths: 1 }, "...a death ends one as Died, in the open world");
+            p.Take(new InstanceEntered(t.AddSeconds(200), ContentKind.Sanctuary, "Chalice of Muspel", 88));
+            p.Take(new BossEngaged(t.AddSeconds(210), "Kaldrix", 970));
+            p.Take(new DamageDealt(t.AddSeconds(215), 1, 970, 10_000));
+            p.Tick(t.AddSeconds(300));
+            Check(p.Live is { Title: "Kaldrix", Kind: "Sanctuary" }, "...a boss pull keeps its fight open past the pause, named for the boss");
+            p.Take(new BossEnded(t.AddSeconds(320), 970, BossOutcome.Kill));
+            p.Tick(t.AddSeconds(345));
+            Check(kept.Count == 3 && kept[2] is { Title: "Kaldrix", Outcome: "kill", HasDamage: true }, "...and ends after it, kept as one fight");
+            p.Take(new DamageDealt(t.AddSeconds(400), 1, 0, 50));
+            p.Tick(t.AddSeconds(401 + BossParser.PauseSeconds));
+            Check(kept.Count == 3, "a stray hit with no kill, death or pull isn't kept");
+        }
+
+        // changing the mode ends the old mode's record where it is and starts the new one there
+        {
+            var (p, kept) = New();
+            p.SetMode(ParserMode.Run, t);
+            p.Take(new InstanceEntered(t, ContentKind.Expedition, "Fire Temple", 89));
+            p.Take(new BossEngaged(t.AddSeconds(30), "Silver Blade Rotan", 980));
+            p.Take(new BossEnded(t.AddSeconds(90), 980, BossOutcome.Kill));
+            p.SetMode(ParserMode.Bosses, t.AddSeconds(100));
+            Check(kept.Count == 1 && kept[0] is { ModeKind: ParserMode.Run, Partial: true } && kept[0].PartialWhy.Contains("the Parser's mode changed"), "switching from Full run keeps the run so far, partial");
+            p.Take(new BossEngaged(t.AddSeconds(120), "Red Spark Ignus", 981));
+            p.SetMode(ParserMode.Run, t.AddSeconds(130));
+            Check(p.Live is { ModeKind: ParserMode.Run, Partial: true } l2 && l2.PartialWhy.Contains("counted from partway through the run") && l2.Splits.Count == 1,
+                "...switching to Full run inside an instance starts a run there, partial, with the pull under way");
+            p.Take(new BossEnded(t.AddSeconds(150), 981, BossOutcome.Kill));
+            Check(kept.Count == 1, "...a pull started under Bosses only and ended under Full run is the run's split, not a record of its own");
+        }
+
         // a fight with nothing heard for ten minutes is given up at the last thing heard
         {
             var (p, kept) = New();
@@ -187,7 +277,7 @@ public static class ParserTests
             p.Take(new BossEnded(t.AddSeconds(65), 940, BossOutcome.Kill));
             p.Take(new BossEngaged(t.AddSeconds(100), "Siliator of Deceit", 941));
             p.Take(new DamageDealt(t.AddSeconds(130), 1, 941, 5_000));
-            store.SaveLive(p.Live);
+            store.SaveLive(p.LiveAll);
             File.AppendAllText(Path.Combine(dir, EncounterStore.FileName), "{\"Id\":\"cut");   // a line cut by a crash
             var again = new EncounterStore(() => dir);
             var all = again.All();
@@ -196,19 +286,23 @@ public static class ParserTests
             var live = again.LoadLive();
             var (q, kept2) = New();
             q.Ended = e => { kept2.Add(e); again.Add(e); };
-            q.Resume(live!, t.AddSeconds(160));
-            Check(q.Live is { Boss: "Siliator of Deceit", Partial: true } l && l.PartialWhy.Contains("the tracker restarted during the fight") && q.Where.Instance == "Shattered Arkanis",
+            q.Resume(live, t.AddSeconds(160));
+            Check(q.Live is { Boss: "Siliator of Deceit", Partial: true } l && l.PartialWhy.Contains("the tracker restarted during it") && q.Where.Instance == "Shattered Arkanis",
                 "a restart in the middle of a fight carries it on, partial, in its instance");
             q.Take(new InstanceEntered(t.AddSeconds(170), ContentKind.Expedition, "Shattered Arkanis", 83));
             q.Take(new BossEnded(t.AddSeconds(200), 941, BossOutcome.Kill));
             Check(kept2.Count == 1 && kept2[0].Duration(t).TotalSeconds == 100 && again.All().Count == 2, "...and ends as the one fight it was, from its own pull");
             live = new EncounterStore(() => dir).LoadLive();
             var (r, kept3) = New();
-            r.Resume(live!, t.AddMinutes(40));
-            Check(r.Live == null && kept3.Count == 1 && kept3[0] is { Outcome: "left", Partial: true } && kept3[0].End == live!.LastAt,
+            r.Resume(live, t.AddMinutes(40));
+            Check(r.Live == null && kept3.Count == 1 && kept3[0] is { Outcome: "left", Partial: true } && kept3[0].End == live[0].LastAt,
                 "a fight saved long ago is kept as it was, ended at the last thing heard");
             again.Add(kept2[0]);   // the same fight twice counts once
             Check(new EncounterStore(() => dir).All().Count == 2, "a fight kept twice reads back once");
+            // the first builds kept one record, not a list: still read
+            File.WriteAllText(Path.Combine(dir, EncounterStore.LiveName), System.Text.Json.JsonSerializer.Serialize(live[0]));
+            var old = new EncounterStore(() => dir).LoadLive();
+            Check(old.Count == 1 && old[0].Boss == "Siliator of Deceit" && old[0].ModeKind == ParserMode.Bosses, "a live file of one record (the first builds) still reads, as a boss pull");
             try { Directory.Delete(dir, true); } catch (Exception) { }
         }
 

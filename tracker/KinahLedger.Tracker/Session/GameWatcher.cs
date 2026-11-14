@@ -71,6 +71,8 @@ public sealed class GameWatcher
     DateTime _screenScanAt = DateTime.MinValue; bool _screenLogged;
     /// <summary>Another character is in the world (the reason, for the status line); the window closes the run and starts fresh.</summary>
     public event Action<string>? CharacterChanged;
+    /// <summary>The reader counted something from the game's messages: the window redraws now, not at its next tick (0.10.70).</summary>
+    public event Action? PacketCounted;
     public int BalanceEverySec { get; set; } = 3;
 
     /* ---------------- which character (Session/Characters.cs) ---------------- */
@@ -320,8 +322,9 @@ public sealed class GameWatcher
             if (c != null && c.Running) return c;
             var s = new TrackerSession(ManualChat, _settings, _items, "Passive") { RegionKey = RegionKey, Server = Server, AllView = AllView, DayView = DayView, Packets = Packets };
             s.Parsed += ev => { if (ev is MarketSold or MarketListed or MarketExpired) Market.OnChatEvent(ev); };
-            s.OverallRestart += _ => { var a = new SessionEngine(_items); a.SetZone(s.Zone); AllView = a; s.AllView = a; };
+            s.OverallRestart += _ => { var a = s.FreshAll ?? new SessionEngine(_items); if (s.FreshAll == null) a.SetZone(s.Zone); AllView = a; s.AllView = a; };
             s.MarketOpen = t => (t - Market.SeenAt).TotalSeconds is >= -2 and <= 10;
+            s.PacketCounted += () => PacketCounted?.Invoke();
             await s.StartAsync();
             Chat = s; ChatSince = DateTime.UtcNow; ChatNote = s.DetectNote; _flushAt = DateTime.UtcNow;
             return s;

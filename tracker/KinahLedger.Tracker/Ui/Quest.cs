@@ -343,7 +343,8 @@ public partial class MainWindow
     /// <summary>One part of a hero's line of figures: the figure, its word, the hover text, and what a click opens (none: a plain figure).</summary>
     /// <param name="On">What it opens is open: the part wears its tone's tint and its word the tone.</param>
     /// <param name="Roll">The figure's Motion.Number key and value, so it rolls from the last one shown under that key.</param>
-    internal sealed record QStat(string Fig, string Word, string Tip, Action? Click = null, bool On = false, string Tone = "Gold", (string Key, double Value, bool Money)? Roll = null);
+    /// <param name="Here">The place's share of the figure ("340K here", 0.10.70), small and faint after the word; "" for none.</param>
+    internal sealed record QStat(string Fig, string Word, string Tip, Action? Click = null, bool On = false, string Tone = "Gold", (string Key, double Value, bool Money)? Roll = null, string Here = "");
 
     /// <summary>
     /// A hero's line of figures (UX pass, 2026-11-13): "632.3K Kinah · 261.7K loot · 161 kills", the figures in ink, their
@@ -363,6 +364,14 @@ public partial class MainWindow
             if (p.Roll is { } r) Motion.Number(fig, r.Key, r.Value, r.Money ? v => Amounts.Short(v) : v => Math.Round(v).ToString("N0"), r.Money ? 0 : -1);
             var word = QT(p.Word, 12, FontWeights.Medium, p.On ? p.Tone : "Muted"); word.VerticalAlignment = VerticalAlignment.Bottom; word.Margin = new Thickness(4, 0, 0, 0);
             sp.Children.Add(fig); sp.Children.Add(word);
+            if (p.Here.Length > 0)
+            {
+                // the place's share: its figure a step under the figure's ink, its word faint ("274.4K here")
+                int cut = p.Here.LastIndexOf(' ');
+                var hf = QT(cut > 0 ? p.Here[..cut] : p.Here, 11.5, FontWeights.SemiBold, "Muted"); hf.VerticalAlignment = VerticalAlignment.Bottom; hf.Margin = new Thickness(6, 0, 0, 1); hf.Tag = "here";
+                sp.Children.Add(hf);
+                if (cut > 0) { var hw = QT(p.Here[cut..], 11, FontWeights.Medium, "Faint"); hw.VerticalAlignment = VerticalAlignment.Bottom; hw.Margin = new Thickness(0, 0, 0, 1); hw.Tag = "here"; sp.Children.Add(hw); }
+            }
             var b = new Border { Child = sp, Padding = new Thickness(6, 2, 6, 3), CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, ToolTip = p.Tip, Tag = "stat" };
             ToolTipService.SetInitialShowDelay(b, 300);
             if (p.Click is { } click)

@@ -29,6 +29,12 @@ public sealed class ItemRepeatGuard
     public const double RepeatSeconds = 30, BeforeSeconds = 12, AfterSeconds = 3, RaceAfterSeconds = 2.5, KillBeforeSeconds = 5, KillAfterSeconds = 4,
         ClusterSeconds = 2.5, KillNearSeconds = 1.5, KillSameSeconds = 0.5, HoldSeconds = 5;
 
+    /// <summary>
+    /// How long a line set aside (<see cref="Aside"/>) is remembered while the read still shows it: a window over the chat
+    /// (the crafting window after the Market) can hide it for a minute or more, and the chat shows it again after.
+    /// </summary>
+    public const double AsideSeconds = 300;
+
     /// <summary>Where a line came in: its place from the bottom of the read, how long the read was, and the two lines above it.</summary>
     public sealed record Place(int FromBottom, int ReadLength, string Above1, string Above2);
 
@@ -41,8 +47,9 @@ public sealed class ItemRepeatGuard
     /// </summary>
     public readonly record struct Screen(int Shown, DateTime Since, IReadOnlyList<string>? Read = null);
 
-    // Unsure: counted from a line whose count was lost, so any count of the item may be it
-    sealed record Copy(string Item, int Count, DateTime LineAt, DateTime CountedAt, Place? Place, bool Unsure);
+    // Unsure: counted from a line whose count was lost, so any count of the item may be it. Aside: the line was handled
+    // without counting as a pickup (why, "bought at the Market"), null for a counted one
+    sealed record Copy(string Item, int Count, DateTime LineAt, DateTime CountedAt, Place? Place, bool Unsure, string? Aside = null);
     readonly List<Copy> _copies = new();
     // "row" (an item's name), "race" (a node, "" when unnamed, and its skill), "kill"
     readonly List<(string Kind, string Item, GatherFamily Family, DateTime At, int Obj)> _witness = new();
@@ -86,9 +93,29 @@ public sealed class ItemRepeatGuard
         lock (_lock)
         {
             _copies.Add(new Copy(item, count, lineAt, now, place, unsure));
-            _copies.RemoveAll(c => (now - c.CountedAt).TotalSeconds > RepeatSeconds + BeforeSeconds);
+            Prune(now);
         }
     }
+
+    /// <summary>
+    /// A chat item line handled without counting as a pickup (<paramref name="why"/>: bought at the Market, a reward, the
+    /// inventory at work): a copy all the same. The chat shows the line again after a window over it, and a read that
+    /// can't line up takes it for new; it is that line, never a drop (Steven, 2026-11-13 18:35: two Wrathful Ego bought,
+    /// set aside, then counted as two rare drops 23 s later, after the crafting window, a kill beside them).
+    /// </summary>
+    public void Aside(string item, int count, DateTime lineAt, DateTime now, Place? place, string why, bool unsure = false)
+    {
+        lock (_lock)
+        {
+            _copies.Add(new Copy(item, count, lineAt, now, place, unsure, why));
+            Prune(now);
+        }
+    }
+
+    void Prune(DateTime now) => _copies.RemoveAll(c => (now - c.CountedAt).TotalSeconds > (c.Aside != null ? AsideSeconds : RepeatSeconds + BeforeSeconds));
+
+    /// <summary>Copies of lines set aside still remembered, for the tests.</summary>
+    public int AsideCount { get { lock (_lock) return _copies.Count(c => c.Aside != null); } }
 
     /// <summary>The count of the item's last copy counted from a line whose count was lost, once read twice: that copy's count from now on.</summary>
     public void Settle(string item, int count)
@@ -109,11 +136,23 @@ public sealed class ItemRepeatGuard
     {
         lock (_lock)
         {
-            var prior = _copies.Where(c => Eq(c.Item, item) && (c.Count == count || unsure || c.Unsure) && (now - c.CountedAt).TotalSeconds <= RepeatSeconds).ToList();
+            bool OnScreen(Copy c) => screen.Since == DateTime.MinValue || c.LineAt >= screen.Since.AddSeconds(-1);
+            // a line set aside is remembered longer, while the read shows it still (only when the read can tell)
+            var prior = _copies.Where(c => Eq(c.Item, item) && (c.Count == count || unsure || c.Unsure)
+                && ((now - c.CountedAt).TotalSeconds <= RepeatSeconds || (c.Aside != null && screen.Since != DateTime.MinValue && OnScreen(c)))).ToList();
             if (prior.Count == 0) return (Verdict.Count, "");
             // the read shows more copies than the counted ones still on screen: a line of its own
-            int onScreen = prior.Count(c => screen.Since == DateTime.MinValue || c.LineAt >= screen.Since.AddSeconds(-1));
+            int onScreen = prior.Count(OnScreen);
             if (screen.Shown >= onScreen + 1) return (Verdict.Count, $"the read shows {screen.Shown} such lines" + (onScreen < prior.Count ? $" and {prior.Count - onScreen} counted copy had scrolled off" : ""));
+            // a copy set aside lately (RepeatSeconds), still on screen, and the read shows no more copies than were handled:
+            // this line is one of them read again, whatever kill stands around it now (a set-aside line took no witness, so
+            // the witness count below would take a kill for a second pickup: Steven's two Wrathful Ego, 23 s after they were
+            // bought, an Abyss fight beside them). Not for a gathering material, whose race is a witness of its own, and not
+            // for an older copy, which goes by its place like a counted one: "on screen" leans on when the read's other lines
+            // were first seen, and repeated texts make them look older than they are (a full day's replay took five Odyle
+            // gathers and a Spiritstone drop for copies of lines set aside one to three minutes before)
+            if (!IsGather(item) && prior.Where(c => c.Aside != null && OnScreen(c) && (now - c.CountedAt).TotalSeconds <= RepeatSeconds).MaxBy(c => c.CountedAt) is { } aside)
+                return (Verdict.Repeat, $"the copy at {aside.LineAt.ToLocalTime():HH:mm:ss} was handled already ({aside.Aside}), and the read shows no more such lines");
             if (place != null && prior.FirstOrDefault(c => SamePlace(c.Place, place)) is { } at)
                 return (Verdict.Repeat, $"it stands where the copy counted at {at.LineAt.ToLocalTime():HH:mm:ss} stood");
             // the chat scrolled the line up, and a garbled read in between made the next clean read line up on nothing, so
@@ -292,6 +331,30 @@ public sealed partial class TrackerSession
         if (why.Length > 0) CrashLog.Note($"chat: '{raw.Trim()}' again: counted, {why}");
         _repeats.Counted(name, a.Count, lineAt, now, place, unsure);
         return v;
+    }
+
+    /// <summary>
+    /// A chat item line set aside (<paramref name="why"/>: bought at the Market, a reward, the inventory at work, a box's
+    /// contents): handled once, so remembered as a copy (ItemRepeatGuard.Aside), and the same line shown again after a
+    /// window over the chat is that copy, never a pickup. Returns true when the line is itself a copy already handled
+    /// (left out: it was set aside once already).
+    /// </summary>
+    bool AsideLine(ItemAcquired a, string raw, string why, ChatVoter.Out? meta, IReadOnlyList<string> lines, DateTime lineAt, DateTime now)
+    {
+        var name = _items.NameOf(a.ItemId);
+        // a gathering material has its own witness, the gathering bar's race, and the guard goes by it: a set-aside copy kept
+        // for it changed which gathers counted in a full day's replay (Odyle and ore gathered minutes after one set aside)
+        if (_repeats.IsGather(name)) return false;
+        bool unsure = _parser.CountUnsure(raw);
+        var screen = ScreenOf(ItemLineKey(name, a.Count), raw, meta is { } mr ? mr.Read : lines, meta?.At ?? now, unsure);
+        var place = meta is { } mp ? new ItemRepeatGuard.Place(mp.FromBottom, mp.Read.Count, mp.Above1, mp.Above2) : null;
+        var (v, w) = _repeats.Judge(name, a.Count, lineAt, now, place, screen, final: true, unsure);
+        if (v == ItemRepeatGuard.Verdict.Repeat) { SkipRepeat(raw, w, lineAt); return true; }
+        _repeats.Aside(name, a.Count, lineAt, now, place, why, unsure);
+        // while the game's traffic counts items, its agreement check takes a later chat line of this item for this one too
+        // (the game's messages may show nothing for a bought item, so no rise of it covers the line)
+        if (Packets is { } pk && pk.CountingItems(lineAt)) pk.ItemExcluded(a.ItemId, lineAt, "the chat's line for it was set aside: " + why);
+        return false;
     }
 
     void SkipRepeat(string raw, string why, DateTime lineAt)

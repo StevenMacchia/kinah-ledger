@@ -48,6 +48,7 @@ public static class ReplaySignals
             else if (Reward.Match(text) is { Success: true } r) { raw.Add((t, "reward", r.Groups[1].Value.Trim())); days.Add(day); }
             else if (Header.Match(text) is { Success: true } h) { raw.Add((t, "header", h.Groups[1].Value.Trim())); days.Add(day); }
             else if (Market.IsMatch(text)) { raw.Add((t, "market", "open")); days.Add(day); }
+            else if (text.StartsWith("scene Loading")) { raw.Add((t, "loading", "")); days.Add(day); }
         }
         var last = (lastDay ?? File.GetLastWriteTime(path)).Date;
         var list = new List<ReplaySignal>();

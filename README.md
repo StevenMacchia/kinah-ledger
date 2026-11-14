@@ -267,7 +267,9 @@ Server (region and world, as chosen in the window, so drops can be kept per serv
 bracket, minutes, kills, Kinah (tradeable and bound), item counts by ID, app version, and a random install ID
 used only to drop duplicates and spam. Since 0.10.55, which of your characters played it: its number in the
 tracker (`c1`, `c2`...) and the name it has in the window, so your signed-in profile can show each character apart
-(never a public profile or a leaderboard). Never the account, level, chat text or screenshots. Sharing is on by default and off with one setting; the live readout works either way.
+(never a public profile or a leaderboard). Since 0.10.79, in the Abyss: Abyss Points, Rank Points earned and
+lost, players and monsters defeated and deaths, overall and per area, for your profile's Abyss section (a run
+outside the Abyss sends none of them). Never the account, level, chat text or screenshots. Sharing is on by default and off with one setting; the live readout works either way.
 
 The totals post to `https://kinahledger.com/v1/runs` (`upload.endpoint` in `settings.json`, set by default;
 blank it and nothing is sent) in small batches: every 15 minutes while the game is being read, once more when
