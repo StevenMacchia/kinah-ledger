@@ -283,7 +283,7 @@ public sealed partial class TrackerSession
         string recipe = o.Recipe.Length >= 2 ? o.Recipe : PanelRecipeNow;
         if (o.Lost) { CrashLog.Note($"packets: a try of {(recipe.Length > 0 ? recipe : "an unread recipe")}: {o.Why}; not counted"); return; }
         CrashLog.Note($"packets: craft {(o.Combo ? "combo won" : o.Ok ? "worked" : "failed")} for {(recipe.Length > 0 ? recipe : "an unread recipe")}: {o.Why}");
-        PanelRace(recipe, o.Ok, o.Combo, o.At, _panelLevel, _queueOpen ? _queueId : 0, makes: o.Makes, why: "the game's messages: " + o.Why, fromPackets: true);
+        PanelRace(recipe, o.Ok, o.Combo, o.At, _panelLevel, _queueOpen ? _queueId : 0, makes: o.Makes, why: o.Why, fromPackets: true);
         _packetCountedNow = true;
     }
 

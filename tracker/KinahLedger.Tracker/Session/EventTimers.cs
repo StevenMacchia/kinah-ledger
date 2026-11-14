@@ -46,7 +46,8 @@ public sealed class EventTimers
     /// </summary>
     public static RegionClock ClockOf(string? region) => region switch
     {
-        "na_e" => new("na_e", "NA East", Zone("Eastern Standard Time", "America/New_York") ?? Utc9, true, "US Eastern time"),
+        // no region yet: NA East, Settings.Region's default
+        null or "" or "na_e" => new("na_e", "NA East", Zone("Eastern Standard Time", "America/New_York") ?? Utc9, true, "US Eastern time"),
         "na_w" => new("na_w", "NA West", Utc9, false, "UTC+9, not checked for NA West yet"),
         "eu" => new("eu", "Europe", Utc9, false, "UTC+9, not checked for Europe yet"),
         "latam" => new("latam", "Latin America", Utc9, false, "UTC+9, not checked for Latin America yet"),
@@ -117,6 +118,16 @@ public sealed class EventTimers
 
     /// <summary>True while the server's clock was sampled in the last <see cref="ClockLiveSeconds"/> (for the log and tests; the card says nothing about it).</summary>
     public bool ClockLive(DateTime now) { lock (_gate) return _clockAt != DateTime.MinValue && (now - _clockAt).TotalSeconds <= ClockLiveSeconds; }
+
+    /// <summary>Nothing while the clock is fresh (or never read); "Last read 2 h ago" when it is old.</summary>
+    public string ClockLine(DateTime now)
+    {
+        lock (_gate)
+        {
+            if (_clockAt == DateTime.MinValue) return "";
+            return (now - _clockAt).TotalSeconds <= ClockLiveSeconds ? "" : $"Last read {BossTimers.Ago(now - _clockAt)}";
+        }
+    }
 
     /// <summary>What the game's traffic said about events: the clock, and the event the player is in.</summary>
     public void Take(AreaEvent e)
