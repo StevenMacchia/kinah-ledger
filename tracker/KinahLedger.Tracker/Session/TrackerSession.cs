@@ -4331,17 +4331,34 @@ public sealed partial class TrackerSession
         if (now < _raceReadsFrom) return;
         if (t.Of > 0 && t.Done >= 1 && t.Done <= t.Of)
         {
+            // the queue's size is the N read most; a tie keeps the size it had (2026-11-13 18:17:51, Steven's queue of 15 Wind
+            // Serum: one read of "3 / 45" took over from one "1 / 15" as the latest, the crafts counted went back to 0, and the
+            // next craft's count of 3 made 2 crafts "not seen" where one was)
             _ofReads[t.Of] = _ofReads.GetValueOrDefault(t.Of) + 1;
-            int of = _ofReads.OrderByDescending(kv => kv.Value).ThenByDescending(kv => kv.Key == t.Of).First().Key;
-            if (_queueOf > 0 && of != _queueOf) { CrashLog.Note($"crafting panel: the queue's count reads {t.Done} / {t.Of} after {_queueOf}: a queue of {of}"); _queueCrafts = 0; }
+            int of = _ofReads.OrderByDescending(kv => kv.Value).ThenByDescending(kv => _queueOf > 0 ? kv.Key == _queueOf : kv.Key == t.Of).First().Key;
+            if (_queueOf > 0 && of != _queueOf)
+            {
+                // a size one digit off the one before is a misread of it (15 / 45, 10 / 16), not a new queue: the crafts stay
+                bool misread = OneDigitOff(of, _queueOf);
+                CrashLog.Note($"crafting panel: the queue's count reads {t.Done} / {t.Of} after {_queueOf}: a queue of {of}" + (misread ? " (one digit off: the size misread before, the crafts counted kept)" : ""));
+                if (!misread) _queueCrafts = 0;
+            }
             _queueOf = of;
-            if (t.Of == of) _raceCount = t.Done;
+            // the craft's number counts from a read whose size is the queue's or one digit off it ("3 / 45" in a queue of 15)
+            if (t.Of == of || OneDigitOff(t.Of, of) && t.Done <= of) _raceCount = t.Done;
             QueueViewNow();
         }
         var cur = _queueName.Length >= 2 ? _queueName : PanelShows;
         if (t.Recipe.Length < 3 || cur.Length < 2) return;
         if (CraftPanel.NamesUpgrade(t.Recipe, cur)) _raceUpgradeTitle = true;
         else if (CraftPanel.IsRecipeLine(t.Recipe) && string.Equals(CraftPanel.Settle(t.Recipe, cur).Recipe, cur, StringComparison.OrdinalIgnoreCase)) _raceBaseTitle = true;
+    }
+
+    /// <summary>Two counts of as many digits that differ in one of them (15 and 45): the panel's small digits misread.</summary>
+    internal static bool OneDigitOff(int a, int b)
+    {
+        string x = a.ToString(System.Globalization.CultureInfo.InvariantCulture), y = b.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return x.Length == y.Length && x.Length > 1 && x.Zip(y).Count(p => p.First != p.Second) == 1;
     }
 
     /// <summary>
@@ -4367,7 +4384,11 @@ public sealed partial class TrackerSession
         }
         else if (_queueOf > 0 && c >= _queueOf) k = (true, $"past the queue's {_queueOf} craft{(_queueOf == 1 ? "" : "s")}");
         else if (_raceUpgradeTitle) k = (true, "the panel's title named the upgrade");
-        else if (_raceBaseTitle) k = (false, tint ? "the panel's title named the recipe, its blue tint left out" : "");
+        // the title naming the recipe says "not the roll" only when the roll's title would name an upgrade item; a dish's or
+        // a serum's roll keeps the recipe's title (2026-11-13 18:19:09, Steven's Wind Serum: the blue roll after a craft, its
+        // title the recipe, was taken for a craft, and its x2 pop-up then credited to it)
+        else if (_raceBaseTitle && RecipeBook.ForOutput(_queueName.Length >= 2 ? _queueName : PanelShows) is not { Combo: not RecipeBook.ComboMakes.Upgrade })
+            k = (false, tint ? "the panel's title named the recipe, its blue tint left out" : "");
         else if (tint) k = (true, "the panel's blue tint");
         else k = (false, "");
         if (!k.Roll) c++;

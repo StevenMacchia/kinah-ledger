@@ -342,9 +342,10 @@ public static class PriceBook
     /// <summary>
     /// Materials the player has picked up bound copies of (2026-11-12, Steven: his bound Lesser Manastones "cant even be sold",
     /// and the Crafting part said he lost 500K a craft making Manastones by charging them at the Market's price). A bound copy
-    /// has no Market value, so a material held bound costs nothing in a craft (<see cref="Farmed"/>), and what a craft makes
-    /// from it is bound as well (RecipeBook.BoundCraft). The game's crafting window doesn't say which copies a craft used, so
-    /// having picked up bound ones is the sign. Kept on this PC in bound-held.json; unticking "I have these" lets one go.
+    /// has no Market value, so a material held bound costs nothing in a craft (<see cref="Farmed"/>); what the craft makes
+    /// keeps its Market value (RecipeBook.MadeFromBound: 2026-11-13, guards made from bound Refining Stones came out
+    /// tradeable). The game's crafting window doesn't say which copies a craft used, so having picked up bound ones is the
+    /// sign. Kept on this PC in bound-held.json; unticking "I have these" lets one go.
     /// </summary>
     static HashSet<string>? _boundHeld;
     static HashSet<string> BoundSet()

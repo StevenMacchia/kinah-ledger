@@ -1353,7 +1353,7 @@ public partial class MainWindow : Window
             // a run's pickups: its bound ones, and the chat's lines (where a dungeon's "Lesser Manastone (Bound)" lands)
             foreach (var r in s.Instances.Snapshot()) { From(r.BoundItems.ToList(), true); From(r.Items.ToList(), false); From(r.ChatItems.ToList(), false); }
             var added = PriceBook.NoteBoundHeld(names);
-            if (added.Count > 0) CrashLog.Note($"crafting: bound {string.Join(", ", added.Take(8))} picked up: crafts made from them cost nothing and make bound items");
+            if (added.Count > 0) CrashLog.Note($"crafting: bound {string.Join(", ", added.Take(8))} picked up: crafts made with them don't charge for them");
         }
         catch (InvalidOperationException) { /* a count changed while read: the next refresh takes it */ }
     }
@@ -1371,26 +1371,26 @@ public partial class MainWindow : Window
             long? cost = RecipeBook.CostOfTries(r.Name, r.Tries, out int unpricedMats, out int vendorMats, out int farmedMats, missing);
             // vendor materials with no NPC price are unpriced too: the cost is then the least a try costs
             int gaps = unpricedMats + vendorMats;
-            // made from your bound stock: the bound materials cost nothing and what came out is bound, so it has no sale value
-            bool bound = RecipeBook.BoundCraft(r.Name);
-            long made = 0; bool madeKnown = r.MadeUnknown == 0 || bound;
-            if (!bound)
-                foreach (var (item, n) in r.Made)
-                {
-                    if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
-                }
+            // made with your bound stock: the bound materials cost nothing (CostOfTries); what came out is not bound and sells
+            // as usual (2026-11-13, Steven's Orichalcum Guards from bound Refining Stones: "The guard shouldn't be bound")
+            bool fromBound = RecipeBook.MadeFromBound(r.Name);
+            long made = 0; bool madeKnown = r.MadeUnknown == 0;
+            foreach (var (item, n) in r.Made)
+            {
+                if (PriceBook.Price(item) is long p) made += (long)Math.Round(p * n * PriceBook.SellerKeeps); else madeKnown = false;
+            }
             if (cost != null) spent += cost.Value; else noBook++;
             if (madeKnown) worth += made; else noPrice++;
-            long? profit = cost != null && madeKnown && !bound ? made - cost.Value : null;
+            long? profit = cost != null && madeKnown ? made - cost.Value : null;
             if (profit is long pr) _craftPerRecipe.Add((r.Name, pr, r.Ok));
             var spentCell = cost is not long cv ? "" : gaps == 0 ? Fk(cv) : cv == 0 && farmedMats == 0 ? "" : "≥ " + Fk(cv);
-            var profitCell = bound ? "bound" : profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
+            var profitCell = profit is not long pv ? "" : gaps == 0 ? Signed(pv) : "≤ " + Signed(pv);
             var sellsCell = PriceCell(r.Name);
             var book = RecipeBook.ForOutput(r.Name);
             // what came out and what it sells for, so a loss reads against the whole yield (Steven, 2026-11-05: 40 ingots from
             // 4 crafts of the ×10 recipe, "shows as if only 4 were made with a loss of 151k")
             var tip = "Click for the materials, what a craft costs and what it makes."
-                + (bound ? "\nMade from your bound " + RecipeBook.BoundMain(r.Name) + ": it costs nothing here, and what it makes is bound, so it can't be sold. Only what you paid for (an NPC's ink, Market materials you have no bound copies of) is counted." : "")
+                + (fromBound ? "\nMade with your bound " + RecipeBook.BoundMain(r.Name) + ": it costs nothing here, since it can't be sold. What it makes isn't bound and is valued at the Market's price." : "")
                 + $"\n{r.Ok:N0} worked, {r.Fail:N0} failed."
                 + (r.MadeCount > 0 ? $"\n{r.MadeCount:N0} made" + (madeKnown && made > 0 ? $", selling for {Fk(made)} at the lowest Market ask, {PriceBook.Cut}." : ".") : "")
                 + (book?.SuccessRate is double sr ? $"\nListed success {sr:P0}." : "")
